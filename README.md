@@ -7,8 +7,9 @@ Extensible MMO Game Server for Node.js.
 
 ## Features
 
+- WebSocket-based communication
 - Match-making
-- binary data transfer
+- Binary data transfer (through [msgpack](http://msgpack.org))
 
 TODO:
 
@@ -16,12 +17,6 @@ TODO:
 - "delta-encoding"
 
 ## Production usage
-
-## How to use
-
-Room
-
-GameObject
 
 - [PM2](https://github.com/Unitech/pm2)
 
@@ -31,7 +26,7 @@ http://pm2.keymetrics.io/docs/usage/specifics/#babeljs
 
 node --optimize_for_size --max_old_space_size=920 --gc_interval=100 server.js
 
-Some references:
+Game Server inspiration implementation references:
 
 - https://www.cs.cmu.edu/~ashu/papers/cmu-cs-05-112.pdf
 - http://dev.louiz.org/projects/batajelo/wiki/Server_architecture

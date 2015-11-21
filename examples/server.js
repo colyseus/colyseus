@@ -8,7 +8,7 @@ var colyseus = require('../index')
 var server = http.createServer(app)
   , gameServer = new colyseus.Server({server: server})
 
-gameServer.room(ChatRoom)
+gameServer.addRoomHandler(ChatRoom)
 
 app.use(express.static(__dirname));
 server.listen(port);

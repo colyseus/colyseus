@@ -16,11 +16,15 @@ class ChatRoom extends Room {
   }
 
   onMessage (client, data) {
+    if (data.message == "kick") {
+      this.clients.filter(c => c.id !== client.id).forEach(other => other.close())
+    }
+
     console.log(client.id, "send a message: ", data)
   }
 
   update () {
-    console.log(`ChatRoom ~> Update: ${ this.state.clients }`)
+    console.log(`ChatRoom ~> Update: ${ this.clients.length }`)
   }
 
   dispose () {
