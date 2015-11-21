@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+      body { font-family: Tahoma, Geneva, sans-serif; }
+    </style>
+    <script type="text/javascript" src="websocket.js"></script>
+    <script type="text/javascript" src="msgpack.min.js"></script>
+  </head>
+  <body>
+    <strong>Messages</strong><br>
+
+    <form id="form">
+      <input type="text" id="input" value="" />
+      <input type="submit" value="send" />
+    </form>
+
+    <div id="messages"></div>
+
+    <script>
+      var host = window.document.location.host.replace(/:.*/, '');
+      var conn = new WebSocketClient('ws://' + host + ':2657');
+      conn.binaryType = "arraybuffer"
+
+      var JOIN_ROOM = 100
+      var LEAVE_ROOM = 101
+
+      conn.onopen = function (event) {
+        console.log("connected!")
+        conn.send( msgpack.encode([JOIN_ROOM, "ChatRoom"]) )
+      }
+
+      conn.onmessage = function (event) {
+        var node = document.createElement("p");
+        node.innerHTML = JSON.stringify( msgpack.decode(new Uint8Array(event.data)) )
+        document.getElementById('messages').appendChild(node)
+      };
+
+      conn.onclose = function (event) {
+        console.log("closing connection...")
+      }
+
+      document.getElementById('form').onsubmit = function(e) {
+        e.preventDefault()
+        conn.send( msgpack.encode({message: document.getElementById('input').value}) )
+        document.getElementById('input').value = null
+      }
+
+    </script>
+
+  </body>
+</html>
