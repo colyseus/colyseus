@@ -1,4 +1,4 @@
-# ![colyseus](https://raw.github.com/gamestdio/colyseus/blob/master/examples/logo.png?raw=true)
+# ![colyseus](examples/logo.png?raw=true)
 
 Minimalist MMO Game Server for Node.js.
 
