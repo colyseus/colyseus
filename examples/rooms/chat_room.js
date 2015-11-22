@@ -8,19 +8,23 @@ class ChatRoom extends Room {
   }
 
   onJoin (client) {
-    console.log(client.id, "connected into ChatRoom")
+    console.log("ChatRoom:", client.id, "connected")
   }
 
   onLeave (client) {
-    console.log(client.id, "disconnected from ChatRoom")
+    console.log("ChatRoom:", client.id, "disconnected")
   }
 
   onMessage (client, data) {
+    // TODO
+    // - When sending messages, it would be good to flag which handler is interested in them.
+    // - add 'onMatchStart' method, which can be used to store common data
+
     if (data.message == "kick") {
       this.clients.filter(c => c.id !== client.id).forEach(other => other.close())
     }
 
-    console.log(client.id, "send a message: ", data)
+    console.log("ChatRoom:", client.id, data)
   }
 
   update () {

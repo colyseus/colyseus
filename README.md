@@ -1,9 +1,9 @@
-# colyseus
+# ![colyseus](https://raw.github.com/gamestdio/colyseus/blob/master/examples/logo.png?raw=true)
 
 Extensible MMO Game Server for Node.js.
 
-> Colyseus are in early stages of development, so don't expect a mature and
-> ready-to-go/ready-to-scale piece of software here
+> Colyseus is in early stage development. Don't expect a mature and
+> ready-to-scale piece of software here
 
 ## Features
 
@@ -20,6 +20,7 @@ TODO:
 
 - [PM2](https://github.com/Unitech/pm2)
 
+https://devcenter.heroku.com/articles/node-best-practices
 http://pm2.keymetrics.io/docs/usage/specifics/#babeljs
 
 ## Options to consider

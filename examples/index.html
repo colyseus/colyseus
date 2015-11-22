@@ -8,6 +8,7 @@
     <script type="text/javascript" src="msgpack.min.js"></script>
   </head>
   <body>
+    <h1><img src="logo.png" alt="colyseus"></h1>
     <strong>Messages</strong><br>
 
     <form id="form">
@@ -28,6 +29,8 @@
       conn.onopen = function (event) {
         console.log("connected!")
         conn.send( msgpack.encode([JOIN_ROOM, "ChatRoom"]) )
+        setTimeout(function () { conn.send( msgpack.encode([JOIN_ROOM, "BattleRoom"]) ) }, 1000)
+        setTimeout(function () { conn.send( msgpack.encode([JOIN_ROOM, "advanced_battle"]) ) }, 1000)
       }
 
       conn.onmessage = function (event) {
