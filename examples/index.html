@@ -30,13 +30,17 @@
         console.log("connected!")
         conn.send( msgpack.encode([JOIN_ROOM, "ChatRoom"]) )
         setTimeout(function () { conn.send( msgpack.encode([JOIN_ROOM, "BattleRoom"]) ) }, 1000)
-        setTimeout(function () { conn.send( msgpack.encode([JOIN_ROOM, "advanced_battle"]) ) }, 1000)
       }
 
       conn.onmessage = function (event) {
-        var node = document.createElement("p");
-        node.innerHTML = JSON.stringify( msgpack.decode(new Uint8Array(event.data)) )
-        document.getElementById('messages').appendChild(node)
+        var messages = msgpack.decode(new Uint8Array(event.data))
+        console.log(messages)
+        // for (var i=0; i<messages.length; i++) {
+        //   var node = document.createElement("p");
+        //   node.innerHTML = messages[i]
+        //   document.getElementById('messages').appendChild(node)
+        // }
+
       };
 
       conn.onclose = function (event) {

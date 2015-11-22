@@ -7,7 +7,7 @@ var mocha = require('mocha')
   , Server = require('../lib/server.js')
 
 describe('Server', function() {
-  var server = new Server()
+  var server = new Server({port: 1111})
 
   before(function() {
     // ...

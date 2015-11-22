@@ -14,9 +14,8 @@
     "node": ">= 5.x"
   },
   "dependencies": {
-    "bluebird": "^2.10.1",
+    "deep-diff": "^0.3.3",
     "msgpack-lite": "^0.1.13",
-    "redis": "^2.0.1",
     "shortid": "^2.2.4",
     "ws": "^0.8.0"
   },

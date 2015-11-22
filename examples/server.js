@@ -11,7 +11,7 @@ var server = http.createServer(app)
 
 gameServer.register(ChatRoom)
 gameServer.register(BattleRoom)
-gameServer.register("advanced_battle", BattleRoom, { map: "data1.json" })
+// gameServer.register("advanced_battle", BattleRoom, { map: "data1.json" })
 
 app.use(express.static(__dirname));
 server.listen(port);

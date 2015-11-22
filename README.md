@@ -1,6 +1,6 @@
 # ![colyseus](https://raw.github.com/gamestdio/colyseus/blob/master/examples/logo.png?raw=true)
 
-Extensible MMO Game Server for Node.js.
+Minimalist MMO Game Server for Node.js.
 
 > Colyseus is in early stage development. Don't expect a mature and
 > ready-to-scale piece of software here
