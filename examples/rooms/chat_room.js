@@ -3,15 +3,13 @@ var Room = require('../../lib/room')
 class ChatRoom extends Room {
 
   constructor (options) {
-    super(options)
-
-    this.state.messages = []
-
+    super(options, { messages: [] })
     console.log("ChatRoom created!", options)
   }
 
   onJoin (client) {
-    // console.log("ChatRoom:", client.id, "connected")
+    this.sendState(client)
+    console.log("ChatRoom:", client.id, "connected")
   }
 
   onLeave (client) {

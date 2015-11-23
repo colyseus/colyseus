@@ -20,7 +20,7 @@ class BattleRoom extends Room {
   }
 
   onMessage (client, data) {
-    console.log("BattleRoom:", client.id, data)
+    // console.log("BattleRoom:", client.id, data)
   }
 
   update () {

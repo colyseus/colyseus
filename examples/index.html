@@ -6,6 +6,7 @@
     </style>
     <script type="text/javascript" src="websocket.js"></script>
     <script type="text/javascript" src="msgpack.min.js"></script>
+    <script type="text/javascript" src="json-patch.min.js"></script>
   </head>
   <body>
     <h1><img src="logo.png" alt="colyseus"></h1>
@@ -19,12 +20,16 @@
     <div id="messages"></div>
 
     <script>
+      var state = null
+
       var host = window.document.location.host.replace(/:.*/, '');
       var conn = new WebSocketClient('ws://' + host + ':2657');
       conn.binaryType = "arraybuffer"
 
       var JOIN_ROOM = 100
       var LEAVE_ROOM = 101
+      var ROOM_STATE = 110
+      var ROOM_STATE_PATCH = 111
 
       conn.onopen = function (event) {
         console.log("connected!")
@@ -33,8 +38,33 @@
       }
 
       conn.onmessage = function (event) {
-        var messages = msgpack.decode(new Uint8Array(event.data))
-        console.log(messages)
+        var data = msgpack.decode(new Uint8Array(event.data))
+
+        if (typeof(data[0]) === "number") {
+          if (data[0] == ROOM_STATE) {
+            state = data[1]
+
+            // setup initial messages
+            for (var i=0; i<state.messages.length; i++) {
+              var node = document.createElement("p");
+              node.innerHTML = state.messages[i]
+              document.getElementById('messages').appendChild(node)
+            }
+
+          } else if (data[0] == ROOM_STATE_PATCH) {
+            for (var i=0; i<data[1].length; i++) {
+              var node = document.createElement("p");
+              node.innerHTML = data[1][i].value
+              document.getElementById('messages').appendChild(node)
+            }
+            console.log(data[1])
+            jsonpatch.apply(state, data[1])
+          }
+
+        } else {
+          console.log(data)
+        }
+
         // for (var i=0; i<messages.length; i++) {
         //   var node = document.createElement("p");
         //   node.innerHTML = messages[i]

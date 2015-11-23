@@ -10,11 +10,11 @@ Minimalistic MMO Game Server for Node.js.
 - WebSocket-based communication
 - Match-making
 - Binary data transfer (through [msgpack](http://msgpack.org))
+- Delta-encoding (through [fast-json-patch](https://github.com/Starcounter-Jack/JSON-Patch/) - [RFC6902](http://tools.ietf.org/html/rfc6902))
 
 TODO:
 
 - "area of interest" updates/broadcasts
-- "delta-encoding"
 
 ## Production usage
 
