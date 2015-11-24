@@ -43,7 +43,7 @@
         if (typeof(data[0]) === "number") {
           if (data[0] == ROOM_STATE) {
             var roomId = data[1]
-            state = data[2]
+            state = data[3]
 
             // setup initial messages
             for (var i=0; i<state.messages.length; i++) {
