@@ -68,7 +68,10 @@ var Colyseus = (function (_WebSocketClient) {
       if (typeof message[0] === "number") {
         var roomId = message[1];
 
-        if (message[0] == protocol.ROOM_STATE) {
+        if (message[0] == protocol.USER_ID) {
+          this.id = message[1];
+          return true;
+        } else if (message[0] == protocol.ROOM_STATE) {
           var roomState = message[3];
 
           // first room message received, keep associated only with roomId
@@ -5914,6 +5917,7 @@ module.exports = WebSocketClient;
 // https://en.wikipedia.org/wiki/List_of_HTTP_status_codes
 
 // 1xx Informational
+module.exports.USER_ID = 127;
 module.exports.JOIN_ROOM = 100;
 module.exports.LEAVE_ROOM = 101;
 module.exports.ROOM_DATA = 102;

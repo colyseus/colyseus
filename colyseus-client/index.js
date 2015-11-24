@@ -40,7 +40,11 @@ class Colyseus extends WebSocketClient {
     if (typeof(message[0]) === "number") {
       let roomId = message[1]
 
-      if (message[0] == protocol.ROOM_STATE) {
+      if (message[0] == protocol.USER_ID) {
+        this.id = message[1]
+        return true
+
+      } else if (message[0] == protocol.ROOM_STATE) {
         let roomState = message[3]
 
         // first room message received, keep associated only with roomId

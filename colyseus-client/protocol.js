@@ -2,6 +2,7 @@
 // https://en.wikipedia.org/wiki/List_of_HTTP_status_codes
 
 // 1xx Informational
+module.exports.USER_ID = 127
 module.exports.JOIN_ROOM = 100
 module.exports.LEAVE_ROOM = 101
 module.exports.ROOM_DATA = 102
