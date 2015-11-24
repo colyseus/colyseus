@@ -42,7 +42,8 @@
 
         if (typeof(data[0]) === "number") {
           if (data[0] == ROOM_STATE) {
-            state = data[1]
+            var roomId = data[1]
+            state = data[2]
 
             // setup initial messages
             for (var i=0; i<state.messages.length; i++) {
@@ -52,13 +53,14 @@
             }
 
           } else if (data[0] == ROOM_STATE_PATCH) {
-            for (var i=0; i<data[1].length; i++) {
+            var roomId = data[1]
+            for (var i=0; i<data[2].length; i++) {
               var node = document.createElement("p");
-              node.innerHTML = data[1][i].value
+              node.innerHTML = data[2][i].value
               document.getElementById('messages').appendChild(node)
             }
-            console.log(data[1])
-            jsonpatch.apply(state, data[1])
+            console.log(data[2])
+            jsonpatch.apply(state, data[2])
           }
 
         } else {
