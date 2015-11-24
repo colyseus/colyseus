@@ -1,0 +1,35 @@
+{
+  "name": "colyseus-client",
+  "version": "0.1.0",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/gamestdio/colyseus.git"
+  },
+  "scripts": {
+    "dev": "watchify ./index.js -s Colyseus -o dist/colyseus.js",
+    "start": "npm run dev & nodemon --harmony ./examples/server.js",
+    "uglify": "uglifyjs dist/colyseus.js --compress > dist/colyseus.min.js",
+    "release": "browserify ./index.js -s Colyseus -o dist/colyseus.js",
+    "prepublish": "npm run release && npm run uglify"
+  },
+  "browserify": {
+    "transform": [ [ "babelify", { "presets": [ "es2015" ] } ] ]
+  },
+  "engines": {
+    "node": ">= 5.x"
+  },
+  "dependencies": {
+    "babel-preset-es2015": "^6.1.18",
+    "babelify": "^7.2.0",
+    "fast-json-patch": "^0.5.4",
+    "msgpack-lite": "^0.1.13",
+    "websocket.js": "^0.1.3"
+  },
+  "devDependencies": {
+    "colyseus": "../",
+    "express": "^4.13.3",
+    "nodemon": "^1.7.1",
+    "browserify": "^12.0.1",
+    "watchify": "^3.6.1"
+  }
+}

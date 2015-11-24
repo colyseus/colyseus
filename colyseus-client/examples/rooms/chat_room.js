@@ -1,0 +1,46 @@
+var Room = require('colyseus').Room
+
+class ChatRoom extends Room {
+
+  constructor (options) {
+    super(options, { messages: [] })
+    console.log("ChatRoom created!", options)
+  }
+
+  onJoin (client) {
+    this.sendState(client)
+    console.log("ChatRoom:", client.id, "connected")
+  }
+
+  onLeave (client) {
+    // console.log("ChatRoom:", client.id, "disconnected")
+  }
+
+  onMessage (client, data) {
+    // TODO
+    // - When sending messages, it would be good to flag which handler is interested in them.
+    if (data.message == "kick") {
+      this.clients.filter(c => c.id !== client.id).forEach(other => other.close())
+
+    } else {
+      this.state.messages.push(data.message)
+      this.broadcast("This is a ROOM_DATA message.")
+    }
+
+    console.log("ChatRoom:", client.id, data)
+  }
+
+  update () {
+    this.broadcast()
+  }
+
+  dispose () {
+    console.log("Dispose ChatRoom")
+  }
+
+}
+
+ChatRoom.updateInterval = 1000
+
+module.exports = ChatRoom
+
