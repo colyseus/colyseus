@@ -3,6 +3,7 @@ var Room = require('../../lib/room')
 class BattleRoom extends Room {
 
   constructor (options) {
+    options.updateInterval = 1100
     super(options)
     console.log("BattleRoom created!", options)
   }
@@ -32,7 +33,5 @@ class BattleRoom extends Room {
   }
 
 }
-
-BattleRoom.updateInterval = 1100
 
 module.exports = BattleRoom

@@ -59,7 +59,7 @@
         })
 
         setTimeout(function () {
-          battleRoom = client.join("BattleRoom")
+          battleRoom = client.join("BattleRoom", {invalid_param: 10})
         }, 1000)
       }
 

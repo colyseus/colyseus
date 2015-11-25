@@ -16,6 +16,26 @@ TODO:
 
 - "area of interest" updates/broadcasts
 
+## Room API
+
+### Callbacks
+
+- onJoin (client) - *when a client joins the room*
+- onLeave (client) - *when a client leaves the room*
+- onMessage (client, data) - *when a client send a message*
+- update () - *update method, usually to broadcast patch state*
+- dispose () - *cleanup callback, called after there's no more clients on the room*
+
+### Methods
+
+- lock() - *lock the room to new clients*
+- unlock() - *unlock the room to new clients*
+- send(client, data) - *send data to a particular client*
+- broadcast(data) - *send data to all connected clients*
+- sendState(client) - *send current state to a particular client*
+- broadcastState() - *send current state to all clients*
+- broadcastPatch() - *send patched (diff) state to all clients*
+
 ## Production usage
 
 - [PM2](https://github.com/Unitech/pm2)

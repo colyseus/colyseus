@@ -3,8 +3,13 @@ var Room = require('colyseus').Room
 class BattleRoom extends Room {
 
   constructor (options) {
+    options.updateInterval = 1100
     super(options)
     console.log("BattleRoom created!", options)
+  }
+
+  requestJoin(options) {
+    return (options.invalid_param != 10)
   }
 
   onJoin (client) {
@@ -33,7 +38,4 @@ class BattleRoom extends Room {
 
 }
 
-BattleRoom.updateInterval = 1100
-
 module.exports = BattleRoom
-

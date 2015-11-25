@@ -3,6 +3,7 @@ var Room = require('colyseus').Room
 class ChatRoom extends Room {
 
   constructor (options) {
+    options.updateInterval = 1000
     super(options, { messages: [] })
     console.log("ChatRoom created!", options)
   }
@@ -40,7 +41,4 @@ class ChatRoom extends Room {
 
 }
 
-ChatRoom.updateInterval = 1000
-
 module.exports = ChatRoom
-
