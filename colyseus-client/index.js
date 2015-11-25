@@ -19,7 +19,7 @@ class Colyseus extends WebSocketClient {
   }
 
   join (roomName, options) {
-    this.rooms[ roomName ] = new Room(roomName)
+    this.rooms[ roomName ] = new Room(this, roomName)
     this.send([protocol.JOIN_ROOM, roomName, options || {}])
     return this.rooms[ roomName ]
   }
@@ -48,12 +48,15 @@ class Colyseus extends WebSocketClient {
         let roomState = message[3]
 
         // first room message received, keep associated only with roomId
-        this.rooms[ roomId ] = this.rooms[ message[2] ]
+        if (!this.rooms[ roomId ]) {
+          this.rooms[ roomId ] = this.rooms[ message[2] ]
+          this.rooms[ roomId ].roomId = roomId
+          delete this.rooms[ message[2] ]
+        }
+
         this.rooms[ roomId ].state = roomState
         this.rooms[ roomId ].emit('setup', this.rooms[ roomId ].state)
-        delete this.rooms[ message[2] ]
 
-        this.rooms[ roomId ].roomId = roomId
         this.roomStates[ roomId ] = roomState
 
         return true
