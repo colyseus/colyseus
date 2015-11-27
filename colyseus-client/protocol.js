@@ -1,20 +1,15 @@
-// Use some conventions from http status codes
-// https://en.wikipedia.org/wiki/List_of_HTTP_status_codes
+// Use codes between 0~127 for lesser throughput (1 byte)
 
-// 1xx Informational
-module.exports.USER_ID = 127
-module.exports.JOIN_ROOM = 100
-module.exports.LEAVE_ROOM = 101
-module.exports.ROOM_DATA = 102
-module.exports.ROOM_STATE = 110
-module.exports.ROOM_STATE_PATCH = 111
+// User-related (0~10)
+module.exports.USER_ID = 1
 
-// 2xx Success
+// Room-related (10~20)
+module.exports.JOIN_ROOM = 10
+module.exports.JOIN_ERROR = 12
+module.exports.LEAVE_ROOM = 12
+module.exports.ROOM_DATA = 13
+module.exports.ROOM_STATE = 14
+module.exports.ROOM_STATE_PATCH = 15
 
-// 3xx Redirection
-
-// 4xx Client Error
-module.exports.BAD_REQUEST = 400
-
-// 5xx Server Error
-
+// Generic messages (50~60)
+module.exports.BAD_REQUEST = 50

@@ -23,44 +23,8 @@
       var host = window.document.location.host.replace(/:.*/, '');
       var client = new Colyseus('ws://' + host + ':2657');
 
-      var chatRoom = null
-      var battleRoom = null
-
       client.onopen = function (event) {
-        chatRoom = client.join("ChatRoom")
-
-        chatRoom.on('setup', function(state) {
-          console.log("setup:", state)
-
-          // setup initial messages
-          for (var i=0; i<state.messages.length; i++) {
-            var node = document.createElement("p");
-            node.innerHTML = state.messages[i]
-            document.getElementById('messages').appendChild(node)
-          }
-        })
-
-        chatRoom.on('patch', function(patch) {
-          for (var i=0; i<patch.length; i++) {
-            var node = document.createElement("p");
-            node.innerHTML = patch[i].value
-            document.getElementById('messages').appendChild(node)
-          }
-
-          console.log("patch:", patch)
-        })
-
-        chatRoom.on('update', function(state) {
-          console.log("update:", state)
-        })
-
-        chatRoom.on('data', function(data) {
-          console.log("data:", data)
-        })
-
-        setTimeout(function () {
-          battleRoom = client.join("BattleRoom", {invalid_param: 10})
-        }, 1000)
+        console.log(client.id, "connected!")
       }
 
       client.onmessage = function (event) {
@@ -70,6 +34,53 @@
       client.onclose = function (event) {
         console.log("closing connection...")
       }
+
+      var chatRoom = client.join("ChatRoom")
+      var battleRoom = null
+
+      setTimeout(function () {
+        battleRoom = client.join("BattleRoom", {invalid_param: 10})
+        battleRoom.on('error', function(data) {
+          console.error("BattleRoom, couldn't join:", data)
+        })
+      }, 1000)
+
+      chatRoom.on('join', function() {
+        console.log(client.id, "joined", chatRoom.name)
+      })
+
+      chatRoom.on('leave', function() {
+        console.log(client.id, "leaved", chatRoom.name)
+      })
+
+      chatRoom.on('data', function(data) {
+        console.log(client.id, "received on", chatRoom.name, data)
+      })
+
+      chatRoom.on('setup', function(state) {
+        console.log("setup:", state)
+
+        // setup initial messages
+        for (var i=0; i<state.messages.length; i++) {
+          var node = document.createElement("p");
+          node.innerHTML = state.messages[i]
+          document.getElementById('messages').appendChild(node)
+        }
+      })
+
+      chatRoom.on('patch', function(patch) {
+        for (var i=0; i<patch.length; i++) {
+          var node = document.createElement("p");
+          node.innerHTML = patch[i].value
+          document.getElementById('messages').appendChild(node)
+        }
+
+        console.log("patch:", patch)
+      })
+
+      chatRoom.on('update', function(state) {
+        console.log("update:", state)
+      })
 
       document.getElementById('form').onsubmit = function(e) {
         e.preventDefault()

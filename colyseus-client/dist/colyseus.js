@@ -1,6 +1,8 @@
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.Colyseus = f()}})(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 'use strict';
 
+var _slicedToArray = (function () { function sliceIterator(arr, i) { var _arr = []; var _n = true; var _d = false; var _e = undefined; try { for (var _i = arr[Symbol.iterator](), _s; !(_n = (_s = _i.next()).done); _n = true) { _arr.push(_s.value); if (i && _arr.length === i) break; } } catch (err) { _d = true; _e = err; } finally { try { if (!_n && _i["return"]) _i["return"](); } finally { if (_d) throw _e; } } return _arr; } return function (arr, i) { if (Array.isArray(arr)) { return arr; } else if (Symbol.iterator in Object(arr)) { return sliceIterator(arr, i); } else { throw new TypeError("Invalid attempt to destructure non-iterable instance"); } }; })();
+
 var _createClass = (function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; })();
 
 var _get = function get(object, property, receiver) { if (object === null) object = Function.prototype; var desc = Object.getOwnPropertyDescriptor(object, property); if (desc === undefined) { var parent = Object.getPrototypeOf(object); if (parent === null) { return undefined; } else { return get(parent, property, receiver); } } else if ("value" in desc) { return desc.value; } else { var getter = desc.get; if (getter === undefined) { return undefined; } return getter.call(receiver); } };
@@ -32,10 +34,25 @@ var Colyseus = (function (_WebSocketClient) {
 
     _this.roomStates = {};
     _this.rooms = {};
+    _this._enqueuedCalls = [];
     return _this;
   }
 
   _createClass(Colyseus, [{
+    key: 'onOpenCallback',
+    value: function onOpenCallback(event) {
+      if (this._enqueuedCalls.length > 0) {
+        for (var i = 0; i < this._enqueuedCalls.length; i++) {
+          var _enqueuedCalls$i = _slicedToArray(this._enqueuedCalls[i], 2);
+
+          var method = _enqueuedCalls$i[0];
+          var args = _enqueuedCalls$i[1];
+
+          this[method].apply(this, args);
+        }
+      }
+    }
+  }, {
     key: 'send',
     value: function send(data) {
       return _get(Object.getPrototypeOf(Colyseus.prototype), 'send', this).call(this, msgpack.encode(data));
@@ -43,8 +60,18 @@ var Colyseus = (function (_WebSocketClient) {
   }, {
     key: 'join',
     value: function join(roomName, options) {
-      this.rooms[roomName] = new Room(roomName);
-      this.send([protocol.JOIN_ROOM, roomName, options || {}]);
+      if (this.ws.readyState == WebSocket.OPEN) {
+        this.send([protocol.JOIN_ROOM, roomName, options || {}]);
+      } else {
+        // WebSocket not connected.
+        // Enqueue it to be called when readyState == OPEN
+        this._enqueuedCalls.push(['join', arguments]);
+      }
+
+      if (!this.rooms[roomName]) {
+        this.rooms[roomName] = new Room(this, roomName);
+      }
+
       return this.rooms[roomName];
     }
   }, {
@@ -70,19 +97,29 @@ var Colyseus = (function (_WebSocketClient) {
 
         if (message[0] == protocol.USER_ID) {
           this.id = message[1];
+          if (this.listeners['onopen']) this.listeners['onopen'].apply(null);
+          return true;
+        } else if (message[0] == protocol.JOIN_ROOM) {
+          // first room message received, keep association only with roomId
+          this.rooms[roomId] = this.rooms[message[2]];
+          this.rooms[roomId].roomId = roomId;
+          this.rooms[roomId].emit('join');
+          // delete this.rooms[ message[2] ]
+          return true;
+        } else if (message[0] == protocol.JOIN_ERROR) {
+          this.rooms[roomId].emit('error', message[2]);
+          delete this.rooms[roomId];
+          return true;
+        } else if (message[0] == protocol.LEAVE_ROOM) {
+          this.rooms[roomId].emit('leave');
           return true;
         } else if (message[0] == protocol.ROOM_STATE) {
-          var roomState = message[3];
+          var roomState = message[2];
 
-          // first room message received, keep associated only with roomId
-          this.rooms[roomId] = this.rooms[message[2]];
           this.rooms[roomId].state = roomState;
           this.rooms[roomId].emit('setup', this.rooms[roomId].state);
-          delete this.rooms[message[2]];
 
-          this.rooms[roomId].roomId = roomId;
           this.roomStates[roomId] = roomState;
-
           return true;
         } else if (message[0] == protocol.ROOM_STATE_PATCH) {
           this.rooms[roomId].emit('patch', message[2]);
@@ -5913,25 +5950,21 @@ module.exports = WebSocketClient;
 },{"backoff":3}],43:[function(require,module,exports){
 "use strict";
 
-// Use some conventions from http status codes
-// https://en.wikipedia.org/wiki/List_of_HTTP_status_codes
+// Use codes between 0~127 for lesser throughput (1 byte)
 
-// 1xx Informational
-module.exports.USER_ID = 127;
-module.exports.JOIN_ROOM = 100;
-module.exports.LEAVE_ROOM = 101;
-module.exports.ROOM_DATA = 102;
-module.exports.ROOM_STATE = 110;
-module.exports.ROOM_STATE_PATCH = 111;
+// User-related (0~10)
+module.exports.USER_ID = 1;
 
-// 2xx Success
+// Room-related (10~20)
+module.exports.JOIN_ROOM = 10;
+module.exports.JOIN_ERROR = 12;
+module.exports.LEAVE_ROOM = 12;
+module.exports.ROOM_DATA = 13;
+module.exports.ROOM_STATE = 14;
+module.exports.ROOM_STATE_PATCH = 15;
 
-// 3xx Redirection
-
-// 4xx Client Error
-module.exports.BAD_REQUEST = 400;
-
-// 5xx Server Error
+// Generic messages (50~60)
+module.exports.BAD_REQUEST = 50;
 
 },{}]},{},[1])(1)
 });

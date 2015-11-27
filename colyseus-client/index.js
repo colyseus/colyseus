@@ -12,6 +12,16 @@ class Colyseus extends WebSocketClient {
 
     this.roomStates = {}
     this.rooms = {}
+    this._enqueuedCalls = []
+  }
+
+  onOpenCallback (event) {
+    if (this._enqueuedCalls.length > 0) {
+      for (var i=0; i<this._enqueuedCalls.length; i++) {
+        let [ method, args ] = this._enqueuedCalls[i]
+        this[ method ].apply(this, args)
+      }
+    }
   }
 
   send (data) {
@@ -19,8 +29,19 @@ class Colyseus extends WebSocketClient {
   }
 
   join (roomName, options) {
-    this.rooms[ roomName ] = new Room(this, roomName)
-    this.send([protocol.JOIN_ROOM, roomName, options || {}])
+    if (this.ws.readyState == WebSocket.OPEN) {
+      this.send([protocol.JOIN_ROOM, roomName, options || {}])
+
+    } else {
+      // WebSocket not connected.
+      // Enqueue it to be called when readyState == OPEN
+      this._enqueuedCalls.push(['join', arguments])
+    }
+
+    if (!this.rooms[ roomName ]) {
+      this.rooms[ roomName ] = new Room(this, roomName)
+    }
+
     return this.rooms[ roomName ]
   }
 
@@ -42,23 +63,33 @@ class Colyseus extends WebSocketClient {
 
       if (message[0] == protocol.USER_ID) {
         this.id = message[1]
+        if (this.listeners['onopen']) this.listeners['onopen'].apply(null)
+        return true
+
+      } else if (message[0] == protocol.JOIN_ROOM) {
+        // first room message received, keep association only with roomId
+        this.rooms[ roomId ] = this.rooms[ message[2] ]
+        this.rooms[ roomId ].roomId = roomId
+        this.rooms[ roomId ].emit('join')
+        // delete this.rooms[ message[2] ]
+        return true
+
+      } else if (message[0] == protocol.JOIN_ERROR) {
+        this.rooms[ roomId ].emit('error', message[2])
+        delete this.rooms[ roomId ]
+        return true
+
+      } else if (message[0] == protocol.LEAVE_ROOM) {
+        this.rooms[ roomId ].emit('leave')
         return true
 
       } else if (message[0] == protocol.ROOM_STATE) {
-        let roomState = message[3]
-
-        // first room message received, keep associated only with roomId
-        if (!this.rooms[ roomId ]) {
-          this.rooms[ roomId ] = this.rooms[ message[2] ]
-          this.rooms[ roomId ].roomId = roomId
-          delete this.rooms[ message[2] ]
-        }
+        let roomState = message[2]
 
         this.rooms[ roomId ].state = roomState
         this.rooms[ roomId ].emit('setup', this.rooms[ roomId ].state)
 
         this.roomStates[ roomId ] = roomState
-
         return true
 
       } else if (message[0] == protocol.ROOM_STATE_PATCH) {
@@ -72,6 +103,7 @@ class Colyseus extends WebSocketClient {
         this.rooms[ roomId ].emit('data', message[2])
         message = [ message[2] ]
       }
+
     }
 
     if (this.listeners['onmessage']) this.listeners['onmessage'].apply(null, message)
