@@ -16,6 +16,7 @@ Minimalistic MMO Game Server for Node.js.
 
 TODO:
 
+- delay/lag compensation
 - "area of interest" updates/broadcasts
 
 ## Room API
@@ -51,6 +52,7 @@ node --optimize_for_size --max_old_space_size=920 --gc_interval=100 server.js
 
 Game Server inspiration implementation references:
 
+- https://developer.valvesoftware.com/wiki/Source_Multiplayer_Networking
 - https://www.cs.cmu.edu/~ashu/papers/cmu-cs-05-112.pdf
 - http://dev.louiz.org/projects/batajelo/wiki/Server_architecture
 - https://cloud.google.com/solutions/gaming/dedicated-server-gaming-solution/
