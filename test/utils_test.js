@@ -1,9 +1,4 @@
-var mocha = require('mocha')
-  , describe = mocha.describe
-  , before = mocha.before
-  , it = mocha.it
-  , assert = require('assert')
-
+var assert = require('assert')
   , utils = require('../lib/utils.js')
 
 describe('utils', function() {
