@@ -1,7 +1,6 @@
 var assert = require('assert')
   , MatchMaker = require('../lib/match_maker')
   , DummyRoom = require('./dummy_room')
-  , Room = require('../lib/room')
   , mock = require('./mock')
 
 describe('MatchMaker', function() {
@@ -9,13 +8,13 @@ describe('MatchMaker', function() {
 
   before(function() {
     matchMaker = new MatchMaker()
-    matchMaker.addHandler('room', Room)
+    matchMaker.addHandler('room', DummyRoom)
     matchMaker.addHandler('dummy_room', DummyRoom)
   });
 
   describe('room handlers', function() {
     it('should add handler with name', function() {
-      assert.equal(Room, matchMaker.handlers.room[0]);
+      assert.equal(DummyRoom, matchMaker.handlers.room[0]);
       assert.equal(0, Object.keys(matchMaker.handlers.room[1]).length);
       assert.equal(false, matchMaker.hasAvailableRoom('room'));
     });
@@ -43,6 +42,16 @@ describe('MatchMaker', function() {
       }, Error);
     })
 
+    it('should throw error when trying to join existing room by id with invalid params', function() {
+      var client1 = mock.createDummyClient()
+      var client2 = mock.createDummyClient()
+
+      var room = matchMaker.joinOrCreateByName(client1, 'room', {})
+      assert.throws(() => {
+        matchMaker.joinById(client2, room.roomId, { invalid_param: 1 })
+      }, Error)
+    })
+
     it('should join existing room on joinById', function() {
       assert.equal(false, matchMaker.hasAvailableRoom('dummy_room'))
 
@@ -57,6 +66,7 @@ describe('MatchMaker', function() {
       assert.equal(room.roomId, joiningRoom.roomId)
       assert.equal(2, joiningRoom.clients.length)
     })
+
   });
 });
 
