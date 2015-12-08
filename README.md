@@ -51,6 +51,13 @@ case your application goes down.
 pm2 start server.js --node-args="--harmony"
 ```
 
+Redirect port 80 to target deployment port (e.g. 3000), to avoid running harmful
+code as sudoer: ([read more](http://stackoverflow.com/a/16573737/892698))
+
+```
+sudo iptables -t nat -A PREROUTING -i eth0 -p tcp --dport 80 -j REDIRECT --to-port 3000
+```
+
 ## Options to consider
 
 node --optimize_for_size --max_old_space_size=920 --gc_interval=100 server.js
