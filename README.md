@@ -5,8 +5,10 @@
 
 Minimalistic MMO Game Server for Node.js.
 
-> Colyseus is in early stage development. Don't expect a mature and
-> ready-to-scale piece of software here
+**Live demos:**
+
+- [Colyseus React Example](https://colyseus-react-example.herokuapp.com)
+- [CubeClub Soccer](http://cubeclub.gamestd.io)
 
 ## Features
 
@@ -42,21 +44,16 @@ TODO:
 
 ## Production usage
 
-- [PM2](https://github.com/Unitech/pm2)
+It's recommended to use a [process manager](https://github.com/Unitech/pm2) to ensure the server will reload in
+case your application goes down.
 
-https://devcenter.heroku.com/articles/node-best-practices
-http://pm2.keymetrics.io/docs/usage/specifics/#babeljs
+```
+pm2 start server.js --node-args="--harmony"
+```
 
 ## Options to consider
 
 node --optimize_for_size --max_old_space_size=920 --gc_interval=100 server.js
-
-Game Server inspiration implementation references:
-
-- https://developer.valvesoftware.com/wiki/Source_Multiplayer_Networking
-- https://www.cs.cmu.edu/~ashu/papers/cmu-cs-05-112.pdf
-- http://dev.louiz.org/projects/batajelo/wiki/Server_architecture
-- https://cloud.google.com/solutions/gaming/dedicated-server-gaming-solution/
 
 ## License
 
