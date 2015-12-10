@@ -41,6 +41,7 @@ TODO:
 - sendState(client) - *send current state to a particular client*
 - broadcastState() - *send current state to all clients*
 - broadcastPatch() - *send patched (diff) state to all clients*
+- disconnect() - *disconnect all clients then dispose*
 
 ## Production usage
 
