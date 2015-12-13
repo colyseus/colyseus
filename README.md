@@ -7,8 +7,8 @@ Minimalistic MMO Game Server for Node.js.
 
 **Live demos:**
 
-- [Colyseus React Example](https://colyseus-react-example.herokuapp.com)
 - [CubeClub Soccer](http://cubeclub.gamestd.io)
+- [React Example](https://colyseus-react-example.herokuapp.com)
 
 ## Features
 
