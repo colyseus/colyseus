@@ -1,7 +1,13 @@
 var assert = require('assert')
   , MatchMaker = require('../lib/match_maker')
-  , DummyRoom = require('./dummy_room')
+  , Room = require('../lib/room')
   , mock = require('./mock')
+
+class DummyRoom extends Room {
+  requestJoin (options) {
+    return !options.invalid_param
+  }
+}
 
 describe('MatchMaker', function() {
   var matchMaker;
