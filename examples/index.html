@@ -4,12 +4,10 @@
     <style>
       body { font-family: Tahoma, Geneva, sans-serif; }
     </style>
-    <script type="text/javascript" src="websocket.js"></script>
-    <script type="text/javascript" src="msgpack.min.js"></script>
-    <script type="text/javascript" src="json-patch.min.js"></script>
+    <script type="text/javascript" src="colyseus.js"></script>
   </head>
   <body>
-    <h1><img src="logo.png" alt="colyseus"></h1>
+    <h1><img src="https://github.com/gamestdio/colyseus/raw/master/examples/logo.png?raw=true" alt="colyseus"></h1>
     <strong>Messages</strong><br>
 
     <form id="form">
@@ -23,65 +21,70 @@
       var state = null
 
       var host = window.document.location.host.replace(/:.*/, '');
-      var conn = new WebSocketClient('ws://' + host + ':2657');
-      conn.binaryType = "arraybuffer"
+      var client = new Colyseus('ws://' + host + ':2657');
 
-      var JOIN_ROOM = 100
-      var LEAVE_ROOM = 101
-      var ROOM_STATE = 110
-      var ROOM_STATE_PATCH = 111
-
-      conn.onopen = function (event) {
-        console.log("connected!")
-        conn.send( msgpack.encode([JOIN_ROOM, "ChatRoom"]) )
-        setTimeout(function () { conn.send( msgpack.encode([JOIN_ROOM, "BattleRoom"]) ) }, 1000)
+      client.onopen = function (event) {
+        console.log(client.id, "connected!")
       }
 
-      conn.onmessage = function (event) {
-        var data = msgpack.decode(new Uint8Array(event.data))
-
-        if (typeof(data[0]) === "number") {
-          if (data[0] == ROOM_STATE) {
-            var roomId = data[1]
-            state = data[3]
-
-            // setup initial messages
-            for (var i=0; i<state.messages.length; i++) {
-              var node = document.createElement("p");
-              node.innerHTML = state.messages[i]
-              document.getElementById('messages').appendChild(node)
-            }
-
-          } else if (data[0] == ROOM_STATE_PATCH) {
-            var roomId = data[1]
-            for (var i=0; i<data[2].length; i++) {
-              var node = document.createElement("p");
-              node.innerHTML = data[2][i].value
-              document.getElementById('messages').appendChild(node)
-            }
-            console.log(data[2])
-            jsonpatch.apply(state, data[2])
-          }
-
-        } else {
-          console.log(data)
-        }
-
-        // for (var i=0; i<messages.length; i++) {
-        //   var node = document.createElement("p");
-        //   node.innerHTML = messages[i]
-        //   document.getElementById('messages').appendChild(node)
-        // }
-
+      client.onmessage = function (event) {
+        console.log("Client received message!", event)
       };
 
-      conn.onclose = function (event) {
+      client.onclose = function (event) {
         console.log("closing connection...")
       }
 
+      var invalidRoom = client.join("non_existing_room")
+      invalidRoom.on('error', function(error) {
+        console.error(error)
+      })
+
+      var chatRoom = client.join("chat")
+      chatRoom.on('error', function(error) {
+        console.error(error)
+      })
+
+      chatRoom.on('join', function() {
+        console.log(client.id, "joined", chatRoom.name)
+      })
+
+      chatRoom.on('leave', function() {
+        console.log(client.id, "leaved", chatRoom.name)
+      })
+
+      chatRoom.on('data', function(data) {
+        console.log(client.id, "received on", chatRoom.name, data)
+      })
+
+      chatRoom.on('setup', function(state) {
+        console.log("setup:", state)
+
+        // setup initial messages
+        for (var i=0; i<state.messages.length; i++) {
+          var node = document.createElement("p");
+          node.innerHTML = state.messages[i]
+          document.getElementById('messages').appendChild(node)
+        }
+      })
+
+      chatRoom.on('patch', function(patch) {
+        for (var i=0; i<patch.length; i++) {
+          var node = document.createElement("p");
+          node.innerHTML = patch[i].value
+          document.getElementById('messages').appendChild(node)
+        }
+
+        console.log("patch:", patch)
+      })
+
+      chatRoom.on('update', function(state) {
+        console.log("update:", state)
+      })
+
       document.getElementById('form').onsubmit = function(e) {
         e.preventDefault()
-        conn.send( msgpack.encode({message: document.getElementById('input').value}) )
+        client.send( {message: document.getElementById('input').value} )
         document.getElementById('input').value = null
       }
 
@@ -89,3 +92,4 @@
 
   </body>
 </html>
+

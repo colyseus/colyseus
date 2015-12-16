@@ -29,7 +29,6 @@ TODO:
 - onJoin (client) - *when a client joins the room*
 - onLeave (client) - *when a client leaves the room*
 - onMessage (client, data) - *when a client send a message*
-- update () - *update method, usually to broadcast patch state*
 - dispose () - *cleanup callback, called after there's no more clients on the room*
 
 ### Methods
@@ -40,7 +39,8 @@ TODO:
 - broadcast(data) - *send data to all connected clients*
 - sendState(client) - *send current state to a particular client*
 - broadcastState() - *send current state to all clients*
-- broadcastPatch() - *send patched (diff) state to all clients*
+- broadcastPatch() - *send patched (diff) state to all clients* (called
+  automatically at configurable interval)
 - disconnect() - *disconnect all clients then dispose*
 
 ## Production usage
@@ -58,10 +58,6 @@ code as sudoer: ([read more](http://stackoverflow.com/a/16573737/892698))
 ```
 sudo iptables -t nat -A PREROUTING -i eth0 -p tcp --dport 80 -j REDIRECT --to-port 3000
 ```
-
-## Options to consider
-
-node --optimize_for_size --max_old_space_size=920 --gc_interval=100 server.js
 
 ## License
 

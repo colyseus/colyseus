@@ -3,18 +3,20 @@ var Room = require('../../lib/room')
 class ChatRoom extends Room {
 
   constructor (options) {
-    options.updateInterval = 1000
-    super(options, { messages: [] })
+    super(options, 1000)
+
+    this.setState({ messages: [] })
+
     console.log("ChatRoom created!", options)
   }
 
   onJoin (client) {
     this.sendState(client)
-    console.log("ChatRoom:", client.id, "connected")
+    this.state.messages.push(`${ client.id } joined.`)
   }
 
   onLeave (client) {
-    // console.log("ChatRoom:", client.id, "disconnected")
+    this.state.messages.push(`${ client.id } leaved.`)
   }
 
   onMessage (client, data) {
@@ -28,10 +30,6 @@ class ChatRoom extends Room {
     }
 
     console.log("ChatRoom:", client.id, data)
-  }
-
-  update () {
-    this.broadcast()
   }
 
   dispose () {

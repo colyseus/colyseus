@@ -1,21 +1,14 @@
 var assert = require('assert')
   , Room = require('../lib/room')
+  , protocol = require('../lib/protocol')
+
+  , mock = require('./mock')
+  , msgpack = require('msgpack-lite')
 
 class DummyRoom extends Room {
   requestJoin (options) {
     return !options.invalid_param
   }
-}
-
-class DummyRoomWithUpdate extends Room {
-  constructor (options) {
-    options.updateInterval = 1000;
-    super(options)
-  }
-  requestJoin (options) {
-    return !options.invalid_param
-  }
-  update() {  }
 }
 
 describe('Room', function() {
@@ -33,15 +26,85 @@ describe('Room', function() {
     });
   });
 
-  describe('interval', function() {
-    it('should not default interval without "updateInterval" option', function() {
+  describe('client connection', function() {
+    it('should receive onJoin/onLeave messages', function() {
       var room = new DummyRoom({ })
-      assert.equal(undefined, room._updateInterval)
+      var client = mock.createDummyClient()
+      var message = null
+
+      room._onJoin(client, {})
+
+      assert.equal(client.messages.length, 1)
+
+      message = msgpack.decode(client.messages[0])
+      assert.equal(message[0], protocol.JOIN_ROOM)
+
+      room._onLeave(client)
+      message = msgpack.decode(client.messages[1])
+      assert.equal(message[0], protocol.LEAVE_ROOM)
     })
 
-    it('should set default interval with "updateInterval" and "update" declared', function() {
-      var room = new DummyRoomWithUpdate({ })
-      assert.equal("object", typeof(room._updateInterval))
+    it('should cleanup/dispose when all clients disconnect', function(done) {
+      var room = new DummyRoom({ })
+      var client = mock.createDummyClient()
+
+      room._onJoin(client)
+      assert.equal(typeof(room._patchInterval._repeat), "function")
+
+      room.on('dispose', function() {
+        assert.equal(typeof(room._patchInterval._repeat), "object")
+        done()
+      })
+
+      room._onLeave(client)
+    })
+  })
+
+  describe('patch interval', function() {
+    it('should set default "patch" interval', function() {
+      var room = new DummyRoom({ })
+      assert.equal("object", typeof(room._patchInterval))
+      assert.equal(1000 / 20, room._patchInterval._idleTimeout, "default patch rate should be 20")
+    })
+  })
+
+  describe('broadcastPatch', function() {
+    it('shouldn\'t broadcast patch with no state or no patches', function() {
+      var room = new DummyRoom({ })
+      assert.equal(null, room.state)
+      assert.equal(false, room.broadcast())
+      assert.equal(false, room.broadcastPatch())
+
+      room.setState({one: 1})
+      assert.deepEqual({one: 1}, room.state)
+      assert.equal(false, room.broadcast())
+      assert.equal(false, room.broadcastPatch())
+    })
+
+    it('shouldn\'t broadcast clean state (no patches)', function() {
+      var room = new DummyRoom({ })
+      room.setState({ one: 1 })
+
+      // create 2 dummy connections with the room
+      var client = mock.createDummyClient()
+      room._onJoin(client, {})
+
+      var client2 = mock.createDummyClient()
+      room._onJoin(client2, {})
+
+      assert.deepEqual({one: 1}, room.state)
+      assert.equal(false, room.broadcastPatch(), "shoudn't broadcast clean state")
+
+      room.state.two = 2
+      assert.deepEqual({one: 1, two: 2}, room.state)
+      assert.equal(true, room.broadcastPatch(), "should broadcast patches")
+
+      assert.equal(client.messages.length, 2)
+      assert.equal(client2.messages.length, 2)
+
+      var message = msgpack.decode(client.messages[1])
+      assert.equal(message[0], protocol.ROOM_STATE_PATCH)
+      assert.deepEqual(message[2], [{ op: 'add', path: '/two', value: 2 }])
     })
   })
 
