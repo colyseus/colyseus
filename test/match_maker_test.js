@@ -41,11 +41,10 @@ describe('MatchMaker', function() {
       }, Error);
     })
 
-    it('should throw error when trying to join room with invalid params', function() {
+    it('should\'nt create room when trying to join room with invalid params', function() {
       var client = mock.createDummyClient()
-      assert.throws(() => {
-        matchMaker.joinOrCreateByName(client, 'dummy_room', {invalid_param: 10})
-      }, Error);
+      var room = matchMaker.joinOrCreateByName(client, 'dummy_room', {invalid_param: 10})
+      assert.equal(room, null)
     })
 
     it('should throw error when trying to join existing room by id with invalid params', function() {

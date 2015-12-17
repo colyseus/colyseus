@@ -1,6 +1,6 @@
 {
   "name": "colyseus",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Minimalistic MMO Game Server for Node.js.",
   "keywords": ["mmo", "game", "server", "networking", "websockets"],
   "repository": {
