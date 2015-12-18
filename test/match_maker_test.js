@@ -1,7 +1,7 @@
 var assert = require('assert')
   , MatchMaker = require('../lib/match_maker')
   , Room = require('../lib/room')
-  , mock = require('./mock')
+  , mock = require('./utils/mock')
 
 class DummyRoom extends Room {
   requestJoin (options) {
@@ -41,7 +41,7 @@ describe('MatchMaker', function() {
       }, Error);
     })
 
-    it('should\'nt create room when trying to join room with invalid params', function() {
+    it('shouldn\'t create room when trying to join room with invalid params', function() {
       var client = mock.createDummyClient()
       var room = matchMaker.joinOrCreateByName(client, 'dummy_room', {invalid_param: 10})
       assert.equal(room, null)

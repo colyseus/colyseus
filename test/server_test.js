@@ -1,7 +1,7 @@
 var assert = require('assert')
   , Server = require('../lib/server')
   , Room = require('../lib/room')
-  , mock = require('./mock')
+  , mock = require('./utils/mock')
 
 class DummyRoom extends Room {
   requestJoin (options) {
@@ -39,7 +39,7 @@ describe('Server', function() {
       })
     })
 
-    it('should\'nt join a room with invalid options', function() {
+    it('shouldn\'t join a room with invalid options', function() {
       assert.throws(function() {
         server.onJoinRoomRequest(clients[0], 'room', { invalid_param: 10 })
       }, /join_request_fail/)

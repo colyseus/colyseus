@@ -1,6 +1,6 @@
 {
   "name": "colyseus",
-  "version": "0.2.1",
+  "version": "0.2.3",
   "description": "Minimalistic MMO Game Server for Node.js.",
   "keywords": ["mmo", "game", "server", "networking", "websockets"],
   "repository": {
@@ -10,7 +10,7 @@
   "scripts": {
     "start": "nodemon --harmony ./examples/server.js",
     "debug": "node-debug --harmony ./examples/server.js",
-    "test": "mocha --harmony"
+    "test": "NODE_ENV=test mocha --harmony"
   },
   "engines": {
     "node": ">= 5.x"

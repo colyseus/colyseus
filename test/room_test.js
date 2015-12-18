@@ -2,7 +2,7 @@ var assert = require('assert')
   , Room = require('../lib/room')
   , protocol = require('../lib/protocol')
 
-  , mock = require('./mock')
+  , mock = require('./utils/mock')
   , msgpack = require('msgpack-lite')
 
 class DummyRoom extends Room {
@@ -13,7 +13,7 @@ class DummyRoom extends Room {
 
 describe('Room', function() {
 
-  describe('constructor', function() {
+  describe('#constructor', function() {
     it('should instantiate with valid options', function() {
       var room = new DummyRoom({ })
       assert.equal('DummyRoom', room.constructor.name)
@@ -26,7 +26,7 @@ describe('Room', function() {
     });
   });
 
-  describe('client connection', function() {
+  describe('#onJoin/#onLeave', function() {
     it('should receive onJoin/onLeave messages', function() {
       var room = new DummyRoom({ })
       var client = mock.createDummyClient()
@@ -68,7 +68,36 @@ describe('Room', function() {
     })
   })
 
-  describe('broadcastPatch', function() {
+  describe('#sendState/#broadcastState', function() {
+    var room = new DummyRoom({ })
+    var client = mock.createDummyClient()
+    room._onJoin(client, {})
+
+    it('should throw an exception without initializing state', function() {
+      assert.throws(function() { room.sendState(client) }, /getLastState/)
+      assert.throws(function() { room.broadcastState(client) }, /getLastState/)
+    })
+
+    it('should send state when it is set up', function() {
+      room.setState({ success: true })
+
+      // first message
+      room.sendState(client)
+
+      var message = msgpack.decode( client.messages[1] )
+      assert.equal(message[0], protocol.ROOM_STATE)
+      assert.deepEqual(message[2], { success: true })
+
+      // second message
+      room.broadcastState(client)
+
+      var message = msgpack.decode( client.messages[2] )
+      assert.equal(message[0], protocol.ROOM_STATE)
+      assert.deepEqual(message[2], { success: true })
+    })
+  })
+
+  describe('#broadcastPatch', function() {
     it('shouldn\'t broadcast patch with no state or no patches', function() {
       var room = new DummyRoom({ })
       assert.equal(null, room.state)
