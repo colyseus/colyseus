@@ -10,6 +10,7 @@ class PlainState {
     this.array = [1,2,3,4,5,6,7,8,9,10]
     this.objs = [{hp: 100, x: 0, y: 0}, {hp: 80, x: 10, y: 20}, {hp: 25, x: 8, y: -14}]
     this.boolean = true
+    this.null = null
   }
 }
 
@@ -39,6 +40,7 @@ class ComplexState {
       new ChildObject(25, 8, -14, this)
     ]
     this.boolean = true
+    this.null = null
   }
   add(hp, x, y) {
     this.objs.push( new ChildObject(hp, x, y, this) )
@@ -50,7 +52,8 @@ class ComplexState {
       string: this.string,
       array: this.array,
       objs: this.objs,
-      boolean: this.boolean
+      boolean: this.boolean,
+      null: this.null
     }
   }
 }
