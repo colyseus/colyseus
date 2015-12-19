@@ -11,6 +11,12 @@ class PlainState {
     this.objs = [{hp: 100, x: 0, y: 0}, {hp: 80, x: 10, y: 20}, {hp: 25, x: 8, y: -14}]
     this.boolean = true
     this.null = null
+    this.teams = [
+      { id: 0, score: 0 },
+      { id: 1, score: 0 },
+      { id: 2, score: 0 },
+      { id: 3, score: 0 }
+    ]
   }
 }
 
@@ -41,6 +47,12 @@ class ComplexState {
     ]
     this.boolean = true
     this.null = null
+    this.teams = [
+      { id: 0, score: 0 },
+      { id: 1, score: 0 },
+      { id: 2, score: 0 },
+      { id: 3, score: 0 }
+    ]
   }
   add(hp, x, y) {
     this.objs.push( new ChildObject(hp, x, y, this) )
@@ -53,7 +65,8 @@ class ComplexState {
       array: this.array,
       objs: this.objs,
       boolean: this.boolean,
-      null: this.null
+      null: this.null,
+      teams: this.teams
     }
   }
 }
@@ -94,6 +107,12 @@ describe('StateObserver', function() {
 
       assert.ok(diffTime <= 5)
     })
+
+    it('should support deep mutations', function() {
+      assert.equal(observer.getPatches().length, 0)
+      state.teams[0].score += 1
+      assert.equal(observer.getPatches().length, 1)
+    })
   })
 
   describe('classy object state (generated through toJSON method)', function() {
@@ -132,7 +151,12 @@ describe('StateObserver', function() {
       assert.ok(diffTime <= 5)
     })
 
+    it('should support deep mutations', function() {
+      assert.equal(observer.getPatches().length, 0)
+      state.teams[0].score += 1
+      assert.equal(observer.getPatches().length, 1)
+    })
+
   })
 
 });
-
