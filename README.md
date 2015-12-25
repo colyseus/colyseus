@@ -7,7 +7,7 @@ Minimalistic MMO Game Server for Node.js.
 
 **Live demos:**
 
-- [CubeClub Soccer](http://cubeclub.gamestd.io)
+- [tanx](https://playcanvas.com/project/367035/overview/tanxcolyseus)
 - [React Example](https://colyseus-react-example.herokuapp.com)
 
 ## Features
