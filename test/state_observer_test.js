@@ -20,16 +20,28 @@ class PlainState {
   }
 }
 
+class Property {
+  constructor (prop)  {
+    this.prop = prop
+  }
+  set (v) { this.prop = v }
+  toJSON () { return this.prop }
+}
+
 class ChildObject {
   constructor (hp, x, y, parent) {
     this.complexObject = global
     this.parent = parent
     this.hp = hp
+    this.prop = new Property(10)
     this.x = x
     this.y = y
   }
+  child_method () {
+    return true
+  }
   toJSON () {
-    return { hp: this.hp, x: this.x, y: this.y }
+    return { hp: this.hp, x: this.x, y: this.y, prop: this.prop }
   }
 }
 
@@ -53,6 +65,7 @@ class ComplexState {
       { id: 2, score: 0 },
       { id: 3, score: 0 }
     ]
+    this.prop = new Property(1)
   }
   add(hp, x, y) {
     this.objs.push( new ChildObject(hp, x, y, this) )
@@ -66,7 +79,8 @@ class ComplexState {
       objs: this.objs,
       boolean: this.boolean,
       null: this.null,
-      teams: this.teams
+      teams: this.teams,
+      prop: this.prop
     }
   }
 }
@@ -143,7 +157,7 @@ describe('StateObserver', function() {
 
       assert.deepEqual(diff, [
         { op: 'replace', path: '/objs/2/x', value: 100 },
-        { op: 'add', path: '/objs/3', value: { hp: 80, x: 100, y: 200 } },
+        { op: 'add', path: '/objs/3', value: { hp: 80, prop: 10, x: 100, y: 200 } },
         { op: 'replace', path: '/array/9', value: 20 },
         { op: 'add', path: '/array/10', value: 21 }
       ])
@@ -155,6 +169,12 @@ describe('StateObserver', function() {
       assert.equal(observer.getPatches().length, 0)
       state.teams[0].score += 1
       assert.equal(observer.getPatches().length, 1)
+    })
+
+    it('original state objects shouldn\'t be mutated', function() {
+      var jsonState = observer.toJSON(state)
+      state.prop.set( 20 )
+      assert.equal(state.prop.toJSON(), 20)
     })
 
   })

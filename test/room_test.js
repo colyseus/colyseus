@@ -74,8 +74,8 @@ describe('Room', function() {
     room._onJoin(client, {})
 
     it('should throw an exception without initializing state', function() {
-      assert.throws(function() { room.sendState(client) }, /getLastState/)
-      assert.throws(function() { room.broadcastState(client) }, /getLastState/)
+      assert.throws(function() { room.sendState(client) }, /getState/)
+      assert.throws(function() { room.broadcastState(client) }, /getState/)
     })
 
     it('should send state when it is set up', function() {
