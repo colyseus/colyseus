@@ -1,6 +1,6 @@
 {
   "name": "colyseus",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "description": "Minimalistic MMO Game Server for Node.js.",
   "keywords": [
     "mmo",
@@ -19,7 +19,7 @@
     "test": "mocha --harmony"
   },
   "engines": {
-    "node": ">= 5.x"
+    "node": ">= 4.x"
   },
   "dependencies": {
     "debug": "^2.2.0",
