@@ -1,3 +1,5 @@
+"use strict";
+
 var Room = require('../../lib/room')
 
 class ChatRoom extends Room {
