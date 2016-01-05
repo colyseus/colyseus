@@ -16,12 +16,13 @@
   "scripts": {
     "start": "nodemon --harmony ./examples/server.js",
     "debug": "node-debug --harmony ./examples/server.js",
-    "test": "NODE_ENV=test mocha --harmony"
+    "test": "mocha --harmony"
   },
   "engines": {
     "node": ">= 5.x"
   },
   "dependencies": {
+    "debug": "^2.2.0",
     "fast-json-patch": "Starcounter-Jack/JSON-Patch",
     "msgpack-lite": "^0.1.13",
     "shortid": "^2.2.4",
@@ -35,7 +36,6 @@
     "mocha": "^2.3.4",
     "node-inspector": "^0.12.3",
     "nodemon": "^1.7.1",
-
     "immutable": "^3.7.6",
     "immutable-diff": "^0.1.1"
   }
