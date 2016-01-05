@@ -1,3 +1,5 @@
+"use strict";
+
 var assert = require('assert')
   , Room = require('../lib/room')
   , protocol = require('../lib/protocol')

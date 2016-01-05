@@ -1,3 +1,5 @@
+"use strict";
+
 var colyseus = require('../index')
   , http = require('http')
   , express = require('express')

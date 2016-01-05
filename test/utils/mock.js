@@ -1,3 +1,5 @@
+"use strict";
+
 var shortid = require('shortid')
   , EventEmitter = require('events').EventEmitter
 

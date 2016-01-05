@@ -1,3 +1,5 @@
+"use strict";
+
 var assert = require('assert')
   , MatchMaker = require('../lib/match_maker')
   , Room = require('../lib/room')

@@ -1,3 +1,5 @@
+"use strict";
+
 var assert = require('assert')
   , StateObserver = require('../lib/state/observer')
   , msgpack = require('msgpack-lite')
