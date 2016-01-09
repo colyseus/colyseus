@@ -20,12 +20,6 @@ describe('Room', function() {
       var room = new DummyRoom({ })
       assert.equal('DummyRoom', room.constructor.name)
     });
-
-    it('should throw error instantiating with invalid options', function() {
-      assert.throws(() => {
-        var room = new DummyRoom({ invalid_param: true })
-      }, Error);
-    });
   });
 
   describe('#onJoin/#onLeave', function() {
