@@ -1,6 +1,6 @@
 {
   "name": "colyseus",
-  "version": "0.2.9",
+  "version": "0.2.10",
   "description": "Minimalistic MMO Game Server for Node.js.",
   "keywords": [
     "mmo",
@@ -22,7 +22,6 @@
     "node": ">= 4.x"
   },
   "dependencies": {
-    "debug": "^2.2.0",
     "fast-json-patch": "Starcounter-Jack/JSON-Patch",
     "msgpack-lite": "^0.1.13",
     "shortid": "^2.2.4",
