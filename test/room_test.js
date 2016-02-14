@@ -13,6 +13,16 @@ class DummyRoom extends Room {
   }
 }
 
+class DummyRoomWithState extends Room {
+  constructor(options) {
+    super(options)
+    this.setState({ number: 10 })
+  }
+  requestJoin (options) {
+    return !options.invalid_param
+  }
+}
+
 describe('Room', function() {
 
   describe('#constructor', function() {
@@ -38,6 +48,22 @@ describe('Room', function() {
       room._onLeave(client)
       message = msgpack.decode(client.messages[1])
       assert.equal(message[0], protocol.LEAVE_ROOM)
+    })
+
+    it('should receive JOIN_ROOM and ROOM_DATA messages onJoin', function() {
+      var room = new DummyRoomWithState({ })
+      var client = mock.createDummyClient()
+      var message = null
+
+      room._onJoin(client, {})
+
+      assert.equal(client.messages.length, 2)
+
+      message = msgpack.decode(client.messages[0])
+      assert.equal(message[0], protocol.JOIN_ROOM)
+
+      message = msgpack.decode(client.messages[1])
+      assert.equal(message[0], protocol.ROOM_STATE)
     })
 
     it('should cleanup/dispose when all clients disconnect', function(done) {
