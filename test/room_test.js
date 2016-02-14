@@ -124,10 +124,19 @@ describe('Room', function() {
       assert.deepEqual({one: 1, two: 2}, room.state)
       assert.equal(true, room.broadcastPatch(), "should broadcast patches")
 
-      assert.equal(client.messages.length, 2)
-      assert.equal(client2.messages.length, 2)
+      assert.equal(client.messages.length, 3)
+      assert.equal(client2.messages.length, 3)
 
+      // first message, join room
+      var message = msgpack.decode(client.messages[0])
+      assert.equal(message[0], protocol.JOIN_ROOM)
+
+      // second message, room state
       var message = msgpack.decode(client.messages[1])
+      assert.equal(message[0], protocol.ROOM_STATE)
+
+      // third message, room patch state
+      var message = msgpack.decode(client.messages[2])
       assert.equal(message[0], protocol.ROOM_STATE_PATCH)
       assert.deepEqual(message[2], [{ op: 'add', path: '/two', value: 2 }])
     })
