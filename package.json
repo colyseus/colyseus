@@ -3,9 +3,9 @@
   "version": "0.3.1",
   "description": "Minimalistic MMO Game Server for Node.js.",
   "keywords": [
+    "multiplayer",
     "mmo",
     "game",
-    "server",
     "networking",
     "websockets"
   ],

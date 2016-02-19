@@ -13,7 +13,6 @@ class ChatRoom extends Room {
   }
 
   onJoin (client) {
-    this.sendState(client)
     this.state.messages.push(`${ client.id } joined.`)
   }
 
