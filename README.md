@@ -3,7 +3,7 @@
 [![Join the chat at https://gitter.im/gamestdio/colyseus](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/gamestdio/colyseus?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 [![Build Status](https://secure.travis-ci.org/gamestdio/colyseus.png?branch=master)](http://travis-ci.org/gamestdio/colyseus)
 
-Minimalistic MMO Game Server for Node.js.
+Minimalistic MMO Game Server for Node.js. [View documentation](http://gamestd.io/colyseus/docs).
 
 **Live demos:**
 
@@ -21,6 +21,16 @@ TODO:
 
 - delay/lag compensation
 - "area of interest" updates/broadcasts
+
+---
+
+**Match-making diagram:**
+
+![Match-making diagram](http://www.gliffy.com/go/publish/image/10069321/L.png)
+
+**Room state diagram:**
+
+![Room state diagram](http://www.gliffy.com/go/publish/image/10069469/L.png)
 
 ## Room API
 
