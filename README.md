@@ -7,7 +7,7 @@ Minimalistic MMO Game Server for Node.js. [View documentation](http://gamestd.io
 
 **Live demos:**
 
-- [tanx](https://playcanvas.com/project/367035/overview/tanxcolyseus)
+- [tanx](https://playcanvas.com/project/367035/overview/tanxcolyseus) ([source-code](https://github.com/endel/tanx))
 - [tic-tac-toe](https://tictactoe-colyseus.herokuapp.com) ([source-code](https://github.com/endel/tic-tac-toe))
 - [React Example](https://colyseus-react-example.herokuapp.com)
 
