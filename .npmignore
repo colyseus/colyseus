@@ -1,3 +1,10 @@
 *.log
 colyseus-client
 *.psd
+NOTES.txt
+*~
+observer.js
+TODO
+*.psd
+header.png
+quick-tests
