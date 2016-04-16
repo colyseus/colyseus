@@ -3,7 +3,6 @@ colyseus-client
 *.psd
 NOTES.txt
 *~
-observer.js
 TODO
 *.psd
 header.png
