@@ -6,8 +6,12 @@ var Benchmark = require('benchmark')
   , Immutable = require('immutable')
   , immutablediff = require('immutable-diff')
   , jsonpatch = require('fast-json-patch')
+  , StateObserver = require('../../lib/state/observer.js')
 
   , suite = new Benchmark.Suite()
+
+var stateObserver = new StateObserver({})
+var toJSON = stateObserver.toJSON.bind( stateObserver )
 
 class PlainState {
   constructor () {
@@ -76,25 +80,6 @@ class ComplexState {
       teams: this.teams
     }
   }
-}
-function toJSON(obj) {
-  var result
-
-    if (obj && typeof(obj.toJSON)==="function") {
-      result = obj.toJSON()
-
-        for (var k in result) {
-          result[k] = toJSON(result[k])
-        }
-
-    } else if (obj instanceof Array) {
-      result = obj.map((_) => toJSON(_))
-
-    } else {
-      result = obj
-    }
-
-  return result
 }
 
 var obj1 = new ComplexState();
