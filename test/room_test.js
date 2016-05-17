@@ -91,16 +91,21 @@ describe('Room', function() {
   })
 
   describe('#sendState/#broadcastState', function() {
-    var room = new DummyRoom({ })
-    var client = mock.createDummyClient()
-    room._onJoin(client, {})
 
     it('should throw an exception without initializing state', function() {
+      let room = new DummyRoom({ })
+      let client = mock.createDummyClient()
+      room._onJoin(client, {})
+
       assert.throws(function() { room.sendState(client) }, /getState/)
       assert.throws(function() { room.broadcastState(client) }, /getState/)
     })
 
     it('should send state when it is set up', function() {
+      let room = new DummyRoom({ })
+      let client = mock.createDummyClient()
+      room._onJoin(client, {})
+
       room.setState({ success: true })
 
       // first message
@@ -120,16 +125,28 @@ describe('Room', function() {
   })
 
   describe('#broadcastPatch', function() {
-    it('shouldn\'t broadcast patch with no state or no patches', function() {
-      var room = new DummyRoom({ })
+    it('should broadcast patch with no state or no patches', function() {
+      let room = new DummyRoom({ })
+
+      // connect 2 dummy clients into room
+      let client1 = mock.createDummyClient()
+      room._onJoin(client1, {})
+
+      let client2 = mock.createDummyClient()
+      room._onJoin(client2, {})
+
       assert.equal(null, room.state)
-      assert.equal(false, room.broadcast())
-      assert.equal(false, room.broadcastPatch())
+
+      assert.equal(true, room.broadcast())
+      assert.equal(true, room.broadcastPatch())
+
+      assert.deepEqual( [], msgpack.decode( client1.messages[1] )[2] )
+      assert.deepEqual( [], msgpack.decode( client1.messages[2] )[2] )
 
       room.setState({one: 1})
       assert.deepEqual({one: 1}, room.state)
-      assert.equal(false, room.broadcast())
-      assert.equal(false, room.broadcastPatch())
+      assert.equal(true, room.broadcast())
+      assert.equal(true, room.broadcastPatch())
     })
 
     it('shouldn\'t broadcast clean state (no patches)', function() {
@@ -144,14 +161,14 @@ describe('Room', function() {
       room._onJoin(client2, {})
 
       assert.deepEqual({one: 1}, room.state)
-      assert.equal(false, room.broadcastPatch(), "shoudn't broadcast clean state")
+      assert.equal(true, room.broadcastPatch())
 
       room.state.two = 2
       assert.deepEqual({one: 1, two: 2}, room.state)
-      assert.equal(true, room.broadcastPatch(), "should broadcast patches")
+      assert.equal(true, room.broadcastPatch())
 
-      assert.equal(client.messages.length, 3)
-      assert.equal(client2.messages.length, 3)
+      assert.equal(client.messages.length, 4)
+      assert.equal(client2.messages.length, 4)
 
       // first message, join room
       var message = msgpack.decode(client.messages[0])
@@ -161,8 +178,13 @@ describe('Room', function() {
       var message = msgpack.decode(client.messages[1])
       assert.equal(message[0], protocol.ROOM_STATE)
 
-      // third message, room patch state
+      // third message, empty patch state
       var message = msgpack.decode(client.messages[2])
+      assert.equal(message[0], protocol.ROOM_STATE_PATCH)
+      assert.deepEqual(message[2], [])
+
+      // fourth message, room patch state
+      var message = msgpack.decode(client.messages[3])
       assert.equal(message[0], protocol.ROOM_STATE_PATCH)
       assert.deepEqual(message[2], [{ op: 'add', path: '/two', value: 2 }])
     })

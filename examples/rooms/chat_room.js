@@ -4,12 +4,18 @@ var Room = require('../../lib/room')
 
 class ChatRoom extends Room {
 
-  constructor (options) {
-    super(options, 1000)
+  constructor ( options ) {
+
+    super( options )
+
+    this.useTimeline()
+
+    this.setPatchRate( 1000 )
 
     this.setState({ messages: [] })
 
     console.log("ChatRoom created!", options)
+
   }
 
   onJoin (client) {
@@ -31,7 +37,7 @@ class ChatRoom extends Room {
     console.log("ChatRoom:", client.id, data)
   }
 
-  dispose () {
+  onDispose () {
     console.log("Dispose ChatRoom")
   }
 

@@ -14,20 +14,22 @@ Minimalist Multiplayer Game Server for Node.js. [View documentation](http://game
 ## Features
 
 - WebSocket-based communication
-- Match-making
+- Room instantiation
 - Binary data transfer (through [msgpack](http://msgpack.org))
 - Delta-encoded state broadcasts (through [fast-json-patch](https://github.com/Starcounter-Jack/JSON-Patch/) - [RFC6902](http://tools.ietf.org/html/rfc6902))
+- Lag compensation (using [timeframe](http://github.com/gamestdio/timeframe), a
+  Timeline implementation)
+  - _(Not automatic. You should apply the technique as you need, in the client and/or the server.)_
 
 TODO:
 
-- delay/lag compensation
 - "area of interest" updates/broadcasts
 
 ---
 
-**Match-making diagram:**
+**Room instantiation diagram:**
 
-![Match-making diagram](http://www.gliffy.com/go/publish/image/10069321/L.png)
+![Room instantiation diagram](http://www.gliffy.com/go/publish/image/10069321/L.png)
 
 **Room state diagram:**
 
@@ -35,24 +37,30 @@ TODO:
 
 ## Room API
 
-### Callbacks
+### Properties
 
-- onJoin (client) - *when a client joins the room*
-- onLeave (client) - *when a client leaves the room*
-- onMessage (client, data) - *when a client send a message*
-- dispose () - *cleanup callback, called after there's no more clients on the room*
+- clock - *A [`ClockTimer`](https://github.com/gamestdio/clock-timer.js) instance*
+- timeline - *A [`Timeline`](https://github.com/gamestdio/timeframe) instance (see `useTimeline`)*
+- clients - *Array of connected clients*
 
-### Methods
+### Methods you should implement
 
-- lock() - *lock the room to new clients*
-- unlock() - *unlock the room to new clients*
-- send(client, data) - *send data to a particular client*
-- broadcast(data) - *send data to all connected clients*
-- sendState(client) - *send current state to a particular client*
-- broadcastState() - *send current state to all clients*
-- broadcastPatch() - *send patched (diff) state to all clients* (called
-  automatically at configurable interval)
-- disconnect() - *disconnect all clients then dispose*
+- onJoin (client) - *When a client joins the room*
+- onLeave (client) - *When a client leaves the room*
+- onMessage (client, data) - *When a client send a message*
+- onDispose () - *Cleanup callback, called after there's no more clients on the room*
+
+### Available methods
+
+- setState( object ) - *Set the current state to be broadcasted / patched.*
+- setSimulationInterval( callback[, milliseconds=16.6] ) - *(Optional) Create the simulation interval that will change the state of the game. Default simulation interval: 16.6ms (60fps)*
+- setPatchRate( milliseconds ) - *Set frequency the patched state should be sent to all clients. Default is 50ms (20fps).*
+- useTimeline([ maxSnapshots=10 ]) - *(Optional) Keep state history between broadcatesd patches.*
+- send( client, data ) - *Send data to a particular client.*
+- lock() - *Lock the room to new clients.*
+- unlock() - *Unlock the room to new clients.*
+- broadcast( data ) - *Send data to all connected clients.*
+- disconnect() - *Disconnect all clients then dispose.*
 
 ## Production usage
 
