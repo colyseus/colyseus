@@ -13,9 +13,9 @@
     "url": "git://github.com/gamestdio/colyseus.git"
   },
   "scripts": {
-    "start": "nodemon --harmony ./examples/server.js",
-    "debug": "node-debug --harmony ./examples/server.js",
-    "test": "mocha --harmony"
+    "start": "nodemon --harmony --harmony-proxies ./examples/server.js",
+    "debug": "node-debug --harmony --harmony-proxies ./examples/server.js",
+    "test": "mocha --harmony --harmony-proxies"
   },
   "engines": {
     "node": ">= 4.x"
