@@ -23,13 +23,30 @@ class DummyRoomWithState extends Room {
   }
 }
 
+class DummyRoomWithTimeline extends Room {
+  constructor(options) {
+    super(options)
+    this.useTimeline()
+  }
+  requestJoin (options) {
+    return !options.invalid_param
+  }
+}
+
 describe('Room', function() {
 
   describe('#constructor', function() {
+
     it('should instantiate with valid options', function() {
       var room = new DummyRoom({ })
       assert.equal('DummyRoom', room.constructor.name)
     });
+
+    it('should instantiate with timeline attribute', function() {
+      var room = new DummyRoomWithTimeline({ })
+      assert.equal(0, room.timeline.history.length)
+    });
+
   });
 
   describe('#onJoin/#onLeave', function() {

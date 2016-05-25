@@ -22,10 +22,10 @@
   },
   "dependencies": {
     "clock-timer.js": "^1.1.0",
-    "fast-json-patch": "Starcounter-Jack/JSON-Patch",
+    "fossil-delta": "^0.2.5",
     "msgpack-lite": "^0.1.13",
     "shortid": "^2.2.4",
-    "timeframe": "^0.1.0",
+    "timeframe": "^0.3.2",
     "ws": "^1.0.1"
   },
   "devDependencies": {
@@ -34,9 +34,7 @@
     "colyseus.js": "^0.1.8",
     "express": "^4.13.3",
     "mocha": "^2.3.4",
-    "nodemon": "^1.7.1",
-    "immutable": "^3.7.6",
-    "immutable-diff": "^0.1.1"
+    "nodemon": "^1.7.1"
   },
   "license": "MIT"
 }

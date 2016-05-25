@@ -3,9 +3,9 @@
 console.log('benchmark: evaluating a complex patch state')
 
 var Benchmark = require('benchmark')
-  , Immutable = require('immutable')
-  , immutablediff = require('immutable-diff')
   , jsonpatch = require('fast-json-patch')
+  , fossilDelta = require('fossil-delta')
+  , msgpack = require('msgpack-lite')
   , StateObserver = require('../../lib/state/observer.js')
 
   , suite = new Benchmark.Suite()
@@ -82,32 +82,6 @@ class ComplexState {
   }
 }
 
-var obj1 = new ComplexState();
-var state1 = Immutable.fromJS(toJSON(obj1)).toJS();
-suite.add('using immutable', function() {
-  for (var i=0; i<4; i++) {
-    obj1.objs[0].hp--;
-    obj1.objs[2].hp--;
-    obj1.teams[i].score++;
-    var newState = Immutable.fromJS(toJSON(obj1)).toJS();
-    var diff = jsonpatch.compare(state1, newState);
-    state1 = newState
-  }
-})
-
-var obj11 = new ComplexState();
-var state11 = Immutable.fromJS(toJSON(obj11));
-suite.add('using immutable + immutable-diff', function() {
-  for (var i=0; i<4; i++) {
-    obj11.objs[0].hp--;
-    obj11.objs[2].hp--;
-    obj11.teams[i].score++;
-    var newState = Immutable.fromJS(toJSON(obj11));
-    var diff = immutablediff.default(state11, newState).toJS();
-    state11 = newState
-  }
-})
-
 var obj2 = new ComplexState();
 var state2 = JSON.parse(JSON.stringify(toJSON(obj2)))
 suite.add('using json', function() {
@@ -116,7 +90,7 @@ suite.add('using json', function() {
     obj2.objs[2].hp--;
     obj2.teams[i].score++;
     var newState = JSON.parse(JSON.stringify(toJSON(obj2)))
-    var diff = jsonpatch.compare(state2, newState);
+    var diff = msgpack.encode( jsonpatch.compare(state2, newState) )
     state2 = newState
   }
 })
@@ -128,7 +102,7 @@ suite.add('using plain + observe', function() {
     obj3.objs[0].hp--;
     obj3.objs[2].hp--;
     obj3.teams[i].score++;
-    var diff = jsonpatch.generate(observer)
+    var diff = msgpack.encode( jsonpatch.generate(observer) )
   }
 })
 
@@ -141,7 +115,37 @@ suite.add('using complex + observe', function() {
     obj4.objs[2].hp--;
     obj4.teams[i].score++;
     Object.assign(obj4state, toJSON(obj4))
-    var diff = jsonpatch.generate(observer2)
+    var diff = msgpack.encode( jsonpatch.generate(observer2) )
+    console.log("observe, length: ", diff.length)
+  }
+})
+
+var obj4 = new PlainState();
+var oldBinary4 = msgpack.encode( toJSON( obj4 ) )
+var newBinary4 = null
+suite.add('using plain + fossildelta', function() {
+  for (var i=0; i<4; i++) {
+    obj4.objs[0].hp--;
+    obj4.objs[2].hp--;
+    obj4.teams[i].score++;
+    newBinary4 = msgpack.encode( toJSON( obj4 ) )
+    var diff = fossilDelta.create( oldBinary4, newBinary4 )
+    oldBinary4 = newBinary4
+  }
+})
+
+var obj5 = new ComplexState();
+var oldBinary5 = msgpack.encode( toJSON( obj4 ) )
+var newBinary5 = null
+suite.add('using complex + fossildelta', function() {
+  for (var i=0; i<4; i++) {
+    obj5.objs[0].hp--;
+    obj5.objs[2].hp--;
+    obj5.teams[i].score++;
+    newBinary5 = msgpack.encode( toJSON( obj5 ) )
+    var diff = fossilDelta.create( oldBinary5, newBinary5 )
+    oldBinary5 = newBinary5
+    console.log("fossildenta, length: ", diff.length)
   }
 })
 
