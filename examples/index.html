@@ -40,47 +40,47 @@
         console.error(error)
       })
 
-      // var chatRoom = client.join("chat")
-      // chatRoom.on('error', function(error) {
-      //   console.error(error)
-      // })
-      //
-      // chatRoom.on('join', function() {
-      //   console.log(client.id, "joined", chatRoom.name)
-      // })
-      //
-      // chatRoom.on('leave', function() {
-      //   console.log(client.id, "leaved", chatRoom.name)
-      // })
-      //
-      // chatRoom.on('data', function(data) {
-      //   console.log(client.id, "received on", chatRoom.name, data)
-      // })
-      //
-      // chatRoom.on('setup', function(state) {
-      //   console.log("setup:", state)
-      //
-      //   // setup initial messages
-      //   for (var i=0; i<state.messages.length; i++) {
-      //     var node = document.createElement("p");
-      //     node.innerHTML = state.messages[i]
-      //     document.getElementById('messages').appendChild(node)
-      //   }
-      // })
-      //
-      // chatRoom.on('patch', function(patch) {
-      //   for (var i=0; i<patch.length; i++) {
-      //     var node = document.createElement("p");
-      //     node.innerHTML = patch[i].value
-      //     document.getElementById('messages').appendChild(node)
-      //   }
-      //
-      //   console.log("patch:", patch)
-      // })
-      //
-      // chatRoom.on('update', function(state) {
-      //   console.log("update:", state)
-      // })
+      var chatRoom = client.join("chat")
+      chatRoom.on('error', function(error) {
+        console.error(error)
+      })
+
+      chatRoom.on('join', function() {
+        console.log(client.id, "joined", chatRoom.name)
+      })
+
+      chatRoom.on('leave', function() {
+        console.log(client.id, "leaved", chatRoom.name)
+      })
+
+      chatRoom.on('data', function(data) {
+        console.log(client.id, "received on", chatRoom.name, data)
+      })
+
+      chatRoom.on('setup', function(state) {
+        console.log("setup:", state)
+
+        // setup initial messages
+        for (var i=0; i<state.messages.length; i++) {
+          var node = document.createElement("p");
+          node.innerHTML = state.messages[i]
+          document.getElementById('messages').appendChild(node)
+        }
+      })
+
+      chatRoom.on('patch', function(patch) {
+        for (var i=0; i<patch.length; i++) {
+          var node = document.createElement("p");
+          node.innerHTML = patch[i].value
+          document.getElementById('messages').appendChild(node)
+        }
+
+        console.log("patch:", patch)
+      })
+
+      chatRoom.on('update', function(state) {
+        console.log("update:", state)
+      })
 
       document.getElementById('form').onsubmit = function(e) {
         e.preventDefault()
