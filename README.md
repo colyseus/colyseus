@@ -5,6 +5,8 @@
 
 Minimalist Multiplayer Game Server for Node.js. [View documentation](http://gamestd.io/colyseus/docs).
 
+Read the [blog post](https://medium.com/@endel/colyseus-minimalistic-mmo-game-server-for-node-js-a29fe1cebbfe) to understand the motivation behind this project.
+
 **Live demos:**
 
 - [tanx](https://playcanvas.com/project/367035/overview/tanxcolyseus) ([source-code](https://github.com/endel/tanx))
