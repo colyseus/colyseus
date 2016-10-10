@@ -1,31 +1,33 @@
 "use strict";
 
-var EventEmitter = require('events').EventEmitter
-  , WebSocketServer = require('ws').Server
+import { EventEmitter } from "events";
+import { Server as WebSocketServer } from "ws";
 
-  , shortid = require('shortid')
-  , msgpack = require('msgpack-lite')
+import { Protocol } from "./Protocol";
+import { MatchMaker } from "./MatchMaker";
+import { spliceOne } from "./Utils";
+import { Room } from "./Room";
 
-  , protocol = require('./protocol')
-  , MatchMaker = require('./match_maker')
+import * as shortid from "shortid";
+import * as msgpack from "msgpack-lite";
 
-  , utils = require('./utils')
+import * as WebSocket from "ws";
 
 // // memory debugging
 // setInterval(function() { console.log(require('util').inspect(process.memoryUsage())); }, 1000)
 
-class Server extends EventEmitter {
+export class Server extends EventEmitter {
+  protected server: WebSocketServer;
+  protected matchMaker: MatchMaker = new MatchMaker();
+
+  // room references by client id
+  protected clients: {[id: string]: Room[]} = {};
 
   constructor (options) {
     super()
 
     this.server = new WebSocketServer(options)
     this.server.on('connection', this.onConnect.bind(this))
-
-    // room references by client id
-    this.clients = {}
-
-    this.matchMaker = new MatchMaker()
   }
 
   /**
@@ -39,28 +41,22 @@ class Server extends EventEmitter {
    *    server.register("area_1", AreaHandler, { map_file: "area1.json" })
    *    server.register("area_2", AreaHandler, { map_file: "area2.json" })
    *    server.register("area_3", AreaHandler, { map_file: "area3.json" })
-   *
-   * @param name
-   * @param handler
-   * @param options
    */
-  register (name, handler, options) {
-    if (typeof(name)!=="string" && name.name) {
-      handler = name
-      name = handler.name
-    }
+  register (name: string, handler: Function, options?: any) {
     this.matchMaker.addHandler(name, handler, options)
   }
 
-  onConnect (client) {
-    client.id = shortid.generate()
-    client.send( msgpack.encode([protocol.USER_ID, client.id]), { binary: true } )
+  onConnect (client: WebSocket) {
+    let clientId = shortid.generate();
+
+    (<any>client).id = clientId;
+    client.send( msgpack.encode([ Protocol.USER_ID, clientId ]), { binary: true } )
 
     client.on('message', this.onMessage.bind(this, client));
     client.on('error', this.onError.bind(this, client));
     client.on('close', this.onDisconnect.bind(this, client));
 
-    this.clients[ client.id ] = []
+    this.clients[ clientId ] = [];
     this.emit('connect', client)
   }
 
@@ -69,37 +65,34 @@ class Server extends EventEmitter {
   }
 
   onMessage (client, data) {
-
     let message = msgpack.decode(data)
     this.emit('message', client, message)
 
-    if (typeof(message[0]) === "number" && message[0] == protocol.JOIN_ROOM) {
+    if (typeof(message[0]) === "number" && message[0] == Protocol.JOIN_ROOM) {
       try {
         this.onJoinRoomRequest(client, message[1], message[2])
       } catch (e) {
         console.error(e.stack)
-        client.send(msgpack.encode([protocol.JOIN_ERROR, message[1], e.message]), { binary: true })
+        client.send(msgpack.encode([Protocol.JOIN_ERROR, message[1], e.message]), { binary: true })
       }
 
-    } else if (typeof(message[0]) === "number" && message[0] == protocol.LEAVE_ROOM) {
+    } else if (typeof(message[0]) === "number" && message[0] == Protocol.LEAVE_ROOM) {
       // trigger onLeave directly to specific room
-      let room = this.matchMaker.roomsById[ message[1] ]
+      let room = this.matchMaker.getRoomById( message[1] );
       if (room) room._onLeave(client)
 
-    } else if (typeof(message[0]) === "number" && message[0] == protocol.ROOM_DATA) {
+    } else if (typeof(message[0]) === "number" && message[0] == Protocol.ROOM_DATA) {
       // send message directly to specific room
-      let room = this.matchMaker.roomsById[ message[1] ]
+      let room = this.matchMaker.getRoomById( message[1] );
       if (room) room._onMessage(client, message[2])
 
     } else {
       this.clients[ client.id ].forEach(room => room._onMessage(client, message))
     }
-
   }
 
   onJoinRoomRequest (client, roomToJoin, clientOptions) {
-
-    var room = false
+    var room: Room;
 
     if (typeof(roomToJoin)==="string") {
       room = this.matchMaker.joinOrCreateByName(client, roomToJoin, clientOptions || {});
@@ -115,20 +108,17 @@ class Server extends EventEmitter {
     } else {
       throw new Error("join_request_fail")
     }
-
   }
 
   onClientLeaveRoom (room, client, isDisconnect) {
-
     if (isDisconnect) {
       return true
     }
 
     var roomIndex = this.clients[ client.id ].indexOf(room)
     if (roomIndex >= 0) {
-      utils.spliceOne(this.clients[ client.id ], roomIndex)
+      spliceOne(this.clients[ client.id ], roomIndex)
     }
-
   }
 
   onDisconnect (client) {
@@ -141,5 +131,3 @@ class Server extends EventEmitter {
   }
 
 }
-
-module.exports = Server

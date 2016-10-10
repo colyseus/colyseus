@@ -1,6 +1,5 @@
-"use strict";
 
-module.exports.spliceOne = function(arr, index) {
+export function spliceOne (arr: Array<any>, index: number): void {
   // manually splice availableRooms array
   // http://jsperf.com/manual-splice
   if (index >= arr.length) {
@@ -12,7 +11,7 @@ module.exports.spliceOne = function(arr, index) {
   arr.length = len;
 }
 
-module.exports.merge = function (a, b) {
+export function merge (a: any, b: any): any {
   for (var key in b) {
     if (b.hasOwnProperty(key)) {
       a[key] = b[key]
@@ -21,7 +20,7 @@ module.exports.merge = function (a, b) {
   return a;
 }
 
-module.exports.logError = function(err) {
+export function logError (err: Error): void {
   if (err) {
     console.log(err)
   }
@@ -33,7 +32,7 @@ module.exports.logError = function(err) {
 // You can see the impact of changes on this benchmark:
 // `node --harmony test/benchmark/patch.js`
 //
-const toJSON = function (obj) {
+export function toJSON (obj: any): any {
   let result
 
   if (obj && typeof(obj.toJSON)==="function") {
@@ -58,5 +57,3 @@ const toJSON = function (obj) {
 
   return result
 }
-
-module.exports.toJSON = toJSON

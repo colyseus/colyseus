@@ -2,6 +2,8 @@
   "name": "colyseus",
   "version": "0.4.2",
   "description": "Minimalist Multiplayer Game Server for Node.js.",
+  "main": "./lib/index.js",
+  "typings": "./lib/index.d.ts",
   "keywords": [
     "multiplayer",
     "game",
@@ -13,9 +15,11 @@
     "url": "git://github.com/gamestdio/colyseus.git"
   },
   "scripts": {
-    "start": "nodemon --harmony --harmony-proxies ./examples/server.js",
+    "prepublish": "tsc -d",
+    "watch": "tsc -d -w",
+    "start": "npm run watch & nodemon --harmony --harmony-proxies ./examples/server.js",
     "debug": "node-debug --harmony --harmony-proxies ./examples/server.js",
-    "test": "mocha --harmony --harmony-proxies"
+    "test": "mocha --require ts-node/register test/**Test.ts"
   },
   "engines": {
     "node": ">= 4.x"
@@ -25,16 +29,23 @@
     "fossil-delta": "^0.2.5",
     "msgpack-lite": "^0.1.13",
     "shortid": "^2.2.4",
-    "timeframe": "^0.3.2",
-    "ws": "^1.0.1"
+    "timeframe": "file:../timeframe",
+    "ws": "^1.1.0"
   },
   "devDependencies": {
+    "@types/mocha": "^2.2.32",
+    "@types/msgpack-lite": "^0.1.1",
+    "@types/node": "^6.0.41",
+    "@types/shortid": "0.0.28",
     "assert": "^1.3.0",
     "benchmark": "^1.0.0",
     "colyseus.js": "^0.4.0",
     "express": "^4.13.3",
-    "mocha": "^2.3.4",
-    "nodemon": "^1.7.1"
+    "mocha": "2.3.2",
+    "nodemon": "^1.7.1",
+    "ts-node": "^1.4.1",
+    "typescript": "^2.0.3",
+    "typings": "^1.4.0"
   },
   "license": "MIT"
 }

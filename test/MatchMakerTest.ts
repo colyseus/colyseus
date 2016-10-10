@@ -1,15 +1,7 @@
-"use strict";
-
-var assert = require('assert')
-  , MatchMaker = require('../lib/match_maker')
-  , Room = require('../lib/room')
-  , mock = require('./utils/mock')
-
-class DummyRoom extends Room {
-  requestJoin (options) {
-    return !options.invalid_param
-  }
-}
+import * as assert from 'assert';
+import { MatchMaker } from "../src/MatchMaker";
+import { Room } from "../src/Room";
+import { createDummyClient, DummyRoom } from "./utils/mock";
 
 describe('MatchMaker', function() {
   var matchMaker;
@@ -28,7 +20,7 @@ describe('MatchMaker', function() {
     });
 
     it('should create a new room on joinOrCreateByName', function() {
-      var client = mock.createDummyClient()
+      var client = createDummyClient()
       var room = matchMaker.joinOrCreateByName(client, 'room', {})
 
       assert.equal(0, room.roomId)
@@ -37,21 +29,21 @@ describe('MatchMaker', function() {
     })
 
     it('should throw error when trying to join room by id with invalid id', function() {
-      var client = mock.createDummyClient()
+      var client = createDummyClient()
       assert.throws(() => {
         matchMaker.joinById(client, 100)
       }, Error);
     })
 
     it('shouldn\'t create room when trying to join room with invalid params', function() {
-      var client = mock.createDummyClient()
+      var client = createDummyClient()
       var room = matchMaker.joinOrCreateByName(client, 'dummy_room', {invalid_param: 10})
       assert.equal(room, null)
     })
 
     it('should throw error when trying to join existing room by id with invalid params', function() {
-      var client1 = mock.createDummyClient()
-      var client2 = mock.createDummyClient()
+      var client1 = createDummyClient()
+      var client2 = createDummyClient()
 
       var room = matchMaker.joinOrCreateByName(client1, 'room', {})
       assert.throws(() => {
@@ -62,8 +54,8 @@ describe('MatchMaker', function() {
     it('should join existing room on joinById', function() {
       assert.equal(false, matchMaker.hasAvailableRoom('dummy_room'))
 
-      var client1 = mock.createDummyClient()
-      var client2 = mock.createDummyClient()
+      var client1 = createDummyClient()
+      var client2 = createDummyClient()
 
       var room = matchMaker.joinOrCreateByName(client1, 'dummy_room', {})
       var joiningRoom = matchMaker.joinById(client2, room.roomId, {})

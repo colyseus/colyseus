@@ -1,0 +1,16 @@
+{
+    "compilerOptions": {
+        "outDir": "lib",
+        "module": "commonjs",
+        "target": "es5",
+        "noImplicitAny": false,
+        "sourceMap": false
+    },
+    "include": [
+      "src/**.ts"
+    ],
+    "files": [
+      "definitions/fossil-delta.d.ts",
+      "typings/index.d.ts"
+    ]
+}

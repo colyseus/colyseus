@@ -2,7 +2,7 @@
 
 var jsonpatch = require('fast-json-patch')
 
-class StateObserver {
+export class StateObserver {
 
   constructor (state) {
     this.state = state
@@ -67,5 +67,3 @@ class StateObserver {
   }
 
 }
-
-module.exports = StateObserver

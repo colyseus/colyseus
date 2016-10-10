@@ -1,7 +1,7 @@
 "use strict";
 
 var assert = require('assert')
-  , StateObserver = require('../lib/state/observer')
+  , StateObserver = require('../../lib/state/Observer').StateObserver
   , msgpack = require('msgpack-lite')
 
 class PlainState {

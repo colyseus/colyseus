@@ -1,17 +1,11 @@
 "use strict";
 
-var assert = require('assert')
-  , Server = require('../lib/server')
-  , Room = require('../lib/room')
-  , mock = require('./utils/mock')
-  , msgpack = require('msgpack-lite')
-  , protocol = require('../lib/protocol')
-
-class DummyRoom extends Room {
-  requestJoin (options) {
-    return !options.invalid_param
-  }
-}
+import * as assert from "assert";
+import * as msgpack from "msgpack-lite";
+import { Room } from "../src/Room";
+import { Server } from "../src/Server";
+import { Protocol } from "../src/Protocol";
+import { createEmptyClient, DummyRoom } from "./utils/mock";
 
 describe('Server', function() {
   var server = new Server({port: 1111})
@@ -24,7 +18,7 @@ describe('Server', function() {
   // connect 5 clients into server
   before(function() {
     for (var i=0; i<5; i++) {
-      var client = mock.createEmptyClient()
+      var client = createEmptyClient()
       clients.push(client)
       server.onConnect(client)
     }
@@ -47,8 +41,8 @@ describe('Server', function() {
       })
 
       assert.equal( 2, client.messages.length )
-      assert.equal( protocol.USER_ID, msgpack.decode(client.messages[0])[0] )
-      assert.equal( protocol.JOIN_ROOM, msgpack.decode(client.messages[1])[0] )
+      assert.equal( Protocol.USER_ID, msgpack.decode(client.messages[0])[0] )
+      assert.equal( Protocol.JOIN_ROOM, msgpack.decode(client.messages[1])[0] )
 
     })
 
@@ -61,7 +55,7 @@ describe('Server', function() {
       }, /join_request_fail/)
 
       assert.equal( 1, client.messages.length )
-      assert.equal( protocol.USER_ID, msgpack.decode(client.messages[0])[0] )
+      assert.equal( Protocol.USER_ID, msgpack.decode(client.messages[0])[0] )
 
     })
   });

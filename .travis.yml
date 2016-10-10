@@ -1,3 +1,4 @@
 language: node_js
 node_js:
   - 5
+script: './node_modules/.bin/_mocha --require ts-node/register test/**Test.ts'
