@@ -1,6 +1,6 @@
 "use strict";
 
-var colyseus = require('../index')
+var colyseus = require('../lib/index')
   , http = require('http')
   , express = require('express')
   , port = process.env.PORT || 2657

@@ -15,10 +15,10 @@
     "url": "git://github.com/gamestdio/colyseus.git"
   },
   "scripts": {
+    "install": "typings install",
     "prepublish": "tsc -d",
     "watch": "tsc -d -w",
     "start": "npm run watch & nodemon --harmony --harmony-proxies ./examples/server.js",
-    "debug": "node-debug --harmony --harmony-proxies ./examples/server.js",
     "test": "mocha --require ts-node/register test/**Test.ts"
   },
   "engines": {
