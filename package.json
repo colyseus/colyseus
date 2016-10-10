@@ -29,7 +29,7 @@
     "fossil-delta": "^0.2.5",
     "msgpack-lite": "^0.1.13",
     "shortid": "^2.2.4",
-    "timeframe": "file:../timeframe",
+    "timeframe": "^0.3.5",
     "ws": "^1.1.0"
   },
   "devDependencies": {
