@@ -1,6 +1,6 @@
 {
   "name": "colyseus",
-  "version": "0.4.2",
+  "version": "0.4.3-rc2",
   "description": "Minimalist Multiplayer Game Server for Node.js.",
   "main": "./lib/index.js",
   "typings": "./lib/index.d.ts",
@@ -15,7 +15,6 @@
     "url": "git://github.com/gamestdio/colyseus.git"
   },
   "scripts": {
-    "install": "typings install",
     "prepublish": "tsc -d",
     "watch": "tsc -d -w",
     "start": "npm run watch & nodemon --harmony --harmony-proxies ./examples/server.js",
