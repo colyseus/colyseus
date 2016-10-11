@@ -2,6 +2,7 @@ language: node_js
 node_js:
   - 6
 install:
+  - 'npm install -g typings'
   - 'npm install'
-  - './node_modules/.bin/typings install'
+  - 'typings install'
 script: './node_modules/.bin/_mocha --require ts-node/register test/**Test.ts'
