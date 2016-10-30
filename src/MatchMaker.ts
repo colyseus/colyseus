@@ -1,6 +1,6 @@
 import { merge, spliceOne } from "./Utils";
 import { Room } from "./Room";
-import * as WebSocket from "ws";
+import { Client } from "./index";
 
 export class MatchMaker {
 
@@ -27,7 +27,7 @@ export class MatchMaker {
     return this.roomsById[ roomId ];
   }
 
-  public joinById (client: WebSocket, roomId: number, clientOptions: any): Room<any> {
+  public joinById (client: Client, roomId: number, clientOptions: any): Room<any> {
     let room = this.roomsById[ roomId ];
     if (!room) { throw new Error(`room doesn't exists`); }
 
@@ -39,7 +39,7 @@ export class MatchMaker {
     return room;
   }
 
-  public joinOrCreateByName (client: WebSocket, roomName: string, clientOptions: any): Room<any> {
+  public joinOrCreateByName (client: Client, roomName: string, clientOptions: any): Room<any> {
 
     // throw error
     if (!this.hasHandler(roomName)) {
@@ -55,7 +55,7 @@ export class MatchMaker {
 
   }
 
-  public requestJoin (client: WebSocket, roomName: string, clientOptions: any): Room<any> {
+  public requestJoin (client: Client, roomName: string, clientOptions: any): Room<any> {
     let room: Room<any>;
 
     if ( this.hasAvailableRoom( roomName ) ) {
@@ -72,7 +72,7 @@ export class MatchMaker {
     return room;
   }
 
-  public create (client: WebSocket, roomName: string, clientOptions: any): Room<any> {
+  public create (client: Client, roomName: string, clientOptions: any): Room<any> {
     let room = null
       , handler = this.handlers[ roomName ][0]
       , options = this.handlers[ roomName ][1];

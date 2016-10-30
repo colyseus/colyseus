@@ -7,11 +7,10 @@ import { Protocol } from "./Protocol";
 import { MatchMaker } from "./MatchMaker";
 import { spliceOne } from "./Utils";
 import { Room } from "./Room";
+import { Client } from "./index";
 
 import * as shortid from "shortid";
 import * as msgpack from "msgpack-lite";
-
-import * as WebSocket from "ws";
 
 // // memory debugging
 // setInterval(function() { console.log(require('util').inspect(process.memoryUsage())); }, 1000)
@@ -46,10 +45,10 @@ export class Server extends EventEmitter {
     this.matchMaker.addHandler(name, handler, options)
   }
 
-  onConnect (client: WebSocket) {
+  onConnect (client: Client) {
     let clientId = shortid.generate();
 
-    (<any>client).id = clientId;
+    client.id = clientId;
     client.send( msgpack.encode([ Protocol.USER_ID, clientId ]), { binary: true } )
 
     client.on('message', this.onMessage.bind(this, client));
@@ -60,11 +59,11 @@ export class Server extends EventEmitter {
     this.emit('connect', client)
   }
 
-  onError (client, e) {
+  onError (client: Client, e: any) {
     console.error("[ERROR]", client.id, e)
   }
 
-  onMessage (client, data) {
+  onMessage (client: Client, data: any) {
     let message = msgpack.decode(data)
     this.emit('message', client, message)
 
@@ -91,7 +90,7 @@ export class Server extends EventEmitter {
     }
   }
 
-  onJoinRoomRequest (client, roomToJoin, clientOptions) {
+  onJoinRoomRequest (client: Client, roomToJoin: number | string, clientOptions: any) {
     var room: Room<any>;
 
     if (typeof(roomToJoin)==="string") {

@@ -1,13 +1,14 @@
-import { EventEmitter } from "events";
-import { Protocol } from "./Protocol";
-import { logError, spliceOne, toJSON } from "./Utils";
-
-import ClockTimer from "clock-timer.js";
-import { createTimeline, Timeline } from "timeframe";
-
 import * as msgpack from "msgpack-lite";
 import * as fossilDelta from "fossil-delta";
-import * as WebSocket from "ws";
+import * as shortid from "shortid";
+
+import ClockTimer from "clock-timer.js";
+import { EventEmitter } from "events";
+import { createTimeline, Timeline } from "timeframe";
+
+import { Client } from "./index";
+import { Protocol } from "./Protocol";
+import { logError, spliceOne, toJSON } from "./Utils";
 
 export abstract class Room<T> extends EventEmitter {
 
@@ -17,7 +18,7 @@ export abstract class Room<T> extends EventEmitter {
   public roomId: number;
   public roomName: string;
 
-  protected clients: WebSocket[] = [];
+  protected clients: Client[] = [];
   protected options: any;
 
   public state: T;
@@ -38,9 +39,9 @@ export abstract class Room<T> extends EventEmitter {
     this.setPatchRate( 1000 / 20 )
   }
 
-  abstract onMessage (client: WebSocket, data: any): void;
-  abstract onJoin (client: WebSocket, options?: any): void;
-  abstract onLeave (client: WebSocket): void;
+  abstract onMessage (client: Client, data: any): void;
+  abstract onJoin (client: Client, options?: any): void;
+  abstract onLeave (client: Client): void;
   abstract onDispose (): void;
 
   public requestJoin (options: any): boolean {
@@ -87,11 +88,11 @@ export abstract class Room<T> extends EventEmitter {
     this.emit('unlock')
   }
 
-  send (client: WebSocket, data: any): void {
+  send (client: Client, data: any): void {
     client.send( msgpack.encode( [Protocol.ROOM_DATA, this.roomId, data] ), { binary: true }, logError.bind(this) )
   }
 
-  sendState (client: WebSocket): void {
+  sendState (client: Client): void {
     client.send( msgpack.encode( [
       Protocol.ROOM_STATE,
       this.roomId,
@@ -167,7 +168,7 @@ export abstract class Room<T> extends EventEmitter {
     }
   }
 
-  _onJoin (client: WebSocket, options?: any): void {
+  _onJoin (client: Client, options?: any): void {
     this.clients.push( client )
 
     // confirm room id that matches the room name requested to join
@@ -183,7 +184,7 @@ export abstract class Room<T> extends EventEmitter {
     }
   }
 
-  _onLeave (client: WebSocket, isDisconnect: boolean = false): void {
+  _onLeave (client: Client, isDisconnect: boolean = false): void {
     // remove client from client list
     spliceOne(this.clients, this.clients.indexOf(client))
 
