@@ -34,7 +34,7 @@ export function createDummyClient (): any {
   return new Client(shortid.generate())
 }
 
-export class DummyRoom extends Room {
+export class DummyRoom extends Room<any> {
   requestJoin (options) {
     return !options.invalid_param
   }
@@ -45,7 +45,7 @@ export class DummyRoom extends Room {
   onMessage() {}
 }
 
-export class DummyRoomWithState extends Room {
+export class DummyRoomWithState extends Room<any> {
   constructor(options) {
     super(options)
     this.setState({ number: 10 })
@@ -60,7 +60,7 @@ export class DummyRoomWithState extends Room {
   onMessage() {}
 }
 
-export class DummyRoomWithTimeline extends Room {
+export class DummyRoomWithTimeline extends Room<any> {
   constructor(options) {
     super(options)
     this.useTimeline()

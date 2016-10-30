@@ -21,7 +21,7 @@ export class Server extends EventEmitter {
   protected matchMaker: MatchMaker = new MatchMaker();
 
   // room references by client id
-  protected clients: {[id: string]: Room[]} = {};
+  protected clients: {[id: string]: Room<any>[]} = {};
 
   constructor (options) {
     super()
@@ -92,7 +92,7 @@ export class Server extends EventEmitter {
   }
 
   onJoinRoomRequest (client, roomToJoin, clientOptions) {
-    var room: Room;
+    var room: Room<any>;
 
     if (typeof(roomToJoin)==="string") {
       room = this.matchMaker.joinOrCreateByName(client, roomToJoin, clientOptions || {});

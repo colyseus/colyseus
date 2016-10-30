@@ -9,7 +9,7 @@ import * as msgpack from "msgpack-lite";
 import * as fossilDelta from "fossil-delta";
 import * as WebSocket from "ws";
 
-export abstract class Room extends EventEmitter {
+export abstract class Room<T> extends EventEmitter {
 
   public clock: ClockTimer = new ClockTimer();
   public timeline?: Timeline;
@@ -20,7 +20,7 @@ export abstract class Room extends EventEmitter {
   protected clients: WebSocket[] = [];
   protected options: any;
 
-  public state: any;
+  public state: T;
   protected _previousState: any;
 
   private _simulationInterval: NodeJS.Timer;

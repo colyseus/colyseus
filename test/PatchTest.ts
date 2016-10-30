@@ -5,7 +5,7 @@ import { createDummyClient, DummyRoom } from "./utils/mock";
 import { Protocol } from "../src/Protocol";
 
 describe('Room patches', function() {
-  let room: Room;
+  let room: Room<any>;
 
   beforeEach(function() {
     room = new DummyRoom();

@@ -8,9 +8,5 @@
     },
     "include": [
       "src/**.ts"
-    ],
-    "files": [
-      "definitions/fossil-delta.d.ts",
-      "typings/index.d.ts"
     ]
 }

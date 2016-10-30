@@ -5,8 +5,8 @@ import * as WebSocket from "ws";
 export class MatchMaker {
 
   private handlers: {[id: string]: any[]} = {};
-  private availableRooms: {[name: string]: Room[]} = {};
-  private roomsById: {[name: number]: Room} = {};
+  private availableRooms: {[name: string]: Room<any>[]} = {};
+  private roomsById: {[name: number]: Room<any>} = {};
   private roomCount: number = 0;
 
   public addHandler (name: string, handler: Function, options: any = {}): void {
@@ -23,11 +23,11 @@ export class MatchMaker {
       this.availableRooms[ roomName ].length > 0)
   }
 
-  public getRoomById (roomId: number): Room {
+  public getRoomById (roomId: number): Room<any> {
     return this.roomsById[ roomId ];
   }
 
-  public joinById (client: WebSocket, roomId: number, clientOptions: any): Room {
+  public joinById (client: WebSocket, roomId: number, clientOptions: any): Room<any> {
     let room = this.roomsById[ roomId ];
     if (!room) { throw new Error(`room doesn't exists`); }
 
@@ -39,7 +39,7 @@ export class MatchMaker {
     return room;
   }
 
-  public joinOrCreateByName (client: WebSocket, roomName: string, clientOptions: any): Room {
+  public joinOrCreateByName (client: WebSocket, roomName: string, clientOptions: any): Room<any> {
 
     // throw error
     if (!this.hasHandler(roomName)) {
@@ -55,8 +55,8 @@ export class MatchMaker {
 
   }
 
-  public requestJoin (client: WebSocket, roomName: string, clientOptions: any): Room {
-    let room: Room;
+  public requestJoin (client: WebSocket, roomName: string, clientOptions: any): Room<any> {
+    let room: Room<any>;
 
     if ( this.hasAvailableRoom( roomName ) ) {
       for ( var i=0; i < this.availableRooms[ roomName ].length; i++ ) {
@@ -72,7 +72,7 @@ export class MatchMaker {
     return room;
   }
 
-  public create (client: WebSocket, roomName: string, clientOptions: any): Room {
+  public create (client: WebSocket, roomName: string, clientOptions: any): Room<any> {
     let room = null
       , handler = this.handlers[ roomName ][0]
       , options = this.handlers[ roomName ][1];
@@ -103,7 +103,7 @@ export class MatchMaker {
     return room;
   }
 
-  private lockRoom (roomName: string, room: Room): void {
+  private lockRoom (roomName: string, room: Room<any>): void {
     if (this.hasAvailableRoom(roomName)) {
       let index = this.availableRooms[roomName].indexOf(room);
       if (index !== -1) {
@@ -112,13 +112,13 @@ export class MatchMaker {
     }
   }
 
-  private unlockRoom (roomName: string, room: Room) {
+  private unlockRoom (roomName: string, room: Room<any>) {
     if (this.availableRooms[ roomName ].indexOf(room) === -1) {
       this.availableRooms[ roomName ].push(room)
     }
   }
 
-  private disposeRoom(roomName: string, room: Room): void {
+  private disposeRoom(roomName: string, room: Room<any>): void {
     delete this.roomsById[ room.roomId ]
 
     // remove from available rooms
