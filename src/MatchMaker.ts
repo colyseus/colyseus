@@ -83,9 +83,9 @@ export class MatchMaker {
     options.roomId = this.roomCount++;
     options.roomName = roomName;
 
-    // Room#requestJoin may fail on constructor
     room = new handler(merge(clientOptions, options));
 
+    // imediatelly ask client to join the room
     if ( room.requestJoin(clientOptions) ) {
       room.on('lock', this.lockRoom.bind(this, roomName, room));
       room.on('unlock', this.unlockRoom.bind(this, roomName, room));

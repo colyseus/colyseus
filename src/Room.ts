@@ -27,7 +27,7 @@ export abstract class Room<T> extends EventEmitter {
   private _simulationInterval: NodeJS.Timer;
   private _patchInterval: number;
 
-  constructor ( options: any = {}) {
+  constructor ( options: any = {} ) {
     super()
 
     this.roomId = options.roomId

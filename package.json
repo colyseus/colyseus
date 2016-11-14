@@ -1,6 +1,6 @@
 {
   "name": "colyseus",
-  "version": "0.4.3-rc4",
+  "version": "0.4.3-rc5",
   "description": "Minimalist Multiplayer Game Server for Node.js.",
   "main": "./lib/index.js",
   "typings": "./lib/index.d.ts",
@@ -32,7 +32,7 @@
     "@types/ws": "0.0.35",
     "clock-timer.js": "^1.1.0",
     "fossil-delta": "^0.2.5",
-    "msgpack-lite": "^0.1.13",
+    "msgpack-lite": "^0.1.26",
     "shortid": "^2.2.6",
     "timeframe": "^0.3.5",
     "ws": "^1.1.0"

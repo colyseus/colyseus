@@ -2,6 +2,7 @@
 
 import { EventEmitter } from "events";
 import { Server as WebSocketServer } from "ws";
+// import { Server as WebSocketServer } from "uws";
 
 import { Protocol } from "./Protocol";
 import { MatchMaker } from "./MatchMaker";
@@ -26,7 +27,7 @@ export class Server extends EventEmitter {
     super()
 
     this.server = new WebSocketServer(options)
-    this.server.on('connection', this.onConnect.bind(this))
+    this.server.on('connection', this.onConnect)
   }
 
   /**
@@ -45,7 +46,7 @@ export class Server extends EventEmitter {
     this.matchMaker.addHandler(name, handler, options)
   }
 
-  onConnect (client: Client) {
+  onConnect = (client: Client) => {
     let clientId = shortid.generate();
 
     client.id = clientId;
