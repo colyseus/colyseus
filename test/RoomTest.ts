@@ -64,7 +64,7 @@ describe('Room', function() {
       var client = createDummyClient()
 
       room._onJoin(client)
-      assert.equal(typeof((<any>room)._patchInterval._repeat), "function")
+      assert.equal(typeof((<any>room)._patchInterval._repeat), "number")
 
       room.on('dispose', function() {
         assert.equal(typeof((<any>room)._patchInterval._repeat), "object")
