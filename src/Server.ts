@@ -65,7 +65,17 @@ export class Server extends EventEmitter {
   }
 
   onMessage (client: Client, data: any) {
-    let message = msgpack.decode(data)
+    let message;
+
+    // try to decode message received from client
+    try {
+      message = msgpack.decode(data);
+
+    } catch (e) {
+      console.error("Couldn't decode message:", data, e.stack);
+      return;
+    }
+
     this.emit('message', client, message)
 
     if (typeof(message[0]) === "number" && message[0] == Protocol.JOIN_ROOM) {
