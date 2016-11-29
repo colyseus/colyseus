@@ -1,6 +1,6 @@
 "use strict";
 
-var Room = require('../../lib/room')
+var Room = require('../../lib/Room').Room;
 
 class ChatRoom extends Room {
 
