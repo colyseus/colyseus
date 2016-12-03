@@ -34,7 +34,7 @@ export class MatchMaker {
     if (!room.requestJoin(clientOptions)) {
       throw new Error(`Can't join ${ clientOptions.roomName }`);
     }
-    room._onJoin(client, clientOptions)
+    (<any>room)._onJoin(client, clientOptions)
 
     return room;
   }
@@ -49,7 +49,7 @@ export class MatchMaker {
     let room = ( this.requestJoin( client, roomName, clientOptions )
       || this.create( client, roomName, clientOptions ) );
 
-    if (room) room._onJoin(client, clientOptions);
+    if (room) (<any>room)._onJoin(client, clientOptions);
 
     return room;
 

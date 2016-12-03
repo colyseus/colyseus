@@ -1,4 +1,4 @@
-"use strict";
+import * as http from "http";
 
 import { EventEmitter } from "events";
 import { Server as WebSocketServer } from "ws";
@@ -16,6 +16,12 @@ import * as msgpack from "msgpack-lite";
 // // memory debugging
 // setInterval(function() { console.log(require('util').inspect(process.memoryUsage())); }, 1000)
 
+export interface ServerOptions {
+  server?: http.Server;
+  port?: number;
+  ws?: WebSocketServer;
+}
+
 export class Server extends EventEmitter {
   protected server: WebSocketServer;
   protected matchMaker: MatchMaker = new MatchMaker();
@@ -23,17 +29,20 @@ export class Server extends EventEmitter {
   // room references by client id
   protected clients: {[id: string]: Room<any>[]} = {};
 
-  constructor (options) {
+  constructor (options: ServerOptions) {
     super()
 
-    this.server = new WebSocketServer(options)
+    if (options.server || options.port) {
+      this.server = new WebSocketServer(options);
+
+    } else {
+      this.server = options.ws;
+    }
+
     this.server.on('connection', this.onConnect)
   }
 
   /**
-   * @example Registering with a class reference
-   *    server.register(RoomHandler)
-   *
    * @example Registering with room name + class handler
    *    server.register("room_name", RoomHandler)
    *
@@ -42,11 +51,11 @@ export class Server extends EventEmitter {
    *    server.register("area_2", AreaHandler, { map_file: "area2.json" })
    *    server.register("area_3", AreaHandler, { map_file: "area3.json" })
    */
-  register (name: string, handler: Function, options?: any) {
+  public register (name: string, handler: Function, options?: any) {
     this.matchMaker.addHandler(name, handler, options)
   }
 
-  onConnect = (client: Client) => {
+  private onConnect = (client: Client) => {
     let clientId = shortid.generate();
 
     client.id = clientId;
@@ -60,11 +69,11 @@ export class Server extends EventEmitter {
     this.emit('connect', client)
   }
 
-  onError (client: Client, e: any) {
+  private onError (client: Client, e: any) {
     console.error("[ERROR]", client.id, e)
   }
 
-  onMessage (client: Client, data: any) {
+  private onMessage (client: Client, data: any) {
     let message;
 
     // try to decode message received from client
@@ -89,19 +98,19 @@ export class Server extends EventEmitter {
     } else if (typeof(message[0]) === "number" && message[0] == Protocol.LEAVE_ROOM) {
       // trigger onLeave directly to specific room
       let room = this.matchMaker.getRoomById( message[1] );
-      if (room) room._onLeave(client)
+      if (room) (<any>room)._onLeave(client)
 
     } else if (typeof(message[0]) === "number" && message[0] == Protocol.ROOM_DATA) {
       // send message directly to specific room
       let room = this.matchMaker.getRoomById( message[1] );
-      if (room) room._onMessage(client, message[2])
+      if (room) room.onMessage(client, message[2])
 
     } else {
-      this.clients[ client.id ].forEach(room => room._onMessage(client, message))
+      this.clients[ client.id ].forEach(room => room.onMessage(client, message))
     }
   }
 
-  onJoinRoomRequest (client: Client, roomToJoin: number | string, clientOptions: any) {
+  private onJoinRoomRequest (client: Client, roomToJoin: number | string, clientOptions: any) {
     var room: Room<any>;
 
     if (typeof(roomToJoin)==="string") {
@@ -120,7 +129,7 @@ export class Server extends EventEmitter {
     }
   }
 
-  onClientLeaveRoom (room, client, isDisconnect) {
+  private onClientLeaveRoom (room, client, isDisconnect) {
     if (isDisconnect) {
       return true
     }
@@ -131,11 +140,11 @@ export class Server extends EventEmitter {
     }
   }
 
-  onDisconnect (client) {
+  private onDisconnect (client) {
     this.emit('disconnect', client)
 
     // send leave message to all connected rooms
-    this.clients[ client.id ].forEach(room => room._onLeave(client, true))
+    this.clients[ client.id ].forEach(room => (<any>room)._onLeave(client, true))
 
     delete this.clients[ client.id ]
   }
