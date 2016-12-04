@@ -18,10 +18,10 @@ Read the [blog post](https://medium.com/@endel/colyseus-minimalistic-mmo-game-se
 
 ### Usage examples
 
-- [tanx](https://playcanvas.com/project/367035/overview/tanxcolyseus) - Multiplayer game tanks game, originally from [PlayCanvas](https://tanx.io/) ([source-code](https://github.com/endel/tanx))
-- [tic-tac-toe](https://tictactoe-colyseus.herokuapp.com) - Simple Tic Tac Toe using [pixi.js](https://github.com/pixijs/pixi.js) ([source-code](https://github.com/endel/tic-tac-toe))
-- [LD35 entry: dotower](http://ludumdare.com/compo/ludum-dare-35/?action=preview&uid=50958) - Simple experimental MOBA using [pixi.js](https://github.com/pixijs/pixi.js) ([source-code](https://github.com/endel/LD35))
-- [React Example](https://colyseus-react-example.herokuapp.com) - Example integrating with [ReactJS](https://github.com/facebook/react) state ([source-code](https://github.com/endel/colyseus-react-example))
+- [tanx](https://playcanvas.com/project/367035/overview/tanxcolyseus) ([source-code](https://github.com/endel/tanx)) - Multiplayer tanks game, originally from [PlayCanvas](https://tanx.io/)
+- [tic-tac-toe](https://tictactoe-colyseus.herokuapp.com) ([source-code](https://github.com/endel/tic-tac-toe)) - Simple Tic Tac Toe using [pixi.js](https://github.com/pixijs/pixi.js)
+- [LD35 entry: dotower](http://ludumdare.com/compo/ludum-dare-35/?action=preview&uid=50958) ([source-code](https://github.com/endel/LD35)) - Simple experimental MOBA using [pixi.js](https://github.com/pixijs/pixi.js)
+- [React Example](https://colyseus-react-example.herokuapp.com) ([source-code](https://github.com/endel/colyseus-react-example)) - Example integrating with [ReactJS](https://github.com/facebook/react) state
 
 ---
 
