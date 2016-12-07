@@ -15,6 +15,12 @@ Read the [blog post](https://medium.com/@endel/colyseus-minimalistic-mmo-game-se
 - Custom room handlers
 - Lag compensation (using [timeframe](http://github.com/gamestdio/timeframe), a
   Timeline implementation) - Not automatic. You should apply the technique as you need, in the client and/or the server.
+  
+### Client integration
+
+- [JavaScript/TypeScript](https://github.com/gamestdio/colyseus.js)
+- [Unity3d](https://github.com/gamestdio/colyseus-unity3d) (works only with server v0.3.x)
+- [CoronaSDK](https://github.com/gamestdio/colyseus.lua) (works only with server v0.3.x)
 
 ### Usage examples
 
