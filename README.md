@@ -1,9 +1,10 @@
-# ![colyseus](examples/logo.png?raw=true)
+# ![colyseus](media/header.png?raw=true)
+
+> Minimalist Multiplayer Game Server for Node.js. [View documentation](https://github.com/gamestdio/colyseus/wiki).
 
 [![Join the chat at https://gitter.im/gamestdio/colyseus](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/gamestdio/colyseus?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 [![Build Status](https://secure.travis-ci.org/gamestdio/colyseus.png?branch=master)](http://travis-ci.org/gamestdio/colyseus)
 
-Minimalist Multiplayer Game Server for Node.js. [View documentation](https://github.com/gamestdio/colyseus/wiki).
 
 Read the [blog post](https://medium.com/@endel/colyseus-minimalistic-mmo-game-server-for-node-js-a29fe1cebbfe) to understand the motivation behind this project.
 
