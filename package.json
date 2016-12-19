@@ -45,8 +45,7 @@
     "mocha": "2.3.2",
     "nodemon": "^1.7.1",
     "ts-node": "^1.4.1",
-    "typescript": "^2.0.3",
-    "typings": "^1.4.0"
+    "typescript": "^2.1.4"
   },
   "license": "MIT"
 }
