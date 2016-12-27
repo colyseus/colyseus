@@ -16,7 +16,7 @@ Read the [blog post](https://medium.com/@endel/colyseus-minimalistic-mmo-game-se
 - Custom room handlers
 - Lag compensation (using [timeframe](http://github.com/gamestdio/timeframe), a
   Timeline implementation) - Not automatic. You should apply the technique as you need, in the client and/or the server.
-  
+
 ### Client integration
 
 - [JavaScript/TypeScript](https://github.com/gamestdio/colyseus.js)
@@ -25,6 +25,7 @@ Read the [blog post](https://medium.com/@endel/colyseus-minimalistic-mmo-game-se
 
 ### Usage examples
 
+- [Official Examples](https://github.com/gamestdio/colyseus-examples) - Official examples for learning purposes.
 - [tanx](https://playcanvas.com/project/367035/overview/tanxcolyseus) ([source-code](https://github.com/endel/tanx)) - Multiplayer tanks game, originally from [PlayCanvas](https://tanx.io/)
 - [tic-tac-toe](https://tictactoe-colyseus.herokuapp.com) ([source-code](https://github.com/endel/tic-tac-toe)) - Simple Tic Tac Toe using [pixi.js](https://github.com/pixijs/pixi.js)
 - [LD35 entry: dotower](http://ludumdare.com/compo/ludum-dare-35/?action=preview&uid=50958) ([source-code](https://github.com/endel/LD35)) - Simple experimental MOBA using [pixi.js](https://github.com/pixijs/pixi.js)

@@ -1,1 +1,0 @@
-../node_modules/colyseus.js/dist/colyseus.js
