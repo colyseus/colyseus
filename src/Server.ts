@@ -39,7 +39,7 @@ export class Server extends EventEmitter {
       this.server = options.ws;
     }
 
-    this.server.on('connection', this.onConnect)
+    this.server.on('connection', this.onConnect);
   }
 
   /**
@@ -52,21 +52,21 @@ export class Server extends EventEmitter {
    *    server.register("area_3", AreaHandler, { map_file: "area3.json" })
    */
   public register (name: string, handler: Function, options?: any) {
-    this.matchMaker.addHandler(name, handler, options)
+    this.matchMaker.addHandler(name, handler, options);
   }
 
   private onConnect = (client: Client) => {
     let clientId = shortid.generate();
 
     client.id = clientId;
-    client.send( msgpack.encode([ Protocol.USER_ID, clientId ]), { binary: true } )
+    client.send( msgpack.encode([ Protocol.USER_ID, clientId ]), { binary: true } );
 
     client.on('message', this.onMessage.bind(this, client));
     client.on('error', this.onError.bind(this, client));
     client.on('close', this.onDisconnect.bind(this, client));
 
     this.clients[ clientId ] = [];
-    this.emit('connect', client)
+    this.emit('connect', client);
   }
 
   private onError (client: Client, e: any) {
@@ -85,32 +85,32 @@ export class Server extends EventEmitter {
       return;
     }
 
-    this.emit('message', client, message)
+    this.emit('message', client, message);
 
     if (typeof(message[0]) === "number" && message[0] == Protocol.JOIN_ROOM) {
       try {
-        this.onJoinRoomRequest(client, message[1], message[2])
+        this.onJoinRoomRequest(client, message[1], message[2]);
       } catch (e) {
-        console.error(e.stack)
-        client.send(msgpack.encode([Protocol.JOIN_ERROR, message[1], e.message]), { binary: true })
+        console.error(e.stack);
+        client.send(msgpack.encode([Protocol.JOIN_ERROR, message[1], e.message]), { binary: true });
       }
 
     } else if (typeof(message[0]) === "number" && message[0] == Protocol.LEAVE_ROOM) {
       // trigger onLeave directly to specific room
       let room = this.matchMaker.getRoomById( message[1] );
-      if (room) (<any>room)._onLeave(client)
+      if (room) (<any>room)._onLeave(client);
 
     } else if (typeof(message[0]) === "number" && message[0] == Protocol.ROOM_DATA) {
       // send message directly to specific room
       let room = this.matchMaker.getRoomById( message[1] );
-      if (room) room.onMessage(client, message[2])
+      if (room) room.onMessage(client, message[2]);
 
     } else {
-      this.clients[ client.id ].forEach(room => room.onMessage(client, message))
+      this.clients[ client.id ].forEach(room => room.onMessage(client, message));
     }
   }
 
-  private onJoinRoomRequest (client: Client, roomToJoin: number | string, clientOptions: any) {
+  private onJoinRoomRequest (client: Client, roomToJoin: number | string, clientOptions: any): Room<any> {
     var room: Room<any>;
 
     if (typeof(roomToJoin)==="string") {
@@ -121,32 +121,34 @@ export class Server extends EventEmitter {
     }
 
     if ( room ) {
-      room.on('leave', this.onClientLeaveRoom.bind(this, room))
-      this.clients[ client.id ].push( room )
+      room.once('leave', this.onClientLeaveRoom.bind(this, room));
+      this.clients[ client.id ].push( room );
 
     } else {
       throw new Error("join_request_fail")
     }
+
+    return room;
   }
 
-  private onClientLeaveRoom (room, client, isDisconnect) {
+  private onClientLeaveRoom = (room: Room<any>, client: Client, isDisconnect: boolean): boolean => {
     if (isDisconnect) {
-      return true
+      return true;
     }
 
-    var roomIndex = this.clients[ client.id ].indexOf(room)
+    var roomIndex = this.clients[ client.id ].indexOf(room);
     if (roomIndex >= 0) {
-      spliceOne(this.clients[ client.id ], roomIndex)
+      spliceOne(this.clients[ client.id ], roomIndex);
     }
   }
 
   private onDisconnect (client) {
-    this.emit('disconnect', client)
+    this.emit('disconnect', client);
 
     // send leave message to all connected rooms
-    this.clients[ client.id ].forEach(room => (<any>room)._onLeave(client, true))
+    this.clients[ client.id ].forEach(room => (<any>room)._onLeave(client, true));
 
-    delete this.clients[ client.id ]
+    delete this.clients[ client.id ];
   }
 
 }

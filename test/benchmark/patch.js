@@ -6,12 +6,9 @@ var Benchmark = require('benchmark')
   , jsonpatch = require('fast-json-patch')
   , fossilDelta = require('fossil-delta')
   , msgpack = require('msgpack-lite')
-  , StateObserver = require('../../lib/state/observer.js')
+  , toJSON = require('../../lib/Utils').toJSON
 
   , suite = new Benchmark.Suite()
-
-var stateObserver = new StateObserver({})
-var toJSON = stateObserver.toJSON.bind( stateObserver )
 
 class PlainState {
   constructor () {
@@ -116,7 +113,6 @@ suite.add('using complex + observe', function() {
     obj4.teams[i].score++;
     Object.assign(obj4state, toJSON(obj4))
     var diff = msgpack.encode( jsonpatch.generate(observer2) )
-    console.log("observe, length: ", diff.length)
   }
 })
 
@@ -145,7 +141,6 @@ suite.add('using complex + fossildelta', function() {
     newBinary5 = msgpack.encode( toJSON( obj5 ) )
     var diff = fossilDelta.create( oldBinary5, newBinary5 )
     oldBinary5 = newBinary5
-    console.log("fossildenta, length: ", diff.length)
   }
 })
 

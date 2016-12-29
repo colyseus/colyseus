@@ -30,13 +30,13 @@ export abstract class Room<T> extends EventEmitter {
   constructor ( options: any = {} ) {
     super()
 
-    this.roomId = options.roomId
-    this.roomName = options.roomName
+    this.roomId = options.roomId;
+    this.roomName = options.roomName;
 
-    this.options = options
+    this.options = options;
 
     // Default patch rate is 20fps (50ms)
-    this.setPatchRate( 1000 / 20 )
+    this.setPatchRate( 1000 / 20 );
   }
 
   abstract onMessage (client: Client, data: any): void;
@@ -81,15 +81,15 @@ export abstract class Room<T> extends EventEmitter {
   }
 
   public lock (): void {
-    this.emit('lock')
+    this.emit('lock');
   }
 
   public unlock (): void {
-    this.emit('unlock')
+    this.emit('unlock');
   }
 
   public send (client: Client, data: any): void {
-    client.send( msgpack.encode( [Protocol.ROOM_DATA, this.roomId, data] ), { binary: true }, logError.bind(this) )
+    client.send( msgpack.encode( [Protocol.ROOM_DATA, this.roomId, data] ), { binary: true }, logError.bind(this) );
   }
 
   public broadcast (data: any): boolean {
@@ -100,15 +100,15 @@ export abstract class Room<T> extends EventEmitter {
 
     // encode all messages with msgpack
     if (!(data instanceof Buffer)) {
-      data = msgpack.encode([Protocol.ROOM_DATA, this.roomId, data])
+      data = msgpack.encode([Protocol.ROOM_DATA, this.roomId, data]);
     }
 
     var numClients = this.clients.length;
     while (numClients--) {
-      this.clients[ numClients ].send(data, { binary: true }, logError.bind(this) )
+      this.clients[ numClients ].send(data, { binary: true }, logError.bind(this) );
     }
 
-    return true
+    return true;
   }
 
   public disconnect (): void {
@@ -127,7 +127,7 @@ export abstract class Room<T> extends EventEmitter {
       this.clock.elapsedTime,
     ] ), {
       binary: true
-    }, logError.bind(this) )
+    }, logError.bind(this) );
   }
 
   private broadcastState (): boolean {
@@ -143,7 +143,7 @@ export abstract class Room<T> extends EventEmitter {
       throw new Error( 'trying to broadcast null state. you should call #setState on constructor or during user connection.' );
     }
 
-    let newState = this.getEncodedState()
+    let newState = this.getEncodedState();
 
     // skip if state has not changed.
     if ( newState.equals( this._previousState ) ) {
@@ -165,10 +165,10 @@ export abstract class Room<T> extends EventEmitter {
   }
 
   private _onJoin (client: Client, options?: any): void {
-    this.clients.push( client )
+    this.clients.push( client );
 
     // confirm room id that matches the room name requested to join
-    client.send( msgpack.encode( [Protocol.JOIN_ROOM, this.roomId, this.roomName] ), { binary: true }, logError.bind(this) )
+    client.send( msgpack.encode( [Protocol.JOIN_ROOM, this.roomId, this.roomName] ), { binary: true }, logError.bind(this) );
 
     // send current state when new client joins the room
     if (this.state) {
@@ -182,28 +182,28 @@ export abstract class Room<T> extends EventEmitter {
 
   private _onLeave (client: Client, isDisconnect: boolean = false): void {
     // remove client from client list
-    spliceOne(this.clients, this.clients.indexOf(client))
+    spliceOne(this.clients, this.clients.indexOf(client));
 
-    if (this.onLeave) this.onLeave(client)
+    if (this.onLeave) this.onLeave(client);
 
-    this.emit('leave', client, isDisconnect)
+    this.emit('leave', client, isDisconnect);
 
     if (!isDisconnect) {
-      client.send( msgpack.encode( [Protocol.LEAVE_ROOM, this.roomId] ), { binary: true }, logError.bind(this) )
+      client.send( msgpack.encode( [Protocol.LEAVE_ROOM, this.roomId] ), { binary: true }, logError.bind(this) );
     }
 
     // custom cleanup method & clear intervals
     if ( this.clients.length == 0 ) {
       if ( this.onDispose ) this.onDispose();
-      if ( this._patchInterval ) clearInterval( this._patchInterval )
-      if ( this._simulationInterval ) clearInterval( this._simulationInterval )
+      if ( this._patchInterval ) clearInterval( this._patchInterval );
+      if ( this._simulationInterval ) clearInterval( this._simulationInterval );
 
-      this.emit('dispose')
+      this.emit('dispose');
     }
   }
 
   private getEncodedState () {
-    return msgpack.encode( toJSON( this.state ) )
+    return msgpack.encode( toJSON( this.state ) );
   }
 
 }

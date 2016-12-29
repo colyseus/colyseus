@@ -2,26 +2,31 @@
 
 import { EventEmitter } from "events";
 import * as shortid from "shortid";
+import * as msgpack from "msgpack-lite";
 import * as WebSocket from "ws";
 import { Room } from "../../src/Room";
 
-class Client extends EventEmitter {
+export class Client extends EventEmitter {
 
   public id: string;
   public messages: Array<any> = [];
 
   constructor (id?: string) {
     super();
-    this.id = id || null
+    this.id = id || null;
   }
 
   send (message) {
-    this.messages.push(message)
+    this.messages.push(message);
+  }
+
+  get lastMessage () {
+    return msgpack.decode(this.messages[ this.messages.length - 1 ]);
   }
 
   close () {
     this.messages = [];
-    // this.emit('close')
+    // this.emit('close');
   }
 
 }
@@ -47,11 +52,11 @@ export class DummyRoom extends Room<any> {
 
 export class DummyRoomWithState extends Room<any> {
   constructor(options) {
-    super(options)
-    this.setState({ number: 10 })
+    super(options);
+    this.setState({ number: 10 });
   }
   requestJoin (options) {
-    return !options.invalid_param
+    return !options.invalid_param;
   }
 
   onDispose() {}
