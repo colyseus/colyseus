@@ -18,8 +18,8 @@ export abstract class Room<T> extends EventEmitter {
   public roomId: number;
   public roomName: string;
 
-  protected clients: Client[] = [];
-  protected options: any;
+  public clients: Client[] = [];
+  public options: any;
 
   public state: T;
   protected _previousState: any;

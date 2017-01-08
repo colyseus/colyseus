@@ -88,12 +88,13 @@ export class Server extends EventEmitter {
     this.emit('message', client, message);
 
     if (typeof(message[0]) === "number" && message[0] == Protocol.JOIN_ROOM) {
-      try {
-        this.onJoinRoomRequest(client, message[1], message[2]);
-      } catch (e) {
-        console.error(e.stack);
-        client.send(msgpack.encode([Protocol.JOIN_ERROR, message[1], e.message]), { binary: true });
-      }
+      this.onJoinRoomRequest(client, message[1], message[2], (err: string, room: Room<any>) => {
+        if (err) {
+          let roomId = (room) ? room.roomId : message[1];
+          client.send(msgpack.encode([Protocol.JOIN_ERROR, roomId, err]), { binary: true });
+          if (room) (<any>room)._onLeave(client);
+        }
+      });
 
     } else if (typeof(message[0]) === "number" && message[0] == Protocol.LEAVE_ROOM) {
       // trigger onLeave directly to specific room
@@ -110,8 +111,9 @@ export class Server extends EventEmitter {
     }
   }
 
-  private onJoinRoomRequest (client: Client, roomToJoin: number | string, clientOptions: any): Room<any> {
+  private onJoinRoomRequest ( client: Client, roomToJoin: number | string, clientOptions: any, callback: (err: string, room: Room<any>) => any): void {
     var room: Room<any>;
+    let err: string;
 
     if (typeof(roomToJoin)==="string") {
       room = this.matchMaker.joinOrCreateByName(client, roomToJoin, clientOptions || {});
@@ -121,14 +123,22 @@ export class Server extends EventEmitter {
     }
 
     if ( room ) {
+      try {
+        (<any>room)._onJoin(client, clientOptions);
+
+      } catch (e) {
+        console.error(room.roomName, "onJoin:", e.stack);
+        err = e.message;
+      }
+
       room.once('leave', this.onClientLeaveRoom.bind(this, room));
       this.clients[ client.id ].push( room );
 
     } else {
-      throw new Error("join_request_fail")
+      err = "join_request_fail";
     }
 
-    return room;
+    callback(err, room);
   }
 
   private onClientLeaveRoom = (room: Room<any>, client: Client, isDisconnect: boolean): boolean => {

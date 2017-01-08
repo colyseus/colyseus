@@ -50,6 +50,16 @@ export class DummyRoom extends Room<any> {
   onMessage() {}
 }
 
+export class RoomWithError extends Room<any> {
+  onDispose() {}
+  onJoin() {
+    (<any>this).iHaveAnError();
+  }
+  onLeave() {}
+  onMessage() {}
+}
+
+
 export class DummyRoomWithState extends Room<any> {
   constructor(options) {
     super(options);
