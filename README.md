@@ -1,5 +1,7 @@
 # ![colyseus](media/header.png?raw=true)
 
+[![Greenkeeper badge](https://badges.greenkeeper.io/gamestdio/colyseus.svg)](https://greenkeeper.io/)
+
 > Multiplayer Game Server for Node.js. [View documentation](https://github.com/gamestdio/colyseus/wiki).
 
 [![Join the chat at https://gitter.im/gamestdio/colyseus](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/gamestdio/colyseus?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
