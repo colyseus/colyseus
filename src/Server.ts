@@ -29,9 +29,18 @@ export class Server extends EventEmitter {
   // room references by client id
   protected clients: {[id: string]: Room<any>[]} = {};
 
-  constructor (options: ServerOptions) {
-    super()
+  constructor (options?: ServerOptions) {
+    super();
 
+    if (options) {
+      this.attach(options);
+    }
+  }
+
+  /**
+   * Attaches Colyseus server to a server or port.
+   */
+  public attach (options: ServerOptions) {
     if (options.server || options.port) {
       this.server = new WebSocketServer(options);
 
@@ -70,7 +79,7 @@ export class Server extends EventEmitter {
   }
 
   private onError (client: Client, e: any) {
-    console.error("[ERROR]", client.id, e)
+    console.error("[ERROR]", client.id, e);
   }
 
   private onMessage (client: Client, data: any) {
@@ -119,7 +128,7 @@ export class Server extends EventEmitter {
       room = this.matchMaker.joinOrCreateByName(client, roomToJoin, clientOptions || {});
 
     } else {
-      room = this.matchMaker.joinById(client, roomToJoin, clientOptions)
+      room = this.matchMaker.joinById(client, roomToJoin, clientOptions);
     }
 
     if ( room ) {
