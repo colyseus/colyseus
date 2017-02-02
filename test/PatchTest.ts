@@ -50,6 +50,20 @@ describe('Room patches', function() {
       assert.equal(message[0], Protocol.ROOM_STATE);
       assert.deepEqual(message[2], { success: true });
     })
+
+    xit('should allow null and undefined values', function() {
+      let room = new DummyRoom({ });
+      let client = createDummyClient();
+      (<any>room)._onJoin(client, {});
+
+      room.setState({ n: null, u: undefined });
+
+      (<any>room).broadcastState();
+
+      var message = msgpack.decode( client.messages[1] );
+      assert.equal(message[0], Protocol.ROOM_STATE);
+      assert.deepEqual(message[2], { n: null, u: undefined });
+    })
   })
 
   describe('#broadcastPatch', function() {
