@@ -42,7 +42,7 @@
     "benchmark": "^2.1.1",
     "colyseus.js": "^0.5.0",
     "express": "^4.13.3",
-    "mocha": "3.2.0",
+    "mocha": "2.3.2",
     "nodemon": "^1.7.1",
     "ts-node": "^2.0.0",
     "typescript": "^2.1.4"
