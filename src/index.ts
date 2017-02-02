@@ -1,4 +1,4 @@
-/* ///<reference path="./vendor.d.ts"/> */
+///<reference path="./vendor.d.ts"/>
 import * as WebSocket from "ws";
 import * as shortid from "shortid";
 
