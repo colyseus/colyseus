@@ -20,6 +20,7 @@ Read the [blog post](https://medium.com/@endel/colyseus-minimalistic-mmo-game-se
 ### Client integration
 
 - [JavaScript/TypeScript](https://github.com/gamestdio/colyseus.js)
+- [Construct2](https://github.com/polpoy/colyseus-construct-plugin)
 - [Unity3d](https://github.com/gamestdio/colyseus-unity3d) (works only with server v0.3.x)
 - [CoronaSDK](https://github.com/gamestdio/colyseus.lua) (works only with server v0.3.x)
 
