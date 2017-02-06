@@ -83,7 +83,7 @@ describe('Room', function() {
     });
   });
 
-  describe('#sendState/#broadcastState', function() {
+  describe('#sendState', function() {
     it('should send state when it is set up', function() {
       let room = new DummyRoom({ });
       let client = createDummyClient();
@@ -94,14 +94,9 @@ describe('Room', function() {
       // first message
       (<any>room).sendState(client);
 
+
       var message = msgpack.decode( client.messages[1] );
-      assert.equal(message[0], Protocol.ROOM_STATE);
-      assert.deepEqual(message[2], { success: true });
 
-      // second message
-      (<any>room).broadcastState();
-
-      var message = msgpack.decode( client.messages[2] );
       assert.equal(message[0], Protocol.ROOM_STATE);
       assert.deepEqual(message[2], { success: true });
     });
@@ -135,6 +130,14 @@ describe('Room', function() {
       // set state
       room.setState({one: 1});
       assert.deepEqual({one: 1}, room.state);
+
+      // clean state. no patches available!
+      assert.equal(false, (<any>room).broadcastPatch());
+
+      // change the state to make patch available
+      room.state.one = 111;
+
+      // voila!
       assert.equal(true, (<any>room).broadcastPatch());
     });
 
@@ -150,14 +153,19 @@ describe('Room', function() {
       (<any>room)._onJoin(client2, {});
 
       assert.deepEqual({one: 1}, room.state);
-      assert.equal(true, (<any>room).broadcastPatch());
 
+      // clean state. no patches available!
+      assert.equal(false, (<any>room).broadcastPatch());
+
+      // change the state to make patch available
       room.state.two = 2;
       assert.deepEqual({one: 1, two: 2}, room.state);
+
+      // voila!
       assert.equal(true, (<any>room).broadcastPatch());
 
-      assert.equal(client.messages.length, 4);
-      assert.equal(client2.messages.length, 4);
+      assert.equal(client.messages.length, 3);
+      assert.equal(client2.messages.length, 3);
 
       // first message, join room
       var message = msgpack.decode(client.messages[0]);
@@ -170,13 +178,7 @@ describe('Room', function() {
       // third message, empty patch state
       var message = msgpack.decode(client.messages[2]);
       assert.equal(message[0], Protocol.ROOM_STATE_PATCH);
-      assert.deepEqual(message[2].length, 17);
-      // // TODO: ideally empty patch state should have 0 length
-      // assert.deepEqual(message[2].length, 0);
-
-      // fourth message, room patch state
-      var message = msgpack.decode(client.messages[3]);
-      assert.equal(message[0], Protocol.ROOM_STATE_PATCH);
+      assert.deepEqual(message[2].length, 22);
 
       assert.deepEqual(message[2], [ 66, 10, 66, 58, 130, 163, 111, 110, 101, 1, 163, 116, 119, 111, 2, 49, 86, 53, 49, 74, 89, 59 ]);
     });

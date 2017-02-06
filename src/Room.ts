@@ -22,7 +22,12 @@ export abstract class Room<T> extends EventEmitter {
   public options: any;
 
   public state: T;
+
+  // when a new user connects, it receives the '_previousState', which holds
+  // the last binary snapshot other users already have, therefore the patches
+  // that follow will be the same for all clients.
   protected _previousState: any;
+  protected _previousStateEncoded: any;
 
   private _simulationInterval: NodeJS.Timer;
   private _patchInterval: number;
@@ -72,7 +77,10 @@ export abstract class Room<T> extends EventEmitter {
   public setState (newState) {
     this.clock.start();
 
-    this._previousState = this.getEncodedState();
+    // ensure state is populated for `sendState()` method.
+    this._previousState = toJSON( newState );
+    this._previousStateEncoded = msgpack.encode( this._previousState );
+
     this.state = newState;
 
     if ( this.timeline ) {
@@ -122,7 +130,7 @@ export abstract class Room<T> extends EventEmitter {
     client.send( msgpack.encode( [
       Protocol.ROOM_STATE,
       this.roomId,
-      toJSON( this.state ),
+      this._previousState,
       this.clock.currentTime,
       this.clock.elapsedTime,
     ] ), {
@@ -130,34 +138,28 @@ export abstract class Room<T> extends EventEmitter {
     }, logError.bind(this) );
   }
 
-  private broadcastState (): boolean {
-    return this.broadcast( msgpack.encode([
-      Protocol.ROOM_STATE,
-      this.roomId,
-      toJSON( this.state )
-    ]) );
-  }
-
   private broadcastPatch (): boolean {
     if ( !this._previousState ) {
       throw new Error( 'trying to broadcast null state. you should call #setState on constructor or during user connection.' );
     }
 
-    let newState = this.getEncodedState();
+    let currentState = toJSON( this.state );
+    let currentStateEncoded = msgpack.encode( currentState );
 
     // skip if state has not changed.
-    if ( newState.equals( this._previousState ) ) {
+    if ( currentStateEncoded.equals( this._previousStateEncoded ) ) {
       return false;
     }
 
-    let patches = fossilDelta.create( this._previousState, newState );
+    let patches = fossilDelta.create( this._previousStateEncoded, currentStateEncoded );
 
     // take a snapshot of the current state
     if (this.timeline) {
       this.timeline.takeSnapshot( this.state, this.clock.elapsedTime );
     }
 
-    this._previousState = newState;
+    this._previousState = currentState;
+    this._previousStateEncoded = currentStateEncoded;
 
     // broadcast patches (diff state) to all clients,
     // even if nothing has changed in order to calculate PING on client-side
@@ -200,10 +202,6 @@ export abstract class Room<T> extends EventEmitter {
 
       this.emit('dispose');
     }
-  }
-
-  private getEncodedState () {
-    return msgpack.encode( toJSON( this.state ) );
   }
 
 }
