@@ -42,17 +42,17 @@ export function toJSON (obj: any): any {
     result = obj.map((_) => toJSON(_))
 
   } else {
-    result = obj
+    result = obj;
   }
 
-  if (typeof(result)==="object") {
-    let copy = Array.isArray(result) ? [] : {}
+  if (result && typeof(result)==="object") {
+    let copy = Array.isArray(result) ? [] : {};
 
     for (var k in result) {
-      copy[k] = toJSON(result[k])
+      copy[k] = toJSON(result[k]);
     }
 
-    result = copy
+    result = copy;
   }
 
   return result

@@ -29,16 +29,16 @@ describe('Patch', function() {
   })
 
   describe('#sendState', function() {
-    xit('should allow null and undefined values', function() {
+    it('should allow null and undefined values', function() {
       let room = new DummyRoom({ });
       let client = createDummyClient();
-      (<any>room)._onJoin(client, {});
 
       room.setState({ n: null, u: undefined });
+      (<any>room)._onJoin(client, {});
 
       var message = msgpack.decode( client.messages[1] );
       assert.equal(message[0], Protocol.ROOM_STATE);
-      assert.deepEqual(message[2], { n: null, u: undefined });
+      assert.deepEqual(message[2], { n: null, u: null });
     })
   })
 
