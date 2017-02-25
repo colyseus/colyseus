@@ -1,7 +1,7 @@
 import * as http from "http";
 
 import { EventEmitter } from "events";
-import { Server as WebSocketServer } from "uws";
+import { Server as WebSocketServer, IServerOptions } from "uws";
 
 import { Protocol } from "./Protocol";
 import { MatchMaker } from "./MatchMaker";
@@ -12,14 +12,12 @@ import { Client } from "./index";
 import * as shortid from "shortid";
 import * as msgpack from "msgpack-lite";
 
+export type ServerOptions = IServerOptions & {
+  ws?: WebSocketServer
+};
+
 // // memory debugging
 // setInterval(function() { console.log(require('util').inspect(process.memoryUsage())); }, 1000)
-
-export interface ServerOptions {
-  server?: http.Server;
-  port?: number;
-  ws?: WebSocketServer;
-}
 
 export class Server extends EventEmitter {
   protected server: WebSocketServer;

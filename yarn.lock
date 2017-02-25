@@ -28,9 +28,9 @@
   version "0.0.28"
   resolved "https://registry.yarnpkg.com/@types/shortid/-/shortid-0.0.28.tgz#b359e25348351f6bf736eed20d2e666528c248c6"
 
-"@types/ws@0.0.38":
-  version "0.0.38"
-  resolved "https://registry.yarnpkg.com/@types/ws/-/ws-0.0.38.tgz#42106fff4b422ca956734e29f0d73a6d893194d3"
+"@types/uws@^0.0.0":
+  version "0.0.0"
+  resolved "https://registry.yarnpkg.com/@types/uws/-/uws-0.0.0.tgz#f245f4e931d06cd8e4fcb11dce8b9ae9f0f63d05"
   dependencies:
     "@types/node" "*"
 
@@ -153,12 +153,6 @@ aws4@^1.2.1:
   version "1.5.0"
   resolved "https://registry.yarnpkg.com/aws4/-/aws4-1.5.0.tgz#0a29ffb79c31c9e712eeb087e8e7a64b4a56d755"
 
-backoff@^2.4.1:
-  version "2.5.0"
-  resolved "https://registry.yarnpkg.com/backoff/-/backoff-2.5.0.tgz#f616eda9d3e4b66b8ca7fca79f695722c5f8e26f"
-  dependencies:
-    precond "0.2"
-
 balanced-match@^0.4.1:
   version "0.4.2"
   resolved "https://registry.yarnpkg.com/balanced-match/-/balanced-match-0.4.2.tgz#cb3f3e3c732dc0f01ee70b403f302e61d7709838"
@@ -257,25 +251,13 @@ clock-timer.js@^1.1.0:
   dependencies:
     clock.js "^1.1.5"
 
-clock.js@*, clock.js@^1.1.0, clock.js@^1.1.5:
+clock.js@*, clock.js@^1.1.5:
   version "1.1.5"
   resolved "https://registry.yarnpkg.com/clock.js/-/clock.js-1.1.5.tgz#c1186cd7e328cc838006d1d2a74eac72070b8f45"
 
 code-point-at@^1.0.0:
   version "1.1.0"
   resolved "https://registry.yarnpkg.com/code-point-at/-/code-point-at-1.1.0.tgz#0d070b4d043a5bea33a2f1a40e2edb3d9a4ccf77"
-
-colyseus.js@^0.5.0:
-  version "0.5.2"
-  resolved "https://registry.yarnpkg.com/colyseus.js/-/colyseus.js-0.5.2.tgz#b2905e89b74809a591aa33276424098d3528a7e0"
-  dependencies:
-    clock.js "^1.1.0"
-    fast-json-patch "^1.0.0"
-    fossil-delta "^0.2.5"
-    msgpack-lite "^0.1.20"
-    signals.js "^1.0.0-alpha.8"
-    tiny-emitter "^1.1.0"
-    websocket.js "^0.1.4"
 
 combined-stream@^1.0.5, combined-stream@~1.0.5:
   version "1.0.5"
@@ -544,10 +526,6 @@ extglob@^0.3.1:
 extsprintf@1.0.2:
   version "1.0.2"
   resolved "https://registry.yarnpkg.com/extsprintf/-/extsprintf-1.0.2.tgz#e1080e0658e300b06294990cc70e1502235fd550"
-
-fast-json-patch@^1.0.0:
-  version "1.1.4"
-  resolved "https://registry.yarnpkg.com/fast-json-patch/-/fast-json-patch-1.1.4.tgz#4f280f0fb0b35b96bdc6fa146fb1c152334a1af7"
 
 filename-regex@^2.0.0:
   version "2.0.0"
@@ -1194,7 +1172,7 @@ ms@0.7.1:
   version "0.7.1"
   resolved "https://registry.yarnpkg.com/ms/-/ms-0.7.1.tgz#9cd13c03adbff25b65effde7ce864ee952017098"
 
-msgpack-lite@^0.1.20, msgpack-lite@^0.1.26:
+msgpack-lite@^0.1.26:
   version "0.1.26"
   resolved "https://registry.yarnpkg.com/msgpack-lite/-/msgpack-lite-0.1.26.tgz#dd3c50b26f059f25e7edee3644418358e2a9ad89"
   dependencies:
@@ -1380,10 +1358,6 @@ pinkie@^2.0.0, pinkie@^2.0.4:
 platform@^1.3.3:
   version "1.3.3"
   resolved "https://registry.yarnpkg.com/platform/-/platform-1.3.3.tgz#646c77011899870b6a0903e75e997e8e51da7461"
-
-precond@0.2:
-  version "0.2.3"
-  resolved "https://registry.yarnpkg.com/precond/-/precond-0.2.3.tgz#aa9591bcaa24923f1e0f4849d240f47efc1075ac"
 
 prepend-http@^1.0.0:
   version "1.0.4"
@@ -1613,10 +1587,6 @@ signal-exit@^3.0.0:
   version "3.0.2"
   resolved "https://registry.yarnpkg.com/signal-exit/-/signal-exit-3.0.2.tgz#b5fdc08f1287ea1178628e415e25132b73646c6d"
 
-signals.js@^1.0.0-alpha.8:
-  version "1.0.0"
-  resolved "https://registry.yarnpkg.com/signals.js/-/signals.js-1.0.0.tgz#19b3d9affbda9ef4aa516055467c527e0084d399"
-
 slide@^1.1.5:
   version "1.1.6"
   resolved "https://registry.yarnpkg.com/slide/-/slide-1.1.6.tgz#56eb027d65b4d2dce6cb2e2d32c4d4afc9e1d707"
@@ -1774,10 +1744,6 @@ timeframe@^0.3.5:
     clock.js "*"
     harmony-proxy "^1.0.1"
 
-tiny-emitter@^1.1.0:
-  version "1.1.0"
-  resolved "https://registry.yarnpkg.com/tiny-emitter/-/tiny-emitter-1.1.0.tgz#ab405a21ffed814a76c19739648093d70654fecb"
-
 touch@1.0.0:
   version "1.0.0"
   resolved "https://registry.yarnpkg.com/touch/-/touch-1.0.0.tgz#449cbe2dbae5a8c8038e30d71fa0ff464947c4de"
@@ -1900,9 +1866,9 @@ uuid@^3.0.0:
   version "3.0.1"
   resolved "https://registry.yarnpkg.com/uuid/-/uuid-3.0.1.tgz#6544bba2dfda8c1cf17e629a3a305e2bb1fee6c1"
 
-uws@^0.12.0:
-  version "0.12.0"
-  resolved "https://registry.yarnpkg.com/uws/-/uws-0.12.0.tgz#07163ea6e687d9731e66821107b5fdf1ee644cbd"
+uws@^0.13.0:
+  version "0.13.0"
+  resolved "https://registry.yarnpkg.com/uws/-/uws-0.13.0.tgz#09fedbb9f9eb074de4feaec5b8b10b3ffdd4f707"
 
 v8flags@^2.0.11:
   version "2.0.11"
@@ -1923,12 +1889,6 @@ verror@1.3.6:
 void-elements@~2.0.1:
   version "2.0.1"
   resolved "https://registry.yarnpkg.com/void-elements/-/void-elements-2.0.1.tgz#c066afb582bb1cb4128d60ea92392e94d5e9dbec"
-
-websocket.js@^0.1.4:
-  version "0.1.7"
-  resolved "https://registry.yarnpkg.com/websocket.js/-/websocket.js-0.1.7.tgz#8d24cefb1a080c259e7e4740c02cab8f142df2b0"
-  dependencies:
-    backoff "^2.4.1"
 
 wide-align@^1.1.0:
   version "1.1.0"

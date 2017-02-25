@@ -1,5 +1,4 @@
-///<reference path="./vendor.d.ts"/>
-import * as WebSocket from "ws";
+import * as WebSocket from "uws";
 import * as shortid from "shortid";
 
 // Core classes
