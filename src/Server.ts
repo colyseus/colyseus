@@ -1,4 +1,5 @@
 import * as http from "http";
+import * as https from "https";
 
 import { EventEmitter } from "events";
 import { Server as WebSocketServer } from "uws";
@@ -16,7 +17,7 @@ import * as msgpack from "msgpack-lite";
 // setInterval(function() { console.log(require('util').inspect(process.memoryUsage())); }, 1000)
 
 export interface ServerOptions {
-  server?: http.Server;
+  server?: http.Server | https.Server;
   port?: number;
   ws?: WebSocketServer;
 }
