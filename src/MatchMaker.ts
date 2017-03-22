@@ -29,27 +29,26 @@ export class MatchMaker {
 
   public joinById (client: Client, roomId: number, clientOptions: any): Room<any> {
     let room = this.roomsById[ roomId ];
-    if (!room) { throw new Error(`room doesn't exists`); }
 
-    if (!room.requestJoin(clientOptions)) {
-      throw new Error(`Can't join ${ clientOptions.roomName }`);
+    if (!room) {
+      console.error(`Error: trying to join non-existant room "${ roomId }"`);
+
+    } else if (!room.requestJoin(clientOptions)) {
+      console.error(`Error can't join "${ clientOptions.roomName }" with options: ${ JSON.stringify(clientOptions) }`);
+      room = undefined;
     }
 
     return room;
   }
 
   public joinOrCreateByName (client: Client, roomName: string, clientOptions: any): Room<any> {
-
-    // throw error
     if (!this.hasHandler(roomName)) {
-      throw new Error(`no handler for "${ roomName }"`);
+      console.error(`Error: no available handler for "${ roomName }"`);
+
+    } else {
+      return this.requestJoin( client, roomName, clientOptions )
+        || this.create( client, roomName, clientOptions );
     }
-
-    let room = ( this.requestJoin( client, roomName, clientOptions )
-      || this.create( client, roomName, clientOptions ) );
-
-    return room;
-
   }
 
   public requestJoin (client: Client, roomName: string, clientOptions: any): Room<any> {

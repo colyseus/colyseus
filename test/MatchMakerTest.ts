@@ -4,7 +4,7 @@ import { Room } from "../src/Room";
 import { createDummyClient, DummyRoom } from "./utils/mock";
 
 describe('MatchMaker', function() {
-  var matchMaker;
+  let matchMaker;
 
   before(function() {
     matchMaker = new MatchMaker()
@@ -27,11 +27,9 @@ describe('MatchMaker', function() {
       assert.equal(1, Object.keys(matchMaker.roomsById).length)
     });
 
-    it('should throw error when trying to join room by id with invalid id', function() {
+    it('shouldn\'t return when trying to join with invalid room id', function() {
       var client = createDummyClient()
-      assert.throws(() => {
-        matchMaker.joinById(client, 100)
-      }, Error);
+      assert.equal(matchMaker.joinById(client, 100), undefined);
     });
 
     it('shouldn\'t create room when trying to join room with invalid params', function() {
@@ -45,9 +43,7 @@ describe('MatchMaker', function() {
       var client2 = createDummyClient()
 
       var room = matchMaker.joinOrCreateByName(client1, 'room', {})
-      assert.throws(() => {
-        matchMaker.joinById(client2, room.roomId, { invalid_param: 1 })
-      }, Error)
+      assert.equal(matchMaker.joinById(client2, room.roomId, { invalid_param: 1 }), undefined);
     });
 
     it('should join existing room on joinById', function() {
