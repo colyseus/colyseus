@@ -4,7 +4,7 @@
 
 [![Join the chat at https://gitter.im/gamestdio/colyseus](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/gamestdio/colyseus?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 [![Build Status](https://secure.travis-ci.org/gamestdio/colyseus.png?branch=master)](http://travis-ci.org/gamestdio/colyseus)
-[![OpenCollective](https://opencollective.com/colyseus/backers/badge.svg)](#backers) 
+[![OpenCollective](https://opencollective.com/colyseus/backers/badge.svg)](#backers)
 [![OpenCollective](https://opencollective.com/colyseus/sponsors/badge.svg)](#sponsors)
 
 
@@ -66,6 +66,14 @@ Room handlers have these methods available.
 - unlock() - *Unlock the room to new clients.*
 - broadcast( data ) - *Send data to all connected clients.*
 - disconnect() - *Disconnect all clients then dispose.*
+
+# Contributing
+
+We encourage you to contribute to Colyseus! Please check out the [Contributing
+guide](.github/CONTRIBUTING.md) for guidelines about how to proceed. Join us!
+
+Everyone interacting in Colyseus and its sub-projects' codebases, issue trackers
+and chat rooms is expected to follow the [code of conduct](CODE_OF_CONDUCT.md).
 
 ## Backers
 Support us with a monthly donation and help us continue our activities. [[Become a backer](https://opencollective.com/colyseus#backer)]
