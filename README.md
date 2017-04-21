@@ -19,12 +19,16 @@ Read the [blog post](https://medium.com/@endel/colyseus-minimalistic-mmo-game-se
 - Lag compensation (using [timeframe](http://github.com/gamestdio/timeframe), a
   Timeline implementation) - Not automatic. You should apply the technique as you need, in the client and/or the server.
 
-### Client integration
+### Official client integration
 
 - [JavaScript/TypeScript](https://github.com/gamestdio/colyseus.js)
-- [Construct2](https://github.com/polpoy/colyseus-construct-plugin)
 - [Unity](https://github.com/gamestdio/colyseus-unity3d)
 - [CoronaSDK](https://github.com/gamestdio/colyseus.lua) (works only with server v0.3.x)
+
+### Community client integration
+
+- [Construct2](https://github.com/polpoy/colyseus-construct-plugin)
+- [Cocos2d-x](https://github.com/chunho32/colyseus-cocos2d-x)
 
 ### Usage examples
 
