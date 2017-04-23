@@ -1,10 +1,12 @@
+yarn.lock
 *.log
-colyseus-client
+*.tgz
 *.psd
-NOTES.txt
 *~
+NOTES.txt
 TODO
-*.psd
-header.png
 quick-tests
+media
 src
+docs
+test
