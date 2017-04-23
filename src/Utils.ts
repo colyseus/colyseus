@@ -49,7 +49,9 @@ export function toJSON (obj: any): any {
     let copy = Array.isArray(result) ? [] : {};
 
     for (var k in result) {
-      copy[k] = toJSON(result[k]);
+      if (typeof(result[k]) !== "function") {
+        copy[k] = toJSON(result[k]);
+      }
     }
 
     result = copy;
