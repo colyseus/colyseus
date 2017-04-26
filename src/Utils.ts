@@ -1,14 +1,18 @@
 
-export function spliceOne (arr: Array<any>, index: number): void {
+export function spliceOne (arr: Array<any>, index: number): boolean {
   // manually splice availableRooms array
   // http://jsperf.com/manual-splice
-  if (index >= arr.length) {
-    return;
+  if (index === -1 || index >= arr.length) {
+    return false;
   }
+
   for (var i = index, len = arr.length - 1; i < len; i++) {
     arr[i] = arr[i + 1];
   }
+
   arr.length = len;
+
+  return true;
 }
 
 export function merge (a: any, b: any): any {

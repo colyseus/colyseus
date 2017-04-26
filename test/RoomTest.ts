@@ -184,5 +184,51 @@ describe('Room', function() {
     });
   });
 
+  describe("#disconnect", () => {
+
+    it("should send disconnect message to all clients", () => {
+      let room = new DummyRoom({ });
+
+      // connect 10 clients
+      let lastClient;
+      for (var i = 0, len = 10; i < len; i++) {
+        lastClient = createDummyClient();
+        (<any>room)._onJoin(lastClient, {});
+      }
+
+      assert.equal(lastClient.lastMessage[0], Protocol.JOIN_ROOM);
+      room.disconnect();
+
+      assert.equal(lastClient.lastMessage[0], Protocol.LEAVE_ROOM);
+      assert.deepEqual(room.clients, {});
+    });
+
+    it("should send disconnect message to all clients", (done) => {
+      let room = new DummyRoom({ });
+
+      // connect 10 clients
+      let client1 = createDummyClient();
+      (<any>room)._onJoin(client1, {});
+
+      let client2 = createDummyClient();
+      (<any>room)._onJoin(client2, {});
+
+      let client3 = createDummyClient();
+      (<any>room)._onJoin(client3, {});
+
+      // force asynchronous
+      setTimeout(() => (<any>room)._onLeave(client1, true), 0);
+      setTimeout(() => {
+        assert.doesNotThrow(() => room.disconnect());
+      }, 0);
+      setTimeout(() => (<any>room)._onLeave(client2, true), 0);
+      setTimeout(() => (<any>room)._onLeave(client3, true), 0);
+
+      // fulfil the test
+      setTimeout(done, 5);
+    });
+
+  });
+
 });
 

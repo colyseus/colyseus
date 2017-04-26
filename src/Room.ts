@@ -183,8 +183,11 @@ export abstract class Room<T> extends EventEmitter {
   }
 
   private _onLeave (client: Client, isDisconnect: boolean = false): void {
-    // remove client from client list
-    spliceOne(this.clients, this.clients.indexOf(client));
+    // Remove client from client list
+    if (!spliceOne(this.clients, this.clients.indexOf(client))) {
+      // skip if the client already left.
+      return;
+    }
 
     if (this.onLeave) this.onLeave(client);
 
