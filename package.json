@@ -28,7 +28,7 @@
     "@types/mocha": "^2.2.32",
     "@types/msgpack-lite": "^0.1.1",
     "@types/node": "^7.0.12",
-    "@types/shortid": "0.0.28",
+    "@types/shortid": "0.0.29",
     "@types/uws": "^0.13.0",
     "clock-timer.js": "^1.1.0",
     "fossil-delta": "^0.2.5",
