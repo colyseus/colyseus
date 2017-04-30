@@ -20,7 +20,7 @@ export type ServerOptions = IServerOptions & {
 // setInterval(function() { console.log(require('util').inspect(process.memoryUsage())); }, 1000)
 
 export class Server extends EventEmitter {
-  protected server: WebSocketServer;
+  protected wss: WebSocketServer;
   protected matchMaker: MatchMaker = new MatchMaker();
 
   // room references by client id
@@ -39,13 +39,13 @@ export class Server extends EventEmitter {
    */
   public attach (options: ServerOptions) {
     if (options.server || options.port) {
-      this.server = new WebSocketServer(options);
+      this.wss = new WebSocketServer(options);
 
     } else {
-      this.server = options.ws;
+      this.wss = options.ws;
     }
 
-    this.server.on('connection', this.onConnect);
+    this.wss.on('connection', this.onConnect);
   }
 
   /**
@@ -62,6 +62,7 @@ export class Server extends EventEmitter {
   }
 
   private onConnect = (client: Client) => {
+    console.log("onconnect:", client);
     let clientId = shortid.generate();
 
     client.id = clientId;
@@ -80,6 +81,7 @@ export class Server extends EventEmitter {
   }
 
   private onMessage (client: Client, data: any) {
+    console.log("message arrived!", data);
     let message;
 
     // try to decode message received from client
@@ -98,19 +100,19 @@ export class Server extends EventEmitter {
         if (err) {
           let roomId = (room) ? room.roomId : message[1];
           client.send(msgpack.encode([Protocol.JOIN_ERROR, roomId, err]), { binary: true });
-          if (room) (<any>room)._onLeave(client);
+          if (room) { (<any>room)._onLeave(client); }
         }
       });
 
     } else if (typeof(message[0]) === "number" && message[0] == Protocol.LEAVE_ROOM) {
       // trigger onLeave directly to specific room
       let room = this.matchMaker.getRoomById( message[1] );
-      if (room) (<any>room)._onLeave(client);
+      if (room) { (<any>room)._onLeave(client); }
 
     } else if (typeof(message[0]) === "number" && message[0] == Protocol.ROOM_DATA) {
       // send message directly to specific room
       let room = this.matchMaker.getRoomById( message[1] );
-      if (room) room.onMessage(client, message[2]);
+      if (room) { room.onMessage(client, message[2]); }
 
     } else {
       this.clients[ client.id ].forEach(room => room.onMessage(client, message));
