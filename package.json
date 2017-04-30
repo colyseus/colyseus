@@ -43,7 +43,6 @@
     "express": "^4.13.3",
     "mocha": "2.3.2",
     "nodemon": "^1.7.1",
-    "sticky-session": "^1.1.2",
     "ts-node": "^3.0.0",
     "typescript": "^2.1.4"
   },
