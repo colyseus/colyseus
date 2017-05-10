@@ -16,9 +16,6 @@ export type ServerOptions = IServerOptions & {
   ws?: WebSocketServer
 };
 
-// // memory debugging
-// setInterval(function() { console.log(require('util').inspect(process.memoryUsage())); }, 1000)
-
 export class Server extends EventEmitter {
   protected wss: WebSocketServer;
   protected matchMaker: MatchMaker = new MatchMaker();
@@ -62,7 +59,6 @@ export class Server extends EventEmitter {
   }
 
   private onConnect = (client: Client) => {
-    console.log("onconnect:", client);
     let clientId = shortid.generate();
 
     client.id = clientId;
@@ -81,7 +77,6 @@ export class Server extends EventEmitter {
   }
 
   private onMessage (client: Client, data: any) {
-    console.log("message arrived!", data);
     let message;
 
     // try to decode message received from client

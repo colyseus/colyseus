@@ -18,13 +18,13 @@
   dependencies:
     "@types/node" "*"
 
-"@types/node@*", "@types/node@^7.0.12":
-  version "7.0.12"
-  resolved "https://registry.yarnpkg.com/@types/node/-/node-7.0.12.tgz#ae5f67a19c15f752148004db07cbbb372e69efc9"
+"@types/node@*", "@types/node@^7.0.18":
+  version "7.0.18"
+  resolved "https://registry.yarnpkg.com/@types/node/-/node-7.0.18.tgz#cd67f27d3dc0cfb746f0bdd5e086c4c5d55be173"
 
-"@types/shortid@0.0.28":
-  version "0.0.28"
-  resolved "https://registry.yarnpkg.com/@types/shortid/-/shortid-0.0.28.tgz#b359e25348351f6bf736eed20d2e666528c248c6"
+"@types/shortid@0.0.29":
+  version "0.0.29"
+  resolved "https://registry.yarnpkg.com/@types/shortid/-/shortid-0.0.29.tgz#8093ee0416a6e2bf2aa6338109114b3fbffa0e9b"
 
 "@types/uws@^0.13.0":
   version "0.13.0"
@@ -1057,6 +1057,10 @@ map-stream@~0.1.0:
 media-typer@0.3.0:
   version "0.3.0"
   resolved "https://registry.yarnpkg.com/media-typer/-/media-typer-0.3.0.tgz#8710d7af0aa626f8fffa1ce00168545263255748"
+
+memshared@^0.9.3:
+  version "0.9.3"
+  resolved "https://registry.yarnpkg.com/memshared/-/memshared-0.9.3.tgz#ac94abb024ae103f3fd5bb12cba7e48afdd66f91"
 
 merge-descriptors@1.0.1:
   version "1.0.1"
