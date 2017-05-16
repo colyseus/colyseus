@@ -32,7 +32,7 @@
     "@types/uws": "^0.13.0",
     "clock-timer.js": "^1.1.0",
     "fossil-delta": "^0.2.5",
-    "memshared": "^0.9.3",
+    "memshared": "^0.9.6",
     "msgpack-lite": "^0.1.26",
     "shortid": "^2.2.6",
     "timeframe": "^0.3.5",

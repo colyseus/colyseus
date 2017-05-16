@@ -1,4 +1,5 @@
 import * as cluster from "cluster";
+import * as memshared from "memshared";
 import * as net from "net";
 import * as os from "os";
 
@@ -8,6 +9,11 @@ import { ServerOptions } from "./Server";
 
 import { setupMaster } from "./cluster/Master";
 import { setupWorker } from "./cluster/Worker";
+
+export enum ClusterProtocol {
+  BIND_CLIENT,
+  CREATE_ROOM,
+}
 
 export interface ClusterOptions {
   numWorkers?: number;

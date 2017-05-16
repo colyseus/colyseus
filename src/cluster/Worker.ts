@@ -1,9 +1,14 @@
 import * as cluster from "cluster";
 import * as net from "net";
+import { ClusterProtocol } from "../ClusterServer";
 
 export function setupWorker (server: net.Server) {
   process.on('message', (message, connection) => {
-    if (message !== "redirect") { return; }
+    console.log("worker received message:", message);
+
+    if (message !== ClusterProtocol.BIND_CLIENT) {
+      return;
+    }
 
     // Emulate a connection event on the server by emitting the
     // event with the connection the master sent us.
@@ -15,18 +20,3 @@ export function setupWorker (server: net.Server) {
   return server;
 }
 
-export function spawnWorker () {
-  let worker = cluster.fork();
-
-  worker.on("message", (message) => {
-    console.log("Worker received message:", message);
-  });
-
-  // auto-spawn a new worker on failure
-  worker.on("exit", () => {
-    console.warn("worker", process.pid, "died. Respawn.")
-    spawnWorker();
-  });
-
-  return worker;
-}

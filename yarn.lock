@@ -1058,9 +1058,9 @@ media-typer@0.3.0:
   version "0.3.0"
   resolved "https://registry.yarnpkg.com/media-typer/-/media-typer-0.3.0.tgz#8710d7af0aa626f8fffa1ce00168545263255748"
 
-memshared@^0.9.3:
-  version "0.9.3"
-  resolved "https://registry.yarnpkg.com/memshared/-/memshared-0.9.3.tgz#ac94abb024ae103f3fd5bb12cba7e48afdd66f91"
+memshared@^0.9.6:
+  version "0.9.6"
+  resolved "https://registry.yarnpkg.com/memshared/-/memshared-0.9.6.tgz#c79ce3c0494f9211b6d78379069215969bd16e27"
 
 merge-descriptors@1.0.1:
   version "1.0.1"
