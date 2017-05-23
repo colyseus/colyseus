@@ -4,11 +4,11 @@ import * as child_process from "child_process";
 import * as net from "net";
 import * as os from "os";
 
-import { ClusterOptions, ClusterProtocol } from "../ClusterServer";
+import { ClusterOptions } from "../ClusterServer";
+import { Protocol } from "../Protocol";
+import { spliceOne } from "../Utils";
 
-export function setupMaster (options: ClusterOptions = {}) {
-  let matchMakingWorker = spawnMatchMaking();
-
+export function spawnWorkers (options: ClusterOptions = {}) {
   // use the number of CPUs as number of workers.
   if (!options.numWorkers) {
     options.numWorkers = os.cpus().length;
@@ -17,24 +17,12 @@ export function setupMaster (options: ClusterOptions = {}) {
   for (var i = 0, len = options.numWorkers; i < len; i++) {
     spawnWorker();
   }
-
-  // clients are only allowed to communicate with match-making by default
-  return net.createServer({ pauseOnConnect: true }, (connection) => {
-    matchMakingWorker.send(ClusterProtocol.BIND_CLIENT, connection);
-  });
 }
 
-function spawnMatchMaking () {
-  let worker = child_process.fork(__dirname + "/../matchmaking", [], { silent: false });
+export function spawnMatchMaking () {
+  let worker = child_process.fork(__dirname + "/../matchmaking/Process", [], { silent: false });
 
-  worker.on("message", (message) => {
-    let workerProcess = Array.isArray(message) && memshared.getProcessById(message.shift());
-    console.log(message);
-    if (workerProcess) {
-      console.log(`match-making wants to communicate with pid(${ workerProcess.pid }) `);
-      workerProcess.send(message);
-    }
-  });
+  enableProcessCommunication(worker);
 
   // allow worker to use memshared
   memshared.registerProcess(worker);
@@ -45,22 +33,37 @@ function spawnMatchMaking () {
 export function spawnWorker () {
   let worker = cluster.fork();
 
-  // push worker to shared 'workerIds' list.
   if (!memshared.store['workerIds']) {
     memshared.store['workerIds'] = [];
   }
 
+  // push worker id to shared workers list.
   memshared.store['workerIds'].push(worker.process.pid);
 
-  worker.on("message", (message) => {
-    console.log("Worker received message:", message);
-  });
+  enableProcessCommunication(worker);
 
   // auto-spawn a new worker on failure
   worker.on("exit", () => {
     console.warn("worker", process.pid, "died. Respawn.")
+
+    // remove workerId from shared store
+    spliceOne(memshared.store['workerIds'], memshared.store['workerIds'].indexOf(process.pid));
+
+    // spawn new worker as a replacement for this one
     spawnWorker();
   });
 
   return worker;
+}
+
+function enableProcessCommunication(worker: child_process.ChildProcess | cluster.Worker) {
+  worker.on("message", (message) => {
+    let workerProcess = Array.isArray(message) && memshared.getProcessById(message.shift());
+    console.log(message);
+    if (workerProcess) {
+      console.log(`process wants to communicate directly with pid (${ workerProcess.pid }) `);
+      workerProcess.send(message);
+    }
+  });
+
 }

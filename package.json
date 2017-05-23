@@ -45,7 +45,7 @@
     "mocha": "2.3.2",
     "nodemon": "^1.7.1",
     "ts-node": "^3.0.0",
-    "typescript": "^2.1.4"
+    "typescript": "^2.3.2"
   },
   "license": "MIT",
   "greenkeeper": {

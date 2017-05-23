@@ -10,7 +10,7 @@ import { Client } from "./index";
 import { Protocol } from "./Protocol";
 import { logError, spliceOne, toJSON } from "./Utils";
 
-export abstract class Room<T> extends EventEmitter {
+export abstract class Room<T=any> extends EventEmitter {
 
   public clock: ClockTimer = new ClockTimer();
   public timeline?: Timeline;
