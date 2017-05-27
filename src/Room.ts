@@ -19,9 +19,10 @@ export abstract class Room<T=any> extends EventEmitter {
   public roomName: string;
 
   public clients: Client[] = [];
-  public options: any;
+  public maxClients: number = Infinity;
 
   public state: T;
+  public options: any;
 
   // when a new user connects, it receives the '_previousState', which holds
   // the last binary snapshot other users already have, therefore the patches
@@ -33,8 +34,10 @@ export abstract class Room<T=any> extends EventEmitter {
   private _patchInterval: number;
 
   constructor ( options: any = {} ) {
-    super()
+    super();
 
+    // TODO: remove 'options' from constructor options.
+    // It's error-prone when implementing new rooms.
     this.roomId = options.roomId;
     this.roomName = options.roomName;
 
@@ -49,8 +52,8 @@ export abstract class Room<T=any> extends EventEmitter {
   abstract onLeave (client: Client): void;
   abstract onDispose (): void;
 
-  public requestJoin (options: any): boolean {
-    return true;
+  public requestJoin (options: any): number {
+    return 1;
   }
 
   public setSimulationInterval ( callback: Function, delay: number = 1000 / 60 ): void {

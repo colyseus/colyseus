@@ -19,6 +19,7 @@ wss.on('connection', onConnect);
 //
 let callbacks: {[requestId:string]: Function} = {};
 process.on('message', (message, connection) => {
+  console.log("matchmaking received message: ", message);
   if (message === Protocol.BIND_CLIENT) {
     server.emit('connection', connection);
     connection.resume();
@@ -82,8 +83,10 @@ function onConnect (client: Client) {
 
               callbacks[ client.id ] = handleResponse(client);
 
+              joinOptions.clientId = client.id;
+
               // Send JOIN_ROOM command to selected worker process.
-              process.send([ selectedWorkerId, Protocol.JOIN_ROOM, roomName, joinOptions, client.id ]);
+              process.send([ selectedWorkerId, Protocol.CREATE_ROOM, roomName, joinOptions ]);
             });
 
           } else {

@@ -2,6 +2,7 @@ import * as cluster from "cluster";
 import * as child_process from "child_process";
 import * as memshared from "memshared";
 import * as net from "net";
+import * as http from "http";
 import * as os from "os";
 
 import { Server as WebSocketServer, IServerOptions } from "uws";
@@ -18,7 +19,7 @@ export interface ClusterOptions {
 }
 
 export class ClusterServer {
-  protected server: net.Server;
+  protected server: net.Server | http.Server;
 
   // master process attributes
   protected matchMakingWorker: child_process.ChildProcess;
@@ -33,11 +34,14 @@ export class ClusterServer {
        this.matchMakingWorker = spawnMatchMaking();
        memshared.store['matchmaking_process'] = this.matchMakingWorker.pid;
 
+       // https://stackoverflow.com/questions/38593154/pass-connections-with-https-using-pauseonconnect
+
        // clients are only allowed to communicate with match-making by default
-       this.server = net.createServer({ pauseOnConnect: true }, (connection) => {
-         console.log("connection.address", connection.address);
-         console.log("connection.remoteAddress", connection.remoteAddress);
-         console.log("connection.localAddress", connection.localAddress);
+       // this.server = net.createServer({ pauseOnConnect: true }, (connection) => {
+       this.server = http.createServer();
+       this.server.on('connection', (connection) => {
+         // pauseOnConnect
+         connection.pause();
 
          // TODO: check endpoint url
          this.matchMakingWorker.send(Protocol.BIND_CLIENT, connection);
