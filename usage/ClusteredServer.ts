@@ -14,6 +14,11 @@ if (cluster.isMaster) {
   console.log("Worker spawned");
   const app = new express();
 
+  app.get("/something", (req, res) => {
+    console.log("something!");
+    res.send("Hey!");
+  });
+
   // Create HTTP Server
   gameServer.attach({ server: app });
 

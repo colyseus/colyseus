@@ -119,10 +119,10 @@ export class Server extends EventEmitter {
     let err: string;
 
     if (typeof(roomToJoin)==="string") {
-      room = this.matchMaker.joinOrCreateByName(client, roomToJoin, clientOptions || {});
+      // room = this.matchMaker.joinOrCreateByName(client, roomToJoin, clientOptions || {});
 
     } else {
-      room = this.matchMaker.joinById(client, roomToJoin, clientOptions);
+      // room = this.matchMaker.joinById(client, roomToJoin, clientOptions);
     }
 
     if ( room ) {

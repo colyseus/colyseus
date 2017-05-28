@@ -2,10 +2,11 @@ import * as express from "express";
 import * as msgpack from "msgpack-lite";
 import * as child_process from "child_process";
 import * as memshared from "memshared";
-
 import { Server as WebSocketServer } from "uws";
+
 import { Protocol, send } from "../Protocol";
 import { Client, generateId } from "../";
+import { handleUpgrade } from "../cluster/Worker";
 
 const app = new express();
 const server = app.listen(0, "localhost")
@@ -18,11 +19,11 @@ wss.on('connection', onConnect);
 // to match-making process.
 //
 let callbacks: {[requestId:string]: Function} = {};
-process.on('message', (message, connection) => {
-  console.log("matchmaking received message: ", message);
-  if (message === Protocol.BIND_CLIENT) {
-    server.emit('connection', connection);
-    connection.resume();
+process.on('message', (message, socket) => {
+  console.log("matchmaking received message: ", message[0]);
+
+  if (message[0] === Protocol.PASS_WEBSOCKET) {
+    handleUpgrade(wss, socket, message);
     return;
 
   } else if (Array.isArray(message) && callbacks[ message[0] ]) {
@@ -38,7 +39,7 @@ console.log("MatchMaking process spawned with pid", process.pid);
 
 function onConnect (client: Client) {
   client.id = generateId();
-  console.log("onConnect", client);
+  console.log("WebSocketServer: onConnect", client.id);
 
   client.on('message', (message) => {
     // try to decode message received from client

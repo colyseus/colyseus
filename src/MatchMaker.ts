@@ -164,6 +164,9 @@ export class MatchMaker {
 
     room = new handler(merge(clientOptions, options));
 
+    // cache on which process the room is living.
+    memshared.set(room.roomId, process.pid);
+
     // imediatelly ask client to join the room
     if ( room.requestJoin(clientOptions) ) {
       room.on('lock', this.lockRoom.bind(this, roomName, room));
@@ -199,6 +202,9 @@ export class MatchMaker {
 
   private disposeRoom(roomName: string, room: Room): void {
     delete this.roomsById[ room.roomId ]
+
+    // remove from cache
+    memshared.del(room.roomId);
 
     // remove from available rooms
     this.lockRoom(roomName, room)

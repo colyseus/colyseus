@@ -3,6 +3,7 @@ import * as shortid from "shortid";
 
 // Core classes
 export { Server } from "./Server";
+export { ClusterServer } from "./ClusterServer";
 export { Room } from "./Room";
 export { Protocol } from "./Protocol";
 

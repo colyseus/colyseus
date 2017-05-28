@@ -5,14 +5,16 @@ import * as net from "net";
 import * as http from "http";
 import * as os from "os";
 
-import { Server as WebSocketServer, IServerOptions } from "uws";
+import { Server as WebSocketServer } from "uws";
 
 import { ServerOptions } from "./Server";
 
-import { spawnWorkers, spawnMatchMaking } from "./cluster/Master";
+import { spawnWorkers, spawnMatchMaking, getNextWorkerForSocket } from "./cluster/Master";
 import { setupWorker } from "./cluster/Worker";
 import { Protocol } from "./Protocol";
 import { MatchMaker } from "./MatchMaker";
+
+let cache = memshared.store;
 
 export interface ClusterOptions {
   numWorkers?: number;
@@ -32,19 +34,34 @@ export class ClusterServer {
        spawnWorkers(options);
 
        this.matchMakingWorker = spawnMatchMaking();
-       memshared.store['matchmaking_process'] = this.matchMakingWorker.pid;
+       cache['matchmaking_process'] = this.matchMakingWorker.pid;
 
-       // https://stackoverflow.com/questions/38593154/pass-connections-with-https-using-pauseonconnect
-
-       // clients are only allowed to communicate with match-making by default
-       // this.server = net.createServer({ pauseOnConnect: true }, (connection) => {
        this.server = http.createServer();
-       this.server.on('connection', (connection) => {
+       this.server.on('connection', (socket) => {
          // pauseOnConnect
-         connection.pause();
+         socket.pause();
+       });
 
-         // TODO: check endpoint url
-         this.matchMakingWorker.send(Protocol.BIND_CLIENT, connection);
+       this.server.on('request', (request, response) => {
+         console.log("TODO: forward regular http requests to next worker.");
+         let socket = request.connection;
+         let worker = getNextWorkerForSocket(socket);
+         worker.send([Protocol.PASS_HTTP_SOCKET], socket)
+       });
+
+       this.server.on('upgrade', (request, socket, head) => {
+         let worker = this.matchMakingWorker;
+         let roomId = request.url.substr(1);
+
+         // bind client to the worker that has requested room spawed
+         if (cache[roomId]) {
+           worker = memshared.getProcessById(cache[roomId]);
+         }
+
+         worker.send([Protocol.PASS_WEBSOCKET, {
+           headers: request.headers,
+           method: request.method,
+         }, head], socket);
        });
     }
 
@@ -61,12 +78,12 @@ export class ClusterServer {
 
   register (name: string, handler: Function, options: any = {}) {
     if (cluster.isMaster) {
-      if (!memshared.store['handlers']) {
-        memshared.store['handlers'] = [];
+      if (!cache['handlers']) {
+        cache['handlers'] = [];
       }
 
       // push to available handlers list
-      memshared.store['handlers'].push(name);
+      cache['handlers'].push(name);
 
     } else {
       // register session handler
@@ -85,10 +102,6 @@ export class ClusterServer {
       this.server = setupWorker(options.server.listen(0, "localhost"), this.matchMaker);
       (<any>options).server = this.server;
     }
-
-    this.server.on("connection", () => {
-      console.log("Connected!");
-    });
   }
 
 }

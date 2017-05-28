@@ -15,7 +15,7 @@ export abstract class Room<T=any> extends EventEmitter {
   public clock: ClockTimer = new ClockTimer();
   public timeline?: Timeline;
 
-  public roomId: number;
+  public roomId: string;
   public roomName: string;
 
   public clients: Client[] = [];
