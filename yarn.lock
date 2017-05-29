@@ -2,6 +2,10 @@
 # yarn lockfile v1
 
 
+"@types/cookie@^0.3.0":
+  version "0.3.0"
+  resolved "https://registry.yarnpkg.com/@types/cookie/-/cookie-0.3.0.tgz#c840871e6b23f814b2eb0ae6963d44ee59cf6627"
+
 "@types/fossil-delta@^0.2.1":
   version "0.2.2"
   resolved "https://registry.yarnpkg.com/@types/fossil-delta/-/fossil-delta-0.2.2.tgz#c6f3e87b818cfc93067f506716a22819ae2edbb5"
@@ -327,7 +331,7 @@ cookie-signature@1.0.6:
   version "1.0.6"
   resolved "https://registry.yarnpkg.com/cookie-signature/-/cookie-signature-1.0.6.tgz#e303a882b342cc3ee8ca513a79999734dab3ae2c"
 
-cookie@0.3.1:
+cookie@0.3.1, cookie@^0.3.1:
   version "0.3.1"
   resolved "https://registry.yarnpkg.com/cookie/-/cookie-0.3.1.tgz#e7e0a1f9ef43b4c8ba925c5c5a96e806d16873bb"
 

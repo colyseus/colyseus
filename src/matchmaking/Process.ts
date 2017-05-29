@@ -1,7 +1,7 @@
 import * as express from "express";
 import * as msgpack from "msgpack-lite";
-import * as child_process from "child_process";
 import * as memshared from "memshared";
+import * as cookie from "cookie";
 import { Server as WebSocketServer } from "uws";
 
 import { Protocol, send } from "../Protocol";
@@ -13,6 +13,12 @@ const server = app.listen(0, "localhost")
 
 let wss = new WebSocketServer({ server: server });
 wss.on('connection', onConnect);
+
+// set client id via cookie
+wss.on('headers', (headers) => {
+  headers.push('Set-Cookie: ' + cookie.serialize('id', generateId()));
+  console.log("headers:", headers);
+});
 
 //
 // Listen to "redirect" messages from main process, to redirect the connection
@@ -38,8 +44,10 @@ process.on('message', (message, socket) => {
 console.log("MatchMaking process spawned with pid", process.pid);
 
 function onConnect (client: Client) {
-  client.id = generateId();
-  console.log("WebSocketServer: onConnect", client.id);
+  // client.id = generateId();
+  console.log("WebSocketServer: onConnect");
+  console.log("client cookies:", client.upgradeReq.headers.cookie)
+  // client.send( msgpack.encode([ Protocol.USER_ID, client.id ]), { binary: true } );
 
   client.on('message', (message) => {
     // try to decode message received from client
@@ -102,8 +110,6 @@ function onConnect (client: Client) {
       });
 
     });
-
-
 
   });
 

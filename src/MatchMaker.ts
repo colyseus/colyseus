@@ -43,6 +43,14 @@ export class MatchMaker {
 
   }
 
+  public disconnect (client: Client) {
+    // send leave message
+    (<any>this.clients[ client.id ])._onLeave(client, true);
+
+    // cleanup client data
+    delete this.clients[ client.id ];
+  }
+
   public onJoinRoomRequest (roomToJoin: string, clientOptions: ClientOptions, allowCreateRoom: boolean, callback: (err: string, room: Room) => any): void {
     var room: Room;
     let err: string;

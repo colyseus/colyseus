@@ -2,6 +2,7 @@ import * as cluster from "cluster";
 import * as memshared from "memshared";
 import * as net from "net";
 import * as http from "http";
+import * as msgpack from "msgpack-lite";
 
 import { Server as WebSocketServer } from "uws";
 import { Protocol } from "../Protocol";
@@ -24,6 +25,24 @@ export function handleUpgrade (wss: WebSocketServer, socket: net.Socket, message
 
 export function setupWorker (server: net.Server, matchMaker: MatchMaker) {
   let wss = new WebSocketServer({ server: server as http.Server });
+
+  wss.on("connection", (client: Client) => {
+    client.on('message', (message) => {
+      // TODO: unify this with matchmaking/Process
+      try {
+        // try to decode message received from client
+        message = msgpack.decode(Buffer.from(message));
+
+      } catch (e) {
+        console.error("Couldn't decode message:", message, e.stack);
+        return;
+      }
+
+      matchMaker.execute(client, message);
+    });
+    client.on('error', (e) => console.error("[ERROR]", client.id, e));
+    client.on('close', () => matchMaker.disconnect(client));
+  })
 
   process.on('message', (message, socket) => {
     let roomNameOrId = message[1];

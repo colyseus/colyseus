@@ -13,6 +13,7 @@ import { spawnWorkers, spawnMatchMaking, getNextWorkerForSocket } from "./cluste
 import { setupWorker } from "./cluster/Worker";
 import { Protocol } from "./Protocol";
 import { MatchMaker } from "./MatchMaker";
+import { generateId } from "./";
 
 let cache = memshared.store;
 
@@ -100,7 +101,6 @@ export class ClusterServer {
     if (options.server) {
       // Don't expose internal server to the outside.
       this.server = setupWorker(options.server.listen(0, "localhost"), this.matchMaker);
-      (<any>options).server = this.server;
     }
   }
 

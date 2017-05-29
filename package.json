@@ -24,6 +24,7 @@
     "node": ">= 4.x"
   },
   "dependencies": {
+    "@types/cookie": "^0.3.0",
     "@types/fossil-delta": "^0.2.1",
     "@types/ip": "^0.0.29",
     "@types/mocha": "^2.2.32",
@@ -32,6 +33,7 @@
     "@types/shortid": "0.0.29",
     "@types/uws": "^0.13.0",
     "clock-timer.js": "^1.1.0",
+    "cookie": "^0.3.1",
     "fossil-delta": "^0.2.5",
     "ip": "^1.1.5",
     "memshared": "^0.9.11",
