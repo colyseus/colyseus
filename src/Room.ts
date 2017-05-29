@@ -20,6 +20,8 @@ export abstract class Room<T> extends EventEmitter {
 
   public clients: Client[] = [];
   public options: any;
+  
+  public autoDispose: boolean = true;
 
   public state: T;
 
@@ -198,7 +200,7 @@ export abstract class Room<T> extends EventEmitter {
     }
 
     // custom cleanup method & clear intervals
-    if ( this.clients.length == 0 ) {
+    if ( this.clients.length == 0 && this.autoDispose ) {
       if ( this.onDispose ) this.onDispose();
       if ( this._patchInterval ) clearInterval( this._patchInterval );
       if ( this._simulationInterval ) clearInterval( this._simulationInterval );
