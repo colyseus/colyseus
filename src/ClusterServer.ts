@@ -5,8 +5,6 @@ import * as net from "net";
 import * as http from "http";
 import * as os from "os";
 
-import { Server as WebSocketServer } from "uws";
-
 import { ServerOptions } from "./Server";
 
 import { spawnWorkers, spawnMatchMaking, getNextWorkerForSocket } from "./cluster/Master";

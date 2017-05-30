@@ -7,20 +7,20 @@ import * as msgpack from "msgpack-lite";
 import { Server as WebSocketServer } from "uws";
 import { Protocol } from "../Protocol";
 import { MatchMaker } from "../MatchMaker";
-import { Client, Room } from "../";
+import { Client, Room, generateId } from "../";
 
-export function handleUpgrade (wss: WebSocketServer, socket: net.Socket, message: any) {
-  let [ code, request, head ] = message;
+export function handleUpgrade (server: http.Server, socket: net.Socket, message: any) {
+  let code = message[0];
+  let request: http.ServerRequest = message[1];
+  let head: any = message[2];
+
+  // assign client socket to request
   request.connection = socket;
 
-  // handle upgrade of the living web socket connection again,
-  // in the worker node
-  wss.handleUpgrade(request, socket, head, (client) => {
-    wss.emit('connection', client, request);
-  });
+  // handle 'upgrade' of the WebSocket connection in the worker node
+  server.emit('upgrade', request, socket, head);
 
   socket.resume();
-  return;
 }
 
 export function setupWorker (server: net.Server, matchMaker: MatchMaker) {
@@ -55,7 +55,7 @@ export function setupWorker (server: net.Server, matchMaker: MatchMaker) {
       return;
 
     } else if (message[0] === Protocol.PASS_WEBSOCKET) {
-      handleUpgrade(wss, socket, message);
+      handleUpgrade(server as http.Server, socket, message);
       return;
 
     } else if (allowCreateRoom || message[0] === Protocol.JOIN_ROOM) {
@@ -81,3 +81,5 @@ export function setupWorker (server: net.Server, matchMaker: MatchMaker) {
 
   return server;
 }
+
+

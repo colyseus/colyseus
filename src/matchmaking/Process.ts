@@ -11,13 +11,19 @@ import { handleUpgrade } from "../cluster/Worker";
 const app = new express();
 const server = app.listen(0, "localhost")
 
-let wss = new WebSocketServer({ server: server });
+let wss = new WebSocketServer({
+  server: server ,
+  verifyClient: function (info, done) {
+    // console.log("Verify client!", info, done);
+    done(true);
+  }
+});
+
 wss.on('connection', onConnect);
 
-// set client id via cookie
-wss.on('headers', (headers) => {
-  headers.push('Set-Cookie: ' + cookie.serialize('id', generateId()));
-  console.log("headers:", headers);
+// TODO: doesn't work with uNetworking/uWebSockets. only with websockets.ws.
+wss.on('headers', function(headers) {
+  headers.push("Set-Cookie: id=two");
 });
 
 //
@@ -29,7 +35,7 @@ process.on('message', (message, socket) => {
   console.log("matchmaking received message: ", message[0]);
 
   if (message[0] === Protocol.PASS_WEBSOCKET) {
-    handleUpgrade(wss, socket, message);
+    handleUpgrade(server, socket, message);
     return;
 
   } else if (Array.isArray(message) && callbacks[ message[0] ]) {
@@ -46,7 +52,7 @@ console.log("MatchMaking process spawned with pid", process.pid);
 function onConnect (client: Client) {
   // client.id = generateId();
   console.log("WebSocketServer: onConnect");
-  console.log("client cookies:", client.upgradeReq.headers.cookie)
+  console.log("client cookies:", client)
   // client.send( msgpack.encode([ Protocol.USER_ID, client.id ]), { binary: true } );
 
   client.on('message', (message) => {
