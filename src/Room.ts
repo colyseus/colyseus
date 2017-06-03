@@ -21,7 +21,7 @@ export abstract class Room<T=any> extends EventEmitter {
   public clients: Client[] = [];
   public maxClients: number = Infinity;
 
-   public patchRate: number = 1000 / 20; // Default patch rate is 20fps (50ms)
+  public patchRate: number = 1000 / 20; // Default patch rate is 20fps (50ms)
 
   public state: T;
   public options: any;
@@ -38,7 +38,6 @@ export abstract class Room<T=any> extends EventEmitter {
   constructor () {
     super();
 
-    console.log("ARGUMENTS LENGTH: ", arguments.length);
     if (arguments.length > 0) {
       console.warn("DEPRECATION WARNING: use 'onInit(options)' instead of 'constructor(options)' to initialize the room.");
     }
@@ -115,9 +114,7 @@ export abstract class Room<T=any> extends EventEmitter {
     }
 
     var numClients = this.clients.length;
-    console.log('numClients', numClients);
     while (numClients--) {
-      console.log("send to", this.clients[ numClients ].id, data);
       this.clients[ numClients ].send(data, { binary: true }, logError.bind(this) );
     }
 
