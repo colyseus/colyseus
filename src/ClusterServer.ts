@@ -60,7 +60,7 @@ export class ClusterServer {
          worker.send([Protocol.PASS_WEBSOCKET, {
            headers: request.headers,
            method: request.method,
-         }, head], socket);
+         }, head, roomId], socket);
        });
     }
 

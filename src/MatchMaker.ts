@@ -14,8 +14,8 @@ export class MatchMaker {
   private roomCount: number = 0;
 
   // room references by client id
-  protected clients: {[id: string]: Room} = {};
-  protected connectingClientByRoom: {[roomId: string]: string[]} = {};
+  protected clients: {[id: string]: Room[]} = {};
+  protected connectingClientByRoom: {[roomId: string]: {[clientId: string]: any}} = {};
 
   public execute (client: Client, message: any) {
     if (message[0] == Protocol.JOIN_ROOM) {
@@ -23,7 +23,7 @@ export class MatchMaker {
         if (err) {
           let roomId = (room) ? room.roomId : message[1];
           client.send(msgpack.encode([Protocol.JOIN_ERROR, roomId, err]), { binary: true });
-          if (room) { (<any>room)._onLeave(client); }
+          // if (room) { (<any>room)._onLeave(client); }
         }
       });
 
@@ -38,19 +38,26 @@ export class MatchMaker {
       if (room) { room.onMessage(client, message[2]); }
 
     } else {
-      this.clients[ client.id ].onMessage(client, message);
+      this.clients[ client.id ].forEach(room => room.onMessage(client, message));
     }
 
   }
 
   public disconnect (client: Client) {
     // send leave message
-    (<any>this.clients[ client.id ])._onLeave(client, true);
+    this.clients[ client.id ].forEach(room => (<any>room)._onLeave(client, true));
 
     // cleanup client data
     delete this.clients[ client.id ];
   }
 
+  /**
+   * Create/joins a particular client in a room running in a worker process.
+   *
+   * The client doesn't join instantly because this method is called from the
+   * match-making process. The client will request a new WebSocket connection
+   * to effectively join into the room created/joined by this method.
+   */
   public onJoinRoomRequest (roomToJoin: string, clientOptions: ClientOptions, allowCreateRoom: boolean, callback: (err: string, room: Room) => any): void {
     var room: Room;
     let err: string;
@@ -68,10 +75,10 @@ export class MatchMaker {
       // Reserve a seat for clientId
       //
       if (!this.connectingClientByRoom[ room.roomId ]) {
-        this.connectingClientByRoom[ room.roomId ] = [];
+        this.connectingClientByRoom[ room.roomId ] = {};
       }
 
-      this.connectingClientByRoom[ room.roomId ].push(clientOptions.clientId);
+      this.connectingClientByRoom[ room.roomId ][ clientOptions.clientId ] = clientOptions;
 
     } else {
       err = "join_request_fail";
@@ -80,30 +87,38 @@ export class MatchMaker {
     callback(err, room);
   }
 
-  // TODO:
-  public onJoin (roomId: string, client: Client, clientOptions: ClientOptions, callback: (err: string, room: Room) => any): void {
-      let room = this.roomsById[roomId];
-      let err: string;
+  /**
+   * Binds target client to the room running in a worker process.
+   */
+  public onJoin (roomId: string, client: Client, callback: (err: string, room: Room) => any): void {
+    let room = this.roomsById[roomId];
+    let clientOptions = this.connectingClientByRoom[roomId][client.id];
+    let err: string;
 
-      try {
-        (<any>room)._onJoin(client, clientOptions);
+    try {
+      (<any>room)._onJoin(client, clientOptions);
+      room.once('leave', this.onClientLeaveRoom.bind(this, room));
 
-      } catch (e) {
-        console.error(room.roomName, "onJoin:", e.stack);
-        err = e.message;
+      if (!this.clients[ client.id ]) {
+        this.clients[ client.id ] = [];
       }
 
-      room.once('leave', this.onClientLeaveRoom.bind(this, room));
-      this.clients[ client.id ] = room;
+      this.clients[ client.id ].push(room);
 
-      callback(err, room);
+    } catch (e) {
+      console.error(room.roomName, "onJoin:", e.stack);
+      client.send(msgpack.encode([Protocol.JOIN_ERROR, roomId, e.message]), { binary: true });
+    }
+
+    callback(err, room);
   }
 
   private onClientLeaveRoom = (room: Room, client: Client, isDisconnect: boolean): boolean => {
     if (isDisconnect) {
       return true;
     }
-    delete this.clients[ client.id ];
+
+    spliceOne(this.clients[ client.id ], this.clients[ client.id ].indexOf(room));
   }
 
   public addHandler (name: string, handler: Function, options: any = {}): void {
@@ -164,13 +179,15 @@ export class MatchMaker {
       , handler = this.handlers[ roomName ][0]
       , options = this.handlers[ roomName ][1];
 
-    // TODO:
-    // keep track of available roomId's
-    // try to use 0~127 in order to have lesser Buffer size
-    options.roomId = generateId();
-    options.roomName = roomName;
+    room = new handler();
 
-    room = new handler(merge(clientOptions, options));
+    // set room options
+    room.roomId = generateId();
+    room.roomName = roomName;
+
+    if (room.onInit) {
+      room.onInit(options);
+    }
 
     // cache on which process the room is living.
     memshared.set(room.roomId, process.pid);
@@ -195,10 +212,7 @@ export class MatchMaker {
 
   private lockRoom (roomName: string, room: Room): void {
     if (this.hasAvailableRoom(roomName)) {
-      let index = this.availableRooms[roomName].indexOf(room);
-      if (index !== -1) {
-        spliceOne(this.availableRooms[roomName], index);
-      }
+      spliceOne(this.availableRooms[roomName], this.availableRooms[roomName].indexOf(room));
     }
   }
 

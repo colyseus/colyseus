@@ -21,6 +21,8 @@ export abstract class Room<T=any> extends EventEmitter {
   public clients: Client[] = [];
   public maxClients: number = Infinity;
 
+   public patchRate: number = 1000 / 20; // Default patch rate is 20fps (50ms)
+
   public state: T;
   public options: any;
 
@@ -33,20 +35,18 @@ export abstract class Room<T=any> extends EventEmitter {
   private _simulationInterval: NodeJS.Timer;
   private _patchInterval: number;
 
-  constructor ( options: any = {} ) {
+  constructor () {
     super();
 
-    // TODO: remove 'options' from constructor options.
-    // It's error-prone when implementing new rooms.
-    this.roomId = options.roomId;
-    this.roomName = options.roomName;
+    console.log("ARGUMENTS LENGTH: ", arguments.length);
+    if (arguments.length > 0) {
+      console.warn("DEPRECATION WARNING: use 'onInit(options)' instead of 'constructor(options)' to initialize the room.");
+    }
 
-    this.options = options;
-
-    // Default patch rate is 20fps (50ms)
-    this.setPatchRate( 1000 / 20 );
+    this.setPatchRate(this.patchRate);
   }
 
+  abstract onInit (options: any): void;
   abstract onMessage (client: Client, data: any): void;
   abstract onJoin (client: Client, options?: any): void;
   abstract onLeave (client: Client): void;
@@ -115,7 +115,9 @@ export abstract class Room<T=any> extends EventEmitter {
     }
 
     var numClients = this.clients.length;
+    console.log('numClients', numClients);
     while (numClients--) {
+      console.log("send to", this.clients[ numClients ].id, data);
       this.clients[ numClients ].send(data, { binary: true }, logError.bind(this) );
     }
 

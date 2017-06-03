@@ -1,12 +1,11 @@
 import * as express from "express";
 import * as msgpack from "msgpack-lite";
 import * as memshared from "memshared";
-import * as cookie from "cookie";
 import { Server as WebSocketServer } from "uws";
 
 import { Protocol, send } from "../Protocol";
 import { Client, generateId } from "../";
-import { handleUpgrade } from "../cluster/Worker";
+import { handleUpgrade, setUserId } from "../cluster/Worker";
 
 const app = new express();
 const server = app.listen(0, "localhost")
@@ -20,11 +19,6 @@ let wss = new WebSocketServer({
 });
 
 wss.on('connection', onConnect);
-
-// TODO: doesn't work with uNetworking/uWebSockets. only with websockets.ws.
-wss.on('headers', function(headers) {
-  headers.push("Set-Cookie: id=two");
-});
 
 //
 // Listen to "redirect" messages from main process, to redirect the connection
@@ -43,17 +37,13 @@ process.on('message', (message, socket) => {
     callback(message[1]);
     return;
   }
-
 });
 
 // Process spawned successfully!
 console.log("MatchMaking process spawned with pid", process.pid);
 
 function onConnect (client: Client) {
-  // client.id = generateId();
-  console.log("WebSocketServer: onConnect");
-  console.log("client cookies:", client)
-  // client.send( msgpack.encode([ Protocol.USER_ID, client.id ]), { binary: true } );
+  setUserId(client);
 
   client.on('message', (message) => {
     // try to decode message received from client
