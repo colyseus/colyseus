@@ -10,6 +10,9 @@ import { Protocol } from "../Protocol";
 import { MatchMaker } from "../MatchMaker";
 import { Client, Room, generateId } from "../";
 
+/**
+ * Retrieve and/or set 'colyseusid' cookie.
+ */
 export function setUserId (client: Client) {
   let clientCookies = cookie.parse(client.upgradeReq.headers.cookie);
   client.id = clientCookies['colyseusid'] || generateId();

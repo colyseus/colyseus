@@ -27,11 +27,6 @@ export class MatchMaker {
         }
       });
 
-    } else if (message[0] == Protocol.LEAVE_ROOM) {
-      // trigger onLeave directly to specific room
-      let room = this.getRoomById( message[1] );
-      if (room) { (<any>room)._onLeave(client); }
-
     } else if (message[0] == Protocol.ROOM_DATA) {
       // send message directly to specific room
       let room = this.getRoomById( message[1] );
