@@ -2,11 +2,8 @@ import { Room } from "../src";
 
 export class ChatRoom extends Room<any> {
 
-  constructor ( options ) {
-    super( options );
-    this.setPatchRate( 1000 );
+  onInit (options) {
     this.setState({ messages: [] });
-    console.log("ChatRoom created!", options);
   }
 
   onJoin (client) {
@@ -19,6 +16,12 @@ export class ChatRoom extends Room<any> {
 
   onMessage (client, data) {
     this.state.messages.push(data.message);
+
+    if (data.message==="leave") {
+      console.log("let's disconnect!");
+      this.disconnect();
+    }
+
     console.log("ChatRoom:", client.id, data);
   }
 

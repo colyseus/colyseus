@@ -18,6 +18,8 @@ let wss = new WebSocketServer({
   }
 });
 
+// setInterval(() => console.log("MatchMaking connections:", wss.clients.length), 1000);
+
 wss.on('connection', onConnect);
 
 //
@@ -26,8 +28,6 @@ wss.on('connection', onConnect);
 //
 let callbacks: {[requestId:string]: Function} = {};
 process.on('message', (message, socket) => {
-  console.log("matchmaking received message: ", message[0]);
-
   if (message[0] === Protocol.PASS_WEBSOCKET) {
     handleUpgrade(server, socket, message);
     return;
@@ -44,6 +44,7 @@ console.log("MatchMaking process spawned with pid", process.pid);
 
 function onConnect (client: Client) {
   setUserId(client);
+  console.log("onConnect: matchmaking process");
 
   client.on('message', (message) => {
     // try to decode message received from client

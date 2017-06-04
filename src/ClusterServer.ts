@@ -5,8 +5,6 @@ import * as net from "net";
 import * as http from "http";
 import * as os from "os";
 
-import { ServerOptions } from "./Server";
-
 import { spawnWorkers, spawnMatchMaking, getNextWorkerForSocket } from "./cluster/Master";
 import { setupWorker } from "./cluster/Worker";
 import { Protocol } from "./Protocol";
@@ -16,6 +14,7 @@ import { generateId } from "./";
 let cache = memshared.store;
 
 export interface ClusterOptions {
+  server?: http.Server;
   numWorkers?: number;
 }
 
@@ -35,9 +34,8 @@ export class ClusterServer {
        this.matchMakingWorker = spawnMatchMaking();
        cache['matchmaking_process'] = this.matchMakingWorker.pid;
 
-       this.server = http.createServer();
+       this.server = options.server || http.createServer();
        this.server.on('connection', (socket) => {
-         // pauseOnConnect
          socket.pause();
        });
 
@@ -57,6 +55,7 @@ export class ClusterServer {
            worker = memshared.getProcessById(cache[roomId]);
          }
 
+         // send socket connection from master to a child process
          worker.send([Protocol.PASS_WEBSOCKET, {
            headers: request.headers,
            method: request.method,
@@ -90,7 +89,7 @@ export class ClusterServer {
     }
   }
 
-  attach (options: ServerOptions) {
+  attach (options: { server: http.Server }) {
     if (!cluster.isWorker) {
       console.warn("ClusterServer#attach method should only be called from a worker process.");
       return;

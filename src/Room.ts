@@ -195,6 +195,12 @@ export abstract class Room<T=any> extends EventEmitter {
 
     this.emit('leave', client, isDisconnect);
 
+    //
+    // TODO: force disconnect from server.
+    //
+    // need to check why the connection is being re-directed to MatchMaking
+    // process after calling `client.close()` here
+    //
     if (!isDisconnect) {
       client.send( msgpack.encode( [Protocol.LEAVE_ROOM, this.roomId] ), { binary: true }, logError.bind(this) );
     }

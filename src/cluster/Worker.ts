@@ -41,6 +41,8 @@ export function handleUpgrade (server: http.Server, socket: net.Socket, message:
 export function setupWorker (server: net.Server, matchMaker: MatchMaker) {
   let wss = new WebSocketServer({ server: server as http.Server });
 
+  // setInterval(() => console.log(`worker ${ process.pid } connections:`, wss.clients.length), 1000);
+
   wss.on("connection", (client: Client) => {
     setUserId(client);
 
@@ -94,7 +96,6 @@ export function setupWorker (server: net.Server, matchMaker: MatchMaker) {
 
         // send response back to match-making process.
         memshared.get("matchmaking_process", (err, matchMakingPid) => {
-          console.log("send back to matchmaking process...", matchMakingPid);
           process.send([matchMakingPid, joinOptions.clientId, joinRoomResponse]);
         });
       });

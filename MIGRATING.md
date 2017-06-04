@@ -1,9 +1,10 @@
-Migrating between versions of Colyseus server
+Migrating between versions of Colyseus
 ===
 
 Migrating from 0.4 to 0.5
 ---
 
+- Use `ClusterServer` instead of `Server`.
 - `constructor` / `onInit` - no more `options` in the constructor.
 - `requestJoin` - return type is now a number (`0..1`)
 - **recommended:** use `patchRate` property instead of `setPatchRate()` method.

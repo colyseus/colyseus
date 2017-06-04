@@ -44,32 +44,33 @@ Read the [blog post](https://medium.com/@endel/colyseus-minimalistic-mmo-game-se
 
 ### Room properties
 
-- clock - *A [`ClockTimer`](https://github.com/gamestdio/clock-timer.js) instance*
-- timeline - *A [`Timeline`](https://github.com/gamestdio/timeframe) instance (see `useTimeline`)*
-- clients - *Array of connected clients*
+- `clock` - *A [`ClockTimer`](https://github.com/gamestdio/clock-timer.js) instance*
+- `timeline` - *A [`Timeline`](https://github.com/gamestdio/timeframe) instance (see `useTimeline`)*
+- `clients` - *Array of connected clients*
 
 ### Abstract methods
 
-Room handlers must implement all these methods.
+Room handlers should implement these methods.
 
-- onJoin (client) - *When a client joins the room*
-- onLeave (client) - *When a client leaves the room*
-- onMessage (client, data) - *When a client send a message*
-- onDispose () - *Cleanup callback, called after there's no more clients on the room*
+- `onInit (options)` - *When room is initialized*
+- `onJoin (client)` - *When a client joins the room*
+- `onLeave (client)` - *When a client leaves the room*
+- `onMessage (client, data)` - *When a client send a message*
+- `onDispose ()` - *Cleanup callback, called after there's no more clients on the room*
 
 ### Methods:
 
 Room handlers have these methods available.
 
-- setState( object ) - *Set the current state to be broadcasted / patched.*
-- setSimulationInterval( callback[, milliseconds=16.6] ) - *(Optional) Create the simulation interval that will change the state of the game. Default simulation interval: 16.6ms (60fps)*
-- setPatchRate( milliseconds ) - *Set frequency the patched state should be sent to all clients. Default is 50ms (20fps).*
-- useTimeline([ maxSnapshots=10 ]) - *(Optional) Keep state history between broadcatesd patches.*
-- send( client, data ) - *Send data to a particular client.*
-- lock() - *Lock the room to new clients.*
-- unlock() - *Unlock the room to new clients.*
-- broadcast( data ) - *Send data to all connected clients.*
-- disconnect() - *Disconnect all clients then dispose.*
+- `setState( object )` - *Set the current state to be broadcasted / patched.*
+- `setSimulationInterval( callback[, milliseconds=16.6] )` - *(Optional) Create the simulation interval that will change the state of the game. Default simulation interval: 16.6ms (60fps)*
+- `setPatchRate( milliseconds )` - *Set frequency the patched state should be sent to all clients. Default is 50ms (20fps).*
+- `useTimeline([ maxSnapshots=10 ])` - *(Optional) Keep state history between broadcatesd patches.*
+- `send( client, data )` - *Send data to a particular client.*
+- `lock()` - *Lock the room to new clients.*
+- `unlock()` - *Unlock the room to new clients.*
+- `broadcast( data )` - *Send data to all connected clients.*
+- `disconnect()` - *Disconnect all clients then dispose.*
 
 # Contributing
 
