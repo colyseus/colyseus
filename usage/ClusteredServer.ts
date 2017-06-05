@@ -7,6 +7,9 @@ import { ChatRoom } from "./ChatRoom";
 
 let gameServer = new ClusterServer();
 
+// Register ChatRoom as "chat"
+gameServer.register("chat", ChatRoom);
+
 if (cluster.isMaster) {
   gameServer.listen(8080);
 
@@ -21,7 +24,4 @@ if (cluster.isMaster) {
 
   // Create HTTP Server
   gameServer.attach({ server: app });
-
-  // Register ChatRoom as "chat"
-  gameServer.register("chat", ChatRoom);
 }

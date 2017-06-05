@@ -65,7 +65,7 @@ function onConnect (client: Client) {
 
     // has room handler avaialble?
     memshared.lindex("handlers", roomName, (err, index) => {
-      if (index === -1) {
+      if (index === null) {
         send(client, [Protocol.JOIN_ERROR, roomName, `Error: no available handler for "${ roomName }"`]);
         return;
       }
