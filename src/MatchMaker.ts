@@ -14,7 +14,7 @@ export class MatchMaker {
   private roomCount: number = 0;
 
   // room references by client id
-  protected clients: {[id: string]: Room[]} = {};
+  protected sessions: {[sessionId: string]: Room} = {};
   protected connectingClientByRoom: {[roomId: string]: {[clientId: string]: any}} = {};
 
   public execute (client: Client, message: any) {
@@ -23,7 +23,6 @@ export class MatchMaker {
         if (err) {
           let roomId = (room) ? room.roomId : message[1];
           client.send(msgpack.encode([Protocol.JOIN_ERROR, roomId, err]), { binary: true });
-          // if (room) { (<any>room)._onLeave(client); }
         }
       });
 
@@ -33,17 +32,9 @@ export class MatchMaker {
       if (room) { room.onMessage(client, message[2]); }
 
     } else {
-      this.clients[ client.id ].forEach(room => room.onMessage(client, message));
+      this.sessions[ client.sessionId ].onMessage(client, message);
     }
 
-  }
-
-  public disconnect (client: Client) {
-    // send leave message
-    this.clients[ client.id ].forEach(room => (<any>room)._onLeave(client, true));
-
-    // cleanup client data
-    delete this.clients[ client.id ];
   }
 
   /**
@@ -56,6 +47,8 @@ export class MatchMaker {
   public onJoinRoomRequest (roomToJoin: string, clientOptions: ClientOptions, allowCreateRoom: boolean, callback: (err: string, room: Room) => any): void {
     var room: Room;
     let err: string;
+
+    clientOptions.sessionId = generateId();
 
     if (isValidId(roomToJoin)) {
       room = this.joinById(roomToJoin, clientOptions);
@@ -90,15 +83,15 @@ export class MatchMaker {
     let clientOptions = this.connectingClientByRoom[roomId][client.id];
     let err: string;
 
+    // assign sessionId to socket connection.
+    client.sessionId = clientOptions.sessionId;
+    delete clientOptions.sessionId;
+
     try {
       (<any>room)._onJoin(client, clientOptions);
       room.once('leave', this.onClientLeaveRoom.bind(this, room));
 
-      if (!this.clients[ client.id ]) {
-        this.clients[ client.id ] = [];
-      }
-
-      this.clients[ client.id ].push(room);
+      this.sessions[ client.sessionId ] = room;
 
     } catch (e) {
       console.error(room.roomName, "onJoin:", e.stack);
@@ -108,12 +101,16 @@ export class MatchMaker {
     callback(err, room);
   }
 
+  public onLeave (client: Client, room: Room) {
+    (<any>room)._onLeave(client, true);
+  }
+
   private onClientLeaveRoom = (room: Room, client: Client, isDisconnect: boolean): boolean => {
     if (isDisconnect) {
       return true;
     }
 
-    spliceOne(this.clients[ client.id ], this.clients[ client.id ].indexOf(room));
+    delete this.sessions[ client.sessionId ];
   }
 
   public addHandler (name: string, handler: Function, options: any = {}): void {

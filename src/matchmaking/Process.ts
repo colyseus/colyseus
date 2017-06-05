@@ -44,7 +44,6 @@ console.log("MatchMaking process spawned with pid", process.pid);
 
 function onConnect (client: Client) {
   setUserId(client);
-  console.log("onConnect: matchmaking process");
 
   client.on('message', (message) => {
     // try to decode message received from client

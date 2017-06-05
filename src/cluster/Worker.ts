@@ -63,8 +63,14 @@ export function setupWorker (server: net.Server, matchMaker: MatchMaker) {
 
           matchMaker.execute(client, message);
         });
-        client.on('error', (e) => console.error("[ERROR]", client.id, e));
-        client.on('close', () => matchMaker.disconnect(client));
+
+        client.on('close', () => {
+          matchMaker.onLeave(client, room)
+        });
+
+        client.on('error', (e) => {
+          console.error("[ERROR]", client.id, e)
+        });
       }
     });
   });

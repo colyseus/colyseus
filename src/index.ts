@@ -15,4 +15,7 @@ export function generateId () { return shortid.generate(); }
 export function isValidId (id: any) { return shortid.isValid(id); }
 
 // Export 'WebSocket' as 'Client' with 'id' property.
-export type Client = WebSocket & { id: string };
+export type Client = WebSocket & {
+  id: string;
+  sessionId: string;
+};

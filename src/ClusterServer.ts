@@ -50,7 +50,7 @@ export class ClusterServer {
          let worker = this.matchMakingWorker;
          let roomId = request.url.substr(1);
 
-         // bind client to the worker that has requested room spawed
+         // bind client to the worker that has the requested room spawed
          if (cache[roomId]) {
            worker = memshared.getProcessById(cache[roomId]);
          }

@@ -17,8 +17,7 @@ export class ChatRoom extends Room<any> {
   onMessage (client, data) {
     this.state.messages.push(data.message);
 
-    if (data.message==="leave") {
-      console.log("let's disconnect!");
+    if (data.message === "leave") {
       this.disconnect();
     }
 

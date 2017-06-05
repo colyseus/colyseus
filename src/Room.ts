@@ -115,6 +115,7 @@ export abstract class Room<T=any> extends EventEmitter {
 
     var numClients = this.clients.length;
     while (numClients--) {
+      console.log(this.clients[ numClients ].id, this.clients[ numClients ].sessionId);
       this.clients[ numClients ].send(data, { binary: true }, logError.bind(this) );
     }
 
@@ -172,7 +173,7 @@ export abstract class Room<T=any> extends EventEmitter {
     this.clients.push( client );
 
     // confirm room id that matches the room name requested to join
-    client.send( msgpack.encode( [Protocol.JOIN_ROOM, this.roomId, this.roomName] ), { binary: true }, logError.bind(this) );
+    client.send( msgpack.encode( [Protocol.JOIN_ROOM, client.sessionId] ), { binary: true }, logError.bind(this) );
 
     // send current state when new client joins the room
     if (this.state) {

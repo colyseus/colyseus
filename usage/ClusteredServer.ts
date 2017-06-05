@@ -11,7 +11,7 @@ if (cluster.isMaster) {
   gameServer.listen(8080);
 
 } else {
-  console.log("Worker spawned");
+  console.log("Worker spawned", process.pid);
   const app = new express();
 
   app.get("/something", (req, res) => {
