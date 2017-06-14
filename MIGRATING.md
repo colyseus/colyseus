@@ -31,7 +31,7 @@ onInit (options) {
 }
 ```
 
-#### `requestJoin` - return type is now a number (`0..1`)
+#### `requestJoin` - can return type can be either `boolean` or `number` (`0..1`)
 
 OLD
 

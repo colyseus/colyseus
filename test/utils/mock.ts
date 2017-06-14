@@ -39,18 +39,20 @@ export function createDummyClient (): any {
   return new Client(shortid.generate())
 }
 
-export class DummyRoom extends Room<any> {
+export class DummyRoom extends Room {
   requestJoin (options) {
     return !options.invalid_param
   }
 
+  onInit () {}
   onDispose() {}
   onJoin() {}
   onLeave() {}
   onMessage() {}
 }
 
-export class RoomWithError extends Room<any> {
+export class RoomWithError extends Room {
+  onInit () {}
   onDispose() {}
   onJoin() {
     (<any>this).iHaveAnError();
@@ -60,30 +62,35 @@ export class RoomWithError extends Room<any> {
 }
 
 
-export class DummyRoomWithState extends Room<any> {
-  constructor(options) {
-    super(options);
+export class DummyRoomWithState extends Room {
+  constructor () {
+    super();
     this.setState({ number: 10 });
   }
+
   requestJoin (options) {
     return !options.invalid_param;
   }
 
+  onInit () {}
   onDispose() {}
   onJoin() {}
   onLeave() {}
   onMessage() {}
 }
 
-export class DummyRoomWithTimeline extends Room<any> {
-  constructor(options) {
-    super(options)
+export class DummyRoomWithTimeline extends Room {
+  constructor () {
+    super();
     this.useTimeline()
   }
+
+
   requestJoin (options) {
     return !options.invalid_param
   }
 
+  onInit () {}
   onDispose() {}
   onJoin() {}
   onLeave() {}

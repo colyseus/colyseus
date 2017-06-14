@@ -50,7 +50,7 @@ export class MatchMaker {
 
     clientOptions.sessionId = generateId();
 
-    if (isValidId(roomToJoin)) {
+    if (!this.hasHandler(roomToJoin) && isValidId(roomToJoin)) {
       room = this.joinById(roomToJoin, clientOptions);
 
     } else {
@@ -118,6 +118,10 @@ export class MatchMaker {
     this.availableRooms[ name ] = [];
   }
 
+  protected hasHandler (name: string) {
+    return this.handlers[ name ] !== undefined;
+  }
+
   public hasAvailableRoom (roomName: string): boolean {
     return (this.availableRooms[ roomName ] &&
       this.availableRooms[ roomName ].length > 0)
@@ -155,7 +159,7 @@ export class MatchMaker {
           continue;
         }
 
-        let score = availableRoom.requestJoin(clientOptions);
+        let score = availableRoom.requestJoin(clientOptions) as number;
         if (score > bestScore) {
           bestScore = score;
           room = availableRoom;

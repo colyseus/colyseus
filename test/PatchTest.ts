@@ -8,11 +8,11 @@ describe('Patch', function() {
   let room: Room<any>;
 
   beforeEach(function() {
-    room = new DummyRoom({});
+    room = new DummyRoom();
   })
 
   describe('patch interval', function() {
-      let room = new DummyRoom({ });
+      let room = new DummyRoom();
       room.setPatchRate(1000 / 20);
       assert.equal("object", typeof((<any>room)._patchInterval));
       assert.equal(1000 / 20, (<any>room)._patchInterval._idleTimeout, "should have patch rate set");
@@ -31,7 +31,7 @@ describe('Patch', function() {
 
   describe('#sendState', function() {
     it('should allow null and undefined values', function() {
-      let room = new DummyRoom({ });
+      let room = new DummyRoom();
       let client = createDummyClient();
 
       room.setState({ n: null, u: undefined });

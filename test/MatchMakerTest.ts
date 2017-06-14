@@ -19,45 +19,44 @@ describe('MatchMaker', function() {
       assert.equal(false, matchMaker.hasAvailableRoom('room'));
     });
 
-    it('should create a new room on joinOrCreateByName', function() {
-      var client = createDummyClient()
-      var room = matchMaker.joinOrCreateByName(client, 'room', {})
-
-      assert.equal(0, room.roomId)
-      assert.equal(1, Object.keys(matchMaker.roomsById).length)
+    it('should create a new room on joinOrCreateByName', function(done) {
+      matchMaker.onJoinRoomRequest('room', {}, true, (err, room) => {
+        assert.ok(typeof(room.roomId) === "string");
+        assert.ok(room instanceof Room);
+        done();
+      });
     });
 
     it('shouldn\'t return when trying to join with invalid room id', function() {
-      var client = createDummyClient()
-      assert.equal(matchMaker.joinById(client, 100), undefined);
+      assert.equal(matchMaker.joinById('invalid_id', {}), undefined);
     });
 
-    it('shouldn\'t create room when trying to join room with invalid params', function() {
-      var client = createDummyClient()
-      var room = matchMaker.joinOrCreateByName(client, 'dummy_room', {invalid_param: 10})
-      assert.equal(room, null)
+    it('shouldn\'t create room when requesting to join room with invalid params', function(done) {
+      matchMaker.onJoinRoomRequest('dummy_room', { invalid_param: 10 }, true, (err, room) => {
+        assert.ok(typeof(err)==="string");
+        assert.equal(room, undefined);
+        done();
+      })
     });
 
-    it('should throw error when trying to join existing room by id with invalid params', function() {
-      var client1 = createDummyClient()
-      var client2 = createDummyClient()
-
-      var room = matchMaker.joinOrCreateByName(client1, 'room', {})
-      assert.equal(matchMaker.joinById(client2, room.roomId, { invalid_param: 1 }), undefined);
+    it('shouldn\t return room instance when trying to join existing room by id with invalid params', function(done) {
+      matchMaker.onJoinRoomRequest('room', {}, true, (err, room) => {
+        assert.ok(room instanceof Room);
+        assert.equal(matchMaker.joinById(room.roomId, { invalid_param: 1 }), undefined);
+        done();
+      });
     });
 
-    it('should join existing room on joinById', function() {
+    it('should join existing room using "joinById"', function(done) {
       assert.equal(false, matchMaker.hasAvailableRoom('dummy_room'))
 
-      var client1 = createDummyClient()
-      var client2 = createDummyClient()
-
-      var room = matchMaker.joinOrCreateByName(client1, 'dummy_room', {})
-      var joiningRoom = matchMaker.joinById(client2, room.roomId, {})
-
-      assert.equal(true, matchMaker.hasAvailableRoom('dummy_room'))
-      assert.equal('dummy_room', room.roomName)
-      assert.equal(room.roomId, joiningRoom.roomId)
+      matchMaker.onJoinRoomRequest('dummy_room', {}, true, (err, room) => {
+        var joiningRoom = matchMaker.joinById(room.roomId, {});
+        assert.equal(true, matchMaker.hasAvailableRoom('dummy_room'))
+        assert.equal('dummy_room', room.roomName)
+        assert.equal(room.roomId, joiningRoom.roomId)
+        done();
+      });
     });
 
   });
