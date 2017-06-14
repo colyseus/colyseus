@@ -82,7 +82,26 @@ export function setupWorker (server: net.Server, matchMaker: MatchMaker) {
 
     if (message[0] === Protocol.PASS_HTTP_SOCKET) {
       server.emit('connection', socket);
+
+      // re-create request for incoming socket
+      let request: any = new (<any>http).ClientRequest();
+      request.headers = message[1].headers;
+      request.method = message[1].method;
+      request.url = message[1].url;
+      request.connection = socket;
+      request._readableState = socket._readableState;
+
+      // TODO / FIXME:
+      //
+      // should we flush something here?
+      // '_flush' method has been lost after redirecting the socket
+      //
+      request._flush = function() {};
+
+      // emit request to server
+      socket.parser.onIncoming(request);
       socket.resume();
+
       return;
 
     } else if (message[0] === Protocol.PASS_WEBSOCKET) {

@@ -40,10 +40,13 @@ export class ClusterServer {
        });
 
        this.server.on('request', (request, response) => {
-         console.log("TODO: forward regular http requests to next worker.");
          let socket = request.connection;
          let worker = getNextWorkerForSocket(socket);
-         worker.send([Protocol.PASS_HTTP_SOCKET], socket)
+         worker.send([Protocol.PASS_HTTP_SOCKET, {
+           url: request.url,
+           headers: request.headers,
+           method: request.method,
+         }], socket);
        });
 
        this.server.on('upgrade', (request, socket, head) => {

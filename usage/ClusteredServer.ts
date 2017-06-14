@@ -18,7 +18,7 @@ if (cluster.isMaster) {
   const app = new express();
 
   app.get("/something", (req, res) => {
-    console.log("something!");
+    console.log("something!", process.pid);
     res.send("Hey!");
   });
 
