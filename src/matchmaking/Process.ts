@@ -33,8 +33,8 @@ process.on('message', (message, socket) => {
     return;
 
   } else if (Array.isArray(message) && callbacks[ message[0] ]) {
-    let callback = callbacks[ message[0] ];
-    callback(message[1]);
+    let callback = callbacks[ message.shift() ];
+    callback(...message);
     return;
   }
 });
@@ -70,39 +70,22 @@ function onConnect (client: Client) {
         return;
       }
 
-      // retrieve active worker ids
-      memshared.lrange("workerIds", 0, -1, (err, workerIds) => {
+      // Request to join an existing sessions for requested handler
+      memshared.smembers(roomName, (err, availableWorkerIds) => {
+        //
+        // TODO:
+        // remove a room from match-making cache when it reaches maxClients.
+        //
 
-        // Request to join an existing sessions for requested handler
-        memshared.smembers(roomName, (err, availableWorkerIds) => {
-          let numAvaialbleWorkers = availableWorkerIds.length;
-          console.log("numAvaialbleWorkers", numAvaialbleWorkers);
+        joinOptions.clientId = client.id;
 
-          // No workers has an instance of the requested handler.
-          // Let's create an instance on a worker with fewer handler spawned.
-          if (numAvaialbleWorkers === 0) {
-            memshared.mget(availableWorkerIds, (err, spawnedRooms) => {
-              let selectedWorkerId = (spawnedRooms.length > 0)
-                ? workerIds[ spawnedRooms.indexOf(Math.min(...spawnedRooms)) ]
-                : workerIds[0];
+        if (availableWorkerIds.length > 0) {
+          broadcastJoinRoomRequest(availableWorkerIds, client, roomName, joinOptions);
 
-              callbacks[ client.id ] = handleResponse(client);
-
-              joinOptions.clientId = client.id;
-
-              // Send JOIN_ROOM command to selected worker process.
-              process.send([ selectedWorkerId, Protocol.CREATE_ROOM, roomName, joinOptions ]);
-            });
-
-          } else {
-
-            // Broadcast message and wait for the reply of every worker
-            console.log("broadcasting raw message to other processes", message);
-            process.send(message);
-
-          }
-        });
-
+        } else {
+          // retrieve active worker ids
+          requestCreateRoom(client, roomName, joinOptions);
+        }
       });
 
     });
@@ -114,13 +97,67 @@ function onConnect (client: Client) {
   });
 }
 
-function handleResponse (client: Client) {
-  return function (data) {
-    console.log("handle response...", data);
-    send(client, data);
+function broadcastJoinRoomRequest (availableWorkerIds: string[], client: Client, roomName: string, joinOptions: any) {
+  let responsesReceived = [];
 
-    if (data[0] !== Protocol.JOIN_ERROR) {
-      client.close();
+  callbacks[ client.id ] = (workerId, roomId, score) => {
+    responsesReceived.push({
+      roomId: roomId,
+      score: score,
+      workerId: workerId
+    });
+
+    console.log("received response from worker:", roomId, score);
+    console.log("enough responses?", responsesReceived.length === availableWorkerIds.length);
+
+    if (responsesReceived.length === availableWorkerIds.length) {
+      // sort responses by score
+      responsesReceived.sort((a, b) => b.score - a.score);
+
+      let { workerId, roomId, score } = responsesReceived[0];
+      console.log("Selected data:", workerId, roomId, score);
+
+      if (score === 0) {
+        // highest score is 0, let's request to create a room instead of joining.
+        requestCreateRoom(client, roomName, joinOptions);
+
+      } else {
+        console.log("joinRoomRequest: ", workerId, roomId, joinOptions);
+
+        // send join room request to worker id with best score
+        joinRoomRequest(workerId, client, roomId, joinOptions);
+      }
     }
   }
+
+  availableWorkerIds.forEach(availableWorkerId => {
+    // Send JOIN_ROOM command to selected worker process.
+    process.send([ availableWorkerId, Protocol.REQUEST_JOIN_ROOM, roomName, joinOptions ]);
+  });
+}
+
+function joinRoomRequest (workerId, client, roomName, joinOptions) {
+  // forward data received from worker process to the client
+  callbacks[ client.id ] = (data) => send(client, data);
+
+  // Send JOIN_ROOM command to selected worker process.
+  process.send([ workerId, Protocol.JOIN_ROOM, roomName, joinOptions ]);
+}
+
+function requestCreateRoom (client, roomName, joinOptions) {
+  // forward data received from worker process to the client
+  callbacks[ client.id ] = (data) => send(client, data);
+
+  memshared.lrange("workerIds", 0, -1, (err, workerIds) => {
+    memshared.mget(workerIds, (err, spawnedRoomCounts) => {
+      spawnedRoomCounts = spawnedRoomCounts.filter(count => count);
+
+      let selectedWorkerId = (spawnedRoomCounts.length > 0)
+        ? workerIds[ spawnedRoomCounts.indexOf(Math.min(...spawnedRoomCounts)) ]
+        : workerIds[0];
+
+      // Send JOIN_ROOM command to selected worker process.
+      process.send([ selectedWorkerId, Protocol.CREATE_ROOM, roomName, joinOptions ]);
+    });
+  });
 }

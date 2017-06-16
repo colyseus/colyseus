@@ -6,6 +6,11 @@ import { Client, Protocol, Room, generateId, isValidId } from "./index";
 
 export type ClientOptions = { clientId: string } & any;
 
+export interface RoomWithScore {
+  room: Room;
+  score: number;
+};
+
 export class MatchMaker {
 
   private handlers: {[id: string]: any[]} = {};
@@ -54,7 +59,7 @@ export class MatchMaker {
       room = this.joinById(roomToJoin, clientOptions);
 
     } else {
-      room = this.requestToJoinRoom( roomToJoin, clientOptions )
+      room = this.requestToJoinRoom( roomToJoin, clientOptions ).room
         || (allowCreateRoom && this.create( roomToJoin, clientOptions ));
     }
 
@@ -85,7 +90,9 @@ export class MatchMaker {
 
     // assign sessionId to socket connection.
     client.sessionId = clientOptions.sessionId;
+
     delete clientOptions.sessionId;
+    delete clientOptions.clientId;
 
     try {
       (<any>room)._onJoin(client, clientOptions);
@@ -145,7 +152,7 @@ export class MatchMaker {
     return room;
   }
 
-  public requestToJoinRoom (roomName: string, clientOptions: ClientOptions): Room {
+  public requestToJoinRoom (roomName: string, clientOptions: ClientOptions): RoomWithScore {
     let room: Room;
     let bestScore = 0;
 
@@ -167,7 +174,10 @@ export class MatchMaker {
       }
     }
 
-    return room;
+    return {
+      room: room,
+      score: bestScore
+    };
   }
 
   public create (roomName: string, clientOptions: ClientOptions): Room {
@@ -208,13 +218,32 @@ export class MatchMaker {
 
   private lockRoom (roomName: string, room: Room): void {
     if (this.hasAvailableRoom(roomName)) {
-      spliceOne(this.availableRooms[roomName], this.availableRooms[roomName].indexOf(room));
+      let roomIndex = this.availableRooms[roomName].indexOf(room);
+      if (roomIndex !== -1) {
+        // decrease number of rooms spawned on this worker
+        memshared.decr(process.pid.toString());
+      }
+      spliceOne(this.availableRooms[roomName], roomIndex);
+    }
+
+    //
+    // if current worker doesn't have any 'rooName' handlers available
+    // anymore, remove it from the list.
+    //
+    if (!this.hasAvailableRoom(roomName)) {
+      memshared.srem(room.roomName, process.pid);
     }
   }
 
   private unlockRoom (roomName: string, room: Room) {
     if (this.availableRooms[ roomName ].indexOf(room) === -1) {
       this.availableRooms[ roomName ].push(room)
+
+      // flag current worker has this room id
+      memshared.sadd(room.roomName, process.pid);
+
+      // increase number of rooms spawned on this worker
+      memshared.incr(process.pid.toString());
     }
   }
 

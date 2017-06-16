@@ -8,8 +8,9 @@ export enum Protocol {
   USER_ID = 1,
 
   // Cluster messages (server-side)
-  PASS_HTTP_SOCKET = 7,
-  PASS_WEBSOCKET = 8,
+  PASS_HTTP_SOCKET = 3,
+  PASS_WEBSOCKET = 4,
+  REQUEST_JOIN_ROOM = 8,
   CREATE_ROOM = 9,
 
   // Room-related (10~20)

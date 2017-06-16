@@ -115,7 +115,6 @@ export abstract class Room<T=any> extends EventEmitter {
 
     var numClients = this.clients.length;
     while (numClients--) {
-      console.log(this.clients[ numClients ].id, this.clients[ numClients ].sessionId);
       this.clients[ numClients ].send(data, { binary: true }, logError.bind(this) );
     }
 

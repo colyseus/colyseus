@@ -45,8 +45,8 @@ Read the [blog post](https://medium.com/@endel/colyseus-minimalistic-mmo-game-se
 ### Room properties
 
 - `clock` - *A [`ClockTimer`](https://github.com/gamestdio/clock-timer.js) instance*
-- `timeline` - *A [`Timeline`](https://github.com/gamestdio/timeframe) instance (see `useTimeline`)*
 - `clients` - *Array of connected clients*
+- `timeline` - *A [`Timeline`](https://github.com/gamestdio/timeframe) instance (see `useTimeline`)*
 
 ### Abstract methods
 

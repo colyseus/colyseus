@@ -6,7 +6,8 @@ export class ChatRoom extends Room<any> {
     this.setState({ messages: [] });
   }
 
-  onJoin (client) {
+  onJoin (client, options) {
+    console.log("client has joined!", client, options);
     this.state.messages.push(`${ client.id } joined.`);
   }
 

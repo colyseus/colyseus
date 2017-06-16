@@ -14,7 +14,7 @@ import { Client, Room, generateId } from "../";
  * Retrieve and/or set 'colyseusid' cookie.
  */
 export function setUserId (client: Client) {
-  let clientCookies = cookie.parse(client.upgradeReq.headers.cookie);
+  let clientCookies = cookie.parse(client.upgradeReq.headers.cookie as string);
   client.id = clientCookies['colyseusid'] || generateId();
 
   if (!clientCookies['colyseusid']) {
@@ -108,6 +108,15 @@ export function setupWorker (server: net.Server, matchMaker: MatchMaker) {
       handleUpgrade(server as http.Server, socket, message);
       return;
 
+    } else if (message[0] === Protocol.REQUEST_JOIN_ROOM) {
+      let { room, score } = matchMaker.requestToJoinRoom(message[1], message[2]);
+
+      // send response back to match-making process.
+      getMatchMakingProcess(matchMakingPid => {
+        console.log("process", process.pid, "is responding to REQUEST_JOIN_ROOM");
+        process.send([matchMakingPid, joinOptions.clientId, process.pid, room.roomId, score]);
+      });
+
     } else if (allowCreateRoom || message[0] === Protocol.JOIN_ROOM) {
       matchMaker.onJoinRoomRequest(roomNameOrId, joinOptions, allowCreateRoom, (err: string, room: Room<any>) => {
         let joinRoomResponse;
@@ -120,10 +129,12 @@ export function setupWorker (server: net.Server, matchMaker: MatchMaker) {
         }
 
         // send response back to match-making process.
-        memshared.get("matchmaking_process", (err, matchMakingPid) => {
+        getMatchMakingProcess(matchMakingPid => {
+          console.log("process", process.pid, "is responding to JOIN_ROOM");
           process.send([matchMakingPid, joinOptions.clientId, joinRoomResponse]);
         });
       });
+
     }
 
   });
@@ -131,4 +142,8 @@ export function setupWorker (server: net.Server, matchMaker: MatchMaker) {
   return server;
 }
 
-
+function getMatchMakingProcess (callback: (matchMakingPid) => void) {
+  memshared.get("matchmaking_process", (err, matchMakingPid) => {
+    callback(matchMakingPid);
+  });
+}
