@@ -1,6 +1,6 @@
 <div align="center">
   <a href="https://github.com/gamestdio/colyseus">
-    ![colyseus](media/header.png?raw=true)
+    <img src="media/header.png?raw=true" />
   </a>
   <br>
   <br>
