@@ -10,20 +10,22 @@ import { Client } from "./index";
 import { Protocol } from "./Protocol";
 import { logError, spliceOne, toJSON } from "./Utils";
 
-export abstract class Room<T> extends EventEmitter {
+export abstract class Room<T=any> extends EventEmitter {
 
   public clock: ClockTimer = new ClockTimer();
   public timeline?: Timeline;
 
-  public roomId: number;
+  public roomId: string;
   public roomName: string;
 
   public clients: Client[] = [];
-  public options: any;
-  
+
+  public maxClients: number = Infinity;
+  public patchRate: number = 1000 / 20; // Default patch rate is 20fps (50ms)
   public autoDispose: boolean = true;
 
   public state: T;
+  public options: any;
 
   // when a new user connects, it receives the '_previousState', which holds
   // the last binary snapshot other users already have, therefore the patches
@@ -34,25 +36,24 @@ export abstract class Room<T> extends EventEmitter {
   private _simulationInterval: NodeJS.Timer;
   private _patchInterval: number;
 
-  constructor ( options: any = {} ) {
-    super()
+  constructor () {
+    super();
 
-    this.roomId = options.roomId;
-    this.roomName = options.roomName;
+    if (arguments.length > 0) {
+      console.warn("DEPRECATION WARNING: use 'onInit(options)' instead of 'constructor(options)' to initialize the room.");
+    }
 
-    this.options = options;
-
-    // Default patch rate is 20fps (50ms)
-    this.setPatchRate( 1000 / 20 );
+    this.setPatchRate(this.patchRate);
   }
 
+  abstract onInit (options: any): void;
   abstract onMessage (client: Client, data: any): void;
   abstract onJoin (client: Client, options?: any): void;
   abstract onLeave (client: Client): void;
   abstract onDispose (): void;
 
-  public requestJoin (options: any): boolean {
-    return true;
+  public requestJoin (options: any): number | boolean {
+    return 1;
   }
 
   public setSimulationInterval ( callback: Function, delay: number = 1000 / 60 ): void {
@@ -172,7 +173,7 @@ export abstract class Room<T> extends EventEmitter {
     this.clients.push( client );
 
     // confirm room id that matches the room name requested to join
-    client.send( msgpack.encode( [Protocol.JOIN_ROOM, this.roomId, this.roomName] ), { binary: true }, logError.bind(this) );
+    client.send( msgpack.encode( [Protocol.JOIN_ROOM, client.sessionId] ), { binary: true }, logError.bind(this) );
 
     // send current state when new client joins the room
     if (this.state) {
@@ -195,6 +196,12 @@ export abstract class Room<T> extends EventEmitter {
 
     this.emit('leave', client, isDisconnect);
 
+    //
+    // TODO: force disconnect from server.
+    //
+    // need to check why the connection is being re-directed to MatchMaking
+    // process after calling `client.close()` here
+    //
     if (!isDisconnect) {
       client.send( msgpack.encode( [Protocol.LEAVE_ROOM, this.roomId] ), { binary: true }, logError.bind(this) );
     }

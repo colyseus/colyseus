@@ -14,12 +14,12 @@ describe('Room', function() {
   describe('#constructor', function() {
 
     it('should instantiate with valid options', function() {
-      var room = new DummyRoom({ });
+      var room = new DummyRoom();
       assert.ok(room instanceof DummyRoom);
     });
 
     it('should instantiate with timeline attribute', function() {
-      var room = new DummyRoomWithTimeline({ });
+      var room = new DummyRoomWithTimeline();
       assert.equal(0, room.timeline.history.length);
     });
 
@@ -27,7 +27,7 @@ describe('Room', function() {
 
   describe('#onJoin/#onLeave', function() {
     it('should receive onJoin/onLeave messages', function() {
-      var room = new DummyRoom({ });
+      var room = new DummyRoom();
       var client = createDummyClient();
       var message = null;
 
@@ -43,8 +43,8 @@ describe('Room', function() {
       assert.equal(message[0], Protocol.LEAVE_ROOM);
     });
 
-    it('should receive JOIN_ROOM and ROOM_DATA messages onJoin', function() {
-      var room = new DummyRoomWithState({ });
+    it('should receive JOIN_ROOM and ROOM_STATE messages onJoin', function() {
+      var room = new DummyRoomWithState();
       var client = createDummyClient();
       var message = null;
 
@@ -60,7 +60,7 @@ describe('Room', function() {
     });
 
     it('should cleanup/dispose when all clients disconnect', function(done) {
-      var room = new DummyRoom({ });
+      var room = new DummyRoom();
       var client = createDummyClient();
 
       (<any>room)._onJoin(client);
@@ -77,7 +77,7 @@ describe('Room', function() {
 
   describe('patch interval', function() {
     it('should set default "patch" interval', function() {
-      var room = new DummyRoom({ });
+      var room = new DummyRoom();
       assert.equal("object", typeof((<any>room)._patchInterval));
       assert.equal(1000 / 20, (<any>room)._patchInterval._idleTimeout, "default patch rate should be 20");
     });
@@ -85,7 +85,7 @@ describe('Room', function() {
 
   describe('#sendState', function() {
     it('should send state when it is set up', function() {
-      let room = new DummyRoom({ });
+      let room = new DummyRoom();
       let client = createDummyClient();
       (<any>room)._onJoin(client, {});
 
@@ -104,7 +104,7 @@ describe('Room', function() {
 
   describe('#broadcastPatch', function() {
     it('should fail to broadcast patch without state', function() {
-      let room = new DummyRoom({ });
+      let room = new DummyRoom();
 
       // connect 2 dummy clients into room
       let client1 = createDummyClient();
@@ -118,7 +118,7 @@ describe('Room', function() {
     });
 
     it('should broadcast patch having state', function() {
-      let room = new DummyRoom({ });
+      let room = new DummyRoom();
 
       // connect 2 dummy clients into room
       let client1 = createDummyClient();
@@ -142,7 +142,7 @@ describe('Room', function() {
     });
 
     it('shouldn\'t broadcast clean state (no patches)', function() {
-      var room = new DummyRoom({ });
+      var room = new DummyRoom();
       room.setState({ one: 1 });
 
       // create 2 dummy connections with the room
@@ -187,7 +187,7 @@ describe('Room', function() {
   describe("#disconnect", () => {
 
     it("should send disconnect message to all clients", () => {
-      let room = new DummyRoom({ });
+      let room = new DummyRoom();
 
       // connect 10 clients
       let lastClient;
@@ -204,7 +204,7 @@ describe('Room', function() {
     });
 
     it("should send disconnect message to all clients", (done) => {
-      let room = new DummyRoom({ });
+      let room = new DummyRoom();
 
       // connect 10 clients
       let client1 = createDummyClient();

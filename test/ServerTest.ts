@@ -3,10 +3,11 @@
 import * as assert from "assert";
 import * as msgpack from "msgpack-lite";
 import { Room } from "../src/Room";
-import { Server } from "../src/Server";
+// import { Server } from "../src/Server";
 import { Protocol } from "../src/Protocol";
 import { createEmptyClient, DummyRoom, Client } from "./utils/mock";
 
+/*
 describe('Server', function() {
   var server = new Server({port: 1111});
   var clients: Client[];
@@ -65,3 +66,4 @@ describe('Server', function() {
 
   });
 });
+*/
