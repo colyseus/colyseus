@@ -60,7 +60,7 @@ See [roadmap](https://github.com/gamestdio/colyseus/wiki/Roadmap) for our future
 <div align="center">
   <br>
   <a href="https://www.evennode.com/?utm_source=colyseus" target="_blank"><img src="https://www.evennode.com/images/logo.png" /></a>
-  <br>
+  <br><br>
   <blockquote>
     EvenNode provides <a href="https://www.evennode.com/?utm_source=colyseus">Node.js hosting</a> fully compatible with Colyseus. Discount is available to Colyseus projects on request. Contact support for more information
   </blockquote>
