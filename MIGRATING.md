@@ -2,11 +2,31 @@
 
 ## Migrating from 0.4 to 0.5
 
-#### Use `ClusterServer` instead of `Server`:
+#### Use `Server#listen` to bind http port.
 
-The `ClusterServer` will take care of forwarding connections to child processes. Even if you're running in a single-core machine, you should now use it. See usage example in [usage/ClusteredServer.ts](usage/ClusteredServer.ts)
+The `Server` is now using the `ClusterServer` under the hood, which will spawn
+workers automatically. If you're using the `Server` instead of `ClusterServer`
+directly, you should call its `listen` method.
 
-You can still define and use your own HTTP routes and middlewares in the worker processes.
+OLD
+
+```
+import { createServer } from 'http';
+import { Server } from 'colyseus';
+const httpServer = createServer(app);
+const gameServer = new Server({ server: httpServer });
+httpServer.listen(2657);
+```
+
+NEW
+
+```
+import { createServer } from 'http';
+import { Server } from 'colyseus';
+const httpServer = createServer(app);
+const gameServer = new Server({ server: httpServer });
+gameServer.listen(2657); // calling 'listen' from gameServer instead of httpServer
+```
 
 #### `constructor` signature changed. use `onInit` instead.
 

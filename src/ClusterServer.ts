@@ -94,7 +94,7 @@ export class ClusterServer {
 
   attach (options: { server: http.Server }) {
     if (!cluster.isWorker) {
-      console.warn("ClusterServer#attach method should only be called from a worker process.");
+      // ClusterServer#attach method should only be called from a worker process.
       return;
     }
 
