@@ -7,10 +7,10 @@
 	<a href="https://npmjs.com/package/colyseus">
 		<img src="https://img.shields.io/npm/dm/colyseus.svg">
 	</a>
-  <a href="https://opencollective.com/colyseus#sponsors">
+  <a href="#sponsors">
 		<img src="https://opencollective.com/colyseus/sponsors/badge.svg">
 	</a>
-	<a href="https://opencollective.com/colyseus#backer">
+	<a href="#backers">
 		<img src="https://opencollective.com/colyseus/backers/badge.svg">
 	</a>
 	<a href="https://gitter.im/colyseus/colyseus">
@@ -58,7 +58,9 @@ See [roadmap](https://github.com/gamestdio/colyseus/wiki/Roadmap) for our future
 ## Huge thanks for our first sponsor!
 
 <div align="center">
+  <br>
   <a href="https://www.evennode.com/?utm_source=colyseus" target="_blank"><img src="https://www.evennode.com/images/logo.png" /></a>
+  <br>
   <blockquote>
     EvenNode provides <a href="https://www.evennode.com/?utm_source=colyseus">Node.js hosting</a> fully compatible with Colyseus. Discount is available to Colyseus projects on request. Contact support for more information
   </blockquote>
