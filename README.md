@@ -13,8 +13,8 @@
 	<a href="#backers">
 		<img src="https://opencollective.com/colyseus/backers/badge.svg">
 	</a>
-	<a href="https://gitter.im/colyseus/colyseus">
-		<img src="https://badges.gitter.im/colyseus/colyseus.svg">
+	<a href="https://gitter.im/gamestdio/colyseus">
+		<img src="https://badges.gitter.im/gamestdio/colyseus.svg">
 	</a>
   <h3>
     Multiplayer Game Server for Node.js. <a href="https://github.com/gamestdio/colyseus/wiki">View documentation</a>
