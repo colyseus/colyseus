@@ -55,7 +55,7 @@ See [roadmap](https://github.com/gamestdio/colyseus/wiki/Roadmap) for our future
 - [LD35 entry: dotower](http://ludumdare.com/compo/ludum-dare-35/?action=preview&uid=50958) ([source-code](https://github.com/endel/LD35)) - Simple experimental MOBA using [pixi.js](https://github.com/pixijs/pixi.js)
 - [React Example](https://colyseus-react-example.herokuapp.com) ([source-code](https://github.com/endel/colyseus-react-example)) - Example integrating with [ReactJS](https://github.com/facebook/react)
 
-## Huge thanks for our first sponsor!
+## Huge thanks to our first sponsor!
 
 <div align="center">
   <br>
