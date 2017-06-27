@@ -14,7 +14,9 @@ import { Client, Room, generateId } from "../";
  * Retrieve and/or set 'colyseusid' cookie.
  */
 export function setUserId (client: Client) {
-  let clientCookies = cookie.parse(client.upgradeReq.headers.cookie as string);
+  let cookieStr = client.upgradeReq.headers.cookie as string || "";
+  let clientCookies = cookie.parse(cookieStr);
+
   client.id = clientCookies['colyseusid'] || generateId();
 
   if (!clientCookies['colyseusid']) {

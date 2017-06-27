@@ -1,6 +1,6 @@
 {
   "name": "colyseus",
-  "version": "0.5.0-alpha.3",
+  "version": "0.5.0-alpha.4",
   "description": "Multiplayer Game Server for Node.js.",
   "main": "./lib/index.js",
   "typings": "./lib/index.d.ts",
@@ -17,7 +17,7 @@
   "scripts": {
     "prepublish": "tsc -d",
     "watch": "tsc -d -w",
-    "start": "npm run watch & nodemon --harmony --harmony-proxies ./examples/server.js",
+    "start": "nodemon --watch 'src/**/*.ts' --exec 'ts-node' usage/Server.ts",
     "test": "mocha --require ts-node/register test/**Test.ts"
   },
   "engines": {
