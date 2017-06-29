@@ -104,6 +104,10 @@ export function setupWorker (server: net.Server, matchMaker: MatchMaker) {
       socket.parser.onIncoming(request);
       socket.resume();
 
+      // This is way too hacky.
+      request.emit('data', message[1].body);
+      request.emit('end');
+
       return;
 
     } else if (message[0] === Protocol.PASS_WEBSOCKET) {

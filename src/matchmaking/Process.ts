@@ -8,10 +8,10 @@ import { Client, generateId } from "../";
 import { handleUpgrade, setUserId } from "../cluster/Worker";
 
 const app = new express();
-const server = app.listen(0, "localhost")
+const server = app.listen(0, "localhost");
 
 let wss = new WebSocketServer({
-  server: server ,
+  server: server,
   verifyClient: function (info, done) {
     // console.log("Verify client!", info, done);
     done(true);
