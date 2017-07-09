@@ -4,6 +4,8 @@ import * as msgpack from "msgpack-lite";
 import { merge, spliceOne } from "./Utils";
 import { Client, Protocol, Room, generateId, isValidId } from "./index";
 
+import { debugMatchMaking } from "./Debug";
+
 export type ClientOptions = { clientId: string } & any;
 
 export interface RoomWithScore {
@@ -200,6 +202,8 @@ export class MatchMaker {
 
     // imediatelly ask client to join the room
     if ( room.requestJoin(clientOptions) ) {
+      debugMatchMaking("spawning '%s' on worker %d", roomName, process.pid);
+
       room.on('lock', this.lockRoom.bind(this, roomName, room));
       room.on('unlock', this.unlockRoom.bind(this, roomName, room));
       room.once('dispose', this.disposeRoom.bind(this, roomName, room));

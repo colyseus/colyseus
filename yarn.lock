@@ -6,6 +6,10 @@
   version "0.3.0"
   resolved "https://registry.yarnpkg.com/@types/cookie/-/cookie-0.3.0.tgz#c840871e6b23f814b2eb0ae6963d44ee59cf6627"
 
+"@types/debug@^0.0.29":
+  version "0.0.29"
+  resolved "https://registry.yarnpkg.com/@types/debug/-/debug-0.0.29.tgz#a1e514adfbd92f03a224ba54d693111dbf1f3754"
+
 "@types/fossil-delta@^0.2.1":
   version "0.2.2"
   resolved "https://registry.yarnpkg.com/@types/fossil-delta/-/fossil-delta-0.2.2.tgz#c6f3e87b818cfc93067f506716a22819ae2edbb5"
@@ -368,9 +372,15 @@ debug@2.0.0:
   dependencies:
     ms "0.6.2"
 
-debug@2.6.7, debug@^2.2.0:
+debug@2.6.7:
   version "2.6.7"
   resolved "https://registry.yarnpkg.com/debug/-/debug-2.6.7.tgz#92bad1f6d05bbb6bba22cca88bcd0ec894c2861e"
+  dependencies:
+    ms "2.0.0"
+
+debug@^2.2.0, debug@^2.6.8:
+  version "2.6.8"
+  resolved "https://registry.yarnpkg.com/debug/-/debug-2.6.8.tgz#e731531ca2ede27d188222427da17821d68ff4fc"
   dependencies:
     ms "2.0.0"
 
