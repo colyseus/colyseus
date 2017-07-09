@@ -10,6 +10,8 @@ import { Client } from "./index";
 import { Protocol } from "./Protocol";
 import { logError, spliceOne, toJSON } from "./Utils";
 
+import { debugPatch } from "./Debug";
+
 export abstract class Room<T=any> extends EventEmitter {
 
   public clock: ClockTimer = new ClockTimer();
@@ -163,6 +165,8 @@ export abstract class Room<T=any> extends EventEmitter {
 
     this._previousState = currentState;
     this._previousStateEncoded = currentStateEncoded;
+
+    debugPatch("broadcasting patch: %d bytes", patches.length);
 
     // broadcast patches (diff state) to all clients,
     // even if nothing has changed in order to calculate PING on client-side

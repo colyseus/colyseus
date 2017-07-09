@@ -76,7 +76,6 @@ function enableProcessCommunication(worker: child_process.ChildProcess | cluster
   worker.on("message", (message) => {
     let workerProcess = Array.isArray(message) && memshared.getProcessById(message.shift());
     if (workerProcess) {
-      console.log(`process wants to communicate directly with pid (${ workerProcess.pid }) `);
       workerProcess.send(message);
     }
   });

@@ -7,6 +7,8 @@ import { Protocol, send } from "../Protocol";
 import { Client, generateId } from "../";
 import { handleUpgrade, setUserId } from "../cluster/Worker";
 
+import { debugMatchMaking } from "../Debug";
+
 const app = new express();
 const server = app.listen(0, "localhost");
 
@@ -40,7 +42,7 @@ process.on('message', (message, socket) => {
 });
 
 // Process spawned successfully!
-console.log("MatchMaking process spawned with pid", process.pid);
+debugMatchMaking("MatchMaking process spawned with pid %d", process.pid);
 
 function onConnect (client: Client) {
   setUserId(client);
@@ -107,22 +109,22 @@ function broadcastJoinRoomRequest (availableWorkerIds: string[], client: Client,
       workerId: workerId
     });
 
-    console.log("received response from worker:", roomId, score);
-    console.log("enough responses?", responsesReceived.length === availableWorkerIds.length);
+    debugMatchMaking("JOIN_ROOM, receiving responses (%d/%d)", responsesReceived.length, availableWorkerIds.length);
 
     if (responsesReceived.length === availableWorkerIds.length) {
       // sort responses by score
       responsesReceived.sort((a, b) => b.score - a.score);
 
       let { workerId, roomId, score } = responsesReceived[0];
-      console.log("Selected data:", workerId, roomId, score);
 
       if (score === 0) {
+        debugMatchMaking("JOIN_ROOM, best score: %d, (options: %j)", score, joinOptions);
+
         // highest score is 0, let's request to create a room instead of joining.
         requestCreateRoom(client, roomName, joinOptions);
 
       } else {
-        console.log("joinRoomRequest: ", workerId, roomId, joinOptions);
+        debugMatchMaking("JOIN_ROOM, best score: %d, (options: %j)", score, joinOptions);
 
         // send join room request to worker id with best score
         joinRoomRequest(workerId, client, roomId, joinOptions);
@@ -156,7 +158,9 @@ function requestCreateRoom (client, roomName, joinOptions) {
         ? workerIds[ spawnedRoomCounts.indexOf(Math.min(...spawnedRoomCounts)) ]
         : workerIds[0];
 
-      // Send JOIN_ROOM command to selected worker process.
+      debugMatchMaking("requesting CREATE_ROOM");
+
+      // Send CREATE_ROOM command to selected worker process.
       process.send([ selectedWorkerId, Protocol.CREATE_ROOM, roomName, joinOptions ]);
     });
   });
