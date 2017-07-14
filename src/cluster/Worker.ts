@@ -1,9 +1,8 @@
-import * as cluster from "cluster";
 import * as memshared from "memshared";
 import * as net from "net";
 import * as http from "http";
 import * as msgpack from "msgpack-lite";
-import * as cookie from "cookie";
+import * as parseURL from "url-parse";
 
 import { Server as WebSocketServer } from "uws";
 import { Protocol } from "../Protocol";
@@ -14,28 +13,29 @@ import { Client, Room, generateId } from "../";
  * Retrieve and/or set 'colyseusid' cookie.
  */
 export function setUserId (client: Client) {
-  let cookieStr = client.upgradeReq.headers.cookie as string || "";
-  let clientCookies = cookie.parse(cookieStr);
+  let url = (<any>client.upgradeReq).url;
 
-  client.id = clientCookies['colyseusid'] || generateId();
+  client.id = url.query['colyseusid'] || generateId();
 
-  if (!clientCookies['colyseusid']) {
+  if (!url.query['colyseusid']) {
     client.send( msgpack.encode([ Protocol.USER_ID, client.id ]), { binary: true } );
   }
 }
 
 export function handleUpgrade (server: http.Server, socket: net.Socket, message: any) {
   let code = message[0];
-  let request: http.ServerRequest = message[1];
+  let upgradeReq: http.ServerRequest = message[1];
   let head: any = message[2];
-  let roomId: any = message[3];
+
+  let url: any = parseURL(message[3], true);
+  (<any>upgradeReq).url = url;
+  (<any>upgradeReq).roomId = url.pathname.substr(1);
 
   // assign client socket to request
-  request.connection = socket;
-  (<any>request).roomId = roomId;
+  upgradeReq.connection = socket;
 
   // handle 'upgrade' of the WebSocket connection in the worker node
-  server.emit('upgrade', request, socket, head);
+  server.emit('upgrade', upgradeReq, socket, head);
 
   socket.resume();
 }

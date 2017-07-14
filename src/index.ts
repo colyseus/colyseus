@@ -11,6 +11,7 @@ export { Protocol } from "./Protocol";
 export type EntityMap<T> = {[ entityId:string ]: T};
 
 // Utilities
+export { nonenumerable as nosync } from "nonenumerable";
 export function generateId () { return shortid.generate(); }
 export function isValidId (id: any) { return shortid.isValid(id); }
 

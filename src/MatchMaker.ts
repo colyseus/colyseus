@@ -252,6 +252,8 @@ export class MatchMaker {
   }
 
   private disposeRoom(roomName: string, room: Room): void {
+    debugMatchMaking("disposing '%s' on worker %d", roomName, process.pid);
+
     delete this.roomsById[ room.roomId ]
 
     // remove from cache

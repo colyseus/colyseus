@@ -1,6 +1,6 @@
 {
   "name": "colyseus",
-  "version": "0.5.0-alpha.8",
+  "version": "0.5.0-alpha.9",
   "description": "Multiplayer Game Server for Node.js.",
   "main": "./lib/index.js",
   "typings": "./lib/index.d.ts",
@@ -18,13 +18,13 @@
     "prepublish": "tsc -d",
     "watch": "tsc -d -w",
     "start": "nodemon --watch 'src/**/*.ts' --exec 'ts-node' usage/Server.ts",
-    "test": "mocha --require ts-node/register test/**Test.ts"
+    "test": "mocha --require ts-node/register test/**Test.ts",
+    "typedoc": "typedoc --name Colyseus --mode file --out docs"
   },
   "engines": {
     "node": ">= 4.x"
   },
   "dependencies": {
-    "@types/cookie": "^0.3.0",
     "@types/debug": "^0.0.29",
     "@types/fossil-delta": "^0.2.1",
     "@types/ip": "^0.0.29",
@@ -34,14 +34,15 @@
     "@types/shortid": "0.0.29",
     "@types/uws": "^0.13.0",
     "clock-timer.js": "^1.1.0",
-    "cookie": "^0.3.1",
     "debug": "^2.6.8",
     "fossil-delta": "^0.2.5",
     "ip": "^1.1.5",
     "memshared": "^0.9.14",
     "msgpack-lite": "^0.1.26",
+    "nonenumerable": "^1.0.1",
     "shortid": "^2.2.6",
     "timeframe": "^0.3.5",
+    "url-parse": "^1.1.9",
     "uws": "^0.14.1"
   },
   "devDependencies": {
@@ -51,6 +52,7 @@
     "mocha": "2.3.2",
     "nodemon": "^1.7.1",
     "ts-node": "^3.0.0",
+    "typedoc": "^0.7.1",
     "typescript": "^2.3.2"
   },
   "license": "MIT",

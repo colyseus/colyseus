@@ -166,7 +166,7 @@ export abstract class Room<T=any> extends EventEmitter {
     this._previousState = currentState;
     this._previousStateEncoded = currentStateEncoded;
 
-    debugPatch("broadcasting patch: %d bytes", patches.length);
+    debugPatch("'%s' (%d) is broadcasting patch: %d bytes", this.roomName, this.roomId, patches.length);
 
     // broadcast patches (diff state) to all clients,
     // even if nothing has changed in order to calculate PING on client-side

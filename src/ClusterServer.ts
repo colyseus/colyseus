@@ -4,6 +4,7 @@ import * as memshared from "memshared";
 import * as net from "net";
 import * as http from "http";
 import * as os from "os";
+import * as parseURL from "url-parse";
 
 import { spawnWorkers, spawnMatchMaking, getNextWorkerForSocket } from "./cluster/Master";
 import { setupWorker } from "./cluster/Worker";
@@ -59,7 +60,7 @@ export class ClusterServer {
 
        this.server.on('upgrade', (request, socket, head) => {
          let worker = this.matchMakingWorker;
-         let roomId = request.url.substr(1);
+         let roomId = parseURL(request.url).pathname.substr(1);
 
          // bind client to the worker that has the requested room spawed
          if (cache[roomId]) {
@@ -70,7 +71,7 @@ export class ClusterServer {
          worker.send([Protocol.PASS_WEBSOCKET, {
            headers: request.headers,
            method: request.method,
-         }, head, roomId], socket);
+         }, head, request.url], socket);
        });
     }
 
