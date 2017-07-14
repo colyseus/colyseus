@@ -51,7 +51,7 @@
     "express": "^4.13.3",
     "mocha": "2.3.2",
     "nodemon": "^1.7.1",
-    "ts-node": "^3.0.0",
+    "ts-node": "^3.2.0",
     "typedoc": "^0.7.1",
     "typescript": "^2.3.2"
   },
@@ -59,6 +59,7 @@
   "greenkeeper": {
     "ignore": [
       "mocha",
+      "ts-node",
       "@types/node"
     ]
   }
