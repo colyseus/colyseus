@@ -1,6 +1,6 @@
 {
   "name": "colyseus",
-  "version": "0.5.0-alpha.10",
+  "version": "0.5.0-alpha.11",
   "description": "Multiplayer Game Server for Node.js.",
   "main": "./lib/index.js",
   "typings": "./lib/index.d.ts",
@@ -35,7 +35,7 @@
     "@types/node": "^7.0.18",
     "@types/shortid": "0.0.29",
     "@types/uws": "^0.13.0",
-    "clock-timer.js": "^1.1.0",
+    "clock-timer.js": "^1.1.7",
     "debug": "^2.6.8",
     "fossil-delta": "^0.2.5",
     "ip": "^1.1.5",

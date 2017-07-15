@@ -216,6 +216,9 @@ export abstract class Room<T=any> extends EventEmitter {
       if ( this._patchInterval ) clearInterval( this._patchInterval );
       if ( this._simulationInterval ) clearInterval( this._simulationInterval );
 
+      // clear all timeouts/intervals
+      this.clock.clear();
+
       this.emit('dispose');
     }
   }
