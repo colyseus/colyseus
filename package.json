@@ -1,6 +1,6 @@
 {
   "name": "colyseus",
-  "version": "0.5.0-alpha.9",
+  "version": "0.5.0-alpha.10",
   "description": "Multiplayer Game Server for Node.js.",
   "main": "./lib/index.js",
   "typings": "./lib/index.d.ts",
@@ -19,7 +19,9 @@
     "watch": "tsc -d -w",
     "start": "nodemon --watch 'src/**/*.ts' --exec 'ts-node' usage/Server.ts",
     "test": "mocha --require ts-node/register test/**Test.ts",
-    "typedoc": "typedoc --name Colyseus --mode file --out docs"
+    "typedoc": "typedoc --name Colyseus --mode file --out docs",
+    "postinstall": "npm run -s donate",
+    "donate": "echo \"\u001b[35m\u001b[1mLove Colyseus? Support its development by becoming a backer:\u001b[22m\u001b[39m\n > \u001b[34mhttps://opencollective.com/colyseus/donate\u001b[39m\""
   },
   "engines": {
     "node": ">= 4.x"

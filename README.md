@@ -40,12 +40,12 @@ See [roadmap](https://github.com/gamestdio/colyseus/wiki/Roadmap) for our future
 
 - [JavaScript/TypeScript](https://github.com/gamestdio/colyseus.js)
 - [Unity](https://github.com/gamestdio/colyseus-unity3d)
-- [CoronaSDK](https://github.com/gamestdio/colyseus.lua) (works only with server v0.3.x)
+- [CoronaSDK](https://github.com/gamestdio/colyseus.lua) (works with server v0.3.x)
 
 ### Community client integration
 
-- [Construct2](https://github.com/polpoy/colyseus-construct-plugin)
-- [Cocos2d-x](https://github.com/chunho32/colyseus-cocos2d-x)
+- [Construct2](https://github.com/polpoy/colyseus-construct-plugin) (works with server v0.5.0)
+- [Cocos2d-x](https://github.com/chunho32/colyseus-cocos2d-x) (works with server v0.5.0)
 
 ### Usage examples
 
