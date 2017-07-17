@@ -21,7 +21,13 @@
   <h3>
 </div>
 
-Read the [blog post](https://medium.com/@endel/colyseus-minimalistic-mmo-game-server-for-node-js-a29fe1cebbfe) to understand the motivation behind this project.
+Read the [version 0.6.0 update](https://medium.com/@endel/colyseus-html5-multiplayer-games-made-simple-v0-6-0-alpha-update-d5d0e5eba4a0).
+
+## Why?
+
+Writing your own multiplayer boilerplate using Socket.io/SockJS/etc is time
+consuming and you'll face a range of different problems along the way. Colyseus
+should have all these problems figured out already.
 
 ## Features / Characteristics
 
@@ -39,13 +45,13 @@ See [roadmap](https://github.com/gamestdio/colyseus/wiki/Roadmap) for our future
 ### Official client integration
 
 - [JavaScript/TypeScript](https://github.com/gamestdio/colyseus.js)
-- [Unity](https://github.com/gamestdio/colyseus-unity3d)
-- [CoronaSDK](https://github.com/gamestdio/colyseus.lua) (works with server v0.3.x)
+- [Unity](https://github.com/gamestdio/colyseus-unity3d) (compatible with server v0.5.x)
+- [CoronaSDK](https://github.com/gamestdio/colyseus.lua) (compatible with server v0.3.x)
 
 ### Community client integration
 
-- [Construct2](https://github.com/polpoy/colyseus-construct-plugin) (works with server v0.5.0)
-- [Cocos2d-x](https://github.com/chunho32/colyseus-cocos2d-x) (works with server v0.5.0)
+- [Construct2](https://github.com/polpoy/colyseus-construct-plugin) (compatible with server v0.5.0)
+- [Cocos2d-x](https://github.com/chunho32/colyseus-cocos2d-x) (compatible with server v0.5.0)
 
 ### Usage examples
 
