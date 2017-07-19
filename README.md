@@ -21,7 +21,7 @@
   <h3>
 </div>
 
-Read the [version 0.6.0 update](https://medium.com/@endel/colyseus-html5-multiplayer-games-made-simple-v0-6-0-alpha-update-d5d0e5eba4a0).
+Read the [version 0.5.0 update](https://medium.com/@endel/colyseus-html5-multiplayer-games-made-simple-v0-6-0-alpha-update-d5d0e5eba4a0).
 
 ## Why?
 
