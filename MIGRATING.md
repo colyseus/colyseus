@@ -1,6 +1,6 @@
 # Migrating between versions of Colyseus
 
-## Migrating from 0.5 to 0.6
+## Migrating from 0.4 to 0.5
 
 #### Use `Server#listen` to bind http port.
 
