@@ -27,7 +27,7 @@
     "node": ">= 4.x"
   },
   "dependencies": {
-    "@types/debug": "^0.0.29",
+    "@types/debug": "^0.0.30",
     "@types/fossil-delta": "^0.2.1",
     "@types/ip": "^0.0.29",
     "@types/mocha": "^2.2.32",
