@@ -2,7 +2,7 @@ import * as msgpack from "msgpack-lite";
 import * as fossilDelta from "fossil-delta";
 import * as shortid from "shortid";
 
-import ClockTimer from "clock-timer.js";
+import Timer from "@gamestdio/timer";
 import { EventEmitter } from "events";
 import { createTimeline, Timeline } from "timeframe";
 
@@ -14,7 +14,7 @@ import { debugPatch } from "./Debug";
 
 export abstract class Room<T=any> extends EventEmitter {
 
-  public clock: ClockTimer = new ClockTimer();
+  public clock: Timer = new Timer();
   public timeline?: Timeline;
 
   public roomId: string;
