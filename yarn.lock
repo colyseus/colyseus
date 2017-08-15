@@ -2,6 +2,12 @@
 # yarn lockfile v1
 
 
+"@gamestdio/timeline@^0.3.5":
+  version "0.3.5"
+  resolved "https://registry.npmjs.org/@gamestdio/timeline/-/timeline-0.3.5.tgz#35ffbe1621535b41dfb5d5009c4c52301bbb1fc6"
+  dependencies:
+    harmony-proxy "^1.0.1"
+
 "@gamestdio/timer@^1.1.7":
   version "1.1.8"
   resolved "https://registry.yarnpkg.com/@gamestdio/timer/-/timer-1.1.8.tgz#6e5424f6e137aa88935571628f790433429a2f14"
@@ -341,7 +347,7 @@ cliui@^2.1.0:
     right-align "^0.1.1"
     wordwrap "0.0.2"
 
-clock.js@*, clock.js@^1.1.5:
+clock.js@^1.1.5:
   version "1.1.7"
   resolved "https://registry.yarnpkg.com/clock.js/-/clock.js-1.1.7.tgz#4ae35f7c3702bf4191c1b855c8b8e273a432fb2d"
 
@@ -1050,6 +1056,7 @@ jade@1.11.0:
     jstransformer "0.0.2"
     mkdirp "~0.5.0"
     transformers "2.1.0"
+    uglify-js "^2.4.19"
     void-elements "~2.0.1"
     with "~4.0.0"
 
@@ -1930,13 +1937,6 @@ timed-out@^2.0.0:
   version "2.0.0"
   resolved "https://registry.yarnpkg.com/timed-out/-/timed-out-2.0.0.tgz#f38b0ae81d3747d628001f41dafc652ace671c0a"
 
-timeframe@^0.3.5:
-  version "0.3.5"
-  resolved "https://registry.yarnpkg.com/timeframe/-/timeframe-0.3.5.tgz#c8cc612d22faacdd9b31e33e6072c85f21ab208c"
-  dependencies:
-    clock.js "*"
-    harmony-proxy "^1.0.1"
-
 touch@1.0.0:
   version "1.0.0"
   resolved "https://registry.yarnpkg.com/touch/-/touch-1.0.0.tgz#449cbe2dbae5a8c8038e30d71fa0ff464947c4de"
@@ -2030,7 +2030,7 @@ typescript@^2.3.2:
   version "2.4.2"
   resolved "https://registry.yarnpkg.com/typescript/-/typescript-2.4.2.tgz#f8395f85d459276067c988aa41837a8f82870844"
 
-uglify-js@^2.6:
+uglify-js@^2.4.19, uglify-js@^2.6:
   version "2.8.29"
   resolved "https://registry.yarnpkg.com/uglify-js/-/uglify-js-2.8.29.tgz#29c5733148057bb4e1f75df35b7a9cb72e6a59dd"
   dependencies:
@@ -2111,9 +2111,9 @@ uuid@^3.0.0:
   version "3.1.0"
   resolved "https://registry.yarnpkg.com/uuid/-/uuid-3.1.0.tgz#3dd3d3e790abc24d7b0d3a034ffababe28ebbc04"
 
-uws@8.14.0:
-  version "8.14.0"
-  resolved "https://registry.yarnpkg.com/uws/-/uws-8.14.0.tgz#acc1488d13ecb23fe2f942a7eafb06681fa91431"
+uws@8.14.1:
+  version "8.14.1"
+  resolved "https://registry.npmjs.org/uws/-/uws-8.14.1.tgz#de09619f305f6174d5516a9c6942cb120904b20b"
 
 v8flags@^3.0.0:
   version "3.0.0"
