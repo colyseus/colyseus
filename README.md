@@ -45,21 +45,23 @@ See [roadmap](https://github.com/gamestdio/colyseus/wiki/Roadmap) for our future
 ### Official client integration
 
 - [JavaScript/TypeScript](https://github.com/gamestdio/colyseus.js)
-- [Unity](https://github.com/gamestdio/colyseus-unity3d) (compatible with server v0.5.x)
+- [Unity](https://github.com/gamestdio/colyseus-unity3d)
 - [CoronaSDK](https://github.com/gamestdio/colyseus.lua) (compatible with server v0.3.x)
 
 ### Community client integration
 
-- [Construct2](https://github.com/polpoy/colyseus-construct-plugin) (compatible with server v0.5.0)
-- [Cocos2d-x](https://github.com/chunho32/colyseus-cocos2d-x) (compatible with server v0.5.0)
+- [Construct2](https://github.com/polpoy/colyseus-construct-plugin) (compatible with server v0.4.0)
+- [Cocos2d-x](https://github.com/chunho32/colyseus-cocos2d-x) (compatible with server v0.4.0)
 
 ### Usage examples
 
-- [Official Examples](https://github.com/gamestdio/colyseus-examples) - Official examples for learning purposes.
-- [tanx](https://playcanvas.com/project/367035/overview/tanxcolyseus) ([source-code](https://github.com/endel/tanx)) - Multiplayer tanks game, originally from [PlayCanvas](https://tanx.io/)
-- [tic-tac-toe](https://tictactoe-colyseus.herokuapp.com) ([source-code](https://github.com/endel/tic-tac-toe)) - Simple Tic Tac Toe using [pixi.js](https://github.com/pixijs/pixi.js)
-- [LD35 entry: dotower](http://ludumdare.com/compo/ludum-dare-35/?action=preview&uid=50958) ([source-code](https://github.com/endel/LD35)) - Simple experimental MOBA using [pixi.js](https://github.com/pixijs/pixi.js)
-- [React Example](https://colyseus-react-example.herokuapp.com) ([source-code](https://github.com/endel/colyseus-react-example)) - Example integrating with [ReactJS](https://github.com/facebook/react)
+See the [official examples](https://github.com/gamestdio/colyseus-examples) for
+usage reference with the latest version of Colyseus.
+
+- (outdated: v0.2.x) [tanx](https://playcanvas.com/project/367035/overview/tanxcolyseus) ([source-code](https://github.com/endel/tanx)) - Multiplayer tanks game, originally from [PlayCanvas](https://tanx.io/)
+- (outdated: v0.3.x) [tic-tac-toe](https://tictactoe-colyseus.herokuapp.com) ([source-code](https://github.com/endel/tic-tac-toe)) - Simple Tic Tac Toe using [pixi.js](https://github.com/pixijs/pixi.js)
+- (outdated: v0.3.x) [LD35 entry: dotower](http://ludumdare.com/compo/ludum-dare-35/?action=preview&uid=50958) ([source-code](https://github.com/endel/LD35)) - Simple experimental MOBA using [pixi.js](https://github.com/pixijs/pixi.js)
+- (outdated: v0.4.x) [React Example](https://colyseus-react-example.herokuapp.com) ([source-code](https://github.com/endel/colyseus-react-example)) - Example integrating with [ReactJS](https://github.com/facebook/react)
 
 ## Huge thanks to our first sponsor!
 
