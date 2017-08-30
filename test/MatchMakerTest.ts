@@ -1,4 +1,5 @@
 import * as assert from 'assert';
+import * as sinon from 'sinon';
 import { MatchMaker } from "../src/MatchMaker";
 import { Room } from "../src/Room";
 import { createDummyClient, DummyRoom } from "./utils/mock";
@@ -13,6 +14,7 @@ describe('MatchMaker', function() {
   });
 
   describe('room handlers', function() {
+
     it('should add handler with name', function() {
       assert.equal(DummyRoom, matchMaker.handlers.room[0]);
       assert.equal(0, Object.keys(matchMaker.handlers.room[1]).length);
@@ -57,6 +59,15 @@ describe('MatchMaker', function() {
         assert.equal(room.roomId, joiningRoom.roomId)
         done();
       });
+    });
+
+    it('should call "onDispose" when room is not created', function(done) {
+      sinon.stub(DummyRoom.prototype, 'requestJoin').returns(false);
+      const spy = sinon.spy(DummyRoom.prototype, 'onDispose');
+      const room = matchMaker.create('dummy_room', {});
+      assert.ok(spy.calledOnce);
+      assert.equal(null, room);
+      done();
     });
 
   });
