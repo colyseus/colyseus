@@ -4,7 +4,7 @@ import * as shortid from "shortid";
 
 import Timer from "@gamestdio/timer";
 import { EventEmitter } from "events";
-import { createTimeline, Timeline } from "timeframe";
+import { createTimeline, Timeline } from "@gamestdio/timeline";
 
 import { Client } from "./index";
 import { Protocol } from "./Protocol";

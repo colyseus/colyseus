@@ -1,6 +1,6 @@
 {
   "name": "colyseus",
-  "version": "0.5.0-alpha.13",
+  "version": "0.5.1",
   "description": "Multiplayer Game Server for Node.js.",
   "main": "./lib/index.js",
   "typings": "./lib/index.d.ts",
@@ -27,6 +27,8 @@
     "node": ">= 4.x"
   },
   "dependencies": {
+    "@gamestdio/timeline": "^0.3.5",
+    "@gamestdio/timer": "^1.1.7",
     "@types/debug": "^0.0.29",
     "@types/fossil-delta": "^0.2.1",
     "@types/ip": "^0.0.29",
@@ -35,7 +37,6 @@
     "@types/node": "^7.0.18",
     "@types/shortid": "0.0.29",
     "@types/uws": "^0.13.0",
-    "@gamestdio/timer": "^1.1.7",
     "debug": "^2.6.8",
     "fossil-delta": "^0.2.5",
     "ip": "^1.1.5",
@@ -43,7 +44,6 @@
     "msgpack-lite": "^0.1.26",
     "nonenumerable": "^1.0.1",
     "shortid": "^2.2.6",
-    "timeframe": "^0.3.5",
     "url-parse": "^1.1.9",
     "uws": "8.14.1"
   },
