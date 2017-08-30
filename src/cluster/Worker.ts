@@ -86,7 +86,7 @@ export function setupWorker (server: net.Server, matchMaker: MatchMaker) {
       server.emit('connection', socket);
 
       // re-create request for incoming socket
-      let request: any = new (<any>http).ClientRequest();
+      let request: any = new (<any>http).ClientRequest({ port: server.address().port });
       request.headers = message[1].headers;
       request.method = message[1].method;
       request.url = message[1].url;
