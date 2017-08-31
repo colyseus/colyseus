@@ -1,7 +1,7 @@
 import * as assert from "assert";
 import * as msgpack from "msgpack-lite";
 import { Room } from "../src/Room";
-import { createDummyClient, DummyRoom } from "./utils/mock";
+import { createDummyClient, DummyRoom, DummyRoomWithState } from "./utils/mock";
 import { Protocol } from "../src/Protocol";
 
 describe('Patch', function() {
@@ -12,7 +12,7 @@ describe('Patch', function() {
   })
 
   describe('patch interval', function() {
-      let room = new DummyRoom();
+      let room = new DummyRoomWithState();
       room.setPatchRate(1000 / 20);
       assert.equal("object", typeof((<any>room)._patchInterval));
       assert.equal(1000 / 20, (<any>room)._patchInterval._idleTimeout, "should have patch rate set");
