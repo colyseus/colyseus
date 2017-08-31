@@ -111,9 +111,7 @@ export class ClusterServer {
       // Don't expose internal server to the outside.
       options.server.on('listening', () => {
           this.server = setupWorker(options.server, this.matchMaker);
-      });
-
-      options.server.listen(0, 'localhost');
+      }).listen(0, 'localhost');
     }
   }
 
