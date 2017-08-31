@@ -120,7 +120,7 @@ export function setupWorker (server: net.Server, matchMaker: MatchMaker) {
       // send response back to match-making process.
       getMatchMakingProcess(matchMakingPid => {
         console.log("process", process.pid, "is responding to REQUEST_JOIN_ROOM");
-        process.send([matchMakingPid, joinOptions.clientId, process.pid, room.roomId, score]);
+        process.send([matchMakingPid, joinOptions.clientId, process.pid, room && room.roomId, score]);
       });
 
     } else if (allowCreateRoom || message[0] === Protocol.JOIN_ROOM) {
