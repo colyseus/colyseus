@@ -59,8 +59,7 @@ export class MatchMaker {
 
     if (!this.hasHandler(roomToJoin) && isValidId(roomToJoin)) {
       room = this.joinById(roomToJoin, clientOptions);
-
-    } else {
+    } else if (isValidId(roomToJoin)) {
       room = this.requestToJoinRoom( roomToJoin, clientOptions ).room
         || (allowCreateRoom && this.create( roomToJoin, clientOptions ));
     }
