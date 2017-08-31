@@ -204,7 +204,7 @@ describe('Room', function() {
     });
 
     it("should send disconnect message to all clients", (done) => {
-      let room = new DummyRoom();
+      let room = new DummyRoomWithState();
 
       // connect 10 clients
       let client1 = createDummyClient();
