@@ -161,10 +161,10 @@ export class MatchMaker {
     if ( this.hasAvailableRoom( roomName ) ) {
       for ( var i=0; i < this.availableRooms[ roomName ].length; i++ ) {
         let availableRoom = this.availableRooms[ roomName ][ i ];
-        let numConnectedClients = availableRoom.clients.length + this.connectingClientByRoom[ availableRoom.roomId ].length;
+        let numConnectedClients = availableRoom.clients.length + Object.keys(this.connectingClientByRoom[ availableRoom.roomId ]).length;
 
         // Check maxClients before requesting to join.
-        if (numConnectedClients >= availableRoom.maxClients) {
+        if (numConnectedClients > availableRoom.maxClients) {
           continue;
         }
 
