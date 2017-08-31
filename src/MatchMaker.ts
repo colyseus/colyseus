@@ -214,10 +214,7 @@ export class MatchMaker {
       this.unlockRoom(roomName, room);
 
     } else {
-      if (room.onDispose) {
-        room.onDispose();
-      }
-
+      room._dispose();
       room = null;
     }
 

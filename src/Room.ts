@@ -212,16 +212,19 @@ export abstract class Room<T=any> extends EventEmitter {
 
     // custom cleanup method & clear intervals
     if ( this.clients.length == 0 && this.autoDispose ) {
-      if ( this.onDispose ) this.onDispose();
-      if ( this._patchInterval ) clearInterval( this._patchInterval );
-      if ( this._simulationInterval ) clearInterval( this._simulationInterval );
-
-      // clear all timeouts/intervals + force to stop ticking
-      this.clock.clear();
-      this.clock.stop();
-
+      this._dispose();
       this.emit('dispose');
     }
+  }
+
+  private _dispose () {
+    if ( this.onDispose ) this.onDispose();
+    if ( this._patchInterval ) clearInterval( this._patchInterval );
+    if ( this._simulationInterval ) clearInterval( this._simulationInterval );
+
+    // clear all timeouts/intervals + force to stop ticking
+    this.clock.clear();
+    this.clock.stop();
   }
 
 }
