@@ -71,5 +71,13 @@ describe('MatchMaker', function() {
       done();
     });
 
+    it('should emit error if room name is not a valid id', function(done) {
+      const invalidRoomName = '';
+      matchMaker.onJoinRoomRequest(invalidRoomName, {}, true, (err, room) => {
+        assert.equal('join_request_fail', err);
+        done();
+      });
+    });
+
   });
 });
