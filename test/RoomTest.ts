@@ -1,5 +1,6 @@
 import * as assert from "assert";
 import * as msgpack from "msgpack-lite";
+import * as sinon from 'sinon';
 import { Room } from "../src/Room";
 import { Protocol } from "../src/Protocol";
 import {
@@ -204,7 +205,9 @@ describe('Room', function() {
     });
 
     it("should send disconnect message to all clients", (done) => {
-      let room = new DummyRoomWithState();
+      let room = new DummyRoom();
+
+      let clock = sinon.useFakeTimers();
 
       // connect 10 clients
       let client1 = createDummyClient();
@@ -225,7 +228,8 @@ describe('Room', function() {
       setTimeout(() => (<any>room)._onLeave(client3, true), 0);
 
       // fulfil the test
-      setTimeout(done, 5);
+      clock.runAll();
+      done();
     });
 
   });

@@ -7,7 +7,7 @@ import { createDummyClient, DummyRoom } from "./utils/mock";
 describe('MatchMaker', function() {
   let matchMaker;
 
-  before(function() {
+  beforeEach(function() {
     matchMaker = new MatchMaker()
     matchMaker.addHandler('room', DummyRoom);
     matchMaker.addHandler('dummy_room', DummyRoom);
@@ -62,12 +62,21 @@ describe('MatchMaker', function() {
     });
 
     it('should call "onDispose" when room is not created', function(done) {
-      sinon.stub(DummyRoom.prototype, 'requestJoin').returns(false);
+      const stub = sinon.stub(DummyRoom.prototype, 'requestJoin').returns(false);
       const spy = sinon.spy(DummyRoom.prototype, 'onDispose');
       const room = matchMaker.create('dummy_room', {});
       assert.ok(spy.calledOnce);
       assert.equal(null, room);
+      stub.restore();
       done();
+    });
+
+    it('should emit error if room name is not a valid id', function(done) {
+      const invalidRoomName = '';
+      matchMaker.onJoinRoomRequest(invalidRoomName, {}, true, (err, room) => {
+        assert.equal('join_request_fail', err);
+        done();
+      });
     });
 
   });

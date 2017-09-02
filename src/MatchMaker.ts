@@ -57,9 +57,10 @@ export class MatchMaker {
 
     clientOptions.sessionId = generateId();
 
-    if (!this.hasHandler(roomToJoin) && isValidId(roomToJoin)) {
-      room = this.joinById(roomToJoin, clientOptions);
-
+    if (!this.hasHandler(roomToJoin)) {
+      if (isValidId(roomToJoin)) {
+        room = this.joinById(roomToJoin, clientOptions);
+      }
     } else {
       room = this.requestToJoinRoom( roomToJoin, clientOptions ).room
         || (allowCreateRoom && this.create( roomToJoin, clientOptions ));
