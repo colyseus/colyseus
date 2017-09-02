@@ -99,6 +99,7 @@ export function setupWorker (server: net.Server, matchMaker: MatchMaker) {
       // '_flush' method has been lost after redirecting the socket
       //
       request._flush = function() {};
+      request._dump = function() {};
 
       // emit request to server
       socket.parser.onIncoming(request);
