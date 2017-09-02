@@ -147,7 +147,7 @@ export class MatchMaker {
       console.error(`Error: trying to join non-existant room "${ roomId }"`);
 
     } else if (!room.requestJoin(clientOptions)) {
-      console.error(`Error can't join "${ clientOptions.roomName }" with options: ${ JSON.stringify(clientOptions) }`);
+      console.error(`Error can't join "${ room.roomName }" with options: ${ JSON.stringify(clientOptions) }`);
       room = undefined;
     }
 
