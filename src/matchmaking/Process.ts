@@ -1,4 +1,4 @@
-import * as express from "express";
+import { createServer } from 'http';
 import * as msgpack from "msgpack-lite";
 import * as memshared from "memshared";
 import { Server as WebSocketServer } from "uws";
@@ -9,8 +9,8 @@ import { handleUpgrade, setUserId } from "../cluster/Worker";
 
 import { debugMatchMaking } from "../Debug";
 
-const app = new express();
-const server = app.listen(0, "localhost");
+const server = createServer();
+server.listen(0, "localhost");
 
 let wss = new WebSocketServer({
   server: server,
