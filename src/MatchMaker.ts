@@ -2,7 +2,8 @@ import * as memshared from "memshared";
 import * as msgpack from "msgpack-lite";
 
 import { merge, spliceOne } from "./Utils";
-import { Client, Protocol, Room, generateId, isValidId } from "./index";
+import { Client, Room, generateId, isValidId } from "./index";
+import { Protocol, send } from "./Protocol";
 
 import { debugMatchMaking } from "./Debug";
 
@@ -24,12 +25,36 @@ export class MatchMaker {
   protected sessions: {[sessionId: string]: Room} = {};
   protected connectingClientByRoom: {[roomId: string]: {[clientId: string]: any}} = {};
 
-  public execute (client: Client, message: any) {
+  public bindClient (client: Client, roomId: string) {
+    this.onJoin(roomId, client, (err, room) => {
+      if (!err) {
+        client.on('message', (message) => {
+          // TODO: unify this with matchmaking/Process
+          try {
+            // try to decode message received from client
+            message = msgpack.decode(Buffer.from(message));
+
+          } catch (e) {
+            console.error("Couldn't decode message:", message, e.stack);
+            return;
+          }
+
+          this.execute(client, message);
+        });
+
+        client.on('close', (_) => this.onLeave(client, room));
+        client.on('error', (e) => console.error("[ERROR]", client.id, e));
+      }
+    });
+
+  }
+
+  protected execute (client: Client, message: any) {
     if (message[0] == Protocol.JOIN_ROOM) {
       this.onJoinRoomRequest(message[1], message[2], false, (err: string, room: Room) => {
         if (err) {
           let roomId = (room) ? room.roomId : message[1];
-          client.send(msgpack.encode([Protocol.JOIN_ERROR, roomId, err]), { binary: true });
+          send(client, [Protocol.JOIN_ERROR, roomId, err]);
         }
       });
 
@@ -104,7 +129,7 @@ export class MatchMaker {
 
     } catch (e) {
       console.error(room.roomName, "onJoin:", e.stack);
-      client.send(msgpack.encode([Protocol.JOIN_ERROR, roomId, e.message]), { binary: true });
+      send(client, [Protocol.JOIN_ERROR, roomId, e.message]);
     }
 
     callback(err, room);
@@ -123,11 +148,12 @@ export class MatchMaker {
   }
 
   public addHandler (name: string, handler: Function, options: any = {}): void {
+    memshared.sadd("handlers", name);
     this.handlers[ name ] = [handler, options];
     this.availableRooms[ name ] = [];
   }
 
-  protected hasHandler (name: string) {
+  public hasHandler (name: string) {
     return this.handlers[ name ] !== undefined;
   }
 

@@ -2,12 +2,11 @@ import * as cluster from "cluster";
 import * as memshared from "memshared";
 import * as child_process from "child_process";
 import * as net from "net";
-import * as os from "os";
 import * as ip from "ip";
 
-import { ClusterOptions } from "../ClusterServer";
 import { Protocol } from "../Protocol";
 import { spliceOne } from "../Utils";
+import { debugCluster } from "../Debug";
 
 const seed = (Math.random() * 0xffffffff) | 0;
 let workers = [];
@@ -17,14 +16,9 @@ export function getNextWorkerForSocket (socket: net.Socket) {
   return workers[hash % workers.length];
 }
 
-
-export function spawnWorkers (options: ClusterOptions = {}) {
-  // use the number of CPUs as number of workers.
-  if (!options.numWorkers) {
-    options.numWorkers = os.cpus().length;
-  }
-
-  for (var i = 0, len = options.numWorkers; i < len; i++) {
+// use the number of CPUs as number of workers.
+export function spawnWorkers (numWorkers: number) {
+  for (var i = 0, len = numWorkers; i < len; i++) {
     spawnWorker();
   }
 }
@@ -40,8 +34,10 @@ export function spawnMatchMaking () {
   return worker;
 }
 
-export function spawnWorker () {
+function spawnWorker () {
   let worker = cluster.fork();
+
+  debugCluster(`fork spawned with pid ${ worker.process.pid }`);
 
   if (!memshared.store['workerIds']) {
     memshared.store['workerIds'] = [];

@@ -11,12 +11,12 @@ import { setupWorker } from "./cluster/Worker";
 import { Protocol } from "./Protocol";
 import { MatchMaker } from "./MatchMaker";
 import { generateId } from "./";
+import { debugCluster } from "./Debug";
 
 let cache = memshared.store;
 
 export interface ClusterOptions {
   server?: http.Server;
-  numWorkers?: number;
 }
 
 export class ClusterServer {
@@ -30,10 +30,12 @@ export class ClusterServer {
 
   constructor (options: ClusterOptions = {}) {
     if (cluster.isMaster) {
-       spawnWorkers(options);
+       debugCluster(`master spawned with pid ${ process.pid }`);
 
        this.matchMakingWorker = spawnMatchMaking();
        cache['matchmaking_process'] = this.matchMakingWorker.pid;
+
+       debugCluster(`matchmaking spawned with pid ${ this.matchMakingWorker.pid }`);
 
        this.server = options.server || http.createServer();
        this.server.on('connection', (socket) => {
@@ -80,6 +82,10 @@ export class ClusterServer {
     }
   }
 
+  fork (numWorkers: number = os.cpus().length) {
+    spawnWorkers(numWorkers);
+  }
+
   listen (port: number, hostname?: string, backlog?: number, listeningListener?: Function) {
     if (cluster.isMaster) {
       this.server.listen(port, hostname, backlog, listeningListener);
@@ -87,16 +93,7 @@ export class ClusterServer {
   }
 
   register (name: string, handler: Function, options: any = {}) {
-    if (cluster.isMaster) {
-      if (!cache['handlers']) {
-        cache['handlers'] = [];
-      }
-
-      // push to available handlers list
-      cache['handlers'].push(name);
-
-    } else {
-      // register session handler
+    if (!cluster.isMaster) {
       this.matchMaker.addHandler(name, handler, options);
     }
   }

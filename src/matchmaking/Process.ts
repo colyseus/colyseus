@@ -41,9 +41,6 @@ process.on('message', (message, socket) => {
   }
 });
 
-// Process spawned successfully!
-debugMatchMaking("MatchMaking process spawned with pid %d", process.pid);
-
 function onConnect (client: Client) {
   setUserId(client);
 
@@ -66,8 +63,8 @@ function onConnect (client: Client) {
     let joinOptions = message[2];
 
     // has room handler avaialble?
-    memshared.lindex("handlers", roomName, (err, index) => {
-      if (index === null) {
+    memshared.sismember("handlers", roomName, (err, isHandlerAvailable) => {
+      if (!isHandlerAvailable) {
         send(client, [Protocol.JOIN_ERROR, roomName, `Error: no available handler for "${ roomName }"`]);
         return;
       }
