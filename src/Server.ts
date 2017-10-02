@@ -6,7 +6,7 @@ import * as parseURL from "url-parse";
 
 import { Server as WebSocketServer, IServerOptions } from "uws";
 import { MatchMaker } from "./MatchMaker";
-import { Protocol, send } from "./Protocol";
+import { Protocol, send, decode } from "./Protocol";
 import { Client } from "./index";
 import { handleUpgrade, setUserId } from "./cluster/Worker";
 import { Room } from "./Room";
@@ -68,11 +68,7 @@ export class Server {
   }
 
   onMessageMatchMaking (client: Client, message) {
-    try {
-      message = msgpack.decode(Buffer.from(message));
-
-    } catch (e) {
-      console.error("Couldn't decode message:", message, e.stack);
+    if (!(message = decode(message))) {
       return;
     }
 

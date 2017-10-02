@@ -3,7 +3,7 @@ import * as msgpack from "msgpack-lite";
 import * as memshared from "memshared";
 import { Server as WebSocketServer } from "uws";
 
-import { Protocol, send } from "../Protocol";
+import { Protocol, decode, send } from "../Protocol";
 import { Client, generateId } from "../";
 import { handleUpgrade, setUserId } from "../cluster/Worker";
 
@@ -45,12 +45,7 @@ function onConnect (client: Client) {
   setUserId(client);
 
   client.on('message', (message) => {
-    // try to decode message received from client
-    try {
-      message = msgpack.decode(Buffer.from(message));
-
-    } catch (e) {
-      console.error("Couldn't decode message:", message, e.stack);
+    if (!(message = decode(message))) {
       return;
     }
 

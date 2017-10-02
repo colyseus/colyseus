@@ -3,7 +3,7 @@ import * as msgpack from "msgpack-lite";
 
 import { merge, spliceOne } from "./Utils";
 import { Client, Room, generateId, isValidId } from "./index";
-import { Protocol, send } from "./Protocol";
+import { Protocol, decode, send } from "./Protocol";
 
 import { debugMatchMaking } from "./Debug";
 
@@ -29,16 +29,9 @@ export class MatchMaker {
     this.onJoin(roomId, client, (err, room) => {
       if (!err) {
         client.on('message', (message) => {
-          // TODO: unify this with matchmaking/Process
-          try {
-            // try to decode message received from client
-            message = msgpack.decode(Buffer.from(message));
-
-          } catch (e) {
-            console.error("Couldn't decode message:", message, e.stack);
+          if (!(message = decode(message))) {
             return;
           }
-
           this.execute(client, message);
         });
 

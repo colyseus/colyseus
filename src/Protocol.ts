@@ -25,6 +25,18 @@ export enum Protocol {
   BAD_REQUEST = 50,
 }
 
+export function decode (message: any) {
+  try {
+    message = msgpack.decode(Buffer.from(message));
+
+  } catch (e) {
+    console.error("Couldn't decode message:", message, e.stack);
+    return;
+  }
+
+  return message;
+}
+
 export function send (client: Client, message: any[]) {
   // [Protocol.JOIN_ERROR, roomId, err]
   client.send(msgpack.encode(message), { binary: true });
