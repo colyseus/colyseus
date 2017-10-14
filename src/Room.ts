@@ -7,7 +7,7 @@ import { EventEmitter } from "events";
 import { createTimeline, Timeline } from "@gamestdio/timeline";
 
 import { Client } from "./index";
-import { Protocol } from "./Protocol";
+import { Protocol, send } from "./Protocol";
 import { logError, spliceOne, toJSON } from "./Utils";
 
 import { debugPatch } from "./Debug";
@@ -102,7 +102,7 @@ export abstract class Room<T=any> extends EventEmitter {
   }
 
   public send (client: Client, data: any): void {
-    client.send( msgpack.encode( [Protocol.ROOM_DATA, this.roomId, data] ), { binary: true }, logError.bind(this) );
+    send(client, [ Protocol.ROOM_DATA, this.roomId, data ]);
   }
 
   public broadcast (data: any): boolean {
@@ -132,15 +132,13 @@ export abstract class Room<T=any> extends EventEmitter {
   }
 
   protected sendState (client: Client): void {
-    client.send( msgpack.encode( [
+    send(client, [
       Protocol.ROOM_STATE,
       this.roomId,
       this._previousState,
       this.clock.currentTime,
       this.clock.elapsedTime,
-    ] ), {
-      binary: true
-    }, logError.bind(this) );
+    ]);
   }
 
   private broadcastPatch (): boolean {
@@ -177,7 +175,7 @@ export abstract class Room<T=any> extends EventEmitter {
     this.clients.push( client );
 
     // confirm room id that matches the room name requested to join
-    client.send( msgpack.encode( [Protocol.JOIN_ROOM, client.sessionId] ), { binary: true }, logError.bind(this) );
+    send(client, [ Protocol.JOIN_ROOM, client.sessionId ]);
 
     // send current state when new client joins the room
     if (this.state) {
@@ -207,7 +205,7 @@ export abstract class Room<T=any> extends EventEmitter {
     // process after calling `client.close()` here
     //
     if (!isDisconnect) {
-      client.send( msgpack.encode( [Protocol.LEAVE_ROOM, this.roomId] ), { binary: true }, logError.bind(this) );
+      send(client, [ Protocol.LEAVE_ROOM, this.roomId ]);
     }
 
     // custom cleanup method & clear intervals

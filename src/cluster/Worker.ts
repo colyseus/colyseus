@@ -5,7 +5,7 @@ import * as msgpack from "msgpack-lite";
 import * as parseURL from "url-parse";
 
 import { Server as WebSocketServer } from "uws";
-import { Protocol } from "../Protocol";
+import { Protocol, send } from "../Protocol";
 import { MatchMaker } from "../MatchMaker";
 import { Client, Room, generateId } from "../";
 
@@ -18,7 +18,7 @@ export function setUserId (client: Client) {
   client.id = url.query['colyseusid'] || generateId();
 
   if (!url.query['colyseusid']) {
-    client.send( msgpack.encode([ Protocol.USER_ID, client.id ]), { binary: true } );
+    send(client, [ Protocol.USER_ID, client.id ]);
   }
 }
 
@@ -103,7 +103,7 @@ export function setupWorker (server: net.Server, matchMaker: MatchMaker) {
       matchMaker.onJoinRoomRequest(roomNameOrId, joinOptions, allowCreateRoom, (err: string, room: Room<any>) => {
         let joinRoomResponse = (err)
           ? [ Protocol.JOIN_ERROR, roomNameOrId, err ]
-          : [ Protocol.JOIN_ROOM, room.roomId ];
+          : [ Protocol.JOIN_ROOM, room.roomId, joinOptions.requestId ];
 
         // send response back to match-making process.
         getMatchMakingProcess(matchMakingPid => {

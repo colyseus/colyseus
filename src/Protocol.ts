@@ -38,6 +38,5 @@ export function decode (message: any) {
 }
 
 export function send (client: Client, message: any[]) {
-  // [Protocol.JOIN_ERROR, roomId, err]
   client.send(msgpack.encode(message), { binary: true });
 }

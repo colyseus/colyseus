@@ -89,7 +89,7 @@ export class Server {
       this.matchMaker.onJoinRoomRequest(roomName, joinOptions, true, (err: string, room: Room<any>) => {
         let joinRoomResponse = (err)
           ? [ Protocol.JOIN_ERROR, roomName, err ]
-          : [ Protocol.JOIN_ROOM, room.roomId ];
+          : [ Protocol.JOIN_ROOM, room.roomId, joinOptions.requestId ];
 
         send(client, joinRoomResponse);
       });
