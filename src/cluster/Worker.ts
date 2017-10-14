@@ -5,7 +5,7 @@ import * as msgpack from "msgpack-lite";
 import * as parseURL from "url-parse";
 
 import { Server as WebSocketServer } from "uws";
-import { Protocol } from "../Protocol";
+import { Protocol, send } from "../Protocol";
 import { MatchMaker } from "../MatchMaker";
 import { Client, Room, generateId } from "../";
 
@@ -18,7 +18,7 @@ export function setUserId (client: Client) {
   client.id = url.query['colyseusid'] || generateId();
 
   if (!url.query['colyseusid']) {
-    client.send( msgpack.encode([ Protocol.USER_ID, client.id ]), { binary: true } );
+    send(client, [ Protocol.USER_ID, client.id ]);
   }
 }
 
@@ -49,32 +49,7 @@ export function setupWorker (server: net.Server, matchMaker: MatchMaker) {
     setUserId(client);
 
     let roomId = (<any>client.upgradeReq).roomId;
-
-    matchMaker.onJoin(roomId, client, (err, room) => {
-      if (!err) {
-        client.on('message', (message) => {
-          // TODO: unify this with matchmaking/Process
-          try {
-            // try to decode message received from client
-            message = msgpack.decode(Buffer.from(message));
-
-          } catch (e) {
-            console.error("Couldn't decode message:", message, e.stack);
-            return;
-          }
-
-          matchMaker.execute(client, message);
-        });
-
-        client.on('close', () => {
-          matchMaker.onLeave(client, room)
-        });
-
-        client.on('error', (e) => {
-          console.error("[ERROR]", client.id, e)
-        });
-      }
-    });
+    matchMaker.bindClient(client, roomId);
   });
 
   process.on('message', (message, socket) => {
@@ -126,14 +101,9 @@ export function setupWorker (server: net.Server, matchMaker: MatchMaker) {
 
     } else if (allowCreateRoom || message[0] === Protocol.JOIN_ROOM) {
       matchMaker.onJoinRoomRequest(roomNameOrId, joinOptions, allowCreateRoom, (err: string, room: Room<any>) => {
-        let joinRoomResponse;
-
-        if (err) {
-          joinRoomResponse = [ Protocol.JOIN_ERROR, roomNameOrId, err ];
-
-        } else {
-          joinRoomResponse = [ Protocol.JOIN_ROOM, room.roomId ];
-        }
+        let joinRoomResponse = (err)
+          ? [ Protocol.JOIN_ERROR, roomNameOrId, err ]
+          : [ Protocol.JOIN_ROOM, room.roomId, joinOptions.requestId ];
 
         // send response back to match-making process.
         getMatchMakingProcess(matchMakingPid => {

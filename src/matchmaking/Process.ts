@@ -3,7 +3,7 @@ import * as msgpack from "msgpack-lite";
 import * as memshared from "memshared";
 import { Server as WebSocketServer } from "uws";
 
-import { Protocol, send } from "../Protocol";
+import { Protocol, decode, send } from "../Protocol";
 import { Client, generateId } from "../";
 import { handleUpgrade, setUserId } from "../cluster/Worker";
 
@@ -41,19 +41,11 @@ process.on('message', (message, socket) => {
   }
 });
 
-// Process spawned successfully!
-debugMatchMaking("MatchMaking process spawned with pid %d", process.pid);
-
 function onConnect (client: Client) {
   setUserId(client);
 
   client.on('message', (message) => {
-    // try to decode message received from client
-    try {
-      message = msgpack.decode(Buffer.from(message));
-
-    } catch (e) {
-      console.error("Couldn't decode message:", message, e.stack);
+    if (!(message = decode(message))) {
       return;
     }
 
@@ -66,8 +58,8 @@ function onConnect (client: Client) {
     let joinOptions = message[2];
 
     // has room handler avaialble?
-    memshared.lindex("handlers", roomName, (err, index) => {
-      if (index === null) {
+    memshared.sismember("handlers", roomName, (err, isHandlerAvailable) => {
+      if (!isHandlerAvailable) {
         send(client, [Protocol.JOIN_ERROR, roomName, `Error: no available handler for "${ roomName }"`]);
         return;
       }
