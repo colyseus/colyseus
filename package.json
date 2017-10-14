@@ -29,7 +29,7 @@
   "dependencies": {
     "@gamestdio/timeline": "^0.3.5",
     "@gamestdio/timer": "^1.1.7",
-    "@types/debug": "^0.0.29",
+    "@types/debug": "^0.0.30",
     "@types/fossil-delta": "^0.2.1",
     "@types/ip": "^0.0.29",
     "@types/mocha": "^2.2.32",
@@ -37,7 +37,7 @@
     "@types/node": "^7.0.18",
     "@types/shortid": "0.0.29",
     "@types/uws": "^0.13.0",
-    "debug": "^2.6.8",
+    "debug": "^3.1.0",
     "fossil-delta": "^0.2.5",
     "ip": "^1.1.5",
     "memshared": "^0.9.15",
@@ -55,7 +55,7 @@
     "nodemon": "^1.7.1",
     "sinon": "^4.0.0",
     "ts-node": "^3.2.0",
-    "typedoc": "^0.7.1",
+    "typedoc": "^0.9.0",
     "typescript": "^2.3.2"
   },
   "license": "MIT",
@@ -63,7 +63,10 @@
     "ignore": [
       "mocha",
       "ts-node",
-      "@types/node"
+      "@types/node",
+      "typedoc",
+      "sinon",
+      "benchmark"
     ]
   }
 }
