@@ -5,13 +5,15 @@ import * as express from 'express';
 import { ClusterServer } from "../src/ClusterServer";
 import { ChatRoom } from "./ChatRoom";
 
+const PORT = 8080;
+
 let gameServer = new ClusterServer();
 
 // Register ChatRoom as "chat"
 gameServer.register("chat", ChatRoom);
 
 if (cluster.isMaster) {
-  gameServer.listen(8080);
+  gameServer.listen(PORT);
   gameServer.fork();
 
 } else {
@@ -25,3 +27,5 @@ if (cluster.isMaster) {
   // Create HTTP Server
   gameServer.attach({ server: app });
 }
+
+console.log(`Listening on ${ PORT }`);

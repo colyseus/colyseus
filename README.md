@@ -67,18 +67,6 @@ usage reference with the latest version of Colyseus.
 - (outdated: v0.3.x) [LD35 entry: dotower](http://ludumdare.com/compo/ludum-dare-35/?action=preview&uid=50958) ([source-code](https://github.com/endel/LD35)) - Simple experimental MOBA using [pixi.js](https://github.com/pixijs/pixi.js)
 - (outdated: v0.4.x) [React Example](https://colyseus-react-example.herokuapp.com) ([source-code](https://github.com/endel/colyseus-react-example)) - Example integrating with [ReactJS](https://github.com/facebook/react)
 
-## Huge thanks to our first sponsor!
-
-<div align="center">
-  <br>
-  <a href="https://www.evennode.com/?utm_source=colyseus" target="_blank"><img src="https://www.evennode.com/images/logo.png" /></a>
-  <br><br>
-  <blockquote>
-    EvenNode provides <a href="https://www.evennode.com/?utm_source=colyseus">Node.js hosting</a> fully compatible with Colyseus. Discount is available to Colyseus projects on request. Contact support for more information
-  </blockquote>
-</div>
-
-
 ## Sponsors
 Become a sponsor and get your logo on our README on Github with a link to your site. [[Become a sponsor](https://opencollective.com/colyseus#sponsor)]
 
