@@ -8,18 +8,18 @@
   </a>
   <br>
   <br>
-	<a href="https://npmjs.com/package/colyseus">
-		<img src="https://img.shields.io/npm/dm/colyseus.svg">
-	</a>
-  <a href="#sponsors">
-		<img src="https://opencollective.com/colyseus/sponsors/badge.svg">
-	</a>
-	<a href="#backers">
-		<img src="https://opencollective.com/colyseus/backers/badge.svg">
-	</a>
-	<a href="https://gitter.im/gamestdio/colyseus">
-		<img src="https://badges.gitter.im/gamestdio/colyseus.svg">
-	</a>
+  <a href="https://npmjs.com/package/colyseus">
+    <img src="https://img.shields.io/npm/dm/colyseus.svg">
+  </a>
+  <a href="https://patreon.com/endel" title="Donate to this project using Patreon">
+    <img src="https://img.shields.io/badge/patreon-donate-yellow.svg" alt="Patreon donate button" />
+  </a>
+  <a href="http://discuss.colyseus.io" title="Discuss on Forum">
+    <img src="https://img.shields.io/badge/discuss-on%20forum-brightgreen.svg?style=flat&colorB=b400ff" alt="Discussion forum" />
+  </a>
+  <a href="https://gitter.im/gamestdio/colyseus">
+    <img src="https://badges.gitter.im/gamestdio/colyseus.svg">
+  </a>
   <h3>
     Multiplayer Game Server for Node.js. <a href="https://github.com/gamestdio/colyseus/wiki">View documentation</a>
   <h3>
@@ -66,73 +66,6 @@ usage reference with the latest version of Colyseus.
 - (outdated: v0.3.x) [tic-tac-toe](https://tictactoe-colyseus.herokuapp.com) ([source-code](https://github.com/endel/tic-tac-toe)) - Simple Tic Tac Toe using [pixi.js](https://github.com/pixijs/pixi.js)
 - (outdated: v0.3.x) [LD35 entry: dotower](http://ludumdare.com/compo/ludum-dare-35/?action=preview&uid=50958) ([source-code](https://github.com/endel/LD35)) - Simple experimental MOBA using [pixi.js](https://github.com/pixijs/pixi.js)
 - (outdated: v0.4.x) [React Example](https://colyseus-react-example.herokuapp.com) ([source-code](https://github.com/endel/colyseus-react-example)) - Example integrating with [ReactJS](https://github.com/facebook/react)
-
-## Sponsors
-Become a sponsor and get your logo on our README on Github with a link to your site. [[Become a sponsor](https://opencollective.com/colyseus#sponsor)]
-
-<a href="https://opencollective.com/colyseus/sponsor/0/website" target="_blank"><img src="https://opencollective.com/colyseus/sponsor/0/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/sponsor/1/website" target="_blank"><img src="https://opencollective.com/colyseus/sponsor/1/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/sponsor/2/website" target="_blank"><img src="https://opencollective.com/colyseus/sponsor/2/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/sponsor/3/website" target="_blank"><img src="https://opencollective.com/colyseus/sponsor/3/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/sponsor/4/website" target="_blank"><img src="https://opencollective.com/colyseus/sponsor/4/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/sponsor/5/website" target="_blank"><img src="https://opencollective.com/colyseus/sponsor/5/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/sponsor/6/website" target="_blank"><img src="https://opencollective.com/colyseus/sponsor/6/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/sponsor/7/website" target="_blank"><img src="https://opencollective.com/colyseus/sponsor/7/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/sponsor/8/website" target="_blank"><img src="https://opencollective.com/colyseus/sponsor/8/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/sponsor/9/website" target="_blank"><img src="https://opencollective.com/colyseus/sponsor/9/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/sponsor/10/website" target="_blank"><img src="https://opencollective.com/colyseus/sponsor/10/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/sponsor/11/website" target="_blank"><img src="https://opencollective.com/colyseus/sponsor/11/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/sponsor/12/website" target="_blank"><img src="https://opencollective.com/colyseus/sponsor/12/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/sponsor/13/website" target="_blank"><img src="https://opencollective.com/colyseus/sponsor/13/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/sponsor/14/website" target="_blank"><img src="https://opencollective.com/colyseus/sponsor/14/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/sponsor/15/website" target="_blank"><img src="https://opencollective.com/colyseus/sponsor/15/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/sponsor/16/website" target="_blank"><img src="https://opencollective.com/colyseus/sponsor/16/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/sponsor/17/website" target="_blank"><img src="https://opencollective.com/colyseus/sponsor/17/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/sponsor/18/website" target="_blank"><img src="https://opencollective.com/colyseus/sponsor/18/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/sponsor/19/website" target="_blank"><img src="https://opencollective.com/colyseus/sponsor/19/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/sponsor/20/website" target="_blank"><img src="https://opencollective.com/colyseus/sponsor/20/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/sponsor/21/website" target="_blank"><img src="https://opencollective.com/colyseus/sponsor/21/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/sponsor/22/website" target="_blank"><img src="https://opencollective.com/colyseus/sponsor/22/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/sponsor/23/website" target="_blank"><img src="https://opencollective.com/colyseus/sponsor/23/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/sponsor/24/website" target="_blank"><img src="https://opencollective.com/colyseus/sponsor/24/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/sponsor/25/website" target="_blank"><img src="https://opencollective.com/colyseus/sponsor/25/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/sponsor/26/website" target="_blank"><img src="https://opencollective.com/colyseus/sponsor/26/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/sponsor/27/website" target="_blank"><img src="https://opencollective.com/colyseus/sponsor/27/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/sponsor/28/website" target="_blank"><img src="https://opencollective.com/colyseus/sponsor/28/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/sponsor/29/website" target="_blank"><img src="https://opencollective.com/colyseus/sponsor/29/avatar.svg"></a>
-
-## Backers
-Support us with a monthly donation and help us continue our activities. [[Become a backer](https://opencollective.com/colyseus#backer)]
-<a href="https://opencollective.com/colyseus/backer/0/website" target="_blank"><img src="https://opencollective.com/colyseus/backer/0/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/backer/1/website" target="_blank"><img src="https://opencollective.com/colyseus/backer/1/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/backer/2/website" target="_blank"><img src="https://opencollective.com/colyseus/backer/2/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/backer/3/website" target="_blank"><img src="https://opencollective.com/colyseus/backer/3/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/backer/4/website" target="_blank"><img src="https://opencollective.com/colyseus/backer/4/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/backer/5/website" target="_blank"><img src="https://opencollective.com/colyseus/backer/5/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/backer/6/website" target="_blank"><img src="https://opencollective.com/colyseus/backer/6/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/backer/7/website" target="_blank"><img src="https://opencollective.com/colyseus/backer/7/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/backer/8/website" target="_blank"><img src="https://opencollective.com/colyseus/backer/8/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/backer/9/website" target="_blank"><img src="https://opencollective.com/colyseus/backer/9/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/backer/10/website" target="_blank"><img src="https://opencollective.com/colyseus/backer/10/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/backer/11/website" target="_blank"><img src="https://opencollective.com/colyseus/backer/11/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/backer/12/website" target="_blank"><img src="https://opencollective.com/colyseus/backer/12/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/backer/13/website" target="_blank"><img src="https://opencollective.com/colyseus/backer/13/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/backer/14/website" target="_blank"><img src="https://opencollective.com/colyseus/backer/14/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/backer/15/website" target="_blank"><img src="https://opencollective.com/colyseus/backer/15/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/backer/16/website" target="_blank"><img src="https://opencollective.com/colyseus/backer/16/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/backer/17/website" target="_blank"><img src="https://opencollective.com/colyseus/backer/17/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/backer/18/website" target="_blank"><img src="https://opencollective.com/colyseus/backer/18/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/backer/19/website" target="_blank"><img src="https://opencollective.com/colyseus/backer/19/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/backer/20/website" target="_blank"><img src="https://opencollective.com/colyseus/backer/20/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/backer/21/website" target="_blank"><img src="https://opencollective.com/colyseus/backer/21/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/backer/22/website" target="_blank"><img src="https://opencollective.com/colyseus/backer/22/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/backer/23/website" target="_blank"><img src="https://opencollective.com/colyseus/backer/23/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/backer/24/website" target="_blank"><img src="https://opencollective.com/colyseus/backer/24/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/backer/25/website" target="_blank"><img src="https://opencollective.com/colyseus/backer/25/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/backer/26/website" target="_blank"><img src="https://opencollective.com/colyseus/backer/26/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/backer/27/website" target="_blank"><img src="https://opencollective.com/colyseus/backer/27/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/backer/28/website" target="_blank"><img src="https://opencollective.com/colyseus/backer/28/avatar.svg"></a>
-<a href="https://opencollective.com/colyseus/backer/29/website" target="_blank"><img src="https://opencollective.com/colyseus/backer/29/avatar.svg"></a>
 
 # Contributing
 
