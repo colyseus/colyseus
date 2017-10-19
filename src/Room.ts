@@ -10,7 +10,8 @@ import { Client } from "./index";
 import { Protocol, send } from "./Protocol";
 import { logError, spliceOne, toJSON } from "./Utils";
 
-import { debugPatch } from "./Debug";
+import { debugPatch, debugPatchData } from "./Debug";
+import * as jsonPatch from "fast-json-patch"; // this is only used for debugging patches
 
 export abstract class Room<T=any> extends EventEmitter {
 
@@ -161,10 +162,19 @@ export abstract class Room<T=any> extends EventEmitter {
       this.timeline.takeSnapshot( this.state, this.clock.elapsedTime );
     }
 
+    //
+    // debugging
+    //
+    if (debugPatch.enabled) {
+      debugPatch(`"%s" (roomId: "%s") is sending %d bytes:`, this.roomName, this.roomId, patches.length);
+    }
+
+    if (debugPatchData.enabled) {
+      debugPatchData(jsonPatch.compare(this._previousState, currentState));
+    }
+
     this._previousState = currentState;
     this._previousStateEncoded = currentStateEncoded;
-
-    debugPatch("'%s' (%d) is broadcasting patch: %d bytes", this.roomName, this.roomId, patches.length);
 
     // broadcast patches (diff state) to all clients,
     // even if nothing has changed in order to calculate PING on client-side
