@@ -8,6 +8,7 @@ import { Server as WebSocketServer } from "uws";
 import { Protocol, send } from "../Protocol";
 import { MatchMaker } from "../MatchMaker";
 import { Client, Room, generateId } from "../";
+import { debugMatchMaking } from "../Debug";
 
 /**
  * Retrieve and/or set 'colyseusid' cookie.
@@ -92,11 +93,12 @@ export function setupWorker (server: net.Server, matchMaker: MatchMaker) {
 
     } else if (message[0] === Protocol.REQUEST_JOIN_ROOM) {
       let { room, score } = matchMaker.requestToJoinRoom(message[1], message[2]);
+      let roomId = room && room.roomId;
 
       // send response back to match-making process.
       getMatchMakingProcess(matchMakingPid => {
-        console.log("process", process.pid, "is responding to REQUEST_JOIN_ROOM");
-        process.send([matchMakingPid, joinOptions.clientId, process.pid, room && room.roomId, score]);
+        debugMatchMaking("worker '%s' is responding to REQUEST_JOIN_ROOM. (roomId: %s, score: %d)", process.pid, roomId, score);
+        process.send([matchMakingPid, joinOptions.clientId, process.pid, roomId, score]);
       });
 
     } else if (allowCreateRoom || message[0] === Protocol.JOIN_ROOM) {
