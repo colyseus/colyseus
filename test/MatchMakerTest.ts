@@ -2,22 +2,21 @@ import * as assert from 'assert';
 import * as sinon from 'sinon';
 import { MatchMaker } from "../src/MatchMaker";
 import { Room } from "../src/Room";
-import { createDummyClient, DummyRoom } from "./utils/mock";
+import { createDummyClient, DummyRoom, Client } from "./utils/mock";
 
 describe('MatchMaker', function() {
   let matchMaker;
 
   beforeEach(function() {
     matchMaker = new MatchMaker()
-    matchMaker.addHandler('room', DummyRoom);
-    matchMaker.addHandler('dummy_room', DummyRoom);
+    matchMaker.registerHandler('room', DummyRoom);
+    matchMaker.registerHandler('dummy_room', DummyRoom);
   });
 
   describe('room handlers', function() {
 
     it('should add handler with name', function() {
-      assert.equal(DummyRoom, matchMaker.handlers.room[0]);
-      assert.equal(0, Object.keys(matchMaker.handlers.room[1]).length);
+      assert.ok(matchMaker.hasHandler('room'));
       assert.equal(false, matchMaker.hasAvailableRoom('room'));
     });
 
@@ -80,4 +79,57 @@ describe('MatchMaker', function() {
     });
 
   });
+
+  describe('registered handler events', () => {
+    it('should trigger "create" event', (done) => {
+      matchMaker.handlers["room"].on("create", (room) => {
+        assert.ok(room instanceof Room);
+        done();
+      });
+
+      matchMaker.create('room', {});
+    })
+
+    it('should trigger "dispose" event', (done) => {
+      let dummyRoom = matchMaker.create('room', {});
+
+      matchMaker.handlers["room"].on("dispose", (room) => {
+        assert.ok(room instanceof Room);
+        done();
+      });
+
+      dummyRoom.emit("dispose");
+    })
+
+    it('should trigger "join" event', (done) => {
+      let dummyRoom = matchMaker.create('room', {});
+
+      matchMaker.handlers["room"].on("join", (room, client) => {
+        assert.ok(room instanceof Room);
+        assert.ok(client instanceof Client);
+        done();
+      });
+
+      let client = createDummyClient();
+      matchMaker.onJoinRoomRequest('room', { clientId: client.id }, true, (err, room) => {
+        matchMaker.onJoin (room.roomId, client, () => {});
+      });
+    })
+
+    it('should trigger "leave" event', (done) => {
+      let dummyRoom = matchMaker.create('room', {});
+
+      matchMaker.handlers["room"].on("leave", (room, client) => {
+        assert.ok(room instanceof Room);
+        assert.ok(client instanceof Client);
+        done();
+      });
+
+      let client = createDummyClient();
+      matchMaker.onJoinRoomRequest('room', { clientId: client.id }, true, (err, room) => {
+        matchMaker.onLeave (client, room);
+      });
+    })
+  });
+
 });

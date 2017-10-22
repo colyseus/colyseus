@@ -5,7 +5,7 @@ import * as msgpack from "msgpack-lite";
 import * as parseURL from "url-parse";
 
 import { Server as WebSocketServer, IServerOptions } from "uws";
-import { MatchMaker } from "./MatchMaker";
+import { MatchMaker, RegisteredHandler } from "./MatchMaker";
 import { Protocol, send, decode } from "./Protocol";
 import { Client } from "./index";
 import { handleUpgrade, setUserId } from "./cluster/Worker";
@@ -43,8 +43,8 @@ export class Server {
     this.httpServer.listen(port, hostname, backlog, listeningListener);
   }
 
-  register (name: string, handler: Function, options: any = {}) {
-    this.matchMaker.addHandler(name, handler, options);
+  register (name: string, handler: Function, options: any = {}): RegisteredHandler {
+    return this.matchMaker.registerHandler(name, handler, options);
   }
 
   onConnection = (client: Client) => {

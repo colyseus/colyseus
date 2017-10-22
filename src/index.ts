@@ -6,6 +6,7 @@ export { Server } from "./Server";
 export { ClusterServer } from "./ClusterServer";
 export { Room } from "./Room";
 export { Protocol } from "./Protocol";
+export { RegisteredHandler } from "./MatchMaker";
 
 // State Helper Types
 export type EntityMap<T> = {[ entityId:string ]: T};
