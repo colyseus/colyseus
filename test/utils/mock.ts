@@ -44,7 +44,7 @@ export class DummyRoom extends Room {
     return !options.invalid_param
   }
 
-  onInit () {}
+  onInit () { this.setState({}); }
   onDispose() {}
   onJoin() {}
   onLeave() {}
@@ -52,7 +52,7 @@ export class DummyRoom extends Room {
 }
 
 export class RoomWithError extends Room {
-  onInit () {}
+  onInit () { this.setState({}); }
   onDispose() {}
   onJoin() {
     (<any>this).iHaveAnError();
@@ -90,7 +90,7 @@ export class DummyRoomWithTimeline extends Room {
     return !options.invalid_param
   }
 
-  onInit () {}
+  onInit () { this.setState({}); }
   onDispose() {}
   onJoin() {}
   onLeave() {}

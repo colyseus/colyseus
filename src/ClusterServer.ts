@@ -9,7 +9,7 @@ import * as parseURL from "url-parse";
 import { spawnWorkers, spawnMatchMaking, getNextWorkerForSocket } from "./cluster/Master";
 import { setupWorker } from "./cluster/Worker";
 import { Protocol } from "./Protocol";
-import { MatchMaker } from "./MatchMaker";
+import { MatchMaker, RegisteredHandler } from "./MatchMaker";
 import { generateId } from "./";
 import { debugCluster } from "./Debug";
 
@@ -92,15 +92,18 @@ export class ClusterServer {
     }
   }
 
-  register (name: string, handler: Function, options: any = {}) {
-    if (!cluster.isMaster) {
-      this.matchMaker.addHandler(name, handler, options);
+  register (name: string, handler: Function, options: any = {}): RegisteredHandler {
+    if (!cluster.isWorker) {
+      console.warn("ClusterServer#register should be called from a worker process.");
+      return;
     }
+
+    return this.matchMaker.registerHandler(name, handler, options);
   }
 
   attach (options: { server: http.Server }) {
     if (!cluster.isWorker) {
-      // ClusterServer#attach method should only be called from a worker process.
+      console.warn("ClusterServer#attach should be called from a worker process.");
       return;
     }
 

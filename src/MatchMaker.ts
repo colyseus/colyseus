@@ -1,7 +1,8 @@
 import * as memshared from "memshared";
 import * as msgpack from "msgpack-lite";
+import * as EventEmitter from "events";
 
-import { merge, spliceOne } from "./Utils";
+import { spliceOne } from "./Utils";
 import { Client, Room, generateId, isValidId } from "./index";
 import { Protocol, decode, send } from "./Protocol";
 
@@ -14,12 +15,23 @@ export interface RoomWithScore {
   score: number;
 };
 
+export class RegisteredHandler extends EventEmitter {
+  klass: any;
+  options: any;
+
+  constructor (klass: any, options: any) {
+    super();
+
+    this.klass = klass;
+    this.options = options;
+  }
+}
+
 export class MatchMaker {
 
-  private handlers: {[id: string]: any[]} = {};
+  private handlers: {[id: string]: RegisteredHandler} = {};
   private availableRooms: {[name: string]: Room[]} = {};
   private roomsById: {[name: number]: Room} = {};
-  private roomCount: number = 0;
 
   // room references by client id
   protected sessions: {[sessionId: string]: Room} = {};
@@ -120,6 +132,9 @@ export class MatchMaker {
 
       this.sessions[ client.sessionId ] = room;
 
+      // emit 'join' on registered handler
+      this.handlers[room.roomName].emit("join", room, client);
+
     } catch (e) {
       console.error(room.roomName, "onJoin:", e.stack);
       send(client, [Protocol.JOIN_ERROR, roomId, e.message]);
@@ -130,6 +145,9 @@ export class MatchMaker {
 
   public onLeave (client: Client, room: Room) {
     (<any>room)._onLeave(client, true);
+
+    // emit 'leave' on registered handler
+    this.handlers[room.roomName].emit("leave", room, client);
   }
 
   private onClientLeaveRoom = (room: Room, client: Client, isDisconnect: boolean): boolean => {
@@ -140,10 +158,15 @@ export class MatchMaker {
     delete this.sessions[ client.sessionId ];
   }
 
-  public addHandler (name: string, handler: Function, options: any = {}): void {
+  public registerHandler (name: string, klass: Function, options: any = {}) {
     memshared.sadd("handlers", name);
-    this.handlers[ name ] = [handler, options];
+
+    let registeredHandler = new RegisteredHandler(klass, options);
+
+    this.handlers[ name ] = registeredHandler;
     this.availableRooms[ name ] = [];
+
+    return registeredHandler;
   }
 
   public hasHandler (name: string) {
@@ -180,7 +203,7 @@ export class MatchMaker {
     if ( this.hasAvailableRoom( roomName ) ) {
       for ( var i=0; i < this.availableRooms[ roomName ].length; i++ ) {
         let availableRoom = this.availableRooms[ roomName ][ i ];
-        let numConnectedClients = availableRoom.clients.length + Object.keys(this.connectingClientByRoom[ availableRoom.roomId ]).length;
+        let numConnectedClients = availableRoom.clients.length + Object.keys(this.connectingClientByRoom[ availableRoom.roomId ] || {}).length;
 
         // Check maxClients before requesting to join.
         if (numConnectedClients > availableRoom.maxClients) {
@@ -203,17 +226,16 @@ export class MatchMaker {
 
   public create (roomName: string, clientOptions: ClientOptions): Room {
     let room = null
-      , handler = this.handlers[ roomName ][0]
-      , options = this.handlers[ roomName ][1];
+      , registeredHandler = this.handlers[ roomName ];
 
-    room = new handler();
+    room = new registeredHandler.klass();
 
     // set room options
     room.roomId = generateId();
     room.roomName = roomName;
 
     if (room.onInit) {
-      room.onInit(options);
+      room.onInit(registeredHandler.options);
     }
 
     // cache on which process the room is living.
@@ -221,6 +243,8 @@ export class MatchMaker {
 
     // imediatelly ask client to join the room
     if ( room.requestJoin(clientOptions) ) {
+      registeredHandler.emit("create", room);
+
       debugMatchMaking("spawning '%s' on worker %d", roomName, process.pid);
 
       room.on('lock', this.lockRoom.bind(this, roomName, room));
@@ -273,6 +297,9 @@ export class MatchMaker {
 
   private disposeRoom(roomName: string, room: Room): void {
     debugMatchMaking("disposing '%s' on worker %d", roomName, process.pid);
+
+    // emit disposal on registered session handler
+    this.handlers[roomName].emit("dispose", room);
 
     delete this.roomsById[ room.roomId ]
 

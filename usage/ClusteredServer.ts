@@ -9,9 +9,6 @@ const PORT = 8080;
 
 let gameServer = new ClusterServer();
 
-// Register ChatRoom as "chat"
-gameServer.register("chat", ChatRoom);
-
 if (cluster.isMaster) {
   gameServer.listen(PORT);
   gameServer.fork();
@@ -23,6 +20,14 @@ if (cluster.isMaster) {
     console.log("something!", process.pid);
     res.send("Hey!");
   });
+
+  // Register ChatRoom as "chat"
+  gameServer.register("chat", ChatRoom).
+    // demonstrating public events.
+    on("create", (room) => console.log("room created!", room.roomId)).
+    on("join", (room, client) => console.log("client", client.id, "joined", room.roomId)).
+    on("leave", (room, client) => console.log("client", client.id, "left", room.roomId)).
+    on("dispose", (room) => console.log("room disposed!", room.roomId));
 
   // Create HTTP Server
   gameServer.attach({ server: app });
