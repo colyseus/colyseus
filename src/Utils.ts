@@ -15,10 +15,13 @@ export function spliceOne (arr: Array<any>, index: number): boolean {
   return true;
 }
 
-export function merge (a: any, b: any): any {
-  for (var key in b) {
-    if (b.hasOwnProperty(key)) {
-      a[key] = b[key]
+export function merge (a: any, ...objs: any[]): any {
+  for (let i = 0, len = objs.length; i < len; i++) {
+    let b = objs[i];
+    for (let key in b) {
+      if (b.hasOwnProperty(key)) {
+        a[key] = b[key]
+      }
     }
   }
   return a;

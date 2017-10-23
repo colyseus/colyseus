@@ -11,6 +11,7 @@ describe('MatchMaker', function() {
     matchMaker = new MatchMaker()
     matchMaker.registerHandler('room', DummyRoom);
     matchMaker.registerHandler('dummy_room', DummyRoom);
+    matchMaker.registerHandler('room_with_default_options', DummyRoom, { level: 1 });
   });
 
   describe('room handlers', function() {
@@ -26,6 +27,17 @@ describe('MatchMaker', function() {
         assert.ok(room instanceof Room);
         done();
       });
+    });
+
+    it('onInit should receive client options as second argument when creating room', function() {
+      const onInitStub = sinon.stub(DummyRoom.prototype, 'onInit').returns(true);
+      matchMaker.create('room_with_default_options', { map: "forest" });
+      assert.deepEqual(onInitStub.getCall(0).args, [{ level: 1, map: "forest" }]);
+
+      matchMaker.create('room_with_default_options', { level: 2 });
+      assert.deepEqual(onInitStub.getCall(1).args, [{ level: 1 }], "shouldn't be possible to overwrite arguments");
+
+      onInitStub.restore();
     });
 
     it('shouldn\'t return when trying to join with invalid room id', function() {

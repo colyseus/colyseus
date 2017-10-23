@@ -2,7 +2,7 @@ import * as memshared from "memshared";
 import * as msgpack from "msgpack-lite";
 import * as EventEmitter from "events";
 
-import { spliceOne } from "./Utils";
+import { merge, spliceOne } from "./Utils";
 import { Client, Room, generateId, isValidId } from "./index";
 import { Protocol, decode, send } from "./Protocol";
 
@@ -235,7 +235,7 @@ export class MatchMaker {
     room.roomName = roomName;
 
     if (room.onInit) {
-      room.onInit(registeredHandler.options);
+      room.onInit(merge({}, clientOptions, registeredHandler.options));
     }
 
     // cache on which process the room is living.
