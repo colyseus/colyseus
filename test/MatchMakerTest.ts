@@ -2,6 +2,7 @@ import * as assert from 'assert';
 import * as sinon from 'sinon';
 import { MatchMaker } from "../src/MatchMaker";
 import { Room } from "../src/Room";
+import { generateId, Protocol } from "../src";
 import { createDummyClient, DummyRoom, Client } from "./utils/mock";
 
 describe('MatchMaker', function() {
@@ -90,6 +91,19 @@ describe('MatchMaker', function() {
       });
     });
 
+  });
+
+  describe('onJoin', () => {
+    it('should send error message to client when joining invalid room', (done) => {
+      let client = createDummyClient();
+
+      matchMaker.onJoin(generateId(), client, (err: string, room: Room) =>  {
+        assert.ok(typeof(err) === "string");
+        assert.equal(room, undefined);
+        assert.equal(client.lastMessage[0], Protocol.JOIN_ERROR);
+        done();
+      });
+    });
   });
 
   describe('registered handler events', () => {

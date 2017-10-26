@@ -117,16 +117,16 @@ export class MatchMaker {
    */
   public onJoin (roomId: string, client: Client, callback: (err: string, room: Room) => any): void {
     let room = this.roomsById[roomId];
-    let clientOptions = this.connectingClientByRoom[roomId][client.id];
     let err: string;
+    let clientOptions = this.connectingClientByRoom[roomId] && this.connectingClientByRoom[roomId][client.id];
 
-    // assign sessionId to socket connection.
-    client.sessionId = clientOptions.sessionId;
+    if (room && clientOptions) {
+      // assign sessionId to socket connection.
+      client.sessionId = clientOptions.sessionId;
 
-    delete clientOptions.sessionId;
-    delete clientOptions.clientId;
+      delete clientOptions.sessionId;
+      delete clientOptions.clientId;
 
-    try {
       (<any>room)._onJoin(client, clientOptions);
       room.once('leave', this.onClientLeaveRoom.bind(this, room));
 
@@ -135,9 +135,10 @@ export class MatchMaker {
       // emit 'join' on registered handler
       this.handlers[room.roomName].emit("join", room, client);
 
-    } catch (e) {
-      console.error(room.roomName, "onJoin:", e.stack);
-      send(client, [Protocol.JOIN_ERROR, roomId, e.message]);
+    } else {
+      err = "trying to join non-existing room";
+      debugMatchMaking(`JOIN_ERROR: ${ err } (roomId: %s, clientOptions: %j)`, roomId, clientOptions);
+      send(client, [Protocol.JOIN_ERROR, roomId, err]);
     }
 
     callback(err, room);
