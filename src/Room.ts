@@ -83,8 +83,16 @@ export abstract class Room<T=any> extends EventEmitter {
   public setState (newState) {
     this.clock.start();
 
+    // TODO: deprecate toJSON on next versions
+    if (process.env.USE_TO_JSON) {
+      console.warn("DEPRECATION WARNING: toJSON() support will be completely removed in next versions.");
+      this._previousState = toJSON( newState );
+
+    } else {
+      this._previousState = newState;
+    }
+
     // ensure state is populated for `sendState()` method.
-    this._previousState = toJSON( newState );
     this._previousStateEncoded = msgpack.encode( this._previousState );
 
     this.state = newState;
@@ -147,7 +155,11 @@ export abstract class Room<T=any> extends EventEmitter {
       throw new Error( 'trying to broadcast null state. you should call #setState on constructor or during user connection.' );
     }
 
-    let currentState = toJSON( this.state );
+    // TODO: deprecate toJSON on next versions
+    let currentState = (process.env.USE_TO_JSON)
+      ? toJSON( this.state )
+      : this.state;
+
     let currentStateEncoded = msgpack.encode( currentState );
 
     // skip if state has not changed.
