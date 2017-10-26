@@ -39,7 +39,7 @@
     "@types/uws": "^0.13.0",
     "debug": "^3.1.0",
     "fast-json-patch": "^2.0.5",
-    "fossil-delta": "^0.2.5",
+    "fossil-delta": "^1.0.0",
     "ip": "^1.1.5",
     "memshared": "^0.9.15",
     "msgpack-lite": "^0.1.26",
