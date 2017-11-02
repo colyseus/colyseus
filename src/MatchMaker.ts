@@ -37,6 +37,19 @@ export class MatchMaker {
   protected sessions: {[sessionId: string]: Room} = {};
   protected connectingClientByRoom: {[roomId: string]: {[clientId: string]: any}} = {};
 
+  constructor () {
+    process.once('SIGINT', () => {
+      this.gracefullyShutdown();
+      process.exit();
+    });
+
+    // nodemon sends SIGUSR2 before reloading (https://github.com/remy/nodemon#controlling-shutdown-of-your-script)
+    process.once('SIGUSR2', () => {
+      this.gracefullyShutdown();
+      process.kill(process.pid, 'SIGUSR2');
+    });
+  }
+
   public bindClient (client: Client, roomId: string) {
     this.onJoin(roomId, client, (err, room) => {
       if (!err) {
@@ -309,6 +322,13 @@ export class MatchMaker {
 
     // remove from available rooms
     this.lockRoom(roomName, room)
+  }
+
+  private gracefullyShutdown () {
+    for (let roomId in this.roomsById) {
+      this.roomsById[roomId].disconnect();
+      this.roomsById[roomId].emit('dispose');
+    }
   }
 
 }
