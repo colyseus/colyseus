@@ -56,7 +56,6 @@
     "nodemon": "^1.7.1",
     "sinon": "^4.0.0",
     "ts-node": "^3.2.0",
-    "typedoc": "^0.9.0",
     "typescript": "^2.3.2"
   },
   "license": "MIT",
