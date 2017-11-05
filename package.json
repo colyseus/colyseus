@@ -45,7 +45,7 @@
     "msgpack-lite": "^0.1.26",
     "nonenumerable": "^1.0.1",
     "shortid": "^2.2.6",
-    "url-parse": "^1.1.9",
+    "url-parse": "^1.2.0",
     "uws": "8.14.1"
   },
   "devDependencies": {
