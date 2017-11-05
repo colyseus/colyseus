@@ -1,7 +1,7 @@
 "use strict";
 
 import * as assert from "assert";
-import * as msgpack from "msgpack-lite";
+import * as msgpack from "notepack.io";
 import { Room } from "../src/Room";
 // import { Server } from "../src/Server";
 import { Protocol } from "../src/Protocol";

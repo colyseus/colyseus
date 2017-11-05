@@ -1,4 +1,4 @@
-import * as msgpack from "msgpack-lite";
+import * as msgpack from "notepack.io";
 import * as fossilDelta from "fossil-delta";
 import * as shortid from "shortid";
 

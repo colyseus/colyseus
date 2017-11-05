@@ -1,5 +1,5 @@
 import * as memshared from "memshared";
-import * as msgpack from "msgpack-lite";
+import * as msgpack from "notepack.io";
 import * as EventEmitter from "events";
 
 import { merge, spliceOne } from "./Utils";

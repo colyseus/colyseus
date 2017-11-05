@@ -1,5 +1,5 @@
 import * as assert from "assert";
-import * as msgpack from "msgpack-lite";
+import * as msgpack from "notepack.io";
 import { Room } from "../src/Room";
 import { createDummyClient, DummyRoom, DummyRoomWithState } from "./utils/mock";
 import { Protocol } from "../src/Protocol";
@@ -39,7 +39,7 @@ describe('Patch', function() {
 
       var message = msgpack.decode( client.messages[1] );
       assert.equal(message[0], Protocol.ROOM_STATE);
-      assert.deepEqual(message[2], { n: null, u: null });
+      assert.deepEqual(message[2], { n: null, u: undefined });
     })
   })
 

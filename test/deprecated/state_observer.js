@@ -2,7 +2,7 @@
 
 var assert = require('assert')
   , StateObserver = require('../../lib/state/Observer').StateObserver
-  , msgpack = require('msgpack-lite')
+  , msgpack = require('notepack.io')
 
 class PlainState {
   constructor () {

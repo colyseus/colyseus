@@ -2,7 +2,7 @@
 
 import { EventEmitter } from "events";
 import * as shortid from "shortid";
-import * as msgpack from "msgpack-lite";
+import * as msgpack from "notepack.io";
 import * as WebSocket from "uws";
 import { Room } from "../../src/Room";
 

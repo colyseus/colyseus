@@ -1,4 +1,4 @@
-import * as msgpack from "msgpack-lite";
+import * as msgpack from "notepack.io";
 import { Client } from "./index";
 
 export enum Protocol {
