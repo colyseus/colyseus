@@ -37,7 +37,7 @@ export abstract class Room<T=any> extends EventEmitter {
   protected _previousStateEncoded: any;
 
   private _simulationInterval: NodeJS.Timer;
-  private _patchInterval: number;
+  private _patchInterval: NodeJS.Timer;
 
   constructor () {
     super();
@@ -51,9 +51,9 @@ export abstract class Room<T=any> extends EventEmitter {
 
   abstract onInit (options: any): void;
   abstract onMessage (client: Client, data: any): void;
-  abstract onJoin (client: Client, options?: any): void;
-  abstract onLeave (client: Client): void;
-  abstract onDispose (): void;
+  abstract onJoin (client: Client, options?: any): void | Promise<any>;
+  abstract onLeave (client: Client): void | Promise<any>;
+  abstract onDispose (): void | Promise<any>;
 
   public requestJoin (options: any): number | boolean {
     return 1;
@@ -133,11 +133,15 @@ export abstract class Room<T=any> extends EventEmitter {
     return true;
   }
 
-  public disconnect (): void {
+  public disconnect (): Promise<any> {
+    let promises = [];
+
     var i = this.clients.length;
     while (i--) {
-      this._onLeave(this.clients[i]);
+      promises.push( this._onLeave(this.clients[i]) );
     }
+
+    return Promise.all(promises);
   }
 
   protected sendState (client: Client): void {
@@ -209,14 +213,18 @@ export abstract class Room<T=any> extends EventEmitter {
     }
   }
 
-  private _onLeave (client: Client, isDisconnect: boolean = false): void {
+  private _onLeave (client: Client, isDisconnect: boolean = false): void | Promise<any> {
+    let userReturnData;
+
     // Remove client from client list
     if (!spliceOne(this.clients, this.clients.indexOf(client))) {
       // skip if the client already left.
       return;
     }
 
-    if (this.onLeave) this.onLeave(client);
+    if (this.onLeave) {
+      userReturnData = this.onLeave(client);
+    }
 
     this.emit('leave', client, isDisconnect);
 
@@ -235,16 +243,22 @@ export abstract class Room<T=any> extends EventEmitter {
       this._dispose();
       this.emit('dispose');
     }
+
+    return userReturnData || Promise.resolve();
   }
 
-  private _dispose () {
-    if ( this.onDispose ) this.onDispose();
+  private _dispose (): Promise<any> {
+    let userReturnData;
+
+    if ( this.onDispose ) userReturnData = this.onDispose();
     if ( this._patchInterval ) clearInterval( this._patchInterval );
     if ( this._simulationInterval ) clearInterval( this._simulationInterval );
 
     // clear all timeouts/intervals + force to stop ticking
     this.clock.clear();
     this.clock.stop();
+
+    return userReturnData || Promise.resolve();
   }
 
 }
