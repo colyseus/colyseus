@@ -59,6 +59,10 @@ export abstract class Room<T=any> extends EventEmitter {
     return 1;
   }
 
+  public verifyClient (client: Client, options: any): boolean | Promise<boolean> {
+    return Promise.resolve(true);
+  }
+
   public setSimulationInterval ( callback: Function, delay: number = 1000 / 60 ): void {
     // clear previous interval in case called setSimulationInterval more than once
     if ( this._simulationInterval ) clearInterval( this._simulationInterval );
@@ -156,7 +160,8 @@ export abstract class Room<T=any> extends EventEmitter {
 
   private broadcastPatch (): boolean {
     if ( !this._previousState ) {
-      throw new Error( 'trying to broadcast null state. you should call #setState on constructor or during user connection.' );
+      debugPatch('trying to broadcast null state. you should call #setState on constructor or during user connection.');
+      return false;
     }
 
     // TODO: deprecate toJSON on next versions
@@ -239,15 +244,21 @@ export abstract class Room<T=any> extends EventEmitter {
     }
 
     // custom cleanup method & clear intervals
-    if ( this.clients.length == 0 && this.autoDispose ) {
-      this._dispose();
-      this.emit('dispose');
+    if ( this.autoDispose ) {
+      this._disposeIfEmpty();
     }
 
     return userReturnData || Promise.resolve();
   }
 
-  private _dispose (): Promise<any> {
+  protected _disposeIfEmpty () {
+    if ( this.clients.length == 0 ) {
+      this._dispose();
+      this.emit('dispose');
+    }
+  }
+
+  protected _dispose (): Promise<any> {
     let userReturnData;
 
     if ( this.onDispose ) userReturnData = this.onDispose();

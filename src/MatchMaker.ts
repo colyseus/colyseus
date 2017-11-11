@@ -44,20 +44,26 @@ export class MatchMaker {
   }
 
   public bindClient (client: Client, roomId: string) {
-    this.onJoin(roomId, client, (err, room) => {
-      if (!err) {
-        client.on('message', (message) => {
-          if (!(message = decode(message))) {
-            return;
-          }
-          this.execute(client, message);
-        });
+    let roomPromise = this.onJoin(roomId, client);
 
-        client.on('close', (_) => this.onLeave(client, room));
-        client.on('error', (e) => console.error("[ERROR]", client.id, e));
-      }
+    roomPromise.then(room => {
+      client.on('message', (message) => {
+        if (!(message = decode(message))) {
+          return;
+        }
+        this.execute(client, message);
+      });
+
+      client.on('close', (_) => this.onLeave(client, room));
+      client.on('error', (e) => console.error("[ERROR]", client.id, e));
+
+    }).catch(err => {
+      send(client, [Protocol.JOIN_ERROR, roomId, err]);
+
+      client.removeAllListeners();
     });
 
+    return roomPromise;
   }
 
   protected execute (client: Client, message: any) {
@@ -121,33 +127,55 @@ export class MatchMaker {
   /**
    * Binds target client to the room running in a worker process.
    */
-  public onJoin (roomId: string, client: Client, callback: (err: string, room: Room) => any): void {
-    let room = this.roomsById[roomId];
-    let err: string;
-    let clientOptions = this.connectingClientByRoom[roomId] && this.connectingClientByRoom[roomId][client.id];
+  public onJoin (roomId: string, client: Client): Promise<Room> {
+    const room = this.roomsById[roomId];
+    const clientOptions = this.connectingClientByRoom[roomId] && this.connectingClientByRoom[roomId][client.id];
 
-    if (room && clientOptions) {
-      // assign sessionId to socket connection.
-      client.sessionId = clientOptions.sessionId;
+    return new Promise<Room>((resolve, reject) => {
+      if (room && clientOptions) {
+        // assign sessionId to socket connection.
+        client.sessionId = clientOptions.sessionId;
 
-      delete clientOptions.sessionId;
-      delete clientOptions.clientId;
+        delete clientOptions.sessionId;
+        delete clientOptions.clientId;
 
-      (<any>room)._onJoin(client, clientOptions);
-      room.once('leave', this.onClientLeaveRoom.bind(this, room));
+        let isVerified = room.verifyClient(client, clientOptions);
 
-      this.sessions[ client.sessionId ] = room;
+        if (!(isVerified instanceof Promise)) {
+          isVerified = (isVerified)
+            ? Promise.resolve()
+            : Promise.reject(undefined);
+        }
 
-      // emit 'join' on registered handler
-      this.handlers[room.roomName].emit("join", room, client);
+        isVerified.then(() => {
+          (<any>room)._onJoin(client, clientOptions);
+          room.once('leave', this.onClientLeaveRoom.bind(this, room));
 
-    } else {
-      err = "trying to join non-existing room";
-      debugMatchMaking(`JOIN_ERROR: ${ err } (roomId: %s, clientOptions: %j)`, roomId, clientOptions);
-      send(client, [Protocol.JOIN_ERROR, roomId, err]);
-    }
+          this.sessions[ client.sessionId ] = room;
 
-    callback(err, room);
+          // emit 'join' on registered handler
+          this.handlers[room.roomName].emit("join", room, client);
+
+          resolve(room);
+
+        }).catch((err) => {
+          err = err || "verifyClient failed.";
+
+          debugMatchMaking(`JOIN_ERROR: ${err} (roomId: %s, clientOptions: %j)`, roomId, clientOptions);
+
+          room._disposeIfEmpty();
+
+          reject(err);
+        });
+
+      } else {
+        let err =  "trying to join non-existing room";
+
+        debugMatchMaking(`JOIN_ERROR: ${ err } (roomId: %s, clientOptions: %j)`, roomId, clientOptions);
+
+        reject(err);
+      }
+    });
   }
 
   public onLeave (client: Client, room: Room) {

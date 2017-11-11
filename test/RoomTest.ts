@@ -115,7 +115,7 @@ describe('Room', function() {
       (<any>room)._onJoin(client2, {});
 
       assert.equal(undefined, room.state);
-      assert.throws(() => { (<any>room).broadcastPatch(); });
+      assert.equal(false, (<any>room).broadcastPatch());
     });
 
     it('should broadcast patch having state', function() {
@@ -228,7 +228,7 @@ describe('Room', function() {
       setTimeout(() => (<any>room)._onLeave(client3, true), 0);
 
       // fulfil the test
-      clock.runAll();
+      (<any>clock).runAll();
       done();
     });
 
