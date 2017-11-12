@@ -1,5 +1,5 @@
 import * as assert from "assert";
-import * as msgpack from "msgpack-lite";
+import * as msgpack from "notepack.io";
 import * as sinon from 'sinon';
 import { Room } from "../src/Room";
 import { Protocol } from "../src/Protocol";

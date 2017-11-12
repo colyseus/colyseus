@@ -5,7 +5,7 @@ console.log('benchmark: evaluating a complex patch state')
 var Benchmark = require('benchmark')
   , jsonpatch = require('fast-json-patch')
   , fossilDelta = require('fossil-delta')
-  , msgpack = require('msgpack-lite')
+  , msgpack = require('notepack.io')
   , toJSON = require('../../lib/Utils').toJSON
 
   , suite = new Benchmark.Suite()

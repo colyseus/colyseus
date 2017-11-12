@@ -1,7 +1,7 @@
 import * as memshared from "memshared";
 import * as net from "net";
 import * as http from "http";
-import * as msgpack from "msgpack-lite";
+import * as msgpack from "notepack.io";
 import * as parseURL from "url-parse";
 
 import { Server as WebSocketServer } from "uws";

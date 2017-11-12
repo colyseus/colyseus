@@ -1,5 +1,5 @@
 import { createServer } from 'http';
-import * as msgpack from "msgpack-lite";
+import * as msgpack from "notepack.io";
 import * as memshared from "memshared";
 import { Server as WebSocketServer } from "uws";
 
