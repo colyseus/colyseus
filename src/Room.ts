@@ -8,7 +8,7 @@ import { createTimeline, Timeline } from "@gamestdio/timeline";
 
 import { Client } from "./index";
 import { Protocol, send } from "./Protocol";
-import { logError, spliceOne, toJSON } from "./Utils";
+import { logError, spliceOne } from "./Utils";
 
 import { debugPatch, debugPatchData } from "./Debug";
 import * as jsonPatch from "fast-json-patch"; // this is only used for debugging patches
@@ -83,14 +83,7 @@ export abstract class Room<T=any> extends EventEmitter {
   public setState (newState) {
     this.clock.start();
 
-    // TODO: deprecate toJSON on next versions
-    if (process.env.USE_TO_JSON) {
-      console.warn("DEPRECATION WARNING: toJSON() support will be completely removed in next versions.");
-      this._previousState = toJSON( newState );
-
-    } else {
-      this._previousState = newState;
-    }
+    this._previousState = newState;
 
     // ensure state is populated for `sendState()` method.
     this._previousStateEncoded = msgpack.encode( this._previousState );
@@ -159,11 +152,7 @@ export abstract class Room<T=any> extends EventEmitter {
       throw new Error( 'trying to broadcast null state. you should call #setState on constructor or during user connection.' );
     }
 
-    // TODO: deprecate toJSON on next versions
-    let currentState = (process.env.USE_TO_JSON)
-      ? toJSON( this.state )
-      : this.state;
-
+    let currentState = this.state;
     let currentStateEncoded = msgpack.encode( currentState );
 
     // skip if state has not changed.

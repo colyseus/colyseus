@@ -32,37 +32,3 @@ export function logError (err: Error): void {
     console.log(err)
   }
 }
-
-//
-// TODO: there is possibly room for improvement on this method
-//
-// You can see the impact of changes on this benchmark:
-// `node --harmony test/benchmark/patch.js`
-//
-export function toJSON (obj: any): any {
-  let result
-
-  if (obj && typeof(obj.toJSON)==="function") {
-    result = obj.toJSON()
-
-  } else if (obj instanceof Array) {
-    result = obj.map((_) => toJSON(_))
-
-  } else {
-    result = obj;
-  }
-
-  if (result && typeof(result)==="object") {
-    let copy = Array.isArray(result) ? [] : {};
-
-    for (var k in result) {
-      if (typeof(result[k]) !== "function") {
-        copy[k] = toJSON(result[k]);
-      }
-    }
-
-    result = copy;
-  }
-
-  return result
-}

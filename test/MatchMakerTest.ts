@@ -8,8 +8,8 @@ import { createDummyClient, DummyRoom, Client } from "./utils/mock";
 describe('MatchMaker', function() {
   let matchMaker;
 
-  beforeEach(function() {
-    matchMaker = new MatchMaker()
+  beforeEach(() => {
+    matchMaker = new MatchMaker();
     matchMaker.registerHandler('room', DummyRoom);
     matchMaker.registerHandler('dummy_room', DummyRoom);
     matchMaker.registerHandler('room_with_default_options', DummyRoom, { level: 1 });
