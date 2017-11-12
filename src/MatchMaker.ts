@@ -43,7 +43,7 @@ export class MatchMaker {
     // (https://github.com/remy/nodemon#controlling-shutdown-of-your-script)
     //
     ['SIGINT', 'SIGTERM', 'SIGUSR2'].forEach(signal => {
-      this.gracefullyShutdown(signal);
+      process.once(signal, () => this.gracefullyShutdown(signal));
     });
   }
 
