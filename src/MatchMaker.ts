@@ -38,9 +38,13 @@ export class MatchMaker {
   protected connectingClientByRoom: {[roomId: string]: {[clientId: string]: any}} = {};
 
   constructor () {
-    process.once('SIGINT', () => this.gracefullyShutdown());
-    process.once('SIGTERM', () => this.gracefullyShutdown());
-    process.once('SIGUSR2', () => this.gracefullyShutdown()); // nodemon sends SIGUSR2 before reloading (https://github.com/remy/nodemon#controlling-shutdown-of-your-script)
+    //
+    // nodemon sends SIGUSR2 before reloading
+    // (https://github.com/remy/nodemon#controlling-shutdown-of-your-script)
+    //
+    ['SIGINT', 'SIGTERM', 'SIGUSR2'].forEach(signal => {
+      this.gracefullyShutdown(signal);
+    });
   }
 
   public bindClient (client: Client, roomId: string) {
@@ -317,7 +321,7 @@ export class MatchMaker {
     this.lockRoom(roomName, room)
   }
 
-  private gracefullyShutdown () {
+  private gracefullyShutdown (signal: string) {
     let promises = [];
 
     for (let roomId in this.roomsById) {
@@ -333,7 +337,7 @@ export class MatchMaker {
       room.emit('dispose');
     }
 
-    Promise.all(promises).then(() => process.exit(0));
+    Promise.all(promises).then(() => process.kill(process.pid, signal));
   }
 
 }
