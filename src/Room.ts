@@ -141,7 +141,7 @@ export abstract class Room<T=any> extends EventEmitter {
     send(client, [
       Protocol.ROOM_STATE,
       this.roomId,
-      this._previousState,
+      this._previousStateEncoded,
       this.clock.currentTime,
       this.clock.elapsedTime,
     ]);

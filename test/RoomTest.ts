@@ -99,7 +99,7 @@ describe('Room', function() {
       var message = msgpack.decode( client.messages[1] );
 
       assert.equal(message[0], Protocol.ROOM_STATE);
-      assert.deepEqual(message[2], { success: true });
+      assert.deepEqual(msgpack.decode(message[2]), { success: true });
     });
   });
 

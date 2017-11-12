@@ -39,7 +39,7 @@ describe('Patch', function() {
 
       var message = msgpack.decode( client.messages[1] );
       assert.equal(message[0], Protocol.ROOM_STATE);
-      assert.deepEqual(message[2], { n: null, u: undefined });
+      assert.deepEqual(msgpack.decode(message[2]), { n: null, u: undefined });
     })
   })
 
