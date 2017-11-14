@@ -3,7 +3,12 @@ import * as sinon from 'sinon';
 import { MatchMaker } from "../src/MatchMaker";
 import { Room } from "../src/Room";
 import { generateId, Protocol } from "../src";
-import { createDummyClient, DummyRoom, Client } from "./utils/mock";
+import { createDummyClient, DummyRoom, RoomVerifyClient, Client } from "./utils/mock";
+
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.log(reason, promise);
+});
 
 describe('MatchMaker', function() {
   let matchMaker;
@@ -13,6 +18,7 @@ describe('MatchMaker', function() {
     matchMaker.registerHandler('room', DummyRoom);
     matchMaker.registerHandler('dummy_room', DummyRoom);
     matchMaker.registerHandler('room_with_default_options', DummyRoom, { level: 1 });
+    matchMaker.registerHandler('room_verify_client', RoomVerifyClient);
   });
 
   describe('room handlers', function() {
@@ -97,11 +103,85 @@ describe('MatchMaker', function() {
     it('should send error message to client when joining invalid room', (done) => {
       let client = createDummyClient();
 
-      matchMaker.onJoin(generateId(), client, (err: string, room: Room) =>  {
+      matchMaker.bindClient(client, generateId()).then((room) => {
+        throw new Error("this promise shouldn't succeed");
+
+      }).catch(err => {
         assert.ok(typeof(err) === "string");
-        assert.equal(room, undefined);
         assert.equal(client.lastMessage[0], Protocol.JOIN_ERROR);
         done();
+      });
+    });
+  });
+
+  describe('verifyClient', () => {
+    it('should\'t allow to connect when verifyClient returns false', (done) => {
+      let client = createDummyClient();
+
+      RoomVerifyClient.prototype.verifyClient = () => false;
+
+      matchMaker.onJoinRoomRequest('room_verify_client', { clientId: client.id }, true, (err, room) => {
+        matchMaker.bindClient(client, room.roomId).then((room) => {
+          throw new Error("this promise shouldn't succeed");
+
+        }).catch(err => {
+          assert.ok(typeof (err) === "string");
+          assert.equal(client.lastMessage[0], Protocol.JOIN_ERROR);
+          done();
+        });
+      });
+    });
+
+    it('should\'t allow to connect when verifyClient returns a failed promise', (done) => {
+      let client = createDummyClient();
+
+      RoomVerifyClient.prototype.verifyClient = () => new Promise((resolve, reject) => {
+        setTimeout(() => reject("forbidden"), 50);
+      });
+
+      matchMaker.onJoinRoomRequest('room_verify_client', { clientId: client.id }, true, (err, room) => {
+        matchMaker.bindClient(client, room.roomId).then((room) => {
+          throw new Error("this promise shouldn't succeed");
+
+        }).catch(err => {
+          assert.equal(err, "forbidden");
+          assert.equal(client.lastMessage[0], Protocol.JOIN_ERROR);
+          done();
+        });
+      });
+    });
+
+    it('should allow to connect when verifyClient returns true', (done) => {
+      let client = createDummyClient();
+
+      RoomVerifyClient.prototype.verifyClient = () => true;
+
+      matchMaker.onJoinRoomRequest('room_verify_client', { clientId: client.id }, true, (err, room) => {
+        matchMaker.bindClient(client, room.roomId).then((room) => {
+          assert.ok(room instanceof Room);
+          done();
+
+        }).catch(err => {
+          throw new Error("this promise shouldn't fail");
+        });
+      });
+    });
+
+    it('should allow to connect when verifyClient returns fulfiled promise', (done) => {
+      let client = createDummyClient();
+
+      RoomVerifyClient.prototype.verifyClient = () => new Promise((resolve, reject) => {
+        setTimeout(() => resolve(), 50);
+      });
+
+      matchMaker.onJoinRoomRequest('room_verify_client', { clientId: client.id }, true, (err, room) => {
+        matchMaker.bindClient(client, room.roomId).then((room) => {
+          assert.ok(room instanceof Room);
+          done();
+
+        }).catch(err => {
+          throw new Error("this promise shouldn't fail");
+        });
       });
     });
   });
@@ -114,7 +194,7 @@ describe('MatchMaker', function() {
       });
 
       matchMaker.create('room', {});
-    })
+    });
 
     it('should trigger "dispose" event', (done) => {
       let dummyRoom = matchMaker.create('room', {});
@@ -125,7 +205,7 @@ describe('MatchMaker', function() {
       });
 
       dummyRoom.emit("dispose");
-    })
+    });
 
     it('should trigger "join" event', (done) => {
       let dummyRoom = matchMaker.create('room', {});
@@ -140,7 +220,7 @@ describe('MatchMaker', function() {
       matchMaker.onJoinRoomRequest('room', { clientId: client.id }, true, (err, room) => {
         matchMaker.onJoin (room.roomId, client, () => {});
       });
-    })
+    });
 
     it('should trigger "leave" event', (done) => {
       let dummyRoom = matchMaker.create('room', {});
@@ -155,7 +235,20 @@ describe('MatchMaker', function() {
       matchMaker.onJoinRoomRequest('room', { clientId: client.id }, true, (err, room) => {
         matchMaker.onLeave (client, room);
       });
-    })
+    });
+  });
+
+  describe('onJoinRoomRequest', () => {
+    it('should remove reserved seat after joining the room', (done) => {
+      let client = createDummyClient();
+
+      matchMaker.onJoinRoomRequest('room', { clientId: client.id }, true, (err, room) => {
+        matchMaker.bindClient(client, room.roomId).then((room) => {
+          assert.deepEqual({}, room.connectingClients);
+          done();
+        });
+      });
+    });
   });
 
 });

@@ -115,7 +115,7 @@ describe('Room', function() {
       (<any>room)._onJoin(client2, {});
 
       assert.equal(undefined, room.state);
-      assert.throws(() => { (<any>room).broadcastPatch(); });
+      assert.equal(false, (<any>room).broadcastPatch());
     });
 
     it('should broadcast patch having state', function() {

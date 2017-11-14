@@ -64,7 +64,6 @@ export class Server {
     } else {
       client.on("message",  this.onMessageMatchMaking.bind(this, client));
     }
-
   }
 
   onMessageMatchMaking (client: Client, message) {

@@ -96,3 +96,8 @@ export class DummyRoomWithTimeline extends Room {
   onLeave() {}
   onMessage() {}
 }
+
+export class RoomVerifyClient extends DummyRoom {
+  patchRate = 5000;
+
+}
