@@ -228,7 +228,7 @@ describe('Room', function() {
       setTimeout(() => (<any>room)._onLeave(client3, true), 0);
 
       // fulfil the test
-      (<any>clock).runAll();
+      clock.runAll();
       done();
     });
 
