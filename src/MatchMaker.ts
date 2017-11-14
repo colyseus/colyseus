@@ -35,7 +35,6 @@ export class MatchMaker {
 
   // room references by client id
   protected sessions: {[sessionId: string]: Room} = {};
-  protected connectingClientByRoom: {[roomId: string]: {[clientId: string]: any}} = {};
 
   constructor () {
     process.once('SIGINT', () => this.gracefullyShutdown());
@@ -108,14 +107,8 @@ export class MatchMaker {
     }
 
     if ( room ) {
-      //
       // Reserve a seat for clientId
-      //
-      if (!this.connectingClientByRoom[ room.roomId ]) {
-        this.connectingClientByRoom[ room.roomId ] = {};
-      }
-
-      this.connectingClientByRoom[ room.roomId ][ clientOptions.clientId ] = clientOptions;
+      room.connectingClients[ clientOptions.clientId ] = clientOptions;
 
     } else {
       err = "join_request_fail";
@@ -129,15 +122,17 @@ export class MatchMaker {
    */
   public onJoin (roomId: string, client: Client): Promise<Room> {
     const room = this.roomsById[roomId];
-    const clientOptions = this.connectingClientByRoom[roomId] && this.connectingClientByRoom[roomId][client.id];
+    const clientOptions = room && room.connectingClients[ client.id ];
 
     return new Promise<Room>((resolve, reject) => {
       if (room && clientOptions) {
         // assign sessionId to socket connection.
         client.sessionId = clientOptions.sessionId;
 
+        // clean temporary data
         delete clientOptions.sessionId;
         delete clientOptions.clientId;
+        delete room.connectingClients[client.id];
 
         let isVerified = room.verifyClient(client, clientOptions);
 
@@ -238,7 +233,7 @@ export class MatchMaker {
     if ( this.hasAvailableRoom( roomName ) ) {
       for ( var i=0; i < this.availableRooms[ roomName ].length; i++ ) {
         let availableRoom = this.availableRooms[ roomName ][ i ];
-        let numConnectedClients = availableRoom.clients.length + Object.keys(this.connectingClientByRoom[ availableRoom.roomId ] || {}).length;
+        let numConnectedClients = availableRoom.clients.length + Object.keys(availableRoom.connectingClients).length;
 
         // Check maxClients before requesting to join.
         if (numConnectedClients > availableRoom.maxClients) {

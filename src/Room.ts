@@ -28,7 +28,9 @@ export abstract class Room<T=any> extends EventEmitter {
   public autoDispose: boolean = true;
 
   public state: T;
-  public options: any;
+
+  // holds a list of clients with clientOptions during handshake 
+  public connectingClients: {[clientId: string]: any} = {}; 
 
   // when a new user connects, it receives the '_previousState', which holds
   // the last binary snapshot other users already have, therefore the patches

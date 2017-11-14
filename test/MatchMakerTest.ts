@@ -194,7 +194,7 @@ describe('MatchMaker', function() {
       });
 
       matchMaker.create('room', {});
-    })
+    });
 
     it('should trigger "dispose" event', (done) => {
       let dummyRoom = matchMaker.create('room', {});
@@ -205,7 +205,7 @@ describe('MatchMaker', function() {
       });
 
       dummyRoom.emit("dispose");
-    })
+    });
 
     it('should trigger "join" event', (done) => {
       let dummyRoom = matchMaker.create('room', {});
@@ -220,7 +220,7 @@ describe('MatchMaker', function() {
       matchMaker.onJoinRoomRequest('room', { clientId: client.id }, true, (err, room) => {
         matchMaker.onJoin (room.roomId, client, () => {});
       });
-    })
+    });
 
     it('should trigger "leave" event', (done) => {
       let dummyRoom = matchMaker.create('room', {});
@@ -235,7 +235,20 @@ describe('MatchMaker', function() {
       matchMaker.onJoinRoomRequest('room', { clientId: client.id }, true, (err, room) => {
         matchMaker.onLeave (client, room);
       });
-    })
+    });
+  });
+
+  describe('onJoinRoomRequest', () => {
+    it('should remove reserved seat after joining the room', (done) => {
+      let client = createDummyClient();
+
+      matchMaker.onJoinRoomRequest('room', { clientId: client.id }, true, (err, room) => {
+        matchMaker.bindClient(client, room.roomId).then((room) => {
+          assert.deepEqual({}, room.connectingClients);
+          done();
+        });
+      });
+    });
   });
 
 });
