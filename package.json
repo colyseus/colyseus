@@ -45,7 +45,7 @@
     "notepack.io": "^2.1.2",
     "shortid": "^2.2.6",
     "url-parse": "^1.2.0",
-    "uws": "8.14.1"
+    "uws": "9.14.0"
   },
   "devDependencies": {
     "@types/sinon": "^4.0.0",
