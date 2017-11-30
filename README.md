@@ -1,7 +1,3 @@
-<a target='_blank' rel='nofollow' href='https://app.codesponsor.io/link/Pa34TYK6ySj3zGr7u124Dgnn/gamestdio/colyseus'>
-  <img alt='Sponsor' width='888' height='68' src='https://app.codesponsor.io/embed/Pa34TYK6ySj3zGr7u124Dgnn/gamestdio/colyseus.svg' />
-</a>
-
 <div align="center">
   <a href="https://github.com/gamestdio/colyseus">
     <img src="media/header.png?raw=true" />
