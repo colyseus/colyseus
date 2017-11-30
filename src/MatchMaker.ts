@@ -240,7 +240,7 @@ export class MatchMaker {
         let numConnectedClients = availableRoom.clients.length + Object.keys(availableRoom.connectingClients).length;
 
         // Check maxClients before requesting to join.
-        if (numConnectedClients > availableRoom.maxClients) {
+        if (numConnectedClients >= availableRoom.maxClients) {
           continue;
         }
 
