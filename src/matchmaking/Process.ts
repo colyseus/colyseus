@@ -1,7 +1,7 @@
-import { createServer } from 'http';
+import * as http from 'http';
 import * as msgpack from "notepack.io";
 import * as memshared from "memshared";
-import { Server as WebSocketServer } from "uws";
+import { Server as WebSocketServer } from "ws";
 
 import { Protocol, decode, send } from "../Protocol";
 import { Client, generateId } from "../";
@@ -9,18 +9,15 @@ import { handleUpgrade, setUserId } from "../cluster/Worker";
 
 import { debugMatchMaking } from "../Debug";
 
-const server = createServer();
+const server = http.createServer();
 server.listen(0, "localhost");
 
 let wss = new WebSocketServer({
   server: server,
   verifyClient: function (info, done) {
-    // console.log("Verify client!", info, done);
     done(true);
   }
 });
-
-// setInterval(() => console.log("MatchMaking connections:", wss.clients.length), 1000);
 
 wss.on('connection', onConnect);
 
@@ -41,7 +38,12 @@ process.on('message', (message, socket) => {
   }
 });
 
-function onConnect (client: Client) {
+function onConnect (client: Client, req?: http.IncomingMessage) {
+  // compatibility with ws@3.x.x / uws
+  if (req) {
+    client.upgradeReq = req;
+  }
+
   setUserId(client);
 
   client.on('message', (message) => {
@@ -87,7 +89,7 @@ function onConnect (client: Client) {
   });
 
   client.on('error', (e) => {
-    console.error("[ERROR]", client, e);
+    console.error("[ERROR]", e);
   });
 }
 

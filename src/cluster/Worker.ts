@@ -4,7 +4,7 @@ import * as http from "http";
 import * as msgpack from "notepack.io";
 import * as parseURL from "url-parse";
 
-import { Server as WebSocketServer } from "uws";
+import { WebSocketServer } from "../ws";
 import { Protocol, send } from "../Protocol";
 import { MatchMaker } from "../MatchMaker";
 import { Client, Room, generateId } from "../";
@@ -42,11 +42,14 @@ export function handleUpgrade (server: http.Server, socket: net.Socket, message:
 }
 
 export function setupWorker (server: net.Server, matchMaker: MatchMaker) {
-  let wss = new WebSocketServer({ server: server as http.Server });
+  let wss = new (WebSocketServer as any)({ server: server });
 
-  // setInterval(() => console.log(`worker ${ process.pid } connections:`, wss.clients.length), 1000);
+  wss.on("connection", (client: Client, req?: http.IncomingMessage) => {
+    // compatibility with ws@3.x.x / uws
+    if (req) {
+      client.upgradeReq = req;
+    }
 
-  wss.on("connection", (client: Client) => {
     setUserId(client);
 
     let roomId = (<any>client.upgradeReq).roomId;

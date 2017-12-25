@@ -4,7 +4,7 @@ import * as memshared from "memshared";
 import * as msgpack from "notepack.io";
 import * as parseURL from "url-parse";
 
-import { Server as WebSocketServer, IServerOptions } from "uws";
+import { WebSocketServer, IServerOptions } from "./ws";
 import { MatchMaker, RegisteredHandler } from "./MatchMaker";
 import { Protocol, send, decode } from "./Protocol";
 import { Client } from "./index";
@@ -29,7 +29,7 @@ export class Server {
 
   attach (options: ServerOptions) {
     if (options.server || options.port) {
-      this.server = new WebSocketServer(options);
+      this.server = new (WebSocketServer as any)(options);
       this.httpServer = options.server;
 
     } else {
@@ -47,11 +47,18 @@ export class Server {
     return this.matchMaker.registerHandler(name, handler, options);
   }
 
-  onConnection = (client: Client) => {
+  onConnection = (client: Client, req?: http.IncomingMessage) => {
+    //
     // TODO: DRY (Worker.ts)
     // ensure URL is parsed.
+    //
+    // compatibility with ws@3.x.x / uws
+    if (req) {
+      client.upgradeReq = req;
+    }
+
     let url = parseURL((<any>client.upgradeReq).url, true);
-    (<any>client.upgradeReq).url = url;
+    client.upgradeReq.url = url;
     (<any>client.upgradeReq).roomId = url.pathname.substr(1);
 
     setUserId(client);

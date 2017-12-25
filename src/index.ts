@@ -1,5 +1,6 @@
-import * as WebSocket from "uws";
+import * as WebSocket from "ws";
 import * as shortid from "shortid";
+import * as http from "http";
 
 // Core classes
 export { Server } from "./Server";
@@ -18,6 +19,7 @@ export function isValidId (id: any) { return shortid.isValid(id); }
 
 // Export 'WebSocket' as 'Client' with 'id' property.
 export type Client = WebSocket & {
+  upgradeReq: http.IncomingMessage; // cross-compatibility for ws (v3.x+) and uws
   id: string;
   sessionId: string;
 };

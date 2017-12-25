@@ -58,7 +58,7 @@ export class MatchMaker {
       });
 
       client.on('close', (_) => this.onLeave(client, room));
-      client.on('error', (e) => console.error("[ERROR]", client.id, e));
+      // client.on('error', (e) => console.error("[ERROR]", client.id, e));
 
     }).catch(err => {
       send(client, [Protocol.JOIN_ERROR, roomId, err]);
