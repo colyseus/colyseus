@@ -40,7 +40,7 @@
     "notepack.io": "^2.1.2",
     "shortid": "^2.2.6",
     "url-parse": "^1.2.0",
-    "ws": "^3.3.3"
+    "ws": "^4.0.0"
   },
   "devDependencies": {
     "@types/uws": "^0.13.1",
