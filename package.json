@@ -1,6 +1,6 @@
 {
   "name": "colyseus",
-  "version": "0.8.3",
+  "version": "0.8.4",
   "description": "Multiplayer Game Server for Node.js.",
   "main": "./lib/index.js",
   "typings": "./lib/index.d.ts",
@@ -54,7 +54,7 @@
     "benchmark": "^2.1.1",
     "express": "^4.16.2",
     "mocha": "2.3.2",
-    "nodemon": "^1.7.1",
+    "nodemon": "^1.14.8",
     "sinon": "^4.0.0",
     "ts-node": "^3.2.0",
     "typescript": "^2.3.2"
@@ -64,7 +64,9 @@
     "ignore": [
       "mocha",
       "ts-node",
+      "nodemon",
       "@types/node",
+      "@types/mocha",
       "typedoc",
       "sinon",
       "benchmark"
