@@ -7,6 +7,7 @@ import * as ip from "ip";
 import { Protocol } from "../Protocol";
 import { spliceOne } from "../Utils";
 import { debugCluster } from "../Debug";
+import { Worker } from "cluster";
 
 const seed = (Math.random() * 0xffffffff) | 0;
 let workers = [];
@@ -17,10 +18,14 @@ export function getNextWorkerForSocket (socket: net.Socket) {
 }
 
 // use the number of CPUs as number of workers.
-export function spawnWorkers (numWorkers: number) {
+export function spawnWorkers (numWorkers: number): Worker[] {
+  let workers: Worker[] = [];
+
   for (var i = 0, len = numWorkers; i < len; i++) {
-    spawnWorker();
+    workers.push(spawnWorker());
   }
+
+  return workers;
 }
 
 export function spawnMatchMaking () {

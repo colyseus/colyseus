@@ -83,7 +83,7 @@ export class ClusterServer {
   }
 
   fork (numWorkers: number = os.cpus().length) {
-    spawnWorkers(numWorkers);
+    return spawnWorkers(numWorkers);
   }
 
   listen (port: number, hostname?: string, backlog?: number, listeningListener?: Function) {

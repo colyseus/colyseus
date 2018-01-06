@@ -88,9 +88,7 @@ function onConnect (client: Client, req?: http.IncomingMessage) {
 
   });
 
-  client.on('error', (e) => {
-    console.error("[ERROR]", e);
-  });
+  client.on('error', (e) => {/*console.error("[ERROR]", e);*/});
 }
 
 function broadcastJoinRoomRequest (availableWorkerIds: string[], client: Client, roomName: string, joinOptions: any) {
