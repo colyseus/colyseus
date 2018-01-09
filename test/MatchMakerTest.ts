@@ -86,6 +86,7 @@ describe('MatchMaker', function() {
       assert.ok(spy.calledOnce);
       assert.equal(null, room);
       stub.restore();
+      spy.restore();
       done();
     });
 
@@ -176,12 +177,39 @@ describe('MatchMaker', function() {
 
       matchMaker.onJoinRoomRequest('room_verify_client', { clientId: client.id }, true, (err, room) => {
         matchMaker.bindClient(client, room.roomId).then((room) => {
+          assert.equal(1, room.clients.length);
           assert.ok(room instanceof Room);
           done();
 
         }).catch(err => {
           throw new Error("this promise shouldn't fail");
         });
+      });
+    });
+
+    it('should handle leaving room before onJoin is fulfiled.', (done) => {
+      const onDisposeSpy = sinon.spy(RoomVerifyClient.prototype, 'onDispose');
+
+      RoomVerifyClient.prototype.verifyClient = () => new Promise((resolve, reject) => {
+        setTimeout(() => resolve(), 100);
+      });
+
+      let client = createDummyClient();
+
+      matchMaker.onJoinRoomRequest('room_verify_client', { clientId: client.id }, true, (err, room) => {
+        matchMaker.bindClient(client, room.roomId).then((room) => {
+          throw new Error("this promise shouldn't succeed");
+
+        }).catch(err => {
+          assert.equal(0, room.clients.length);
+          assert.deepEqual({}, matchMaker.sessions);
+          assert.ok(onDisposeSpy.calledOnce);
+          onDisposeSpy.restore();
+
+          done();
+        });
+
+        client.emit('close');
       });
     });
   });
@@ -233,7 +261,7 @@ describe('MatchMaker', function() {
 
       let client = createDummyClient();
       matchMaker.onJoinRoomRequest('room', { clientId: client.id }, true, (err, room) => {
-        matchMaker.onLeave (client, room);
+        matchMaker.onLeave (client, room.roomId);
       });
     });
   });

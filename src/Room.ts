@@ -29,8 +29,8 @@ export abstract class Room<T=any> extends EventEmitter {
 
   public state: T;
 
-  // holds a list of clients with clientOptions during handshake 
-  public connectingClients: {[clientId: string]: any} = {}; 
+  // holds a list of clients with clientOptions during handshake
+  public connectingClients: {[clientId: string]: any} = {};
 
   // when a new user connects, it receives the '_previousState', which holds
   // the last binary snapshot other users already have, therefore the patches
@@ -212,13 +212,13 @@ export abstract class Room<T=any> extends EventEmitter {
   private _onLeave (client: Client, isDisconnect: boolean = false): void | Promise<any> {
     let userReturnData;
 
-    // Remove client from client list
-    if (!spliceOne(this.clients, this.clients.indexOf(client))) {
-      // skip if the client already left.
-      return;
-    }
-
-    if (this.onLeave) {
+    //
+    // call abstract 'onLeave' method only if the client has been successfully accepted.
+    //
+    // the '_onLeave' method may be called before 'verifyClient' succeeds,
+    // before the client is appended to `this.clients`
+    //
+    if (spliceOne(this.clients, this.clients.indexOf(client)) && this.onLeave) {
       userReturnData = this.onLeave(client);
     }
 

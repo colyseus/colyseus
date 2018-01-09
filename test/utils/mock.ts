@@ -3,17 +3,22 @@
 import { EventEmitter } from "events";
 import * as shortid from "shortid";
 import * as msgpack from "notepack.io";
-import * as WebSocket from "uws";
+import WebSocket from "../../src/ws";
 import { Room } from "../../src/Room";
 
 export class Client extends EventEmitter {
 
   public id: string;
   public messages: Array<any> = [];
+  public readyState: number = WebSocket.OPEN;
 
   constructor (id?: string) {
     super();
     this.id = id || null;
+
+    this.on('close', () => {
+      this.readyState = WebSocket.CLOSED
+    });
   }
 
   send (message) {

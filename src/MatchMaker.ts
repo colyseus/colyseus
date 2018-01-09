@@ -1,4 +1,5 @@
 import * as memshared from "memshared";
+import WebSocket from "./ws";
 import * as msgpack from "notepack.io";
 import * as EventEmitter from "events";
 
@@ -49,6 +50,10 @@ export class MatchMaker {
   public bindClient (client: Client, roomId: string) {
     let roomPromise = this.onJoin(roomId, client);
 
+    // register 'close' event early on. the client might disconnect before
+    // successfully joining the requested room
+    client.on('close', (_) => this.onLeave(client, roomId));
+
     roomPromise.then(room => {
       client.on('message', (message) => {
         if (!(message = decode(message))) {
@@ -57,7 +62,6 @@ export class MatchMaker {
         this.execute(client, message);
       });
 
-      client.on('close', (_) => this.onLeave(client, room));
       client.on('error', (e) => {/*console.error("[ERROR]", client.id, e)*/});
 
     }).catch(err => {
@@ -147,6 +151,13 @@ export class MatchMaker {
         }
 
         isVerified.then(() => {
+          //
+          // client may have disconnected before 'verifyClient' is complete
+          //
+          if (client.readyState !== WebSocket.OPEN) {
+            return reject("client already disconnected");
+          }
+
           (<any>room)._onJoin(client, clientOptions);
           room.once('leave', this.onClientLeaveRoom.bind(this, room));
 
@@ -177,7 +188,9 @@ export class MatchMaker {
     });
   }
 
-  public onLeave (client: Client, room: Room) {
+  public onLeave (client: Client, roomId: string) {
+    let room = this.roomsById[roomId];
+
     (<any>room)._onLeave(client, true);
 
     // emit 'leave' on registered handler
