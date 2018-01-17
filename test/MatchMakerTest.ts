@@ -3,7 +3,7 @@ import * as sinon from 'sinon';
 import { MatchMaker } from "../src/MatchMaker";
 import { Room } from "../src/Room";
 import { generateId, Protocol } from "../src";
-import { createDummyClient, DummyRoom, RoomVerifyClient, Client } from "./utils/mock";
+import { createDummyClient, DummyRoom, RoomVerifyClient, Client, RoomVerifyClientWithLock } from "./utils/mock";
 
 
 process.on('unhandledRejection', (reason, promise) => {
@@ -19,6 +19,7 @@ describe('MatchMaker', function() {
     matchMaker.registerHandler('dummy_room', DummyRoom);
     matchMaker.registerHandler('room_with_default_options', DummyRoom, { level: 1 });
     matchMaker.registerHandler('room_verify_client', RoomVerifyClient);
+    matchMaker.registerHandler('room_verify_client_with_lock', RoomVerifyClientWithLock);
   });
 
   describe('room handlers', function() {
@@ -212,6 +213,36 @@ describe('MatchMaker', function() {
         client.emit('close');
       });
     });
+
+    xit('shouldn\'t accept second client when room is locked after first one', (done) => {
+      let client = createDummyClient();
+
+      matchMaker.onJoinRoomRequest('room_verify_client_with_lock', { clientId: client.id }, true, (err, room) => {
+        matchMaker.bindClient(client, room.roomId).then((room) => {
+          assert.equal(1, room.clients.length);
+          assert.ok(room instanceof Room);
+
+        }).catch(err => {
+          throw new Error("this promise shouldn't fail");
+        });
+      });
+
+      // try to join with a second client when the room will be locked
+      setTimeout(() => {
+        let client = createDummyClient();
+        matchMaker.onJoinRoomRequest('room_verify_client_with_lock', { clientId: client.id }, true, (err, room) => {
+          matchMaker.bindClient(client, room.roomId).then((room) => {
+            assert.equal(1, room.clients.length);
+            assert.ok(room instanceof Room);
+            done();
+
+          }).catch(err => {
+            throw new Error("this promise shouldn't fail");
+          });
+        });
+      }, 10);
+
+    });
   });
 
   describe('registered handler events', () => {
@@ -272,8 +303,10 @@ describe('MatchMaker', function() {
 
       matchMaker.onJoinRoomRequest('room', { clientId: client.id }, true, (err, room) => {
         matchMaker.bindClient(client, room.roomId).then((room) => {
-          assert.deepEqual({}, room.connectingClients);
-          done();
+          setTimeout(() => {
+            assert.deepEqual({}, room.connectingClients);
+            done();
+          }, 5);
         });
       });
     });

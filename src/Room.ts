@@ -61,7 +61,7 @@ export abstract class Room<T=any> extends EventEmitter {
     return 1;
   }
 
-  public verifyClient (client: Client, options: any): boolean | Promise<boolean> {
+  public verifyClient (client: Client, options: any): boolean | Promise<any> {
     return Promise.resolve(true);
   }
 

@@ -106,3 +106,18 @@ export class RoomVerifyClient extends DummyRoom {
   patchRate = 5000;
 
 }
+
+export class RoomVerifyClientWithLock extends DummyRoom {
+  patchRate = 5000;
+
+  async verifyClient () {
+    return new Promise((resolve, reject) => {
+      setTimeout(() => resolve(true), 100);
+    });
+  }
+
+  onJoin () {
+    this.lock();
+  }
+
+}
