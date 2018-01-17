@@ -140,7 +140,6 @@ export class MatchMaker {
         // clean temporary data
         delete clientOptions.sessionId;
         delete clientOptions.clientId;
-        delete room.connectingClients[client.id];
 
         let isVerified = room.verifyClient(client, clientOptions);
 
@@ -176,6 +175,10 @@ export class MatchMaker {
           room._disposeIfEmpty();
 
           reject(err);
+
+        }).then(() => {
+          // clean reserved seat only after verifyClient succeeds
+          delete room.connectingClients[client.id];
         });
 
       } else {
