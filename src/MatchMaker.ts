@@ -149,7 +149,22 @@ export class MatchMaker {
             : Promise.reject(undefined);
         }
 
-        isVerified.then(() => {
+        const onVerifyFailure = (err?: string) => {
+          err = err || "verifyClient failed.";
+
+          debugMatchMaking(`JOIN_ERROR: ${err} (roomId: %s, clientOptions: %j)`, roomId, clientOptions);
+
+          room._disposeIfEmpty();
+
+          reject(err);
+        }
+
+        isVerified.then((result) => {
+          //
+          // promise returned falsy value
+          //
+          if (result === false) { return onVerifyFailure(); }
+
           //
           // client may have disconnected before 'verifyClient' is complete
           //
@@ -167,16 +182,7 @@ export class MatchMaker {
 
           resolve(room);
 
-        }).catch((err) => {
-          err = err || "verifyClient failed.";
-
-          debugMatchMaking(`JOIN_ERROR: ${err} (roomId: %s, clientOptions: %j)`, roomId, clientOptions);
-
-          room._disposeIfEmpty();
-
-          reject(err);
-
-        }).then(() => {
+        }).catch(onVerifyFailure).then(() => {
           // clean reserved seat only after verifyClient succeeds
           delete room.connectingClients[client.id];
         });

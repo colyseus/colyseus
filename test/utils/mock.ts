@@ -104,7 +104,7 @@ export class DummyRoomWithTimeline extends Room {
 
 export class RoomVerifyClient extends DummyRoom {
   patchRate = 5000;
-
+  onJoin () {}
 }
 
 export class RoomVerifyClientWithLock extends DummyRoom {

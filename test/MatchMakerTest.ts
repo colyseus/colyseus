@@ -164,7 +164,7 @@ describe('MatchMaker', function() {
           done();
 
         }).catch(err => {
-          throw new Error("this promise shouldn't fail");
+          throw new Error(err);
         });
       });
     });
@@ -183,7 +183,7 @@ describe('MatchMaker', function() {
           done();
 
         }).catch(err => {
-          throw new Error("this promise shouldn't fail");
+          throw new Error(err);
         });
       });
     });
