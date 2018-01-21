@@ -9,7 +9,6 @@
         "sourceMap": false
     },
     "include": [
-      "src/**/*.ts",
-      "usage/**/*.ts",
+      "src/**/*.ts"
     ]
 }
