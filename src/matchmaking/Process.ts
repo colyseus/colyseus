@@ -44,6 +44,10 @@ function onConnect (client: Client, req?: http.IncomingMessage) {
     client.upgradeReq = req;
   }
 
+  // since ws@3.3.3 it's required to listen to 'error' to prevent server crash
+  // https://github.com/websockets/ws/issues/1256
+  client.on('error', (e) => {/*console.error("[ERROR]", e);*/ });
+
   setUserId(client);
 
   client.on('message', (message) => {
@@ -87,8 +91,6 @@ function onConnect (client: Client, req?: http.IncomingMessage) {
     });
 
   });
-
-  client.on('error', (e) => {/*console.error("[ERROR]", e);*/});
 }
 
 function broadcastJoinRoomRequest (availableWorkerIds: string[], client: Client, roomName: string, joinOptions: any) {

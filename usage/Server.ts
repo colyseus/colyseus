@@ -28,6 +28,16 @@ app.get("/something", (req, res) => {
   res.send("Hey!");
 });
 
+gameServer.onShutdown(() => {
+  console.log("CUSTOM SHUTDOWN ROUTINE: STARTED");
+  return new Promise((resolve, reject) => {
+    setTimeout(() => {
+      console.log("CUSTOM SHUTDOWN ROUTINE: FINISHED");
+      resolve();
+    }, 1000);
+  })
+});
+
 gameServer.listen(port);
 
 console.log(`Listening on http://${ endpoint }:${ port }`)

@@ -6,8 +6,9 @@ import * as http from "http";
 import * as os from "os";
 import * as parseURL from "url-parse";
 
-import { spawnWorkers, spawnMatchMaking, getNextWorkerForSocket } from "./cluster/Master";
+import { spawnWorkers, spawnMatchMaking, getNextWorkerForSocket, onWorkersShutdown } from "./cluster/Master";
 import { setupWorker } from "./cluster/Worker";
+import { registerGracefulShutdown } from "./Utils";
 import { Protocol } from "./Protocol";
 import { MatchMaker, RegisteredHandler } from "./MatchMaker";
 import { generateId } from "./";
@@ -28,14 +29,26 @@ export class ClusterServer {
   // child process attributes
   protected matchMaker: MatchMaker;
 
+  protected _onShutdown: () => void | Promise<any> = () => Promise.resolve();
+
   constructor (options: ClusterOptions = {}) {
     if (cluster.isMaster) {
        debugCluster(`master spawned with pid ${ process.pid }`);
 
        this.matchMakingWorker = spawnMatchMaking();
        cache['matchmaking_process'] = this.matchMakingWorker.pid;
-
        debugCluster(`matchmaking spawned with pid ${ this.matchMakingWorker.pid }`);
+
+       registerGracefulShutdown((signal) => {
+         this.server.removeAllListeners();
+         this.matchMakingWorker.removeAllListeners();
+         this.matchMakingWorker.kill(signal)
+
+         onWorkersShutdown.
+           then(() => this._onShutdown()).
+           catch((e) => console.error("ERROR:", e)).
+           then(() => process.exit());
+      });
 
        this.server = options.server || http.createServer();
        this.server.on('connection', (socket) => {
@@ -79,6 +92,13 @@ export class ClusterServer {
 
     if (cluster.isWorker) {
       this.matchMaker = new MatchMaker();
+
+      registerGracefulShutdown((signal) => {
+        this.matchMaker.gracefullyShutdown().
+          then(() => this._onShutdown()).
+          catch((err) => console.log("ERROR!", err)).
+          then(() => process.kill(process.pid, signal));
+      });
     }
   }
 
@@ -114,6 +134,10 @@ export class ClusterServer {
           this.server = setupWorker(server, this.matchMaker);
       });
     }
+  }
+
+  onShutdown (callback: () => void | Promise<any>) {
+    this._onShutdown = callback;
   }
 
 }

@@ -1,3 +1,35 @@
+//
+// nodemon sends SIGUSR2 before reloading
+// (https://github.com/remy/nodemon#controlling-shutdown-of-your-script)
+//
+export function registerGracefulShutdown (callback) {
+  let calledOnce = false;
+  ['SIGINT', 'SIGTERM', 'SIGUSR2'].forEach(signal => {
+    process.once(signal, () => callback(signal));
+  });
+}
+
+export class Deferred {
+  promise: Promise<any>;
+
+  reject: Function;
+  resolve: Function;
+
+  constructor() {
+    this.promise = new Promise((resolve, reject) => {
+      this.resolve = resolve;
+      this.reject = reject;
+    });
+  }
+
+  then (func: (value: any) => any) {
+    return this.promise.then(func);
+  }
+
+  catch (func: (value: any) => any) {
+    return this.promise.catch(func);
+  }
+}
 
 export function spliceOne (arr: Array<any>, index: number): boolean {
   // manually splice availableRooms array

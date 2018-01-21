@@ -1,9 +1,9 @@
 import * as memshared from "memshared";
-import WebSocket from "./ws";
 import * as msgpack from "notepack.io";
 import * as EventEmitter from "events";
+import WebSocket from "./ws";
 
-import { merge, spliceOne } from "./Utils";
+import { merge, spliceOne, registerGracefulShutdown } from "./Utils";
 import { Client, Room, generateId, isValidId } from "./index";
 import { Protocol, decode, send } from "./Protocol";
 
@@ -36,16 +36,7 @@ export class MatchMaker {
 
   // room references by client id
   protected sessions: {[sessionId: string]: Room} = {};
-
-  constructor () {
-    //
-    // nodemon sends SIGUSR2 before reloading
-    // (https://github.com/remy/nodemon#controlling-shutdown-of-your-script)
-    //
-    ['SIGINT', 'SIGTERM', 'SIGUSR2'].forEach(signal => {
-      process.once(signal, () => this.gracefullyShutdown(signal));
-    });
-  }
+  protected isGracefullyShuttingDown: boolean = false;
 
   public bindClient (client: Client, roomId: string) {
     let roomPromise = this.onJoin(roomId, client);
@@ -54,6 +45,10 @@ export class MatchMaker {
     // successfully joining the requested room
     client.on('close', (_) => this.onLeave(client, roomId));
 
+    // since ws@3.3.3 it's required to listen to 'error' to prevent server crash
+    // https://github.com/websockets/ws/issues/1256
+    client.on('error', (e) => {/*console.error("[ERROR]", e);*/ });
+
     roomPromise.then(room => {
       client.on('message', (message) => {
         if (!(message = decode(message))) {
@@ -61,8 +56,6 @@ export class MatchMaker {
         }
         this.execute(client, message);
       });
-
-      client.on('error', (e) => {/*console.error("[ERROR]", client.id, e)*/});
 
     }).catch(err => {
       send(client, [Protocol.JOIN_ERROR, roomId, err]);
@@ -199,6 +192,11 @@ export class MatchMaker {
 
   public onLeave (client: Client, roomId: string) {
     let room = this.roomsById[roomId];
+    if (!room) {
+      // TODO: when gracefully shutting down, _onLeave is called manually per client,
+      // and the room may not exist anymore when receiving the 'close' event.
+      return;
+    }
 
     (<any>room)._onLeave(client, true);
 
@@ -366,7 +364,13 @@ export class MatchMaker {
     this.lockRoom(roomName, room)
   }
 
-  private gracefullyShutdown (signal: string) {
+  public gracefullyShutdown () {
+    if (this.isGracefullyShuttingDown) {
+      return Promise.reject(false);
+    }
+
+    this.isGracefullyShuttingDown = true;
+
     let promises = [];
 
     for (let roomId in this.roomsById) {
@@ -382,7 +386,7 @@ export class MatchMaker {
       room.emit('dispose');
     }
 
-    Promise.all(promises).then(() => process.kill(process.pid, signal));
+    return Promise.all(promises);
   }
 
 }

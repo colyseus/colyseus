@@ -10,6 +10,7 @@ import { Protocol, send, decode } from "./Protocol";
 import { Client } from "./index";
 import { handleUpgrade, setUserId } from "./cluster/Worker";
 import { Room } from "./Room";
+import { registerGracefulShutdown } from "./Utils";
 
 export type ServerOptions = IServerOptions & {
   ws?: WebSocketServer
@@ -20,8 +21,16 @@ export class Server {
   protected httpServer: net.Server | http.Server;
 
   protected matchMaker: MatchMaker = new MatchMaker();
+  protected _onShutdown: () => void | Promise<any> = () => Promise.resolve();
 
   constructor (options?: ServerOptions) {
+    registerGracefulShutdown((signal) => {
+      this.matchMaker.gracefullyShutdown().
+        then(() => this._onShutdown()).
+        catch((err) => console.log("ERROR!", err)).
+        then(() => process.exit());
+    });
+
     if (options.server) {
       this.attach({ server: options.server as http.Server });
     }
@@ -47,6 +56,10 @@ export class Server {
     return this.matchMaker.registerHandler(name, handler, options);
   }
 
+  onShutdown (callback: () => void | Promise<any>) {
+    this._onShutdown = callback;
+  }
+
   onConnection = (client: Client, req?: http.IncomingMessage) => {
     //
     // TODO: DRY (Worker.ts)
@@ -70,6 +83,10 @@ export class Server {
 
     } else {
       client.on("message",  this.onMessageMatchMaking.bind(this, client));
+
+      // since ws@3.3.3 it's required to listen to 'error' to prevent server crash
+      // https://github.com/websockets/ws/issues/1256
+      client.on('error', (e) => {/*console.error("[ERROR]", e);*/ });
     }
   }
 

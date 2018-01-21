@@ -7,7 +7,10 @@ export class ChatRoom extends Room<any> {
   }
 
   onJoin (client, options) {
-    console.log("client has joined!", client, options);
+    console.log("client has joined!");
+    console.log("client.id:", client.id);
+    console.log("client.sessionId:", client.sessionId);
+    console.log("with options", options);
     this.state.messages.push(`${ client.id } joined.`);
   }
 
@@ -26,7 +29,15 @@ export class ChatRoom extends Room<any> {
   }
 
   onDispose () {
-    console.log("Dispose ChatRoom");
+    console.log("Disposing ChatRoom...");
+
+    // perform async tasks to disconnect all players
+    return new Promise((resolve, reject) => {
+      setTimeout(() => {
+        console.log("async task finished, let's dispose the room now!")
+        reject();
+      }, 2000);
+    });
   }
 
 }

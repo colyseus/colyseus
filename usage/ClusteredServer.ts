@@ -13,8 +13,20 @@ if (cluster.isMaster) {
   gameServer.listen(PORT);
   gameServer.fork();
 
+  gameServer.onShutdown(() => {
+    console.log("CUSTOM SHUTDOWN ROUTINE MASTER: STARTED");
+    return new Promise((resolve, reject) => {
+      setTimeout(() => {
+        console.log("CUSTOM SHUTDOWN ROUTINE MASTER: FINISHED");
+        resolve();
+      }, 1000);
+    })
+  });
+
 } else {
   const app = new express();
+
+  app.on("close", () => console.log("express close!"));
 
   app.get("/something", (req, res) => {
     console.log("something!", process.pid);
@@ -28,6 +40,16 @@ if (cluster.isMaster) {
     on("join", (room, client) => console.log("client", client.id, "joined", room.roomId)).
     on("leave", (room, client) => console.log("client", client.id, "left", room.roomId)).
     on("dispose", (room) => console.log("room disposed!", room.roomId));
+
+  gameServer.onShutdown(() => {
+    console.log("CUSTOM SHUTDOWN WORKER: STARTED");
+    return new Promise((resolve, reject) => {
+      setTimeout(() => {
+        console.log("CUSTOM SHUTDOWN WORKER: FINISHED");
+        resolve();
+      }, 1000);
+    })
+  });
 
   // Create HTTP Server
   gameServer.attach({ server: app });
