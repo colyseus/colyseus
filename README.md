@@ -63,6 +63,20 @@ usage reference with the latest version of Colyseus.
 - (outdated: v0.3.x) [LD35 entry: dotower](http://ludumdare.com/compo/ludum-dare-35/?action=preview&uid=50958) ([source-code](https://github.com/endel/LD35)) - Simple experimental MOBA using [pixi.js](https://github.com/pixijs/pixi.js)
 - (outdated: v0.4.x) [React Example](https://colyseus-react-example.herokuapp.com) ([source-code](https://github.com/endel/colyseus-react-example)) - Example integrating with [ReactJS](https://github.com/facebook/react)
 
+# Contributors
+
+Thanks goes to these wonderful people ([emoji key](https://github.com/kentcdodds/all-contributors#emoji-key)):
+
+<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<!-- prettier-ignore -->
+| [<img src="https://avatars3.githubusercontent.com/u/130494?v=4" width="100px;"/><br /><sub><b>Endel Dreyer</b></sub>](https://twitter.com/endel)<br />[💻](https://github.com/endel/all-contributors/commits?author=endel "Code") [📖](https://github.com/endel/all-contributors/commits?author=endel "Documentation") [💡](#example-endel "Examples") | [<img src="https://avatars2.githubusercontent.com/u/20824844?v=4" width="100px;"/><br /><sub><b>AnubisCode</b></sub>](https://github.com/AnubisCode)<br />[🐛](https://github.com/endel/all-contributors/issues?q=author%3AAnubisCode "Bug reports") [💻](https://github.com/endel/all-contributors/commits?author=AnubisCode "Code") [💵](#financial-AnubisCode "Financial") | [<img src="https://avatars0.githubusercontent.com/u/763609?v=4" width="100px;"/><br /><sub><b>Kyle J. Kemp</b></sub>](http://seiyria.com)<br />[💬](#question-seiyria "Answering Questions") [🐛](https://github.com/endel/all-contributors/issues?q=author%3Aseiyria "Bug reports") [💻](https://github.com/endel/all-contributors/commits?author=seiyria "Code") [🤔](#ideas-seiyria "Ideas, Planning, & Feedback") | [<img src="https://avatars1.githubusercontent.com/u/1041315?v=4" width="100px;"/><br /><sub><b>Abhishek Hingnikar</b></sub>](https://github.com/darkyen)<br />[💬](#question-darkyen "Answering Questions") [🐛](https://github.com/endel/all-contributors/issues?q=author%3Adarkyen "Bug reports") [🤔](#ideas-darkyen "Ideas, Planning, & Feedback") [👀](#review-darkyen "Reviewed Pull Requests") | [<img src="https://avatars2.githubusercontent.com/u/21344385?v=4" width="100px;"/><br /><sub><b>Federico</b></sub>](https://twitter.com/Federkun)<br />[🐛](https://github.com/endel/all-contributors/issues?q=author%3AFederkun "Bug reports") [💻](https://github.com/endel/all-contributors/commits?author=Federkun "Code") | [<img src="https://avatars0.githubusercontent.com/u/853683?v=4" width="100px;"/><br /><sub><b>OYED</b></sub>](https://oyed.io)<br />[🐛](https://github.com/endel/all-contributors/issues?q=author%3Aoyed "Bug reports") [💵](#financial-oyed "Financial") [🤔](#ideas-oyed "Ideas, Planning, & Feedback") | [<img src="https://avatars0.githubusercontent.com/u/13785893?v=4" width="100px;"/><br /><sub><b>Derwish</b></sub>](https://github.com/derwish-pro)<br />[🐛](https://github.com/endel/all-contributors/issues?q=author%3Aderwish-pro "Bug reports") [🔧](#tool-derwish-pro "Tools") |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| [<img src="https://avatars2.githubusercontent.com/u/2755221?v=4" width="100px;"/><br /><sub><b>VF</b></sub>](https://github.com/havingfunq)<br />[🐛](https://github.com/endel/all-contributors/issues?q=author%3Ahavingfunq "Bug reports") [🤔](#ideas-havingfunq "Ideas, Planning, & Feedback") |
+<!-- ALL-CONTRIBUTORS-LIST:END -->
+
+This project follows the [all-contributors][https://github.com/kentcdodds/all-contributors] specification.
+Contributions of any kind are welcome!
+
 # Contributing
 
 We encourage you to contribute to Colyseus! Please check out the [Contributing

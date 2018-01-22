@@ -42,7 +42,7 @@ export class ClusterServer {
        registerGracefulShutdown((signal) => {
          this.server.removeAllListeners();
          this.matchMakingWorker.removeAllListeners();
-         this.matchMakingWorker.kill(signal)
+         this.matchMakingWorker.kill(signal);
 
          onWorkersShutdown.
            then(() => this._onShutdown()).
