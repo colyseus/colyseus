@@ -74,7 +74,7 @@ Thanks goes to these wonderful people ([emoji key](https://github.com/kentcdodds
 | [<img src="https://avatars2.githubusercontent.com/u/2755221?v=4" width="100px;"/><br /><sub><b>VF</b></sub>](https://github.com/havingfunq)<br />[🐛](https://github.com/endel/all-contributors/issues?q=author%3Ahavingfunq "Bug reports") [🤔](#ideas-havingfunq "Ideas, Planning, & Feedback") |
 <!-- ALL-CONTRIBUTORS-LIST:END -->
 
-This project follows the [all-contributors][https://github.com/kentcdodds/all-contributors] specification.
+This project follows the [all-contributors](https://github.com/kentcdodds/all-contributors) specification.
 Contributions of any kind are welcome!
 
 # Contributing
