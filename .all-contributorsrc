@@ -1,0 +1,99 @@
+{
+  "projectName": "all-contributors",
+  "projectOwner": "endel",
+  "files": [
+    "README.md"
+  ],
+  "imageSize": 100,
+  "commit": false,
+  "contributors": [
+    {
+      "login": "endel",
+      "name": "Endel Dreyer",
+      "avatar_url": "https://avatars3.githubusercontent.com/u/130494?v=4",
+      "profile": "https://twitter.com/endel",
+      "contributions": [
+        "code",
+        "doc",
+        "example"
+      ]
+    },
+    {
+      "login": "AnubisCode",
+      "name": "AnubisCode",
+      "avatar_url": "https://avatars2.githubusercontent.com/u/20824844?v=4",
+      "profile": "https://github.com/AnubisCode",
+      "contributions": [
+        "bug",
+        "code",
+        "financial",
+        "ideas"
+      ]
+    },
+    {
+      "login": "seiyria",
+      "name": "Kyle J. Kemp",
+      "avatar_url": "https://avatars0.githubusercontent.com/u/763609?v=4",
+      "profile": "http://seiyria.com",
+      "contributions": [
+        "question",
+        "bug",
+        "code",
+        "ideas"
+      ]
+    },
+    {
+      "login": "darkyen",
+      "name": "Abhishek Hingnikar",
+      "avatar_url": "https://avatars1.githubusercontent.com/u/1041315?v=4",
+      "profile": "https://github.com/darkyen",
+      "contributions": [
+        "question",
+        "bug",
+        "ideas",
+        "review"
+      ]
+    },
+    {
+      "login": "Federkun",
+      "name": "Federico",
+      "avatar_url": "https://avatars2.githubusercontent.com/u/21344385?v=4",
+      "profile": "https://twitter.com/Federkun",
+      "contributions": [
+        "bug",
+        "code"
+      ]
+    },
+    {
+      "login": "oyed",
+      "name": "OYED",
+      "avatar_url": "https://avatars0.githubusercontent.com/u/853683?v=4",
+      "profile": "https://oyed.io",
+      "contributions": [
+        "bug",
+        "financial",
+        "ideas"
+      ]
+    },
+    {
+      "login": "derwish-pro",
+      "name": "Derwish",
+      "avatar_url": "https://avatars0.githubusercontent.com/u/13785893?v=4",
+      "profile": "https://github.com/derwish-pro",
+      "contributions": [
+        "bug",
+        "tool"
+      ]
+    },
+    {
+      "login": "havingfunq",
+      "name": "VF",
+      "avatar_url": "https://avatars2.githubusercontent.com/u/2755221?v=4",
+      "profile": "https://github.com/havingfunq",
+      "contributions": [
+        "bug",
+        "ideas"
+      ]
+    }
+  ]
+}
