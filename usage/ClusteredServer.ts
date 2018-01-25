@@ -1,6 +1,7 @@
 import * as cluster from "cluster";
 import * as path from 'path';
 import * as express from 'express';
+import * as bodyParser from "body-parser";
 
 import { ClusterServer } from "../src/ClusterServer";
 import { ChatRoom } from "./ChatRoom";
@@ -26,11 +27,19 @@ if (cluster.isMaster) {
 } else {
   const app = new express();
 
+  app.use(bodyParser.json());
+
   app.on("close", () => console.log("express close!"));
 
   app.get("/something", (req, res) => {
     console.log("something!", process.pid);
+    console.log("GET /something")
     res.send("Hey!");
+  });
+
+  app.post("/something", (req, res) => {
+    console.log("POST /something")
+    res.json(req.body);
   });
 
   // Register ChatRoom as "chat"
