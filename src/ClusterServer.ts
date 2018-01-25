@@ -58,16 +58,21 @@ export class ClusterServer {
        this.server.on('request', (request, response) => {
          let socket = request.connection;
          let worker = getNextWorkerForSocket(socket);
-         let body = [];
+         let bodyChunks = [];
 
          request.on('data', (chunk) => {
-           body.push(chunk);
+           bodyChunks.push(chunk);
 
          }).on('end', () => {
+           let body = Buffer.concat(bodyChunks).toString();
+
+           // content-length might have changed.
+           request.headers['content-length'] = body.length;
+
            worker.send([Protocol.PASS_HTTP_SOCKET, {
              url: request.url,
              headers: request.headers,
-             body: Buffer.concat(body).toString(),
+             body: body,
              method: request.method,
            }], socket);
          });

@@ -1,5 +1,6 @@
 import * as http from "http";
 import * as express from "express";
+import * as bodyParser from "body-parser";
 
 import { Server } from "../src/Server";
 import { ChatRoom } from "./ChatRoom";
@@ -8,6 +9,7 @@ const port = 8080;
 const endpoint = "localhost";
 
 const app = express();
+app.use(bodyParser.json());
 
 // Create HTTP & WebSocket servers
 const server = http.createServer(app);
@@ -23,9 +25,16 @@ gameServer.register("chat", ChatRoom).
 
 app.use(express.static(__dirname));
 
+
 app.get("/something", (req, res) => {
   console.log("something!", process.pid);
+  console.log("GET /something")
   res.send("Hey!");
+});
+
+app.post("/something", (req, res) => {
+  console.log("POST /something")
+  res.json(req.body);
 });
 
 gameServer.onShutdown(() => {
