@@ -1,6 +1,6 @@
 import * as assert from 'assert';
 import * as sinon from 'sinon';
-import { MatchMaker } from "../src/MatchMaker";
+import { MatchMaker, RegisteredHandler } from "../src/MatchMaker";
 import { Room } from "../src/Room";
 import { generateId, Protocol } from "../src";
 import { createDummyClient, DummyRoom, RoomVerifyClient, Client, RoomVerifyClientWithLock } from "./utils/mock";
@@ -12,10 +12,12 @@ process.on('unhandledRejection', (reason, promise) => {
 
 describe('MatchMaker', function() {
   let matchMaker;
+  let roomRegisteredHandler: RegisteredHandler;
 
   beforeEach(() => {
     matchMaker = new MatchMaker();
-    matchMaker.registerHandler('room', DummyRoom);
+
+    roomRegisteredHandler = matchMaker.registerHandler('room', DummyRoom);
     matchMaker.registerHandler('dummy_room', DummyRoom);
     matchMaker.registerHandler('room_with_default_options', DummyRoom, { level: 1 });
     matchMaker.registerHandler('room_verify_client', RoomVerifyClient);
@@ -23,7 +25,6 @@ describe('MatchMaker', function() {
   });
 
   describe('room handlers', function() {
-
     it('should add handler with name', function() {
       assert.ok(matchMaker.hasHandler('room'));
       assert.equal(false, matchMaker.hasAvailableRoom('room'));
@@ -279,6 +280,30 @@ describe('MatchMaker', function() {
       matchMaker.onJoinRoomRequest('room', { clientId: client.id }, true, (err, room) => {
         matchMaker.onJoin (room.roomId, client, () => {});
       });
+    });
+
+    it('should trigger "lock" event', (done) => {
+      matchMaker.handlers["room"].on("lock", (room) => done());
+      matchMaker.handlers["room"].on("create", (room) => room.lock());
+      matchMaker.create('room', {});
+    });
+
+    it('should trigger "unlock" event', (done) => {
+      matchMaker.handlers["room"].on("unlock", (room) => done());
+      matchMaker.handlers["room"].on("create", (room) => {
+        room.lock();
+        room.unlock();
+      });
+      matchMaker.create('room', {});
+    });
+
+    it('should\'nt trigger "unlock" if room hasn\'t been locked before', (done) => {
+      matchMaker.handlers["room"].on("unlock", (room) => {
+        throw new Error("shouldn't trigger 'unlock' event here");
+      });
+      matchMaker.handlers["room"].on("create", (room) => room.unlock());
+      setTimeout(() => done(), 100);
+      matchMaker.create('room', {});
     });
 
     it('should trigger "leave" event', (done) => {

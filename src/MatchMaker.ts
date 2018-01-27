@@ -204,7 +204,7 @@ export class MatchMaker {
     this.handlers[room.roomName].emit("leave", room, client);
   }
 
-  private onClientLeaveRoom = (room: Room, client: Client, isDisconnect: boolean): boolean => {
+  private onClientLeaveRoom (room: Room, client: Client, isDisconnect: boolean): boolean {
     if (isDisconnect) {
       return true;
     }
@@ -297,8 +297,6 @@ export class MatchMaker {
 
     // imediatelly ask client to join the room
     if ( room.requestJoin(clientOptions) ) {
-      registeredHandler.emit("create", room);
-
       debugMatchMaking("spawning '%s' on worker %d", roomName, process.pid);
 
       room.on('lock', this.lockRoom.bind(this, roomName, room));
@@ -308,7 +306,9 @@ export class MatchMaker {
       this.roomsById[ room.roomId ] = room;
 
       // room always start unlocked
-      this.unlockRoom(roomName, room);
+      this.createRoomReferences(roomName, room);
+
+      registeredHandler.emit("create", room);
 
     } else {
       room._dispose();
@@ -319,33 +319,18 @@ export class MatchMaker {
   }
 
   private lockRoom (roomName: string, room: Room): void {
-    if (this.hasAvailableRoom(roomName)) {
-      let roomIndex = this.availableRooms[roomName].indexOf(room);
-      if (roomIndex !== -1) {
-        // decrease number of rooms spawned on this worker
-        memshared.decr(process.pid.toString());
-      }
-      spliceOne(this.availableRooms[roomName], roomIndex);
-    }
+    if (this.clearRoomReferences(roomName, room)) {
 
-    //
-    // if current worker doesn't have any 'rooName' handlers available
-    // anymore, remove it from the list.
-    //
-    if (!this.hasAvailableRoom(roomName)) {
-      memshared.srem(room.roomName, process.pid);
+      // emit public event on registered handler
+      this.handlers[room.roomName].emit("lock", room);
     }
   }
 
   private unlockRoom (roomName: string, room: Room) {
-    if (this.availableRooms[ roomName ].indexOf(room) === -1) {
-      this.availableRooms[ roomName ].push(room)
+    if (this.createRoomReferences(roomName, room)) {
 
-      // flag current worker has this room id
-      memshared.sadd(room.roomName, process.pid);
-
-      // increase number of rooms spawned on this worker
-      memshared.incr(process.pid.toString());
+      // emit public event on registered handler
+      this.handlers[room.roomName].emit("unlock", room);
     }
   }
 
@@ -361,7 +346,47 @@ export class MatchMaker {
     memshared.del(room.roomId);
 
     // remove from available rooms
-    this.lockRoom(roomName, room)
+    this.clearRoomReferences(roomName, room)
+  }
+
+  protected createRoomReferences (roomName: string, room: Room): boolean {
+    if (this.availableRooms[ roomName ].indexOf(room) === -1) {
+      this.availableRooms[ roomName ].push(room)
+
+      // flag current worker has this room id
+      memshared.sadd(room.roomName, process.pid);
+
+      // increase number of rooms spawned on this worker
+      memshared.incr(process.pid.toString());
+
+      return true;
+    }
+  }
+
+  protected clearRoomReferences (roomName: string, room: Room): boolean {
+    let hasDisposed: boolean = false;
+
+    if (this.hasAvailableRoom(roomName)) {
+      let roomIndex = this.availableRooms[roomName].indexOf(room);
+      if (roomIndex !== -1) {
+        // decrease number of rooms spawned on this worker
+        memshared.decr(process.pid.toString());
+
+        hasDisposed = true;
+      }
+
+      spliceOne(this.availableRooms[roomName], roomIndex);
+    }
+
+    //
+    // if current worker doesn't have any 'roomName' handlers available
+    // anymore, remove it from the list.
+    //
+    if (!this.hasAvailableRoom(roomName)) {
+      memshared.srem(room.roomName, process.pid);
+    }
+
+    return hasDisposed;
   }
 
   public gracefullyShutdown () {
