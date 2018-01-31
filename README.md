@@ -21,8 +21,6 @@
   <h3>
 </div>
 
-Read the [version 0.5.0 update](https://medium.com/@endel/colyseus-html5-multiplayer-games-made-simple-v0-6-0-alpha-update-d5d0e5eba4a0).
-
 Colyseus is a Authoritative Multiplayer Game Server for Node.js. It allows you
 to focus on your gameplay instead of bothering about networking.
 
