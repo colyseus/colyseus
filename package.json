@@ -8,7 +8,8 @@
     "multiplayer",
     "game",
     "networking",
-    "websockets"
+    "websockets",
+    "netcode"
   ],
   "repository": {
     "type": "git",

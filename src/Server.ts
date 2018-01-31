@@ -90,7 +90,7 @@ export class Server {
     }
   }
 
-  onMessageMatchMaking (client: Client, message) {
+  protected onMessageMatchMaking (client: Client, message) {
     if (!(message = decode(message))) {
       return;
     }

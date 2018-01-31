@@ -17,30 +17,36 @@
     <img src="https://badges.gitter.im/gamestdio/colyseus.svg">
   </a>
   <h3>
-    Multiplayer Game Server for Node.js. <a href="https://github.com/gamestdio/colyseus/wiki">View documentation</a>
+    Multiplayer Game Server for Node.js. <a href="http://colyseus.io/docs/">View documentation</a>
   <h3>
 </div>
 
 Read the [version 0.5.0 update](https://medium.com/@endel/colyseus-html5-multiplayer-games-made-simple-v0-6-0-alpha-update-d5d0e5eba4a0).
 
-## Why?
+Colyseus is a Authoritative Multiplayer Game Server for Node.js. It allows you
+to focus on your gameplay instead of bothering about networking.
 
-Writing your own multiplayer boilerplate using Socket.io/SockJS/etc is time
-consuming and you'll face a range of different problems along the way. Colyseus
-should have all these problems figured out already.
+The mission of this framework is to be the easiest solution for creating your
+own multiplayer games in JavaScript.
 
-## Features / Characteristics
+This framework is fairly new and is being evolved constantly. You're encouraged
+to take a look on [some games being developed with
+it](https://discuss.colyseus.io/category/5/showcase) and make your own!
 
-- Authoritative game server
+## What Colyseus provides to you:
+
 - WebSocket-based communication
-- Binary delta compressed state (through [msgpack](http://msgpack.org) / [fossil-delta-js](https://github.com/dchest/fossil-delta-js))
-- Match-making
-- Custom room handlers
-- Scalable vertically
-- Lag compensation (using [timeframe](http://github.com/gamestdio/timeframe), a
-  Timeline implementation) - Not automatic. You should apply the technique as you need, in the client and/or the server.
+- Simple API in the server-side and client-side.
+- Automatic state synchronization between server and client.
+- Matchmaking clients into game sessions
+- Scale on many processes on a single machine.
 
-See [roadmap](https://github.com/gamestdio/colyseus/wiki/Roadmap) for our future plans.
+## What Colyseus won't provide:
+
+- Game Engine: Colyseus is agnostic of the engine you're using. Need Physics? Add your own logic / package.
+- Database: It's up to configure and select which database you'd like to use.
+
+See [roadmap](http://colyseus.io/docs/roadmap/) for our future plans.
 
 ### Official client integration
 
