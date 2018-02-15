@@ -1,6 +1,7 @@
 import * as WebSocket from "ws";
 import * as shortid from "shortid";
 import * as http from "http";
+import Clock from "@gamestdio/timer";
 
 // Core classes
 export { Server } from "./Server";
@@ -13,6 +14,7 @@ export { RegisteredHandler } from "./MatchMaker";
 export type EntityMap<T> = {[ entityId:string ]: T};
 
 // Utilities
+export { Clock }
 export { nonenumerable as nosync } from "nonenumerable";
 export function generateId () { return shortid.generate(); }
 export function isValidId (id: any) { return shortid.isValid(id); }

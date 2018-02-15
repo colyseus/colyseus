@@ -2,7 +2,7 @@ import * as msgpack from "notepack.io";
 import * as fossilDelta from "fossil-delta";
 import * as shortid from "shortid";
 
-import Timer from "@gamestdio/timer";
+import Clock from "@gamestdio/timer";
 import { EventEmitter } from "events";
 import { createTimeline, Timeline } from "@gamestdio/timeline";
 
@@ -15,7 +15,7 @@ import * as jsonPatch from "fast-json-patch"; // this is only used for debugging
 
 export abstract class Room<T=any> extends EventEmitter {
 
-  public clock: Timer = new Timer();
+  public clock: Clock = new Clock();
   public timeline?: Timeline;
 
   public roomId: string;
