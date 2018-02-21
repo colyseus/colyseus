@@ -35,7 +35,7 @@ export class ChatRoom extends Room<any> {
     return new Promise((resolve, reject) => {
       setTimeout(() => {
         console.log("async task finished, let's dispose the room now!")
-        reject();
+        resolve();
       }, 2000);
     });
   }
