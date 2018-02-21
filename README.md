@@ -17,7 +17,7 @@
     <img src="https://badges.gitter.im/gamestdio/colyseus.svg">
   </a>
   <h3>
-    Multiplayer Game Server for Node.js. <a href="http://colyseus.io/docs/">View documentation</a>
+    Multiplayer Game Server for Node.js. <br /><a href="http://colyseus.io/docs/">View documentation</a>
   <h3>
 </div>
 
@@ -49,8 +49,8 @@ See [roadmap](http://colyseus.io/docs/roadmap/) for our future plans.
 ### Official client integration
 
 - [JavaScript/TypeScript](https://github.com/gamestdio/colyseus.js)
-- [Unity](https://github.com/gamestdio/colyseus-unity3d)
-- [CoronaSDK](https://github.com/gamestdio/colyseus.lua) (compatible with server v0.3.x)
+- [Unity](https://github.com/gamestdio/colyseus-unity3d) ([unity3d.com](https://unity3d.com/))
+- [Defold Engine](https://github.com/gamestdio/colyseus-defold) ([defold.com](https://www.defold.com/))
 
 ### Community client integration
 
