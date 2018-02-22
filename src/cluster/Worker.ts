@@ -7,7 +7,7 @@ import * as parseURL from "url-parse";
 import { WebSocketServer } from "../ws";
 import { Protocol, send } from "../Protocol";
 import { MatchMaker } from "../MatchMaker";
-import { Client, Room, generateId } from "../";
+import { Client, Room, generateId, isValidId } from "../";
 import { debugMatchMaking } from "../Debug";
 
 /**
@@ -95,8 +95,21 @@ export function setupWorker (server: net.Server, matchMaker: MatchMaker) {
       return;
 
     } else if (message[0] === Protocol.REQUEST_JOIN_ROOM) {
-      let { room, score } = matchMaker.requestToJoinRoom(message[1], message[2]);
-      let roomId = room && room.roomId;
+      let roomNameOrId = message[1];
+      let clientOptions = message[2];
+
+      let room, roomId, score = 1;
+
+      if (isValidId(roomNameOrId)) {
+        room = matchMaker.joinById(roomNameOrId, clientOptions);
+
+      } else {
+        let result = matchMaker.getAvailableRoomByScore(roomNameOrId, clientOptions);
+        room = result.room
+        score = result.score;
+      }
+
+      roomId = room && room.roomId;
 
       // send response back to match-making process.
       getMatchMakingProcess(matchMakingPid => {

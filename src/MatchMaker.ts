@@ -100,7 +100,7 @@ export class MatchMaker {
     clientOptions.sessionId = generateId();
 
     if (this.hasHandler(roomToJoin)) {
-      room = this.requestToJoinRoom( roomToJoin, clientOptions ).room
+      room = this.getAvailableRoomByScore( roomToJoin, clientOptions ).room
         || (allowCreateRoom && this.create( roomToJoin, clientOptions ));
 
     } else if (isValidId(roomToJoin)) {
@@ -242,26 +242,27 @@ export class MatchMaker {
     if (!room) {
       console.error(`Error: trying to join non-existant room "${ roomId }"`);
 
+    } else if (room.maxClientsReached) {
+      console.error(`Error: roomId "${ roomId }" reached maxClients.`);
+      room = undefined;
+
     } else if (!room.requestJoin(clientOptions)) {
-      console.error(`Error can't join "${ room.roomName }" with options: ${ JSON.stringify(clientOptions) }`);
+      console.error(`Error: can't join "${ room.roomName }" with options: ${ JSON.stringify(clientOptions) }`);
       room = undefined;
     }
 
     return room;
   }
 
-  public requestToJoinRoom (roomName: string, clientOptions: ClientOptions): RoomWithScore {
+  public getAvailableRoomByScore (roomName: string, clientOptions: ClientOptions): RoomWithScore {
     let room: Room;
     let bestScore = 0;
 
     if ( this.hasAvailableRoom( roomName ) ) {
-      for ( var i=0; i < this.availableRooms[ roomName ].length; i++ ) {
-        let availableRoom = this.availableRooms[ roomName ][ i ];
-        let numConnectedClients = availableRoom.clients.length + Object.keys(availableRoom.connectingClients).length;
-
-        // Check maxClients before requesting to join.
-        if (numConnectedClients >= availableRoom.maxClients) {
-          continue;
+      this.availableRooms[ roomName ].forEach(availableRoom => {
+        // check maxClients before requesting to join.
+        if (availableRoom.maxClientsReached) {
+          return;
         }
 
         let score = availableRoom.requestJoin(clientOptions) as number;
@@ -269,7 +270,7 @@ export class MatchMaker {
           bestScore = score;
           room = availableRoom;
         }
-      }
+      });
     }
 
     return {
@@ -353,7 +354,7 @@ export class MatchMaker {
     if (this.availableRooms[ roomName ].indexOf(room) === -1) {
       this.availableRooms[ roomName ].push(room)
 
-      // flag current worker has this room id
+      // flag current worker has this room name
       memshared.sadd(room.roomName, process.pid);
 
       // increase number of rooms spawned on this worker

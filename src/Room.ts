@@ -65,6 +65,10 @@ export abstract class Room<T=any> extends EventEmitter {
     return Promise.resolve(true);
   }
 
+  public get maxClientsReached () {
+    return this.clients.length + Object.keys(this.connectingClients).length >= this.maxClients;
+  }
+
   public setSimulationInterval ( callback: Function, delay: number = 1000 / 60 ): void {
     // clear previous interval in case called setSimulationInterval more than once
     if ( this._simulationInterval ) clearInterval( this._simulationInterval );

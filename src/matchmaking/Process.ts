@@ -4,7 +4,7 @@ import * as memshared from "memshared";
 import { Server as WebSocketServer } from "ws";
 
 import { Protocol, decode, send } from "../Protocol";
-import { Client, generateId } from "../";
+import { Client, generateId, isValidId } from "../";
 import { handleUpgrade, setUserId } from "../cluster/Worker";
 
 import { debugMatchMaking } from "../Debug";
@@ -63,32 +63,42 @@ function onConnect (client: Client, req?: http.IncomingMessage) {
     let roomName = message[1];
     let joinOptions = message[2];
 
-    // has room handler avaialble?
-    memshared.sismember("handlers", roomName, (err, isHandlerAvailable) => {
-      if (!isHandlerAvailable) {
-        send(client, [Protocol.JOIN_ERROR, roomName, `Error: no available handler for "${ roomName }"`]);
-        return;
-      }
+    joinOptions.clientId = client.id;
 
-      // Request to join an existing sessions for requested handler
-      memshared.smembers(roomName, (err, availableWorkerIds) => {
-        //
-        // TODO:
-        // remove a room from match-making cache when it reaches maxClients.
-        //
+    if (isValidId(roomName)) {
+      // join room by id
+      memshared.get(roomName, (err, workerId) =>
+        broadcastJoinRoomRequest([workerId], client, roomName, joinOptions));
 
-        joinOptions.clientId = client.id;
+    } else {
+      // join room by name
 
-        if (availableWorkerIds.length > 0) {
-          broadcastJoinRoomRequest(availableWorkerIds, client, roomName, joinOptions);
-
-        } else {
-          // retrieve active worker ids
-          requestCreateRoom(client, roomName, joinOptions);
+      // is room handler avaialble?
+      memshared.sismember("handlers", roomName, (err, isHandlerAvailable) => {
+        if (!isHandlerAvailable) {
+          send(client, [Protocol.JOIN_ERROR, roomName, `Error: no available handler for "${ roomName }"`]);
+          return;
         }
+
+        // request to join an existing sessions for requested handler
+        memshared.smembers(roomName, (err, availableWorkerIds) => {
+          //
+          // TODO:
+          // remove a room from match-making cache when it reaches maxClients.
+          //
+
+          if (availableWorkerIds.length > 0) {
+            broadcastJoinRoomRequest(availableWorkerIds, client, roomName, joinOptions);
+
+          } else {
+            // retrieve active worker ids
+            requestCreateRoom(client, roomName, joinOptions);
+          }
+        });
+
       });
 
-    });
+    }
 
   });
 }

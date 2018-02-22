@@ -7,7 +7,7 @@ import * as parseURL from "url-parse";
 import { WebSocketServer, IServerOptions } from "./ws";
 import { MatchMaker, RegisteredHandler } from "./MatchMaker";
 import { Protocol, send, decode } from "./Protocol";
-import { Client } from "./index";
+import { Client, isValidId } from "./index";
 import { handleUpgrade, setUserId } from "./cluster/Worker";
 import { Room } from "./Room";
 import { registerGracefulShutdown } from "./Utils";
@@ -105,7 +105,7 @@ export class Server {
 
     joinOptions.clientId = client.id;
 
-    if (!this.matchMaker.hasHandler(roomName)) {
+    if (!this.matchMaker.hasHandler(roomName) && !isValidId(roomName)) {
       send(client, [Protocol.JOIN_ERROR, roomName, `Error: no available handler for "${ roomName }"`]);
 
     } else {
