@@ -246,7 +246,7 @@ export class MatchMaker {
       console.error(`Error: roomId "${ roomId }" reached maxClients.`);
       room = undefined;
 
-    } else if (!room.requestJoin(clientOptions)) {
+    } else if (!room.requestJoin(clientOptions, false)) {
       console.error(`Error: can't join "${ room.roomName }" with options: ${ JSON.stringify(clientOptions) }`);
       room = undefined;
     }
@@ -265,7 +265,7 @@ export class MatchMaker {
           return;
         }
 
-        let score = availableRoom.requestJoin(clientOptions) as number;
+        let score = availableRoom.requestJoin(clientOptions, false) as number;
         if (score > bestScore) {
           bestScore = score;
           room = availableRoom;
@@ -297,7 +297,7 @@ export class MatchMaker {
     memshared.set(room.roomId, process.pid);
 
     // imediatelly ask client to join the room
-    if ( room.requestJoin(clientOptions) ) {
+    if ( room.requestJoin(clientOptions, true) ) {
       debugMatchMaking("spawning '%s' on worker %d", roomName, process.pid);
 
       room.on('lock', this.lockRoom.bind(this, roomName, room));

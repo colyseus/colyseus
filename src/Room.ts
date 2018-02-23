@@ -57,7 +57,7 @@ export abstract class Room<T=any> extends EventEmitter {
   abstract onLeave (client: Client): void | Promise<any>;
   abstract onDispose (): void | Promise<any>;
 
-  public requestJoin (options: any): number | boolean {
+  public requestJoin (options: any, isNew?: boolean): number | boolean {
     return 1;
   }
 
