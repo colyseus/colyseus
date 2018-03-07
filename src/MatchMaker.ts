@@ -45,10 +45,6 @@ export class MatchMaker {
     // successfully joining the requested room
     client.on('close', (_) => this.onLeave(client, roomId));
 
-    // since ws@3.3.3 it's required to listen to 'error' to prevent server crash
-    // https://github.com/websockets/ws/issues/1256
-    client.on('error', (e) => {/*console.error("[ERROR]", e);*/ });
-
     roomPromise.then(room => {
       client.on('message', (message) => {
         if (!(message = decode(message))) {

@@ -83,10 +83,6 @@ export class Server {
 
     } else {
       client.on("message",  this.onMessageMatchMaking.bind(this, client));
-
-      // since ws@3.3.3 it's required to listen to 'error' to prevent server crash
-      // https://github.com/websockets/ws/issues/1256
-      client.on('error', (e) => {/*console.error("[ERROR]", e);*/ });
     }
   }
 

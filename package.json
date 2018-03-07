@@ -1,6 +1,6 @@
 {
   "name": "colyseus",
-  "version": "0.8.13",
+  "version": "0.8.14",
   "description": "Multiplayer Game Server for Node.js.",
   "main": "./lib/index.js",
   "typings": "./lib/index.d.ts",
@@ -41,7 +41,7 @@
     "notepack.io": "^2.1.2",
     "shortid": "^2.2.6",
     "url-parse": "^1.2.0",
-    "ws": "^3.3.3"
+    "ws": "^5.0.0"
   },
   "devDependencies": {
     "@types/debug": "^0.0.30",
