@@ -23,7 +23,7 @@ export class Server {
   protected matchMaker: MatchMaker = new MatchMaker();
   protected _onShutdown: () => void | Promise<any> = () => Promise.resolve();
 
-  constructor (options?: ServerOptions) {
+  constructor (options: ServerOptions = {}) {
     registerGracefulShutdown((signal) => {
       this.matchMaker.gracefullyShutdown().
         then(() => this._onShutdown()).
