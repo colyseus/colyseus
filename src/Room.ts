@@ -51,11 +51,14 @@ export abstract class Room<T=any> extends EventEmitter {
     this.setPatchRate(this.patchRate);
   }
 
-  abstract onInit (options: any): void;
+  // Abstract methods
   abstract onMessage (client: Client, data: any): void;
-  abstract onJoin (client: Client, options?: any): void | Promise<any>;
-  abstract onLeave (client: Client): void | Promise<any>;
-  abstract onDispose (): void | Promise<any>;
+
+  // Optional abstract methods
+  onInit? (options: any): void;
+  onJoin? (client: Client, options?: any): void | Promise<any>;
+  onLeave? (client: Client): void | Promise<any>;
+  onDispose? (): void | Promise<any>;
 
   public requestJoin (options: any, isNew?: boolean): number | boolean {
     return 1;
@@ -128,7 +131,7 @@ export abstract class Room<T=any> extends EventEmitter {
       data = msgpack.encode([Protocol.ROOM_DATA, this.roomId, data]);
     }
 
-    var numClients = this.clients.length;
+    let numClients = this.clients.length;
     while (numClients--) {
       this.clients[ numClients ].send(data, { binary: true }, logError.bind(this) );
     }
@@ -139,7 +142,7 @@ export abstract class Room<T=any> extends EventEmitter {
   public disconnect (): Promise<any> {
     let promises = [];
 
-    var i = this.clients.length;
+    let i = this.clients.length;
     while (i--) {
       promises.push( this._onLeave(this.clients[i]) );
     }
