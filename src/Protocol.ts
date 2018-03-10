@@ -23,6 +23,9 @@ export enum Protocol {
 
   // Generic messages (50~60)
   BAD_REQUEST = 50,
+
+  // WebSocket error codes
+  WS_SERVER_DISCONNECT = 4201,
 }
 
 export function decode (message: any) {

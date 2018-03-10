@@ -231,14 +231,9 @@ export abstract class Room<T=any> extends EventEmitter {
 
     this.emit('leave', client, isDisconnect);
 
-    //
-    // TODO: force disconnect from server.
-    //
-    // need to check why the connection is being re-directed to MatchMaking
-    // process after calling `client.close()` here
-    //
+    // Force WebSocket disconnection from server.
     if (!isDisconnect) {
-      send(client, [ Protocol.LEAVE_ROOM, this.roomId ]);
+      client.close(Protocol.WS_SERVER_DISCONNECT);
     }
 
     // custom cleanup method & clear intervals
