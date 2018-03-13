@@ -1,8 +1,10 @@
 import { Room } from "../src";
 
 export class ChatRoom extends Room<any> {
+  maxClients = 4;
 
   onInit (options) {
+    console.log("onInit:", options)
     this.setState({ messages: [] });
   }
 
@@ -14,15 +16,19 @@ export class ChatRoom extends Room<any> {
     this.state.messages.push(`${ client.id } joined.`);
   }
 
+  requestJoin (options, isNewRoom: boolean) {
+    return (options.create && isNewRoom) || this.clients.length > 0;
+  }
+
   onLeave (client) {
     this.state.messages.push(`${ client.id } left.`);
   }
 
   onMessage (client, data) {
-    this.state.messages.push(data.message);
+    this.state.messages.push(data);
 
-    if (data.message === "leave") {
-      this.disconnect();
+    if (data === "leave") {
+      this.disconnect().then(() => console.log("yup, disconnected."));
     }
 
     console.log("ChatRoom:", client.id, data);
@@ -35,7 +41,7 @@ export class ChatRoom extends Room<any> {
     return new Promise((resolve, reject) => {
       setTimeout(() => {
         console.log("async task finished, let's dispose the room now!")
-        reject();
+        resolve();
       }, 2000);
     });
   }

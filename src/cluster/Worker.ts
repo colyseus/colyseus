@@ -1,10 +1,13 @@
-import * as memshared from "memshared";
+// import * as memshared from "memshared";
+declare var memshared: any;
+
 import * as net from "net";
 import * as http from "http";
 import * as msgpack from "notepack.io";
 import * as parseURL from "url-parse";
 
-import { WebSocketServer } from "../ws";
+import { Server as WebSocketServer } from "ws";
+// import { WebSocketServer } from "../ws";
 import { Protocol, send } from "../Protocol";
 import { MatchMaker } from "../MatchMaker";
 import { Client, Room, generateId, isValidId } from "../";

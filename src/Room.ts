@@ -28,6 +28,7 @@ export abstract class Room<T=any> extends EventEmitter {
   public autoDispose: boolean = true;
 
   public state: T;
+  public metadata: any;
 
   // holds a list of clients with clientOptions during handshake
   public connectingClients: {[clientId: string]: any} = {};
@@ -108,6 +109,10 @@ export abstract class Room<T=any> extends EventEmitter {
     }
   }
 
+  public setMetadata (meta: any) {
+    this.metadata = meta;
+  }
+
   public lock (): void {
     this.emit('lock');
   }
@@ -117,7 +122,7 @@ export abstract class Room<T=any> extends EventEmitter {
   }
 
   public send (client: Client, data: any): void {
-    send(client, [ Protocol.ROOM_DATA, this.roomId, data ]);
+    send(client, [ Protocol.ROOM_DATA, data ]);
   }
 
   public broadcast (data: any): boolean {
@@ -128,7 +133,7 @@ export abstract class Room<T=any> extends EventEmitter {
 
     // encode all messages with msgpack
     if (!(data instanceof Buffer)) {
-      data = msgpack.encode([Protocol.ROOM_DATA, this.roomId, data]);
+      data = msgpack.encode([Protocol.ROOM_DATA, data]);
     }
 
     let numClients = this.clients.length;
@@ -153,7 +158,6 @@ export abstract class Room<T=any> extends EventEmitter {
   protected sendState (client: Client): void {
     send(client, [
       Protocol.ROOM_STATE,
-      this.roomId,
       this._previousStateEncoded,
       this.clock.currentTime,
       this.clock.elapsedTime,
@@ -197,7 +201,7 @@ export abstract class Room<T=any> extends EventEmitter {
 
     // broadcast patches (diff state) to all clients,
     // even if nothing has changed in order to calculate PING on client-side
-    return this.broadcast( msgpack.encode([ Protocol.ROOM_STATE_PATCH, this.roomId, patches ]) );
+    return this.broadcast( msgpack.encode([ Protocol.ROOM_STATE_PATCH, patches ]) );
   }
 
   private _onJoin (client: Client, options?: any): void {

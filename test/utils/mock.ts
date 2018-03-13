@@ -1,9 +1,7 @@
-"use strict";
-
 import { EventEmitter } from "events";
 import * as shortid from "shortid";
 import * as msgpack from "notepack.io";
-import WebSocket from "../../src/ws";
+import * as WebSocket from "ws";
 import { Room } from "../../src/Room";
 
 export class Client extends EventEmitter {

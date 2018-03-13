@@ -1,29 +1,36 @@
 import * as net from "net";
 import * as http from "http";
-import * as memshared from "memshared";
 import * as msgpack from "notepack.io";
 import * as parseURL from "url-parse";
+import * as WebSocket from "ws";
+import { ServerOptions as IServerOptions } from "ws";
 
-import { WebSocketServer, IServerOptions } from "./ws";
 import { MatchMaker, RegisteredHandler } from "./MatchMaker";
 import { Protocol, send, decode } from "./Protocol";
-import { Client, isValidId } from "./index";
-import { handleUpgrade, setUserId } from "./cluster/Worker";
+import { Client, isValidId, generateId } from "./index";
 import { Room } from "./Room";
 import { registerGracefulShutdown } from "./Utils";
+import { Presence } from "./presence/Presence";
 
 export type ServerOptions = IServerOptions & {
-  ws?: WebSocketServer
+  presence?: any,
+  engine?: any,
+  ws?: any
 };
 
 export class Server {
-  protected server: WebSocketServer;
+  protected server: any;
   protected httpServer: net.Server | http.Server;
 
-  protected matchMaker: MatchMaker = new MatchMaker();
+  protected presence: Presence;
+  protected matchMaker: MatchMaker;
+
   protected _onShutdown: () => void | Promise<any> = () => Promise.resolve();
 
   constructor (options: ServerOptions = {}) {
+    this.presence = options.presence;
+    this.matchMaker = new MatchMaker(this.presence);
+
     registerGracefulShutdown((signal) => {
       this.matchMaker.gracefullyShutdown().
         then(() => this._onShutdown()).
@@ -32,13 +39,18 @@ export class Server {
     });
 
     if (options.server) {
-      this.attach({ server: options.server as http.Server });
+      this.attach(options);
     }
   }
 
   attach (options: ServerOptions) {
+    delete options.presence;
+
     if (options.server || options.port) {
-      this.server = new (WebSocketServer as any)(options);
+      let engine = options.engine || WebSocket.Server;
+      delete options.engine;
+
+      this.server = new engine(options);
       this.httpServer = options.server;
 
     } else {
@@ -60,23 +72,19 @@ export class Server {
     this._onShutdown = callback;
   }
 
-  onConnection = (client: Client, req?: http.IncomingMessage) => {
-    //
-    // TODO: DRY (Worker.ts)
-    // ensure URL is parsed.
-    //
-    // compatibility with ws@3.x.x / uws
-    if (req) {
-      client.upgradeReq = req;
+  onConnection = (client: Client, req?: http.IncomingMessage & any) => {
+    // compatibility with ws / uws
+    const upgradeReq = req || client.upgradeReq;
+
+    const url = parseURL(upgradeReq.url, true);
+    const roomId = url.pathname.substr(1);
+
+    // set client id
+    client.id = url.query['colyseusid'] || generateId();
+
+    if (!url.query['colyseusid']) {
+      send(client, [Protocol.USER_ID, client.id]);
     }
-
-    let url = parseURL((<any>client.upgradeReq).url, true);
-    client.upgradeReq.url = url;
-    (<any>client.upgradeReq).roomId = url.pathname.substr(1);
-
-    setUserId(client);
-
-    let roomId = (<any>client.upgradeReq).roomId;
 
     if (roomId) {
       this.matchMaker.bindClient(client, roomId);
@@ -96,8 +104,10 @@ export class Server {
       return;
     }
 
-    let roomName = message[1];
-    let joinOptions = message[2];
+    console.log("onMessageMatchMaking", process.pid, message);
+
+    const roomName = message[1];
+    const joinOptions = message[2];
 
     joinOptions.clientId = client.id;
 
@@ -105,13 +115,9 @@ export class Server {
       send(client, [Protocol.JOIN_ERROR, roomName, `Error: no available handler for "${ roomName }"`]);
 
     } else {
-      this.matchMaker.onJoinRoomRequest(roomName, joinOptions, true, (err: string, room: Room<any>) => {
-        let joinRoomResponse = (err)
-          ? [ Protocol.JOIN_ERROR, roomName, err ]
-          : [ Protocol.JOIN_ROOM, room.roomId, joinOptions.requestId ];
-
-        send(client, joinRoomResponse);
-      });
+      this.matchMaker.onJoinRoomRequest(roomName, joinOptions).
+        then((room: Room) => send(client, [Protocol.JOIN_ROOM, room.roomId, joinOptions.requestId])).
+        catch(err => send(client, [Protocol.JOIN_ERROR, roomName, err.message]));
     }
 
   }

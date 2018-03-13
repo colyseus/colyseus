@@ -1,5 +1,7 @@
+// import * as memshared from "memshared";
+declare var memshared: any;
+
 import * as cluster from "cluster";
-import * as memshared from "memshared";
 import * as child_process from "child_process";
 import * as net from "net";
 import * as ip from "ip";

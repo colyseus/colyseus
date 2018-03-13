@@ -2,11 +2,13 @@
 // nodemon sends SIGUSR2 before reloading
 // (https://github.com/remy/nodemon#controlling-shutdown-of-your-script)
 //
+const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM', 'SIGUSR2'];
+
 export function registerGracefulShutdown (callback) {
   let calledOnce = false;
-  ['SIGINT', 'SIGTERM', 'SIGUSR2'].forEach(signal => {
-    process.once(signal, () => callback(signal));
-  });
+
+  signals.forEach(signal => 
+    process.once(signal, () => callback(signal)));
 }
 
 export class Deferred {

@@ -5,7 +5,6 @@ import Clock, { Delayed } from "@gamestdio/timer";
 
 // Core classes
 export { Server } from "./Server";
-export { ClusterServer } from "./ClusterServer";
 export { Room } from "./Room";
 export { Protocol } from "./Protocol";
 export { RegisteredHandler } from "./MatchMaker";
@@ -21,7 +20,7 @@ export function isValidId (id: any) { return shortid.isValid(id); }
 
 // Export 'WebSocket' as 'Client' with 'id' property.
 export type Client = WebSocket & {
-  upgradeReq: http.IncomingMessage; // cross-compatibility for ws (v3.x+) and uws
+  upgradeReq?: http.IncomingMessage; // cross-compatibility for ws (v3.x+) and uws
   id: string;
   sessionId: string;
 };

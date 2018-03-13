@@ -5,16 +5,22 @@ import * as WebSocket from "uws";
 
 import { Server } from "../src/Server";
 import { ChatRoom } from "./ChatRoom";
+import { RedisPresence } from './../src/presence/RedisPresence';
 
-const port = 8080;
+const port = parseInt(process.env.PORT || "8080");
 const endpoint = "localhost";
 
 const app = express();
-app.use(bodyParser.json());
 
 // Create HTTP & WebSocket servers
 const server = http.createServer(app);
 const gameServer = new Server({
+  verifyClient: (info, next) => {
+    console.log("verifyClient");
+    next(true);
+  },
+
+  presence: new RedisPresence(),
   engine: WebSocket.Server,
   server: server 
 });
@@ -28,28 +34,8 @@ gameServer.register("chat", ChatRoom).
   on("dispose", (room) => console.log("room disposed!", room.roomId));
 
 app.use(express.static(__dirname));
-
-app.get("/something", (req, res) => {
-  console.log("something!", process.pid);
-  console.log("GET /something")
-  res.send("Hey!");
-});
-
-app.post("/something", (req, res) => {
-  console.log("POST /something")
-  res.json(req.body);
-});
-
-gameServer.onShutdown(() => {
-  console.log("CUSTOM SHUTDOWN ROUTINE: STARTED");
-  return new Promise((resolve, reject) => {
-    setTimeout(() => {
-      console.log("CUSTOM SHUTDOWN ROUTINE: FINISHED");
-      resolve();
-    }, 1000);
-  })
-});
+app.use(bodyParser.json());
 
 gameServer.listen(port);
 
-console.log(`Listening on http://${ endpoint }:${ port }`)
+console.log(`Listening on http://localhost:${ port }`)
