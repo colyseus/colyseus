@@ -3,6 +3,7 @@ import { spliceOne } from '../Utils';
 
 export class LocalPresence implements Presence {
     data: {[roomName: string]: string[]} = {};
+    sets: {[roomName: string]: {[key: string]: string}} = {};
 
     subscribe(topic: string, callback: Function) {
         return this;
@@ -32,6 +33,18 @@ export class LocalPresence implements Presence {
         if (this.data[key]) {
             spliceOne(this.data[key], this.data[key].indexOf(value));
         }
+    }
+
+    hset (roomId: string, key: string, value: string) {
+        if (!this.sets[roomId]) {
+            this.sets[roomId] = {};
+        }
+
+        this.sets[roomId][key] = value;
+    }
+
+    async hget (roomId: string, key: string) {
+        return this.data[roomId] && this.data[roomId][key];
     }
 
 }

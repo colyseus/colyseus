@@ -35,7 +35,7 @@ export class RegisteredHandler extends EventEmitter {
   }
 }
 
-const REMOTE_REQUEST_JOIN_TIMEOUT = 400;
+const REMOTE_ROOM_SCOPE_TIMEOUT = 400;
 
 export class MatchMaker {
   private handlers: {[id: string]: RegisteredHandler} = {};
@@ -53,32 +53,36 @@ export class MatchMaker {
     this.presence = presence || new LocalPresence();
   }
 
-  public bindClient (client: Client, roomId: string) {
-    let roomPromise = this.onJoin(roomId, client);
+  public async bindRoom (client: Client, roomId: string) {
+    const room = this.localRooms.getById(roomId);
+    const clientOptions = client.options;
 
-    // register 'close' event early on. the client might disconnect before
-    // successfully joining the requested room
+    // assign sessionId to socket connection.
+    client.sessionId = await this.presence.hget(roomId, "sessionId");
+
+    // clean temporary data
+    delete clientOptions.sessionId;
+    delete clientOptions.clientId;
+
+    // this.remoteRoomCall(roomId, "_onJoin", [])
+    (<any>room)._onJoin(client, clientOptions);
+    room.once('leave', this.onClientLeaveRoom.bind(this, room));
+
+    this.sessions[ client.sessionId ] = room;
+
+    // emit 'join' on registered handler
+    this.handlers[room.roomName].emit("join", room, client);
+
+    // register 'close' event early on. the client might disconnect before successfully joining the requested room
     client.on('close', (_) => this.onLeave(client, roomId));
-
-    roomPromise.then(room => {
-      client.on('message', (message) => {
-        if (!(message = decode(message))) {
-          return;
-        }
-        this.execute(client, message);
-      });
-
-    }).catch(err => {
-      console.log("CATCH:", typeof(err), err);
-      send(client, [Protocol.JOIN_ERROR, roomId, err]);
-
-      client.removeAllListeners();
-    });
-
-    return roomPromise;
+    client.on('message', (message) => this.onRoomMessage(client, message));
   }
 
-  protected execute (client: Client, message: any) {
+  protected onRoomMessage (client: Client, message: any) {
+    if (!(message = decode(message))) {
+      return;
+    }
+
     if (message[0] == Protocol.JOIN_ROOM) {
       this.onJoinRoomRequest(message[1], message[2], false).
         catch((err) => send(client, [Protocol.JOIN_ERROR, message[1], err]));
@@ -101,15 +105,11 @@ export class MatchMaker {
    * match-making process. The client will request a new WebSocket connection
    * to effectively join into the room created/joined by this method.
    */
-  public async onJoinRoomRequest (roomToJoin: string, clientOptions: ClientOptions, allowCreateRoom: boolean = true): Promise<Room> {
-    // let room: Room;
-    let room: any;
+  public async onJoinRoomRequest (client: Client, roomToJoin: string, clientOptions: ClientOptions, allowCreateRoom: boolean = true): Promise<Room> {
+    let room: Room;
     let err: string;
 
     clientOptions.sessionId = generateId();
-
-    console.log("hasHandler?", roomToJoin, this.hasHandler(roomToJoin));
-    console.log("allowCreateRoom", allowCreateRoom);
 
     if (this.hasHandler(roomToJoin)) {
       let bestRoomByScore = await this.getAvailableRoomByScore(roomToJoin, clientOptions);
@@ -122,10 +122,9 @@ export class MatchMaker {
       room = this.joinById(roomToJoin, clientOptions);
     }
 
-    console.log("ROOM:", typeof(room));
-
     if (room) {
       // Reserve a seat for clientId
+      this.presence.hset(room.roomId, "sessionId", clientOptions.sessionId);
       room.connectingClients[clientOptions.clientId] = clientOptions;
 
     } else {
@@ -136,76 +135,33 @@ export class MatchMaker {
     return room;
   }
 
-  /**
-   * Binds target client to the room running in a worker process.
-   */
-  public onJoin (roomId: string, client: Client): Promise<Room> {
+  public async remoteRoomCall (roomId: string, method: string, args?: any[]) {
     const room = this.localRooms.getById(roomId);
-    const clientOptions = room && room.connectingClients[ client.id ];
 
-    return new Promise<Room>((resolve, reject) => {
-      if (room && clientOptions) {
-        // assign sessionId to socket connection.
-        client.sessionId = clientOptions.sessionId;
+    if (!room) {
+      return new Promise((resolve, reject) => {
+        const requestId = generateId();
+        const channel = `${roomId}:${requestId}`;
+        const unsubscribe = () => this.presence.unsubscribe(channel);
 
-        // clean temporary data
-        delete clientOptions.sessionId;
-        delete clientOptions.clientId;
-
-        let isVerified = room.verifyClient(client, clientOptions);
-
-        if (!(isVerified instanceof Promise)) {
-          isVerified = (isVerified)
-            ? Promise.resolve()
-            : Promise.reject(undefined);
-        }
-
-        const onVerifyFailure = (err?: string) => {
-          err = err || "verifyClient failed.";
-
-          debugMatchMaking(`JOIN_ERROR: ${err} (roomId: %s, clientOptions: %j)`, roomId, clientOptions);
-
-          (<any>room)._disposeIfEmpty();
-
-          reject(err);
-        }
-
-        isVerified.then((result) => {
-          //
-          // promise returned falsy value
-          //
-          if (result === false) { return onVerifyFailure(); }
-
-          //
-          // client may have disconnected before 'verifyClient' is complete
-          //
-          if (client.readyState !== WebSocket.OPEN) {
-            return reject("client already disconnected");
-          }
-
-          (<any>room)._onJoin(client, clientOptions);
-          room.once('leave', this.onClientLeaveRoom.bind(this, room));
-
-          this.sessions[ client.sessionId ] = room;
-
-          // emit 'join' on registered handler
-          this.handlers[room.roomName].emit("join", room, client);
-
-          resolve(room);
-
-        }).catch(onVerifyFailure).then(() => {
-          // clean reserved seat only after verifyClient succeeds
-          delete room.connectingClients[client.id];
+        this.presence.subscribe(channel, (data) => {
+          console.log("LETS RESOLVE!", data);
+          resolve(data);
+          unsubscribe();
         });
 
-      } else {
-        let err =  "trying to join non-existing room";
+        this.presence.publish(roomId, [method, requestId, args]);
 
-        debugMatchMaking(`JOIN_ERROR: ${ err } (roomId: %s, clientOptions: %j)`, roomId, clientOptions);
+        setTimeout(() => {
+          unsubscribe();
+          reject();
+        }, REMOTE_ROOM_SCOPE_TIMEOUT);
+      });
 
-        reject(err);
-      }
-    });
+    } else {
+      console.log("LETS CALL", method, "ON LOCAL ROOM:", room.roomId);
+      return room[method].apply(room, args);
+    }
   }
 
   public onLeave (client: Client, roomId: string) {
@@ -267,6 +223,7 @@ export class MatchMaker {
   }
 
   public async getAvailableRoomByScore (roomName: string, clientOptions: ClientOptions): Promise<RoomWithScore> {
+    console.log("getAvailableRoomByScore...")
     let roomsWithScore = (await this.getRoomsWithScore(roomName, clientOptions)).
       sort((a, b) => b.score - a.score);;
 
@@ -276,30 +233,15 @@ export class MatchMaker {
   }
 
   protected async getRoomsWithScore (roomName: string, clientOptions: ClientOptions): Promise<RoomWithScore[]> {
+    console.log("getRoomsWithScore...");
     let roomsWithScore: RoomWithScore[] = [];
     let roomIds = await this.presence.smembers(roomName);
     let remoteRequestJoins = [];
 
     roomIds.forEach(roomId => {
+      console.log("roomId, is local?", roomId, typeof(this.localRooms.getById(roomId)));
       if (!this.localRooms.getById(roomId)) {
-        let requestId = generateId();
-        let requestJoinSubscription = `${roomId}:${requestId}`;
-
-        remoteRequestJoins.push(new Promise((resolve, reject) => {
-          const unsubscribe = () => {
-            this.presence.unsubscribe(requestJoinSubscription);
-            return true;
-          }
-
-          this.presence.subscribe(requestJoinSubscription, (score) => {
-            resolve({ roomId, score });
-            unsubscribe();
-          });
-
-          this.presence.publish(roomId, ['requestJoin', requestId, clientOptions]);
-
-          setTimeout(() => unsubscribe() && reject(), REMOTE_REQUEST_JOIN_TIMEOUT);
-        }));
+        remoteRequestJoins.push(this.remoteRoomCall(roomId, 'requestJoin', [clientOptions, false]));
 
       } else {
         let room = this.localRooms.getById(roomId);
@@ -315,11 +257,11 @@ export class MatchMaker {
     });
 
     let remoteScores = await Promise.all(remoteRequestJoins);
-
     return roomsWithScore.concat(remoteScores);
   }
 
   public create (roomName: string, clientOptions: ClientOptions): Room {
+    console.log('lets create room', roomName, clientOptions);
     let room = null
       , registeredHandler = this.handlers[ roomName ];
 
@@ -391,16 +333,23 @@ export class MatchMaker {
       this.presence.sadd(room.roomName, room.roomId);
 
       this.presence.subscribe(room.roomId, (message) => {
+        console.log("RECEIVED MESSAGE:", message);
+
         let [ method, requestId, args ] = message;
+        const reply = (data) => {
+          console.log("LETS REPLY WITH", data);
+          this.presence.publish(`${room.roomId}:${requestId}`, data);
+        };
 
-        if (method === "requestJoin") {
-          this.presence.publish(`${room.roomId}:${requestId}`, room.requestJoin.call(room, args[0], false));
-        }
+        console.log(`LETS EXECUTE REMOTE COMMAND: ${room.roomId}, ${method}, ARGS: ${JSON.stringify(args)}`);
 
-        console.log(`REDIS: ${room.roomId}, messsage: ${message}`)
+        let response = room[method].apply(room, args);
+        if (!(response instanceof Promise)) return reply(response);
+
+        response.
+          then((result) => reply(result)).
+          catch(e => console.error("ERROR EXECUTING REMOTE COMMAND:", room.roomId, method, args));
       });
-
-      // this.presence.registerRoom(roomName, room.roomId, process.pid);
 
       return true;
     }

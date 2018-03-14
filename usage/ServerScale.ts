@@ -16,10 +16,9 @@ const app = express();
 const server = http.createServer(app);
 const gameServer = new Server({
   verifyClient: (info, next) => {
-    console.log("verifyClient");
+    // console.log("custom verifyClient!");
     next(true);
   },
-
   presence: new RedisPresence(),
   engine: WebSocket.Server,
   server: server 

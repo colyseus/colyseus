@@ -8,6 +8,9 @@ export class ChatRoom extends Room<any> {
     this.setState({ messages: [] });
   }
 
+  // verifyClient (options) {
+  // }
+
   onJoin (client, options) {
     console.log("client has joined!");
     console.log("client.id:", client.id);

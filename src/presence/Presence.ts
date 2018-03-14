@@ -6,6 +6,9 @@ export interface Presence {
     sadd (key: string, value: any);
     smembers (key: string);
     srem (key: string, value: any);
+
+    hset(roomId: string, key: string, value: string);
+    hget(roomId: string, key: string): Promise<string>;
 }
 
 export interface RoomPresence {

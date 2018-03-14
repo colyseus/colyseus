@@ -8,6 +8,7 @@ export class RedisPresence implements Presence {
     pub: redis.RedisClient = redis.createClient();
 
     protected smembersAsync = promisify(this.pub.smembers).bind(this.pub);
+    protected hgetAsync = promisify(this.pub.hget).bind(this.pub);
     protected subscriptions: {[channel: string]: (...args: any[]) => any} = {};
 
     subscribe(topic: string, callback: Function) {
@@ -15,7 +16,7 @@ export class RedisPresence implements Presence {
 
         this.subscriptions[topic] = (channel, message) => {
             if (channel === topic) {
-                callback(message);
+                callback(JSON.parse(message));
             }
         };
 
@@ -33,7 +34,11 @@ export class RedisPresence implements Presence {
     }
 
     publish(topic: string, data: any) {
-        this.pub.publish(topic, data);
+        if (data === undefined) {
+            data = false;
+        }
+
+        this.pub.publish(topic, JSON.stringify(data));
     }
 
     sadd (key: string, value: any) {
@@ -46,6 +51,14 @@ export class RedisPresence implements Presence {
 
     srem (key: string, value: any) {
         this.pub.srem(key, value);
+    }
+
+    hset (roomId: string, key: string, value: string) {
+        this.pub.hset(roomId, key, value);
+    }
+
+    hget (roomId: string, key: string) {
+        return this.hgetAsync(roomId, key);
     }
 
 }

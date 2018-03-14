@@ -13,6 +13,9 @@ import { logError, spliceOne } from "./Utils";
 import { debugPatch, debugPatchData } from "./Debug";
 import * as jsonPatch from "fast-json-patch"; // this is only used for debugging patches
 
+const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
+const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
+
 export abstract class Room<T=any> extends EventEmitter {
 
   public clock: Clock = new Clock();
@@ -24,7 +27,7 @@ export abstract class Room<T=any> extends EventEmitter {
   public clients: Client[] = [];
 
   public maxClients: number = Infinity;
-  public patchRate: number = 1000 / 20; // Default patch rate is 20fps (50ms)
+  public patchRate: number = DEFAULT_PATCH_RATE; 
   public autoDispose: boolean = true;
 
   public state: T;
@@ -44,10 +47,6 @@ export abstract class Room<T=any> extends EventEmitter {
 
   constructor () {
     super();
-
-    if (arguments.length > 0) {
-      console.warn("DEPRECATION WARNING: use 'onInit(options)' instead of 'constructor(options)' to initialize the room.");
-    }
 
     this.setPatchRate(this.patchRate);
   }
@@ -73,7 +72,7 @@ export abstract class Room<T=any> extends EventEmitter {
     return this.clients.length + Object.keys(this.connectingClients).length >= this.maxClients;
   }
 
-  public setSimulationInterval ( callback: Function, delay: number = 1000 / 60 ): void {
+  public setSimulationInterval ( callback: Function, delay: number = DEFAULT_SIMULATION_INTERVAL ): void {
     // clear previous interval in case called setSimulationInterval more than once
     if ( this._simulationInterval ) clearInterval( this._simulationInterval );
 

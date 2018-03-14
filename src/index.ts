@@ -22,5 +22,6 @@ export function isValidId (id: any) { return shortid.isValid(id); }
 export type Client = WebSocket & {
   upgradeReq?: http.IncomingMessage; // cross-compatibility for ws (v3.x+) and uws
   id: string;
+  options: any;
   sessionId: string;
 };
