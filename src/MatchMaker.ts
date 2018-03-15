@@ -54,9 +54,12 @@ export class MatchMaker {
       });
 
     }).catch(err => {
+      // application level error
+      if (err instanceof Error) { err = err.message; }
+
       send(client, [Protocol.JOIN_ERROR, roomId, err]);
 
-      client.removeAllListeners();
+      client.close();
     });
 
     return roomPromise;
