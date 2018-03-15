@@ -30,7 +30,6 @@ export class Client extends EventEmitter {
   }
 
   close () {
-    this.messages = [];
     // this.emit('close');
   }
 
