@@ -164,7 +164,7 @@ export class Server {
         then((room: Room) => send(client, [Protocol.JOIN_ROOM, room.roomId, joinOptions.requestId])).
         catch(e => {
           console.log("onJoinRoomRequest error", e);
-          send(client, [Protocol.JOIN_ERROR, roomName, e.message])
+          send(client, [Protocol.JOIN_ERROR, roomName, e && e.message])
         });
     }
   }

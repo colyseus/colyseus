@@ -24,4 +24,5 @@ export type Client = WebSocket & {
   id: string;
   options: any;
   sessionId: string;
+  remote?: boolean; // is this a remote client, from another process?
 };

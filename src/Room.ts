@@ -9,6 +9,8 @@ import { createTimeline, Timeline } from "@gamestdio/timeline";
 import { Client } from "./index";
 import { Protocol, send } from "./Protocol";
 import { logError, spliceOne } from "./Utils";
+import { Presence } from './presence/Presence';
+import { RemoteClient } from "./presence/RemoteClient";
 
 import { debugPatch, debugPatchData } from "./Debug";
 import * as jsonPatch from "fast-json-patch"; // this is only used for debugging patches
@@ -24,7 +26,7 @@ export abstract class Room<T=any> extends EventEmitter {
   public roomId: string;
   public roomName: string;
 
-  public clients: Client[] = [];
+  public clients: (Client | RemoteClient)[] = [];
 
   public maxClients: number = Infinity;
   public patchRate: number = DEFAULT_PATCH_RATE; 
@@ -32,6 +34,8 @@ export abstract class Room<T=any> extends EventEmitter {
 
   public state: T;
   public metadata: any;
+
+  protected presence: Presence;
 
   // holds a list of clients with clientOptions during handshake
   public connectingClients: {[clientId: string]: any} = {};
@@ -45,9 +49,9 @@ export abstract class Room<T=any> extends EventEmitter {
   private _simulationInterval: NodeJS.Timer;
   private _patchInterval: NodeJS.Timer;
 
-  constructor () {
+  constructor (presence: Presence) {
     super();
-
+    this.presence = presence;
     this.setPatchRate(this.patchRate);
   }
 
@@ -204,6 +208,10 @@ export abstract class Room<T=any> extends EventEmitter {
   }
 
   private _onJoin (client: Client, options?: any): void {
+    if (client.remote) {
+      client = <Client> (new RemoteClient(client, this.roomId, this.presence));
+    }
+
     this.clients.push( client );
 
     // confirm room id that matches the room name requested to join

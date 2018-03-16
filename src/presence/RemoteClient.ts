@@ -6,9 +6,24 @@ export class RemoteClient extends EventEmitter {
     public id: string;
     public sessionId: string;
 
-    send (data: any) {
+    protected roomId: string
+    protected presence: Presence;
+
+    constructor (client: Client, roomId: string, presence: Presence) {
+        super();
+
+        this.id = client.id;
+        this.sessionId = client.sessionId;
+        this.roomId = roomId;
+
+        this.presence = presence;
     }
 
-    close () {
+    send (buffer: Buffer) {
+        this.presence.publish(`${this.roomId}:${this.sessionId}`, ['send', Array.from(buffer)]);
+    }
+
+    close (code?: number) {
+        this.presence.publish(`${this.roomId}:${this.sessionId}`, ['close', code]);
     }
 }
