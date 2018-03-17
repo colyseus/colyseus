@@ -1,3 +1,4 @@
+import { debugErrors } from './Debug';
 import * as net from "net";
 import * as http from "http";
 import * as msgpack from "notepack.io";
@@ -136,8 +137,9 @@ export class Server {
     client.options = upgradeReq.options;
     client.auth = upgradeReq.auth;
 
-    if (upgradeReq.roomId) {
-      this.matchMaker.bindRoom(client, upgradeReq.roomId);
+    let roomId = upgradeReq.roomId;
+    if (roomId) {
+      this.matchMaker.connectToRoom(client, upgradeReq.roomId);
 
     } else {
       client.on("message",  this.onMessageMatchMaking.bind(this, client));
@@ -165,7 +167,10 @@ export class Server {
     } else {
       this.matchMaker.onJoinRoomRequest(client, roomName, joinOptions).
         then((roomId: string) => send(client, [Protocol.JOIN_ROOM, roomId, joinOptions.requestId])).
-        catch(e => send(client, [Protocol.JOIN_ERROR, roomName, e && e.message]));
+        catch(e => {
+          debugErrors(e.stack || e);
+          send(client, [Protocol.JOIN_ERROR, roomName, e && e.message])
+        });
     }
   }
 

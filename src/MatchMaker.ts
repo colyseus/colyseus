@@ -14,7 +14,7 @@ import { RoomList } from './RoomList';
 import { Presence } from './presence/Presence';
 import { LocalPresence } from './presence/LocalPresence';
 
-import { debugMatchMaking } from "./Debug";
+import { debugMatchMaking, debugErrors } from "./Debug";
 
 export type ClientOptions = { clientId: string } & any;
 
@@ -41,8 +41,6 @@ export class MatchMaker {
   private handlers: {[id: string]: RegisteredHandler} = {};
 
   private localRooms = new RoomList<Room>();
-  private remoteRooms = new RoomList<RemoteRoom>();
-
   private presence: Presence;
 
   // room references by client id
@@ -53,7 +51,9 @@ export class MatchMaker {
     this.presence = presence || new LocalPresence();
   }
 
-  public async bindRoom (client: Client, roomId: string) {
+  public async connectToRoom (client: Client, roomId: string) {
+    let err: string;
+
     const room = this.localRooms.getById(roomId);
     const clientOptions = client.options;
 
@@ -64,10 +64,15 @@ export class MatchMaker {
     delete clientOptions.sessionId;
     delete clientOptions.clientId;
 
-    // (<any>room)._onJoin(client, clientOptions);
     if (this.localRooms.getById(roomId)) {
       this.sessions[client.sessionId] = room;
-      (<any>room)._onJoin(client, clientOptions, client.auth);
+      try {
+        (<any>room)._onJoin(client, clientOptions, client.auth);
+
+      } catch (e) {
+        err = e.message || e;
+        debugErrors(e.stack || e);
+      }
 
     } else {
       this.sessions[client.sessionId] = new RemoteRoom(roomId, this);
@@ -86,14 +91,17 @@ export class MatchMaker {
         }
       });
 
-      this.remoteRoomCall(roomId, "_onJoin", [{
+      try {
+        await this.remoteRoomCall(roomId, "_onJoin", [{
           id: client.id,
           sessionId: client.sessionId,
           remote: true,
-        },
-        clientOptions,
-        client.auth
-      ]);
+        }, clientOptions, client.auth]);
+
+      } catch (e) {
+        err = e.message || e;
+        debugErrors(e.stack || e);
+      }
 
       client.once('close', (_) => {
         console.log("remote client is closing connection:", client.sessionId);
@@ -107,6 +115,11 @@ export class MatchMaker {
     this.presence.hdel(roomId, client.id);
 
     client.on('message', (message) => this.onRoomMessage(client, message));
+
+    if (err) {
+      send(client, [Protocol.JOIN_ERROR, `${client.sessionId} couldn't connect to room "${roomId}": ${err}`]);
+      client.close();
+    }
   }
 
   protected onRoomMessage (client: Client, message: any) {
@@ -132,8 +145,9 @@ export class MatchMaker {
    * to effectively join into the room created/joined by this method.
    */
   public async onJoinRoomRequest (client: Client, roomToJoin: string, clientOptions: ClientOptions): Promise<string> {
-    let roomId: string;
     let err: string;
+
+    let roomId: string;
     let isCreating: boolean = false;
 
     clientOptions.sessionId = generateId();
@@ -145,7 +159,7 @@ export class MatchMaker {
 
       } else {
         isCreating = true;
-        roomId = this.create(roomToJoin, clientOptions).roomId;
+        roomId = this.create(roomToJoin, clientOptions);
       }
     } 
 
@@ -181,10 +195,10 @@ export class MatchMaker {
         };
 
         this.presence.subscribe(channel, (message) => {
-          console.log("RECEIVED:", message);
           let [code, data] = message;
           if (code === Protocol.IPC_SUCCESS) {
             resolve(data);
+
           } else if (code === Protocol.IPC_ERROR) {
             reject(data);
           }
@@ -258,8 +272,6 @@ export class MatchMaker {
     let roomsWithScore = (await this.getRoomsWithScore(roomName, clientOptions)).
       sort((a, b) => b.score - a.score);;
 
-    console.log("rooms with score:", roomsWithScore);
-
     return roomsWithScore[0];
   }
 
@@ -291,13 +303,10 @@ export class MatchMaker {
       return true;
     }));
 
-    let remoteScores: RoomWithScore[] = await Promise.all(remoteRequestJoins);
-    console.log("remote scores:", remoteScores);
-
-    return roomsWithScore.concat(remoteScores);
+    return (await Promise.all(remoteRequestJoins)).concat(roomsWithScore);
   }
 
-  public create (roomName: string, clientOptions: ClientOptions): Room {
+  public create (roomName: string, clientOptions: ClientOptions): string {
     let room = null
       , registeredHandler = this.handlers[ roomName ];
 
@@ -313,7 +322,7 @@ export class MatchMaker {
 
     // imediatelly ask client to join the room
     if ( room.requestJoin(clientOptions, true) ) {
-      debugMatchMaking("spawning '%s' on worker %d", roomName, process.pid);
+      debugMatchMaking("spawning '%s' on process %d", roomName, process.pid);
 
       room.on('lock', this.lockRoom.bind(this, roomName, room));
       room.on('unlock', this.unlockRoom.bind(this, roomName, room));
@@ -333,7 +342,7 @@ export class MatchMaker {
       room = null;
     }
 
-    return room;
+    return room && room.roomId;
   }
 
   private lockRoom (roomName: string, room: Room): void {
@@ -352,7 +361,7 @@ export class MatchMaker {
   }
 
   private disposeRoom(roomName: string, room: Room): void {
-    debugMatchMaking("disposing '%s' on worker %d", roomName, process.pid);
+    debugMatchMaking("disposing '%s' on process %d", roomName, process.pid);
 
     // emit disposal on registered session handler
     this.handlers[roomName].emit("dispose", room);
@@ -383,13 +392,22 @@ export class MatchMaker {
         }
 
         // reply with method result
-        let response = room[method].apply(room, args);
+        let response: any;
+
+        try {
+          response = room[method].apply(room, args);
+
+        } catch (e) {
+          debugErrors(e.stack || e);
+          return reply([Protocol.IPC_ERROR, e.message || e]);
+        }
+
         if (!(response instanceof Promise)) return reply([Protocol.IPC_SUCCESS, response]);
 
         response.
           then(result => reply([Protocol.IPC_SUCCESS, result])).
           catch(e => {
-            console.log("ERROR!", e.message || e);
+            debugErrors(e.stack || e);
             reply([Protocol.IPC_ERROR, e.message || e])
           });
       });

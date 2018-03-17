@@ -220,7 +220,7 @@ export abstract class Room<T=any> extends EventEmitter {
     remoteClient.emit(eventName);
   }
 
-  private _onJoin (client: Client, options?: any, auth?: any): void {
+  private _onJoin (client: Client, options?: any, auth?: any) {
     if (client.remote) {
       client = <any> (new RemoteClient(client, this.roomId, this.presence));
     }
@@ -248,19 +248,14 @@ export abstract class Room<T=any> extends EventEmitter {
     }
 
     if (this.onJoin) {
-      this.onJoin(client, options, auth);
+      return this.onJoin(client, options, auth);
     }
   }
 
   private _onLeave (client: Client): void | Promise<any> {
     let userReturnData;
 
-    //
     // call abstract 'onLeave' method only if the client has been successfully accepted.
-    //
-    // the '_onLeave' method may be called before 'verifyClient' succeeds,
-    // before the client is appended to `this.clients`
-    //
     if (spliceOne(this.clients, this.clients.indexOf(client)) && this.onLeave) {
       userReturnData = this.onLeave(client);
     }
