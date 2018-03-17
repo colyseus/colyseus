@@ -102,18 +102,18 @@ export class Server {
       let isLocked = await this.matchMaker.remoteRoomCall(req.roomId, 'locked');
       if (isLocked) return next(false, Protocol.WS_TOO_MANY_CLIENTS, "maxClients reached.");
 
+      console.log("let's validate this client to connect into:", req.roomId);
+
       // verify client from room scope.
-      this.matchMaker.remoteRoomCall(req.roomId, "verifyClient", [req.options]).
+      this.matchMaker.remoteRoomCall(req.roomId, "onAuth", [req.options]).
         then((result) => {
-          req.verifyClient = result;
+          req.auth = result;
           next(true);
         }).
         catch((e) => {
-          console.error("ERROR: verifyClient", e)
+          console.error("ERROR: onAuth", e)
           next(false);
         });
-
-      console.log("let's validate this client to connect into:", req.roomId);
 
     } else {
       next(true);
@@ -134,6 +134,7 @@ export class Server {
 
     // set client options
     client.options = upgradeReq.options;
+    client.auth = upgradeReq.auth;
 
     if (upgradeReq.roomId) {
       this.matchMaker.bindRoom(client, upgradeReq.roomId);

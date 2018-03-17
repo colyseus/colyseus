@@ -27,6 +27,11 @@ export enum Protocol {
   // WebSocket error codes
   WS_SERVER_DISCONNECT = 4201,
   WS_TOO_MANY_CLIENTS = 4202,
+
+  // Inter-process communication (100~200)
+  IPC_SUCCESS = 100,
+  IPC_ERROR = 101,
+  IPC_TIMEOUT = 102,
 }
 
 export function decode (message: any) {

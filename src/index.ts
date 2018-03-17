@@ -25,4 +25,5 @@ export type Client = WebSocket & {
   options: any;
   sessionId: string;
   remote?: boolean; // is this a remote client, from another process?
+  auth?: any; // custom data set through Room's verifyClient method.
 };

@@ -35,7 +35,7 @@ export class RegisteredHandler extends EventEmitter {
   }
 }
 
-const REMOTE_ROOM_SCOPE_TIMEOUT = 400;
+const REMOTE_ROOM_SCOPE_TIMEOUT = 8000; // remote room calls timeout
 
 export class MatchMaker {
   private handlers: {[id: string]: RegisteredHandler} = {};
@@ -67,7 +67,7 @@ export class MatchMaker {
     // (<any>room)._onJoin(client, clientOptions);
     if (this.localRooms.getById(roomId)) {
       this.sessions[client.sessionId] = room;
-      (<any>room)._onJoin(client, clientOptions);
+      (<any>room)._onJoin(client, clientOptions, client.auth);
 
     } else {
       this.sessions[client.sessionId] = new RemoteRoom(roomId, this);
@@ -87,10 +87,13 @@ export class MatchMaker {
       });
 
       this.remoteRoomCall(roomId, "_onJoin", [{
-        id: client.id,
-        sessionId: client.sessionId,
-        remote: true,
-      }, clientOptions]);
+          id: client.id,
+          sessionId: client.sessionId,
+          remote: true,
+        },
+        clientOptions,
+        client.auth
+      ]);
 
       client.once('close', (_) => {
         console.log("remote client is closing connection:", client.sessionId);
@@ -171,13 +174,20 @@ export class MatchMaker {
 
         const requestId = generateId();
         const channel = `${roomId}:${requestId}`;
+
         const unsubscribe = () => {
           this.presence.unsubscribe(channel);
           clearTimeout(unsubscribeTimeout);
         };
 
-        this.presence.subscribe(channel, (data) => {
-          resolve(data);
+        this.presence.subscribe(channel, (message) => {
+          console.log("RECEIVED:", message);
+          let [code, data] = message;
+          if (code === Protocol.IPC_SUCCESS) {
+            resolve(data);
+          } else if (code === Protocol.IPC_ERROR) {
+            reject(data);
+          }
           unsubscribe();
         });
 
@@ -185,7 +195,7 @@ export class MatchMaker {
 
         unsubscribeTimeout = setTimeout(() => {
           unsubscribe();
-          reject();
+          reject(Protocol.IPC_TIMEOUT);
         }, REMOTE_ROOM_SCOPE_TIMEOUT);
       });
 
@@ -361,28 +371,27 @@ export class MatchMaker {
       this.presence.sadd(room.roomName, room.roomId);
 
       this.presence.subscribe(room.roomId, (message) => {
-        // console.log("RECEIVED MESSAGE:", message);
-
         let [ method, requestId, args ] = message;
+
         const reply = (data) => {
-          // console.log("LETS REPLY WITH", data);
           this.presence.publish(`${room.roomId}:${requestId}`, data);
         };
 
-        // console.log(`LETS EXECUTE REMOTE COMMAND: ${room.roomId}, ${method}, ARGS: ${JSON.stringify(args)}`);
-
         // reply with property value
         if (!args && typeof(room[method]) !== "function") {
-          return reply(room[method]);
+          return reply([Protocol.IPC_SUCCESS, room[method]]);
         }
 
         // reply with method result
         let response = room[method].apply(room, args);
-        if (!(response instanceof Promise)) return reply(response);
+        if (!(response instanceof Promise)) return reply([Protocol.IPC_SUCCESS, response]);
 
         response.
-          then((result) => reply(result)).
-          catch(e => console.error("ERROR EXECUTING REMOTE COMMAND:", room.roomId, method, args));
+          then(result => reply([Protocol.IPC_SUCCESS, result])).
+          catch(e => {
+            console.log("ERROR!", e.message || e);
+            reply([Protocol.IPC_ERROR, e.message || e])
+          });
       });
 
       return true;

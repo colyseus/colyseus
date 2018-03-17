@@ -59,7 +59,7 @@ export abstract class Room<T=any> extends EventEmitter {
 
   // Optional abstract methods
   onInit? (options: any): void;
-  onJoin? (client: Client, options?: any): void | Promise<any>;
+  onJoin? (client: Client, options?: any, auth?: any): void | Promise<any>;
   onLeave? (client: Client): void | Promise<any>;
   onDispose? (): void | Promise<any>;
 
@@ -220,7 +220,7 @@ export abstract class Room<T=any> extends EventEmitter {
     remoteClient.emit(eventName);
   }
 
-  private _onJoin (client: Client, options?: any): void {
+  private _onJoin (client: Client, options?: any, auth?: any): void {
     if (client.remote) {
       client = <any> (new RemoteClient(client, this.roomId, this.presence));
     }
@@ -248,7 +248,7 @@ export abstract class Room<T=any> extends EventEmitter {
     }
 
     if (this.onJoin) {
-      this.onJoin(client, options);
+      this.onJoin(client, options, auth);
     }
   }
 
