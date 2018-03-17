@@ -26,6 +26,7 @@ export enum Protocol {
 
   // WebSocket error codes
   WS_SERVER_DISCONNECT = 4201,
+  WS_TOO_MANY_CLIENTS = 4202,
 }
 
 export function decode (message: any) {

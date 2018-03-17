@@ -20,7 +20,7 @@ const gameServer = new Server({
     next(true);
   },
   presence: new RedisPresence(),
-  engine: WebSocket.Server,
+  // engine: WebSocket.Server,
   server: server 
 });
 
@@ -28,8 +28,8 @@ const gameServer = new Server({
 gameServer.register("chat", ChatRoom).
   // demonstrating public events.
   on("create", (room) => console.log("room created!", room.roomId)).
-  on("join", (room, client) => console.log("client", client.id, "joined", room.roomId)).
-  on("leave", (room, client) => console.log("client", client.id, "left", room.roomId)).
+  on("join", (room, client) => console.log("client", client.sessionId, "joined", room.roomId)).
+  on("leave", (room, client) => console.log("client", client.sessionId, "left", room.roomId)).
   on("dispose", (room) => console.log("room disposed!", room.roomId));
 
 app.use(express.static(__dirname));

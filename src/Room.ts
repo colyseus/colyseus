@@ -19,7 +19,6 @@ const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
 
 export abstract class Room<T=any> extends EventEmitter {
-
   public clock: Clock = new Clock();
   public timeline?: Timeline;
 
@@ -37,9 +36,6 @@ export abstract class Room<T=any> extends EventEmitter {
 
   protected presence: Presence;
 
-  // holds a list of clients with clientOptions during handshake
-  public connectingClients: {[clientId: string]: any} = {};
-
   // when a new user connects, it receives the '_previousState', which holds
   // the last binary snapshot other users already have, therefore the patches
   // that follow will be the same for all clients.
@@ -49,7 +45,10 @@ export abstract class Room<T=any> extends EventEmitter {
   private _simulationInterval: NodeJS.Timer;
   private _patchInterval: NodeJS.Timer;
 
-  constructor (presence: Presence) {
+  private locked: boolean = false;
+  private _maxClientsReached: boolean = false;
+
+  constructor (presence?: Presence) {
     super();
     this.presence = presence;
     this.setPatchRate(this.patchRate);
@@ -72,8 +71,9 @@ export abstract class Room<T=any> extends EventEmitter {
     return Promise.resolve(true);
   }
 
-  public get maxClientsReached () {
-    return this.clients.length + Object.keys(this.connectingClients).length >= this.maxClients;
+  public async hasReachedMaxClients (): Promise<boolean> {
+    let connectingClients = (await this.presence.hlen(this.roomId));
+    return this.clients.length + connectingClients >= this.maxClients;
   }
 
   public setSimulationInterval ( callback: Function, delay: number = DEFAULT_SIMULATION_INTERVAL ): void {
@@ -117,10 +117,12 @@ export abstract class Room<T=any> extends EventEmitter {
   }
 
   public lock (): void {
+    this.locked = true;
     this.emit('lock');
   }
 
   public unlock (): void {
+    this.locked = false;
     this.emit('unlock');
   }
 
@@ -141,7 +143,7 @@ export abstract class Room<T=any> extends EventEmitter {
 
     let numClients = this.clients.length;
     while (numClients--) {
-      this.clients[ numClients ].send(data, { binary: true }, logError.bind(this) );
+      (<Client>this.clients[ numClients ]).send(data, { binary: true }, logError.bind(this) );
     }
 
     return true;
@@ -152,7 +154,7 @@ export abstract class Room<T=any> extends EventEmitter {
 
     let i = this.clients.length;
     while (i--) {
-      promises.push( this._onLeave(this.clients[i]) );
+      promises.push( this._onLeave((<Client>this.clients[i])) );
     }
 
     return Promise.all(promises);
@@ -203,19 +205,34 @@ export abstract class Room<T=any> extends EventEmitter {
     this._previousStateEncoded = currentStateEncoded;
 
     // broadcast patches (diff state) to all clients,
-    // even if nothing has changed in order to calculate PING on client-side
     return this.broadcast( msgpack.encode([ Protocol.ROOM_STATE_PATCH, patches ]) );
+  }
+
+  // allow remote clients to trigger events on themselves
+  private _triggerOnRemoteClient (sessionId, eventName) {
+    console.log("_triggerOnRemoteClient, sessionId", sessionId, eventName);
+    let remoteClient = this.clients.filter(c => c.sessionId === sessionId)[0];
+    remoteClient.emit(eventName);
   }
 
   private _onJoin (client: Client, options?: any): void {
     if (client.remote) {
-      client = <Client> (new RemoteClient(client, this.roomId, this.presence));
+      client = <any> (new RemoteClient(client, this.roomId, this.presence));
     }
 
     this.clients.push( client );
 
+    // lock automatically when maxClients is reached
+    if (this.clients.length === this.maxClients) {
+      this._maxClientsReached = true;
+      this.lock();
+    }
+
     // confirm room id that matches the room name requested to join
     send(client, [ Protocol.JOIN_ROOM, client.sessionId ]);
+
+    // bind onLeave method.
+    client.once('close', this._onLeave.bind(this, client));
 
     // send current state when new client joins the room
     if (this.state) {
@@ -227,7 +244,7 @@ export abstract class Room<T=any> extends EventEmitter {
     }
   }
 
-  private _onLeave (client: Client, isDisconnect: boolean = false): void | Promise<any> {
+  private _onLeave (client: Client): void | Promise<any> {
     let userReturnData;
 
     //
@@ -240,16 +257,16 @@ export abstract class Room<T=any> extends EventEmitter {
       userReturnData = this.onLeave(client);
     }
 
-    this.emit('leave', client, isDisconnect);
-
-    // Force WebSocket disconnection from server.
-    if (!isDisconnect) {
-      client.close(Protocol.WS_SERVER_DISCONNECT);
-    }
+    this.emit('leave', client);
 
     // custom cleanup method & clear intervals
     if ( this.autoDispose ) {
       this._disposeIfEmpty();
+    }
+
+    // unlock if room is available for new connections
+    if (this._maxClientsReached && this.locked) {
+      this.unlock();
     }
 
     return userReturnData || Promise.resolve();

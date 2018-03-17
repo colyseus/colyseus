@@ -1,4 +1,5 @@
 import { Room } from "../src";
+import { RemoteClient } from "../src/presence/RemoteClient";
 
 export class ChatRoom extends Room<any> {
   maxClients = 4;
@@ -12,10 +13,11 @@ export class ChatRoom extends Room<any> {
   // }
 
   onJoin (client, options) {
-    console.log("client has joined!");
-    console.log("client.id:", client.id);
-    console.log("client.sessionId:", client.sessionId);
-    console.log("with options", options);
+    console.log("CLIENT JOINED ON ROOM", this.roomId, "CLIENTS:", this.clients.map(c => c instanceof RemoteClient));
+    // console.log("client has joined!");
+    // console.log("client.id:", client.id);
+    // console.log("client.sessionId:", client.sessionId);
+    // console.log("with options", options);
     this.state.messages.push(`${ client.id } joined.`);
   }
 

@@ -99,6 +99,10 @@ export class Server {
     req.options = query;
 
     if (req.roomId) {
+      let isLocked = await this.matchMaker.remoteRoomCall(req.roomId, 'locked');
+      if (isLocked) return next(false, Protocol.WS_TOO_MANY_CLIENTS, "maxClients reached.");
+
+      // verify client from room scope.
       this.matchMaker.remoteRoomCall(req.roomId, "verifyClient", [req.options]).
         then((result) => {
           req.verifyClient = result;
@@ -149,8 +153,6 @@ export class Server {
       return;
     }
 
-    console.log("onMessageMatchMaking", process.pid, message);
-
     const roomName = message[1];
     const joinOptions = message[2];
 
@@ -161,11 +163,8 @@ export class Server {
 
     } else {
       this.matchMaker.onJoinRoomRequest(client, roomName, joinOptions).
-        then((room: Room) => send(client, [Protocol.JOIN_ROOM, room.roomId, joinOptions.requestId])).
-        catch(e => {
-          console.log("onJoinRoomRequest error", e);
-          send(client, [Protocol.JOIN_ERROR, roomName, e && e.message])
-        });
+        then((roomId: string) => send(client, [Protocol.JOIN_ROOM, roomId, joinOptions.requestId])).
+        catch(e => send(client, [Protocol.JOIN_ERROR, roomName, e && e.message]));
     }
   }
 
