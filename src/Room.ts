@@ -210,8 +210,13 @@ export abstract class Room<T=any> extends EventEmitter {
 
   // allow remote clients to trigger events on themselves
   private _triggerOnRemoteClient (sessionId, eventName) {
-    console.log("_triggerOnRemoteClient, sessionId", sessionId, eventName);
     let remoteClient = this.clients.filter(c => c.sessionId === sessionId)[0];
+
+    if (!remoteClient) {
+      console.error(this.roomId, "REMOTE CLIENT NOT FOUND:", sessionId, `(event: ${eventName})`);
+      return;
+    }
+
     remoteClient.emit(eventName);
   }
 
@@ -230,6 +235,9 @@ export abstract class Room<T=any> extends EventEmitter {
 
     // confirm room id that matches the room name requested to join
     send(client, [ Protocol.JOIN_ROOM, client.sessionId ]);
+
+    // emit 'join' to room handler
+    this.emit('join', client);
 
     // bind onLeave method.
     client.once('close', this._onLeave.bind(this, client));

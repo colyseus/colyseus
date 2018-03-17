@@ -59,7 +59,6 @@ export class MatchMaker {
 
     // assign sessionId to socket connection.
     client.sessionId = await this.presence.hget(roomId, client.id);
-    console.log("NEW CLIENT:", client.sessionId);
 
     // clean temporary data
     delete clientOptions.sessionId;
@@ -95,8 +94,8 @@ export class MatchMaker {
 
       client.once('close', (_) => {
         console.log("remote client is closing connection:", client.sessionId);
-        this.remoteRoomCall(roomId, "_triggerOnRemoteClient", [client.sessionId, 'close']);
         this.presence.unsubscribe(remoteSessionSub);
+        this.remoteRoomCall(roomId, "_triggerOnRemoteClient", [client.sessionId, 'close']);
         delete this.sessions[client.sessionId];
       });
     }
@@ -104,7 +103,6 @@ export class MatchMaker {
     // clear reserved seat of connecting client into the room
     this.presence.hdel(roomId, client.id);
 
-    // register 'close' event early on. the client might disconnect before successfully joining the requested room
     client.on('message', (message) => this.onRoomMessage(client, message));
   }
 

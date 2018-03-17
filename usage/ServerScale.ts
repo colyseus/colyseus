@@ -27,10 +27,10 @@ const gameServer = new Server({
 // Register ChatRoom as "chat"
 gameServer.register("chat", ChatRoom).
   // demonstrating public events.
-  on("create", (room) => console.log("room created!", room.roomId)).
-  on("join", (room, client) => console.log("client", client.sessionId, "joined", room.roomId)).
-  on("leave", (room, client) => console.log("client", client.sessionId, "left", room.roomId)).
-  on("dispose", (room) => console.log("room disposed!", room.roomId));
+  on("create", (room) => console.log("handler: room created!", room.roomId)).
+  on("join", (room, client) => console.log("handler: client", client.sessionId, "joined", room.roomId)).
+  on("leave", (room, client) => console.log("handler: client", client.sessionId, "left", room.roomId)).
+  on("dispose", (room) => console.log("handler: room disposed!", room.roomId));
 
 app.use(express.static(__dirname));
 app.use(bodyParser.json());
