@@ -7,7 +7,7 @@ import { EventEmitter } from "events";
 import { createTimeline, Timeline } from "@gamestdio/timeline";
 
 import { Client } from "./index";
-import { Protocol, send } from "./Protocol";
+import { Protocol, send, decode } from "./Protocol";
 import { logError, spliceOne } from "./Utils";
 import { Presence } from './presence/Presence';
 import { RemoteClient } from "./presence/RemoteClient";
@@ -25,7 +25,8 @@ export abstract class Room<T=any> extends EventEmitter {
   public roomId: string;
   public roomName: string;
 
-  public clients: (Client | RemoteClient)[] = [];
+  public clients: Client[] = [];
+  protected remoteClients: {[sessionId: string]: RemoteClient} = {};
 
   public maxClients: number = Infinity;
   public patchRate: number = DEFAULT_PATCH_RATE; 
@@ -209,20 +210,39 @@ export abstract class Room<T=any> extends EventEmitter {
   }
 
   // allow remote clients to trigger events on themselves
-  private _triggerOnRemoteClient (sessionId, eventName) {
-    let remoteClient = this.clients.filter(c => c.sessionId === sessionId)[0];
+  private _emitOnClient (sessionId, event) {
+    let remoteClient = this.remoteClients[sessionId];
 
     if (!remoteClient) {
-      console.error(this.roomId, "REMOTE CLIENT NOT FOUND:", sessionId, `(event: ${eventName})`);
+      console.error(this.roomId, "REMOTE CLIENT NOT FOUND:", sessionId, `(event: ${event})`);
       return;
     }
 
-    remoteClient.emit(eventName);
+    if (typeof(event) !== "string") {
+      remoteClient.emit('message', new Buffer(event));
+
+    } else {
+      remoteClient.emit(event);
+    }
+  }
+
+  private _onMessage (client: Client, message: any) {
+    if (!(message = decode(message))) { return; }
+
+    if (message[0] == Protocol.ROOM_DATA) {
+      this.onMessage(client, message[2]);
+
+    } else {
+      this.onMessage(client, message);
+    }
+
   }
 
   private _onJoin (client: Client, options?: any, auth?: any) {
+    // create remote client instance.
     if (client.remote) {
       client = <any> (new RemoteClient(client, this.roomId, this.presence));
+      this.remoteClients[client.sessionId] = <any> client;
     }
 
     this.clients.push( client );
@@ -240,6 +260,7 @@ export abstract class Room<T=any> extends EventEmitter {
     this.emit('join', client);
 
     // bind onLeave method.
+    client.on('message', this._onMessage.bind(this, client));
     client.once('close', this._onLeave.bind(this, client));
 
     // send current state when new client joins the room
@@ -258,6 +279,11 @@ export abstract class Room<T=any> extends EventEmitter {
     // call abstract 'onLeave' method only if the client has been successfully accepted.
     if (spliceOne(this.clients, this.clients.indexOf(client)) && this.onLeave) {
       userReturnData = this.onLeave(client);
+    }
+
+    // remove remote client reference
+    if (client instanceof RemoteClient) {
+      delete this.remoteClients[client.sessionId];
     }
 
     this.emit('leave', client);

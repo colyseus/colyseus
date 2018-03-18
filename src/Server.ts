@@ -7,12 +7,14 @@ import * as WebSocket from "ws";
 import { ServerOptions as IServerOptions } from "ws";
 import { unescape } from "querystring";
 
-import { MatchMaker, RegisteredHandler } from "./MatchMaker";
+import { MatchMaker } from "./MatchMaker";
+import { RegisteredHandler } from './matchmaker/RegisteredHandler';
+import { Presence } from "./presence/Presence";
+
 import { Protocol, send, decode } from "./Protocol";
 import { Client, isValidId, generateId } from "./index";
 import { Room } from "./Room";
 import { registerGracefulShutdown } from "./Utils";
-import { Presence } from "./presence/Presence";
 
 export type ServerOptions = IServerOptions & {
   verifyClient?: WebSocket.VerifyClientCallbackAsync

@@ -7,7 +7,7 @@ import Clock, { Delayed } from "@gamestdio/timer";
 export { Server } from "./Server";
 export { Room } from "./Room";
 export { Protocol } from "./Protocol";
-export { RegisteredHandler } from "./MatchMaker";
+export { RegisteredHandler } from "./matchmaker/RegisteredHandler";
 
 // State Helper Types
 export type EntityMap<T> = {[ entityId:string ]: T};

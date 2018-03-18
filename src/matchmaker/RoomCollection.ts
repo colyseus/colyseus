@@ -1,4 +1,6 @@
-export class RoomList<T> {
+import { Room } from '../Room';
+
+export class RoomCollection<T=Room> {
     byName: { [roomName: string]: T[] } = {};
     byId: { [id: string]: T } = {};
 
