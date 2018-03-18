@@ -170,7 +170,7 @@ export abstract class Room<T=any> extends EventEmitter {
   }
 
   private broadcastPatch (): boolean {
-    if ( !this._previousState ) {
+    if ( !this.state ) {
       debugPatch('trying to broadcast null state. you should call #setState on constructor or during user connection.');
       return false;
     }
@@ -198,7 +198,7 @@ export abstract class Room<T=any> extends EventEmitter {
     }
 
     if (debugPatchData.enabled) {
-      debugPatchData(jsonPatch.compare(this._previousState, currentState));
+      debugPatchData("%j", jsonPatch.compare(msgpack.decode(this._previousStateEncoded), currentState));
     }
 
     this._previousState = currentState;
