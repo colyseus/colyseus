@@ -301,8 +301,6 @@ export class MatchMaker {
       room.on('leave', this.onClientLeaveRoom.bind(this, room));
       room.once('dispose', this.disposeRoom.bind(this, roomName, room));
 
-      this.localRooms.setById(room.roomId, room);
-
       // room always start unlocked
       this.createRoomReferences(room);
 
@@ -367,7 +365,6 @@ export class MatchMaker {
 
         // reply with method result
         let response: any;
-
         try {
           response = room[method].apply(room, args);
 
@@ -376,7 +373,9 @@ export class MatchMaker {
           return reply([Protocol.IPC_ERROR, e.message || e]);
         }
 
-        if (!(response instanceof Promise)) return reply([Protocol.IPC_SUCCESS, response]);
+        if (!(response instanceof Promise)) {
+          return reply([Protocol.IPC_SUCCESS, response]);
+        }
 
         response.
           then(result => reply([Protocol.IPC_SUCCESS, result])).
@@ -395,7 +394,6 @@ export class MatchMaker {
       let roomIndex = this.localRooms[room.roomName].indexOf(room);
       if (roomIndex !== -1) {
         this.presence.srem(room.roomName, room.roomId);
-        // this.presence.unregisterRoom(roomName, room.roomId, process.pid);
       }
 
       // clear list of connecting clients.
