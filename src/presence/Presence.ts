@@ -14,10 +14,4 @@ export interface Presence {
     hget(roomId: string, key: string): Promise<string>;
     hdel(roomId: string, key: string);
     hlen(roomId: string): Promise<number>;
-
-}
-
-export interface RoomPresence {
-    registerRoom(roomName: string, roomId: string, pid: number);
-    unregisterRoom(roomName: string, roomId: string, pid: number);
 }

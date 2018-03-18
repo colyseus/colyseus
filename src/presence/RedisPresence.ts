@@ -1,6 +1,6 @@
+import * as redis from "redis";
 import { promisify } from 'util';
 
-import * as redis from "redis";
 import { Presence } from "./Presence";
 
 export class RedisPresence implements Presence {
