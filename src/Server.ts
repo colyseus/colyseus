@@ -99,24 +99,21 @@ export class Server {
     req.colyseusid = query['colyseusid'];
 
     delete query['colyseusid'];
-    req.options = query;
+    req.options = query['options'] || {};
 
     if (req.roomId) {
       let isLocked = await this.matchMaker.remoteRoomCall(req.roomId, 'locked');
       if (isLocked) return next(false, Protocol.WS_TOO_MANY_CLIENTS, "maxClients reached.");
 
-      console.log("let's validate this client to connect into:", req.roomId);
-
       // verify client from room scope.
       this.matchMaker.remoteRoomCall(req.roomId, "onAuth", [req.options]).
         then((result) => {
+          if (!result) return next(false);
+
           req.auth = result;
           next(true);
         }).
-        catch((e) => {
-          console.error("ERROR: onAuth", e)
-          next(false);
-        });
+        catch((e) => next(false));
 
     } else {
       next(true);
