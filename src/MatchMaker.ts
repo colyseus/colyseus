@@ -337,15 +337,18 @@ export class MatchMaker {
     // emit disposal on registered session handler
     this.handlers[roomName].emit("dispose", room);
 
-    delete this.localRooms.byId[ room.roomId ]
+    this.localRooms.deleteById(room.roomId);
 
     // remove from available rooms
     this.clearRoomReferences(room);
+
+    // unsubscribe from remote connections
+    this.presence.unsubscribe(room.roomId);
   }
 
   protected createRoomReferences (room: Room): boolean {
-    if (this.localRooms[ room.roomName ].indexOf(room) === -1) {
-      this.localRooms[ room.roomName ].push(room)
+    if (!this.localRooms.getById(room.roomId)) {
+      this.localRooms.setById(room.roomId, room);
 
       // cache on which process the room is living.
       this.presence.sadd(room.roomName, room.roomId);
@@ -398,7 +401,7 @@ export class MatchMaker {
       // clear list of connecting clients.
       this.presence.del(room.roomId);
 
-      spliceOne(this.localRooms[room.roomName], roomIndex);
+      this.localRooms.deleteById(room.roomId);
     }
   }
 

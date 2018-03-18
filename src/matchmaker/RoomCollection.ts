@@ -11,4 +11,8 @@ export class RoomCollection<T=Room> {
     getById(id: string): T {
         return this.byId[id];
     }
+
+    deleteById (id: string) {
+        delete this.byId[id];
+    }
 }
