@@ -9,6 +9,11 @@ export { Room } from "./Room";
 export { Protocol } from "./Protocol";
 export { RegisteredHandler } from "./matchmaker/RegisteredHandler";
 
+// Presence
+export { Presence } from "./presence/Presence";
+export { LocalPresence } from "./presence/LocalPresence";
+export { RedisPresence } from "./presence/RedisPresence";
+
 // State Helper Types
 export type EntityMap<T> = {[ entityId:string ]: T};
 
