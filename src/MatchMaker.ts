@@ -9,7 +9,6 @@ import { Protocol, send } from "./Protocol";
 
 import { Room } from "./Room";
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
-import { RoomCollection } from './matchmaker/RoomCollection';
 
 import { Presence } from './presence/Presence';
 import { LocalPresence } from './presence/LocalPresence';
@@ -28,7 +27,7 @@ const REMOTE_ROOM_SCOPE_TIMEOUT = 8000; // remote room calls timeout
 export class MatchMaker {
   private handlers: {[id: string]: RegisteredHandler} = {};
 
-  private localRooms = new RoomCollection<Room>();
+  private localRooms: {[roomId: string]: Room} = {};
   private presence: Presence;
 
   // room references by client id
@@ -41,7 +40,7 @@ export class MatchMaker {
   public async connectToRoom (client: Client, roomId: string) {
     let err: string;
 
-    const room = this.localRooms.getById(roomId);
+    const room = this.localRooms[roomId];
     const clientOptions = client.options;
     const auth = client.auth;
 
@@ -52,7 +51,7 @@ export class MatchMaker {
     delete clientOptions.auth;
     delete client.options;
 
-    if (this.localRooms.getById(roomId)) {
+    if (this.localRooms[roomId]) {
       try {
         (<any>room)._onJoin(client, clientOptions, client.auth);
 
@@ -89,7 +88,8 @@ export class MatchMaker {
       }
 
       // forward 'message' events to room's process
-      client.once('message', (data) => {
+      client.on('message', (data: Buffer) => {
+        console.log("LETS FORWARD DATA FROM CLIENT", client.sessionId, data);
         this.remoteRoomCall(roomId, "_emitOnClient", [client.sessionId, Array.from(data)]);
       });
 
@@ -126,7 +126,7 @@ export class MatchMaker {
     clientOptions.sessionId = generateId();
 
     if (this.hasHandler(roomToJoin)) {
-      let bestRoomByScore = await this.getAvailableRoomByScore(roomToJoin, clientOptions);
+      let bestRoomByScore = (await this.getAvailableRoomByScore(roomToJoin, clientOptions))[0];
       if (bestRoomByScore && bestRoomByScore.roomId) {
         roomToJoin = bestRoomByScore.roomId;
 
@@ -152,7 +152,7 @@ export class MatchMaker {
   }
 
   public async remoteRoomCall (roomId: string, method: string, args?: any[]) {
-    const room = this.localRooms.getById(roomId);
+    const room = this.localRooms[roomId];
 
     if (!room) {
       return new Promise((resolve, reject) => {
@@ -206,18 +206,12 @@ export class MatchMaker {
     let registeredHandler = new RegisteredHandler(klass, options);
 
     this.handlers[ name ] = registeredHandler;
-    this.localRooms[ name ] = [];
 
     return registeredHandler;
   }
 
   public hasHandler (name: string) {
     return this.handlers[ name ] !== undefined;
-  }
-
-  public hasAvailableRoom (roomName: string): boolean {
-    return (this.localRooms[ roomName ] &&
-      this.localRooms[ roomName ].length > 0)
   }
 
   public async joinById (roomId: string, clientOptions: ClientOptions): Promise<string> {
@@ -239,11 +233,9 @@ export class MatchMaker {
     return roomId;
   }
 
-  public async getAvailableRoomByScore (roomName: string, clientOptions: ClientOptions): Promise<RoomWithScore> {
-    let roomsWithScore = (await this.getRoomsWithScore(roomName, clientOptions)).
-      sort((a, b) => b.score - a.score);;
-
-    return roomsWithScore[0];
+  public async getAvailableRoomByScore (roomName: string, clientOptions: ClientOptions): Promise<RoomWithScore[]> {
+    return (await this.getRoomsWithScore(roomName, clientOptions)).
+      sort((a, b) => b.score - a.score);
   }
 
   protected async getRoomsWithScore (roomName: string, clientOptions: ClientOptions): Promise<RoomWithScore[]> {
@@ -257,7 +249,7 @@ export class MatchMaker {
       // check maxClients before requesting to join.
       if (maxClientsReached) { return; }
 
-      const localRoom = this.localRooms.getById(roomId);
+      const localRoom = this.localRooms[roomId];
       if (!localRoom) {
         remoteRequestJoins.push(new Promise(async (resolve, reject) => {
           let score = await this.remoteRoomCall(roomId, 'requestJoin', [clientOptions, false]);
@@ -335,8 +327,6 @@ export class MatchMaker {
     // emit disposal on registered session handler
     this.handlers[roomName].emit("dispose", room);
 
-    this.localRooms.deleteById(room.roomId);
-
     // remove from available rooms
     this.clearRoomReferences(room);
 
@@ -345,12 +335,13 @@ export class MatchMaker {
   }
 
   protected createRoomReferences (room: Room): boolean {
-    if (!this.localRooms.getById(room.roomId)) {
-      this.localRooms.setById(room.roomId, room);
+    if (!this.localRooms[room.roomId]) {
+      this.localRooms[room.roomId] = room;
 
       // cache on which process the room is living.
       this.presence.sadd(room.roomName, room.roomId);
 
+      console.log(`LETS SUBCRIBE TO ${room.roomId}`);
       this.presence.subscribe(room.roomId, (message) => {
         let [ method, requestId, args ] = message;
 
@@ -390,16 +381,13 @@ export class MatchMaker {
   }
 
   protected clearRoomReferences (room: Room) {
-    if (this.hasAvailableRoom(room.roomName)) {
-      let roomIndex = this.localRooms[room.roomName].indexOf(room);
-      if (roomIndex !== -1) {
-        this.presence.srem(room.roomName, room.roomId);
-      }
+    if (this.localRooms[room.roomId]) {
+      this.presence.srem(room.roomName, room.roomId);
 
       // clear list of connecting clients.
       this.presence.del(room.roomId);
 
-      this.localRooms.deleteById(room.roomId);
+      delete this.localRooms[room.roomId];
     }
   }
 
@@ -412,8 +400,8 @@ export class MatchMaker {
 
     let promises = [];
 
-    for (let roomId in this.localRooms.byId) {
-      let room = this.localRooms.byId[roomId];
+    for (let roomId in this.localRooms) {
+      let room = this.localRooms[roomId];
 
       // disable autoDispose temporarily, which allow potentially retrieving a
       // Promise from user's `onDispose` method.

@@ -58,7 +58,7 @@ export class Server {
     if (options.server || options.port) {
       const customVerifyClient: WebSocket.VerifyClientCallbackAsync = options.verifyClient;
 
-      options.verifyClient = (info, next) =>  {
+      options.verifyClient = (info, next) => {
         if (!customVerifyClient) return this.verifyClient(info, next);
 
         customVerifyClient(info, (verified, code, message) => {
@@ -102,12 +102,19 @@ export class Server {
     req.options = query['options'] || {};
 
     if (req.roomId) {
+      console.log(`LETS CHECK IF ROOM ${req.roomId} IS LOCKED...`);
+
       let isLocked = await this.matchMaker.remoteRoomCall(req.roomId, 'locked');
+      console.log(`IS LOCKED REPLY:`, isLocked);
+
       if (isLocked) return next(false, Protocol.WS_TOO_MANY_CLIENTS, "maxClients reached.");
+
+      console.log("LETS CALL onAuth:", req.options);
 
       // verify client from room scope.
       this.matchMaker.remoteRoomCall(req.roomId, "onAuth", [req.options]).
         then((result) => {
+          console.log("onAuth", result);
           if (!result) return next(false);
 
           req.auth = result;
