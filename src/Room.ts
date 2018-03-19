@@ -29,7 +29,7 @@ export abstract class Room<T=any> extends EventEmitter {
   protected remoteClients: {[sessionId: string]: RemoteClient} = {};
 
   public maxClients: number = Infinity;
-  public patchRate: number = DEFAULT_PATCH_RATE; 
+  public patchRate: number = DEFAULT_PATCH_RATE;
   public autoDispose: boolean = true;
 
   public state: T;
@@ -68,13 +68,17 @@ export abstract class Room<T=any> extends EventEmitter {
     return 1;
   }
 
-  public verifyClient (client: Client, options: any): boolean | Promise<any> {
-    return Promise.resolve(true);
+  public onAuth (options: any): boolean | Promise<any> {
+    return true;
   }
 
   public async hasReachedMaxClients (): Promise<boolean> {
     let connectingClients = (await this.presence.hlen(this.roomId));
-    return this.clients.length + connectingClients >= this.maxClients;
+    return (
+      this.clients.length +
+      Object.keys(this.remoteClients).length +
+      connectingClients
+    ) >= this.maxClients;
   }
 
   public setSimulationInterval ( callback: Function, delay: number = DEFAULT_SIMULATION_INTERVAL ): void {
