@@ -254,12 +254,12 @@ export class MatchMaker {
 
       registeredHandler.emit('create', room);
 
-    } else {
-      room._dispose();
-      room = null;
-    }
+      return room.roomId;
 
-    return room && room.roomId;
+    } else {
+      (room as any)._dispose();
+      return undefined;
+    }
   }
 
   public gracefullyShutdown() {
