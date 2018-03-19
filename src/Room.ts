@@ -1,32 +1,35 @@
-import * as msgpack from "notepack.io";
-import * as fossilDelta from "fossil-delta";
-import * as shortid from "shortid";
+import * as fossilDelta from 'fossil-delta';
+import * as msgpack from 'notepack.io';
+import * as shortid from 'shortid';
 
-import Clock from "@gamestdio/timer";
-import { EventEmitter } from "events";
-import { createTimeline, Timeline } from "@gamestdio/timeline";
+import { createTimeline, Timeline } from '@gamestdio/timeline';
+import Clock from '@gamestdio/timer';
+import { EventEmitter } from 'events';
 
-import { Client } from "./index";
-import { Protocol, send, decode } from "./Protocol";
-import { logError, spliceOne } from "./Utils";
+import { Client } from './index';
 import { Presence } from './presence/Presence';
-import { RemoteClient } from "./presence/RemoteClient";
+import { RemoteClient } from './presence/RemoteClient';
+import { decode, Protocol, send } from './Protocol';
+import { logError, spliceOne } from './Utils';
 
-import { debugPatch, debugPatchData } from "./Debug";
-import * as jsonPatch from "fast-json-patch"; // this is only used for debugging patches
+import * as jsonPatch from 'fast-json-patch'; // this is only used for debugging patches
+import { debugErrors, debugPatch, debugPatchData } from './Debug';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
 
-export abstract class Room<T=any> extends EventEmitter {
+export type SimulationCallback = (deltaTime?: number) => void;
+
+export interface RoomConstructor<T= any> {
+  new (presence?: Presence): Room<T>;
+}
+
+export abstract class Room<T= any> extends EventEmitter {
   public clock: Clock = new Clock();
   public timeline?: Timeline;
 
   public roomId: string;
   public roomName: string;
-
-  public clients: Client[] = [];
-  protected remoteClients: {[sessionId: string]: RemoteClient} = {};
 
   public maxClients: number = Infinity;
   public patchRate: number = DEFAULT_PATCH_RATE;
@@ -34,6 +37,9 @@ export abstract class Room<T=any> extends EventEmitter {
 
   public state: T;
   public metadata: any;
+
+  protected clients: Client[] = [];
+  protected remoteClients: {[sessionId: string]: RemoteClient} = {};
 
   protected presence: Presence;
 
@@ -49,31 +55,31 @@ export abstract class Room<T=any> extends EventEmitter {
   private locked: boolean = false;
   private _maxClientsReached: boolean = false;
 
-  constructor (presence?: Presence) {
+  constructor(presence?: Presence) {
     super();
     this.presence = presence;
     this.setPatchRate(this.patchRate);
   }
 
   // Abstract methods
-  abstract onMessage (client: Client, data: any): void;
+  public abstract onMessage(client: Client, data: any): void;
 
   // Optional abstract methods
-  onInit? (options: any): void;
-  onJoin? (client: Client, options?: any, auth?: any): void | Promise<any>;
-  onLeave? (client: Client): void | Promise<any>;
-  onDispose? (): void | Promise<any>;
+  public onInit?(options: any): void;
+  public onJoin?(client: Client, options?: any, auth?: any): void | Promise<any>;
+  public onLeave?(client: Client): void | Promise<any>;
+  public onDispose?(): void | Promise<any>;
 
-  public requestJoin (options: any, isNew?: boolean): number | boolean {
+  public requestJoin(options: any, isNew?: boolean): number | boolean {
     return 1;
   }
 
-  public onAuth (options: any): boolean | Promise<any> {
+  public onAuth(options: any): boolean | Promise<any> {
     return true;
   }
 
-  public async hasReachedMaxClients (): Promise<boolean> {
-    let connectingClients = (await this.presence.hlen(this.roomId));
+  public async hasReachedMaxClients(): Promise<boolean> {
+    const connectingClients = (await this.presence.hlen(this.roomId));
     return (
       this.clients.length +
       Object.keys(this.remoteClients).length +
@@ -81,28 +87,28 @@ export abstract class Room<T=any> extends EventEmitter {
     ) >= this.maxClients;
   }
 
-  public setSimulationInterval ( callback: Function, delay: number = DEFAULT_SIMULATION_INTERVAL ): void {
+  public setSimulationInterval( callback: SimulationCallback, delay: number = DEFAULT_SIMULATION_INTERVAL ): void {
     // clear previous interval in case called setSimulationInterval more than once
-    if ( this._simulationInterval ) clearInterval( this._simulationInterval );
+    if ( this._simulationInterval ) { clearInterval( this._simulationInterval ); }
 
     this._simulationInterval = setInterval( () => {
       this.clock.tick();
-      callback();
+      callback(this.clock.deltaTime);
     }, delay );
   }
 
-  public setPatchRate ( milliseconds: number ): void {
+  public setPatchRate( milliseconds: number ): void {
     // clear previous interval in case called setPatchRate more than once
-    if ( this._patchInterval ) clearInterval(this._patchInterval);
+    if ( this._patchInterval ) { clearInterval(this._patchInterval); }
 
     this._patchInterval = setInterval( this.broadcastPatch.bind(this), milliseconds );
   }
 
-  public useTimeline ( maxSnapshots: number = 10 ): void {
+  public useTimeline( maxSnapshots: number = 10 ): void {
     this.timeline = createTimeline( maxSnapshots );
   }
 
-  public setState (newState) {
+  public setState(newState) {
     this.clock.start();
 
     this._previousState = newState;
@@ -117,28 +123,28 @@ export abstract class Room<T=any> extends EventEmitter {
     }
   }
 
-  public setMetadata (meta: any) {
+  public setMetadata(meta: any) {
     this.metadata = meta;
   }
 
-  public lock (): void {
+  public lock(): void {
     this.locked = true;
     this.emit('lock');
   }
 
-  public unlock (): void {
+  public unlock(): void {
     this.locked = false;
     this.emit('unlock');
   }
 
-  public send (client: Client, data: any): void {
+  public send(client: Client, data: any): void {
     send(client, [ Protocol.ROOM_DATA, data ]);
   }
 
-  public broadcast (data: any): boolean {
+  public broadcast(data: any): boolean {
     // no data given, try to broadcast patched state
     if (!data) {
-      throw new Error("Room#broadcast: 'data' is required to broadcast.");
+      throw new Error('Room#broadcast: \'data\' is required to broadcast.');
     }
 
     // encode all messages with msgpack
@@ -148,24 +154,24 @@ export abstract class Room<T=any> extends EventEmitter {
 
     let numClients = this.clients.length;
     while (numClients--) {
-      (<Client>this.clients[ numClients ]).send(data, { binary: true }, logError.bind(this) );
+      (this.clients[ numClients ] as Client).send(data, { binary: true }, logError.bind(this) );
     }
 
     return true;
   }
 
-  public disconnect (): Promise<any> {
-    let promises = [];
+  public disconnect(): Promise<any> {
+    const promises = [];
 
     let i = this.clients.length;
     while (i--) {
-      promises.push( this._onLeave((<Client>this.clients[i])) );
+      promises.push( this._onLeave((this.clients[i] as Client)) );
     }
 
     return Promise.all(promises);
   }
 
-  protected sendState (client: Client): void {
+  protected sendState(client: Client): void {
     send(client, [
       Protocol.ROOM_STATE,
       this._previousStateEncoded,
@@ -174,21 +180,21 @@ export abstract class Room<T=any> extends EventEmitter {
     ]);
   }
 
-  private broadcastPatch (): boolean {
+  protected broadcastPatch(): boolean {
     if ( !this.state ) {
       debugPatch('trying to broadcast null state. you should call #setState on constructor or during user connection.');
       return false;
     }
 
-    let currentState = this.state;
-    let currentStateEncoded = msgpack.encode( currentState );
+    const currentState = this.state;
+    const currentStateEncoded = msgpack.encode( currentState );
 
     // skip if state has not changed.
     if ( currentStateEncoded.equals( this._previousStateEncoded ) ) {
       return false;
     }
 
-    let patches = fossilDelta.create( this._previousStateEncoded, currentStateEncoded );
+    const patches = fossilDelta.create( this._previousStateEncoded, currentStateEncoded );
 
     // take a snapshot of the current state
     if (this.timeline) {
@@ -203,7 +209,7 @@ export abstract class Room<T=any> extends EventEmitter {
     }
 
     if (debugPatchData.enabled) {
-      debugPatchData("%j", jsonPatch.compare(msgpack.decode(this._previousStateEncoded), currentState));
+      debugPatchData('%j', jsonPatch.compare(msgpack.decode(this._previousStateEncoded), currentState));
     }
 
     this._previousState = currentState;
@@ -213,16 +219,37 @@ export abstract class Room<T=any> extends EventEmitter {
     return this.broadcast( msgpack.encode([ Protocol.ROOM_STATE_PATCH, patches ]) );
   }
 
+  protected _disposeIfEmpty() {
+    if ( this.clients.length === 0 ) {
+      this._dispose();
+      this.emit('dispose');
+    }
+  }
+
+  protected _dispose(): Promise<any> {
+    let userReturnData;
+
+    if ( this.onDispose ) { userReturnData = this.onDispose(); }
+    if ( this._patchInterval ) { clearInterval( this._patchInterval ); }
+    if ( this._simulationInterval ) { clearInterval( this._simulationInterval ); }
+
+    // clear all timeouts/intervals + force to stop ticking
+    this.clock.clear();
+    this.clock.stop();
+
+    return userReturnData || Promise.resolve();
+  }
+
   // allow remote clients to trigger events on themselves
-  private _emitOnClient (sessionId, event) {
-    let remoteClient = this.remoteClients[sessionId];
+  private _emitOnClient(sessionId, event) {
+    const remoteClient = this.remoteClients[sessionId];
 
     if (!remoteClient) {
-      console.error(this.roomId, "REMOTE CLIENT NOT FOUND:", sessionId, `(event: ${event})`);
+      console.error(this.roomId, 'REMOTE CLIENT NOT FOUND:', sessionId, `(event: ${event})`);
       return;
     }
 
-    if (typeof(event) !== "string") {
+    if (typeof(event) !== 'string') {
       remoteClient.emit('message', new Buffer(event));
 
     } else {
@@ -230,10 +257,15 @@ export abstract class Room<T=any> extends EventEmitter {
     }
   }
 
-  private _onMessage (client: Client, message: any) {
-    if (!(message = decode(message))) { return; }
+  private _onMessage(client: Client, message: any) {
+    message = decode(message);
 
-    if (message[0] == Protocol.ROOM_DATA) {
+    if (!message) {
+      debugErrors(`${this.roomName} (${this.roomId}), couldn't decode message: ${message}`);
+      return;
+    }
+
+    if (message[0] === Protocol.ROOM_DATA) {
       this.onMessage(client, message[2]);
 
     } else {
@@ -242,11 +274,11 @@ export abstract class Room<T=any> extends EventEmitter {
 
   }
 
-  private _onJoin (client: Client, options?: any, auth?: any) {
+  private _onJoin(client: Client, options?: any, auth?: any) {
     // create remote client instance.
     if (client.remote) {
-      client = <any> (new RemoteClient(client, this.roomId, this.presence));
-      this.remoteClients[client.sessionId] = <any> client;
+      client = (new RemoteClient(client, this.roomId, this.presence)) as any;
+      this.remoteClients[client.sessionId] = client as any;
     }
 
     this.clients.push( client );
@@ -277,7 +309,7 @@ export abstract class Room<T=any> extends EventEmitter {
     }
   }
 
-  private _onLeave (client: Client): void | Promise<any> {
+  private _onLeave(client: Client): void | Promise<any> {
     let userReturnData;
 
     // call abstract 'onLeave' method only if the client has been successfully accepted.
@@ -301,27 +333,6 @@ export abstract class Room<T=any> extends EventEmitter {
     if (this._maxClientsReached && this.locked) {
       this.unlock();
     }
-
-    return userReturnData || Promise.resolve();
-  }
-
-  protected _disposeIfEmpty () {
-    if ( this.clients.length == 0 ) {
-      this._dispose();
-      this.emit('dispose');
-    }
-  }
-
-  protected _dispose (): Promise<any> {
-    let userReturnData;
-
-    if ( this.onDispose ) userReturnData = this.onDispose();
-    if ( this._patchInterval ) clearInterval( this._patchInterval );
-    if ( this._simulationInterval ) clearInterval( this._simulationInterval );
-
-    // clear all timeouts/intervals + force to stop ticking
-    this.clock.clear();
-    this.clock.stop();
 
     return userReturnData || Promise.resolve();
   }

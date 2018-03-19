@@ -1,43 +1,42 @@
-import * as msgpack from "notepack.io";
-import * as EventEmitter from "events";
-import * as WebSocket from "ws";
+import * as EventEmitter from 'events';
+import * as msgpack from 'notepack.io';
+import * as WebSocket from 'ws';
 
-import { merge, spliceOne, registerGracefulShutdown } from "./Utils";
+import { merge, registerGracefulShutdown, spliceOne } from './Utils';
 
-import { Client, generateId, isValidId } from "./index";
-import { Protocol, send } from "./Protocol";
+import { Client, generateId, isValidId } from './index';
+import { Protocol, send } from './Protocol';
 
-import { Room } from "./Room";
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
+import { Room, RoomConstructor } from './Room';
 
-import { Presence } from './presence/Presence';
 import { LocalPresence } from './presence/LocalPresence';
+import { Presence } from './presence/Presence';
 
-import { debugMatchMaking, debugErrors } from "./Debug";
+import { debugErrors, debugMatchMaking } from './Debug';
 
 export type ClientOptions = any;
 
 export interface RoomWithScore {
   roomId: string;
   score: number;
-};
+}
 
 const REMOTE_ROOM_SCOPE_TIMEOUT = 8000; // remote room calls timeout
 
 export class MatchMaker {
-  private handlers: {[id: string]: RegisteredHandler} = {};
-
-  private localRooms: {[roomId: string]: Room} = {};
-  private presence: Presence;
-
-  // room references by client id
   protected isGracefullyShuttingDown: boolean = false;
 
-  constructor (presence?: Presence) {
+  private handlers: {[id: string]: RegisteredHandler} = {};
+  private localRooms: {[roomId: string]: Room} = {};
+
+  private presence: Presence;
+
+  constructor(presence?: Presence) {
     this.presence = presence || new LocalPresence();
   }
 
-  public async connectToRoom (client: Client, roomId: string) {
+  public async connectToRoom(client: Client, roomId: string) {
     let err: string;
 
     const room = this.localRooms[roomId];
@@ -53,7 +52,7 @@ export class MatchMaker {
 
     if (this.localRooms[roomId]) {
       try {
-        (<any>room)._onJoin(client, clientOptions, client.auth);
+        (room as any)._onJoin(client, clientOptions, client.auth);
 
       } catch (e) {
         err = e.message || e;
@@ -61,25 +60,25 @@ export class MatchMaker {
       }
 
     } else {
-      let remoteSessionSub = `${roomId}:${client.sessionId}`;
+      const remoteSessionSub = `${roomId}:${client.sessionId}`;
 
       this.presence.subscribe(remoteSessionSub, (message) => {
-        let [method, data] = message;
+        const [method, data] = message;
 
-        if (method === "send") {
+        if (method === 'send') {
           client.send(new Buffer(data), { binary: true });
 
-        } else if (method === "close") {
-          console.log("remote client received 'close' from room:", client.sessionId);
+        } else if (method === 'close') {
+          console.log('remote client received \'close\' from room:', client.sessionId);
           client.close(data);
         }
       });
 
       try {
-        await this.remoteRoomCall(roomId, "_onJoin", [{
+        await this.remoteRoomCall(roomId, '_onJoin', [{
           id: client.id,
-          sessionId: client.sessionId,
           remote: true,
+          sessionId: client.sessionId,
         }, clientOptions, client.auth]);
 
       } catch (e) {
@@ -89,15 +88,15 @@ export class MatchMaker {
 
       // forward 'message' events to room's process
       client.on('message', (data: Buffer) => {
-        console.log("LETS FORWARD DATA FROM CLIENT", client.sessionId, data);
-        this.remoteRoomCall(roomId, "_emitOnClient", [client.sessionId, Array.from(data)]);
+        console.log('LETS FORWARD DATA FROM CLIENT', client.sessionId, data);
+        this.remoteRoomCall(roomId, '_emitOnClient', [client.sessionId, Array.from(data)]);
       });
 
       // forward 'close' events to room's process
       client.once('close', (_) => {
-        console.log("remote client is closing connection:", client.sessionId);
+        console.log('remote client is closing connection:', client.sessionId);
         this.presence.unsubscribe(remoteSessionSub);
-        this.remoteRoomCall(roomId, "_emitOnClient", [client.sessionId, 'close']);
+        this.remoteRoomCall(roomId, '_emitOnClient', [client.sessionId, 'close']);
       });
     }
 
@@ -117,16 +116,14 @@ export class MatchMaker {
    * match-making process. The client will request a new WebSocket connection
    * to effectively join into the room created/joined by this method.
    */
-  public async onJoinRoomRequest (client: Client, roomToJoin: string, clientOptions: ClientOptions): Promise<string> {
-    let err: string;
-
+  public async onJoinRoomRequest(client: Client, roomToJoin: string, clientOptions: ClientOptions): Promise<string> {
     let roomId: string;
     let isCreating: boolean = false;
 
     clientOptions.sessionId = generateId();
 
     if (this.hasHandler(roomToJoin)) {
-      let bestRoomByScore = (await this.getAvailableRoomByScore(roomToJoin, clientOptions))[0];
+      const bestRoomByScore = (await this.getAvailableRoomByScore(roomToJoin, clientOptions))[0];
       if (bestRoomByScore && bestRoomByScore.roomId) {
         roomToJoin = bestRoomByScore.roomId;
 
@@ -145,13 +142,13 @@ export class MatchMaker {
       this.presence.hset(roomId, client.id, clientOptions.sessionId);
 
     } else {
-      throw new Error("join_request_fail");
+      throw new Error('join_request_fail');
     }
 
     return roomId;
   }
 
-  public async remoteRoomCall (roomId: string, method: string, args?: any[]) {
+  public async remoteRoomCall(roomId: string, method: string, args?: any[]) {
     const room = this.localRooms[roomId];
 
     if (!room) {
@@ -167,7 +164,7 @@ export class MatchMaker {
         };
 
         this.presence.subscribe(channel, (message) => {
-          let [code, data] = message;
+          const [code, data] = message;
           if (code === Protocol.IPC_SUCCESS) {
             resolve(data);
 
@@ -186,7 +183,7 @@ export class MatchMaker {
       });
 
     } else {
-      if (!args && typeof(room[method]) !== "function") {
+      if (!args && typeof(room[method]) !== 'function') {
         return room[method];
       }
 
@@ -194,38 +191,30 @@ export class MatchMaker {
     }
   }
 
-  private onClientJoinRoom (room: Room, client: Client) {
-    this.handlers[room.roomName].emit("join", room, client);
-  }
-
-  private onClientLeaveRoom (room: Room, client: Client) {
-    this.handlers[room.roomName].emit("leave", room, client);
-  }
-
-  public registerHandler (name: string, klass: Function, options: any = {}) {
-    let registeredHandler = new RegisteredHandler(klass, options);
+  public registerHandler(name: string, klass: RoomConstructor, options: any = {}) {
+    const registeredHandler = new RegisteredHandler(klass, options);
 
     this.handlers[ name ] = registeredHandler;
 
     return registeredHandler;
   }
 
-  public hasHandler (name: string) {
+  public hasHandler(name: string) {
     return this.handlers[ name ] !== undefined;
   }
 
-  public async joinById (roomId: string, clientOptions: ClientOptions): Promise<string> {
-    let exists = await this.presence.exists(roomId);
+  public async joinById(roomId: string, clientOptions: ClientOptions): Promise<string> {
+    const exists = await this.presence.exists(roomId);
 
     if (!exists) {
       console.error(`Error: trying to join non-existant room "${ roomId }"`);
       return;
 
-    } else if (await this.remoteRoomCall(roomId, "hasReachedMaxClients")) {
+    } else if (await this.remoteRoomCall(roomId, 'hasReachedMaxClients')) {
       console.error(`Error: roomId "${ roomId }" reached maxClients.`);
       return;
 
-    } else if (!(await this.remoteRoomCall(roomId, "requestJoin", [clientOptions, false]))) {
+    } else if (!(await this.remoteRoomCall(roomId, 'requestJoin', [clientOptions, false]))) {
       console.error(`Error: can't join "${ roomId }" with options: ${ JSON.stringify(clientOptions) }`);
       return;
     }
@@ -233,47 +222,14 @@ export class MatchMaker {
     return roomId;
   }
 
-  public async getAvailableRoomByScore (roomName: string, clientOptions: ClientOptions): Promise<RoomWithScore[]> {
+  public async getAvailableRoomByScore(roomName: string, clientOptions: ClientOptions): Promise<RoomWithScore[]> {
     return (await this.getRoomsWithScore(roomName, clientOptions)).
       sort((a, b) => b.score - a.score);
   }
 
-  protected async getRoomsWithScore (roomName: string, clientOptions: ClientOptions): Promise<RoomWithScore[]> {
-    let roomsWithScore: RoomWithScore[] = [];
-    let roomIds = await this.presence.smembers(roomName);
-    let remoteRequestJoins = [];
-
-    await Promise.all(roomIds.map(async (roomId) => {
-      let maxClientsReached = await this.remoteRoomCall(roomId, 'hasReachedMaxClients');
-
-      // check maxClients before requesting to join.
-      if (maxClientsReached) { return; }
-
-      const localRoom = this.localRooms[roomId];
-      if (!localRoom) {
-        remoteRequestJoins.push(new Promise(async (resolve, reject) => {
-          let score = await this.remoteRoomCall(roomId, 'requestJoin', [clientOptions, false]);
-          resolve({ roomId, score });
-        }));
-
-      } else {
-        roomsWithScore.push({
-          score: localRoom.requestJoin(clientOptions, false) as number,
-          roomId: roomId
-        });
-      }
-
-      return true;
-    }));
-
-    return (await Promise.all(remoteRequestJoins)).concat(roomsWithScore);
-  }
-
-  public create (roomName: string, clientOptions: ClientOptions): string {
-    let room = null
-      , registeredHandler = this.handlers[ roomName ];
-
-    room = new registeredHandler.klass(this.presence);
+  public create(roomName: string, clientOptions: ClientOptions): string {
+    const registeredHandler = this.handlers[ roomName ];
+    const room = new registeredHandler.klass(this.presence);
 
     // set room options
     room.roomId = generateId();
@@ -285,7 +241,7 @@ export class MatchMaker {
 
     // imediatelly ask client to join the room
     if ( room.requestJoin(clientOptions, true) ) {
-      debugMatchMaking("spawning '%s' on process %d", roomName, process.pid);
+      debugMatchMaking('spawning \'%s\' on process %d', roomName, process.pid);
 
       room.on('lock', this.lockRoom.bind(this, roomName, room));
       room.on('unlock', this.unlockRoom.bind(this, roomName, room));
@@ -296,7 +252,7 @@ export class MatchMaker {
       // room always start unlocked
       this.createRoomReferences(room);
 
-      registeredHandler.emit("create", room);
+      registeredHandler.emit('create', room);
 
     } else {
       room._dispose();
@@ -306,35 +262,67 @@ export class MatchMaker {
     return room && room.roomId;
   }
 
-  private lockRoom (roomName: string, room: Room): void {
-    this.clearRoomReferences(room);
-
-    // emit public event on registered handler
-    this.handlers[room.roomName].emit("lock", room);
-  }
-
-  private unlockRoom (roomName: string, room: Room) {
-    if (this.createRoomReferences(room)) {
-
-      // emit public event on registered handler
-      this.handlers[room.roomName].emit("unlock", room);
+  public gracefullyShutdown() {
+    if (this.isGracefullyShuttingDown) {
+      return Promise.reject(false);
     }
+
+    this.isGracefullyShuttingDown = true;
+
+    const promises = [];
+
+    for (const roomId in this.localRooms) {
+      if (!this.localRooms.hasOwnProperty(roomId)) {
+        continue;
+      }
+
+      const room = this.localRooms[roomId];
+
+      // disable autoDispose temporarily, which allow potentially retrieving a
+      // Promise from user's `onDispose` method.
+      room.autoDispose = false;
+
+      promises.push( room.disconnect() );
+      promises.push( (room as any)._dispose() );
+
+      room.emit('dispose');
+    }
+
+    return Promise.all(promises);
   }
 
-  private disposeRoom(roomName: string, room: Room): void {
-    debugMatchMaking("disposing '%s' on process %d", roomName, process.pid);
+  protected async getRoomsWithScore(roomName: string, clientOptions: ClientOptions): Promise<RoomWithScore[]> {
+    const roomsWithScore: RoomWithScore[] = [];
+    const roomIds = await this.presence.smembers(roomName);
+    const remoteRequestJoins = [];
 
-    // emit disposal on registered session handler
-    this.handlers[roomName].emit("dispose", room);
+    await Promise.all(roomIds.map(async (roomId) => {
+      const maxClientsReached = await this.remoteRoomCall(roomId, 'hasReachedMaxClients');
 
-    // remove from available rooms
-    this.clearRoomReferences(room);
+      // check maxClients before requesting to join.
+      if (maxClientsReached) { return; }
 
-    // unsubscribe from remote connections
-    this.presence.unsubscribe(room.roomId);
+      const localRoom = this.localRooms[roomId];
+      if (!localRoom) {
+        remoteRequestJoins.push(new Promise(async (resolve, reject) => {
+          const score = await this.remoteRoomCall(roomId, 'requestJoin', [clientOptions, false]);
+          resolve({ roomId, score });
+        }));
+
+      } else {
+        roomsWithScore.push({
+          roomId,
+          score: localRoom.requestJoin(clientOptions, false) as number,
+        });
+      }
+
+      return true;
+    }));
+
+    return (await Promise.all(remoteRequestJoins)).concat(roomsWithScore);
   }
 
-  protected createRoomReferences (room: Room): boolean {
+  protected createRoomReferences(room: Room): boolean {
     if (!this.localRooms[room.roomId]) {
       this.localRooms[room.roomId] = room;
 
@@ -343,14 +331,14 @@ export class MatchMaker {
 
       console.log(`LETS SUBCRIBE TO ${room.roomId}`);
       this.presence.subscribe(room.roomId, (message) => {
-        let [ method, requestId, args ] = message;
+        const [ method, requestId, args ] = message;
 
         const reply = (data) => {
           this.presence.publish(`${room.roomId}:${requestId}`, data);
         };
 
         // reply with property value
-        if (!args && typeof(room[method]) !== "function") {
+        if (!args && typeof(room[method]) !== 'function') {
           return reply([Protocol.IPC_SUCCESS, room[method]]);
         }
 
@@ -369,10 +357,10 @@ export class MatchMaker {
         }
 
         response.
-          then(result => reply([Protocol.IPC_SUCCESS, result])).
-          catch(e => {
+          then((result) => reply([Protocol.IPC_SUCCESS, result])).
+          catch((e) => {
             debugErrors(e.stack || e);
-            reply([Protocol.IPC_ERROR, e.message || e])
+            reply([Protocol.IPC_ERROR, e.message || e]);
           });
       });
 
@@ -380,7 +368,7 @@ export class MatchMaker {
     }
   }
 
-  protected clearRoomReferences (room: Room) {
+  protected clearRoomReferences(room: Room) {
     if (this.localRooms[room.roomId]) {
       this.presence.srem(room.roomName, room.roomId);
 
@@ -391,29 +379,40 @@ export class MatchMaker {
     }
   }
 
-  public gracefullyShutdown () {
-    if (this.isGracefullyShuttingDown) {
-      return Promise.reject(false);
+  private onClientJoinRoom(room: Room, client: Client) {
+    this.handlers[room.roomName].emit('join', room, client);
+  }
+
+  private onClientLeaveRoom(room: Room, client: Client) {
+    this.handlers[room.roomName].emit('leave', room, client);
+  }
+
+  private lockRoom(roomName: string, room: Room): void {
+    this.clearRoomReferences(room);
+
+    // emit public event on registered handler
+    this.handlers[room.roomName].emit('lock', room);
+  }
+
+  private unlockRoom(roomName: string, room: Room) {
+    if (this.createRoomReferences(room)) {
+
+      // emit public event on registered handler
+      this.handlers[room.roomName].emit('unlock', room);
     }
+  }
 
-    this.isGracefullyShuttingDown = true;
+  private disposeRoom(roomName: string, room: Room): void {
+    debugMatchMaking('disposing \'%s\' on process %d', roomName, process.pid);
 
-    let promises = [];
+    // emit disposal on registered session handler
+    this.handlers[roomName].emit('dispose', room);
 
-    for (let roomId in this.localRooms) {
-      let room = this.localRooms[roomId];
+    // remove from available rooms
+    this.clearRoomReferences(room);
 
-      // disable autoDispose temporarily, which allow potentially retrieving a
-      // Promise from user's `onDispose` method.
-      room.autoDispose = false;
-
-      promises.push( room.disconnect() );
-      promises.push( (<any>room)._dispose() );
-
-      room.emit('dispose');
-    }
-
-    return Promise.all(promises);
+    // unsubscribe from remote connections
+    this.presence.unsubscribe(room.roomId);
   }
 
 }

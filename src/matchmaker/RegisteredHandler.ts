@@ -1,10 +1,11 @@
 import { EventEmitter } from 'events';
+import { RoomConstructor } from './../Room';
 
 export class RegisteredHandler extends EventEmitter {
-  klass: any;
-  options: any;
+  public klass: RoomConstructor;
+  public options: any;
 
-  constructor (klass: any, options: any) {
+  constructor(klass: RoomConstructor, options: any) {
     super();
 
     this.klass = klass;

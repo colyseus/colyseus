@@ -4,18 +4,18 @@
 //
 const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM', 'SIGUSR2'];
 
-export function registerGracefulShutdown (callback) {
-  let calledOnce = false;
+export function registerGracefulShutdown(callback) {
+  const calledOnce = false;
 
-  signals.forEach(signal => 
+  signals.forEach((signal) =>
     process.once(signal, () => callback(signal)));
 }
 
 export class Deferred {
-  promise: Promise<any>;
+  public promise: Promise<any>;
 
-  reject: Function;
-  resolve: Function;
+  public reject: Function;
+  public resolve: Function;
 
   constructor() {
     this.promise = new Promise((resolve, reject) => {
@@ -24,23 +24,23 @@ export class Deferred {
     });
   }
 
-  then (func: (value: any) => any) {
+  public then(func: (value: any) => any) {
     return this.promise.then(func);
   }
 
-  catch (func: (value: any) => any) {
+  public catch(func: (value: any) => any) {
     return this.promise.catch(func);
   }
 }
 
-export function spliceOne (arr: Array<any>, index: number): boolean {
+export function spliceOne(arr: any[], index: number): boolean {
   // manually splice availableRooms array
   // http://jsperf.com/manual-splice
   if (index === -1 || index >= arr.length) {
     return false;
   }
 
-  for (var i = index, len = arr.length - 1; i < len; i++) {
+  for (let i = index, len = arr.length - 1; i < len; i++) {
     arr[i] = arr[i + 1];
   }
 
@@ -49,20 +49,20 @@ export function spliceOne (arr: Array<any>, index: number): boolean {
   return true;
 }
 
-export function merge (a: any, ...objs: any[]): any {
+export function merge(a: any, ...objs: any[]): any {
   for (let i = 0, len = objs.length; i < len; i++) {
-    let b = objs[i];
-    for (let key in b) {
+    const b = objs[i];
+    for (const key in b) {
       if (b.hasOwnProperty(key)) {
-        a[key] = b[key]
+        a[key] = b[key];
       }
     }
   }
   return a;
 }
 
-export function logError (err: Error): void {
+export function logError(err: Error): void {
   if (err) {
-    console.log(err)
+    console.log(err);
   }
 }

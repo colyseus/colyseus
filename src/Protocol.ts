@@ -1,5 +1,5 @@
-import * as msgpack from "notepack.io";
-import { Client } from "./index";
+import * as msgpack from 'notepack.io';
+import { Client } from './index';
 
 export enum Protocol {
   // Use codes between 0~127 for lesser throughput (1 byte)
@@ -34,18 +34,18 @@ export enum Protocol {
   IPC_TIMEOUT = 102,
 }
 
-export function decode (message: any) {
+export function decode(message: any) {
   try {
     message = msgpack.decode(Buffer.from(message));
 
   } catch (e) {
-    console.error("Couldn't decode message:", message, e.stack);
+    console.error('Couldn\'t decode message:', message, e.stack);
     return;
   }
 
   return message;
 }
 
-export function send (client: Client, message: any[]) {
+export function send(client: Client, message: any[]) {
   client.send(msgpack.encode(message), { binary: true });
 }

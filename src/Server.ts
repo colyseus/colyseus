@@ -1,26 +1,26 @@
+import * as http from 'http';
+import * as net from 'net';
+import * as msgpack from 'notepack.io';
+import { unescape } from 'querystring';
+import * as parseURL from 'url-parse';
+import * as WebSocket from 'ws';
+import { ServerOptions as IServerOptions } from 'ws';
+
 import { debugErrors } from './Debug';
-import * as net from "net";
-import * as http from "http";
-import * as msgpack from "notepack.io";
-import * as parseURL from "url-parse";
-import * as WebSocket from "ws";
-import { ServerOptions as IServerOptions } from "ws";
-import { unescape } from "querystring";
-
-import { MatchMaker } from "./MatchMaker";
+import { MatchMaker } from './MatchMaker';
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
-import { Presence } from "./presence/Presence";
+import { Presence } from './presence/Presence';
 
-import { Protocol, send, decode } from "./Protocol";
-import { Client, isValidId, generateId } from "./index";
-import { Room } from "./Room";
-import { registerGracefulShutdown } from "./Utils";
+import { Client, generateId, isValidId } from './index';
+import { decode, Protocol, send } from './Protocol';
+import { Room, RoomConstructor } from './Room';
+import { registerGracefulShutdown } from './Utils';
 
 export type ServerOptions = IServerOptions & {
   verifyClient?: WebSocket.VerifyClientCallbackAsync
   presence?: any,
   engine?: any,
-  ws?: any
+  ws?: any,
 };
 
 export class Server {
@@ -30,19 +30,21 @@ export class Server {
   protected presence: Presence;
   protected matchMaker: MatchMaker;
 
-  protected _onShutdown: () => void | Promise<any> = () => Promise.resolve();
+  protected onShutdownCallback: () => void | Promise<any>;
 
-  constructor (options: ServerOptions = {}) {
+  constructor(options: ServerOptions = {}) {
     this.presence = options.presence;
     this.matchMaker = new MatchMaker(this.presence);
+
+    this.onShutdownCallback = () => Promise.resolve();
 
     // "presence" option is not used from now on
     delete options.presence;
 
     registerGracefulShutdown((signal) => {
       this.matchMaker.gracefullyShutdown().
-        then(() => this._onShutdown()).
-        catch((err) => console.log("ERROR!", err)).
+        then(() => this.onShutdownCallback()).
+        catch((err) => console.log('ERROR!', err)).
         then(() => process.exit());
     });
 
@@ -51,7 +53,7 @@ export class Server {
     }
   }
 
-  public attach (options: ServerOptions) {
+  public attach(options: ServerOptions) {
     const engine = options.engine || WebSocket.Server;
     delete options.engine;
 
@@ -59,10 +61,10 @@ export class Server {
       const customVerifyClient: WebSocket.VerifyClientCallbackAsync = options.verifyClient;
 
       options.verifyClient = (info, next) => {
-        if (!customVerifyClient) return this.verifyClient(info, next);
+        if (!customVerifyClient) { return this.verifyClient(info, next); }
 
         customVerifyClient(info, (verified, code, message) => {
-          if (!verified) return next(verified, code, message);
+          if (!verified) { return next(verified, code, message); }
 
           this.verifyClient(info, next);
         });
@@ -78,16 +80,16 @@ export class Server {
     this.server.on('connection', this.onConnection);
   }
 
-  public listen (port: number, hostname?: string, backlog?: number, listeningListener?: Function) {
+  public listen(port: number, hostname?: string, backlog?: number, listeningListener?: Function) {
     this.httpServer.listen(port, hostname, backlog, listeningListener);
   }
 
-  public register (name: string, handler: Function, options: any = {}): RegisteredHandler {
+  public register(name: string, handler: RoomConstructor, options: any = {}): RegisteredHandler {
     return this.matchMaker.registerHandler(name, handler, options);
   }
 
-  public onShutdown (callback: () => void | Promise<any>) {
-    this._onShutdown = callback;
+  public onShutdown(callback: () => void | Promise<any>) {
+    this.onShutdownCallback = callback;
   }
 
   protected verifyClient = async (info, next) => {
@@ -96,26 +98,26 @@ export class Server {
     req.roomId = url.pathname.substr(1);
 
     const query = JSON.parse(unescape(url.query.substr(1)));
-    req.colyseusid = query['colyseusid'];
+    req.colyseusid = query.colyseusid;
 
-    delete query['colyseusid'];
-    req.options = query['options'] || {};
+    delete query.colyseusid;
+    req.options = query.options || {};
 
     if (req.roomId) {
       console.log(`LETS CHECK IF ROOM ${req.roomId} IS LOCKED...`);
 
-      let isLocked = await this.matchMaker.remoteRoomCall(req.roomId, 'locked');
+      const isLocked = await this.matchMaker.remoteRoomCall(req.roomId, 'locked');
       console.log(`IS LOCKED REPLY:`, isLocked);
 
-      if (isLocked) return next(false, Protocol.WS_TOO_MANY_CLIENTS, "maxClients reached.");
+      if (isLocked) { return next(false, Protocol.WS_TOO_MANY_CLIENTS, 'maxClients reached.'); }
 
-      console.log("LETS CALL onAuth:", req.options);
+      console.log('LETS CALL onAuth:', req.options);
 
       // verify client from room scope.
-      this.matchMaker.remoteRoomCall(req.roomId, "onAuth", [req.options]).
+      this.matchMaker.remoteRoomCall(req.roomId, 'onAuth', [req.options]).
         then((result) => {
-          console.log("onAuth", result);
-          if (!result) return next(false);
+          console.log('onAuth', result);
+          if (!result) { return next(false); }
 
           req.auth = result;
           next(true);
@@ -143,22 +145,25 @@ export class Server {
     client.options = upgradeReq.options;
     client.auth = upgradeReq.auth;
 
-    let roomId = upgradeReq.roomId;
+    const roomId = upgradeReq.roomId;
     if (roomId) {
       this.matchMaker.connectToRoom(client, upgradeReq.roomId);
 
     } else {
-      client.on("message",  this.onMessageMatchMaking.bind(this, client));
+      client.on('message',  this.onMessageMatchMaking.bind(this, client));
     }
   }
 
-  protected onMessageMatchMaking (client: Client, message) {
-    if (!(message = decode(message))) {
+  protected onMessageMatchMaking(client: Client, message) {
+    message = decode(message);
+
+    if (!message) {
+      debugErrors(`couldn't decode message: ${message}`);
       return;
     }
 
     if (message[0] !== Protocol.JOIN_ROOM) {
-      console.error("MatchMaking couldn't process message:", message);
+      console.error('MatchMaking couldn\'t process message:', message);
       return;
     }
 
@@ -173,9 +178,9 @@ export class Server {
     } else {
       this.matchMaker.onJoinRoomRequest(client, roomName, joinOptions).
         then((roomId: string) => send(client, [Protocol.JOIN_ROOM, roomId, joinOptions.requestId])).
-        catch(e => {
+        catch((e) => {
           debugErrors(e.stack || e);
-          send(client, [Protocol.JOIN_ERROR, roomName, e && e.message])
+          send(client, [Protocol.JOIN_ERROR, roomName, e && e.message]);
         });
     }
   }
