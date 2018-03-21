@@ -40,7 +40,9 @@ export function spliceOne(arr: any[], index: number): boolean {
     return false;
   }
 
-  for (let i = index, len = arr.length - 1; i < len; i++) {
+  const len = arr.length - 1;
+
+  for (let i = index; i < len; i++) {
     arr[i] = arr[i + 1];
   }
 

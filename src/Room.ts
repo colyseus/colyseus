@@ -80,11 +80,7 @@ export abstract class Room<T= any> extends EventEmitter {
 
   public async hasReachedMaxClients(): Promise<boolean> {
     const connectingClients = (await this.presence.hlen(this.roomId));
-    return (
-      this.clients.length +
-      Object.keys(this.remoteClients).length +
-      connectingClients
-    ) >= this.maxClients;
+    return (this.clients.length + connectingClients) >= this.maxClients;
   }
 
   public setSimulationInterval( callback: SimulationCallback, delay: number = DEFAULT_SIMULATION_INTERVAL ): void {
@@ -317,12 +313,12 @@ export abstract class Room<T= any> extends EventEmitter {
       userReturnData = this.onLeave(client);
     }
 
+    this.emit('leave', client);
+
     // remove remote client reference
     if (client instanceof RemoteClient) {
       delete this.remoteClients[client.sessionId];
     }
-
-    this.emit('leave', client);
 
     // custom cleanup method & clear intervals
     if ( this.autoDispose ) {
