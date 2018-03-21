@@ -4,8 +4,8 @@ import { promisify } from 'util';
 import { Presence } from './Presence';
 
 export class RedisPresence implements Presence {
-    public sub: redis.RedisClient = redis.createClient();
-    public pub: redis.RedisClient = redis.createClient();
+    public sub: redis.RedisClient;
+    public pub: redis.RedisClient;
 
     protected smembersAsync = promisify(this.pub.smembers).bind(this.pub);
     protected hgetAsync = promisify(this.pub.hget).bind(this.pub);
@@ -13,6 +13,11 @@ export class RedisPresence implements Presence {
     protected subscriptions: {[channel: string]: (...args: any[]) => any} = {};
 
     protected pubsubAsync = promisify(this.pub.pubsub).bind(this.pub);
+
+    constructor(opts?: redis.ClientOpts) {
+        this.sub = redis.createClient(opts);
+        this.pub = redis.createClient(opts);
+    }
 
     public subscribe(topic: string, callback: Function) {
         this.sub.subscribe(topic);
