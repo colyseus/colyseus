@@ -171,7 +171,7 @@ export class MatchMaker {
           unsubscribe();
         });
 
-        this.presence.publish(roomId, [method, requestId, args]);
+        this.presence.publish(`$${roomId}`, [method, requestId, args]);
 
         unsubscribeTimeout = setTimeout(() => {
           unsubscribe();
@@ -326,7 +326,7 @@ export class MatchMaker {
       // cache on which process the room is living.
       this.presence.sadd(room.roomName, room.roomId);
 
-      this.presence.subscribe(room.roomId, (message) => {
+      this.presence.subscribe(`$${room.roomId}`, (message) => {
         const [ method, requestId, args ] = message;
 
         const reply = (data) => {
@@ -408,7 +408,7 @@ export class MatchMaker {
     this.clearRoomReferences(room);
 
     // unsubscribe from remote connections
-    this.presence.unsubscribe(room.roomId);
+    this.presence.unsubscribe(`$${room.roomId}`);
   }
 
 }
