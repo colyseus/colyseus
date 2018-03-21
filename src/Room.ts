@@ -241,7 +241,7 @@ export abstract class Room<T= any> extends EventEmitter {
     const remoteClient = this.remoteClients[sessionId];
 
     if (!remoteClient) {
-      console.error(this.roomId, 'REMOTE CLIENT NOT FOUND:', sessionId, `(event: ${event})`);
+      debugErrors(`trying to send event ("${event}") to non-existing remote client (${sessionId})`);
       return;
     }
 

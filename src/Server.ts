@@ -44,7 +44,7 @@ export class Server {
     registerGracefulShutdown((signal) => {
       this.matchMaker.gracefullyShutdown().
         then(() => this.onShutdownCallback()).
-        catch((err) => console.log('ERROR!', err)).
+        catch((err) => debugErrors(`error during shutdown: ${err}`)).
         then(() => process.exit());
     });
 
@@ -104,19 +104,13 @@ export class Server {
     req.options = query.options || {};
 
     if (req.roomId) {
-      console.log(`LETS CHECK IF ROOM ${req.roomId} IS LOCKED...`);
-
       const isLocked = await this.matchMaker.remoteRoomCall(req.roomId, 'locked');
-      console.log(`IS LOCKED REPLY:`, isLocked);
 
       if (isLocked) { return next(false, Protocol.WS_TOO_MANY_CLIENTS, 'maxClients reached.'); }
-
-      console.log('LETS CALL onAuth:', req.options);
 
       // verify client from room scope.
       this.matchMaker.remoteRoomCall(req.roomId, 'onAuth', [req.options]).
         then((result) => {
-          console.log('onAuth', result);
           if (!result) { return next(false); }
 
           req.auth = result;
@@ -163,7 +157,7 @@ export class Server {
     }
 
     if (message[0] !== Protocol.JOIN_ROOM) {
-      console.error('MatchMaking couldn\'t process message:', message);
+      debugErrors(`MatchMaking couldn\'t process message: ${message}`);
       return;
     }
 

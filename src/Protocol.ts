@@ -1,4 +1,5 @@
 import * as msgpack from 'notepack.io';
+import { debugErrors } from './Debug';
 import { Client } from './index';
 
 export enum Protocol {
@@ -39,7 +40,7 @@ export function decode(message: any) {
     message = msgpack.decode(Buffer.from(message));
 
   } catch (e) {
-    console.error('Couldn\'t decode message:', message, e.stack);
+    debugErrors(`message couldn't be decoded: ${message}\n${e.stack}`);
     return;
   }
 

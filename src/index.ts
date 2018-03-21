@@ -13,6 +13,7 @@ export { RegisteredHandler } from './matchmaker/RegisteredHandler';
 export { Presence } from './presence/Presence';
 export { LocalPresence } from './presence/LocalPresence';
 export { RedisPresence } from './presence/RedisPresence';
+export { MemsharedPresence } from './presence/MemsharedPresence';
 
 // State Helper Types
 export interface EntityMap<T> {[ entityId: string ]: T; }

@@ -34,6 +34,8 @@ export class RedisPresence implements Presence {
         this.sub.unsubscribe(topic);
 
         delete this.subscriptions[topic];
+
+        return this;
     }
 
     public publish(topic: string, data: any) {

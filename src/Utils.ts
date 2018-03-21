@@ -1,3 +1,5 @@
+import { debugErrors } from './Debug';
+
 //
 // nodemon sends SIGUSR2 before reloading
 // (https://github.com/remy/nodemon#controlling-shutdown-of-your-script)
@@ -65,6 +67,6 @@ export function merge(a: any, ...objs: any[]): any {
 
 export function logError(err: Error): void {
   if (err) {
-    console.log(err);
+    debugErrors(`websocket error: ${err.message}\n${err.stack}`);
   }
 }

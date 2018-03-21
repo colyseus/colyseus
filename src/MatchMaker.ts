@@ -69,7 +69,6 @@ export class MatchMaker {
           client.send(new Buffer(data), { binary: true });
 
         } else if (method === 'close') {
-          console.log('remote client received \'close\' from room:', client.sessionId);
           client.close(data);
         }
       });
@@ -88,13 +87,11 @@ export class MatchMaker {
 
       // forward 'message' events to room's process
       client.on('message', (data: Buffer) => {
-        console.log('LETS FORWARD DATA FROM CLIENT', client.sessionId, data);
         this.remoteRoomCall(roomId, '_emitOnClient', [client.sessionId, Array.from(data)]);
       });
 
       // forward 'close' events to room's process
       client.once('close', (_) => {
-        console.log('remote client is closing connection:', client.sessionId);
         this.presence.unsubscribe(remoteSessionSub);
         this.remoteRoomCall(roomId, '_emitOnClient', [client.sessionId, 'close']);
       });
@@ -207,15 +204,15 @@ export class MatchMaker {
     const exists = await this.presence.exists(roomId);
 
     if (!exists) {
-      console.error(`Error: trying to join non-existant room "${ roomId }"`);
+      debugErrors(`trying to join non-existant room "${ roomId }"`);
       return;
 
     } else if (await this.remoteRoomCall(roomId, 'hasReachedMaxClients')) {
-      console.error(`Error: roomId "${ roomId }" reached maxClients.`);
+      debugErrors(`room "${ roomId }" reached maxClients.`);
       return;
 
     } else if (!(await this.remoteRoomCall(roomId, 'requestJoin', [clientOptions, false]))) {
-      console.error(`Error: can't join "${ roomId }" with options: ${ JSON.stringify(clientOptions) }`);
+      debugErrors(`can't join room "${ roomId }" with options: ${ JSON.stringify(clientOptions) }`);
       return;
     }
 
@@ -329,7 +326,6 @@ export class MatchMaker {
       // cache on which process the room is living.
       this.presence.sadd(room.roomName, room.roomId);
 
-      console.log(`LETS SUBCRIBE TO ${room.roomId}`);
       this.presence.subscribe(room.roomId, (message) => {
         const [ method, requestId, args ] = message;
 

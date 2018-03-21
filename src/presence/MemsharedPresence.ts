@@ -7,18 +7,19 @@ export class MemsharedPresence implements Presence {
     protected subscriptions: {[channel: string]: (...args: any[]) => any} = {};
 
     public subscribe(topic: string, callback: Function) {
-        this.subscriptions[topic] = (channel, message) => {
-            if (channel === topic) {
-                callback(JSON.parse(message));
-            }
-        };
+        this.subscriptions[topic] = (message) => callback(message);
 
         memshared.subscribe(topic, this.subscriptions[topic]);
+
+        return this;
     }
 
     public unsubscribe(topic: string) {
         memshared.unsubscribe(topic, this.subscriptions[topic]);
+
         delete this.subscriptions[topic];
+
+        return this;
     }
 
     public publish(topic: string, data: any) {
@@ -26,6 +27,12 @@ export class MemsharedPresence implements Presence {
     }
 
     public async exists(roomId: string): Promise<boolean> {
+        return new Promise<boolean>((resolve, reject) => {
+            memshared.pubsub(roomId, (err, data) => {
+                if (err) { return reject(err); }
+                resolve(data.length > 0);
+            });
+        });
     }
 
     public del(roomId: string) {
@@ -39,9 +46,9 @@ export class MemsharedPresence implements Presence {
     public smembers(key: string): Promise<string[]> {
         return new Promise((resolve, reject) => {
             memshared.smembers(key, (err, data) => {
-                if (err) return reject(err)
+                if (err) { return reject(err); }
                 resolve(data);
-            })
+            });
         });
     }
 
@@ -56,9 +63,9 @@ export class MemsharedPresence implements Presence {
     public hget(roomId: string, key: string): Promise<any> {
         return new Promise((resolve, reject) => {
             memshared.hget(roomId, key, (err, data) => {
-                if (err) return reject(err)
+                if (err) { return reject(err); }
                 resolve(data);
-            })
+            });
         });
     }
 
@@ -69,9 +76,9 @@ export class MemsharedPresence implements Presence {
     public hlen(roomId: string): Promise<number> {
         return new Promise((resolve, reject) => {
             memshared.hlen(roomId, (err, data) => {
-                if (err) return reject(err)
+                if (err) { return reject(err); }
                 resolve(data);
-            })
+            });
         });
     }
 
