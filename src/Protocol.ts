@@ -5,16 +5,10 @@ import { Client } from './index';
 // Use codes between 0~127 for lesser throughput (1 byte)
 export enum Protocol {
 
-  // User-related (1~10)
+  // User-related (1~9)
   USER_ID = 1,
 
-  // Cluster messages (server-side)
-  PASS_HTTP_SOCKET = 3,
-  PASS_WEBSOCKET = 4,
-  REQUEST_JOIN_ROOM = 8,
-  CREATE_ROOM = 9,
-
-  // Room-related (10~20)
+  // Room-related (10~19)
   JOIN_ROOM = 10,
   JOIN_ERROR = 11,
   LEAVE_ROOM = 12,
