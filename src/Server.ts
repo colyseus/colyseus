@@ -13,7 +13,7 @@ import { Presence } from './presence/Presence';
 import { Client, generateId, isValidId } from './index';
 import { decode, Protocol, send } from './Protocol';
 import { Room, RoomConstructor } from './Room';
-import { registerGracefulShutdown, parseQueryString } from './Utils';
+import { parseQueryString, registerGracefulShutdown } from './Utils';
 
 export type ServerOptions = IServerOptions & {
   verifyClient?: WebSocket.VerifyClientCallbackAsync

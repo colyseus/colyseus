@@ -55,13 +55,16 @@ export function spliceOne(arr: any[], index: number): boolean {
   return true;
 }
 
-export function parseQueryString (query: string): any {
+export function parseQueryString(query: string): any {
   const data = querystring.parse(query.substr(1));
 
-  for (let k in data) {
+  for (const k in data) {
+    if (!data.hasOwnProperty(k)) { continue; }
+
     let typedValue;
+
     try {
-      typedValue = JSON.parse(<string> data[k]);
+      typedValue = JSON.parse(data[k] as string);
 
     } catch (e) {
       typedValue = data[k];
