@@ -59,7 +59,7 @@ export function parseQueryString(query: string): any {
   const data = querystring.parse(query.substr(1));
 
   for (const k in data) {
-    if (!data.hasOwnProperty(k)) { continue; }
+    if (!Object.prototype.hasOwnProperty.call(data, k)) { continue; }
 
     let typedValue;
 
