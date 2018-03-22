@@ -105,7 +105,9 @@ export class Server {
     if (req.roomId) {
       const isLocked = await this.matchMaker.remoteRoomCall(req.roomId, 'locked');
 
-      if (isLocked) { return next(false, Protocol.WS_TOO_MANY_CLIENTS, 'maxClients reached.'); }
+      if (isLocked) {
+        return next(false, Protocol.WS_TOO_MANY_CLIENTS, 'maxClients reached.');
+      }
 
       // verify client from room scope.
       this.matchMaker.remoteRoomCall(req.roomId, 'onAuth', [req.options]).

@@ -5,7 +5,7 @@ import * as WebSocket from 'ws';
 import { merge, registerGracefulShutdown, spliceOne } from './Utils';
 
 import { Client, generateId, isValidId } from './index';
-import { Protocol, send } from './Protocol';
+import { IpcProtocol, Protocol, send } from './Protocol';
 
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
 import { Room, RoomConstructor } from './Room';
@@ -163,10 +163,10 @@ export class MatchMaker {
 
         this.presence.subscribe(channel, (message) => {
           const [code, data] = message;
-          if (code === Protocol.IPC_SUCCESS) {
+          if (code === IpcProtocol.SUCCESS) {
             resolve(data);
 
-          } else if (code === Protocol.IPC_ERROR) {
+          } else if (code === IpcProtocol.ERROR) {
             reject(data);
           }
           unsubscribe();
@@ -176,7 +176,7 @@ export class MatchMaker {
 
         unsubscribeTimeout = setTimeout(() => {
           unsubscribe();
-          reject(Protocol.IPC_TIMEOUT);
+          reject(IpcProtocol.TIMEOUT);
         }, REMOTE_ROOM_SCOPE_TIMEOUT);
       });
 
@@ -336,7 +336,7 @@ export class MatchMaker {
 
         // reply with property value
         if (!args && typeof(room[method]) !== 'function') {
-          return reply([Protocol.IPC_SUCCESS, room[method]]);
+          return reply([IpcProtocol.SUCCESS, room[method]]);
         }
 
         // reply with method result
@@ -346,18 +346,18 @@ export class MatchMaker {
 
         } catch (e) {
           debugErrors(e.stack || e);
-          return reply([Protocol.IPC_ERROR, e.message || e]);
+          return reply([IpcProtocol.ERROR, e.message || e]);
         }
 
         if (!(response instanceof Promise)) {
-          return reply([Protocol.IPC_SUCCESS, response]);
+          return reply([IpcProtocol.SUCCESS, response]);
         }
 
         response.
-          then((result) => reply([Protocol.IPC_SUCCESS, result])).
+          then((result) => reply([IpcProtocol.SUCCESS, result])).
           catch((e) => {
             debugErrors(e.stack || e);
-            reply([Protocol.IPC_ERROR, e.message || e]);
+            reply([IpcProtocol.ERROR, e.message || e]);
           });
       });
 

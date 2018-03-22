@@ -2,8 +2,8 @@ import * as msgpack from 'notepack.io';
 import { debugErrors } from './Debug';
 import { Client } from './index';
 
+// Use codes between 0~127 for lesser throughput (1 byte)
 export enum Protocol {
-  // Use codes between 0~127 for lesser throughput (1 byte)
 
   // User-related (1~10)
   USER_ID = 1,
@@ -28,11 +28,13 @@ export enum Protocol {
   // WebSocket error codes
   WS_SERVER_DISCONNECT = 4201,
   WS_TOO_MANY_CLIENTS = 4202,
+}
 
-  // Inter-process communication (100~200)
-  IPC_SUCCESS = 100,
-  IPC_ERROR = 101,
-  IPC_TIMEOUT = 102,
+// Inter-process communication protocol
+export enum IpcProtocol {
+  SUCCESS = 0,
+  ERROR = 1,
+  TIMEOUT = 2,
 }
 
 export function decode(message: any) {
