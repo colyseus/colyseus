@@ -1,7 +1,6 @@
 import * as http from 'http';
 import * as net from 'net';
 import * as msgpack from 'notepack.io';
-import { unescape } from 'querystring';
 import * as parseURL from 'url-parse';
 import * as WebSocket from 'ws';
 import { ServerOptions as IServerOptions } from 'ws';
@@ -14,7 +13,7 @@ import { Presence } from './presence/Presence';
 import { Client, generateId, isValidId } from './index';
 import { decode, Protocol, send } from './Protocol';
 import { Room, RoomConstructor } from './Room';
-import { registerGracefulShutdown } from './Utils';
+import { registerGracefulShutdown, parseQueryString } from './Utils';
 
 export type ServerOptions = IServerOptions & {
   verifyClient?: WebSocket.VerifyClientCallbackAsync
@@ -97,11 +96,11 @@ export class Server {
     const url = parseURL(req.url);
     req.roomId = url.pathname.substr(1);
 
-    const query = JSON.parse(unescape(url.query.substr(1)));
+    const query = parseQueryString(url.query);
     req.colyseusid = query.colyseusid;
 
     delete query.colyseusid;
-    req.options = query.options || {};
+    req.options = query;
 
     if (req.roomId) {
       const isLocked = await this.matchMaker.remoteRoomCall(req.roomId, 'locked');

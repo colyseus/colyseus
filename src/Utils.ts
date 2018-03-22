@@ -1,3 +1,5 @@
+import * as querystring from 'querystring';
+
 import { debugErrors } from './Debug';
 
 //
@@ -51,6 +53,24 @@ export function spliceOne(arr: any[], index: number): boolean {
   arr.length = len;
 
   return true;
+}
+
+export function parseQueryString (query: string): any {
+  const data = querystring.parse(query.substr(1));
+
+  for (let k in data) {
+    let typedValue;
+    try {
+      typedValue = JSON.parse(<string> data[k]);
+
+    } catch (e) {
+      typedValue = data[k];
+    }
+
+    data[k] = typedValue;
+  }
+
+  return data;
 }
 
 export function merge(a: any, ...objs: any[]): any {
