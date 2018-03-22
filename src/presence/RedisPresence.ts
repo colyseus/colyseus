@@ -7,16 +7,22 @@ export class RedisPresence implements Presence {
     public sub: redis.RedisClient;
     public pub: redis.RedisClient;
 
-    protected smembersAsync = promisify(this.pub.smembers).bind(this.pub);
-    protected hgetAsync = promisify(this.pub.hget).bind(this.pub);
-    protected hlenAsync = promisify(this.pub.hlen).bind(this.pub);
     protected subscriptions: {[channel: string]: (...args: any[]) => any} = {};
 
-    protected pubsubAsync = promisify(this.pub.pubsub).bind(this.pub);
+    protected smembersAsync: any;
+    protected hgetAsync: any;
+    protected hlenAsync: any;
+    protected pubsubAsync: any;
 
     constructor(opts?: redis.ClientOpts) {
         this.sub = redis.createClient(opts);
         this.pub = redis.createClient(opts);
+
+        // create promisified redis methods.
+        this.smembersAsync = promisify(this.pub.smembers).bind(this.pub);
+        this.hgetAsync = promisify(this.pub.hget).bind(this.pub);
+        this.hlenAsync = promisify(this.pub.hlen).bind(this.pub);
+        this.pubsubAsync = promisify(this.pub.pubsub).bind(this.pub);
     }
 
     public subscribe(topic: string, callback: Function) {
