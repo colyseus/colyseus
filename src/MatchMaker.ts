@@ -121,7 +121,7 @@ export class MatchMaker {
       roomId = roomToJoin;
 
     } else if (!this.hasHandler(roomToJoin)) {
-      throw new Error("join_request_fail");
+      throw new Error('join_request_fail');
     }
 
     clientOptions.sessionId = generateId();
@@ -266,11 +266,9 @@ export class MatchMaker {
     }
   }
 
-  public async getAvailableRooms (roomName: string): Promise<RoomAvailable[]> {
+  public async getAvailableRooms(roomName: string): Promise<RoomAvailable[]> {
     const roomIds = await this.presence.smembers(roomName);
     const availableRooms: RoomAvailable[] = [];
-
-    console.log("roomIds", roomIds);
 
     await Promise.all(roomIds.map(async (roomId) => {
       const availability: RoomAvailable = await this.remoteRoomCall(roomId, 'getAvailableData');

@@ -171,17 +171,17 @@ export abstract class Room<T= any> extends EventEmitter {
     return true;
   }
 
-  public async getAvailableData (): Promise<RoomAvailable> {
+  public async getAvailableData(): Promise<RoomAvailable> {
     if (this.locked || await this.hasReachedMaxClients()) {
       return undefined;
 
     } else {
       return {
-        roomId: this.roomId,
         clients: this.clients.length,
         maxClients: this.maxClients,
-        metadata: this.metadata
-      }
+        metadata: this.metadata,
+        roomId: this.roomId,
+      };
     }
   }
 
@@ -307,7 +307,6 @@ export abstract class Room<T= any> extends EventEmitter {
     }
 
     this.clients.push( client );
-
 
     // if (this._disposeIfEmptyAfterCreationTimeout) {
     //   clearInterval(this._disposeIfEmptyAfterCreationTimeout);
