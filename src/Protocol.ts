@@ -16,6 +16,9 @@ export enum Protocol {
   ROOM_STATE = 14,
   ROOM_STATE_PATCH = 15,
 
+  // Match-making related (20~29)
+  ROOM_LIST = 20,
+
   // Generic messages (50~60)
   BAD_REQUEST = 50,
 

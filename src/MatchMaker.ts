@@ -8,7 +8,7 @@ import { Client, generateId, isValidId } from './index';
 import { IpcProtocol, Protocol, send } from './Protocol';
 
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
-import { Room, RoomConstructor } from './Room';
+import { Room, RoomAvailability, RoomConstructor } from './Room';
 
 import { LocalPresence } from './presence/LocalPresence';
 import { Presence } from './presence/Presence';
@@ -258,6 +258,23 @@ export class MatchMaker {
       (room as any)._dispose();
       return undefined;
     }
+  }
+
+  public async getAvailableRooms (roomName: string): Promise<RoomAvailability[]> {
+    const roomIds = await this.presence.smembers(roomName);
+    const availableRooms: RoomAvailability[] = [];
+
+    await Promise.all(roomIds.map(async (roomId) => {
+      const availability: RoomAvailability = await this.remoteRoomCall(roomId, 'getAvailabilityData');
+
+      if (availability) {
+        availableRooms.push(availability);
+      }
+
+      return true;
+    }));
+
+    return availableRooms;
   }
 
   public gracefullyShutdown() {

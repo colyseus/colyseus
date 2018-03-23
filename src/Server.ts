@@ -23,11 +23,12 @@ export type ServerOptions = IServerOptions & {
 };
 
 export class Server {
+  public matchMaker: MatchMaker;
+
   protected server: any;
   protected httpServer: net.Server | http.Server;
 
   protected presence: Presence;
-  protected matchMaker: MatchMaker;
 
   protected onShutdownCallback: () => void | Promise<any>;
 
@@ -157,27 +158,33 @@ export class Server {
       return;
     }
 
-    if (message[0] !== Protocol.JOIN_ROOM) {
-      debugErrors(`MatchMaking couldn\'t process message: ${message}`);
-      return;
-    }
+    if (message[0] === Protocol.JOIN_ROOM) {
+      const roomName = message[1];
+      const joinOptions = message[2];
 
-    const roomName = message[1];
-    const joinOptions = message[2];
+      joinOptions.clientId = client.id;
 
-    joinOptions.clientId = client.id;
+      if (!this.matchMaker.hasHandler(roomName) && !isValidId(roomName)) {
+        send(client, [Protocol.JOIN_ERROR, roomName, `Error: no available handler for "${roomName}"`]);
 
-    if (!this.matchMaker.hasHandler(roomName) && !isValidId(roomName)) {
-      send(client, [Protocol.JOIN_ERROR, roomName, `Error: no available handler for "${ roomName }"`]);
+      } else {
+        this.matchMaker.onJoinRoomRequest(client, roomName, joinOptions).
+          then((roomId: string) => send(client, [Protocol.JOIN_ROOM, roomId, joinOptions.requestId])).
+          catch((e) => {
+            debugErrors(e.stack || e);
+            send(client, [Protocol.JOIN_ERROR, roomName, e && e.message]);
+          });
+      }
+
+    } else if (message[0] === Protocol.ROOM_LIST) {
+      this.matchMaker.getAvailableRooms(message[1]).
+        then((rooms) => send(client, [Protocol.ROOM_LIST, rooms])).
+        catch((e) => debugErrors(e.stack || e));
 
     } else {
-      this.matchMaker.onJoinRoomRequest(client, roomName, joinOptions).
-        then((roomId: string) => send(client, [Protocol.JOIN_ROOM, roomId, joinOptions.requestId])).
-        catch((e) => {
-          debugErrors(e.stack || e);
-          send(client, [Protocol.JOIN_ERROR, roomName, e && e.message]);
-        });
+      debugErrors(`MatchMaking couldn\'t process message: ${message}`);
     }
+
   }
 
 }
