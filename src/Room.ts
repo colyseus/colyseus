@@ -48,18 +48,18 @@ export abstract class Room<T= any> extends EventEmitter {
   protected clients: Client[] = [];
   protected remoteClients: {[sessionId: string]: RemoteClient} = {};
 
+  protected locked: boolean = false;
   protected presence: Presence;
 
   // when a new user connects, it receives the '_previousState', which holds
   // the last binary snapshot other users already have, therefore the patches
   // that follow will be the same for all clients.
-  protected _previousState: any;
-  protected _previousStateEncoded: any;
+  private _previousState: any;
+  private _previousStateEncoded: any;
 
   private _simulationInterval: NodeJS.Timer;
   private _patchInterval: NodeJS.Timer;
 
-  private locked: boolean = false;
   private _maxClientsReached: boolean = false;
 
   // // this timeout prevents rooms that are created by one process, but no client
