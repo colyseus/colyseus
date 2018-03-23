@@ -8,7 +8,7 @@ import { Client, generateId, isValidId } from './index';
 import { IpcProtocol, Protocol, send } from './Protocol';
 
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
-import { Room, RoomAvailability, RoomConstructor } from './Room';
+import { Room, RoomAvailable, RoomConstructor } from './Room';
 
 import { LocalPresence } from './presence/LocalPresence';
 import { Presence } from './presence/Presence';
@@ -260,12 +260,12 @@ export class MatchMaker {
     }
   }
 
-  public async getAvailableRooms (roomName: string): Promise<RoomAvailability[]> {
+  public async getAvailableRooms (roomName: string): Promise<RoomAvailable[]> {
     const roomIds = await this.presence.smembers(roomName);
-    const availableRooms: RoomAvailability[] = [];
+    const availableRooms: RoomAvailable[] = [];
 
     await Promise.all(roomIds.map(async (roomId) => {
-      const availability: RoomAvailability = await this.remoteRoomCall(roomId, 'getAvailabilityData');
+      const availability: RoomAvailable = await this.remoteRoomCall(roomId, 'getAvailableData');
 
       if (availability) {
         availableRooms.push(availability);

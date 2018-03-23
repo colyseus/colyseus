@@ -24,6 +24,13 @@ export interface RoomConstructor<T= any> {
   new (presence?: Presence): Room<T>;
 }
 
+export interface RoomAvailable {
+  roomId: string;
+  clients: number;
+  maxClients: number;
+  metadata?: any;
+}
+
 export abstract class Room<T= any> extends EventEmitter {
   public clock: Clock = new Clock();
   public timeline?: Timeline;
@@ -55,9 +62,17 @@ export abstract class Room<T= any> extends EventEmitter {
   private locked: boolean = false;
   private _maxClientsReached: boolean = false;
 
+  // // this timeout prevents rooms that are created by one process, but no client
+  // // ever had success joining into it on the specified interval.
+  // private _disposeIfEmptyAfterCreationTimeout: NodeJS.Timer;
+
   constructor(presence?: Presence) {
     super();
+
     this.presence = presence;
+
+    // this._disposeIfEmptyAfterCreationTimeout = setTimeout(() => this._disposeIfEmpty(), 10000);
+
     this.setPatchRate(this.patchRate);
   }
 
@@ -154,6 +169,20 @@ export abstract class Room<T= any> extends EventEmitter {
     }
 
     return true;
+  }
+
+  public async getAvailableData (): Promise<RoomAvailable> {
+    if (this.locked || await this.hasReachedMaxClients()) {
+      return undefined;
+
+    } else {
+      return {
+        roomId: this.roomId,
+        clients: this.clients.length,
+        maxClients: this.maxClients,
+        metadata: this.metadata
+      }
+    }
   }
 
   public disconnect(): Promise<any> {
@@ -278,6 +307,12 @@ export abstract class Room<T= any> extends EventEmitter {
     }
 
     this.clients.push( client );
+
+
+    // if (this._disposeIfEmptyAfterCreationTimeout) {
+    //   clearInterval(this._disposeIfEmptyAfterCreationTimeout);
+    //   this._disposeIfEmptyAfterCreationTimeout = undefined;
+    // }
 
     // lock automatically when maxClients is reached
     if (this.clients.length === this.maxClients) {

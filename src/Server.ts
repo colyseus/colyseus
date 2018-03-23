@@ -177,8 +177,11 @@ export class Server {
       }
 
     } else if (message[0] === Protocol.ROOM_LIST) {
-      this.matchMaker.getAvailableRooms(message[1]).
-        then((rooms) => send(client, [Protocol.ROOM_LIST, rooms])).
+      const requestId = message[1];
+      const roomName = message[2];
+
+      this.matchMaker.getAvailableRooms(roomName).
+        then((rooms) => send(client, [Protocol.ROOM_LIST, requestId, rooms])).
         catch((e) => debugErrors(e.stack || e));
 
     } else {
