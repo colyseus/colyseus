@@ -116,23 +116,29 @@ export class MatchMaker {
    */
   public async onJoinRoomRequest(client: Client, roomToJoin: string, clientOptions: ClientOptions): Promise<string> {
     let roomId: string;
-    let isCreating: boolean = false;
+
+    if (isValidId(roomToJoin)) {
+      roomId = roomToJoin;
+
+    } else if (!this.hasHandler(roomToJoin)) {
+      throw new Error("join_request_fail");
+    }
 
     clientOptions.sessionId = generateId();
 
-    if (this.hasHandler(roomToJoin)) {
-      const bestRoomByScore = (await this.getAvailableRoomByScore(roomToJoin, clientOptions))[0];
-      if (bestRoomByScore && bestRoomByScore.roomId) {
-        roomToJoin = bestRoomByScore.roomId;
-
-      } else {
-        isCreating = true;
-        roomId = this.create(roomToJoin, clientOptions);
-      }
+    // check if there's an existing room with provided name available to join
+    const bestRoomByScore = (await this.getAvailableRoomByScore(roomToJoin, clientOptions))[0];
+    if (bestRoomByScore && bestRoomByScore.roomId) {
+      roomId = bestRoomByScore.roomId;
     }
 
-    if (!isCreating && isValidId(roomToJoin)) {
-      roomId = await this.joinById(roomToJoin, clientOptions);
+    if (isValidId(roomId)) {
+      roomId = await this.joinById(roomId, clientOptions);
+    }
+
+    // if couldn't join a room by its id, let's try to create a new one
+    if (!roomId) {
+      roomId = this.create(roomToJoin, clientOptions);
     }
 
     if (roomId) {
@@ -263,6 +269,8 @@ export class MatchMaker {
   public async getAvailableRooms (roomName: string): Promise<RoomAvailable[]> {
     const roomIds = await this.presence.smembers(roomName);
     const availableRooms: RoomAvailable[] = [];
+
+    console.log("roomIds", roomIds);
 
     await Promise.all(roomIds.map(async (roomId) => {
       const availability: RoomAvailable = await this.remoteRoomCall(roomId, 'getAvailableData');

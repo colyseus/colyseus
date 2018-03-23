@@ -32,7 +32,9 @@ export class LocalPresence implements Presence {
     }
 
     public sadd(key: string, value: any) {
-        if (!this.data[key]) { this.data[key] = []; }
+        if (!this.data[key]) {
+            this.data[key] = [];
+        }
 
         if (this.data[key].indexOf(value) === -1) {
             this.data[key].push(value);
@@ -62,7 +64,9 @@ export class LocalPresence implements Presence {
     }
 
     public hdel(roomId: string, key: any) {
-        delete this.hash[roomId][key];
+        if (this.hash[roomId]) {
+            delete this.hash[roomId][key];
+        }
     }
 
     public async hlen(roomId: string) {
