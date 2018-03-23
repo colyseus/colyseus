@@ -48,7 +48,6 @@ export abstract class Room<T= any> extends EventEmitter {
   protected clients: Client[] = [];
   protected remoteClients: {[sessionId: string]: RemoteClient} = {};
 
-  protected locked: boolean = false;
   protected presence: Presence;
 
   // when a new user connects, it receives the '_previousState', which holds
@@ -60,6 +59,7 @@ export abstract class Room<T= any> extends EventEmitter {
   private _simulationInterval: NodeJS.Timer;
   private _patchInterval: NodeJS.Timer;
 
+  private _locked: boolean = false;
   private _maxClientsReached: boolean = false;
 
   // // this timeout prevents rooms that are created by one process, but no client
@@ -91,6 +91,10 @@ export abstract class Room<T= any> extends EventEmitter {
 
   public onAuth(options: any): boolean | Promise<any> {
     return true;
+  }
+
+  public get locked() {
+    return this._locked;
   }
 
   public async hasReachedMaxClients(): Promise<boolean> {
@@ -139,12 +143,12 @@ export abstract class Room<T= any> extends EventEmitter {
   }
 
   public lock(): void {
-    this.locked = true;
+    this._locked = true;
     this.emit('lock');
   }
 
   public unlock(): void {
-    this.locked = false;
+    this._locked = false;
     this.emit('unlock');
   }
 
@@ -172,7 +176,7 @@ export abstract class Room<T= any> extends EventEmitter {
   }
 
   public async getAvailableData(): Promise<RoomAvailable> {
-    if (this.locked || await this.hasReachedMaxClients()) {
+    if (this._locked || await this.hasReachedMaxClients()) {
       return undefined;
 
     } else {
