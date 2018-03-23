@@ -60,6 +60,7 @@ export abstract class Room<T= any> extends EventEmitter {
   private _patchInterval: NodeJS.Timer;
 
   private _locked: boolean = false;
+  private _lockedExplicitly: boolean = false;
   private _maxClientsReached: boolean = false;
 
   // // this timeout prevents rooms that are created by one process, but no client
@@ -144,11 +145,21 @@ export abstract class Room<T= any> extends EventEmitter {
 
   public lock(): void {
     this._locked = true;
+
+    // rooms locked internally aren't explicit locks.
+    this._lockedExplicitly = (arguments[0] === undefined);
+
     this.emit('lock');
   }
 
   public unlock(): void {
     this._locked = false;
+
+    // only internal usage passes arguments to this function.
+    if (arguments[0] === undefined) {
+      this._lockedExplicitly = false;
+    }
+
     this.emit('unlock');
   }
 
@@ -320,7 +331,7 @@ export abstract class Room<T= any> extends EventEmitter {
     // lock automatically when maxClients is reached
     if (this.clients.length === this.maxClients) {
       this._maxClientsReached = true;
-      this.lock();
+      this.lock.call(this, true);
     }
 
     // confirm room id that matches the room name requested to join
@@ -364,8 +375,8 @@ export abstract class Room<T= any> extends EventEmitter {
     }
 
     // unlock if room is available for new connections
-    if (this._maxClientsReached && this.locked) {
-      this.unlock();
+    if (this._maxClientsReached && this._lockedExplicitly) {
+      this.unlock.call(this, true);
     }
 
     return userReturnData || Promise.resolve();
