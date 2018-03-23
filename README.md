@@ -37,12 +37,12 @@ it](https://discuss.colyseus.io/category/5/showcase) and make your own!
 - Simple API in the server-side and client-side.
 - Automatic state synchronization between server and client.
 - Matchmaking clients into game sessions
-- Scale on many processes on a single machine.
+- Scale vertically or horizontally
 
 ## What Colyseus won't provide:
 
 - Game Engine: Colyseus is agnostic of the engine you're using. Need Physics? Add your own logic / package.
-- Database: It's up to configure and select which database you'd like to use.
+- Database: It's up to you to configure and select which database you'd like to use.
 
 See [roadmap](http://colyseus.io/docs/roadmap/) for our future plans.
 
