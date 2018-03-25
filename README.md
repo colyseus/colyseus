@@ -50,6 +50,7 @@ See [roadmap](http://colyseus.io/docs/roadmap/) for our future plans.
 
 - [JavaScript/TypeScript](https://github.com/gamestdio/colyseus.js)
 - [Unity](https://github.com/gamestdio/colyseus-unity3d) ([unity3d.com](https://unity3d.com/))
+- [Construct 3](https://github.com/gamestdio/colyseus-construct3) ([construct3.net](https://www.construct.net/))
 - [Defold Engine](https://github.com/gamestdio/colyseus-defold) ([defold.com](https://www.defold.com/))
 
 ### Community client integration
