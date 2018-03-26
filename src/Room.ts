@@ -45,7 +45,7 @@ export abstract class Room<T= any> extends EventEmitter {
   public state: T;
   public metadata: any;
 
-  protected clients: Client[] = [];
+  public clients: Client[] = [];
   protected remoteClients: {[sessionId: string]: RemoteClient} = {};
 
   protected presence: Presence;

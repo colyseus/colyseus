@@ -22,7 +22,7 @@ export interface RoomWithScore {
   score: number;
 }
 
-const REMOTE_ROOM_SCOPE_TIMEOUT = 8000; // remote room calls timeout
+const PRESENCE_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_TIMEOUT || 8000); // remote room calls timeout
 
 export class MatchMaker {
   protected isGracefullyShuttingDown: boolean = false;
@@ -74,17 +74,11 @@ export class MatchMaker {
         }
       });
 
-      try {
-        await this.remoteRoomCall(roomId, '_onJoin', [{
-          id: client.id,
-          remote: true,
-          sessionId: client.sessionId,
-        }, clientOptions, client.auth]);
-
-      } catch (e) {
-        err = e.message || e;
-        debugErrors(e.stack || e);
-      }
+      await this.remoteRoomCall(roomId, '_onJoin', [{
+        id: client.id,
+        remote: true,
+        sessionId: client.sessionId,
+      }, clientOptions, client.auth]);
 
       // forward 'message' events to room's process
       client.on('message', (data: Buffer) => {
@@ -100,36 +94,35 @@ export class MatchMaker {
 
     // clear reserved seat of connecting client into the room
     this.presence.hdel(roomId, client.id);
-
-    if (err) {
-      send(client, [Protocol.JOIN_ERROR, `${client.sessionId} couldn't connect to room "${roomId}": ${err}`]);
-      client.close();
-    }
   }
 
   /**
-   * Create/joins a particular client in a room running in a worker process.
+   * Create or joins the client into a particular room
    *
    * The client doesn't join instantly because this method is called from the
    * match-making process. The client will request a new WebSocket connection
    * to effectively join into the room created/joined by this method.
    */
   public async onJoinRoomRequest(client: Client, roomToJoin: string, clientOptions: ClientOptions): Promise<string> {
+    const hasHandler = this.hasHandler(roomToJoin);
     let roomId: string;
 
-    if (isValidId(roomToJoin)) {
+    if (!hasHandler && isValidId(roomToJoin)) {
       roomId = roomToJoin;
+    }
 
-    } else if (!this.hasHandler(roomToJoin)) {
+    if (!hasHandler && !isValidId(roomToJoin)) {
       throw new Error('join_request_fail');
     }
 
     clientOptions.sessionId = generateId();
 
     // check if there's an existing room with provided name available to join
-    const bestRoomByScore = (await this.getAvailableRoomByScore(roomToJoin, clientOptions))[0];
-    if (bestRoomByScore && bestRoomByScore.roomId) {
-      roomId = bestRoomByScore.roomId;
+    if (hasHandler) {
+      const bestRoomByScore = (await this.getAvailableRoomByScore(roomToJoin, clientOptions))[0];
+      if (bestRoomByScore && bestRoomByScore.roomId) {
+        roomId = bestRoomByScore.roomId;
+      }
     }
 
     if (isValidId(roomId)) {
@@ -137,7 +130,7 @@ export class MatchMaker {
     }
 
     // if couldn't join a room by its id, let's try to create a new one
-    if (!roomId) {
+    if (!roomId && hasHandler) {
       roomId = this.create(roomToJoin, clientOptions);
     }
 
@@ -182,8 +175,8 @@ export class MatchMaker {
 
         unsubscribeTimeout = setTimeout(() => {
           unsubscribe();
-          reject(IpcProtocol.TIMEOUT);
-        }, REMOTE_ROOM_SCOPE_TIMEOUT);
+          reject(new Error("remote room timed out"));
+        }, PRESENCE_TIMEOUT);
       });
 
     } else {
@@ -281,6 +274,11 @@ export class MatchMaker {
     }));
 
     return availableRooms;
+  }
+
+  // used only for testing purposes
+  public getRoomById (roomId: string) {
+    return this.localRooms[roomId];
   }
 
   public gracefullyShutdown() {

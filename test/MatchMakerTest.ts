@@ -1,10 +1,14 @@
+(<any>process.env).COLYSEUS_PRESENCE_TIMEOUT = 50;
+
 import * as assert from 'assert';
 import * as sinon from 'sinon';
-import { MatchMaker, RegisteredHandler } from "../src/MatchMaker";
-import { Room } from "../src/Room";
-import { generateId, Protocol } from "../src";
-import { createDummyClient, DummyRoom, RoomVerifyClient, Client, RoomVerifyClientWithLock } from "./utils/mock";
 
+import { MatchMaker } from "../src/MatchMaker";
+import { RegisteredHandler } from './../src/matchmaker/RegisteredHandler';
+import { Room } from "../src/Room";
+
+import { generateId, Protocol, isValidId } from "../src";
+import { createDummyClient, DummyRoom, RoomVerifyClient, Client, RoomVerifyClientWithLock } from "./utils/mock";
 
 process.on('unhandledRejection', (reason, promise) => {
   console.log(reason, promise);
@@ -27,15 +31,13 @@ describe('MatchMaker', function() {
   describe('room handlers', function() {
     it('should add handler with name', function() {
       assert.ok(matchMaker.hasHandler('room'));
-      assert.equal(false, matchMaker.hasAvailableRoom('room'));
     });
 
-    it('should create a new room on joinOrCreateByName', function(done) {
-      matchMaker.onJoinRoomRequest('room', {}, true, (err, room) => {
-        assert.ok(typeof(room.roomId) === "string");
-        assert.ok(room instanceof Room);
-        done();
-      });
+    it('should create a new room ', async () => {
+      let roomId = await matchMaker.onJoinRoomRequest(createDummyClient(), 'room', {}, true);
+      let room = matchMaker.getRoomById(roomId)
+      assert.ok(typeof (room.roomId) === "string");
+      assert.ok(room instanceof Room);
     });
 
     it('onInit should receive client options as second argument when creating room', function() {
@@ -49,36 +51,33 @@ describe('MatchMaker', function() {
       onInitStub.restore();
     });
 
-    it('shouldn\'t return when trying to join with invalid room id', function() {
-      assert.equal(matchMaker.joinById('invalid_id', {}), undefined);
+    it('shouldn\'t return when trying to join with invalid room id', async () => {
+      let roomId = await matchMaker.joinById('invalid_id', {});
+      assert.equal(roomId, undefined);
     });
 
-    it('shouldn\'t create room when requesting to join room with invalid params', function(done) {
-      matchMaker.onJoinRoomRequest('dummy_room', { invalid_param: 10 }, true, (err, room) => {
-        assert.ok(typeof(err)==="string");
-        assert.equal(room, undefined);
-        done();
-      })
+    it('shouldn\'t create room when requesting to join room with invalid params', async () => {
+      try {
+        await matchMaker.onJoinRoomRequest(createDummyClient(), 'dummy_room', { invalid_param: 10 });
+      } catch (e) {
+        assert.equal(e.message, "join_request_fail");
+      }
     });
 
-    it('shouldn\t return room instance when trying to join existing room by id with invalid params', function(done) {
-      matchMaker.onJoinRoomRequest('room', {}, true, (err, room) => {
-        assert.ok(room instanceof Room);
-        assert.equal(matchMaker.joinById(room.roomId, { invalid_param: 1 }), undefined);
-        done();
-      });
+    it('shouldn\t return room instance when trying to join existing room by id with invalid params', async () => {
+      let roomId = await matchMaker.onJoinRoomRequest(createDummyClient(), 'room', {});
+      assert.ok(isValidId(roomId));
+
+      let joinByRoomId = await matchMaker.joinById(roomId, { invalid_param: 1 });
+      assert.equal(joinByRoomId, undefined);
     });
 
-    it('should join existing room using "joinById"', function(done) {
-      assert.equal(false, matchMaker.hasAvailableRoom('dummy_room'))
+    it('should join existing room using "joinById"', async () => {
+      let roomId = await matchMaker.onJoinRoomRequest(createDummyClient(), 'room', {});
+      assert.ok(isValidId(roomId));
 
-      matchMaker.onJoinRoomRequest('dummy_room', {}, true, (err, room) => {
-        var joiningRoom = matchMaker.joinById(room.roomId, {});
-        assert.equal(true, matchMaker.hasAvailableRoom('dummy_room'))
-        assert.equal('dummy_room', room.roomName)
-        assert.equal(room.roomId, joiningRoom.roomId)
-        done();
-      });
+      let joinByRoomId = await matchMaker.joinById(roomId, {});
+      assert.ok(isValidId(joinByRoomId));
     });
 
     it('should call "onDispose" when room is not created', function(done) {
@@ -92,159 +91,160 @@ describe('MatchMaker', function() {
       done();
     });
 
-    it('should emit error if room name is not a valid id', function(done) {
-      const invalidRoomName = '';
-      matchMaker.onJoinRoomRequest(invalidRoomName, {}, true, (err, room) => {
-        assert.equal('join_request_fail', err);
-        done();
-      });
+    it('should emit error if room name is not a valid id', async () => {
+      const invalidRoomName = 'fjf10jf10jf0jf0fj';
+      try {
+        await matchMaker.onJoinRoomRequest(createDummyClient(), invalidRoomName, {});
+
+      } catch (e) {
+        assert.equal(e.message, "join_request_fail");
+      }
     });
 
   });
 
   describe('onJoin', () => {
-    it('should send error message to client when joining invalid room', (done) => {
-      let client = createDummyClient();
+    it('should send error message to client when joining invalid room', async () => {
+      let client = createDummyClient({});
 
-      matchMaker.bindClient(client, generateId()).then((room) => {
-        throw new Error("this promise shouldn't succeed");
+      try {
+        await matchMaker.connectToRoom(client, generateId());
+        assert.fail("an error should be thrown here.");
 
-      }).catch(err => {
-        assert.ok(typeof(err) === "string");
-        assert.equal(client.lastMessage[0], Protocol.JOIN_ERROR);
-        done();
-      });
+      } catch (e) {
+        assert.equal(e.message, "remote room timed out");
+      }
     });
   });
 
-  describe('verifyClient', () => {
-    it('should\'t allow to connect when verifyClient returns false', (done) => {
-      let client = createDummyClient();
+  // describe('verifyClient', () => {
+  //   it('should\'t allow to connect when verifyClient returns false', (done) => {
+  //     let client = createDummyClient();
 
-      RoomVerifyClient.prototype.verifyClient = () => false;
+  //     RoomVerifyClient.prototype.verifyClient = () => false;
 
-      matchMaker.onJoinRoomRequest('room_verify_client', { clientId: client.id }, true, (err, room) => {
-        matchMaker.bindClient(client, room.roomId).then((room) => {
-          throw new Error("this promise shouldn't succeed");
+  //     matchMaker.onJoinRoomRequest('room_verify_client', { clientId: client.id }, true, (err, room) => {
+  //       matchMaker.bindClient(client, room.roomId).then((room) => {
+  //         throw new Error("this promise shouldn't succeed");
 
-        }).catch(err => {
-          assert.ok(typeof (err) === "string");
-          assert.equal(client.lastMessage[0], Protocol.JOIN_ERROR);
-          done();
-        });
-      });
-    });
+  //       }).catch(err => {
+  //         assert.ok(typeof (err) === "string");
+  //         assert.equal(client.lastMessage[0], Protocol.JOIN_ERROR);
+  //         done();
+  //       });
+  //     });
+  //   });
 
-    it('should\'t allow to connect when verifyClient returns a failed promise', (done) => {
-      let client = createDummyClient();
+  //   it('should\'t allow to connect when verifyClient returns a failed promise', (done) => {
+  //     let client = createDummyClient();
 
-      RoomVerifyClient.prototype.verifyClient = () => new Promise((resolve, reject) => {
-        setTimeout(() => reject("forbidden"), 50);
-      });
+  //     RoomVerifyClient.prototype.verifyClient = () => new Promise((resolve, reject) => {
+  //       setTimeout(() => reject("forbidden"), 50);
+  //     });
 
-      matchMaker.onJoinRoomRequest('room_verify_client', { clientId: client.id }, true, (err, room) => {
-        matchMaker.bindClient(client, room.roomId).then((room) => {
-          throw new Error("this promise shouldn't succeed");
+  //     matchMaker.onJoinRoomRequest('room_verify_client', { clientId: client.id }, true, (err, room) => {
+  //       matchMaker.bindClient(client, room.roomId).then((room) => {
+  //         throw new Error("this promise shouldn't succeed");
 
-        }).catch(err => {
-          assert.equal(err, "forbidden");
-          assert.equal(client.lastMessage[0], Protocol.JOIN_ERROR);
-          done();
-        });
-      });
-    });
+  //       }).catch(err => {
+  //         assert.equal(err, "forbidden");
+  //         assert.equal(client.lastMessage[0], Protocol.JOIN_ERROR);
+  //         done();
+  //       });
+  //     });
+  //   });
 
-    it('should allow to connect when verifyClient returns true', (done) => {
-      let client = createDummyClient();
+  //   it('should allow to connect when verifyClient returns true', (done) => {
+  //     let client = createDummyClient();
 
-      RoomVerifyClient.prototype.verifyClient = () => true;
+  //     RoomVerifyClient.prototype.verifyClient = () => true;
 
-      matchMaker.onJoinRoomRequest('room_verify_client', { clientId: client.id }, true, (err, room) => {
-        matchMaker.bindClient(client, room.roomId).then((room) => {
-          assert.ok(room instanceof Room);
-          done();
+  //     matchMaker.onJoinRoomRequest('room_verify_client', { clientId: client.id }, true, (err, room) => {
+  //       matchMaker.bindClient(client, room.roomId).then((room) => {
+  //         assert.ok(room instanceof Room);
+  //         done();
 
-        }).catch(err => {
-          throw new Error(err);
-        });
-      });
-    });
+  //       }).catch(err => {
+  //         throw new Error(err);
+  //       });
+  //     });
+  //   });
 
-    it('should allow to connect when verifyClient returns fulfiled promise', (done) => {
-      let client = createDummyClient();
+  //   it('should allow to connect when verifyClient returns fulfiled promise', (done) => {
+  //     let client = createDummyClient();
 
-      RoomVerifyClient.prototype.verifyClient = () => new Promise((resolve, reject) => {
-        setTimeout(() => resolve(), 50);
-      });
+  //     RoomVerifyClient.prototype.verifyClient = () => new Promise((resolve, reject) => {
+  //       setTimeout(() => resolve(), 50);
+  //     });
 
-      matchMaker.onJoinRoomRequest('room_verify_client', { clientId: client.id }, true, (err, room) => {
-        matchMaker.bindClient(client, room.roomId).then((room) => {
-          assert.equal(1, room.clients.length);
-          assert.ok(room instanceof Room);
-          done();
+  //     matchMaker.onJoinRoomRequest('room_verify_client', { clientId: client.id }, true, (err, room) => {
+  //       matchMaker.bindClient(client, room.roomId).then((room) => {
+  //         assert.equal(1, room.clients.length);
+  //         assert.ok(room instanceof Room);
+  //         done();
 
-        }).catch(err => {
-          throw new Error(err);
-        });
-      });
-    });
+  //       }).catch(err => {
+  //         throw new Error(err);
+  //       });
+  //     });
+  //   });
 
-    it('should handle leaving room before onJoin is fulfiled.', (done) => {
-      const onDisposeSpy = sinon.spy(RoomVerifyClient.prototype, 'onDispose');
+  //   it('should handle leaving room before onJoin is fulfiled.', (done) => {
+  //     const onDisposeSpy = sinon.spy(RoomVerifyClient.prototype, 'onDispose');
 
-      RoomVerifyClient.prototype.verifyClient = () => new Promise((resolve, reject) => {
-        setTimeout(() => resolve(), 100);
-      });
+  //     RoomVerifyClient.prototype.verifyClient = () => new Promise((resolve, reject) => {
+  //       setTimeout(() => resolve(), 100);
+  //     });
 
-      let client = createDummyClient();
+  //     let client = createDummyClient();
 
-      matchMaker.onJoinRoomRequest('room_verify_client', { clientId: client.id }, true, (err, room) => {
-        matchMaker.bindClient(client, room.roomId).then((room) => {
-          throw new Error("this promise shouldn't succeed");
+  //     matchMaker.onJoinRoomRequest('room_verify_client', { clientId: client.id }, true, (err, room) => {
+  //       matchMaker.bindClient(client, room.roomId).then((room) => {
+  //         throw new Error("this promise shouldn't succeed");
 
-        }).catch(err => {
-          assert.equal(0, room.clients.length);
-          assert.deepEqual({}, matchMaker.sessions);
-          assert.ok(onDisposeSpy.calledOnce);
-          onDisposeSpy.restore();
+  //       }).catch(err => {
+  //         assert.equal(0, room.clients.length);
+  //         assert.deepEqual({}, matchMaker.sessions);
+  //         assert.ok(onDisposeSpy.calledOnce);
+  //         onDisposeSpy.restore();
 
-          done();
-        });
+  //         done();
+  //       });
 
-        client.emit('close');
-      });
-    });
+  //       client.emit('close');
+  //     });
+  //   });
 
-    xit('shouldn\'t accept second client when room is locked after first one', (done) => {
-      let client = createDummyClient();
+  //   xit('shouldn\'t accept second client when room is locked after first one', (done) => {
+  //     let client = createDummyClient();
 
-      matchMaker.onJoinRoomRequest('room_verify_client_with_lock', { clientId: client.id }, true, (err, room) => {
-        matchMaker.bindClient(client, room.roomId).then((room) => {
-          assert.equal(1, room.clients.length);
-          assert.ok(room instanceof Room);
+  //     matchMaker.onJoinRoomRequest('room_verify_client_with_lock', { clientId: client.id }, true, (err, room) => {
+  //       matchMaker.bindClient(client, room.roomId).then((room) => {
+  //         assert.equal(1, room.clients.length);
+  //         assert.ok(room instanceof Room);
 
-        }).catch(err => {
-          throw new Error("this promise shouldn't fail");
-        });
-      });
+  //       }).catch(err => {
+  //         throw new Error("this promise shouldn't fail");
+  //       });
+  //     });
 
-      // try to join with a second client when the room will be locked
-      setTimeout(() => {
-        let client = createDummyClient();
-        matchMaker.onJoinRoomRequest('room_verify_client_with_lock', { clientId: client.id }, true, (err, room) => {
-          matchMaker.bindClient(client, room.roomId).then((room) => {
-            assert.equal(1, room.clients.length);
-            assert.ok(room instanceof Room);
-            done();
+  //     // try to join with a second client when the room will be locked
+  //     setTimeout(() => {
+  //       let client = createDummyClient();
+  //       matchMaker.onJoinRoomRequest('room_verify_client_with_lock', { clientId: client.id }, true, (err, room) => {
+  //         matchMaker.bindClient(client, room.roomId).then((room) => {
+  //           assert.equal(1, room.clients.length);
+  //           assert.ok(room instanceof Room);
+  //           done();
 
-          }).catch(err => {
-            throw new Error("this promise shouldn't fail");
-          });
-        });
-      }, 10);
+  //         }).catch(err => {
+  //           throw new Error("this promise shouldn't fail");
+  //         });
+  //       });
+  //     }, 10);
 
-    });
-  });
+  //   });
+  // });
 
   describe('registered handler events', () => {
     it('should trigger "create" event', (done) => {
@@ -257,7 +257,7 @@ describe('MatchMaker', function() {
     });
 
     it('should trigger "dispose" event', (done) => {
-      let dummyRoom = matchMaker.create('room', {});
+      let dummyRoom = matchMaker.getRoomById(matchMaker.create('room', {}));
 
       matchMaker.handlers["room"].on("dispose", (room) => {
         assert.ok(room instanceof Room);
@@ -267,8 +267,8 @@ describe('MatchMaker', function() {
       dummyRoom.emit("dispose");
     });
 
-    it('should trigger "join" event', (done) => {
-      let dummyRoom = matchMaker.create('room', {});
+    it('should trigger "join" event', async (done) => {
+      let dummyRoom = matchMaker.getRoomById(matchMaker.create('room', {}));
 
       matchMaker.handlers["room"].on("join", (room, client) => {
         assert.ok(room instanceof Room);
@@ -277,9 +277,8 @@ describe('MatchMaker', function() {
       });
 
       let client = createDummyClient();
-      matchMaker.onJoinRoomRequest('room', { clientId: client.id }, true, (err, room) => {
-        matchMaker.onJoin (room.roomId, client, () => {});
-      });
+      let room = matchMaker.getRoomById(await matchMaker.onJoinRoomRequest(client, 'room', {}));
+      (room as any)._onJoin(client, {});
     });
 
     it('should trigger "lock" event', (done) => {
@@ -306,8 +305,8 @@ describe('MatchMaker', function() {
       matchMaker.create('room', {});
     });
 
-    it('should trigger "leave" event', (done) => {
-      let dummyRoom = matchMaker.create('room', {});
+    it('should trigger "leave" event', async (done) => {
+      let dummyRoom = matchMaker.getRoomById(matchMaker.create('room', {}));
 
       matchMaker.handlers["room"].on("leave", (room, client) => {
         assert.ok(room instanceof Room);
@@ -316,9 +315,9 @@ describe('MatchMaker', function() {
       });
 
       let client = createDummyClient();
-      matchMaker.onJoinRoomRequest('room', { clientId: client.id }, true, (err, room) => {
-        matchMaker.onLeave (client, room.roomId);
-      });
+      let room = matchMaker.getRoomById(await matchMaker.onJoinRoomRequest(client, 'room', { clientId: client.id }));
+      room._onJoin(client);
+      room._onLeave(client);
     });
   });
 
