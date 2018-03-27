@@ -52,13 +52,7 @@ export class MatchMaker {
     delete client.options;
 
     if (this.localRooms[roomId]) {
-      try {
-        (room as any)._onJoin(client, clientOptions, client.auth);
-
-      } catch (e) {
-        err = e.message || e;
-        debugErrors(e.stack || e);
-      }
+      (room as any)._onJoin(client, clientOptions, client.auth);
 
     } else {
       const remoteSessionSub = `${roomId}:${client.sessionId}`;
