@@ -70,7 +70,7 @@ export class LocalPresence implements Presence {
     }
 
     public async hlen(roomId: string) {
-        return Object.keys(this.hash[roomId]).length;
+        return this.hash[roomId] && Object.keys(this.hash[roomId]).length || 0;
     }
 
 }

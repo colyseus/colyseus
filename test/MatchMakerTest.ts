@@ -321,19 +321,4 @@ describe('MatchMaker', function() {
     });
   });
 
-  describe('onJoinRoomRequest', () => {
-    it('should remove reserved seat after joining the room', (done) => {
-      let client = createDummyClient();
-
-      matchMaker.onJoinRoomRequest('room', { clientId: client.id }, true, (err, room) => {
-        matchMaker.bindClient(client, room.roomId).then((room) => {
-          setTimeout(() => {
-            assert.deepEqual({}, room.connectingClients);
-            done();
-          }, 5);
-        });
-      });
-    });
-  });
-
 });

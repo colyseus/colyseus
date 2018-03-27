@@ -27,7 +27,7 @@ describe('Room', function() {
   });
 
   describe('#onJoin/#onLeave', function() {
-    it('should receive onJoin/onLeave messages', function() {
+    it('should receive onJoin messages', function() {
       var room = new DummyRoom();
       var client = createDummyClient();
       var message = null;
@@ -38,10 +38,6 @@ describe('Room', function() {
 
       message = msgpack.decode(client.messages[0]);
       assert.equal(message[0], Protocol.JOIN_ROOM);
-
-      (<any>room)._onLeave(client);
-      message = msgpack.decode(client.messages[1]);
-      assert.equal(message[0], Protocol.LEAVE_ROOM);
     });
 
     it('should receive JOIN_ROOM and ROOM_STATE messages onJoin', function() {
@@ -99,7 +95,7 @@ describe('Room', function() {
       var message = msgpack.decode( client.messages[1] );
 
       assert.equal(message[0], Protocol.ROOM_STATE);
-      assert.deepEqual(msgpack.decode(message[2]), { success: true });
+      assert.deepEqual(msgpack.decode(message[1]), { success: true });
     });
   });
 
@@ -179,15 +175,15 @@ describe('Room', function() {
       // third message, empty patch state
       var message = msgpack.decode(client.messages[2]);
       assert.equal(message[0], Protocol.ROOM_STATE_PATCH);
-      assert.deepEqual(message[2].length, 22);
+      assert.deepEqual(message[1].length, 22);
 
-      assert.deepEqual(message[2], [ 66, 10, 66, 58, 130, 163, 111, 110, 101, 1, 163, 116, 119, 111, 2, 49, 86, 53, 49, 74, 89, 59 ]);
+      assert.deepEqual(message[1], [ 66, 10, 66, 58, 130, 163, 111, 110, 101, 1, 163, 116, 119, 111, 2, 49, 86, 53, 49, 74, 89, 59 ]);
     });
   });
 
   describe("#disconnect", () => {
 
-    it("should send disconnect message to all clients", () => {
+    it("should disconnect all clients", () => {
       let room = new DummyRoom();
 
       // connect 10 clients
@@ -200,11 +196,10 @@ describe('Room', function() {
       assert.equal(lastClient.lastMessage[0], Protocol.JOIN_ROOM);
       room.disconnect();
 
-      assert.equal(lastClient.lastMessage[0], Protocol.LEAVE_ROOM);
       assert.deepEqual(room.clients, {});
     });
 
-    it("should send disconnect message to all clients", (done) => {
+    it("should allow asynchronous disconnects", (done) => {
       let room = new DummyRoom();
 
       let clock = sinon.useFakeTimers();
