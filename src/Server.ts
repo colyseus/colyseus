@@ -147,7 +147,7 @@ export class Server {
         catch((e) => {
           debugErrors(e.stack || e);
           send(client, [Protocol.JOIN_ERROR, roomId, e && e.message]);
-        })
+        });
 
     } else {
       client.on('message',  this.onMessageMatchMaking.bind(this, client));

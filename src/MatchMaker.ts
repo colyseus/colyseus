@@ -37,8 +37,6 @@ export class MatchMaker {
   }
 
   public async connectToRoom(client: Client, roomId: string) {
-    let err: string;
-
     const room = this.localRooms[roomId];
     const clientOptions = client.options;
     const auth = client.auth;
@@ -169,7 +167,7 @@ export class MatchMaker {
 
         unsubscribeTimeout = setTimeout(() => {
           unsubscribe();
-          reject(new Error("remote room timed out"));
+          reject(new Error('remote room timed out'));
         }, PRESENCE_TIMEOUT);
       });
 
@@ -271,7 +269,7 @@ export class MatchMaker {
   }
 
   // used only for testing purposes
-  public getRoomById (roomId: string) {
+  public getRoomById(roomId: string) {
     return this.localRooms[roomId];
   }
 
