@@ -221,6 +221,10 @@ export abstract class Room<T= any> extends EventEmitter {
   }
 
   protected broadcastPatch(): boolean {
+    if (!this._simulationInterval) {
+      this.clock.tick();
+    }
+
     if ( !this.state ) {
       debugPatch('trying to broadcast null state. you should call #setState on constructor or during user connection.');
       return false;
