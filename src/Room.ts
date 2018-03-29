@@ -379,7 +379,8 @@ export abstract class Room<T= any> extends EventEmitter {
     }
 
     // unlock if room is available for new connections
-    if (this._maxClientsReached && this._lockedExplicitly) {
+    if (this._maxClientsReached && !this._lockedExplicitly) {
+      this._maxClientsReached = false;
       this.unlock.call(this, true);
     }
 
