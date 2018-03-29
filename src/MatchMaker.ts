@@ -73,7 +73,10 @@ export class MatchMaker {
       }, clientOptions, client.auth]);
 
       // forward 'message' events to room's process
-      client.on('message', (data: Buffer) => {
+      client.on('message', (data: Buffer | ArrayBuffer) => {
+        // compatibility with uws
+        if (data instanceof ArrayBuffer) { data = new Buffer(data); }
+
         this.remoteRoomCall(roomId, '_emitOnClient', [client.sessionId, Array.from(data)]);
       });
 
