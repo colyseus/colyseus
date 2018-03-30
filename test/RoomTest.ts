@@ -99,8 +99,8 @@ describe('Room', function() {
     });
   });
 
-  describe('#broadcastPatch', function() {
-    it('should fail to broadcast patch without state', function() {
+  describe('#broadcast', function() {
+    it('should broadcast data to all clients', function() {
       let room = new DummyRoom();
 
       // connect 2 dummy clients into room
@@ -110,11 +110,17 @@ describe('Room', function() {
       let client2 = createDummyClient();
       (<any>room)._onJoin(client2, {});
 
-      assert.equal(undefined, room.state);
-      assert.equal(false, (<any>room).broadcastPatch());
+      let client3 = createDummyClient();
+      (<any>room)._onJoin(client3, {});
+
+      room.broadcast("data");
+
+      assert.equal("data", client1.lastMessage[1]);
+      assert.equal("data", client2.lastMessage[1]);
+      assert.equal("data", client3.lastMessage[1]);
     });
 
-    it('should broadcast patch having state', function() {
+    it('should broadcast data to all clients, except the provided client', function() {
       let room = new DummyRoom();
 
       // connect 2 dummy clients into room
@@ -124,60 +130,14 @@ describe('Room', function() {
       let client2 = createDummyClient();
       (<any>room)._onJoin(client2, {});
 
-      // set state
-      room.setState({one: 1});
-      assert.deepEqual({one: 1}, room.state);
+      let client3 = createDummyClient();
+      (<any>room)._onJoin(client3, {});
 
-      // clean state. no patches available!
-      assert.equal(false, (<any>room).broadcastPatch());
+      room.broadcast("data", { except: client3 });
 
-      // change the state to make patch available
-      room.state.one = 111;
-
-      // voila!
-      assert.equal(true, (<any>room).broadcastPatch());
-    });
-
-    it('shouldn\'t broadcast clean state (no patches)', function() {
-      var room = new DummyRoom();
-      room.setState({ one: 1 });
-
-      // create 2 dummy connections with the room
-      var client = createDummyClient();
-      (<any>room)._onJoin(client, {});
-
-      var client2 = createDummyClient();
-      (<any>room)._onJoin(client2, {});
-
-      assert.deepEqual({one: 1}, room.state);
-
-      // clean state. no patches available!
-      assert.equal(false, (<any>room).broadcastPatch());
-
-      // change the state to make patch available
-      room.state.two = 2;
-      assert.deepEqual({one: 1, two: 2}, room.state);
-
-      // voila!
-      assert.equal(true, (<any>room).broadcastPatch());
-
-      assert.equal(client.messages.length, 3);
-      assert.equal(client2.messages.length, 3);
-
-      // first message, join room
-      var message = msgpack.decode(client.messages[0]);
-      assert.equal(message[0], Protocol.JOIN_ROOM);
-
-      // second message, room state
-      var message = msgpack.decode(client.messages[1]);
-      assert.equal(message[0], Protocol.ROOM_STATE);
-
-      // third message, empty patch state
-      var message = msgpack.decode(client.messages[2]);
-      assert.equal(message[0], Protocol.ROOM_STATE_PATCH);
-      assert.deepEqual(message[1].length, 22);
-
-      assert.deepEqual(message[1], [ 66, 10, 66, 58, 130, 163, 111, 110, 101, 1, 163, 116, 119, 111, 2, 49, 86, 53, 49, 74, 89, 59 ]);
+      assert.equal("data", client1.lastMessage[1]);
+      assert.equal("data", client2.lastMessage[1]);
+      assert.equal(undefined, client3.lastMessage[1]);
     });
   });
 

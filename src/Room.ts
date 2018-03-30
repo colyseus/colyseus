@@ -31,6 +31,10 @@ export interface RoomAvailable {
   metadata?: any;
 }
 
+export interface BroadcastOptions {
+  except: Client
+}
+
 export abstract class Room<T= any> extends EventEmitter {
   public clock: Clock = new Clock();
   public timeline?: Timeline;
@@ -167,7 +171,7 @@ export abstract class Room<T= any> extends EventEmitter {
     send(client, [ Protocol.ROOM_DATA, data ]);
   }
 
-  public broadcast(data: any): boolean {
+  public broadcast(data: any, options?: BroadcastOptions): boolean {
     // no data given, try to broadcast patched state
     if (!data) {
       throw new Error('Room#broadcast: \'data\' is required to broadcast.');
@@ -180,7 +184,11 @@ export abstract class Room<T= any> extends EventEmitter {
 
     let numClients = this.clients.length;
     while (numClients--) {
-      (this.clients[ numClients ] as Client).send(data, { binary: true }, logError.bind(this) );
+      let client = this.clients[ numClients ];
+
+      if (!options || options.except !== client) {
+        client.send(data, { binary: true }, logError.bind(this));
+      }
     }
 
     return true;
@@ -205,7 +213,7 @@ export abstract class Room<T= any> extends EventEmitter {
 
     let i = this.clients.length;
     while (i--) {
-      promises.push( this._onLeave((this.clients[i] as Client)) );
+      promises.push( this._onLeave(this.clients[i]) );
     }
 
     return Promise.all(promises);
