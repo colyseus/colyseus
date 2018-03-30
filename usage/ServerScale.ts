@@ -1,3 +1,5 @@
+process.env.DEBUG="colyseus:*";
+
 import * as http from "http";
 import * as express from "express";
 import * as bodyParser from "body-parser";
@@ -7,7 +9,7 @@ import { Server } from "../src/Server";
 import { ChatRoom } from "./ChatRoom";
 import { RedisPresence } from './../src/presence/RedisPresence';
 
-const port = parseInt(process.env.PORT || "8080");
+const port = Number(process.env.PORT || "2567");
 const endpoint = "localhost";
 
 const app = express();
@@ -20,8 +22,8 @@ const gameServer = new Server({
     next(true);
   },
   presence: new RedisPresence(),
-  // engine: WebSocket.Server,
-  server: server 
+  engine: WebSocket.Server,
+  server: server
 });
 
 // Register ChatRoom as "chat"

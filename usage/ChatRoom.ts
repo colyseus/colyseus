@@ -1,32 +1,33 @@
 import { Room } from "../src";
-import { RemoteClient } from "../src/presence/RemoteClient";
 
 export class ChatRoom extends Room<any> {
   maxClients = 4;
 
   onInit (options) {
-    console.log("onInit:", options)
     this.setState({ messages: [] });
   }
 
-  // verifyClient (options) {
-  // }
+  async onAuth (options) {
+    return { success: true };
+  }
 
-  onJoin (client, options) {
-    console.log("CLIENT JOINED ON ROOM", this.roomId, "CLIENTS:", this.clients.map(c => c instanceof RemoteClient));
-    // console.log("client has joined!");
-    // console.log("client.id:", client.id);
-    // console.log("client.sessionId:", client.sessionId);
-    // console.log("with options", options);
+  onJoin (client, options, auth) {
+    console.log("client has joined!");
+    console.log("client.id:", client.id);
+    console.log("client.sessionId:", client.sessionId);
+    console.log("with options", options);
     this.state.messages.push(`${ client.id } joined.`);
   }
 
   requestJoin (options, isNewRoom: boolean) {
-    return (options.create && isNewRoom) || this.clients.length > 0;
+    return (options.create)
+      ? (options.create && isNewRoom)
+      : this.clients.length > 0;
   }
 
   onLeave (client) {
     this.state.messages.push(`${ client.id } left.`);
+    console.log("ChatRoom:", client.sessionId, "left!");
   }
 
   onMessage (client, data) {

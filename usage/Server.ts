@@ -6,7 +6,7 @@ import * as WebSocket from "uws";
 import { Server } from "../src/Server";
 import { ChatRoom } from "./ChatRoom";
 
-const port = 8080;
+const port = 2567;
 const endpoint = "localhost";
 
 const app = express();
@@ -16,7 +16,7 @@ app.use(bodyParser.json());
 const server = http.createServer(app);
 const gameServer = new Server({
   engine: WebSocket.Server,
-  server: server 
+  server: server
 });
 
 // Register ChatRoom as "chat"
@@ -50,6 +50,8 @@ gameServer.onShutdown(() => {
   })
 });
 
+process.on('unhandledRejection', r => console.log(r));
+
 gameServer.listen(port);
 
-console.log(`Listening on http://${ endpoint }:${ port }`)
+console.log(`Listening on ws://${ endpoint }:${ port }`)
