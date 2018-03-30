@@ -32,7 +32,7 @@ export interface RoomAvailable {
 }
 
 export interface BroadcastOptions {
-  except: Client
+  except: Client;
 }
 
 export abstract class Room<T= any> extends EventEmitter {
@@ -184,7 +184,7 @@ export abstract class Room<T= any> extends EventEmitter {
 
     let numClients = this.clients.length;
     while (numClients--) {
-      let client = this.clients[ numClients ];
+      const client = this.clients[ numClients ];
 
       if (!options || options.except !== client) {
         client.send(data, { binary: true }, logError.bind(this));
