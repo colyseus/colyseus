@@ -1,19 +1,14 @@
-import * as msgpack from "notepack.io";
-import { Client } from "./index";
+import * as msgpack from 'notepack.io';
+import { debugErrors } from './Debug';
+import { Client } from './index';
 
+// Use codes between 0~127 for lesser throughput (1 byte)
 export enum Protocol {
-  // Use codes between 0~127 for lesser throughput (1 byte)
 
-  // User-related (1~10)
+  // User-related (1~9)
   USER_ID = 1,
 
-  // Cluster messages (server-side)
-  PASS_HTTP_SOCKET = 3,
-  PASS_WEBSOCKET = 4,
-  REQUEST_JOIN_ROOM = 8,
-  CREATE_ROOM = 9,
-
-  // Room-related (10~20)
+  // Room-related (10~19)
   JOIN_ROOM = 10,
   JOIN_ERROR = 11,
   LEAVE_ROOM = 12,
@@ -21,22 +16,36 @@ export enum Protocol {
   ROOM_STATE = 14,
   ROOM_STATE_PATCH = 15,
 
+  // Match-making related (20~29)
+  ROOM_LIST = 20,
+
   // Generic messages (50~60)
   BAD_REQUEST = 50,
+
+  // WebSocket error codes
+  WS_SERVER_DISCONNECT = 4201,
+  WS_TOO_MANY_CLIENTS = 4202,
 }
 
-export function decode (message: any) {
+// Inter-process communication protocol
+export enum IpcProtocol {
+  SUCCESS = 0,
+  ERROR = 1,
+  TIMEOUT = 2,
+}
+
+export function decode(message: any) {
   try {
     message = msgpack.decode(Buffer.from(message));
 
   } catch (e) {
-    console.error("Couldn't decode message:", message, e.stack);
+    debugErrors(`message couldn't be decoded: ${message}\n${e.stack}`);
     return;
   }
 
   return message;
 }
 
-export function send (client: Client, message: any[]) {
+export function send(client: Client, message: any[]) {
   client.send(msgpack.encode(message), { binary: true });
 }

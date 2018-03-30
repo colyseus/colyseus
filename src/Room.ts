@@ -1,99 +1,134 @@
-import * as msgpack from "notepack.io";
-import * as fossilDelta from "fossil-delta";
-import * as shortid from "shortid";
+import * as fossilDelta from 'fossil-delta';
+import * as msgpack from 'notepack.io';
+import * as shortid from 'shortid';
 
-import Clock from "@gamestdio/timer";
-import { EventEmitter } from "events";
-import { createTimeline, Timeline } from "@gamestdio/timeline";
+import { createTimeline, Timeline } from '@gamestdio/timeline';
+import Clock from '@gamestdio/timer';
+import { EventEmitter } from 'events';
 
-import { Client } from "./index";
-import { Protocol, send } from "./Protocol";
-import { logError, spliceOne } from "./Utils";
+import { Client } from './index';
+import { Presence } from './presence/Presence';
+import { RemoteClient } from './presence/RemoteClient';
+import { decode, Protocol, send } from './Protocol';
+import { logError, spliceOne } from './Utils';
 
-import { debugPatch, debugPatchData } from "./Debug";
-import * as jsonPatch from "fast-json-patch"; // this is only used for debugging patches
+import * as jsonPatch from 'fast-json-patch'; // this is only used for debugging patches
+import { debugErrors, debugPatch, debugPatchData } from './Debug';
 
-export abstract class Room<T=any> extends EventEmitter {
+const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
+const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
 
+export type SimulationCallback = (deltaTime?: number) => void;
+
+export interface RoomConstructor<T= any> {
+  new (presence?: Presence): Room<T>;
+}
+
+export interface RoomAvailable {
+  roomId: string;
+  clients: number;
+  maxClients: number;
+  metadata?: any;
+}
+
+export interface BroadcastOptions {
+  except: Client;
+}
+
+export abstract class Room<T= any> extends EventEmitter {
   public clock: Clock = new Clock();
   public timeline?: Timeline;
 
   public roomId: string;
   public roomName: string;
 
-  public clients: Client[] = [];
-
   public maxClients: number = Infinity;
-  public patchRate: number = 1000 / 20; // Default patch rate is 20fps (50ms)
+  public patchRate: number = DEFAULT_PATCH_RATE;
   public autoDispose: boolean = true;
 
   public state: T;
+  public metadata: any;
 
-  // holds a list of clients with clientOptions during handshake
-  public connectingClients: {[clientId: string]: any} = {};
+  public clients: Client[] = [];
+  protected remoteClients: {[sessionId: string]: RemoteClient} = {};
+
+  protected presence: Presence;
 
   // when a new user connects, it receives the '_previousState', which holds
   // the last binary snapshot other users already have, therefore the patches
   // that follow will be the same for all clients.
-  protected _previousState: any;
-  protected _previousStateEncoded: any;
+  private _previousState: any;
+  private _previousStateEncoded: any;
 
   private _simulationInterval: NodeJS.Timer;
   private _patchInterval: NodeJS.Timer;
 
-  constructor () {
+  private _locked: boolean = false;
+  private _lockedExplicitly: boolean = false;
+  private _maxClientsReached: boolean = false;
+
+  // // this timeout prevents rooms that are created by one process, but no client
+  // // ever had success joining into it on the specified interval.
+  // private _disposeIfEmptyAfterCreationTimeout: NodeJS.Timer;
+
+  constructor(presence?: Presence) {
     super();
 
-    if (arguments.length > 0) {
-      console.warn("DEPRECATION WARNING: use 'onInit(options)' instead of 'constructor(options)' to initialize the room.");
-    }
+    this.presence = presence;
+
+    // this._disposeIfEmptyAfterCreationTimeout = setTimeout(() => this._disposeIfEmpty(), 10000);
 
     this.setPatchRate(this.patchRate);
   }
 
   // Abstract methods
-  abstract onMessage (client: Client, data: any): void;
+  public abstract onMessage(client: Client, data: any): void;
 
   // Optional abstract methods
-  onInit? (options: any): void;
-  onJoin? (client: Client, options?: any): void | Promise<any>;
-  onLeave? (client: Client): void | Promise<any>;
-  onDispose? (): void | Promise<any>;
+  public onInit?(options: any): void;
+  public onJoin?(client: Client, options?: any, auth?: any): void | Promise<any>;
+  public onLeave?(client: Client): void | Promise<any>;
+  public onDispose?(): void | Promise<any>;
 
-  public requestJoin (options: any, isNew?: boolean): number | boolean {
+  public requestJoin(options: any, isNew?: boolean): number | boolean {
     return 1;
   }
 
-  public verifyClient (client: Client, options: any): boolean | Promise<any> {
-    return Promise.resolve(true);
+  public onAuth(options: any): boolean | Promise<any> {
+    return true;
   }
 
-  public get maxClientsReached () {
-    return this.clients.length + Object.keys(this.connectingClients).length >= this.maxClients;
+  public get locked() {
+    return this._locked;
   }
 
-  public setSimulationInterval ( callback: Function, delay: number = 1000 / 60 ): void {
+  public async hasReachedMaxClients(): Promise<boolean> {
+    const connectingClients = (await this.presence.hlen(this.roomId));
+    return (this.clients.length + connectingClients) >= this.maxClients;
+  }
+
+  public setSimulationInterval( callback: SimulationCallback, delay: number = DEFAULT_SIMULATION_INTERVAL ): void {
     // clear previous interval in case called setSimulationInterval more than once
-    if ( this._simulationInterval ) clearInterval( this._simulationInterval );
+    if ( this._simulationInterval ) { clearInterval( this._simulationInterval ); }
 
     this._simulationInterval = setInterval( () => {
       this.clock.tick();
-      callback();
+      callback(this.clock.deltaTime);
     }, delay );
   }
 
-  public setPatchRate ( milliseconds: number ): void {
+  public setPatchRate( milliseconds: number ): void {
     // clear previous interval in case called setPatchRate more than once
-    if ( this._patchInterval ) clearInterval(this._patchInterval);
+    if ( this._patchInterval ) { clearInterval(this._patchInterval); }
 
     this._patchInterval = setInterval( this.broadcastPatch.bind(this), milliseconds );
   }
 
-  public useTimeline ( maxSnapshots: number = 10 ): void {
+  public useTimeline( maxSnapshots: number = 10 ): void {
     this.timeline = createTimeline( maxSnapshots );
   }
 
-  public setState (newState) {
+  public setState(newState) {
     this.clock.start();
 
     this._previousState = newState;
@@ -108,39 +143,73 @@ export abstract class Room<T=any> extends EventEmitter {
     }
   }
 
-  public lock (): void {
+  public setMetadata(meta: any) {
+    this.metadata = meta;
+  }
+
+  public lock(): void {
+    this._locked = true;
+
+    // rooms locked internally aren't explicit locks.
+    this._lockedExplicitly = (arguments[0] === undefined);
+
     this.emit('lock');
   }
 
-  public unlock (): void {
+  public unlock(): void {
+    this._locked = false;
+
+    // only internal usage passes arguments to this function.
+    if (arguments[0] === undefined) {
+      this._lockedExplicitly = false;
+    }
+
     this.emit('unlock');
   }
 
-  public send (client: Client, data: any): void {
-    send(client, [ Protocol.ROOM_DATA, this.roomId, data ]);
+  public send(client: Client, data: any): void {
+    send(client, [ Protocol.ROOM_DATA, data ]);
   }
 
-  public broadcast (data: any): boolean {
+  public broadcast(data: any, options?: BroadcastOptions): boolean {
     // no data given, try to broadcast patched state
     if (!data) {
-      throw new Error("Room#broadcast: 'data' is required to broadcast.");
+      throw new Error('Room#broadcast: \'data\' is required to broadcast.');
     }
 
     // encode all messages with msgpack
     if (!(data instanceof Buffer)) {
-      data = msgpack.encode([Protocol.ROOM_DATA, this.roomId, data]);
+      data = msgpack.encode([Protocol.ROOM_DATA, data]);
     }
 
     let numClients = this.clients.length;
     while (numClients--) {
-      this.clients[ numClients ].send(data, { binary: true }, logError.bind(this) );
+      const client = this.clients[ numClients ];
+
+      if (!options || options.except !== client) {
+        client.send(data, { binary: true }, logError.bind(this));
+      }
     }
 
     return true;
   }
 
-  public disconnect (): Promise<any> {
-    let promises = [];
+  public async getAvailableData(): Promise<RoomAvailable> {
+    if (this._locked || await this.hasReachedMaxClients()) {
+      return undefined;
+
+    } else {
+      return {
+        clients: this.clients.length,
+        maxClients: this.maxClients,
+        metadata: this.metadata,
+        roomId: this.roomId,
+      };
+    }
+  }
+
+  public disconnect(): Promise<any> {
+    const promises = [];
 
     let i = this.clients.length;
     while (i--) {
@@ -150,31 +219,34 @@ export abstract class Room<T=any> extends EventEmitter {
     return Promise.all(promises);
   }
 
-  protected sendState (client: Client): void {
+  protected sendState(client: Client): void {
     send(client, [
       Protocol.ROOM_STATE,
-      this.roomId,
       this._previousStateEncoded,
       this.clock.currentTime,
       this.clock.elapsedTime,
     ]);
   }
 
-  private broadcastPatch (): boolean {
-    if ( !this._previousState ) {
+  protected broadcastPatch(): boolean {
+    if (!this._simulationInterval) {
+      this.clock.tick();
+    }
+
+    if ( !this.state ) {
       debugPatch('trying to broadcast null state. you should call #setState on constructor or during user connection.');
       return false;
     }
 
-    let currentState = this.state;
-    let currentStateEncoded = msgpack.encode( currentState );
+    const currentState = this.state;
+    const currentStateEncoded = msgpack.encode( currentState );
 
     // skip if state has not changed.
     if ( currentStateEncoded.equals( this._previousStateEncoded ) ) {
       return false;
     }
 
-    let patches = fossilDelta.create( this._previousStateEncoded, currentStateEncoded );
+    const patches = fossilDelta.create( this._previousStateEncoded, currentStateEncoded );
 
     // take a snapshot of the current state
     if (this.timeline) {
@@ -189,22 +261,100 @@ export abstract class Room<T=any> extends EventEmitter {
     }
 
     if (debugPatchData.enabled) {
-      debugPatchData(jsonPatch.compare(this._previousState, currentState));
+      debugPatchData('%j', jsonPatch.compare(msgpack.decode(this._previousStateEncoded), currentState));
     }
 
     this._previousState = currentState;
     this._previousStateEncoded = currentStateEncoded;
 
     // broadcast patches (diff state) to all clients,
-    // even if nothing has changed in order to calculate PING on client-side
-    return this.broadcast( msgpack.encode([ Protocol.ROOM_STATE_PATCH, this.roomId, patches ]) );
+    return this.broadcast( msgpack.encode([ Protocol.ROOM_STATE_PATCH, patches ]) );
   }
 
-  private _onJoin (client: Client, options?: any): void {
+  protected _disposeIfEmpty() {
+    if ( this.clients.length === 0 ) {
+      this._dispose();
+      this.emit('dispose');
+    }
+  }
+
+  protected _dispose(): Promise<any> {
+    let userReturnData;
+
+    if ( this.onDispose ) { userReturnData = this.onDispose(); }
+    if ( this._patchInterval ) { clearInterval( this._patchInterval ); }
+    if ( this._simulationInterval ) { clearInterval( this._simulationInterval ); }
+
+    // clear all timeouts/intervals + force to stop ticking
+    this.clock.clear();
+    this.clock.stop();
+
+    return userReturnData || Promise.resolve();
+  }
+
+  // allow remote clients to trigger events on themselves
+  private _emitOnClient(sessionId, event) {
+    const remoteClient = this.remoteClients[sessionId];
+
+    if (!remoteClient) {
+      debugErrors(`trying to send event ("${event}") to non-existing remote client (${sessionId})`);
+      return;
+    }
+
+    if (typeof(event) !== 'string') {
+      remoteClient.emit('message', new Buffer(event));
+
+    } else {
+      remoteClient.emit(event);
+    }
+  }
+
+  private _onMessage(client: Client, message: any) {
+    message = decode(message);
+
+    if (!message) {
+      debugErrors(`${this.roomName} (${this.roomId}), couldn't decode message: ${message}`);
+      return;
+    }
+
+    if (message[0] === Protocol.ROOM_DATA) {
+      this.onMessage(client, message[2]);
+
+    } else {
+      this.onMessage(client, message);
+    }
+
+  }
+
+  private _onJoin(client: Client, options?: any, auth?: any) {
+    // create remote client instance.
+    if (client.remote) {
+      client = (new RemoteClient(client, this.roomId, this.presence)) as any;
+      this.remoteClients[client.sessionId] = client as any;
+    }
+
     this.clients.push( client );
+
+    // if (this._disposeIfEmptyAfterCreationTimeout) {
+    //   clearInterval(this._disposeIfEmptyAfterCreationTimeout);
+    //   this._disposeIfEmptyAfterCreationTimeout = undefined;
+    // }
+
+    // lock automatically when maxClients is reached
+    if (this.clients.length === this.maxClients) {
+      this._maxClientsReached = true;
+      this.lock.call(this, true);
+    }
 
     // confirm room id that matches the room name requested to join
     send(client, [ Protocol.JOIN_ROOM, client.sessionId ]);
+
+    // emit 'join' to room handler
+    this.emit('join', client);
+
+    // bind onLeave method.
+    client.on('message', this._onMessage.bind(this, client));
+    client.once('close', this._onLeave.bind(this, client));
 
     // send current state when new client joins the room
     if (this.state) {
@@ -212,33 +362,23 @@ export abstract class Room<T=any> extends EventEmitter {
     }
 
     if (this.onJoin) {
-      this.onJoin(client, options);
+      return this.onJoin(client, options, auth);
     }
   }
 
-  private _onLeave (client: Client, isDisconnect: boolean = false): void | Promise<any> {
+  private _onLeave(client: Client): void | Promise<any> {
     let userReturnData;
 
-    //
     // call abstract 'onLeave' method only if the client has been successfully accepted.
-    //
-    // the '_onLeave' method may be called before 'verifyClient' succeeds,
-    // before the client is appended to `this.clients`
-    //
     if (spliceOne(this.clients, this.clients.indexOf(client)) && this.onLeave) {
       userReturnData = this.onLeave(client);
     }
 
-    this.emit('leave', client, isDisconnect);
+    this.emit('leave', client);
 
-    //
-    // TODO: force disconnect from server.
-    //
-    // need to check why the connection is being re-directed to MatchMaking
-    // process after calling `client.close()` here
-    //
-    if (!isDisconnect) {
-      send(client, [ Protocol.LEAVE_ROOM, this.roomId ]);
+    // remove remote client reference
+    if (client instanceof RemoteClient) {
+      delete this.remoteClients[client.sessionId];
     }
 
     // custom cleanup method & clear intervals
@@ -246,26 +386,11 @@ export abstract class Room<T=any> extends EventEmitter {
       this._disposeIfEmpty();
     }
 
-    return userReturnData || Promise.resolve();
-  }
-
-  protected _disposeIfEmpty () {
-    if ( this.clients.length == 0 ) {
-      this._dispose();
-      this.emit('dispose');
+    // unlock if room is available for new connections
+    if (this._maxClientsReached && !this._lockedExplicitly) {
+      this._maxClientsReached = false;
+      this.unlock.call(this, true);
     }
-  }
-
-  protected _dispose (): Promise<any> {
-    let userReturnData;
-
-    if ( this.onDispose ) userReturnData = this.onDispose();
-    if ( this._patchInterval ) clearInterval( this._patchInterval );
-    if ( this._simulationInterval ) clearInterval( this._simulationInterval );
-
-    // clear all timeouts/intervals + force to stop ticking
-    this.clock.clear();
-    this.clock.stop();
 
     return userReturnData || Promise.resolve();
   }

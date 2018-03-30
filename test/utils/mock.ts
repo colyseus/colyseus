@@ -1,9 +1,7 @@
-"use strict";
-
 import { EventEmitter } from "events";
 import * as shortid from "shortid";
 import * as msgpack from "notepack.io";
-import WebSocket from "../../src/ws";
+import * as WebSocket from "ws";
 import { Room } from "../../src/Room";
 
 export class Client extends EventEmitter {
@@ -39,8 +37,10 @@ export function createEmptyClient(): any {
   return new Client()
 }
 
-export function createDummyClient (): any {
-  return new Client(shortid.generate())
+export function createDummyClient (options?: any): any {
+  let client = new Client(shortid.generate());
+  (<any>client).options = options;
+  return client;
 }
 
 export class DummyRoom extends Room {

@@ -1,11 +1,12 @@
 import * as http from "http";
 import * as express from "express";
 import * as bodyParser from "body-parser";
+import * as WebSocket from "uws";
 
 import { Server } from "../src/Server";
 import { ChatRoom } from "./ChatRoom";
 
-const port = 8080;
+const port = 2567;
 const endpoint = "localhost";
 
 const app = express();
@@ -13,7 +14,10 @@ app.use(bodyParser.json());
 
 // Create HTTP & WebSocket servers
 const server = http.createServer(app);
-const gameServer = new Server({ server: server });
+const gameServer = new Server({
+  engine: WebSocket.Server,
+  server: server
+});
 
 // Register ChatRoom as "chat"
 gameServer.register("chat", ChatRoom).
@@ -24,7 +28,6 @@ gameServer.register("chat", ChatRoom).
   on("dispose", (room) => console.log("room disposed!", room.roomId));
 
 app.use(express.static(__dirname));
-
 
 app.get("/something", (req, res) => {
   console.log("something!", process.pid);
@@ -47,6 +50,8 @@ gameServer.onShutdown(() => {
   })
 });
 
+process.on('unhandledRejection', r => console.log(r));
+
 gameServer.listen(port);
 
-console.log(`Listening on http://${ endpoint }:${ port }`)
+console.log(`Listening on ws://${ endpoint }:${ port }`)
