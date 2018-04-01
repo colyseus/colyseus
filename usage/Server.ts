@@ -6,7 +6,7 @@ import * as WebSocket from "uws";
 import { Server } from "../src/Server";
 import { ChatRoom } from "./ChatRoom";
 
-const port = 2567;
+const port = Number(process.env.PORT || 2567);
 const endpoint = "localhost";
 
 const app = express();

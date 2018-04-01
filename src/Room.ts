@@ -49,10 +49,10 @@ export abstract class Room<T= any> extends EventEmitter {
   public state: T;
   public metadata: any;
 
+  public presence: Presence;
+
   public clients: Client[] = [];
   protected remoteClients: {[sessionId: string]: RemoteClient} = {};
-
-  protected presence: Presence;
 
   // when a new user connects, it receives the '_previousState', which holds
   // the last binary snapshot other users already have, therefore the patches

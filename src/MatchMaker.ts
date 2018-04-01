@@ -221,11 +221,12 @@ export class MatchMaker {
 
   public create(roomName: string, clientOptions: ClientOptions): string {
     const registeredHandler = this.handlers[ roomName ];
-    const room = new registeredHandler.klass(this.presence);
+    const room = new registeredHandler.klass();
 
-    // set room options
+    // set room public attributes
     room.roomId = generateId();
     room.roomName = roomName;
+    room.presence = this.presence;
 
     if (room.onInit) {
       room.onInit(merge({}, clientOptions, registeredHandler.options));
