@@ -13,7 +13,7 @@ import { Room, RoomAvailable, RoomConstructor } from './Room';
 import { LocalPresence } from './presence/LocalPresence';
 import { Presence } from './presence/Presence';
 
-import { debugErrors, debugMatchMaking } from './Debug';
+import { debugError, debugMatchMaking } from './Debug';
 
 export type ClientOptions = any;
 
@@ -199,15 +199,15 @@ export class MatchMaker {
     const exists = await this.presence.exists(this.getRoomChannel(roomId));
 
     if (!exists) {
-      debugErrors(`trying to join non-existant room "${ roomId }"`);
+      debugError(`trying to join non-existant room "${ roomId }"`);
       return;
 
     } else if (await this.remoteRoomCall(roomId, 'hasReachedMaxClients')) {
-      debugErrors(`room "${ roomId }" reached maxClients.`);
+      debugError(`room "${ roomId }" reached maxClients.`);
       return;
 
     } else if (!(await this.remoteRoomCall(roomId, 'requestJoin', [clientOptions, false]))) {
-      debugErrors(`can't join room "${ roomId }" with options: ${ JSON.stringify(clientOptions) }`);
+      debugError(`can't join room "${ roomId }" with options: ${ JSON.stringify(clientOptions) }`);
       return;
     }
 
@@ -362,7 +362,7 @@ export class MatchMaker {
           response = room[method].apply(room, args);
 
         } catch (e) {
-          debugErrors(e.stack || e);
+          debugError(e.stack || e);
           return reply([IpcProtocol.ERROR, e.message || e]);
         }
 
@@ -373,7 +373,7 @@ export class MatchMaker {
         response.
           then((result) => reply([IpcProtocol.SUCCESS, result])).
           catch((e) => {
-            debugErrors(e.stack || e);
+            debugError(e.stack || e);
             reply([IpcProtocol.ERROR, e.message || e]);
           });
       });

@@ -1,5 +1,5 @@
 import * as msgpack from 'notepack.io';
-import { debugErrors } from './Debug';
+import { debugError } from './Debug';
 import { Client } from './index';
 
 // Use codes between 0~127 for lesser throughput (1 byte)
@@ -39,7 +39,7 @@ export function decode(message: any) {
     message = msgpack.decode(Buffer.from(message));
 
   } catch (e) {
-    debugErrors(`message couldn't be decoded: ${message}\n${e.stack}`);
+    debugError(`message couldn't be decoded: ${message}\n${e.stack}`);
     return;
   }
 

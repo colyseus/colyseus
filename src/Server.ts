@@ -5,7 +5,7 @@ import * as parseURL from 'url-parse';
 import * as WebSocket from 'ws';
 import { ServerOptions as IServerOptions } from 'ws';
 
-import { debugErrors } from './Debug';
+import { debugError } from './Debug';
 import { MatchMaker } from './MatchMaker';
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
 import { Presence } from './presence/Presence';
@@ -44,7 +44,7 @@ export class Server {
     registerGracefulShutdown((signal) => {
       this.matchMaker.gracefullyShutdown().
         then(() => this.onShutdownCallback()).
-        catch((err) => debugErrors(`error during shutdown: ${err}`)).
+        catch((err) => debugError(`error during shutdown: ${err}`)).
         then(() => process.exit());
     });
 
@@ -145,7 +145,7 @@ export class Server {
     if (roomId) {
       this.matchMaker.connectToRoom(client, upgradeReq.roomId).
         catch((e) => {
-          debugErrors(e.stack || e);
+          debugError(e.stack || e);
           send(client, [Protocol.JOIN_ERROR, roomId, e && e.message]);
         });
 
@@ -158,7 +158,7 @@ export class Server {
     message = decode(message);
 
     if (!message) {
-      debugErrors(`couldn't decode message: ${message}`);
+      debugError(`couldn't decode message: ${message}`);
       return;
     }
 
@@ -175,7 +175,7 @@ export class Server {
         this.matchMaker.onJoinRoomRequest(client, roomName, joinOptions).
           then((roomId: string) => send(client, [Protocol.JOIN_ROOM, roomId, joinOptions.requestId])).
           catch((e) => {
-            debugErrors(e.stack || e);
+            debugError(e.stack || e);
             send(client, [Protocol.JOIN_ERROR, roomName, e && e.message]);
           });
       }
@@ -186,10 +186,10 @@ export class Server {
 
       this.matchMaker.getAvailableRooms(roomName).
         then((rooms) => send(client, [Protocol.ROOM_LIST, requestId, rooms])).
-        catch((e) => debugErrors(e.stack || e));
+        catch((e) => debugError(e.stack || e));
 
     } else {
-      debugErrors(`MatchMaking couldn\'t process message: ${message}`);
+      debugError(`MatchMaking couldn\'t process message: ${message}`);
     }
 
   }

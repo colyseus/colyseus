@@ -1,6 +1,6 @@
 import * as querystring from 'querystring';
 
-import { debugErrors } from './Debug';
+import { debugError } from './Debug';
 
 //
 // nodemon sends SIGUSR2 before reloading
@@ -90,6 +90,6 @@ export function merge(a: any, ...objs: any[]): any {
 
 export function logError(err: Error): void {
   if (err) {
-    debugErrors(`websocket error: ${err.message}\n${err.stack}`);
+    debugError(`websocket error: ${err.message}\n${err.stack}`);
   }
 }
