@@ -119,9 +119,11 @@ export abstract class Room<T= any> extends EventEmitter {
 
   public setPatchRate( milliseconds: number ): void {
     // clear previous interval in case called setPatchRate more than once
-    if ( milliseconds === null || milliseconds === 0 ) {
+    if ( this._patchInterval ) {
       clearInterval( this._patchInterval );
-    } else {
+    }
+
+    if ( milliseconds !== null && milliseconds !== 0 ) {
       this._patchInterval = setInterval( this.broadcastPatch.bind(this), milliseconds );
     }
   }
