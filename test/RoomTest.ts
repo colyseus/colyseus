@@ -78,6 +78,15 @@ describe('Room', function() {
       assert.equal("object", typeof((<any>room)._patchInterval));
       assert.equal(1000 / 20, (<any>room)._patchInterval._idleTimeout, "default patch rate should be 20");
     });
+
+    it('should disable "patch" interval', function() {
+      var room = new DummyRoom();
+      
+      room.setPatchRate(null);
+
+      assert.equal("object", typeof ((<any>room)._patchInterval));
+      assert.equal(-1, (<any>room)._patchInterval._idleTimeout, "patch rate should be disabled; set to -1");
+    });
   });
 
   describe('#sendState', function() {
