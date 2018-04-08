@@ -1,8 +1,7 @@
 language: node_js
 node_js:
-  - 6
-  - 7
-  # - 8
+  - 8
+  - 9
 install:
   - 'npm install'
 script:
