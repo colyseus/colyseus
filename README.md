@@ -53,6 +53,10 @@ See [roadmap](http://colyseus.io/docs/roadmap/) for our future plans.
 - [Construct 3](https://github.com/gamestdio/colyseus-construct3) ([construct3.net](https://www.construct.net/))
 - [Defold Engine](https://github.com/gamestdio/colyseus-defold) ([defold.com](https://www.defold.com/))
 
+Consider backing Colyseus development and its support on Patreon.
+
+<a href="https://www.patreon.com/bePatron?u=3301115"><img src="https://c5.patreon.com/external/logo/become_a_patron_button.png" /></a>
+
 ### Community client integration
 
 - [Construct2](https://github.com/polpoy/colyseus-construct-plugin) (compatible with server v0.4.0)
