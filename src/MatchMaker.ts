@@ -199,15 +199,15 @@ export class MatchMaker {
     const exists = await this.presence.exists(this.getRoomChannel(roomId));
 
     if (!exists) {
-      debugError(`trying to join non-existant room "${ roomId }"`);
+      debugMatchMaking(`trying to join non-existant room "${ roomId }"`);
       return;
 
     } else if (await this.remoteRoomCall(roomId, 'hasReachedMaxClients')) {
-      debugError(`room "${ roomId }" reached maxClients.`);
+      debugMatchMaking(`room "${ roomId }" reached maxClients.`);
       return;
 
     } else if (!(await this.remoteRoomCall(roomId, 'requestJoin', [clientOptions, false]))) {
-      debugError(`can't join room "${ roomId }" with options: ${ JSON.stringify(clientOptions) }`);
+      debugMatchMaking(`can't join room "${ roomId }" with options: ${ JSON.stringify(clientOptions) }`);
       return;
     }
 
