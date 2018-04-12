@@ -141,6 +141,11 @@ export class Server {
     client.options = upgradeReq.options;
     client.auth = upgradeReq.auth;
 
+    // prevent server crashes if a single client had unexpected error
+    client.on('error', (err) => {
+      debugError(err.message + "\n" + err.stack);
+    });
+
     const roomId = upgradeReq.roomId;
     if (roomId) {
       this.matchMaker.connectToRoom(client, upgradeReq.roomId).
