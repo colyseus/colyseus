@@ -53,6 +53,10 @@ See [roadmap](http://colyseus.io/docs/roadmap/) for our future plans.
 - [Construct 3](https://github.com/gamestdio/colyseus-construct3) ([construct3.net](https://www.construct.net/))
 - [Defold Engine](https://github.com/gamestdio/colyseus-defold) ([defold.com](https://www.defold.com/))
 
+### Tools
+
+- [@colyseus/monitor](https://github.com/gamestdio/colyseus-monitor) - A Web Monitoring Panel for Colyseus
+
 Consider backing Colyseus development and its support on Patreon.
 
 <a href="https://www.patreon.com/bePatron?u=3301115"><img src="https://c5.patreon.com/external/logo/become_a_patron_button.png" /></a>
