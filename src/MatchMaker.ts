@@ -25,12 +25,12 @@ export interface RoomWithScore {
 const PRESENCE_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_TIMEOUT || 8000); // remote room calls timeout
 
 export class MatchMaker {
-  protected isGracefullyShuttingDown: boolean = false;
+  public handlers: {[id: string]: RegisteredHandler} = {};
 
-  private handlers: {[id: string]: RegisteredHandler} = {};
   private localRooms: {[roomId: string]: Room} = {};
-
   private presence: Presence;
+
+  private isGracefullyShuttingDown: boolean = false;
 
   constructor(presence?: Presence) {
     this.presence = presence || new LocalPresence();
@@ -243,7 +243,7 @@ export class MatchMaker {
       room.once('dispose', this.disposeRoom.bind(this, roomName, room));
 
       // room always start unlocked
-      this.createRoomReferences(room);
+      this.createRoomReferences(room, true);
 
       registeredHandler.emit('create', room);
 
@@ -255,12 +255,15 @@ export class MatchMaker {
     }
   }
 
-  public async getAvailableRooms(roomName: string): Promise<RoomAvailable[]> {
+  public async getAvailableRooms(
+    roomName: string,
+    roomMethodName: string = 'getAvailableData',
+  ): Promise<RoomAvailable[]> {
     const roomIds = await this.presence.smembers(roomName);
     const availableRooms: RoomAvailable[] = [];
 
     await Promise.all(roomIds.map(async (roomId) => {
-      const availability: RoomAvailable = await this.remoteRoomCall(roomId, 'getAvailableData');
+      const availability: RoomAvailable = await this.remoteRoomCall(roomId, roomMethodName);
 
       if (availability) {
         availableRooms.push(availability);
@@ -270,6 +273,26 @@ export class MatchMaker {
     }));
 
     return availableRooms;
+  }
+
+  public async getAllRooms(
+    roomName: string,
+    roomMethodName: string = 'getAvailableData',
+  ): Promise<RoomAvailable[]> {
+    const roomIds = await this.presence.smembers(`a_${roomName}`);
+    const rooms: RoomAvailable[] = [];
+
+    await Promise.all(roomIds.map(async (roomId) => {
+      const availability: RoomAvailable = await this.remoteRoomCall(roomId, roomMethodName);
+
+      if (availability) {
+        rooms.push(availability);
+      }
+
+      return true;
+    }));
+
+    return rooms;
   }
 
   // used only for testing purposes
@@ -337,22 +360,25 @@ export class MatchMaker {
     return (await Promise.all(remoteRequestJoins)).concat(roomsWithScore);
   }
 
-  protected createRoomReferences(room: Room): boolean {
-    if (!this.localRooms[room.roomId]) {
-      this.localRooms[room.roomId] = room;
+  protected createRoomReferences(room: Room, init: boolean = false): boolean {
+    this.localRooms[room.roomId] = room;
 
-      // cache on which process the room is living.
-      this.presence.sadd(room.roomName, room.roomId);
+    // add unlocked room reference
+    this.presence.sadd(room.roomName, room.roomId);
+
+    if (init) {
+      // add alive room reference (a=all)
+      this.presence.sadd(`a_${room.roomName}`, room.roomId);
 
       this.presence.subscribe(this.getRoomChannel(room.roomId), (message) => {
-        const [ method, requestId, args ] = message;
+        const [method, requestId, args] = message;
 
         const reply = (data) => {
           this.presence.publish(`${room.roomId}:${requestId}`, data);
         };
 
         // reply with property value
-        if (!args && typeof(room[method]) !== 'function') {
+        if (!args && typeof (room[method]) !== 'function') {
           return reply([IpcProtocol.SUCCESS, room[method]]);
         }
 
@@ -377,20 +403,16 @@ export class MatchMaker {
             reply([IpcProtocol.ERROR, e.message || e]);
           });
       });
-
-      return true;
     }
+
+    return true;
   }
 
   protected clearRoomReferences(room: Room) {
-    if (this.localRooms[room.roomId]) {
-      this.presence.srem(room.roomName, room.roomId);
+    this.presence.srem(room.roomName, room.roomId);
 
-      // clear list of connecting clients.
-      this.presence.del(room.roomId);
-
-      delete this.localRooms[room.roomId];
-    }
+    // clear list of connecting clients.
+    this.presence.del(room.roomId);
   }
 
   protected getRoomChannel(roomId) {
@@ -425,6 +447,9 @@ export class MatchMaker {
 
     // emit disposal on registered session handler
     this.handlers[roomName].emit('dispose', room);
+
+    // remove from alive rooms
+    this.presence.srem(`a_${roomName}`, room.roomId);
 
     // remove from available rooms
     this.clearRoomReferences(room);

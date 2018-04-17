@@ -150,23 +150,29 @@ export abstract class Room<T= any> extends EventEmitter {
   }
 
   public lock(): void {
-    this._locked = true;
-
     // rooms locked internally aren't explicit locks.
     this._lockedExplicitly = (arguments[0] === undefined);
 
+    // skip if already locked.
+    if (this._locked) { return; }
+
     this.emit('lock');
+
+    this._locked = true;
   }
 
   public unlock(): void {
-    this._locked = false;
-
     // only internal usage passes arguments to this function.
     if (arguments[0] === undefined) {
       this._lockedExplicitly = false;
     }
 
+    // skip if already locked
+    if (!this._locked) { return; }
+
     this.emit('unlock');
+
+    this._locked = false;
   }
 
   public send(client: Client, data: any): void {
@@ -197,17 +203,12 @@ export abstract class Room<T= any> extends EventEmitter {
   }
 
   public async getAvailableData(): Promise<RoomAvailable> {
-    if (this._locked || await this.hasReachedMaxClients()) {
-      return undefined;
-
-    } else {
-      return {
-        clients: this.clients.length,
-        maxClients: this.maxClients,
-        metadata: this.metadata,
-        roomId: this.roomId,
-      };
-    }
+    return {
+      clients: this.clients.length,
+      maxClients: this.maxClients,
+      metadata: this.metadata,
+      roomId: this.roomId,
+    };
   }
 
   public disconnect(): Promise<any> {

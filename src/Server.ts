@@ -143,7 +143,7 @@ export class Server {
 
     // prevent server crashes if a single client had unexpected error
     client.on('error', (err) => {
-      debugError(err.message + "\n" + err.stack);
+      debugError(err.message + '\n' + err.stack);
     });
 
     const roomId = upgradeReq.roomId;
