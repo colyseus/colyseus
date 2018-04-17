@@ -1,4 +1,9 @@
-process.env.DEBUG="colyseus:*";
+//
+// This example shows how to scale the Colyseus.Server.
+//
+// You must specify the `presence` option on Colyseus.Server when using multiple
+// processes. This example uses Redis as presence server.
+//
 
 import * as http from "http";
 import * as express from "express";
