@@ -46,7 +46,7 @@
     "@types/fossil-delta": "^1.0.0",
     "@types/ip": "^0.0.29",
     "@types/mocha": "^2.2.32",
-    "@types/node": "^8.0.0",
+    "@types/node": "^9.6.6",
     "@types/redis": "^2.8.6",
     "@types/sinon": "^4.0.0",
     "@types/uws": "^0.13.1",
