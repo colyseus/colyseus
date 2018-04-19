@@ -55,7 +55,7 @@
     "benchmark": "^2.1.1",
     "body-parser": "^1.18.2",
     "express": "^4.16.2",
-    "mocha": "2.3.2",
+    "mocha": "5.1.1",
     "nodemon": "^1.14.8",
     "sinon": "^4.0.0",
     "ts-node": "^3.2.0",
