@@ -63,8 +63,8 @@ Consider backing Colyseus development and its support on Patreon.
 
 ### Community client integration
 
-- [Construct2](https://github.com/polpoy/colyseus-construct-plugin) (compatible with server v0.4.0)
-- [Cocos2d-x](https://github.com/chunho32/colyseus-cocos2d-x) (compatible with server v0.4.0)
+- [Construct2](https://github.com/Keevle/Colyseus-for-C2)
+- [Cocos2d-x](https://github.com/chunho32/colyseus-cocos2d-x) (outdated, compatible with server v0.4.0)
 
 ### Usage examples
 
