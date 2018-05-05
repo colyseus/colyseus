@@ -193,6 +193,10 @@ export class Server {
         then((rooms) => send(client, [Protocol.ROOM_LIST, requestId, rooms])).
         catch((e) => debugError(e.stack || e));
 
+    } else if (message[0] === Protocol.PING) {
+      // keep-alive ping.
+      return;
+
     } else {
       debugError(`MatchMaking couldn\'t process message: ${message}`);
     }

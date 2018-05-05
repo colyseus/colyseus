@@ -1,4 +1,4 @@
-out.log
+*.log
 node_modules
 yarn.lock
 /lib
