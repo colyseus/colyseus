@@ -130,7 +130,7 @@ export class MatchMaker {
     }
 
     if (roomId) {
-      this.remoteRoomCall(roomId, "_touchTimeout");
+      this.remoteRoomCall(roomId, '_touchTimeout');
 
       // Reserve a seat for client id
       this.presence.hset(roomId, client.id, clientOptions.sessionId);

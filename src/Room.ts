@@ -1,7 +1,7 @@
 import * as fossilDelta from 'fossil-delta';
 import * as msgpack from 'notepack.io';
 import * as shortid from 'shortid';
-import * as WebSocket from "ws";
+import * as WebSocket from 'ws';
 
 import { createTimeline, Timeline } from '@gamestdio/timeline';
 import Clock from '@gamestdio/timer';
@@ -21,7 +21,6 @@ const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
 export const ROOM_TIMEOUT_WITHOUT_CONNECTIONS = 10 * 1000; // 10 seconds
 
 export type SimulationCallback = (deltaTime?: number) => void;
-
 
 export interface RoomConstructor<T= any> {
   new (presence?: Presence): Room<T>;
@@ -280,14 +279,15 @@ export abstract class Room<T= any> extends EventEmitter {
     return this.broadcast( msgpack.encode([ Protocol.ROOM_STATE_PATCH, patches ]) );
   }
 
-  protected _touchTimeout () {
+  protected _touchTimeout() {
     clearTimeout(this._disposeIfEmptyAfterCreationTimeout);
 
     if (this.clients.length > 0) {
       return;
     }
 
-    this._disposeIfEmptyAfterCreationTimeout = setTimeout(() => this._disposeIfEmpty(), ROOM_TIMEOUT_WITHOUT_CONNECTIONS);
+    this._disposeIfEmptyAfterCreationTimeout = setTimeout(() =>
+      this._disposeIfEmpty(), ROOM_TIMEOUT_WITHOUT_CONNECTIONS);
   }
 
   protected _disposeIfEmpty() {
