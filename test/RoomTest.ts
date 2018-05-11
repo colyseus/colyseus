@@ -81,7 +81,7 @@ describe('Room', function() {
 
     it('should disable "patch" interval', function() {
       var room = new DummyRoom();
-      
+
       room.setPatchRate(null);
 
       assert.equal("object", typeof ((<any>room)._patchInterval));
@@ -266,15 +266,16 @@ describe('Room', function() {
       (<any>room)._onJoin(client3, {});
 
       // force asynchronous
-      setTimeout(() => (<any>room)._onLeave(client1, true), 0);
+      setTimeout(() => (<any>room)._onLeave(client1, true), 1);
       setTimeout(() => {
         assert.doesNotThrow(() => room.disconnect());
-      }, 0);
-      setTimeout(() => (<any>room)._onLeave(client2, true), 0);
-      setTimeout(() => (<any>room)._onLeave(client3, true), 0);
+      }, 1);
+      setTimeout(() => (<any>room)._onLeave(client2, true), 1);
+      setTimeout(() => (<any>room)._onLeave(client3, true), 1);
 
       // fulfil the test
-      clock.runAll();
+      clock.tick(1);
+      clock.restore();
       done();
     });
 

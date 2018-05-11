@@ -130,6 +130,8 @@ export class MatchMaker {
     }
 
     if (roomId) {
+      this.remoteRoomCall(roomId, "_touchTimeout");
+
       // Reserve a seat for client id
       this.presence.hset(roomId, client.id, clientOptions.sessionId);
 
@@ -456,6 +458,9 @@ export class MatchMaker {
 
     // unsubscribe from remote connections
     this.presence.unsubscribe(this.getRoomChannel(room.roomId));
+
+    // remove actual room reference
+    delete this.localRooms[room.roomId];
   }
 
 }

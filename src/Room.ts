@@ -1,6 +1,7 @@
 import * as fossilDelta from 'fossil-delta';
 import * as msgpack from 'notepack.io';
 import * as shortid from 'shortid';
+import * as WebSocket from "ws";
 
 import { createTimeline, Timeline } from '@gamestdio/timeline';
 import Clock from '@gamestdio/timer';
@@ -17,8 +18,10 @@ import { debugError, debugPatch, debugPatchData } from './Debug';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
+export const ROOM_TIMEOUT_WITHOUT_CONNECTIONS = 10 * 1000; // 10 seconds
 
 export type SimulationCallback = (deltaTime?: number) => void;
+
 
 export interface RoomConstructor<T= any> {
   new (presence?: Presence): Room<T>;
@@ -67,16 +70,14 @@ export abstract class Room<T= any> extends EventEmitter {
   private _lockedExplicitly: boolean = false;
   private _maxClientsReached: boolean = false;
 
-  // // this timeout prevents rooms that are created by one process, but no client
-  // // ever had success joining into it on the specified interval.
-  // private _disposeIfEmptyAfterCreationTimeout: NodeJS.Timer;
+  // this timeout prevents rooms that are created by one process, but no client
+  // ever had success joining into it on the specified interval.
+  private _disposeIfEmptyAfterCreationTimeout: NodeJS.Timer;
 
   constructor(presence?: Presence) {
     super();
 
     this.presence = presence;
-
-    // this._disposeIfEmptyAfterCreationTimeout = setTimeout(() => this._disposeIfEmpty(), 10000);
 
     this.setPatchRate(this.patchRate);
   }
@@ -176,7 +177,9 @@ export abstract class Room<T= any> extends EventEmitter {
   }
 
   public send(client: Client, data: any): void {
-    send(client, [ Protocol.ROOM_DATA, data ]);
+    if (client.readyState === WebSocket.OPEN) {
+      send(client, [Protocol.ROOM_DATA, data]);
+    }
   }
 
   public broadcast(data: any, options?: BroadcastOptions): boolean {
@@ -194,7 +197,10 @@ export abstract class Room<T= any> extends EventEmitter {
     while (numClients--) {
       const client = this.clients[ numClients ];
 
-      if (!options || options.except !== client) {
+      if (
+        client.readyState === WebSocket.OPEN &&
+        (!options || options.except !== client)
+      ) {
         client.send(data, { binary: true }, logError.bind(this));
       }
     }
@@ -274,6 +280,16 @@ export abstract class Room<T= any> extends EventEmitter {
     return this.broadcast( msgpack.encode([ Protocol.ROOM_STATE_PATCH, patches ]) );
   }
 
+  protected _touchTimeout () {
+    clearTimeout(this._disposeIfEmptyAfterCreationTimeout);
+
+    if (this.clients.length > 0) {
+      return;
+    }
+
+    this._disposeIfEmptyAfterCreationTimeout = setTimeout(() => this._disposeIfEmpty(), ROOM_TIMEOUT_WITHOUT_CONNECTIONS);
+  }
+
   protected _disposeIfEmpty() {
     if ( this.clients.length === 0 ) {
       this._dispose();
@@ -342,10 +358,10 @@ export abstract class Room<T= any> extends EventEmitter {
 
     this.clients.push( client );
 
-    // if (this._disposeIfEmptyAfterCreationTimeout) {
-    //   clearInterval(this._disposeIfEmptyAfterCreationTimeout);
-    //   this._disposeIfEmptyAfterCreationTimeout = undefined;
-    // }
+    if (this._disposeIfEmptyAfterCreationTimeout) {
+      clearTimeout(this._disposeIfEmptyAfterCreationTimeout);
+      this._disposeIfEmptyAfterCreationTimeout = undefined;
+    }
 
     // lock automatically when maxClients is reached
     if (this.clients.length === this.maxClients) {

@@ -1,6 +1,6 @@
 {
   "name": "colyseus",
-  "version": "0.9.5",
+  "version": "0.9.6",
   "description": "Multiplayer Game Server for Node.js.",
   "main": "./lib/index.js",
   "typings": "./lib/index.d.ts",
@@ -19,7 +19,7 @@
     "prepublish": "tsc -d",
     "watch": "tsc -d -w",
     "start": "nodemon --watch 'src/**/*.ts' --exec 'ts-node' usage/Server.ts",
-    "test": "mocha --require ts-node/register test/**Test.ts",
+    "test": "mocha --require ts-node/register test/**Test.ts --exit",
     "tslint": "tslint --project .",
     "postinstall": "npm run -s donate",
     "donate": "echo \"\u001b[35m\u001b[1mLove Colyseus? Support its development by becoming a backer:\u001b[22m\u001b[39m\n > \u001b[34mhttps://www.patreon.com/endel\u001b[39m\""
@@ -31,7 +31,7 @@
     "@gamestdio/timeline": "^0.3.5",
     "@gamestdio/timer": "^1.1.7",
     "@types/shortid": "0.0.29",
-    "@types/ws": "^3.2.1",
+    "@types/ws": "^5.1.1",
     "debug": "^3.1.0",
     "fast-json-patch": "^2.0.5",
     "fossil-delta": "^1.0.1",
@@ -44,9 +44,8 @@
   "devDependencies": {
     "@types/debug": "^0.0.30",
     "@types/fossil-delta": "^1.0.0",
-    "@types/ip": "^0.0.29",
-    "@types/mocha": "^2.2.32",
-    "@types/node": "^8.0.0",
+    "@types/mocha": "^5.2.0",
+    "@types/node": "^10.0.8",
     "@types/redis": "^2.8.6",
     "@types/sinon": "^4.0.0",
     "@types/uws": "^0.13.1",
@@ -55,13 +54,13 @@
     "benchmark": "^2.1.1",
     "body-parser": "^1.18.2",
     "express": "^4.16.2",
-    "mocha": "2.3.2",
+    "mocha": "^5.1.1",
     "nodemon": "^1.14.8",
     "sinon": "^4.0.0",
-    "ts-node": "^3.2.0",
+    "ts-node": "^6.0.3",
     "tslint": "^5.9.1",
     "typescript": "^2.8.1",
-    "uws": "^9.14.0"
+    "uws": "^10.148.0"
   },
   "license": "MIT",
   "greenkeeper": {
