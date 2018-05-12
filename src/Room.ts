@@ -339,10 +339,6 @@ export abstract class Room<T= any> extends EventEmitter {
     if (message[0] === Protocol.ROOM_DATA) {
       this.onMessage(client, message[2]);
 
-    } else if (message[0] === Protocol.PING) {
-      // keep-alive ping.
-      return;
-
     } else {
       this.onMessage(client, message);
     }

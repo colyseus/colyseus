@@ -15,6 +15,10 @@ import { decode, Protocol, send } from './Protocol';
 import { Room, RoomConstructor } from './Room';
 import { parseQueryString, registerGracefulShutdown } from './Utils';
 
+const PING_INTERVAL = 20 * 1000; // 20 seconds for verifying ping.
+function noop() {/* tslint:disable:no-empty */}
+function heartbeat() { this.isAlive = true; }
+
 export type ServerOptions = IServerOptions & {
   verifyClient?: WebSocket.VerifyClientCallbackAsync
   presence?: any,
@@ -25,10 +29,11 @@ export type ServerOptions = IServerOptions & {
 export class Server {
   public matchMaker: MatchMaker;
 
-  protected server: any;
+  protected server: WebSocket.Server;
   protected httpServer: net.Server | http.Server;
 
   protected presence: Presence;
+  protected pingInterval: NodeJS.Timer;
 
   protected onShutdownCallback: () => void | Promise<any>;
 
@@ -43,7 +48,7 @@ export class Server {
 
     registerGracefulShutdown((signal) => {
       this.matchMaker.gracefullyShutdown().
-        then(() => this.onShutdownCallback()).
+        then(() => this.shutdown()).
         catch((err) => debugError(`error during shutdown: ${err}`)).
         then(() => process.exit());
     });
@@ -78,6 +83,21 @@ export class Server {
     }
 
     this.server.on('connection', this.onConnection);
+
+    // interval to detect broken connections
+    this.pingInterval = setInterval(() => {
+      this.server.clients.forEach((client: Client) => {
+        //
+        // if client hasn't responded after the interval, terminate its connection.
+        //
+        if (client.isAlive === false) {
+          return client.terminate();
+        }
+
+        client.isAlive = false;
+        client.ping(noop);
+      });
+    }, PING_INTERVAL);
   }
 
   public listen(port: number, hostname?: string, backlog?: number, listeningListener?: Function) {
@@ -131,6 +151,7 @@ export class Server {
 
     // set client id
     client.id = upgradeReq.colyseusid || generateId();
+    client.isAlive = true;
 
     // ensure client has its "colyseusid"
     if (!upgradeReq.colyseusid) {
@@ -143,6 +164,7 @@ export class Server {
 
     // prevent server crashes if a single client had unexpected error
     client.on('error', (err) => debugError(err.message + '\n' + err.stack));
+    client.on('pong', heartbeat);
 
     const roomId = upgradeReq.roomId;
     if (roomId) {
@@ -191,14 +213,15 @@ export class Server {
         then((rooms) => send(client, [Protocol.ROOM_LIST, requestId, rooms])).
         catch((e) => debugError(e.stack || e));
 
-    } else if (message[0] === Protocol.PING) {
-      // keep-alive ping.
-      return;
-
     } else {
       debugError(`MatchMaking couldn\'t process message: ${message}`);
     }
 
+  }
+
+  protected shutdown()  {
+    clearInterval(this.pingInterval);
+    return this.onShutdownCallback();
   }
 
 }
