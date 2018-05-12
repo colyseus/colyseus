@@ -61,10 +61,10 @@ describe('Room', function() {
       var client = createDummyClient();
 
       (<any>room)._onJoin(client);
-      assert.ok((<any>room)._patchInterval._repeat > 0);
+      assert.ok((<any>room)._patchInterval._idleTimeout > 0);
 
       room.on('dispose', function() {;
-        assert.ok(!(<any>room)._patchInterval._repeat);
+        assert.ok((<any>room)._patchInterval._idleTimeout === -1);
         done();
       });
 
