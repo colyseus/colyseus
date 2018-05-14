@@ -113,6 +113,10 @@ export abstract class Room<T= any> extends EventEmitter {
     return (this.clients.length + this.reservedSeats.size) >= this.maxClients;
   }
 
+  public hasReservedSeat (sessionId: string): boolean {
+    return this.reservedSeats.has(sessionId);
+  }
+
   public setSimulationInterval( callback: SimulationCallback, delay: number = DEFAULT_SIMULATION_INTERVAL ): void {
     // clear previous interval in case called setSimulationInterval more than once
     if ( this._simulationInterval ) { clearInterval( this._simulationInterval ); }

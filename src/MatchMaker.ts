@@ -98,6 +98,7 @@ export class MatchMaker {
   public async onJoinRoomRequest(client: Client, roomToJoin: string, clientOptions: ClientOptions): Promise<string> {
     const hasHandler = this.hasHandler(roomToJoin);
     let roomId: string;
+    let isReconnect = false;
 
     if (!hasHandler && isValidId(roomToJoin)) {
       roomId = roomToJoin;
@@ -109,12 +110,10 @@ export class MatchMaker {
 
     if (clientOptions.sessionId) {
       roomId = await this.presence.get(clientOptions.sessionId);
-
-      // TODO: no need for `requestJoin` here, just reconnect the user into the room.
-      //
+      isReconnect = true;
     }
 
-    if (!roomId) {
+    if (!roomId || !clientOptions.sessionId) {
       clientOptions.sessionId = generateId();
 
       // check if there's an existing room with provided name available to join
@@ -127,7 +126,7 @@ export class MatchMaker {
     }
 
     if (isValidId(roomId)) {
-      roomId = await this.joinById(roomId, clientOptions);
+      roomId = await this.joinById(roomId, clientOptions, isReconnect);
     }
 
     // if couldn't join a room by its id, let's try to create a new one
@@ -204,12 +203,15 @@ export class MatchMaker {
     return this.handlers[ name ] !== undefined;
   }
 
-  public async joinById(roomId: string, clientOptions: ClientOptions): Promise<string> {
+  public async joinById(roomId: string, clientOptions: ClientOptions, isReconnect: boolean): Promise<string> {
     const exists = await this.presence.exists(this.getRoomChannel(roomId));
 
     if (!exists) {
       debugMatchMaking(`trying to join non-existant room "${ roomId }"`);
       return;
+
+    } else if (isReconnect && await this.remoteRoomCall(roomId, 'hasReservedSeat', [clientOptions.sessionId])) {
+      return roomId;
 
     } else if (await this.remoteRoomCall(roomId, 'hasReachedMaxClients')) {
       debugMatchMaking(`room "${ roomId }" reached maxClients.`);
