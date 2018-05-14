@@ -18,7 +18,6 @@ import { debugError, debugPatch, debugPatchData } from './Debug';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
-export const ROOM_TIMEOUT_WITHOUT_CONNECTIONS = 10 * 1000; // 10 seconds
 
 export type SimulationCallback = (deltaTime?: number) => void;
 
@@ -51,9 +50,14 @@ export abstract class Room<T= any> extends EventEmitter {
   public state: T;
   public metadata: any;
 
+  // reconnection
+  public allowReconnection: boolean = true;
+  public reconnectionTimeout = 15 * 1000;
+
   public presence: Presence;
 
   public clients: Client[] = [];
+  public reservedSeats: Set<string> = new Set();
   protected remoteClients: {[sessionId: string]: RemoteClient} = {};
 
   // when a new user connects, it receives the '_previousState', which holds
@@ -71,7 +75,7 @@ export abstract class Room<T= any> extends EventEmitter {
 
   // this timeout prevents rooms that are created by one process, but no client
   // ever had success joining into it on the specified interval.
-  private _disposeIfEmptyAfterCreationTimeout: NodeJS.Timer;
+  private _autoDisposeTimeout: NodeJS.Timer;
 
   constructor(presence?: Presence) {
     super();
@@ -102,9 +106,8 @@ export abstract class Room<T= any> extends EventEmitter {
     return this._locked;
   }
 
-  public async hasReachedMaxClients(): Promise<boolean> {
-    const connectingClients = (await this.presence.hlen(this.roomId));
-    return (this.clients.length + connectingClients) >= this.maxClients;
+  public hasReachedMaxClients(): boolean {
+    return (this.clients.length + this.reservedSeats.size) >= this.maxClients;
   }
 
   public setSimulationInterval( callback: SimulationCallback, delay: number = DEFAULT_SIMULATION_INTERVAL ): void {
@@ -279,15 +282,32 @@ export abstract class Room<T= any> extends EventEmitter {
     return this.broadcast( msgpack.encode([ Protocol.ROOM_STATE_PATCH, patches ]) );
   }
 
-  protected _touchTimeout() {
-    clearTimeout(this._disposeIfEmptyAfterCreationTimeout);
+  protected _reserveSeat(client: Client, allowReconnection: boolean = false) {
+    // reconnection timeout in seconds.
+    const reconnectionTimeout = this.reconnectionTimeout / 1000;
 
-    if (this.clients.length > 0) {
+    this.presence.setex(`${this.roomId}:${client.id}`, client.sessionId, reconnectionTimeout);
+    this.reservedSeats.add(client.sessionId);
+
+    // TODO: add timeout in case reserved seat is never fulfilled.
+
+    if (allowReconnection) {
+      // store reference of the roomId this client is allowed to reconnect to.
+      this.presence.setex(client.sessionId, this.roomId, reconnectionTimeout);
+    }
+
+    this.resetAutoDisposeTimeout();
+  }
+
+  protected resetAutoDisposeTimeout() {
+    clearTimeout(this._autoDisposeTimeout);
+
+    if (this.clients.length > 0 || !this.autoDispose) {
       return;
     }
 
-    this._disposeIfEmptyAfterCreationTimeout = setTimeout(() =>
-      this._disposeIfEmpty(), ROOM_TIMEOUT_WITHOUT_CONNECTIONS);
+    this._autoDisposeTimeout = setTimeout(() =>
+      this._disposeIfEmpty(), this.reconnectionTimeout);
   }
 
   protected _disposeIfEmpty() {
@@ -353,10 +373,11 @@ export abstract class Room<T= any> extends EventEmitter {
     }
 
     this.clients.push( client );
+    this.reservedSeats.delete(client.sessionId);
 
-    if (this._disposeIfEmptyAfterCreationTimeout) {
-      clearTimeout(this._disposeIfEmptyAfterCreationTimeout);
-      this._disposeIfEmptyAfterCreationTimeout = undefined;
+    if (this._autoDisposeTimeout) {
+      clearTimeout(this._autoDisposeTimeout);
+      this._autoDisposeTimeout = undefined;
     }
 
     // lock automatically when maxClients is reached
@@ -400,8 +421,11 @@ export abstract class Room<T= any> extends EventEmitter {
       delete this.remoteClients[client.sessionId];
     }
 
-    // custom cleanup method & clear intervals
-    if ( this.autoDispose ) {
+    // allow room reconnection
+    if (this.allowReconnection) {
+      this._reserveSeat(client, true);
+
+    } else if (this.autoDispose) {
       this._disposeIfEmpty();
     }
 

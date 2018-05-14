@@ -3,12 +3,14 @@ import * as msgpack from "notepack.io";
 import { Room } from "../src/Room";
 import { createDummyClient, DummyRoom, DummyRoomWithState } from "./utils/mock";
 import { Protocol } from "../src/Protocol";
+import { LocalPresence } from './../src/presence/LocalPresence';
 
 describe('Patch', function() {
   let room: Room<any>;
 
   beforeEach(function() {
     room = new DummyRoom();
+    room.presence = new LocalPresence();
   })
 
   describe('patch interval', function() {

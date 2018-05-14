@@ -10,7 +10,6 @@ import { Room } from "../src/Room";
 import { generateId, Protocol, isValidId } from "../src";
 import { createDummyClient, DummyRoom, RoomVerifyClient, Client, RoomVerifyClientWithLock } from "./utils/mock";
 
-import { ROOM_TIMEOUT_WITHOUT_CONNECTIONS } from './../src/Room';
 
 process.on('unhandledRejection', (reason, promise) => {
   console.log(reason, promise);
@@ -337,7 +336,7 @@ describe('MatchMaker', function() {
       assert.equal(dummyRoom.clients, 0);
       assert(dummyRoom instanceof Room);
 
-      clock.tick(ROOM_TIMEOUT_WITHOUT_CONNECTIONS);
+      clock.tick(dummyRoom.reconnectionTimeout);
       assert(matchMaker.getRoomById(roomId) === undefined);
 
       clock.restore();
@@ -347,13 +346,14 @@ describe('MatchMaker', function() {
       const clock = sinon.useFakeTimers();
 
       const roomId = await matchMaker.onJoinRoomRequest(createDummyClient(), 'room', {});
-      clock.tick(ROOM_TIMEOUT_WITHOUT_CONNECTIONS - 1);
-      assert(matchMaker.getRoomById(roomId) instanceof Room);
+      const room = matchMaker.getRoomById(roomId);
+      clock.tick(room.reconnectionTimeout - 1);
+      assert(room instanceof Room);
 
       await matchMaker.onJoinRoomRequest(createDummyClient(), 'room', {});
       assert(matchMaker.getRoomById(roomId) instanceof Room);
 
-      clock.tick(ROOM_TIMEOUT_WITHOUT_CONNECTIONS);
+      clock.tick(room.reconnectionTimeout);
       assert(matchMaker.getRoomById(roomId) === undefined);
 
       clock.restore();
@@ -364,12 +364,13 @@ describe('MatchMaker', function() {
 
       const client = createDummyClient({});
       const roomId = await matchMaker.onJoinRoomRequest(client, 'room', {});
+      const room = matchMaker.getRoomById(roomId);
 
-      clock.tick(ROOM_TIMEOUT_WITHOUT_CONNECTIONS - 1);
-      assert(matchMaker.getRoomById(roomId) instanceof Room);
+      clock.tick(room.reconnectionTimeout - 1);
+      assert(room instanceof Room);
 
       await matchMaker.connectToRoom(client, roomId);
-      clock.tick(ROOM_TIMEOUT_WITHOUT_CONNECTIONS);
+      clock.tick(room.reconnectionTimeout);
       assert(matchMaker.getRoomById(roomId) instanceof Room);
 
       clock.restore();

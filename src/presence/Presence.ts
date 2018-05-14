@@ -5,10 +5,14 @@ export interface Presence {
 
     exists(roomId: string): Promise<boolean>;
 
+    setex(key: string, value: string, seconds: number);
+    get(key: string);
+
     del(key: string): void;
     sadd(key: string, value: any);
     smembers(key: string);
     srem(key: string, value: any);
+    scard(key: string);
 
     hset(roomId: string, key: string, value: string);
     hget(roomId: string, key: string): Promise<string>;

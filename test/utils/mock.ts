@@ -3,6 +3,7 @@ import * as shortid from "shortid";
 import * as msgpack from "notepack.io";
 import * as WebSocket from "ws";
 import { Room } from "../../src/Room";
+import { LocalPresence } from './../../src/presence/LocalPresence';
 
 export class Client extends EventEmitter {
 
@@ -44,6 +45,10 @@ export function createDummyClient (options?: any): any {
 }
 
 export class DummyRoom extends Room {
+  constructor () {
+    super(new LocalPresence());
+  }
+
   requestJoin (options) {
     return !options.invalid_param
   }
@@ -56,6 +61,9 @@ export class DummyRoom extends Room {
 }
 
 export class RoomWithError extends Room {
+  constructor () {
+    super(new LocalPresence());
+  }
   onInit () { this.setState({}); }
   onDispose() {}
   onJoin() {
@@ -68,7 +76,7 @@ export class RoomWithError extends Room {
 
 export class DummyRoomWithState extends Room {
   constructor () {
-    super();
+    super(new LocalPresence());
     this.setState({ number: 10 });
   }
 
@@ -85,10 +93,9 @@ export class DummyRoomWithState extends Room {
 
 export class DummyRoomWithTimeline extends Room {
   constructor () {
-    super();
+    super(new LocalPresence());
     this.useTimeline()
   }
-
 
   requestJoin (options) {
     return !options.invalid_param

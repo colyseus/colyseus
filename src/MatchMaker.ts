@@ -42,7 +42,7 @@ export class MatchMaker {
     const auth = client.auth;
 
     // assign sessionId to socket connection.
-    client.sessionId = await this.presence.hget(roomId, client.id);
+    client.sessionId = await this.presence.get(`${roomId}:${client.id}`);
 
     // clean temporary data
     delete clientOptions.auth;
@@ -86,9 +86,6 @@ export class MatchMaker {
         this.remoteRoomCall(roomId, '_emitOnClient', [client.sessionId, 'close']);
       });
     }
-
-    // clear reserved seat of connecting client into the room
-    this.presence.hdel(roomId, client.id);
   }
 
   /**
@@ -110,13 +107,22 @@ export class MatchMaker {
       throw new Error('join_request_fail');
     }
 
-    clientOptions.sessionId = generateId();
+    if (clientOptions.sessionId) {
+      roomId = await this.presence.get(clientOptions.sessionId);
 
-    // check if there's an existing room with provided name available to join
-    if (hasHandler) {
-      const bestRoomByScore = (await this.getAvailableRoomByScore(roomToJoin, clientOptions))[0];
-      if (bestRoomByScore && bestRoomByScore.roomId) {
-        roomId = bestRoomByScore.roomId;
+      // TODO: no need for `requestJoin` here, just reconnect the user into the room.
+      //
+    }
+
+    if (!roomId) {
+      clientOptions.sessionId = generateId();
+
+      // check if there's an existing room with provided name available to join
+      if (hasHandler) {
+        const bestRoomByScore = (await this.getAvailableRoomByScore(roomToJoin, clientOptions))[0];
+        if (bestRoomByScore && bestRoomByScore.roomId) {
+          roomId = bestRoomByScore.roomId;
+        }
       }
     }
 
@@ -130,10 +136,11 @@ export class MatchMaker {
     }
 
     if (roomId) {
-      this.remoteRoomCall(roomId, '_touchTimeout');
-
-      // Reserve a seat for client id
-      this.presence.hset(roomId, client.id, clientOptions.sessionId);
+      // reserve seat for client on selected room
+      this.remoteRoomCall(roomId, '_reserveSeat', [{
+        id: client.id,
+        sessionId: clientOptions.sessionId
+      }]);
 
     } else {
       throw new Error('join_request_fail');

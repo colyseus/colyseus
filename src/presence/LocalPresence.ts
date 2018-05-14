@@ -2,19 +2,21 @@ import { spliceOne } from '../Utils';
 import { Presence } from './Presence';
 
 export class LocalPresence implements Presence {
-    // "channels"
-    public rooms: {[roomId: string]: boolean} = {};
+    public channels: {[roomId: string]: boolean} = {};
 
     public data: {[roomName: string]: string[]} = {};
     public hash: {[roomName: string]: {[key: string]: string}} = {};
 
+    public keys: {[name: string]: string} = {};
+    private timeouts: {[name: string]: NodeJS.Timer} = {};
+
     public subscribe(topic: string, callback: Function) {
-        this.rooms[topic] = true;
+        this.channels[topic] = true;
         return this;
     }
 
     public unsubscribe(topic: string) {
-        this.rooms[topic] = false;
+        this.channels[topic] = false;
         return this;
     }
 
@@ -23,7 +25,24 @@ export class LocalPresence implements Presence {
     }
 
     public async exists(roomId: string): Promise<boolean> {
-        return this.rooms[roomId];
+        return this.channels[roomId];
+    }
+
+    public setex(key: string, value: string, seconds: number) {
+        // ensure previous timeout is clear before setting another one.
+        if (this.timeouts[key]) {
+            clearTimeout(this.timeouts[key]);
+        }
+
+        this.keys[key] = value;
+        this.timeouts[key] = setTimeout(() => {
+            delete this.keys[key];
+            delete this.timeouts[key];
+        }, seconds * 1000);
+    }
+
+    public get(key: string) {
+        return this.keys[key];
     }
 
     public del(key: string) {
@@ -49,6 +68,10 @@ export class LocalPresence implements Presence {
         if (this.data[key]) {
             spliceOne(this.data[key], this.data[key].indexOf(value));
         }
+    }
+
+    public scard(key: string) {
+        return this.data[key].length;
     }
 
     public hset(roomId: string, key: string, value: string) {

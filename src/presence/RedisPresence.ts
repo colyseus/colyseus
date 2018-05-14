@@ -61,6 +61,19 @@ export class RedisPresence implements Presence {
         return (await this.pubsubAsync('channels', roomId)).length > 0;
     }
 
+    public setex(key: string, value: string, seconds: number) {
+        this.pub.setex(key, seconds, value);
+    }
+
+    public async get(key: string) {
+        return new Promise((resolve, reject) => {
+            this.pub.get(key, (err, data) => {
+                if (err) { return reject(err); }
+                resolve(data);
+            });
+        });
+    }
+
     public del(roomId: string) {
         this.pub.del(roomId);
     }
@@ -75,6 +88,15 @@ export class RedisPresence implements Presence {
 
     public srem(key: string, value: any) {
         this.pub.srem(key, value);
+    }
+
+    public scard(key: string) {
+        return new Promise((resolve, reject) => {
+            this.pub.scard(key, (err, data) => {
+                if (err) { return reject(err); }
+                resolve(data);
+            });
+        });
     }
 
     public hset(roomId: string, key: string, value: string) {
