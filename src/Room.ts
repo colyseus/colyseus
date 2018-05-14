@@ -56,8 +56,11 @@ export abstract class Room<T= any> extends EventEmitter {
 
   public presence: Presence;
 
-  public clients: Client[] = [];
+  // seat reservation
   public reservedSeats: Set<string> = new Set();
+  public reservedSeatTimeouts: {[id: string]: NodeJS.Timer} = {};
+
+  public clients: Client[] = [];
   protected remoteClients: {[sessionId: string]: RemoteClient} = {};
 
   // when a new user connects, it receives the '_previousState', which holds
@@ -294,6 +297,10 @@ export abstract class Room<T= any> extends EventEmitter {
     if (allowReconnection) {
       // store reference of the roomId this client is allowed to reconnect to.
       this.presence.setex(client.sessionId, this.roomId, reconnectionTimeout);
+
+      // expire seat reservation after timeout
+      this.reservedSeatTimeouts[client.sessionId] = setTimeout(() =>
+        this.reservedSeats.delete(client.sessionId), this.reconnectionTimeout);
     }
 
     this.resetAutoDisposeTimeout();
@@ -373,8 +380,15 @@ export abstract class Room<T= any> extends EventEmitter {
     }
 
     this.clients.push( client );
-    this.reservedSeats.delete(client.sessionId);
 
+    // delete seat reservation
+    this.reservedSeats.delete(client.sessionId);
+    if (this.reservedSeatTimeouts[client.sessionId]) {
+      clearTimeout(this.reservedSeatTimeouts[client.sessionId]);
+      delete this.reservedSeatTimeouts[client.sessionId];
+    }
+
+    // clear auto-dispose timeout.
     if (this._autoDisposeTimeout) {
       clearTimeout(this._autoDisposeTimeout);
       this._autoDisposeTimeout = undefined;
