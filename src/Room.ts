@@ -403,7 +403,7 @@ export abstract class Room<T= any> extends EventEmitter {
     }
 
     // confirm room id that matches the room name requested to join
-    send(client, [ Protocol.JOIN_ROOM, client.sessionId ]);
+    send(client, [ Protocol.JOIN_ROOM, client.sessionId, this.allowReconnection ]);
 
     // emit 'join' to room handler
     this.emit('join', client);
