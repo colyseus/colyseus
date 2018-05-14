@@ -296,8 +296,6 @@ export abstract class Room<T= any> extends EventEmitter {
     this.presence.setex(`${this.roomId}:${client.id}`, client.sessionId, reconnectionTimeout);
     this.reservedSeats.add(client.sessionId);
 
-    // TODO: add timeout in case reserved seat is never fulfilled.
-
     if (allowReconnection) {
       // store reference of the roomId this client is allowed to reconnect to.
       this.presence.setex(client.sessionId, this.roomId, reconnectionTimeout);
