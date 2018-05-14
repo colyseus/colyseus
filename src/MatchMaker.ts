@@ -138,7 +138,7 @@ export class MatchMaker {
       // reserve seat for client on selected room
       this.remoteRoomCall(roomId, '_reserveSeat', [{
         id: client.id,
-        sessionId: clientOptions.sessionId
+        sessionId: clientOptions.sessionId,
       }]);
 
     } else {

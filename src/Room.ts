@@ -113,7 +113,7 @@ export abstract class Room<T= any> extends EventEmitter {
     return (this.clients.length + this.reservedSeats.size) >= this.maxClients;
   }
 
-  public hasReservedSeat (sessionId: string): boolean {
+  public hasReservedSeat(sessionId: string): boolean {
     return this.reservedSeats.has(sessionId);
   }
 
