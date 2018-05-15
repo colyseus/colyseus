@@ -98,7 +98,7 @@ export class MatchMaker {
   public async onJoinRoomRequest(client: Client, roomToJoin: string, clientOptions: ClientOptions): Promise<string> {
     const hasHandler = this.hasHandler(roomToJoin);
     let roomId: string;
-    let isReconnect = false;
+    let isReconnect: boolean;
 
     if (!hasHandler && isValidId(roomToJoin)) {
       roomId = roomToJoin;
@@ -115,6 +115,7 @@ export class MatchMaker {
 
     if (!roomId || !clientOptions.sessionId) {
       clientOptions.sessionId = generateId();
+      isReconnect = false;
 
       // check if there's an existing room with provided name available to join
       if (hasHandler) {
