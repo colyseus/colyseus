@@ -60,8 +60,6 @@ describe('Room', function() {
       var room = new DummyRoom();
       var client = createDummyClient();
 
-      room.allowReconnection = false;
-
       (<any>room)._onJoin(client);
       assert.ok((<any>room)._patchInterval._idleTimeout > 0);
 
