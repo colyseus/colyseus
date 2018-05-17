@@ -5,7 +5,7 @@ import * as sinon from 'sinon';
 
 import { MatchMaker } from "../src/MatchMaker";
 import { RegisteredHandler } from './../src/matchmaker/RegisteredHandler';
-import { Room } from "../src/Room";
+import { Room, DEFAULT_SEAT_RESERVATION_TIME } from "../src/Room";
 
 import { generateId, Protocol, isValidId } from "../src";
 import { createDummyClient, DummyRoom, RoomVerifyClient, Client, RoomVerifyClientWithLock } from "./utils/mock";
@@ -336,7 +336,7 @@ describe('MatchMaker', function() {
       assert.equal(dummyRoom.clients, 0);
       assert(dummyRoom instanceof Room);
 
-      clock.tick(dummyRoom.reconnectionTimeout);
+      clock.tick(DEFAULT_SEAT_RESERVATION_TIME * 1000);
       assert(matchMaker.getRoomById(roomId) === undefined);
 
       clock.restore();
@@ -347,13 +347,13 @@ describe('MatchMaker', function() {
 
       const roomId = await matchMaker.onJoinRoomRequest(createDummyClient(), 'room', {});
       const room = matchMaker.getRoomById(roomId);
-      clock.tick(room.reconnectionTimeout - 1);
+      clock.tick(DEFAULT_SEAT_RESERVATION_TIME * 1000 - 1);
       assert(room instanceof Room);
 
       await matchMaker.onJoinRoomRequest(createDummyClient(), 'room', {});
       assert(matchMaker.getRoomById(roomId) instanceof Room);
 
-      clock.tick(room.reconnectionTimeout);
+      clock.tick(DEFAULT_SEAT_RESERVATION_TIME * 1000);
       assert(matchMaker.getRoomById(roomId) === undefined);
 
       clock.restore();
@@ -366,11 +366,11 @@ describe('MatchMaker', function() {
       const roomId = await matchMaker.onJoinRoomRequest(client, 'room', {});
       const room = matchMaker.getRoomById(roomId);
 
-      clock.tick(room.reconnectionTimeout - 1);
+      clock.tick(DEFAULT_SEAT_RESERVATION_TIME * 1000 - 1);
       assert(room instanceof Room);
 
       await matchMaker.connectToRoom(client, roomId);
-      clock.tick(room.reconnectionTimeout);
+      clock.tick(DEFAULT_SEAT_RESERVATION_TIME * 1000);
       assert(matchMaker.getRoomById(roomId) instanceof Room);
 
       clock.restore();
