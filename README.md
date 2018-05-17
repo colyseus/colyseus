@@ -63,6 +63,7 @@ Consider backing Colyseus development and its support on Patreon.
 
 ### Community client integration
 
+- [Objective-C](https://github.com/swittk/Colyseus-ObjC)
 - [Construct2](https://github.com/Keevle/Colyseus-for-C2)
 - [Cocos2d-x](https://github.com/chunho32/colyseus-cocos2d-x) (outdated, compatible with server v0.4.0)
 
