@@ -1,8 +1,11 @@
 import * as assert from "assert";
 import * as msgpack from "notepack.io";
 import * as sinon from 'sinon';
+
 import { Room } from "../src/Room";
+import { MatchMaker } from './../src/MatchMaker';
 import { Protocol } from "../src/Protocol";
+
 import {
   createDummyClient,
   DummyRoom,
@@ -277,6 +280,84 @@ describe('Room', function() {
       clock.tick(1);
       clock.restore();
       done();
+    });
+
+  });
+
+  describe("#allowReconnection", () => {
+    const matchMaker = new MatchMaker();
+    matchMaker.registerHandler('reconnect', DummyRoom);
+
+    it("should fail waiting same sessionId for reconnection", (done) => {
+      const clock = sinon.useFakeTimers();
+
+      const client = createDummyClient({});
+      matchMaker.onJoinRoomRequest(client, 'reconnect', {}).
+        then((roomId) => {
+          const room = matchMaker.getRoomById(roomId);
+
+          room.onLeave = async function (client) {
+            try {
+              await this.allowReconnection(client, 10);
+              assert.fail("this block shouldn't have been reached.");
+
+            } catch (e) {
+              done();
+            }
+          }
+
+          matchMaker.connectToRoom(client, roomId).
+            then(() => {
+              assert.equal(room.clients.length, 1);
+
+              client.emit("close");
+              assert.equal(room.clients.length, 0);
+
+              clock.tick(11 * 1000);
+
+              clock.restore();
+            });
+        });
+
+    });
+
+    it("should succeed waiting same sessionId for reconnection", async () => {
+      const clock = sinon.useFakeTimers();
+
+      const firstClient = createDummyClient({});
+      const roomId = await matchMaker.onJoinRoomRequest(firstClient, 'reconnect', {});
+
+      const room = matchMaker.getRoomById(roomId);
+      const reconnectionSpy = sinon.spy();
+
+      room.onLeave = async function(client) {
+        try {
+          const reconnectionClient = await this.allowReconnection(client, 10);
+          assert.equal(client.sessionId, reconnectionClient.sessionId);
+          reconnectionSpy();
+
+        } catch (e) {
+          assert.fail("catch block shouldn't be called here.");
+        }
+      }
+
+      await matchMaker.connectToRoom(firstClient, roomId);
+      assert.equal(room.clients.length, 1);
+      firstClient.emit("close");
+
+      assert.equal(room.clients.length, 0);
+      clock.tick(5 * 1000);
+
+      const secondClient = createDummyClient({});
+      const secondRoomId = await matchMaker.onJoinRoomRequest(secondClient, 'reconnect', {
+        sessionId: firstClient.sessionId
+      });
+      assert.equal(roomId, secondRoomId);
+      await matchMaker.connectToRoom(secondClient, roomId);
+
+      sinon.assert.calledOnce(reconnectionSpy);
+
+      clock.restore();
     });
 
   });
