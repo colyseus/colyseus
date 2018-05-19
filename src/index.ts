@@ -30,7 +30,7 @@ export type Client = WebSocket & {
   id: string;
   options: any;
   sessionId: string;
-  isAlive: boolean; // ping / pong
+  pingCount: number; // ping / pong
   remote?: boolean; // is this a remote client, from another process?
   auth?: any; // custom data set through Room's verifyClient method.
 };

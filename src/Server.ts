@@ -17,7 +17,7 @@ import { parseQueryString, registerGracefulShutdown } from './Utils';
 
 const PING_INTERVAL = 20 * 1000; // 20 seconds for verifying ping.
 function noop() {/* tslint:disable:no-empty */}
-function heartbeat() { this.isAlive = true; }
+function heartbeat() { this.pingCount = 0; }
 
 export type ServerOptions = IServerOptions & {
   verifyClient?: WebSocket.VerifyClientCallbackAsync
@@ -90,11 +90,11 @@ export class Server {
         //
         // if client hasn't responded after the interval, terminate its connection.
         //
-        if (client.isAlive === false) {
+        if (client.pingCount >= 3) {
           return client.terminate();
         }
 
-        client.isAlive = false;
+        client.pingCount++;
         client.ping(noop);
       });
     }, PING_INTERVAL);
@@ -151,7 +151,7 @@ export class Server {
 
     // set client id
     client.id = upgradeReq.colyseusid || generateId();
-    client.isAlive = true;
+    client.pingCount = 0;
 
     // ensure client has its "colyseusid"
     if (!upgradeReq.colyseusid) {
