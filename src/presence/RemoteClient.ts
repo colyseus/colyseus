@@ -1,3 +1,5 @@
+import * as WebSocket from 'ws';
+
 import { EventEmitter } from 'events';
 import { Client } from './../index';
 import { Presence } from './Presence';
@@ -5,6 +7,8 @@ import { Presence } from './Presence';
 export class RemoteClient extends EventEmitter {
     public id: string;
     public sessionId: string;
+
+    protected readyState = WebSocket.OPEN;
 
     protected roomId: string;
     protected presence: Presence;
