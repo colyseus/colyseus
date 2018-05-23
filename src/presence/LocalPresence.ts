@@ -7,7 +7,7 @@ export class LocalPresence implements Presence {
     public data: {[roomName: string]: string[]} = {};
     public hash: {[roomName: string]: {[key: string]: string}} = {};
 
-    public keys: {[name: string]: string} = {};
+    public keys: {[name: string]: string | number} = {};
     private timeouts: {[name: string]: NodeJS.Timer} = {};
 
     public subscribe(topic: string, callback: Function) {
@@ -94,6 +94,22 @@ export class LocalPresence implements Presence {
 
     public async hlen(roomId: string) {
         return this.hash[roomId] && Object.keys(this.hash[roomId]).length || 0;
+    }
+
+    public async incr(key: string) {
+        if (!this.keys[key]) {
+            this.keys[key] = 0;
+        }
+        (this.keys[key] as number)++;
+        return this.keys[key];
+    }
+
+    public async decr(key: string) {
+        if (!this.keys[key]) {
+            this.keys[key] = 0;
+        }
+        (this.keys[key] as number)--;
+        return this.keys[key];
     }
 
 }

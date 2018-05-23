@@ -18,4 +18,7 @@ export interface Presence {
     hget(roomId: string, key: string): Promise<string>;
     hdel(roomId: string, key: string);
     hlen(roomId: string): Promise<number>;
+
+    incr(key: string);
+    decr(key: string);
 }

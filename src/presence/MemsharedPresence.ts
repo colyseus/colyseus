@@ -104,4 +104,22 @@ export class MemsharedPresence implements Presence {
         });
     }
 
+    public incr(key: string): Promise<number> {
+        return new Promise((resolve, reject) => {
+            memshared.incr(key, (err, data) => {
+                if (err) { return reject(err); }
+                resolve(data);
+            });
+        });
+    }
+
+    public decr(key: string): Promise<number> {
+        return new Promise((resolve, reject) => {
+            memshared.decr(key, (err, data) => {
+                if (err) { return reject(err); }
+                resolve(data);
+            });
+        });
+    }
+
 }

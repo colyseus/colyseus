@@ -117,6 +117,11 @@ export class MatchMaker {
       clientOptions.sessionId = generateId();
       isReconnect = false;
 
+      // prevent race-conditions
+      // creating rooms when multiple clients request to create a room simultaneously,
+      // we need to wait for the first room to be created to prevent creating multiple rooms
+      await this.awaitRoomAvailable(roomToJoin);
+
       // check if there's an existing room with provided name available to join
       if (hasHandler) {
         const bestRoomByScore = (await this.getAvailableRoomByScore(roomToJoin, clientOptions))[0];
@@ -348,8 +353,10 @@ export class MatchMaker {
     // clean-up possibly stale room ids
     // (ungraceful shutdowns using Redis can result on stale room ids still on memory.)
     //
-
     const roomIds = await this.presence.smembers(roomName);
+
+    // remove connecting counts
+    await this.presence.del(this.getHandlerConcurrencyKey(roomName));
 
     await Promise.all(roomIds.map(async (roomId) => {
       try {
@@ -449,8 +456,27 @@ export class MatchMaker {
     this.presence.del(room.roomId);
   }
 
-  protected getRoomChannel(roomId) {
+  protected async awaitRoomAvailable(roomToJoin: string) {
+      const key = this.getHandlerConcurrencyKey(roomToJoin);
+      const concurrency = await this.presence.incr(key) - 1;
+
+      this.presence.decr(key);
+
+      if (concurrency > 0) {
+        debugMatchMaking('receiving %d concurrent requests for joining \'%s\'', concurrency, roomToJoin);
+        return await new Promise((resolve, reject) => setTimeout(resolve, concurrency * 10));
+
+      } else {
+        return true;
+      }
+  }
+
+  protected getRoomChannel(roomId: string) {
     return `$${roomId}`;
+  }
+
+  protected getHandlerConcurrencyKey(name: string) {
+    return `${name}:c`;
   }
 
   private onClientJoinRoom(room: Room, client: Client) {
