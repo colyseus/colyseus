@@ -464,7 +464,7 @@ export class MatchMaker {
 
       if (concurrency > 0) {
         debugMatchMaking('receiving %d concurrent requests for joining \'%s\'', concurrency, roomToJoin);
-        return await new Promise((resolve, reject) => setTimeout(resolve, concurrency * 10));
+        return await new Promise((resolve, reject) => setTimeout(resolve, concurrency * 100));
 
       } else {
         return true;
