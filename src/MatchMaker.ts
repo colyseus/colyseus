@@ -463,7 +463,7 @@ export class MatchMaker {
       this.presence.decr(key);
 
       if (concurrency > 0) {
-        debugMatchMaking('receiving %d concurrent requests for joining \'%s\'', concurrency, roomToJoin);
+        debugMatchMaking('receiving %d concurrent requests for joining \'%s\' (waiting %d ms)', concurrency, roomToJoin, concurrency * 100);
         return await new Promise((resolve, reject) => setTimeout(resolve, concurrency * 100));
 
       } else {
