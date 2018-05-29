@@ -184,7 +184,9 @@ export class MatchMaker {
 
         unsubscribeTimeout = setTimeout(() => {
           unsubscribe();
-          reject(new Error('remote room timed out'));
+
+          const request = `${method}${args && '(' + args.join(', ') + ')' || ''}`;
+          reject(new Error(`remote room (${roomId}) timed out, requesting "${request}"`));
         }, rejectionTimeout);
       });
 
@@ -253,7 +255,7 @@ export class MatchMaker {
 
     // imediatelly ask client to join the room
     if ( room.requestJoin(clientOptions, true) ) {
-      debugMatchMaking('spawning \'%s\' on process %d', roomName, process.pid);
+      debugMatchMaking('spawning \'%s\' (%s) on process %d', roomName, room.roomId, process.pid);
 
       room.on('lock', this.lockRoom.bind(this, roomName, room));
       room.on('unlock', this.unlockRoom.bind(this, roomName, room));
@@ -463,7 +465,11 @@ export class MatchMaker {
       this.presence.decr(key);
 
       if (concurrency > 0) {
-        debugMatchMaking('receiving %d concurrent requests for joining \'%s\' (waiting %d ms)', concurrency, roomToJoin, concurrency * 100);
+        debugMatchMaking(
+          'receiving %d concurrent requests for joining \'%s\' (waiting %d ms)',
+          concurrency, roomToJoin, concurrency * 100,
+        );
+
         return await new Promise((resolve, reject) => setTimeout(resolve, concurrency * 100));
 
       } else {
@@ -503,7 +509,7 @@ export class MatchMaker {
   }
 
   private disposeRoom(roomName: string, room: Room): void {
-    debugMatchMaking('disposing \'%s\' on process %d', roomName, process.pid);
+    debugMatchMaking('disposing \'%s\' (%s) on process %d', roomName, room.roomId, process.pid);
 
     // emit disposal on registered session handler
     this.handlers[roomName].emit('dispose', room);
