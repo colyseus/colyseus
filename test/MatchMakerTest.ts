@@ -113,7 +113,7 @@ describe('MatchMaker', function() {
         assert.fail("an error should be thrown here.");
 
       } catch (e) {
-        assert.equal(e.message, "remote room timed out");
+        assert.ok(e.message.match(/timed out/));
       }
     });
   });
