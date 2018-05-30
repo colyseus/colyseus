@@ -1,6 +1,5 @@
 import * as EventEmitter from 'events';
 import * as msgpack from 'notepack.io';
-import * as WebSocket from 'ws';
 
 import { merge, registerGracefulShutdown, spliceOne } from './Utils';
 
@@ -471,7 +470,6 @@ export class MatchMaker {
         );
 
         return await new Promise((resolve, reject) => setTimeout(resolve, concurrency * 100));
-
       } else {
         return true;
       }
