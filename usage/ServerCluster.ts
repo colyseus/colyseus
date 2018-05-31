@@ -31,10 +31,11 @@ if (cluster.isMaster) {
     // We create a new game server and register the room.
     const gameServer = new colyseus.Server({
         server: http.createServer(),
-        presence: new colyseus.MemsharedPresence()
+        // presence: new colyseus.MemsharedPresence()
+        presence: new colyseus.RedisPresence()
     });
 
-    gameServer.register("chat", ChatRoom);
+    gameServer.register("chat", ChatRoom).on("create", () => console.log("ROOM CREATED"));
     gameServer.listen(port);
 
     console.log(`Listening on ws://${endpoint}:${port}`)

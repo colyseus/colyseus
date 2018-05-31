@@ -47,5 +47,11 @@ export function decode(message: any) {
 }
 
 export function send(client: Client, message: any[]) {
-  client.send(msgpack.encode(message), { binary: true });
+  if ((client as any).write) {
+    console.log("WRITING ON SOCKET: ", message);
+    (client as any).write(msgpack.encode(message));
+
+  } else {
+    client.send(msgpack.encode(message), { binary: true });
+  }
 }
