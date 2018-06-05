@@ -108,8 +108,10 @@ export class MatchMaker {
     }
 
     if (clientOptions.sessionId) {
-      roomId = await this.presence.get(clientOptions.sessionId);
-      isReconnect = true;
+      isReconnect = await this.presence.get(clientOptions.sessionId);
+      if (isReconnect) {
+        roomId = isReconnect as any;
+      }
     }
 
     if (!roomId || !clientOptions.sessionId) {
