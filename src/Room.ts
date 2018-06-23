@@ -205,11 +205,16 @@ export abstract class Room<T= any> extends EventEmitter {
     while (numClients--) {
       const client = this.clients[ numClients ];
 
-      if (
+      if ((client as any).write) {
+        // TCP
+        (client as any).write(data);
+
+      } else if (
         client.readyState === WebSocket.OPEN &&
         (!options || options.except !== client)
       ) {
-        client.send(data, { binary: true }, logError.bind(this));
+        // WebSocket
+        client.send(data, { binary: true });
       }
     }
 
