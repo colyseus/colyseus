@@ -124,10 +124,15 @@ export class Server {
     req.options = query;
 
     if (req.roomId) {
-      const isLocked = await this.matchMaker.remoteRoomCall(req.roomId, 'locked');
+      // TODO: refactor me. this piece of code is repeated on MatchMaker class.
+      const hasReservedSeat = await this.matchMaker.remoteRoomCall(req.roomId, 'hasReservedSeat', [query.sessionId]);
 
-      if (isLocked) {
-        return next(false, Protocol.WS_TOO_MANY_CLIENTS, 'maxClients reached.');
+      if (!hasReservedSeat) {
+        const isLocked = await this.matchMaker.remoteRoomCall(req.roomId, 'locked');
+
+        if (isLocked) {
+          return next(false, Protocol.WS_TOO_MANY_CLIENTS, 'maxClients reached.');
+        }
       }
 
       // verify client from room scope.

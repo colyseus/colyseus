@@ -25,9 +25,15 @@ export class ChatRoom extends Room<any> {
       : this.clients.length > 0;
   }
 
-  onLeave (client) {
-    this.state.messages.push(`${ client.id } left.`);
-    console.log("ChatRoom:", client.sessionId, "left!");
+  async onLeave (client) {
+    try {
+      await this.allowReconnection(client, 10);
+      console.log("CLIENT RECONNECTED");
+
+    } catch (e) {
+      this.state.messages.push(`${client.id} left.`);
+      console.log("ChatRoom:", client.sessionId, "left!");
+    }
   }
 
   onMessage (client, data) {
