@@ -15,14 +15,14 @@ export function registerGracefulShutdown(callback) {
     process.once(signal, () => callback(signal)));
 }
 
-export class Deferred {
-  public promise: Promise<any>;
+export class Deferred<T= any> {
+  public promise: Promise<T>;
 
-  public reject: Function;
   public resolve: Function;
+  public reject: Function;
 
   constructor() {
-    this.promise = new Promise((resolve, reject) => {
+    this.promise = new Promise<T>((resolve, reject) => {
       this.resolve = resolve;
       this.reject = reject;
     });
@@ -35,6 +35,7 @@ export class Deferred {
   public catch(func: (value: any) => any) {
     return this.promise.catch(func);
   }
+
 }
 
 export function spliceOne(arr: any[], index: number): boolean {

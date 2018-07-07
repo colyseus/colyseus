@@ -1,17 +1,16 @@
 import * as fossilDelta from 'fossil-delta';
 import * as msgpack from 'notepack.io';
-import * as shortid from 'shortid';
 import * as WebSocket from 'ws';
 
 import { createTimeline, Timeline } from '@gamestdio/timeline';
 import Clock from '@gamestdio/timer';
 import { EventEmitter } from 'events';
 
-import { Client } from './index';
+import { Client, Delayed } from './index';
 import { Presence } from './presence/Presence';
 import { RemoteClient } from './presence/RemoteClient';
 import { decode, Protocol, send } from './Protocol';
-import { logError, spliceOne } from './Utils';
+import { Deferred, logError, spliceOne } from './Utils';
 
 import * as jsonPatch from 'fast-json-patch'; // this is only used for debugging patches
 import { debugError, debugPatch, debugPatchData } from './Debug';
@@ -60,7 +59,8 @@ export abstract class Room<T= any> extends EventEmitter {
   // seat reservation & reconnection
   protected reservedSeats: Set<string> = new Set();
   protected reservedSeatTimeouts: {[sessionId: string]: NodeJS.Timer} = {};
-  protected reconnectionResolvers: {[sessionId: string]: (value?: Client | PromiseLike<Client>) => void} = {};
+
+  protected reconnections: {[sessionId: string]: Deferred} = {};
 
   // when a new user connects, it receives the '_previousState', which holds
   // the last binary snapshot other users already have, therefore the patches
@@ -230,7 +230,15 @@ export abstract class Room<T= any> extends EventEmitter {
 
     let i = this.clients.length;
     while (i--) {
-      promises.push( this._onLeave(this.clients[i]) );
+      const client = this.clients[i];
+      const reconnection = this.reconnections[client.sessionId];
+
+      if (reconnection) {
+        reconnection.reject();
+
+      } else {
+        promises.push(this._onLeave(client));
+      }
     }
 
     return Promise.all(promises);
@@ -291,17 +299,16 @@ export abstract class Room<T= any> extends EventEmitter {
   protected allowReconnection(client: Client, seconds: number = 15): Promise<Client> {
     this._reserveSeat(client, seconds, true);
 
-    const reconnection = new Promise<Client>((resolve, reject) => {
-      // keep resolver reference in case the user reconnects into this room.
-      this.reconnectionResolvers[client.sessionId] = resolve;
+    // keep reconnection reference in case the user reconnects into this room.
+    const reconnection = new Deferred();
+    this.reconnections[client.sessionId] = reconnection;
 
-      // expire seat reservation after timeout
-      this.reservedSeatTimeouts[client.sessionId] = setTimeout(reject, seconds * 1000);
-    });
+    // expire seat reservation after timeout
+    this.reservedSeatTimeouts[client.sessionId] = setTimeout(() => reconnection.reject(false), seconds * 1000);
 
     const cleanup = () => {
       this.reservedSeats.delete(client.sessionId);
-      delete this.reconnectionResolvers[client.sessionId];
+      delete this.reconnections[client.sessionId];
       delete this.reservedSeatTimeouts[client.sessionId];
     };
 
@@ -312,7 +319,7 @@ export abstract class Room<T= any> extends EventEmitter {
       }).
       catch(cleanup);
 
-    return reconnection;
+    return reconnection.promise;
   }
 
   protected _reserveSeat(
@@ -441,9 +448,9 @@ export abstract class Room<T= any> extends EventEmitter {
       this.sendState(client);
     }
 
-    const isReconnection = this.reconnectionResolvers[client.sessionId];
-    if (isReconnection) {
-      this.reconnectionResolvers[client.sessionId](client);
+    const reconnection = this.reconnections[client.sessionId];
+    if (reconnection) {
+      reconnection.resolve(client);
 
     } else {
       // emit 'join' to room handler
