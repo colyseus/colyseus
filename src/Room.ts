@@ -6,10 +6,10 @@ import { createTimeline, Timeline } from '@gamestdio/timeline';
 import Clock from '@gamestdio/timer';
 import { EventEmitter } from 'events';
 
-import { Client, Delayed } from './index';
+import { Client } from './index';
 import { Presence } from './presence/Presence';
 import { RemoteClient } from './presence/RemoteClient';
-import { decode, Protocol, send } from './Protocol';
+import { decode, Protocol, send, WS_CLOSE_CONSENTED } from './Protocol';
 import { Deferred, logError, spliceOne } from './Utils';
 
 import * as jsonPatch from 'fast-json-patch'; // this is only used for debugging patches
@@ -93,7 +93,7 @@ export abstract class Room<T= any> extends EventEmitter {
   // Optional abstract methods
   public onInit?(options: any): void;
   public onJoin?(client: Client, options?: any, auth?: any): void | Promise<any>;
-  public onLeave?(client: Client): void | Promise<any>;
+  public onLeave?(client: Client, consented?: boolean): void | Promise<any>;
   public onDispose?(): void | Promise<any>;
 
   public requestJoin(options: any, isNew?: boolean): number | boolean {
@@ -402,6 +402,9 @@ export abstract class Room<T= any> extends EventEmitter {
     if (message[0] === Protocol.ROOM_DATA) {
       this.onMessage(client, message[2]);
 
+    } else if (message[0] === Protocol.LEAVE_ROOM) {
+      client.close(WS_CLOSE_CONSENTED);
+
     } else {
       this.onMessage(client, message);
     }
@@ -460,12 +463,12 @@ export abstract class Room<T= any> extends EventEmitter {
     }
   }
 
-  private _onLeave(client: Client): void | Promise<any> {
+  private _onLeave(client: Client, code?: any): void | Promise<any> {
     let userReturnData;
 
     // call abstract 'onLeave' method only if the client has been successfully accepted.
     if (spliceOne(this.clients, this.clients.indexOf(client)) && this.onLeave) {
-      userReturnData = this.onLeave(client);
+      userReturnData = this.onLeave(client, (code === WS_CLOSE_CONSENTED));
     }
 
     this.emit('leave', client);

@@ -25,8 +25,12 @@ export class ChatRoom extends Room<any> {
       : this.clients.length > 0;
   }
 
-  async onLeave (client) {
+  async onLeave (client, consented) {
+    console.log("IS CONSENTED?", consented);
+
     try {
+      if (consented) throw new Error("just close!");
+
       await this.allowReconnection(client, 10);
       console.log("CLIENT RECONNECTED");
 

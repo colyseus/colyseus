@@ -2,6 +2,8 @@ import * as msgpack from 'notepack.io';
 import { debugError } from './Debug';
 import { Client } from './index';
 
+export const WS_CLOSE_CONSENTED = 4000;
+
 // Use codes between 0~127 for lesser throughput (1 byte)
 export enum Protocol {
 
