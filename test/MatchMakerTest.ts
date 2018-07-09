@@ -58,10 +58,16 @@ describe('MatchMaker', function() {
     });
 
     it('shouldn\'t create room when requesting to join room with invalid params', async () => {
+      const room = 'dummy_room';
+
+      const joinRequestOptions = {
+        invalid_param: 10,
+      };
+
       try {
-        await matchMaker.onJoinRoomRequest(createDummyClient(), 'dummy_room', { invalid_param: 10 });
+        await matchMaker.onJoinRoomRequest(createDummyClient(), room, joinRequestOptions);
       } catch (e) {
-        assert.equal(e.message, "join_request_fail");
+        assert.equal(e.message, `Failed to auto-create room "${room}" during join request using options "${JSON.stringify(joinRequestOptions)}"`);
       }
     });
 
@@ -98,7 +104,7 @@ describe('MatchMaker', function() {
         await matchMaker.onJoinRoomRequest(createDummyClient(), invalidRoomName, {});
 
       } catch (e) {
-        assert.equal(e.message, "join_request_fail");
+        assert.equal(e.message, `Failed to join invalid room "${invalidRoomName}"`);
       }
     });
 
