@@ -15,7 +15,7 @@ import { decode, Protocol, send } from './Protocol';
 import { Room, RoomConstructor } from './Room';
 import { parseQueryString, registerGracefulShutdown } from './Utils';
 
-const PING_INTERVAL = 20 * 1000; // 20 seconds for verifying ping.
+const PING_INTERVAL = 1 * 1000; // 1 seconds for verifying ping.
 function noop() {/* tslint:disable:no-empty */}
 function heartbeat() { this.pingCount = 0; }
 
@@ -90,7 +90,7 @@ export class Server {
         //
         // if client hasn't responded after the interval, terminate its connection.
         //
-        if (client.pingCount >= 3) {
+        if (client.pingCount >= 2) {
           return client.terminate();
         }
 
