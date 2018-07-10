@@ -139,6 +139,11 @@ export class MatchMaker {
     // if couldn't join a room by its id, let's try to create a new one
     if (!roomId && hasHandler) {
       roomId = this.create(roomToJoin, clientOptions);
+
+      if (!roomId) {
+        throw new Error(`Failed to auto-create room "${roomToJoin}" during ` +
+          `join request using options "${JSON.stringify(clientOptions)}"`);
+      }
     }
 
     if (roomId) {
@@ -149,7 +154,7 @@ export class MatchMaker {
       }]);
 
     } else {
-      throw new Error('join_request_fail');
+      throw new Error(`Failed to join invalid room "${roomToJoin}"`);
     }
 
     return roomId;
