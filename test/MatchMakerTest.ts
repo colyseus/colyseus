@@ -66,6 +66,7 @@ describe('MatchMaker', function() {
 
       try {
         await matchMaker.onJoinRoomRequest(createDummyClient(), room, joinRequestOptions);
+        assert.fail("catch block should've taken place");
       } catch (e) {
         assert.equal(e.message, `Failed to auto-create room "${room}" during join request using options "${JSON.stringify(joinRequestOptions)}"`);
       }
@@ -90,12 +91,17 @@ describe('MatchMaker', function() {
     it('should call "onDispose" when room is not created', function(done) {
       const stub = sinon.stub(DummyRoom.prototype, 'requestJoin').returns(false);
       const spy = sinon.spy(DummyRoom.prototype, 'onDispose');
-      const room = matchMaker.create('dummy_room', {});
-      assert.ok(spy.calledOnce);
-      assert.equal(null, room);
-      stub.restore();
-      spy.restore();
-      done();
+      try {
+        matchMaker.create('dummy_room', {});
+        assert.fail("catch block should've taken place");
+
+      } catch (e) {
+        assert.equal(typeof(e.message), "string");
+        assert.ok(spy.calledOnce);
+        stub.restore();
+        spy.restore();
+        done();
+      }
     });
 
     it('should emit error if room name is not a valid id', async () => {
