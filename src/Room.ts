@@ -18,7 +18,7 @@ import { debugError, debugPatch, debugPatchData } from './Debug';
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
 
-export const DEFAULT_SEAT_RESERVATION_TIME = 2;
+const DEFAULT_SEAT_RESERVATION_TIME = 3;
 
 export type SimulationCallback = (deltaTime?: number) => void;
 
@@ -57,6 +57,7 @@ export abstract class Room<T= any> extends EventEmitter {
   protected remoteClients: {[sessionId: string]: RemoteClient} = {};
 
   // seat reservation & reconnection
+  protected seatReservationTime: number = DEFAULT_SEAT_RESERVATION_TIME;
   protected reservedSeats: Set<string> = new Set();
   protected reservedSeatTimeouts: {[sessionId: string]: NodeJS.Timer} = {};
 
@@ -110,6 +111,11 @@ export abstract class Room<T= any> extends EventEmitter {
 
   public hasReachedMaxClients(): boolean {
     return (this.clients.length + this.reservedSeats.size) >= this.maxClients;
+  }
+
+  public setSeatReservationTime(seconds: number) {
+    this.seatReservationTime = seconds;
+    return this;
   }
 
   public hasReservedSeat(sessionId: string): boolean {
@@ -324,7 +330,7 @@ export abstract class Room<T= any> extends EventEmitter {
 
   protected _reserveSeat(
     client: Client,
-    seconds: number = DEFAULT_SEAT_RESERVATION_TIME,
+    seconds: number = this.seatReservationTime,
     allowReconnection: boolean = false,
   ) {
     this.presence.setex(`${this.roomId}:${client.id}`, client.sessionId, seconds);

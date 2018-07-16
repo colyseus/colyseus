@@ -12,7 +12,7 @@ import { Presence } from './presence/Presence';
 
 import { Client, generateId, isValidId } from './index';
 import { decode, Protocol, send } from './Protocol';
-import { Room, RoomConstructor } from './Room';
+import { RoomConstructor } from './Room';
 import { parseQueryString, registerGracefulShutdown } from './Utils';
 
 const PING_INTERVAL = 1 * 1000; // 1 seconds for verifying ping.
@@ -20,6 +20,7 @@ function noop() {/* tslint:disable:no-empty */}
 function heartbeat() { this.pingCount = 0; }
 
 export type ServerOptions = IServerOptions & {
+  seatReserveationTime?: number,
   verifyClient?: WebSocket.VerifyClientCallbackAsync
   presence?: any,
   engine?: any,

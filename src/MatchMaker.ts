@@ -38,7 +38,6 @@ export class MatchMaker {
   public async connectToRoom(client: Client, roomId: string) {
     const room = this.localRooms[roomId];
     const clientOptions = client.options;
-    const auth = client.auth;
 
     // assign sessionId to socket connection.
     client.sessionId = await this.presence.get(`${roomId}:${client.id}`);
