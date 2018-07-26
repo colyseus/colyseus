@@ -60,7 +60,7 @@
     "ts-node": "^6.0.3",
     "tslint": "^5.9.1",
     "typescript": "^2.8.1",
-    "uws": "^10.148.0"
+    "uws": "^99.0.0"
   },
   "license": "MIT",
   "greenkeeper": {
