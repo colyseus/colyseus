@@ -1,6 +1,5 @@
 import * as http from 'http';
 import * as net from 'net';
-import * as msgpack from 'notepack.io';
 import * as parseURL from 'url-parse';
 import * as WebSocket from 'ws';
 import { ServerOptions as IServerOptions } from 'ws';
