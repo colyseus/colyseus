@@ -243,7 +243,7 @@ export abstract class Room<T= any> extends EventEmitter {
         reconnection.reject();
 
       } else {
-        promises.push(this._onLeave(client));
+        promises.push(this._onLeave(client, WS_CLOSE_CONSENTED));
       }
     }
 
