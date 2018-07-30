@@ -1,7 +1,7 @@
 import * as http from "http";
 import * as express from "express";
 import * as bodyParser from "body-parser";
-import * as WebSocket from "uws";
+// import * as WebSocket from "uws";
 
 import { Server } from "../src/Server";
 import { ChatRoom } from "./ChatRoom";
@@ -15,7 +15,7 @@ app.use(bodyParser.json());
 // Create HTTP & WebSocket servers
 const server = http.createServer(app);
 const gameServer = new Server({
-  engine: WebSocket.Server,
+  // engine: WebSocket.Server,
   server: server
 });
 
