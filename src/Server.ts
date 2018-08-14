@@ -14,12 +14,11 @@ import { decode, Protocol, send } from './Protocol';
 import { RoomConstructor } from './Room';
 import { parseQueryString, registerGracefulShutdown } from './Utils';
 
-const PING_INTERVAL = 1 * 1000; // 1 seconds for verifying ping.
 function noop() {/* tslint:disable:no-empty */}
 function heartbeat() { this.pingCount = 0; }
 
 export type ServerOptions = IServerOptions & {
-  seatReserveationTime?: number,
+  pingTimeout?: number,
   verifyClient?: WebSocket.VerifyClientCallbackAsync
   presence?: any,
   engine?: any,
@@ -34,12 +33,14 @@ export class Server {
 
   protected presence: Presence;
   protected pingInterval: NodeJS.Timer;
+  protected pingTimeout: number;
 
   protected onShutdownCallback: () => void | Promise<any>;
 
   constructor(options: ServerOptions = {}) {
     this.presence = options.presence;
     this.matchMaker = new MatchMaker(this.presence);
+    this.pingTimeout = options.pingTimeout || 1500;
 
     this.onShutdownCallback = () => Promise.resolve();
 
@@ -97,7 +98,7 @@ export class Server {
         client.pingCount++;
         client.ping(noop);
       });
-    }, PING_INTERVAL);
+    }, this.pingTimeout);
   }
 
   public listen(port: number, hostname?: string, backlog?: number, listeningListener?: Function) {
@@ -125,10 +126,10 @@ export class Server {
 
     if (req.roomId) {
       // TODO: refactor me. this piece of code is repeated on MatchMaker class.
-      const hasReservedSeat = await this.matchMaker.remoteRoomCall(req.roomId, 'hasReservedSeat', [query.sessionId]);
+      const hasReservedSeat = await this.matchMaker.remoteRoomCall(req.roomId, 'hasReservedSeat', [query.sessionId], 400);
 
       if (!hasReservedSeat) {
-        const isLocked = await this.matchMaker.remoteRoomCall(req.roomId, 'locked');
+        const isLocked = await this.matchMaker.remoteRoomCall(req.roomId, 'locked', undefined, 400);
 
         if (isLocked) {
           return next(false, Protocol.WS_TOO_MANY_CLIENTS, 'maxClients reached.');
