@@ -125,26 +125,43 @@ export class Server {
     req.options = query;
 
     if (req.roomId) {
-      // TODO: refactor me. this piece of code is repeated on MatchMaker class.
-      const hasReservedSeat = await this.matchMaker.remoteRoomCall(req.roomId, 'hasReservedSeat', [query.sessionId], 400);
+      try {
+        // TODO: refactor me. this piece of code is repeated on MatchMaker class.
+        const hasReservedSeat = await this.matchMaker.remoteRoomCall(
+          req.roomId,
+          'hasReservedSeat',
+          [query.sessionId],
+          300,
+        );
 
-      if (!hasReservedSeat) {
-        const isLocked = await this.matchMaker.remoteRoomCall(req.roomId, 'locked', undefined, 400);
+        if (!hasReservedSeat) {
+          const isLocked = await this.matchMaker.remoteRoomCall(
+            req.roomId,
+            'locked',
+            undefined,
+            300,
+          );
 
-        if (isLocked) {
-          return next(false, Protocol.WS_TOO_MANY_CLIENTS, 'maxClients reached.');
+          if (isLocked) {
+            return next(false, Protocol.WS_TOO_MANY_CLIENTS, 'maxClients reached.');
+          }
         }
-      }
 
-      // verify client from room scope.
-      this.matchMaker.remoteRoomCall(req.roomId, 'onAuth', [req.options]).
-        then((result) => {
-          if (!result) { return next(false); }
+        // verify client from room scope.
+        const authResult = await this.matchMaker.remoteRoomCall(req.roomId, 'onAuth', [req.options]);
 
-          req.auth = result;
+        if (authResult) {
+          req.auth = authResult;
           next(true);
-        }).
-        catch((e) => next(false));
+
+        } else {
+          throw new Error("onAuth failed.");
+        }
+
+      } catch (e) {
+        debugError(e.message + '\n' + e.stack);
+        next(false);
+      }
 
     } else {
       next(true);
