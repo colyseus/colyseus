@@ -155,7 +155,7 @@ export class Server {
           next(true);
 
         } else {
-          throw new Error("onAuth failed.");
+          throw new Error('onAuth failed.');
         }
 
       } catch (e) {
