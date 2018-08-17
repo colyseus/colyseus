@@ -134,7 +134,10 @@ export abstract class Room<T= any> extends EventEmitter {
 
   public setPatchRate( milliseconds: number ): void {
     // clear previous interval in case called setPatchRate more than once
-    if ( this._patchInterval ) { clearInterval( this._patchInterval ); }
+    if (this._patchInterval) {
+      clearInterval(this._patchInterval);
+      this._patchInterval = undefined;
+    }
 
     if ( milliseconds !== null && milliseconds !== 0 ) {
       this._patchInterval = setInterval( this.broadcastPatch.bind(this), milliseconds );
@@ -360,7 +363,7 @@ export abstract class Room<T= any> extends EventEmitter {
   }
 
   protected _disposeIfEmpty() {
-    if ( this.clients.length === 0 ) {
+    if (this.clients.length === 0 && this.reservedSeats.size === 0) {
       this._dispose();
       this.emit('dispose');
     }
@@ -369,9 +372,19 @@ export abstract class Room<T= any> extends EventEmitter {
   protected _dispose(): Promise<any> {
     let userReturnData;
 
-    if ( this.onDispose ) { userReturnData = this.onDispose(); }
-    if ( this._patchInterval ) { clearInterval( this._patchInterval ); }
-    if ( this._simulationInterval ) { clearInterval( this._simulationInterval ); }
+    if (this.onDispose) {
+      userReturnData = this.onDispose();
+    }
+
+    if (this._patchInterval) {
+      clearInterval(this._patchInterval);
+      this._patchInterval = undefined;
+    }
+
+    if (this._simulationInterval) {
+      clearInterval(this._simulationInterval);
+      this._simulationInterval = undefined;
+     }
 
     // clear all timeouts/intervals + force to stop ticking
     this.clock.clear();
@@ -486,7 +499,7 @@ export abstract class Room<T= any> extends EventEmitter {
 
     // dispose immediatelly if client reconnection isn't set up.
     if (!this.reservedSeats.has(client.sessionId) && this.autoDispose) {
-      this._disposeIfEmpty();
+      this.resetAutoDisposeTimeout(this.seatReservationTime);
     }
 
     // unlock if room is available for new connections
