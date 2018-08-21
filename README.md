@@ -31,6 +31,8 @@ This framework is fairly new and is being evolved constantly. You're encouraged
 to take a look on [some games being developed with
 it](https://discuss.colyseus.io/category/5/showcase) and make your own!
 
+<a href="https://www.patreon.com/bePatron?u=3301115"><img src="https://c5.patreon.com/external/logo/become_a_patron_button.png" /></a>
+
 ## What Colyseus provides to you:
 
 - WebSocket-based communication
@@ -49,17 +51,14 @@ See [roadmap](http://colyseus.io/docs/roadmap/) for our future plans.
 ### Official client integration
 
 - [JavaScript/TypeScript](https://github.com/gamestdio/colyseus.js)
-- [Unity](https://github.com/gamestdio/colyseus-unity3d) ([unity3d.com](https://unity3d.com/))
-- [Construct 3](https://github.com/gamestdio/colyseus-construct3) ([construct3.net](https://www.construct.net/))
 - [Defold Engine](https://github.com/gamestdio/colyseus-defold) ([defold.com](https://www.defold.com/))
+- [Haxe](https://github.com/gamestdio/colyseus-hx) ([haxe.org](https://haxe.org/))
+- [Construct 3](https://github.com/gamestdio/colyseus-construct3) ([construct3.net](https://www.construct.net/))
+- [Unity](https://github.com/gamestdio/colyseus-unity3d) ([unity3d.com](https://unity3d.com/))
 
 ### Tools
 
 - [@colyseus/monitor](https://github.com/gamestdio/colyseus-monitor) - A Web Monitoring Panel for Colyseus
-
-Consider backing Colyseus development and its support on Patreon.
-
-<a href="https://www.patreon.com/bePatron?u=3301115"><img src="https://c5.patreon.com/external/logo/become_a_patron_button.png" /></a>
 
 ### Community client integration
 
