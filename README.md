@@ -31,7 +31,9 @@ This framework is fairly new and is being evolved constantly. You're encouraged
 to take a look on [some games being developed with
 it](https://discuss.colyseus.io/category/5/showcase) and make your own!
 
-<a href="https://www.patreon.com/bePatron?u=3301115"><img src="https://c5.patreon.com/external/logo/become_a_patron_button.png" /></a>
+<div align="center">
+  <a href="https://www.patreon.com/bePatron?u=3301115"><img src="https://c5.patreon.com/external/logo/become_a_patron_button.png" /></a>
+</div>
 
 ## What Colyseus provides to you:
 
