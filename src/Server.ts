@@ -115,6 +115,7 @@ export class Server {
 
   protected verifyClient = async (info, next) => {
     const req = info.req;
+
     const url = parseURL(req.url);
     req.roomId = url.pathname.substr(1);
 
@@ -127,7 +128,7 @@ export class Server {
     if (req.roomId) {
       try {
         // TODO: refactor me. this piece of code is repeated on MatchMaker class.
-        const hasReservedSeat = await this.matchMaker.remoteRoomCall(
+        const hasReservedSeat = query.sessionId && await this.matchMaker.remoteRoomCall(
           req.roomId,
           'hasReservedSeat',
           [query.sessionId],

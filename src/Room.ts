@@ -49,7 +49,7 @@ export abstract class Room<T= any> extends EventEmitter {
   public autoDispose: boolean = true;
 
   public state: T;
-  public metadata: any;
+  public metadata: any = null;
 
   public presence: Presence;
 
@@ -354,7 +354,7 @@ export abstract class Room<T= any> extends EventEmitter {
   protected resetAutoDisposeTimeout(timeoutInSeconds: number) {
     clearTimeout(this._autoDisposeTimeout);
 
-    if (this.clients.length > 0 || !this.autoDispose) {
+    if (!this.autoDispose) {
       return;
     }
 
@@ -482,12 +482,12 @@ export abstract class Room<T= any> extends EventEmitter {
     }
   }
 
-  private _onLeave(client: Client, code?: any): void | Promise<any> {
+  private async _onLeave(client: Client, code?: any): Promise<any> {
     let userReturnData;
 
     // call abstract 'onLeave' method only if the client has been successfully accepted.
     if (spliceOne(this.clients, this.clients.indexOf(client)) && this.onLeave) {
-      userReturnData = this.onLeave(client, (code === WS_CLOSE_CONSENTED));
+      userReturnData = await this.onLeave(client, (code === WS_CLOSE_CONSENTED));
     }
 
     this.emit('leave', client);
@@ -499,7 +499,7 @@ export abstract class Room<T= any> extends EventEmitter {
 
     // dispose immediatelly if client reconnection isn't set up.
     if (!this.reservedSeats.has(client.sessionId) && this.autoDispose) {
-      this.resetAutoDisposeTimeout(this.seatReservationTime);
+      this._disposeIfEmpty();
     }
 
     // unlock if room is available for new connections
@@ -508,7 +508,7 @@ export abstract class Room<T= any> extends EventEmitter {
       this.unlock.call(this, true);
     }
 
-    return userReturnData || Promise.resolve();
+    return userReturnData || true;
   }
 
 }

@@ -1,10 +1,7 @@
-import * as EventEmitter from 'events';
-import * as msgpack from 'notepack.io';
-
-import { merge, registerGracefulShutdown, spliceOne } from './Utils';
+import { merge } from './Utils';
 
 import { Client, generateId, isValidId } from './index';
-import { IpcProtocol, Protocol, send } from './Protocol';
+import { IpcProtocol } from './Protocol';
 
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
 import { Room, RoomAvailable, RoomConstructor } from './Room';

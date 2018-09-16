@@ -6,8 +6,6 @@ var Benchmark = require('benchmark')
   , jsonpatch = require('fast-json-patch')
   , fossilDelta = require('fossil-delta')
   , msgpack = require('notepack.io')
-  , toJSON = require('../../lib/Utils').toJSON
-
   , suite = new Benchmark.Suite()
 
 class PlainState {
@@ -71,7 +69,7 @@ class ComplexState {
       float: this.float,
       string: this.string,
       array: this.array,
-      objs: this.objs,
+      objs: this.objs.map(obj => obj.toJSON()),
       boolean: this.boolean,
       null: this.null,
       teams: this.teams
@@ -80,17 +78,18 @@ class ComplexState {
 }
 
 var obj2 = new ComplexState();
-var state2 = JSON.parse(JSON.stringify(toJSON(obj2)))
+var state2 = JSON.parse(JSON.stringify(obj2.toJSON()))
 suite.add('using json', function() {
   for (var i=0; i<4; i++) {
     obj2.objs[0].hp--;
     obj2.objs[2].hp--;
     obj2.teams[i].score++;
-    var newState = JSON.parse(JSON.stringify(toJSON(obj2)))
+    var newState = JSON.parse(JSON.stringify(obj2.toJSON()))
     var diff = msgpack.encode( jsonpatch.compare(state2, newState) )
     state2 = newState
   }
-})
+  this.bytes = diff.length;
+});
 
 var obj3 = new PlainState();
 var observer = jsonpatch.observe(obj3)
@@ -101,51 +100,57 @@ suite.add('using plain + observe', function() {
     obj3.teams[i].score++;
     var diff = msgpack.encode( jsonpatch.generate(observer) )
   }
+  this.bytes = diff.length;
 })
 
 var obj4 = new ComplexState();
-var obj4state = JSON.parse(JSON.stringify(toJSON(obj4)))
-var observer2 = jsonpatch.observe(obj4state)
+var obj4state = JSON.parse(JSON.stringify(obj4.toJSON()))
+var observer2 = jsonpatch.observe(obj4state);
 suite.add('using complex + observe', function() {
   for (var i=0; i<4; i++) {
     obj4.objs[0].hp--;
     obj4.objs[2].hp--;
     obj4.teams[i].score++;
-    Object.assign(obj4state, toJSON(obj4))
+
+    Object.assign(obj4state, obj4.toJSON())
     var diff = msgpack.encode( jsonpatch.generate(observer2) )
   }
-})
+  this.bytes = diff.length;
+});
 
-var obj4 = new PlainState();
-var oldBinary4 = msgpack.encode( toJSON( obj4 ) )
-var newBinary4 = null
-suite.add('using plain + fossildelta', function() {
-  for (var i=0; i<4; i++) {
-    obj4.objs[0].hp--;
-    obj4.objs[2].hp--;
-    obj4.teams[i].score++;
-    newBinary4 = msgpack.encode( toJSON( obj4 ) )
-    var diff = fossilDelta.create( oldBinary4, newBinary4 )
-    oldBinary4 = newBinary4
-  }
-})
-
-var obj5 = new ComplexState();
-var oldBinary5 = msgpack.encode( toJSON( obj4 ) )
+var obj5 = new PlainState();
+var oldBinary5 = msgpack.encode( obj5 );
 var newBinary5 = null
-suite.add('using complex + fossildelta', function() {
+suite.add('using plain + fossildelta', function() {
   for (var i=0; i<4; i++) {
     obj5.objs[0].hp--;
     obj5.objs[2].hp--;
     obj5.teams[i].score++;
-    newBinary5 = msgpack.encode( toJSON( obj5 ) )
+    newBinary5 = msgpack.encode( obj5 )
     var diff = fossilDelta.create( oldBinary5, newBinary5 )
     oldBinary5 = newBinary5
   }
+  this.bytes = diff.length;
+})
+
+var obj6 = new ComplexState();
+var oldBinary6 = msgpack.encode( obj6.toJSON() );
+var newBinary6 = null
+suite.add('using complex + fossildelta', function() {
+  for (var i=0; i<4; i++) {
+    obj6.objs[0].hp--;
+    obj6.objs[2].hp--;
+    obj6.teams[i].score++;
+    newBinary6 = msgpack.encode( obj6.toJSON() )
+    var diff = fossilDelta.create( oldBinary6, newBinary6 )
+    oldBinary6 = newBinary6
+  }
+  this.bytes = diff.length;
 })
 
 suite.on('cycle', function(event) {
   console.log(String(event.target));
+  console.log("bytes to transfer:", event.target.bytes);
 })
 
 suite.run()
