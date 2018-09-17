@@ -358,12 +358,14 @@ export abstract class Room<T= any> extends EventEmitter {
       return;
     }
 
-    this._autoDisposeTimeout = setTimeout(() =>
-      this._disposeIfEmpty(), timeoutInSeconds * 1000);
+    this._autoDisposeTimeout = setTimeout(() => {
+      this._autoDisposeTimeout = undefined;
+      this._disposeIfEmpty();
+    }, timeoutInSeconds * 1000);
   }
 
   protected _disposeIfEmpty() {
-    if (this.clients.length === 0 && this.reservedSeats.size === 0) {
+    if (!this._autoDisposeTimeout && this.clients.length === 0 && this.reservedSeats.size === 0) {
       this._dispose();
       this.emit('dispose');
     }
@@ -498,7 +500,7 @@ export abstract class Room<T= any> extends EventEmitter {
     }
 
     // dispose immediatelly if client reconnection isn't set up.
-    if (!this.reservedSeats.has(client.sessionId) && this.autoDispose) {
+    if (this.autoDispose) {
       this._disposeIfEmpty();
     }
 

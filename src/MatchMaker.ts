@@ -10,6 +10,7 @@ import { LocalPresence } from './presence/LocalPresence';
 import { Presence } from './presence/Presence';
 
 import { debugError, debugMatchMaking } from './Debug';
+import { MatchMakeError } from './Errors';
 
 export type ClientOptions = any;
 
@@ -18,7 +19,9 @@ export interface RoomWithScore {
   score: number;
 }
 
-const PRESENCE_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_TIMEOUT || 8000); // remote room calls timeout
+// remote room call timeouts
+export const REMOTE_ROOM_SHORT_TIMEOUT = 200;
+export const REMOTE_ROOM_LARGE_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_TIMEOUT || 8000);
 
 export class MatchMaker {
   public handlers: {[id: string]: RegisteredHandler} = {};
@@ -100,7 +103,7 @@ export class MatchMaker {
     }
 
     if (!hasHandler && !isValidId(roomToJoin)) {
-      throw new Error('join_request_fail');
+      throw new MatchMakeError('join_request_fail');
     }
 
     if (clientOptions.sessionId) {
@@ -114,9 +117,8 @@ export class MatchMaker {
       clientOptions.sessionId = generateId();
       isReconnect = false;
 
-      // prevent race-conditions
-      // creating rooms when multiple clients request to create a room simultaneously,
-      // we need to wait for the first room to be created to prevent creating multiple rooms
+      // when multiple clients request to create a room simultaneously, we need
+      // to wait for the first room to be created to prevent creating multiple of them
       await this.awaitRoomAvailable(roomToJoin);
 
       // check if there's an existing room with provided name available to join
@@ -145,13 +147,18 @@ export class MatchMaker {
       }]);
 
     } else {
-      throw new Error(`Failed to join invalid room "${roomToJoin}"`);
+      throw new MatchMakeError(`Failed to join invalid room "${roomToJoin}"`);
     }
 
     return roomId;
   }
 
-  public async remoteRoomCall(roomId: string, method: string, args?: any[], rejectionTimeout = PRESENCE_TIMEOUT) {
+  public async remoteRoomCall(
+    roomId: string,
+    method: string,
+    args?: any[],
+    rejectionTimeout = REMOTE_ROOM_SHORT_TIMEOUT,
+  ) {
     const room = this.localRooms[roomId];
 
     if (!room) {
@@ -270,7 +277,7 @@ export class MatchMaker {
     } else {
       (room as any)._dispose();
 
-      throw new Error(`Failed to auto-create room "${roomName}" during ` +
+      throw new MatchMakeError(`Failed to auto-create room "${roomName}" during ` +
         `join request using options "${JSON.stringify(clientOptions)}"`);
     }
   }
@@ -361,7 +368,7 @@ export class MatchMaker {
 
     await Promise.all(roomIds.map(async (roomId) => {
       try {
-        await this.remoteRoomCall(roomId, 'roomId', undefined, 100);
+        await this.remoteRoomCall(roomId, 'roomId');
 
       } catch (e) {
         debugMatchMaking(`cleaning up stale room '${roomName}' (${roomId})`);

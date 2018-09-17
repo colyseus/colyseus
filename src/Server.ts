@@ -5,14 +5,15 @@ import * as WebSocket from 'ws';
 import { ServerOptions as IServerOptions } from 'ws';
 
 import { debugError } from './Debug';
-import { MatchMaker } from './MatchMaker';
+import { MatchMaker, REMOTE_ROOM_LARGE_TIMEOUT } from './MatchMaker';
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
 import { Presence } from './presence/Presence';
 
+import { MatchMakeError } from './Errors';
 import { Client, generateId, isValidId } from './index';
 import { decode, Protocol, send } from './Protocol';
 import { RoomConstructor } from './Room';
-import { parseQueryString, registerGracefulShutdown } from './Utils';
+import { parseQueryString, registerGracefulShutdown, retry } from './Utils';
 
 function noop() {/* tslint:disable:no-empty */}
 function heartbeat() { this.pingCount = 0; }
@@ -132,16 +133,10 @@ export class Server {
           req.roomId,
           'hasReservedSeat',
           [query.sessionId],
-          300,
         );
 
         if (!hasReservedSeat) {
-          const isLocked = await this.matchMaker.remoteRoomCall(
-            req.roomId,
-            'locked',
-            undefined,
-            300,
-          );
+          const isLocked = await this.matchMaker.remoteRoomCall(req.roomId, 'locked');
 
           if (isLocked) {
             return next(false, Protocol.WS_TOO_MANY_CLIENTS, 'maxClients reached.');
@@ -149,7 +144,12 @@ export class Server {
         }
 
         // verify client from room scope.
-        const authResult = await this.matchMaker.remoteRoomCall(req.roomId, 'onAuth', [req.options]);
+        const authResult = await this.matchMaker.remoteRoomCall(
+          req.roomId,
+          'onAuth',
+          [req.options],
+          REMOTE_ROOM_LARGE_TIMEOUT,
+        );
 
         if (authResult) {
           req.auth = authResult;
@@ -221,9 +221,18 @@ export class Server {
         send(client, [Protocol.JOIN_ERROR, roomName, `Error: no available handler for "${roomName}"`]);
 
       } else {
-        this.matchMaker.onJoinRoomRequest(client, roomName, joinOptions).
-          then((roomId: string) => send(client, [Protocol.JOIN_ROOM, roomId, joinOptions.requestId])).
-          catch((e) => {
+        //
+        // As a room might stop responding during the matchmaking process, due to it being disposed.
+        // The last step of the matchmaking will make sure a seat will be reserved for this client
+        // If `onJoinRoomRequest` can't make it until the very last step, a retry is necessary.
+        //
+        retry(() => {
+          return this.matchMaker.onJoinRoomRequest(client, roomName, joinOptions);
+        }, 3, 0, [MatchMakeError]).
+          then((roomId) => {
+            send(client, [Protocol.JOIN_ROOM, roomId, joinOptions.requestId]);
+
+          }).catch((e) => {
             debugError(e.stack || e);
             send(client, [Protocol.JOIN_ERROR, roomName, e && e.message]);
           });

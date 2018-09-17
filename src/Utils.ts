@@ -15,6 +15,31 @@ export function registerGracefulShutdown(callback) {
     process.once(signal, () => callback(signal)));
 }
 
+export function retry(
+  cb: Function,
+  maxRetries: number = 3,
+  retries: number = 0,
+  errorWhiteList: any[] = [],
+) {
+  return new Promise((resolve, reject) => {
+    cb()
+      .then(resolve)
+      .catch((e) => {
+        if (
+          errorWhiteList.indexOf(e.constructor) === -1 &&
+          retries++ < maxRetries
+        ) {
+          retry(cb, maxRetries, retries, errorWhiteList).
+            then(resolve).
+            catch((e2) => reject(e2));
+
+        } else {
+          reject(e);
+        }
+      });
+  });
+}
+
 export class Deferred<T= any> {
   public promise: Promise<T>;
 
