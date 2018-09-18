@@ -3,7 +3,7 @@ Looking for help? Post on the forum instead: http://discuss.colyseus.io
 -->
 
 Your issue may already be reported!
-Please search on the [issue track](../) before creating one.
+Please search on the [issue tracker](../) before creating one.
 
 ## Steps to Reproduce (for bugs)
 <!--- Provide a link to a live example, or an unambiguous set of steps to -->
@@ -21,7 +21,5 @@ Please search on the [issue track](../) before creating one.
 <!--- Include as many relevant details about the environment you experienced the bug in -->
 * Colyseus Version:
 * Node.js Version:
-* Browser Name and version:
-* Unity Version:
-* Operating System and version (desktop or mobile):
+* Operating System and version:
 * Link to your project:
