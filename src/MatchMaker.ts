@@ -1,10 +1,7 @@
-import * as EventEmitter from 'events';
-import * as msgpack from 'notepack.io';
-
-import { merge, registerGracefulShutdown, spliceOne } from './Utils';
+import { merge } from './Utils';
 
 import { Client, generateId, isValidId } from './index';
-import { IpcProtocol, Protocol, send } from './Protocol';
+import { IpcProtocol } from './Protocol';
 
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
 import { Room, RoomAvailable, RoomConstructor } from './Room';
@@ -13,6 +10,7 @@ import { LocalPresence } from './presence/LocalPresence';
 import { Presence } from './presence/Presence';
 
 import { debugError, debugMatchMaking } from './Debug';
+import { MatchMakeError } from './Errors';
 
 export type ClientOptions = any;
 
@@ -21,7 +19,9 @@ export interface RoomWithScore {
   score: number;
 }
 
-const PRESENCE_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_TIMEOUT || 8000); // remote room calls timeout
+// remote room call timeouts
+export const REMOTE_ROOM_SHORT_TIMEOUT = 200;
+export const REMOTE_ROOM_LARGE_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_TIMEOUT || 8000);
 
 export class MatchMaker {
   public handlers: {[id: string]: RegisteredHandler} = {};
@@ -38,7 +38,6 @@ export class MatchMaker {
   public async connectToRoom(client: Client, roomId: string) {
     const room = this.localRooms[roomId];
     const clientOptions = client.options;
-    const auth = client.auth;
 
     // assign sessionId to socket connection.
     client.sessionId = await this.presence.get(`${roomId}:${client.id}`);
@@ -104,21 +103,22 @@ export class MatchMaker {
     }
 
     if (!hasHandler && !isValidId(roomToJoin)) {
-      throw new Error('join_request_fail');
+      throw new MatchMakeError('join_request_fail');
     }
 
     if (clientOptions.sessionId) {
-      roomId = await this.presence.get(clientOptions.sessionId);
-      isReconnect = true;
+      isReconnect = await this.presence.get(clientOptions.sessionId);
+      if (isReconnect) {
+        roomId = isReconnect as any;
+      }
     }
 
     if (!roomId || !clientOptions.sessionId) {
       clientOptions.sessionId = generateId();
       isReconnect = false;
 
-      // prevent race-conditions
-      // creating rooms when multiple clients request to create a room simultaneously,
-      // we need to wait for the first room to be created to prevent creating multiple rooms
+      // when multiple clients request to create a room simultaneously, we need
+      // to wait for the first room to be created to prevent creating multiple of them
       await this.awaitRoomAvailable(roomToJoin);
 
       // check if there's an existing room with provided name available to join
@@ -147,13 +147,18 @@ export class MatchMaker {
       }]);
 
     } else {
-      throw new Error('join_request_fail');
+      throw new MatchMakeError(`Failed to join invalid room "${roomToJoin}"`);
     }
 
     return roomId;
   }
 
-  public async remoteRoomCall(roomId: string, method: string, args?: any[], rejectionTimeout = PRESENCE_TIMEOUT) {
+  public async remoteRoomCall(
+    roomId: string,
+    method: string,
+    args?: any[],
+    rejectionTimeout = REMOTE_ROOM_SHORT_TIMEOUT,
+  ) {
     const room = this.localRooms[roomId];
 
     if (!room) {
@@ -271,7 +276,9 @@ export class MatchMaker {
 
     } else {
       (room as any)._dispose();
-      return undefined;
+
+      throw new MatchMakeError(`Failed to auto-create room "${roomName}" during ` +
+        `join request using options "${JSON.stringify(clientOptions)}"`);
     }
   }
 
@@ -361,7 +368,7 @@ export class MatchMaker {
 
     await Promise.all(roomIds.map(async (roomId) => {
       try {
-        await this.remoteRoomCall(roomId, 'roomId', undefined, 100);
+        await this.remoteRoomCall(roomId, 'roomId');
 
       } catch (e) {
         debugMatchMaking(`cleaning up stale room '${roomName}' (${roomId})`);

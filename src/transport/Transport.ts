@@ -5,8 +5,10 @@ import * as https from "https";
 import { Client, isValidId } from '..';
 import { Protocol, decode, send } from "../Protocol";
 import { MatchMaker } from '../MatchMaker';
+import { MatchMakeError } from './../Errors';
 
 import { debugError } from './../Debug';
+import { retry } from "../Utils";
 
 export abstract class Transport {
     protected server: net.Server | http.Server | https.Server;
@@ -35,9 +37,18 @@ export abstract class Transport {
                 send(client, [Protocol.JOIN_ERROR, roomName, `Error: no available handler for "${roomName}"`]);
 
             } else {
-                this.matchMaker.onJoinRoomRequest(client, roomName, joinOptions).
-                    then((roomId: string) => send(client, [Protocol.JOIN_ROOM, roomId, joinOptions.requestId])).
-                    catch((e) => {
+                //
+                // As a room might stop responding during the matchmaking process, due to it being disposed.
+                // The last step of the matchmaking will make sure a seat will be reserved for this client
+                // If `onJoinRoomRequest` can't make it until the very last step, a retry is necessary.
+                //
+                retry(() => {
+                    return this.matchMaker.onJoinRoomRequest(client, roomName, joinOptions);
+                }, 3, 0, [MatchMakeError]).
+                    then((roomId) => {
+                        send(client, [Protocol.JOIN_ROOM, roomId, joinOptions.requestId]);
+
+                    }).catch((e) => {
                         debugError(e.stack || e);
                         send(client, [Protocol.JOIN_ERROR, roomName, e && e.message]);
                     });
@@ -54,9 +65,7 @@ export abstract class Transport {
         } else {
             debugError(`MatchMaking couldn\'t process message: ${message}`);
         }
-
     }
-
 }
 
 export { TCPTransport } from "./TCPTransport";

@@ -14,7 +14,7 @@ import { Server } from "../src/Server";
 import { ChatRoom } from "./ChatRoom";
 import { RedisPresence } from './../src/presence/RedisPresence';
 
-const port = Number(process.env.PORT || "2567");
+const port = Number(process.env.PORT || 2657);
 const endpoint = "localhost";
 
 const app = express();

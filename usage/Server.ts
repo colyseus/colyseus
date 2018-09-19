@@ -1,12 +1,12 @@
 import * as http from "http";
 import * as express from "express";
 import * as bodyParser from "body-parser";
-import * as WebSocket from "uws";
+// import * as WebSocket from "uws";
 
 import { Server, RedisPresence, MemsharedPresence } from "../src";
 import { ChatRoom } from "./ChatRoom";
 
-const port = Number(process.env.PORT || 2567);
+const port = Number(process.env.PORT || 2657);
 const endpoint = "localhost";
 
 const app = express();
@@ -15,8 +15,7 @@ app.use(bodyParser.json());
 // Create HTTP & WebSocket servers
 const server = http.createServer(app);
 const gameServer = new Server({
-  // presence: new RedisPresence(),
-  engine: WebSocket.Server,
+  // engine: WebSocket.Server,
   server: server
 });
 

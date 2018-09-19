@@ -1,14 +1,15 @@
 import * as net from "net";
 
-import { Client, isValidId, generateId } from '../';
+import { isValidId, generateId } from '../';
 import { Protocol, send, decode } from "../Protocol";
 import { Transport } from './Transport';
 import { MatchMaker } from './../MatchMaker';
+import { ServerOptions } from './../Server';
 
 import { debugError } from './../Debug';
 
 export class TCPTransport extends Transport {
-    constructor (matchMaker: MatchMaker, options: any = {}) {
+    constructor (matchMaker: MatchMaker, options: ServerOptions = {}) {
         super(matchMaker);
 
         this.server = net.createServer();

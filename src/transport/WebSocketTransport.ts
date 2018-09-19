@@ -6,21 +6,24 @@ import { Client, Protocol, generateId } from '..';
 
 import { Transport } from './Transport';
 import { parseQueryString } from '../Utils';
-import { MatchMaker } from '../MatchMaker';
+import { MatchMaker, REMOTE_ROOM_LARGE_TIMEOUT } from '../MatchMaker';
 import { send, decode } from '../Protocol';
+import { ServerOptions } from './../Server';
 
 import { debugError } from './../Debug';
 
-const PING_INTERVAL = 20 * 1000; // 20 seconds for verifying ping.
 function noop() {/* tslint:disable:no-empty */}
 function heartbeat() { this.pingCount = 0; }
 
 export class WebSocketTransport extends Transport {
     protected wss: WebSocket.Server;
-    protected pingInterval: NodeJS.Timer;
 
-    constructor (matchMaker: MatchMaker, options: any = {}, engine: any) {
+    protected pingInterval: NodeJS.Timer;
+    protected pingTimeout: number;
+
+    constructor (matchMaker: MatchMaker, options: ServerOptions = {}, engine: any) {
         super(matchMaker);
+        this.pingTimeout = options.pingTimeout || 1500;
 
         const customVerifyClient: WebSocket.VerifyClientCallbackAsync = options.verifyClient;
         options.verifyClient = (info, next) => {
@@ -44,14 +47,14 @@ export class WebSocketTransport extends Transport {
                 //
                 // if client hasn't responded after the interval, terminate its connection.
                 //
-                if (client.pingCount >= 3) {
+                if (client.pingCount >= 2) {
                     return client.terminate();
                 }
 
                 client.pingCount++;
                 client.ping(noop);
             });
-        }, PING_INTERVAL);
+        }, this.pingTimeout);
     }
 
     public listen(port: number, hostname?: string, backlog?: number, listeningListener?: Function) {
@@ -77,21 +80,42 @@ export class WebSocketTransport extends Transport {
         req.options = query;
 
         if (req.roomId) {
-            const isLocked = await this.matchMaker.remoteRoomCall(req.roomId, 'locked');
+            try {
+                // TODO: refactor me. this piece of code is repeated on MatchMaker class.
+                const hasReservedSeat = query.sessionId && await this.matchMaker.remoteRoomCall(
+                    req.roomId,
+                    'hasReservedSeat',
+                    [query.sessionId],
+                );
 
-            if (isLocked) {
-                return next(false, Protocol.WS_TOO_MANY_CLIENTS, 'maxClients reached.');
-            }
+                if (!hasReservedSeat) {
+                    const isLocked = await this.matchMaker.remoteRoomCall(req.roomId, 'locked');
 
-            // verify client from room scope.
-            this.matchMaker.remoteRoomCall(req.roomId, 'onAuth', [req.options]).
-                then((result) => {
-                    if (!result) { return next(false); }
+                    if (isLocked) {
+                        return next(false, Protocol.WS_TOO_MANY_CLIENTS, 'maxClients reached.');
+                    }
+                }
 
-                    req.auth = result;
+                // verify client from room scope.
+                const authResult = await this.matchMaker.remoteRoomCall(
+                    req.roomId,
+                    'onAuth',
+                    [req.options],
+                    REMOTE_ROOM_LARGE_TIMEOUT,
+                );
+
+                if (authResult) {
+                    req.auth = authResult;
                     next(true);
-                }).
-                catch((e) => next(false));
+
+                } else {
+                    throw new Error('onAuth failed.');
+                }
+
+            } catch (e) {
+                debugError(e.message + '\n' + e.stack);
+                next(false);
+            }
 
         } else {
             next(true);

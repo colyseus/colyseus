@@ -1,6 +1,4 @@
-import * as http from 'http';
 import * as net from 'net';
-import * as msgpack from 'notepack.io';
 import * as WebSocket from 'ws';
 import { ServerOptions as IServerOptions } from 'ws';
 
@@ -10,12 +8,11 @@ import { RegisteredHandler } from './matchmaker/RegisteredHandler';
 import { Presence } from './presence/Presence';
 import { Transport, TCPTransport, WebSocketTransport } from './transport/Transport';
 
-import { Client, generateId, isValidId } from './index';
-import { decode, Protocol, send } from './Protocol';
-import { Room, RoomConstructor } from './Room';
+import { RoomConstructor } from './Room';
 import { registerGracefulShutdown } from './Utils';
 
 export type ServerOptions = IServerOptions & {
+  pingTimeout?: number,
   verifyClient?: WebSocket.VerifyClientCallbackAsync
   presence?: any,
   engine?: any,

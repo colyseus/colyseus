@@ -24,12 +24,16 @@ export class Client extends EventEmitter {
     this.messages.push(message);
   }
 
+  getMessageAt(index: number) {
+    return msgpack.decode(this.messages[index]);
+  }
+
   get lastMessage () {
-    return msgpack.decode(this.messages[ this.messages.length - 1 ]);
+    return this.getMessageAt(this.messages.length - 1);
   }
 
   close () {
-    // this.emit('close');
+    this.emit('close');
   }
 
 }
@@ -42,6 +46,10 @@ export function createDummyClient (options?: any): any {
   let client = new Client(shortid.generate());
   (<any>client).options = options;
   return client;
+}
+
+export function awaitForTimeout(ms: number) {
+  return new Promise((resolve, reject) => setTimeout(resolve, ms));
 }
 
 export class DummyRoom extends Room {
@@ -111,6 +119,19 @@ export class DummyRoomWithTimeline extends Room {
 export class RoomVerifyClient extends DummyRoom {
   patchRate = 5000;
   onJoin () {}
+}
+
+export class RoomWithAsync extends DummyRoom {
+  async onAuth() {
+    await awaitForTimeout(200);
+    return true;
+  }
+
+  onJoin () {}
+
+  async onLeave() {
+    await awaitForTimeout(200);
+  }
 }
 
 export class RoomVerifyClientWithLock extends DummyRoom {

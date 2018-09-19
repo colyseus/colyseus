@@ -14,6 +14,15 @@ import {
 } from "./utils/mock";
 
 describe('Room', function() {
+  let clock: sinon.SinonFakeTimers;
+
+  beforeEach(() => {
+    clock = sinon.useFakeTimers();
+  });
+
+  afterEach(() => {
+    clock.restore()
+  });
 
   describe('#constructor', function() {
 
@@ -60,18 +69,20 @@ describe('Room', function() {
     });
 
     it('should cleanup/dispose when all clients disconnect', function(done) {
-      var room = new DummyRoom();
-      var client = createDummyClient();
+      const room = new DummyRoom();
+      const client = createDummyClient();
 
       (<any>room)._onJoin(client);
-      assert.ok((<any>room)._patchInterval._idleTimeout > 0);
+      assert.ok((<any>room)._patchInterval !== undefined);
 
       room.on('dispose', function() {;
-        assert.ok((<any>room)._patchInterval._idleTimeout === -1);
+        assert.ok((<any>room)._patchInterval === undefined);
         done();
       });
 
       (<any>room)._onLeave(client);
+
+      clock.tick((room as any).seatReservationTime * 1000 + 1);
     });
   });
 
@@ -79,16 +90,14 @@ describe('Room', function() {
     it('should set default "patch" interval', function() {
       var room = new DummyRoom();
       assert.equal("object", typeof((<any>room)._patchInterval));
-      assert.equal(1000 / 20, (<any>room)._patchInterval._idleTimeout, "default patch rate should be 20");
+      assert.equal(1000 / 20, room.patchRate, "default patch rate should be 20");
     });
 
     it('should disable "patch" interval', function() {
       var room = new DummyRoom();
 
       room.setPatchRate(null);
-
-      assert.equal("object", typeof ((<any>room)._patchInterval));
-      assert.equal(-1, (<any>room)._patchInterval._idleTimeout, "patch rate should be disabled; set to -1");
+      assert.equal(undefined, (<any>room)._patchInterval, "patch rate should be disabled");
     });
   });
 
@@ -256,8 +265,6 @@ describe('Room', function() {
     it("should allow asynchronous disconnects", (done) => {
       let room = new DummyRoom();
 
-      let clock = sinon.useFakeTimers();
-
       // connect 10 clients
       let client1 = createDummyClient();
       (<any>room)._onJoin(client1, {});
@@ -278,7 +285,6 @@ describe('Room', function() {
 
       // fulfil the test
       clock.tick(1);
-      clock.restore();
       done();
     });
 
@@ -289,8 +295,6 @@ describe('Room', function() {
     matchMaker.registerHandler('reconnect', DummyRoom);
 
     it("should fail waiting same sessionId for reconnection", (done) => {
-      const clock = sinon.useFakeTimers();
-
       const client = createDummyClient({});
       matchMaker.onJoinRoomRequest(client, 'reconnect', {}).
         then((roomId) => {
@@ -314,16 +318,12 @@ describe('Room', function() {
               assert.equal(room.clients.length, 0);
 
               clock.tick(11 * 1000);
-
-              clock.restore();
             });
         });
 
     });
 
     it("should succeed waiting same sessionId for reconnection", async () => {
-      const clock = sinon.useFakeTimers();
-
       const firstClient = createDummyClient({});
       const roomId = await matchMaker.onJoinRoomRequest(firstClient, 'reconnect', {});
 
@@ -356,8 +356,6 @@ describe('Room', function() {
       await matchMaker.connectToRoom(secondClient, roomId);
 
       sinon.assert.calledOnce(reconnectionSpy);
-
-      clock.restore();
     });
 
   });
