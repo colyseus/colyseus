@@ -1,6 +1,3 @@
-import * as http from "http";
-import * as express from "express";
-import * as bodyParser from "body-parser";
 import * as net from "net";
 
 import { Server } from "../src/Server";
