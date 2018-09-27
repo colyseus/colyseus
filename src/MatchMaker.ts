@@ -342,15 +342,7 @@ export class MatchMaker {
       }
 
       const room = this.localRooms[roomId];
-
-      // disable autoDispose temporarily, which allow potentially retrieving a
-      // Promise from user's `onDispose` method.
-      room.autoDispose = false;
-
       promises.push( room.disconnect() );
-      promises.push( (room as any)._dispose() );
-
-      room.emit('dispose');
     }
 
     return Promise.all(promises);

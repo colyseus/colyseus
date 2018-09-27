@@ -1,7 +1,8 @@
-import { EventEmitter } from "events";
 import * as shortid from "shortid";
 import * as msgpack from "notepack.io";
 import * as WebSocket from "ws";
+import { EventEmitter } from "events";
+
 import { Room } from "../../src/Room";
 import { LocalPresence } from './../../src/presence/LocalPresence';
 
@@ -32,14 +33,14 @@ export class Client extends EventEmitter {
     return this.getMessageAt(this.messages.length - 1);
   }
 
-  close () {
-    this.emit('close');
+  close (code?: number) {
+    this.emit('close', code);
   }
 
 }
 
 export function createEmptyClient(): any {
-  return new Client()
+  return new Client();
 }
 
 export function createDummyClient (options?: any): any {
@@ -122,15 +123,23 @@ export class RoomVerifyClient extends DummyRoom {
 }
 
 export class RoomWithAsync extends DummyRoom {
+  static ASYNC_TIMEOUT = 200;
+
+  maxClients = 1;
+
   async onAuth() {
-    await awaitForTimeout(200);
+    await awaitForTimeout(RoomWithAsync.ASYNC_TIMEOUT);
     return true;
   }
 
   onJoin () {}
 
   async onLeave() {
-    await awaitForTimeout(200);
+    await awaitForTimeout(RoomWithAsync.ASYNC_TIMEOUT);
+  }
+
+  async onDispose() {
+    await awaitForTimeout(RoomWithAsync.ASYNC_TIMEOUT);
   }
 }
 

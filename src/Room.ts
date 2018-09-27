@@ -6,7 +6,7 @@ import { createTimeline, Timeline } from '@gamestdio/timeline';
 import Clock from '@gamestdio/timer';
 import { EventEmitter } from 'events';
 
-import { Client } from './index';
+import { Client } from '.';
 import { Presence } from './presence/Presence';
 import { RemoteClient } from './presence/RemoteClient';
 import { decode, Protocol, send, WS_CLOSE_CONSENTED } from './Protocol';
@@ -367,13 +367,17 @@ export abstract class Room<T= any> extends EventEmitter {
   }
 
   protected _disposeIfEmpty() {
-    if (
+    const willDispose = (
       !this._autoDisposeTimeout &&
       this.clients.length === 0 &&
       this.reservedSeats.size === 0
-    ) {
+    );
+
+    if (willDispose) {
       this.emit('dispose');
     }
+
+    return willDispose;
   }
 
   protected _dispose(): Promise<any> {
@@ -490,11 +494,9 @@ export abstract class Room<T= any> extends EventEmitter {
   }
 
   private async _onLeave(client: Client, code?: number): Promise<any> {
-    let userReturnData;
-
     // call abstract 'onLeave' method only if the client has been successfully accepted.
     if (spliceOne(this.clients, this.clients.indexOf(client)) && this.onLeave) {
-      userReturnData = await this.onLeave(client, (code === WS_CLOSE_CONSENTED));
+      await this.onLeave(client, (code === WS_CLOSE_CONSENTED));
     }
 
     this.emit('leave', client);
@@ -505,17 +507,13 @@ export abstract class Room<T= any> extends EventEmitter {
     }
 
     // dispose immediatelly if client reconnection isn't set up.
-    if (this.autoDispose) {
-      this._disposeIfEmpty();
-    }
+    const willDispose = (this.autoDispose && this._disposeIfEmpty());
 
     // unlock if room is available for new connections
-    if (this._maxClientsReached && !this._lockedExplicitly) {
+    if (!willDispose && this._maxClientsReached && !this._lockedExplicitly) {
       this._maxClientsReached = false;
       this.unlock.call(this, true);
     }
-
-    return userReturnData || true;
   }
 
 }
