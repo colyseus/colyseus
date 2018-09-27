@@ -235,8 +235,6 @@ export abstract class Room<T= any> extends EventEmitter {
   }
 
   public disconnect(): Promise<any> {
-    const promises = [];
-
     let i = this.clients.length;
     while (i--) {
       const client = this.clients[i];
@@ -246,11 +244,13 @@ export abstract class Room<T= any> extends EventEmitter {
         reconnection.reject();
 
       } else {
-        promises.push(this._onLeave(client, WS_CLOSE_CONSENTED));
+        client.close(WS_CLOSE_CONSENTED);
       }
     }
 
-    return Promise.all(promises);
+    return new Promise((resolve, reject) => {
+      this.once('dispose', () => resolve());
+    });
   }
 
   protected sendState(client: Client): void {
@@ -396,7 +396,7 @@ export abstract class Room<T= any> extends EventEmitter {
   }
 
   // allow remote clients to trigger events on themselves
-  private _emitOnClient(sessionId, event) {
+  private _emitOnClient(sessionId, event, args?: any) {
     const remoteClient = this.remoteClients[sessionId];
 
     if (!remoteClient) {
@@ -408,7 +408,7 @@ export abstract class Room<T= any> extends EventEmitter {
       remoteClient.emit('message', new Buffer(event));
 
     } else {
-      remoteClient.emit(event);
+      remoteClient.emit(event, args);
     }
   }
 
@@ -484,7 +484,7 @@ export abstract class Room<T= any> extends EventEmitter {
     }
   }
 
-  private async _onLeave(client: Client, code?: any): Promise<any> {
+  private async _onLeave(client: Client, code?: number): Promise<any> {
     let userReturnData;
 
     // call abstract 'onLeave' method only if the client has been successfully accepted.

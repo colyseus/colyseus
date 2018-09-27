@@ -60,7 +60,7 @@ export class MatchMaker {
           client.send(new Buffer(data), { binary: true });
 
         } else if (method === 'close') {
-          client.close(data);
+          client.close(data || undefined);
         }
       });
 
@@ -79,9 +79,9 @@ export class MatchMaker {
       });
 
       // forward 'close' events to room's process
-      client.once('close', (_) => {
+      client.once('close', (code) => {
         this.presence.unsubscribe(remoteSessionSub);
-        this.remoteRoomCall(roomId, '_emitOnClient', [client.sessionId, 'close']);
+        this.remoteRoomCall(roomId, '_emitOnClient', [client.sessionId, 'close', code]);
       });
     }
   }
