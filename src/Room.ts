@@ -85,6 +85,8 @@ export abstract class Room<T= any> extends EventEmitter {
 
     this.presence = presence;
 
+    this.once('dispose', () => this._dispose());
+
     this.setPatchRate(this.patchRate);
   }
 
@@ -365,8 +367,11 @@ export abstract class Room<T= any> extends EventEmitter {
   }
 
   protected _disposeIfEmpty() {
-    if (!this._autoDisposeTimeout && this.clients.length === 0 && this.reservedSeats.size === 0) {
-      this._dispose();
+    if (
+      !this._autoDisposeTimeout &&
+      this.clients.length === 0 &&
+      this.reservedSeats.size === 0
+    ) {
       this.emit('dispose');
     }
   }
