@@ -344,11 +344,10 @@ export abstract class Room<T= any> extends EventEmitter {
     if (allowReconnection) {
       // store reference of the roomId this client is allowed to reconnect to.
       this.presence.setex(client.sessionId, this.roomId, seconds);
+    } 
 
-    } else {
-      this.reservedSeatTimeouts[client.sessionId] = setTimeout(() =>
+    this.reservedSeatTimeouts[client.sessionId] = setTimeout(() =>
         this.reservedSeats.delete(client.sessionId), seconds * 1000);
-    }
 
     this.resetAutoDisposeTimeout(seconds);
   }
