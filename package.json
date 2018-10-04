@@ -42,7 +42,7 @@
     "ws": "^6.0.0"
   },
   "devDependencies": {
-    "@types/debug": "^0.0.30",
+    "@types/debug": "^0.0.31",
     "@types/fossil-delta": "^1.0.0",
     "@types/mocha": "^5.2.0",
     "@types/node": "^10.0.8",
