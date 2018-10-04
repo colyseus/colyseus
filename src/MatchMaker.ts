@@ -514,6 +514,9 @@ export class MatchMaker {
     // remove from alive rooms
     this.presence.srem(`a_${roomName}`, room.roomId);
 
+    // remove concurrency key
+    this.presence.del(this.getHandlerConcurrencyKey(roomName));
+
     // remove from available rooms
     this.clearRoomReferences(room);
 

@@ -321,6 +321,7 @@ export abstract class Room<T= any> extends EventEmitter {
       this.reservedSeats.delete(client.sessionId);
       delete this.reconnections[client.sessionId];
       delete this.reservedSeatTimeouts[client.sessionId];
+      this._disposeIfEmpty();
     };
 
     reconnection.
@@ -368,6 +369,7 @@ export abstract class Room<T= any> extends EventEmitter {
 
   protected _disposeIfEmpty() {
     const willDispose = (
+      this.autoDispose &&
       !this._autoDisposeTimeout &&
       this.clients.length === 0 &&
       this.reservedSeats.size === 0
@@ -507,7 +509,7 @@ export abstract class Room<T= any> extends EventEmitter {
     }
 
     // dispose immediatelly if client reconnection isn't set up.
-    const willDispose = (this.autoDispose && this._disposeIfEmpty());
+    const willDispose = this._disposeIfEmpty();
 
     // unlock if room is available for new connections
     if (!willDispose && this._maxClientsReached && !this._lockedExplicitly) {

@@ -8,7 +8,6 @@
 import * as http from "http";
 import * as express from "express";
 import * as bodyParser from "body-parser";
-import * as WebSocket from "uws";
 
 import { Server } from "../src/Server";
 import { ChatRoom } from "./ChatRoom";
@@ -27,7 +26,6 @@ const gameServer = new Server({
     next(true);
   },
   presence: new RedisPresence(),
-  engine: WebSocket.Server,
   server: server
 });
 

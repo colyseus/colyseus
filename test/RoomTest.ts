@@ -306,6 +306,8 @@ describe('Room', function() {
               assert.fail("this block shouldn't have been reached.");
 
             } catch (e) {
+              assert.ok(!matchMaker.getRoomById(roomId), "room should be disposed after failed allowReconnection");
+
               done();
             }
           }
