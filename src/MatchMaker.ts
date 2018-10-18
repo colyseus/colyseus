@@ -20,8 +20,8 @@ export interface RoomWithScore {
 }
 
 // remote room call timeouts
-export const REMOTE_ROOM_SHORT_TIMEOUT = 200;
-export const REMOTE_ROOM_LARGE_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_TIMEOUT || 8000);
+export const REMOTE_ROOM_SHORT_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_SHORT_TIMEOUT || 200);
+export const REMOTE_ROOM_LARGE_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_LARGE_TIMEOUT || 8000);
 
 export class MatchMaker {
   public handlers: {[id: string]: RegisteredHandler} = {};
