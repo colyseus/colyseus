@@ -1,3 +1,5 @@
+import * as WebSocket from 'ws';
+
 import { merge } from './Utils';
 
 import { Client, generateId, isValidId } from './index';
@@ -57,7 +59,9 @@ export class MatchMaker {
         const [method, data] = message;
 
         if (method === 'send') {
-          client.send(new Buffer(data), { binary: true });
+          if (client.readyState === WebSocket.OPEN) {
+            client.send(new Buffer(data), { binary: true });
+          }
 
         } else if (method === 'close') {
           client.close(data || undefined);
