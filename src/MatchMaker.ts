@@ -1,7 +1,7 @@
 import { merge } from './Utils';
 
 import { Client, generateId, isValidId } from './index';
-import { IpcProtocol } from './Protocol';
+import { IpcProtocol, WS_CLOSE_CONSENTED } from './Protocol';
 
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
 import { Room, RoomAvailable, RoomConstructor } from './Room';
@@ -60,7 +60,7 @@ export class MatchMaker {
           client.send(new Buffer(data), { binary: true });
 
         } else if (method === 'close') {
-          client.close(data || undefined);
+          client.close(WS_CLOSE_CONSENTED, data || undefined);
         }
       });
 
