@@ -1,4 +1,5 @@
 import * as msgpack from 'notepack.io';
+import * as WebSocket from 'ws';
 import { debugError } from './Debug';
 import { Client } from './index';
 
@@ -48,6 +49,8 @@ export function decode(message: any) {
   return message;
 }
 
-export function send(client: Client, message: any[]) {
-  client.send(msgpack.encode(message), { binary: true });
+export function send(client: Client, message: any, encode: boolean = true) {
+  if (client.readyState === WebSocket.OPEN) {
+    client.send((encode && msgpack.encode(message)) || message, { binary: true });
+  }
 }

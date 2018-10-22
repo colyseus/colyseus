@@ -196,9 +196,7 @@ export abstract class Room<T= any> extends EventEmitter {
   }
 
   public send(client: Client, data: any): void {
-    if (client.readyState === WebSocket.OPEN) {
-      send(client, [Protocol.ROOM_DATA, data]);
-    }
+    send(client, [Protocol.ROOM_DATA, data]);
   }
 
   public broadcast(data: any, options?: BroadcastOptions): boolean {
@@ -216,11 +214,8 @@ export abstract class Room<T= any> extends EventEmitter {
     while (numClients--) {
       const client = this.clients[ numClients ];
 
-      if (
-        client.readyState === WebSocket.OPEN &&
-        (!options || options.except !== client)
-      ) {
-        client.send(data, { binary: true }, logError.bind(this));
+      if ((!options || options.except !== client)) {
+        send(client, data, false);
       }
     }
 

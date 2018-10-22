@@ -1,7 +1,8 @@
+import * as WebSocket from 'ws';
 import { merge } from './Utils';
 
 import { Client, generateId, isValidId } from './index';
-import { IpcProtocol } from './Protocol';
+import { IpcProtocol, send } from './Protocol';
 
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
 import { Room, RoomAvailable, RoomConstructor } from './Room';
@@ -47,7 +48,7 @@ export class MatchMaker {
     delete clientOptions.requestId;
     delete client.options;
 
-    if (this.localRooms[roomId]) {
+    if (room) {
       (room as any)._onJoin(client, clientOptions, client.auth);
 
     } else {
@@ -57,7 +58,7 @@ export class MatchMaker {
         const [method, data] = message;
 
         if (method === 'send') {
-          client.send(new Buffer(data), { binary: true });
+          send(client, new Buffer(data), false);
 
         } else if (method === 'close') {
           client.close(data || undefined);
@@ -141,7 +142,7 @@ export class MatchMaker {
 
     if (roomId) {
       // reserve seat for client on selected room
-      this.remoteRoomCall(roomId, '_reserveSeat', [{
+      await this.remoteRoomCall(roomId, '_reserveSeat', [{
         id: client.id,
         sessionId: clientOptions.sessionId,
       }]);
