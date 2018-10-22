@@ -49,7 +49,8 @@ export class Server {
     // "presence" option is not used from now on
     delete options.presence;
 
-    if(options.shutdownProcessOnSignal !== false) {
+    const { shutdownProcessOnSignal = true } = options;
+    if(shutdownProcessOnSignal) {
       registerGracefulShutdown((signal) => {
         this.matchMaker.gracefullyShutdown().
           then(() => this.shutdown()).
