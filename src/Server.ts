@@ -24,6 +24,7 @@ export type ServerOptions = IServerOptions & {
   presence?: any,
   engine?: any,
   ws?: any,
+  shutdownProcessOnSignal?: Boolean,
 };
 
 export class Server {
@@ -48,12 +49,16 @@ export class Server {
     // "presence" option is not used from now on
     delete options.presence;
 
-    registerGracefulShutdown((signal) => {
-      this.matchMaker.gracefullyShutdown().
-        then(() => this.shutdown()).
-        catch((err) => debugError(`error during shutdown: ${err}`)).
-        then(() => process.exit());
-    });
+    if(options.shutdownProcessOnSignal !== false) {
+      registerGracefulShutdown((signal) => {
+        this.matchMaker.gracefullyShutdown().
+          then(() => this.shutdown()).
+          catch((err) => debugError(`error during shutdown: ${err}`)).
+          then(() => {
+            process.exit()
+          });
+      });
+    }
 
     if (options.server) {
       this.attach(options);
