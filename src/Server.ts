@@ -41,7 +41,9 @@ export class Server {
   constructor(options: ServerOptions = {}) {
     this.presence = options.presence;
     this.matchMaker = new MatchMaker(this.presence);
-    this.pingTimeout = options.pingTimeout || 1500;
+    this.pingTimeout = (options.pingTimeout !== undefined)
+      ? options.pingTimeout
+      : 1500;
 
     this.onShutdownCallback = () => Promise.resolve();
 
@@ -86,20 +88,9 @@ export class Server {
 
     this.server.on('connection', this.onConnection);
 
-    // interval to detect broken connections
-    this.pingInterval = setInterval(() => {
-      this.server.clients.forEach((client: Client) => {
-        //
-        // if client hasn't responded after the interval, terminate its connection.
-        //
-        if (client.pingCount >= 2) {
-          return client.terminate();
-        }
-
-        client.pingCount++;
-        client.ping(noop);
-      });
-    }, this.pingTimeout);
+    if (this.pingTimeout > 0) {
+      this.autoTerminateUnresponsiveClients(this.pingTimeout);
+    }
   }
 
   public listen(port: number, hostname?: string, backlog?: number, listeningListener?: Function) {
@@ -112,6 +103,23 @@ export class Server {
 
   public onShutdown(callback: () => void | Promise<any>) {
     this.onShutdownCallback = callback;
+  }
+
+  protected autoTerminateUnresponsiveClients(pingTimeout: number) {
+      // interval to detect broken connections
+      this.pingInterval = setInterval(() => {
+        this.server.clients.forEach((client: Client) => {
+          //
+          // if client hasn't responded after the interval, terminate its connection.
+          //
+          if (client.pingCount >= 2) {
+            return client.terminate();
+          }
+
+          client.pingCount++;
+          client.ping(noop);
+        });
+      }, pingTimeout);
   }
 
   protected verifyClient = async (info, next) => {
