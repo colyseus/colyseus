@@ -20,9 +20,7 @@ describe('Room', function() {
     clock = sinon.useFakeTimers();
   });
 
-  afterEach(() => {
-    clock.restore()
-  });
+  afterEach(() => clock.restore());
 
   describe('#constructor', function() {
 
@@ -294,22 +292,25 @@ describe('Room', function() {
     const matchMaker = new MatchMaker();
     matchMaker.registerHandler('reconnect', DummyRoom);
 
-    it("should fail waiting same sessionId for reconnection", (done) => {
-      const client = createDummyClient({});
+    it("should fail waiting same sessionId for reconnection", function (done) {
+      // do not use fake timers along with async/await internal functions
+      clock.restore();
+      this.timeout(2500);
+
+      const client = createDummyClient();
       matchMaker.onJoinRoomRequest(client, 'reconnect', {}).
         then((roomId) => {
           const room = matchMaker.getRoomById(roomId);
 
-          room.onLeave = async function (client) {
-            try {
-              await this.allowReconnection(client, 10);
+          room.onLeave = function (client) {
+            this.allowReconnection(client, 2).then(() => {
               assert.fail("this block shouldn't have been reached.");
 
-            } catch (e) {
+            }).catch((e) => {
               assert.ok(!matchMaker.getRoomById(roomId), "room should be disposed after failed allowReconnection");
 
               done();
-            }
+            })
           }
 
           matchMaker.connectToRoom(client, roomId).
@@ -318,15 +319,15 @@ describe('Room', function() {
 
               client.emit("close");
               assert.equal(room.clients.length, 0);
-
-              clock.tick(11 * 1000);
             });
         });
 
     });
 
     it("should succeed waiting same sessionId for reconnection", async () => {
-      const firstClient = createDummyClient({});
+      const tick = async (ms) => clock.tick(ms);
+
+      const firstClient = createDummyClient();
       const roomId = await matchMaker.onJoinRoomRequest(firstClient, 'reconnect', {});
 
       const room = matchMaker.getRoomById(roomId);
@@ -348,15 +349,18 @@ describe('Room', function() {
       firstClient.emit("close");
 
       assert.equal(room.clients.length, 0);
-      clock.tick(5 * 1000);
+      await tick(5 * 1000);
 
-      const secondClient = createDummyClient({});
+      const secondClient = createDummyClient();
       const secondRoomId = await matchMaker.onJoinRoomRequest(secondClient, 'reconnect', {
         sessionId: firstClient.sessionId
       });
       assert.equal(roomId, secondRoomId);
       await matchMaker.connectToRoom(secondClient, roomId);
 
+      // force async functions to be called along with fake timers
+      await tick(1);
+      await tick(1);
       sinon.assert.calledOnce(reconnectionSpy);
     });
 

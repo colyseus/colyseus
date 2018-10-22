@@ -21,6 +21,7 @@ export class RemoteClient extends EventEmitter {
         this.roomId = roomId;
 
         this.presence = presence;
+        this.once('close', (code) => this.close(code));
     }
 
     public send(buffer: Buffer) {

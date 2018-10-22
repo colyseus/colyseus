@@ -302,21 +302,21 @@ export abstract class Room<T= any> extends EventEmitter {
     return this.broadcast( msgpack.encode([ Protocol.ROOM_STATE_PATCH, patches ]) );
   }
 
-  protected allowReconnection(client: Client, seconds: number = 15): Promise<Client> {
-    this._reserveSeat(client, seconds, true);
+  protected async allowReconnection(client: Client, seconds: number = 15): Promise<Client> {
+    await this._reserveSeat(client, seconds, true);
 
     // keep reconnection reference in case the user reconnects into this room.
     const reconnection = new Deferred();
     this.reconnections[client.sessionId] = reconnection;
 
     // expire seat reservation after timeout
-    this.reservedSeatTimeouts[client.sessionId] = setTimeout(() => reconnection.reject(false), seconds * 1000);
+    this.reservedSeatTimeouts[client.sessionId] = setTimeout(() =>
+      reconnection.reject(false), seconds * 1000);
 
     const cleanup = () => {
       this.reservedSeats.delete(client.sessionId);
       delete this.reconnections[client.sessionId];
       delete this.reservedSeatTimeouts[client.sessionId];
-      this._disposeIfEmpty();
     };
 
     reconnection.
@@ -324,29 +324,32 @@ export abstract class Room<T= any> extends EventEmitter {
         clearTimeout(this.reservedSeatTimeouts[client.sessionId]);
         cleanup();
       }).
-      catch(cleanup);
+      catch(() => {
+        cleanup();
+        this._disposeIfEmpty();
+      });
 
-    return reconnection.promise;
+    return await reconnection.promise;
   }
 
-  protected _reserveSeat(
+  protected async _reserveSeat(
     client: Client,
     seconds: number = this.seatReservationTime,
     allowReconnection: boolean = false,
   ) {
-    this.presence.setex(`${this.roomId}:${client.id}`, client.sessionId, seconds);
     this.reservedSeats.add(client.sessionId);
+    await this.presence.setex(`${this.roomId}:${client.id}`, client.sessionId, seconds);
 
     if (allowReconnection) {
       // store reference of the roomId this client is allowed to reconnect to.
-      this.presence.setex(client.sessionId, this.roomId, seconds);
+      await this.presence.setex(client.sessionId, this.roomId, seconds);
 
     } else {
       this.reservedSeatTimeouts[client.sessionId] = setTimeout(() =>
         this.reservedSeats.delete(client.sessionId), seconds * 1000);
-    }
 
-    this.resetAutoDisposeTimeout(seconds);
+      this.resetAutoDisposeTimeout(seconds);
+    }
   }
 
   protected resetAutoDisposeTimeout(timeoutInSeconds: number) {
@@ -365,7 +368,7 @@ export abstract class Room<T= any> extends EventEmitter {
   protected _disposeIfEmpty() {
     const willDispose = (
       this.autoDispose &&
-      !this._autoDisposeTimeout &&
+      this._autoDisposeTimeout === undefined &&
       this.clients.length === 0 &&
       this.reservedSeats.size === 0
     );

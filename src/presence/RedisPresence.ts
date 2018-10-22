@@ -66,7 +66,8 @@ export class RedisPresence implements Presence {
     }
 
     public setex(key: string, value: string, seconds: number) {
-        this.pub.setex(key, seconds, value);
+      return new Promise((resolve) =>
+        this.pub.setex(key, seconds, value, resolve));
     }
 
     public async get(key: string) {

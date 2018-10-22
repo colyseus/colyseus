@@ -16,7 +16,7 @@ export class Client extends EventEmitter {
     super();
     this.id = id || null;
 
-    this.on('close', () => {
+    this.once('close', () => {
       this.readyState = WebSocket.CLOSED
     });
   }
@@ -43,13 +43,13 @@ export function createEmptyClient(): any {
   return new Client();
 }
 
-export function createDummyClient (options?: any): any {
+export function createDummyClient (options: any = {}): any {
   let client = new Client(shortid.generate());
   (<any>client).options = options;
   return client;
 }
 
-export function awaitForTimeout(ms: number) {
+export function awaitForTimeout(ms: number = 200) {
   return new Promise((resolve, reject) => setTimeout(resolve, ms));
 }
 

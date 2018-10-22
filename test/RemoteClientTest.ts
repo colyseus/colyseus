@@ -1,0 +1,90 @@
+import * as assert from 'assert';
+import * as sinon from 'sinon';
+
+import { MatchMaker, REMOTE_ROOM_SHORT_TIMEOUT } from "../src/MatchMaker";
+import { RegisteredHandler } from './../src/matchmaker/RegisteredHandler';
+import { Room } from "../src/Room";
+
+import { generateId, Protocol, isValidId } from "../src";
+import { createDummyClient, DummyRoom, RoomVerifyClient, Client, RoomVerifyClientWithLock, RoomWithAsync, awaitForTimeout } from "./utils/mock";
+import { RedisPresence } from "../src/presence/RedisPresence";
+import { WS_CLOSE_CONSENTED } from '../src/Protocol';
+
+describe('RemoteClient', function() {
+  let matchMaker1: MatchMaker;
+  let matchMaker2: MatchMaker;
+  // let clock: sinon.SinonFakeTimers;
+
+  function registerHandlers (matchMaker: MatchMaker) {
+    matchMaker.registerHandler('room', DummyRoom);
+    matchMaker.registerHandler('room_two', DummyRoom);
+    matchMaker.registerHandler('dummy_room', DummyRoom);
+    matchMaker.registerHandler('room_async', RoomWithAsync);
+  }
+
+  async function connectClientToRoom(matchMaker: MatchMaker, client: any, roomName: string, options: any = {}) {
+    const roomId = await matchMaker.onJoinRoomRequest(client, roomName, options);
+    const room = matchMaker.getRoomById(roomId);
+    await matchMaker.connectToRoom(client, roomId);
+    return roomId;
+  }
+
+  before(() => {
+    // const redis = new RedisPresence();
+    // redis.sub.flushdb();
+  });
+
+  after(async function () {
+    this.timeout(6000);
+
+    await matchMaker1.gracefullyShutdown();
+    await matchMaker2.gracefullyShutdown();
+  });
+
+  beforeEach(() => {
+    matchMaker1 = new MatchMaker(new RedisPresence());
+    matchMaker2 = new MatchMaker(new RedisPresence());
+
+    registerHandlers(matchMaker1);
+    registerHandlers(matchMaker2);
+  });
+
+  // afterEach(() => clock.restore());
+
+  describe("Inter-process communication", () => {
+
+    it('should register RemoteClient on room owner\'s MatchMaker', async () => {
+      const client1 = createDummyClient();
+      const roomId = await connectClientToRoom(matchMaker1, client1, 'room');
+      const room = matchMaker1.getRoomById(roomId);
+
+      const client2 = createDummyClient();
+      await connectClientToRoom(matchMaker2, client2, 'room');
+
+      assert.ok(client1.sessionId);
+      assert.ok(client2.sessionId);
+
+      assert.equal(room.clients.length, 2);
+    });
+
+    it('should emit "close" event when RemoteClient disconnects', async () => {
+      const client1 = createDummyClient();
+      const roomId = await connectClientToRoom(matchMaker1, client1, 'room_two');
+      const room = matchMaker1.getRoomById(roomId);
+
+      const client2 = createDummyClient();
+      await connectClientToRoom(matchMaker2, client2, 'room_two');
+
+      const client3 = createDummyClient();
+      await connectClientToRoom(matchMaker2, client3, 'room_two');
+
+      client2.emit('close');
+      client3.emit('close');
+
+      await awaitForTimeout();
+      assert.equal(room.clients.length, 1);
+    });
+  });
+
+});
+
