@@ -24,7 +24,7 @@ export type ServerOptions = IServerOptions & {
   presence?: any,
   engine?: any,
   ws?: any,
-  shutdownProcessOnSignal?: Boolean,
+  shutdownProcessOnSignal?: boolean,
 };
 
 export class Server {
@@ -50,13 +50,13 @@ export class Server {
     delete options.presence;
 
     const { shutdownProcessOnSignal = true } = options;
-    if(shutdownProcessOnSignal) {
+    if (shutdownProcessOnSignal) {
       registerGracefulShutdown((signal) => {
         this.matchMaker.gracefullyShutdown().
           then(() => this.shutdown()).
           catch((err) => debugError(`error during shutdown: ${err}`)).
           then(() => {
-            process.exit()
+            process.exit();
           });
       });
     }
