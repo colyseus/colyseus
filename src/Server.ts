@@ -24,6 +24,7 @@ export type ServerOptions = IServerOptions & {
   presence?: any,
   engine?: any,
   ws?: any,
+  gracefullyShutdown?: boolean,
 };
 
 export class Server {
@@ -36,8 +37,6 @@ export class Server {
   protected pingInterval: NodeJS.Timer;
   protected pingTimeout: number;
 
-  protected onShutdownCallback: () => void | Promise<any>;
-
   constructor(options: ServerOptions = {}) {
     this.presence = options.presence;
     this.matchMaker = new MatchMaker(this.presence);
@@ -45,17 +44,12 @@ export class Server {
       ? options.pingTimeout
       : 1500;
 
-    this.onShutdownCallback = () => Promise.resolve();
-
     // "presence" option is not used from now on
     delete options.presence;
 
-    registerGracefulShutdown((signal) => {
-      this.matchMaker.gracefullyShutdown().
-        then(() => this.shutdown()).
-        catch((err) => debugError(`error during shutdown: ${err}`)).
-        then(() => process.exit());
-    });
+    if (!!options.gracefullyShutdown) {
+      registerGracefulShutdown((signal) => this.gracefullyShutdown());
+    }
 
     if (options.server) {
       this.attach(options);
@@ -97,13 +91,28 @@ export class Server {
     this.httpServer.listen(port, hostname, backlog, listeningListener);
   }
 
-  public register(name: string, handler: RoomConstructor, options: any = {}): RegisteredHandler {
+  public async register(name: string, handler: RoomConstructor, options: any = {}): Promise<RegisteredHandler> {
     return this.matchMaker.registerHandler(name, handler, options);
+  }
+
+  public gracefullyShutdown(exit: boolean = true) {
+    this.matchMaker.gracefullyShutdown().
+      then(() => {
+        clearInterval(this.pingInterval);
+        return this.onShutdownCallback();
+      }).
+      catch((err) => debugError(`error during shutdown: ${err}`)).
+      then(() => {
+        if (exit) { process.exit(); }
+      });
   }
 
   public onShutdown(callback: () => void | Promise<any>) {
     this.onShutdownCallback = callback;
   }
+
+  protected onShutdownCallback: () => void | Promise<any> =
+    () => Promise.resolve()
 
   protected autoTerminateUnresponsiveClients(pingTimeout: number) {
       // interval to detect broken connections
@@ -258,11 +267,6 @@ export class Server {
       debugError(`MatchMaking couldn\'t process message: ${message}`);
     }
 
-  }
-
-  protected shutdown()  {
-    clearInterval(this.pingInterval);
-    return this.onShutdownCallback();
   }
 
 }
