@@ -1,14 +1,9 @@
 import * as assert from 'assert';
-import * as sinon from 'sinon';
 
-import { MatchMaker, REMOTE_ROOM_SHORT_TIMEOUT } from "../src/MatchMaker";
-import { RegisteredHandler } from './../src/matchmaker/RegisteredHandler';
-import { Room } from "../src/Room";
+import { MatchMaker } from "../src/MatchMaker";
 
-import { generateId, Protocol, isValidId } from "../src";
 import { createDummyClient, DummyRoom, RoomVerifyClient, Client, RoomVerifyClientWithLock, RoomWithAsync, awaitForTimeout } from "./utils/mock";
 import { RedisPresence } from "../src/presence/RedisPresence";
-import { WS_CLOSE_CONSENTED } from '../src/Protocol';
 
 describe('RemoteClient', function() {
   let matchMaker1: MatchMaker;
