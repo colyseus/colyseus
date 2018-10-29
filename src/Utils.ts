@@ -9,8 +9,6 @@ import { debugError } from './Debug';
 const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM', 'SIGUSR2'];
 
 export function registerGracefulShutdown(callback) {
-  const calledOnce = false;
-
   signals.forEach((signal) =>
     process.once(signal, () => callback(signal)));
 }

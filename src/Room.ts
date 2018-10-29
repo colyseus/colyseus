@@ -1,6 +1,5 @@
 import * as fossilDelta from 'fossil-delta';
 import * as msgpack from 'notepack.io';
-import * as WebSocket from 'ws';
 
 import { createTimeline, Timeline } from '@gamestdio/timeline';
 import Clock from '@gamestdio/timer';
