@@ -17,13 +17,12 @@ process.on('unhandledRejection', (reason, promise) => {
 
 describe('MatchMaker', function() {
   let matchMaker;
-  let roomRegisteredHandler: RegisteredHandler;
   let clock: sinon.SinonFakeTimers;
 
   beforeEach(() => {
     matchMaker = new MatchMaker();
 
-    roomRegisteredHandler = matchMaker.registerHandler('room', DummyRoom);
+    matchMaker.registerHandler('room', DummyRoom);
     matchMaker.registerHandler('dummy_room', DummyRoom);
     matchMaker.registerHandler('room_with_default_options', DummyRoom, { level: 1 });
     matchMaker.registerHandler('room_verify_client', RoomVerifyClient);

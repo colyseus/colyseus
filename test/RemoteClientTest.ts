@@ -10,16 +10,15 @@ describe('RemoteClient', function() {
   let matchMaker2: MatchMaker;
   // let clock: sinon.SinonFakeTimers;
 
-  function registerHandlers (matchMaker: MatchMaker) {
-    matchMaker.registerHandler('room', DummyRoom);
-    matchMaker.registerHandler('room_two', DummyRoom);
-    matchMaker.registerHandler('dummy_room', DummyRoom);
-    matchMaker.registerHandler('room_async', RoomWithAsync);
+  async function registerHandlers (matchMaker: MatchMaker) {
+    await matchMaker.registerHandler('room', DummyRoom);
+    await matchMaker.registerHandler('room_two', DummyRoom);
+    await matchMaker.registerHandler('dummy_room', DummyRoom);
+    await matchMaker.registerHandler('room_async', RoomWithAsync);
   }
 
   async function connectClientToRoom(matchMaker: MatchMaker, client: any, roomName: string, options: any = {}) {
     const roomId = await matchMaker.onJoinRoomRequest(client, roomName, options);
-    const room = matchMaker.getRoomById(roomId);
     await matchMaker.connectToRoom(client, roomId);
     return roomId;
   }
@@ -30,18 +29,18 @@ describe('RemoteClient', function() {
   });
 
   after(async function () {
-    this.timeout(6000);
+    this.timeout(1000);
 
     await matchMaker1.gracefullyShutdown();
     await matchMaker2.gracefullyShutdown();
   });
 
-  beforeEach(() => {
+  beforeEach(async function () {
     matchMaker1 = new MatchMaker(new RedisPresence());
     matchMaker2 = new MatchMaker(new RedisPresence());
 
-    registerHandlers(matchMaker1);
-    registerHandlers(matchMaker2);
+    await registerHandlers(matchMaker1);
+    await registerHandlers(matchMaker2);
   });
 
   // afterEach(() => clock.restore());
