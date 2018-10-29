@@ -38,6 +38,8 @@ export class Server {
   protected pingTimeout: number;
 
   constructor(options: ServerOptions = {}) {
+    const { gracefullyShutdown = true } = options;
+
     this.presence = options.presence;
     this.matchMaker = new MatchMaker(this.presence);
     this.pingTimeout = (options.pingTimeout !== undefined)
@@ -47,7 +49,7 @@ export class Server {
     // "presence" option is not used from now on
     delete options.presence;
 
-    if (!!options.gracefullyShutdown) {
+    if (gracefullyShutdown) {
       registerGracefulShutdown((signal) => this.gracefullyShutdown());
     }
 
@@ -96,7 +98,7 @@ export class Server {
   }
 
   public gracefullyShutdown(exit: boolean = true) {
-    this.matchMaker.gracefullyShutdown().
+    return this.matchMaker.gracefullyShutdown().
       then(() => {
         clearInterval(this.pingInterval);
         return this.onShutdownCallback();

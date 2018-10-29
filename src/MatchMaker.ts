@@ -204,8 +204,8 @@ export class MatchMaker {
     }
   }
 
-  public registerHandler(name: string, klass: RoomConstructor, options: any = {}) {
-    this.cleanupStaleRooms(name);
+  public async registerHandler(name: string, klass: RoomConstructor, options: any = {}) {
+    await this.cleanupStaleRooms(name);
 
     const registeredHandler = new RegisteredHandler(klass, options);
 
@@ -328,7 +328,7 @@ export class MatchMaker {
     return this.localRooms[roomId];
   }
 
-  public gracefullyShutdown() {
+  public gracefullyShutdown(): Promise<any> {
     if (this.isGracefullyShuttingDown) {
       return Promise.reject(false);
     }
@@ -354,7 +354,7 @@ export class MatchMaker {
     // clean-up possibly stale room ids
     // (ungraceful shutdowns using Redis can result on stale room ids still on memory.)
     //
-    const roomIds = await this.presence.smembers(roomName);
+    const roomIds = await this.presence.smembers(`a_${roomName}`);
 
     // remove connecting counts
     await this.presence.del(this.getHandlerConcurrencyKey(roomName));
