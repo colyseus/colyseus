@@ -205,11 +205,11 @@ export class MatchMaker {
   }
 
   public async registerHandler(name: string, klass: RoomConstructor, options: any = {}) {
-    await this.cleanupStaleRooms(name);
-
     const registeredHandler = new RegisteredHandler(klass, options);
 
     this.handlers[ name ] = registeredHandler;
+
+    await this.cleanupStaleRooms(name);
 
     return registeredHandler;
   }
