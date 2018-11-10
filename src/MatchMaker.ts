@@ -1,4 +1,3 @@
-import * as WebSocket from 'ws';
 import { merge } from './Utils';
 
 import { Client, generateId, isValidId } from './index';
@@ -123,7 +122,8 @@ export class MatchMaker {
       await this.awaitRoomAvailable(roomToJoin);
 
       // check if there's an existing room with provided name available to join
-      if (hasHandler) {
+      // check if client forces a create, if he does, do not search for available room
+      if (hasHandler && !clientOptions.forceCreate) {
         const bestRoomByScore = (await this.getAvailableRoomByScore(roomToJoin, clientOptions))[0];
         if (bestRoomByScore && bestRoomByScore.roomId) {
           roomId = bestRoomByScore.roomId;
