@@ -76,7 +76,7 @@ export class MatchMaker {
         // compatibility with uws
         if (data instanceof ArrayBuffer) { data = new Buffer(data); }
 
-        this.remoteRoomCall(roomId, '_emitOnClient', [client.sessionId, Array.from(data)]);
+        this.remoteRoomCall(roomId, '_emitOnClient', [client.sessionId, Array.from(data as Buffer)]);
       });
 
       // forward 'close' events to room's process
