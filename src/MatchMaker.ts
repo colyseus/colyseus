@@ -10,7 +10,7 @@ import { Room, RoomAvailable, RoomConstructor } from './Room';
 import { LocalPresence } from './presence/LocalPresence';
 import { Presence } from './presence/Presence';
 
-import { debugError, debugMatchMaking } from './Debug';
+import { debugAndPrintError, debugMatchMaking } from './Debug';
 import { MatchMakeError } from './Errors';
 
 export type ClientOptions = any;
@@ -430,7 +430,7 @@ export class MatchMaker {
           response = room[method].apply(room, args);
 
         } catch (e) {
-          debugError(e.stack || e);
+          debugAndPrintError(e.stack || e);
           return reply([IpcProtocol.ERROR, e.message || e]);
         }
 
@@ -441,7 +441,7 @@ export class MatchMaker {
         response.
           then((result) => reply([IpcProtocol.SUCCESS, result])).
           catch((e) => {
-            debugError(e.stack || e);
+            debugAndPrintError(e.stack || e);
             reply([IpcProtocol.ERROR, e.message || e]);
           });
       });

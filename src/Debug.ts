@@ -3,9 +3,9 @@ import * as debug from 'debug';
 export const debugMatchMaking = debug('colyseus:matchmaking');
 export const debugPatch = debug('colyseus:patch');
 export const debugPatchData = debug('colyseus:patch:data');
+export const debugError = debug('colyseus:errors');
 
-const debugErrors = debug('colyseus:errors');
-export const debugError = (...args: any[]) => {
+export const debugAndPrintError = (...args: any[]) => {
     console.error(...args);
-    debugErrors.apply(debugError, args);
+    debugError.apply(debugError, args);
 };

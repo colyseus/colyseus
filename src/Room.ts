@@ -12,7 +12,7 @@ import { decode, Protocol, send, WS_CLOSE_CONSENTED } from './Protocol';
 import { Deferred, logError, spliceOne } from './Utils';
 
 import * as jsonPatch from 'fast-json-patch'; // this is only used for debugging patches
-import { debugError, debugPatch, debugPatchData } from './Debug';
+import { debugAndPrintError, debugPatch, debugPatchData } from './Debug';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
@@ -408,7 +408,7 @@ export abstract class Room<T= any> extends EventEmitter {
     const remoteClient = this.remoteClients[sessionId];
 
     if (!remoteClient) {
-      debugError(`trying to send event ("${event}") to non-existing remote client (${sessionId})`);
+      debugAndPrintError(`trying to send event ("${event}") to non-existing remote client (${sessionId})`);
       return;
     }
 
@@ -424,7 +424,7 @@ export abstract class Room<T= any> extends EventEmitter {
     message = decode(message);
 
     if (!message) {
-      debugError(`${this.roomName} (${this.roomId}), couldn't decode message: ${message}`);
+      debugAndPrintError(`${this.roomName} (${this.roomId}), couldn't decode message: ${message}`);
       return;
     }
 

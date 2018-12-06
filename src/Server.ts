@@ -4,7 +4,7 @@ import * as parseURL from 'url-parse';
 import * as WebSocket from 'ws';
 import { ServerOptions as IServerOptions } from 'ws';
 
-import { debugError } from './Debug';
+import { debugAndPrintError, debugError } from './Debug';
 import { MatchMaker, REMOTE_ROOM_LARGE_TIMEOUT } from './MatchMaker';
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
 import { Presence } from './presence/Presence';
@@ -103,7 +103,7 @@ export class Server {
         clearInterval(this.pingInterval);
         return this.onShutdownCallback();
       }).
-      catch((err) => debugError(`error during shutdown: ${err}`)).
+      catch((err) => debugAndPrintError(`error during shutdown: ${err}`)).
       then(() => {
         if (exit) { process.exit(); }
       });
@@ -179,7 +179,7 @@ export class Server {
         }
 
       } catch (e) {
-        debugError(e.message + '\n' + e.stack);
+        debugAndPrintError(e.message + '\n' + e.stack);
         next(false);
       }
 
@@ -206,14 +206,14 @@ export class Server {
     client.auth = upgradeReq.auth;
 
     // prevent server crashes if a single client had unexpected error
-    client.on('error', (err) => debugError(err.message + '\n' + err.stack));
+    client.on('error', (err) => debugAndPrintError(err.message + '\n' + err.stack));
     client.on('pong', heartbeat);
 
     const roomId = upgradeReq.roomId;
     if (roomId) {
       this.matchMaker.connectToRoom(client, upgradeReq.roomId).
         catch((e) => {
-          debugError(e.stack || e);
+          debugAndPrintError(e.stack || e);
           send(client, [Protocol.JOIN_ERROR, roomId, e && e.message]);
         });
 
@@ -226,7 +226,7 @@ export class Server {
     message = decode(message);
 
     if (!message) {
-      debugError(`couldn't decode message: ${message}`);
+      debugAndPrintError(`couldn't decode message: ${message}`);
       return;
     }
 
@@ -252,7 +252,7 @@ export class Server {
             send(client, [Protocol.JOIN_ROOM, roomId, joinOptions.requestId]);
 
           }).catch((e) => {
-            debugError(e.stack || e);
+            debugError(`MatchMakeError: ${message}\n${e.stack}`);
             send(client, [Protocol.JOIN_ERROR, roomName, e && e.message]);
           });
       }
@@ -263,10 +263,10 @@ export class Server {
 
       this.matchMaker.getAvailableRooms(roomName).
         then((rooms) => send(client, [Protocol.ROOM_LIST, requestId, rooms])).
-        catch((e) => debugError(e.stack || e));
+        catch((e) => debugAndPrintError(e.stack || e));
 
     } else {
-      debugError(`MatchMaking couldn\'t process message: ${message}`);
+      debugAndPrintError(`MatchMaking couldn\'t process message: ${message}`);
     }
 
   }

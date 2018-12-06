@@ -1,6 +1,6 @@
 import * as msgpack from 'notepack.io';
 import * as WebSocket from 'ws';
-import { debugError } from './Debug';
+import { debugAndPrintError } from './Debug';
 import { Client } from './index';
 
 export const WS_CLOSE_CONSENTED = 4000;
@@ -42,7 +42,7 @@ export function decode(message: any) {
     message = msgpack.decode(Buffer.from(message));
 
   } catch (e) {
-    debugError(`message couldn't be decoded: ${message}\n${e.stack}`);
+    debugAndPrintError(`message couldn't be decoded: ${message}\n${e.stack}`);
     return;
   }
 
