@@ -86,7 +86,7 @@ export abstract class Room<T= any> extends EventEmitter {
 
     this.once('dispose', async () => {
       await this._dispose();
-      this.emit('disposeComplete');
+      this.emit('disconnect');
     });
 
     this.setPatchRate(this.patchRate);
@@ -248,7 +248,7 @@ export abstract class Room<T= any> extends EventEmitter {
     }
 
     return new Promise((resolve, reject) => {
-      this.once('disposeComplete', () => resolve());
+      this.once('disconnect', () => resolve());
     });
   }
 
