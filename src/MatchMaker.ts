@@ -111,6 +111,9 @@ export class MatchMaker {
       isReconnect = await this.presence.get(clientOptions.sessionId);
       if (isReconnect) {
         roomId = isReconnect as any;
+
+      } else {
+        throw new MatchMakeError(`rejoin has been expired for ${clientOptions.sessionId}`);
       }
     }
 
