@@ -435,10 +435,6 @@ export abstract class Room<T= any> extends EventEmitter {
       this.onMessage(client, message[2]);
 
     } else if (message[0] === Protocol.LEAVE_ROOM) {
-      //
-      // TODO: create a test for this
-      //
-
       // stop interpreting messages from this client
       client.removeAllListeners('message');
 
