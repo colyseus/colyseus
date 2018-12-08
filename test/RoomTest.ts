@@ -1,6 +1,7 @@
 import * as assert from "assert";
 import * as msgpack from "notepack.io";
 import * as sinon from 'sinon';
+import * as WebSocket from "ws";
 
 import { Room } from "../src/Room";
 import { MatchMaker } from './../src/MatchMaker';
@@ -10,7 +11,8 @@ import {
   createDummyClient,
   DummyRoom,
   DummyRoomWithTimeline,
-  DummyRoomWithState
+  DummyRoomWithState,
+  RoomWithAsync,
 } from "./utils/mock";
 
 describe('Room', function() {
@@ -51,19 +53,32 @@ describe('Room', function() {
     });
 
     it('should receive JOIN_ROOM and ROOM_STATE messages onJoin', function() {
-      var room = new DummyRoomWithState();
-      var client = createDummyClient();
-      var message = null;
+      const room = new DummyRoomWithState();
+      const client = createDummyClient();
 
       (<any>room)._onJoin(client, {});
 
       assert.equal(client.messages.length, 2);
+      assert.equal(client.getMessageAt(0)[0], Protocol.JOIN_ROOM);
+      assert.equal(client.getMessageAt(1)[0], Protocol.ROOM_STATE);
+    });
 
-      message = msgpack.decode(client.messages[0]);
-      assert.equal(message[0], Protocol.JOIN_ROOM);
+    it('should close client connection only after onLeave has fulfiled', function(done) {
+      clock.restore();
 
-      message = msgpack.decode(client.messages[1]);
-      assert.equal(message[0], Protocol.ROOM_STATE);
+      const room = new RoomWithAsync();
+      const client = createDummyClient();
+
+      (<any>room)._onJoin(client);
+      (<any>room)._onMessage(client, msgpack.encode([Protocol.LEAVE_ROOM]));
+
+      assert.equal(client.getMessageAt(0)[0], Protocol.JOIN_ROOM);
+      assert.equal(client.readyState, WebSocket.OPEN);
+
+      room.on('disconnect', () => {
+        assert.equal(client.readyState, WebSocket.CLOSED);
+        done();
+      });
     });
 
     it('should cleanup/dispose when all clients disconnect', function(done) {
@@ -79,8 +94,6 @@ describe('Room', function() {
       });
 
       (<any>room)._onLeave(client);
-
-      clock.tick((room as any).seatReservationTime * 1000 + 1);
     });
   });
 
@@ -110,9 +123,7 @@ describe('Room', function() {
       // first message
       (<any>room).sendState(client);
 
-
-      var message = msgpack.decode( client.messages[1] );
-
+      const message = client.getMessageAt(1);
       assert.equal(message[0], Protocol.ROOM_STATE);
       assert.deepEqual(msgpack.decode(message[1]), { success: true });
     });

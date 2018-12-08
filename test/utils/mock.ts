@@ -34,7 +34,8 @@ export class Client extends EventEmitter {
   }
 
   close (code?: number) {
-    this.emit('close', code);
+    this.readyState = WebSocket.CLOSED;
+    this.emit('close');
   }
 
 }
