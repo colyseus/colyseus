@@ -1,6 +1,6 @@
 import Clock, { Delayed } from '@gamestdio/timer';
 import * as http from 'http';
-import * as shortid from 'shortid';
+import * as nanoid from 'nanoid';
 import * as WebSocket from 'ws';
 
 // Core classes
@@ -21,8 +21,8 @@ export interface EntityMap<T> {[ entityId: string ]: T; }
 // Utilities
 export { Clock, Delayed };
 export { nonenumerable as nosync } from 'nonenumerable';
-export function generateId() { return shortid.generate(); }
-export function isValidId(id: any) { return shortid.isValid(id); }
+export function generateId() { return nanoid(9); }
+export function isValidId(id: any) { return /[a-zA-Z0-9_\-]{9}/.test(id); }
 
 // Export 'WebSocket' as 'Client' with 'id' property.
 export type Client = WebSocket & {
