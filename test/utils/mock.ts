@@ -1,8 +1,8 @@
-import * as shortid from "shortid";
 import * as msgpack from "notepack.io";
 import * as WebSocket from "ws";
 import { EventEmitter } from "events";
 
+import { generateId } from "../../src";
 import { Room } from "../../src/Room";
 import { LocalPresence } from './../../src/presence/LocalPresence';
 
@@ -45,7 +45,7 @@ export function createEmptyClient(): any {
 }
 
 export function createDummyClient (options: any = {}): any {
-  let client = new Client(shortid.generate());
+  let client = new Client(generateId());
   (<any>client).options = options;
   return client;
 }
@@ -67,7 +67,7 @@ export class DummyRoom extends Room {
   onDispose() {}
   onJoin() {}
   onLeave() {}
-  onMessage() {}
+  onMessage(client, message) { this.broadcast(message); }
 }
 
 export class RoomWithError extends Room {
