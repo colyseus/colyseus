@@ -25,6 +25,10 @@ export class Client extends EventEmitter {
     this.messages.push(message);
   }
 
+  receive (message) {
+    this.emit('message', msgpack.encode(message));
+  }
+
   getMessageAt(index: number) {
     return msgpack.decode(this.messages[index]);
   }
