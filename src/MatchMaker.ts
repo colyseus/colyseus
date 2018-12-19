@@ -100,7 +100,7 @@ export class MatchMaker {
 
     // `rejoin` requests come with a pre-set `sessionId`
     let sessionId: string = clientOptions.sessionId;
-    let isReconnect = (sessionId !== undefined);
+    const isReconnect = (sessionId !== undefined);
 
     if (!hasHandler && isValidId(roomToJoin)) {
       roomId = roomToJoin;
@@ -147,7 +147,7 @@ export class MatchMaker {
       // reserve seat for client on selected room
       await this.remoteRoomCall(roomId, '_reserveSeat', [{
         id: client.id,
-        sessionId: sessionId,
+        sessionId,
       }]);
 
     } else {
@@ -194,7 +194,8 @@ export class MatchMaker {
           unsubscribe();
 
           const request = `${method}${ args && ' with args ' + JSON.stringify(args) || '' }`;
-          reject(new Error(`remote room (${roomId}) timed out, requesting "${request}"\nTimeout setting: ${rejectionTimeout}ms`));
+          reject(new Error(`remote room (${roomId}) timed out, requesting "${request}"` +
+            `Timeout setting: ${rejectionTimeout}ms`));
         }, rejectionTimeout);
       });
 
@@ -445,8 +446,8 @@ export class MatchMaker {
           then((result) => reply([IpcProtocol.SUCCESS, result])).
           catch((e) => {
             // user might have called `reject()` without arguments.
-            const message = e && e.message || e;
-            reply([IpcProtocol.ERROR, message]);
+            const err = e && e.message || e;
+            reply([IpcProtocol.ERROR, err]);
           });
       });
     }

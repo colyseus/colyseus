@@ -21,9 +21,7 @@ const DEFAULT_SEAT_RESERVATION_TIME = 3;
 
 export type SimulationCallback = (deltaTime?: number) => void;
 
-export interface RoomConstructor<T= any> {
-  new (presence?: Presence): Room<T>;
-}
+export type RoomConstructor<T= any> = new (presence?: Presence) => Room<T>;
 
 export interface RoomAvailable {
   roomId: string;
