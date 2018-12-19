@@ -194,7 +194,7 @@ export class MatchMaker {
           unsubscribe();
 
           const request = `${method}${ args && ' with args ' + JSON.stringify(args) || '' }`;
-          reject(new Error(`remote room (${roomId}) timed out, requesting "${request}"`));
+          reject(new Error(`remote room (${roomId}) timed out, requesting "${request}"\nTimeout setting: ${rejectionTimeout}ms`));
         }, rejectionTimeout);
       });
 
@@ -444,8 +444,9 @@ export class MatchMaker {
         response.
           then((result) => reply([IpcProtocol.SUCCESS, result])).
           catch((e) => {
-            debugAndPrintError(e.stack || e);
-            reply([IpcProtocol.ERROR, e.message || e]);
+            // user might have called `reject()` without arguments.
+            const message = e && e.message || e;
+            reply([IpcProtocol.ERROR, message]);
           });
       });
     }

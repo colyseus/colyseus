@@ -179,7 +179,10 @@ export class Server {
         }
 
       } catch (e) {
-        debugAndPrintError(e.message + '\n' + e.stack);
+        if (e) { // user might have called `reject()` during onAuth without arguments.
+          debugAndPrintError(e.message + '\n' + e.stack);
+        }
+
         next(false);
       }
 
