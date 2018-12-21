@@ -5,16 +5,16 @@
   <br>
   <br>
   <a href="https://npmjs.com/package/colyseus">
-    <img src="https://img.shields.io/npm/dm/colyseus.svg">
+    <img src="https://img.shields.io/npm/dm/colyseus.svg?style=for-the-badge">
   </a>
   <a href="https://patreon.com/endel" title="Donate to this project using Patreon">
-    <img src="https://img.shields.io/badge/patreon-donate-yellow.svg" alt="Patreon donate button" />
+    <img src="https://img.shields.io/badge/patreon-donate-yellow.svg?style=for-the-badge" alt="Patreon donate button" />
   </a>
   <a href="http://discuss.colyseus.io" title="Discuss on Forum">
-    <img src="https://img.shields.io/badge/discuss-on%20forum-brightgreen.svg?style=flat&colorB=b400ff" alt="Discussion forum" />
+    <img src="https://img.shields.io/badge/discuss-on%20forum-brightgreen.svg?style=for-the-badge&colorB=b400ff" alt="Discussion forum" />
   </a>
-  <a href="https://gitter.im/gamestdio/colyseus">
-    <img src="https://badges.gitter.im/gamestdio/colyseus.svg">
+  <a href="https://discord.gg/RY8rRS7">
+    <img src="https://img.shields.io/discord/525739117951320081.svg?style=for-the-badge">
   </a>
   <h3>
     Multiplayer Game Server for Node.js. <br /><a href="http://colyseus.io/docs/">View documentation</a>
