@@ -118,7 +118,7 @@ export class MatchMaker {
       }
     }
 
-    if (!roomId) {
+    if (!roomId || !isReconnect) {
       sessionId = generateId();
 
       // when multiple clients request to create a room simultaneously, we need

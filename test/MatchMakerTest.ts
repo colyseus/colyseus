@@ -90,11 +90,17 @@ describe('MatchMaker', function() {
     it('should join existing room using "joinById"', async () => {
       clock.restore();
 
-      let roomId = await matchMaker.onJoinRoomRequest(createDummyClient(), 'room', {});
+      const client = createDummyClient();
+      let roomId = await matchMaker.onJoinRoomRequest(client, 'room', {});
       assert.ok(isValidId(roomId));
 
       let joinByRoomId = await matchMaker.joinById(roomId, {});
       assert.ok(isValidId(joinByRoomId));
+
+      const roomClient = createDummyClient();
+      await matchMaker.onJoinRoomRequest(roomClient, roomId, {});
+      await matchMaker.connectToRoom(roomClient, roomId);
+      assert.ok(roomClient.sessionId, "should have valid sessionId");
     });
 
     it('should call "onDispose" when room is not created', function(done) {

@@ -17,9 +17,11 @@ import {
 
 describe('Room', function() {
   let clock: sinon.SinonFakeTimers;
+  let tick: any;
 
   beforeEach(() => {
     clock = sinon.useFakeTimers();
+    tick = async (ms) => clock.tick(ms);
   });
 
   afterEach(() => clock.restore());
@@ -336,8 +338,6 @@ describe('Room', function() {
     });
 
     it("should succeed waiting same sessionId for reconnection", async () => {
-      const tick = async (ms) => clock.tick(ms);
-
       const firstClient = createDummyClient();
       const roomId = await matchMaker.onJoinRoomRequest(firstClient, 'reconnect', {});
 
@@ -367,7 +367,9 @@ describe('Room', function() {
         sessionId: firstClient.sessionId
       });
       assert.equal(roomId, secondRoomId);
+
       await matchMaker.connectToRoom(secondClient, roomId);
+      assert.equal(secondClient.sessionId, firstClient.sessionId);
 
       // force async functions to be called along with fake timers
       await tick(1);
