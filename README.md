@@ -48,7 +48,7 @@ it](https://discuss.colyseus.io/category/5/showcase) and make your own!
 - Game Engine: Colyseus is agnostic of the engine you're using. Need Physics? Add your own logic / package.
 - Database: It's up to you to configure and select which database you'd like to use.
 
-See [roadmap](http://colyseus.io/docs/roadmap/) for our future plans.
+See [roadmap](https://github.com/colyseus/colyseus/wiki/Roadmap) for our future plans.
 
 ### Official client integration
 
