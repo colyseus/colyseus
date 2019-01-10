@@ -59,6 +59,7 @@ export abstract class Room<T= any> extends EventEmitter {
   protected reservedSeatTimeouts: {[sessionId: string]: NodeJS.Timer} = {};
 
   protected reconnections: {[sessionId: string]: Deferred} = {};
+  protected isDisconnecting: boolean = false;
 
   // when a new user connects, it receives the '_previousState', which holds
   // the last binary snapshot other users already have, therefore the patches
@@ -232,6 +233,7 @@ export abstract class Room<T= any> extends EventEmitter {
   }
 
   public disconnect(): Promise<any> {
+    this.isDisconnecting = true;
     this.autoDispose = true;
 
     let i = this.clients.length;
@@ -305,6 +307,10 @@ export abstract class Room<T= any> extends EventEmitter {
   }
 
   protected async allowReconnection(client: Client, seconds: number = 15): Promise<Client> {
+    if (this.isDisconnecting) {
+      throw new Error('disconnecting');
+    }
+
     await this._reserveSeat(client, seconds, true);
 
     // keep reconnection reference in case the user reconnects into this room.
