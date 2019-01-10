@@ -471,7 +471,7 @@ export abstract class Room<T= any> extends EventEmitter {
     }
 
     // lock automatically when maxClients is reached
-    if (this.clients.length === this.maxClients) {
+    if (!this._locked && this.clients.length === this.maxClients) {
       this._maxClientsReached = true;
       this.lock.call(this, true);
     }
