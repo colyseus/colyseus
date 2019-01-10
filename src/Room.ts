@@ -232,6 +232,8 @@ export abstract class Room<T= any> extends EventEmitter {
   }
 
   public disconnect(): Promise<any> {
+    this.autoDispose = true;
+
     let i = this.clients.length;
     while (i--) {
       const client = this.clients[i];
