@@ -1,5 +1,5 @@
 <div align="center">
-  <a href="https://github.com/gamestdio/colyseus">
+  <a href="https://github.com/colyseus/colyseus">
     <img src="media/header.png?raw=true" />
   </a>
   <br>
@@ -52,16 +52,16 @@ See [roadmap](https://github.com/colyseus/colyseus/wiki/Roadmap) for our future 
 
 ### Official client integration
 
-- [JavaScript/TypeScript](https://github.com/gamestdio/colyseus.js)
-- [Defold Engine](https://github.com/gamestdio/colyseus-defold) ([defold.com](https://www.defold.com/))
-- [Haxe](https://github.com/gamestdio/colyseus-hx) ([haxe.org](https://haxe.org/))
-- [Cocos2d-x](https://github.com/gamestdio/colyseus-cocos2d-x) ([cocos2d-x.org](https://cocos2d-x.org/))
-- [Construct 3](https://github.com/gamestdio/colyseus-construct3) ([construct3.net](https://www.construct.net/))
-- [Unity](https://github.com/gamestdio/colyseus-unity3d) ([unity3d.com](https://unity3d.com/))
+- [JavaScript/TypeScript](https://github.com/colyseus/colyseus.js)
+- [Defold Engine](https://github.com/colyseus/colyseus-defold) ([defold.com](https://www.defold.com/))
+- [Haxe](https://github.com/colyseus/colyseus-hx) ([haxe.org](https://haxe.org/))
+- [Cocos2d-x](https://github.com/colyseus/colyseus-cocos2d-x) ([cocos2d-x.org](https://cocos2d-x.org/))
+- [Construct 3](https://github.com/colyseus/colyseus-construct3) ([construct3.net](https://www.construct.net/))
+- [Unity](https://github.com/colyseus/colyseus-unity3d) ([unity3d.com](https://unity3d.com/))
 
 ### Tools
 
-- [@colyseus/monitor](https://github.com/gamestdio/colyseus-monitor) - A Web Monitoring Panel for Colyseus
+- [@colyseus/monitor](https://github.com/colyseus/colyseus-monitor) - A Web Monitoring Panel for Colyseus
 
 ### Community client integration
 
@@ -70,7 +70,7 @@ See [roadmap](https://github.com/colyseus/colyseus/wiki/Roadmap) for our future 
 
 ### Usage examples
 
-See the [official examples](https://github.com/gamestdio/colyseus-examples) for
+See the [official examples](https://github.com/colyseus/colyseus-examples) for
 usage reference with the latest version of Colyseus.
 
 - [tic-tac-toe](https://tictactoe-colyseus.herokuapp.com) ([source-code](https://github.com/endel/tic-tac-toe)) - Simple Tic Tac Toe using [pixi.js](https://github.com/pixijs/pixi.js)
@@ -84,9 +84,9 @@ Thanks goes to these wonderful people ([emoji key](https://github.com/kentcdodds
 
 <!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
 <!-- prettier-ignore -->
-| [<img src="https://avatars3.githubusercontent.com/u/130494?v=4" width="100px;"/><br /><sub><b>Endel Dreyer</b></sub>](https://twitter.com/endel)<br />[💻](https://github.com/gamestdio/colyseus/commits?author=endel "Code") [📖](https://github.com/gamestdio/colyseus/commits?author=endel "Documentation") [💡](#example-endel "Examples") | [<img src="https://avatars2.githubusercontent.com/u/20824844?v=4" width="100px;"/><br /><sub><b>AnubisCode</b></sub>](https://github.com/AnubisCode)<br />[🐛](https://github.com/gamestdio/colyseus/issues?q=author%3AAnubisCode "Bug reports") [💻](https://github.com/gamestdio/colyseus/commits?author=AnubisCode "Code") [💵](#financial-AnubisCode "Financial") [🤔](#ideas-AnubisCode "Ideas, Planning, & Feedback") | [<img src="https://avatars0.githubusercontent.com/u/763609?v=4" width="100px;"/><br /><sub><b>Kyle J. Kemp</b></sub>](http://seiyria.com)<br />[💬](#question-seiyria "Answering Questions") [🐛](https://github.com/gamestdio/colyseus/issues?q=author%3Aseiyria "Bug reports") [💻](https://github.com/gamestdio/colyseus/commits?author=seiyria "Code") [🤔](#ideas-seiyria "Ideas, Planning, & Feedback") | [<img src="https://avatars1.githubusercontent.com/u/1041315?v=4" width="100px;"/><br /><sub><b>Abhishek Hingnikar</b></sub>](https://github.com/darkyen)<br />[💬](#question-darkyen "Answering Questions") [🐛](https://github.com/gamestdio/colyseus/issues?q=author%3Adarkyen "Bug reports") [🤔](#ideas-darkyen "Ideas, Planning, & Feedback") [👀](#review-darkyen "Reviewed Pull Requests") | [<img src="https://avatars2.githubusercontent.com/u/21344385?v=4" width="100px;"/><br /><sub><b>Federico</b></sub>](https://twitter.com/Federkun)<br />[🐛](https://github.com/gamestdio/colyseus/issues?q=author%3AFederkun "Bug reports") [💻](https://github.com/gamestdio/colyseus/commits?author=Federkun "Code") | [<img src="https://avatars0.githubusercontent.com/u/853683?v=4" width="100px;"/><br /><sub><b>OYED</b></sub>](https://oyed.io)<br />[💬](#question-oyed "Answering Questions") [🐛](https://github.com/gamestdio/colyseus/issues?q=author%3Aoyed "Bug reports") [💵](#financial-oyed "Financial") [🤔](#ideas-oyed "Ideas, Planning, & Feedback") | [<img src="https://avatars0.githubusercontent.com/u/13785893?v=4" width="100px;"/><br /><sub><b>Derwish</b></sub>](https://github.com/derwish-pro)<br />[🐛](https://github.com/gamestdio/colyseus/issues?q=author%3Aderwish-pro "Bug reports") [🔧](#tool-derwish-pro "Tools") |
+| [<img src="https://avatars3.githubusercontent.com/u/130494?v=4" width="100px;"/><br /><sub><b>Endel Dreyer</b></sub>](https://twitter.com/endel)<br />[💻](https://github.com/colyseus/colyseus/commits?author=endel "Code") [📖](https://github.com/colyseus/colyseus/commits?author=endel "Documentation") [💡](#example-endel "Examples") | [<img src="https://avatars2.githubusercontent.com/u/20824844?v=4" width="100px;"/><br /><sub><b>AnubisCode</b></sub>](https://github.com/AnubisCode)<br />[🐛](https://github.com/colyseus/colyseus/issues?q=author%3AAnubisCode "Bug reports") [💻](https://github.com/colyseus/colyseus/commits?author=AnubisCode "Code") [💵](#financial-AnubisCode "Financial") [🤔](#ideas-AnubisCode "Ideas, Planning, & Feedback") | [<img src="https://avatars0.githubusercontent.com/u/763609?v=4" width="100px;"/><br /><sub><b>Kyle J. Kemp</b></sub>](http://seiyria.com)<br />[💬](#question-seiyria "Answering Questions") [🐛](https://github.com/colyseus/colyseus/issues?q=author%3Aseiyria "Bug reports") [💻](https://github.com/colyseus/colyseus/commits?author=seiyria "Code") [🤔](#ideas-seiyria "Ideas, Planning, & Feedback") | [<img src="https://avatars1.githubusercontent.com/u/1041315?v=4" width="100px;"/><br /><sub><b>Abhishek Hingnikar</b></sub>](https://github.com/darkyen)<br />[💬](#question-darkyen "Answering Questions") [🐛](https://github.com/colyseus/colyseus/issues?q=author%3Adarkyen "Bug reports") [🤔](#ideas-darkyen "Ideas, Planning, & Feedback") [👀](#review-darkyen "Reviewed Pull Requests") | [<img src="https://avatars2.githubusercontent.com/u/21344385?v=4" width="100px;"/><br /><sub><b>Federico</b></sub>](https://twitter.com/Federkun)<br />[🐛](https://github.com/colyseus/colyseus/issues?q=author%3AFederkun "Bug reports") [💻](https://github.com/colyseus/colyseus/commits?author=Federkun "Code") | [<img src="https://avatars0.githubusercontent.com/u/853683?v=4" width="100px;"/><br /><sub><b>OYED</b></sub>](https://oyed.io)<br />[💬](#question-oyed "Answering Questions") [🐛](https://github.com/colyseus/colyseus/issues?q=author%3Aoyed "Bug reports") [💵](#financial-oyed "Financial") [🤔](#ideas-oyed "Ideas, Planning, & Feedback") | [<img src="https://avatars0.githubusercontent.com/u/13785893?v=4" width="100px;"/><br /><sub><b>Derwish</b></sub>](https://github.com/derwish-pro)<br />[🐛](https://github.com/colyseus/colyseus/issues?q=author%3Aderwish-pro "Bug reports") [🔧](#tool-derwish-pro "Tools") |
 | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| [<img src="https://avatars2.githubusercontent.com/u/2755221?v=4" width="100px;"/><br /><sub><b>VF</b></sub>](https://github.com/havingfunq)<br />[🐛](https://github.com/gamestdio/colyseus/issues?q=author%3Ahavingfunq "Bug reports") [🤔](#ideas-havingfunq "Ideas, Planning, & Feedback") | [<img src="https://avatars0.githubusercontent.com/u/18367963?v=4" width="100px;"/><br /><sub><b>Wenish</b></sub>](http://wenish.github.io/portfolio/)<br />[🐛](https://github.com/gamestdio/colyseus/issues?q=author%3AWenish "Bug reports") |
+| [<img src="https://avatars2.githubusercontent.com/u/2755221?v=4" width="100px;"/><br /><sub><b>VF</b></sub>](https://github.com/havingfunq)<br />[🐛](https://github.com/colyseus/colyseus/issues?q=author%3Ahavingfunq "Bug reports") [🤔](#ideas-havingfunq "Ideas, Planning, & Feedback") | [<img src="https://avatars0.githubusercontent.com/u/18367963?v=4" width="100px;"/><br /><sub><b>Wenish</b></sub>](http://wenish.github.io/portfolio/)<br />[🐛](https://github.com/colyseus/colyseus/issues?q=author%3AWenish "Bug reports") |
 <!-- ALL-CONTRIBUTORS-LIST:END -->
 
 This project follows the [all-contributors](https://github.com/kentcdodds/all-contributors) specification.
