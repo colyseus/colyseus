@@ -55,6 +55,7 @@ See [roadmap](https://github.com/colyseus/colyseus/wiki/Roadmap) for our future 
 - [JavaScript/TypeScript](https://github.com/gamestdio/colyseus.js)
 - [Defold Engine](https://github.com/gamestdio/colyseus-defold) ([defold.com](https://www.defold.com/))
 - [Haxe](https://github.com/gamestdio/colyseus-hx) ([haxe.org](https://haxe.org/))
+- [Cocos2d-x](https://github.com/gamestdio/colyseus-cocos2d-x) ([cocos2d-x.org](https://cocos2d-x.org/))
 - [Construct 3](https://github.com/gamestdio/colyseus-construct3) ([construct3.net](https://www.construct.net/))
 - [Unity](https://github.com/gamestdio/colyseus-unity3d) ([unity3d.com](https://unity3d.com/))
 
@@ -66,7 +67,6 @@ See [roadmap](https://github.com/colyseus/colyseus/wiki/Roadmap) for our future 
 
 - [Objective-C](https://github.com/swittk/Colyseus-ObjC)
 - [Construct2](https://github.com/Keevle/Colyseus-for-C2)
-- [Cocos2d-x](https://github.com/chunho32/colyseus-cocos2d-x) (outdated, compatible with server v0.4.0)
 
 ### Usage examples
 
