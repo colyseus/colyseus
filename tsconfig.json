@@ -5,6 +5,7 @@
         "lib": ["es6"],
         "target": "es2015",
         "declaration": true,
+        "experimentalDecorators": true,
         "noImplicitAny": false,
         "sourceMap": false
     },

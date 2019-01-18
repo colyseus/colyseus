@@ -105,23 +105,6 @@ export class DummyRoomWithState extends Room {
   onMessage() {}
 }
 
-export class DummyRoomWithTimeline extends Room {
-  constructor () {
-    super(new LocalPresence());
-    this.useTimeline()
-  }
-
-  requestJoin (options) {
-    return !options.invalid_param
-  }
-
-  onInit () { this.setState({}); }
-  onDispose() {}
-  onJoin() {}
-  onLeave() {}
-  onMessage() {}
-}
-
 export class RoomVerifyClient extends DummyRoom {
   patchRate = 5000;
   onJoin () {}

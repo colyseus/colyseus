@@ -10,7 +10,6 @@ import { Protocol } from "../src/Protocol";
 import {
   createDummyClient,
   DummyRoom,
-  DummyRoomWithTimeline,
   DummyRoomWithState,
   RoomWithAsync,
 } from "./utils/mock";
@@ -31,11 +30,6 @@ describe('Room', function() {
     it('should instantiate with valid options', function() {
       var room = new DummyRoom();
       assert.ok(room instanceof DummyRoom);
-    });
-
-    it('should instantiate with timeline attribute', function() {
-      var room = new DummyRoomWithTimeline();
-      assert.equal(0, room.timeline.history.length);
     });
 
   });

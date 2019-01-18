@@ -1,18 +1,19 @@
-import * as fossilDelta from 'fossil-delta';
 import * as msgpack from 'notepack.io';
 
-import { createTimeline, Timeline } from '@gamestdio/timeline';
 import Clock from '@gamestdio/timer';
 import { EventEmitter } from 'events';
 
 import { Client } from '.';
 import { Presence } from './presence/Presence';
 import { RemoteClient } from './presence/RemoteClient';
-import { decode, Protocol, send, WS_CLOSE_CONSENTED } from './Protocol';
-import { Deferred, logError, spliceOne } from './Utils';
 
-import * as jsonPatch from 'fast-json-patch'; // this is only used for debugging patches
-import { debugAndPrintError, debugPatch, debugPatchData } from './Debug';
+import { FossilDelta } from './serializer/FossilDelta';
+import { serialize, Serializer } from './serializer/Serializer';
+
+import { decode, Protocol, send, WS_CLOSE_CONSENTED } from './Protocol';
+import { Deferred, spliceOne } from './Utils';
+
+import { debugAndPrintError, debugPatch } from './Debug';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
@@ -34,9 +35,9 @@ export interface BroadcastOptions {
   except: Client;
 }
 
+@serialize(FossilDelta)
 export abstract class Room<T= any> extends EventEmitter {
   public clock: Clock = new Clock();
-  public timeline?: Timeline;
 
   public roomId: string;
   public roomName: string;
@@ -48,6 +49,7 @@ export abstract class Room<T= any> extends EventEmitter {
   public state: T;
   public metadata: any = null;
 
+  public serializer: Serializer<T> = this._getSerializer();
   public presence: Presence;
 
   public clients: Client[] = [];
@@ -60,12 +62,6 @@ export abstract class Room<T= any> extends EventEmitter {
 
   protected reconnections: {[sessionId: string]: Deferred} = {};
   protected isDisconnecting: boolean = false;
-
-  // when a new user connects, it receives the '_previousState', which holds
-  // the last binary snapshot other users already have, therefore the patches
-  // that follow will be the same for all clients.
-  private _previousState: any;
-  private _previousStateEncoded: any;
 
   private _simulationInterval: NodeJS.Timer;
   private _patchInterval: NodeJS.Timer;
@@ -98,6 +94,7 @@ export abstract class Room<T= any> extends EventEmitter {
   public onInit?(options: any): void;
   public onJoin?(client: Client, options?: any, auth?: any): void | Promise<any>;
   public onLeave?(client: Client, consented?: boolean): void | Promise<any>;
+  public onPatch?(client: Client, state: T): any;
   public onDispose?(): void | Promise<any>;
 
   public requestJoin(options: any, isNew?: boolean): number | boolean {
@@ -143,27 +140,16 @@ export abstract class Room<T= any> extends EventEmitter {
     }
 
     if ( milliseconds !== null && milliseconds !== 0 ) {
-      this._patchInterval = setInterval( this.broadcastPatch.bind(this), milliseconds );
+      this._patchInterval = setInterval(this.broadcastPatch.bind(this), milliseconds);
     }
-  }
-
-  public useTimeline( maxSnapshots: number = 10 ): void {
-    this.timeline = createTimeline( maxSnapshots );
   }
 
   public setState(newState) {
     this.clock.start();
 
-    this._previousState = newState;
-
-    // ensure state is populated for `sendState()` method.
-    this._previousStateEncoded = msgpack.encode( this._previousState );
+    this.serializer.reset(newState);
 
     this.state = newState;
-
-    if ( this.timeline ) {
-      this.timeline.takeSnapshot( this.state );
-    }
   }
 
   public setMetadata(meta: any) {
@@ -254,10 +240,13 @@ export abstract class Room<T= any> extends EventEmitter {
     });
   }
 
+  // see @serialize decorator.
+  protected _getSerializer?(): Serializer<T>;
+
   protected sendState(client: Client): void {
     send(client, [
       Protocol.ROOM_STATE,
-      this._previousStateEncoded,
+      this.serializer.getData(),
       this.clock.currentTime,
       this.clock.elapsedTime,
     ]);
@@ -268,42 +257,18 @@ export abstract class Room<T= any> extends EventEmitter {
       this.clock.tick();
     }
 
-    if ( !this.state ) {
-      debugPatch('trying to broadcast null state. you should call #setState on constructor or during user connection.');
+    if (!this.state) {
+      debugPatch('trying to broadcast null state. you should call #setState');
       return false;
     }
 
-    const currentState = this.state;
-    const currentStateEncoded = msgpack.encode( currentState );
+    if (this.serializer.hasChanged(this.state)) {
+      // broadcast patches (diff state) to all clients,
+      return this.broadcast( msgpack.encode([ Protocol.ROOM_STATE_PATCH, this.serializer.getPatches() ]) );
 
-    // skip if state has not changed.
-    if ( currentStateEncoded.equals( this._previousStateEncoded ) ) {
+    } else {
       return false;
     }
-
-    const patches = fossilDelta.create( this._previousStateEncoded, currentStateEncoded );
-
-    // take a snapshot of the current state
-    if (this.timeline) {
-      this.timeline.takeSnapshot( this.state, this.clock.elapsedTime );
-    }
-
-    //
-    // debugging
-    //
-    if (debugPatch.enabled) {
-      debugPatch(`"%s" (roomId: "%s") is sending %d bytes:`, this.roomName, this.roomId, patches.length);
-    }
-
-    if (debugPatchData.enabled) {
-      debugPatchData('%j', jsonPatch.compare(msgpack.decode(this._previousStateEncoded), currentState));
-    }
-
-    this._previousState = currentState;
-    this._previousStateEncoded = currentStateEncoded;
-
-    // broadcast patches (diff state) to all clients,
-    return this.broadcast( msgpack.encode([ Protocol.ROOM_STATE_PATCH, patches ]) );
   }
 
   protected async allowReconnection(client: Client, seconds: number = 15): Promise<Client> {
