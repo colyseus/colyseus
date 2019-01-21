@@ -6,7 +6,9 @@ import { Serializer } from './Serializer';
 import * as jsonPatch from 'fast-json-patch'; // this is only used for debugging patches
 import { debugPatch } from '../Debug';
 
-export class FossilDelta<T> implements Serializer<T> {
+export class FossilDeltaSerializer<T> implements Serializer<T> {
+  public id = "fossil-delta";
+
   // when a new user connects, it receives the 'previousState', which holds
   // the last binary snapshot other users already have, therefore the patches
   // that follow will be the same for all clients.

@@ -251,8 +251,8 @@ export class Server {
         retry(() => {
           return this.matchMaker.onJoinRoomRequest(client, roomName, joinOptions);
         }, 3, 0, [MatchMakeError]).
-          then((roomId) => {
-            send(client, [Protocol.JOIN_ROOM, roomId, joinOptions.requestId]);
+          then(async (roomId: string) => {
+            send(client, [ Protocol.JOIN_ROOM, roomId, joinOptions.requestId ]);
 
           }).catch((e) => {
             debugError(`MatchMakeError: ${message}\n${e.stack}`);

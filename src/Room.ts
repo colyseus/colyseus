@@ -7,7 +7,7 @@ import { Client } from '.';
 import { Presence } from './presence/Presence';
 import { RemoteClient } from './presence/RemoteClient';
 
-import { FossilDelta } from './serializer/FossilDelta';
+import { FossilDeltaSerializer } from './serializer/FossilDeltaSerializer';
 import { serialize, Serializer } from './serializer/Serializer';
 
 import { decode, Protocol, send, WS_CLOSE_CONSENTED } from './Protocol';
@@ -35,7 +35,7 @@ export interface BroadcastOptions {
   except: Client;
 }
 
-@serialize(FossilDelta)
+@serialize(FossilDeltaSerializer)
 export abstract class Room<T= any> extends EventEmitter {
   public clock: Clock = new Clock();
 
@@ -48,8 +48,6 @@ export abstract class Room<T= any> extends EventEmitter {
 
   public state: T;
   public metadata: any = null;
-
-  public serializer: Serializer<T> = this._getSerializer();
   public presence: Presence;
 
   public clients: Client[] = [];
@@ -62,6 +60,8 @@ export abstract class Room<T= any> extends EventEmitter {
 
   protected reconnections: {[sessionId: string]: Deferred} = {};
   protected isDisconnecting: boolean = false;
+
+  private _serializer: Serializer<T> = this._getSerializer();
 
   private _simulationInterval: NodeJS.Timer;
   private _patchInterval: NodeJS.Timer;
@@ -147,7 +147,7 @@ export abstract class Room<T= any> extends EventEmitter {
   public setState(newState) {
     this.clock.start();
 
-    this.serializer.reset(newState);
+    this._serializer.reset(newState);
 
     this.state = newState;
   }
@@ -241,12 +241,13 @@ export abstract class Room<T= any> extends EventEmitter {
   }
 
   // see @serialize decorator.
+  public get serializer() { return this._serializer.id; }
   protected _getSerializer?(): Serializer<T>;
 
   protected sendState(client: Client): void {
     send(client, [
       Protocol.ROOM_STATE,
-      this.serializer.getData(),
+      this._serializer.getData(),
       this.clock.currentTime,
       this.clock.elapsedTime,
     ]);
@@ -262,9 +263,9 @@ export abstract class Room<T= any> extends EventEmitter {
       return false;
     }
 
-    if (this.serializer.hasChanged(this.state)) {
+    if (this._serializer.hasChanged(this.state)) {
       // broadcast patches (diff state) to all clients,
-      return this.broadcast( msgpack.encode([ Protocol.ROOM_STATE_PATCH, this.serializer.getPatches() ]) );
+      return this.broadcast( msgpack.encode([ Protocol.ROOM_STATE_PATCH, this._serializer.getPatches() ]) );
 
     } else {
       return false;

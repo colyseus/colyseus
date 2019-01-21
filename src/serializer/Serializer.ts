@@ -5,6 +5,7 @@ export function serialize(serializer: FunctionConstructor & any) {
 }
 
 export interface Serializer<T> {
+  id: string;
   reset(data: any): void;
   hasChanged(newState: any): boolean;
   getData(): any;
