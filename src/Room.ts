@@ -264,8 +264,22 @@ export abstract class Room<T= any> extends EventEmitter {
     }
 
     if (this._serializer.hasChanged(this.state)) {
-      // broadcast patches (diff state) to all clients,
-      return this.broadcast( msgpack.encode([ Protocol.ROOM_STATE_PATCH, this._serializer.getPatches() ]) );
+      let numClients = this.clients.length;
+
+      if (this.onPatch) {
+        // broadcast custom patch for each client
+        while (numClients--) {
+          const client = this.clients[numClients];
+          send(client, [Protocol.ROOM_STATE_PATCH, this.onPatch(client, this.state)], false);
+        }
+
+      } else {
+        // broadcast same patch to all clients
+        while (numClients--) {
+          const client = this.clients[numClients];
+          send(client, msgpack.encode([ Protocol.ROOM_STATE_PATCH, this._serializer.getPatches() ]), false);
+        }
+      }
 
     } else {
       return false;
