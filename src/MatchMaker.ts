@@ -1,4 +1,3 @@
-import * as WebSocket from 'ws';
 import { merge } from './Utils';
 
 import { Client, generateId, isValidId } from './index';
@@ -21,7 +20,7 @@ export interface RoomWithScore {
 }
 
 // remote room call timeouts
-export const REMOTE_ROOM_SHORT_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_SHORT_TIMEOUT || 200);
+export const REMOTE_ROOM_SHORT_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_SHORT_TIMEOUT || 4000);
 export const REMOTE_ROOM_LARGE_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_LARGE_TIMEOUT || 8000);
 
 export class MatchMaker {
@@ -99,15 +98,18 @@ export class MatchMaker {
     let roomId: string;
 
     // `rejoin` requests come with a pre-set `sessionId`
-    let sessionId: string = clientOptions.sessionId;
-    const isReconnect = (sessionId !== undefined);
+    const isReconnect = (clientOptions.sessionId !== undefined);
+    let sessionId: string = clientOptions.sessionId || generateId();
 
-    if (!hasHandler && isValidId(roomToJoin)) {
-      roomId = roomToJoin;
-    }
+    let isJoinById: boolean = (!hasHandler && isValidId(roomToJoin));
+    let shouldCreateRoom = hasHandler && !isReconnect;
 
-    if (!hasHandler && !isValidId(roomToJoin)) {
-      throw new MatchMakeError('join_request_fail');
+    if (isJoinById) {
+      // join room by id
+      roomId = await this.joinById(roomToJoin, clientOptions, isReconnect && sessionId);
+
+    } else if (!hasHandler) {
+      throw new MatchMakeError(`Failed to join invalid room "${roomToJoin}"`);
     }
 
     if (isReconnect) {
@@ -119,38 +121,51 @@ export class MatchMaker {
     }
 
     if (!roomId || !isReconnect) {
-      sessionId = generateId();
-
       // when multiple clients request to create a room simultaneously, we need
       // to wait for the first room to be created to prevent creating multiple of them
       await this.awaitRoomAvailable(roomToJoin);
 
       // check if there's an existing room with provided name available to join
-      if (hasHandler) {
-        const bestRoomByScore = (await this.getAvailableRoomByScore(roomToJoin, clientOptions))[0];
-        if (bestRoomByScore && bestRoomByScore.roomId) {
-          roomId = bestRoomByScore.roomId;
+      const availableRoomsByScore = await this.getAvailableRoomByScore(roomToJoin, clientOptions);
+
+      for (let i = 0, l = availableRoomsByScore.length; i < l; i++) {
+        roomId = await this.joinById(availableRoomsByScore[i].roomId, clientOptions, isReconnect && sessionId);
+
+        // couldn't join this room, skip 
+        if (!roomId) {
+          continue;
+        }
+
+        if (await this.remoteRoomCall(roomId, '_reserveSeat', [{
+          id: client.id,
+          sessionId,
+        }])) {
+          // seat reservation was successful, no need to try other rooms.
+          shouldCreateRoom = false;
+          break;
+
+        } else {
+          shouldCreateRoom = true;
         }
       }
     }
 
-    if (isValidId(roomId)) {
-      roomId = await this.joinById(roomId, clientOptions, isReconnect && sessionId);
-    }
-
     // if couldn't join a room by its id, let's try to create a new one
-    if (!roomId && hasHandler) {
-      roomId = this.create(roomToJoin, clientOptions);
+    if (shouldCreateRoom) {
+      roomId = await this.create(roomToJoin, clientOptions);
     }
 
-    if (roomId) {
-      // reserve seat for client on selected room
-      await this.remoteRoomCall(roomId, '_reserveSeat', [{
+    if (
+      (shouldCreateRoom || isJoinById || isReconnect) && 
+      !await this.remoteRoomCall(roomId, '_reserveSeat', [{
         id: client.id,
         sessionId,
-      }]);
+      }])
+    ) {
+      throw new MatchMakeError('join_request_fail');
+    }
 
-    } else {
+    if (!roomId) {
       throw new MatchMakeError(`Failed to join invalid room "${roomToJoin}"`);
     }
 
@@ -194,7 +209,7 @@ export class MatchMaker {
           unsubscribe();
 
           const request = `${method}${ args && ' with args ' + JSON.stringify(args) || '' }`;
-          reject(new Error(`remote room (${roomId}) timed out, requesting "${request}"` +
+          reject(new Error(`remote room (${roomId}) timed out, requesting "${request}". ` +
             `Timeout setting: ${rejectionTimeout}ms`));
         }, rejectionTimeout);
       });
@@ -249,7 +264,7 @@ export class MatchMaker {
       sort((a, b) => b.score - a.score);
   }
 
-  public create(roomName: string, clientOptions: ClientOptions): string {
+  public async create(roomName: string, clientOptions: ClientOptions): Promise<string> {
     const registeredHandler = this.handlers[ roomName ];
     const room = new registeredHandler.klass();
 
@@ -273,7 +288,7 @@ export class MatchMaker {
       room.once('dispose', this.disposeRoom.bind(this, roomName, room));
 
       // room always start unlocked
-      this.createRoomReferences(room, true);
+      await this.createRoomReferences(room, true);
 
       registeredHandler.emit('create', room);
 
@@ -315,7 +330,14 @@ export class MatchMaker {
     const rooms: RoomAvailable[] = [];
 
     await Promise.all(roomIds.map(async (roomId) => {
-      const availability: RoomAvailable = await this.remoteRoomCall(roomId, roomMethodName);
+      let availability: RoomAvailable;
+
+      try {
+        availability = await this.remoteRoomCall(roomId, roomMethodName);
+
+      } catch (e) {
+        // room did not respond
+      }
 
       if (availability) {
         rooms.push(availability);
@@ -365,7 +387,8 @@ export class MatchMaker {
 
     await Promise.all(roomIds.map(async (roomId) => {
       try {
-        await this.remoteRoomCall(roomId, 'roomId');
+        // use hardcoded short timeout for cleaning up stale rooms.
+        await this.remoteRoomCall(roomId, 'roomId', undefined, 200);
 
       } catch (e) {
         debugMatchMaking(`cleaning up stale room '${roomName}' (${roomId})`);
@@ -381,7 +404,15 @@ export class MatchMaker {
     const remoteRequestJoins = [];
 
     await Promise.all(roomIds.map(async (roomId) => {
-      const maxClientsReached = await this.remoteRoomCall(roomId, 'hasReachedMaxClients');
+      let maxClientsReached: boolean;
+
+      try {
+        maxClientsReached = await this.remoteRoomCall(roomId, 'hasReachedMaxClients');
+
+      } catch (e) {
+        // room did not responded.
+        maxClientsReached = true;
+      }
 
       // check maxClients before requesting to join.
       if (maxClientsReached) { return; }
@@ -406,17 +437,17 @@ export class MatchMaker {
     return (await Promise.all(remoteRequestJoins)).concat(roomsWithScore);
   }
 
-  protected createRoomReferences(room: Room, init: boolean = false): boolean {
+  protected async createRoomReferences(room: Room, init: boolean = false): Promise<boolean> {
     this.localRooms[room.roomId] = room;
 
     // add unlocked room reference
-    this.presence.sadd(room.roomName, room.roomId);
+    await this.presence.sadd(room.roomName, room.roomId);
 
     if (init) {
       // add alive room reference (a=all)
-      this.presence.sadd(`a_${room.roomName}`, room.roomId);
+      await this.presence.sadd(`a_${room.roomName}`, room.roomId);
 
-      this.presence.subscribe(this.getRoomChannel(room.roomId), (message) => {
+      await this.presence.subscribe(this.getRoomChannel(room.roomId), (message) => {
         const [method, requestId, args] = message;
 
         const reply = (data) => {
@@ -469,12 +500,15 @@ export class MatchMaker {
       this.presence.decr(key);
 
       if (concurrency > 0) {
+        // avoid having too long timeout if 10+ clients ask to join at the same time
+        const concurrencyTimeout = Math.min(concurrency * 100, REMOTE_ROOM_SHORT_TIMEOUT);
+
         debugMatchMaking(
           'receiving %d concurrent requests for joining \'%s\' (waiting %d ms)',
-          concurrency, roomToJoin, concurrency * 100,
+          concurrency, roomToJoin, concurrencyTimeout,
         );
 
-        return await new Promise((resolve, reject) => setTimeout(resolve, concurrency * 100));
+        return await new Promise((resolve, reject) => setTimeout(resolve, concurrencyTimeout));
       } else {
         return true;
       }
@@ -503,8 +537,8 @@ export class MatchMaker {
     this.handlers[room.roomName].emit('lock', room);
   }
 
-  private unlockRoom(roomName: string, room: Room) {
-    if (this.createRoomReferences(room)) {
+  private async unlockRoom(roomName: string, room: Room) {
+    if (await this.createRoomReferences(room)) {
 
       // emit public event on registered handler
       this.handlers[room.roomName].emit('unlock', room);
