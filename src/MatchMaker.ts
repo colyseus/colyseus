@@ -388,7 +388,7 @@ export class MatchMaker {
     await Promise.all(roomIds.map(async (roomId) => {
       try {
         // use hardcoded short timeout for cleaning up stale rooms.
-        await this.remoteRoomCall(roomId, 'roomId', undefined, 200);
+        await this.remoteRoomCall(roomId, 'roomId');
 
       } catch (e) {
         debugMatchMaking(`cleaning up stale room '${roomName}' (${roomId})`);
