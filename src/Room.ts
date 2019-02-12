@@ -18,7 +18,7 @@ import { debugAndPrintError, debugPatch } from './Debug';
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
 
-const DEFAULT_SEAT_RESERVATION_TIME = 3;
+const DEFAULT_SEAT_RESERVATION_TIME = Number(process.env.COLYSEUS_SEAT_RESERVATION_TIME || 5);
 
 export type SimulationCallback = (deltaTime?: number) => void;
 
@@ -80,7 +80,12 @@ export abstract class Room<T= any> extends EventEmitter {
     this.presence = presence;
 
     this.once('dispose', async () => {
-      await this._dispose();
+      try {
+        await this._dispose();
+
+      } catch (e) {
+        debugAndPrintError(`onDispose error: ${(e && e.message || e || 'promise rejected')}`);
+      }
       this.emit('disconnect');
     });
 
@@ -325,6 +330,10 @@ export abstract class Room<T= any> extends EventEmitter {
     seconds: number = this.seatReservationTime,
     allowReconnection: boolean = false,
   ) {
+    if (!allowReconnection && this.hasReachedMaxClients()) {
+      return false;
+    }
+
     this.reservedSeats.add(client.sessionId);
     await this.presence.setex(`${this.roomId}:${client.id}`, client.sessionId, seconds);
 
@@ -338,6 +347,8 @@ export abstract class Room<T= any> extends EventEmitter {
 
       this.resetAutoDisposeTimeout(seconds);
     }
+
+    return true;
   }
 
   protected resetAutoDisposeTimeout(timeoutInSeconds: number) {
@@ -491,7 +502,12 @@ export abstract class Room<T= any> extends EventEmitter {
   private async _onLeave(client: Client, code?: number): Promise<any> {
     // call abstract 'onLeave' method only if the client has been successfully accepted.
     if (spliceOne(this.clients, this.clients.indexOf(client)) && this.onLeave) {
-      await this.onLeave(client, (code === WS_CLOSE_CONSENTED));
+      try {
+        await this.onLeave(client, (code === WS_CLOSE_CONSENTED));
+
+      } catch (e) {
+        debugAndPrintError(`onLeave error: ${(e && e.message || e || 'promise rejected')}`);
+      }
     }
 
     this.emit('leave', client);

@@ -1,4 +1,3 @@
-import { Protocol } from './../src/Protocol';
 import * as assert from 'assert';
 
 import { MatchMaker } from "../src/MatchMaker";
@@ -7,7 +6,6 @@ import { createDummyClient, DummyRoom, RoomVerifyClient, Client, RoomVerifyClien
 import { RedisPresence } from "../src/presence/RedisPresence";
 import { RemoteClient } from '../src/presence/RemoteClient';
 import { isValidId } from '../src';
-import { send } from '../src/Protocol';
 
 describe('RemoteClient & RedisPresence', function() {
   let matchMaker1: MatchMaker;

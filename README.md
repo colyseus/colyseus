@@ -62,9 +62,11 @@ See [roadmap](https://github.com/colyseus/colyseus/wiki/Roadmap) for our future 
 ### Tools
 
 - [@colyseus/monitor](https://github.com/colyseus/colyseus-monitor) - A Web Monitoring Panel for Colyseus
+- [@colyseus/loadtest](https://github.com/colyseus/colyseus-loadtest) - Utility tool for load testing Colyseus.
 
 ### Community client integration
 
+- [Java](https://github.com/doorbash/colyseus-java)
 - [Objective-C](https://github.com/swittk/Colyseus-ObjC)
 - [Construct2](https://github.com/Keevle/Colyseus-for-C2)
 

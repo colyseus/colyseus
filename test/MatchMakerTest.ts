@@ -133,6 +133,7 @@ describe('MatchMaker', function() {
 
   describe('onJoin', () => {
     it('should send error message to client when joining invalid room', async () => {
+
       let client = createDummyClient({});
       clock.restore();
 
@@ -143,7 +144,7 @@ describe('MatchMaker', function() {
       } catch (e) {
         assert.ok(e.message.match(/timed out/));
       }
-    });
+    }).timeout(REMOTE_ROOM_SHORT_TIMEOUT + 100);
   });
 
   // describe('verifyClient', () => {
@@ -285,12 +286,11 @@ describe('MatchMaker', function() {
       matchMaker.create('room', {});
     });
 
-    it('should trigger "dispose" event', (done) => {
-      let dummyRoom = matchMaker.getRoomById(matchMaker.create('room', {}));
+    it('should trigger "dispose" event', async () => {
+      let dummyRoom = matchMaker.getRoomById(await matchMaker.create('room', {}));
 
       matchMaker.handlers["room"].on("dispose", (room) => {
         assert.ok(room instanceof Room);
-        done();
       });
 
       dummyRoom.emit("dispose");
@@ -298,6 +298,8 @@ describe('MatchMaker', function() {
 
     it('should trigger "join" event', (done) => {
       let dummyRoom = matchMaker.getRoomById(matchMaker.create('room', {}));
+
+      // TODO
 
       matchMaker.handlers["room"].on("join", (room, client) => {
         assert.ok(room instanceof Room);
