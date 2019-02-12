@@ -313,7 +313,7 @@ export class MatchMaker {
       let availability: RoomAvailable;
 
       try {
-        availability = await this.remoteRoomCall(roomId, roomMethodName)
+        availability = await this.remoteRoomCall(roomId, roomMethodName);
 
       } catch (e) {
         // room did not respond
