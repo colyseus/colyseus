@@ -1,3 +1,4 @@
+import * as http from "http";
 import * as fossilDelta from 'fossil-delta';
 import * as msgpack from 'notepack.io';
 
@@ -84,7 +85,12 @@ export abstract class Room<T= any> extends EventEmitter {
     this.presence = presence;
 
     this.once('dispose', async () => {
-      await this._dispose();
+      try {
+        await this._dispose();
+
+      } catch (e) {
+        debugAndPrintError(`onDispose error: ${(e && e.message || e || 'promise rejected')}`);
+      }
       this.emit('disconnect');
     });
 
@@ -517,7 +523,12 @@ export abstract class Room<T= any> extends EventEmitter {
   private async _onLeave(client: Client, code?: number): Promise<any> {
     // call abstract 'onLeave' method only if the client has been successfully accepted.
     if (spliceOne(this.clients, this.clients.indexOf(client)) && this.onLeave) {
-      await this.onLeave(client, (code === WS_CLOSE_CONSENTED));
+      try {
+        await this.onLeave(client, (code === WS_CLOSE_CONSENTED));
+
+      } catch (e) {
+        debugAndPrintError(`onLeave error: ${(e && e.message || e || 'promise rejected')}`);
+      }
     }
 
     this.emit('leave', client);

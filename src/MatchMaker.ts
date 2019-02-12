@@ -99,9 +99,9 @@ export class MatchMaker {
 
     // `rejoin` requests come with a pre-set `sessionId`
     const isReconnect = (clientOptions.sessionId !== undefined);
-    let sessionId: string = clientOptions.sessionId || generateId();
+    const sessionId: string = clientOptions.sessionId || generateId();
 
-    let isJoinById: boolean = (!hasHandler && isValidId(roomToJoin));
+    const isJoinById: boolean = (!hasHandler && isValidId(roomToJoin));
     let shouldCreateRoom = hasHandler && !isReconnect;
 
     if (isJoinById) {
@@ -131,7 +131,7 @@ export class MatchMaker {
       for (let i = 0, l = availableRoomsByScore.length; i < l; i++) {
         roomId = await this.joinById(availableRoomsByScore[i].roomId, clientOptions, isReconnect && sessionId);
 
-        // couldn't join this room, skip 
+        // couldn't join this room, skip
         if (!roomId) {
           continue;
         }
@@ -155,18 +155,18 @@ export class MatchMaker {
       roomId = await this.create(roomToJoin, clientOptions);
     }
 
-    if (
-      (shouldCreateRoom || isJoinById || isReconnect) && 
-      !await this.remoteRoomCall(roomId, '_reserveSeat', [{
-        id: client.id,
-        sessionId,
-      }])
-    ) {
-      throw new MatchMakeError('join_request_fail');
-    }
-
     if (!roomId) {
       throw new MatchMakeError(`Failed to join invalid room "${roomToJoin}"`);
+
+    } else if (shouldCreateRoom || isJoinById || isReconnect) {
+      const reserveSeatSuccessful = await this.remoteRoomCall(roomId, '_reserveSeat', [{
+        id: client.id,
+        sessionId,
+      }]);
+
+      if (!reserveSeatSuccessful) {
+        throw new MatchMakeError('join_request_fail');
+      }
     }
 
     return roomId;
