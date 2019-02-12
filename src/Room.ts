@@ -1,4 +1,3 @@
-import * as http from "http";
 import * as fossilDelta from 'fossil-delta';
 import * as msgpack from 'notepack.io';
 
