@@ -17,7 +17,7 @@
     <img src="https://img.shields.io/discord/525739117951320081.svg?style=for-the-badge&colorB=7581dc&logo=discord&logoColor=white">
   </a>
   <h3>
-    Multiplayer Game Server for Node.js. <br /><a href="http://colyseus.io/docs/">View documentation</a>
+    Multiplayer Game Server for Node.js. <br /><a href="https://docs.colyseus.io/">View documentation</a>
   </h3>
 </div>
 
@@ -30,10 +30,6 @@ own multiplayer games in JavaScript.
 This framework is fairly new and is being evolved constantly. You're encouraged
 to take a look on [some games being developed with
 it](https://discuss.colyseus.io/category/5/showcase) and make your own!
-
-<div align="center">
-  <a href="https://www.patreon.com/bePatron?u=3301115"><img src="https://c5.patreon.com/external/logo/become_a_patron_button.png" /></a>
-</div>
 
 ## What Colyseus provides to you:
 
@@ -75,10 +71,11 @@ See [roadmap](https://github.com/colyseus/colyseus/wiki/Roadmap) for our future 
 See the [official examples](https://github.com/colyseus/colyseus-examples) for
 usage reference with the latest version of Colyseus.
 
-- [tic-tac-toe](https://tictactoe-colyseus.herokuapp.com) ([source-code](https://github.com/endel/tic-tac-toe)) - Simple Tic Tac Toe using [pixi.js](https://github.com/pixijs/pixi.js)
+- [Colyseus + PixiJS Boilerplate](https://colyseus-pixijs-boilerplate.herokuapp.com/) ([source-code](https://github.com/endel/colyseus-pixijs-boilerplate)) - Simplistic agar.io implementation using [PixiJS](https://github.com/pixijs/pixi.js)
+- [Tic Tac Toe](https://tictactoe-colyseus.herokuapp.com) ([source-code](https://github.com/endel/tic-tac-toe)) - Simple Tic Tac Toe using [PixiJS](https://github.com/pixijs/pixi.js)
 - (outdated: v0.8.x) [tanx](https://playcanvas.com/project/367035/overview/tanxcolyseus) ([source-code](https://github.com/endel/tanx)) - Multiplayer tanks game, originally from [PlayCanvas](https://tanx.io/)
 - (outdated: v0.4.x) [React Example](https://colyseus-react-example.herokuapp.com) ([source-code](https://github.com/endel/colyseus-react-example)) - Example integrating with [ReactJS](https://github.com/facebook/react)
-- (outdated: v0.3.x) [LD35 entry: dotower](http://ludumdare.com/compo/ludum-dare-35/?action=preview&uid=50958) ([source-code](https://github.com/endel/LD35)) - Simple experimental MOBA using [pixi.js](https://github.com/pixijs/pixi.js)
+- (outdated: v0.3.x) [LD35 entry: dotower](http://ludumdare.com/compo/ludum-dare-35/?action=preview&uid=50958) ([source-code](https://github.com/endel/LD35)) - Simple experimental MOBA using [PixiJS](https://github.com/pixijs/pixi.js)
 
 # Contributors
 

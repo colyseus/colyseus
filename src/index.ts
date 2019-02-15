@@ -15,6 +15,11 @@ export { LocalPresence } from './presence/LocalPresence';
 export { RedisPresence } from './presence/RedisPresence';
 export { MemsharedPresence } from './presence/MemsharedPresence';
 
+// Serializers
+export { FossilDeltaSerializer } from "./serializer/FossilDeltaSerializer";
+export { SchemaSerializer } from "./serializer/SchemaSerializer";
+export { serialize } from "./serializer/Serializer";
+
 // State Helper Types
 export interface EntityMap<T> {[ entityId: string ]: T; }
 

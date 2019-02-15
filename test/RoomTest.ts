@@ -129,7 +129,7 @@ describe('Room', function() {
     it('should broadcast data to all clients', function() {
       let room = new DummyRoom();
 
-      // connect 2 dummy clients into room
+      // connect 3 dummy clients into room
       let client1 = createDummyClient();
       (<any>room)._onJoin(client1, {});
 
@@ -164,6 +164,30 @@ describe('Room', function() {
       assert.equal("data", client1.lastMessage[1]);
       assert.equal("data", client2.lastMessage[1]);
       assert.equal(undefined, client3.lastMessage[1]);
+    });
+
+    it('should broadcast after next patch', function() {
+      const room = new DummyRoom();
+
+      // connect 3 dummy clients into room
+      const client1 = createDummyClient();
+      (<any>room)._onJoin(client1, {});
+      const client2 = createDummyClient();
+      (<any>room)._onJoin(client2, {});
+      const client3 = createDummyClient();
+      (<any>room)._onJoin(client3, {});
+
+      room.broadcast("data", { afterNextPatch: true });
+
+      assert.equal(undefined, client1.lastMessage[1]);
+      assert.equal(undefined, client2.lastMessage[1]);
+      assert.equal(undefined, client3.lastMessage[1]);
+
+      tick(room.patchRate);
+
+      assert.equal("data", client1.lastMessage[1]);
+      assert.equal("data", client2.lastMessage[1]);
+      assert.equal("data", client3.lastMessage[1]);
     });
   });
 

@@ -1,6 +1,6 @@
 {
   "name": "colyseus",
-  "version": "0.9.27",
+  "version": "0.10.0-alpha.1",
   "description": "Multiplayer Game Server for Node.js.",
   "main": "./lib/index.js",
   "typings": "./lib/index.d.ts",
@@ -23,13 +23,13 @@
     "test": "mocha --require ts-node/register test/**Test.ts --exit",
     "tslint": "tslint --project .",
     "postinstall": "npm run -s donate",
-    "donate": "echo \"\u001b[35m\u001b[1mLove Colyseus? Support its development by becoming a backer:\u001b[22m\u001b[39m\n > \u001b[34mhttps://www.patreon.com/endel\u001b[39m\""
+    "donate": "echo \"\u001b[35m\u001b[1mLove Colyseus? ⚔  Support its development by becoming a backer:\u001b[22m\u001b[39m\n > \u001b[34mhttps://www.patreon.com/endel\u001b[39m\""
   },
   "engines": {
     "node": ">= 8.x"
   },
   "dependencies": {
-    "@colyseus/schema": "^0.1.5",
+    "@colyseus/schema": "^0.1.6",
     "@gamestdio/timeline": "^0.3.5",
     "@gamestdio/timer": "^1.1.7",
     "@types/ws": "^6.0.1",
@@ -60,7 +60,7 @@
     "sinon": "^4.0.0",
     "ts-node": "^7.0.1",
     "tslint": "^5.11.0",
-    "typescript": "^3.2.2"
+    "typescript": "^3.3.3"
   },
   "license": "MIT",
   "greenkeeper": {
