@@ -31,7 +31,8 @@ export interface RoomAvailable {
 }
 
 export interface BroadcastOptions {
-  except: Client;
+  except?: Client;
+  afterNextPatch?: boolean;
 }
 
 export abstract class Room<T= any> extends EventEmitter {
@@ -60,6 +61,8 @@ export abstract class Room<T= any> extends EventEmitter {
 
   protected reconnections: {[sessionId: string]: Deferred} = {};
   protected isDisconnecting: boolean = false;
+
+  private _afterNextPatchBroadcasts: Array<[any, BroadcastOptions]> = [];
 
   // when a new user connects, it receives the '_previousState', which holds
   // the last binary snapshot other users already have, therefore the patches
@@ -148,7 +151,10 @@ export abstract class Room<T= any> extends EventEmitter {
     }
 
     if ( milliseconds !== null && milliseconds !== 0 ) {
-      this._patchInterval = setInterval( this.broadcastPatch.bind(this), milliseconds );
+      this._patchInterval = setInterval( () => {
+        this.broadcastPatch();
+        this.broadcastAfterPatch();
+      }, milliseconds );
     }
   }
 
@@ -205,7 +211,13 @@ export abstract class Room<T= any> extends EventEmitter {
     send(client, [Protocol.ROOM_DATA, data]);
   }
 
-  public broadcast(data: any, options?: BroadcastOptions): boolean {
+  public broadcast(data: any, options: BroadcastOptions = {}): boolean {
+    if (options.afterNextPatch) {
+      delete options.afterNextPatch;
+      this._afterNextPatchBroadcasts.push([data, options]);
+      return true;
+    }
+
     // no data given, try to broadcast patched state
     if (!data) {
       throw new Error('Room#broadcast: \'data\' is required to broadcast.');
@@ -220,7 +232,7 @@ export abstract class Room<T= any> extends EventEmitter {
     while (numClients--) {
       const client = this.clients[ numClients ];
 
-      if ((!options || options.except !== client)) {
+      if (options.except !== client) {
         send(client, data, false);
       }
     }
@@ -309,6 +321,20 @@ export abstract class Room<T= any> extends EventEmitter {
 
     // broadcast patches (diff state) to all clients,
     return this.broadcast( msgpack.encode([ Protocol.ROOM_STATE_PATCH, patches ]) );
+  }
+
+  protected broadcastAfterPatch() {
+    const length = this._afterNextPatchBroadcasts.length;
+
+    if (length > 0) {
+      for (let i = 0; i < length; i++) {
+        this.broadcast.apply(this, this._afterNextPatchBroadcasts[i]);
+      }
+
+      // new messages may have been added in the meantime,
+      // let's splice the ones that have been processed
+      this._afterNextPatchBroadcasts.splice(0, length);
+    }
   }
 
   protected async allowReconnection(client: Client, seconds: number = 15): Promise<Client> {
