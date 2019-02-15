@@ -17,7 +17,7 @@
     <img src="https://img.shields.io/discord/525739117951320081.svg?style=for-the-badge&colorB=7581dc&logo=discord&logoColor=white">
   </a>
   <h3>
-    Multiplayer Game Server for Node.js. <br /><a href="http://colyseus.io/docs/">View documentation</a>
+    Multiplayer Game Server for Node.js. <br /><a href="https://docs.colyseus.io/">View documentation</a>
   </h3>
 </div>
 
@@ -30,10 +30,6 @@ own multiplayer games in JavaScript.
 This framework is fairly new and is being evolved constantly. You're encouraged
 to take a look on [some games being developed with
 it](https://discuss.colyseus.io/category/5/showcase) and make your own!
-
-<div align="center">
-  <a href="https://www.patreon.com/bePatron?u=3301115"><img src="https://c5.patreon.com/external/logo/become_a_patron_button.png" /></a>
-</div>
 
 ## What Colyseus provides to you:
 
