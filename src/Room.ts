@@ -193,7 +193,7 @@ export abstract class Room<T= any> extends EventEmitter {
   }
 
   public send(client: Client, data: any): void {
-    send(client, [Protocol.ROOM_DATA, data]);
+    send(client, Protocol.ROOM_DATA, data);
   }
 
   public broadcast(data: any, options: BroadcastOptions = {}): boolean {
@@ -210,7 +210,7 @@ export abstract class Room<T= any> extends EventEmitter {
 
     // encode all messages with msgpack
     if (!(data instanceof Buffer)) {
-      data = msgpack.encode([Protocol.ROOM_DATA, data]);
+      data = msgpack.encode(data);
     }
 
     let numClients = this.clients.length;
@@ -218,7 +218,7 @@ export abstract class Room<T= any> extends EventEmitter {
       const client = this.clients[ numClients ];
 
       if (options.except !== client) {
-        send(client, data, false);
+        send(client, Protocol.ROOM_DATA, data, false);
       }
     }
 
@@ -261,12 +261,7 @@ export abstract class Room<T= any> extends EventEmitter {
   protected _getSerializer?(): Serializer<T>;
 
   protected sendState(client: Client): void {
-    send(client, [
-      Protocol.ROOM_STATE,
-      this._serializer.getData(),
-      this.clock.currentTime,
-      this.clock.elapsedTime,
-    ]);
+    send(client, Protocol.ROOM_STATE, this._serializer.getData());
   }
 
   protected broadcastPatch(): boolean {
@@ -279,6 +274,8 @@ export abstract class Room<T= any> extends EventEmitter {
       return false;
     }
 
+    console.log("PATCH?", this._serializer.hasChanged(this.state));
+
     if (this._serializer.hasChanged(this.state)) {
       let numClients = this.clients.length;
 
@@ -286,14 +283,16 @@ export abstract class Room<T= any> extends EventEmitter {
         // broadcast custom patch for each client
         while (numClients--) {
           const client = this.clients[numClients];
-          send(client, [Protocol.ROOM_STATE_PATCH, this.onPatch(client, this.state)], false);
+          send(client, Protocol.ROOM_STATE_PATCH, this.onPatch(client, this.state), false);
         }
 
       } else {
         // broadcast same patch to all clients
+        const patches = Uint8Array.from(this._serializer.getPatches());
+
         while (numClients--) {
           const client = this.clients[numClients];
-          send(client, msgpack.encode([ Protocol.ROOM_STATE_PATCH, this._serializer.getPatches() ]), false);
+          send(client, Protocol.ROOM_STATE_PATCH, patches, false);
         }
       }
 
@@ -503,7 +502,7 @@ export abstract class Room<T= any> extends EventEmitter {
     }
 
     // confirm room id that matches the room name requested to join
-    send(client, [ Protocol.JOIN_ROOM, client.sessionId ]);
+    send(client, Protocol.JOIN_ROOM, client.sessionId);
 
     // bind onLeave method.
     client.on('message', this._onMessage.bind(this, client));

@@ -57,7 +57,7 @@ export class MatchMaker {
         const [method, data] = message;
 
         if (method === 'send') {
-          send(client, new Buffer(data), false);
+          send(client, data[0], new Buffer(data.slice(1)), false);
 
         } else if (method === 'close') {
           client.close(data || undefined);

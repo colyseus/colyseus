@@ -49,8 +49,9 @@ export function decode(message: any) {
   return message;
 }
 
-export function send(client: Client, message: any, encode: boolean = true) {
+export function send(client: Client, protocol: Protocol, message: any | Buffer, encode: boolean = true) {
   if (client.readyState === WebSocket.OPEN) {
-    client.send((encode && msgpack.encode(message)) || message, { binary: true });
+    const data = (encode && msgpack.encode(message)) || message;
+    client.send(Buffer.concat([new Uint8Array([protocol]), data], data.byteLength + 1), { binary: true });
   }
 }

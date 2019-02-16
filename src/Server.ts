@@ -201,7 +201,7 @@ export class Server {
 
     // ensure client has its "colyseusid"
     if (!upgradeReq.colyseusid) {
-      send(client, [Protocol.USER_ID, client.id]);
+      send(client, Protocol.USER_ID, client.id);
     }
 
     // set client options
@@ -217,7 +217,7 @@ export class Server {
       this.matchMaker.connectToRoom(client, upgradeReq.roomId).
         catch((e) => {
           debugAndPrintError(e.stack || e);
-          send(client, [Protocol.JOIN_ERROR, roomId, e && e.message]);
+          send(client, Protocol.JOIN_ERROR, e && e.message);
         });
 
     } else {
@@ -240,7 +240,7 @@ export class Server {
       joinOptions.clientId = client.id;
 
       if (!this.matchMaker.hasHandler(roomName) && !isValidId(roomName)) {
-        send(client, [Protocol.JOIN_ERROR, roomName, `Error: no available handler for "${roomName}"`]);
+        send(client, Protocol.JOIN_ERROR, [roomName, `Error: no available handler for "${roomName}"`]);
 
       } else {
         //
@@ -252,11 +252,11 @@ export class Server {
           return this.matchMaker.onJoinRoomRequest(client, roomName, joinOptions);
         }, 3, 0, [MatchMakeError]).
           then(async (roomId: string) => {
-            send(client, [ Protocol.JOIN_ROOM, roomId, joinOptions.requestId ]);
+            send(client, Protocol.JOIN_ROOM, [ roomId, joinOptions.requestId ]);
 
           }).catch((e) => {
             debugError(`MatchMakeError: ${message}\n${e.stack}`);
-            send(client, [Protocol.JOIN_ERROR, roomName, e && e.message]);
+            send(client, Protocol.JOIN_ERROR, [roomName, e && e.message]);
           });
       }
 
@@ -265,7 +265,7 @@ export class Server {
       const roomName = message[2];
 
       this.matchMaker.getAvailableRooms(roomName).
-        then((rooms) => send(client, [Protocol.ROOM_LIST, requestId, rooms])).
+        then((rooms) => send(client, Protocol.ROOM_LIST, [requestId, rooms])).
         catch((e) => debugAndPrintError(e.stack || e));
 
     } else {
