@@ -193,7 +193,7 @@ export abstract class Room<T= any> extends EventEmitter {
   }
 
   public send(client: Client, data: any): void {
-    send(client, Protocol.ROOM_DATA, data);
+    send[Protocol.ROOM_DATA](client, data);
   }
 
   public broadcast(data: any, options: BroadcastOptions = {}): boolean {
@@ -218,7 +218,7 @@ export abstract class Room<T= any> extends EventEmitter {
       const client = this.clients[ numClients ];
 
       if (options.except !== client) {
-        send(client, Protocol.ROOM_DATA, data, false);
+        send[Protocol.ROOM_DATA](client, data);
       }
     }
 
@@ -261,7 +261,7 @@ export abstract class Room<T= any> extends EventEmitter {
   protected _getSerializer?(): Serializer<T>;
 
   protected sendState(client: Client): void {
-    send(client, Protocol.ROOM_STATE, this._serializer.getData());
+    send[Protocol.ROOM_STATE](client, this._serializer.getData());
   }
 
   protected broadcastPatch(): boolean {
@@ -283,16 +283,16 @@ export abstract class Room<T= any> extends EventEmitter {
         // broadcast custom patch for each client
         while (numClients--) {
           const client = this.clients[numClients];
-          send(client, Protocol.ROOM_STATE_PATCH, this.onPatch(client, this.state), false);
+          send[Protocol.ROOM_STATE_PATCH](client, this.onPatch(client, this.state));
         }
 
       } else {
-        // broadcast same patch to all clients
-        const patches = Uint8Array.from(this._serializer.getPatches());
+        // get patches only once to broadcast to all clients
+        const patches = this._serializer.getPatches();
 
         while (numClients--) {
           const client = this.clients[numClients];
-          send(client, Protocol.ROOM_STATE_PATCH, patches, false);
+          send[Protocol.ROOM_STATE_PATCH](client, patches);
         }
       }
 
@@ -502,7 +502,7 @@ export abstract class Room<T= any> extends EventEmitter {
     }
 
     // confirm room id that matches the room name requested to join
-    send(client, Protocol.JOIN_ROOM, client.sessionId);
+    send[Protocol.JOIN_ROOM](client, client.sessionId);
 
     // bind onLeave method.
     client.on('message', this._onMessage.bind(this, client));

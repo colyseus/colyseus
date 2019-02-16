@@ -14,6 +14,7 @@ import { Client, generateId, isValidId } from './index';
 import { decode, Protocol, send } from './Protocol';
 import { RoomConstructor } from './Room';
 import { parseQueryString, registerGracefulShutdown, retry } from './Utils';
+import { utf8Length, utf8Write } from './Protocol';
 
 function noop() {/* tslint:disable:no-empty */}
 function heartbeat() { this.pingCount = 0; }
@@ -201,7 +202,7 @@ export class Server {
 
     // ensure client has its "colyseusid"
     if (!upgradeReq.colyseusid) {
-      send(client, Protocol.USER_ID, client.id);
+      send[Protocol.USER_ID](client);
     }
 
     // set client options
@@ -217,7 +218,7 @@ export class Server {
       this.matchMaker.connectToRoom(client, upgradeReq.roomId).
         catch((e) => {
           debugAndPrintError(e.stack || e);
-          send(client, Protocol.JOIN_ERROR, e && e.message);
+          send[Protocol.JOIN_ERROR](client, (e && e.message) || "");
         });
 
     } else {
@@ -233,14 +234,14 @@ export class Server {
       return;
     }
 
-    if (message[0] === Protocol.JOIN_ROOM) {
+    if (message[0] === Protocol.JOIN_REQUEST) {
       const roomName = message[1];
       const joinOptions = message[2];
 
       joinOptions.clientId = client.id;
 
       if (!this.matchMaker.hasHandler(roomName) && !isValidId(roomName)) {
-        send(client, Protocol.JOIN_ERROR, [roomName, `Error: no available handler for "${roomName}"`]);
+        send[Protocol.JOIN_ERROR](client, `no available handler for "${roomName}"`);
 
       } else {
         //
@@ -252,11 +253,13 @@ export class Server {
           return this.matchMaker.onJoinRoomRequest(client, roomName, joinOptions);
         }, 3, 0, [MatchMakeError]).
           then(async (roomId: string) => {
-            send(client, Protocol.JOIN_ROOM, [ roomId, joinOptions.requestId ]);
+            send[Protocol.JOIN_REQUEST](client, joinOptions.requestId, roomId);
 
           }).catch((e) => {
+            const message = (e && e.message) || "";
             debugError(`MatchMakeError: ${message}\n${e.stack}`);
-            send(client, Protocol.JOIN_ERROR, [roomName, e && e.message]);
+
+            send[Protocol.JOIN_ERROR](client, message);
           });
       }
 
@@ -265,7 +268,11 @@ export class Server {
       const roomName = message[2];
 
       this.matchMaker.getAvailableRooms(roomName).
-        then((rooms) => send(client, Protocol.ROOM_LIST, [requestId, rooms])).
+        then((rooms) => {
+          console.warn("TODO: ROOM_LIST PROTOCOL ENCODING");
+          // send(client, Protocol.ROOM_LIST, [requestId, rooms])
+          // send[Protocol.ROOM_LIST](client, joinOptions.requestId, roomId);
+        }).
         catch((e) => debugAndPrintError(e.stack || e));
 
     } else {
