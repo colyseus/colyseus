@@ -91,33 +91,27 @@ export const send = {
      * TODO: this is only supporting SchemaSerializer.
      * It should support FossilDeltaSerializer as well.
      */
-    
-    client.send(Buffer.alloc(1, Protocol.ROOM_STATE), { binary: true });
-    client.send(bytes, { binary: true });
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(Buffer.alloc(1, Protocol.ROOM_STATE), { binary: true });
+      client.send(bytes, { binary: true });
+    }
   },
 
   [Protocol.ROOM_STATE_PATCH]: (client: Client, bytes: number[]) => {
-    client.send(Buffer.alloc(1, Protocol.ROOM_STATE_PATCH), { binary: true });
-    client.send(bytes, { binary: true });
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(Buffer.alloc(1, Protocol.ROOM_STATE_PATCH), { binary: true });
+      client.send(bytes, { binary: true });
+    }
   },
 
   [Protocol.ROOM_DATA]: (client: Client, data: any) => {
-    client.send(Buffer.alloc(1, Protocol.ROOM_DATA), { binary: true });
-    client.send(msgpack.encode(data), { binary: true });
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(Buffer.alloc(1, Protocol.ROOM_DATA), { binary: true });
+      client.send(msgpack.encode(data), { binary: true });
+    }
   }
 
 }
-
-// export function send(client: Client, protocol: Protocol, ...data:any[]) {
-//   if (client.readyState === WebSocket.OPEN) {
-//     if (protocol === Protocol.USER_ID) {
-//     }
-
-//     const data = (encode && msgpack.encode(message)) || message;
-//     client.send(Buffer.concat([new Uint8Array([protocol]), data], data.byteLength + 1), { binary: true });
-
-//   }
-// }
 
 export function utf8Write(buff: Buffer, offset: number, str: string) {
   buff[offset++] = utf8Length(str) - 1;
