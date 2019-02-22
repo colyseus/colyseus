@@ -253,22 +253,33 @@ export abstract class Room<T= any> extends EventEmitter {
     this.isDisconnecting = true;
     this.autoDispose = true;
 
-    let i = this.clients.length;
-    while (i--) {
-      const client = this.clients[i];
-      const reconnection = this.reconnections[client.sessionId];
+    const delayedDisconnection = new Promise((resolve) =>
+      this.once('disconnect', () => resolve()));
 
-      if (reconnection) {
-        reconnection.reject();
+    let numClients = this.clients.length;
+    if (numClients > 0) {
+      // prevent new clients to join while this room is disconnecting.
+      this.lock();
 
-      } else {
-        client.close(WS_CLOSE_CONSENTED);
+      // clients may have `async onLeave`, room will be disposed after they all run
+      while (numClients--) {
+        const client = this.clients[numClients];
+        const reconnection = this.reconnections[client.sessionId];
+
+        if (reconnection) {
+          reconnection.reject();
+
+        } else {
+          client.close(WS_CLOSE_CONSENTED);
+        }
       }
+
+    } else {
+      // no clients connected, dispose immediately.
+      this.emit('dispose');
     }
 
-    return new Promise((resolve, reject) => {
-      this.once('disconnect', () => resolve());
-    });
+    return delayedDisconnection;
   }
 
   protected sendState(client: Client): void {
