@@ -274,7 +274,7 @@ export class MatchMaker {
     room.presence = this.presence;
 
     if (room.onInit) {
-      room.onInit(merge({}, clientOptions, registeredHandler.options));
+      await room.onInit(merge({}, clientOptions, registeredHandler.options));
     }
 
     // imediatelly ask client to join the room
