@@ -10,7 +10,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
   }
 
   public getData() {
-    return this.state.encode();
+    return this.state.encodeAll()
   }
 
   public hasChanged(newState: any) {

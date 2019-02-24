@@ -274,8 +274,6 @@ export abstract class Room<T= any> extends EventEmitter {
       return false;
     }
 
-    console.log("PATCH?", this._serializer.hasChanged(this.state));
-
     if (this._serializer.hasChanged(this.state)) {
       let numClients = this.clients.length;
 
