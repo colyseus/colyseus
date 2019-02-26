@@ -49,7 +49,10 @@ export function createEmptyClient(): any {
 }
 
 export function createDummyClient (options: any = {}): any {
-  let client = new Client(generateId());
+  const id = options.id || generateId();
+  delete options.id;
+
+  let client = new Client(id);
   (<any>client).options = options;
   return client;
 }

@@ -13,6 +13,7 @@ import {
   DummyRoomWithState,
   RoomWithAsync,
 } from "./utils/mock";
+import { generateId } from "../src";
 
 describe('Room', function() {
   let clock: sinon.SinonFakeTimers;
@@ -356,7 +357,8 @@ describe('Room', function() {
     });
 
     it("should succeed waiting same sessionId for reconnection", async () => {
-      const firstClient = createDummyClient();
+      const clientId = generateId();
+      const firstClient = createDummyClient({ id: clientId });
       const roomId = await matchMaker.onJoinRoomRequest(firstClient, 'reconnect', {});
 
       const room = matchMaker.getRoomById(roomId);
@@ -380,7 +382,7 @@ describe('Room', function() {
       assert.equal(room.clients.length, 0);
       await tick(5 * 1000);
 
-      const secondClient = createDummyClient();
+      const secondClient = createDummyClient({ id: clientId });
       const secondRoomId = await matchMaker.onJoinRoomRequest(secondClient, 'reconnect', {
         sessionId: firstClient.sessionId
       });

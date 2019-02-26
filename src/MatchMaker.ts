@@ -105,7 +105,15 @@ export class MatchMaker {
     const isJoinById: boolean = (!hasHandler && isValidId(roomToJoin));
     let shouldCreateRoom = hasHandler && !isReconnect;
 
-    if (isJoinById) {
+    if (isReconnect) {
+      roomToJoin = await this.presence.get(sessionId);
+
+      if (!roomToJoin) {
+        throw new MatchMakeError(`rejoin has been expired for ${sessionId}`);
+      }
+    }
+
+    if (isJoinById || isReconnect) {
       // join room by id
       roomId = await this.joinById(roomToJoin, clientOptions, isReconnect && sessionId);
 
@@ -113,15 +121,7 @@ export class MatchMaker {
       throw new MatchMakeError(`Failed to join invalid room "${roomToJoin}"`);
     }
 
-    if (isReconnect) {
-      roomId = await this.presence.get(sessionId);
-
-      if (!roomId) {
-        throw new MatchMakeError(`rejoin has been expired for ${sessionId}`);
-      }
-    }
-
-    if (!roomId || !isReconnect) {
+    if (!roomId && !isReconnect) {
       // when multiple clients request to create a room simultaneously, we need
       // to wait for the first room to be created to prevent creating multiple of them
       await this.awaitRoomAvailable(roomToJoin);
@@ -130,7 +130,7 @@ export class MatchMaker {
       const availableRoomsByScore = await this.getAvailableRoomByScore(roomToJoin, clientOptions);
 
       for (let i = 0, l = availableRoomsByScore.length; i < l; i++) {
-        roomId = await this.joinById(availableRoomsByScore[i].roomId, clientOptions, isReconnect && sessionId);
+        roomId = await this.joinById(availableRoomsByScore[i].roomId, clientOptions);
 
         // couldn't join this room, skip
         if (!roomId) {
@@ -159,7 +159,7 @@ export class MatchMaker {
     if (!roomId) {
       throw new MatchMakeError(`Failed to join invalid room "${roomToJoin}"`);
 
-    } else if (shouldCreateRoom || isJoinById || isReconnect) {
+    } else if (shouldCreateRoom || isJoinById) {
       const reserveSeatSuccessful = await this.remoteRoomCall(roomId, '_reserveSeat', [{
         id: client.id,
         sessionId,
@@ -238,7 +238,7 @@ export class MatchMaker {
     return this.handlers[ name ] !== undefined;
   }
 
-  public async joinById(roomId: string, clientOptions: ClientOptions, rejoinSessionId: string): Promise<string> {
+  public async joinById(roomId: string, clientOptions: ClientOptions, rejoinSessionId?: string): Promise<string> {
     const exists = await this.presence.exists(this.getRoomChannel(roomId));
 
     if (!exists) {
@@ -275,7 +275,7 @@ export class MatchMaker {
     room.presence = this.presence;
 
     if (room.onInit) {
-      room.onInit(merge({}, clientOptions, registeredHandler.options));
+      await room.onInit(merge({}, clientOptions, registeredHandler.options));
     }
 
     // imediatelly ask client to join the room

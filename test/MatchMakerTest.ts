@@ -103,11 +103,11 @@ describe('MatchMaker', function() {
       assert.ok(roomClient.sessionId, "should have valid sessionId");
     });
 
-    it('should call "onDispose" when room is not created', function(done) {
+    it('should call "onDispose" when room is not created', async () => {
       const stub = sinon.stub(DummyRoom.prototype, 'requestJoin').returns(false);
       const spy = sinon.spy(DummyRoom.prototype, 'onDispose');
       try {
-        matchMaker.create('dummy_room', {});
+        await matchMaker.create('dummy_room', {});
         assert.fail("catch block should've taken place");
 
       } catch (e) {
@@ -115,7 +115,6 @@ describe('MatchMaker', function() {
         assert.ok(spy.calledOnce);
         stub.restore();
         spy.restore();
-        done();
       }
     });
 
