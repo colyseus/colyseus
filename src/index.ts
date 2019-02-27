@@ -20,9 +20,6 @@ export { FossilDeltaSerializer } from "./serializer/FossilDeltaSerializer";
 export { SchemaSerializer } from "./serializer/SchemaSerializer";
 export { serialize } from "./serializer/Serializer";
 
-// State Helper Types
-export interface EntityMap<T> {[ entityId: string ]: T; }
-
 // Utilities
 export { Clock, Delayed };
 export { nonenumerable as nosync } from 'nonenumerable';
