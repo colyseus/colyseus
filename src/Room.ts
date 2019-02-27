@@ -515,7 +515,7 @@ export abstract class Room<T= any> extends EventEmitter {
       client,
       client.sessionId,
       this._serializer.id,
-      this._serializer.handshake && this._serializer.handshake()
+      this._serializer.handshake && this._serializer.handshake(),
     );
 
     // bind onLeave method.

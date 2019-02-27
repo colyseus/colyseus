@@ -16,9 +16,9 @@ export { RedisPresence } from './presence/RedisPresence';
 export { MemsharedPresence } from './presence/MemsharedPresence';
 
 // Serializers
-export { FossilDeltaSerializer } from "./serializer/FossilDeltaSerializer";
-export { SchemaSerializer } from "./serializer/SchemaSerializer";
-export { serialize } from "./serializer/Serializer";
+export { FossilDeltaSerializer } from './serializer/FossilDeltaSerializer';
+export { SchemaSerializer } from './serializer/SchemaSerializer';
+export { serialize } from './serializer/Serializer';
 
 // Utilities
 export { Clock, Delayed };

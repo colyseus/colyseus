@@ -1,8 +1,8 @@
+import { Reflection, Schema } from '@colyseus/schema';
 import { Serializer } from './Serializer';
-import { Schema, Reflection } from "@colyseus/schema";
 
 export class SchemaSerializer<T> implements Serializer<T> {
-  public id = "schema";
+  public id = 'schema';
   private state: T & Schema;
 
   public reset(newState: any) {
@@ -10,18 +10,18 @@ export class SchemaSerializer<T> implements Serializer<T> {
   }
 
   public getData() {
-    return this.state.encodeAll()
+    return this.state.encodeAll();
   }
 
   public hasChanged(newState: any) {
-    return newState['$changed'];
+    return newState.$changed;
   }
 
   public getPatches() {
     return this.state.encode();
   }
-  
-  public handshake () {
+
+  public handshake() {
     return Reflection.encode(this.state);
   }
 }

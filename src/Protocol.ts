@@ -2,11 +2,10 @@ import * as msgpack from 'notepack.io';
 import * as WebSocket from 'ws';
 import { debugAndPrintError } from './Debug';
 import { Client } from './index';
-import { Stream, Writable } from 'stream';
 
 export const WS_CLOSE_CONSENTED = 4000;
 
-// Colyseus protocol codes range between 0~100 
+// Colyseus protocol codes range between 0~100
 // (msgpack messages are identified on client-side as >100)
 export enum Protocol {
 
@@ -129,11 +128,11 @@ export const send = {
       client.send(Buffer.alloc(1, Protocol.ROOM_DATA), { binary: true });
       client.send(msgpack.encode(data), { binary: true });
     }
-  }
+  },
 
-}
+};
 
-export function utf8Write(buff: Buffer, offset: number, str: string) {
+export function utf8Write(buff: Buffer, offset: number, str: string = '') {
   buff[offset++] = utf8Length(str) - 1;
 
   let c = 0;
@@ -160,8 +159,9 @@ export function utf8Write(buff: Buffer, offset: number, str: string) {
 }
 
 // Faster for short strings than Buffer.byteLength
-export function utf8Length(str: string) {
-  let c = 0, length = 0;
+export function utf8Length(str: string = '') {
+  let c = 0;
+  let length = 0;
   for (let i = 0, l = str.length; i < l; i++) {
     c = str.charCodeAt(i);
     if (c < 0x80) {

@@ -1,10 +1,10 @@
-import { Serializer } from './Serializer';
 import { debugPatch } from '../Debug';
+import { Serializer } from './Serializer';
 
-import * as jsonpatch from 'fast-json-patch'; 
+import * as jsonpatch from 'fast-json-patch';
 
 export class JSONPatchSerializer<T> implements Serializer<T> {
-  public id = "json-patch";
+  public id = 'json-patch';
 
   private state: T;
   private observer: jsonpatch.Observer<T>;

@@ -12,9 +12,9 @@ import { Presence } from './presence/Presence';
 import { MatchMakeError } from './Errors';
 import { Client, generateId, isValidId } from './index';
 import { decode, Protocol, send } from './Protocol';
+import { utf8Length, utf8Write } from './Protocol';
 import { RoomConstructor } from './Room';
 import { parseQueryString, registerGracefulShutdown, retry } from './Utils';
-import { utf8Length, utf8Write } from './Protocol';
 
 function noop() {/* tslint:disable:no-empty */}
 function heartbeat() { this.pingCount = 0; }
@@ -218,7 +218,7 @@ export class Server {
       this.matchMaker.connectToRoom(client, upgradeReq.roomId).
         catch((e) => {
           debugAndPrintError(e.stack || e);
-          send[Protocol.JOIN_ERROR](client, (e && e.message) || "");
+          send[Protocol.JOIN_ERROR](client, (e && e.message) || '');
         });
 
     } else {
@@ -256,10 +256,10 @@ export class Server {
             send[Protocol.JOIN_REQUEST](client, joinOptions.requestId, roomId);
 
           }).catch((e) => {
-            const message = (e && e.message) || "";
-            debugError(`MatchMakeError: ${message}\n${e.stack}`);
+            const errorMessage = (e && e.message) || '';
+            debugError(`MatchMakeError: ${errorMessage}\n${e.stack}`);
 
-            send[Protocol.JOIN_ERROR](client, message);
+            send[Protocol.JOIN_ERROR](client, errorMessage);
           });
       }
 
@@ -269,7 +269,7 @@ export class Server {
 
       this.matchMaker.getAvailableRooms(roomName).
         then((rooms) => {
-          console.warn("TODO: ROOM_LIST PROTOCOL ENCODING");
+          console.warn('TODO: ROOM_LIST PROTOCOL ENCODING');
           // send(client, Protocol.ROOM_LIST, [requestId, rooms])
           // send[Protocol.ROOM_LIST](client, joinOptions.requestId, roomId);
         }).
