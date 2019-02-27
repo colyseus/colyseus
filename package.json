@@ -31,7 +31,6 @@
   },
   "dependencies": {
     "@colyseus/schema": "^0.1.6",
-    "@gamestdio/timeline": "^0.3.5",
     "@gamestdio/timer": "^1.1.7",
     "@types/ws": "^6.0.1",
     "debug": "^4.0.1",
