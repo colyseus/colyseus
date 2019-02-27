@@ -79,10 +79,30 @@ export const send = {
     client.send(buff, { binary: true });
   },
 
-  [Protocol.JOIN_ROOM]: (client: Client, sessionId: string) => {
-    const buff = Buffer.allocUnsafe(1 + 1 + utf8Length(sessionId));
+  [Protocol.JOIN_ROOM]: (client: Client, sessionId: string, serializerId: string, handshake?: number[]) => {
+    let offset = 0;
+
+    const sessionIdLength = utf8Length(sessionId);
+    const serializerIdLength = utf8Length(serializerId);
+    const handshakeLength = (handshake) ? handshake.length : 0;
+
+    const buff = Buffer.allocUnsafe(1 + sessionIdLength + serializerIdLength + handshakeLength);
     buff.writeUInt8(Protocol.JOIN_ROOM, 0);
-    utf8Write(buff, 1, sessionId);
+    offset += 1;
+
+    utf8Write(buff, offset, sessionId);
+    offset += sessionIdLength;
+
+    utf8Write(buff, offset, serializerId);
+    offset += serializerIdLength;
+
+    if (handshake) {
+      for (let i = 0, l = handshake.length; i < l; i++) {
+        buff.writeUInt8(handshake[i], offset);
+        offset++;
+      }
+    }
+
     client.send(buff, { binary: true });
   },
 

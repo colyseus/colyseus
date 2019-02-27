@@ -511,7 +511,12 @@ export abstract class Room<T= any> extends EventEmitter {
     }
 
     // confirm room id that matches the room name requested to join
-    send[Protocol.JOIN_ROOM](client, client.sessionId);
+    send[Protocol.JOIN_ROOM](
+      client,
+      client.sessionId,
+      this._serializer.id,
+      this._serializer.handshake && this._serializer.handshake()
+    );
 
     // bind onLeave method.
     client.on('message', this._onMessage.bind(this, client));

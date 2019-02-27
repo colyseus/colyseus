@@ -10,4 +10,5 @@ export interface Serializer<T> {
   hasChanged(newState: any): boolean;
   getData(): any;
   getPatches(): any;
+  handshake?(): number[];
 }
