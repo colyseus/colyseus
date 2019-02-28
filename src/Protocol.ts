@@ -55,7 +55,6 @@ export const send = {
   [Protocol.USER_ID]: (client: Client) => {
     const buff = Buffer.allocUnsafe(1 + utf8Length(client.id));
     buff.writeUInt8(Protocol.USER_ID, 0);
-    buff.writeUInt8(Protocol.USER_ID, 0);
     utf8Write(buff, 1, client.id);
     client.send(buff, { binary: true });
   },
@@ -97,8 +96,7 @@ export const send = {
 
     if (handshake) {
       for (let i = 0, l = handshake.length; i < l; i++) {
-        buff.writeUInt8(handshake[i], offset);
-        offset++;
+        buff.writeUInt8(handshake[i], offset++);
       }
     }
 
