@@ -11,7 +11,11 @@
     "websockets",
     "netcode"
   ],
-  "files": [ "lib", "LICENSE", "README.md" ],
+  "files": [
+    "lib",
+    "LICENSE",
+    "README.md"
+  ],
   "repository": {
     "type": "git",
     "url": "git://github.com/gamestdio/colyseus.git"
@@ -30,7 +34,7 @@
     "node": ">= 8.x"
   },
   "dependencies": {
-    "@colyseus/schema": "^0.1.6",
+    "@colyseus/schema": "^0.3.0",
     "@gamestdio/timer": "^1.1.7",
     "@types/ws": "^6.0.1",
     "debug": "^4.0.1",
