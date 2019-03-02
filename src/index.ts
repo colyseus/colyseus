@@ -17,6 +17,7 @@ export { MemsharedPresence } from './presence/MemsharedPresence';
 
 // Serializers
 export { FossilDeltaSerializer } from './serializer/FossilDeltaSerializer';
+export { JSONPatchSerializer } from './serializer/JSONPatchSerializer';
 export { SchemaSerializer } from './serializer/SchemaSerializer';
 export { serialize } from './serializer/Serializer';
 
