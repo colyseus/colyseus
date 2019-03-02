@@ -4,10 +4,9 @@ import { Serializer } from './Serializer';
 import * as jsonpatch from 'fast-json-patch';
 
 /**
- * This serializer is not meant to be used in production.
- * It just demonstrates how you can implement your own data serializer.
+ * This serializer is not meant to be used.
+ * It just ilustrates how you can implement your own data serializer.
  */
-
 export class JSONPatchSerializer<T> implements Serializer<T> {
   public id = 'json-patch';
 
@@ -21,7 +20,7 @@ export class JSONPatchSerializer<T> implements Serializer<T> {
   }
 
   public getData() {
-    return this.state;
+    return JSON.stringify(this.state);
   }
 
   public hasChanged(newState: any) {
@@ -45,6 +44,6 @@ export class JSONPatchSerializer<T> implements Serializer<T> {
   }
 
   public getPatches() {
-    return this.patches;
+    return JSON.stringify(this.patches);
   }
 }
