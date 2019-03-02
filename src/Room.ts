@@ -218,7 +218,7 @@ export abstract class Room<T= any> extends EventEmitter {
       const client = this.clients[ numClients ];
 
       if (options.except !== client) {
-        send[Protocol.ROOM_DATA](client, data);
+        send[Protocol.ROOM_DATA](client, data, false);
       }
     }
 

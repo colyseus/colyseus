@@ -58,7 +58,7 @@ export class MatchMaker {
 
         if (method === 'send') {
           const protocol = data[0];
-          send[protocol](data.slice(1));
+          send[protocol](client, data.slice(1));
 
         } else if (method === 'close') {
           client.close(data || undefined);

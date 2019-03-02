@@ -121,10 +121,10 @@ export const send = {
     }
   },
 
-  [Protocol.ROOM_DATA]: (client: Client, data: any) => {
+  [Protocol.ROOM_DATA]: (client: Client, data: any, encode: boolean = true) => {
     if (client.readyState === WebSocket.OPEN) {
       client.send(Buffer.alloc(1, Protocol.ROOM_DATA), { binary: true });
-      client.send(msgpack.encode(data), { binary: true });
+      client.send(encode && msgpack.encode(data) || data, { binary: true });
     }
   },
 

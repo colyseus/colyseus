@@ -1,4 +1,4 @@
-export function serialize(serializer: FunctionConstructor & any) {
+export function serialize(serializer: new () => Serializer<any>) {
   return (constructor: Function) => {
     constructor.prototype._getSerializer = () => new serializer();
   };

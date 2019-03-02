@@ -148,3 +148,46 @@ export class RoomVerifyClientWithLock extends DummyRoom {
   }
 
 }
+
+export function utf8Read(buff: Buffer, offset: number) {
+  const length = buff.readUInt8(offset++);
+
+  var string = '', chr = 0;
+  for (var i = offset, end = offset + length; i < end; i++) {
+    var byte = buff.readUInt8(i);
+    if ((byte & 0x80) === 0x00) {
+      string += String.fromCharCode(byte);
+      continue;
+    }
+    if ((byte & 0xe0) === 0xc0) {
+      string += String.fromCharCode(
+        ((byte & 0x1f) << 6) |
+        (buff.readUInt8(++i) & 0x3f)
+      );
+      continue;
+    }
+    if ((byte & 0xf0) === 0xe0) {
+      string += String.fromCharCode(
+        ((byte & 0x0f) << 12) |
+        ((buff.readUInt8(++i) & 0x3f) << 6) |
+        ((buff.readUInt8(++i) & 0x3f) << 0)
+      );
+      continue;
+    }
+    if ((byte & 0xf8) === 0xf0) {
+      chr = ((byte & 0x07) << 18) |
+        ((buff.readUInt8(++i) & 0x3f) << 12) |
+        ((buff.readUInt8(++i) & 0x3f) << 6) |
+        ((buff.readUInt8(++i) & 0x3f) << 0);
+      if (chr >= 0x010000) { // surrogate pair
+        chr -= 0x010000;
+        string += String.fromCharCode((chr >>> 10) + 0xD800, (chr & 0x3FF) + 0xDC00);
+      } else {
+        string += String.fromCharCode(chr);
+      }
+      continue;
+    }
+    throw new Error('Invalid byte ' + byte.toString(16));
+  }
+  return string;
+}

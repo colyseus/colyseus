@@ -7,7 +7,7 @@ import { RedisPresence } from "../src/presence/RedisPresence";
 import { RemoteClient } from '../src/presence/RemoteClient';
 import { isValidId } from '../src';
 
-describe('RemoteClient & RedisPresence', function() {
+xdescribe('RemoteClient & RedisPresence', function() {
   let matchMaker1: MatchMaker;
   let matchMaker2: MatchMaker;
   let matchMaker3: MatchMaker;

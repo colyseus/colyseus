@@ -44,9 +44,7 @@ describe('Room', function() {
       (<any>room)._onJoin(client, {});
 
       assert.equal(client.messages.length, 1);
-
-      message = msgpack.decode(client.messages[0]);
-      assert.equal(message[0], Protocol.JOIN_ROOM);
+      assert.equal((client.messages[0] as Buffer).readUInt8(0), Protocol.JOIN_ROOM);
     });
 
     it('should receive JOIN_ROOM and ROOM_STATE messages onJoin', function() {
@@ -55,9 +53,9 @@ describe('Room', function() {
 
       (<any>room)._onJoin(client, {});
 
-      assert.equal(client.messages.length, 2);
-      assert.equal(client.getMessageAt(0)[0], Protocol.JOIN_ROOM);
-      assert.equal(client.getMessageAt(1)[0], Protocol.ROOM_STATE);
+      assert.equal(client.messages.length, 3);
+      assert.equal((client.messages[0] as Buffer).readUInt8(0), Protocol.JOIN_ROOM);
+      assert.equal((client.messages[1] as Buffer).readUInt8(0), Protocol.ROOM_STATE);
     });
 
     it('should close client connection only after onLeave has fulfiled', function(done) {
@@ -69,7 +67,7 @@ describe('Room', function() {
       (<any>room)._onJoin(client);
       (<any>room)._onMessage(client, msgpack.encode([Protocol.LEAVE_ROOM]));
 
-      assert.equal(client.getMessageAt(0)[0], Protocol.JOIN_ROOM);
+      assert.equal((client.messages[0] as Buffer).readUInt8(0), Protocol.JOIN_ROOM);
       assert.equal(client.readyState, WebSocket.OPEN);
 
       room.on('disconnect', () => {
@@ -120,9 +118,8 @@ describe('Room', function() {
       // first message
       (<any>room).sendState(client);
 
-      const message = client.getMessageAt(1);
-      assert.equal(message[0], Protocol.ROOM_STATE);
-      assert.deepEqual(msgpack.decode(message[1]), { success: true });
+      assert.equal((client.messages[1] as Buffer).readUInt8(0), Protocol.ROOM_STATE);
+      assert.deepEqual(msgpack.decode(client.messages[2]), { success: true });
     });
   });
 
@@ -142,9 +139,10 @@ describe('Room', function() {
 
       room.broadcast("data");
 
-      assert.equal("data", client1.lastMessage[1]);
-      assert.equal("data", client2.lastMessage[1]);
-      assert.equal("data", client3.lastMessage[1]);
+      assert.equal(Protocol.ROOM_DATA, (client1.messages[1] as Buffer).readUInt8(0));
+      assert.equal("data", client1.lastMessage);
+      assert.equal("data", client2.lastMessage);
+      assert.equal("data", client3.lastMessage);
     });
 
     it('should broadcast data to all clients, except the provided client', function() {
@@ -162,9 +160,11 @@ describe('Room', function() {
 
       room.broadcast("data", { except: client3 });
 
-      assert.equal("data", client1.lastMessage[1]);
-      assert.equal("data", client2.lastMessage[1]);
-      assert.equal(undefined, client3.lastMessage[1]);
+      assert.equal(3, client1.messages.length);
+      assert.equal(3, client2.messages.length);
+      assert.equal(1, client3.messages.length);
+      assert.equal("data", client1.lastMessage);
+      assert.equal("data", client2.lastMessage);
     });
 
     it('should broadcast after next patch', function() {
@@ -180,15 +180,18 @@ describe('Room', function() {
 
       room.broadcast("data", { afterNextPatch: true });
 
-      assert.equal(undefined, client1.lastMessage[1]);
-      assert.equal(undefined, client2.lastMessage[1]);
-      assert.equal(undefined, client3.lastMessage[1]);
+      assert.equal(1, client1.messages.length);
+      assert.equal(1, client2.messages.length);
+      assert.equal(1, client3.messages.length);
 
       tick(room.patchRate);
 
-      assert.equal("data", client1.lastMessage[1]);
-      assert.equal("data", client2.lastMessage[1]);
-      assert.equal("data", client3.lastMessage[1]);
+      assert.equal(3, client1.messages.length);
+      assert.equal(3, client2.messages.length);
+      assert.equal(3, client3.messages.length);
+      assert.equal("data", client1.lastMessage);
+      assert.equal("data", client2.lastMessage);
+      assert.equal("data", client3.lastMessage);
     });
   });
 
@@ -254,23 +257,23 @@ describe('Room', function() {
       // voila!
       assert.equal(true, (<any>room).broadcastPatch());
 
-      assert.equal(client.messages.length, 3);
-      assert.equal(client2.messages.length, 3);
+      assert.equal(client.messages.length, 5);
+      assert.equal(client2.messages.length, 5);
 
       // first message, join room
-      var message = msgpack.decode(client.messages[0]);
-      assert.equal(message[0], Protocol.JOIN_ROOM);
+      var message = (client.messages[0] as Buffer).readUInt8(0);
+      assert.equal(message, Protocol.JOIN_ROOM);
 
       // second message, room state
-      var message = msgpack.decode(client.messages[1]);
-      assert.equal(message[0], Protocol.ROOM_STATE);
+      var message = (client.messages[1] as Buffer).readUInt8(0);
+      assert.equal(message, Protocol.ROOM_STATE);
 
       // third message, empty patch state
-      var message = msgpack.decode(client.messages[2]);
-      assert.equal(message[0], Protocol.ROOM_STATE_PATCH);
-      assert.deepEqual(message[1].length, 22);
+      var message = (client.messages[3] as Buffer).readUInt8(0);
+      assert.equal(message, Protocol.ROOM_STATE_PATCH);
+      assert.deepEqual(client.messages[4].length, 22);
 
-      assert.deepEqual(message[1], [ 66, 10, 66, 58, 130, 163, 111, 110, 101, 1, 163, 116, 119, 111, 2, 49, 86, 53, 49, 74, 89, 59 ]);
+      assert.deepEqual(client.messages[4], [ 66, 10, 66, 58, 130, 163, 111, 110, 101, 1, 163, 116, 119, 111, 2, 49, 86, 53, 49, 74, 89, 59 ]);
     });
   });
 
@@ -286,7 +289,7 @@ describe('Room', function() {
         (<any>room)._onJoin(lastClient, {});
       }
 
-      assert.equal(lastClient.lastMessage[0], Protocol.JOIN_ROOM);
+      assert.equal((lastClient.messages[0] as Buffer).readUInt8(0), Protocol.JOIN_ROOM);
       room.disconnect();
 
       assert.deepEqual(room.clients, {});

@@ -12,7 +12,6 @@ import { Presence } from './presence/Presence';
 import { MatchMakeError } from './Errors';
 import { Client, generateId, isValidId } from './index';
 import { decode, Protocol, send } from './Protocol';
-import { utf8Length, utf8Write } from './Protocol';
 import { RoomConstructor } from './Room';
 import { parseQueryString, registerGracefulShutdown, retry } from './Utils';
 

@@ -39,9 +39,8 @@ describe('Patch', function() {
       room.setState({ n: null, u: undefined });
       (<any>room)._onJoin(client, {});
 
-      var message = msgpack.decode( client.messages[1] );
-      assert.equal(message[0], Protocol.ROOM_STATE);
-      assert.deepEqual(msgpack.decode(message[1]), { n: null, u: undefined });
+      var state = msgpack.decode( client.messages[2] );
+      assert.deepEqual(state, { n: null, u: undefined });
     })
   })
 
