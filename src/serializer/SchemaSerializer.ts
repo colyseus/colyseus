@@ -5,7 +5,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
   public id = 'schema';
   private state: T & Schema;
 
-  public reset(newState: any) {
+  public reset(newState: T & Schema) {
     this.state = newState;
   }
 
@@ -13,7 +13,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
     return this.state.encodeAll();
   }
 
-  public hasChanged(newState: any) {
+  public hasChanged(newState: Schema) {
     return newState.$changed;
   }
 

@@ -5,11 +5,12 @@
   "main": "./lib/index.js",
   "typings": "./lib/index.d.ts",
   "keywords": [
+    "colyseus",
     "multiplayer",
-    "game",
+    "netcode",
+    "realtime",
     "networking",
-    "websockets",
-    "netcode"
+    "websockets"
   ],
   "files": [
     "lib",
@@ -34,7 +35,7 @@
     "node": ">= 8.x"
   },
   "dependencies": {
-    "@colyseus/schema": "^0.3.0",
+    "@colyseus/schema": "^0.3.2",
     "@gamestdio/timer": "^1.1.7",
     "@types/ws": "^6.0.1",
     "debug": "^4.0.1",

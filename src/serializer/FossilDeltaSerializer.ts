@@ -3,6 +3,7 @@ import * as msgpack from 'notepack.io';
 
 import { Serializer } from './Serializer';
 
+import { Schema } from '@colyseus/schema';
 import * as jsonPatch from 'fast-json-patch'; // this is only used for debugging patches
 import { debugPatch } from '../Debug';
 
@@ -17,7 +18,7 @@ export class FossilDeltaSerializer<T> implements Serializer<T> {
 
   private patches: any;
 
-  public reset(newState: any) {
+  public reset(newState: T) {
     this.previousState = newState;
     this.previousStateEncoded = msgpack.encode(this.previousState);
   }
@@ -26,10 +27,24 @@ export class FossilDeltaSerializer<T> implements Serializer<T> {
     return this.previousStateEncoded;
   }
 
-  public hasChanged(newState: any) {
+  public hasChanged(newState: T | Schema) {
     const currentState = newState;
-    const currentStateEncoded = msgpack.encode(currentState);
-    const changed = !currentStateEncoded.equals(this.previousStateEncoded);
+    let changed: boolean = false;
+    let currentStateEncoded;
+
+    /**
+     * allow optimized state changes when using `Schema` class.
+     */
+    if (newState instanceof Schema) {
+      if (newState.$changed) {
+        changed = true;
+        currentStateEncoded = msgpack.encode(currentState);
+      }
+
+    } else {
+      currentStateEncoded = msgpack.encode(currentState);
+      changed = !currentStateEncoded.equals(this.previousStateEncoded);
+    }
 
     if (changed) {
       this.patches = fossilDelta.create(this.previousStateEncoded, currentStateEncoded);
