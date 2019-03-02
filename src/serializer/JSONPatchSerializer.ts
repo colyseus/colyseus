@@ -3,6 +3,11 @@ import { Serializer } from './Serializer';
 
 import * as jsonpatch from 'fast-json-patch';
 
+/**
+ * This serializer is not meant to be used in production.
+ * It just demonstrates how you can implement your own data serializer.
+ */
+
 export class JSONPatchSerializer<T> implements Serializer<T> {
   public id = 'json-patch';
 
