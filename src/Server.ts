@@ -267,11 +267,7 @@ export class Server {
       const roomName = message[2];
 
       this.matchMaker.getAvailableRooms(roomName).
-        then((rooms) => {
-          console.warn('TODO: ROOM_LIST PROTOCOL ENCODING');
-          // send(client, Protocol.ROOM_LIST, [requestId, rooms])
-          // send[Protocol.ROOM_LIST](client, joinOptions.requestId, roomId);
-        }).
+        then((rooms) => send[Protocol.ROOM_LIST](client, requestId, rooms)).
         catch((e) => debugAndPrintError(e.stack || e));
 
     } else {

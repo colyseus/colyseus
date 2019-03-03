@@ -2,6 +2,7 @@ import * as msgpack from 'notepack.io';
 import * as WebSocket from 'ws';
 import { debugAndPrintError } from './Debug';
 import { Client } from './index';
+import { RoomAvailable } from './Room';
 
 export const WS_CLOSE_CONSENTED = 4000;
 
@@ -126,6 +127,11 @@ export const send = {
       client.send(Buffer.alloc(1, Protocol.ROOM_DATA), { binary: true });
       client.send(encode && msgpack.encode(data) || data, { binary: true });
     }
+  },
+
+  [Protocol.ROOM_LIST]: (client: Client, requestId: number, rooms: RoomAvailable[]) => {
+    client.send(Buffer.alloc(1, Protocol.ROOM_LIST), { binary: true });
+    client.send(msgpack.encode([requestId, rooms]), { binary: true });
   },
 
 };
