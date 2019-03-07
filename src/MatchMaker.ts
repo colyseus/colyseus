@@ -1,7 +1,7 @@
 import { merge } from './Utils';
 
 import { Client, generateId, isValidId } from './index';
-import { IpcProtocol, send } from './Protocol';
+import { IpcProtocol, Protocol, send } from './Protocol';
 
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
 import { Room, RoomAvailable, RoomConstructor } from './Room';
@@ -57,8 +57,11 @@ export class MatchMaker {
         const [method, data] = message;
 
         if (method === 'send') {
-          const protocol = data[0];
-          send[protocol](client, data.slice(1));
+          const buff = Buffer.allocUnsafe(data.length);
+          for (let i = 0, l = data.length; i < l; i++) {
+            buff.writeUInt8(data[i], i);
+          }
+          client.send(buff, { binary: true });
 
         } else if (method === 'close') {
           client.close(data || undefined);

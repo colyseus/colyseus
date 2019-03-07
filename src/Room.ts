@@ -448,7 +448,7 @@ export abstract class Room<T= any> extends EventEmitter {
     }
 
     if (typeof(event) !== 'string') {
-      remoteClient.emit('message', new Buffer(event));
+      remoteClient.emit('message', event);
 
     } else {
       remoteClient.emit(event, args);

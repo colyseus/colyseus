@@ -7,7 +7,7 @@ import { RedisPresence } from "../src/presence/RedisPresence";
 import { RemoteClient } from '../src/presence/RemoteClient';
 import { isValidId } from '../src';
 
-xdescribe('RemoteClient & RedisPresence', function() {
+describe('RemoteClient & RedisPresence', function() {
   let matchMaker1: MatchMaker;
   let matchMaker2: MatchMaker;
   let matchMaker3: MatchMaker;
@@ -127,10 +127,10 @@ xdescribe('RemoteClient & RedisPresence', function() {
 
       await awaitForTimeout(10);
 
-      assert.equal(client1.lastMessage[1], "SOMETHING");
-      assert.equal(client2.lastMessage[1], "SOMETHING");
-      assert.equal(client3.lastMessage[1], "SOMETHING");
-      assert.equal(client4.lastMessage[1], "SOMETHING");
+      assert.equal(client1.lastMessage, "SOMETHING");
+      assert.equal(client2.lastMessage, "SOMETHING");
+      assert.equal(client3.lastMessage, "SOMETHING");
+      assert.equal(client4.lastMessage, "SOMETHING");
 
       await room.disconnect(); // cleanup data on RedisPresence
     });
