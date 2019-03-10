@@ -1,9 +1,11 @@
 import * as fossilDelta from 'fossil-delta';
 import * as msgpack from 'notepack.io';
-
-import { Serializer } from './Serializer';
-
 import { Schema } from '@colyseus/schema';
+
+import { Client } from '..';
+import { Serializer } from './Serializer';
+import { send, Protocol } from '../Protocol';
+
 import * as jsonPatch from 'fast-json-patch'; // this is only used for debugging patches
 import { debugPatch } from '../Debug';
 
@@ -13,7 +15,7 @@ export class FossilDeltaSerializer<T> implements Serializer<T> {
   // when a new user connects, it receives the 'previousState', which holds
   // the last binary snapshot other users already have, therefore the patches
   // that follow will be the same for all clients.
-  private previousState: any;
+  private previousState: T | Schema;
   private previousStateEncoded: any;
 
   private patches: any;
@@ -23,8 +25,23 @@ export class FossilDeltaSerializer<T> implements Serializer<T> {
     this.previousStateEncoded = msgpack.encode(this.previousState);
   }
 
-  public getData() {
+  public getFullState(client: Client) {
     return this.previousStateEncoded;
+  }
+
+  public applyPatches(clients: Client[], previousState: T | Schema) {
+    const hasChanged = this.hasChanged(previousState);
+
+    if (hasChanged) {
+      let numClients = clients.length;
+
+      while (numClients--) {
+        const client = clients[numClients];
+        send[Protocol.ROOM_STATE_PATCH](client, this.patches);
+      }
+    }
+
+    return hasChanged;
   }
 
   public hasChanged(newState: T | Schema) {
@@ -67,7 +84,4 @@ export class FossilDeltaSerializer<T> implements Serializer<T> {
     return changed;
   }
 
-  public getPatches() {
-    return this.patches;
-  }
 }

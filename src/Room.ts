@@ -7,8 +7,8 @@ import { Client } from '.';
 import { Presence } from './presence/Presence';
 import { RemoteClient } from './presence/RemoteClient';
 
-import { FossilDeltaSerializer } from './serializer/FossilDeltaSerializer';
-import { serialize, Serializer } from './serializer/Serializer';
+import { SchemaSerializer } from './serializer/SchemaSerializer';
+import { Serializer } from './serializer/Serializer';
 
 import { decode, Protocol, send, WS_CLOSE_CONSENTED } from './Protocol';
 import { Deferred, spliceOne } from './Utils';
@@ -36,7 +36,6 @@ export interface BroadcastOptions {
   afterNextPatch?: boolean;
 }
 
-@serialize(FossilDeltaSerializer)
 export abstract class Room<T= any> extends EventEmitter {
   public clock: Clock = new Clock();
 
@@ -101,7 +100,6 @@ export abstract class Room<T= any> extends EventEmitter {
   public onInit?(options: any): void;
   public onJoin?(client: Client, options?: any, auth?: any): void | Promise<any>;
   public onLeave?(client: Client, consented?: boolean): void | Promise<any>;
-  public onPatch?(client: Client, state: T): any;
   public onDispose?(): void | Promise<any>;
 
   public requestJoin(options: any, isNew?: boolean): number | boolean {
@@ -269,10 +267,12 @@ export abstract class Room<T= any> extends EventEmitter {
 
   // see @serialize decorator.
   public get serializer() { return this._serializer.id; }
-  protected _getSerializer?(): Serializer<T>;
+  protected _getSerializer?(): Serializer<T> {
+    return new SchemaSerializer<T>();
+  }
 
   protected sendState(client: Client): void {
-    send[Protocol.ROOM_STATE](client, this._serializer.getData());
+    send[Protocol.ROOM_STATE](client, this._serializer.getFullState(client));
   }
 
   protected broadcastPatch(): boolean {
@@ -285,31 +285,7 @@ export abstract class Room<T= any> extends EventEmitter {
       return false;
     }
 
-    if (this._serializer.hasChanged(this.state)) {
-      let numClients = this.clients.length;
-
-      if (this.onPatch) {
-        // broadcast custom patch for each client
-        while (numClients--) {
-          const client = this.clients[numClients];
-          send[Protocol.ROOM_STATE_PATCH](client, this.onPatch(client, this.state));
-        }
-
-      } else {
-        // get patches only once to broadcast to all clients
-        const patches = this._serializer.getPatches();
-
-        while (numClients--) {
-          const client = this.clients[numClients];
-          send[Protocol.ROOM_STATE_PATCH](client, patches);
-        }
-      }
-
-      return true;
-
-    } else {
-      return false;
-    }
+    return this._serializer.applyPatches(this.clients, this.state);
   }
 
   protected broadcastAfterPatch() {

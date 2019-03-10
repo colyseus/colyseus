@@ -1,3 +1,5 @@
+import { Client } from "..";
+
 export function serialize(serializer: new () => Serializer<any>) {
   return (constructor: Function) => {
     constructor.prototype._getSerializer = () => new serializer();
@@ -7,8 +9,7 @@ export function serialize(serializer: new () => Serializer<any>) {
 export interface Serializer<T> {
   id: string;
   reset(data: any): void;
-  hasChanged(newState: any): boolean;
-  getData(): any;
-  getPatches(): any;
+  getFullState(client: Client): any;
+  applyPatches(clients: Client[], state: T): boolean;
   handshake?(): number[];
 }

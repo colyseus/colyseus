@@ -1,7 +1,11 @@
+import * as jsonpatch from 'fast-json-patch';
+import * as msgpack from 'notepack.io';
+
 import { debugPatch } from '../Debug';
 import { Serializer } from './Serializer';
 
-import * as jsonpatch from 'fast-json-patch';
+import { Client } from '..';
+import { send, Protocol } from '../Protocol';
 
 /**
  * This serializer is not meant to be used.
@@ -19,8 +23,24 @@ export class JSONPatchSerializer<T> implements Serializer<T> {
     this.observer = jsonpatch.observe(newState);
   }
 
-  public getData() {
+  public getFullState() {
     return JSON.stringify(this.state);
+  }
+
+  public applyPatches(clients: Client[], newState: T) {
+    const hasChanged  = this.hasChanged(newState);
+
+    if (hasChanged) {
+      const patches = JSON.stringify(this.patches)
+      let numClients = clients.length;
+
+      while (numClients--) {
+        const client = clients[numClients];
+        send[Protocol.ROOM_STATE_PATCH](client, patches as any);
+      }
+    }
+
+    return hasChanged;
   }
 
   public hasChanged(newState: any) {
@@ -41,9 +61,5 @@ export class JSONPatchSerializer<T> implements Serializer<T> {
     }
 
     return changed;
-  }
-
-  public getPatches() {
-    return JSON.stringify(this.patches);
   }
 }
