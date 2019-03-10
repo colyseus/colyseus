@@ -1,8 +1,8 @@
 import { Client } from '..';
 import { Serializer } from './Serializer';
 
-import { Reflection, Schema, Definition } from '@colyseus/schema';
-import { send, Protocol } from '../Protocol';
+import { Definition, Reflection, Schema } from '@colyseus/schema';
+import { Protocol, send } from '../Protocol';
 
 export class SchemaSerializer<T> implements Serializer<T> {
   public id = 'schema';
@@ -23,7 +23,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
       : this.state.encodeAll();
   }
 
-  public applyPatches (clients: Client[]) {
+  public applyPatches(clients: Client[]) {
     const hasChanges = this.state.$changed;
 
     if (hasChanges) {
@@ -62,7 +62,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
       if (filters[fieldName]) {
         return true;
 
-      } else if (typeof (schema[fieldName]) === "function") {
+      } else if (typeof (schema[fieldName]) === 'function') {
         const childSchema = (schema[fieldName] as typeof Schema)._schema;
         const childFilters = (schema[fieldName] as typeof Schema)._filters;
         return this.hasFilter(childSchema, childFilters);

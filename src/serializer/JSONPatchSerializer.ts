@@ -5,7 +5,7 @@ import { debugPatch } from '../Debug';
 import { Serializer } from './Serializer';
 
 import { Client } from '..';
-import { send, Protocol } from '../Protocol';
+import { Protocol, send } from '../Protocol';
 
 /**
  * This serializer is not meant to be used.
@@ -31,7 +31,7 @@ export class JSONPatchSerializer<T> implements Serializer<T> {
     const hasChanged  = this.hasChanged(newState);
 
     if (hasChanged) {
-      const patches = JSON.stringify(this.patches)
+      const patches = JSON.stringify(this.patches);
       let numClients = clients.length;
 
       while (numClients--) {

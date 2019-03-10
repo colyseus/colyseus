@@ -1,10 +1,10 @@
+import { Schema } from '@colyseus/schema';
 import * as fossilDelta from 'fossil-delta';
 import * as msgpack from 'notepack.io';
-import { Schema } from '@colyseus/schema';
 
 import { Client } from '..';
+import { Protocol, send } from '../Protocol';
 import { Serializer } from './Serializer';
-import { send, Protocol } from '../Protocol';
 
 import * as jsonPatch from 'fast-json-patch'; // this is only used for debugging patches
 import { debugPatch } from '../Debug';

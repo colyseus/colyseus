@@ -1,4 +1,4 @@
-import { Client } from "..";
+import { Client } from '..';
 
 export function serialize(serializer: new () => Serializer<any>) {
   return (constructor: Function) => {
