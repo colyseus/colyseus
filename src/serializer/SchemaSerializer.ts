@@ -58,6 +58,10 @@ export class SchemaSerializer<T> implements Serializer<T> {
   }
 
   private hasFilter(schema: Definition, filters: any) {
+    if (!filters) {
+      return false;
+    }
+
     for (const fieldName in schema) {
       if (filters[fieldName]) {
         return true;
