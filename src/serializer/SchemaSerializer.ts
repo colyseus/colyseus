@@ -46,7 +46,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
           send[Protocol.ROOM_STATE_PATCH](client, this.state.encodeFiltered(client));
         }
 
-        throw new Error("filters are not fully implemented yet.");
+        throw new Error('filters are not fully implemented yet.');
         // this.state.markAsUnchanged();
 
       }
