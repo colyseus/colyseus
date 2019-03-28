@@ -1,7 +1,7 @@
-import * as assert from "assert";
-import * as msgpack from "notepack.io";
-import * as sinon from 'sinon';
-import * as WebSocket from "ws";
+import assert from "assert";
+import msgpack from "notepack.io";
+import sinon from 'sinon';
+import WebSocket from "ws";
 
 import { Room } from "../src/Room";
 import { MatchMaker } from './../src/MatchMaker';

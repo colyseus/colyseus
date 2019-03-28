@@ -5,10 +5,10 @@
 // processes.
 //
 
-import * as os from "os";
-import * as cluster from "cluster";
-import * as http from "http";
-import * as colyseus from "../src";
+import os from "os";
+import cluster from "cluster";
+import http from "http";
+import colyseus from "../src";
 
 import { ChatRoom } from "./ChatRoom"
 

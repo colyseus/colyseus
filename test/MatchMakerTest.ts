@@ -1,7 +1,7 @@
 (<any>process.env).COLYSEUS_PRESENCE_TIMEOUT = 50;
 
-import * as assert from 'assert';
-import * as sinon from 'sinon';
+import assert from 'assert';
+import sinon from 'sinon';
 
 import { MatchMaker, REMOTE_ROOM_SHORT_TIMEOUT } from "../src/MatchMaker";
 import { RegisteredHandler } from './../src/matchmaker/RegisteredHandler';

@@ -1,7 +1,7 @@
-import * as http from 'http';
-import * as net from 'net';
-import * as parseURL from 'url-parse';
-import * as WebSocket from 'ws';
+import http from 'http';
+import net from 'net';
+import parseURL from 'url-parse';
+import WebSocket from 'ws';
 import { ServerOptions as IServerOptions } from 'ws';
 
 import { debugAndPrintError, debugError } from './Debug';

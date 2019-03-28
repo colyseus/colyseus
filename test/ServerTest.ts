@@ -1,5 +1,5 @@
-import * as assert from "assert";
-import * as msgpack from "notepack.io";
+import assert from "assert";
+import msgpack from "notepack.io";
 
 import { Server } from "../src/Server";
 import { Protocol } from "../src/Protocol";

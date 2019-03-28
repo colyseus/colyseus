@@ -1,8 +1,8 @@
-import * as msgpack from "notepack.io";
-import * as WebSocket from "ws";
+import msgpack from "notepack.io";
+import WebSocket from "ws";
 import { EventEmitter } from "events";
 
-import { generateId } from "../../src";
+import { generateId, serialize, FossilDeltaSerializer } from "../../src";
 import { Room } from "../../src/Room";
 import { LocalPresence } from './../../src/presence/LocalPresence';
 
@@ -61,6 +61,7 @@ export function awaitForTimeout(ms: number = 200) {
   return new Promise((resolve, reject) => setTimeout(resolve, ms));
 }
 
+@serialize(FossilDeltaSerializer)
 export class DummyRoom extends Room {
   constructor () {
     super(new LocalPresence());
@@ -77,6 +78,7 @@ export class DummyRoom extends Room {
   onMessage(client, message) { this.broadcast(message); }
 }
 
+@serialize(FossilDeltaSerializer)
 export class RoomWithError extends Room {
   constructor () {
     super(new LocalPresence());
@@ -90,7 +92,7 @@ export class RoomWithError extends Room {
   onMessage() {}
 }
 
-
+@serialize(FossilDeltaSerializer)
 export class DummyRoomWithState extends Room {
   constructor () {
     super(new LocalPresence());
@@ -108,11 +110,13 @@ export class DummyRoomWithState extends Room {
   onMessage() {}
 }
 
+@serialize(FossilDeltaSerializer)
 export class RoomVerifyClient extends DummyRoom {
   patchRate = 5000;
   onJoin () {}
 }
 
+@serialize(FossilDeltaSerializer)
 export class RoomWithAsync extends DummyRoom {
   static ASYNC_TIMEOUT = 200;
 
@@ -134,6 +138,7 @@ export class RoomWithAsync extends DummyRoom {
   }
 }
 
+@serialize(FossilDeltaSerializer)
 export class RoomVerifyClientWithLock extends DummyRoom {
   patchRate = 5000;
 

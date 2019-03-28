@@ -1,7 +1,7 @@
 import Clock, { Delayed } from '@gamestdio/timer';
-import * as http from 'http';
-import * as nanoid from 'nanoid';
-import * as WebSocket from 'ws';
+import http from 'http';
+import nanoid from 'nanoid';
+import WebSocket from 'ws';
 
 // Core classes
 export { Server } from './Server';

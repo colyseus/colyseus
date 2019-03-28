@@ -1,8 +1,7 @@
-import * as assert from "assert";
-import * as msgpack from "notepack.io";
+import assert from "assert";
+import msgpack from "notepack.io";
 import { Room } from "../src/Room";
 import { createDummyClient, DummyRoom, DummyRoomWithState } from "./utils/mock";
-import { Protocol } from "../src/Protocol";
 import { LocalPresence } from './../src/presence/LocalPresence';
 
 describe('Patch', function() {

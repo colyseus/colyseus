@@ -1,4 +1,4 @@
-import * as msgpack from 'notepack.io';
+import msgpack from 'notepack.io';
 
 import Clock from '@gamestdio/timer';
 import { EventEmitter } from 'events';

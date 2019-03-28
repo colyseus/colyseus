@@ -1,12 +1,12 @@
 import { Schema } from '@colyseus/schema';
-import * as fossilDelta from 'fossil-delta';
-import * as msgpack from 'notepack.io';
+import fossilDelta from 'fossil-delta';
+import msgpack from 'notepack.io';
 
 import { Client } from '..';
 import { Protocol, send } from '../Protocol';
 import { Serializer } from './Serializer';
 
-import * as jsonPatch from 'fast-json-patch'; // this is only used for debugging patches
+import jsonPatch from 'fast-json-patch'; // this is only used for debugging patches
 import { debugPatch } from '../Debug';
 
 export class FossilDeltaSerializer<T> implements Serializer<T> {

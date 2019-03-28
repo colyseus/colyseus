@@ -1,5 +1,5 @@
-import * as jsonpatch from 'fast-json-patch';
-import * as msgpack from 'notepack.io';
+import jsonpatch from 'fast-json-patch';
+import msgpack from 'notepack.io';
 
 import { debugPatch } from '../Debug';
 import { Serializer } from './Serializer';

@@ -1,5 +1,5 @@
-import * as msgpack from 'notepack.io';
-import * as WebSocket from 'ws';
+import msgpack from 'notepack.io';
+import WebSocket from 'ws';
 import { debugAndPrintError } from './Debug';
 import { Client } from './index';
 import { RoomAvailable } from './Room';

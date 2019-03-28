@@ -1,5 +1,5 @@
-import * as assert from 'assert';
-import * as sinon from 'sinon';
+import assert from 'assert';
+import sinon from 'sinon';
 
 import { MatchMaker } from "../src/MatchMaker";
 import { DummyRoom, RoomVerifyClient, RoomVerifyClientWithLock, createDummyClient } from './utils/mock';

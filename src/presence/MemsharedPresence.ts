@@ -1,4 +1,4 @@
-import * as memshared from 'memshared';
+import memshared from 'memshared';
 import { promisify } from 'util';
 
 import { Presence } from './Presence';
