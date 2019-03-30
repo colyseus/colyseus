@@ -1,6 +1,6 @@
 import http from 'http';
 import net from 'net';
-import parseURL from 'url-parse';
+import url from "url";
 import WebSocket from 'ws';
 import { ServerOptions as IServerOptions } from 'ws';
 
@@ -136,17 +136,17 @@ export class Server {
   protected verifyClient = async (info, next) => {
     const req = info.req;
 
-    const url = parseURL(req.url);
+    const parsedURL = url.parse(req.url);
     // TODO: use only this on version 1.0.
-    // req.roomId = url.pathname.match(/^\/[0-9a-zA-Z\-]+\/([0-9a-zA-Z\-]+)/)[1];
+    // req.roomId = parsedURL.pathname.match(/^\/[0-9a-zA-Z\-]+\/([0-9a-zA-Z\-]+)/)[1];
 
     // compatibility with proxying, remove me on 1.0 >>>
-    req.roomId = url.pathname.substr(1);
+    req.roomId = parsedURL.pathname.substr(1);
     const processIdIndex = req.roomId.indexOf("/");
     if (processIdIndex > 0) { req.roomId = req.roomId.substr(processIdIndex + 1); }
     // <<<<
 
-    const query = parseQueryString(url.query);
+    const query = parseQueryString(parsedURL.query);
     req.colyseusid = query.colyseusid;
 
     delete query.colyseusid;

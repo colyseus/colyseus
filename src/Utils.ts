@@ -80,7 +80,7 @@ export function spliceOne(arr: any[], index: number): boolean {
 }
 
 export function parseQueryString(query: string): any {
-  const data = querystring.parse(query.substr(1));
+  const data = querystring.parse(query);
 
   for (const k in data) {
     if (!Object.prototype.hasOwnProperty.call(data, k)) { continue; }
