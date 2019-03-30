@@ -137,7 +137,14 @@ export class Server {
     const req = info.req;
 
     const url = parseURL(req.url);
+    // TODO: use only this on version 1.0.
+    // req.roomId = url.pathname.match(/^\/[0-9a-zA-Z\-]+\/([0-9a-zA-Z\-]+)/)[1];
+
+    // compatibility with proxying, remove me on 1.0 >>>
     req.roomId = url.pathname.substr(1);
+    const processIdIndex = req.roomId.indexOf("/");
+    if (processIdIndex > 0) { req.roomId = req.roomId.substr(processIdIndex + 1); }
+    // <<<<
 
     const query = parseQueryString(url.query);
     req.colyseusid = query.colyseusid;
@@ -148,14 +155,14 @@ export class Server {
     if (req.roomId) {
       try {
         // TODO: refactor me. this piece of code is repeated on MatchMaker class.
-        const hasReservedSeat = query.sessionId && await this.matchMaker.remoteRoomCall(
+        const hasReservedSeat = query.sessionId && (await this.matchMaker.remoteRoomCall(
           req.roomId,
           'hasReservedSeat',
           [query.sessionId],
-        );
+        )).response;
 
         if (!hasReservedSeat) {
-          const isLocked = await this.matchMaker.remoteRoomCall(req.roomId, 'locked');
+          const isLocked = (await this.matchMaker.remoteRoomCall(req.roomId, 'locked')).response;
 
           if (isLocked) {
             return next(false, Protocol.WS_TOO_MANY_CLIENTS, 'maxClients reached.');
@@ -163,12 +170,12 @@ export class Server {
         }
 
         // verify client from room scope.
-        const authResult = await this.matchMaker.remoteRoomCall(
+        const authResult = (await this.matchMaker.remoteRoomCall(
           req.roomId,
           'onAuth',
           [req.options],
           REMOTE_ROOM_LARGE_TIMEOUT,
-        );
+        )).response;
 
         if (authResult) {
           req.auth = authResult;

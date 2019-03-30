@@ -68,16 +68,23 @@ export const send = {
   },
 
   [Protocol.JOIN_REQUEST]: (client: Client, requestId: number, roomId: string, processId: string) => {
+    let offset = 0;
+
     /**
      * TODO: reset `requestId` to `0` on client-side once it reaches `127`
      */
     const roomIdLength = utf8Length(roomId);
     const processIdLength = utf8Length(processId);
     const buff = Buffer.allocUnsafe(1 + 1 + roomIdLength + processIdLength);
-    buff.writeUInt8(Protocol.JOIN_REQUEST, 0);
-    buff.writeUInt8(requestId, 1);
-    utf8Write(buff, 2, roomId);
-    utf8Write(buff, 3 + roomIdLength, processId);
+
+    buff.writeUInt8(Protocol.JOIN_REQUEST, offset++);
+    buff.writeUInt8(requestId, offset++);
+    utf8Write(buff, offset, roomId);
+    offset += roomIdLength;
+
+    utf8Write(buff, offset, processId);
+    offset += processIdLength;
+
     client.send(buff, { binary: true });
   },
 
@@ -89,8 +96,7 @@ export const send = {
     const handshakeLength = (handshake) ? handshake.length : 0;
 
     const buff = Buffer.allocUnsafe(1 + sessionIdLength + serializerIdLength + handshakeLength);
-    buff.writeUInt8(Protocol.JOIN_ROOM, 0);
-    offset += 1;
+    buff.writeUInt8(Protocol.JOIN_ROOM, offset++);
 
     utf8Write(buff, offset, sessionId);
     offset += sessionIdLength;
