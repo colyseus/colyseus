@@ -67,14 +67,17 @@ export const send = {
     client.send(buff, { binary: true });
   },
 
-  [Protocol.JOIN_REQUEST]: (client: Client, requestId: number, roomId: string) => {
+  [Protocol.JOIN_REQUEST]: (client: Client, requestId: number, roomId: string, processId: string) => {
     /**
      * TODO: reset `requestId` to `0` on client-side once it reaches `127`
      */
-    const buff = Buffer.allocUnsafe(1 + 1 + utf8Length(roomId));
+    const roomIdLength = utf8Length(roomId);
+    const processIdLength = utf8Length(processId);
+    const buff = Buffer.allocUnsafe(1 + 1 + roomIdLength + processIdLength);
     buff.writeUInt8(Protocol.JOIN_REQUEST, 0);
     buff.writeUInt8(requestId, 1);
     utf8Write(buff, 2, roomId);
+    utf8Write(buff, 3 + roomIdLength, processId);
     client.send(buff, { binary: true });
   },
 

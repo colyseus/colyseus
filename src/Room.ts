@@ -5,7 +5,6 @@ import { EventEmitter } from 'events';
 
 import { Client } from '.';
 import { Presence } from './presence/Presence';
-import { RemoteClient } from './presence/RemoteClient';
 
 import { SchemaSerializer } from './serializer/SchemaSerializer';
 import { Serializer } from './serializer/Serializer';
@@ -51,7 +50,6 @@ export abstract class Room<T= any> extends EventEmitter {
   public presence: Presence;
 
   public clients: Client[] = [];
-  protected remoteClients: {[sessionId: string]: RemoteClient} = {};
 
   // seat reservation & reconnection
   protected seatReservationTime: number = DEFAULT_SEAT_RESERVATION_TIME;
@@ -414,23 +412,6 @@ export abstract class Room<T= any> extends EventEmitter {
     return userReturnData || Promise.resolve();
   }
 
-  // allow remote clients to trigger events on themselves
-  private _emitOnClient(sessionId, event, args?: any) {
-    const remoteClient = this.remoteClients[sessionId];
-
-    if (!remoteClient) {
-      debugAndPrintError(`trying to send event ("${event}") to non-existing remote client (${sessionId})`);
-      return;
-    }
-
-    if (typeof(event) !== 'string') {
-      remoteClient.emit('message', event);
-
-    } else {
-      remoteClient.emit(event, args);
-    }
-  }
-
   private _onMessage(client: Client, message: any) {
     message = decode(message);
 
@@ -460,11 +441,6 @@ export abstract class Room<T= any> extends EventEmitter {
 
   private _onJoin(client: Client, options?: any, auth?: any) {
     // create remote client instance.
-    if (client.remote) {
-      client = (new RemoteClient(client, this.roomId, this.presence)) as any;
-      this.remoteClients[client.sessionId] = client as any;
-    }
-
     this.clients.push( client );
 
     // delete seat reservation
@@ -527,11 +503,6 @@ export abstract class Room<T= any> extends EventEmitter {
     }
 
     this.emit('leave', client);
-
-    // remove remote client reference
-    if (client instanceof RemoteClient) {
-      delete this.remoteClients[client.sessionId];
-    }
 
     // dispose immediatelly if client reconnection isn't set up.
     const willDispose = this._disposeIfEmpty();
