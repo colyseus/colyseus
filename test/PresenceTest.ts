@@ -25,7 +25,7 @@ describe('Presence', function() {
     it('should remove reserved seat after joining the room', async () => {
       const client = createDummyClient({});
 
-      const roomId = await matchMaker.onJoinRoomRequest(client, 'room', {});
+      const { roomId } = await matchMaker.onJoinRoomRequest(client, 'room', {});
 
       await matchMaker.connectToRoom(client, roomId);
 

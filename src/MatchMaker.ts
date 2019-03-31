@@ -23,12 +23,12 @@ export interface RoomWithScore {
 export const REMOTE_ROOM_SHORT_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_SHORT_TIMEOUT || 4000);
 export const REMOTE_ROOM_LARGE_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_LARGE_TIMEOUT || 8000);
 
-type RemoteRoomResponse<T=any> = {processId: string, response: T };
+type RemoteRoomResponse<T= any> = [string?, T?];
 
 export class MatchMaker {
   public handlers: {[id: string]: RegisteredHandler} = {};
 
-  private processId: string = process.env.NODE_APP_INSTANCE || "0";
+  private processId: string = process.env.NODE_APP_INSTANCE || '0';
   private localRooms: {[roomId: string]: Room} = {};
   private presence: Presence;
 
@@ -40,6 +40,8 @@ export class MatchMaker {
 
   public async connectToRoom(client: Client, roomId: string) {
     const room = this.localRooms[roomId];
+    if (!room) { throw new Error(`connectToRoom(), room doesn't exist. roomId: ${roomId}`); }
+
     const clientOptions = client.options;
 
     // assign sessionId to socket connection.
@@ -60,7 +62,11 @@ export class MatchMaker {
    * match-making process. The client will request a new WebSocket connection
    * to effectively join into the room created/joined by this method.
    */
-  public async onJoinRoomRequest(client: Client, roomToJoin: string, clientOptions: ClientOptions): Promise<{ roomId: string, processId: string }> {
+  public async onJoinRoomRequest(
+    client: Client,
+    roomToJoin: string,
+    clientOptions: ClientOptions,
+  ): Promise<{ roomId: string, processId: string }> {
     const hasHandler = this.hasHandler(roomToJoin);
     let roomId: string;
     let processId: string;
@@ -82,7 +88,10 @@ export class MatchMaker {
 
     if (isJoinById || isReconnect) {
       // join room by id
-      roomId = (await this.joinById(roomToJoin, clientOptions, isReconnect && sessionId)).roomId;
+      const joinById = await this.joinById(roomToJoin, clientOptions, isReconnect && sessionId);
+
+      processId = joinById[0];
+      roomId = joinById[1];
 
     } else if (!hasHandler) {
       throw new MatchMakeError(`Failed to join invalid room "${roomToJoin}"`);
@@ -99,7 +108,7 @@ export class MatchMaker {
       for (let i = 0, l = availableRoomsByScore.length; i < l; i++) {
         // couldn't join this room, skip
         const joinByIdResponse = (await this.joinById(availableRoomsByScore[i].roomId, clientOptions));
-        roomId = joinByIdResponse.roomId;
+        roomId = joinByIdResponse[1];
 
         if (!roomId) { continue; }
 
@@ -108,9 +117,9 @@ export class MatchMaker {
           sessionId,
         }]);
 
-        if (reserveSeatResponse.response) {
+        if (reserveSeatResponse[1]) {
           // seat reservation was successful, no need to try other rooms.
-          processId = reserveSeatResponse.processId;
+          processId = reserveSeatResponse[0];
           shouldCreateRoom = false;
           break;
 
@@ -135,9 +144,9 @@ export class MatchMaker {
         sessionId,
       }]);
 
-      processId = reserveSeatSuccessful.processId;
+      processId = reserveSeatSuccessful[0];
 
-      if (!reserveSeatSuccessful.response) {
+      if (!reserveSeatSuccessful[1]) {
         throw new MatchMakeError('join_request_fail');
       }
     }
@@ -145,7 +154,7 @@ export class MatchMaker {
     return { roomId, processId };
   }
 
-  public async remoteRoomCall<R=any>(
+  public async remoteRoomCall<R= any>(
     roomId: string,
     method: string,
     args?: any[],
@@ -188,12 +197,12 @@ export class MatchMaker {
       });
 
     } else {
-      return {
-        processId: this.processId,
-        response: (!args && typeof (room[method]) !== 'function')
+      return [
+        this.processId,
+        (!args && typeof (room[method]) !== 'function')
           ? room[method]
-          : (await room[method].apply(room, args))
-      };
+          : (await room[method].apply(room, args)),
+      ];
     }
   }
 
@@ -211,30 +220,36 @@ export class MatchMaker {
     return this.handlers[ name ] !== undefined;
   }
 
-  public async joinById(roomId: string, clientOptions: ClientOptions, rejoinSessionId?: string): Promise<{processId?: string, roomId?: string}> {
+  public async joinById(
+    roomId: string,
+    clientOptions: ClientOptions,
+    rejoinSessionId?: string,
+  ): Promise<RemoteRoomResponse<string>> {
     const exists = await this.presence.exists(this.getRoomChannel(roomId));
     if (!exists) {
       debugMatchMaking(`trying to join non-existant room "${ roomId }"`);
-      return {};
+      return [];
     }
 
     if (rejoinSessionId) {
       const hasReservedSeatResponse = await this.remoteRoomCall(roomId, 'hasReservedSeat', [rejoinSessionId]);
-      return { processId: hasReservedSeatResponse.processId, roomId };
-    } 
-  
-    if ((await this.remoteRoomCall(roomId, 'hasReachedMaxClients')).response) {
-      debugMatchMaking(`room "${ roomId }" reached maxClients.`);
-      return {};
-    } 
-    
-    const requestJoinResponse = await this.remoteRoomCall(roomId, 'requestJoin', [clientOptions, false]);
-    if (!requestJoinResponse.response) {
-      debugMatchMaking(`can't join room "${ roomId }" with options: ${ JSON.stringify(clientOptions) }`);
-      return {};
+      if (hasReservedSeatResponse[1]) {
+        return [hasReservedSeatResponse[0], roomId];
+      }
     }
 
-    return { processId: requestJoinResponse.processId, roomId };
+    if ((await this.remoteRoomCall(roomId, 'hasReachedMaxClients'))[1]) {
+      debugMatchMaking(`room "${ roomId }" reached maxClients.`);
+      return [];
+    }
+
+    const requestJoinResponse = await this.remoteRoomCall(roomId, 'requestJoin', [clientOptions, false]);
+    if (!requestJoinResponse[1]) {
+      debugMatchMaking(`can't join room "${ roomId }" with options: ${ JSON.stringify(clientOptions) }`);
+      return [];
+    }
+
+    return [ requestJoinResponse[0], roomId ];
   }
 
   public async getAvailableRoomByScore(roomName: string, clientOptions: ClientOptions): Promise<RoomWithScore[]> {
@@ -298,7 +313,7 @@ export class MatchMaker {
       }
 
       if (availability) {
-        availableRooms.push(availability.response);
+        availableRooms.push(availability[1]);
       }
 
       return true;
@@ -325,7 +340,7 @@ export class MatchMaker {
       }
 
       if (availability) {
-        rooms.push(availability.response);
+        rooms.push(availability[1]);
       }
 
       return true;
@@ -392,7 +407,7 @@ export class MatchMaker {
       let maxClientsReached: boolean;
 
       try {
-        maxClientsReached = (await this.remoteRoomCall(roomId, 'hasReachedMaxClients')).response;
+        maxClientsReached = (await this.remoteRoomCall(roomId, 'hasReachedMaxClients'))[1];
 
       } catch (e) {
         // room did not responded.
@@ -408,7 +423,7 @@ export class MatchMaker {
           const requestJoinResponse = await this.remoteRoomCall(roomId, 'requestJoin', [clientOptions, false]);
           resolve({
             roomId,
-            score: requestJoinResponse.response
+            score: requestJoinResponse[1],
           });
         }));
 
@@ -439,7 +454,7 @@ export class MatchMaker {
         const [method, requestId, args] = message;
 
         const reply = (code, data) => {
-          this.presence.publish(`${room.roomId}:${requestId}`, [code, { processId: this.processId, response: data }]);
+          this.presence.publish(`${room.roomId}:${requestId}`, [code, [this.processId, data]]);
         };
 
         // reply with property value

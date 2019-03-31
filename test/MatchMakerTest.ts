@@ -40,8 +40,8 @@ describe('MatchMaker', function() {
     });
 
     it('should create a new room ', async () => {
-      let roomId = await matchMaker.onJoinRoomRequest(createDummyClient(), 'room', {}, true);
-      let room = matchMaker.getRoomById(roomId)
+      const { roomId } = await matchMaker.onJoinRoomRequest(createDummyClient(), 'room', {}, true);
+      const room = matchMaker.getRoomById(roomId)
       assert.ok(typeof (room.roomId) === "string");
       assert.ok(room instanceof Room);
     });
@@ -58,7 +58,7 @@ describe('MatchMaker', function() {
     });
 
     it('shouldn\'t return when trying to join with invalid room id', async () => {
-      let roomId = await matchMaker.joinById('invalid_id', {});
+      let { roomId } = await matchMaker.joinById('invalid_id', {});
       assert.equal(roomId, undefined);
     });
 
@@ -80,10 +80,10 @@ describe('MatchMaker', function() {
     it('shouldn\t return room instance when trying to join existing room by id with invalid params', async () => {
       clock.restore();
 
-      let roomId = await matchMaker.onJoinRoomRequest(createDummyClient(), 'room', {});
+      let { roomId } = await matchMaker.onJoinRoomRequest(createDummyClient(), 'room', {});
       assert.ok(isValidId(roomId));
 
-      let joinByRoomId = await matchMaker.joinById(roomId, { invalid_param: 1 });
+      let { joinByRoomId } = await matchMaker.joinById(roomId, { invalid_param: 1 });
       assert.equal(joinByRoomId, undefined);
     });
 
@@ -91,10 +91,10 @@ describe('MatchMaker', function() {
       clock.restore();
 
       const client = createDummyClient();
-      let roomId = await matchMaker.onJoinRoomRequest(client, 'room', {});
+      let { roomId } = await matchMaker.onJoinRoomRequest(client, 'room', {});
       assert.ok(isValidId(roomId));
 
-      let joinByRoomId = await matchMaker.joinById(roomId, {});
+      let [_, joinByRoomId] = await matchMaker.joinById(roomId, {});
       assert.ok(isValidId(joinByRoomId));
 
       const roomClient = createDummyClient();
@@ -141,9 +141,9 @@ describe('MatchMaker', function() {
         assert.fail("an error should be thrown here.");
 
       } catch (e) {
-        assert.ok(e.message.match(/timed out/));
+        assert.ok(e.message.match(/room doesn't exist/));
       }
-    }).timeout(REMOTE_ROOM_SHORT_TIMEOUT + 100);
+    });
   });
 
   // describe('verifyClient', () => {
@@ -308,7 +308,7 @@ describe('MatchMaker', function() {
 
       let client = createDummyClient();
 
-      matchMaker.onJoinRoomRequest(client, 'room', {}).then((roomId) => {
+      matchMaker.onJoinRoomRequest(client, 'room', {}).then(({ roomId }) => {
         matchMaker.getRoomById(roomId)._onJoin(client, {});
       })
     });
@@ -350,7 +350,7 @@ describe('MatchMaker', function() {
 
       let client = createDummyClient();
 
-      matchMaker.onJoinRoomRequest(client, 'room', { clientId: client.id }).then((roomId) => {
+      matchMaker.onJoinRoomRequest(client, 'room', { clientId: client.id }).then(({ roomId }) => {
         let room = matchMaker.getRoomById(roomId);
         room._onJoin(client);
         room._onLeave(client);
@@ -363,7 +363,7 @@ describe('MatchMaker', function() {
       const tick = async (ms) => clock.tick(ms);
 
       const client = createDummyClient({});
-      const roomId = await matchMaker.onJoinRoomRequest(client, 'room_async', {});
+      const { roomId } = await matchMaker.onJoinRoomRequest(client, 'room_async', {});
       const room = matchMaker.getRoomById(roomId);
 
       await tick(room.seatReservationTime * 1000 - 1);
@@ -388,7 +388,7 @@ describe('MatchMaker', function() {
 
   describe("time between room creation and first connection", () => {
     it('should remove the room reference after a timeout without connection', async () => {
-      const roomId = await matchMaker.onJoinRoomRequest(createDummyClient(), 'room', {});
+      const { roomId } = await matchMaker.onJoinRoomRequest(createDummyClient(), 'room', {});
       const dummyRoom = matchMaker.getRoomById(roomId);
       assert.equal(dummyRoom.clients, 0);
       assert(dummyRoom instanceof Room);
@@ -398,7 +398,7 @@ describe('MatchMaker', function() {
     });
 
     it('timer should be re-set if second client tries to join the room', async () => {
-      const roomId = await matchMaker.onJoinRoomRequest(createDummyClient(), 'room', {});
+      const { roomId } = await matchMaker.onJoinRoomRequest(createDummyClient(), 'room', {});
       const room = matchMaker.getRoomById(roomId);
       clock.tick(room.seatReservationTime * 1000 - 1);
       assert(room instanceof Room);
@@ -412,7 +412,7 @@ describe('MatchMaker', function() {
 
     it('room shouldn\'t be removed if a client has joined', async () => {
       const client = createDummyClient({});
-      const roomId = await matchMaker.onJoinRoomRequest(client, 'room', {});
+      const { roomId } = await matchMaker.onJoinRoomRequest(client, 'room', {});
       const room = matchMaker.getRoomById(roomId);
 
       clock.tick(room.seatReservationTime * 1000 - 1);

@@ -1,6 +1,6 @@
 import http from 'http';
 import net from 'net';
-import url from "url";
+import url from 'url';
 import WebSocket from 'ws';
 import { ServerOptions as IServerOptions } from 'ws';
 
@@ -142,7 +142,7 @@ export class Server {
 
     // compatibility with proxying, remove me on 1.0 >>>
     req.roomId = parsedURL.pathname.substr(1);
-    const processIdIndex = req.roomId.indexOf("/");
+    const processIdIndex = req.roomId.indexOf('/');
     if (processIdIndex > 0) { req.roomId = req.roomId.substr(processIdIndex + 1); }
     // <<<<
 
@@ -159,10 +159,10 @@ export class Server {
           req.roomId,
           'hasReservedSeat',
           [query.sessionId],
-        )).response;
+        ))[1];
 
         if (!hasReservedSeat) {
-          const isLocked = (await this.matchMaker.remoteRoomCall(req.roomId, 'locked')).response;
+          const isLocked = (await this.matchMaker.remoteRoomCall(req.roomId, 'locked'))[1];
 
           if (isLocked) {
             return next(false, Protocol.WS_TOO_MANY_CLIENTS, 'maxClients reached.');
@@ -175,7 +175,7 @@ export class Server {
           'onAuth',
           [req.options],
           REMOTE_ROOM_LARGE_TIMEOUT,
-        )).response;
+        ))[1];
 
         if (authResult) {
           req.auth = authResult;

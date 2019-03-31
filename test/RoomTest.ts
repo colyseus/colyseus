@@ -334,7 +334,7 @@ describe('Room', function() {
 
       const client = createDummyClient();
       matchMaker.onJoinRoomRequest(client, 'reconnect', {}).
-        then((roomId) => {
+        then(({ roomId }) => {
           const room = matchMaker.getRoomById(roomId);
 
           room.onLeave = function (client) {
@@ -362,7 +362,7 @@ describe('Room', function() {
     it("should succeed waiting same sessionId for reconnection", async () => {
       const clientId = generateId();
       const firstClient = createDummyClient({ id: clientId });
-      const roomId = await matchMaker.onJoinRoomRequest(firstClient, 'reconnect', {});
+      const { roomId } = await matchMaker.onJoinRoomRequest(firstClient, 'reconnect', {});
 
       const room = matchMaker.getRoomById(roomId);
       const reconnectionSpy = sinon.spy();
@@ -386,7 +386,7 @@ describe('Room', function() {
       await tick(5 * 1000);
 
       const secondClient = createDummyClient({ id: clientId });
-      const secondRoomId = await matchMaker.onJoinRoomRequest(secondClient, 'reconnect', {
+      const { roomId: secondRoomId } = await matchMaker.onJoinRoomRequest(secondClient, 'reconnect', {
         sessionId: firstClient.sessionId
       });
       assert.equal(roomId, secondRoomId);
