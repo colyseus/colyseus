@@ -14,6 +14,7 @@ import { Client, generateId, isValidId } from './index';
 import { decode, Protocol, send } from './Protocol';
 import { RoomConstructor } from './Room';
 import { parseQueryString, registerGracefulShutdown, retry } from './Utils';
+import { registerNode, unregisterNode } from './discovery';
 
 function noop() {/* tslint:disable:no-empty */}
 function heartbeat() { this.pingCount = 0; }
@@ -37,11 +38,13 @@ export class Server {
   protected pingInterval: NodeJS.Timer;
   protected pingTimeout: number;
 
+  protected processId: string = generateId();
+
   constructor(options: ServerOptions = {}) {
     const { gracefullyShutdown = true } = options;
 
     this.presence = options.presence;
-    this.matchMaker = new MatchMaker(this.presence);
+    this.matchMaker = new MatchMaker(this.presence, this.processId);
     this.pingTimeout = (options.pingTimeout !== undefined)
       ? options.pingTimeout
       : 1500;
@@ -90,7 +93,16 @@ export class Server {
   }
 
   public listen(port: number, hostname?: string, backlog?: number, listeningListener?: Function) {
-    this.httpServer.listen(port, hostname, backlog, listeningListener);
+    this.httpServer.address
+    this.httpServer.listen(port, hostname, backlog, () => {
+      if (listeningListener) { listeningListener(); }
+
+      // register node for proxy/service discovery
+      registerNode(this.presence, {
+        processId: this.processId,
+        addressInfo: this.httpServer.address() as net.AddressInfo
+      });
+    });
   }
 
   public async register(name: string, handler: RoomConstructor, options: any = {}): Promise<RegisteredHandler> {
@@ -98,8 +110,14 @@ export class Server {
   }
 
   public gracefullyShutdown(exit: boolean = true) {
+    unregisterNode(this.presence, {
+      processId: this.processId,
+      addressInfo: this.httpServer.address() as net.AddressInfo
+    });
+
     return this.matchMaker.gracefullyShutdown().
       then(() => {
+        this.server.close();
         clearInterval(this.pingInterval);
         return this.onShutdownCallback();
       }).

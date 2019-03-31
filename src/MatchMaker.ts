@@ -28,14 +28,15 @@ type RemoteRoomResponse<T= any> = [string?, T?];
 export class MatchMaker {
   public handlers: {[id: string]: RegisteredHandler} = {};
 
-  private processId: string = process.env.NODE_APP_INSTANCE || '0';
+  private processId: string;
   private localRooms: {[roomId: string]: Room} = {};
   private presence: Presence;
 
   private isGracefullyShuttingDown: boolean = false;
 
-  constructor(presence?: Presence) {
+  constructor(presence?: Presence, processId?: string) {
     this.presence = presence || new LocalPresence();
+    this.processId = processId;
   }
 
   public async connectToRoom(client: Client, roomId: string) {
