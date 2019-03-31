@@ -14,7 +14,9 @@ import { Client, generateId, isValidId } from './index';
 import { decode, Protocol, send } from './Protocol';
 import { RoomConstructor } from './Room';
 import { parseQueryString, registerGracefulShutdown, retry } from './Utils';
+
 import { registerNode, unregisterNode } from './discovery';
+import { LocalPresence } from './presence/LocalPresence';
 
 function noop() {/* tslint:disable:no-empty */}
 function heartbeat() { this.pingCount = 0; }
@@ -43,7 +45,7 @@ export class Server {
   constructor(options: ServerOptions = {}) {
     const { gracefullyShutdown = true } = options;
 
-    this.presence = options.presence;
+    this.presence = options.presence || new LocalPresence();
     this.matchMaker = new MatchMaker(this.presence, this.processId);
     this.pingTimeout = (options.pingTimeout !== undefined)
       ? options.pingTimeout
@@ -93,14 +95,13 @@ export class Server {
   }
 
   public listen(port: number, hostname?: string, backlog?: number, listeningListener?: Function) {
-    this.httpServer.address
     this.httpServer.listen(port, hostname, backlog, () => {
       if (listeningListener) { listeningListener(); }
 
       // register node for proxy/service discovery
       registerNode(this.presence, {
+        addressInfo: this.httpServer.address() as net.AddressInfo,
         processId: this.processId,
-        addressInfo: this.httpServer.address() as net.AddressInfo
       });
     });
   }
@@ -111,8 +112,8 @@ export class Server {
 
   public gracefullyShutdown(exit: boolean = true) {
     unregisterNode(this.presence, {
+      addressInfo: this.httpServer.address() as net.AddressInfo,
       processId: this.processId,
-      addressInfo: this.httpServer.address() as net.AddressInfo
     });
 
     return this.matchMaker.gracefullyShutdown().
