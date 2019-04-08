@@ -57,8 +57,9 @@ See [roadmap](https://github.com/colyseus/colyseus/wiki/Roadmap) for our future 
 
 ### Tools
 
+- [@colyseus/proxy](https://github.com/colyseus/proxy) - Proxy & Service Discovery for scaling Colyseus
 - [@colyseus/monitor](https://github.com/colyseus/colyseus-monitor) - A Web Monitoring Panel for Colyseus
-- [@colyseus/loadtest](https://github.com/colyseus/colyseus-loadtest) - Utility tool for load testing Colyseus.
+- [@colyseus/loadtest](https://github.com/colyseus/colyseus-loadtest) - Utility tool for load testing Colyseus
 
 ### Community client integration
 
