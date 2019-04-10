@@ -156,14 +156,8 @@ export class Server {
     const req = info.req;
 
     const parsedURL = url.parse(req.url);
-    // TODO: use only this on version 1.0.
-    // req.roomId = parsedURL.pathname.match(/^\/[0-9a-zA-Z\-]+\/([0-9a-zA-Z\-]+)/)[1];
-
-    // compatibility with proxying, remove me on 1.0 >>>
-    req.roomId = parsedURL.pathname.substr(1);
-    const processIdIndex = req.roomId.indexOf('/');
-    if (processIdIndex > 0) { req.roomId = req.roomId.substr(processIdIndex + 1); }
-    // <<<<
+    const processAndRoomId = parsedURL.pathname.match(/\/[a-zA-Z0-9_\-]+\/([a-zA-Z0-9_\-]+)$/);
+    req.roomId = processAndRoomId && processAndRoomId[1];
 
     const query = parseQueryString(parsedURL.query);
     req.colyseusid = query.colyseusid;
