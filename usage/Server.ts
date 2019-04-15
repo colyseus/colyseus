@@ -6,7 +6,7 @@ import bodyParser from "body-parser";
 import { Server } from "../src/Server";
 import { ChatRoom } from "./ChatRoom";
 
-const port = Number(process.env.PORT || 2657);
+const port = Number(process.env.PORT || 2567);
 const endpoint = "localhost";
 
 const app = express();

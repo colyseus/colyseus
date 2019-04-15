@@ -1,7 +1,6 @@
 import { Room } from "../src";
 
 import { serialize } from "../src/serializer/Serializer";
-import { SchemaSerializer } from "../src/serializer/SchemaSerializer";
 
 import { Schema, type } from "@colyseus/schema";
 
@@ -10,7 +9,6 @@ class State extends Schema {
   lastMessage: string = "";
 }
 
-@serialize(SchemaSerializer)
 export class ChatRoom extends Room<State> {
   maxClients = 4;
 
