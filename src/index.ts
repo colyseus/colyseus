@@ -5,7 +5,7 @@ import WebSocket from 'ws';
 
 // Core classes
 export { Server } from './Server';
-export { Room } from './Room';
+export { Room, RoomAvailable } from './Room';
 export { Protocol } from './Protocol';
 export { RegisteredHandler } from './matchmaker/RegisteredHandler';
 
