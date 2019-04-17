@@ -8,6 +8,7 @@ import { Serializer } from './Serializer';
 
 import jsonPatch from 'fast-json-patch'; // this is only used for debugging patches
 import { debugPatch } from '../Debug';
+import { typeCheck } from '../Utils';
 
 export class FossilDeltaSerializer<T> implements Serializer<T> {
   public id = 'fossil-delta';
@@ -52,8 +53,8 @@ export class FossilDeltaSerializer<T> implements Serializer<T> {
     /**
      * allow optimized state changes when using `Schema` class.
      */
-    if (newState instanceof Schema) {
-      if (newState.$changed) {
+    if (typeCheck(newState, Schema)) {
+      if ((newState as Schema).$changed) {
         changed = true;
         currentStateEncoded = msgpack.encode(currentState);
       }

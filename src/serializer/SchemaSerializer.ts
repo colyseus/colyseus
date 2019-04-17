@@ -3,6 +3,7 @@ import { Serializer } from './Serializer';
 
 import { Definition, Reflection, Schema } from '@colyseus/schema';
 import { Protocol, send } from '../Protocol';
+import { typeCheck } from '../Utils';
 
 export class SchemaSerializer<T> implements Serializer<T> {
   public id = 'schema';
@@ -10,7 +11,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
   private hasFiltersByClient: boolean = false;
 
   public reset(newState: T & Schema) {
-    if (!(newState instanceof Schema)) {
+    if (!typeCheck(newState, Schema)) {
       throw new Error(`SchemaSerializer error. See: https://docs.colyseus.io/migrating/0.10/#new-default-serializer`);
     }
     this.state = newState;

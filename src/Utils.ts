@@ -117,3 +117,13 @@ export function logError(err: Error): void {
     debugAndPrintError(`websocket error: ${err.message}\n${err.stack}`);
   }
 }
+
+export function typeCheck(objectInstance: any, checkedClass: any): boolean {
+  while (objectInstance.__proto__) {
+    objectInstance = objectInstance.__proto__;
+    if (objectInstance.constructor.name === checkedClass.name) {
+      return true;
+    }
+  }
+  return false;
+}
