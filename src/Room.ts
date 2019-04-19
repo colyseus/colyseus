@@ -150,7 +150,7 @@ export abstract class Room<T= any> extends EventEmitter {
     }
   }
 
-  public setState(newState) {
+  public setState(newState: T) {
     this.clock.start();
 
     this._serializer.reset(newState);
