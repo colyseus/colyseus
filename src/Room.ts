@@ -19,7 +19,7 @@ const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
 
 const DEFAULT_SEAT_RESERVATION_TIME = Number(process.env.COLYSEUS_SEAT_RESERVATION_TIME || 5);
 
-export type SimulationCallback = (deltaTime?: number) => void;
+export type SimulationCallback = (deltaTime: number) => void;
 
 export type RoomConstructor<T= any> = new (presence?: Presence) => Room<T>;
 
