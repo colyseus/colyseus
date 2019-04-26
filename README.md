@@ -61,11 +61,12 @@ See [roadmap](https://github.com/colyseus/colyseus/wiki/Roadmap) for our future 
 - [@colyseus/monitor](https://github.com/colyseus/colyseus-monitor) - A Web Monitoring Panel for Colyseus
 - [@colyseus/loadtest](https://github.com/colyseus/colyseus-loadtest) - Utility tool for load testing Colyseus
 
-### Community client integration
+### Tools made by the community :heart:
 
-- [Java](https://github.com/doorbash/colyseus-java)
-- [Objective-C](https://github.com/swittk/Colyseus-ObjC)
-- [Construct2](https://github.com/Keevle/Colyseus-for-C2)
+- [colyseus-hxjs](https://github.com/serjek/colyseus-hxjs): Haxe externs for colyseus server (by [@serjek](https://github.com/serjek))
+- [colyseus-java](https://github.com/doorbash/colyseus-java): Client for Java (by [@doorbash](https://github.com/doorbash))
+- [Colyseus-ObjC](https://github.com/swittk/Colyseus-ObjC): Client for Objective C (by [@swittk](https://github.com/swittk))
+- [Colyseus-for-C2](https://github.com/Keevle/Colyseus-for-C2): Client for Construct 2 (by [@Keevle](https://github.com/Keevle))
 
 ### Usage examples
 
