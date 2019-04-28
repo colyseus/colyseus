@@ -46,6 +46,16 @@ it](https://discuss.colyseus.io/category/5/showcase) and make your own!
 
 See [roadmap](https://github.com/colyseus/colyseus/wiki/Roadmap) for our future plans.
 
+## Quickstart
+
+Create an barebones Colyseus server by using `npm init colyseus-app`.
+
+```
+npm init colyseus-app my-colyseus-server
+cd my-colyseus-server
+npm start
+```
+
 ### Official client integration
 
 - [JavaScript/TypeScript](https://github.com/colyseus/colyseus.js)
