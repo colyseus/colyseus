@@ -1,10 +1,19 @@
 import { Room } from "../src";
 
-export class ChatRoom extends Room<any> {
+import { serialize } from "../src/serializer/Serializer";
+
+import { Schema, type } from "@colyseus/schema";
+
+class State extends Schema {
+  @type("string")
+  lastMessage: string = "";
+}
+
+export class ChatRoom extends Room<State> {
   maxClients = 4;
 
   onInit (options) {
-    this.setState({ messages: [] });
+    this.setState(new State());
   }
 
   async onAuth (options) {
@@ -16,7 +25,7 @@ export class ChatRoom extends Room<any> {
     console.log("client.id:", client.id);
     console.log("client.sessionId:", client.sessionId);
     console.log("with options", options);
-    this.state.messages.push(`${ client.id } joined.`);
+    this.state.lastMessage = `${ client.id } joined.`;
   }
 
   requestJoin (options, isNewRoom: boolean) {
@@ -33,13 +42,13 @@ export class ChatRoom extends Room<any> {
       console.log("CLIENT RECONNECTED");
 
     } catch (e) {
-      this.state.messages.push(`${client.id} left.`);
+      this.state.lastMessage = `${client.id} left.`;
       console.log("ChatRoom:", client.sessionId, "left!");
     }
   }
 
   onMessage (client, data) {
-    this.state.messages.push(data);
+    this.state.lastMessage = data;
 
     if (data === "leave") {
       this.disconnect().then(() => console.log("yup, disconnected."));

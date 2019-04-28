@@ -11,6 +11,7 @@
         "sourceMap": false
     },
     "include": [
-      "src/**/*.ts"
+      "**/*.ts",
+      "./../src/**/*.ts"
     ]
 }

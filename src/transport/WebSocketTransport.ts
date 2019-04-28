@@ -1,16 +1,16 @@
-import * as WebSocket from 'ws';
-import * as http from 'http';
-import * as parseURL from 'url-parse';
+import url from 'url';
+import http from 'http';
+import WebSocket from 'ws';
 
 import { Client, Protocol, generateId } from '..';
 
 import { Transport } from './Transport';
 import { parseQueryString } from '../Utils';
 import { MatchMaker, REMOTE_ROOM_LARGE_TIMEOUT } from '../MatchMaker';
-import { send, decode } from '../Protocol';
+import { send } from '../Protocol';
 import { ServerOptions } from './../Server';
 
-import { debugError } from './../Debug';
+import { debugAndPrintError } from './../Debug';
 
 function noop() {/* tslint:disable:no-empty */}
 function heartbeat() { this.pingCount = 0; }
@@ -23,7 +23,9 @@ export class WebSocketTransport extends Transport {
 
     constructor (matchMaker: MatchMaker, options: ServerOptions = {}, engine: any) {
         super(matchMaker);
-        this.pingTimeout = options.pingTimeout || 1500;
+        this.pingTimeout = (options.pingTimeout !== undefined)
+            ? options.pingTimeout
+            : 1500;
 
         const customVerifyClient: WebSocket.VerifyClientCallbackAsync = options.verifyClient;
         options.verifyClient = (info, next) => {
@@ -40,6 +42,10 @@ export class WebSocketTransport extends Transport {
         this.wss.on('connection', this.onConnection);
 
         this.server = options.server;
+
+        if (this.pingTimeout > 0) {
+            this.autoTerminateUnresponsiveClients(this.pingTimeout);
+        }
 
         // interval to detect broken connections
         this.pingInterval = setInterval(() => {
@@ -68,12 +74,31 @@ export class WebSocketTransport extends Transport {
         this.server.close();
     }
 
+    protected autoTerminateUnresponsiveClients(pingTimeout: number) {
+        // interval to detect broken connections
+        this.pingInterval = setInterval(() => {
+            this.wss.clients.forEach((client: Client) => {
+                //
+                // if client hasn't responded after the interval, terminate its connection.
+                //
+                if (client.pingCount >= 2) {
+                    return client.terminate();
+                }
+
+                client.pingCount++;
+                client.ping(noop);
+            });
+        }, pingTimeout);
+    }
+
     protected verifyClient = async (info, next) => {
         const req = info.req;
-        const url = parseURL(req.url);
-        req.roomId = url.pathname.substr(1);
 
-        const query = parseQueryString(url.query);
+        const parsedURL = url.parse(req.url);
+        const processAndRoomId = parsedURL.pathname.match(/\/[a-zA-Z0-9_\-]+\/([a-zA-Z0-9_\-]+)$/);
+        req.roomId = processAndRoomId && processAndRoomId[1];
+
+        const query = parseQueryString(parsedURL.query);
         req.colyseusid = query.colyseusid;
 
         delete query.colyseusid;
@@ -82,14 +107,14 @@ export class WebSocketTransport extends Transport {
         if (req.roomId) {
             try {
                 // TODO: refactor me. this piece of code is repeated on MatchMaker class.
-                const hasReservedSeat = query.sessionId && await this.matchMaker.remoteRoomCall(
+                const hasReservedSeat = query.sessionId && (await this.matchMaker.remoteRoomCall(
                     req.roomId,
                     'hasReservedSeat',
                     [query.sessionId],
-                );
+                ))[1];
 
                 if (!hasReservedSeat) {
-                    const isLocked = await this.matchMaker.remoteRoomCall(req.roomId, 'locked');
+                    const isLocked = (await this.matchMaker.remoteRoomCall(req.roomId, 'locked'))[1];
 
                     if (isLocked) {
                         return next(false, Protocol.WS_TOO_MANY_CLIENTS, 'maxClients reached.');
@@ -97,12 +122,12 @@ export class WebSocketTransport extends Transport {
                 }
 
                 // verify client from room scope.
-                const authResult = await this.matchMaker.remoteRoomCall(
+                const authResult = (await this.matchMaker.remoteRoomCall(
                     req.roomId,
                     'onAuth',
                     [req.options],
                     REMOTE_ROOM_LARGE_TIMEOUT,
-                );
+                ))[1];
 
                 if (authResult) {
                     req.auth = authResult;
@@ -113,7 +138,10 @@ export class WebSocketTransport extends Transport {
                 }
 
             } catch (e) {
-                debugError(e.message + '\n' + e.stack);
+                if (e) { // user might have called `reject()` during onAuth without arguments.
+                    debugAndPrintError(e.message + '\n' + e.stack);
+                }
+
                 next(false);
             }
 
@@ -124,7 +152,7 @@ export class WebSocketTransport extends Transport {
 
     protected onConnection = (client: Client, req?: http.IncomingMessage & any) => {
         // compatibility with ws / uws
-        const upgradeReq = req || client.upgradeReq || {};
+        const upgradeReq = req || client.upgradeReq;
 
         // set client id
         client.id = upgradeReq.colyseusid || generateId();
@@ -132,7 +160,7 @@ export class WebSocketTransport extends Transport {
 
         // ensure client has its "colyseusid"
         if (!upgradeReq.colyseusid) {
-            send(client, [Protocol.USER_ID, client.id]);
+            send[Protocol.USER_ID](client);
         }
 
         // set client options
@@ -140,19 +168,19 @@ export class WebSocketTransport extends Transport {
         client.auth = upgradeReq.auth;
 
         // prevent server crashes if a single client had unexpected error
-        client.on('error', (err) => debugError(err.message + '\n' + err.stack));
+        client.on('error', (err) => debugAndPrintError(err.message + '\n' + err.stack));
         client.on('pong', heartbeat);
 
         const roomId = upgradeReq.roomId;
         if (roomId) {
             this.matchMaker.connectToRoom(client, upgradeReq.roomId).
                 catch((e) => {
-                    debugError(e.stack || e);
-                    send(client, [Protocol.JOIN_ERROR, roomId, e && e.message]);
+                    debugAndPrintError(e.stack || e);
+                    send[Protocol.JOIN_ERROR](client, (e && e.message) || '');
                 });
 
         } else {
-            client.on('message', (data) => this.onMessageMatchMaking(client, decode(data)));
+            client.on('message', this.onMessageMatchMaking.bind(this, client));
         }
     }
 

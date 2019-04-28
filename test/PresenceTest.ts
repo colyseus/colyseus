@@ -1,5 +1,5 @@
-import * as assert from 'assert';
-import * as sinon from 'sinon';
+import assert from 'assert';
+import sinon from 'sinon';
 
 import { MatchMaker } from "../src/MatchMaker";
 import { DummyRoom, RoomVerifyClient, RoomVerifyClientWithLock, createDummyClient } from './utils/mock';
@@ -25,7 +25,7 @@ describe('Presence', function() {
     it('should remove reserved seat after joining the room', async () => {
       const client = createDummyClient({});
 
-      const roomId = await matchMaker.onJoinRoomRequest(client, 'room', {});
+      const { roomId } = await matchMaker.onJoinRoomRequest(client, 'room', {});
 
       await matchMaker.connectToRoom(client, roomId);
 

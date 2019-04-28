@@ -39,6 +39,7 @@
         "question",
         "bug",
         "code",
+        "financial",
         "ideas"
       ]
     },
@@ -70,6 +71,7 @@
       "avatar_url": "https://avatars0.githubusercontent.com/u/853683?v=4",
       "profile": "https://oyed.io",
       "contributions": [
+        "question",
         "bug",
         "financial",
         "ideas"

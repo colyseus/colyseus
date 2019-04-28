@@ -5,6 +5,8 @@ node_js:
   - 10
 install:
   - 'npm install'
+services:
+  - redis-server
 script:
   - npm run tslint
   - npm test

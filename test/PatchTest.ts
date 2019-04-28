@@ -1,8 +1,7 @@
-import * as assert from "assert";
-import * as msgpack from "notepack.io";
+import assert from "assert";
+import msgpack from "notepack.io";
 import { Room } from "../src/Room";
 import { createDummyClient, DummyRoom, DummyRoomWithState } from "./utils/mock";
-import { Protocol } from "../src/Protocol";
 import { LocalPresence } from './../src/presence/LocalPresence';
 
 describe('Patch', function() {
@@ -39,9 +38,8 @@ describe('Patch', function() {
       room.setState({ n: null, u: undefined });
       (<any>room)._onJoin(client, {});
 
-      var message = msgpack.decode( client.messages[1] );
-      assert.equal(message[0], Protocol.ROOM_STATE);
-      assert.deepEqual(msgpack.decode(message[1]), { n: null, u: undefined });
+      var state = msgpack.decode( client.messages[2] );
+      assert.deepEqual(state, { n: null, u: undefined });
     })
   })
 

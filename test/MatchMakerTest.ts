@@ -1,15 +1,15 @@
 (<any>process.env).COLYSEUS_PRESENCE_TIMEOUT = 50;
 
-import * as assert from 'assert';
-import * as sinon from 'sinon';
+import assert from 'assert';
+import sinon from 'sinon';
 
-import { MatchMaker } from "../src/MatchMaker";
+import { MatchMaker, REMOTE_ROOM_SHORT_TIMEOUT } from "../src/MatchMaker";
 import { RegisteredHandler } from './../src/matchmaker/RegisteredHandler';
 import { Room } from "../src/Room";
 
 import { generateId, Protocol, isValidId } from "../src";
-import { createDummyClient, DummyRoom, RoomVerifyClient, Client, RoomVerifyClientWithLock } from "./utils/mock";
-
+import { createDummyClient, DummyRoom, RoomVerifyClient, Client, RoomVerifyClientWithLock, RoomWithAsync } from "./utils/mock";
+import { WS_CLOSE_CONSENTED } from '../src/Protocol';
 
 process.on('unhandledRejection', (reason, promise) => {
   console.log(reason, promise);
@@ -17,17 +17,22 @@ process.on('unhandledRejection', (reason, promise) => {
 
 describe('MatchMaker', function() {
   let matchMaker;
-  let roomRegisteredHandler: RegisteredHandler;
+  let clock: sinon.SinonFakeTimers;
 
   beforeEach(() => {
     matchMaker = new MatchMaker();
 
-    roomRegisteredHandler = matchMaker.registerHandler('room', DummyRoom);
+    matchMaker.registerHandler('room', DummyRoom);
     matchMaker.registerHandler('dummy_room', DummyRoom);
     matchMaker.registerHandler('room_with_default_options', DummyRoom, { level: 1 });
     matchMaker.registerHandler('room_verify_client', RoomVerifyClient);
     matchMaker.registerHandler('room_verify_client_with_lock', RoomVerifyClientWithLock);
+    matchMaker.registerHandler('room_async', RoomWithAsync);
+
+    clock = sinon.useFakeTimers();
   });
+
+  afterEach(() => clock.restore());
 
   describe('room handlers', function() {
     it('should add handler with name', function() {
@@ -35,8 +40,8 @@ describe('MatchMaker', function() {
     });
 
     it('should create a new room ', async () => {
-      let roomId = await matchMaker.onJoinRoomRequest(createDummyClient(), 'room', {}, true);
-      let room = matchMaker.getRoomById(roomId)
+      const { roomId } = await matchMaker.onJoinRoomRequest(createDummyClient(), 'room', {}, true);
+      const room = matchMaker.getRoomById(roomId)
       assert.ok(typeof (room.roomId) === "string");
       assert.ok(room instanceof Room);
     });
@@ -53,7 +58,7 @@ describe('MatchMaker', function() {
     });
 
     it('shouldn\'t return when trying to join with invalid room id', async () => {
-      let roomId = await matchMaker.joinById('invalid_id', {});
+      let { roomId } = await matchMaker.joinById('invalid_id', {});
       assert.equal(roomId, undefined);
     });
 
@@ -73,26 +78,36 @@ describe('MatchMaker', function() {
     });
 
     it('shouldn\t return room instance when trying to join existing room by id with invalid params', async () => {
-      let roomId = await matchMaker.onJoinRoomRequest(createDummyClient(), 'room', {});
+      clock.restore();
+
+      let { roomId } = await matchMaker.onJoinRoomRequest(createDummyClient(), 'room', {});
       assert.ok(isValidId(roomId));
 
-      let joinByRoomId = await matchMaker.joinById(roomId, { invalid_param: 1 });
+      let { joinByRoomId } = await matchMaker.joinById(roomId, { invalid_param: 1 });
       assert.equal(joinByRoomId, undefined);
     });
 
     it('should join existing room using "joinById"', async () => {
-      let roomId = await matchMaker.onJoinRoomRequest(createDummyClient(), 'room', {});
+      clock.restore();
+
+      const client = createDummyClient();
+      let { roomId } = await matchMaker.onJoinRoomRequest(client, 'room', {});
       assert.ok(isValidId(roomId));
 
-      let joinByRoomId = await matchMaker.joinById(roomId, {});
+      let [_, joinByRoomId] = await matchMaker.joinById(roomId, {});
       assert.ok(isValidId(joinByRoomId));
+
+      const roomClient = createDummyClient();
+      await matchMaker.onJoinRoomRequest(roomClient, roomId, {});
+      await matchMaker.connectToRoom(roomClient, roomId);
+      assert.ok(roomClient.sessionId, "should have valid sessionId");
     });
 
-    it('should call "onDispose" when room is not created', function(done) {
+    it('should call "onDispose" when room is not created', async () => {
       const stub = sinon.stub(DummyRoom.prototype, 'requestJoin').returns(false);
       const spy = sinon.spy(DummyRoom.prototype, 'onDispose');
       try {
-        matchMaker.create('dummy_room', {});
+        await matchMaker.create('dummy_room', {});
         assert.fail("catch block should've taken place");
 
       } catch (e) {
@@ -100,7 +115,6 @@ describe('MatchMaker', function() {
         assert.ok(spy.calledOnce);
         stub.restore();
         spy.restore();
-        done();
       }
     });
 
@@ -118,14 +132,16 @@ describe('MatchMaker', function() {
 
   describe('onJoin', () => {
     it('should send error message to client when joining invalid room', async () => {
+
       let client = createDummyClient({});
+      clock.restore();
 
       try {
         await matchMaker.connectToRoom(client, generateId());
         assert.fail("an error should be thrown here.");
 
       } catch (e) {
-        assert.ok(e.message.match(/timed out/));
+        assert.ok(e.message.match(/room doesn't exist/));
       }
     });
   });
@@ -269,12 +285,11 @@ describe('MatchMaker', function() {
       matchMaker.create('room', {});
     });
 
-    it('should trigger "dispose" event', (done) => {
-      let dummyRoom = matchMaker.getRoomById(matchMaker.create('room', {}));
+    it('should trigger "dispose" event', async () => {
+      let dummyRoom = matchMaker.getRoomById(await matchMaker.create('room', {}));
 
       matchMaker.handlers["room"].on("dispose", (room) => {
         assert.ok(room instanceof Room);
-        done();
       });
 
       dummyRoom.emit("dispose");
@@ -282,6 +297,8 @@ describe('MatchMaker', function() {
 
     it('should trigger "join" event', (done) => {
       let dummyRoom = matchMaker.getRoomById(matchMaker.create('room', {}));
+
+      // TODO
 
       matchMaker.handlers["room"].on("join", (room, client) => {
         assert.ok(room instanceof Room);
@@ -291,7 +308,7 @@ describe('MatchMaker', function() {
 
       let client = createDummyClient();
 
-      matchMaker.onJoinRoomRequest(client, 'room', {}).then((roomId) => {
+      matchMaker.onJoinRoomRequest(client, 'room', {}).then(({ roomId }) => {
         matchMaker.getRoomById(roomId)._onJoin(client, {});
       })
     });
@@ -312,6 +329,8 @@ describe('MatchMaker', function() {
     });
 
     it('should\'nt trigger "unlock" if room hasn\'t been locked before', (done) => {
+      clock.restore();
+
       matchMaker.handlers["room"].on("unlock", (room) => {
         throw new Error("shouldn't trigger 'unlock' event here");
       });
@@ -331,7 +350,7 @@ describe('MatchMaker', function() {
 
       let client = createDummyClient();
 
-      matchMaker.onJoinRoomRequest(client, 'room', { clientId: client.id }).then((roomId) => {
+      matchMaker.onJoinRoomRequest(client, 'room', { clientId: client.id }).then(({ roomId }) => {
         let room = matchMaker.getRoomById(roomId);
         room._onJoin(client);
         room._onLeave(client);
@@ -339,25 +358,47 @@ describe('MatchMaker', function() {
     });
   });
 
+  describe("async callbacks", () => {
+    it("shouldn't allow to join a room that's disposing asynchronously", async () => {
+      const tick = async (ms) => clock.tick(ms);
+
+      const client = createDummyClient({});
+      const { roomId } = await matchMaker.onJoinRoomRequest(client, 'room_async', {});
+      const room = matchMaker.getRoomById(roomId);
+
+      await tick(room.seatReservationTime * 1000 - 1);
+      assert(matchMaker.getRoomById(roomId) instanceof Room);
+
+      await matchMaker.connectToRoom(client, roomId);
+      await tick(room.seatReservationTime * 1000);
+      assert(matchMaker.getRoomById(roomId) instanceof Room);
+
+      client.close(WS_CLOSE_CONSENTED);
+      await tick(RoomWithAsync.ASYNC_TIMEOUT + 1);
+      await tick(RoomWithAsync.ASYNC_TIMEOUT + 1);
+
+      // WORKAROUND: each tick fulfils an internal promise
+      await tick(1);
+      await tick(1);
+      await tick(1);
+
+      assert(!matchMaker.getRoomById(roomId));
+    });
+  });
+
   describe("time between room creation and first connection", () => {
     it('should remove the room reference after a timeout without connection', async () => {
-      const clock = sinon.useFakeTimers();
-
-      const roomId = await matchMaker.onJoinRoomRequest(createDummyClient(), 'room', {});
+      const { roomId } = await matchMaker.onJoinRoomRequest(createDummyClient(), 'room', {});
       const dummyRoom = matchMaker.getRoomById(roomId);
       assert.equal(dummyRoom.clients, 0);
       assert(dummyRoom instanceof Room);
 
       clock.tick(dummyRoom.seatReservationTime * 1000);
       assert(matchMaker.getRoomById(roomId) === undefined);
-
-      clock.restore();
     });
 
     it('timer should be re-set if second client tries to join the room', async () => {
-      const clock = sinon.useFakeTimers();
-
-      const roomId = await matchMaker.onJoinRoomRequest(createDummyClient(), 'room', {});
+      const { roomId } = await matchMaker.onJoinRoomRequest(createDummyClient(), 'room', {});
       const room = matchMaker.getRoomById(roomId);
       clock.tick(room.seatReservationTime * 1000 - 1);
       assert(room instanceof Room);
@@ -367,15 +408,11 @@ describe('MatchMaker', function() {
 
       clock.tick(room.seatReservationTime * 1000);
       assert(matchMaker.getRoomById(roomId) === undefined);
-
-      clock.restore();
     });
 
     it('room shouldn\'t be removed if a client has joined', async () => {
-      const clock = sinon.useFakeTimers();
-
       const client = createDummyClient({});
-      const roomId = await matchMaker.onJoinRoomRequest(client, 'room', {});
+      const { roomId } = await matchMaker.onJoinRoomRequest(client, 'room', {});
       const room = matchMaker.getRoomById(roomId);
 
       clock.tick(room.seatReservationTime * 1000 - 1);
@@ -384,8 +421,6 @@ describe('MatchMaker', function() {
       await matchMaker.connectToRoom(client, roomId);
       clock.tick(room.seatReservationTime * 1000);
       assert(matchMaker.getRoomById(roomId) instanceof Room);
-
-      clock.restore();
     });
   });
 

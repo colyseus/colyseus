@@ -1,9 +1,9 @@
-import * as assert from "assert";
-import * as msgpack from "notepack.io";
+import assert from "assert";
+import msgpack from "notepack.io";
 
 import { Server } from "../src/Server";
 import { Protocol } from "../src/Protocol";
-import { createEmptyClient, DummyRoom, RoomWithAsync, Client, awaitForTimeout } from "./utils/mock";
+import { createEmptyClient, DummyRoom, RoomWithAsync, Client, awaitForTimeout, utf8Read } from "./utils/mock";
 import { isValidId, Room } from "../src";
 
 describe('Server', () => {
@@ -39,78 +39,89 @@ describe('Server', () => {
       const client0 = clients[0];
       const client1 = clients[1];
 
-      client0.emit('message', msgpack.encode([Protocol.JOIN_ROOM, "room", { requestId: 0 }]));
-      client1.emit('message', msgpack.encode([Protocol.JOIN_ROOM, "room", { requestId: 0 }]));
+      client0.emit('message', msgpack.encode([Protocol.JOIN_REQUEST, "room", { requestId: 5 }]));
+      client1.emit('message', msgpack.encode([Protocol.JOIN_REQUEST, "room", { requestId: 5 }]));
       await awaitForTimeout(100);
 
-      const lastMessage = client0.lastMessage;
-      assert.equal(lastMessage[0], Protocol.JOIN_ROOM);
-      assert.ok(isValidId(lastMessage[1]));
-      assert.equal(lastMessage[2], 0);
+      assert.equal((client0.messages[1] as Buffer).readUInt8(0), Protocol.JOIN_REQUEST);
+      assert.equal((client0.messages[1] as Buffer).readUInt8(1), 5); // requestId
+      assert.ok(isValidId(utf8Read(client0.messages[1], 2)));
     });
 
     it('should join a room with valid options', async () => {
       const client = clients[2];
 
-      client.emit('message', msgpack.encode([Protocol.JOIN_ROOM, "room", { requestId: 1 }]));
+      client.emit('message', msgpack.encode([Protocol.JOIN_REQUEST, "room", { requestId: 1 }]));
       await awaitForTimeout(100);
 
-      assert.equal(client.lastMessage[0], Protocol.JOIN_ROOM);
-      assert.ok(isValidId(client.lastMessage[1]));
-      assert.equal(client.lastMessage[2], 1);
+      assert.equal((client.messages[1] as Buffer).readUInt8(0), Protocol.JOIN_REQUEST);
+      assert.equal((client.messages[1] as Buffer).readUInt8(1), 1); // requestId
+      assert.ok(isValidId(utf8Read(client.messages[1], 2)));
+    });
+
+    it('shouldn\'t join a non-existant room', async () => {
+      const client = clients[3];
+
+      client.emit('message', msgpack.encode([Protocol.JOIN_REQUEST, "non_existant_room", {}]));
+      await awaitForTimeout(100);
+
+      assert.equal((client.messages[1] as Buffer).readUInt8(0), Protocol.JOIN_ERROR);
+      assert.equal(utf8Read(client.messages[1], 1), `no available handler for "non_existant_room"`);
     });
 
     it('shouldn\'t join a room with invalid options', async () => {
       const client = clients[3];
 
-      client.emit('message', msgpack.encode([Protocol.JOIN_ROOM, "invalid_room", { invalid_param: 10 }]));
+      client.emit('message', msgpack.encode([Protocol.JOIN_REQUEST, "invalid_room", { invalid_param: 10 }]));
       await awaitForTimeout(100);
 
-      assert.equal(client.lastMessage[0], Protocol.JOIN_ERROR);
-      assert.equal(client.lastMessage[1], 'invalid_room');
+      assert.equal((client.messages[1] as Buffer).readUInt8(0), Protocol.JOIN_ERROR);
+      assert.ok(/^failed to auto-create room "invalid_room"/gi.test(utf8Read(client.messages[1], 1)));
     });
 
   });
 
   describe('matchmaking', () => {
-    it('joining a room that is dispoing disposing room', async function () {
+    it('joining a room that is dispoing', async function () {
       this.timeout(10000);
-
-      const joinOptions = {};
 
       // connect first client
       const client1 = clients[0];
-      client1.emit('message', msgpack.encode([Protocol.JOIN_ROOM, "room_async", joinOptions]));
+      client1.emit('message', msgpack.encode([Protocol.JOIN_REQUEST, "room_async", {}]));
       await awaitForTimeout(20);
 
-      const lastMessage = client1.lastMessage;
-      const roomId = lastMessage[1];
-
+      const roomId = utf8Read(client1.messages[1], 1);
       const roomClient1 = createEmptyClient();
       roomClient1.upgradeReq = { url: `ws://localhost:1111/${roomId}?colyseusid=${client1.id}` };
 
-      (<any>server).verifyClient({ req: roomClient1.upgradeReq }, async (success) => {
+      let client1Success: boolean;
+      await (<any>server).verifyClient({ req: roomClient1.upgradeReq }, async (success) => {
+        client1Success = success;
         (<any>server).onConnection(roomClient1);
         await awaitForTimeout(20);
         roomClient1.close();
       });
+      assert.ok(client1Success);
 
       // connect second client
       const client2 = clients[1];
-      await awaitForTimeout(220);
-      client2.emit('message', msgpack.encode([Protocol.JOIN_ROOM, "room_async", joinOptions]));
+      await awaitForTimeout(RoomWithAsync.ASYNC_TIMEOUT + 20);
+      client2.emit('message', msgpack.encode([Protocol.JOIN_REQUEST, "room_async", {}]));
 
       await awaitForTimeout(50);
 
-      const roomId2 = client2.lastMessage[1];
+      const roomId2 = utf8Read(client2.messages[1], 1);
 
       const roomClient2 = createEmptyClient();
       roomClient2.upgradeReq = { url: `ws://localhost:1111/${roomId2}?colyseusid=${client2.id}` };
 
-      (<any>server).verifyClient({ req: roomClient2.upgradeReq }, async (success) => {
+      let client2Success: boolean;
+      await (<any>server).verifyClient({ req: roomClient2.upgradeReq }, async (success) => {
+        client2Success = success;
         (<any>server).onConnection(roomClient2);
         await awaitForTimeout(20);
       });
+      assert.ok(client2Success);
 
       await awaitForTimeout(500);
 

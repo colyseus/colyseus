@@ -1,12 +1,12 @@
-import * as http from "http";
-import * as express from "express";
-import * as bodyParser from "body-parser";
-// import * as WebSocket from "uws";
+import http from "http";
+import express from "express";
+import bodyParser from "body-parser";
+// import WebSocket from "uws";
 
 import { Server, RedisPresence, MemsharedPresence } from "../src";
 import { ChatRoom } from "./ChatRoom";
 
-const port = Number(process.env.PORT || 2657);
+const port = Number(process.env.PORT || 2567);
 const endpoint = "localhost";
 
 const app = express();
@@ -20,12 +20,14 @@ const gameServer = new Server({
 });
 
 // Register ChatRoom as "chat"
-gameServer.register("chat", ChatRoom).
+gameServer.register("chat", ChatRoom).then((handler) => {
   // demonstrating public events.
-  on("create", (room) => console.log("room created!", room.roomId)).
-  on("join", (room, client) => console.log("client", client.id, "joined", room.roomId)).
-  on("leave", (room, client) => console.log("client", client.id, "left", room.roomId)).
-  on("dispose", (room) => console.log("room disposed!", room.roomId));
+  handler.
+    on("create", (room) => console.log("room created!", room.roomId)).
+    on("join", (room, client) => console.log("client", client.id, "joined", room.roomId)).
+    on("leave", (room, client) => console.log("client", client.id, "left", room.roomId)).
+    on("dispose", (room) => console.log("room disposed!", room.roomId));
+})
 
 app.use(express.static(__dirname));
 

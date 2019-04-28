@@ -6,7 +6,7 @@ import { Transport } from './Transport';
 import { MatchMaker } from './../MatchMaker';
 import { ServerOptions } from './../Server';
 
-import { debugError } from './../Debug';
+import { debugError, debugAndPrintError } from './../Debug';
 
 export class TCPTransport extends Transport {
     constructor (matchMaker: MatchMaker, options: ServerOptions = {}) {
@@ -31,7 +31,7 @@ export class TCPTransport extends Transport {
 
         // ensure client has its "colyseusid"
         if (!upgradeReq.colyseusid) {
-            send(client, [Protocol.USER_ID, client.id]);
+            send[Protocol.USER_ID](client);
         }
 
         // set client options
@@ -71,8 +71,8 @@ export class TCPTransport extends Transport {
 
             this.matchMaker.connectToRoom(client, roomId).
                 catch((e) => {
-                    debugError(e.stack || e);
-                    send(client, [Protocol.JOIN_ERROR, roomId, e && e.message]);
+                    debugAndPrintError(e.stack || e);
+                    send[Protocol.JOIN_ERROR](client, (e && e.message) || '');
                 });
 
         } else {

@@ -1,7 +1,7 @@
 import Clock, { Delayed } from '@gamestdio/timer';
-import * as http from 'http';
-import * as shortid from 'shortid';
-import * as WebSocket from 'ws';
+import http from 'http';
+import nanoid from 'nanoid';
+import WebSocket from 'ws';
 
 // Core classes
 export { Server } from './Server';
@@ -13,16 +13,17 @@ export { RegisteredHandler } from './matchmaker/RegisteredHandler';
 export { Presence } from './presence/Presence';
 export { LocalPresence } from './presence/LocalPresence';
 export { RedisPresence } from './presence/RedisPresence';
-export { MemsharedPresence } from './presence/MemsharedPresence';
 
-// State Helper Types
-export interface EntityMap<T> {[ entityId: string ]: T; }
+// Serializers
+export { FossilDeltaSerializer } from './serializer/FossilDeltaSerializer';
+export { SchemaSerializer } from './serializer/SchemaSerializer';
+export { serialize } from './serializer/Serializer';
 
 // Utilities
 export { Clock, Delayed };
 export { nonenumerable as nosync } from 'nonenumerable';
-export function generateId() { return shortid.generate(); }
-export function isValidId(id: any) { return shortid.isValid(id); }
+export function generateId() { return nanoid(9); }
+export function isValidId(id: string) { return id && /^[a-zA-Z0-9_\-]{9}$/.test(id); }
 
 // Export 'WebSocket' as 'Client' with 'id' property.
 export type Client = WebSocket & {

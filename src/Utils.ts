@@ -1,6 +1,6 @@
-import * as querystring from 'querystring';
+import querystring from 'querystring';
 
-import { debugError } from './Debug';
+import { debugAndPrintError } from './Debug';
 
 //
 // nodemon sends SIGUSR2 before reloading
@@ -9,8 +9,6 @@ import { debugError } from './Debug';
 const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM', 'SIGUSR2'];
 
 export function registerGracefulShutdown(callback) {
-  const calledOnce = false;
-
   signals.forEach((signal) =>
     process.once(signal, () => callback(signal)));
 }
@@ -82,7 +80,7 @@ export function spliceOne(arr: any[], index: number): boolean {
 }
 
 export function parseQueryString(query: string): any {
-  const data = querystring.parse(query.substr(1));
+  const data = querystring.parse(query);
 
   for (const k in data) {
     if (!Object.prototype.hasOwnProperty.call(data, k)) { continue; }
@@ -116,6 +114,6 @@ export function merge(a: any, ...objs: any[]): any {
 
 export function logError(err: Error): void {
   if (err) {
-    debugError(`websocket error: ${err.message}\n${err.stack}`);
+    debugAndPrintError(`websocket error: ${err.message}\n${err.stack}`);
   }
 }

@@ -7,7 +7,7 @@ import { Protocol, decode, send } from "../Protocol";
 import { MatchMaker } from '../MatchMaker';
 import { MatchMakeError } from './../Errors';
 
-import { debugError } from './../Debug';
+import { debugError, debugAndPrintError } from './../Debug';
 import { retry } from "../Utils";
 
 export abstract class Transport {
@@ -18,23 +18,29 @@ export abstract class Transport {
         this.matchMaker = matchMaker;
     }
 
+    public address () {
+        return this.server.address();
+    }
+
     abstract listen(port?: number, hostname?: string, backlog?: number, listeningListener?: Function): this;
     abstract shutdown(): void;
 
-    protected onMessageMatchMaking(client: Client, message: any) {
+    protected onMessageMatchMaking(client: Client, message) {
+        message = decode(message);
+
         if (!message) {
-            debugError(`couldn't decode message: ${message}`);
+            debugAndPrintError(`couldn't decode message: ${message}`);
             return;
         }
 
-        if (message[0] === Protocol.JOIN_ROOM) {
+        if (message[0] === Protocol.JOIN_REQUEST) {
             const roomName = message[1];
             const joinOptions = message[2];
 
             joinOptions.clientId = client.id;
 
             if (!this.matchMaker.hasHandler(roomName) && !isValidId(roomName)) {
-                send(client, [Protocol.JOIN_ERROR, roomName, `Error: no available handler for "${roomName}"`]);
+                send[Protocol.JOIN_ERROR](client, `no available handler for "${roomName}"`);
 
             } else {
                 //
@@ -45,12 +51,14 @@ export abstract class Transport {
                 retry(() => {
                     return this.matchMaker.onJoinRoomRequest(client, roomName, joinOptions);
                 }, 3, 0, [MatchMakeError]).
-                    then((roomId) => {
-                        send(client, [Protocol.JOIN_ROOM, roomId, joinOptions.requestId]);
+                    then((response: { roomId: string, processId: string }) => {
+                        send[Protocol.JOIN_REQUEST](client, joinOptions.requestId, response.roomId, response.processId);
 
                     }).catch((e) => {
-                        debugError(e.stack || e);
-                        send(client, [Protocol.JOIN_ERROR, roomName, e && e.message]);
+                        const errorMessage = (e && e.message) || '';
+                        debugError(`MatchMakeError: ${errorMessage}\n${e.stack}`);
+
+                        send[Protocol.JOIN_ERROR](client, errorMessage);
                     });
             }
 
@@ -59,11 +67,11 @@ export abstract class Transport {
             const roomName = message[2];
 
             this.matchMaker.getAvailableRooms(roomName).
-                then((rooms) => send(client, [Protocol.ROOM_LIST, requestId, rooms])).
-                catch((e) => debugError(e.stack || e));
+                then((rooms) => send[Protocol.ROOM_LIST](client, requestId, rooms)).
+                catch((e) => debugAndPrintError(e.stack || e));
 
         } else {
-            debugError(`MatchMaking couldn\'t process message: ${message}`);
+            debugAndPrintError(`MatchMaking couldn\'t process message: ${message}`);
         }
     }
 }

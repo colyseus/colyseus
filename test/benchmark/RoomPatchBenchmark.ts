@@ -1,8 +1,8 @@
-import * as Benchmark from "benchmark";
-import * as msgpack from "notepack.io";
-import * as fossilDelta from "fossil-delta";
-import * as nodeDelta from "node-delta";
-import * as util from "util";
+import Benchmark from "benchmark";
+import msgpack from "notepack.io";
+import fossilDelta from "fossil-delta";
+import nodeDelta from "node-delta";
+import util from "util";
 import { DummyRoom, createDummyClient } from "../utils/mock";
 import { generateId, Protocol } from "../../src";
 import { toJSON } from "../../src/Utils";

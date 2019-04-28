@@ -1,8 +1,8 @@
-import * as net from 'net';
-import * as WebSocket from 'ws';
+import net from 'net';
+import WebSocket from 'ws';
 import { ServerOptions as IServerOptions } from 'ws';
 
-import { debugError } from './Debug';
+import { debugAndPrintError } from './Debug';
 import { MatchMaker } from './MatchMaker';
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
 import { Presence } from './presence/Presence';
@@ -11,12 +11,17 @@ import { Transport, TCPTransport, WebSocketTransport } from './transport/Transpo
 import { RoomConstructor } from './Room';
 import { registerGracefulShutdown } from './Utils';
 
+import { registerNode, unregisterNode } from './discovery';
+import { LocalPresence } from './presence/LocalPresence';
+import { generateId } from '.';
+
 export type ServerOptions = IServerOptions & {
   pingTimeout?: number,
   verifyClient?: WebSocket.VerifyClientCallbackAsync
   presence?: any,
   engine?: any,
   ws?: any,
+  gracefullyShutdown?: boolean,
 };
 
 export class Server {
@@ -25,23 +30,20 @@ export class Server {
   protected transport: Transport;
   protected presence: Presence;
 
-  protected onShutdownCallback: () => void | Promise<any>;
+  protected processId: string = generateId();
 
   constructor(options: ServerOptions = {}) {
-    this.presence = options.presence;
-    this.matchMaker = new MatchMaker(this.presence);
+    const { gracefullyShutdown = true } = options;
 
-    this.onShutdownCallback = () => Promise.resolve();
+    this.presence = options.presence || new LocalPresence();
+    this.matchMaker = new MatchMaker(this.presence, this.processId);
 
     // "presence" option is not used from now on
     delete options.presence;
 
-    registerGracefulShutdown((signal) => {
-      this.matchMaker.gracefullyShutdown().
-        then(() => this.shutdown()).
-        catch((err) => debugError(`error during shutdown: ${err}`)).
-        then(() => process.exit());
-    });
+    if (gracefullyShutdown) {
+      registerGracefulShutdown((signal) => this.gracefullyShutdown());
+    }
 
     this.attach(options);
   }
@@ -56,19 +58,43 @@ export class Server {
   }
 
   public listen(port: number, hostname?: string, backlog?: number, listeningListener?: Function) {
-    this.transport.listen(port, hostname, backlog, listeningListener);
+    this.transport.listen(port, hostname, backlog, () => {
+      if (listeningListener) listeningListener();
+        // register node for proxy/service discovery
+        registerNode(this.presence, {
+            addressInfo: this.transport.address() as net.AddressInfo,
+            processId: this.processId,
+        });
+      
+    });
   }
 
-  public register(name: string, handler: RoomConstructor, options: any = {}): RegisteredHandler {
+  public async register(name: string, handler: RoomConstructor, options: any = {}): Promise<RegisteredHandler> {
     return this.matchMaker.registerHandler(name, handler, options);
+  }
+
+  public gracefullyShutdown(exit: boolean = true) {
+    unregisterNode(this.presence, {
+      addressInfo: this.transport.address() as net.AddressInfo,
+      processId: this.processId,
+    });
+
+    return this.matchMaker.gracefullyShutdown().
+      then(() => {
+        this.transport.shutdown();
+        return this.onShutdownCallback();
+      }).
+      catch((err) => debugAndPrintError(`error during shutdown: ${err}`)).
+      then(() => {
+        if (exit) { process.exit(); }
+      });
   }
 
   public onShutdown(callback: () => void | Promise<any>) {
     this.onShutdownCallback = callback;
   }
 
-  protected shutdown()  {
-    return this.onShutdownCallback();
-  }
+  protected onShutdownCallback: () => void | Promise<any> =
+    () => Promise.resolve()
 
 }
