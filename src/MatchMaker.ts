@@ -139,7 +139,7 @@ export class MatchMaker {
     if (!roomId) {
       throw new MatchMakeError(`Failed to join invalid room "${roomToJoin}"`);
 
-    } else if (shouldCreateRoom || isJoinById) {
+    } else if (shouldCreateRoom || isJoinById || isReconnect) {
       const reserveSeatSuccessful = await this.remoteRoomCall(roomId, '_reserveSeat', [{
         id: client.id,
         sessionId,
