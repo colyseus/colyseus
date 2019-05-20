@@ -46,14 +46,24 @@ it](https://discuss.colyseus.io/category/5/showcase) and make your own!
 
 See [roadmap](https://github.com/colyseus/colyseus/wiki/Roadmap) for our future plans.
 
+## Quickstart
+
+Create a bare-bones Colyseus server by using `npm init colyseus-app`.
+
+```
+npm init colyseus-app my-colyseus-server
+cd my-colyseus-server
+npm start
+```
+
 ### Official client integration
 
 - [JavaScript/TypeScript](https://github.com/colyseus/colyseus.js)
 - [Defold Engine](https://github.com/colyseus/colyseus-defold) ([defold.com](https://www.defold.com/))
+- [Unity](https://github.com/colyseus/colyseus-unity3d) ([unity3d.com](https://unity3d.com/))
 - [Haxe](https://github.com/colyseus/colyseus-hx) ([haxe.org](https://haxe.org/))
 - [Cocos2d-x](https://github.com/colyseus/colyseus-cocos2d-x) ([cocos2d-x.org](https://cocos2d-x.org/))
 - [Construct 3](https://github.com/colyseus/colyseus-construct3) ([construct3.net](https://www.construct.net/))
-- [Unity](https://github.com/colyseus/colyseus-unity3d) ([unity3d.com](https://unity3d.com/))
 
 ### Tools
 
@@ -61,11 +71,12 @@ See [roadmap](https://github.com/colyseus/colyseus/wiki/Roadmap) for our future 
 - [@colyseus/monitor](https://github.com/colyseus/colyseus-monitor) - A Web Monitoring Panel for Colyseus
 - [@colyseus/loadtest](https://github.com/colyseus/colyseus-loadtest) - Utility tool for load testing Colyseus
 
-### Community client integration
+### Tools made by the community :heart:
 
-- [Java](https://github.com/doorbash/colyseus-java)
-- [Objective-C](https://github.com/swittk/Colyseus-ObjC)
-- [Construct2](https://github.com/Keevle/Colyseus-for-C2)
+- [colyseus-hxjs](https://github.com/serjek/colyseus-hxjs): Haxe externs for colyseus server (by [@serjek](https://github.com/serjek))
+- [colyseus-java](https://github.com/doorbash/colyseus-java): Client for Java (by [@doorbash](https://github.com/doorbash))
+- [Colyseus-ObjC](https://github.com/swittk/Colyseus-ObjC): Client for Objective C (by [@swittk](https://github.com/swittk))
+- [Colyseus-for-C2](https://github.com/Keevle/Colyseus-for-C2): Client for Construct 2 (by [@Keevle](https://github.com/Keevle))
 
 ### Usage examples
 
