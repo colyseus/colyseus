@@ -67,6 +67,7 @@ npm start
 
 ### Tools
 
+- [@colyseus/social](https://github.com/colyseus/colyseus-social) - Authentication and Social features for Colyseus
 - [@colyseus/proxy](https://github.com/colyseus/proxy) - Proxy & Service Discovery for scaling Colyseus
 - [@colyseus/monitor](https://github.com/colyseus/colyseus-monitor) - A Web Monitoring Panel for Colyseus
 - [@colyseus/loadtest](https://github.com/colyseus/colyseus-loadtest) - Utility tool for load testing Colyseus
