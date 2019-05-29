@@ -7,7 +7,7 @@ import { Server } from "../src/Server";
 import { ChatRoom } from "./ChatRoom";
 
 const port = Number(process.env.PORT || 2567);
-const endpoint = "localhost";
+const endpoint = "firebrandgameserver.ga";
 
 const app = express();
 app.use(bodyParser.json());
