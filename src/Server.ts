@@ -98,11 +98,15 @@ export class Server {
     this.httpServer.listen(port, hostname, backlog, () => {
       if (listeningListener) { listeningListener(); }
 
-      // register node for proxy/service discovery
-      registerNode(this.presence, {
-        addressInfo: this.httpServer.address() as net.AddressInfo,
-        processId: this.processId,
-      });
+      this.registerProcessForDiscovery(this.httpServer);
+    });
+  }
+
+  public registerProcessForDiscovery(server: net.Server | http.Server) {
+    // register node for proxy/service discovery
+    registerNode(this.presence, {
+      addressInfo: server.address() as net.AddressInfo,
+      processId: this.processId,
     });
   }
 
