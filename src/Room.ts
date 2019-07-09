@@ -403,7 +403,12 @@ export abstract class Room<T= any> extends EventEmitter {
     if (this._simulationInterval) {
       clearInterval(this._simulationInterval);
       this._simulationInterval = undefined;
-     }
+    }
+
+    if (this._autoDisposeTimeout) {
+      clearInterval(this._autoDisposeTimeout);
+      this._autoDisposeTimeout = undefined;
+    }
 
     // clear all timeouts/intervals + force to stop ticking
     this.clock.clear();
@@ -427,11 +432,11 @@ export abstract class Room<T= any> extends EventEmitter {
       // stop interpreting messages from this client
       client.removeAllListeners('message');
 
-      // prevent "onLeave" from being called twice in case the connection is forcibly closed
-      client.removeAllListeners('close');
+      // // prevent "onLeave" from being called twice in case the connection is forcibly closed
+      // client.removeAllListeners('close');
 
       // only effectively close connection when "onLeave" is fulfilled
-      this._onLeave(client, WS_CLOSE_CONSENTED).then(() => client.close());
+      this._onLeave(client, WS_CLOSE_CONSENTED).then(() => client.terminate());
 
     } else {
       this.onMessage(client, message);

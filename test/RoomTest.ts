@@ -292,7 +292,7 @@ describe('Room', function() {
       assert.equal((lastClient.messages[0] as Buffer).readUInt8(0), Protocol.JOIN_ROOM);
       room.disconnect();
 
-      assert.deepEqual(room.clients, {});
+      assert.deepEqual(room.clients, []);
     });
 
     it("should allow asynchronous disconnects", (done) => {

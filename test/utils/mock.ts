@@ -42,6 +42,10 @@ export class Client extends EventEmitter {
     this.emit('close');
   }
 
+  terminate() {
+    this.emit('close');
+  }
+
 }
 
 export function createEmptyClient(): any {

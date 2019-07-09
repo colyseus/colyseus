@@ -552,6 +552,9 @@ export class MatchMaker {
   private disposeRoom(roomName: string, room: Room): void {
     debugMatchMaking('disposing \'%s\' (%s) on process %d', roomName, room.roomId, process.pid);
 
+    // remove all room listeners.
+    room.removeAllListeners();
+
     // emit disposal on registered session handler
     this.handlers[roomName].emit('dispose', room);
 
