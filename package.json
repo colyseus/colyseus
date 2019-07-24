@@ -1,6 +1,6 @@
 {
   "name": "colyseus",
-  "version": "0.10.8",
+  "version": "0.10.9",
   "description": "Multiplayer Game Server for Node.js.",
   "main": "./lib/index.js",
   "typings": "./lib/index.d.ts",
@@ -19,7 +19,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git://github.com/gamestdio/colyseus.git"
+    "url": "git://github.com/colyseus/colyseus.git"
   },
   "homepage": "https://colyseus.io/",
   "scripts": {

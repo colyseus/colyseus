@@ -1,8 +1,10 @@
 import { spliceOne } from '../Utils';
 import { Presence } from './Presence';
+import { EventEmitter } from 'events';
 
 export class LocalPresence implements Presence {
-    public channels: {[roomId: string]: boolean} = {};
+    public channels = new EventEmitter();
+    private listenersByTopic: {[id: string]: ((...args: any[]) => void)[]} = {};
 
     public data: {[roomName: string]: string[]} = {};
     public hash: {[roomName: string]: {[key: string]: string}} = {};
@@ -10,22 +12,28 @@ export class LocalPresence implements Presence {
     public keys: {[name: string]: string | number} = {};
     private timeouts: {[name: string]: NodeJS.Timer} = {};
 
-    public subscribe(topic: string, callback: Function) {
-        this.channels[topic] = true;
+    public subscribe(topic: string, callback: (...args: any[]) => void) {
+        if (!this.listenersByTopic[topic]) { this.listenersByTopic[topic] = []; }
+        this.listenersByTopic[topic].push(callback);
+        this.channels.on(topic, callback);
         return this;
     }
 
     public unsubscribe(topic: string) {
-        this.channels[topic] = false;
+        if (this.listenersByTopic[topic]) {
+          this.listenersByTopic[topic].forEach(callback => this.channels.removeListener(topic, callback));
+          delete this.listenersByTopic[topic];
+        }
         return this;
     }
 
     public publish(topic: string, data: any) {
+        this.channels.emit(topic, data);
         return this;
     }
 
     public async exists(roomId: string): Promise<boolean> {
-        return this.channels[roomId];
+        return this.channels.listenerCount(roomId) > 0;
     }
 
     public setex(key: string, value: string, seconds: number) {
