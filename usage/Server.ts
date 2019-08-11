@@ -3,7 +3,7 @@ import express from "express";
 import bodyParser from "body-parser";
 // import WebSocket from "uws";
 
-import { Server } from "../src/Server";
+import { Server, RedisPresence } from "../src";
 import { ChatRoom } from "./ChatRoom";
 
 const port = Number(process.env.PORT || 2567);

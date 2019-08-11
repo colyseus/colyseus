@@ -1,25 +1,19 @@
-import http from 'http';
 import net from 'net';
-import url from 'url';
 import WebSocket from 'ws';
 import { ServerOptions as IServerOptions } from 'ws';
 
-import { debugAndPrintError, debugError } from './Debug';
-import { MatchMaker, REMOTE_ROOM_LARGE_TIMEOUT } from './MatchMaker';
+import { debugAndPrintError } from './Debug';
+import { MatchMaker } from './MatchMaker';
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
 import { Presence } from './presence/Presence';
+import { Transport, TCPTransport, WebSocketTransport } from './transport/Transport';
 
-import { MatchMakeError } from './Errors';
-import { Client, generateId, isValidId } from './index';
-import { decode, Protocol, send } from './Protocol';
 import { RoomConstructor } from './Room';
-import { parseQueryString, registerGracefulShutdown, retry } from './Utils';
+import { registerGracefulShutdown } from './Utils';
 
 import { registerNode, unregisterNode } from './discovery';
 import { LocalPresence } from './presence/LocalPresence';
-
-function noop() {/* tslint:disable:no-empty */}
-function heartbeat() { this.pingCount = 0; }
+import { generateId } from '.';
 
 export type ServerOptions = IServerOptions & {
   pingTimeout?: number,
@@ -33,12 +27,8 @@ export type ServerOptions = IServerOptions & {
 export class Server {
   public matchMaker: MatchMaker;
 
-  protected server: WebSocket.Server;
-  protected httpServer: net.Server | http.Server;
-
+  protected transport: Transport;
   protected presence: Presence;
-  protected pingInterval: NodeJS.Timer;
-  protected pingTimeout: number;
 
   protected processId: string = generateId();
 
@@ -47,9 +37,6 @@ export class Server {
 
     this.presence = options.presence || new LocalPresence();
     this.matchMaker = new MatchMaker(this.presence, this.processId);
-    this.pingTimeout = (options.pingTimeout !== undefined)
-      ? options.pingTimeout
-      : 1500;
 
     // "presence" option is not used from now on
     delete options.presence;
@@ -58,54 +45,34 @@ export class Server {
       registerGracefulShutdown((signal) => this.gracefullyShutdown());
     }
 
-    if (options.server) {
-      this.attach(options);
-    }
+    this.attach(options);
   }
 
   public attach(options: ServerOptions) {
     const engine = options.engine || WebSocket.Server;
     delete options.engine;
 
-    if (options.server || options.port) {
-      const customVerifyClient: WebSocket.VerifyClientCallbackAsync = options.verifyClient;
-
-      options.verifyClient = (info, next) => {
-        if (!customVerifyClient) { return this.verifyClient(info, next); }
-
-        customVerifyClient(info, (verified, code, message) => {
-          if (!verified) { return next(verified, code, message); }
-
-          this.verifyClient(info, next);
-        });
-      };
-
-      this.server = new engine(options);
-      this.httpServer = options.server;
-
-    } else {
-      this.server = options.ws;
-    }
-
-    this.server.on('connection', this.onConnection);
-
-    if (this.pingTimeout > 0) {
-      this.autoTerminateUnresponsiveClients(this.pingTimeout);
-    }
+    this.transport = (engine === net.Server)
+      ? new TCPTransport(this.matchMaker, options)
+      : new WebSocketTransport(this.matchMaker, options, engine);
   }
 
   public listen(port: number, hostname?: string, backlog?: number, listeningListener?: Function) {
-    this.httpServer.listen(port, hostname, backlog, () => {
-      if (listeningListener) { listeningListener(); }
-
-      this.registerProcessForDiscovery(this.httpServer);
+    this.transport.listen(port, hostname, backlog, () => {
+      if (listeningListener) listeningListener();
+        // register node for proxy/service discovery
+        registerNode(this.presence, {
+            addressInfo: this.transport.address() as net.AddressInfo,
+            processId: this.processId,
+        });
+      this.registerProcessForDiscovery(this.transport);
     });
   }
 
-  public registerProcessForDiscovery(server: net.Server | http.Server) {
+  public registerProcessForDiscovery(transport: Transport) {
     // register node for proxy/service discovery
     registerNode(this.presence, {
-      addressInfo: server.address() as net.AddressInfo,
+      addressInfo: transport.address() as net.AddressInfo,
       processId: this.processId,
     });
   }
@@ -116,14 +83,13 @@ export class Server {
 
   public gracefullyShutdown(exit: boolean = true) {
     unregisterNode(this.presence, {
-      addressInfo: this.httpServer.address() as net.AddressInfo,
+      addressInfo: this.transport.address() as net.AddressInfo,
       processId: this.processId,
     });
 
     return this.matchMaker.gracefullyShutdown().
       then(() => {
-        this.server.close();
-        clearInterval(this.pingInterval);
+        this.transport.shutdown();
         return this.onShutdownCallback();
       }).
       catch((err) => debugAndPrintError(`error during shutdown: ${err}`)).
@@ -138,166 +104,5 @@ export class Server {
 
   protected onShutdownCallback: () => void | Promise<any> =
     () => Promise.resolve()
-
-  protected autoTerminateUnresponsiveClients(pingTimeout: number) {
-      // interval to detect broken connections
-      this.pingInterval = setInterval(() => {
-        this.server.clients.forEach((client: Client) => {
-          //
-          // if client hasn't responded after the interval, terminate its connection.
-          //
-          if (client.pingCount >= 2) {
-            return client.terminate();
-          }
-
-          client.pingCount++;
-          client.ping(noop);
-        });
-      }, pingTimeout);
-  }
-
-  protected verifyClient = async (info, next) => {
-    const req = info.req;
-
-    const parsedURL = url.parse(req.url);
-    const processAndRoomId = parsedURL.pathname.match(/\/[a-zA-Z0-9_\-]+\/([a-zA-Z0-9_\-]+)$/);
-    req.roomId = processAndRoomId && processAndRoomId[1];
-
-    const query = parseQueryString(parsedURL.query);
-    req.colyseusid = query.colyseusid;
-
-    delete query.colyseusid;
-    req.options = query;
-
-    if (req.roomId) {
-      try {
-        // TODO: refactor me. this piece of code is repeated on MatchMaker class.
-        const hasReservedSeat = query.sessionId && (await this.matchMaker.remoteRoomCall(
-          req.roomId,
-          'hasReservedSeat',
-          [query.sessionId],
-        ))[1];
-
-        if (!hasReservedSeat) {
-          const isLocked = (await this.matchMaker.remoteRoomCall(req.roomId, 'locked'))[1];
-
-          if (isLocked) {
-            return next(false, Protocol.WS_TOO_MANY_CLIENTS, 'maxClients reached.');
-          }
-        }
-
-        // verify client from room scope.
-        const authResult = (await this.matchMaker.remoteRoomCall(
-          req.roomId,
-          'onAuth',
-          [req.options],
-          REMOTE_ROOM_LARGE_TIMEOUT,
-        ))[1];
-
-        if (authResult) {
-          req.auth = authResult;
-          next(true);
-
-        } else {
-          throw new Error('onAuth failed.');
-        }
-
-      } catch (e) {
-        if (e) { // user might have called `reject()` during onAuth without arguments.
-          debugAndPrintError(e.message + '\n' + e.stack);
-        }
-
-        next(false);
-      }
-
-    } else {
-      next(true);
-    }
-  }
-
-  protected onConnection = (client: Client, req?: http.IncomingMessage & any) => {
-    // compatibility with ws / uws
-    const upgradeReq = req || client.upgradeReq;
-
-    // set client id
-    client.id = upgradeReq.colyseusid || generateId();
-    client.pingCount = 0;
-
-    // ensure client has its "colyseusid"
-    if (!upgradeReq.colyseusid) {
-      send[Protocol.USER_ID](client);
-    }
-
-    // set client options
-    client.options = upgradeReq.options;
-    client.auth = upgradeReq.auth;
-
-    // prevent server crashes if a single client had unexpected error
-    client.on('error', (err) => debugAndPrintError(err.message + '\n' + err.stack));
-    client.on('pong', heartbeat);
-
-    const roomId = upgradeReq.roomId;
-    if (roomId) {
-      this.matchMaker.connectToRoom(client, upgradeReq.roomId).
-        catch((e) => {
-          debugAndPrintError(e.stack || e);
-          send[Protocol.JOIN_ERROR](client, (e && e.message) || '');
-        });
-
-    } else {
-      client.on('message',  this.onMessageMatchMaking.bind(this, client));
-    }
-  }
-
-  protected onMessageMatchMaking(client: Client, message) {
-    message = decode(message);
-
-    if (!message) {
-      debugAndPrintError(`couldn't decode message: ${message}`);
-      return;
-    }
-
-    if (message[0] === Protocol.JOIN_REQUEST) {
-      const roomName = message[1];
-      const joinOptions = message[2];
-
-      joinOptions.clientId = client.id;
-
-      if (!this.matchMaker.hasHandler(roomName) && !isValidId(roomName)) {
-        send[Protocol.JOIN_ERROR](client, `no available handler for "${roomName}"`);
-
-      } else {
-        //
-        // As a room might stop responding during the matchmaking process, due to it being disposed.
-        // The last step of the matchmaking will make sure a seat will be reserved for this client
-        // If `onJoinRoomRequest` can't make it until the very last step, a retry is necessary.
-        //
-        retry(() => {
-          return this.matchMaker.onJoinRoomRequest(client, roomName, joinOptions);
-        }, 3, 0, [MatchMakeError]).
-          then((response: {roomId: string, processId: string}) => {
-            send[Protocol.JOIN_REQUEST](client, joinOptions.requestId, response.roomId, response.processId);
-
-          }).catch((e) => {
-            const errorMessage = (e && e.message) || '';
-            debugError(`MatchMakeError: ${errorMessage}\n${e.stack}`);
-
-            send[Protocol.JOIN_ERROR](client, errorMessage);
-          });
-      }
-
-    } else if (message[0] === Protocol.ROOM_LIST) {
-      const requestId = message[1];
-      const roomName = message[2];
-
-      this.matchMaker.getAvailableRooms(roomName).
-        then((rooms) => send[Protocol.ROOM_LIST](client, requestId, rooms)).
-        catch((e) => debugAndPrintError(e.stack || e));
-
-    } else {
-      debugAndPrintError(`MatchMaking couldn\'t process message: ${message}`);
-    }
-
-  }
 
 }

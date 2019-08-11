@@ -29,9 +29,7 @@ export class ChatRoom extends Room<State> {
   }
 
   requestJoin (options, isNewRoom: boolean) {
-    return (options.create)
-      ? (options.create && isNewRoom)
-      : this.clients.length > 0;
+    return true;
   }
 
   async onLeave (client, consented) {
