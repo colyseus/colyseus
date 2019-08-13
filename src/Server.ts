@@ -129,6 +129,9 @@ export class Server {
         }
 
         const response = await this.matchMaker[method](name, body);
+        console.log("WILL RESPOND WITH:", response);
+        console.log("JSON => ", JSON.stringify(response));
+
         res.json(response);
 
       } catch (e) {

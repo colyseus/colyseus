@@ -1,5 +1,5 @@
-import { MatchMakerDriver, QueryHelpers, RoomCacheData } from "./Driver";
 import { spliceOne } from "../../Utils";
+import { MatchMakerDriver, QueryHelpers, RoomCacheData } from "./Driver";
 
 class RoomCache implements RoomCacheData {
   clients: number;
@@ -12,12 +12,34 @@ class RoomCache implements RoomCacheData {
 
   private $rooms: RoomCache[];
 
-  constructor (initialValues: any, rooms) {
+  constructor (initialValues: any, rooms: RoomCache[]) {
     for (let field in initialValues) {
       this[field] = initialValues[field];
     }
 
-    this.$rooms = rooms;
+    /**
+     * Avoid these properties from being JSON encoded
+     */
+    Object.defineProperties(this, {
+      processId: {
+        value: this.processId,
+        writable: true,
+        configurable: true,
+        enumerable: false
+      },
+      locked: {
+        value: this.locked,
+        writable: true,
+        configurable: true,
+        enumerable: false
+      },
+      $rooms: {
+        value: rooms,
+        writable: true,
+        configurable: true,
+        enumerable: false
+      },
+    });
   }
 
   save() {
@@ -58,8 +80,7 @@ class Query<T> implements QueryHelpers<T> {
   sort(options: any) {
   }
 
-  then() {
-    console.log("Query<T> => then()");
+  then(resolve, reject) {
     const room: any = this.$rooms.find((room => {
       for (let field in this.conditions) {
         if (room[field] !== this.conditions[field]) {
@@ -68,8 +89,7 @@ class Query<T> implements QueryHelpers<T> {
       }
       return true;
     }));
-    console.log("will return", room);
-    return Promise.resolve(room);
+    return resolve(room);
   }
 }
 
@@ -92,7 +112,6 @@ export class LocalDriver implements MatchMakerDriver {
   }
 
   findOne(conditions: any) {
-    console.log("create new Query()");
     return new Query<RoomCacheData>(this.rooms, conditions) as any as QueryHelpers<RoomCacheData>;;
   }
 
