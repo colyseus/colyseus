@@ -10,9 +10,6 @@ export const WS_CLOSE_CONSENTED = 4000;
 // (msgpack messages are identified on client-side as >100)
 export enum Protocol {
 
-  // User-related (1~8)
-  USER_ID = 1,
-
   // Room-related (9~19)
   JOIN_REQUEST = 9,
   JOIN_ROOM = 10,
@@ -31,6 +28,12 @@ export enum Protocol {
   // WebSocket error codes
   WS_SERVER_DISCONNECT = 4201,
   WS_TOO_MANY_CLIENTS = 4202,
+
+  // MatchMaking Error Codes
+  ERR_MATCHMAKE_NO_HANDLER = 4210,
+  ERR_MATCHMAKE_INVALID_CRITERIA = 4211,
+  ERR_MATCHMAKE_INVALID_ROOM_ID = 4212,
+  ERR_MATCHMAKE_UNHANDLED = 4213, // generic exception during onCreate/onJoin
 }
 
 // Inter-process communication protocol
@@ -53,13 +56,6 @@ export function decode(message: any) {
 }
 
 export const send = {
-  [Protocol.USER_ID]: (client: Client) => {
-    const buff = Buffer.allocUnsafe(1 + utf8Length(client.id));
-    buff.writeUInt8(Protocol.USER_ID, 0);
-    utf8Write(buff, 1, client.id);
-    client.send(buff, { binary: true });
-  },
-
   [Protocol.JOIN_ERROR]: (client: Client, message: string) => {
     const buff = Buffer.allocUnsafe(1 + utf8Length(message));
     buff.writeUInt8(Protocol.JOIN_ERROR, 0);

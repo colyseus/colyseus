@@ -1,7 +1,7 @@
 import { merge } from './Utils';
 
 import { Client, generateId, isValidId } from './index';
-import { IpcProtocol, Protocol, send } from './Protocol';
+import { IpcProtocol, Protocol } from './Protocol';
 
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
 import { Room, RoomAvailable, RoomConstructor } from './Room';
@@ -11,6 +11,7 @@ import { Presence } from './presence/Presence';
 
 import { debugAndPrintError, debugMatchMaking } from './Debug';
 import { MatchMakeError } from './Errors';
+import { RoomCache, IRoomCache } from './matchmaker/RoomCache';
 
 export type ClientOptions = any;
 
@@ -21,12 +22,12 @@ export interface RoomWithScore {
 
 // remote room call timeouts
 export const REMOTE_ROOM_SHORT_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_SHORT_TIMEOUT || 4000);
-export const REMOTE_ROOM_LARGE_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_LARGE_TIMEOUT || 8000);
 
 type RemoteRoomResponse<T= any> = [string?, T?];
 
 export class MatchMaker {
   public handlers: {[id: string]: RegisteredHandler} = {};
+  public methods = ['joinOrCreate', 'create', 'join', 'joinById'];
 
   private processId: string;
   private localRooms: {[roomId: string]: Room} = {};
@@ -39,120 +40,74 @@ export class MatchMaker {
     this.processId = processId;
   }
 
-  public async connectToRoom(client: Client, roomId: string) {
-    const room = this.localRooms[roomId];
-    if (!room) { throw new Error(`connectToRoom(), room doesn't exist. roomId: ${roomId}`); }
+  public async joinOrCreate(roomName: string, options: ClientOptions) {
+    const handler = this.handlers[roomName];
+    if (!handler) {
+      throw new MatchMakeError(`no available handler for "${roomName}"`, Protocol.ERR_MATCHMAKE_NO_HANDLER);
+    }
 
-    const clientOptions = client.options;
+    // Object.keys(handler.options)
+    let room = await RoomCache.findOne({
+      name: roomName,
+      locked: false,
+      ...handler.getFilterOptions(options)
+    }, { roomId: 1, processId: 1 });
 
-    // assign sessionId to socket connection.
-    client.sessionId = await this.presence.get(`${roomId}:${client.id}`);
+    if (!room) {
+      room = await this.createRoom(roomName, options);
+    }
 
-    // clean temporary data
-    delete clientOptions.auth;
-    delete clientOptions.requestId;
-    delete client.options;
-
-    (room as any)._onJoin(client, clientOptions, client.auth);
+    return this.reserveSeatFor(room, options);
   }
 
-  /**
-   * Create or joins the client into a particular room
-   *
-   * The client doesn't join instantly because this method is called from the
-   * match-making process. The client will request a new WebSocket connection
-   * to effectively join into the room created/joined by this method.
-   */
-  public async onJoinRoomRequest(
-    client: Client,
-    roomToJoin: string,
-    clientOptions: ClientOptions,
-  ): Promise<{ roomId: string, processId: string }> {
-    const hasHandler = this.hasHandler(roomToJoin);
-    let roomId: string;
-    let processId: string;
-
-    // `rejoin` requests come with a pre-set `sessionId`
-    const isReconnect = (clientOptions.sessionId !== undefined);
-    const sessionId: string = clientOptions.sessionId || generateId();
-
-    const isJoinById: boolean = (!hasHandler && isValidId(roomToJoin));
-    let shouldCreateRoom = hasHandler && !isReconnect;
-
-    if (isReconnect) {
-      roomToJoin = await this.presence.get(sessionId);
-
-      if (!roomToJoin) {
-        throw new MatchMakeError(`rejoin has been expired for ${sessionId}`);
-      }
+  public async create(roomName: string, options: ClientOptions) {
+    const handler = this.handlers[roomName];
+    if (!handler) {
+      throw new MatchMakeError(`no available handler for "${roomName}"`, Protocol.ERR_MATCHMAKE_NO_HANDLER);
     }
 
-    if (isJoinById || isReconnect) {
-      // join room by id
-      const joinById = await this.joinById(roomToJoin, clientOptions, isReconnect && sessionId);
+    // Object.keys(handler.options)
+    const room = await this.createRoom(roomName, options);
 
-      processId = joinById[0];
-      roomId = joinById[1];
+    return this.reserveSeatFor(room, options);
+  }
 
-    } else if (!hasHandler) {
-      throw new MatchMakeError(`Failed to join invalid room "${roomToJoin}"`);
+  public async join(roomName: string, options: ClientOptions) {
+    const handler = this.handlers[roomName];
+    if (!handler) {
+      throw new MatchMakeError(`no available handler for "${roomName}"`, Protocol.ERR_MATCHMAKE_NO_HANDLER);
     }
 
-    if (!roomId && !isReconnect) {
-      // when multiple clients request to create a room simultaneously, we need
-      // to wait for the first room to be created to prevent creating multiple of them
-      await this.awaitRoomAvailable(roomToJoin);
+    const room = await RoomCache.findOne({
+      name: roomName,
+      locked: false,
+      ...handler.getFilterOptions(options)
+    }, { roomId: 1, processId: 1 });
 
-      // check if there's an existing room with provided name available to join
-      const availableRoomsByScore = await this.getAvailableRoomByScore(roomToJoin, clientOptions);
-
-      for (let i = 0, l = availableRoomsByScore.length; i < l; i++) {
-        // couldn't join this room, skip
-        const joinByIdResponse = (await this.joinById(availableRoomsByScore[i].roomId, clientOptions));
-        roomId = joinByIdResponse[1];
-
-        if (!roomId) { continue; }
-
-        const reserveSeatResponse = await this.remoteRoomCall(roomId, '_reserveSeat', [{
-          id: client.id,
-          sessionId,
-        }]);
-
-        if (reserveSeatResponse[1]) {
-          // seat reservation was successful, no need to try other rooms.
-          processId = reserveSeatResponse[0];
-          shouldCreateRoom = false;
-          break;
-
-        } else {
-          processId = this.processId;
-          shouldCreateRoom = true;
-        }
-      }
+    if (!room) {
+      throw new MatchMakeError(`no rooms found with provided criteria`, Protocol.ERR_MATCHMAKE_INVALID_CRITERIA);
     }
 
-    // if couldn't join a room by its id, let's try to create a new one
-    if (shouldCreateRoom) {
-      roomId = await this.create(roomToJoin, clientOptions);
+    return this.reserveSeatFor(room, options);
+  }
+
+  public async joinById(roomId: string, options: ClientOptions) {
+    const isValidRoomId = isValidId(roomId);
+    const room = isValidRoomId && await RoomCache.findOne({ roomId: roomId }, { roomId: 1, processId: 1 });
+
+    if (!room) {
+      throw new MatchMakeError(`room ${roomId} not found`, Protocol.ERR_MATCHMAKE_INVALID_ROOM_ID);
     }
 
-    if (!roomId) {
-      throw new MatchMakeError(`Failed to join invalid room "${roomToJoin}"`);
+    return this.reserveSeatFor(room, options);
+  }
 
-    } else if (shouldCreateRoom || isJoinById) {
-      const reserveSeatSuccessful = await this.remoteRoomCall(roomId, '_reserveSeat', [{
-        id: client.id,
-        sessionId,
-      }]);
+  protected async reserveSeatFor(room: IRoomCache, options) {
+    const sessionId: string = generateId();
 
-      processId = reserveSeatSuccessful[0];
+    await this.remoteRoomCall(room.roomId, '_reserveSeat', [{ sessionId }, options]);
 
-      if (!reserveSeatSuccessful[1]) {
-        throw new MatchMakeError('join_request_fail');
-      }
-    }
-
-    return { roomId, processId };
+    return { room, sessionId };
   }
 
   public async remoteRoomCall<R= any>(
@@ -207,12 +162,12 @@ export class MatchMaker {
     }
   }
 
-  public async registerHandler(name: string, klass: RoomConstructor, options: any = {}) {
-    const registeredHandler = new RegisteredHandler(klass, options);
+  public defineRoomType(name: string, klass: RoomConstructor, defaultOptions: any = {}) {
+    const registeredHandler = new RegisteredHandler(klass, defaultOptions);
 
-    this.handlers[ name ] = registeredHandler;
+    this.handlers[name] = registeredHandler;
 
-    await this.cleanupStaleRooms(name);
+    this.cleanupStaleRooms(name);
 
     return registeredHandler;
   }
@@ -221,44 +176,7 @@ export class MatchMaker {
     return this.handlers[ name ] !== undefined;
   }
 
-  public async joinById(
-    roomId: string,
-    clientOptions: ClientOptions,
-    rejoinSessionId?: string,
-  ): Promise<RemoteRoomResponse<string>> {
-    const exists = await this.presence.exists(this.getRoomChannel(roomId));
-    if (!exists) {
-      debugMatchMaking(`trying to join non-existant room "${ roomId }"`);
-      return [];
-    }
-
-    if (rejoinSessionId) {
-      const hasReservedSeatResponse = await this.remoteRoomCall(roomId, 'hasReservedSeat', [rejoinSessionId]);
-      if (hasReservedSeatResponse[1]) {
-        return [hasReservedSeatResponse[0], roomId];
-      }
-    }
-
-    if ((await this.remoteRoomCall(roomId, 'hasReachedMaxClients'))[1]) {
-      debugMatchMaking(`room "${ roomId }" reached maxClients.`);
-      return [];
-    }
-
-    const requestJoinResponse = await this.remoteRoomCall(roomId, 'requestJoin', [clientOptions, false]);
-    if (!requestJoinResponse[1]) {
-      debugMatchMaking(`can't join room "${ roomId }" with options: ${ JSON.stringify(clientOptions) }`);
-      return [];
-    }
-
-    return [ requestJoinResponse[0], roomId ];
-  }
-
-  public async getAvailableRoomByScore(roomName: string, clientOptions: ClientOptions): Promise<RoomWithScore[]> {
-    return (await this.getRoomsWithScore(roomName, clientOptions)).
-      sort((a, b) => b.score - a.score);
-  }
-
-  public async create(roomName: string, clientOptions: ClientOptions): Promise<string> {
+  public async createRoom(roomName: string, clientOptions: ClientOptions): Promise<IRoomCache> {
     const registeredHandler = this.handlers[ roomName ];
     const room = new registeredHandler.klass();
 
@@ -267,87 +185,34 @@ export class MatchMaker {
     room.roomName = roomName;
     room.presence = this.presence;
 
-    if (room.onInit) {
-      await room.onInit(merge({}, clientOptions, registeredHandler.options));
+    if (room.onCreate) {
+      await room.onCreate(merge({}, clientOptions, registeredHandler.options));
     }
 
     // imediatelly ask client to join the room
-    if ( room.requestJoin(clientOptions, true) ) {
-      debugMatchMaking('spawning \'%s\' (%s) on process %d', roomName, room.roomId, process.pid);
+    debugMatchMaking('spawning \'%s\' (%s) on process %d', roomName, room.roomId, process.pid);
 
-      room.on('lock', this.lockRoom.bind(this, roomName, room));
-      room.on('unlock', this.unlockRoom.bind(this, roomName, room));
-      room.on('join', this.onClientJoinRoom.bind(this, room));
-      room.on('leave', this.onClientLeaveRoom.bind(this, room));
-      room.once('dispose', this.disposeRoom.bind(this, roomName, room));
+    room.on('lock', this.lockRoom.bind(this, roomName, room));
+    room.on('unlock', this.unlockRoom.bind(this, roomName, room));
+    room.on('join', this.onClientJoinRoom.bind(this, room));
+    room.on('leave', this.onClientLeaveRoom.bind(this, room));
+    room.once('dispose', this.disposeRoom.bind(this, roomName, room));
 
-      // room always start unlocked
-      await this.createRoomReferences(room, true);
+    // room always start unlocked
+    await this.createRoomReferences(room, true);
 
-      registeredHandler.emit('create', room);
+    // create a RoomCache reference.
+    room.cache = await RoomCache.create({
+      name: roomName,
+      roomId: room.roomId,
+      processId: this.processId,
+      maxClients: room.maxClients,
+      ...registeredHandler.getFilterOptions(clientOptions)
+    });
 
-      return room.roomId;
+    registeredHandler.emit('create', room);
 
-    } else {
-      (room as any)._dispose();
-
-      throw new MatchMakeError(`Failed to auto-create room "${roomName}" during ` +
-        `join request using options "${JSON.stringify(clientOptions)}"`);
-    }
-  }
-
-  public async getAvailableRooms(
-    roomName: string,
-    roomMethodName: string = 'getAvailableData',
-  ): Promise<RoomAvailable[]> {
-    const roomIds = await this.presence.smembers(roomName);
-    const availableRooms: RoomAvailable[] = [];
-
-    await Promise.all(roomIds.map(async (roomId) => {
-      let availability: RemoteRoomResponse<RoomAvailable>;
-
-      try {
-        availability = await this.remoteRoomCall<RoomAvailable>(roomId, roomMethodName);
-
-      } catch (e) {
-        // room did not respond
-      }
-
-      if (availability) {
-        availableRooms.push(availability[1]);
-      }
-
-      return true;
-    }));
-
-    return availableRooms;
-  }
-
-  public async getAllRooms(
-    roomName: string,
-    roomMethodName: string = 'getAvailableData',
-  ): Promise<RoomAvailable[]> {
-    const roomIds = await this.presence.smembers(`a_${roomName}`);
-    const rooms: RoomAvailable[] = [];
-
-    await Promise.all(roomIds.map(async (roomId) => {
-      let availability: RemoteRoomResponse<RoomAvailable>;
-
-      try {
-        availability = await this.remoteRoomCall<RoomAvailable>(roomId, roomMethodName);
-
-      } catch (e) {
-        // room did not respond
-      }
-
-      if (availability) {
-        rooms.push(availability[1]);
-      }
-
-      return true;
-    }));
-
-    return rooms;
+    return room.cache;
   }
 
   // used only for testing purposes
@@ -381,64 +246,24 @@ export class MatchMaker {
     // clean-up possibly stale room ids
     // (ungraceful shutdowns using Redis can result on stale room ids still on memory.)
     //
-    const roomIds = await this.presence.smembers(`a_${roomName}`);
+    const cachedRooms = await RoomCache.find({ name: roomName });
 
     // remove connecting counts
     await this.presence.del(this.getHandlerConcurrencyKey(roomName));
 
-    await Promise.all(roomIds.map(async (roomId) => {
+    await Promise.all(cachedRooms.map(async (room) => {
       try {
         // use hardcoded short timeout for cleaning up stale rooms.
-        await this.remoteRoomCall(roomId, 'roomId');
+        await this.remoteRoomCall(room.roomId, 'roomId');
 
       } catch (e) {
-        debugMatchMaking(`cleaning up stale room '${roomName}' (${roomId})`);
-        this.clearRoomReferences({roomId, roomName} as Room);
-        this.presence.srem(`a_${roomName}`, roomId);
+        debugMatchMaking(`cleaning up stale room '${roomName}' (${room.roomId})`);
+        room.remove();
+
+        this.clearRoomReferences({ roomId: room.roomId, roomName } as Room);
+        this.presence.srem(`a_${roomName}`, room.roomId);
       }
     }));
-  }
-
-  protected async getRoomsWithScore(roomName: string, clientOptions: ClientOptions): Promise<RoomWithScore[]> {
-    const roomsWithScore: RoomWithScore[] = [];
-    const roomIds = await this.presence.smembers(roomName);
-    const remoteRequestJoins = [];
-
-    await Promise.all(roomIds.map(async (roomId) => {
-      let maxClientsReached: boolean;
-
-      try {
-        maxClientsReached = (await this.remoteRoomCall(roomId, 'hasReachedMaxClients'))[1];
-
-      } catch (e) {
-        // room did not responded.
-        maxClientsReached = true;
-      }
-
-      // check maxClients before requesting to join.
-      if (maxClientsReached) { return; }
-
-      const localRoom = this.localRooms[roomId];
-      if (!localRoom) {
-        remoteRequestJoins.push(new Promise(async (resolve, reject) => {
-          const requestJoinResponse = await this.remoteRoomCall(roomId, 'requestJoin', [clientOptions, false]);
-          resolve({
-            roomId,
-            score: requestJoinResponse[1],
-          });
-        }));
-
-      } else {
-        roomsWithScore.push({
-          roomId,
-          score: localRoom.requestJoin(clientOptions, false) as number,
-        });
-      }
-
-      return true;
-    }));
-
-    return (await Promise.all(remoteRequestJoins)).concat(roomsWithScore);
   }
 
   protected async createRoomReferences(room: Room, init: boolean = false): Promise<boolean> {
@@ -551,6 +376,9 @@ export class MatchMaker {
 
   private disposeRoom(roomName: string, room: Room): void {
     debugMatchMaking('disposing \'%s\' (%s) on process %d', roomName, room.roomId, process.pid);
+
+    // remove from room listing
+    room.cache.remove();
 
     // remove all room listeners.
     room.removeAllListeners();

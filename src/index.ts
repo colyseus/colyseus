@@ -28,7 +28,7 @@ export function isValidId(id: string) { return id && /^[a-zA-Z0-9_\-]{9}$/.test(
 // Export 'WebSocket' as 'Client' with 'id' property.
 export type Client = WebSocket & {
   upgradeReq?: http.IncomingMessage; // cross-compatibility for ws (v3.x+) and uws
-  id: string;
+  // id: string;
   options: any;
   sessionId: string;
   pingCount: number; // ping / pong

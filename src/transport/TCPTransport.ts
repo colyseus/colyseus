@@ -29,11 +29,6 @@ export class TCPTransport extends Transport {
         client.id = upgradeReq.colyseusid || generateId();
         client.pingCount = 0;
 
-        // ensure client has its "colyseusid"
-        if (!upgradeReq.colyseusid) {
-            send[Protocol.USER_ID](client);
-        }
-
         // set client options
         client.options = upgradeReq.options;
         client.auth = upgradeReq.auth;
@@ -69,14 +64,14 @@ export class TCPTransport extends Transport {
             // forward as 'message' all 'data' messages
             client.on('data', (data) => client.emit('message', data));
 
-            this.matchMaker.connectToRoom(client, roomId).
-                catch((e) => {
-                    debugAndPrintError(e.stack || e);
-                    send[Protocol.JOIN_ERROR](client, (e && e.message) || '');
-                });
+            const room = this.matchMaker.getRoomById(roomId);
+            room['_onJoin'](client, client.options, client.auth);
 
-        } else {
-            this.onMessageMatchMaking(client, message);
+            // this.matchMaker.connectToRoom(client, roomId).
+            //     catch((e) => {
+            //         debugAndPrintError(e.stack || e);
+            //         send[Protocol.JOIN_ERROR](client, (e && e.message) || '');
+            //     });
         }
 
     }

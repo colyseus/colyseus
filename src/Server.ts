@@ -15,12 +15,17 @@ import { registerNode, unregisterNode } from './discovery';
 import { LocalPresence } from './presence/LocalPresence';
 import { generateId } from '.';
 
+import { Express } from "express-serve-static-core";
+import { MatchMakeError } from './Errors';
+import { Protocol } from './Protocol';
+
 export type ServerOptions = IServerOptions & {
   pingTimeout?: number,
   verifyClient?: WebSocket.VerifyClientCallbackAsync
   presence?: any,
   engine?: any,
   ws?: any,
+  express?: any,
   gracefullyShutdown?: boolean,
 };
 
@@ -31,6 +36,8 @@ export class Server {
   protected presence: Presence;
 
   protected processId: string = generateId();
+
+  protected route = "/matchmake";
 
   constructor(options: ServerOptions = {}) {
     const { gracefullyShutdown = true } = options;
@@ -43,6 +50,10 @@ export class Server {
 
     if (gracefullyShutdown) {
       registerGracefulShutdown((signal) => this.gracefullyShutdown());
+    }
+
+    if (options.express) {
+      this.registerExpressRoutes(options.express);
     }
 
     this.attach(options);
@@ -77,8 +88,8 @@ export class Server {
     });
   }
 
-  public async register(name: string, handler: RoomConstructor, options: any = {}): Promise<RegisteredHandler> {
-    return this.matchMaker.registerHandler(name, handler, options);
+  public define(name: string, handler: RoomConstructor, defaultOptions: any = {}): RegisteredHandler {
+    return this.matchMaker.defineRoomType(name, handler, defaultOptions);
   }
 
   public gracefullyShutdown(exit: boolean = true) {
@@ -104,5 +115,27 @@ export class Server {
 
   protected onShutdownCallback: () => void | Promise<any> =
     () => Promise.resolve()
+
+  protected registerExpressRoutes(app: Express) {
+    app.post(`${this.route}/:method/:name`, async (req, res) => {
+      const { name, method } = req.params;
+      const body = req.body;
+
+      try {
+        if (this.matchMaker.methods.indexOf(method) === -1) {
+          throw new MatchMakeError(`invalid method "${method}"`, Protocol.ERR_MATCHMAKE_UNHANDLED);
+        }
+
+        const response = await this.matchMaker[method](name, body);
+        res.json(response);
+
+      } catch (e) {
+        res.json({
+          code: e.code || Protocol.ERR_MATCHMAKE_UNHANDLED,
+          error: e.message
+        });
+      }
+    });
+  }
 
 }

@@ -52,11 +52,13 @@
     "@types/express": "^4.16.1",
     "@types/fossil-delta": "^1.0.0",
     "@types/mocha": "^5.2.0",
+    "@types/mongoose": "^5.5.12",
     "@types/node": "^10.0.8",
     "@types/sinon": "^4.3.3",
     "all-contributors-cli": "^5.4.0",
     "benchmark": "^2.1.1",
     "body-parser": "^1.18.2",
+    "cors": "^2.8.5",
     "express": "^4.16.2",
     "mocha": "^5.1.1",
     "nodemon": "^1.14.8",
@@ -80,6 +82,7 @@
     ]
   },
   "optionalDependencies": {
+    "mongoose": "^5.6.9",
     "redis": "^2.8.0"
   }
 }

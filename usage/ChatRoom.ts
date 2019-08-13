@@ -12,20 +12,22 @@ class State extends Schema {
 export class ChatRoom extends Room<State> {
   maxClients = 4;
 
-  onInit (options) {
+  onCreate (options) {
     this.setState(new State());
   }
 
-  async onAuth (options) {
+  async onAuth (req, options) {
+    console.log("headers:", req.headers);
+    console.log("remoteAddress:", req.connection.remoteAddress)
+
     return { success: true };
   }
 
   onJoin (client, options, auth) {
     console.log("client has joined!");
-    console.log("client.id:", client.id);
     console.log("client.sessionId:", client.sessionId);
     console.log("with options", options);
-    this.state.lastMessage = `${ client.id } joined.`;
+    this.state.lastMessage = `${ client.sessionId } joined.`;
   }
 
   requestJoin (options, isNewRoom: boolean) {
@@ -42,7 +44,7 @@ export class ChatRoom extends Room<State> {
       console.log("CLIENT RECONNECTED");
 
     } catch (e) {
-      this.state.lastMessage = `${client.id} left.`;
+      this.state.lastMessage = `${client.sessionId} left.`;
       console.log("ChatRoom:", client.sessionId, "left!");
     }
   }
@@ -54,7 +56,7 @@ export class ChatRoom extends Room<State> {
       this.disconnect().then(() => console.log("yup, disconnected."));
     }
 
-    console.log("ChatRoom:", client.id, data);
+    console.log("ChatRoom:", client.sessionId, data);
   }
 
   onDispose () {

@@ -1,4 +1,5 @@
 import msgpack from 'notepack.io';
+import http from 'http';
 
 import Clock from '@gamestdio/timer';
 import { EventEmitter } from 'events';
@@ -13,6 +14,7 @@ import { decode, Protocol, send, WS_CLOSE_CONSENTED } from './Protocol';
 import { Deferred, spliceOne } from './Utils';
 
 import { debugAndPrintError, debugPatch } from './Debug';
+import { IRoomCache } from './matchmaker/RoomCache';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
@@ -36,6 +38,7 @@ export interface BroadcastOptions {
 }
 
 export abstract class Room<T= any> extends EventEmitter {
+  public cache: IRoomCache;
   public clock: Clock = new Clock();
 
   public roomId: string;
@@ -53,10 +56,10 @@ export abstract class Room<T= any> extends EventEmitter {
 
   // seat reservation & reconnection
   protected seatReservationTime: number = DEFAULT_SEAT_RESERVATION_TIME;
-  protected reservedSeats: Set<string> = new Set();
-  protected reservedSeatTimeouts: {[sessionId: string]: NodeJS.Timer} = {};
+  protected reservedSeats: { [sessionId: string]: any } = {};
+  protected reservedSeatTimeouts: { [sessionId: string]: NodeJS.Timer } = {};
 
-  protected reconnections: {[sessionId: string]: Deferred} = {};
+  protected reconnections: { [sessionId: string]: Deferred } = {};
   protected isDisconnecting: boolean = false;
 
   private _serializer: Serializer<T> = this._getSerializer();
@@ -95,16 +98,12 @@ export abstract class Room<T= any> extends EventEmitter {
   public abstract onMessage(client: Client, data: any): void;
 
   // Optional abstract methods
-  public onInit?(options: any): void;
+  public onCreate?(options: any): void;
   public onJoin?(client: Client, options?: any, auth?: any): void | Promise<any>;
   public onLeave?(client: Client, consented?: boolean): void | Promise<any>;
   public onDispose?(): void | Promise<any>;
 
-  public requestJoin(options: any, isNew?: boolean): number | boolean {
-    return 1;
-  }
-
-  public onAuth(options: any): boolean | Promise<any> {
+  public onAuth(request: http.IncomingMessage, options: any): boolean | Promise<any> {
     return true;
   }
 
@@ -113,7 +112,7 @@ export abstract class Room<T= any> extends EventEmitter {
   }
 
   public hasReachedMaxClients(): boolean {
-    return (this.clients.length + this.reservedSeats.size) >= this.maxClients;
+    return (this.clients.length + Object.keys(this.reservedSeats).length) >= this.maxClients;
   }
 
   public setSeatReservationTime(seconds: number) {
@@ -121,8 +120,8 @@ export abstract class Room<T= any> extends EventEmitter {
     return this;
   }
 
-  public hasReservedSeat(sessionId: string): boolean {
-    return this.reservedSeats.has(sessionId);
+  public getReservedSeatOptions(sessionId: string): boolean {
+    return this.reservedSeats[sessionId];
   }
 
   public setSimulationInterval( callback: SimulationCallback, delay: number = DEFAULT_SIMULATION_INTERVAL ): void {
@@ -305,7 +304,7 @@ export abstract class Room<T= any> extends EventEmitter {
       throw new Error('disconnecting');
     }
 
-    await this._reserveSeat(client, seconds, true);
+    await this._reserveSeat(client, true, seconds, true);
 
     // keep reconnection reference in case the user reconnects into this room.
     const reconnection = new Deferred();
@@ -316,7 +315,7 @@ export abstract class Room<T= any> extends EventEmitter {
       reconnection.reject(false), seconds * 1000);
 
     const cleanup = () => {
-      this.reservedSeats.delete(client.sessionId);
+      delete this.reservedSeats[client.sessionId];
       delete this.reconnections[client.sessionId];
       delete this.reservedSeatTimeouts[client.sessionId];
     };
@@ -336,6 +335,7 @@ export abstract class Room<T= any> extends EventEmitter {
 
   protected async _reserveSeat(
     client: Client,
+    joinOptions: any = true,
     seconds: number = this.seatReservationTime,
     allowReconnection: boolean = false,
   ) {
@@ -343,8 +343,8 @@ export abstract class Room<T= any> extends EventEmitter {
       return false;
     }
 
-    this.reservedSeats.add(client.sessionId);
-    await this.presence.setex(`${this.roomId}:${client.id}`, client.sessionId, seconds);
+    this.reservedSeats[client.sessionId] = joinOptions;
+    // await this.presence.setex(`${this.roomId}:${client.id}`, client.sessionId, seconds);
 
     if (allowReconnection) {
       // store reference of the roomId this client is allowed to reconnect to.
@@ -352,7 +352,7 @@ export abstract class Room<T= any> extends EventEmitter {
 
     } else {
       this.reservedSeatTimeouts[client.sessionId] = setTimeout(() =>
-        this.reservedSeats.delete(client.sessionId), seconds * 1000);
+        delete this.reservedSeats[client.sessionId], seconds * 1000);
 
       this.resetAutoDisposeTimeout(seconds);
     }
@@ -378,7 +378,7 @@ export abstract class Room<T= any> extends EventEmitter {
       this.autoDispose &&
       this._autoDisposeTimeout === undefined &&
       this.clients.length === 0 &&
-      this.reservedSeats.size === 0
+      Object.keys(this.reservedSeats).length === 0
     );
 
     if (willDispose) {
@@ -388,7 +388,7 @@ export abstract class Room<T= any> extends EventEmitter {
     return willDispose;
   }
 
-  protected _dispose(): Promise<any> {
+  protected async _dispose(): Promise<any> {
     let userReturnData;
 
     if (this.onDispose) {
@@ -414,7 +414,7 @@ export abstract class Room<T= any> extends EventEmitter {
     this.clock.clear();
     this.clock.stop();
 
-    return userReturnData || Promise.resolve();
+    return await (userReturnData || Promise.resolve());
   }
 
   private _onMessage(client: Client, message: any) {
@@ -444,12 +444,12 @@ export abstract class Room<T= any> extends EventEmitter {
 
   }
 
-  private _onJoin(client: Client, options?: any, auth?: any) {
+  public async ['_onJoin'](client: Client, options?: any, auth?: any) {
     // create remote client instance.
     this.clients.push( client );
 
     // delete seat reservation
-    this.reservedSeats.delete(client.sessionId);
+    delete this.reservedSeats[client.sessionId];
     if (this.reservedSeatTimeouts[client.sessionId]) {
       clearTimeout(this.reservedSeatTimeouts[client.sessionId]);
       delete this.reservedSeatTimeouts[client.sessionId];
@@ -467,6 +467,21 @@ export abstract class Room<T= any> extends EventEmitter {
       this.lock.call(this, true);
     }
 
+    // bind onLeave method.
+    client.on('message', this._onMessage.bind(this, client));
+    client.once('close', this._onLeave.bind(this, client));
+
+    const reconnection = this.reconnections[client.sessionId];
+    if (reconnection) {
+      reconnection.resolve(client);
+
+    } else if (this.onJoin) {
+      await this.onJoin(client, options, auth);
+    }
+
+    // emit 'join' to room handler
+    this.emit('join', client);
+
     // confirm room id that matches the room name requested to join
     send[Protocol.JOIN_ROOM](
       client,
@@ -475,30 +490,26 @@ export abstract class Room<T= any> extends EventEmitter {
       this._serializer.handshake && this._serializer.handshake(),
     );
 
-    // bind onLeave method.
-    client.on('message', this._onMessage.bind(this, client));
-    client.once('close', this._onLeave.bind(this, client));
-
     // send current state when new client joins the room
     if (this.state) {
       this.sendState(client);
     }
 
-    const reconnection = this.reconnections[client.sessionId];
-    if (reconnection) {
-      reconnection.resolve(client);
-
-    } else {
-      // emit 'join' to room handler
-      this.emit('join', client);
-
-      return this.onJoin && this.onJoin(client, options, auth);
-    }
+    // update room listing cache
+    await this.cache.update({
+      $set: { locked: this._locked },
+      $inc: { clients: 1 }
+    });
   }
 
   private async _onLeave(client: Client, code?: number): Promise<any> {
+    const success = spliceOne(this.clients, this.clients.indexOf(client));
+    console.log("_onLeave, success?", success);
+
+    if (!success) { return; }
+
     // call abstract 'onLeave' method only if the client has been successfully accepted.
-    if (spliceOne(this.clients, this.clients.indexOf(client)) && this.onLeave) {
+    if (this.onLeave) {
       try {
         await this.onLeave(client, (code === WS_CLOSE_CONSENTED));
 
@@ -517,6 +528,12 @@ export abstract class Room<T= any> extends EventEmitter {
       this._maxClientsReached = false;
       this.unlock.call(this, true);
     }
+
+    // update room listing cache
+    await this.cache.update({
+      $set: { locked: this._locked },
+      $inc: { clients: -1 }
+    });
   }
 
 }

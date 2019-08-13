@@ -1,4 +1,5 @@
 import http from "http";
+import cors from "cors";
 import express from "express";
 import bodyParser from "body-parser";
 // import WebSocket from "uws";
@@ -10,24 +11,25 @@ const port = Number(process.env.PORT || 2567);
 const endpoint = "localhost";
 
 const app = express();
+
+app.use(cors());
 app.use(bodyParser.json());
 
 // Create HTTP & WebSocket servers
 const server = http.createServer(app);
 const gameServer = new Server({
   // engine: WebSocket.Server,
-  server: server
+  server: server,
+  express: app
 });
 
 // Register ChatRoom as "chat"
-gameServer.register("chat", ChatRoom).then((handler) => {
+gameServer.define("chat", ChatRoom).
   // demonstrating public events.
-  handler.
-    on("create", (room) => console.log("room created!", room.roomId)).
-    on("join", (room, client) => console.log("client", client.id, "joined", room.roomId)).
-    on("leave", (room, client) => console.log("client", client.id, "left", room.roomId)).
-    on("dispose", (room) => console.log("room disposed!", room.roomId));
-})
+  on("create", (room) => console.log("room created!", room.roomId)).
+  on("join", (room, client) => console.log("client", client.sessionId, "joined", room.roomId)).
+  on("leave", (room, client) => console.log("client", client.sessionId, "left", room.roomId)).
+  on("dispose", (room) => console.log("room disposed!", room.roomId));
 
 app.use(express.static(__dirname));
 
