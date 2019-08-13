@@ -1,15 +1,15 @@
-import * as net from "net";
+import * as net from 'net';
 
-import { isValidId, generateId } from '../';
-import { Protocol, send, decode } from "../Protocol";
-import { Transport } from './Transport';
+import { generateId, isValidId } from '../';
+import { decode, Protocol, send } from '../Protocol';
 import { MatchMaker } from './../MatchMaker';
 import { ServerOptions } from './../Server';
+import { Transport } from './Transport';
 
-import { debugError, debugAndPrintError } from './../Debug';
+import { debugAndPrintError, debugError } from './../Debug';
 
 export class TCPTransport extends Transport {
-    constructor (matchMaker: MatchMaker, options: ServerOptions = {}) {
+    constructor(matchMaker: MatchMaker, options: ServerOptions = {}) {
         super(matchMaker);
 
         this.server = net.createServer();
@@ -19,6 +19,10 @@ export class TCPTransport extends Transport {
     public listen(port?: number, hostname?: string, backlog?: number, listeningListener?: Function): this {
         this.server.listen(port, hostname, backlog, listeningListener);
         return this;
+    }
+
+    public shutdown() {
+        this.server.close();
     }
 
     protected onConnection = (client: net.Socket & any) => {
@@ -40,12 +44,8 @@ export class TCPTransport extends Transport {
         client.on('data', (data) => this.onMessage(client, decode(data)));
     }
 
-    public shutdown () {
-        this.server.close();
-    }
-
-    protected onMessage (client: net.Socket & any, message: any) {
-        console.log("RECEIVED:", message);
+    protected onMessage(client: net.Socket & any, message: any) {
+        console.log('RECEIVED:', message);
 
         if (
             message[0] === Protocol.JOIN_ROOM &&
@@ -57,7 +57,7 @@ export class TCPTransport extends Transport {
             client.id = message[3];
             client.options = message[2];
 
-            console.log("EFFECTIVELY CONNECT INTO ROOM", roomId, client.id, client.options);
+            console.log('EFFECTIVELY CONNECT INTO ROOM', roomId, client.id, client.options);
 
             client.removeAllListeners('data');
 
@@ -65,7 +65,7 @@ export class TCPTransport extends Transport {
             client.on('data', (data) => client.emit('message', data));
 
             const room = this.matchMaker.getRoomById(roomId);
-            room['_onJoin'](client, client.options, client.auth);
+            room._onJoin(client, client.options, client.auth);
 
             // this.matchMaker.connectToRoom(client, roomId).
             //     catch((e) => {

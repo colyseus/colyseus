@@ -1,5 +1,5 @@
 export class MatchMakeError extends Error {
-  code: number;
+  public code: number;
 
   constructor(message: string, code: number) {
     super(message);

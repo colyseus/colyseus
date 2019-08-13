@@ -11,7 +11,7 @@ import { Presence } from './presence/Presence';
 
 import { debugAndPrintError, debugMatchMaking } from './Debug';
 import { MatchMakeError } from './Errors';
-import { RoomCache, IRoomCache } from './matchmaker/RoomCache';
+import { RoomCache, RoomCacheData } from './matchmaker/RoomCache';
 
 export type ClientOptions = any;
 
@@ -27,7 +27,7 @@ type RemoteRoomResponse<T= any> = [string?, T?];
 
 export class MatchMaker {
   public handlers: {[id: string]: RegisteredHandler} = {};
-  public methods = ['joinOrCreate', 'create', 'join', 'joinById'];
+  public exposedMethods = ['joinOrCreate', 'create', 'join', 'joinById'];
 
   private processId: string;
   private localRooms: {[roomId: string]: Room} = {};
@@ -41,17 +41,8 @@ export class MatchMaker {
   }
 
   public async joinOrCreate(roomName: string, options: ClientOptions) {
-    const handler = this.handlers[roomName];
-    if (!handler) {
-      throw new MatchMakeError(`no available handler for "${roomName}"`, Protocol.ERR_MATCHMAKE_NO_HANDLER);
-    }
-
     // Object.keys(handler.options)
-    let room = await RoomCache.findOne({
-      name: roomName,
-      locked: false,
-      ...handler.getFilterOptions(options)
-    }, { roomId: 1, processId: 1 });
+    let room = await this.queryRoom(roomName, options);
 
     if (!room) {
       room = await this.createRoom(roomName, options);
@@ -73,16 +64,7 @@ export class MatchMaker {
   }
 
   public async join(roomName: string, options: ClientOptions) {
-    const handler = this.handlers[roomName];
-    if (!handler) {
-      throw new MatchMakeError(`no available handler for "${roomName}"`, Protocol.ERR_MATCHMAKE_NO_HANDLER);
-    }
-
-    const room = await RoomCache.findOne({
-      name: roomName,
-      locked: false,
-      ...handler.getFilterOptions(options)
-    }, { roomId: 1, processId: 1 });
+    const room = await this.queryRoom(roomName, options);
 
     if (!room) {
       throw new MatchMakeError(`no rooms found with provided criteria`, Protocol.ERR_MATCHMAKE_INVALID_CRITERIA);
@@ -93,7 +75,7 @@ export class MatchMaker {
 
   public async joinById(roomId: string, options: ClientOptions) {
     const isValidRoomId = isValidId(roomId);
-    const room = isValidRoomId && await RoomCache.findOne({ roomId: roomId }, { roomId: 1, processId: 1 });
+    const room = isValidRoomId && await RoomCache.findOne({ roomId }, { _id: 0, processId: 1, roomId: 1 });
 
     if (!room) {
       throw new MatchMakeError(`room ${roomId} not found`, Protocol.ERR_MATCHMAKE_INVALID_ROOM_ID);
@@ -102,12 +84,44 @@ export class MatchMaker {
     return this.reserveSeatFor(room, options);
   }
 
-  protected async reserveSeatFor(room: IRoomCache, options) {
-    const sessionId: string = generateId();
+  public async query(roomName?: string) {
+    const conditions: any = { locked: false };
 
-    await this.remoteRoomCall(room.roomId, '_reserveSeat', [{ sessionId }, options]);
+    if (roomName) {
+      conditions.name = roomName;
+    }
 
-    return { room, sessionId };
+    return await RoomCache.find({
+      locked: false,
+      ...conditions,
+    }, {
+      _id: 0,
+      clients: 1,
+      locked: 1,
+      maxClients: 1,
+      metadata: 1,
+      name: 1,
+      roomId: 1,
+    });
+  }
+
+  public async queryRoom(roomName: string, options: ClientOptions) {
+    const handler = this.handlers[roomName];
+    if (!handler) {
+      throw new MatchMakeError(`no available handler for "${roomName}"`, Protocol.ERR_MATCHMAKE_NO_HANDLER);
+    }
+
+    const query = RoomCache.findOne({
+      locked: false,
+      name: roomName,
+      ...handler.getFilterOptions(options),
+    }, { _id: 0, processId: 1, roomId: 1 });
+
+    if (handler.sortOptions) {
+      query.sort(handler.sortOptions);
+    }
+
+    return await query;
   }
 
   public async remoteRoomCall<R= any>(
@@ -176,7 +190,7 @@ export class MatchMaker {
     return this.handlers[ name ] !== undefined;
   }
 
-  public async createRoom(roomName: string, clientOptions: ClientOptions): Promise<IRoomCache> {
+  public async createRoom(roomName: string, clientOptions: ClientOptions): Promise<RoomCacheData> {
     const registeredHandler = this.handlers[ roomName ];
     const room = new registeredHandler.klass();
 
@@ -203,11 +217,11 @@ export class MatchMaker {
 
     // create a RoomCache reference.
     room.cache = await RoomCache.create({
-      name: roomName,
-      roomId: room.roomId,
-      processId: this.processId,
       maxClients: room.maxClients,
-      ...registeredHandler.getFilterOptions(clientOptions)
+      name: roomName,
+      processId: this.processId,
+      roomId: room.roomId,
+      ...registeredHandler.getFilterOptions(clientOptions),
     });
 
     registeredHandler.emit('create', room);
@@ -239,6 +253,14 @@ export class MatchMaker {
     }
 
     return Promise.all(promises);
+  }
+
+  protected async reserveSeatFor(room: RoomCacheData, options) {
+    const sessionId: string = generateId();
+
+    await this.remoteRoomCall(room.roomId, '_reserveSeat', [{ sessionId }, options]);
+
+    return { room, sessionId };
   }
 
   protected async cleanupStaleRooms(roomName: string) {

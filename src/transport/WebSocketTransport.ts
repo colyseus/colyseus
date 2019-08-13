@@ -1,14 +1,14 @@
-import url from 'url';
 import http from 'http';
+import url from 'url';
 import WebSocket from 'ws';
 
 import { Client, Protocol } from '..';
 
-import { Transport } from './Transport';
-import { parseQueryString } from '../Utils';
 import { MatchMaker } from '../MatchMaker';
 import { send } from '../Protocol';
+import { parseQueryString } from '../Utils';
 import { ServerOptions } from './../Server';
+import { Transport } from './Transport';
 
 import { debugAndPrintError } from './../Debug';
 
@@ -104,7 +104,7 @@ export class WebSocketTransport extends Transport {
     client.auth = await room.onAuth(upgradeReq, client.options);
 
     try {
-      room['_onJoin'](client, client.options, client.auth);
+      room._onJoin(client, client.options, client.auth);
 
     } catch (e) {
       debugAndPrintError(e.stack || e);

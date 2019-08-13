@@ -6,16 +6,16 @@ import { debugAndPrintError } from './Debug';
 import { MatchMaker } from './MatchMaker';
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
 import { Presence } from './presence/Presence';
-import { Transport, TCPTransport, WebSocketTransport } from './transport/Transport';
+import { TCPTransport, Transport, WebSocketTransport } from './transport/Transport';
 
 import { RoomConstructor } from './Room';
 import { registerGracefulShutdown } from './Utils';
 
+import { generateId } from '.';
 import { registerNode, unregisterNode } from './discovery';
 import { LocalPresence } from './presence/LocalPresence';
-import { generateId } from '.';
 
-import { Express } from "express-serve-static-core";
+import { Express } from 'express-serve-static-core';
 import { MatchMakeError } from './Errors';
 import { Protocol } from './Protocol';
 
@@ -37,7 +37,7 @@ export class Server {
 
   protected processId: string = generateId();
 
-  protected route = "/matchmake";
+  protected route = '/matchmake';
 
   constructor(options: ServerOptions = {}) {
     const { gracefullyShutdown = true } = options;
@@ -70,12 +70,13 @@ export class Server {
 
   public listen(port: number, hostname?: string, backlog?: number, listeningListener?: Function) {
     this.transport.listen(port, hostname, backlog, () => {
-      if (listeningListener) listeningListener();
-        // register node for proxy/service discovery
-        registerNode(this.presence, {
-            addressInfo: this.transport.address() as net.AddressInfo,
-            processId: this.processId,
-        });
+      if (listeningListener) { listeningListener(); }
+
+      // register node for proxy/service discovery
+      registerNode(this.presence, {
+        addressInfo: this.transport.address() as net.AddressInfo,
+        processId: this.processId,
+      });
       this.registerProcessForDiscovery(this.transport);
     });
   }
@@ -122,7 +123,7 @@ export class Server {
       const body = req.body;
 
       try {
-        if (this.matchMaker.methods.indexOf(method) === -1) {
+        if (this.matchMaker.exposedMethods.indexOf(method) === -1) {
           throw new MatchMakeError(`invalid method "${method}"`, Protocol.ERR_MATCHMAKE_UNHANDLED);
         }
 
@@ -132,9 +133,14 @@ export class Server {
       } catch (e) {
         res.json({
           code: e.code || Protocol.ERR_MATCHMAKE_UNHANDLED,
-          error: e.message
+          error: e.message,
         });
       }
+    });
+
+    app.get(`${this.route}/:roomName?`, async (req, res) => {
+      const { roomName } = req.params;
+      res.json((await this.matchMaker.query(roomName)));
     });
   }
 

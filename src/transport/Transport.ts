@@ -1,28 +1,28 @@
-import * as net from "net";
-import * as http from "http";
-import * as https from "https";
+import * as http from 'http';
+import * as https from 'https';
+import * as net from 'net';
 
 import { Client, isValidId } from '..';
-import { Protocol, decode, send } from "../Protocol";
 import { MatchMaker } from '../MatchMaker';
+import { decode, Protocol, send } from '../Protocol';
 import { MatchMakeError } from './../Errors';
 
-import { debugError, debugAndPrintError } from './../Debug';
-import { retry } from "../Utils";
+import { retry } from '../Utils';
+import { debugAndPrintError, debugError } from './../Debug';
 
 export abstract class Transport {
     public server: net.Server | http.Server | https.Server;
     protected matchMaker: MatchMaker;
 
-    constructor (matchMaker: MatchMaker) {
+    constructor(matchMaker: MatchMaker) {
         this.matchMaker = matchMaker;
     }
 
-    abstract listen(port?: number, hostname?: string, backlog?: number, listeningListener?: Function): this;
-    abstract shutdown(): void;
+    public abstract listen(port?: number, hostname?: string, backlog?: number, listeningListener?: Function): this;
+    public abstract shutdown(): void;
 
-    public address () { return this.server.address(); }
+    public address() { return this.server.address(); }
 }
 
-export { TCPTransport } from "./TCPTransport";
-export { WebSocketTransport } from "./WebSocketTransport";
+export { TCPTransport } from './TCPTransport';
+export { WebSocketTransport } from './WebSocketTransport';

@@ -7,7 +7,7 @@ import WebSocket from 'ws';
 export { Server } from './Server';
 export { Room, RoomAvailable } from './Room';
 export { Protocol } from './Protocol';
-export { RegisteredHandler } from './matchmaker/RegisteredHandler';
+export { RegisteredHandler, SortOptions } from './matchmaker/RegisteredHandler';
 
 // Presence
 export { Presence } from './presence/Presence';

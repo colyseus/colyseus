@@ -1,5 +1,5 @@
-import msgpack from 'notepack.io';
 import http from 'http';
+import msgpack from 'notepack.io';
 
 import Clock from '@gamestdio/timer';
 import { EventEmitter } from 'events';
@@ -14,7 +14,7 @@ import { decode, Protocol, send, WS_CLOSE_CONSENTED } from './Protocol';
 import { Deferred, spliceOne } from './Utils';
 
 import { debugAndPrintError, debugPatch } from './Debug';
-import { IRoomCache } from './matchmaker/RoomCache';
+import { RoomCacheData } from './matchmaker/RoomCache';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
@@ -38,7 +38,14 @@ export interface BroadcastOptions {
 }
 
 export abstract class Room<T= any> extends EventEmitter {
-  public cache: IRoomCache;
+
+  public get locked() {
+    return this._locked;
+  }
+
+  // see @serialize decorator.
+  public get serializer() { return this._serializer.id; }
+  public cache: RoomCacheData;
   public clock: Clock = new Clock();
 
   public roomId: string;
@@ -105,10 +112,6 @@ export abstract class Room<T= any> extends EventEmitter {
 
   public onAuth(request: http.IncomingMessage, options: any): boolean | Promise<any> {
     return true;
-  }
-
-  public get locked() {
-    return this._locked;
   }
 
   public hasReachedMaxClients(): boolean {
@@ -262,8 +265,63 @@ export abstract class Room<T= any> extends EventEmitter {
     return delayedDisconnection;
   }
 
-  // see @serialize decorator.
-  public get serializer() { return this._serializer.id; }
+  public async ['_onJoin'](client: Client, options?: any, auth?: any) {
+    // create remote client instance.
+    this.clients.push( client );
+
+    // delete seat reservation
+    delete this.reservedSeats[client.sessionId];
+    if (this.reservedSeatTimeouts[client.sessionId]) {
+      clearTimeout(this.reservedSeatTimeouts[client.sessionId]);
+      delete this.reservedSeatTimeouts[client.sessionId];
+    }
+
+    // clear auto-dispose timeout.
+    if (this._autoDisposeTimeout) {
+      clearTimeout(this._autoDisposeTimeout);
+      this._autoDisposeTimeout = undefined;
+    }
+
+    // lock automatically when maxClients is reached
+    if (!this._locked && this.clients.length === this.maxClients) {
+      this._maxClientsReached = true;
+      this.lock.call(this, true);
+    }
+
+    // bind onLeave method.
+    client.on('message', this._onMessage.bind(this, client));
+    client.once('close', this._onLeave.bind(this, client));
+
+    const reconnection = this.reconnections[client.sessionId];
+    if (reconnection) {
+      reconnection.resolve(client);
+
+    } else if (this.onJoin) {
+      await this.onJoin(client, options, auth);
+    }
+
+    // emit 'join' to room handler
+    this.emit('join', client);
+
+    // confirm room id that matches the room name requested to join
+    send[Protocol.JOIN_ROOM](
+      client,
+      client.sessionId,
+      this._serializer.id,
+      this._serializer.handshake && this._serializer.handshake(),
+    );
+
+    // send current state when new client joins the room
+    if (this.state) {
+      this.sendState(client);
+    }
+
+    // update room listing cache
+    await this.cache.updateOne({
+      $inc: { clients: 1 },
+      $set: { locked: this._locked },
+    });
+  }
   protected _getSerializer?(): Serializer<T> {
     return new SchemaSerializer<T>();
   }
@@ -444,67 +502,9 @@ export abstract class Room<T= any> extends EventEmitter {
 
   }
 
-  public async ['_onJoin'](client: Client, options?: any, auth?: any) {
-    // create remote client instance.
-    this.clients.push( client );
-
-    // delete seat reservation
-    delete this.reservedSeats[client.sessionId];
-    if (this.reservedSeatTimeouts[client.sessionId]) {
-      clearTimeout(this.reservedSeatTimeouts[client.sessionId]);
-      delete this.reservedSeatTimeouts[client.sessionId];
-    }
-
-    // clear auto-dispose timeout.
-    if (this._autoDisposeTimeout) {
-      clearTimeout(this._autoDisposeTimeout);
-      this._autoDisposeTimeout = undefined;
-    }
-
-    // lock automatically when maxClients is reached
-    if (!this._locked && this.clients.length === this.maxClients) {
-      this._maxClientsReached = true;
-      this.lock.call(this, true);
-    }
-
-    // bind onLeave method.
-    client.on('message', this._onMessage.bind(this, client));
-    client.once('close', this._onLeave.bind(this, client));
-
-    const reconnection = this.reconnections[client.sessionId];
-    if (reconnection) {
-      reconnection.resolve(client);
-
-    } else if (this.onJoin) {
-      await this.onJoin(client, options, auth);
-    }
-
-    // emit 'join' to room handler
-    this.emit('join', client);
-
-    // confirm room id that matches the room name requested to join
-    send[Protocol.JOIN_ROOM](
-      client,
-      client.sessionId,
-      this._serializer.id,
-      this._serializer.handshake && this._serializer.handshake(),
-    );
-
-    // send current state when new client joins the room
-    if (this.state) {
-      this.sendState(client);
-    }
-
-    // update room listing cache
-    await this.cache.update({
-      $set: { locked: this._locked },
-      $inc: { clients: 1 }
-    });
-  }
-
   private async _onLeave(client: Client, code?: number): Promise<any> {
     const success = spliceOne(this.clients, this.clients.indexOf(client));
-    console.log("_onLeave, success?", success);
+    console.log('_onLeave, success?', success);
 
     if (!success) { return; }
 
@@ -530,9 +530,9 @@ export abstract class Room<T= any> extends EventEmitter {
     }
 
     // update room listing cache
-    await this.cache.update({
+    await this.cache.updateOne({
+      $inc: { clients: -1 },
       $set: { locked: this._locked },
-      $inc: { clients: -1 }
     });
   }
 
