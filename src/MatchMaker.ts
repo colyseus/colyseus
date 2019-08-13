@@ -4,14 +4,15 @@ import { Client, generateId, isValidId } from './index';
 import { IpcProtocol, Protocol } from './Protocol';
 
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
-import { Room, RoomAvailable, RoomConstructor } from './Room';
+import { Room, RoomConstructor } from './Room';
 
 import { LocalPresence } from './presence/LocalPresence';
 import { Presence } from './presence/Presence';
 
 import { debugAndPrintError, debugMatchMaking } from './Debug';
 import { MatchMakeError } from './Errors';
-import { RoomCache, RoomCacheData } from './matchmaker/RoomCache';
+import { MatchMakerDriver, RoomCacheData } from './matchmaker/drivers/Driver';
+import { LocalDriver } from './matchmaker/drivers/LocalDriver';
 
 export type ClientOptions = any;
 
@@ -21,7 +22,7 @@ export interface RoomWithScore {
 }
 
 // remote room call timeouts
-export const REMOTE_ROOM_SHORT_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_SHORT_TIMEOUT || 4000);
+export const REMOTE_ROOM_SHORT_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_SHORT_TIMEOUT || 3000);
 
 type RemoteRoomResponse<T= any> = [string?, T?];
 
@@ -31,18 +32,21 @@ export class MatchMaker {
 
   private processId: string;
   private localRooms: {[roomId: string]: Room} = {};
+
   private presence: Presence;
+  private driver: MatchMakerDriver;
 
   private isGracefullyShuttingDown: boolean = false;
 
-  constructor(presence?: Presence, processId?: string) {
+  constructor(presence?: Presence, driver?: MatchMakerDriver,processId?: string) {
     this.presence = presence || new LocalPresence();
+    this.driver = driver || new LocalDriver();
     this.processId = processId;
   }
 
   public async joinOrCreate(roomName: string, options: ClientOptions) {
-    // Object.keys(handler.options)
     let room = await this.queryRoom(roomName, options);
+    console.log("room? =>", room);
 
     if (!room) {
       room = await this.createRoom(roomName, options);
@@ -75,7 +79,7 @@ export class MatchMaker {
 
   public async joinById(roomId: string, options: ClientOptions) {
     const isValidRoomId = isValidId(roomId);
-    const room = isValidRoomId && await RoomCache.findOne({ roomId }, { _id: 0, processId: 1, roomId: 1 });
+    const room = isValidRoomId && await this.driver.findOne({ roomId });
 
     if (!room) {
       throw new MatchMakeError(`room ${roomId} not found`, Protocol.ERR_MATCHMAKE_INVALID_ROOM_ID);
@@ -84,25 +88,10 @@ export class MatchMaker {
     return this.reserveSeatFor(room, options);
   }
 
-  public async query(roomName?: string) {
-    const conditions: any = { locked: false };
+  public async query(roomName?: string, conditions: any = {}) {
+    if (roomName) { conditions.name = roomName; }
 
-    if (roomName) {
-      conditions.name = roomName;
-    }
-
-    return await RoomCache.find({
-      locked: false,
-      ...conditions,
-    }, {
-      _id: 0,
-      clients: 1,
-      locked: 1,
-      maxClients: 1,
-      metadata: 1,
-      name: 1,
-      roomId: 1,
-    });
+    return await this.driver.find(conditions);
   }
 
   public async queryRoom(roomName: string, options: ClientOptions) {
@@ -111,11 +100,11 @@ export class MatchMaker {
       throw new MatchMakeError(`no available handler for "${roomName}"`, Protocol.ERR_MATCHMAKE_NO_HANDLER);
     }
 
-    const query = RoomCache.findOne({
+    const query = this.driver.findOne({
       locked: false,
       name: roomName,
       ...handler.getFilterOptions(options),
-    }, { _id: 0, processId: 1, roomId: 1 });
+    });
 
     if (handler.sortOptions) {
       query.sort(handler.sortOptions);
@@ -199,9 +188,25 @@ export class MatchMaker {
     room.roomName = roomName;
     room.presence = this.presence;
 
+    // create a RoomCache reference.
+    ;
+    room.cache = this.driver.createInstance({
+      name: roomName,
+      processId: this.processId,
+      roomId: room.roomId,
+      ...registeredHandler.getFilterOptions(clientOptions),
+    });
+
     if (room.onCreate) {
-      await room.onCreate(merge({}, clientOptions, registeredHandler.options));
+      try {
+        await room.onCreate(merge({}, clientOptions, registeredHandler.options));
+
+      } catch (e) {
+        throw new MatchMakeError(e.message, Protocol.ERR_MATCHMAKE_UNHANDLED);
+      }
     }
+
+    room.cache.maxClients = room.maxClients;
 
     // imediatelly ask client to join the room
     debugMatchMaking('spawning \'%s\' (%s) on process %d', roomName, room.roomId, process.pid);
@@ -214,15 +219,7 @@ export class MatchMaker {
 
     // room always start unlocked
     await this.createRoomReferences(room, true);
-
-    // create a RoomCache reference.
-    room.cache = await RoomCache.create({
-      maxClients: room.maxClients,
-      name: roomName,
-      processId: this.processId,
-      roomId: room.roomId,
-      ...registeredHandler.getFilterOptions(clientOptions),
-    });
+    await room.cache.save();
 
     registeredHandler.emit('create', room);
 
@@ -268,7 +265,7 @@ export class MatchMaker {
     // clean-up possibly stale room ids
     // (ungraceful shutdowns using Redis can result on stale room ids still on memory.)
     //
-    const cachedRooms = await RoomCache.find({ name: roomName });
+    const cachedRooms = await this.driver.find({ name: roomName });
 
     // remove connecting counts
     await this.presence.del(this.getHandlerConcurrencyKey(roomName));

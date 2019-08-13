@@ -104,7 +104,7 @@ export class WebSocketTransport extends Transport {
     client.auth = await room.onAuth(upgradeReq, client.options);
 
     try {
-      room._onJoin(client, client.options, client.auth);
+      await room._onJoin(client, client.options, client.auth);
 
     } catch (e) {
       debugAndPrintError(e.stack || e);

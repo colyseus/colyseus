@@ -23,6 +23,7 @@ export type ServerOptions = IServerOptions & {
   pingTimeout?: number,
   verifyClient?: WebSocket.VerifyClientCallbackAsync
   presence?: any,
+  driver?: any,
   engine?: any,
   ws?: any,
   express?: any,
@@ -43,7 +44,7 @@ export class Server {
     const { gracefullyShutdown = true } = options;
 
     this.presence = options.presence || new LocalPresence();
-    this.matchMaker = new MatchMaker(this.presence, this.processId);
+    this.matchMaker = new MatchMaker(this.presence, options.driver, this.processId);
 
     // "presence" option is not used from now on
     delete options.presence;
@@ -139,8 +140,9 @@ export class Server {
     });
 
     app.get(`${this.route}/:roomName?`, async (req, res) => {
-      const { roomName } = req.params;
-      res.json((await this.matchMaker.query(roomName)));
+      res.json((
+        await this.matchMaker.query(req.params.roomName, { locked: false })
+      ));
     });
   }
 

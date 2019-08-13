@@ -14,7 +14,7 @@ import { decode, Protocol, send, WS_CLOSE_CONSENTED } from './Protocol';
 import { Deferred, spliceOne } from './Utils';
 
 import { debugAndPrintError, debugPatch } from './Debug';
-import { RoomCacheData } from './matchmaker/RoomCache';
+import { RoomCacheData } from './matchmaker/drivers/Driver';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
@@ -24,13 +24,6 @@ const DEFAULT_SEAT_RESERVATION_TIME = Number(process.env.COLYSEUS_SEAT_RESERVATI
 export type SimulationCallback = (deltaTime: number) => void;
 
 export type RoomConstructor<T= any> = new (presence?: Presence) => Room<T>;
-
-export interface RoomAvailable {
-  roomId: string;
-  clients: number;
-  maxClients: number;
-  metadata?: any;
-}
 
 export interface BroadcastOptions {
   except?: Client;
@@ -56,7 +49,6 @@ export abstract class Room<T= any> extends EventEmitter {
   public autoDispose: boolean = true;
 
   public state: T;
-  public metadata: any = null;
   public presence: Presence;
 
   public clients: Client[] = [];
@@ -160,8 +152,14 @@ export abstract class Room<T= any> extends EventEmitter {
     this.state = newState;
   }
 
-  public setMetadata(meta: any) {
-    this.metadata = meta;
+  public async setMetadata(meta: any, persist: boolean = false) {
+    this.cache.metadata = meta;
+
+    if (persist) { this.cache.save(); }
+  }
+
+  public get metadata() {
+    return this.cache.metadata;
   }
 
   public lock(): void {
@@ -223,7 +221,7 @@ export abstract class Room<T= any> extends EventEmitter {
     return true;
   }
 
-  public async getAvailableData(): Promise<RoomAvailable> {
+  public getAvailableData() {
     return {
       clients: this.clients.length,
       maxClients: this.maxClients,

@@ -7,6 +7,8 @@ import bodyParser from "body-parser";
 import { Server, RedisPresence } from "../src";
 import { ChatRoom } from "./ChatRoom";
 
+import { MongooseDriver } from "../src/matchmaker/drivers/MongooseDriver";
+
 const port = Number(process.env.PORT || 2567);
 const endpoint = "localhost";
 
@@ -20,7 +22,8 @@ const server = http.createServer(app);
 const gameServer = new Server({
   // engine: WebSocket.Server,
   server: server,
-  express: app
+  express: app,
+  // driver: new MongooseDriver(),
 });
 
 // Register ChatRoom as "chat"

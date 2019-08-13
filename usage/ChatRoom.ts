@@ -13,6 +13,7 @@ export class ChatRoom extends Room<State> {
   maxClients = 4;
 
   onCreate (options) {
+
     this.setState(new State());
   }
 

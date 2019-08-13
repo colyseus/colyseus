@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
+
 import { RoomConstructor } from './../Room';
-import { RoomCacheData } from './RoomCache';
+import { RoomCacheData } from './drivers/Driver';
 
 export const INVALID_OPTION_KEYS: Array<keyof RoomCacheData> = [
   'clients',
