@@ -18,35 +18,17 @@ class RoomCache implements RoomListingData {
       this[field] = initialValues[field];
     }
 
-    /**
-     * Avoid these properties from being JSON encoded
-     */
-    Object.defineProperties(this, {
-      processId: {
-        value: this.processId,
-        writable: true,
-        configurable: true,
-        enumerable: false
-      },
-      locked: {
-        value: this.locked,
-        writable: true,
-        configurable: true,
-        enumerable: false
-      },
-      private: {
-        value: this.private,
-        writable: true,
-        configurable: true,
-        enumerable: false
-      },
-      $rooms: {
-        value: rooms,
-        writable: true,
-        configurable: true,
-        enumerable: false
-      },
-    });
+    this.$rooms = rooms;
+  }
+
+  toJSON () {
+    return {
+      clients: this.clients,
+      maxClients: this.maxClients,
+      metadata: this.metadata,
+      name: this.name,
+      roomId: this.roomId
+    }
   }
 
   save() {

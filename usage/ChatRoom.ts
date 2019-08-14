@@ -1,7 +1,4 @@
 import { Room } from "../src";
-
-import { serialize } from "../src/serializer/Serializer";
-
 import { Schema, type } from "@colyseus/schema";
 
 class State extends Schema {
@@ -14,7 +11,8 @@ export class ChatRoom extends Room<State> {
 
   onCreate (options) {
     console.log("CREATE ROOM WITH OPTIONS", options);
-    // this.listing.private = true;
+    this.setMetadata({ password: true });
+
     this.setState(new State());
   }
 

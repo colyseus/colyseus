@@ -31,6 +31,12 @@ export interface BroadcastOptions {
   afterNextPatch?: boolean;
 }
 
+export enum RoomInternalState {
+  CREATING = 0,
+  CREATED = 1,
+  DISCONNECTING = 2,
+}
+
 export abstract class Room<T= any> extends EventEmitter {
 
   public get locked() {
@@ -53,6 +59,9 @@ export abstract class Room<T= any> extends EventEmitter {
   public presence: Presence;
 
   public clients: Client[] = [];
+
+  /** @internal */
+  public _internalState: RoomInternalState = RoomInternalState.CREATING;
 
   // seat reservation & reconnection
   protected seatReservationTime: number = DEFAULT_SEAT_RESERVATION_TIME;
@@ -153,10 +162,20 @@ export abstract class Room<T= any> extends EventEmitter {
     this.state = newState;
   }
 
-  public async setMetadata(meta: any, persist: boolean = false) {
+  public setMetadata(meta: any) {
     this.listing.metadata = meta;
 
-    if (persist) { this.listing.save(); }
+    if (this._internalState === RoomInternalState.CREATED) {
+      this.listing.save();
+    }
+  }
+
+  public setPrivate(bool: boolean) {
+    this.listing.private = bool;
+
+    if (this._internalState === RoomInternalState.CREATED) {
+      this.listing.save();
+    }
   }
 
   public get metadata() {
@@ -232,7 +251,7 @@ export abstract class Room<T= any> extends EventEmitter {
   }
 
   public disconnect(): Promise<any> {
-    this.isDisconnecting = true;
+    this._internalState = RoomInternalState.DISCONNECTING;
     this.autoDispose = true;
 
     const delayedDisconnection = new Promise((resolve) =>
@@ -351,7 +370,7 @@ export abstract class Room<T= any> extends EventEmitter {
   }
 
   protected async allowReconnection(client: Client, seconds: number = 15): Promise<Client> {
-    if (this.isDisconnecting) {
+    if (this._internalState === RoomInternalState.DISCONNECTING) {
       throw new Error('disconnecting');
     }
 
@@ -510,8 +529,6 @@ export abstract class Room<T= any> extends EventEmitter {
 
   private async _onLeave(client: Client, code?: number): Promise<any> {
     const success = spliceOne(this.clients, this.clients.indexOf(client));
-
-    console.log("SUCCESS?", success);
 
     // call abstract 'onLeave' method only if the client has been successfully accepted.
     if (success) {

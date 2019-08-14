@@ -4,7 +4,7 @@ import { Client, generateId, isValidId } from './index';
 import { IpcProtocol, Protocol } from './Protocol';
 
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
-import { Room, RoomConstructor } from './Room';
+import { Room, RoomConstructor, RoomInternalState } from './Room';
 
 import { LocalPresence } from './presence/LocalPresence';
 import { Presence } from './presence/Presence';
@@ -231,6 +231,7 @@ export class MatchMaker {
       }
     }
 
+    room._internalState = RoomInternalState.CREATED;
     room.listing.maxClients = room.maxClients;
 
     // imediatelly ask client to join the room

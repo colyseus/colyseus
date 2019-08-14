@@ -25,9 +25,9 @@ const gameServer = new Server({
   driver: new MongooseDriver(),
 });
 
+
 // Register ChatRoom as "chat"
-gameServer.define("chat", ChatRoom).
-  filterBy(['progress']).
+gameServer.define("chat", ChatRoom).filterBy(['password']).
   // demonstrating public events.
   on("create", (room) => console.log("room created!", room.roomId)).
   on("join", (room, client) => console.log("client", client.sessionId, "joined", room.roomId)).
