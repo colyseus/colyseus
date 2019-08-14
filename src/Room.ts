@@ -264,7 +264,7 @@ export abstract class Room<T= any> extends EventEmitter {
     return delayedDisconnection;
   }
 
-  public async ['_onJoin'](client: Client, req: http.IncomingMessage) {
+  public async ['_onJoin'](client: Client, req?: http.IncomingMessage) {
     if (this.reservedSeatTimeouts[client.sessionId]) {
       clearTimeout(this.reservedSeatTimeouts[client.sessionId]);
       delete this.reservedSeatTimeouts[client.sessionId];
