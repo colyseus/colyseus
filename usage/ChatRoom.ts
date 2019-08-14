@@ -13,11 +13,12 @@ export class ChatRoom extends Room<State> {
   maxClients = 4;
 
   onCreate (options) {
-    this.listing.private = true;
+    console.log("CREATE ROOM WITH OPTIONS", options);
+    // this.listing.private = true;
     this.setState(new State());
   }
 
-  async onAuth (req, options) {
+  async onAuth (client, options, req) {
     // console.log("headers:", req.headers);
     // console.log("remoteAddress:", req.connection.remoteAddress)
 
@@ -25,14 +26,9 @@ export class ChatRoom extends Room<State> {
   }
 
   onJoin (client, options, auth) {
-    console.log("client has joined!");
-    console.log("client.sessionId:", client.sessionId);
-    console.log("with options", options);
+    console.log(`client "${client.sessionId}" has joined, options =>`, options);
+    console.log("auth response =>", auth);
     this.state.lastMessage = `${ client.sessionId } joined.`;
-  }
-
-  requestJoin (options, isNewRoom: boolean) {
-    return true;
   }
 
   async onLeave (client, consented) {

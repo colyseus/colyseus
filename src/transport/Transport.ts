@@ -2,13 +2,7 @@ import * as http from 'http';
 import * as https from 'https';
 import * as net from 'net';
 
-import { Client, isValidId } from '..';
 import { MatchMaker } from '../MatchMaker';
-import { decode, Protocol, send } from '../Protocol';
-import { MatchMakeError } from './../Errors';
-
-import { retry } from '../Utils';
-import { debugAndPrintError, debugError } from './../Debug';
 
 export abstract class Transport {
     public server: net.Server | http.Server | https.Server;

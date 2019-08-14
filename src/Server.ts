@@ -116,17 +116,16 @@ export class Server {
   protected registerExpressRoutes(app: Express) {
     app.post(`${this.route}/:method/:name`, async (req, res) => {
       const { name, method } = req.params;
-      const body = req.body;
+      const data = req.body || {};
+
+      console.log("REQUEST BODY =>", data);
 
       try {
         if (this.matchMaker.exposedMethods.indexOf(method) === -1) {
           throw new MatchMakeError(`invalid method "${method}"`, Protocol.ERR_MATCHMAKE_UNHANDLED);
         }
 
-        const response = await this.matchMaker[method](name, body);
-        console.log("WILL RESPOND WITH:", response);
-        console.log("JSON => ", JSON.stringify(response));
-
+        const response = await this.matchMaker[method](name, data);
         res.json(response);
 
       } catch (e) {

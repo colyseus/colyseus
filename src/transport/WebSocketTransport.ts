@@ -99,6 +99,7 @@ export class WebSocketTransport extends Transport {
     client.pingCount = 0;
 
     // set client options
+    client.id = sessionId;
     client.sessionId = sessionId;
 
     // TODO: handle re-connection differently?

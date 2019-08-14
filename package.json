@@ -57,7 +57,6 @@
     "@types/sinon": "^4.3.3",
     "all-contributors-cli": "^5.4.0",
     "benchmark": "^2.1.1",
-    "body-parser": "^1.18.2",
     "cors": "^2.8.5",
     "express": "^4.16.2",
     "mocha": "^5.1.1",

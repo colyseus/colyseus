@@ -29,9 +29,9 @@ export function isValidId(id: string) { return id && /^[a-zA-Z0-9_\-]{9}$/.test(
 export type Client = WebSocket & {
   upgradeReq?: http.IncomingMessage; // cross-compatibility for ws (v3.x+) and uws
   // id: string;
-  options: any;
-  sessionId: string;
+
+  id: string;
+  sessionId: string; // TODO: remove sessionId on version 1.0.0
+
   pingCount: number; // ping / pong
-  remote?: boolean; // is this a remote client, from another process?
-  auth?: any; // custom data set through Room's verifyClient method.
 };

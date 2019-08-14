@@ -38,7 +38,7 @@ export class MatchMaker {
 
   private isGracefullyShuttingDown: boolean = false;
 
-  constructor(presence?: Presence, driver?: MatchMakerDriver,processId?: string) {
+  constructor(presence?: Presence, driver?: MatchMakerDriver, processId?: string) {
     this.presence = presence || new LocalPresence();
     this.driver = driver || new LocalDriver();
     this.processId = processId;
@@ -278,7 +278,7 @@ export class MatchMaker {
   protected async reserveSeatFor(room: RoomListingData, options) {
     const sessionId: string = generateId();
 
-    await this.remoteRoomCall(room.roomId, '_reserveSeat', [{ sessionId }, options]);
+    await this.remoteRoomCall(room.roomId, '_reserveSeat', [sessionId, options]);
 
     return { room, sessionId };
   }

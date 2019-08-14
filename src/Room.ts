@@ -103,7 +103,7 @@ export abstract class Room<T= any> extends EventEmitter {
   public onLeave?(client: Client, consented?: boolean): void | Promise<any>;
   public onDispose?(): void | Promise<any>;
 
-  public onAuth(request: http.IncomingMessage, options: any): boolean | Promise<any> {
+  public onAuth(client: Client, options: any, request: http.IncomingMessage): boolean | Promise<any> {
     return true;
   }
 
@@ -265,8 +265,6 @@ export abstract class Room<T= any> extends EventEmitter {
   }
 
   public async ['_onJoin'](client: Client, req: http.IncomingMessage) {
-    // delete seat reservation
-    delete this.reservedSeats[client.sessionId];
     if (this.reservedSeatTimeouts[client.sessionId]) {
       clearTimeout(this.reservedSeatTimeouts[client.sessionId]);
       delete this.reservedSeatTimeouts[client.sessionId];
@@ -281,8 +279,11 @@ export abstract class Room<T= any> extends EventEmitter {
     // bind clean-up callback when client connection closes
     client.once('close', this._onLeave.bind(this, client));
 
+    // get seat reservation options and remove it
     const options = this.reservedSeats[client.sessionId];
-    const auth = await this.onAuth(req, options);
+    delete this.reservedSeats[client.sessionId];
+
+    const auth = await this.onAuth(client, options, req);
 
     const reconnection = this.reconnections[client.sessionId];
     if (reconnection) {
@@ -291,22 +292,6 @@ export abstract class Room<T= any> extends EventEmitter {
     } else if (this.onJoin) {
       await this.onJoin(client, options, auth);
     }
-
-    // joined successfully, add to local client list
-    this.clients.push(client);
-
-    //
-    // TODO: update client number during seat reservation
-    //
-    // lock automatically when maxClients is reached
-    if (!this._locked && this.clients.length === this.maxClients) {
-      this._maxClientsReached = true;
-      this.lock.call(this, true);
-    }
-    await this.listing.updateOne({
-      $inc: { clients: 1 },
-      $set: { locked: this._locked },
-    });
 
     // emit 'join' to room handler
     this.emit('join', client);
@@ -326,6 +311,9 @@ export abstract class Room<T= any> extends EventEmitter {
     if (this.state) {
       this.sendState(client);
     }
+
+    // joined successfully, add to local client list
+    this.clients.push(client);
   }
   protected _getSerializer?(): Serializer<T> {
     return new SchemaSerializer<T>();
@@ -367,7 +355,7 @@ export abstract class Room<T= any> extends EventEmitter {
       throw new Error('disconnecting');
     }
 
-    await this._reserveSeat(client, true, seconds, true);
+    await this._reserveSeat(client.sessionId, true, seconds, true);
 
     // keep reconnection reference in case the user reconnects into this room.
     const reconnection = new Deferred();
@@ -397,7 +385,7 @@ export abstract class Room<T= any> extends EventEmitter {
   }
 
   protected async _reserveSeat(
-    client: Client,
+    sessionId: string,
     joinOptions: any = true,
     seconds: number = this.seatReservationTime,
     allowReconnection: boolean = false,
@@ -406,16 +394,28 @@ export abstract class Room<T= any> extends EventEmitter {
       return false;
     }
 
-    this.reservedSeats[client.sessionId] = joinOptions;
+    this.reservedSeats[sessionId] = joinOptions;
     // await this.presence.setex(`${this.roomId}:${client.id}`, client.sessionId, seconds);
 
     if (allowReconnection) {
       // store reference of the roomId this client is allowed to reconnect to.
-      await this.presence.setex(client.sessionId, this.roomId, seconds);
+      await this.presence.setex(sessionId, this.roomId, seconds);
 
     } else {
-      this.reservedSeatTimeouts[client.sessionId] = setTimeout(() =>
-        delete this.reservedSeats[client.sessionId], seconds * 1000);
+
+      // lock automatically when maxClients is reached
+      if (!this._locked && this.hasReachedMaxClients()) {
+        this._maxClientsReached = true;
+        this.lock.call(this, true);
+      }
+
+      await this.listing.updateOne({
+        $inc: { clients: 1 },
+        $set: { locked: this._locked },
+      });
+
+      this.reservedSeatTimeouts[sessionId] = setTimeout(() =>
+        delete this.reservedSeats[sessionId], seconds * 1000);
 
       this.resetAutoDisposeTimeout(seconds);
     }
@@ -523,14 +523,14 @@ export abstract class Room<T= any> extends EventEmitter {
         }
       }
 
-      // update room listing cache
-      await this.listing.updateOne({
-        $inc: { clients: -1 },
-        $set: { locked: this._locked },
-      });
-
       this.emit('leave', client);
     }
+
+    // update room listing cache
+    await this.listing.updateOne({
+      $inc: { clients: -1 },
+      $set: { locked: this._locked },
+    });
 
     // dispose immediatelly if client reconnection isn't set up.
     const willDispose = this._disposeIfEmpty();

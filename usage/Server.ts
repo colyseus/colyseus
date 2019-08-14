@@ -1,7 +1,6 @@
 import http from "http";
 import cors from "cors";
 import express from "express";
-import bodyParser from "body-parser";
 // import WebSocket from "uws";
 
 import { Server, RedisPresence } from "../src";
@@ -15,7 +14,7 @@ const endpoint = "localhost";
 const app = express();
 
 app.use(cors());
-app.use(bodyParser.json());
+app.use(express.json());
 
 // Create HTTP & WebSocket servers
 const server = http.createServer(app);
@@ -28,6 +27,7 @@ const gameServer = new Server({
 
 // Register ChatRoom as "chat"
 gameServer.define("chat", ChatRoom).
+  filterBy(['progress']).
   // demonstrating public events.
   on("create", (room) => console.log("room created!", room.roomId)).
   on("join", (room, client) => console.log("client", client.sessionId, "joined", room.roomId)).
