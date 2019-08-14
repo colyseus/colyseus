@@ -102,7 +102,6 @@ export class WebSocketTransport extends Transport {
     client.id = sessionId;
     client.sessionId = sessionId;
 
-    // TODO: handle re-connection differently?
     try {
       await room._onJoin(client, upgradeReq);
 

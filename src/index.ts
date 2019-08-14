@@ -34,4 +34,5 @@ export type Client = WebSocket & {
   sessionId: string; // TODO: remove sessionId on version 1.0.0
 
   pingCount: number; // ping / pong
+  reconnectSuccess?: boolean;
 };

@@ -373,6 +373,7 @@ export abstract class Room<T= any> extends EventEmitter {
 
     reconnection.
       then(() => {
+        client.reconnectSuccess = true;
         clearTimeout(this.reservedSeatTimeouts[client.sessionId]);
         cleanup();
       }).
@@ -523,8 +524,13 @@ export abstract class Room<T= any> extends EventEmitter {
         }
       }
 
-      this.emit('leave', client);
+      if (!client.reconnectSuccess) {
+        this.emit('leave', client);
+      }
     }
+
+    // skip next checks if client has reconnected successfully (through `allowReconnection()`)
+    if (client.reconnectSuccess) { return; }
 
     // update room listing cache
     await this.listing.updateOne({
