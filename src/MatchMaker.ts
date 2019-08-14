@@ -119,6 +119,8 @@ export class MatchMaker {
   }
 
   public async queryRoom(roomName: string, options: ClientOptions) {
+    await this.awaitRoomAvailable(roomName);
+
     const handler = this.handlers[roomName];
     if (!handler) {
       throw new MatchMakeError(`no available handler for "${roomName}"`, Protocol.ERR_MATCHMAKE_NO_HANDLER);
