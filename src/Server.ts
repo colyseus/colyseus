@@ -73,11 +73,6 @@ export class Server {
     this.transport.listen(port, hostname, backlog, () => {
       if (listeningListener) { listeningListener(); }
 
-      // register node for proxy/service discovery
-      registerNode(this.presence, {
-        addressInfo: this.transport.address() as net.AddressInfo,
-        processId: this.processId,
-      });
       this.registerProcessForDiscovery(this.transport);
     });
   }
