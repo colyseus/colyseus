@@ -15,6 +15,7 @@ import { Deferred, spliceOne } from './Utils';
 
 import { debugAndPrintError, debugPatch } from './Debug';
 import { RoomListingData } from './matchmaker/drivers/Driver';
+import { MatchMakeError } from './Errors';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
@@ -117,10 +118,6 @@ export abstract class Room<T= any> extends EventEmitter {
 
   public hasReservedSeat(sessionId: string): boolean {
     return this.reservedSeats[sessionId] !== undefined;
-  }
-
-  public getReservedSeatOptions(sessionId: string): any {
-    return this.reservedSeats[sessionId];
   }
 
   public setSimulationInterval( callback: SimulationCallback, delay: number = DEFAULT_SIMULATION_INTERVAL ): void {
@@ -267,10 +264,7 @@ export abstract class Room<T= any> extends EventEmitter {
     return delayedDisconnection;
   }
 
-  public async ['_onJoin'](client: Client, options?: any, auth?: any) {
-    // create remote client instance.
-    this.clients.push( client );
-
+  public async ['_onJoin'](client: Client, req: http.IncomingMessage) {
     // delete seat reservation
     delete this.reservedSeats[client.sessionId];
     if (this.reservedSeatTimeouts[client.sessionId]) {
@@ -284,15 +278,11 @@ export abstract class Room<T= any> extends EventEmitter {
       this._autoDisposeTimeout = undefined;
     }
 
-    // lock automatically when maxClients is reached
-    if (!this._locked && this.clients.length === this.maxClients) {
-      this._maxClientsReached = true;
-      this.lock.call(this, true);
-    }
-
-    // bind onLeave method.
-    client.on('message', this._onMessage.bind(this, client));
+    // bind clean-up callback when client connection closes
     client.once('close', this._onLeave.bind(this, client));
+
+    const options = this.reservedSeats[client.sessionId];
+    const auth = await this.onAuth(req, options);
 
     const reconnection = this.reconnections[client.sessionId];
     if (reconnection) {
@@ -302,8 +292,27 @@ export abstract class Room<T= any> extends EventEmitter {
       await this.onJoin(client, options, auth);
     }
 
+    // joined successfully, add to local client list
+    this.clients.push(client);
+
+    //
+    // TODO: update client number during seat reservation
+    //
+    // lock automatically when maxClients is reached
+    if (!this._locked && this.clients.length === this.maxClients) {
+      this._maxClientsReached = true;
+      this.lock.call(this, true);
+    }
+    await this.listing.updateOne({
+      $inc: { clients: 1 },
+      $set: { locked: this._locked },
+    });
+
     // emit 'join' to room handler
     this.emit('join', client);
+
+    // allow client to send messages after onJoin has succeeded.
+    client.on('message', this._onMessage.bind(this, client));
 
     // confirm room id that matches the room name requested to join
     send[Protocol.JOIN_ROOM](
@@ -317,12 +326,6 @@ export abstract class Room<T= any> extends EventEmitter {
     if (this.state) {
       this.sendState(client);
     }
-
-    // update room listing cache
-    await this.listing.updateOne({
-      $inc: { clients: 1 },
-      $set: { locked: this._locked },
-    });
   }
   protected _getSerializer?(): Serializer<T> {
     return new SchemaSerializer<T>();
@@ -506,21 +509,28 @@ export abstract class Room<T= any> extends EventEmitter {
 
   private async _onLeave(client: Client, code?: number): Promise<any> {
     const success = spliceOne(this.clients, this.clients.indexOf(client));
-    console.log('_onLeave, success?', success);
 
-    if (!success) { return; }
+    console.log("SUCCESS?", success);
 
     // call abstract 'onLeave' method only if the client has been successfully accepted.
-    if (this.onLeave) {
-      try {
-        await this.onLeave(client, (code === Protocol.WS_CLOSE_CONSENTED));
+    if (success) {
+      if (this.onLeave) {
+        try {
+          await this.onLeave(client, (code === Protocol.WS_CLOSE_CONSENTED));
 
-      } catch (e) {
-        debugAndPrintError(`onLeave error: ${(e && e.message || e || 'promise rejected')}`);
+        } catch (e) {
+          debugAndPrintError(`onLeave error: ${(e && e.message || e || 'promise rejected')}`);
+        }
       }
-    }
 
-    this.emit('leave', client);
+      // update room listing cache
+      await this.listing.updateOne({
+        $inc: { clients: -1 },
+        $set: { locked: this._locked },
+      });
+
+      this.emit('leave', client);
+    }
 
     // dispose immediatelly if client reconnection isn't set up.
     const willDispose = this._disposeIfEmpty();
@@ -531,11 +541,6 @@ export abstract class Room<T= any> extends EventEmitter {
       this.unlock.call(this, true);
     }
 
-    // update room listing cache
-    await this.listing.updateOne({
-      $inc: { clients: -1 },
-      $set: { locked: this._locked },
-    });
   }
 
 }

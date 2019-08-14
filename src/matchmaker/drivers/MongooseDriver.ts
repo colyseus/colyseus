@@ -18,6 +18,12 @@ const RoomCacheSchema: Schema = new Schema<RoomCacheEntry>({
   versionKey: false,
 });
 
+// RoomCacheSchema.methods.toJSON = function() {
+//   var obj = this.toObject()
+//   delete obj.locked;
+//   return obj
+// }
+
 RoomCacheSchema.index({ name: 1, locked: -1 });
 RoomCacheSchema.index({ roomId: 1 });
 

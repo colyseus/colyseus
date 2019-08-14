@@ -325,7 +325,7 @@ describe('Room', function() {
 
   describe("#allowReconnection", () => {
     const matchMaker = new MatchMaker();
-    matchMaker.registerHandler('reconnect', DummyRoom);
+    matchMaker.defineRoomType('reconnect', DummyRoom);
 
     it("should fail waiting same sessionId for reconnection", function (done) {
       // do not use fake timers along with async/await internal functions

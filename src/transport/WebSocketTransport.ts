@@ -100,15 +100,15 @@ export class WebSocketTransport extends Transport {
 
     // set client options
     client.sessionId = sessionId;
-    client.options = room.getReservedSeatOptions(client.sessionId);
-    client.auth = await room.onAuth(upgradeReq, client.options);
 
+    // TODO: handle re-connection differently?
     try {
-      await room._onJoin(client, client.options, client.auth);
+      await room._onJoin(client, upgradeReq);
 
     } catch (e) {
       debugAndPrintError(e.stack || e);
       send[Protocol.JOIN_ERROR](client, (e && e.message) || '');
+      client.close(Protocol.WS_CLOSE_WITH_ERROR);
     }
   }
 

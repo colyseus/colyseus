@@ -13,9 +13,9 @@ describe('Server', () => {
   let clients: Client[];
 
   // register dummy room
-  server.register('room', DummyRoom);
-  server.register('invalid_room', DummyRoom);
-  server.register('room_async', RoomWithAsync);
+  server.define('room', DummyRoom);
+  server.define('invalid_room', DummyRoom);
+  server.define('room_async', RoomWithAsync);
 
   // connect 5 clients into server
   beforeEach(() => {

@@ -18,8 +18,8 @@ export class ChatRoom extends Room<State> {
   }
 
   async onAuth (req, options) {
-    console.log("headers:", req.headers);
-    console.log("remoteAddress:", req.connection.remoteAddress)
+    // console.log("headers:", req.headers);
+    // console.log("remoteAddress:", req.connection.remoteAddress)
 
     return { success: true };
   }
