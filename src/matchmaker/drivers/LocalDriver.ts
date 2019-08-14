@@ -1,10 +1,11 @@
 import { spliceOne } from "../../Utils";
-import { MatchMakerDriver, QueryHelpers, RoomCacheData } from "./Driver";
+import { MatchMakerDriver, QueryHelpers, RoomListingData } from "./Driver";
 
-class RoomCache implements RoomCacheData {
-  clients: number;
-  locked: boolean;
-  maxClients: number;
+class RoomCache implements RoomListingData {
+  clients: number = 0;
+  locked: boolean = false;
+  private: boolean = false;
+  maxClients: number = Infinity;
   metadata: any;
   name: string;
   processId: string;
@@ -29,6 +30,12 @@ class RoomCache implements RoomCacheData {
       },
       locked: {
         value: this.locked,
+        writable: true,
+        configurable: true,
+        enumerable: false
+      },
+      private: {
+        value: this.private,
         writable: true,
         configurable: true,
         enumerable: false
@@ -112,7 +119,7 @@ export class LocalDriver implements MatchMakerDriver {
   }
 
   findOne(conditions: any) {
-    return new Query<RoomCacheData>(this.rooms, conditions) as any as QueryHelpers<RoomCacheData>;;
+    return new Query<RoomListingData>(this.rooms, conditions) as any as QueryHelpers<RoomListingData>;;
   }
 
 }

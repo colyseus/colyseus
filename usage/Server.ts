@@ -23,7 +23,7 @@ const gameServer = new Server({
   // engine: WebSocket.Server,
   server: server,
   express: app,
-  // driver: new MongooseDriver(),
+  driver: new MongooseDriver(),
 });
 
 // Register ChatRoom as "chat"

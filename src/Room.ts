@@ -10,11 +10,11 @@ import { Presence } from './presence/Presence';
 import { SchemaSerializer } from './serializer/SchemaSerializer';
 import { Serializer } from './serializer/Serializer';
 
-import { decode, Protocol, send, WS_CLOSE_CONSENTED } from './Protocol';
+import { decode, Protocol, send } from './Protocol';
 import { Deferred, spliceOne } from './Utils';
 
 import { debugAndPrintError, debugPatch } from './Debug';
-import { RoomCacheData } from './matchmaker/drivers/Driver';
+import { RoomListingData } from './matchmaker/drivers/Driver';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
@@ -38,7 +38,7 @@ export abstract class Room<T= any> extends EventEmitter {
 
   // see @serialize decorator.
   public get serializer() { return this._serializer.id; }
-  public cache: RoomCacheData;
+  public listing: RoomListingData;
   public clock: Clock = new Clock();
 
   public roomId: string;
@@ -115,7 +115,11 @@ export abstract class Room<T= any> extends EventEmitter {
     return this;
   }
 
-  public getReservedSeatOptions(sessionId: string): boolean {
+  public hasReservedSeat(sessionId: string): boolean {
+    return this.reservedSeats[sessionId] !== undefined;
+  }
+
+  public getReservedSeatOptions(sessionId: string): any {
     return this.reservedSeats[sessionId];
   }
 
@@ -153,13 +157,13 @@ export abstract class Room<T= any> extends EventEmitter {
   }
 
   public async setMetadata(meta: any, persist: boolean = false) {
-    this.cache.metadata = meta;
+    this.listing.metadata = meta;
 
-    if (persist) { this.cache.save(); }
+    if (persist) { this.listing.save(); }
   }
 
   public get metadata() {
-    return this.cache.metadata;
+    return this.listing.metadata;
   }
 
   public lock(): void {
@@ -251,7 +255,7 @@ export abstract class Room<T= any> extends EventEmitter {
           reconnection.reject();
 
         } else {
-          client.close(WS_CLOSE_CONSENTED);
+          client.close(Protocol.WS_CLOSE_CONSENTED);
         }
       }
 
@@ -315,7 +319,7 @@ export abstract class Room<T= any> extends EventEmitter {
     }
 
     // update room listing cache
-    await this.cache.updateOne({
+    await this.listing.updateOne({
       $inc: { clients: 1 },
       $set: { locked: this._locked },
     });
@@ -492,7 +496,7 @@ export abstract class Room<T= any> extends EventEmitter {
       // client.removeAllListeners('close');
 
       // only effectively close connection when "onLeave" is fulfilled
-      this._onLeave(client, WS_CLOSE_CONSENTED).then(() => client.terminate());
+      this._onLeave(client, Protocol.WS_CLOSE_CONSENTED).then(() => client.terminate());
 
     } else {
       this.onMessage(client, message);
@@ -509,7 +513,7 @@ export abstract class Room<T= any> extends EventEmitter {
     // call abstract 'onLeave' method only if the client has been successfully accepted.
     if (this.onLeave) {
       try {
-        await this.onLeave(client, (code === WS_CLOSE_CONSENTED));
+        await this.onLeave(client, (code === Protocol.WS_CLOSE_CONSENTED));
 
       } catch (e) {
         debugAndPrintError(`onLeave error: ${(e && e.message || e || 'promise rejected')}`);
@@ -528,7 +532,7 @@ export abstract class Room<T= any> extends EventEmitter {
     }
 
     // update room listing cache
-    await this.cache.updateOne({
+    await this.listing.updateOne({
       $inc: { clients: -1 },
       $set: { locked: this._locked },
     });

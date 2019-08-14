@@ -11,7 +11,7 @@ import { Presence } from './presence/Presence';
 
 import { debugAndPrintError, debugMatchMaking } from './Debug';
 import { MatchMakeError } from './Errors';
-import { MatchMakerDriver, RoomCacheData } from './matchmaker/drivers/Driver';
+import { MatchMakerDriver, RoomListingData } from './matchmaker/drivers/Driver';
 import { LocalDriver } from './matchmaker/drivers/LocalDriver';
 
 export type ClientOptions = any;
@@ -46,7 +46,6 @@ export class MatchMaker {
 
   public async joinOrCreate(roomName: string, options: ClientOptions) {
     let room = await this.queryRoom(roomName, options);
-    console.log("room? =>", room);
 
     if (!room) {
       room = await this.createRoom(roomName, options);
@@ -81,15 +80,40 @@ export class MatchMaker {
     const isValidRoomId = isValidId(roomId);
     const room = isValidRoomId && await this.driver.findOne({ roomId });
 
-    if (!room) {
-      throw new MatchMakeError(`room ${roomId} not found`, Protocol.ERR_MATCHMAKE_INVALID_ROOM_ID);
+    if (room) {
+      const rejoinSessionId = options.sessionId;
+
+      if (rejoinSessionId) {
+        // handle re-connection!
+        const hasReservedSeat = await this.remoteRoomCall(room.roomId, 'hasReservedSeat', [rejoinSessionId]);
+
+        if (hasReservedSeat) {
+          return { room, sessionId: rejoinSessionId };
+
+        } else {
+          throw new MatchMakeError(`session expired`, Protocol.ERR_MATCHMAKE_EXPIRED);
+
+        }
+
+      } else if (!room.locked) {
+        return this.reserveSeatFor(room, options);
+
+      } else {
+        throw new MatchMakeError(`room "${roomId}" is locked`, Protocol.ERR_MATCHMAKE_INVALID_ROOM_ID);
+
+      }
+
+    } else {
+      throw new MatchMakeError(`room "${roomId}" not found`, Protocol.ERR_MATCHMAKE_INVALID_ROOM_ID);
     }
 
-    return this.reserveSeatFor(room, options);
   }
 
   public async query(roomName?: string, conditions: any = {}) {
     if (roomName) { conditions.name = roomName; }
+
+    // list only public rooms
+    conditions.private = false;
 
     return await this.driver.find(conditions);
   }
@@ -179,7 +203,7 @@ export class MatchMaker {
     return this.handlers[ name ] !== undefined;
   }
 
-  public async createRoom(roomName: string, clientOptions: ClientOptions): Promise<RoomCacheData> {
+  public async createRoom(roomName: string, clientOptions: ClientOptions): Promise<RoomListingData> {
     const registeredHandler = this.handlers[ roomName ];
     const room = new registeredHandler.klass();
 
@@ -189,8 +213,7 @@ export class MatchMaker {
     room.presence = this.presence;
 
     // create a RoomCache reference.
-    ;
-    room.cache = this.driver.createInstance({
+    room.listing = this.driver.createInstance({
       name: roomName,
       processId: this.processId,
       roomId: room.roomId,
@@ -206,7 +229,7 @@ export class MatchMaker {
       }
     }
 
-    room.cache.maxClients = room.maxClients;
+    room.listing.maxClients = room.maxClients;
 
     // imediatelly ask client to join the room
     debugMatchMaking('spawning \'%s\' (%s) on process %d', roomName, room.roomId, process.pid);
@@ -219,11 +242,11 @@ export class MatchMaker {
 
     // room always start unlocked
     await this.createRoomReferences(room, true);
-    await room.cache.save();
+    await room.listing.save();
 
     registeredHandler.emit('create', room);
 
-    return room.cache;
+    return room.listing;
   }
 
   // used only for testing purposes
@@ -252,7 +275,7 @@ export class MatchMaker {
     return Promise.all(promises);
   }
 
-  protected async reserveSeatFor(room: RoomCacheData, options) {
+  protected async reserveSeatFor(room: RoomListingData, options) {
     const sessionId: string = generateId();
 
     await this.remoteRoomCall(room.roomId, '_reserveSeat', [{ sessionId }, options]);
@@ -397,7 +420,7 @@ export class MatchMaker {
     debugMatchMaking('disposing \'%s\' (%s) on process %d', roomName, room.roomId, process.pid);
 
     // remove from room listing
-    room.cache.remove();
+    room.listing.remove();
 
     // remove all room listeners.
     room.removeAllListeners();

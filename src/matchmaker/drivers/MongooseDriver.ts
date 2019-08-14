@@ -1,11 +1,12 @@
 import mongoose, { Document, Schema } from 'mongoose';
-import { MatchMakerDriver, RoomCacheData, QueryHelpers } from './Driver';
+import { MatchMakerDriver, RoomListingData, QueryHelpers } from './Driver';
 
 export interface RoomCacheEntry extends Document { }
 
 const RoomCacheSchema: Schema = new Schema<RoomCacheEntry>({
   clients: { type: Number, default: 0 },
   locked: { type: Boolean, default: false },
+  private: { type: Boolean, default: false },
   maxClients: { type: Number, default: Infinity },
   metadata: Schema.Types.Mixed,
   name: String,
@@ -36,7 +37,7 @@ export class MongooseDriver implements MatchMakerDriver {
   }
 
   createInstance(initialValues: any = {}) {
-    return (new RoomCache(initialValues) as any) as RoomCacheData;
+    return (new RoomCache(initialValues) as any) as RoomListingData;
   }
 
   async find(conditions: any) {
@@ -47,11 +48,16 @@ export class MongooseDriver implements MatchMakerDriver {
       metadata: 1,
       name: 1,
       roomId: 1,
-    })) as any as RoomCacheData[];
+    })) as any as RoomListingData[];
   }
 
   findOne(conditions: any) {
-    return (RoomCache.findOne(conditions, { _id: 0, processId: 1, roomId: 1 })) as any as QueryHelpers<RoomCacheData>;
+    return (RoomCache.findOne(conditions, {
+      _id: 0,
+      processId: 1,
+      roomId: 1,
+      locked: 1
+    })) as any as QueryHelpers<RoomListingData>;
   }
 
 }

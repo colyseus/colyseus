@@ -1,6 +1,7 @@
-export interface RoomCacheData {
+export interface RoomListingData {
   clients: number;
   locked: boolean;
+  private: boolean;
   maxClients: number;
   metadata: any;
   name: string;
@@ -18,7 +19,7 @@ export interface QueryHelpers<T> {
 }
 
 export interface MatchMakerDriver {
-  createInstance(initialValues: any): RoomCacheData;
-  find(conditions: any): Promise<RoomCacheData[]> | RoomCacheData[];
-  findOne(conditions: any): QueryHelpers<RoomCacheData>;
+  createInstance(initialValues: any): RoomListingData;
+  find(conditions: any): Promise<RoomListingData[]> | RoomListingData[];
+  findOne(conditions: any): QueryHelpers<RoomListingData>;
 }

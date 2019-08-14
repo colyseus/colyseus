@@ -2,9 +2,6 @@ import msgpack from 'notepack.io';
 import WebSocket from 'ws';
 import { debugAndPrintError } from './Debug';
 import { Client } from './index';
-import { RoomAvailable } from './Room';
-
-export const WS_CLOSE_CONSENTED = 4000;
 
 // Colyseus protocol codes range between 0~100
 // (msgpack messages are identified on client-side as >100)
@@ -26,6 +23,7 @@ export enum Protocol {
   BAD_REQUEST = 50,
 
   // WebSocket error codes
+  WS_CLOSE_CONSENTED = 4000,
   WS_SERVER_DISCONNECT = 4201,
   WS_TOO_MANY_CLIENTS = 4202,
 
@@ -34,6 +32,7 @@ export enum Protocol {
   ERR_MATCHMAKE_INVALID_CRITERIA = 4211,
   ERR_MATCHMAKE_INVALID_ROOM_ID = 4212,
   ERR_MATCHMAKE_UNHANDLED = 4213, // generic exception during onCreate/onJoin
+  ERR_MATCHMAKE_EXPIRED = 4214, // generic exception during onCreate/onJoin
 }
 
 // Inter-process communication protocol
@@ -132,11 +131,6 @@ export const send = {
       client.send(Buffer.alloc(1, Protocol.ROOM_DATA), { binary: true });
       client.send(encode && msgpack.encode(data) || data, { binary: true });
     }
-  },
-
-  [Protocol.ROOM_LIST]: (client: Client, requestId: number, rooms: RoomAvailable[]) => {
-    client.send(Buffer.alloc(1, Protocol.ROOM_LIST), { binary: true });
-    client.send(msgpack.encode([requestId, rooms]), { binary: true });
   },
 
 };

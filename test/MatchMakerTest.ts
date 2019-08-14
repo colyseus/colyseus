@@ -9,7 +9,6 @@ import { Room } from "../src/Room";
 
 import { generateId, Protocol, isValidId } from "../src";
 import { createDummyClient, DummyRoom, RoomVerifyClient, Client, RoomVerifyClientWithLock, RoomWithAsync } from "./utils/mock";
-import { WS_CLOSE_CONSENTED } from '../src/Protocol';
 
 process.on('unhandledRejection', (reason, promise) => {
   console.log(reason, promise);
@@ -373,7 +372,7 @@ describe('MatchMaker', function() {
       await tick(room.seatReservationTime * 1000);
       assert(matchMaker.getRoomById(roomId) instanceof Room);
 
-      client.close(WS_CLOSE_CONSENTED);
+      client.close(Protocol.WS_CLOSE_CONSENTED);
       await tick(RoomWithAsync.ASYNC_TIMEOUT + 1);
       await tick(RoomWithAsync.ASYNC_TIMEOUT + 1);
 

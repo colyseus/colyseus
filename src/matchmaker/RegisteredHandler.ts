@@ -1,11 +1,12 @@
 import { EventEmitter } from 'events';
 
 import { RoomConstructor } from './../Room';
-import { RoomCacheData } from './drivers/Driver';
+import { RoomListingData } from './drivers/Driver';
 
-export const INVALID_OPTION_KEYS: Array<keyof RoomCacheData> = [
+export const INVALID_OPTION_KEYS: Array<keyof RoomListingData> = [
   'clients',
   'locked',
+  'private',
   // 'maxClients', - maxClients can be useful as filter options
   'metadata',
   'name',

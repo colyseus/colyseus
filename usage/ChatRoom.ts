@@ -13,7 +13,7 @@ export class ChatRoom extends Room<State> {
   maxClients = 4;
 
   onCreate (options) {
-
+    this.listing.private = true;
     this.setState(new State());
   }
 
