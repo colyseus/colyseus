@@ -87,15 +87,11 @@ export const send = {
   [Protocol.JOIN_ROOM]: (client: Client, sessionId: string, serializerId: string, handshake?: number[]) => {
     let offset = 0;
 
-    const sessionIdLength = utf8Length(sessionId);
     const serializerIdLength = utf8Length(serializerId);
     const handshakeLength = (handshake) ? handshake.length : 0;
 
-    const buff = Buffer.allocUnsafe(1 + sessionIdLength + serializerIdLength + handshakeLength);
+    const buff = Buffer.allocUnsafe(1 + serializerIdLength + handshakeLength);
     buff.writeUInt8(Protocol.JOIN_ROOM, offset++);
-
-    utf8Write(buff, offset, sessionId);
-    offset += sessionIdLength;
 
     utf8Write(buff, offset, serializerId);
     offset += serializerIdLength;
