@@ -23,6 +23,7 @@ export class WebSocketTransport extends Transport {
 
   constructor(matchMaker: MatchMaker, options: ServerOptions = {}, engine: any) {
     super(matchMaker);
+
     this.pingTimeout = (options.pingTimeout !== undefined)
       ? options.pingTimeout
       : 1500;
@@ -35,21 +36,6 @@ export class WebSocketTransport extends Transport {
     if (this.pingTimeout > 0) {
       this.autoTerminateUnresponsiveClients(this.pingTimeout);
     }
-
-    // interval to detect broken connections
-    this.pingInterval = setInterval(() => {
-      this.wss.clients.forEach((client: Client) => {
-        //
-        // if client hasn't responded after the interval, terminate its connection.
-        //
-        if (client.pingCount >= 2) {
-          return client.terminate();
-        }
-
-        client.pingCount++;
-        client.ping(noop);
-      });
-    }, this.pingTimeout);
   }
 
   public listen(port: number, hostname?: string, backlog?: number, listeningListener?: Function) {
