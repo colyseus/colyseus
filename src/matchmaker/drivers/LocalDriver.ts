@@ -27,7 +27,8 @@ class RoomCache implements RoomListingData {
       maxClients: this.maxClients,
       metadata: this.metadata,
       name: this.name,
-      roomId: this.roomId
+      processId: this.processId,
+      roomId: this.roomId,
     }
   }
 
