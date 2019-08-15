@@ -4,23 +4,14 @@ import { debugAndPrintError } from './Debug';
 import { Client } from './index';
 
 // Colyseus protocol codes range between 0~100
-// (msgpack messages are identified on client-side as >100)
 export enum Protocol {
-
-  // Room-related (9~19)
-  JOIN_REQUEST = 9,
+  // Room-related (10~19)
   JOIN_ROOM = 10,
   JOIN_ERROR = 11,
   LEAVE_ROOM = 12,
   ROOM_DATA = 13,
   ROOM_STATE = 14,
   ROOM_STATE_PATCH = 15,
-
-  // Match-making related (20~29)
-  ROOM_LIST = 20,
-
-  // Generic messages (50~60)
-  BAD_REQUEST = 50,
 
   // WebSocket error codes
   WS_CLOSE_CONSENTED = 4000,
@@ -60,27 +51,6 @@ export const send = {
     const buff = Buffer.allocUnsafe(1 + utf8Length(message));
     buff.writeUInt8(Protocol.JOIN_ERROR, 0);
     utf8Write(buff, 1, message);
-    client.send(buff, { binary: true });
-  },
-
-  [Protocol.JOIN_REQUEST]: (client: Client, requestId: number, roomId: string, processId: string) => {
-    let offset = 0;
-
-    /**
-     * TODO: reset `requestId` to `0` on client-side once it reaches `127`
-     */
-    const roomIdLength = utf8Length(roomId);
-    const processIdLength = utf8Length(processId);
-    const buff = Buffer.allocUnsafe(1 + 1 + roomIdLength + processIdLength);
-
-    buff.writeUInt8(Protocol.JOIN_REQUEST, offset++);
-    buff.writeUInt8(requestId, offset++);
-    utf8Write(buff, offset, roomId);
-    offset += roomIdLength;
-
-    utf8Write(buff, offset, processId);
-    offset += processIdLength;
-
     client.send(buff, { binary: true });
   },
 
