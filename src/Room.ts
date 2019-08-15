@@ -509,7 +509,7 @@ export abstract class Room<T= any> extends EventEmitter {
     }
 
     if (message[0] === Protocol.ROOM_DATA) {
-      this.onMessage(client, message[2]);
+      this.onMessage(client, message[1]);
 
     } else if (message[0] === Protocol.LEAVE_ROOM) {
       // stop interpreting messages from this client

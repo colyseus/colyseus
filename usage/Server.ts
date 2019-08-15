@@ -22,17 +22,20 @@ const gameServer = new Server({
   // engine: WebSocket.Server,
   server: server,
   express: app,
-  driver: new MongooseDriver(),
+  // driver: new MongooseDriver(),
 });
 
 
-// Register ChatRoom as "chat"
-gameServer.define("chat", ChatRoom).filterBy(['password']).
+// Define ChatRoom as "chat"
+gameServer.define("chat", ChatRoom)
+  // Matchmaking filters
+  // .filterBy(['progress'])
+
   // demonstrating public events.
-  on("create", (room) => console.log("room created!", room.roomId)).
-  on("join", (room, client) => console.log("client", client.sessionId, "joined", room.roomId)).
-  on("leave", (room, client) => console.log("client", client.sessionId, "left", room.roomId)).
-  on("dispose", (room) => console.log("room disposed!", room.roomId));
+  .on("create", (room) => console.log("room created!", room.roomId))
+  .on("join", (room, client) => console.log("client", client.sessionId, "joined", room.roomId))
+  .on("leave", (room, client) => console.log("client", client.sessionId, "left", room.roomId))
+  .on("dispose", (room) => console.log("room disposed!", room.roomId));
 
 app.use(express.static(__dirname));
 
