@@ -20,6 +20,6 @@ export interface QueryHelpers<T> {
 
 export interface MatchMakerDriver {
   createInstance(initialValues: any): RoomListingData;
-  find(conditions: any): Promise<RoomListingData[]> | RoomListingData[];
+  find(conditions: any, additionalProjectionFields?: any): Promise<RoomListingData[]> | RoomListingData[];
   findOne(conditions: any): QueryHelpers<RoomListingData>;
 }

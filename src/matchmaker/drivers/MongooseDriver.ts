@@ -46,7 +46,7 @@ export class MongooseDriver implements MatchMakerDriver {
     return (new RoomCache(initialValues) as any) as RoomListingData;
   }
 
-  async find(conditions: any) {
+  async find(conditions: any, additionalProjectionFields = {}) {
     return (await RoomCache.find(conditions, {
       _id: 0,
       clients: 1,
@@ -54,6 +54,7 @@ export class MongooseDriver implements MatchMakerDriver {
       metadata: 1,
       name: 1,
       roomId: 1,
+      ...additionalProjectionFields
     })) as any as RoomListingData[];
   }
 

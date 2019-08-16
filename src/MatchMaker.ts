@@ -22,7 +22,7 @@ export interface RoomWithScore {
 }
 
 // remote room call timeouts
-export const REMOTE_ROOM_SHORT_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_SHORT_TIMEOUT || 3000);
+export const REMOTE_ROOM_SHORT_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_SHORT_TIMEOUT || 2000);
 
 type RemoteRoomResponse<T= any> = [string?, T?];
 
@@ -291,7 +291,7 @@ export class MatchMaker {
     // clean-up possibly stale room ids
     // (ungraceful shutdowns using Redis can result on stale room ids still on memory.)
     //
-    const cachedRooms = await this.driver.find({ name: roomName });
+    const cachedRooms = await this.driver.find({ name: roomName }, { _id: 1 });
 
     // remove connecting counts
     await this.presence.del(this.getHandlerConcurrencyKey(roomName));
