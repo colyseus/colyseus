@@ -415,14 +415,8 @@ export abstract class Room<T= any> extends EventEmitter {
     }
 
     this.reservedSeats[sessionId] = joinOptions;
-    // await this.presence.setex(`${this.roomId}:${client.id}`, client.sessionId, seconds);
 
-    if (allowReconnection) {
-      // store reference of the roomId this client is allowed to reconnect to.
-      await this.presence.setex(sessionId, this.roomId, seconds);
-
-    } else {
-
+    if (!allowReconnection) {
       // lock automatically when maxClients is reached
       if (!this._locked && this.hasReachedMaxClients()) {
         this._maxClientsReached = true;
