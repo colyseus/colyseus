@@ -19,18 +19,6 @@
       ]
     },
     {
-      "login": "AnubisCode",
-      "name": "AnubisCode",
-      "avatar_url": "https://avatars2.githubusercontent.com/u/20824844?v=4",
-      "profile": "https://github.com/AnubisCode",
-      "contributions": [
-        "bug",
-        "code",
-        "financial",
-        "ideas"
-      ]
-    },
-    {
       "login": "seiyria",
       "name": "Kyle J. Kemp",
       "avatar_url": "https://avatars0.githubusercontent.com/u/763609?v=4",
@@ -44,15 +32,99 @@
       ]
     },
     {
-      "login": "darkyen",
-      "name": "Abhishek Hingnikar",
-      "avatar_url": "https://avatars1.githubusercontent.com/u/1041315?v=4",
-      "profile": "https://github.com/darkyen",
+      "login": "Wenish",
+      "name": "Jonas Voland",
+      "avatar_url": "https://avatars0.githubusercontent.com/u/18367963?v=4",
+      "profile": "http://wenish.github.io/portfolio/",
       "contributions": [
         "question",
         "bug",
-        "ideas",
-        "review"
+        "code",
+        "financial",
+        "ideas"
+      ]
+    },
+    {
+      "login": "doorbash",
+      "name": "Milad Doorbash",
+      "avatar_url": "https://avatars2.githubusercontent.com/u/5982526?v=4",
+      "profile": "https://github.com/doorbash",
+      "contributions": [
+        "bug",
+        "code"
+      ]
+    },
+    {
+      "login": "oyed",
+      "name": "Tom",
+      "avatar_url": "https://avatars0.githubusercontent.com/u/853683?v=4",
+      "profile": "https://oyed.io",
+      "contributions": [
+        "question",
+        "bug",
+        "financial",
+        "ideas"
+      ]
+    },
+    {
+      "login": "mobyjames",
+      "name": "James Jacoby",
+      "avatar_url": "https://avatars0.githubusercontent.com/u/1327007?v=4",
+      "profile": "https://github.com/mobyjames/",
+      "contributions": [
+        "example",
+        "financial",
+        "content"
+      ]
+    },
+    {
+      "login": "AnubisCode",
+      "name": "Nikita Borisov",
+      "avatar_url": "https://avatars2.githubusercontent.com/u/20824844?v=4",
+      "profile": "https://github.com/AnubisCode",
+      "contributions": [
+        "bug",
+        "code",
+        "financial",
+        "ideas"
+      ]
+    },
+    {
+      "login": "filharvey",
+      "name": "Phil Harvey",
+      "avatar_url": "https://avatars2.githubusercontent.com/u/232101?v=4",
+      "profile": "https://acemobe.com/",
+      "contributions": [
+        "financial",
+        "doc"
+      ]
+    },
+    {
+      "login": "brian-hay",
+      "name": "Brian Hay",
+      "avatar_url": "https://avatars2.githubusercontent.com/u/1428000?v=4",
+      "profile": "https://github.com/brian-hay",
+      "contributions": [
+        "financial"
+      ]
+    },
+    {
+      "login": "enriqueto",
+      "name": "Enriqueto",
+      "avatar_url": "https://avatars2.githubusercontent.com/u/5557196?v=4",
+      "profile": "https://github.com/enriqueto",
+      "contributions": [
+        "financial"
+      ]
+    },
+    {
+      "login": "digimbyte",
+      "name": "digimbyte",
+      "avatar_url": "https://avatars2.githubusercontent.com/u/6645396?v=4",
+      "profile": "https://github.com/digimbyte",
+      "contributions": [
+        "financial",
+        "doc"
       ]
     },
     {
@@ -66,18 +138,6 @@
       ]
     },
     {
-      "login": "oyed",
-      "name": "OYED",
-      "avatar_url": "https://avatars0.githubusercontent.com/u/853683?v=4",
-      "profile": "https://oyed.io",
-      "contributions": [
-        "question",
-        "bug",
-        "financial",
-        "ideas"
-      ]
-    },
-    {
       "login": "derwish-pro",
       "name": "Derwish",
       "avatar_url": "https://avatars0.githubusercontent.com/u/13785893?v=4",
@@ -85,25 +145,6 @@
       "contributions": [
         "bug",
         "tool"
-      ]
-    },
-    {
-      "login": "havingfunq",
-      "name": "VF",
-      "avatar_url": "https://avatars2.githubusercontent.com/u/2755221?v=4",
-      "profile": "https://github.com/havingfunq",
-      "contributions": [
-        "bug",
-        "ideas"
-      ]
-    },
-    {
-      "login": "Wenish",
-      "name": "Wenish",
-      "avatar_url": "https://avatars0.githubusercontent.com/u/18367963?v=4",
-      "profile": "http://wenish.github.io/portfolio/",
-      "contributions": [
-        "bug"
       ]
     }
   ],
