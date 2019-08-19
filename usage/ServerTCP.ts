@@ -1,3 +1,7 @@
+/**
+ * WARNING: TCP IMPLEMENTATION IS NOT WORKING YET
+ * CONTRIBUTIONS ARE WELCOME
+ */
 import * as net from "net";
 
 import { Server } from "../src/Server";
@@ -12,7 +16,7 @@ const engine = net.Server;
 const gameServer = new Server({ engine });
 
 // Register ChatRoom as "chat"
-gameServer.register("chat", ChatRoom);
+gameServer.define("chat", ChatRoom);
 
 process.on('unhandledRejection', r => console.log(r));
 gameServer.listen(port);

@@ -235,7 +235,7 @@ export class MatchMaker {
     room.listing.maxClients = room.maxClients;
 
     // imediatelly ask client to join the room
-    debugMatchMaking('spawning \'%s\' (%s) on process %d', roomName, room.roomId, process.pid);
+    debugMatchMaking('spawning \'%s\', roomId: %s, processId: %s', roomName, room.roomId, this.processId);
 
     room.on('lock', this.lockRoom.bind(this, roomName, room));
     room.on('unlock', this.unlockRoom.bind(this, roomName, room));
@@ -281,6 +281,8 @@ export class MatchMaker {
   protected async reserveSeatFor(room: RoomListingData, options) {
     const sessionId: string = generateId();
 
+    debugMatchMaking('reserving seat. sessionId: \'%s\', roomId: \'%s\', processId: \'%s\'', sessionId, room.roomId, this.processId);
+
     await this.remoteRoomCall(room.roomId, '_reserveSeat', [sessionId, options]);
 
     return { room, sessionId };
@@ -302,7 +304,7 @@ export class MatchMaker {
         await this.remoteRoomCall(room.roomId, 'roomId');
 
       } catch (e) {
-        debugMatchMaking(`cleaning up stale room '${roomName}' (${room.roomId})`);
+        debugMatchMaking(`cleaning up stale room '${roomName}', roomId: ${room.roomId}`);
         room.remove();
 
         this.clearRoomReferences({ roomId: room.roomId, roomName } as Room);
@@ -420,7 +422,7 @@ export class MatchMaker {
   }
 
   private disposeRoom(roomName: string, room: Room): void {
-    debugMatchMaking('disposing \'%s\' (%s) on process %d', roomName, room.roomId, process.pid);
+    debugMatchMaking('disposing \'%s\' (%s) on processId \'%s\'', roomName, room.roomId, this.processId);
 
     // remove from room listing
     room.listing.remove();

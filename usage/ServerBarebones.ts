@@ -1,29 +1,14 @@
-import http from "http";
-import cors from "cors";
-import express from "express";
-
-import { Server, RedisPresence } from "../src";
+/**
+ * Barebones server without express.
+ */
+import { Server } from "../src";
 import { ChatRoom } from "./ChatRoom";
-
-import { MongooseDriver } from "../src/matchmaker/drivers/MongooseDriver";
 
 const port = Number(process.env.PORT || 2567);
 const endpoint = "localhost";
 
-const app = express();
-
-app.use(cors());
-app.use(express.json());
-
 // Create HTTP & WebSocket servers
-const server = http.createServer(app);
-const gameServer = new Server({
-  // engine: WebSocket.Server,
-  server: server,
-  express: app,
-  // driver: new MongooseDriver(),
-});
-
+const gameServer = new Server();
 
 // Define ChatRoom as "chat"
 gameServer.define("chat", ChatRoom)
@@ -35,8 +20,6 @@ gameServer.define("chat", ChatRoom)
   .on("join", (room, client) => console.log("client", client.sessionId, "joined", room.roomId))
   .on("leave", (room, client) => console.log("client", client.sessionId, "left", room.roomId))
   .on("dispose", (room) => console.log("room disposed!", room.roomId));
-
-app.use(express.static(__dirname));
 
 gameServer.onShutdown(() => {
   console.log("CUSTOM SHUTDOWN ROUTINE: STARTED");

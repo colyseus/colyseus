@@ -3,6 +3,7 @@ import { Serializer } from './Serializer';
 
 import { Definition, Reflection, Schema } from '@colyseus/schema';
 import { Protocol, send } from '../Protocol';
+import { debugPatch } from '../Debug';
 
 export class SchemaSerializer<T> implements Serializer<T> {
   public id = 'schema';
@@ -36,6 +37,10 @@ export class SchemaSerializer<T> implements Serializer<T> {
         while (numClients--) {
           const client = clients[numClients];
           send[Protocol.ROOM_STATE_PATCH](client, patches);
+        }
+
+        if (debugPatch.enabled) {
+          debugPatch('%d bytes sent to %d clients', patches.length, clients.length);
         }
 
       } else {
