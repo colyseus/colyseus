@@ -31,9 +31,9 @@ const RoomCache = mongoose.model<RoomCacheEntry>('RoomCache', RoomCacheSchema);
 
 export class MongooseDriver implements MatchMakerDriver {
 
-  constructor (connectionURI = 'mongodb://127.0.0.1:27017/colyseus') {
+  constructor (connectionURI?: string) {
     if (mongoose.connection.readyState === mongoose.connection.states['disconnected']) {
-      mongoose.connect(connectionURI, {
+      mongoose.connect(connectionURI || process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/colyseus', {
         autoIndex: true,
         useCreateIndex: true,
         useFindAndModify: true,
