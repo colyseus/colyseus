@@ -166,7 +166,7 @@ export class Server {
           res.end();
 
         } else if (req.method === "POST") {
-          const matchedParams = req.url.match(/([a-zA-Z]+)/gi);
+          const matchedParams = req.url.match(/([a-zA-Z_]+)/gi);
           const method = matchedParams[matchedParams.length-2];
           const name = matchedParams[matchedParams.length-1];
 
@@ -192,7 +192,7 @@ export class Server {
           });
 
         } else if (req.method === "GET") {
-          const matchedParams = req.url.match(/([a-zA-Z]+)/gi);
+          const matchedParams = req.url.match(/([a-zA-Z_]+)/gi);
           let roomName = matchedParams[matchedParams.length-1];
 
           // TODO: improve me, "matchmake" room names aren't allowed this way.
