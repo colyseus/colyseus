@@ -182,10 +182,10 @@ export class Server {
               res.write(JSON.stringify(response));
 
             } catch (e) {
-              res.write({
+              res.write(JSON.stringify({
                 code: e.code || Protocol.ERR_MATCHMAKE_UNHANDLED,
                 error: e.message,
-              });
+              }));
             }
 
             res.end();
