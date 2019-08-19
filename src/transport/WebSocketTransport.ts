@@ -24,6 +24,9 @@ export class WebSocketTransport extends Transport {
   constructor(matchMaker: MatchMaker, options: ServerOptions = {}, engine: any) {
     super(matchMaker);
 
+    // disable per-message deflate
+    options.perMessageDeflate = false;
+
     this.pingTimeout = (options.pingTimeout !== undefined)
       ? options.pingTimeout
       : 1500;
