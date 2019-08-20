@@ -85,7 +85,7 @@ export class MatchMaker {
 
       if (rejoinSessionId) {
         // handle re-connection!
-        const hasReservedSeat = await this.remoteRoomCall(room.roomId, 'hasReservedSeat', [rejoinSessionId]);
+        const [_, hasReservedSeat] = await this.remoteRoomCall(room.roomId, 'hasReservedSeat', [rejoinSessionId]);
 
         if (hasReservedSeat) {
           return { room, sessionId: rejoinSessionId };
@@ -308,7 +308,6 @@ export class MatchMaker {
         room.remove();
 
         this.clearRoomReferences({ roomId: room.roomId, roomName } as Room);
-        this.presence.srem(`a_${roomName}`, room.roomId);
       }
     }));
   }
@@ -320,9 +319,6 @@ export class MatchMaker {
     await this.presence.sadd(room.roomName, room.roomId);
 
     if (init) {
-      // add alive room reference (a=all)
-      await this.presence.sadd(`a_${room.roomName}`, room.roomId);
-
       await this.presence.subscribe(this.getRoomChannel(room.roomId), (message) => {
         const [method, requestId, args] = message;
 
@@ -432,9 +428,6 @@ export class MatchMaker {
 
     // emit disposal on registered session handler
     this.handlers[roomName].emit('dispose', room);
-
-    // remove from alive rooms
-    this.presence.srem(`a_${roomName}`, room.roomId);
 
     // remove concurrency key
     this.presence.del(this.getHandlerConcurrencyKey(roomName));

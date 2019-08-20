@@ -15,7 +15,6 @@ import { Deferred, spliceOne } from './Utils';
 
 import { debugAndPrintError, debugPatch } from './Debug';
 import { RoomListingData } from './matchmaker/drivers/Driver';
-import { MatchMakeError } from './Errors';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
@@ -236,15 +235,6 @@ export abstract class Room<T= any> extends EventEmitter {
     }
 
     return true;
-  }
-
-  public getAvailableData() {
-    return {
-      clients: this.clients.length,
-      maxClients: this.maxClients,
-      metadata: this.metadata,
-      roomId: this.roomId,
-    };
   }
 
   public disconnect(): Promise<any> {
