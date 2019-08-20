@@ -108,13 +108,10 @@ export abstract class Room<T= any> extends EventEmitter {
 
   // Optional abstract methods
   public onCreate?(options: any): void;
+  public onAuth?(client: Client, options: any, request?: http.IncomingMessage): boolean | Promise<any>;
   public onJoin?(client: Client, options?: any, auth?: any): void | Promise<any>;
   public onLeave?(client: Client, consented?: boolean): void | Promise<any>;
   public onDispose?(): void | Promise<any>;
-
-  public onAuth(client: Client, options: any, request: http.IncomingMessage): boolean | Promise<any> {
-    return true;
-  }
 
   public hasReachedMaxClients(): boolean {
     return (this.clients.length + Object.keys(this.reservedSeats).length) >= this.maxClients;
@@ -302,14 +299,14 @@ export abstract class Room<T= any> extends EventEmitter {
     const options = this.reservedSeats[client.sessionId];
     delete this.reservedSeats[client.sessionId];
 
-    const auth = await this.onAuth(client, options, req);
-
     const reconnection = this.reconnections[client.sessionId];
     if (reconnection) {
       reconnection.resolve(client);
 
-    } else if (this.onJoin) {
-      await this.onJoin(client, options, auth);
+    } else {
+      let auth: any;
+      if (this.onAuth) { auth = await this.onAuth(client, options, req); }
+      if (this.onJoin) { await this.onJoin(client, options, auth); }
     }
 
     // emit 'join' to room handler
@@ -321,7 +318,6 @@ export abstract class Room<T= any> extends EventEmitter {
     // confirm room id that matches the room name requested to join
     send[Protocol.JOIN_ROOM](
       client,
-      client.sessionId,
       this._serializer.id,
       this._serializer.handshake && this._serializer.handshake(),
     );
@@ -334,6 +330,7 @@ export abstract class Room<T= any> extends EventEmitter {
     // joined successfully, add to local client list
     this.clients.push(client);
   }
+
   protected _getSerializer?(): Serializer<T> {
     return new SchemaSerializer<T>();
   }
