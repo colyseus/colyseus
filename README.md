@@ -86,7 +86,7 @@ usage reference with the latest version of Colyseus.
 
 - [Colyseus + PixiJS Boilerplate](https://colyseus-pixijs-boilerplate.herokuapp.com/) ([source-code](https://github.com/endel/colyseus-pixijs-boilerplate)) - Simplistic agar.io implementation using [PixiJS](https://github.com/pixijs/pixi.js)
 - [Colyseus + BabylonJS Boilerplate](https://babylonjs-multiplayer.herokuapp.com/) ([source-code](https://github.com/endel/babylonjs-multiplayer-boilerplate)) - Bare-bones [BabylonJS](https://github.com/BabylonJS/Babylon.js) example
-- (outdated: v0.9.x) [Tic Tac Toe](https://tictactoe-colyseus.herokuapp.com) ([source-code](https://github.com/endel/tic-tac-toe)) - Simple Tic Tac Toe using [PixiJS](https://github.com/pixijs/pixi.js)
+- [Tic Tac Toe](https://tictactoe-colyseus.herokuapp.com) ([source-code](https://github.com/endel/tic-tac-toe)) - Simple Tic Tac Toe using [PixiJS](https://github.com/pixijs/pixi.js)
 - (outdated: v0.8.x) [tanx](https://playcanvas.com/project/367035/overview/tanxcolyseus) ([source-code](https://github.com/endel/tanx)) - Multiplayer tanks game, originally from [PlayCanvas](https://tanx.io/)
 - (outdated: v0.4.x) [React Example](https://colyseus-react-example.herokuapp.com) ([source-code](https://github.com/endel/colyseus-react-example)) - Example integrating with [ReactJS](https://github.com/facebook/react)
 - (outdated: v0.3.x) [LD35 entry: dotower](http://ludumdare.com/compo/ludum-dare-35/?action=preview&uid=50958) ([source-code](https://github.com/endel/LD35)) - Simple experimental MOBA using [PixiJS](https://github.com/pixijs/pixi.js)
