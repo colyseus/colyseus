@@ -10,10 +10,13 @@ class RoomCache implements RoomListingData {
   name: string;
   processId: string;
   roomId: string;
+  createdAt: Date;
 
   private $rooms: RoomCache[];
 
   constructor (initialValues: any, rooms: RoomCache[]) {
+    this.createdAt = new Date();
+
     for (let field in initialValues) {
       this[field] = initialValues[field];
     }
@@ -29,6 +32,7 @@ class RoomCache implements RoomListingData {
       name: this.name,
       processId: this.processId,
       roomId: this.roomId,
+      createdAt: this.createdAt,
     }
   }
 
