@@ -1,5 +1,6 @@
 import { spliceOne } from "../../Utils";
 import { MatchMakerDriver, QueryHelpers, RoomListingData } from "./Driver";
+import { SortOptions } from "../RegisteredHandler";
 
 class RoomCache implements RoomListingData {
   clients: number = 0;
@@ -71,7 +72,22 @@ class Query<T> implements QueryHelpers<T> {
     this.conditions = conditions;
   }
 
-  sort(options: any) {
+  sort(options: SortOptions) {
+    this.$rooms = this.$rooms.sort((room1, room2) => {
+      for (let field in options) {
+        const direction = options[field];
+        const isAscending = (direction === 1 || direction === 'asc' || direction === "ascending");
+
+        if (isAscending) {
+          if (room1[field] > room2[field]) return 1;
+          if (room1[field] < room2[field]) return -1;
+
+        } else {
+          if (room1[field] > room2[field]) return -1;
+          if (room1[field] < room2[field]) return 1;
+        }
+      }
+    });
   }
 
   then(resolve, reject) {

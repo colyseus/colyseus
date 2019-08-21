@@ -1,3 +1,5 @@
+import { SortOptions } from "../RegisteredHandler";
+
 export interface RoomListingData {
   clients: number;
   locked: boolean;
@@ -14,7 +16,7 @@ export interface RoomListingData {
 }
 
 export interface QueryHelpers<T> {
-  sort(options: any);
+  sort(options: SortOptions);
   then: Promise<T>["then"];
 }
 
