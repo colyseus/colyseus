@@ -294,9 +294,8 @@ export abstract class Room<T= any> extends EventEmitter {
       reconnection.resolve(client);
 
     } else {
-      let auth: any;
-      if (this.onAuth) { auth = await this.onAuth(client, options, req); }
-      if (this.onJoin) { await this.onJoin(client, options, auth); }
+      if (this.onAuth) { client.auth = await this.onAuth(client, options, req); }
+      if (this.onJoin) { await this.onJoin(client, options, client.auth); }
     }
 
     // emit 'join' to room handler
