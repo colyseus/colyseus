@@ -107,7 +107,7 @@ export abstract class Room<T= any> extends EventEmitter {
 
   // Optional abstract methods
   public onCreate?(options: any): void;
-  public onAuth?(client: Client, options: any, request?: http.IncomingMessage): boolean | Promise<any>;
+  public onAuth?(client: Client, options: any, request?: http.IncomingMessage): any | Promise<any>;
   public onJoin?(client: Client, options?: any, auth?: any): void | Promise<any>;
   public onLeave?(client: Client, consented?: boolean): void | Promise<any>;
   public onDispose?(): void | Promise<any>;
