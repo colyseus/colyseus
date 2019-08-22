@@ -4,7 +4,7 @@ import msgpack from 'notepack.io';
 import Clock from '@gamestdio/timer';
 import { EventEmitter } from 'events';
 
-import { Client } from '.';
+import { Client, ClientState } from '.';
 import { Presence } from './presence/Presence';
 
 import { SchemaSerializer } from './serializer/SchemaSerializer';
@@ -205,7 +205,16 @@ export abstract class Room<T= any> extends EventEmitter {
   }
 
   public send(client: Client, data: any): void {
-    send[Protocol.ROOM_DATA](client, data);
+    if (client.state === ClientState.JOINING) {
+      // sending messages during `onJoin`.
+      // - the client-side cannot register "onMessage" callbacks at this point.
+      // - enqueue the messages to be send after JOIN_ROOM message has been sent
+      if (!client._enqueuedMessages) { client._enqueuedMessages = []; }
+      client._enqueuedMessages.push(data);
+
+    } else {
+      send[Protocol.ROOM_DATA](client, data);
+    }
   }
 
   public broadcast(data: any, options: BroadcastOptions = {}): boolean {
@@ -271,6 +280,8 @@ export abstract class Room<T= any> extends EventEmitter {
   }
 
   public async ['_onJoin'](client: Client, req?: http.IncomingMessage) {
+    client.state = ClientState.JOINING;
+
     if (this.reservedSeatTimeouts[client.sessionId]) {
       clearTimeout(this.reservedSeatTimeouts[client.sessionId]);
       delete this.reservedSeatTimeouts[client.sessionId];
@@ -310,6 +321,14 @@ export abstract class Room<T= any> extends EventEmitter {
       this._serializer.id,
       this._serializer.handshake && this._serializer.handshake(),
     );
+
+    client.state = ClientState.JOINED;
+
+    // dequeue messages (on user-defined `onJoin`)
+    if (client._enqueuedMessages) {
+      client._enqueuedMessages.forEach((data) => this.send(client, data));
+      delete client._enqueuedMessages;
+    }
 
     // send current state when new client joins the room
     if (this.state) {
@@ -378,7 +397,7 @@ export abstract class Room<T= any> extends EventEmitter {
 
     reconnection.
       then(() => {
-        client.reconnectSuccess = true;
+        client.state = ClientState.RECONNECTED;
         clearTimeout(this.reservedSeatTimeouts[client.sessionId]);
         cleanup();
       }).
@@ -414,8 +433,18 @@ export abstract class Room<T= any> extends EventEmitter {
         $set: { locked: this._locked },
       });
 
-      this.reservedSeatTimeouts[sessionId] = setTimeout(() =>
-        delete this.reservedSeats[sessionId], seconds * 1000);
+      this.reservedSeatTimeouts[sessionId] = setTimeout(() => {
+        delete this.reservedSeats[sessionId];
+
+        //
+        // TODO: clear seat reservation!
+        //
+        // this.listing.updateOne({
+        //   $inc: { clients: -1 },
+        //   $set: { locked: this._locked },
+        // });
+
+      }, seconds * 1000);
 
       this.resetAutoDisposeTimeout(seconds);
     }
@@ -492,11 +521,12 @@ export abstract class Room<T= any> extends EventEmitter {
       this.onMessage(client, message[1]);
 
     } else if (message[0] === Protocol.LEAVE_ROOM) {
-      // stop interpreting messages from this client
+      // stop receiving messages from this client
       client.removeAllListeners('message');
 
-      // // prevent "onLeave" from being called twice in case the connection is forcibly closed
-      // client.removeAllListeners('close');
+      // prevent "onLeave" from being called twice if player asks to leave
+      const closeListeners: any[] = client.listeners('close');
+      client.removeListener('close', closeListeners[1]);
 
       // only effectively close connection when "onLeave" is fulfilled
       this._onLeave(client, Protocol.WS_CLOSE_CONSENTED).then(() => client.terminate());
@@ -521,13 +551,13 @@ export abstract class Room<T= any> extends EventEmitter {
         }
       }
 
-      if (!client.reconnectSuccess) {
+      if (client.state !== ClientState.RECONNECTED) {
         this.emit('leave', client);
       }
     }
 
     // skip next checks if client has reconnected successfully (through `allowReconnection()`)
-    if (client.reconnectSuccess) { return; }
+    if (client.state === ClientState.RECONNECTED) { return; }
 
     // update room listing cache
     await this.listing.updateOne({

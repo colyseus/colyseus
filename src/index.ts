@@ -25,6 +25,8 @@ export { nonenumerable as nosync } from 'nonenumerable';
 export function generateId() { return nanoid(9); }
 export function isValidId(id: string) { return id && /^[a-zA-Z0-9_\-]{9}$/.test(id); }
 
+export enum ClientState { JOINING, JOINED, RECONNECTED }
+
 // Export 'WebSocket' as 'Client' with 'id' property.
 export type Client = WebSocket & {
   upgradeReq?: http.IncomingMessage; // cross-compatibility for ws (v3.x+) and uws
@@ -35,5 +37,7 @@ export type Client = WebSocket & {
   auth?: any;
 
   pingCount: number; // ping / pong
-  reconnectSuccess?: boolean;
+
+  state: ClientState;
+  _enqueuedMessages: any;
 };
