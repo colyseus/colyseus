@@ -1,5 +1,5 @@
-import net from 'net';
 import http from 'http';
+import net from 'net';
 import WebSocket from 'ws';
 import { ServerOptions as IServerOptions } from 'ws';
 
@@ -141,7 +141,7 @@ export class Server {
   }
 
   protected async processMatchmakeRequest(method: string, name: string, data: any) {
-    console.log("processMatchmakeRequest, JSON BODY =>", data);
+    console.log('processMatchmakeRequest, JSON BODY =>', data);
 
     if (this.matchMaker.exposedMethods.indexOf(method) === -1) {
       throw new MatchMakeError(`invalid method "${method}"`, Protocol.ERR_MATCHMAKE_UNHANDLED);
@@ -152,25 +152,25 @@ export class Server {
 
   protected createHttpServer() {
     return http.createServer(async (req, res) => {
-      if (req.url.indexOf("/matchmake") !== -1) {
+      if (req.url.indexOf('/matchmake') !== -1) {
         const headers = {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'OPTIONS, POST, GET',
           'Access-Control-Allow-Headers': 'Origin, X-Requested-With, Content-Type, Accept',
+          'Access-Control-Allow-Methods': 'OPTIONS, POST, GET',
+          'Access-Control-Allow-Origin': '*',
           'Access-Control-Max-Age': 2592000,
           // ...
         };
 
-        if (req.method === "OPTIONS") {
+        if (req.method === 'OPTIONS') {
           res.writeHead(204, headers);
           res.end();
 
-        } else if (req.method === "POST") {
+        } else if (req.method === 'POST') {
           const matchedParams = req.url.match(/([a-zA-Z_]+)/gi);
-          const method = matchedParams[matchedParams.length-2];
-          const name = matchedParams[matchedParams.length-1];
+          const method = matchedParams[matchedParams.length - 2];
+          const name = matchedParams[matchedParams.length - 1];
 
-          let data = [];
+          const data = [];
           req.on('data', (chunk) => data.push(chunk));
           req.on('end', async () => {
             headers['Content-Type'] = 'application/json';
@@ -191,17 +191,17 @@ export class Server {
             res.end();
           });
 
-        } else if (req.method === "GET") {
+        } else if (req.method === 'GET') {
           const matchedParams = req.url.match(/([a-zA-Z_]+)/gi);
-          let roomName = matchedParams[matchedParams.length-1];
+          let roomName = matchedParams[matchedParams.length - 1];
 
           // TODO: improve me, "matchmake" room names aren't allowed this way.
-          if (roomName === "matchmake") { roomName = ""; }
+          if (roomName === 'matchmake') { roomName = ''; }
 
           headers['Content-Type'] = 'application/json';
           res.writeHead(200, headers);
           res.write(JSON.stringify(
-            await this.matchMaker.query(roomName, { locked: false })
+            await this.matchMaker.query(roomName, { locked: false }),
           ));
           res.end();
         }

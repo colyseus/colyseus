@@ -1,4 +1,4 @@
-import { SortOptions } from "../RegisteredHandler";
+import { SortOptions } from '../RegisteredHandler';
 
 export interface RoomListingData {
   clients: number;
@@ -16,8 +16,8 @@ export interface RoomListingData {
 }
 
 export interface QueryHelpers<T> {
+  then: Promise<T>['then'];
   sort(options: SortOptions);
-  then: Promise<T>["then"];
 }
 
 export interface MatchMakerDriver {

@@ -66,7 +66,7 @@ export class TCPTransport extends Transport {
 
       const room = this.matchMaker.getRoomById(roomId);
       try {
-        await room['_onJoin'](client);
+        await room._onJoin(client);
 
       } catch (e) {
         debugAndPrintError(e.stack || e);

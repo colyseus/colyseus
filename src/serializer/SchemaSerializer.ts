@@ -2,8 +2,8 @@ import { Client } from '..';
 import { Serializer } from './Serializer';
 
 import { Definition, Reflection, Schema } from '@colyseus/schema';
-import { Protocol, send } from '../Protocol';
 import { debugPatch } from '../Debug';
+import { Protocol, send } from '../Protocol';
 
 export class SchemaSerializer<T> implements Serializer<T> {
   public id = 'schema';
