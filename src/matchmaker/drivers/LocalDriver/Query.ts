@@ -33,7 +33,10 @@ export class Query<T> implements QueryHelpers<T> {
   public then(resolve, reject) {
     const result: any = this.$rooms.find(((room) => {
       for (const field in this.conditions) {
-        if (room[field] !== this.conditions[field]) {
+        if (
+          this.conditions.hasOwnProperty(field) &&
+          room[field] !== this.conditions[field]
+        ) {
           return false;
         }
       }

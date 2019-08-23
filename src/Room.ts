@@ -422,28 +422,11 @@ export abstract class Room<T= any> extends EventEmitter {
     this.reservedSeats[sessionId] = joinOptions;
 
     if (!allowReconnection) {
-      // lock automatically when maxClients is reached
-      if (!this._locked && this.hasReachedMaxClients()) {
-        this._maxClientsReached = true;
-        this.lock.call(this, true);
-      }
+      await this._incrementClientCount();
 
-      await this.listing.updateOne({
-        $inc: { clients: 1 },
-        $set: { locked: this._locked },
-      });
-
-      this.reservedSeatTimeouts[sessionId] = setTimeout(() => {
+      this.reservedSeatTimeouts[sessionId] = setTimeout(async () => {
         delete this.reservedSeats[sessionId];
-
-        //
-        // TODO: clear seat reservation!
-        //
-        // this.listing.updateOne({
-        //   $inc: { clients: -1 },
-        //   $set: { locked: this._locked },
-        // });
-
+        await this._decrementClientCount();
       }, seconds * 1000);
 
       this.resetAutoDisposeTimeout(seconds);
@@ -559,21 +542,39 @@ export abstract class Room<T= any> extends EventEmitter {
     // skip next checks if client has reconnected successfully (through `allowReconnection()`)
     if (client.state === ClientState.RECONNECTED) { return; }
 
-    // update room listing cache
+    // dispose immediatelly if client reconnection isn't set up.
+    await this._decrementClientCount();
+  }
+
+  private async _incrementClientCount() {
+    // lock automatically when maxClients is reached
+    if (!this._locked && this.hasReachedMaxClients()) {
+      this._maxClientsReached = true;
+      this.lock.call(this, true);
+    }
+
     await this.listing.updateOne({
-      $inc: { clients: -1 },
+      $inc: { clients: 1 },
       $set: { locked: this._locked },
     });
+  }
 
-    // dispose immediatelly if client reconnection isn't set up.
+  private async _decrementClientCount() {
     const willDispose = this._disposeIfEmpty();
 
     // unlock if room is available for new connections
-    if (!willDispose && this._maxClientsReached && !this._lockedExplicitly) {
-      this._maxClientsReached = false;
-      this.unlock.call(this, true);
-    }
+    if (!willDispose) {
+      if (this._maxClientsReached && !this._lockedExplicitly) {
+        this._maxClientsReached = false;
+        this.unlock.call(this, true);
+      }
 
+      // update room listing cache
+      await this.listing.updateOne({
+        $inc: { clients: -1 },
+        $set: { locked: this._locked },
+      });
+    }
   }
 
 }

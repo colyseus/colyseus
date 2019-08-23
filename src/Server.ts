@@ -141,8 +141,6 @@ export class Server {
   }
 
   protected async processMatchmakeRequest(method: string, name: string, data: any) {
-    console.log('processMatchmakeRequest, JSON BODY =>', data);
-
     if (this.matchMaker.exposedMethods.indexOf(method) === -1) {
       throw new MatchMakeError(`invalid method "${method}"`, Protocol.ERR_MATCHMAKE_UNHANDLED);
     }

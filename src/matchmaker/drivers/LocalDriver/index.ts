@@ -12,7 +12,10 @@ export class LocalDriver implements MatchMakerDriver {
   public find(conditions: any) {
     return this.rooms.filter(((room) => {
       for (const field in conditions) {
-        if (room[field] !== conditions[field]) {
+        if (
+          conditions.hasOwnProperty(field) &&
+          room[field] !== conditions[field]
+        ) {
           return false;
         }
       }
