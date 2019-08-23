@@ -22,6 +22,7 @@ import { Protocol } from './Protocol';
 
 export type ServerOptions = IServerOptions & {
   pingTimeout?: number,
+  pingCountMax?: number,
   verifyClient?: WebSocket.VerifyClientCallbackAsync
   presence?: any,
   driver?: any,
