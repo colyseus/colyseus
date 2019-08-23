@@ -23,6 +23,7 @@ function heartbeat() { this.pingCount = 0; }
 
 export type ServerOptions = IServerOptions & {
   pingTimeout?: number,
+  pingCountMax?: number,
   verifyClient?: WebSocket.VerifyClientCallbackAsync
   presence?: any,
   engine?: any,
@@ -39,6 +40,7 @@ export class Server {
   protected presence: Presence;
   protected pingInterval: NodeJS.Timer;
   protected pingTimeout: number;
+  protected pingCountMax: number;
 
   protected processId: string = generateId();
 
@@ -49,6 +51,9 @@ export class Server {
     this.matchMaker = new MatchMaker(this.presence, this.processId);
     this.pingTimeout = (options.pingTimeout !== undefined)
       ? options.pingTimeout
+      : 1500;
+    this.pingCountMax = (options.pingCountMax !== undefined)
+      ? options.pingCountMax
       : 1500;
 
     // "presence" option is not used from now on
@@ -89,8 +94,8 @@ export class Server {
 
     this.server.on('connection', this.onConnection);
 
-    if (this.pingTimeout > 0) {
-      this.autoTerminateUnresponsiveClients(this.pingTimeout);
+    if (this.pingTimeout > 0 && this.pingCountMax > 0) {
+      this.autoTerminateUnresponsiveClients(this.pingTimeout, this.pingCountMax);
     }
   }
 
@@ -139,14 +144,14 @@ export class Server {
   protected onShutdownCallback: () => void | Promise<any> =
     () => Promise.resolve()
 
-  protected autoTerminateUnresponsiveClients(pingTimeout: number) {
+  protected autoTerminateUnresponsiveClients(pingTimeout: number, pingCountMax: number) {
       // interval to detect broken connections
       this.pingInterval = setInterval(() => {
         this.server.clients.forEach((client: Client) => {
           //
           // if client hasn't responded after the interval, terminate its connection.
           //
-          if (client.pingCount >= 2) {
+          if (client.pingCount >= pingCountMax) {
             return client.terminate();
           }
 
