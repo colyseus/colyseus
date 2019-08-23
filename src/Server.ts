@@ -54,7 +54,7 @@ export class Server {
       : 1500;
     this.pingCountMax = (options.pingCountMax !== undefined)
       ? options.pingCountMax
-      : 1500;
+      : 2;
 
     // "presence" option is not used from now on
     delete options.presence;
