@@ -107,10 +107,12 @@ export abstract class Room<T= any> extends EventEmitter {
 
   // Optional abstract methods
   public onCreate?(options: any): void;
-  public onAuth?(client: Client, options: any, request?: http.IncomingMessage): any | Promise<any>;
   public onJoin?(client: Client, options?: any, auth?: any): void | Promise<any>;
   public onLeave?(client: Client, consented?: boolean): void | Promise<any>;
   public onDispose?(): void | Promise<any>;
+  public onAuth(client: Client, options: any, request?: http.IncomingMessage): any | Promise<any> {
+    return true;
+  }
 
   public hasReachedMaxClients(): boolean {
     return (this.clients.length + Object.keys(this.reservedSeats).length) >= this.maxClients;
@@ -305,8 +307,15 @@ export abstract class Room<T= any> extends EventEmitter {
       reconnection.resolve(client);
 
     } else {
-      if (this.onAuth) { client.auth = await this.onAuth(client, options, req); }
-      if (this.onJoin) { await this.onJoin(client, options, client.auth); }
+      client.auth = await this.onAuth(client, options, req);
+
+      if (!client.auth) {
+        throw new Error("onAuth failed.");
+      }
+
+      if (this.onJoin) {
+        await this.onJoin(client, options, client.auth);
+      }
     }
 
     // emit 'join' to room handler
