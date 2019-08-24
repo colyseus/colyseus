@@ -1,6 +1,6 @@
 {
   "name": "colyseus",
-  "version": "0.11.2",
+  "version": "0.11.3",
   "description": "Multiplayer Game Server for Node.js.",
   "main": "./lib/index.js",
   "typings": "./lib/index.d.ts",
