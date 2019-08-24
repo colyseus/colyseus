@@ -20,6 +20,7 @@ export class WebSocketTransport extends Transport {
 
   protected pingInterval: NodeJS.Timer;
   protected pingTimeout: number;
+  protected pingCountMax: number;
 
   constructor(matchMaker: MatchMaker, options: ServerOptions = {}, engine: any) {
     super(matchMaker);
@@ -30,14 +31,17 @@ export class WebSocketTransport extends Transport {
     this.pingTimeout = (options.pingTimeout !== undefined)
       ? options.pingTimeout
       : 1500;
+    this.pingCountMax = (options.pingCountMax !== undefined)
+      ? options.pingCountMax
+      : 2;
 
     this.wss = new engine(options);
     this.wss.on('connection', this.onConnection);
 
     this.server = options.server;
 
-    if (this.pingTimeout > 0) {
-      this.autoTerminateUnresponsiveClients(this.pingTimeout);
+    if (this.pingTimeout > 0 && this.pingCountMax > 0) {
+      this.autoTerminateUnresponsiveClients(this.pingTimeout, this.pingCountMax);
     }
   }
 
@@ -52,14 +56,14 @@ export class WebSocketTransport extends Transport {
     this.server.close();
   }
 
-  protected autoTerminateUnresponsiveClients(pingTimeout: number) {
+  protected autoTerminateUnresponsiveClients(pingTimeout: number, pingCountMax: number) {
     // interval to detect broken connections
     this.pingInterval = setInterval(() => {
       this.wss.clients.forEach((client: Client) => {
         //
         // if client hasn't responded after the interval, terminate its connection.
         //
-        if (client.pingCount >= 2) {
+        if (client.pingCount >= pingCountMax) {
           return client.terminate();
         }
 
