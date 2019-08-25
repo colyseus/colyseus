@@ -1,6 +1,6 @@
 {
   "name": "colyseus",
-  "version": "0.11.3",
+  "version": "0.11.4",
   "description": "Multiplayer Game Server for Node.js.",
   "main": "./lib/index.js",
   "typings": "./lib/index.d.ts",
@@ -23,7 +23,7 @@
   },
   "homepage": "https://colyseus.io/",
   "scripts": {
-    "prepublish": "tsc -d",
+    "prepublish": "rm -rf lib && tsc -d",
     "watch": "tsc -d -w",
     "start": "nodemon --watch 'src/**/*.ts' --exec 'ts-node' usage/Server.ts",
     "test": "COLYSEUS_PRESENCE_SHORT_TIMEOUT=300 mocha --require ts-node/register test/**Test.ts --exit",

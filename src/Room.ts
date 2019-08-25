@@ -13,7 +13,7 @@ import { Serializer } from './serializer/Serializer';
 import { decode, Protocol, send } from './Protocol';
 import { Deferred, spliceOne } from './Utils';
 
-import { debugAndPrintError, debugPatch } from './Debug';
+import { debugAndPrintError, debugPatch, debugError } from './Debug';
 import { RoomListingData } from './matchmaker/drivers/Driver';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
@@ -308,21 +308,28 @@ export abstract class Room<T= any> extends EventEmitter {
 
     // get seat reservation options and remove it
     const options = this.reservedSeats[client.sessionId];
-    delete this.reservedSeats[client.sessionId];
 
     const reconnection = this.reconnections[client.sessionId];
     if (reconnection) {
       reconnection.resolve(client);
 
     } else {
-      client.auth = await this.onAuth(client, options, req);
+      try {
+        client.auth = await this.onAuth(client, options, req);
 
-      if (!client.auth) {
-        throw new Error("onAuth failed.");
-      }
+        if (!client.auth) {
+          throw new Error("onAuth failed.");
+        }
 
-      if (this.onJoin) {
-        await this.onJoin(client, options, client.auth);
+        if (this.onJoin) {
+          await this.onJoin(client, options, client.auth);
+        }
+      } catch (e) {
+        debugError(e);
+        throw e;
+
+      } finally {
+        delete this.reservedSeats[client.sessionId];
       }
     }
 
