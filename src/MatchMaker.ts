@@ -29,6 +29,7 @@ type RemoteRoomResponse<T= any> = [string?, T?];
 export class MatchMaker {
   public handlers: {[id: string]: RegisteredHandler} = {};
   public exposedMethods = ['joinOrCreate', 'create', 'join', 'joinById'];
+  public allowedRoomNameChars = /([a-zA-Z_0-9]+)/gi;
 
   private processId: string;
   private localRooms: {[roomId: string]: Room} = {};
