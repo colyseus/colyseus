@@ -4,9 +4,9 @@ import { Client } from '..';
 import { Room } from '../Room';
 
 class Player extends Schema {
-    @type('string') sessionId: string;
-    @type('boolean') connected: boolean;
-    @type('boolean') isMaster: boolean;
+    @type('string') public sessionId: string;
+    @type('boolean') public connected: boolean;
+    @type('boolean') public isMaster: boolean;
 }
 
 class State {

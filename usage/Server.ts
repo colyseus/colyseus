@@ -20,10 +20,13 @@ const server = http.createServer(app);
 const gameServer = new Server({
   // engine: WebSocket.Server,
   server: server,
-  express: app,
+  // express: app,
   // driver: new MongooseDriver(),
 });
 
+app.get("/hello", (req, res) => {
+  res.json({hello: "world!"});
+});
 
 // Define ChatRoom as "chat"
 gameServer.define("chat", ChatRoom)

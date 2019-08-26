@@ -13,7 +13,7 @@ import { Serializer } from './serializer/Serializer';
 import { decode, Protocol, send } from './Protocol';
 import { Deferred, spliceOne } from './Utils';
 
-import { debugAndPrintError, debugPatch, debugError } from './Debug';
+import { debugAndPrintError, debugError, debugPatch } from './Debug';
 import { RoomListingData } from './matchmaker/drivers/Driver';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
@@ -318,7 +318,7 @@ export abstract class Room<T= any> extends EventEmitter {
         client.auth = await this.onAuth(client, options, req);
 
         if (!client.auth) {
-          throw new Error("onAuth failed.");
+          throw new Error('onAuth failed.');
         }
 
         if (this.onJoin) {
