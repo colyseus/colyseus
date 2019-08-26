@@ -214,42 +214,42 @@ export abstract class Room<T= any> extends EventEmitter {
     });
   }
 
-  public send(client: Client, data: any): void {
+  public send(client: Client, message: any): void {
     if (client.state === ClientState.JOINING) {
       // sending messages during `onJoin`.
       // - the client-side cannot register "onMessage" callbacks at this point.
       // - enqueue the messages to be send after JOIN_ROOM message has been sent
       if (!client._enqueuedMessages) { client._enqueuedMessages = []; }
-      client._enqueuedMessages.push(data);
+      client._enqueuedMessages.push(message);
 
     } else {
-      send[Protocol.ROOM_DATA](client, data);
+      send[Protocol.ROOM_DATA](client, message);
     }
   }
 
-  public broadcast(data: any, options: BroadcastOptions = {}): boolean {
+  public broadcast(message: any, options: BroadcastOptions = {}): boolean {
     if (options.afterNextPatch) {
       delete options.afterNextPatch;
-      this._afterNextPatchBroadcasts.push([data, options]);
+      this._afterNextPatchBroadcasts.push([message, options]);
       return true;
     }
 
     // no data given, try to broadcast patched state
-    if (!data) {
+    if (!message) {
       throw new Error('Room#broadcast: \'data\' is required to broadcast.');
     }
 
     // encode all messages with msgpack
-    if (!(data instanceof Buffer)) {
-      data = msgpack.encode(data);
-    }
+    const encodedMessage = (!(message instanceof Buffer))
+      ? msgpack.encode(message)
+      : message;
 
     let numClients = this.clients.length;
     while (numClients--) {
-      const client = this.clients[ numClients ];
+      const client = this.clients[numClients];
 
       if (options.except !== client) {
-        send[Protocol.ROOM_DATA](client, data, false);
+        send[Protocol.ROOM_DATA](client, encodedMessage, false);
       }
     }
 
