@@ -62,7 +62,7 @@ export class ChatRoom extends Room<State> {
       setTimeout(() => {
         console.log("async task finished, let's dispose the room now!")
         resolve();
-      }, 2000);
+      }, 1000);
     });
   }
 

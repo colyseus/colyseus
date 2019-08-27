@@ -243,6 +243,7 @@ export class MatchMaker {
     room.on('join', this.onClientJoinRoom.bind(this, room));
     room.on('leave', this.onClientLeaveRoom.bind(this, room));
     room.once('dispose', this.disposeRoom.bind(this, roomName, room));
+    room.once('disconnect', () => room.removeAllListeners());
 
     // room always start unlocked
     await this.createRoomReferences(room, true);
@@ -426,9 +427,6 @@ export class MatchMaker {
 
     // remove from room listing
     room.listing.remove();
-
-    // remove all room listeners.
-    room.removeAllListeners();
 
     // emit disposal on registered session handler
     this.handlers[roomName].emit('dispose', room);

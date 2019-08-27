@@ -90,21 +90,23 @@ export class Server {
     return this.matchMaker.defineRoomType(name, handler, defaultOptions);
   }
 
-  public gracefullyShutdown(exit: boolean = true) {
+  public async gracefullyShutdown(exit: boolean = true) {
     unregisterNode(this.presence, {
       addressInfo: this.transport.address() as net.AddressInfo,
       processId: this.processId,
     });
 
-    return this.matchMaker.gracefullyShutdown().
-      then(() => {
-        this.transport.shutdown();
-        return this.onShutdownCallback();
-      }).
-      catch((err) => debugAndPrintError(`error during shutdown: ${err}`)).
-      then(() => {
-        if (exit) { process.exit(); }
-      });
+    try {
+      await this.matchMaker.gracefullyShutdown();
+      this.transport.shutdown();
+      await this.onShutdownCallback();
+
+    } catch (e) {
+      debugAndPrintError(`error during shutdown: ${e}`)
+
+    } finally {
+      if (exit) { process.exit(); }
+    }
   }
 
   public onShutdown(callback: () => void | Promise<any>) {

@@ -536,7 +536,7 @@ export abstract class Room<T= any> extends EventEmitter {
       client.removeListener('close', closeListeners[1]);
 
       // only effectively close connection when "onLeave" is fulfilled
-      this._onLeave(client, Protocol.WS_CLOSE_CONSENTED).then(() => client.terminate());
+      this._onLeave(client, Protocol.WS_CLOSE_CONSENTED).then(() => client.close(Protocol.WS_CLOSE_NORMAL));
 
     } else {
       this.onMessage(client, message);

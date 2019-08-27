@@ -13,6 +13,9 @@ export enum Protocol {
   ROOM_STATE = 14,
   ROOM_STATE_PATCH = 15,
 
+  // WebSocket close codes (https://github.com/Luka967/websocket-close-codes)
+  WS_CLOSE_NORMAL = 1000,
+
   // WebSocket error codes
   WS_CLOSE_CONSENTED = 4000,
   WS_CLOSE_WITH_ERROR = 4002,
