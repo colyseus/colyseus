@@ -3,7 +3,7 @@ import net from 'net';
 import WebSocket from 'ws';
 import { ServerOptions as IServerOptions } from 'ws';
 
-import { debugAndPrintError, debugMatchMaking } from './Debug';
+import { debugAndPrintError, debugError, debugMatchMaking } from './Debug';
 import { MatchMaker } from './MatchMaker';
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
 import { Presence } from './presence/Presence';
@@ -102,7 +102,7 @@ export class Server {
       await this.onShutdownCallback();
 
     } catch (e) {
-      debugAndPrintError(`error during shutdown: ${e}`)
+      debugAndPrintError(`error during shutdown: ${e}`);
 
     } finally {
       if (exit) { process.exit(); }

@@ -228,6 +228,7 @@ export class MatchMaker {
         await room.onCreate(merge({}, clientOptions, registeredHandler.options));
 
       } catch (e) {
+        debugAndPrintError(e);
         throw new MatchMakeError(e.message, Protocol.ERR_MATCHMAKE_UNHANDLED);
       }
     }

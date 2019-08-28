@@ -325,7 +325,7 @@ export abstract class Room<T= any> extends EventEmitter {
           await this.onJoin(client, options, client.auth);
         }
       } catch (e) {
-        debugError(e);
+        debugAndPrintError(e);
         throw e;
 
       } finally {
