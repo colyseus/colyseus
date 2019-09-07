@@ -1,6 +1,6 @@
 import querystring from 'querystring';
 
-import { debugAndPrintError } from './Debug';
+import { debugAndPrintError, debugMatchMaking } from './Debug';
 
 //
 // nodemon sends SIGUSR2 before reloading
@@ -16,20 +16,22 @@ export function registerGracefulShutdown(callback) {
 export function retry(
   cb: Function,
   maxRetries: number = 3,
-  retries: number = 0,
   errorWhiteList: any[] = [],
+  retries: number = 0,
 ) {
   return new Promise((resolve, reject) => {
     cb()
       .then(resolve)
       .catch((e) => {
         if (
-          errorWhiteList.indexOf(e.constructor) === -1 &&
+          errorWhiteList.indexOf(e.constructor) !== -1 &&
           retries++ < maxRetries
         ) {
-          retry(cb, maxRetries, retries, errorWhiteList).
-            then(resolve).
-            catch((e2) => reject(e2));
+          setTimeout(() => {
+            retry(cb, maxRetries, errorWhiteList, retries).
+              then(resolve).
+              catch((e2) => reject(e2));
+          }, Math.floor(Math.random() * Math.pow(2, retries) * 400));
 
         } else {
           reject(e);

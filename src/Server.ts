@@ -16,7 +16,7 @@ import { generateId } from '.';
 import { registerNode, unregisterNode } from './discovery';
 import { LocalPresence } from './presence/LocalPresence';
 
-import { MatchMakeError } from './Errors';
+import { MatchMakeError } from './errors/MatchMakeError';
 import { Protocol } from './Protocol';
 
 export type ServerOptions = IServerOptions & {

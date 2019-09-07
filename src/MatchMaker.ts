@@ -1,4 +1,4 @@
-import { merge } from './Utils';
+import { merge, retry } from './Utils';
 
 import { Client, generateId, isValidId } from './index';
 import { IpcProtocol, Protocol } from './Protocol';
@@ -10,7 +10,8 @@ import { LocalPresence } from './presence/LocalPresence';
 import { Presence } from './presence/Presence';
 
 import { debugAndPrintError, debugMatchMaking } from './Debug';
-import { MatchMakeError } from './Errors';
+import { MatchMakeError } from './errors/MatchMakeError';
+import { SeatReservationError } from './errors/SeatReservationError';
 import { MatchMakerDriver, RoomListingData } from './matchmaker/drivers/Driver';
 import { LocalDriver } from './matchmaker/drivers/LocalDriver';
 
@@ -46,13 +47,15 @@ export class MatchMaker {
   }
 
   public async joinOrCreate(roomName: string, options: ClientOptions) {
-    let room = await this.queryRoom(roomName, options);
+    return await retry(async () => {
+      let room = await this.queryRoom(roomName, options);
 
-    if (!room) {
-      room = await this.createRoom(roomName, options);
-    }
+      if (!room) {
+        room = await this.createRoom(roomName, options);
+      }
 
-    return this.reserveSeatFor(room, options);
+      return this.reserveSeatFor(room, options);
+    }, 5, [SeatReservationError]);
   }
 
   public async create(roomName: string, options: ClientOptions) {
@@ -68,13 +71,15 @@ export class MatchMaker {
   }
 
   public async join(roomName: string, options: ClientOptions) {
-    const room = await this.queryRoom(roomName, options);
+    return await retry(async () => {
+      const room = await this.queryRoom(roomName, options);
 
-    if (!room) {
-      throw new MatchMakeError(`no rooms found with provided criteria`, Protocol.ERR_MATCHMAKE_INVALID_CRITERIA);
-    }
+      if (!room) {
+        throw new MatchMakeError(`no rooms found with provided criteria`, Protocol.ERR_MATCHMAKE_INVALID_CRITERIA);
+      }
 
-    return this.reserveSeatFor(room, options);
+      return this.reserveSeatFor(room, options);
+    });
   }
 
   public async joinById(roomId: string, options: ClientOptions) {
@@ -119,25 +124,25 @@ export class MatchMaker {
     return await this.driver.find(conditions);
   }
 
-  public async queryRoom(roomName: string, options: ClientOptions) {
-    await this.awaitRoomAvailable(roomName);
+  public async queryRoom(roomName: string, options: ClientOptions): Promise<RoomListingData> {
+    return await this.awaitRoomAvailable(roomName, async () => {
+      const handler = this.handlers[roomName];
+      if (!handler) {
+        throw new MatchMakeError(`no available handler for "${roomName}"`, Protocol.ERR_MATCHMAKE_NO_HANDLER);
+      }
 
-    const handler = this.handlers[roomName];
-    if (!handler) {
-      throw new MatchMakeError(`no available handler for "${roomName}"`, Protocol.ERR_MATCHMAKE_NO_HANDLER);
-    }
+      const query = this.driver.findOne({
+        locked: false,
+        name: roomName,
+        ...handler.getFilterOptions(options),
+      });
 
-    const query = this.driver.findOne({
-      locked: false,
-      name: roomName,
-      ...handler.getFilterOptions(options),
+      if (handler.sortOptions) {
+        query.sort(handler.sortOptions);
+      }
+
+      return await query;
     });
-
-    if (handler.sortOptions) {
-      query.sort(handler.sortOptions);
-    }
-
-    return await query;
   }
 
   public async remoteRoomCall<R= any>(
@@ -255,7 +260,6 @@ export class MatchMaker {
     return room.listing;
   }
 
-  // used only for testing purposes
   public getRoomById(roomId: string) {
     return this.localRooms[roomId];
   }
@@ -289,7 +293,10 @@ export class MatchMaker {
       sessionId, room.roomId, this.processId,
     );
 
-    await this.remoteRoomCall(room.roomId, '_reserveSeat', [sessionId, options]);
+    const [_, reserveSeatSuccessful] = await this.remoteRoomCall(room.roomId, '_reserveSeat', [sessionId, options]);
+    if (!reserveSeatSuccessful) {
+      throw new SeatReservationError(`${room.roomId} is already full.`);
+    }
 
     return { room, sessionId };
   }
@@ -371,25 +378,34 @@ export class MatchMaker {
     this.presence.del(room.roomId);
   }
 
-  protected async awaitRoomAvailable(roomToJoin: string) {
-      const key = this.getHandlerConcurrencyKey(roomToJoin);
-      const concurrency = await this.presence.incr(key) - 1;
+  protected async awaitRoomAvailable(roomToJoin: string, callback: Function): Promise<RoomListingData> {
+    return new Promise(async (resolve, reject) => {
+      const concurrencyKey = this.getHandlerConcurrencyKey(roomToJoin);
+      const concurrency = await this.presence.incr(concurrencyKey) - 1;
 
-      this.presence.decr(key);
+      // avoid having too long timeout if 10+ clients ask to join at the same time
+      const concurrencyTimeout = Math.min(concurrency * 100, REMOTE_ROOM_SHORT_TIMEOUT);
 
       if (concurrency > 0) {
-        // avoid having too long timeout if 10+ clients ask to join at the same time
-        const concurrencyTimeout = Math.min(concurrency * 100, REMOTE_ROOM_SHORT_TIMEOUT);
-
         debugMatchMaking(
           'receiving %d concurrent requests for joining \'%s\' (waiting %d ms)',
           concurrency, roomToJoin, concurrencyTimeout,
         );
-
-        return await new Promise((resolve, reject) => setTimeout(resolve, concurrencyTimeout));
-      } else {
-        return true;
       }
+
+      setTimeout(async () => {
+        try {
+          const result = await callback();
+          resolve(result);
+
+        } catch (e) {
+          reject(e);
+
+        } finally {
+          await this.presence.decr(concurrencyKey);
+        }
+      }, concurrencyTimeout);
+    });
   }
 
   protected getRoomChannel(roomId: string) {

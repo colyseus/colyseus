@@ -566,7 +566,7 @@ export abstract class Room<T= any> extends EventEmitter {
     // skip next checks if client has reconnected successfully (through `allowReconnection()`)
     if (client.state === ClientState.RECONNECTED) { return; }
 
-    // dispose immediatelly if client reconnection isn't set up.
+    // try to dispose immediatelly if client reconnection isn't set up.
     await this._decrementClientCount();
   }
 
