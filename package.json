@@ -43,6 +43,7 @@
     "nanoid": "^2.0.0",
     "nonenumerable": "^1.0.1",
     "notepack.io": "^2.2.0",
+    "public-ip": "^3.2.0",
     "ws": "^7.1.0"
   },
   "devDependencies": {

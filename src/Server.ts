@@ -38,6 +38,7 @@ export class Server {
   protected presence: Presence;
   protected processId: string = generateId();
   protected route = '/matchmake';
+  private port: number;
 
   constructor(options: ServerOptions = {}) {
     const { gracefullyShutdown = true } = options;
@@ -71,17 +72,18 @@ export class Server {
   }
 
   public listen(port: number, hostname?: string, backlog?: number, listeningListener?: Function) {
+    this.port = port;
     this.transport.listen(port, hostname, backlog, () => {
       if (listeningListener) { listeningListener(); }
 
-      this.registerProcessForDiscovery(this.transport);
+      this.registerProcessForDiscovery();
     });
   }
 
-  public registerProcessForDiscovery(transport: Transport) {
+  public registerProcessForDiscovery() {
     // register node for proxy/service discovery
     registerNode(this.presence, {
-      addressInfo: transport.address() as net.AddressInfo,
+      port: this.port,
       processId: this.processId,
     });
   }
@@ -92,7 +94,7 @@ export class Server {
 
   public async gracefullyShutdown(exit: boolean = true) {
     unregisterNode(this.presence, {
-      addressInfo: this.transport.address() as net.AddressInfo,
+      port: this.port,
       processId: this.processId,
     });
 
