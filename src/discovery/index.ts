@@ -1,8 +1,8 @@
+import ip from 'public-ip';
 import { Presence } from '../presence/Presence';
 
 const NODES_SET = 'colyseus:nodes';
 const DISCOVERY_CHANNEL = 'colyseus:nodes:discovery';
-import ip from 'public-ip';
 
 export interface Node {
     port: number;
