@@ -22,4 +22,4 @@ Changes that are cosmetic in nature and do not add anything substantial to the s
 
 #### **Do you have questions about the source code?**
 
-* Ask any question about how to use Colyseus in the [Gitter channel](https://gitter.im/gamestdio/colyseus).
+* Ask any question about how to use Colyseus on our [Discord Server](https://discord.gg/RY8rRS7).
