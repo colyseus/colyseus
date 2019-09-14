@@ -321,9 +321,6 @@ export abstract class Room<T= any> extends EventEmitter {
           throw new Error('onAuth failed.');
         }
 
-        if (this.onJoin) {
-          await this.onJoin(client, options, client.auth);
-        }
       } catch (e) {
         debugAndPrintError(e);
         throw e;
@@ -361,6 +358,10 @@ export abstract class Room<T= any> extends EventEmitter {
 
     // joined successfully, add to local client list
     this.clients.push(client);
+
+    if(!reconnection && this.onJoin) {
+        await this.onJoin(client, options, client.auth);
+    }
   }
 
   protected _getSerializer?(): Serializer<T> {
