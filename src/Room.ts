@@ -13,13 +13,13 @@ import { Serializer } from './serializer/Serializer';
 import { decode, Protocol, send } from './Protocol';
 import { Deferred, spliceOne } from './Utils';
 
-import { debugAndPrintError, debugError, debugPatch } from './Debug';
+import { debugAndPrintError, debugPatch } from './Debug';
 import { RoomListingData } from './matchmaker/drivers/Driver';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
 
-const DEFAULT_SEAT_RESERVATION_TIME = Number(process.env.COLYSEUS_SEAT_RESERVATION_TIME || 5);
+const DEFAULT_SEAT_RESERVATION_TIME = Number(process.env.COLYSEUS_SEAT_RESERVATION_TIME || 8);
 
 export type SimulationCallback = (deltaTime: number) => void;
 
@@ -292,9 +292,11 @@ export abstract class Room<T= any> extends EventEmitter {
   public async ['_onJoin'](client: Client, req?: http.IncomingMessage) {
     client.state = ClientState.JOINING;
 
-    if (this.reservedSeatTimeouts[client.sessionId]) {
-      clearTimeout(this.reservedSeatTimeouts[client.sessionId]);
-      delete this.reservedSeatTimeouts[client.sessionId];
+    const sessionId = client.sessionId;
+
+    if (this.reservedSeatTimeouts[sessionId]) {
+      clearTimeout(this.reservedSeatTimeouts[sessionId]);
+      delete this.reservedSeatTimeouts[sessionId];
     }
 
     // clear auto-dispose timeout.
@@ -306,10 +308,11 @@ export abstract class Room<T= any> extends EventEmitter {
     // bind clean-up callback when client connection closes
     client.once('close', this._onLeave.bind(this, client));
 
-    // get seat reservation options and remove it
-    const options = this.reservedSeats[client.sessionId];
+    // get seat reservation options
+    const options = this.reservedSeats[sessionId];
+    if (!options) { throw new Error('seat reservation expired.'); }
 
-    const reconnection = this.reconnections[client.sessionId];
+    const reconnection = this.reconnections[sessionId];
     if (reconnection) {
       reconnection.resolve(client);
 
@@ -329,7 +332,8 @@ export abstract class Room<T= any> extends EventEmitter {
         throw e;
 
       } finally {
-        delete this.reservedSeats[client.sessionId];
+        // remove seat reservation
+        delete this.reservedSeats[sessionId];
       }
     }
 
@@ -403,26 +407,27 @@ export abstract class Room<T= any> extends EventEmitter {
       throw new Error('disconnecting');
     }
 
-    await this._reserveSeat(client.sessionId, true, seconds, true);
+    const sessionId = client.sessionId;
+    await this._reserveSeat(sessionId, true, seconds, true);
 
     // keep reconnection reference in case the user reconnects into this room.
     const reconnection = new Deferred();
-    this.reconnections[client.sessionId] = reconnection;
+    this.reconnections[sessionId] = reconnection;
 
     // expire seat reservation after timeout
-    this.reservedSeatTimeouts[client.sessionId] = setTimeout(() =>
+    this.reservedSeatTimeouts[sessionId] = setTimeout(() =>
       reconnection.reject(false), seconds * 1000);
 
     const cleanup = () => {
-      delete this.reservedSeats[client.sessionId];
-      delete this.reconnections[client.sessionId];
-      delete this.reservedSeatTimeouts[client.sessionId];
+      delete this.reservedSeats[sessionId];
+      delete this.reconnections[sessionId];
+      delete this.reservedSeatTimeouts[sessionId];
     };
 
     reconnection.
       then(() => {
         client.state = ClientState.RECONNECTED;
-        clearTimeout(this.reservedSeatTimeouts[client.sessionId]);
+        clearTimeout(this.reservedSeatTimeouts[sessionId]);
         cleanup();
       }).
       catch(() => {
