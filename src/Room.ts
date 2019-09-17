@@ -36,7 +36,7 @@ export enum RoomInternalState {
   DISCONNECTING = 2,
 }
 
-export abstract class Room<T= any> extends EventEmitter {
+export abstract class Room<State= any, Metadata= any> extends EventEmitter {
 
   public get locked() {
     return this._locked;
@@ -44,7 +44,7 @@ export abstract class Room<T= any> extends EventEmitter {
 
   // see @serialize decorator.
   public get serializer() { return this._serializer.id; }
-  public listing: RoomListingData;
+  public listing: RoomListingData<Metadata>;
   public clock: Clock = new Clock();
 
   public roomId: string;
@@ -54,7 +54,7 @@ export abstract class Room<T= any> extends EventEmitter {
   public patchRate: number = DEFAULT_PATCH_RATE;
   public autoDispose: boolean = true;
 
-  public state: T;
+  public state: State;
   public presence: Presence;
 
   public clients: Client[] = [];
@@ -70,7 +70,7 @@ export abstract class Room<T= any> extends EventEmitter {
   protected reconnections: { [sessionId: string]: Deferred } = {};
   protected isDisconnecting: boolean = false;
 
-  private _serializer: Serializer<T> = this._getSerializer();
+  private _serializer: Serializer<State> = this._getSerializer();
   private _afterNextPatchBroadcasts: Array<[any, BroadcastOptions]> = [];
 
   private _simulationInterval: NodeJS.Timer;
@@ -152,7 +152,7 @@ export abstract class Room<T= any> extends EventEmitter {
     }
   }
 
-  public setState(newState: T) {
+  public setState(newState: State) {
     this.clock.start();
 
     this._serializer.reset(newState);
@@ -160,7 +160,7 @@ export abstract class Room<T= any> extends EventEmitter {
     this.state = newState;
   }
 
-  public setMetadata(meta: any) {
+  public setMetadata(meta: Metadata) {
     this.listing.metadata = meta;
 
     if (this._internalState === RoomInternalState.CREATED) {
@@ -367,8 +367,8 @@ export abstract class Room<T= any> extends EventEmitter {
     this.clients.push(client);
   }
 
-  protected _getSerializer?(): Serializer<T> {
-    return new SchemaSerializer<T>();
+  protected _getSerializer?(): Serializer<State> {
+    return new SchemaSerializer<State>();
   }
 
   protected sendState(client: Client): void {

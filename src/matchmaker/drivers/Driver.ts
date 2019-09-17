@@ -1,11 +1,11 @@
 import { SortOptions } from '../RegisteredHandler';
 
-export interface RoomListingData {
+export interface RoomListingData<Metadata= any> {
   clients: number;
   locked: boolean;
   private: boolean;
   maxClients: number;
-  metadata: any;
+  metadata: Metadata;
   name: string;
   processId: string;
   roomId: string;
