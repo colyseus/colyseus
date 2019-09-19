@@ -32,7 +32,7 @@ export class MongooseDriver implements MatchMakerDriver {
         useCreateIndex: true,
         useFindAndModify: true,
         useNewUrlParser: true,
-        useUnifiedTopology: true
+        useUnifiedTopology: true,
       });
     }
   }
