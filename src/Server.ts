@@ -3,7 +3,7 @@ import net from 'net';
 import WebSocket from 'ws';
 import { ServerOptions as IServerOptions } from 'ws';
 
-import { debugAndPrintError, debugError, debugMatchMaking } from './Debug';
+import { debugAndPrintError, debugMatchMaking } from './Debug';
 import { MatchMaker } from './MatchMaker';
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
 import { Presence } from './presence/Presence';
@@ -38,7 +38,6 @@ export class Server {
   protected presence: Presence;
   protected processId: string = generateId();
   protected route = '/matchmake';
-  private port: number;
 
   constructor(options: ServerOptions = {}) {
     const { gracefullyShutdown = true } = options;
@@ -57,9 +56,8 @@ export class Server {
   }
 
   public attach(options: ServerOptions) {
-    if (!options.server) {
-      options.server = http.createServer();
-    }
+    if (!options.server) { options.server = http.createServer(); }
+    options.server.once('listening', () => this.registerProcessForDiscovery());
 
     this.attachMatchMakingRoutes(options.server);
 
@@ -72,18 +70,13 @@ export class Server {
   }
 
   public listen(port: number, hostname?: string, backlog?: number, listeningListener?: Function) {
-    this.port = port;
-    this.transport.listen(port, hostname, backlog, () => {
-      if (listeningListener) { listeningListener(); }
-
-      this.registerProcessForDiscovery();
-    });
+    this.transport.listen(port, hostname, backlog, listeningListener);
   }
 
   public registerProcessForDiscovery() {
     // register node for proxy/service discovery
     registerNode(this.presence, {
-      port: this.port,
+      port: this.transport.address().port,
       processId: this.processId,
     });
   }
@@ -93,8 +86,8 @@ export class Server {
   }
 
   public async gracefullyShutdown(exit: boolean = true) {
-    unregisterNode(this.presence, {
-      port: this.port,
+    await unregisterNode(this.presence, {
+      port: this.transport.address().port,
       processId: this.processId,
     });
 

@@ -15,7 +15,7 @@ export abstract class Transport {
     public abstract listen(port?: number, hostname?: string, backlog?: number, listeningListener?: Function): this;
     public abstract shutdown(): void;
 
-    public address() { return this.server.address(); }
+    public address() { return this.server.address() as net.AddressInfo; }
 }
 
 export { TCPTransport } from './TCPTransport';

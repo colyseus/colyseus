@@ -16,12 +16,12 @@ async function getNodeAddress(node: Node) {
 
 export async function registerNode(presence: Presence, node: Node) {
   const nodeAddress = await getNodeAddress(node);
-  presence.sadd(NODES_SET, nodeAddress);
-  presence.publish(DISCOVERY_CHANNEL, `add,${nodeAddress}`);
+  await presence.sadd(NODES_SET, nodeAddress);
+  await presence.publish(DISCOVERY_CHANNEL, `add,${nodeAddress}`);
 }
 
 export async function unregisterNode(presence: Presence, node: Node) {
   const nodeAddress = await getNodeAddress(node);
-  presence.srem(NODES_SET, nodeAddress);
-  presence.publish(DISCOVERY_CHANNEL, `remove,${nodeAddress}`);
+  await presence.srem(NODES_SET, nodeAddress);
+  await presence.publish(DISCOVERY_CHANNEL, `remove,${nodeAddress}`);
 }
