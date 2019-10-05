@@ -14,6 +14,9 @@ export { Presence } from './presence/Presence';
 export { LocalPresence } from './presence/LocalPresence';
 export { RedisPresence } from './presence/RedisPresence';
 
+// Default rooms
+export { RelayRoom } from './rooms/RelayRoom';
+
 // Serializers
 export { FossilDeltaSerializer } from './serializer/FossilDeltaSerializer';
 export { SchemaSerializer } from './serializer/SchemaSerializer';

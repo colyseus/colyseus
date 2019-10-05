@@ -2,7 +2,7 @@ import http from "http";
 import cors from "cors";
 import express from "express";
 
-import { Server, RedisPresence } from "../src";
+import { Server, RedisPresence, RelayRoom } from "../src";
 import { ChatRoom } from "./ChatRoom";
 
 import { MongooseDriver } from "../src/matchmaker/drivers/MongooseDriver";
@@ -20,6 +20,7 @@ const server = http.createServer(app);
 const gameServer = new Server({
   // engine: WebSocket.Server,
   server: server,
+  // presence: new RedisPresence(),
   // express: app,
   // driver: new MongooseDriver(),
 });
@@ -28,11 +29,11 @@ app.get("/hello", (req, res) => {
   res.json({hello: "world!"});
 });
 
+// Define RelayRoom as "relay"
+gameServer.define("relay", RelayRoom);
+
 // Define ChatRoom as "chat"
 gameServer.define("chat", ChatRoom)
-  // Matchmaking filters
-  // .filterBy(['progress'])
-
   // demonstrating public events.
   .on("create", (room) => console.log("room created!", room.roomId))
   .on("join", (room, client) => console.log("client", client.sessionId, "joined", room.roomId))
