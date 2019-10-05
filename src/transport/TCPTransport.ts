@@ -1,6 +1,6 @@
 import * as net from 'net';
 
-import { generateId, isValidId } from '../';
+import { generateId } from '../';
 import { decode, Protocol, send } from '../Protocol';
 import { MatchMaker } from './../MatchMaker';
 import { ServerOptions } from './../Server';
@@ -8,6 +8,11 @@ import { Transport } from './Transport';
 
 import { debugAndPrintError, debugError } from './../Debug';
 
+/**
+ * TODO:
+ * TCPTransport is not working.
+ * It was meant to be used for https://github.com/colyseus/colyseus-gml
+ */
 export class TCPTransport extends Transport {
   constructor(matchMaker: MatchMaker, options: ServerOptions = {}) {
     super(matchMaker);
@@ -47,11 +52,7 @@ export class TCPTransport extends Transport {
   protected async onMessage(client: net.Socket & any, message: any) {
     console.log('RECEIVED:', message);
 
-    if (
-      message[0] === Protocol.JOIN_ROOM &&
-      isValidId(message[1]) &&
-      isValidId(message[3])
-    ) {
+    if (message[0] === Protocol.JOIN_ROOM) {
       const roomId = message[1];
 
       client.id = message[3];

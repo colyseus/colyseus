@@ -23,7 +23,6 @@ export { serialize } from './serializer/Serializer';
 export { Clock, Delayed };
 export { nonenumerable as nosync } from 'nonenumerable';
 export function generateId() { return nanoid(9); }
-export function isValidId(id: string) { return id && /^[a-zA-Z0-9_\-]{9}$/.test(id); }
 
 export enum ClientState { JOINING, JOINED, RECONNECTED }
 

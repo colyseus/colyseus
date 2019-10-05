@@ -1,6 +1,6 @@
 import { merge, retry } from './Utils';
 
-import { Client, generateId, isValidId } from './index';
+import { Client, generateId } from './index';
 import { IpcProtocol, Protocol } from './Protocol';
 
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
@@ -83,8 +83,7 @@ export class MatchMaker {
   }
 
   public async joinById(roomId: string, options: ClientOptions) {
-    const isValidRoomId = isValidId(roomId);
-    const room = isValidRoomId && await this.driver.findOne({ roomId });
+    const room = await this.driver.findOne({ roomId });
 
     if (room) {
       const rejoinSessionId = options.sessionId;
@@ -224,7 +223,6 @@ export class MatchMaker {
     room.listing = this.driver.createInstance({
       name: roomName,
       processId: this.processId,
-      roomId: room.roomId,
       ...registeredHandler.getFilterOptions(clientOptions),
     });
 
@@ -239,6 +237,8 @@ export class MatchMaker {
     }
 
     room._internalState = RoomInternalState.CREATED;
+
+    room.listing.roomId = room.roomId;
     room.listing.maxClients = room.maxClients;
 
     // imediatelly ask client to join the room
