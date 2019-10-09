@@ -21,14 +21,17 @@
   </h3>
 </div>
 
-Colyseus is a Authoritative Multiplayer Game Server for Node.js. It allows you
-to focus on your gameplay instead of bothering about networking.
+Colyseus is an Authoritative Multiplayer Game Server for Node.js, with clients
+available for the Web, Unity3d, Defold, Haxe, and Cocos2d-X. ([See official clients](#official-client-integration))
 
-The mission of this framework is to be the easiest solution for creating your
-own multiplayer games in JavaScript.
+The project focuses on providing synchronizable data structures for realtime and
+turn-based games, matchmaking, and ease of usage both on the server-side and
+client-side.
 
-This framework is fairly new and is being evolved constantly. You're encouraged
-to take a look on [some games being developed with
+The mission of the framework is to be a standard netcode & matchmaking solution
+for any kind of project you can think of!
+
+You're encouraged to take a look on [some games being developed with
 it](https://discuss.colyseus.io/category/5/showcase) and make your own!
 
 ## What Colyseus provides to you:
@@ -46,7 +49,7 @@ it](https://discuss.colyseus.io/category/5/showcase) and make your own!
 
 See [roadmap](https://github.com/colyseus/colyseus/wiki/Roadmap) for our future plans.
 
-## Quickstart
+# 🚀 Quickstart
 
 Create a bare-bones Colyseus server by using `npm init colyseus-app`.
 
@@ -56,7 +59,7 @@ cd my-colyseus-server
 npm start
 ```
 
-### Official client integration
+# 🕹️ Official Client Integration
 
 - [JavaScript/TypeScript](https://github.com/colyseus/colyseus.js)
 - [Defold Engine](https://github.com/colyseus/colyseus-defold) ([defold.com](https://www.defold.com/))
@@ -65,21 +68,21 @@ npm start
 - [Cocos2d-x](https://github.com/colyseus/colyseus-cocos2d-x) ([cocos2d-x.org](https://cocos2d-x.org/))
 - [Construct 3](https://github.com/colyseus/colyseus-construct3) ([construct3.net](https://www.construct.net/))
 
-### Tools
+# 🛠️ Tools
 
 - [@colyseus/social](https://github.com/colyseus/colyseus-social) - Authentication and Social features for Colyseus
 - [@colyseus/proxy](https://github.com/colyseus/proxy) - Proxy & Service Discovery for scaling Colyseus
 - [@colyseus/monitor](https://github.com/colyseus/colyseus-monitor) - A Web Monitoring Panel for Colyseus
 - [@colyseus/loadtest](https://github.com/colyseus/colyseus-loadtest) - Utility tool for load testing Colyseus
 
-### Tools made by the community :heart:
+## Tools made by the community ❤️
 
 - [colyseus-hxjs](https://github.com/serjek/colyseus-hxjs): Haxe externs for colyseus server (by [@serjek](https://github.com/serjek))
 - [colyseus-java](https://github.com/doorbash/colyseus-java): Client for Java (by [@doorbash](https://github.com/doorbash))
 - [Colyseus-ObjC](https://github.com/swittk/Colyseus-ObjC): Client for Objective C (by [@swittk](https://github.com/swittk))
 - [Colyseus-for-C2](https://github.com/Keevle/Colyseus-for-C2): Client for Construct 2 (by [@Keevle](https://github.com/Keevle))
 
-### Usage examples
+# Usage examples
 
 See the [official examples](https://github.com/colyseus/colyseus-examples) for
 usage reference with the latest version of Colyseus.
@@ -88,9 +91,7 @@ usage reference with the latest version of Colyseus.
 - [Colyseus + BabylonJS Boilerplate](https://babylonjs-multiplayer.herokuapp.com/) ([source-code](https://github.com/endel/babylonjs-multiplayer-boilerplate)) - Bare-bones [BabylonJS](https://github.com/BabylonJS/Babylon.js) example
 - [Tic Tac Toe](https://tictactoe-colyseus.herokuapp.com) ([source-code](https://github.com/endel/tic-tac-toe)) - Tic Tac Toe using [PixiJS](https://github.com/pixijs/pixi.js) and [Defold Engine](https://defold.com)
 - [Collaborative Drawing Prototype](https://colyseus-drawing-prototype.herokuapp.com/) ([source-code](https://github.com/endel/colyseus-collaborative-drawing)) - Collaborative drawing using HTML5 canvas.
-- (outdated: v0.8.x) [tanx](https://playcanvas.com/project/367035/overview/tanxcolyseus) ([source-code](https://github.com/endel/tanx)) - Multiplayer tanks game, originally from [PlayCanvas](https://tanx.io/)
-- (outdated: v0.4.x) [React Example](https://colyseus-react-example.herokuapp.com) ([source-code](https://github.com/endel/colyseus-react-example)) - Example integrating with [ReactJS](https://github.com/facebook/react)
-- (outdated: v0.3.x) [LD35 entry: dotower](http://ludumdare.com/compo/ludum-dare-35/?action=preview&uid=50958) ([source-code](https://github.com/endel/LD35)) - Simple experimental MOBA using [PixiJS](https://github.com/pixijs/pixi.js)
+- (outdated: < v0.8.x): [tanx](https://playcanvas.com/project/367035/overview/tanxcolyseus), [react-example](https://github.com/endel/colyseus-react-example), [LD35 entry: dotower](http://ludumdare.com/compo/ludum-dare-35/?action=preview&uid=50958)
 
 # Contributors
 
@@ -98,7 +99,7 @@ Thanks goes to these wonderful people ([emoji key](https://github.com/kentcdodds
 
 <!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
 <!-- prettier-ignore -->
-| [<img src="https://avatars3.githubusercontent.com/u/130494?v=4" width="100px;" alt="Endel Dreyer"/><br /><sub><b>Endel Dreyer</b></sub>](https://twitter.com/endel)<br />[💻](https://github.com/gamestdio/colyseus/commits?author=endel "Code") [📖](https://github.com/gamestdio/colyseus/commits?author=endel "Documentation") [💡](#example-endel "Examples") | [<img src="https://avatars0.githubusercontent.com/u/763609?v=4" width="100px;" alt="Kyle J. Kemp"/><br /><sub><b>Kyle J. Kemp</b></sub>](http://seiyria.com)<br />[💬](#question-seiyria "Answering Questions") [🐛](https://github.com/gamestdio/colyseus/issues?q=author%3Aseiyria "Bug reports") [💻](https://github.com/gamestdio/colyseus/commits?author=seiyria "Code") [💵](#financial-seiyria "Financial") [🤔](#ideas-seiyria "Ideas, Planning, & Feedback") | [<img src="https://avatars0.githubusercontent.com/u/18367963?v=4" width="100px;" alt="Jonas Voland"/><br /><sub><b>Jonas Voland</b></sub>](http://wenish.github.io/portfolio/)<br />[💬](#question-Wenish "Answering Questions") [🐛](https://github.com/gamestdio/colyseus/issues?q=author%3AWenish "Bug reports") [💻](https://github.com/gamestdio/colyseus/commits?author=Wenish "Code") [💵](#financial-Wenish "Financial") [🤔](#ideas-Wenish "Ideas, Planning, & Feedback") | [<img src="https://avatars2.githubusercontent.com/u/5982526?v=4" width="100px;" alt="Milad Doorbash"/><br /><sub><b>Milad Doorbash</b></sub>](https://github.com/doorbash)<br />[🐛](https://github.com/gamestdio/colyseus/issues?q=author%3Adoorbash "Bug reports") [💻](https://github.com/gamestdio/colyseus/commits?author=doorbash "Code") | [<img src="https://avatars0.githubusercontent.com/u/853683?v=4" width="100px;" alt="Tom"/><br /><sub><b>Tom</b></sub>](https://oyed.io)<br />[💬](#question-oyed "Answering Questions") [🐛](https://github.com/gamestdio/colyseus/issues?q=author%3Aoyed "Bug reports") [💵](#financial-oyed "Financial") [🤔](#ideas-oyed "Ideas, Planning, & Feedback") | [<img src="https://avatars0.githubusercontent.com/u/1327007?v=4" width="100px;" alt="James Jacoby"/><br /><sub><b>James Jacoby</b></sub>](https://github.com/mobyjames/)<br />[💡](#example-mobyjames "Examples") [💵](#financial-mobyjames "Financial") [🖋](#content-mobyjames "Content") | [<img src="https://avatars2.githubusercontent.com/u/20824844?v=4" width="100px;" alt="Nikita Borisov"/><br /><sub><b>Nikita Borisov</b></sub>](https://github.com/AnubisCode)<br />[🐛](https://github.com/gamestdio/colyseus/issues?q=author%3AAnubisCode "Bug reports") [💻](https://github.com/gamestdio/colyseus/commits?author=AnubisCode "Code") [💵](#financial-AnubisCode "Financial") [🤔](#ideas-AnubisCode "Ideas, Planning, & Feedback") |
+| [<img src="https://avatars3.githubusercontent.com/u/130494?v=4" width="100px;" alt="Endel Dreyer"/><br /><sub><b>Endel Dreyer</b></sub>](https://twitter.com/endel)<br />[💻](https://github.com/gamestdio/colyseus/commits?author=endel "Code") [📖](https://github.com/gamestdio/colyseus/commits?author=endel "Documentation") [💡](#example-endel "Examples") | [<img src="https://avatars0.githubusercontent.com/u/763609?v=4" width="100px;" alt="Kyle J. Kemp"/><br /><sub><b>Kyle J. Kemp</b></sub>](http://seiyria.com)<br />[💬](#question-seiyria "Answering Questions") [🐛](https://github.com/gamestdio/colyseus/issues?q=author%3Aseiyria "Bug reports") [💻](https://github.com/gamestdio/colyseus/commits?author=seiyria "Code") [💵](#financial-seiyria "Financial") [🤔](#ideas-seiyria "Ideas, Planning, & Feedback") | [<img src="https://avatars0.githubusercontent.com/u/18367963?v=4" width="100px;" alt="Jonas Voland"/><br /><sub><b>Jonas Voland</b></sub>](http://wenish.github.io/portfolio/)<br />[💬](#question-Wenish "Answering Questions") [🐛](https://github.com/gamestdio/colyseus/issues?q=author%3AWenish "Bug reports") [💻](https://github.com/gamestdio/colyseus/commits?author=Wenish "Code") [💵](#financial-Wenish "Financial") [🤔](#ideas-Wenish "Ideas, Planning, & Feedback") | [<img src="https://avatars2.githubusercontent.com/u/5982526?v=4" width="100px;" alt="Milad Doorbash"/><br /><sub><b>Milad Doorbash</b></sub>](https://github.com/doorbash)<br />[🐛](https://github.com/gamestdio/colyseus/issues?q=author%3Adoorbash "Bug reports") [💻](https://github.com/gamestdio/colyseus/commits?author=doorbash "Code") | [<img src="https://avatars0.githubusercontent.com/u/853683?v=4" width="100px;" alt="Tom"/><br /><sub><b>Tom</b></sub>](https://oyed.io)<br />[💬](#question-oyed "Answering Questions") [🐛](https://github.com/gamestdio/colyseus/issues?q=author%3Aoyed "Bug reports") [💵](#financial-oyed "Financial") [🤔](#ideas-oyed "Ideas, Planning, & Feedback") | [<img src="https://avatars0.githubusercontent.com/u/1327007?v=4" width="100px;" alt="James Jacoby"/><br /><sub><b>James Jacoby</b></sub>](https://github.com/mobyjames/)<br />[💡](#example-mobyjames "Examples") [💵](#financial-mobyjames "Financial") [🖋](#content-mobyjames "Content") | [<img src="https://avatars2.githubusercontent.com/u/20824844?v=4" width="100px;" alt="Nikita Borisov"/><br /><sub><b>Nikita Borisov</b></sub>](https://github.com/TinyDobbins)<br />[🐛](https://github.com/gamestdio/colyseus/issues?q=author%3ATinyDobbins "Bug reports") [💻](https://github.com/gamestdio/colyseus/commits?author=TinyDobbins "Code") [💵](#financial-TinyDobbins "Financial") [🤔](#ideas-TinyDobbins "Ideas, Planning, & Feedback") |
 | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 | [<img src="https://avatars2.githubusercontent.com/u/232101?v=4" width="100px;" alt="Phil Harvey"/><br /><sub><b>Phil Harvey</b></sub>](https://acemobe.com/)<br />[💵](#financial-filharvey "Financial") [📖](https://github.com/gamestdio/colyseus/commits?author=filharvey "Documentation") | [<img src="https://avatars2.githubusercontent.com/u/1428000?v=4" width="100px;" alt="Brian Hay"/><br /><sub><b>Brian Hay</b></sub>](https://github.com/brian-hay)<br />[💵](#financial-brian-hay "Financial") | [<img src="https://avatars2.githubusercontent.com/u/5557196?v=4" width="100px;" alt="Enriqueto"/><br /><sub><b>Enriqueto</b></sub>](https://github.com/enriqueto)<br />[💵](#financial-enriqueto "Financial") | [<img src="https://avatars2.githubusercontent.com/u/6645396?v=4" width="100px;" alt="digimbyte"/><br /><sub><b>digimbyte</b></sub>](https://github.com/digimbyte)<br />[💵](#financial-digimbyte "Financial") [📖](https://github.com/gamestdio/colyseus/commits?author=digimbyte "Documentation") | [<img src="https://avatars2.githubusercontent.com/u/21344385?v=4" width="100px;" alt="Federico"/><br /><sub><b>Federico</b></sub>](https://twitter.com/Federkun)<br />[🐛](https://github.com/gamestdio/colyseus/issues?q=author%3AFederkun "Bug reports") [💻](https://github.com/gamestdio/colyseus/commits?author=Federkun "Code") | [<img src="https://avatars0.githubusercontent.com/u/13785893?v=4" width="100px;" alt="Derwish"/><br /><sub><b>Derwish</b></sub>](https://github.com/derwish-pro)<br />[🐛](https://github.com/gamestdio/colyseus/issues?q=author%3Aderwish-pro "Bug reports") [🔧](#tool-derwish-pro "Tools") |
 <!-- ALL-CONTRIBUTORS-LIST:END -->
@@ -114,6 +115,30 @@ guide](.github/CONTRIBUTING.md) for guidelines about how to proceed. Join us!
 Everyone interacting in Colyseus and its sub-projects' codebases, issue trackers
 and chat rooms is expected to follow the [code of conduct](CODE_OF_CONDUCT.md).
 
-## License
+# Backers / Supporters via Patreon
+
+**Generous backers:**
+- Kyle Kemp
+- Wenish
+
+**Backers:**
+- Brian Hay
+- Damian Alberto Pastorini
+- DIGI
+- Endre Johnsen
+- enriqueto
+- Eric McDaniel
+- Halil Bilgin
+- James Jacoby
+- João Mosmann
+- LeeSeHeon
+- Nikita Borisov
+- Phil
+- Plaid World
+- Rick Porter
+- tobi4s1337
+- Worph
+
+# License
 
 MIT

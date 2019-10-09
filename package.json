@@ -27,7 +27,8 @@
     "watch": "tsc -d -w",
     "start": "nodemon --watch 'src/**/*.ts' --exec 'ts-node' usage/Server.ts",
     "test": "COLYSEUS_PRESENCE_SHORT_TIMEOUT=300 mocha --require ts-node/register test/**Test.ts --exit",
-    "tslint": "tslint --project ."
+    "tslint": "tslint --project .",
+    "update-contributors": "all-contributors generate"
   },
   "engines": {
     "node": ">= 8.x"
