@@ -16,9 +16,7 @@ export class Client extends EventEmitter {
     super();
     this.id = id || null;
 
-    this.once('close', () => {
-      this.readyState = WebSocket.CLOSED
-    });
+    this.once('close', () => this.readyState = WebSocket.CLOSED);
   }
 
   send (message) {
