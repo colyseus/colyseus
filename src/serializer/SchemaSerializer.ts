@@ -7,8 +7,11 @@ import { Protocol, send } from '../Protocol';
 
 export class SchemaSerializer<T> implements Serializer<T> {
   public id = 'schema';
+
   private state: T & Schema;
   private hasFiltersByClient: boolean = false;
+
+  private handshakeCache: number[];
 
   public reset(newState: T & Schema) {
     if (!(newState instanceof Schema)) {
@@ -61,7 +64,14 @@ export class SchemaSerializer<T> implements Serializer<T> {
   }
 
   public handshake() {
-    return this.state && Reflection.encode(this.state);
+    /**
+     * Cache handshake to avoid encoding it for each client joining
+     */
+    if (!this.handshakeCache) {
+      this.handshakeCache = (this.state && Reflection.encode(this.state));
+    }
+
+    return this.handshakeCache
   }
 
   private hasFilter(schema: Definition, filters: any) {
