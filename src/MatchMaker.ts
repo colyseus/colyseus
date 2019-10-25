@@ -285,7 +285,7 @@ export class MatchMaker {
     return Promise.all(promises);
   }
 
-  protected async reserveSeatFor(room: RoomListingData, options) {
+  public async reserveSeatFor(room: RoomListingData, options) {
     const sessionId: string = generateId();
 
     debugMatchMaking(
