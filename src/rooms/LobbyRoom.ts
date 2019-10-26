@@ -1,7 +1,7 @@
 import { Schema, type } from '@colyseus/schema';
 import { Room } from '../Room';
 
-class RoomData extends Schema {
+class RoomData extends Schema { // tslint:disable-line
   @type('string') public id: string;
   @type('string') public name: string;
   @type('number') public clients: number;
@@ -9,11 +9,11 @@ class RoomData extends Schema {
   @type('string') public metadata: string;
 }
 
-class LobbyState extends Schema {
+class LobbyState extends Schema { // tslint:disable-line
   @type([RoomData]) public rooms: RoomData[];
 }
 
-export class LobbyRoom extends Room<LobbyState> {
+export class LobbyRoom extends Room<LobbyState> { // tslint:disable-line
 
   public onCreate(options: any) {
     this.setState(new LobbyState());
@@ -24,8 +24,12 @@ export class LobbyRoom extends Room<LobbyState> {
     // TODO: make .driver available on this scope!
   }
 
-  public onMessage() {}
+  public onMessage() {
+    // TODO:
+  }
 
-  public onDispose() {}
+  public onDispose() {
+    // TODO:
+  }
 
 }

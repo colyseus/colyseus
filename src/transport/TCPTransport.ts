@@ -2,7 +2,7 @@ import * as net from 'net';
 
 import { generateId } from '../';
 import { decode, Protocol, send } from '../Protocol';
-import { MatchMaker } from './../MatchMaker';
+import * as matchMaker from './../MatchMaker';
 import { ServerOptions } from './../Server';
 import { Transport } from './Transport';
 
@@ -14,8 +14,8 @@ import { debugAndPrintError, debugError } from './../Debug';
  * It was meant to be used for https://github.com/colyseus/colyseus-gml
  */
 export class TCPTransport extends Transport {
-  constructor(matchMaker: MatchMaker, options: ServerOptions = {}) {
-    super(matchMaker);
+  constructor(options: ServerOptions = {}) {
+    super();
 
     this.server = net.createServer();
     this.server.on('connection', this.onConnection);
@@ -65,7 +65,7 @@ export class TCPTransport extends Transport {
       // forward as 'message' all 'data' messages
       client.on('data', (data) => client.emit('message', data));
 
-      const room = this.matchMaker.getRoomById(roomId);
+      const room = matchMaker.getRoomById(roomId);
       try {
         await room._onJoin(client);
 

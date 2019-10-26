@@ -71,7 +71,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
       this.handshakeCache = (this.state && Reflection.encode(this.state));
     }
 
-    return this.handshakeCache
+    return this.handshakeCache;
   }
 
   private hasFilter(schema: Definition, filters: any) {

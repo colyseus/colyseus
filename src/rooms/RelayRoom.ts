@@ -3,13 +3,12 @@ import { MapSchema, Schema, type } from '@colyseus/schema';
 import { Client } from '..';
 import { Room } from '../Room';
 
-class Player extends Schema {
+class Player extends Schema { // tslint:disable-line
   @type('string') public sessionId: string;
   @type('boolean') public connected: boolean;
-  @type('boolean') public isMaster: boolean;
 }
 
-class State extends Schema {
+class State extends Schema { // tslint:disable-line
   @type({ map: Player })
   public players = new MapSchema<Player>();
 }
@@ -21,7 +20,7 @@ class State extends Schema {
  * });
  */
 
-export class RelayRoom extends Room<State> {
+export class RelayRoom extends Room<State> { // tslint:disable-line
   public allowReconnectionTime: number = 0;
 
   public onCreate(options) {
@@ -45,9 +44,6 @@ export class RelayRoom extends Room<State> {
     player.sessionId = client.sessionId;
     player.connected = true;
 
-    // first player joining is assigned as master
-    player.isMaster = (this.clients.length === 1);
-
     this.state.players[client.sessionId] = player;
   }
 
@@ -55,7 +51,7 @@ export class RelayRoom extends Room<State> {
     /**
      * append `sessionId` into the message for broadcast.
      */
-    if (typeof(message) === "object" && !Array.isArray(message)) {
+    if (typeof(message) === 'object' && !Array.isArray(message)) {
       message.sessionId = client.sessionId;
     }
 
@@ -63,15 +59,6 @@ export class RelayRoom extends Room<State> {
   }
 
   public async onLeave(client: Client, consented: boolean) {
-    // master is leaving, let's assign a new master.
-    if (this.state.players[client.sessionId].isMaster) {
-      const availableSessionIds = Object.keys(this.state.players).filter((sessionId) => sessionId !== client.sessionId);
-      if (availableSessionIds.length > 0) {
-        const newMasterSessionId = availableSessionIds[Math.floor(Math.random() * availableSessionIds.length)];
-        this.state.players[newMasterSessionId].isMaster = true;
-      }
-    }
-
     if (this.allowReconnectionTime > 0) {
       this.state.players[client.sessionId].connected = false;
 

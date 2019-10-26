@@ -9,6 +9,10 @@ export { Room } from './Room';
 export { Protocol } from './Protocol';
 export { RegisteredHandler, SortOptions } from './matchmaker/RegisteredHandler';
 
+// MatchMaker
+import * as matchMaker from './MatchMaker';
+export { matchMaker };
+
 // Presence
 export { Presence } from './presence/Presence';
 export { LocalPresence } from './presence/LocalPresence';
