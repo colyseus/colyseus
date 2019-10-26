@@ -31,8 +31,8 @@ const handlers: {[id: string]: RegisteredHandler} = {};
 const localRooms: {[roomId: string]: Room} = {};
 
 let presence: Presence;
-let driver: MatchMakerDriver;
 let processId: string;
+export let driver: MatchMakerDriver;
 
 let isGracefullyShuttingDown: boolean = false;
 
