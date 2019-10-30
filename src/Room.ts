@@ -3,6 +3,7 @@ import msgpack from 'notepack.io';
 
 import Clock from '@gamestdio/timer';
 import { EventEmitter } from 'events';
+import { Schema } from '@colyseus/schema';
 
 import { Client, ClientState } from '.';
 import { Presence } from './presence/Presence';
@@ -221,6 +222,9 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
       // - enqueue the messages to be send after JOIN_ROOM message has been sent
       if (!client._enqueuedMessages) { client._enqueuedMessages = []; }
       client._enqueuedMessages.push(message);
+
+    } else if (message instanceof Schema) {
+      send[Protocol.ROOM_DATA_CUSTOM](client, message);
 
     } else {
       send[Protocol.ROOM_DATA](client, message);

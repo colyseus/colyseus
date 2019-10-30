@@ -18,13 +18,8 @@ export { Presence } from './presence/Presence';
 export { LocalPresence } from './presence/LocalPresence';
 export { RedisPresence } from './presence/RedisPresence';
 
-/**
- * FIXME: do not expose rooms by default yet.
- * This causes "schema mismatch" issue on Unity3d due to the way schema
- * contexts are registered
- */
-// // Default rooms
-// export { RelayRoom } from './rooms/RelayRoom';
+// Default rooms
+export { RelayRoom } from './rooms/RelayRoom';
 
 // Serializers
 export { FossilDeltaSerializer } from './serializer/FossilDeltaSerializer';
