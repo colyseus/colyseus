@@ -4,7 +4,7 @@ import WebSocket from 'ws';
 import { ServerOptions as IServerOptions } from 'ws';
 
 import { debugAndPrintError, debugMatchMaking } from './Debug';
-import { MatchMaker } from './MatchMaker';
+import * as matchMaker from './MatchMaker';
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
 import { Presence } from './presence/Presence';
 import { TCPTransport, Transport, WebSocketTransport } from './transport/Transport';
@@ -32,18 +32,22 @@ export type ServerOptions = IServerOptions & {
 };
 
 export class Server {
-  public matchMaker: MatchMaker;
   public transport: Transport;
 
   protected presence: Presence;
   protected processId: string = generateId();
   protected route = '/matchmake';
 
+  private exposedMethods = ['joinOrCreate', 'create', 'join', 'joinById'];
+  private allowedRoomNameChars = /([a-zA-Z_\-0-9]+)/gi;
+
   constructor(options: ServerOptions = {}) {
     const { gracefullyShutdown = true } = options;
 
     this.presence = options.presence || new LocalPresence();
-    this.matchMaker = new MatchMaker(this.presence, options.driver, this.processId);
+
+    // setup matchmaker
+    matchMaker.setup(this.presence, options.driver, this.processId);
 
     // "presence" option is not used from now on
     delete options.presence;
@@ -65,8 +69,8 @@ export class Server {
     delete options.engine;
 
     this.transport = (engine === net.Server)
-      ? new TCPTransport(this.matchMaker, options)
-      : new WebSocketTransport(this.matchMaker, options, engine);
+      ? new TCPTransport(options)
+      : new WebSocketTransport(options, engine);
   }
 
   public listen(port: number, hostname?: string, backlog?: number, listeningListener?: Function) {
@@ -82,7 +86,7 @@ export class Server {
   }
 
   public define(name: string, handler: RoomConstructor, defaultOptions: any = {}): RegisteredHandler {
-    return this.matchMaker.defineRoomType(name, handler, defaultOptions);
+    return matchMaker.defineRoomType(name, handler, defaultOptions);
   }
 
   public async gracefullyShutdown(exit: boolean = true) {
@@ -92,7 +96,7 @@ export class Server {
     });
 
     try {
-      await this.matchMaker.gracefullyShutdown();
+      await matchMaker.gracefullyShutdown();
       this.transport.shutdown();
       await this.onShutdownCallback();
 
@@ -142,7 +146,7 @@ export class Server {
       res.end();
 
     } else if (req.method === 'POST') {
-      const matchedParams = req.url.match(this.matchMaker.allowedRoomNameChars);
+      const matchedParams = req.url.match(this.allowedRoomNameChars);
       const method = matchedParams[matchedParams.length - 2];
       const name = matchedParams[matchedParams.length - 1];
 
@@ -154,11 +158,11 @@ export class Server {
 
         const body = JSON.parse(Buffer.concat(data).toString());
         try {
-          if (this.matchMaker.exposedMethods.indexOf(method) === -1) {
+          if (this.exposedMethods.indexOf(method) === -1) {
             throw new MatchMakeError(`invalid method "${method}"`, Protocol.ERR_MATCHMAKE_UNHANDLED);
           }
 
-          const response = await this.matchMaker[method](name, body);
+          const response = await matchMaker[method](name, body);
           res.write(JSON.stringify(response));
 
         } catch (e) {
@@ -172,7 +176,7 @@ export class Server {
       });
 
     } else if (req.method === 'GET') {
-      const matchedParams = req.url.match(this.matchMaker.allowedRoomNameChars);
+      const matchedParams = req.url.match(this.allowedRoomNameChars);
       let roomName = matchedParams[matchedParams.length - 1];
 
       // TODO: improve me, "matchmake" room names aren't allowed this way.
@@ -181,7 +185,7 @@ export class Server {
       headers['Content-Type'] = 'application/json';
       res.writeHead(200, headers);
       res.write(JSON.stringify(
-        await this.matchMaker.query(roomName, { locked: false }),
+        await matchMaker.query(roomName, { locked: false }),
       ));
       res.end();
     }

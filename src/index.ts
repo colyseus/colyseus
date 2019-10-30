@@ -9,13 +9,22 @@ export { Room } from './Room';
 export { Protocol } from './Protocol';
 export { RegisteredHandler, SortOptions } from './matchmaker/RegisteredHandler';
 
+// MatchMaker
+import * as matchMaker from './MatchMaker';
+export { matchMaker };
+
 // Presence
 export { Presence } from './presence/Presence';
 export { LocalPresence } from './presence/LocalPresence';
 export { RedisPresence } from './presence/RedisPresence';
 
-// Default rooms
-export { RelayRoom } from './rooms/RelayRoom';
+/**
+ * FIXME: do not expose rooms by default yet.
+ * This causes "schema mismatch" issue on Unity3d due to the way schema
+ * contexts are registered
+ */
+// // Default rooms
+// export { RelayRoom } from './rooms/RelayRoom';
 
 // Serializers
 export { FossilDeltaSerializer } from './serializer/FossilDeltaSerializer';

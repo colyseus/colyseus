@@ -3,8 +3,8 @@ import url from 'url';
 import WebSocket from 'ws';
 
 import { Client, Protocol } from '..';
+import * as matchMaker from '../MatchMaker';
 
-import { MatchMaker } from '../MatchMaker';
 import { send } from '../Protocol';
 import { parseQueryString } from '../Utils';
 import { ServerOptions } from './../Server';
@@ -22,8 +22,8 @@ export class WebSocketTransport extends Transport {
   protected pingTimeout: number;
   protected pingCountMax: number;
 
-  constructor(matchMaker: MatchMaker, options: ServerOptions = {}, engine: any) {
-    super(matchMaker);
+  constructor(options: ServerOptions = {}, engine: any) {
+    super();
 
     // disable per-message deflate
     options.perMessageDeflate = false;
@@ -86,7 +86,7 @@ export class WebSocketTransport extends Transport {
     const processAndRoomId = parsedURL.pathname.match(/\/[a-zA-Z0-9_\-]+\/([a-zA-Z0-9_\-]+)$/);
     const roomId = processAndRoomId && processAndRoomId[1];
 
-    const room = this.matchMaker.getRoomById(roomId);
+    const room = matchMaker.getRoomById(roomId);
 
     // set client id
     client.pingCount = 0;
