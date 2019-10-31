@@ -404,6 +404,7 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
 
   protected async allowReconnection(client: Client, seconds: number = 15): Promise<Client> {
     if (this._internalState === RoomInternalState.DISCONNECTING) {
+      this._disposeIfEmpty(); // gracefully shutting down
       throw new Error('disconnecting');
     }
 
