@@ -1,6 +1,8 @@
 import * as httpClient from "httpie";
 import assert from "assert";
+
 import { Server } from "../src";
+import { DummyRoom } from "./utils/mock";
 
 describe("Server", () => {
 
@@ -8,7 +10,14 @@ describe("Server", () => {
     const server = new Server();
 
     // bind & unbind server
-    before(async () => new Promise(resolve => server.listen(8567, undefined, undefined, resolve)));
+    before(async () => new Promise((resolve) => {
+      // define a room
+      server.define("roomName", DummyRoom);
+
+      // listen for testing
+      server.listen(8567, undefined, undefined, resolve);
+    }));
+
     after(() => server.transport.shutdown());
 
     it("should respond to GET /matchmake/ to retrieve list of rooms", async () => {
@@ -16,12 +25,18 @@ describe("Server", () => {
       assert.deepEqual(response.data, []);
     });
 
-    xit("should respond to POST /matchmake/roomName", async () => {
-      const response = await httpClient.post("http://localhost:8567/matchmake/");
-      assert.deepEqual(response.data, []);
+    it("should respond to POST /matchmake/joinOrCreate/roomName", async () => {
+      const { data } = await httpClient.post("http://localhost:8567/matchmake/joinOrCreate/roomName", {
+        body: "{}"
+      });
+
+      assert.ok(data.sessionId);
+      assert.ok(data.room);
+      assert.ok(data.room.processId);
+      assert.ok(data.room.roomId);
+      assert.equal(data.room.name, 'roomName');
     });
 
   });
-
 
 });

@@ -17,9 +17,9 @@ import { LocalDriver } from './matchmaker/drivers/LocalDriver';
 
 export type ClientOptions = any;
 
-export interface RoomWithScore {
-  roomId: string;
-  score: number;
+export interface SeatReservation {
+  sessionId: string;
+  room: RoomListingData;
 }
 
 // remote room call timeouts
@@ -34,16 +34,17 @@ let presence: Presence;
 let processId: string;
 export let driver: MatchMakerDriver;
 
-let isGracefullyShuttingDown: boolean = false;
+let isGracefullyShuttingDown: boolean;
 
 export function setup(_presence?: Presence, _driver?: MatchMakerDriver, _processId?: string) {
   presence = _presence || new LocalPresence();
   driver = _driver || new LocalDriver();
   processId = _processId;
+  isGracefullyShuttingDown = false;
 }
 
-export async function joinOrCreate(roomName: string, options: ClientOptions) {
-  return await retry(async () => {
+export async function joinOrCreate(roomName: string, options: ClientOptions = {}) {
+  return await retry<Promise<SeatReservation>>(async () => {
     let room = await queryRoom(roomName, options);
 
     if (!room) {
@@ -54,7 +55,7 @@ export async function joinOrCreate(roomName: string, options: ClientOptions) {
   }, 5, [SeatReservationError]);
 }
 
-export async function create(roomName: string, options: ClientOptions) {
+export async function create(roomName: string, options: ClientOptions = {}) {
   const handler = handlers[roomName];
   if (!handler) {
     throw new MatchMakeError(`no available handler for "${roomName}"`, Protocol.ERR_MATCHMAKE_NO_HANDLER);
@@ -66,8 +67,8 @@ export async function create(roomName: string, options: ClientOptions) {
   return reserveSeatFor(room, options);
 }
 
-export async function join(roomName: string, options: ClientOptions) {
-  return await retry(async () => {
+export async function join(roomName: string, options: ClientOptions = {}) {
+  return await retry<Promise<SeatReservation>>(async () => {
     const room = await queryRoom(roomName, options);
 
     if (!room) {
@@ -78,7 +79,7 @@ export async function join(roomName: string, options: ClientOptions) {
   });
 }
 
-export async function joinById(roomId: string, options: ClientOptions) {
+export async function joinById(roomId: string, options: ClientOptions = {}) {
   const room = await driver.findOne({ roomId });
 
   if (room) {
@@ -110,12 +111,7 @@ export async function joinById(roomId: string, options: ClientOptions) {
 
 }
 
-export async function query(roomName?: string, conditions: any = {}) {
-  if (roomName) { conditions.name = roomName; }
-
-  // list only public rooms
-  conditions.private = false;
-
+export async function query(conditions: any = {}) {
   return await driver.find(conditions);
 }
 

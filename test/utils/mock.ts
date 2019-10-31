@@ -2,19 +2,19 @@ import msgpack from "notepack.io";
 import WebSocket from "ws";
 import { EventEmitter } from "events";
 
-import { generateId, serialize, FossilDeltaSerializer } from "../../src";
+import { generateId, serialize, FossilDeltaSerializer, Protocol } from "../../src";
 import { Room } from "../../src/Room";
 import { LocalPresence } from './../../src/presence/LocalPresence';
+import { SeatReservation } from "../../src/MatchMaker";
 
 export class Client extends EventEmitter {
-
-  public id: string;
+  public sessionId: string;
   public messages: Array<any> = [];
   public readyState: number = WebSocket.OPEN;
 
   constructor (id?: string) {
     super();
-    this.id = id || null;
+    this.sessionId = id || null;
 
     this.once('close', () => this.readyState = WebSocket.CLOSED);
   }
@@ -46,15 +46,12 @@ export class Client extends EventEmitter {
 
 }
 
-export function createEmptyClient(): any {
+export function createEmptyClient() {
   return new Client();
 }
 
-export function createDummyClient (options: any = {}): any {
-  const id = options.id || generateId();
-  delete options.id;
-
-  let client = new Client(id);
+export function createDummyClient (seatReservation: SeatReservation, options: any = {}) {
+  let client = new Client(seatReservation.sessionId);
   (<any>client).options = options;
   return client;
 }
@@ -63,65 +60,47 @@ export function awaitForTimeout(ms: number = 200) {
   return new Promise((resolve, reject) => setTimeout(resolve, ms));
 }
 
-@serialize(FossilDeltaSerializer)
 export class DummyRoom extends Room {
-  constructor () {
-    super(new LocalPresence());
-  }
-
-  requestJoin (options) {
-    return !options.invalid_param
-  }
-
-  onInit () { this.setState({}); }
+  onCreate () {}
   onDispose() {}
   onJoin() {}
   onLeave() {}
   onMessage(client, message) { this.broadcast(message); }
 }
 
-@serialize(FossilDeltaSerializer)
-export class RoomWithError extends Room {
-  constructor () {
-    super(new LocalPresence());
-  }
-  onInit () { this.setState({}); }
-  onDispose() {}
-  onJoin() {
-    (<any>this).iHaveAnError();
-  }
-  onLeave() {}
-  onMessage() {}
-}
+export class Room2Clients extends Room {
+  maxClients = 2;
 
-@serialize(FossilDeltaSerializer)
-export class DummyRoomWithState extends Room {
-  constructor () {
-    super(new LocalPresence());
-    this.setState({ number: 10 });
-  }
-
-  requestJoin (options) {
-    return !options.invalid_param;
-  }
-
-  onInit () {}
+  onCreate () {}
   onDispose() {}
   onJoin() {}
   onLeave() {}
-  onMessage() {}
+  onMessage(client, message) { this.broadcast(message); }
 }
 
-@serialize(FossilDeltaSerializer)
-export class RoomVerifyClient extends DummyRoom {
-  patchRate = 5000;
-  onJoin () {}
+export class ReconnectRoom extends Room {
+  maxClients = 4;
+
+  onCreate () {}
+  onDispose() {}
+  onJoin() {}
+
+  async onLeave(client, consented) {
+    try {
+      if (consented) throw new Error("consented");
+
+      console.log("Let's await for reconnection...");
+      await this.allowReconnection(client, 1);
+
+    } catch (e) {
+      console.log(e);
+    }
+  }
+  onMessage(client, message) { this.broadcast(message); }
 }
 
-@serialize(FossilDeltaSerializer)
 export class RoomWithAsync extends DummyRoom {
   static ASYNC_TIMEOUT = 200;
-
   maxClients = 1;
 
   async onAuth() {
@@ -138,63 +117,4 @@ export class RoomWithAsync extends DummyRoom {
   async onDispose() {
     await awaitForTimeout(RoomWithAsync.ASYNC_TIMEOUT);
   }
-}
-
-@serialize(FossilDeltaSerializer)
-export class RoomVerifyClientWithLock extends DummyRoom {
-  patchRate = 5000;
-
-  async verifyClient () {
-    return new Promise((resolve, reject) => {
-      setTimeout(() => resolve(true), 100);
-    });
-  }
-
-  onJoin () {
-    this.lock();
-  }
-
-}
-
-export function utf8Read(buff: Buffer, offset: number) {
-  const length = buff.readUInt8(offset++);
-
-  var string = '', chr = 0;
-  for (var i = offset, end = offset + length; i < end; i++) {
-    var byte = buff.readUInt8(i);
-    if ((byte & 0x80) === 0x00) {
-      string += String.fromCharCode(byte);
-      continue;
-    }
-    if ((byte & 0xe0) === 0xc0) {
-      string += String.fromCharCode(
-        ((byte & 0x1f) << 6) |
-        (buff.readUInt8(++i) & 0x3f)
-      );
-      continue;
-    }
-    if ((byte & 0xf0) === 0xe0) {
-      string += String.fromCharCode(
-        ((byte & 0x0f) << 12) |
-        ((buff.readUInt8(++i) & 0x3f) << 6) |
-        ((buff.readUInt8(++i) & 0x3f) << 0)
-      );
-      continue;
-    }
-    if ((byte & 0xf8) === 0xf0) {
-      chr = ((byte & 0x07) << 18) |
-        ((buff.readUInt8(++i) & 0x3f) << 12) |
-        ((buff.readUInt8(++i) & 0x3f) << 6) |
-        ((buff.readUInt8(++i) & 0x3f) << 0);
-      if (chr >= 0x010000) { // surrogate pair
-        chr -= 0x010000;
-        string += String.fromCharCode((chr >>> 10) + 0xD800, (chr & 0x3FF) + 0xDC00);
-      } else {
-        string += String.fromCharCode(chr);
-      }
-      continue;
-    }
-    throw new Error('Invalid byte ' + byte.toString(16));
-  }
-  return string;
 }

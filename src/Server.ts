@@ -179,14 +179,22 @@ export class Server {
       const matchedParams = req.url.match(this.allowedRoomNameChars);
       let roomName = matchedParams[matchedParams.length - 1];
 
+      /**
+       * list public & unlocked rooms
+       */
+      const conditions: any = {
+        locked: false,
+        private: false
+      };
+
       // TODO: improve me, "matchmake" room names aren't allowed this way.
-      if (roomName === 'matchmake') { roomName = ''; }
+      if (roomName !== 'matchmake') {
+        conditions.name = roomName;
+      }
 
       headers['Content-Type'] = 'application/json';
       res.writeHead(200, headers);
-      res.write(JSON.stringify(
-        await matchMaker.query(roomName, { locked: false }),
-      ));
+      res.write(JSON.stringify(await matchMaker.query(conditions)));
       res.end();
     }
 
