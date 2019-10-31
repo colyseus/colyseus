@@ -78,6 +78,16 @@ export class Room2Clients extends Room {
   onMessage(client, message) { this.broadcast(message); }
 }
 
+export class Room3Clients extends Room {
+  maxClients = 3;
+
+  onCreate () {}
+  onDispose() {}
+  onJoin() {}
+  onLeave() {}
+  onMessage(client, message) { this.broadcast(message); }
+}
+
 export class ReconnectRoom extends Room {
   maxClients = 4;
 

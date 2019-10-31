@@ -1,7 +1,7 @@
 import * as httpClient from "httpie";
 import assert from "assert";
 
-import { Server } from "../src";
+import { Server, matchMaker } from "../src";
 import { DummyRoom } from "./utils/mock";
 
 describe("Server", () => {
@@ -11,6 +11,9 @@ describe("Server", () => {
 
     // bind & unbind server
     before(async () => new Promise((resolve) => {
+      // setup matchmaker
+      matchMaker.setup(undefined, undefined, 'dummyProcessId')
+
       // define a room
       server.define("roomName", DummyRoom);
 
