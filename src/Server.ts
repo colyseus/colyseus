@@ -177,14 +177,14 @@ export class Server {
 
     } else if (req.method === 'GET') {
       const matchedParams = req.url.match(this.allowedRoomNameChars);
-      let roomName = matchedParams[matchedParams.length - 1];
+      const roomName = matchedParams[matchedParams.length - 1];
 
       /**
        * list public & unlocked rooms
        */
       const conditions: any = {
         locked: false,
-        private: false
+        private: false,
       };
 
       // TODO: improve me, "matchmake" room names aren't allowed this way.
