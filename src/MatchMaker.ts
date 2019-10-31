@@ -28,7 +28,7 @@ export const REMOTE_ROOM_SHORT_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_SH
 type RemoteRoomResponse<T= any> = [string?, T?];
 
 const handlers: {[id: string]: RegisteredHandler} = {};
-const localRooms: {[roomId: string]: Room} = {};
+const rooms: {[roomId: string]: Room} = {};
 
 let presence: Presence;
 let processId: string;
@@ -142,7 +142,7 @@ export async function remoteRoomCall<R= any>(
   args?: any[],
   rejectionTimeout = REMOTE_ROOM_SHORT_TIMEOUT,
 ): Promise<RemoteRoomResponse<R>> {
-  const room = localRooms[roomId];
+  const room = rooms[roomId];
 
   if (!room) {
     return new Promise((resolve, reject) => {
@@ -253,7 +253,7 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
 }
 
 export function getRoomById(roomId: string) {
-  return localRooms[roomId];
+  return rooms[roomId];
 }
 
 export function gracefullyShutdown(): Promise<any> {
@@ -263,15 +263,13 @@ export function gracefullyShutdown(): Promise<any> {
 
   isGracefullyShuttingDown = true;
 
-  const promises = [];
+  const promises: Array<Promise<any>> = [];
 
-  for (const roomId in localRooms) {
-    if (!localRooms.hasOwnProperty(roomId)) {
+  for (const roomId in rooms) {
+    if (!rooms.hasOwnProperty(roomId)) {
       continue;
     }
-
-    const room = localRooms[roomId];
-    promises.push( room.disconnect() );
+    promises.push(rooms[roomId].disconnect());
   }
 
   return Promise.all(promises);
@@ -318,7 +316,7 @@ async function cleanupStaleRooms(roomName: string) {
 }
 
 async function createRoomReferences(room: Room, init: boolean = false): Promise<boolean> {
-  localRooms[room.roomId] = room;
+  rooms[room.roomId] = room;
 
   // add unlocked room reference
   await presence.sadd(room.roomName, room.roomId);
@@ -450,5 +448,5 @@ function disposeRoom(roomName: string, room: Room): void {
   presence.unsubscribe(getRoomChannel(room.roomId));
 
   // remove actual room reference
-  delete localRooms[room.roomId];
+  delete rooms[room.roomId];
 }
