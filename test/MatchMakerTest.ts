@@ -1,5 +1,5 @@
 import { matchMaker, Room } from "../src";
-import { DummyRoom, Room2Clients, createDummyClient, awaitForTimeout } from "./utils/mock";
+import { DummyRoom, Room2Clients, createDummyClient, awaitForTimeout, ReconnectRoom } from "./utils/mock";
 import assert, { AssertionError } from "assert";
 
 describe("MatchMaker", () => {
@@ -10,7 +10,7 @@ describe("MatchMaker", () => {
   before(() => {
     matchMaker.defineRoomType("dummy", DummyRoom);
     matchMaker.defineRoomType("room2", Room2Clients);
-    matchMaker.defineRoomType("reconnect", Room2Clients);
+    matchMaker.defineRoomType("reconnect", ReconnectRoom);
   });
 
   /**
@@ -103,8 +103,8 @@ describe("MatchMaker", () => {
   });
 
   describe("reconnect", async () => {
-    it("should not allow to reconnect", async () => {
-      const reservedSeat1 = await matchMaker.joinOrCreate("dummy");
+    it("should allow to reconnect", async () => {
+      const reservedSeat1 = await matchMaker.joinOrCreate("reconnect");
 
       const client1 = createDummyClient(reservedSeat1);
       const room = matchMaker.getRoomById(reservedSeat1.room.roomId);
@@ -113,9 +113,35 @@ describe("MatchMaker", () => {
       assert.equal(1, room.clients.length);
 
       client1.close();
-      await awaitForTimeout(50);
+      await awaitForTimeout(100);
+      assert.equal(0, room.clients.length);
 
-      // TODO: try to reconnect and check
+      await matchMaker.joinById(room.roomId, { sessionId: client1.sessionId });
+      await room._onJoin(client1 as any);
+
+      assert.equal(1, room.clients.length);
+    });
+
+    it("should not allow to reconnect", async () => {
+      const reservedSeat1 = await matchMaker.joinOrCreate("reconnect");
+      const reservedSeat2 = await matchMaker.joinOrCreate("reconnect");
+
+      const client1 = createDummyClient(reservedSeat1);
+      const room = matchMaker.getRoomById(reservedSeat1.room.roomId);
+      await room._onJoin(client1 as any);
+
+      /**
+       * Create a second client so the room won't dispose
+       */
+      const client2 = createDummyClient(reservedSeat2);
+      await room._onJoin(client2 as any);
+      assert.equal(2, room.clients.length);
+
+      client1.close();
+      await awaitForTimeout(250);
+      assert.equal(1, room.clients.length);
+
+      assert.rejects(async() => await matchMaker.joinById(room.roomId, { sessionId: client1.sessionId }), /expired/);
     });
   });
 

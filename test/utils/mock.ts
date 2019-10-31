@@ -88,12 +88,10 @@ export class ReconnectRoom extends Room {
   async onLeave(client, consented) {
     try {
       if (consented) throw new Error("consented");
-
-      console.log("Let's await for reconnection...");
-      await this.allowReconnection(client, 1);
+      await this.allowReconnection(client, 0.2); // 200ms
 
     } catch (e) {
-      console.log(e);
+      // console.log("allowReconnection, error =>", e.message);
     }
   }
   onMessage(client, message) { this.broadcast(message); }
