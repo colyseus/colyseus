@@ -23,7 +23,17 @@ describe("MatchMaker", () => {
 
     matchMaker
       .defineRoomType("room2_filtered", Room2Clients)
-      .filterBy(['clients', 'mode']);
+      .filterBy(['mode']);
+
+    matchMaker
+      .defineRoomType("room3_sorted_desc", Room3Clients)
+      .filterBy(['clients'])
+      .sortBy({ clients: -1 });
+
+    matchMaker
+      .defineRoomType("room3_sorted_asc", Room3Clients)
+      .filterBy(['clients'])
+      .sortBy({ clients: 1 });
 
     /**
      * give some time for `cleanupStaleRooms()` to run
@@ -34,7 +44,7 @@ describe("MatchMaker", () => {
   for (let i=0; i<drivers.length; i++) {
     const driver = drivers[i];
 
-    describe(`driver -> ${driver.constructor.name}`, () => {
+    describe(`Driver: ${driver.constructor.name}`, () => {
       /**
        * `setup` matchmaker to re-set graceful shutdown status
        */
@@ -120,6 +130,83 @@ describe("MatchMaker", () => {
 
           const reservedSeat2 = await matchMaker.joinById(reservedSeat1.room.roomId)
           assert.equal(reservedSeat1.room.roomId, reservedSeat2.room.roomId);
+        });
+
+        it("filterBy(): filter by 'mode' field", async () => {
+          const reservedSeat1 = await matchMaker.joinOrCreate("room2_filtered", { mode: "squad" });
+          const reservedSeat2 = await matchMaker.joinOrCreate("room2_filtered", { mode: "duo" });
+          assert.notEqual(reservedSeat1.room.roomId, reservedSeat2.room.roomId);
+
+          const reservedSeat3 = await matchMaker.joinOrCreate("room2_filtered", { mode: "squad" });
+          const reservedSeat4 = await matchMaker.joinOrCreate("room2_filtered", { mode: "duo" });
+          assert.equal(reservedSeat1.room.roomId, reservedSeat3.room.roomId);
+          assert.equal(reservedSeat2.room.roomId, reservedSeat4.room.roomId);
+        });
+
+        it("sortBy(): sort desc by 'clients' field", async () => {
+          const room1 = await matchMaker.createRoom("room3_sorted_desc", {});
+          const room2 = await matchMaker.createRoom("room3_sorted_desc", {});
+          const room3 = await matchMaker.createRoom("room3_sorted_desc", {});
+
+          const reservedSeat1 = await matchMaker.join("room3_sorted_desc");
+          assert.equal(room1.roomId, reservedSeat1.room.roomId);
+
+          const reservedSeat2 = await matchMaker.join("room3_sorted_desc");
+          assert.equal(room1.roomId, reservedSeat2.room.roomId);
+
+          const reservedSeat3 = await matchMaker.join("room3_sorted_desc");
+          assert.equal(room1.roomId, reservedSeat3.room.roomId);
+
+          const reservedSeat4 = await matchMaker.join("room3_sorted_desc");
+          assert.equal(room2.roomId, reservedSeat4.room.roomId);
+
+          const reservedSeat5 = await matchMaker.join("room3_sorted_desc");
+          assert.equal(room2.roomId, reservedSeat5.room.roomId);
+
+          const reservedSeat6 = await matchMaker.join("room3_sorted_desc");
+          assert.equal(room2.roomId, reservedSeat6.room.roomId);
+
+          const reservedSeat7 = await matchMaker.join("room3_sorted_desc");
+          assert.equal(room3.roomId, reservedSeat7.room.roomId);
+
+          const reservedSeat8 = await matchMaker.join("room3_sorted_desc");
+          assert.equal(room3.roomId, reservedSeat8.room.roomId);
+
+          const reservedSeat9 = await matchMaker.join("room3_sorted_desc");
+          assert.equal(room3.roomId, reservedSeat9.room.roomId);
+        });
+
+        it("sortBy(): sort asc by 'clients' field", async () => {
+          const room1 = await matchMaker.createRoom("room3_sorted_asc", {});
+          const room2 = await matchMaker.createRoom("room3_sorted_asc", {});
+          const room3 = await matchMaker.createRoom("room3_sorted_asc", {});
+
+          const reservedSeat1 = await matchMaker.join("room3_sorted_asc");
+          assert.equal(room1.roomId, reservedSeat1.room.roomId);
+
+          const reservedSeat2 = await matchMaker.join("room3_sorted_asc");
+          assert.equal(room2.roomId, reservedSeat2.room.roomId);
+
+          const reservedSeat3 = await matchMaker.join("room3_sorted_asc");
+          assert.equal(room3.roomId, reservedSeat3.room.roomId);
+
+          const reservedSeat4 = await matchMaker.join("room3_sorted_asc");
+          assert.equal(room1.roomId, reservedSeat4.room.roomId);
+
+          const reservedSeat5 = await matchMaker.join("room3_sorted_asc");
+          assert.equal(room2.roomId, reservedSeat5.room.roomId);
+
+          const reservedSeat6 = await matchMaker.join("room3_sorted_asc");
+          assert.equal(room3.roomId, reservedSeat6.room.roomId);
+
+          const reservedSeat7 = await matchMaker.join("room3_sorted_asc");
+          assert.equal(room1.roomId, reservedSeat7.room.roomId);
+
+          const reservedSeat8 = await matchMaker.join("room3_sorted_asc");
+          assert.equal(room2.roomId, reservedSeat8.room.roomId);
+
+          const reservedSeat9 = await matchMaker.join("room3_sorted_asc");
+          assert.equal(room3.roomId, reservedSeat9.room.roomId);
         });
       });
 
@@ -287,10 +374,6 @@ describe("MatchMaker", () => {
         assert.equal(true, rooms[0].locked);
         assert.equal(true, rooms[1].locked);
         assert.equal(true, rooms[2].locked);
-      });
-
-      describe(".filterBy()", () => {
-
       });
 
       describe("concurrency", async () => {
