@@ -51,7 +51,7 @@ export async function joinOrCreate(roomName: string, options: ClientOptions = {}
       room = await createRoom(roomName, options);
     }
 
-    return reserveSeatFor(room, options);
+    return await reserveSeatFor(room, options);
   }, 5, [SeatReservationError]);
 }
 
@@ -125,6 +125,7 @@ export async function queryRoom(roomName: string, options: ClientOptions): Promi
     const roomQuery = driver.findOne({
       locked: false,
       name: roomName,
+      private: false,
       ...handler.getFilterOptions(options),
     });
 
@@ -283,8 +284,17 @@ export async function reserveSeatFor(room: RoomListingData, options) {
     sessionId, room.roomId, processId,
   );
 
-  const [_, reserveSeatSuccessful] = await remoteRoomCall(room.roomId, '_reserveSeat', [sessionId, options]);
-  if (!reserveSeatSuccessful) {
+  let successfulSeatReservation: boolean;
+
+  try {
+    const [_, ok] = await remoteRoomCall(room.roomId, '_reserveSeat', [sessionId, options]);
+    successfulSeatReservation = ok;
+
+  } catch (e) {
+    successfulSeatReservation = false;
+  }
+
+  if (!successfulSeatReservation) {
     throw new SeatReservationError(`${room.roomId} is already full.`);
   }
 

@@ -168,11 +168,11 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
     }
   }
 
-  public setPrivate(bool: boolean = true) {
+  public async setPrivate(bool: boolean = true) {
     this.listing.private = bool;
 
     if (this._internalState === RoomInternalState.CREATED) {
-      this.listing.save();
+      return await this.listing.save();
     }
   }
 

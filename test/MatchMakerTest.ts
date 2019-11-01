@@ -1,11 +1,14 @@
+import assert from "assert";
 import { matchMaker, Room } from "../src";
-import { DummyRoom, Room2Clients, createDummyClient, awaitForTimeout, ReconnectRoom, Room3Clients } from "./utils/mock";
-import assert, { AssertionError } from "assert";
+import { DummyRoom, Room2Clients, createDummyClient, awaitForTimeout, ReconnectRoom, Room3Clients, RoomOnCreateException } from "./utils/mock";
 import { LocalDriver } from "../src/matchmaker/drivers/LocalDriver";
 import { MongooseDriver } from "../src/matchmaker/drivers/MongooseDriver";
 import { DEFAULT_SEAT_RESERVATION_TIME } from "../src/Room";
 
-const drivers = [new LocalDriver(), new MongooseDriver('mongodb://127.0.0.1:27017/colyseus_test')];
+const drivers = [
+  new LocalDriver(),
+  new MongooseDriver('mongodb://127.0.0.1:27017/colyseus_test'),
+];
 
 describe("MatchMaker", () => {
 
@@ -17,6 +20,7 @@ describe("MatchMaker", () => {
     matchMaker.defineRoomType("room2", Room2Clients);
     matchMaker.defineRoomType("room3", Room3Clients);
     matchMaker.defineRoomType("reconnect", ReconnectRoom);
+    matchMaker.defineRoomType("on_create_exception", RoomOnCreateException);
 
     /**
      * give some time for `cleanupStaleRooms()` to run
@@ -47,8 +51,28 @@ describe("MatchMaker", () => {
           assert.ok(room instanceof DummyRoom);
         });
 
+        it("joinOrCreate() should not find private rooms", async () => {
+          const reservedSeat = await matchMaker.joinOrCreate("dummy");
+
+          const room = matchMaker.getRoomById(reservedSeat.room.roomId)
+          await room.setPrivate();
+
+          const reservedSeat2 = await matchMaker.joinOrCreate("dummy");
+          assert.notEqual(reservedSeat2.room.roomId, reservedSeat.room.roomId, "should not join a private room");
+        });
+
+        it("joinOrCreate() should not find locked rooms", async () => {
+          const reservedSeat = await matchMaker.joinOrCreate("dummy");
+
+          const room = matchMaker.getRoomById(reservedSeat.room.roomId)
+          await room.lock();
+
+          const reservedSeat2 = await matchMaker.joinOrCreate("dummy");
+          assert.notEqual(reservedSeat2.room.roomId, reservedSeat.room.roomId, "should not join a locked room");
+        });
+
         it("join() should fail if room doesn't exist", async () => {
-          assert.rejects(async () => await matchMaker.join("dummy"), /no rooms found/i);
+          await assert.rejects(async () => await matchMaker.join("dummy"), /no rooms found/i);
         });
 
         it("join() should succeed if room exists", async () => {
@@ -77,7 +101,7 @@ describe("MatchMaker", () => {
           const room = matchMaker.getRoomById(reservedSeat2.room.roomId);
 
           assert.equal(reservedSeat1.room.roomId, reservedSeat2.room.roomId);
-          assert.rejects(async () => await matchMaker.joinById(reservedSeat1.room.roomId), /locked/i);
+          await assert.rejects(async () => await matchMaker.joinById(reservedSeat1.room.roomId), /locked/i);
           assert.ok(room.hasReservedSeat(reservedSeat2.sessionId));
         });
       });
@@ -129,11 +153,17 @@ describe("MatchMaker", () => {
 
           client1.close();
           await awaitForTimeout(100);
-          assert.equal(0, room.clients.length);
+
+          let rooms = await matchMaker.query({});
+          assert.equal(1, rooms.length);
+          assert.equal(1, rooms[0].clients, "should keep seat reservation after disconnection");
 
           await matchMaker.joinById(room.roomId, { sessionId: client1.sessionId });
           await room._onJoin(client1 as any);
 
+          rooms = await matchMaker.query({});
+          assert.equal(1, rooms.length);
+          assert.equal(1, rooms[0].clients);
           assert.equal(1, room.clients.length);
         });
 
@@ -156,7 +186,7 @@ describe("MatchMaker", () => {
           await awaitForTimeout(250);
           assert.equal(1, room.clients.length);
 
-          assert.rejects(async() => await matchMaker.joinById(room.roomId, { sessionId: client1.sessionId }), /expired/);
+          await assert.rejects(async() => await matchMaker.joinById(room.roomId, { sessionId: client1.sessionId }), /expired/);
         });
       });
 
@@ -241,6 +271,42 @@ describe("MatchMaker", () => {
         assert.equal(true, rooms[1].locked);
         assert.equal(true, rooms[2].locked);
       });
+
+      describe("concurrency", async () => {
+        it("should create 50 rooms", async () => {
+          const numConnections = 100;
+
+          const promises = [];
+          for (let i = 0; i < numConnections; i++) {
+            promises.push(new Promise(async (resolve, reject) => {
+              try {
+                const reservedSeat = await matchMaker.joinOrCreate("room2");
+                const room = matchMaker.getRoomById(reservedSeat.room.roomId);
+                await room._onJoin(createDummyClient(reservedSeat) as any);
+                resolve();
+
+              } catch (e) {
+                reject();
+              }
+            }));
+          }
+
+          // await for all calls to be complete
+          const results = await Promise.all(promises);
+          assert.equal(100, results.length);
+
+          const rooms = await matchMaker.query({});
+          assert.equal(50, rooms.length);
+
+          for (let i = 0; i < Math.floor(numConnections / 2); i++) {
+            assert.equal(2, rooms[i].clients);
+            assert.equal(true,rooms[i].locked);
+          }
+        });
+      });
+
+      // TODO: join 100 clients with low expiration time.
+      // bug: it allows creating rooms with more clients than allowed
 
     });
 
