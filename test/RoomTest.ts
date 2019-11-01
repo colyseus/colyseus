@@ -1,5 +1,5 @@
 import { matchMaker, Room } from "../src";
-import { DummyRoom } from "./utils/mock";
+import { DummyRoom } from "./utils";
 import assert from "assert";
 
 describe("Room", () => {

@@ -2,9 +2,7 @@ import msgpack from "notepack.io";
 import WebSocket from "ws";
 import { EventEmitter } from "events";
 
-import { generateId, serialize, FossilDeltaSerializer, Protocol } from "../../src";
 import { Room } from "../../src/Room";
-import { LocalPresence } from './../../src/presence/LocalPresence';
 import { SeatReservation } from "../../src/MatchMaker";
 
 export class Client extends EventEmitter {

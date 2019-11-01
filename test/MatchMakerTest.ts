@@ -1,6 +1,6 @@
 import assert from "assert";
 import { matchMaker, Room } from "../src";
-import { DummyRoom, Room2Clients, createDummyClient, awaitForTimeout, ReconnectRoom, Room3Clients } from "./utils/mock";
+import { DummyRoom, Room2Clients, createDummyClient, awaitForTimeout, ReconnectRoom, Room3Clients } from "./utils";
 import { LocalDriver } from "../src/matchmaker/drivers/LocalDriver";
 import { MongooseDriver } from "../src/matchmaker/drivers/MongooseDriver";
 import { DEFAULT_SEAT_RESERVATION_TIME } from "../src/Room";

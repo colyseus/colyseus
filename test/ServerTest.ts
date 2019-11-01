@@ -2,7 +2,7 @@ import * as httpClient from "httpie";
 import assert from "assert";
 
 import { Server, matchMaker } from "../src";
-import { DummyRoom } from "./utils/mock";
+import { DummyRoom } from "./utils";
 
 describe("Server", () => {
 
