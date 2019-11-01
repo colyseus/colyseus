@@ -107,19 +107,6 @@ export class ReconnectRoom extends Room {
   onMessage(client, message) { this.broadcast(message); }
 }
 
-/**
- * `RoomOnCreateException` throws an error when being created
- */
-export class RoomOnCreateException extends Room {
-  maxClients = 2;
-
-  onCreate() { throw new Error("not_allowed"); }
-  onDispose() { }
-  onJoin() { }
-  onLeave() { }
-  onMessage(client, message) { this.broadcast(message); }
-}
-
 export class RoomWithAsync extends DummyRoom {
   static ASYNC_TIMEOUT = 200;
   maxClients = 1;
