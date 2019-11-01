@@ -1,14 +1,7 @@
 import assert from "assert";
 import { matchMaker, Room } from "../src";
-import { DummyRoom, Room2Clients, createDummyClient, awaitForTimeout, ReconnectRoom, Room3Clients } from "./utils";
-import { LocalDriver } from "../src/matchmaker/drivers/LocalDriver";
-import { MongooseDriver } from "../src/matchmaker/drivers/MongooseDriver";
+import { DummyRoom, Room2Clients, createDummyClient, awaitForTimeout, ReconnectRoom, Room3Clients, DRIVERS } from "./utils";
 import { DEFAULT_SEAT_RESERVATION_TIME } from "../src/Room";
-
-const drivers = [
-  new LocalDriver(),
-  new MongooseDriver('mongodb://127.0.0.1:27017/colyseus_test'),
-];
 
 describe("MatchMaker", () => {
 
@@ -41,8 +34,8 @@ describe("MatchMaker", () => {
     await awaitForTimeout(50);
   });
 
-  for (let i=0; i<drivers.length; i++) {
-    const driver = drivers[i];
+  for (let i = 0; i < DRIVERS.length; i++) {
+    const driver = DRIVERS[i];
 
     describe(`Driver: ${driver.constructor.name}`, () => {
       /**

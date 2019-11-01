@@ -5,6 +5,14 @@ import { EventEmitter } from "events";
 import { Room } from "../../src/Room";
 import { SeatReservation } from "../../src/MatchMaker";
 
+import { LocalDriver } from "../../src/matchmaker/drivers/LocalDriver";
+import { MongooseDriver } from "../../src/matchmaker/drivers/MongooseDriver";
+
+export const DRIVERS = [
+  new LocalDriver(),
+  new MongooseDriver('mongodb://127.0.0.1:27017/colyseus_test'),
+];
+
 export class Client extends EventEmitter {
   public sessionId: string;
   public messages: Array<any> = [];
