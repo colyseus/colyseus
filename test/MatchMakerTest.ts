@@ -9,6 +9,7 @@ describe("MatchMaker", () => {
    * register room types
    */
   before(async () => {
+    matchMaker.defineRoomType("empty", DummyRoom);
     matchMaker.defineRoomType("dummy", DummyRoom);
     matchMaker.defineRoomType("room2", Room2Clients);
     matchMaker.defineRoomType("room3", Room3Clients);
@@ -78,7 +79,7 @@ describe("MatchMaker", () => {
         });
 
         it("join() should fail if room doesn't exist", async () => {
-          await assert.rejects(async () => await matchMaker.join("dummy"), /no rooms found/i);
+          await assert.rejects(async () => await matchMaker.join("empty"), /no rooms found/i);
         });
 
         it("join() should succeed if room exists", async () => {
