@@ -56,14 +56,7 @@ export async function joinOrCreate(roomName: string, options: ClientOptions = {}
 }
 
 export async function create(roomName: string, options: ClientOptions = {}) {
-  const handler = handlers[roomName];
-  if (!handler) {
-    throw new MatchMakeError(`no available handler for "${roomName}"`, Protocol.ERR_MATCHMAKE_NO_HANDLER);
-  }
-
-  // Object.keys(handler.options)
   const room = await createRoom(roomName, options);
-
   return reserveSeatFor(room, options);
 }
 
@@ -119,7 +112,7 @@ export async function queryRoom(roomName: string, options: ClientOptions): Promi
   return await awaitRoomAvailable(roomName, async () => {
     const handler = handlers[roomName];
     if (!handler) {
-      throw new MatchMakeError(`no available handler for "${roomName}"`, Protocol.ERR_MATCHMAKE_NO_HANDLER);
+      throw new MatchMakeError(`"${roomName}" not defined`, Protocol.ERR_MATCHMAKE_NO_HANDLER);
     }
 
     const roomQuery = driver.findOne({
@@ -204,7 +197,12 @@ export function hasHandler(name: string) {
 }
 
 export async function createRoom(roomName: string, clientOptions: ClientOptions): Promise<RoomListingData> {
-  const registeredHandler = handlers[ roomName ];
+  const registeredHandler = handlers[roomName];
+
+  if (!registeredHandler) {
+    throw new MatchMakeError(`"${roomName}" not defined`, Protocol.ERR_MATCHMAKE_NO_HANDLER);
+  }
+
   const room = new registeredHandler.klass();
 
   // set room public attributes

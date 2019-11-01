@@ -132,6 +132,11 @@ describe("MatchMaker", () => {
           assert.equal(reservedSeat1.room.roomId, reservedSeat2.room.roomId);
         });
 
+        it("should throw error trying to create a room not defined", async () => {
+          await assert.rejects(async () => await matchMaker.joinOrCreate("non_existing_room"), /not defined/i);
+          await assert.rejects(async () => await matchMaker.create("non_existing_room"), /not defined/i);
+        });
+
         it("filterBy(): filter by 'mode' field", async () => {
           const reservedSeat1 = await matchMaker.joinOrCreate("room2_filtered", { mode: "squad" });
           const reservedSeat2 = await matchMaker.joinOrCreate("room2_filtered", { mode: "duo" });
