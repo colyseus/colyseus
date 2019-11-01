@@ -408,10 +408,6 @@ describe("MatchMaker", () => {
           }
         });
       });
-
-      // TODO: join 100 clients with low expiration time.
-      // bug: it allows creating rooms with more clients than allowed
-
     });
 
   }
