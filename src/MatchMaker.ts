@@ -43,9 +43,12 @@ export function setup(_presence?: Presence, _driver?: MatchMakerDriver, _process
   isGracefullyShuttingDown = false;
 }
 
+/**
+ * Join or create into a room and return seat reservation
+ */
 export async function joinOrCreate(roomName: string, options: ClientOptions = {}) {
   return await retry<Promise<SeatReservation>>(async () => {
-    let room = await queryRoom(roomName, options);
+    let room = await findOneRoomAvailable(roomName, options);
 
     if (!room) {
       room = await createRoom(roomName, options);
@@ -55,14 +58,20 @@ export async function joinOrCreate(roomName: string, options: ClientOptions = {}
   }, 5, [SeatReservationError]);
 }
 
+/**
+ * Create a room and return seat reservation
+ */
 export async function create(roomName: string, options: ClientOptions = {}) {
   const room = await createRoom(roomName, options);
   return reserveSeatFor(room, options);
 }
 
+/**
+ * Join a room and return seat reservation
+ */
 export async function join(roomName: string, options: ClientOptions = {}) {
   return await retry<Promise<SeatReservation>>(async () => {
-    const room = await queryRoom(roomName, options);
+    const room = await findOneRoomAvailable(roomName, options);
 
     if (!room) {
       throw new MatchMakeError(`no rooms found with provided criteria`, Protocol.ERR_MATCHMAKE_INVALID_CRITERIA);
@@ -72,6 +81,9 @@ export async function join(roomName: string, options: ClientOptions = {}) {
   });
 }
 
+/**
+ * Join a room by id and return seat reservation
+ */
 export async function joinById(roomId: string, options: ClientOptions = {}) {
   const room = await driver.findOne({ roomId });
 
@@ -104,11 +116,17 @@ export async function joinById(roomId: string, options: ClientOptions = {}) {
 
 }
 
+/**
+ * Query for cached rooms
+ */
 export async function query(conditions: any = {}) {
   return await driver.find(conditions);
 }
 
-export async function queryRoom(roomName: string, options: ClientOptions): Promise<RoomListingData> {
+/**
+ * Find for a public and unlocked room available
+ */
+export async function findOneRoomAvailable(roomName: string, options: ClientOptions): Promise<RoomListingData> {
   return await awaitRoomAvailable(roomName, async () => {
     const handler = handlers[roomName];
     if (!handler) {
@@ -130,6 +148,9 @@ export async function queryRoom(roomName: string, options: ClientOptions): Promi
   });
 }
 
+/**
+ * Call a method or return a property on a remote room.
+ */
 export async function remoteRoomCall<R= any>(
   roomId: string,
   method: string,
@@ -196,6 +217,9 @@ export function hasHandler(name: string) {
   return handlers[ name ] !== undefined;
 }
 
+/**
+ * Create a room
+ */
 export async function createRoom(roomName: string, clientOptions: ClientOptions): Promise<RoomListingData> {
   const registeredHandler = handlers[roomName];
 
@@ -274,7 +298,10 @@ export function gracefullyShutdown(): Promise<any> {
   return Promise.all(promises);
 }
 
-export async function reserveSeatFor(room: RoomListingData, options) {
+/**
+ * Reserve a seat for a client in a room
+ */
+export async function reserveSeatFor(room: RoomListingData, options: any) {
   const sessionId: string = generateId();
 
   debugMatchMaking(
