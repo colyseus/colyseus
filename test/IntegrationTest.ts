@@ -104,6 +104,113 @@ describe("Integration", () => {
           await connection.leave();
         });
 
+        it("onLeave()", async () => {
+          let onLeaveCalled = false;
+
+          matchMaker.defineRoomType('onleave', class _ extends Room {
+            onLeave(client: Client, options: any) {
+              onLeaveCalled = true;
+            }
+            onMessage(client, message) { }
+          });
+
+          const connection = await client.joinOrCreate('onleave');
+          await connection.leave();
+
+          await awaitForTimeout(50);
+          assert.ok(onLeaveCalled);
+        });
+
+        it("async onLeave()", async () => {
+          let onLeaveCalled = false;
+
+          matchMaker.defineRoomType('onleave', class _ extends Room {
+            async onLeave(client: Client, options: any) {
+              return new Promise(resolve => setTimeout(() => {
+                onLeaveCalled = true;
+                resolve();
+              }, 100));
+            }
+            onMessage(client, message) { }
+          });
+
+          const connection = await client.joinOrCreate('onleave');
+          await connection.leave();
+
+          await awaitForTimeout(150);
+          assert.ok(onLeaveCalled);
+        });
+
+        it("onDispose()", async () => {
+          let onDisposeCalled = false;
+
+          matchMaker.defineRoomType('onleave', class _ extends Room {
+            onDispose() {
+              onDisposeCalled = true;
+            }
+            onMessage(client, message) { }
+          });
+
+          const connection = await client.joinOrCreate('onleave');
+          await connection.leave();
+
+          await awaitForTimeout(50);
+          assert.ok(!matchMaker.getRoomById(connection.id))
+          assert.ok(onDisposeCalled);
+        });
+
+        it("async onDispose()", async () => {
+          let onDisposeCalled = false;
+
+          matchMaker.defineRoomType('onleave', class _ extends Room {
+            async onDispose() {
+              return new Promise(resolve => setTimeout(() => {
+                onDisposeCalled = true;
+                resolve();
+              }, 100));
+            }
+            onMessage(client, message) { }
+          });
+
+          const connection = await client.joinOrCreate('onleave');
+          await connection.leave();
+
+          await awaitForTimeout(150);
+          assert.ok(!matchMaker.getRoomById(connection.id))
+          assert.ok(onDisposeCalled);
+        });
+
+        it("onMessage()", async () => {
+          const messageToSend = {
+            string: "hello",
+            number: 10,
+            float: Math.PI,
+            array: [1,2,3,4,5],
+            nested: {
+              string: "hello",
+              number: 10,
+              float: Math.PI,
+            }
+          };
+
+          let onMessageCalled = false;
+
+          matchMaker.defineRoomType('onmessage', class _ extends Room {
+            onMessage(client, message) {
+              assert.deepEqual(messageToSend, message);
+              onMessageCalled = true;
+            }
+          });
+
+          const connection = await client.joinOrCreate('onmessage');
+          connection.send(messageToSend);
+          await awaitForTimeout(20);
+
+          await connection.leave();
+
+          assert.ok(onMessageCalled);
+        });
+
       });
 
     });
