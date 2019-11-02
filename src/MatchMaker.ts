@@ -117,7 +117,7 @@ export async function joinById(roomId: string, options: ClientOptions = {}) {
 }
 
 /**
- * Query for cached rooms
+ * Perform a query for all cached rooms
  */
 export async function query(conditions: any = {}) {
   return await driver.find(conditions);
@@ -211,6 +211,11 @@ export function defineRoomType(name: string, klass: RoomConstructor, defaultOpti
   cleanupStaleRooms(name);
 
   return registeredHandler;
+}
+
+export function removeRoomType(name: string) {
+  delete handlers[name];
+  cleanupStaleRooms(name);
 }
 
 export function hasHandler(name: string) {
