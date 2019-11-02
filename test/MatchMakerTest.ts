@@ -328,7 +328,7 @@ describe("MatchMaker", () => {
         // only 1 client actually joins the room, 2 of them are going to expire
         await room._onJoin(createDummyClient(reservedSeat1) as any);
 
-        await awaitForTimeout(DEFAULT_SEAT_RESERVATION_TIME * 1000);
+        await awaitForTimeout(DEFAULT_SEAT_RESERVATION_TIME * 1100);
 
         // connect 2 clients to the same room again
         await matchMaker.joinOrCreate("room3");

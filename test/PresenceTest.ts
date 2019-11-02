@@ -58,7 +58,7 @@ describe("Presence", () => {
         await presence.setex("setex1", "hello world", 1);
         assert.equal("hello world", await presence.get("setex1"));
 
-        await awaitForTimeout(1000);
+        await awaitForTimeout(1100);
         assert.ok(!(await presence.get("setex1")));
       });
 
