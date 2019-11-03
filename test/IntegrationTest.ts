@@ -270,7 +270,6 @@ describe("Integration", () => {
         });
 
         describe("broadcast()", () => {
-
           it("all clients should receive broadcast data", async () => {
             matchMaker.defineRoomType('broadcast', class _ extends Room {
               maxClients = 3;
@@ -297,10 +296,39 @@ describe("Integration", () => {
             await awaitForTimeout(200);
 
             assert.deepEqual(['one', 'two', 'three', 'one', 'two', 'three', 'one', 'two', 'three'], messages);
+
+            conn1.leave();
+            conn2.leave();
+            conn3.leave();
+            await awaitForTimeout(50);
+          });
+        });
+
+        describe("disconnect()", () => {
+
+          it("should disconnect all clients", async() => {
+            matchMaker.defineRoomType('disconnect', class _ extends Room {
+              maxClients = 2;
+              onCreate() {
+                this.clock.setTimeout(() => this.disconnect(), 100);
+              }
+              onMessage() {}
+            });
+
+            let disconnected: number = 0;
+            const conn1 = await client.joinOrCreate('disconnect');
+            conn1.onLeave(() => disconnected++);
+
+            const conn2 = await client.joinOrCreate('disconnect');
+            conn2.onLeave(() => disconnected++);
+
+            assert.equal(conn1.id, conn2.id, "should've joined the same room");
+
+            await awaitForTimeout(100);
+            assert.equal(2, disconnected, "both clients should've been disconnected");
           });
 
         });
-
 
       });
 
