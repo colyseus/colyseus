@@ -269,6 +269,39 @@ describe("Integration", () => {
 
         });
 
+        describe("broadcast()", () => {
+
+          it("all clients should receive broadcast data", async () => {
+            matchMaker.defineRoomType('broadcast', class _ extends Room {
+              maxClients = 3;
+              onMessage(client: Client, message: any) {
+                this.broadcast(message);
+              }
+            });
+
+            const messages: string[] = [];
+
+            const conn1 = await client.joinOrCreate('broadcast');
+            conn1.onMessage(message => messages.push(message));
+
+            const conn2 = await client.joinOrCreate('broadcast');
+            conn2.onMessage(message => messages.push(message));
+
+            const conn3 = await client.joinOrCreate('broadcast');
+            conn3.onMessage(message => messages.push(message));
+
+            conn1.send("one");
+            conn2.send("two");
+            conn3.send("three");
+
+            await awaitForTimeout(200);
+
+            assert.deepEqual(['one', 'two', 'three', 'one', 'two', 'three', 'one', 'two', 'three'], messages);
+          });
+
+        });
+
+
       });
 
     });
