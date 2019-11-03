@@ -194,9 +194,11 @@ describe("Integration", () => {
           };
 
           let onMessageCalled = false;
+          let sessionId: string;
 
           matchMaker.defineRoomType('onmessage', class _ extends Room {
-            onMessage(client, message) {
+            onMessage(client: Client, message: any) {
+              sessionId = client.sessionId;
               assert.deepEqual(messageToSend, message);
               onMessageCalled = true;
             }
@@ -208,6 +210,7 @@ describe("Integration", () => {
 
           await connection.leave();
 
+          assert.equal(sessionId, connection.sessionId);
           assert.ok(onMessageCalled);
         });
 
