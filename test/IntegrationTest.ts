@@ -1,5 +1,6 @@
 import assert from "assert";
 import * as Colyseus from "colyseus.js";
+import { Schema, type } from "@colyseus/schema";
 
 import { matchMaker, Room, Client, Server } from "../src";
 import { DummyRoom, DRIVERS, awaitForTimeout, createDummyClient } from "./utils";
@@ -212,6 +213,60 @@ describe("Integration", () => {
 
           assert.equal(sessionId, connection.sessionId);
           assert.ok(onMessageCalled);
+        });
+
+        describe("setPatchRate()", () => {
+          class PatchState extends Schema {
+            @type("number") number: number = 0;
+          }
+
+          it("should receive patch at every patch rate", async () => {
+            matchMaker.defineRoomType('patchinterval', class _ extends Room {
+              onCreate(options: any) {
+                this.setState(new PatchState());
+                this.setPatchRate(20);
+                this.setSimulationInterval(() => this.state.number++);
+              }
+              onMessage() {}
+            });
+
+            const connection = await client.create('patchinterval');
+            let patchesReceived: number = 0;
+
+            connection.onStateChange(() => patchesReceived++);
+
+            await awaitForTimeout(20 * 25);
+            assert.ok(patchesReceived > 20, "should have received > 20 patches");
+
+            connection.leave();
+            await awaitForTimeout(50);
+          });
+
+          it("should not receive any patch if patchRate is nullified", async () => {
+            matchMaker.defineRoomType('patchinterval', class _ extends Room {
+              onCreate(options: any) {
+                this.setState(new PatchState());
+                this.setPatchRate(null);
+                this.setSimulationInterval(() => this.state.number++);
+              }
+              onMessage() {}
+            });
+
+            const connection = await client.create<PatchState>('patchinterval');
+            let patchesReceived: number = 0;
+
+            connection.onStateChange(() => patchesReceived++);
+
+            await awaitForTimeout(500);
+
+            // simulation interval may have run a short amount of cycles for the first ROOM_STATE message
+            assert.ok(connection.state.number <= 2);
+            assert.equal(0, patchesReceived);
+
+            connection.leave();
+            await awaitForTimeout(50);
+          });
+
         });
 
       });
