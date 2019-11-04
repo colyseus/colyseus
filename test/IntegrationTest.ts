@@ -109,6 +109,28 @@ describe("Integration", () => {
           await connection.leave();
         });
 
+        it("onJoin() error should reject join promise", async() => {
+          matchMaker.defineRoomType('onjoin', class _ extends Room {
+            async onJoin(client: Client, options: any) {
+              throw new Error("not_allowed");
+            }
+            onMessage(client, message) { }
+          });
+
+          await assert.rejects(async() => await client.joinOrCreate('onjoin'));
+        });
+
+        it("onAuth() error should reject join promise", async() => {
+          matchMaker.defineRoomType('onauth', class _ extends Room {
+            async onAuth(client: Client, options: any) {
+              throw new Error("not_allowed");
+            }
+            onMessage(client, message) { }
+          });
+
+          await assert.rejects(async () => await client.joinOrCreate('onauth'));
+        });
+
         it("onLeave()", async () => {
           let onLeaveCalled = false;
 
@@ -340,33 +362,34 @@ describe("Integration", () => {
             await awaitForTimeout(50);
           });
 
-          xit("should allow to broadcast during onJoin() for current client", async () => {
+          xit("should allow to broadcast during onJoin() for current client", (done) => {
             matchMaker.defineRoomType('broadcast', class _ extends Room {
               onJoin(client, options) {
-                this.send(client, "hello");
-                console.log("SEND MESSAGE!");
                 this.broadcast("hello");
               }
               onMessage(client, message) { }
             });
 
-            const conn = await client.joinOrCreate("broadcast");
+            setImmediate(async() => {
+              // const conn = await client.joinOrCreate('broadcast');
+              const conn = await client.joinOrCreate('broadcast');
 
-            console.log("REGISTER ON MESSAGE!");
-            conn.onMessage((_message) => {
-              console.log("RECEIVED MESSAGE!", _message);
-              onMessageCalled = true;
-              message = _message;
-            });
+              conn.onMessage((_message) => {
+                onMessageCalled = true;
+                message = _message;
+              });
 
-            let onMessageCalled = false;
-            let message: any;
+              let onMessageCalled = false;
+              let message: any;
 
+              await awaitForTimeout(100);
 
-            assert.equal(true, onMessageCalled);
-            assert.equal("hello", message);
+              assert.equal(true, onMessageCalled);
+              assert.equal("hello", message);
 
-            conn.leave();
+              conn.leave();
+              done();
+            })
           });
 
           xit("should broadcast after patch", async () => {
