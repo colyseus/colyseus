@@ -380,6 +380,19 @@ describe("Integration", () => {
           conn.leave();
         })
 
+        it("`pingTimeout` / `pingMaxRetries`: should terminate client", async () => {
+          const conn = await client.joinOrCreate("dummy");
+
+          // force websocket client to be unresponsive
+          conn.connection.ws._socket.removeAllListeners();
+
+          assert.ok(matchMaker.getRoomById(conn.id));
+
+          await awaitForTimeout(700);
+
+          assert.ok(!matchMaker.getRoomById(conn.id));
+        });
+
       });
 
     });
