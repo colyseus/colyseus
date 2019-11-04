@@ -17,9 +17,9 @@ import { LocalDriver } from './matchmaker/drivers/LocalDriver';
 
 export type ClientOptions = any;
 
-export interface RoomWithScore {
-  roomId: string;
-  score: number;
+export interface SeatReservation {
+  sessionId: string;
+  room: RoomListingData;
 }
 
 // remote room call timeouts
@@ -28,47 +28,50 @@ export const REMOTE_ROOM_SHORT_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_SH
 type RemoteRoomResponse<T= any> = [string?, T?];
 
 const handlers: {[id: string]: RegisteredHandler} = {};
-const localRooms: {[roomId: string]: Room} = {};
+const rooms: {[roomId: string]: Room} = {};
 
 let presence: Presence;
 let processId: string;
 export let driver: MatchMakerDriver;
 
-let isGracefullyShuttingDown: boolean = false;
+let isGracefullyShuttingDown: boolean;
 
 export function setup(_presence?: Presence, _driver?: MatchMakerDriver, _processId?: string) {
   presence = _presence || new LocalPresence();
   driver = _driver || new LocalDriver();
   processId = _processId;
+  isGracefullyShuttingDown = false;
 }
 
-export async function joinOrCreate(roomName: string, options: ClientOptions) {
-  return await retry(async () => {
-    let room = await queryRoom(roomName, options);
+/**
+ * Join or create into a room and return seat reservation
+ */
+export async function joinOrCreate(roomName: string, options: ClientOptions = {}) {
+  return await retry<Promise<SeatReservation>>(async () => {
+    let room = await findOneRoomAvailable(roomName, options);
 
     if (!room) {
       room = await createRoom(roomName, options);
     }
 
-    return reserveSeatFor(room, options);
+    return await reserveSeatFor(room, options);
   }, 5, [SeatReservationError]);
 }
 
-export async function create(roomName: string, options: ClientOptions) {
-  const handler = handlers[roomName];
-  if (!handler) {
-    throw new MatchMakeError(`no available handler for "${roomName}"`, Protocol.ERR_MATCHMAKE_NO_HANDLER);
-  }
-
-  // Object.keys(handler.options)
+/**
+ * Create a room and return seat reservation
+ */
+export async function create(roomName: string, options: ClientOptions = {}) {
   const room = await createRoom(roomName, options);
-
   return reserveSeatFor(room, options);
 }
 
-export async function join(roomName: string, options: ClientOptions) {
-  return await retry(async () => {
-    const room = await queryRoom(roomName, options);
+/**
+ * Join a room and return seat reservation
+ */
+export async function join(roomName: string, options: ClientOptions = {}) {
+  return await retry<Promise<SeatReservation>>(async () => {
+    const room = await findOneRoomAvailable(roomName, options);
 
     if (!room) {
       throw new MatchMakeError(`no rooms found with provided criteria`, Protocol.ERR_MATCHMAKE_INVALID_CRITERIA);
@@ -78,7 +81,10 @@ export async function join(roomName: string, options: ClientOptions) {
   });
 }
 
-export async function joinById(roomId: string, options: ClientOptions) {
+/**
+ * Join a room by id and return seat reservation
+ */
+export async function joinById(roomId: string, options: ClientOptions = {}) {
   const room = await driver.findOne({ roomId });
 
   if (room) {
@@ -110,25 +116,27 @@ export async function joinById(roomId: string, options: ClientOptions) {
 
 }
 
-export async function query(roomName?: string, conditions: any = {}) {
-  if (roomName) { conditions.name = roomName; }
-
-  // list only public rooms
-  conditions.private = false;
-
+/**
+ * Perform a query for all cached rooms
+ */
+export async function query(conditions: any = {}) {
   return await driver.find(conditions);
 }
 
-export async function queryRoom(roomName: string, options: ClientOptions): Promise<RoomListingData> {
+/**
+ * Find for a public and unlocked room available
+ */
+export async function findOneRoomAvailable(roomName: string, options: ClientOptions): Promise<RoomListingData> {
   return await awaitRoomAvailable(roomName, async () => {
     const handler = handlers[roomName];
     if (!handler) {
-      throw new MatchMakeError(`no available handler for "${roomName}"`, Protocol.ERR_MATCHMAKE_NO_HANDLER);
+      throw new MatchMakeError(`"${roomName}" not defined`, Protocol.ERR_MATCHMAKE_NO_HANDLER);
     }
 
     const roomQuery = driver.findOne({
       locked: false,
       name: roomName,
+      private: false,
       ...handler.getFilterOptions(options),
     });
 
@@ -140,13 +148,16 @@ export async function queryRoom(roomName: string, options: ClientOptions): Promi
   });
 }
 
+/**
+ * Call a method or return a property on a remote room.
+ */
 export async function remoteRoomCall<R= any>(
   roomId: string,
   method: string,
   args?: any[],
   rejectionTimeout = REMOTE_ROOM_SHORT_TIMEOUT,
 ): Promise<RemoteRoomResponse<R>> {
-  const room = localRooms[roomId];
+  const room = rooms[roomId];
 
   if (!room) {
     return new Promise((resolve, reject) => {
@@ -202,12 +213,25 @@ export function defineRoomType(name: string, klass: RoomConstructor, defaultOpti
   return registeredHandler;
 }
 
+export function removeRoomType(name: string) {
+  delete handlers[name];
+  cleanupStaleRooms(name);
+}
+
 export function hasHandler(name: string) {
   return handlers[ name ] !== undefined;
 }
 
+/**
+ * Create a room
+ */
 export async function createRoom(roomName: string, clientOptions: ClientOptions): Promise<RoomListingData> {
-  const registeredHandler = handlers[ roomName ];
+  const registeredHandler = handlers[roomName];
+
+  if (!registeredHandler) {
+    throw new MatchMakeError(`"${roomName}" not defined`, Protocol.ERR_MATCHMAKE_NO_HANDLER);
+  }
+
   const room = new registeredHandler.klass();
 
   // set room public attributes
@@ -257,7 +281,7 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
 }
 
 export function getRoomById(roomId: string) {
-  return localRooms[roomId];
+  return rooms[roomId];
 }
 
 export function gracefullyShutdown(): Promise<any> {
@@ -267,21 +291,22 @@ export function gracefullyShutdown(): Promise<any> {
 
   isGracefullyShuttingDown = true;
 
-  const promises = [];
+  const promises: Array<Promise<any>> = [];
 
-  for (const roomId in localRooms) {
-    if (!localRooms.hasOwnProperty(roomId)) {
+  for (const roomId in rooms) {
+    if (!rooms.hasOwnProperty(roomId)) {
       continue;
     }
-
-    const room = localRooms[roomId];
-    promises.push( room.disconnect() );
+    promises.push(rooms[roomId].disconnect());
   }
 
   return Promise.all(promises);
 }
 
-export async function reserveSeatFor(room: RoomListingData, options) {
+/**
+ * Reserve a seat for a client in a room
+ */
+export async function reserveSeatFor(room: RoomListingData, options: any) {
   const sessionId: string = generateId();
 
   debugMatchMaking(
@@ -289,8 +314,17 @@ export async function reserveSeatFor(room: RoomListingData, options) {
     sessionId, room.roomId, processId,
   );
 
-  const [_, reserveSeatSuccessful] = await remoteRoomCall(room.roomId, '_reserveSeat', [sessionId, options]);
-  if (!reserveSeatSuccessful) {
+  let successfulSeatReservation: boolean;
+
+  try {
+    const [_, ok] = await remoteRoomCall(room.roomId, '_reserveSeat', [sessionId, options]);
+    successfulSeatReservation = ok;
+
+  } catch (e) {
+    successfulSeatReservation = false;
+  }
+
+  if (!successfulSeatReservation) {
     throw new SeatReservationError(`${room.roomId} is already full.`);
   }
 
@@ -322,7 +356,7 @@ async function cleanupStaleRooms(roomName: string) {
 }
 
 async function createRoomReferences(room: Room, init: boolean = false): Promise<boolean> {
-  localRooms[room.roomId] = room;
+  rooms[room.roomId] = room;
 
   // add unlocked room reference
   await presence.sadd(room.roomName, room.roomId);
@@ -454,5 +488,5 @@ function disposeRoom(roomName: string, room: Room): void {
   presence.unsubscribe(getRoomChannel(room.roomId));
 
   // remove actual room reference
-  delete localRooms[room.roomId];
+  delete rooms[room.roomId];
 }

@@ -54,6 +54,7 @@ export class LocalPresence implements Presence {
     }
 
     public del(key: string) {
+        delete this.keys[key];
         delete this.data[key];
         delete this.hash[key];
     }
@@ -79,7 +80,7 @@ export class LocalPresence implements Presence {
     }
 
     public scard(key: string) {
-        return this.data[key].length;
+        return (this.data[key] || []).length;
     }
 
     public hset(roomId: string, key: string, value: string) {

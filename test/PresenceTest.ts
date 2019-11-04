@@ -1,166 +1,132 @@
-import assert from 'assert';
-import sinon from 'sinon';
+import assert from "assert";
+import { LocalPresence, Presence, RedisPresence } from "../src";
+import { awaitForTimeout } from "./utils";
 
-import { MatchMaker } from "../src/MatchMaker";
-import { DummyRoom, RoomVerifyClient, RoomVerifyClientWithLock, createDummyClient } from './utils/mock';
+const IMPLEMENTATIONS: Presence[] = [
+  new LocalPresence(),
+  new RedisPresence()
+]
 
-process.on('unhandledRejection', (reason, promise) => {
-  console.log(reason, promise);
-});
+describe("Presence", () => {
 
-describe('Presence', function() {
-  let matchMaker;
+  for (let i = 0; i < IMPLEMENTATIONS.length; i++) {
+    const presence = IMPLEMENTATIONS[i];
 
-  beforeEach(() => {
-    matchMaker = new MatchMaker();
+    describe((presence as any).constructor.name, () => {
 
-    matchMaker.registerHandler('room', DummyRoom);
-    matchMaker.registerHandler('dummy_room', DummyRoom);
-    matchMaker.registerHandler('room_with_default_options', DummyRoom, { level: 1 });
-    matchMaker.registerHandler('room_verify_client', RoomVerifyClient);
-    matchMaker.registerHandler('room_verify_client_with_lock', RoomVerifyClientWithLock);
-  });
+      it("subscribe", (done) => {
+        let i = 0;
 
-  describe('reserved seat', () => {
-    it('should remove reserved seat after joining the room', async () => {
-      const client = createDummyClient({});
+        presence.subscribe("topic", (data) => {
+          if (i === 0) {
+            assert.equal("string", data);
 
-      const { roomId } = await matchMaker.onJoinRoomRequest(client, 'room', {});
+          } else if (i === 1) {
+            assert.equal(1000, data);
 
-      await matchMaker.connectToRoom(client, roomId);
+          } else if (i === 2) {
+            assert.deepEqual({ object: "hello world" }, data);
+          }
 
-      assert.equal(await matchMaker.presence.hget(roomId, client.sessionId), undefined);
+          i++;
+
+          if (i === 3) {
+            presence.unsubscribe("topic");
+            done();
+          }
+        });
+
+        presence.publish("topic", "string");
+        presence.publish("topic", 1000);
+        presence.publish("topic", { object: "hello world" });
+      });
+
+      it("unsubscribe", async () => {
+        presence.subscribe("topic2", (_) => assert.fail("should not trigger"));
+        presence.unsubscribe("topic2");
+        presence.publish("topic2", "hello world!");
+        assert.ok(true);
+      });
+
+      it("exists", async () => {
+        await presence.subscribe("exists1", () => {});
+        assert.equal(true, await presence.exists("exists1"));
+        assert.equal(false, await presence.exists("exists2"));
+      });
+
+      it("setex", async () => {
+        await presence.setex("setex1", "hello world", 1);
+        assert.equal("hello world", await presence.get("setex1"));
+
+        await awaitForTimeout(1100);
+        assert.ok(!(await presence.get("setex1")));
+      });
+
+      it("get", async () => {
+        await presence.setex("setex2", "one", 1);
+        assert.equal("one", await presence.get("setex2"));
+
+        await presence.setex("setex3", "two", 1);
+        assert.equal("two", await presence.get("setex3"));
+      });
+
+      it("del", async () => {
+        await presence.setex("setex4", "one", 1);
+        await presence.del("setex4");
+        assert.ok(!(await presence.get("setex4")));
+      });
+
+      it("sadd/smembers/srem (sets)", async () => {
+        await presence.sadd("set", 1);
+        await presence.sadd("set", 2);
+        await presence.sadd("set", 3);
+        assert.deepEqual([1, 2, 3], await presence.smembers("set"));
+        assert.equal(3, await presence.scard("set"));
+
+        await presence.srem("set", 2);
+        assert.deepEqual([1, 3], await presence.smembers("set"));
+        assert.equal(2, await presence.scard("set"));
+
+        await presence.del("set");
+        assert.equal(0, await presence.scard("set"));
+      });
+
+      it("hset/hget/hdel/hlen (hashes)", async () => {
+        await presence.hset("hash", "one", "1");
+        await presence.hset("hash", "two", "2");
+        await presence.hset("hash", "three", "3");
+
+        assert.equal(3, await presence.hlen("hash"));
+        assert.equal("1", await presence.hget("hash", "one"));
+        assert.equal("2", await presence.hget("hash", "two"));
+        assert.equal("3", await presence.hget("hash", "three"));
+        assert.ok(!(await presence.hget("hash", "four")));
+
+        await presence.hdel("hash", "two");
+        assert.equal(2, await presence.hlen("hash"));
+        assert.ok(!(await presence.hget("hash", "two")));
+      });
+
+      it("incr", async () => {
+        await presence.del("num"); //ensure key doens't exist before testing
+
+        await presence.incr("num");
+        await presence.incr("num");
+        await presence.incr("num");
+        assert.equal(3, await presence.get("num"));
+      });
+
+      it("decr", async () => {
+        await presence.del("num"); //ensure key doens't exist before testing
+
+        await presence.decr("num");
+        await presence.decr("num");
+        await presence.decr("num");
+        assert.equal(-3, await presence.get("num"));
+      });
+
     });
-  });
 
-
-  // describe('verifyClient', () => {
-  //   it('should\'t allow to connect when verifyClient returns false', (done) => {
-  //     let client = createDummyClient();
-
-  //     RoomVerifyClient.prototype.verifyClient = () => false;
-
-  //     matchMaker.onJoinRoomRequest('room_verify_client', { clientId: client.id }, true, (err, room) => {
-  //       matchMaker.bindClient(client, room.roomId).then((room) => {
-  //         throw new Error("this promise shouldn't succeed");
-
-  //       }).catch(err => {
-  //         assert.ok(typeof (err) === "string");
-  //         assert.equal(client.lastMessage[0], Protocol.JOIN_ERROR);
-  //         done();
-  //       });
-  //     });
-  //   });
-
-  //   it('should\'t allow to connect when verifyClient returns a failed promise', (done) => {
-  //     let client = createDummyClient();
-
-  //     RoomVerifyClient.prototype.verifyClient = () => new Promise((resolve, reject) => {
-  //       setTimeout(() => reject("forbidden"), 50);
-  //     });
-
-  //     matchMaker.onJoinRoomRequest('room_verify_client', { clientId: client.id }, true, (err, room) => {
-  //       matchMaker.bindClient(client, room.roomId).then((room) => {
-  //         throw new Error("this promise shouldn't succeed");
-
-  //       }).catch(err => {
-  //         assert.equal(err, "forbidden");
-  //         assert.equal(client.lastMessage[0], Protocol.JOIN_ERROR);
-  //         done();
-  //       });
-  //     });
-  //   });
-
-  //   it('should allow to connect when verifyClient returns true', (done) => {
-  //     let client = createDummyClient();
-
-  //     RoomVerifyClient.prototype.verifyClient = () => true;
-
-  //     matchMaker.onJoinRoomRequest('room_verify_client', { clientId: client.id }, true, (err, room) => {
-  //       matchMaker.bindClient(client, room.roomId).then((room) => {
-  //         assert.ok(room instanceof Room);
-  //         done();
-
-  //       }).catch(err => {
-  //         throw new Error(err);
-  //       });
-  //     });
-  //   });
-
-  //   it('should allow to connect when verifyClient returns fulfiled promise', (done) => {
-  //     let client = createDummyClient();
-
-  //     RoomVerifyClient.prototype.verifyClient = () => new Promise((resolve, reject) => {
-  //       setTimeout(() => resolve(), 50);
-  //     });
-
-  //     matchMaker.onJoinRoomRequest('room_verify_client', { clientId: client.id }, true, (err, room) => {
-  //       matchMaker.bindClient(client, room.roomId).then((room) => {
-  //         assert.equal(1, room.clients.length);
-  //         assert.ok(room instanceof Room);
-  //         done();
-
-  //       }).catch(err => {
-  //         throw new Error(err);
-  //       });
-  //     });
-  //   });
-
-  //   it('should handle leaving room before onJoin is fulfiled.', (done) => {
-  //     const onDisposeSpy = sinon.spy(RoomVerifyClient.prototype, 'onDispose');
-
-  //     RoomVerifyClient.prototype.verifyClient = () => new Promise((resolve, reject) => {
-  //       setTimeout(() => resolve(), 100);
-  //     });
-
-  //     let client = createDummyClient();
-
-  //     matchMaker.onJoinRoomRequest('room_verify_client', { clientId: client.id }, true, (err, room) => {
-  //       matchMaker.bindClient(client, room.roomId).then((room) => {
-  //         throw new Error("this promise shouldn't succeed");
-
-  //       }).catch(err => {
-  //         assert.equal(0, room.clients.length);
-  //         assert.deepEqual({}, matchMaker.sessions);
-  //         assert.ok(onDisposeSpy.calledOnce);
-  //         onDisposeSpy.restore();
-
-  //         done();
-  //       });
-
-  //       client.emit('close');
-  //     });
-  //   });
-
-  //   xit('shouldn\'t accept second client when room is locked after first one', (done) => {
-  //     let client = createDummyClient();
-
-  //     matchMaker.onJoinRoomRequest('room_verify_client_with_lock', { clientId: client.id }, true, (err, room) => {
-  //       matchMaker.bindClient(client, room.roomId).then((room) => {
-  //         assert.equal(1, room.clients.length);
-  //         assert.ok(room instanceof Room);
-
-  //       }).catch(err => {
-  //         throw new Error("this promise shouldn't fail");
-  //       });
-  //     });
-
-  //     // try to join with a second client when the room will be locked
-  //     setTimeout(() => {
-  //       let client = createDummyClient();
-  //       matchMaker.onJoinRoomRequest('room_verify_client_with_lock', { clientId: client.id }, true, (err, room) => {
-  //         matchMaker.bindClient(client, room.roomId).then((room) => {
-  //           assert.equal(1, room.clients.length);
-  //           assert.ok(room instanceof Room);
-  //           done();
-
-  //         }).catch(err => {
-  //           throw new Error("this promise shouldn't fail");
-  //         });
-  //       });
-  //     }, 10);
-
-  //   });
-  // });
-
+  }
 });
+
