@@ -41,6 +41,75 @@ describe("Presence", () => {
         presence.publish("topic", { object: "hello world" });
       });
 
+      it("subscribe: multiple callbacks for same topic", async () => {
+        let messages: any[] = [];
+        const callback1 = (data) => messages.push(data);
+        const callback2 = (data) => messages.push(data);
+        const callback3 = (data) => messages.push(data);
+
+        await presence.subscribe("topic-multi", callback1);
+        await presence.subscribe("topic-multi", callback2);
+        await presence.subscribe("topic-multi", callback3);
+        await presence.publish("topic-multi", 1);
+
+        await awaitForTimeout(10);
+
+        assert.deepEqual([1, 1, 1], messages);
+
+        await presence.unsubscribe("topic-multi", callback1);
+        await presence.publish("topic-multi", 1);
+
+        await awaitForTimeout(10);
+
+        assert.deepEqual([1, 1, 1, 1, 1], messages);
+      })
+
+      it("subscribe: topics should not collide", async () => {
+        let messages: any[] = [];
+        const callback1 = (data) => messages.push(data);
+        const callback2 = (data) => messages.push(data);
+        const callback3 = (data) => messages.push(data);
+        const callback4 = (data) => messages.push(data);
+
+        // subscribe to each topic twice
+        await presence.subscribe("topic-collide1", callback1);
+        await presence.subscribe("topic-collide1", callback2);
+        await presence.subscribe("topic-collide2", callback3);
+        await presence.subscribe("topic-collide2", callback4);
+
+        await presence.publish("topic-collide1", 1);
+        await presence.publish("topic-collide1", 2);
+        await presence.publish("topic-collide2", 3);
+        await presence.publish("topic-collide2", 4);
+
+        await awaitForTimeout(10);
+        assert.deepEqual([1, 1, 2, 2, 3, 3, 4, 4], messages);
+
+        // leave duplicated subscriptions
+        await presence.unsubscribe("topic-collide1", callback2);
+        await presence.unsubscribe("topic-collide2", callback4);
+
+        messages = [];
+        await presence.publish("topic-collide1", 1);
+        await presence.publish("topic-collide1", 2);
+        await presence.publish("topic-collide2", 3);
+        await presence.publish("topic-collide2", 4);
+
+        await awaitForTimeout(10);
+        assert.deepEqual([1, 2, 3, 4], messages);
+
+        // leave all subscriptions...
+        await presence.unsubscribe("topic-collide1", callback1);
+        await presence.unsubscribe("topic-collide2", callback3);
+
+        messages = [];
+        await presence.publish("topic-collide1", 1000);
+        await presence.publish("topic-collide2", 2000);
+
+        await awaitForTimeout(10);
+        assert.deepEqual([], messages);
+      });
+
       it("unsubscribe", async () => {
         presence.subscribe("topic2", (_) => assert.fail("should not trigger"));
         presence.unsubscribe("topic2");

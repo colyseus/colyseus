@@ -2,6 +2,8 @@ import { EventEmitter } from 'events';
 import { spliceOne } from '../Utils';
 import { Presence } from './Presence';
 
+type Callback = (...args: any[]) => void;
+
 export class LocalPresence implements Presence {
     public channels = new EventEmitter();
 
@@ -9,7 +11,7 @@ export class LocalPresence implements Presence {
     public hash: {[roomName: string]: {[key: string]: string}} = {};
 
     public keys: {[name: string]: string | number} = {};
-    private listenersByTopic: {[id: string]: Array<(...args: any[]) => void>} = {};
+    private listenersByTopic: {[id: string]: Array<Callback>} = {};
     private timeouts: {[name: string]: NodeJS.Timer} = {};
 
     public subscribe(topic: string, callback: (...args: any[]) => void) {
@@ -19,8 +21,15 @@ export class LocalPresence implements Presence {
         return this;
     }
 
-    public unsubscribe(topic: string) {
-        if (this.listenersByTopic[topic]) {
+    public unsubscribe(topic: string, callback?: Callback) {
+        if (callback)  {
+            const idx = this.listenersByTopic[topic].indexOf(callback);
+            if (idx !== -1) {
+                this.listenersByTopic[topic].splice(idx, 1);
+                this.channels.removeListener(topic, callback);
+            }
+
+        } else if (this.listenersByTopic[topic]) {
           this.listenersByTopic[topic].forEach((callback) => this.channels.removeListener(topic, callback));
           delete this.listenersByTopic[topic];
         }
