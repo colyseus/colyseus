@@ -340,6 +340,35 @@ describe("Integration", () => {
             await awaitForTimeout(50);
           });
 
+          xit("should allow to broadcast during onJoin() for current client", async () => {
+            matchMaker.defineRoomType('broadcast', class _ extends Room {
+              onJoin(client, options) {
+                this.send(client, "hello");
+                console.log("SEND MESSAGE!");
+                this.broadcast("hello");
+              }
+              onMessage(client, message) { }
+            });
+
+            const conn = await client.joinOrCreate("broadcast");
+
+            console.log("REGISTER ON MESSAGE!");
+            conn.onMessage((_message) => {
+              console.log("RECEIVED MESSAGE!", _message);
+              onMessageCalled = true;
+              message = _message;
+            });
+
+            let onMessageCalled = false;
+            let message: any;
+
+
+            assert.equal(true, onMessageCalled);
+            assert.equal("hello", message);
+
+            conn.leave();
+          });
+
           xit("should broadcast after patch", async () => {
             // TODO
           });
