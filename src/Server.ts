@@ -18,16 +18,27 @@ import { LocalPresence } from './presence/LocalPresence';
 
 import { MatchMakeError } from './errors/MatchMakeError';
 import { Protocol } from './Protocol';
+import { MatchMakerDriver } from './matchmaker/drivers/Driver';
 
 export type ServerOptions = IServerOptions & {
+  pingInterval?: number,
+  pingMaxRetries?: number,
+
+  /**
+   * @deprecated use `pingInterval` instead
+   */
   pingTimeout?: number,
+
+  /**
+   * @deprecated use `pingMaxRetries` instead
+   */
   pingCountMax?: number,
+
   verifyClient?: WebSocket.VerifyClientCallbackAsync
-  presence?: any,
-  driver?: any,
+  presence?: Presence,
+  driver?: MatchMakerDriver,
   engine?: any,
   ws?: any,
-  express?: any,
   gracefullyShutdown?: boolean,
 };
 
