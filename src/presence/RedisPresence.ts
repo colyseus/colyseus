@@ -13,7 +13,7 @@ export class RedisPresence implements Presence {
     protected unsubscribeAsync: any;
     protected publishAsync: any;
 
-    protected subscriptions: {[channel: string]: Array<Callback>} = {};
+    protected subscriptions: { [channel: string]: Callback[] } = {};
 
     protected smembersAsync: any;
     protected hgetAsync: any;
@@ -21,14 +21,6 @@ export class RedisPresence implements Presence {
     protected pubsubAsync: any;
     protected incrAsync: any;
     protected decrAsync: any;
-
-    protected handleSubscription = (channel, message) => {
-        if (this.subscriptions[channel]) {
-          for (let i = 0, l = this.subscriptions[channel].length; i < l; i++) {
-            this.subscriptions[channel][i](JSON.parse(message));
-          }
-        }
-    }
 
     constructor(opts?: redis.ClientOpts) {
         this.sub = redis.createClient(opts);
@@ -59,7 +51,7 @@ export class RedisPresence implements Presence {
 
         this.subscriptions[topic].push(callback);
 
-        if (this.sub.listeners("message").length === 0) {
+        if (this.sub.listeners('message').length === 0) {
           this.sub.addListener('message', this.handleSubscription);
         }
 
@@ -167,6 +159,14 @@ export class RedisPresence implements Presence {
 
     public async decr(key: string): Promise<number> {
         return await this.decrAsync(key);
+    }
+
+    protected handleSubscription = (channel, message) => {
+        if (this.subscriptions[channel]) {
+          for (let i = 0, l = this.subscriptions[channel].length; i < l; i++) {
+            this.subscriptions[channel][i](JSON.parse(message));
+          }
+        }
     }
 
 }

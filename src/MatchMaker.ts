@@ -15,6 +15,8 @@ import { SeatReservationError } from './errors/SeatReservationError';
 import { MatchMakerDriver, RoomListingData } from './matchmaker/drivers/Driver';
 import { LocalDriver } from './matchmaker/drivers/LocalDriver';
 
+export { MatchMakerDriver };
+
 export type ClientOptions = any;
 
 export interface SeatReservation {

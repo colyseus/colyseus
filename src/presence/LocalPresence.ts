@@ -11,7 +11,8 @@ export class LocalPresence implements Presence {
     public hash: {[roomName: string]: {[key: string]: string}} = {};
 
     public keys: {[name: string]: string | number} = {};
-    private listenersByTopic: {[id: string]: Array<Callback>} = {};
+
+    private listenersByTopic: {[id: string]: Callback[]} = {};
     private timeouts: {[name: string]: NodeJS.Timer} = {};
 
     public subscribe(topic: string, callback: (...args: any[]) => void) {
@@ -30,7 +31,7 @@ export class LocalPresence implements Presence {
             }
 
         } else if (this.listenersByTopic[topic]) {
-          this.listenersByTopic[topic].forEach((callback) => this.channels.removeListener(topic, callback));
+          this.listenersByTopic[topic].forEach((cb) => this.channels.removeListener(topic, cb));
           delete this.listenersByTopic[topic];
         }
         return this;

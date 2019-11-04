@@ -18,7 +18,6 @@ import { LocalPresence } from './presence/LocalPresence';
 
 import { MatchMakeError } from './errors/MatchMakeError';
 import { Protocol } from './Protocol';
-import { MatchMakerDriver } from './matchmaker/drivers/Driver';
 
 export type ServerOptions = IServerOptions & {
   pingInterval?: number,
@@ -36,7 +35,7 @@ export type ServerOptions = IServerOptions & {
 
   verifyClient?: WebSocket.VerifyClientCallbackAsync
   presence?: Presence,
-  driver?: MatchMakerDriver,
+  driver?: matchMaker.MatchMakerDriver,
   engine?: any,
   ws?: any,
   gracefullyShutdown?: boolean,

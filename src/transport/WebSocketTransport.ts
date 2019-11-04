@@ -29,12 +29,12 @@ export class WebSocketTransport extends Transport {
     options.perMessageDeflate = false;
 
     if (options.pingTimeout !== undefined) {
-      console.warn("'pingTimeout' is deprecated. Use 'pingInterval' instead.");
+      console.warn('"pingTimeout" is deprecated. Use "pingInterval" instead.');
       options.pingInterval = options.pingTimeout;
     }
 
     if (options.pingCountMax !== undefined) {
-      console.warn("'pingCountMax' is deprecated. Use 'pingMaxRetries' instead.");
+      console.warn('"pingCountMax" is deprecated. Use "pingMaxRetries" instead.');
       options.pingMaxRetries = options.pingCountMax;
     }
 
