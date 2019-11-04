@@ -93,6 +93,27 @@ export class LocalPresence implements Presence {
         return (this.data[key] || []).length;
     }
 
+    public async sinter(...keys: string[]) {
+      const intersection: {[value: string]: number} = {};
+
+      for (let i = 0, l = keys.length; i < l; i++) {
+        (await this.smembers(keys[i])).forEach((member) => {
+          if (!intersection[member]) {
+            intersection[member] = 0;
+          }
+
+          intersection[member]++;
+        });
+      }
+
+      return Object.keys(intersection).reduce((prev, curr) => {
+        if (intersection[curr] > 1) {
+          prev.push(curr);
+        }
+        return prev;
+      }, []);
+    }
+
     public hset(roomId: string, key: string, value: string) {
         if (!this.hash[roomId]) {
             this.hash[roomId] = {};

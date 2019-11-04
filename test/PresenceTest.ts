@@ -160,6 +160,18 @@ describe("Presence", () => {
         assert.equal(0, await presence.scard("set"));
       });
 
+      it("sinter - intersection between sets", async () => {
+        await presence.sadd("key1", "a");
+        await presence.sadd("key1", "b");
+        await presence.sadd("key1", "c");
+        await presence.sadd("key2", "c");
+        await presence.sadd("key2", "d");
+        await presence.sadd("key2", "e");
+
+        const intersection = await presence.sinter("key1", "key2");
+        assert.deepEqual(["c"], intersection);
+      });
+
       it("hset/hget/hdel/hlen (hashes)", async () => {
         await presence.hset("hash", "one", "1");
         await presence.hset("hash", "two", "2");

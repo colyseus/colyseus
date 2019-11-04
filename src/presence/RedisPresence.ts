@@ -133,6 +133,15 @@ export class RedisPresence implements Presence {
         });
     }
 
+    public async sinter(...keys: string[]) {
+        return new Promise<string[]>((resolve, reject) => {
+            this.pub.sinter(...keys, (err, data) => {
+                if (err) { return reject(err); }
+                resolve(data);
+            });
+        });
+    }
+
     public async hset(roomId: string, key: string, value: string) {
         return new Promise((resolve) => {
             this.pub.hset(roomId, key, value, resolve);
