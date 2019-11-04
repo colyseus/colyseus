@@ -10,7 +10,11 @@ describe("Integration", () => {
     const driver = DRIVERS[i];
 
     describe(`Using driver: ${(driver.constructor as any).name}`, () => {
-      const server = new Server();
+      const server = new Server({
+        pingInterval: 300,
+        pingMaxRetries: 1,
+      });
+
       const client = new Colyseus.Client("ws://localhost:8567");
 
       before(async () => new Promise((resolve) => {
@@ -18,7 +22,7 @@ describe("Integration", () => {
         matchMaker.setup(undefined, driver, 'dummyProcessId')
 
         // define a room
-        server.define("roomName", DummyRoom);
+        server.define("dummy", DummyRoom);
 
         // listen for testing
         server.listen(8567, undefined, undefined, resolve);
@@ -27,10 +31,10 @@ describe("Integration", () => {
       after(() => server.transport.shutdown());
 
       describe("Room lifecycle", () => {
-        after(() => {
-          matchMaker.removeRoomType('oncreate');
-          matchMaker.removeRoomType('onjoin');
-        });
+        // after(() => {
+        //   matchMaker.removeRoomType('oncreate');
+        //   matchMaker.removeRoomType('onjoin');
+        // });
 
         it("onCreate()", async () => {
           let onCreateCalled = false;
@@ -368,6 +372,13 @@ describe("Integration", () => {
 
 
         });
+
+        it("consumeSeatReservation()", async () => {
+          const seatReservation = await matchMaker.create("dummy", {});
+          const conn = await client.consumeSeatReservation(seatReservation);
+          assert.equal(conn.id, seatReservation.room.roomId);
+          conn.leave();
+        })
 
       });
 
