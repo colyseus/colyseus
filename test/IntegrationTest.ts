@@ -335,6 +335,11 @@ describe("Integration", () => {
             conn3.leave();
             await awaitForTimeout(50);
           });
+
+          xit("should broadcast after patch", async () => {
+            // TODO
+          });
+
         });
 
         describe("disconnect()", () => {
@@ -357,7 +362,7 @@ describe("Integration", () => {
 
             assert.equal(conn1.id, conn2.id, "should've joined the same room");
 
-            await awaitForTimeout(100);
+            await awaitForTimeout(150);
             assert.equal(2, disconnected, "both clients should've been disconnected");
           });
 
