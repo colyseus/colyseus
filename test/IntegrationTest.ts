@@ -332,7 +332,7 @@ describe("Integration", () => {
 
               await awaitForTimeout(200);
 
-              assert.deepEqual(['one', 'two', 'three', 'one', 'two', 'three', 'one', 'two', 'three'], messages);
+              assert.deepEqual(["one", "one", "one", "three", "three", "three", "two", "two", "two"], messages.sort());
 
               conn1.leave();
               conn2.leave();
@@ -365,7 +365,7 @@ describe("Integration", () => {
 
               await awaitForTimeout(200);
 
-              assert.deepEqual(['one', 'two', 'one', 'three', 'two', 'three'], messages);
+              assert.deepEqual(["one", "one", "three", "three", "two", "two"], messages.sort());
 
               conn1.leave();
               conn2.leave();
