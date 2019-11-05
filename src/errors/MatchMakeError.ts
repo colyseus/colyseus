@@ -1,4 +1,4 @@
-import { Protocol } from "../Protocol";
+import { Protocol } from '../Protocol';
 
 export class MatchMakeError extends Error {
   public code: number;

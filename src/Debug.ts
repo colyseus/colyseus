@@ -6,7 +6,7 @@ export const debugPatch = debug('colyseus:patch');
 export const debugError = debug('colyseus:errors');
 
 export const debugAndPrintError = (e: Error | string) => {
-  let message = (e instanceof Error) ? e.stack : e;
+  const message = (e instanceof Error) ? e.stack : e;
 
   if (!(e instanceof MatchMakeError)) {
     console.error(message);
