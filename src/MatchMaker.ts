@@ -15,7 +15,7 @@ import { SeatReservationError } from './errors/SeatReservationError';
 import { MatchMakerDriver, RoomListingData } from './matchmaker/drivers/Driver';
 import { LocalDriver } from './matchmaker/drivers/LocalDriver';
 
-export { MatchMakerDriver };
+export { MatchMakerDriver, MatchMakeError };
 
 export type ClientOptions = any;
 
@@ -254,7 +254,7 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
 
     } catch (e) {
       debugAndPrintError(e);
-      throw new MatchMakeError(e.message, Protocol.ERR_MATCHMAKE_UNHANDLED);
+      throw new MatchMakeError(e.message);
     }
   }
 
@@ -382,7 +382,7 @@ async function createRoomReferences(room: Room, init: boolean = false): Promise<
         response = room[method].apply(room, args);
 
       } catch (e) {
-        debugAndPrintError(e.stack || e);
+        debugAndPrintError(e);
         return reply(IpcProtocol.ERROR, e.message || e);
       }
 

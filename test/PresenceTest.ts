@@ -1,16 +1,11 @@
 import assert from "assert";
-import { LocalPresence, Presence, RedisPresence } from "../src";
-import { awaitForTimeout } from "./utils";
+import { awaitForTimeout, PRESENCE_IMPLEMENTATIONS } from "./utils";
 
-const IMPLEMENTATIONS: Presence[] = [
-  new LocalPresence(),
-  new RedisPresence()
-]
 
 describe("Presence", () => {
 
-  for (let i = 0; i < IMPLEMENTATIONS.length; i++) {
-    const presence = IMPLEMENTATIONS[i];
+  for (let i = 0; i < PRESENCE_IMPLEMENTATIONS.length; i++) {
+    const presence = PRESENCE_IMPLEMENTATIONS[i];
 
     describe((presence as any).constructor.name, () => {
 

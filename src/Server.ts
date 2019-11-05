@@ -169,7 +169,7 @@ export class Server {
         const body = JSON.parse(Buffer.concat(data).toString());
         try {
           if (this.exposedMethods.indexOf(method) === -1) {
-            throw new MatchMakeError(`invalid method "${method}"`, Protocol.ERR_MATCHMAKE_UNHANDLED);
+            throw new MatchMakeError(`invalid method "${method}"`);
           }
 
           const response = await matchMaker[method](name, body);
