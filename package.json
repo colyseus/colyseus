@@ -12,6 +12,10 @@
     "tslint": "tslint --project .",
     "update-contributors": "all-contributors generate"
   },
+  "funding": {
+    "type": "patreon",
+    "url": "https://www.patreon.com/endel"
+  },
   "keywords": [
     "colyseus",
     "multiplayer",
