@@ -13,13 +13,13 @@ export function registerGracefulShutdown(callback) {
     process.once(signal, () => callback(signal)));
 }
 
-export function retry(
+export function retry<T = any>(
   cb: Function,
   maxRetries: number = 3,
   errorWhiteList: any[] = [],
   retries: number = 0,
 ) {
-  return new Promise((resolve, reject) => {
+  return new Promise<T>((resolve, reject) => {
     cb()
       .then(resolve)
       .catch((e) => {
@@ -28,7 +28,7 @@ export function retry(
           retries++ < maxRetries
         ) {
           setTimeout(() => {
-            retry(cb, maxRetries, errorWhiteList, retries).
+            retry<T>(cb, maxRetries, errorWhiteList, retries).
               then(resolve).
               catch((e2) => reject(e2));
           }, Math.floor(Math.random() * Math.pow(2, retries) * 400));

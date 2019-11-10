@@ -5,8 +5,8 @@ export class Query<T> implements QueryHelpers<T> {
   private $rooms: T[];
   private conditions: any;
 
-  constructor(rooms, conditions) {
-    this.$rooms = rooms;
+  constructor(rooms: any[], conditions) {
+    this.$rooms = rooms.slice(0);
     this.conditions = conditions;
   }
 

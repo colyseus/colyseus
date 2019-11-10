@@ -21,7 +21,6 @@ const gameServer = new Server({
   // engine: WebSocket.Server,
   server: server,
   // presence: new RedisPresence(),
-  // express: app,
   // driver: new MongooseDriver(),
 });
 

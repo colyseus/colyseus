@@ -19,8 +19,8 @@ export class WebSocketTransport extends Transport {
   protected wss: WebSocket.Server;
 
   protected pingInterval: NodeJS.Timer;
-  protected pingTimeout: number;
-  protected pingCountMax: number;
+  protected pingIntervalMS: number;
+  protected pingMaxRetries: number;
 
   constructor(options: ServerOptions = {}, engine: any) {
     super();
@@ -28,11 +28,21 @@ export class WebSocketTransport extends Transport {
     // disable per-message deflate
     options.perMessageDeflate = false;
 
-    this.pingTimeout = (options.pingTimeout !== undefined)
-      ? options.pingTimeout
+    if (options.pingTimeout !== undefined) {
+      console.warn('"pingTimeout" is deprecated. Use "pingInterval" instead.');
+      options.pingInterval = options.pingTimeout;
+    }
+
+    if (options.pingCountMax !== undefined) {
+      console.warn('"pingCountMax" is deprecated. Use "pingMaxRetries" instead.');
+      options.pingMaxRetries = options.pingCountMax;
+    }
+
+    this.pingIntervalMS = (options.pingInterval !== undefined)
+      ? options.pingInterval
       : 1500;
-    this.pingCountMax = (options.pingCountMax !== undefined)
-      ? options.pingCountMax
+    this.pingMaxRetries = (options.pingMaxRetries !== undefined)
+      ? options.pingMaxRetries
       : 2;
 
     this.wss = new engine(options);
@@ -40,8 +50,8 @@ export class WebSocketTransport extends Transport {
 
     this.server = options.server;
 
-    if (this.pingTimeout > 0 && this.pingCountMax > 0) {
-      this.autoTerminateUnresponsiveClients(this.pingTimeout, this.pingCountMax);
+    if (this.pingIntervalMS > 0 && this.pingMaxRetries > 0) {
+      this.autoTerminateUnresponsiveClients(this.pingIntervalMS, this.pingMaxRetries);
     }
   }
 
@@ -56,21 +66,21 @@ export class WebSocketTransport extends Transport {
     this.server.close();
   }
 
-  protected autoTerminateUnresponsiveClients(pingTimeout: number, pingCountMax: number) {
+  protected autoTerminateUnresponsiveClients(pingInterval: number, pingMaxRetries: number) {
     // interval to detect broken connections
     this.pingInterval = setInterval(() => {
       this.wss.clients.forEach((client: Client) => {
         //
         // if client hasn't responded after the interval, terminate its connection.
         //
-        if (client.pingCount >= pingCountMax) {
+        if (client.pingCount >= pingMaxRetries) {
           return client.terminate();
         }
 
         client.pingCount++;
         client.ping(noop);
       });
-    }, pingTimeout);
+    }, pingInterval);
   }
 
   protected onConnection = async (client: Client, req?: http.IncomingMessage & any) => {
@@ -99,7 +109,7 @@ export class WebSocketTransport extends Transport {
       await room._onJoin(client, upgradeReq);
 
     } catch (e) {
-      debugAndPrintError(e.stack || e);
+      debugAndPrintError(e);
       send[Protocol.JOIN_ERROR](client, (e && e.message) || '');
       client.close(Protocol.WS_CLOSE_WITH_ERROR);
     }

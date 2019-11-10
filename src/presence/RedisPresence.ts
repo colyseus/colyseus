@@ -3,6 +3,8 @@ import { promisify } from 'util';
 
 import { Presence } from './Presence';
 
+type Callback = (...args: any[]) => void;
+
 export class RedisPresence implements Presence {
     public sub: redis.RedisClient;
     public pub: redis.RedisClient;
@@ -11,7 +13,7 @@ export class RedisPresence implements Presence {
     protected unsubscribeAsync: any;
     protected publishAsync: any;
 
-    protected subscriptions: {[channel: string]: (...args: any[]) => any} = {};
+    protected subscriptions: { [channel: string]: Callback[] } = {};
 
     protected smembersAsync: any;
     protected hgetAsync: any;
@@ -42,26 +44,34 @@ export class RedisPresence implements Presence {
         this.decrAsync = promisify(this.pub.decr).bind(this.pub);
     }
 
-    public async subscribe(topic: string, callback: Function) {
-        this.subscriptions[topic] = (channel, message) => {
-            if (channel === topic) {
-                callback(JSON.parse(message));
-            }
-        };
+    public async subscribe(topic: string, callback: Callback) {
+        if (!this.subscriptions[topic]) {
+          this.subscriptions[topic] = [];
+        }
 
-        this.sub.addListener('message', this.subscriptions[topic]);
+        this.subscriptions[topic].push(callback);
+
+        if (this.sub.listeners('message').length === 0) {
+          this.sub.addListener('message', this.handleSubscription);
+        }
 
         await this.subscribeAsync(topic);
 
         return this;
     }
 
-    public async unsubscribe(topic: string) {
-        this.sub.removeListener('message', this.subscriptions[topic]);
+    public async unsubscribe(topic: string, callback?: Callback) {
+        if (callback) {
+          const index = this.subscriptions[topic].indexOf(callback);
+          this.subscriptions[topic].splice(index, 1);
 
-        delete this.subscriptions[topic];
+        } else {
+          this.subscriptions[topic] = [];
+        }
 
-        await this.unsubscribeAsync(topic);
+        if (this.subscriptions[topic].length === 0) {
+          await this.unsubscribeAsync(topic);
+        }
 
         return this;
     }
@@ -123,6 +133,15 @@ export class RedisPresence implements Presence {
         });
     }
 
+    public async sinter(...keys: string[]) {
+        return new Promise<string[]>((resolve, reject) => {
+            this.pub.sinter(...keys, (err, data) => {
+                if (err) { return reject(err); }
+                resolve(data);
+            });
+        });
+    }
+
     public async hset(roomId: string, key: string, value: string) {
         return new Promise((resolve) => {
             this.pub.hset(roomId, key, value, resolve);
@@ -149,6 +168,14 @@ export class RedisPresence implements Presence {
 
     public async decr(key: string): Promise<number> {
         return await this.decrAsync(key);
+    }
+
+    protected handleSubscription = (channel, message) => {
+        if (this.subscriptions[channel]) {
+          for (let i = 0, l = this.subscriptions[channel].length; i < l; i++) {
+            this.subscriptions[channel][i](JSON.parse(message));
+          }
+        }
     }
 
 }

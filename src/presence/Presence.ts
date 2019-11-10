@@ -1,6 +1,6 @@
 export interface Presence {
     subscribe(topic: string, callback: Function);
-    unsubscribe(topic: string);
+    unsubscribe(topic: string, callback?: Function);
     publish(topic: string, data: any);
 
     exists(roomId: string): Promise<boolean>;
@@ -10,9 +10,10 @@ export interface Presence {
 
     del(key: string): void;
     sadd(key: string, value: any);
-    smembers(key: string);
+    smembers(key: string): Promise<string[]>;
     srem(key: string, value: any);
     scard(key: string);
+    sinter(...keys: string[]): Promise<string[]>;
 
     hset(roomId: string, key: string, value: string);
     hget(roomId: string, key: string): Promise<string>;

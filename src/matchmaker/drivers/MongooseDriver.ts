@@ -43,13 +43,14 @@ export class MongooseDriver implements MatchMakerDriver {
 
   public async find(conditions: any, additionalProjectionFields = {}) {
     return (await RoomCache.find(conditions, {
-      _id: 0,
-      clients: 1,
-      createdAt: 1,
-      maxClients: 1,
-      metadata: 1,
-      name: 1,
-      roomId: 1,
+      _id: false,
+      clients: true,
+      createdAt: true,
+      locked: true,
+      maxClients: true,
+      metadata: true,
+      name: true,
+      roomId: true,
       ...additionalProjectionFields,
     })) as any as RoomListingData[];
   }

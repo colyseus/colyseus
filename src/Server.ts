@@ -20,14 +20,29 @@ import { MatchMakeError } from './errors/MatchMakeError';
 import { Protocol } from './Protocol';
 
 export type ServerOptions = IServerOptions & {
+  pingInterval?: number,
+  pingMaxRetries?: number,
+
+  /**
+   * @deprecated use `pingInterval` instead
+   */
   pingTimeout?: number,
+
+  /**
+   * @deprecated use `pingMaxRetries` instead
+   */
   pingCountMax?: number,
+
+  /**
+   * @deprecated remove on version 0.12.x
+   */
+  express?: any,
+
   verifyClient?: WebSocket.VerifyClientCallbackAsync
-  presence?: any,
-  driver?: any,
+  presence?: Presence,
+  driver?: matchMaker.MatchMakerDriver,
   engine?: any,
   ws?: any,
-  express?: any,
   gracefullyShutdown?: boolean,
 };
 
@@ -159,7 +174,7 @@ export class Server {
         const body = JSON.parse(Buffer.concat(data).toString());
         try {
           if (this.exposedMethods.indexOf(method) === -1) {
-            throw new MatchMakeError(`invalid method "${method}"`, Protocol.ERR_MATCHMAKE_UNHANDLED);
+            throw new MatchMakeError(`invalid method "${method}"`);
           }
 
           const response = await matchMaker[method](name, body);
@@ -177,16 +192,24 @@ export class Server {
 
     } else if (req.method === 'GET') {
       const matchedParams = req.url.match(this.allowedRoomNameChars);
-      let roomName = matchedParams[matchedParams.length - 1];
+      const roomName = matchedParams[matchedParams.length - 1];
+
+      /**
+       * list public & unlocked rooms
+       */
+      const conditions: any = {
+        locked: false,
+        private: false,
+      };
 
       // TODO: improve me, "matchmake" room names aren't allowed this way.
-      if (roomName === 'matchmake') { roomName = ''; }
+      if (roomName !== 'matchmake') {
+        conditions.name = roomName;
+      }
 
       headers['Content-Type'] = 'application/json';
       res.writeHead(200, headers);
-      res.write(JSON.stringify(
-        await matchMaker.query(roomName, { locked: false }),
-      ));
+      res.write(JSON.stringify(await matchMaker.query(conditions)));
       res.end();
     }
 

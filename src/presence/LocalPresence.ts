@@ -2,6 +2,8 @@ import { EventEmitter } from 'events';
 import { spliceOne } from '../Utils';
 import { Presence } from './Presence';
 
+type Callback = (...args: any[]) => void;
+
 export class LocalPresence implements Presence {
     public channels = new EventEmitter();
 
@@ -9,7 +11,8 @@ export class LocalPresence implements Presence {
     public hash: {[roomName: string]: {[key: string]: string}} = {};
 
     public keys: {[name: string]: string | number} = {};
-    private listenersByTopic: {[id: string]: Array<(...args: any[]) => void>} = {};
+
+    private listenersByTopic: {[id: string]: Callback[]} = {};
     private timeouts: {[name: string]: NodeJS.Timer} = {};
 
     public subscribe(topic: string, callback: (...args: any[]) => void) {
@@ -19,9 +22,16 @@ export class LocalPresence implements Presence {
         return this;
     }
 
-    public unsubscribe(topic: string) {
-        if (this.listenersByTopic[topic]) {
-          this.listenersByTopic[topic].forEach((callback) => this.channels.removeListener(topic, callback));
+    public unsubscribe(topic: string, callback?: Callback) {
+        if (callback)  {
+            const idx = this.listenersByTopic[topic].indexOf(callback);
+            if (idx !== -1) {
+                this.listenersByTopic[topic].splice(idx, 1);
+                this.channels.removeListener(topic, callback);
+            }
+
+        } else if (this.listenersByTopic[topic]) {
+          this.listenersByTopic[topic].forEach((cb) => this.channels.removeListener(topic, cb));
           delete this.listenersByTopic[topic];
         }
         return this;
@@ -54,6 +64,7 @@ export class LocalPresence implements Presence {
     }
 
     public del(key: string) {
+        delete this.keys[key];
         delete this.data[key];
         delete this.hash[key];
     }
@@ -79,7 +90,28 @@ export class LocalPresence implements Presence {
     }
 
     public scard(key: string) {
-        return this.data[key].length;
+        return (this.data[key] || []).length;
+    }
+
+    public async sinter(...keys: string[]) {
+      const intersection: {[value: string]: number} = {};
+
+      for (let i = 0, l = keys.length; i < l; i++) {
+        (await this.smembers(keys[i])).forEach((member) => {
+          if (!intersection[member]) {
+            intersection[member] = 0;
+          }
+
+          intersection[member]++;
+        });
+      }
+
+      return Object.keys(intersection).reduce((prev, curr) => {
+        if (intersection[curr] > 1) {
+          prev.push(curr);
+        }
+        return prev;
+      }, []);
     }
 
     public hset(roomId: string, key: string, value: string) {

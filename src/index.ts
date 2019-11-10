@@ -40,10 +40,13 @@ export type Client = WebSocket & {
 
   id: string;
   sessionId: string; // TODO: remove sessionId on version 1.0.0
+
+  /**
+   * auth data provided by your `onAuth`
+   */
   auth?: any;
 
   pingCount: number; // ping / pong
-
   state: ClientState;
   _enqueuedMessages: any;
 };

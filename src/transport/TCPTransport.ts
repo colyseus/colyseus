@@ -70,7 +70,7 @@ export class TCPTransport extends Transport {
         await room._onJoin(client);
 
       } catch (e) {
-        debugAndPrintError(e.stack || e);
+        debugAndPrintError(e);
         send[Protocol.JOIN_ERROR](client, (e && e.message) || '');
         client.close(Protocol.WS_CLOSE_WITH_ERROR);
       }

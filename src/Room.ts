@@ -20,7 +20,7 @@ import { RoomListingData } from './matchmaker/drivers/Driver';
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
 
-const DEFAULT_SEAT_RESERVATION_TIME = Number(process.env.COLYSEUS_SEAT_RESERVATION_TIME || 8);
+export const DEFAULT_SEAT_RESERVATION_TIME = Number(process.env.COLYSEUS_SEAT_RESERVATION_TIME || 8);
 
 export type SimulationCallback = (deltaTime: number) => void;
 
@@ -169,11 +169,11 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
     }
   }
 
-  public setPrivate(bool: boolean = true) {
+  public async setPrivate(bool: boolean = true) {
     this.listing.private = bool;
 
     if (this._internalState === RoomInternalState.CREATED) {
-      this.listing.save();
+      return await this.listing.save();
     }
   }
 
@@ -408,6 +408,7 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
 
   protected async allowReconnection(client: Client, seconds: number = 15): Promise<Client> {
     if (this._internalState === RoomInternalState.DISCONNECTING) {
+      this._disposeIfEmpty(); // gracefully shutting down
       throw new Error('disconnecting');
     }
 
