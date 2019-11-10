@@ -224,7 +224,7 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
       client._enqueuedMessages.push(message);
 
     } else if (message instanceof Schema) {
-      send[Protocol.ROOM_DATA_CUSTOM](client, message);
+      send[Protocol.ROOM_DATA_SCHEMA](client, (message.constructor as typeof Schema)._typeid, message.encodeAll());
 
     } else {
       send[Protocol.ROOM_DATA](client, message);
@@ -243,17 +243,30 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
       throw new Error('Room#broadcast: \'data\' is required to broadcast.');
     }
 
-    // encode all messages with msgpack
-    const encodedMessage = (!(message instanceof Buffer))
-      ? msgpack.encode(message)
-      : message;
+    if (message instanceof Schema) {
+      const typeId = (message.constructor as typeof Schema)._typeid;
+      const encodedMessage = message.encodeAll();
 
-    let numClients = this.clients.length;
-    while (numClients--) {
-      const client = this.clients[numClients];
+      let numClients = this.clients.length;
+      while (numClients--) {
+        const client = this.clients[numClients];
 
-      if (options.except !== client) {
-        send[Protocol.ROOM_DATA](client, encodedMessage, false);
+        if (options.except !== client) {
+          send[Protocol.ROOM_DATA_SCHEMA](client, typeId, encodedMessage);
+        }
+      }
+
+    } else {
+      // encode message with msgpack
+      const encodedMessage = (!(message instanceof Buffer)) ? msgpack.encode(message) : message;
+
+      let numClients = this.clients.length;
+      while (numClients--) {
+        const client = this.clients[numClients];
+
+        if (options.except !== client) {
+          send[Protocol.ROOM_DATA](client, encodedMessage, false);
+        }
       }
     }
 

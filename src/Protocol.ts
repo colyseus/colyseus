@@ -13,7 +13,7 @@ export enum Protocol {
   ROOM_DATA = 13,
   ROOM_STATE = 14,
   ROOM_STATE_PATCH = 15,
-  ROOM_DATA_CUSTOM = 16, // used to send schema instances via room.send()
+  ROOM_DATA_SCHEMA = 16, // used to send schema instances via room.send()
 
   // WebSocket close codes (https://github.com/Luka967/websocket-close-codes)
   WS_CLOSE_NORMAL = 1000,
@@ -106,15 +106,9 @@ export const send = {
   /**
    * TODO: refactor me. Move this to SchemaSerializer
    */
-  [Protocol.ROOM_DATA_CUSTOM]: (client: Client, message: Schema) => {
+  [Protocol.ROOM_DATA_SCHEMA]: (client: Client, typeid, bytes: number[]) => {
     if (client.readyState !== WebSocket.OPEN) { return; }
-    client.send([
-      Protocol.ROOM_DATA_CUSTOM,
-      (message.constructor as typeof Schema)._typeid,
-      ...message.encodeAll()
-    ], {
-      binary: true
-    });
+    client.send([Protocol.ROOM_DATA_SCHEMA, typeid, ...bytes], { binary: true });
   },
 
 };
