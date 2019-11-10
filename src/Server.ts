@@ -36,7 +36,7 @@ export type ServerOptions = IServerOptions & {
   /**
    * @deprecated remove on version 0.12.x
    */
-  express: any,
+  express?: any,
 
   verifyClient?: WebSocket.VerifyClientCallbackAsync
   presence?: Presence,
