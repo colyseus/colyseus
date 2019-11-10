@@ -33,6 +33,11 @@ export type ServerOptions = IServerOptions & {
    */
   pingCountMax?: number,
 
+  /**
+   * @deprecated remove on version 0.12.x
+   */
+  express: any,
+
   verifyClient?: WebSocket.VerifyClientCallbackAsync
   presence?: Presence,
   driver?: matchMaker.MatchMakerDriver,
