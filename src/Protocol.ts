@@ -28,6 +28,7 @@ export enum Protocol {
   ERR_MATCHMAKE_INVALID_ROOM_ID = 4212,
   ERR_MATCHMAKE_UNHANDLED = 4213, // generic exception during onCreate/onJoin
   ERR_MATCHMAKE_EXPIRED = 4214, // generic exception during onCreate/onJoin
+  ERR_MATCHMAKE_INSTANCE_LIMIT = 4215
 }
 
 // Inter-process communication protocol

@@ -234,6 +234,13 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
     throw new MatchMakeError(`"${roomName}" not defined`, Protocol.ERR_MATCHMAKE_NO_HANDLER);
   }
 
+  if (!registeredHandler.isAvailableInstantiation()) {
+    throw new MatchMakeError(
+      `"${roomName}" has reached the maximum number of instances`,
+      Protocol.ERR_MATCHMAKE_INSTANCE_LIMIT
+    );
+  }
+
   const room = new registeredHandler.klass();
 
   // set room public attributes
@@ -277,6 +284,7 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
   await createRoomReferences(room, true);
   await room.listing.save();
 
+  registeredHandler.instanceCount++;
   registeredHandler.emit('create', room);
 
   return room.listing;
@@ -479,6 +487,7 @@ function disposeRoom(roomName: string, room: Room): void {
 
   // emit disposal on registered session handler
   handlers[roomName].emit('dispose', room);
+  handlers[roomName].instanceCount--;
 
   // remove concurrency key
   presence.del(getHandlerConcurrencyKey(roomName));

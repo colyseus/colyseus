@@ -29,6 +29,16 @@ describe("MatchMaker", () => {
       .filterBy(['clients'])
       .sortBy({ clients: 1 });
 
+    matchMaker
+      .defineRoomType('room_limited_instance_number_1', DummyRoom)
+      .filterBy(['id'])
+      .maxInstances(1);
+
+    matchMaker
+      .defineRoomType('room_limited_instance_number_2', DummyRoom)
+      .filterBy(['id'])
+      .maxInstances(2);
+
     /**
      * give some time for `cleanupStaleRooms()` to run
      */
@@ -100,6 +110,24 @@ describe("MatchMaker", () => {
           assert.notEqual(reservedSeat1.room.roomId, reservedSeat2.room.roomId);
           assert.ok(reservedSeat2.room.roomId);
           assert.ok(room.hasReservedSeat(reservedSeat2.sessionId));
+        });
+
+        it("create() should create a room with limited number of instances", async () => {
+          const limited1Instance1 = await matchMaker.create("room_limited_instance_number_1");
+          const limited2Instance1 = await matchMaker.create("room_limited_instance_number_2");
+          const limited2Instance2 = await matchMaker.create("room_limited_instance_number_2");
+
+          assert.ok(limited1Instance1.room.roomId);
+          assert.ok(limited2Instance1.room.roomId);
+          assert.ok(limited2Instance2.room.roomId);
+        });
+
+        it("create() should not create two rooms with limited number of instances", async () => {
+          await matchMaker.create("room_limited_instance_number_1");
+
+          assert.rejects(async () => {
+            await matchMaker.create("room_limited_instance_number_1")
+          }, /maximum number of instances/i);
         });
 
         it("joinById() should allow to join a room by id", async () => {

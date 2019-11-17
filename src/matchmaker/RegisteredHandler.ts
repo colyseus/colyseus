@@ -17,21 +17,25 @@ export const INVALID_OPTION_KEYS: Array<keyof RoomListingData> = [
 export interface SortOptions { [fieldName: string]: 1 | -1 | 'asc' | 'desc' | 'ascending' | 'descending'; }
 
 export class RegisteredHandler extends EventEmitter {
-  public klass: RoomConstructor;
-  public options: any;
-
   public filterOptions: string[] = [];
   public sortOptions?: SortOptions;
+  public instanceLimit: number;
+  public instanceCount: number = 0;
 
-  constructor(klass: RoomConstructor, options: any) {
+  constructor(
+    public klass: RoomConstructor,
+    public options: any
+  ) {
     super();
-
-    this.klass = klass;
-    this.options = options;
   }
 
   public filterBy(options: string[]) {
     this.filterOptions = options;
+    return this;
+  }
+
+  public maxInstances(value: number) {
+    this.instanceLimit = value;
     return this;
   }
 
@@ -53,5 +57,9 @@ export class RegisteredHandler extends EventEmitter {
       }
       return prev;
     }, {});
+  }
+
+  public isAvailableInstantiation() {
+    return this.instanceLimit == null || this.instanceCount < this.instanceLimit;
   }
 }
