@@ -106,7 +106,7 @@ export const send = {
   /**
    * TODO: refactor me. Move this to SchemaSerializer
    */
-  [Protocol.ROOM_DATA_SCHEMA]: (client: Client, typeid, bytes: number[]) => {
+  [Protocol.ROOM_DATA_SCHEMA]: (client: Client, typeid: number, bytes: number[]) => {
     if (client.readyState !== WebSocket.OPEN) { return; }
     client.send([Protocol.ROOM_DATA_SCHEMA, typeid, ...bytes], { binary: true });
   },

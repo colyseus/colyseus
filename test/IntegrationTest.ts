@@ -1,6 +1,6 @@
 import assert from "assert";
 import * as Colyseus from "colyseus.js";
-import { Schema, type } from "@colyseus/schema";
+import { Schema, type, Context } from "@colyseus/schema";
 
 import { matchMaker, Room, Client, Server } from "../src";
 import { DummyRoom, DRIVERS, awaitForTimeout, Room3Clients, PRESENCE_IMPLEMENTATIONS } from "./utils";
@@ -407,6 +407,58 @@ describe("Integration", () => {
               // TODO
             });
 
+          });
+
+          describe("send()", () => {
+
+            it("send() schema-encoded instances", (done) => {
+              const ctx = new Context();
+
+              class State extends Schema {
+                @type("number", ctx) num = 1;
+              }
+
+              class Message extends Schema {
+                @type("string", ctx) str: string = "Hello world";
+              }
+
+              let onMessageCalled = false;
+
+              matchMaker.defineRoomType('sendschema', class _ extends Room {
+                onCreate() {
+                  this.setState(new State());
+                }
+                onMessage(client, message) {
+                  const msg = new Message();
+                  msg.str = message;
+                  this.send(client, msg);
+                }
+              });
+
+              setImmediate(async () => {
+                try {
+                  const connection = await client.joinOrCreate('sendschema', {}, State);
+                  let messageReceived: Message;
+
+                  connection.onMessage((message) => {
+                    onMessageCalled = true;
+                    messageReceived = message;
+                  });
+                  connection.send("hello!");
+                  await awaitForTimeout(100);
+
+                  await connection.leave();
+
+                  assert.ok(onMessageCalled);
+                  assert.equal(messageReceived.str, "hello!");
+                  done();
+
+                } catch (e) {
+                  assert.fail();
+                }
+              });
+
+            });
           });
 
           describe("disconnect()", () => {
