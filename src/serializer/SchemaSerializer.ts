@@ -54,7 +54,6 @@ export class SchemaSerializer<T> implements Serializer<T> {
           send[Protocol.ROOM_STATE_PATCH](client, this.state.encodeFiltered(client));
         }
 
-        throw new Error('filters are not fully implemented yet.');
         // this.state.markAsUnchanged();
 
       }
@@ -74,11 +73,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
     return this.handshakeCache;
   }
 
-  private hasFilter(schema: Definition, filters: any) {
-    if (!filters) {
-      return false;
-    }
-
+  private hasFilter(schema: Definition, filters: any = {}) {
     for (const fieldName in schema) {
       if (filters[fieldName]) {
         return true;
