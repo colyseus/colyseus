@@ -1,4 +1,5 @@
 import assert from "assert";
+import sinon from "sinon";
 import * as Colyseus from "colyseus.js";
 import { Schema, type, Context } from "@colyseus/schema";
 
@@ -15,7 +16,7 @@ describe("Integration", () => {
 
       describe(`Driver => ${(driver.constructor as any).name}, Presence => ${presence.constructor.name}`, () => {
         const server = new Server({
-          pingInterval: 300,
+          pingInterval: 150,
           pingMaxRetries: 1,
           presence,
           driver
@@ -546,18 +547,39 @@ describe("Integration", () => {
             })
           });
 
-          it("`pingTimeout` / `pingMaxRetries`: should terminate client", async () => {
-            const conn = await client.joinOrCreate("dummy");
+          describe("`pingTimeout` / `pingMaxRetries`", () => {
+            it("should terminate unresponsive client after connection is ready", async () => {
+              const conn = await client.joinOrCreate("dummy");
 
-            // force websocket client to be unresponsive
-            conn.connection.ws._socket.removeAllListeners();
+              // force websocket client to be unresponsive
+              conn.connection.ws._socket.removeAllListeners();
 
-            assert.ok(matchMaker.getRoomById(conn.id));
+              assert.ok(matchMaker.getRoomById(conn.id));
 
-            await awaitForTimeout(700);
+              await awaitForTimeout(700);
 
-            assert.ok(!matchMaker.getRoomById(conn.id));
-          });
+              assert.ok(!matchMaker.getRoomById(conn.id));
+            });
+
+            it("should remove the room if seat reservation is never fulfiled", async () => {
+              const stub = sinon.stub(client, 'consumeSeatReservation').callsFake(function(response) {
+                return response;
+              });
+
+              const seatReservation = await (client as any).createMatchMakeRequest('joinOrCreate', "dummy", {});
+              await (client as any).createMatchMakeRequest('joinOrCreate', "dummy", {});
+
+              assert.ok(matchMaker.getRoomById(seatReservation.room.roomId));
+
+              await awaitForTimeout(500);
+
+              assert.ok(!matchMaker.getRoomById(seatReservation.room.roomId));
+
+              stub.restore();
+            });
+
+          })
+
 
         });
 
