@@ -1,4 +1,4 @@
-import { MapSchema, Schema, type, Context, defineTypes } from '@colyseus/schema';
+import { Context, defineTypes, MapSchema, Schema, type } from '@colyseus/schema';
 
 import { Client } from '..';
 import { Room } from '../Room';
@@ -9,19 +9,19 @@ import { Room } from '../Room';
 const context = new Context();
 
 class Player extends Schema { // tslint:disable-line
-  public sessionId: string;
   public connected: boolean;
+  public sessionId: string;
 }
 defineTypes(Player, {
-  sessionId: "string",
-  connected: "boolean"
+  connected: 'boolean',
+  sessionId: 'string',
 }, context);
 
 class State extends Schema { // tslint:disable-line
   public players = new MapSchema<Player>();
 }
 defineTypes(State, {
-  players: { map: Player }
+  players: { map: Player },
 }, context);
 
 /**
@@ -52,8 +52,8 @@ export class RelayRoom extends Room<State> { // tslint:disable-line
 
   public onJoin(client: Client, options: any) {
     const player = new Player();
-    player.sessionId = client.sessionId;
     player.connected = true;
+    player.sessionId = client.sessionId;
 
     this.state.players[client.sessionId] = player;
   }

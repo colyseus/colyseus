@@ -1,8 +1,8 @@
+import { Schema } from '@colyseus/schema';
 import msgpack from 'notepack.io';
 import WebSocket from 'ws';
 import { debugAndPrintError } from './Debug';
 import { Client } from './index';
-import { Schema } from '@colyseus/schema';
 
 // Colyseus protocol codes range between 0~100
 export enum Protocol {

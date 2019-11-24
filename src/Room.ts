@@ -1,9 +1,9 @@
 import http from 'http';
 import msgpack from 'notepack.io';
 
+import { Schema } from '@colyseus/schema';
 import Clock from '@gamestdio/timer';
 import { EventEmitter } from 'events';
-import { Schema } from '@colyseus/schema';
 
 import { Client, ClientState } from '.';
 import { Presence } from './presence/Presence';
