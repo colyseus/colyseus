@@ -1,12 +1,17 @@
 import { Room } from "../src";
 import { Schema, type } from "@colyseus/schema";
 
+class Message extends Schema {
+  @type("string") str;
+  @type("number") num;
+}
+
 class State extends Schema {
   @type("string")
   lastMessage: string = "";
 }
 
-export class ChatRoom extends Room<State> {
+export class DummyRoom extends Room<State> {
   maxClients = 4;
 
   onCreate (options) {
@@ -46,6 +51,13 @@ export class ChatRoom extends Room<State> {
 
   onMessage (client, data) {
     this.state.lastMessage = data;
+
+    if (data === "schema") {
+      const message = new Message();
+      message.str = "Hello world!";
+      message.num = 10;
+      this.send(client, message);
+    }
 
     if (data === "leave") {
       this.disconnect().then(() => console.log("yup, disconnected."));

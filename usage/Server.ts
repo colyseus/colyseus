@@ -3,7 +3,7 @@ import cors from "cors";
 import express from "express";
 
 import { Server, RedisPresence, RelayRoom } from "../src";
-import { ChatRoom } from "./ChatRoom";
+import { DummyRoom } from "./DummyRoom";
 
 import { MongooseDriver } from "../src/matchmaker/drivers/MongooseDriver";
 
@@ -31,8 +31,8 @@ app.get("/hello", (req, res) => {
 // Define RelayRoom as "relay"
 gameServer.define("relay", RelayRoom);
 
-// Define ChatRoom as "chat"
-gameServer.define("chat", ChatRoom)
+// Define DummyRoom as "chat"
+gameServer.define("dummy", DummyRoom)
   // demonstrating public events.
   .on("create", (room) => console.log("room created!", room.roomId))
   .on("join", (room, client) => console.log("client", client.sessionId, "joined", room.roomId))

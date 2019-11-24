@@ -2,6 +2,7 @@ import msgpack from 'notepack.io';
 import WebSocket from 'ws';
 import { debugAndPrintError } from './Debug';
 import { Client } from './index';
+import { Schema } from '@colyseus/schema';
 
 // Colyseus protocol codes range between 0~100
 export enum Protocol {
@@ -12,6 +13,7 @@ export enum Protocol {
   ROOM_DATA = 13,
   ROOM_STATE = 14,
   ROOM_STATE_PATCH = 15,
+  ROOM_DATA_SCHEMA = 16, // used to send schema instances via room.send()
 
   // WebSocket close codes (https://github.com/Luka967/websocket-close-codes)
   WS_CLOSE_NORMAL = 1000,
@@ -92,10 +94,21 @@ export const send = {
     client.send(bytes, { binary: true });
   },
 
-  [Protocol.ROOM_DATA]: (client: Client, data: any, encode: boolean = true) => {
+  /**
+   * TODO: refactor me. Move this to `SchemaSerializer` / `FossilDeltaSerializer`
+   */
+  [Protocol.ROOM_DATA]: (client: Client, message: any, encode: boolean = true) => {
     if (client.readyState !== WebSocket.OPEN) { return; }
     client.send(Buffer.alloc(1, Protocol.ROOM_DATA), { binary: true });
-    client.send(encode && msgpack.encode(data) || data, { binary: true });
+    client.send(encode && msgpack.encode(message) || message, { binary: true });
+  },
+
+  /**
+   * TODO: refactor me. Move this to SchemaSerializer
+   */
+  [Protocol.ROOM_DATA_SCHEMA]: (client: Client, typeid: number, bytes: number[]) => {
+    if (client.readyState !== WebSocket.OPEN) { return; }
+    client.send([Protocol.ROOM_DATA_SCHEMA, typeid, ...bytes], { binary: true });
   },
 
 };
