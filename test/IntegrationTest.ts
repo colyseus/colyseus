@@ -4,7 +4,7 @@ import * as Colyseus from "colyseus.js";
 import { Schema, type, Context } from "@colyseus/schema";
 
 import { matchMaker, Room, Client, Server } from "../src";
-import { DummyRoom, DRIVERS, awaitForTimeout, Room3Clients, PRESENCE_IMPLEMENTATIONS } from "./utils";
+import { DummyRoom, DRIVERS, awaitForTimeout, Room3Clients, PRESENCE_IMPLEMENTATIONS, Room2Clients, Room2ClientsExplicitLock } from "./utils";
 import { MatchMakeError } from "../src/MatchMaker";
 
 describe("Integration", () => {
@@ -460,6 +460,77 @@ describe("Integration", () => {
               });
 
             });
+          });
+
+          describe("lock / unlock", () => {
+            before(() => {
+              server.define("room2", Room2Clients);
+              server.define("room_explicit_lock", Room2ClientsExplicitLock);
+            });
+
+            it("should lock room automatically when maxClients is reached", async () => {
+              const conn1 = await client.joinOrCreate('room2');
+
+              const room = matchMaker.getRoomById(conn1.id);
+              assert.equal(false, room.locked);
+
+              const conn2 = await client.joinOrCreate('room2');
+
+              assert.equal(2, room.clients.length);
+              assert.equal(true, room.locked);
+
+              const roomListing = (await matchMaker.query({}))[0];
+              assert.equal(true, roomListing.locked);
+
+              conn1.leave();
+              conn2.leave();
+            });
+
+            it("should unlock room automatically when last client leaves", async () => {
+              const conn1 = await client.joinOrCreate('room2');
+              const conn2 = await client.joinOrCreate('room2');
+
+              const room = matchMaker.getRoomById(conn1.id);
+              assert.equal(2, room.clients.length);
+              assert.equal(true, room.locked);
+
+              conn2.leave();
+              await awaitForTimeout(50);
+
+              assert.equal(1, room.clients.length);
+              assert.equal(false, room.locked);
+
+              const roomListing = (await matchMaker.query({}))[0];
+              assert.equal(false, roomListing.locked);
+
+              conn1.leave();
+            });
+
+            it("when explicitly locked, should remain locked when last client leaves", async () => {
+              const conn1 = await client.joinOrCreate('room_explicit_lock');
+              const conn2 = await client.joinOrCreate('room_explicit_lock');
+
+              const room = matchMaker.getRoomById(conn1.id);
+              assert.equal(2, room.clients.length);
+              assert.equal(true, room.locked);
+
+              conn1.send("lock"); // send explicit lock to handler
+              await awaitForTimeout(50);
+
+              assert.equal(true, room.locked);
+
+              conn2.leave();
+              await awaitForTimeout(50);
+
+              assert.equal(1, room.clients.length);
+              assert.equal(true, room.locked);
+
+              const roomListing = (await matchMaker.query({}))[0];
+              assert.equal(true, roomListing.locked);
+
+              conn1.leave();
+            });
+
           });
 
           describe("disconnect()", () => {
