@@ -127,13 +127,14 @@ and chat rooms is expected to follow the [code of conduct](CODE_OF_CONDUCT.md).
 - Endre Johnsen
 - enriqueto
 - Eric McDaniel
+- Halil Bilgin
 - James Jacoby
 - João Mosmann
 - LeeSeHeon
 - Nikita Borisov
 - Phil
 - Plaid World
-- Rick Porter
+- Rob Drake
 - tobi4s1337
 - Worph
 
