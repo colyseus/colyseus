@@ -473,6 +473,7 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
 
       this.reservedSeatTimeouts[sessionId] = setTimeout(async () => {
         delete this.reservedSeats[sessionId];
+        delete this.reservedSeatTimeouts[sessionId];
         await this._decrementClientCount();
       }, seconds * 1000);
 
