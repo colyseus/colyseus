@@ -40,7 +40,7 @@ export class DummyRoom extends Room<State> {
     try {
       if (consented) throw new Error("just close!");
 
-      await this.allowReconnection(client, 10);
+      // await this.allowReconnection(client, 10);
       console.log("CLIENT RECONNECTED");
 
     } catch (e) {
@@ -69,13 +69,13 @@ export class DummyRoom extends Room<State> {
   onDispose () {
     console.log("Disposing ChatRoom...");
 
-    // perform async tasks to disconnect all players
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        console.log("async task finished, let's dispose the room now!")
-        resolve();
-      }, 1000);
-    });
+    // // perform async tasks to disconnect all players
+    // return new Promise((resolve, reject) => {
+    //   setTimeout(() => {
+    //     console.log("async task finished, let's dispose the room now!")
+    //     resolve();
+    //   }, 1000);
+    // });
   }
 
 }

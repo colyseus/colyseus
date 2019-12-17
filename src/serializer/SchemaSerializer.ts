@@ -54,7 +54,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
           send[Protocol.ROOM_STATE_PATCH](client, this.state.encodeFiltered(client));
         }
 
-        // this.state.markAsUnchanged();
+        this.state.discardAllChanges();
 
       }
     }
@@ -74,28 +74,33 @@ export class SchemaSerializer<T> implements Serializer<T> {
   }
 
   private hasFilter(schema: Definition, filters: any = {}) {
+    let hasFilter = false;
+
     for (const fieldName in schema) {
+      // skip if a filter has been found
+      if (hasFilter) { break; }
+
       if (filters[fieldName]) {
-        return true;
+        hasFilter = true;
 
       } else if (typeof (schema[fieldName]) === 'function') {
         const childSchema = (schema[fieldName] as typeof Schema)._schema;
         const childFilters = (schema[fieldName] as typeof Schema)._filters;
-        return this.hasFilter(childSchema, childFilters);
+        hasFilter = this.hasFilter(childSchema, childFilters);
 
       } else if (Array.isArray(schema[fieldName])) {
         const childSchema = (schema[fieldName][0] as typeof Schema)._schema;
         const childFilters = (schema[fieldName][0] as typeof Schema)._filters;
-        return this.hasFilter(childSchema, childFilters);
+        hasFilter = this.hasFilter(childSchema, childFilters);
 
       } else if ((schema[fieldName] as any).map) {
         const childSchema = ((schema[fieldName] as any).map as typeof Schema)._schema;
         const childFilters = ((schema[fieldName] as any).map as typeof Schema)._filters;
-        return this.hasFilter(childSchema, childFilters);
+        hasFilter = this.hasFilter(childSchema, childFilters);
 
       }
-
     }
-    return false;
+
+    return hasFilter;
   }
 }

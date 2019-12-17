@@ -2,7 +2,7 @@ import http from "http";
 import Koa from "koa";
 
 import { Server } from "../src";
-import { ChatRoom } from "./ChatRoom";
+import { DummyRoom } from "./DummyRoom";
 
 const app = new Koa();
 const port = Number(process.env.PORT || 2567);
@@ -17,8 +17,8 @@ const gameServer = new Server();
 
 gameServer.attach({ server });
 
-// Define ChatRoom as "chat"
-gameServer.define("chat", ChatRoom)
+// Define DummyRoom as "chat"
+gameServer.define("chat", DummyRoom)
 
 gameServer.listen(port);
 

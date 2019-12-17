@@ -5,7 +5,7 @@
 import * as net from "net";
 
 import { Server } from "../src/Server";
-import { ChatRoom } from "./ChatRoom";
+import { DummyRoom } from "./DummyRoom";
 
 const port = Number(process.env.PORT || 8181);
 const endpoint = "localhost";
@@ -15,8 +15,8 @@ const engine = net.Server;
 // Create TCP server
 const gameServer = new Server({ engine });
 
-// Register ChatRoom as "chat"
-gameServer.define("chat", ChatRoom);
+// Register DummyRoom as "chat"
+gameServer.define("chat", DummyRoom);
 
 process.on('unhandledRejection', r => console.log(r));
 gameServer.listen(port);

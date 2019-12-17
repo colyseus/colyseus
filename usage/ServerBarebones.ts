@@ -2,7 +2,7 @@
  * Barebones server without express.
  */
 import { Server } from "../src";
-import { ChatRoom } from "./ChatRoom";
+import { DummyRoom } from "./DummyRoom";
 
 const port = Number(process.env.PORT || 2567);
 const endpoint = "localhost";
@@ -10,8 +10,8 @@ const endpoint = "localhost";
 // Create HTTP & WebSocket servers
 const gameServer = new Server();
 
-// Define ChatRoom as "chat"
-gameServer.define("chat", ChatRoom)
+// Define DummyRoom as "chat"
+gameServer.define("chat", DummyRoom)
   // Matchmaking filters
   // .filterBy(['progress'])
 
