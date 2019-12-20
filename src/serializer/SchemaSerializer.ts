@@ -76,7 +76,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
   private hasFilter(schema: Definition, filters: any = {}) {
     let hasFilter = false;
 
-    for (const fieldName in schema) {
+    for (const fieldName of Object.keys(schema)) {
       // skip if a filter has been found
       if (hasFilter) { break; }
 

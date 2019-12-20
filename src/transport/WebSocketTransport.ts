@@ -83,7 +83,7 @@ export class WebSocketTransport extends Transport {
     }, pingInterval);
   }
 
-  async onConnection (client: Client, req?: http.IncomingMessage & any) {
+  protected async onConnection(client: Client, req?: http.IncomingMessage & any) {
     // prevent server crashes if a single client had unexpected error
     client.on('error', (err) => debugAndPrintError(err.message + '\n' + err.stack));
     client.on('pong', heartbeat);
