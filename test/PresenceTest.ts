@@ -1,5 +1,5 @@
 import assert from "assert";
-import { awaitForTimeout, PRESENCE_IMPLEMENTATIONS } from "./utils";
+import { timeout, PRESENCE_IMPLEMENTATIONS } from "./utils";
 
 
 describe("Presence", () => {
@@ -47,14 +47,14 @@ describe("Presence", () => {
         await presence.subscribe("topic-multi", callback3);
         await presence.publish("topic-multi", 1);
 
-        await awaitForTimeout(10);
+        await timeout(10);
 
         assert.deepEqual([1, 1, 1], messages);
 
         await presence.unsubscribe("topic-multi", callback1);
         await presence.publish("topic-multi", 1);
 
-        await awaitForTimeout(10);
+        await timeout(10);
 
         assert.deepEqual([1, 1, 1, 1, 1], messages);
       })
@@ -77,7 +77,7 @@ describe("Presence", () => {
         await presence.publish("topic-collide2", 3);
         await presence.publish("topic-collide2", 4);
 
-        await awaitForTimeout(10);
+        await timeout(10);
         assert.deepEqual([1, 1, 2, 2, 3, 3, 4, 4], messages);
 
         // leave duplicated subscriptions
@@ -90,7 +90,7 @@ describe("Presence", () => {
         await presence.publish("topic-collide2", 3);
         await presence.publish("topic-collide2", 4);
 
-        await awaitForTimeout(10);
+        await timeout(10);
         assert.deepEqual([1, 2, 3, 4], messages);
 
         // leave all subscriptions...
@@ -101,7 +101,7 @@ describe("Presence", () => {
         await presence.publish("topic-collide1", 1000);
         await presence.publish("topic-collide2", 2000);
 
-        await awaitForTimeout(10);
+        await timeout(10);
         assert.deepEqual([], messages);
       });
 
@@ -122,7 +122,7 @@ describe("Presence", () => {
         await presence.setex("setex1", "hello world", 1);
         assert.equal("hello world", await presence.get("setex1"));
 
-        await awaitForTimeout(1100);
+        await timeout(1100);
         assert.ok(!(await presence.get("setex1")));
       });
 

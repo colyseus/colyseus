@@ -1,6 +1,6 @@
 import assert from "assert";
 import { matchMaker, Room } from "../src";
-import { DummyRoom, Room2Clients, createDummyClient, awaitForTimeout, ReconnectRoom, Room3Clients, DRIVERS } from "./utils";
+import { DummyRoom, Room2Clients, createDummyClient, timeout, ReconnectRoom, Room3Clients, DRIVERS } from "./utils";
 import { DEFAULT_SEAT_RESERVATION_TIME } from "../src/Room";
 
 describe("MatchMaker", () => {
@@ -32,7 +32,7 @@ describe("MatchMaker", () => {
     /**
      * give some time for `cleanupStaleRooms()` to run
      */
-    await awaitForTimeout(50);
+    await timeout(50);
   });
 
   for (let i = 0; i < DRIVERS.length; i++) {
@@ -255,7 +255,7 @@ describe("MatchMaker", () => {
           assert.equal(1, room.clients.length);
 
           client1.close();
-          await awaitForTimeout(100);
+          await timeout(100);
 
           let rooms = await matchMaker.query({});
           assert.equal(1, rooms.length);
@@ -286,7 +286,7 @@ describe("MatchMaker", () => {
           assert.equal(2, room.clients.length);
 
           client1.close();
-          await awaitForTimeout(250);
+          await timeout(250);
           assert.equal(1, room.clients.length);
 
           await assert.rejects(async() => await matchMaker.joinById(room.roomId, { sessionId: client1.sessionId }), /expired/);
@@ -328,7 +328,7 @@ describe("MatchMaker", () => {
         // only 1 client actually joins the room, 2 of them are going to expire
         await room._onJoin(createDummyClient(reservedSeat1) as any);
 
-        await awaitForTimeout(DEFAULT_SEAT_RESERVATION_TIME * 1100);
+        await timeout(DEFAULT_SEAT_RESERVATION_TIME * 1100);
 
         // connect 2 clients to the same room again
         await matchMaker.joinOrCreate("room3");

@@ -2,7 +2,7 @@ import { Schema } from '@colyseus/schema';
 import msgpack from 'notepack.io';
 import WebSocket from 'ws';
 import { debugAndPrintError } from './Debug';
-import { Client } from './index';
+import { Client, ClientState } from './index';
 
 // Colyseus protocol codes range between 0~100
 export enum Protocol {
@@ -52,6 +52,16 @@ export function decode(message: any) {
 }
 
 export const send = {
+  raw: (client: Client, bytes: number[]) => {
+    if (
+      client.state === ClientState.JOINING &&
+      client.readyState !== WebSocket.OPEN
+    ) {
+      return;
+    }
+    client.send(bytes, { binary: true });
+  },
+
   [Protocol.JOIN_ERROR]: (client: Client, message: string) => {
     if (client.readyState !== WebSocket.OPEN) { return; }
     const buff = Buffer.allocUnsafe(1 + utf8Length(message));
@@ -83,24 +93,38 @@ export const send = {
   },
 
   [Protocol.ROOM_STATE]: (client: Client, bytes: number[]) => {
-    if (client.readyState !== WebSocket.OPEN) { return; }
-    client.send(Buffer.alloc(1, Protocol.ROOM_STATE), { binary: true });
-    client.send(bytes, { binary: true });
+    if (
+      client.state === ClientState.JOINING &&
+      client.readyState !== WebSocket.OPEN
+    ) {
+      return;
+    }
+    client.send([Protocol.ROOM_STATE, ...bytes], { binary: true });
   },
 
-  [Protocol.ROOM_STATE_PATCH]: (client: Client, bytes: number[]) => {
-    if (client.readyState !== WebSocket.OPEN) { return; }
-    client.send(Buffer.alloc(1, Protocol.ROOM_STATE_PATCH), { binary: true });
-    client.send(bytes, { binary: true });
-  },
+  // [Protocol.ROOM_STATE_PATCH]: (client: Client, bytes: number[]) => {
+  //   if (
+  //     client.state === ClientState.JOINING &&
+  //     client.readyState !== WebSocket.OPEN
+  //   ) {
+  //     return;
+  //   }
+  //   console.log({ bytes });
+  //   client.send(Buffer.alloc(1, Protocol.ROOM_STATE_PATCH), { binary: true });
+  //   client.send(bytes, { binary: true });
+  // },
 
   /**
    * TODO: refactor me. Move this to `SchemaSerializer` / `FossilDeltaSerializer`
    */
   [Protocol.ROOM_DATA]: (client: Client, message: any, encode: boolean = true) => {
-    if (client.readyState !== WebSocket.OPEN) { return; }
-    client.send(Buffer.alloc(1, Protocol.ROOM_DATA), { binary: true });
-    client.send(encode && msgpack.encode(message) || message, { binary: true });
+    if (
+      client.state === ClientState.JOINING &&
+      client.readyState !== WebSocket.OPEN
+    ) {
+      return;
+    }
+    client.send([Protocol.ROOM_DATA, ...(encode && msgpack.encode(message) || message)], { binary: true });
   },
 
   /**

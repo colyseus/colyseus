@@ -68,7 +68,7 @@ export function createDummyClient (seatReservation: SeatReservation, options: an
   return client;
 }
 
-export function awaitForTimeout(ms: number = 200) {
+export function timeout(ms: number = 200) {
   return new Promise((resolve, reject) => setTimeout(resolve, ms));
 }
 
@@ -138,17 +138,17 @@ export class RoomWithAsync extends DummyRoom {
   maxClients = 1;
 
   async onAuth() {
-    await awaitForTimeout(RoomWithAsync.ASYNC_TIMEOUT);
+    await timeout(RoomWithAsync.ASYNC_TIMEOUT);
     return true;
   }
 
   onJoin () {}
 
   async onLeave() {
-    await awaitForTimeout(RoomWithAsync.ASYNC_TIMEOUT);
+    await timeout(RoomWithAsync.ASYNC_TIMEOUT);
   }
 
   async onDispose() {
-    await awaitForTimeout(RoomWithAsync.ASYNC_TIMEOUT);
+    await timeout(RoomWithAsync.ASYNC_TIMEOUT);
   }
 }

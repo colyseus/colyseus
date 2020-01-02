@@ -37,9 +37,11 @@ export class SchemaSerializer<T> implements Serializer<T> {
 
         // encode changes once, for all clients
         const patches = this.state.encode();
+        patches.unshift(Protocol.ROOM_STATE_PATCH);
+
         while (numClients--) {
           const client = clients[numClients];
-          send[Protocol.ROOM_STATE_PATCH](client, patches);
+          send.raw(client, patches);
         }
 
         if (debugPatch.enabled) {
@@ -51,7 +53,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
         // encode state multiple times, for each client
         while (numClients--) {
           const client = clients[numClients];
-          send[Protocol.ROOM_STATE_PATCH](client, this.state.encodeFiltered(client));
+          send.raw(client, [Protocol.ROOM_STATE_PATCH, ...this.state.encodeFiltered(client)]);
         }
 
         this.state.discardAllChanges();

@@ -4,7 +4,7 @@ import * as Colyseus from "colyseus.js";
 import { Schema, type, Context } from "@colyseus/schema";
 
 import { matchMaker, Room, Client, Server } from "../src";
-import { DummyRoom, DRIVERS, awaitForTimeout, Room3Clients, PRESENCE_IMPLEMENTATIONS, Room2Clients, Room2ClientsExplicitLock } from "./utils";
+import { DummyRoom, DRIVERS, timeout, Room3Clients, PRESENCE_IMPLEMENTATIONS, Room2Clients, Room2ClientsExplicitLock } from "./utils";
 import { MatchMakeError } from "../src/MatchMaker";
 
 describe("Integration", () => {
@@ -110,12 +110,13 @@ describe("Integration", () => {
                 return new Promise(resolve => setTimeout(() => {
                   onJoinCalled = true;
                   resolve();
-                }, 100));
+                }, 20));
               }
               onMessage(client, message) { }
             });
 
             const connection = await client.joinOrCreate('onjoin');
+            await timeout(50);
             assert.ok(onJoinCalled);
 
             await connection.leave();
@@ -156,7 +157,7 @@ describe("Integration", () => {
             const connection = await client.joinOrCreate('onleave');
             await connection.leave();
 
-            await awaitForTimeout(50);
+            await timeout(50);
             assert.ok(onLeaveCalled);
           });
 
@@ -176,7 +177,7 @@ describe("Integration", () => {
             const connection = await client.joinOrCreate('onleave');
             await connection.leave();
 
-            await awaitForTimeout(150);
+            await timeout(150);
             assert.ok(onLeaveCalled);
           });
 
@@ -193,7 +194,7 @@ describe("Integration", () => {
             const connection = await client.joinOrCreate('onleave');
             await connection.leave();
 
-            await awaitForTimeout(50);
+            await timeout(50);
             assert.ok(!matchMaker.getRoomById(connection.id))
             assert.ok(onDisposeCalled);
           });
@@ -214,7 +215,7 @@ describe("Integration", () => {
             const connection = await client.joinOrCreate('onleave');
             await connection.leave();
 
-            await awaitForTimeout(150);
+            await timeout(150);
             assert.ok(!matchMaker.getRoomById(connection.id))
             assert.ok(onDisposeCalled);
           });
@@ -245,7 +246,7 @@ describe("Integration", () => {
 
             const connection = await client.joinOrCreate('onmessage');
             connection.send(messageToSend);
-            await awaitForTimeout(20);
+            await timeout(20);
 
             await connection.leave();
 
@@ -268,16 +269,17 @@ describe("Integration", () => {
                 onMessage() {}
               });
 
-              const connection = await client.create('patchinterval');
+              const connection = await client.create<PatchState>('patchinterval');
               let patchesReceived: number = 0;
 
               connection.onStateChange(() => patchesReceived++);
 
-              await awaitForTimeout(20 * 25);
+              await timeout(20 * 25);
               assert.ok(patchesReceived > 20, "should have received > 20 patches");
+              assert.ok(connection.state.number >= 20);
 
               connection.leave();
-              await awaitForTimeout(50);
+              await timeout(50);
             });
 
             it("should not receive any patch if patchRate is nullified", async () => {
@@ -295,14 +297,13 @@ describe("Integration", () => {
 
               connection.onStateChange(() => patchesReceived++);
 
-              await awaitForTimeout(500);
+              await timeout(500);
 
               // simulation interval may have run a short amount of cycles for the first ROOM_STATE message
-              assert.ok(connection.state.number <= 2);
               assert.equal(0, patchesReceived);
 
               connection.leave();
-              await awaitForTimeout(50);
+              await timeout(50);
             });
 
           });
@@ -331,14 +332,14 @@ describe("Integration", () => {
               conn2.send("two");
               conn3.send("three");
 
-              await awaitForTimeout(200);
+              await timeout(200);
 
               assert.deepEqual(["one", "one", "one", "three", "three", "three", "two", "two", "two"], messages.sort());
 
               conn1.leave();
               conn2.leave();
               conn3.leave();
-              await awaitForTimeout(50);
+              await timeout(50);
             });
 
             it("should broadcast except to specific client", async () => {
@@ -364,14 +365,14 @@ describe("Integration", () => {
               conn2.send("two");
               conn3.send("three");
 
-              await awaitForTimeout(200);
+              await timeout(200);
 
               assert.deepEqual(["one", "one", "three", "three", "two", "two"], messages.sort());
 
               conn1.leave();
               conn2.leave();
               conn3.leave();
-              await awaitForTimeout(50);
+              await timeout(50);
             });
 
             xit("should allow to broadcast during onJoin() for current client", (done) => {
@@ -394,7 +395,7 @@ describe("Integration", () => {
                 let onMessageCalled = false;
                 let message: any;
 
-                await awaitForTimeout(100);
+                await timeout(100);
 
                 assert.equal(true, onMessageCalled);
                 assert.equal("hello", message);
@@ -446,7 +447,7 @@ describe("Integration", () => {
                     messageReceived = message;
                   });
                   connection.send("hello!");
-                  await awaitForTimeout(100);
+                  await timeout(100);
 
                   await connection.leave();
 
@@ -495,7 +496,7 @@ describe("Integration", () => {
               assert.equal(true, room.locked);
 
               conn2.leave();
-              await awaitForTimeout(50);
+              await timeout(50);
 
               assert.equal(1, room.clients.length);
               assert.equal(false, room.locked);
@@ -515,12 +516,12 @@ describe("Integration", () => {
               assert.equal(true, room.locked);
 
               conn1.send("lock"); // send explicit lock to handler
-              await awaitForTimeout(50);
+              await timeout(50);
 
               assert.equal(true, room.locked);
 
               conn2.leave();
-              await awaitForTimeout(50);
+              await timeout(50);
 
               assert.equal(1, room.clients.length);
               assert.equal(true, room.locked);
@@ -553,7 +554,7 @@ describe("Integration", () => {
 
               assert.equal(conn1.id, conn2.id, "should've joined the same room");
 
-              await awaitForTimeout(150);
+              await timeout(150);
               assert.equal(2, disconnected, "both clients should've been disconnected");
             });
 
@@ -598,7 +599,7 @@ describe("Integration", () => {
                 // console.log(e);
               }
 
-              await awaitForTimeout(1000);
+              await timeout(1000);
 
               const rooms = await matchMaker.query({ name: "single3" });
               const room = rooms[0];
@@ -627,7 +628,7 @@ describe("Integration", () => {
 
               assert.ok(matchMaker.getRoomById(conn.id));
 
-              await awaitForTimeout(700);
+              await timeout(700);
 
               assert.ok(!matchMaker.getRoomById(conn.id));
             });
@@ -642,7 +643,7 @@ describe("Integration", () => {
 
               assert.ok(matchMaker.getRoomById(seatReservation.room.roomId));
 
-              await awaitForTimeout(500);
+              await timeout(500);
 
               assert.ok(!matchMaker.getRoomById(seatReservation.room.roomId));
 
