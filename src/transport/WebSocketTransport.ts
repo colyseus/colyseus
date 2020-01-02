@@ -106,6 +106,10 @@ export class WebSocketTransport extends Transport {
     client.sessionId = sessionId;
 
     try {
+      if (!room || !room.hasReservedSeat(sessionId)) {
+        throw new Error('seat reservation expired.');
+      }
+
       await room._onJoin(client, upgradeReq);
 
     } catch (e) {

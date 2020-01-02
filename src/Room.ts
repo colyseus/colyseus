@@ -146,10 +146,10 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
     }
 
     if ( milliseconds !== null && milliseconds !== 0 ) {
-      this._patchInterval = setInterval( () => {
+      this._patchInterval = setInterval(() => {
         this.broadcastPatch();
         this.broadcastAfterPatch();
-      }, milliseconds );
+      }, milliseconds);
     }
   }
 
@@ -325,9 +325,9 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
     // bind clean-up callback when client connection closes
     client.once('close', this._onLeave.bind(this, client));
 
-    // get seat reservation options
+    // get seat reservation options and clear it
     const options = this.reservedSeats[sessionId];
-    if (!options) { throw new Error('seat reservation expired.'); }
+    delete this.reservedSeats[sessionId];
 
     const reconnection = this.reconnections[sessionId];
     if (reconnection) {
