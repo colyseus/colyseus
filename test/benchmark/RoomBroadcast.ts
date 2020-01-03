@@ -1,8 +1,9 @@
 import Benchmark from "benchmark";
 
-import { Room, Server, matchMaker } from "../../src";
+import { Room, Server, matchMaker, Protocol } from "../../src";
 import WebSocket from "ws";
 import { Deferred } from "../../src/Utils";
+import msgpack from "notepack.io";
 
 const numClients = 5;
 const suite = new Benchmark.Suite();
@@ -26,13 +27,19 @@ server.listen(9999, undefined, undefined, async () => {
   // add dumb clients
   for (let i = 0; i < numClients; i++) {
     const seatReservation = await matchMaker.reserveSeatFor(roomCreated, {});
-    const ws = new WebSocket(`ws://localhost:9999/${seatReservation.room.processId}/${seatReservation.room.roomId}?sessionId=${seatReservation.sessionId}`);
-    ws.on("open", () => {
-      connections.push(ws);
+    const room = new WebSocket(`ws://localhost:9999/${seatReservation.room.processId}/${seatReservation.room.roomId}?sessionId=${seatReservation.sessionId}`);
+    room.on("open", () => {
+      connections.push(room);
 
-      if (connections.length === numClients) {
-        future.resolve();
-      }
+      room.on("message", (message: Buffer) => {
+        room.send(msgpack.encode([Protocol.JOIN_ROOM]), { binary: true }, (err) => {
+          // give some time for confirmation to be acknowledged
+          if (connections.length === numClients) {
+            setTimeout(() => future.resolve(), 100);
+          }
+        });
+      })
+
     });
   }
 

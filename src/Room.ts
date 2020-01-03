@@ -238,27 +238,29 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
 
     if (message instanceof Schema) {
       const typeId = (message.constructor as typeof Schema)._typeid;
-      const encodedMessage = message.encodeAll();
+      const encodedMessage = Buffer.from([Protocol.ROOM_DATA_SCHEMA, typeId, ...message.encodeAll()]);
 
       let numClients = this.clients.length;
       while (numClients--) {
         const client = this.clients[numClients];
 
         if (options.except !== client) {
-          send[Protocol.ROOM_DATA_SCHEMA](client, typeId, encodedMessage);
+          send.raw(client, encodedMessage);
         }
       }
 
     } else {
       // encode message with msgpack
-      const encodedMessage = (!(message instanceof Buffer)) ? msgpack.encode(message) : message;
+      const encodedMessage = (!(message instanceof Buffer))
+        ? Buffer.from([Protocol.ROOM_DATA, ...msgpack.encode(message)])
+        : message;
 
       let numClients = this.clients.length;
       while (numClients--) {
         const client = this.clients[numClients];
 
         if (options.except !== client) {
-          send[Protocol.ROOM_DATA](client, encodedMessage, false);
+          send.raw(client, encodedMessage);
         }
       }
     }

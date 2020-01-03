@@ -52,7 +52,7 @@ export function decode(message: any) {
 }
 
 export const send = {
-  raw: (client: Client, bytes: number[]) => {
+  raw: (client: Client, bytes: Buffer | number[]) => {
     if (client.readyState !== WebSocket.OPEN) { return; }
 
     if (client.state === ClientState.JOINING) {
@@ -93,12 +93,7 @@ export const send = {
       }
     }
 
-    return new Promise((resolve, reject) => {
-      client.send(buff, { binary: true }, (err) => {
-        if (err) { reject(); }
-        else { resolve(); }
-      });
-    })
+    client.send(buff, { binary: true });
   },
 
   [Protocol.ROOM_STATE]: (client: Client, bytes: number[]) => {
@@ -122,13 +117,6 @@ export const send = {
    */
   [Protocol.ROOM_DATA]: (client: Client, message: any, encode: boolean = true) => {
     send.raw(client, [Protocol.ROOM_DATA, ...(encode && msgpack.encode(message) || message)]);
-  },
-
-  /**
-   * TODO: refactor me. Move this to SchemaSerializer
-   */
-  [Protocol.ROOM_DATA_SCHEMA]: (client: Client, typeid: number, bytes: number[]) => {
-    send.raw(client, [Protocol.ROOM_DATA_SCHEMA, typeid, ...bytes]);
   },
 
 };
