@@ -217,7 +217,11 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
 
   public send(client: Client, message: any): void {
     if (message instanceof Schema) {
-      send[Protocol.ROOM_DATA_SCHEMA](client, (message.constructor as typeof Schema)._typeid, message.encodeAll());
+      send.raw(client, [
+        Protocol.ROOM_DATA_SCHEMA,
+        (message.constructor as typeof Schema)._typeid,
+        ...message.encodeAll()
+      ]);
 
     } else {
       send[Protocol.ROOM_DATA](client, message);
