@@ -53,12 +53,16 @@ export function decode(message: any) {
 
 export const send = {
   raw: (client: Client, bytes: number[]) => {
-    if (
-      client.state === ClientState.JOINING &&
-      client.readyState !== WebSocket.OPEN
-    ) {
+    if (client.readyState !== WebSocket.OPEN) { return; }
+
+    if (client.state === ClientState.JOINING) {
+      // sending messages during `onJoin`.
+      // - the client-side cannot register "onMessage" callbacks at this point.
+      // - enqueue the messages to be send after JOIN_ROOM message has been sent
+      client._enqueuedMessages.push(bytes);
       return;
     }
+
     client.send(bytes, { binary: true });
   },
 
@@ -70,7 +74,7 @@ export const send = {
     client.send(buff, { binary: true });
   },
 
-  [Protocol.JOIN_ROOM]: (client: Client, serializerId: string, handshake?: number[]) => {
+  [Protocol.JOIN_ROOM]: async (client: Client, serializerId: string, handshake?: number[]) => {
     if (client.readyState !== WebSocket.OPEN) { return; }
     let offset = 0;
 
@@ -89,17 +93,16 @@ export const send = {
       }
     }
 
-    client.send(buff, { binary: true });
+    return new Promise((resolve, reject) => {
+      client.send(buff, { binary: true }, (err) => {
+        if (err) { reject(); }
+        else { resolve(); }
+      });
+    })
   },
 
   [Protocol.ROOM_STATE]: (client: Client, bytes: number[]) => {
-    if (
-      client.state === ClientState.JOINING &&
-      client.readyState !== WebSocket.OPEN
-    ) {
-      return;
-    }
-    client.send([Protocol.ROOM_STATE, ...bytes], { binary: true });
+    send.raw(client, [Protocol.ROOM_STATE, ...bytes]);
   },
 
   // [Protocol.ROOM_STATE_PATCH]: (client: Client, bytes: number[]) => {
@@ -118,21 +121,14 @@ export const send = {
    * TODO: refactor me. Move this to `SchemaSerializer` / `FossilDeltaSerializer`
    */
   [Protocol.ROOM_DATA]: (client: Client, message: any, encode: boolean = true) => {
-    if (
-      client.state === ClientState.JOINING &&
-      client.readyState !== WebSocket.OPEN
-    ) {
-      return;
-    }
-    client.send([Protocol.ROOM_DATA, ...(encode && msgpack.encode(message) || message)], { binary: true });
+    send.raw(client, [Protocol.ROOM_DATA, ...(encode && msgpack.encode(message) || message)]);
   },
 
   /**
    * TODO: refactor me. Move this to SchemaSerializer
    */
   [Protocol.ROOM_DATA_SCHEMA]: (client: Client, typeid: number, bytes: number[]) => {
-    if (client.readyState !== WebSocket.OPEN) { return; }
-    client.send([Protocol.ROOM_DATA_SCHEMA, typeid, ...bytes], { binary: true });
+    send.raw(client, [Protocol.ROOM_DATA_SCHEMA, typeid, ...bytes]);
   },
 
 };

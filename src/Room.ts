@@ -216,14 +216,7 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
   }
 
   public send(client: Client, message: any): void {
-    if (client.state === ClientState.JOINING) {
-      // sending messages during `onJoin`.
-      // - the client-side cannot register "onMessage" callbacks at this point.
-      // - enqueue the messages to be send after JOIN_ROOM message has been sent
-      if (!client._enqueuedMessages) { client._enqueuedMessages = []; }
-      client._enqueuedMessages.push(message);
-
-    } else if (message instanceof Schema) {
+    if (message instanceof Schema) {
       send[Protocol.ROOM_DATA_SCHEMA](client, (message.constructor as typeof Schema)._typeid, message.encodeAll());
 
     } else {
@@ -307,8 +300,6 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
   }
 
   public async ['_onJoin'](client: Client, req?: http.IncomingMessage) {
-    client.state = ClientState.JOINING;
-
     const sessionId = client.sessionId;
 
     if (this.reservedSeatTimeouts[sessionId]) {
@@ -322,12 +313,17 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
       this._autoDisposeTimeout = undefined;
     }
 
-    // bind clean-up callback when client connection closes
-    client.once('close', this._onLeave.bind(this, client));
-
     // get seat reservation options and clear it
     const options = this.reservedSeats[sessionId];
     delete this.reservedSeats[sessionId];
+
+    // bind clean-up callback when client connection closes
+    client.once('close', this._onLeave.bind(this, client));
+
+    client.state = ClientState.JOINING;
+    client._enqueuedMessages = [];
+
+    this.clients.push(client);
 
     const reconnection = this.reconnections[sessionId];
     if (reconnection) {
@@ -345,6 +341,7 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
           await this.onJoin(client, options, client.auth);
         }
       } catch (e) {
+        spliceOne(this.clients, this.clients.indexOf(client));
         debugAndPrintError(e);
         throw e;
 
@@ -366,22 +363,6 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
       this._serializer.id,
       this._serializer.handshake && this._serializer.handshake(),
     );
-
-    client.state = ClientState.JOINED;
-
-    // dequeue messages (on user-defined `onJoin`)
-    if (client._enqueuedMessages) {
-      client._enqueuedMessages.forEach((data) => this.send(client, data));
-      delete client._enqueuedMessages;
-    }
-
-    // send current state when new client joins the room
-    if (this.state) {
-      this.sendState(client);
-    }
-
-    // joined successfully, add to local client list
-    this.clients.push(client);
   }
 
   protected _getSerializer?(): Serializer<State> {
@@ -550,6 +531,21 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
 
     if (message[0] === Protocol.ROOM_DATA) {
       this.onMessage(client, message[1]);
+
+    } else if (message[0] === Protocol.JOIN_ROOM) {
+      // join room has been acknowledged by the client
+      client.state = ClientState.JOINED;
+
+      // dequeue messages sent before client has joined effectively (on user-defined `onJoin`)
+      if (client._enqueuedMessages.length > 0) {
+        client._enqueuedMessages.forEach((bytes) => send.raw(client, bytes));
+      }
+      delete client._enqueuedMessages;
+
+      // send current state when new client joins the room
+      if (this.state) {
+        this.sendState(client);
+      }
 
     } else if (message[0] === Protocol.LEAVE_ROOM) {
       // stop receiving messages from this client

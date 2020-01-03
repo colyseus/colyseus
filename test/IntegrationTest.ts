@@ -44,93 +44,98 @@ describe("Integration", () => {
           //   matchMaker.removeRoomType('onjoin');
           // });
 
-          it("onCreate()", async () => {
-            let onCreateCalled = false;
+          describe("onCreate()", () => {
+            it("sync onCreate()", async () => {
+              let onCreateCalled = false;
 
-            matchMaker.defineRoomType('oncreate', class _ extends Room {
-              onCreate(options) {
-                assert.deepEqual({ string: "hello", number: 1 }, options);
-                onCreateCalled = true;
-              }
-              onMessage(client, message) { }
-            });
-
-            const connection = await client.joinOrCreate('oncreate', { string: "hello", number: 1 });
-            assert.ok(onCreateCalled);
-
-            // assert 'presence' implementation
-            const room = matchMaker.getRoomById(connection.id);
-            assert.equal(presence, room.presence);
-
-            await connection.leave();
-          });
-
-          it("async onCreate()", async () => {
-            let onCreateCalled = false;
-
-            matchMaker.defineRoomType('oncreate', class _ extends Room {
-              async onCreate(options) {
-                return new Promise(resolve => setTimeout(() => {
+              matchMaker.defineRoomType('oncreate', class _ extends Room {
+                onCreate(options) {
+                  assert.deepEqual({ string: "hello", number: 1 }, options);
                   onCreateCalled = true;
-                  resolve();
-                }, 100)
-                );
-              }
-              onMessage(client, message) { }
+                }
+                onMessage(client, message) { }
+              });
+
+              const connection = await client.joinOrCreate('oncreate', { string: "hello", number: 1 });
+              assert.ok(onCreateCalled);
+
+              // assert 'presence' implementation
+              const room = matchMaker.getRoomById(connection.id);
+              assert.equal(presence, room.presence);
+
+              await connection.leave();
             });
 
-            const connection = await client.joinOrCreate('oncreate', { string: "hello", number: 1 });
-            assert.ok(onCreateCalled);
+            it("async onCreate()", async () => {
+              let onCreateCalled = false;
 
-            await connection.leave();
-          });
+              matchMaker.defineRoomType('oncreate', class _ extends Room {
+                async onCreate(options) {
+                  return new Promise(resolve => setTimeout(() => {
+                    onCreateCalled = true;
+                    resolve();
+                  }, 100)
+                  );
+                }
+                onMessage(client, message) { }
+              });
 
-          it("onJoin()", async () => {
-            let onJoinCalled = false;
+              const connection = await client.joinOrCreate('oncreate', { string: "hello", number: 1 });
+              assert.ok(onCreateCalled);
 
-            matchMaker.defineRoomType('onjoin', class _ extends Room {
-              onJoin(client: Client, options: any) {
-                onJoinCalled = true;
-                assert.deepEqual({ string: "hello", number: 1 }, options);
-              }
-              onMessage(client, message) { }
+              await connection.leave();
             });
-
-            const connection = await client.joinOrCreate('onjoin', { string: "hello", number: 1 });
-            assert.ok(onJoinCalled);
-
-            await connection.leave();
           });
 
-          it("async onJoin()", async () => {
-            let onJoinCalled = false;
+          describe("onJoin()", () => {
+            it("sync onJoin()", async () => {
+              let onJoinCalled = false;
 
-            matchMaker.defineRoomType('onjoin', class _ extends Room {
-              async onJoin(client: Client, options: any) {
-                return new Promise(resolve => setTimeout(() => {
+              matchMaker.defineRoomType('onjoin', class _ extends Room {
+                onJoin(client: Client, options: any) {
                   onJoinCalled = true;
-                  resolve();
-                }, 20));
-              }
-              onMessage(client, message) { }
+                  assert.deepEqual({ string: "hello", number: 1 }, options);
+                }
+                onMessage(client, message) { }
+              });
+
+              const connection = await client.joinOrCreate('onjoin', { string: "hello", number: 1 });
+              assert.ok(onJoinCalled);
+
+              await connection.leave();
             });
 
-            const connection = await client.joinOrCreate('onjoin');
-            await timeout(50);
-            assert.ok(onJoinCalled);
+            it("async onJoin support", async () => {
+              let onJoinCalled = false;
 
-            await connection.leave();
-          });
+              matchMaker.defineRoomType('onjoin', class _ extends Room {
+                async onJoin(client: Client, options: any) {
+                  return new Promise(resolve => setTimeout(() => {
+                    onJoinCalled = true;
+                    resolve();
+                  }, 20));
+                }
+                onMessage(client, message) { }
+              });
 
-          it("onJoin() error should reject join promise", async() => {
-            matchMaker.defineRoomType('onjoin', class _ extends Room {
-              async onJoin(client: Client, options: any) {
-                throw new MatchMakeError("not_allowed");
-              }
-              onMessage(client, message) { }
+              const connection = await client.joinOrCreate('onjoin');
+              await timeout(50);
+              assert.ok(onJoinCalled);
+
+              await connection.leave();
             });
 
-            await assert.rejects(async() => await client.joinOrCreate('onjoin'));
+            it("error during onJoin should reject client-side promise", async () => {
+              matchMaker.defineRoomType('onjoin', class _ extends Room {
+                async onJoin(client: Client, options: any) {
+                  throw new MatchMakeError("not_allowed");
+                }
+                onMessage(client, message) { }
+              });
+
+              await assert.rejects(async () => await client.joinOrCreate('onjoin'));
+            });
+
           });
 
           it("onAuth() error should reject join promise", async() => {
@@ -293,14 +298,14 @@ describe("Integration", () => {
               });
 
               const connection = await client.create<PatchState>('patchinterval');
-              let patchesReceived: number = 0;
+              let stateChangeCount: number = 0;
 
-              connection.onStateChange(() => patchesReceived++);
+              connection.onStateChange(() => stateChangeCount++);
 
               await timeout(500);
 
               // simulation interval may have run a short amount of cycles for the first ROOM_STATE message
-              assert.equal(0, patchesReceived);
+              assert.equal(1, stateChangeCount);
 
               connection.leave();
               await timeout(50);
@@ -375,7 +380,7 @@ describe("Integration", () => {
               await timeout(50);
             });
 
-            xit("should allow to broadcast during onJoin() for current client", (done) => {
+            it("should allow to broadcast during onJoin() for current client", async () => {
               matchMaker.defineRoomType('broadcast', class _ extends Room {
                 onJoin(client, options) {
                   this.broadcast("hello");
@@ -383,26 +388,23 @@ describe("Integration", () => {
                 onMessage(client, message) { }
               });
 
-              setImmediate(async() => {
-                // const conn = await client.joinOrCreate('broadcast');
-                const conn = await client.joinOrCreate('broadcast');
+              // const conn = await client.joinOrCreate('broadcast');
+              const conn = await client.joinOrCreate('broadcast');
 
-                conn.onMessage((_message) => {
-                  onMessageCalled = true;
-                  message = _message;
-                });
+              let onMessageCalled = false;
+              let message: any;
 
-                let onMessageCalled = false;
-                let message: any;
+              conn.onMessage((_message) => {
+                onMessageCalled = true;
+                message = _message;
+              });
 
-                await timeout(100);
+              await timeout(300);
 
-                assert.equal(true, onMessageCalled);
-                assert.equal("hello", message);
+              assert.equal(true, onMessageCalled);
+              assert.equal("hello", message);
 
-                conn.leave();
-                done();
-              })
+              conn.leave();
             });
 
             xit("should broadcast after patch", async () => {

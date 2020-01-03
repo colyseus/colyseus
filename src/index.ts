@@ -48,5 +48,5 @@ export type Client = WebSocket & {
 
   pingCount: number; // ping / pong
   state: ClientState;
-  _enqueuedMessages: any;
+  _enqueuedMessages: any[];
 };
