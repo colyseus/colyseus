@@ -25,39 +25,37 @@ describe("SchemaSerializer", () => {
       assert.ok(serializer.hasFilter(State._schema, State._filters));
     });
 
-    it("should identify filter on recursive structures", () => {
-      class Deck extends Schema {
-        @filter(function(client, value, root) {
-          return true;
-        })
-        @type([Deck]) decks = new ArraySchema<Deck>();
-      }
+    it("should be able to navigate on recursive structures", () => {
+      class Container extends Schema {
+        @type("string") name: string;
 
-      class Card extends Deck {
-        @type([Deck]) moreDecks = new ArraySchema<Deck>();
-        @type(Card) card: Card;
+        @type([Container]) arrayOfContainers: ArraySchema<Container>;
+        @type({ map: Container }) mapOfContainers: MapSchema<Container>;
       }
-
-      class Hand extends Schema {
-        @type([Card]) cards = new ArraySchema<Card>();
-        @type(Deck) deck = new Deck();
-      }
-
-      class Player extends Schema {
-        @type(Hand) hand = new Hand();
-        @type(Deck) deck = new Deck();
-      }
-
       class State extends Schema {
-        @type(Card) card: Card;
-        @type(Deck) deck = new Deck();
-        @type({map: Player}) players = new MapSchema<Player>();
+        @type(Container) root: Container;
       }
 
-      assert.ok(serializer.hasFilter(State._schema, State._filters));
+      const fun = () => serializer.hasFilter(State._schema, State._filters);
+
+      assert.doesNotThrow(fun);
+      assert.equal(false, fun());
     });
 
+    it("should be able to navigate on maps and arrays of primitive types", () => {
+      class State extends Schema {
+        @type(["string"]) stringArr: MapSchema<string>;
+        @type(["number"]) numberArr: MapSchema<number>;
+        @type(["boolean"]) booleanArr: MapSchema<boolean>;
+        @type({ map: "string" }) stringMap: MapSchema<string>;
+        @type({ map: "number" }) numberMap: MapSchema<number>;
+        @type({ map: "boolean" }) booleanMap: MapSchema<boolean>;
+      }
+
+      const fun = () => serializer.hasFilter(State._schema, State._filters);
+
+      assert.doesNotThrow(fun);
+      assert.equal(false, fun());
+    });
   });
-
-
 });
