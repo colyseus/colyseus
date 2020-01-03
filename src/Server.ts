@@ -88,8 +88,21 @@ export class Server {
       : new WebSocketTransport(options, engine);
   }
 
-  public listen(port: number, hostname?: string, backlog?: number, listeningListener?: Function) {
-    this.transport.listen(port, hostname, backlog, listeningListener);
+  public async listen(port: number, hostname?: string, backlog?: number, listeningListener?: Function) {
+    return new Promise((resolve, reject) => {
+      this.transport.listen(port, hostname, backlog, (err) => {
+        if (listeningListener) {
+          listeningListener(err);
+        }
+
+        if (err) {
+          reject();
+
+        } else {
+          resolve();
+        }
+      });
+    });
   }
 
   public registerProcessForDiscovery() {

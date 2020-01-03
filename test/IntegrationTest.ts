@@ -24,7 +24,7 @@ describe("Integration", () => {
 
         const client = new Colyseus.Client("ws://localhost:8567");
 
-        before(async () => new Promise((resolve) => {
+        before(async () => {
           // setup matchmaker
           matchMaker.setup(presence, driver, 'dummyProcessId')
 
@@ -33,8 +33,8 @@ describe("Integration", () => {
           server.define("room3", Room3Clients);
 
           // listen for testing
-          server.listen(8567, undefined, undefined, resolve);
-        }));
+          await server.listen(8567);
+        });
 
         after(() => server.transport.shutdown());
 

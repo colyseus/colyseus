@@ -220,7 +220,7 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
       send.raw(client, [
         Protocol.ROOM_DATA_SCHEMA,
         (message.constructor as typeof Schema)._typeid,
-        ...message.encodeAll()
+        ...message.encodeAll(),
       ]);
 
     } else {
