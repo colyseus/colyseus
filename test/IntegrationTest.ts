@@ -388,7 +388,6 @@ describe("Integration", () => {
                 onMessage(client, message) { }
               });
 
-              // const conn = await client.joinOrCreate('broadcast');
               const conn = await client.joinOrCreate('broadcast');
 
               let onMessageCalled = false;
@@ -407,15 +406,50 @@ describe("Integration", () => {
               conn.leave();
             });
 
-            xit("should broadcast after patch", async () => {
-              // TODO
+            it("should broadcast after patch", async () => {
+              class DummyState extends Schema {
+                @type("number") number: number = 0;
+              }
+
+              matchMaker.defineRoomType('broadcast_afterpatch', class _ extends Room {
+                onCreate() {
+                  this.setPatchRate(100);
+                  this.setState(new DummyState);
+                }
+                onJoin(client, options) {
+                  this.broadcast("hello", { afterNextPatch: true });
+                  this.state.number = 1;
+                }
+                onMessage(client, message) { }
+              });
+
+              const conn = await client.joinOrCreate('broadcast_afterpatch');
+
+              let onMessageCalled = false;
+              let message: any;
+
+              conn.onMessage((_message) => {
+                onMessageCalled = true;
+                message = _message;
+              });
+
+              await timeout(50);
+
+              assert.equal(false, onMessageCalled);
+
+              await timeout(100);
+
+              assert.equal(true, onMessageCalled);
+              assert.equal("hello", message);
+
+              conn.leave();
             });
 
           });
 
           describe("send()", () => {
 
-            it("send() schema-encoded instances", (done) => {
+            it("send() schema-encoded instances", async () => {
               const ctx = new Context();
 
               class State extends Schema {
@@ -439,29 +473,20 @@ describe("Integration", () => {
                 }
               });
 
-              setImmediate(async () => {
-                try {
-                  const connection = await client.joinOrCreate('sendschema', {}, State);
-                  let messageReceived: Message;
+              const connection = await client.joinOrCreate('sendschema', {}, State);
+              let messageReceived: Message;
 
-                  connection.onMessage((message) => {
-                    onMessageCalled = true;
-                    messageReceived = message;
-                  });
-                  connection.send("hello!");
-                  await timeout(100);
-
-                  await connection.leave();
-
-                  assert.ok(onMessageCalled);
-                  assert.equal(messageReceived.str, "hello!");
-                  done();
-
-                } catch (e) {
-                  assert.fail();
-                }
+              connection.onMessage((message) => {
+                onMessageCalled = true;
+                messageReceived = message;
               });
+              connection.send("hello!");
+              await timeout(100);
 
+              await connection.leave();
+
+              assert.ok(onMessageCalled);
+              assert.equal(messageReceived.str, "hello!");
             });
           });
 
