@@ -75,7 +75,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
     return this.handshakeCache;
   }
 
-  private hasFilter(schema: Definition, filters: any = {}) {
+  public hasFilter(schema: Definition, filters: any = {}) {
     let hasFilter = false;
 
     for (const fieldName of Object.keys(schema)) {
