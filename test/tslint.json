@@ -1,0 +1,13 @@
+{
+  "extends": "../tslint.json",
+  "rules": {
+    "max-classes-per-file": false,
+    "member-access": false,
+    "only-arrow-functions": false,
+    "space-before-function-paren": false,
+    "quotemark": [
+      true,
+      "double"
+    ]
+  }
+}
