@@ -1,7 +1,7 @@
 import { Client } from '..';
 import { Serializer } from './Serializer';
 
-import { Definition, Reflection, Schema, dumpChanges } from '@colyseus/schema';
+import { Definition, dumpChanges, Reflection, Schema } from '@colyseus/schema';
 import { debugPatch } from '../Debug';
 import { Protocol, send } from '../Protocol';
 
@@ -50,7 +50,12 @@ export class SchemaSerializer<T> implements Serializer<T> {
         }
 
         if (debugPatch.enabled) {
-          debugPatch('%d bytes sent to %d clients, %j = ', patches.length, clients.length, (debugPatch as any).dumpChanges);
+          debugPatch(
+            '%d bytes sent to %d clients, %j = ',
+            patches.length,
+            clients.length,
+            (debugPatch as any).dumpChanges,
+          );
         }
 
       } else {
@@ -99,15 +104,15 @@ export class SchemaSerializer<T> implements Serializer<T> {
         hasFilter = this.hasFilter(childSchema, childFilters, schema);
 
       } else if (Array.isArray(schema[fieldName])) {
-        if (typeof(schema[fieldName][0]) === "string") {
+        if (typeof(schema[fieldName][0]) === 'string') {
           continue;
         }
         const childSchema = (schema[fieldName][0] as typeof Schema)._schema;
         const childFilters = (schema[fieldName][0] as typeof Schema)._filters;
         hasFilter = this.hasFilter(childSchema, childFilters, schema);
 
-      } else if ((schema[fieldName] as any).map && typeof((schema[fieldName] as any).map) !== "string") {
-        if (typeof((schema[fieldName] as any).map) === "string") {
+      } else if ((schema[fieldName] as any).map) {
+        if (typeof((schema[fieldName] as any).map) === 'string') {
           continue;
         }
         const childSchema = ((schema[fieldName] as any).map as typeof Schema)._schema;
