@@ -1,7 +1,7 @@
 import { Client } from '..';
 import { Serializer } from './Serializer';
 
-import { Definition, Reflection, Schema } from '@colyseus/schema';
+import { Definition, Reflection, Schema, dumpChanges } from '@colyseus/schema';
 import { debugPatch } from '../Debug';
 import { Protocol, send } from '../Protocol';
 
@@ -35,6 +35,11 @@ export class SchemaSerializer<T> implements Serializer<T> {
 
       if (!this.hasFiltersByClient) {
 
+        // dump changes for patch debugging
+        if (debugPatch.enabled) {
+          (debugPatch as any).dumpChanges = dumpChanges(this.state);
+        }
+
         // encode changes once, for all clients
         const patches = this.state.encode();
         patches.unshift(Protocol.ROOM_STATE_PATCH);
@@ -45,7 +50,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
         }
 
         if (debugPatch.enabled) {
-          debugPatch('%d bytes sent to %d clients', patches.length, clients.length);
+          debugPatch('%d bytes sent to %d clients, %j = ', patches.length, clients.length, (debugPatch as any).dumpChanges);
         }
 
       } else {
