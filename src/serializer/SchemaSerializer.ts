@@ -80,8 +80,11 @@ export class SchemaSerializer<T> implements Serializer<T> {
     return this.handshakeCache;
   }
 
-  public hasFilter(schema: Definition, filters: any = {}) {
+  public hasFilter(schema: Definition, filters: any = {}, parent?: Definition) {
     let hasFilter = false;
+
+    // avoid checking recursive structures
+    if (schema === parent) { return hasFilter; }
 
     for (const fieldName of Object.keys(schema)) {
       // skip if a filter has been found
@@ -93,17 +96,23 @@ export class SchemaSerializer<T> implements Serializer<T> {
       } else if (typeof (schema[fieldName]) === 'function') {
         const childSchema = (schema[fieldName] as typeof Schema)._schema;
         const childFilters = (schema[fieldName] as typeof Schema)._filters;
-        hasFilter = this.hasFilter(childSchema, childFilters);
+        hasFilter = this.hasFilter(childSchema, childFilters, schema);
 
       } else if (Array.isArray(schema[fieldName])) {
+        if (typeof(schema[fieldName][0]) === "string") {
+          continue;
+        }
         const childSchema = (schema[fieldName][0] as typeof Schema)._schema;
         const childFilters = (schema[fieldName][0] as typeof Schema)._filters;
-        hasFilter = this.hasFilter(childSchema, childFilters);
+        hasFilter = this.hasFilter(childSchema, childFilters, schema);
 
-      } else if ((schema[fieldName] as any).map) {
+      } else if ((schema[fieldName] as any).map && typeof((schema[fieldName] as any).map) !== "string") {
+        if (typeof((schema[fieldName] as any).map) === "string") {
+          continue;
+        }
         const childSchema = ((schema[fieldName] as any).map as typeof Schema)._schema;
         const childFilters = ((schema[fieldName] as any).map as typeof Schema)._filters;
-        hasFilter = this.hasFilter(childSchema, childFilters);
+        hasFilter = this.hasFilter(childSchema, childFilters, schema);
 
       }
     }
