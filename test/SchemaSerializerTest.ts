@@ -1,5 +1,6 @@
 import assert from "assert";
-import { Schema, ArraySchema, type, filter, MapSchema } from "@colyseus/schema";
+
+import { ArraySchema, defineTypes, filter, MapSchema, Schema, type } from "@colyseus/schema";
 import { SchemaSerializer } from "../src";
 
 describe("SchemaSerializer", () => {
@@ -16,7 +17,7 @@ describe("SchemaSerializer", () => {
 
     it("should return true", () => {
       class State extends Schema {
-        @filter(function(client, value, root) {
+        @filter(function (client, value, root) {
           return true;
         })
         @type("string") str: string;
@@ -40,6 +41,53 @@ describe("SchemaSerializer", () => {
 
       assert.doesNotThrow(fun);
       assert.equal(false, fun());
+    });
+
+    it("should be able to navigate on more complex recursive structures", () => {
+      class ContainerA extends Schema {
+        @type("string") contAName: string;
+      }
+      class ContainerB extends Schema {
+        @type("string") contBName: string;
+      }
+      class State extends Schema {
+      }
+
+      const allContainers = [State, ContainerA, ContainerB];
+      allContainers.forEach((cont) => {
+        defineTypes(cont, {
+          containersA: [ContainerA],
+          containersB: [ContainerB],
+        });
+      });
+
+      const fun = () => serializer.hasFilter(State._schema, State._filters);
+
+      assert.doesNotThrow(fun);
+      assert.equal(false, fun());
+    });
+
+    it("should find filter on more complex recursive structures", () => {
+      class ContainerA extends Schema {
+        @type("string") contAName: string;
+      }
+      class ContainerB extends Schema {
+        @filter(function (client, value, root) { return true; })
+        @type("string")
+        contBName: string;
+      }
+      class State extends Schema {
+      }
+
+      const allContainers = [State, ContainerA, ContainerB];
+      allContainers.forEach((cont) => {
+        defineTypes(cont, {
+          containersA: [ContainerA],
+          containersB: [ContainerB],
+        });
+      });
+
+      assert.ok(serializer.hasFilter(State._schema, State._filters));
     });
 
     it("should be able to navigate on maps and arrays of primitive types", () => {

@@ -85,11 +85,11 @@ export class SchemaSerializer<T> implements Serializer<T> {
     return this.handshakeCache;
   }
 
-  public hasFilter(schema: Definition, filters: any = {}, parent?: Definition) {
+  public hasFilter(schema: Definition, filters: any = {}, schemasCache?: WeakSet<Definition>) {
     let hasFilter = false;
-
-    // avoid checking recursive structures
-    if (schema === parent) { return hasFilter; }
+    // set of schemas we already checked OR are still checking
+    const knownSchemas = schemasCache || new WeakSet<Definition>();
+    knownSchemas.add(schema);
 
     for (const fieldName of Object.keys(schema)) {
       // skip if a filter has been found
@@ -98,26 +98,35 @@ export class SchemaSerializer<T> implements Serializer<T> {
       if (filters[fieldName]) {
         hasFilter = true;
 
-      } else if (typeof (schema[fieldName]) === 'function') {
+      } else if (typeof schema[fieldName] === 'function') {
         const childSchema = (schema[fieldName] as typeof Schema)._schema;
         const childFilters = (schema[fieldName] as typeof Schema)._filters;
-        hasFilter = this.hasFilter(childSchema, childFilters, schema);
+
+        if (!knownSchemas.has(childSchema)) {
+          hasFilter = this.hasFilter(childSchema, childFilters, knownSchemas);
+        }
 
       } else if (Array.isArray(schema[fieldName])) {
-        if (typeof(schema[fieldName][0]) === 'string') {
+        if (typeof schema[fieldName][0] === 'string') {
           continue;
         }
         const childSchema = (schema[fieldName][0] as typeof Schema)._schema;
         const childFilters = (schema[fieldName][0] as typeof Schema)._filters;
-        hasFilter = this.hasFilter(childSchema, childFilters, schema);
+
+        if (!knownSchemas.has(childSchema)) {
+          hasFilter = this.hasFilter(childSchema, childFilters, knownSchemas);
+        }
 
       } else if ((schema[fieldName] as any).map) {
-        if (typeof((schema[fieldName] as any).map) === 'string') {
+        if (typeof (schema[fieldName] as any).map === 'string') {
           continue;
         }
         const childSchema = ((schema[fieldName] as any).map as typeof Schema)._schema;
         const childFilters = ((schema[fieldName] as any).map as typeof Schema)._filters;
-        hasFilter = this.hasFilter(childSchema, childFilters, schema);
+
+        if (!knownSchemas.has(childSchema)) {
+          hasFilter = this.hasFilter(childSchema, childFilters, knownSchemas);
+        }
 
       }
     }
