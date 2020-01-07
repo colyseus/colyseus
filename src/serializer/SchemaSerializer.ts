@@ -1,3 +1,5 @@
+/* tslint:disable:no-string-literal */
+
 import { Client } from '..';
 import { Serializer } from './Serializer';
 
@@ -99,8 +101,8 @@ export class SchemaSerializer<T> implements Serializer<T> {
         hasFilter = true;
 
       } else if (typeof schema[fieldName] === 'function') {
-        const childSchema = (schema[fieldName] as typeof Schema)._schema;
-        const childFilters = (schema[fieldName] as typeof Schema)._filters;
+        const childSchema = schema[fieldName]['_schema'];
+        const childFilters = schema[fieldName]['_filters'];
 
         if (!knownSchemas.has(childSchema)) {
           hasFilter = this.hasFilter(childSchema, childFilters, knownSchemas);
@@ -110,8 +112,8 @@ export class SchemaSerializer<T> implements Serializer<T> {
         if (typeof schema[fieldName][0] === 'string') {
           continue;
         }
-        const childSchema = (schema[fieldName][0] as typeof Schema)._schema;
-        const childFilters = (schema[fieldName][0] as typeof Schema)._filters;
+        const childSchema = schema[fieldName][0]['_schema'];
+        const childFilters = schema[fieldName][0]['_filters'];
 
         if (!knownSchemas.has(childSchema)) {
           hasFilter = this.hasFilter(childSchema, childFilters, knownSchemas);
@@ -121,8 +123,8 @@ export class SchemaSerializer<T> implements Serializer<T> {
         if (typeof (schema[fieldName] as any).map === 'string') {
           continue;
         }
-        const childSchema = ((schema[fieldName] as any).map as typeof Schema)._schema;
-        const childFilters = ((schema[fieldName] as any).map as typeof Schema)._filters;
+        const childSchema = (schema[fieldName] as any).map['_schema'];
+        const childFilters = (schema[fieldName] as any).map['_filters'];
 
         if (!knownSchemas.has(childSchema)) {
           hasFilter = this.hasFilter(childSchema, childFilters, knownSchemas);
