@@ -25,7 +25,7 @@ export class FossilDeltaSerializer<T> implements Serializer<T> {
     this.previousStateEncoded = msgpack.encode(this.previousState);
   }
 
-  public getFullState(client: Client) {
+  public getFullState(client?: Client) {
     return this.previousStateEncoded;
   }
 
