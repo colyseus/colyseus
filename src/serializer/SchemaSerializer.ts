@@ -1,3 +1,5 @@
+/* tslint:disable:no-string-literal */
+
 import { Client } from '..';
 import { Serializer } from './Serializer';
 
