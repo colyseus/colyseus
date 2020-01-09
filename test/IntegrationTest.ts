@@ -7,6 +7,11 @@ import { matchMaker, Room, Client, Server } from "../src";
 import { DummyRoom, DRIVERS, timeout, Room3Clients, PRESENCE_IMPLEMENTATIONS, Room2Clients, Room2ClientsExplicitLock } from "./utils";
 import { MatchMakeError } from "../src/MatchMaker";
 
+import WebSocket from "ws";
+
+const TEST_PORT = 8567;
+const TEST_ENDPOINT = `ws://localhost:${TEST_PORT}`;
+
 describe("Integration", () => {
   for (let i = 0; i < PRESENCE_IMPLEMENTATIONS.length; i++) {
     const presence = PRESENCE_IMPLEMENTATIONS[i];
@@ -22,7 +27,7 @@ describe("Integration", () => {
           driver
         });
 
-        const client = new Colyseus.Client("ws://localhost:8567");
+        const client = new Colyseus.Client(TEST_ENDPOINT);
 
         before(async () => {
           // setup matchmaker
@@ -33,7 +38,7 @@ describe("Integration", () => {
           server.define("room3", Room3Clients);
 
           // listen for testing
-          await server.listen(8567);
+          await server.listen(TEST_PORT);
         });
 
         after(() => server.transport.shutdown());
@@ -136,6 +141,35 @@ describe("Integration", () => {
               await assert.rejects(async () => await client.joinOrCreate('onjoin'));
             });
 
+            it("should discard connections when early disconnected", async () => {
+              matchMaker.defineRoomType('onjoin', class _ extends Room {
+                async onJoin(client: Client, options: any) {
+                  return new Promise((resolve) => setTimeout(resolve, 100));
+                }
+                onMessage(client, message) { }
+              });
+
+              // keep one active connection to prevent room's disposal
+              const activeConnection = await client.joinOrCreate("onjoin");
+
+              const seatReservation = await matchMaker.joinOrCreate('onjoin', {});
+              const room = matchMaker.getRoomById(seatReservation.room.roomId);
+
+              const lostConnection = new WebSocket(`${TEST_ENDPOINT}/${seatReservation.room.processId}/${seatReservation.room.roomId}?sessionId=${seatReservation.sessionId}`);
+
+              // close connection immediatelly after connecting.
+              lostConnection.on("open", () => lostConnection.close());
+
+              await timeout(110);
+
+              const rooms = await matchMaker.query({ name: "onjoin" });
+
+              assert.equal(1, room.clients.length);
+              assert.equal(1, rooms[0].clients);
+
+              await activeConnection.leave();
+              await timeout(50);
+            });
           });
 
           it("onAuth() error should reject join promise", async() => {
