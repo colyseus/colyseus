@@ -20,7 +20,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
       throw new Error(`SchemaSerializer error. See: https://docs.colyseus.io/migrating/0.10/#new-default-serializer`);
     }
     this.state = newState;
-    this.hasFiltersByClient = this.hasFilter(newState._schema, newState._filters);
+    this.hasFiltersByClient = this.hasFilter(newState['_schema'], newState['_filters']);
   }
 
   public getFullState(client?: Client) {
