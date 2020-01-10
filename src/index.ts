@@ -24,7 +24,6 @@ export { RelayRoom } from './rooms/RelayRoom';
 // Serializers
 export { FossilDeltaSerializer } from './serializer/FossilDeltaSerializer';
 export { SchemaSerializer } from './serializer/SchemaSerializer';
-export { serialize } from './serializer/Serializer';
 
 // Utilities
 export { Clock, Delayed };

@@ -16,11 +16,8 @@ export class SchemaSerializer<T> implements Serializer<T> {
   private handshakeCache: number[];
 
   public reset(newState: T & Schema) {
-    if (!(newState instanceof Schema)) {
-      throw new Error(`SchemaSerializer error. See: https://docs.colyseus.io/migrating/0.10/#new-default-serializer`);
-    }
     this.state = newState;
-    this.hasFiltersByClient = this.hasFilter(newState['_schema'], newState['_filters']);
+    this.hasFiltersByClient = this.hasFilter(newState['_schema'] || {}, newState['_filters'] || {});
   }
 
   public getFullState(client?: Client) {
@@ -89,6 +86,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
 
   public hasFilter(schema: Definition, filters: any = {}, schemasCache?: WeakSet<Definition>) {
     let hasFilter = false;
+
     // set of schemas we already checked OR are still checking
     const knownSchemas = schemasCache || new WeakSet<Definition>();
     knownSchemas.add(schema);

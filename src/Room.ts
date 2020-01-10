@@ -16,6 +16,7 @@ import { Deferred, spliceOne } from './Utils';
 
 import { debugAndPrintError, debugPatch } from './Debug';
 import { RoomListingData } from './matchmaker/drivers/Driver';
+import { FossilDeltaSerializer } from './serializer/FossilDeltaSerializer';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
@@ -43,8 +44,6 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
     return this._locked;
   }
 
-  // see @serialize decorator.
-  public get serializer() { return this._serializer.id; }
   public listing: RoomListingData<Metadata>;
   public clock: Clock = new Clock();
 
@@ -71,7 +70,7 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
   protected reconnections: { [sessionId: string]: Deferred } = {};
   protected isDisconnecting: boolean = false;
 
-  private _serializer: Serializer<State> = this._getSerializer();
+  private _serializer: Serializer<State> = new FossilDeltaSerializer();
   private _afterNextPatchBroadcasts: Array<[any, BroadcastOptions]> = [];
 
   private _simulationInterval: NodeJS.Timer;
@@ -155,6 +154,13 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
 
   public setState(newState: State) {
     this.clock.start();
+
+    if ('_schema' in newState) {
+      this._serializer = new SchemaSerializer();
+
+    } else {
+      this._serializer = new FossilDeltaSerializer();
+    }
 
     this._serializer.reset(newState);
 
@@ -369,10 +375,6 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
       this._serializer.id,
       this._serializer.handshake && this._serializer.handshake(),
     );
-  }
-
-  protected _getSerializer?(): Serializer<State> {
-    return new SchemaSerializer<State>();
   }
 
   protected sendState(client: Client): void {

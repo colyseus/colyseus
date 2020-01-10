@@ -25,7 +25,7 @@ export class FossilDeltaSerializer<T> implements Serializer<T> {
     this.previousStateEncoded = msgpack.encode(this.previousState);
   }
 
-  public getFullState(client?: Client) {
+  public getFullState(_?: Client) {
     return this.previousStateEncoded;
   }
 
@@ -33,11 +33,13 @@ export class FossilDeltaSerializer<T> implements Serializer<T> {
     const hasChanged = this.hasChanged(previousState);
 
     if (hasChanged) {
+      this.patches.unshift(Protocol.ROOM_STATE_PATCH);
+
       let numClients = clients.length;
 
       while (numClients--) {
         const client = clients[numClients];
-        send[Protocol.ROOM_STATE_PATCH](client, this.patches);
+        send.raw(client, this.patches);
       }
     }
 
