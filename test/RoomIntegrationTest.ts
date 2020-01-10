@@ -50,7 +50,7 @@ describe("Room Integration", () => {
       assert.deepEqual({ hello: "world!" }, conn.state, "receive initial state");
       conn.send("mutate");
 
-      await timeout(30);
+      await timeout(50);
       assert.deepEqual({ hello: "mutate" }, conn.state, "receive patch");
     });
 
