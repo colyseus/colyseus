@@ -70,7 +70,7 @@ export class Server {
     this.attach(options);
 
     if (gracefullyShutdown) {
-      registerGracefulShutdown((signal) => this.gracefullyShutdown());
+      registerGracefulShutdown((err) => this.gracefullyShutdown(true, err));
     }
   }
 
@@ -117,7 +117,7 @@ export class Server {
     return matchMaker.defineRoomType(name, handler, defaultOptions);
   }
 
-  public async gracefullyShutdown(exit: boolean = true) {
+  public async gracefullyShutdown(exit: boolean = true, err?: Error) {
     await unregisterNode(this.presence, {
       port: this.transport.address().port,
       processId: this.processId,
@@ -132,7 +132,9 @@ export class Server {
       debugAndPrintError(`error during shutdown: ${e}`);
 
     } finally {
-      if (exit) { process.exit(); }
+      if (exit) {
+        process.exit(err ? 1 : 0);
+      }
     }
   }
 

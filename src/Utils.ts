@@ -8,9 +8,17 @@ import { debugAndPrintError, debugMatchMaking } from './Debug';
 //
 const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM', 'SIGUSR2'];
 
-export function registerGracefulShutdown(callback) {
+export function registerGracefulShutdown(callback: (err?: Error) => void) {
+  /**
+   * Gracefully shutdown on uncaught errors
+   */
+  process.on('uncaughtException', (err) => {
+    debugAndPrintError(err);
+    callback(err);
+  });
+
   signals.forEach((signal) =>
-    process.once(signal, () => callback(signal)));
+    process.once(signal, () => callback()));
 }
 
 export function retry<T = any>(

@@ -32,8 +32,8 @@ type RemoteRoomResponse<T= any> = [string?, T?];
 const handlers: {[id: string]: RegisteredHandler} = {};
 const rooms: {[roomId: string]: Room} = {};
 
-let presence: Presence;
-let processId: string;
+export let processId: string;
+export let presence: Presence;
 export let driver: MatchMakerDriver;
 
 let isGracefullyShuttingDown: boolean;
