@@ -117,6 +117,10 @@ and chat rooms is expected to follow the [code of conduct](CODE_OF_CONDUCT.md).
 
 # Backers / Supporters via Patreon
 
+**Sponsors**
+- BubbleboxGames
+- TypeRush
+
 **Generous backers:**
 - Kyle Kemp
 - Wenish
@@ -127,7 +131,6 @@ and chat rooms is expected to follow the [code of conduct](CODE_OF_CONDUCT.md).
 - Endre Johnsen
 - enriqueto
 - Eric McDaniel
-- Halil Bilgin
 - James Jacoby
 - João Mosmann
 - LeeSeHeon
