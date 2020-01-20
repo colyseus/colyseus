@@ -68,7 +68,6 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
   protected reservedSeatTimeouts: { [sessionId: string]: NodeJS.Timer } = {};
 
   protected reconnections: { [sessionId: string]: Deferred } = {};
-  protected isDisconnecting: boolean = false;
 
   private _serializer: Serializer<State> = new FossilDeltaSerializer();
   private _afterNextPatchBroadcasts: Array<[any, BroadcastOptions]> = [];
@@ -299,7 +298,7 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
           reconnection.reject();
 
         } else {
-          client.close(Protocol.WS_CLOSE_CONSENTED);
+          this._forciblyCloseClient(client, Protocol.WS_CLOSE_CONSENTED);
         }
       }
 
@@ -556,20 +555,26 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
       }
 
     } else if (message[0] === Protocol.LEAVE_ROOM) {
-      // stop receiving messages from this client
-      client.removeAllListeners('message');
-
-      // prevent "onLeave" from being called twice if player asks to leave
-      const closeListeners: any[] = client.listeners('close');
-      client.removeListener('close', closeListeners[1]);
-
-      // only effectively close connection when "onLeave" is fulfilled
-      this._onLeave(client, Protocol.WS_CLOSE_CONSENTED).then(() => client.close(Protocol.WS_CLOSE_NORMAL));
+      this._forciblyCloseClient(client, Protocol.WS_CLOSE_CONSENTED);
 
     } else {
       this.onMessage(client, message);
     }
 
+  }
+
+  private _forciblyCloseClient(client: Client, closeCode: number) {
+    // stop receiving messages from this client
+    client.removeAllListeners('message');
+
+    // prevent "onLeave" from being called twice if player asks to leave
+    const closeListeners: any[] = client.listeners('close');
+    if (closeListeners.length >= 2) {
+      client.removeListener('close', closeListeners[1]);
+    }
+
+    // only effectively close connection when "onLeave" is fulfilled
+    this._onLeave(client, closeCode).then(() => client.close(Protocol.WS_CLOSE_NORMAL));
   }
 
   private async _onLeave(client: Client, code?: number): Promise<any> {

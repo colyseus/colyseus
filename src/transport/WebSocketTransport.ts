@@ -10,7 +10,7 @@ import { parseQueryString } from '../Utils';
 import { ServerOptions } from './../Server';
 import { Transport } from './Transport';
 
-import { debugAndPrintError } from './../Debug';
+import { debugAndPrintError, debugConnection } from './../Debug';
 
 function noop() {/* tslint:disable:no-empty */ }
 function heartbeat() { this.pingCount = 0; }
@@ -74,6 +74,7 @@ export class WebSocketTransport extends Transport {
         // if client hasn't responded after the interval, terminate its connection.
         //
         if (client.pingCount >= pingMaxRetries) {
+          debugConnection(`terminating unresponsive client ${client.sessionId}`);
           return client.terminate();
         }
 
