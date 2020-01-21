@@ -546,6 +546,8 @@ describe("Integration", () => {
 
               conn1.leave();
               conn2.leave();
+
+              await timeout(100);
             });
 
             it("should unlock room automatically when last client leaves", async () => {
@@ -562,7 +564,7 @@ describe("Integration", () => {
               assert.equal(1, room.clients.length);
               assert.equal(false, room.locked);
 
-              const roomListing = (await matchMaker.query({}))[0];
+              const roomListing = (await matchMaker.query({ name: "room2" }))[0];
               assert.equal(false, roomListing.locked);
 
               conn1.leave();

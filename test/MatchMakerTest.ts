@@ -268,6 +268,9 @@ describe("MatchMaker", () => {
           assert.equal(1, rooms.length);
           assert.equal(1, rooms[0].clients);
           assert.equal(1, room.clients.length);
+
+          client1.close();
+          await timeout(100);
         });
 
         it("should not allow to reconnect", async () => {
