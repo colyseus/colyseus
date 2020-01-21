@@ -50,7 +50,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
 
         if (debugPatch.enabled) {
           debugPatch(
-            '%d bytes sent to %d clients, %j = ',
+            '%d bytes sent to %d clients, %j',
             patches.length,
             clients.length,
             (debugPatch as any).dumpChanges,

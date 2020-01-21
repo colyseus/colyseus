@@ -543,16 +543,16 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
       // join room has been acknowledged by the client
       client.state = ClientState.JOINED;
 
+      // send current state when new client joins the room
+      if (this.state) {
+        this.sendState(client);
+      }
+
       // dequeue messages sent before client has joined effectively (on user-defined `onJoin`)
       if (client._enqueuedMessages.length > 0) {
         client._enqueuedMessages.forEach((bytes) => send.raw(client, bytes));
       }
       delete client._enqueuedMessages;
-
-      // send current state when new client joins the room
-      if (this.state) {
-        this.sendState(client);
-      }
 
     } else if (message[0] === Protocol.LEAVE_ROOM) {
       this._forciblyCloseClient(client, Protocol.WS_CLOSE_CONSENTED);
