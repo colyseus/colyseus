@@ -166,8 +166,16 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
     this.state = newState;
   }
 
-  public setMetadata(meta: Metadata) {
-    this.listing.metadata = meta;
+  public setMetadata(meta: Partial<Metadata>) {
+    if (!this.listing.metadata) {
+      this.listing.metadata = meta as Metadata;
+
+    } else {
+      for (const field in meta) {
+        if (!meta.hasOwnProperty(field)) { continue; }
+        this.listing.metadata[field] = meta[field];
+      }
+    }
 
     if (this._internalState === RoomInternalState.CREATED) {
       this.listing.save();
