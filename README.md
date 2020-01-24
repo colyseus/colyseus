@@ -22,7 +22,7 @@
 </div>
 
 Colyseus is an Authoritative Multiplayer Game Server for Node.js, with clients
-available for the Web, Unity3d, Defold, Haxe, and Cocos2d-X. ([See official clients](#-official-client-integration))
+available for the Web, Unity3d, Defold, Haxe, and Cocos2d-X. ([See official clients](#%EF%B8%8F-official-client-integration))
 
 The project focuses on providing synchronizable data structures for realtime and
 turn-based games, matchmaking, and ease of usage both on the server-side and
