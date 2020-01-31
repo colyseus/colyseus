@@ -26,6 +26,11 @@ export class RegisteredHandler extends EventEmitter {
   constructor(klass: RoomConstructor, options: any) {
     super();
 
+    if (typeof(klass) !== 'function') {
+      console.debug('You are likely not importing your room class correctly.');
+      throw new Error(`class is expected but ${typeof(klass)} was provided.`);
+    }
+
     this.klass = klass;
     this.options = options;
   }
