@@ -15,10 +15,12 @@ export interface Presence {
     scard(key: string);
     sinter(...keys: string[]): Promise<string[]>;
 
-    hset(roomId: string, key: string, value: string);
-    hget(roomId: string, key: string): Promise<string>;
-    hdel(roomId: string, key: string);
-    hlen(roomId: string): Promise<number>;
+    hset(key: string, field: string, value: string);
+    hincrby(key: string, field: string, value: number);
+    hget(key: string, field: string): Promise<string>;
+    hgetall(key: string): Promise<{ [key: string]: string }>;
+    hdel(key: string, field: string);
+    hlen(key: string): Promise<number>;
 
     incr(key: string);
     decr(key: string);

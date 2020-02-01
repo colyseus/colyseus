@@ -142,24 +142,42 @@ export class RedisPresence implements Presence {
         });
     }
 
-    public async hset(roomId: string, key: string, value: string) {
+    public async hset(key: string, field: string, value: string) {
         return new Promise((resolve) => {
-            this.pub.hset(roomId, key, value, resolve);
+            this.pub.hset(key, field, value, resolve);
         });
     }
 
-    public async hget(roomId: string, key: string) {
-        return await this.hgetAsync(roomId, key);
-    }
-
-    public async hdel(roomId: string, key: string) {
+    public async hincrby(key: string, field: string, value: number) {
         return new Promise((resolve) => {
-            this.pub.hdel(roomId, key, resolve);
+            this.pub.hincrby(key, field, value, resolve);
         });
     }
 
-    public async hlen(roomId: string): Promise<number> {
-        return await this.hlenAsync(roomId);
+    public async hget(key: string, field: string) {
+        return await this.hgetAsync(key, field);
+    }
+
+    public async hgetall(key: string) {
+        return new Promise<{ [key: string]: string }>((resolve, reject) => {
+            this.pub.hgetall(key, (err, values) => {
+              if (err) { return reject(err); }
+              resolve(values);
+            });
+        });
+    }
+
+    public async hdel(key: string, field: string) {
+        return new Promise((resolve, reject) => {
+            this.pub.hdel(key, field, (err, ok) => {
+              if (err) { return reject(err); }
+              resolve(ok);
+            });
+        });
+    }
+
+    public async hlen(key: string): Promise<number> {
+        return await this.hlenAsync(key);
     }
 
     public async incr(key: string): Promise<number> {

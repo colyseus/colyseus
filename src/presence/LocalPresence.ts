@@ -114,26 +114,33 @@ export class LocalPresence implements Presence {
       }, []);
     }
 
-    public hset(roomId: string, key: string, value: string) {
-        if (!this.hash[roomId]) {
-            this.hash[roomId] = {};
+    public hset(key: string, field: string, value: string) {
+        if (!this.hash[key]) { this.hash[key] = {}; }
+        this.hash[key][field] = value;
+    }
+
+    public hincrby(key: string, field: string, value: number) {
+        if (!this.hash[key]) { this.hash[key] = {}; }
+        const previousValue = Number(this.hash[key][field] || '0');
+        this.hash[key][field] = (previousValue + value).toString();
+    }
+
+    public async hget(key: string, field: string) {
+        return this.hash[key] && this.hash[key][field];
+    }
+
+    public async hgetall(key: string) {
+        return this.hash[key] || {};
+    }
+
+    public hdel(key: string, field: any) {
+        if (this.hash[key]) {
+            delete this.hash[key][field];
         }
-
-        this.hash[roomId][key] = value;
     }
 
-    public async hget(roomId: string, key: string) {
-        return this.hash[roomId] && this.hash[roomId][key];
-    }
-
-    public hdel(roomId: string, key: any) {
-        if (this.hash[roomId]) {
-            delete this.hash[roomId][key];
-        }
-    }
-
-    public async hlen(roomId: string) {
-        return this.hash[roomId] && Object.keys(this.hash[roomId]).length || 0;
+    public async hlen(key: string) {
+        return this.hash[key] && Object.keys(this.hash[key]).length || 0;
     }
 
     public async incr(key: string) {

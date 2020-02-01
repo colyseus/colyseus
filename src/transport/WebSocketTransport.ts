@@ -1,4 +1,5 @@
 import http from 'http';
+import querystring from 'querystring';
 import url from 'url';
 import WebSocket from 'ws';
 
@@ -6,7 +7,6 @@ import { Client, Protocol } from '..';
 import * as matchMaker from '../MatchMaker';
 
 import { send } from '../Protocol';
-import { parseQueryString } from '../Utils';
 import { ServerOptions } from './../Server';
 import { Transport } from './Transport';
 
@@ -93,7 +93,7 @@ export class WebSocketTransport extends Transport {
     const upgradeReq = req || client.upgradeReq;
     const parsedURL = url.parse(upgradeReq.url);
 
-    const { sessionId } = parseQueryString(parsedURL.query);
+    const sessionId = querystring.parse(parsedURL.query).sessionId as string;
     const processAndRoomId = parsedURL.pathname.match(/\/[a-zA-Z0-9_\-]+\/([a-zA-Z0-9_\-]+)$/);
     const roomId = processAndRoomId && processAndRoomId[1];
 

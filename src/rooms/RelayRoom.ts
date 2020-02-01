@@ -1,6 +1,6 @@
-import { Context, defineTypes, MapSchema, Schema, type } from '@colyseus/schema';
+import { Context, defineTypes, MapSchema, Schema } from '@colyseus/schema';
 
-import { Client } from '..';
+import { Client } from '../Protocol';
 import { Room } from '../Room';
 
 /**

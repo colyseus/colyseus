@@ -1,8 +1,8 @@
-import { Schema } from '@colyseus/schema';
+import http from 'http';
 import msgpack from 'notepack.io';
 import WebSocket from 'ws';
+
 import { debugAndPrintError } from './Debug';
-import { Client, ClientState } from './index';
 
 // Colyseus protocol codes range between 0~100
 export enum Protocol {
@@ -38,6 +38,26 @@ export enum IpcProtocol {
   ERROR = 1,
   TIMEOUT = 2,
 }
+
+export enum ClientState { JOINING, JOINED, RECONNECTED }
+
+// Export 'WebSocket' as 'Client' with 'id' property.
+export type Client = WebSocket & {
+  upgradeReq?: http.IncomingMessage; // cross-compatibility for ws (v3.x+) and uws
+  // id: string;
+
+  id: string;
+  sessionId: string; // TODO: remove sessionId on version 1.0.0
+
+  /**
+   * auth data provided by your `onAuth`
+   */
+  auth?: any;
+
+  pingCount: number; // ping / pong
+  state: ClientState;
+  _enqueuedMessages: any[];
+};
 
 export function decode(message: any) {
   try {
