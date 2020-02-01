@@ -226,30 +226,22 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
     let room: RoomListingData;
 
     try {
-      room = await createRemoteRoom(processIdWithFewerRooms, roomName, clientOptions);
+      room = await requestFromIPC<RoomListingData>(
+        presence,
+        getProcessChannel(processIdWithFewerRooms),
+        undefined,
+        [roomName, clientOptions],
+        REMOTE_ROOM_SHORT_TIMEOUT,
+      );
 
     } catch (e) {
+      // if other process failed to respond, create the room on this process
       debugAndPrintError(e);
       room = await handleCreateRoom(roomName, clientOptions);
     }
 
     return room;
   }
-}
-
-async function createRemoteRoom(
-  remoteProcessId: string,
-  roomName: string,
-  clientOptions: ClientOptions,
-  rejectionTimeout = REMOTE_ROOM_SHORT_TIMEOUT,
-): Promise<RoomListingData> {
-  return await requestFromIPC<RoomListingData>(
-    presence,
-    getProcessChannel(remoteProcessId),
-    undefined,
-    [roomName, clientOptions],
-    rejectionTimeout,
-  );
 }
 
 async function handleCreateRoom(roomName: string, clientOptions: ClientOptions): Promise<RoomListingData> {
