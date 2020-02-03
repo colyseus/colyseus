@@ -30,7 +30,7 @@ export class TCPTransport extends Transport {
     this.server.close();
   }
 
-  protected onConnection = (client: net.Socket & any) => {
+  protected onConnection (client: net.Socket & any) {
     // compatibility with ws / uws
     const upgradeReq: any = {};
 
@@ -54,9 +54,10 @@ export class TCPTransport extends Transport {
 
     if (message[0] === Protocol.JOIN_ROOM) {
       const roomId = message[1];
+      const sessionId = message[2];
 
-      client.id = message[3];
-      client.options = message[2];
+      client.id = sessionId;
+      client.sessionId = sessionId;
 
       console.log('EFFECTIVELY CONNECT INTO ROOM', roomId, client.id, client.options);
 
@@ -67,6 +68,10 @@ export class TCPTransport extends Transport {
 
       const room = matchMaker.getRoomById(roomId);
       try {
+        if (!room || !room.hasReservedSeat(sessionId)) {
+          throw new Error('seat reservation expired.');
+        }
+
         await room._onJoin(client);
 
       } catch (e) {
