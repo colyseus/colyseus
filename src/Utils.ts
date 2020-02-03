@@ -1,6 +1,13 @@
-import querystring from 'querystring';
+import nanoid from 'nanoid';
 
-import { debugAndPrintError, debugMatchMaking } from './Debug';
+import { debugAndPrintError } from './Debug';
+
+// remote room call timeouts
+export const REMOTE_ROOM_SHORT_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_SHORT_TIMEOUT || 2000);
+
+export function generateId() {
+  return nanoid(9);
+}
 
 //
 // nodemon sends SIGUSR2 before reloading
@@ -89,27 +96,6 @@ export function spliceOne(arr: any[], index: number): boolean {
   return true;
 }
 
-export function parseQueryString(query: string): any {
-  const data = querystring.parse(query);
-
-  for (const k in data) {
-    if (!Object.prototype.hasOwnProperty.call(data, k)) { continue; }
-
-    let typedValue;
-
-    try {
-      typedValue = JSON.parse(data[k] as string);
-
-    } catch (e) {
-      typedValue = data[k];
-    }
-
-    data[k] = typedValue;
-  }
-
-  return data;
-}
-
 export function merge(a: any, ...objs: any[]): any {
   for (let i = 0, len = objs.length; i < len; i++) {
     const b = objs[i];
@@ -120,10 +106,4 @@ export function merge(a: any, ...objs: any[]): any {
     }
   }
   return a;
-}
-
-export function logError(err: Error): void {
-  if (err) {
-    debugAndPrintError(`websocket error: ${err.message}\n${err.stack}`);
-  }
 }

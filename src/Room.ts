@@ -5,13 +5,12 @@ import { Schema } from '@colyseus/schema';
 import Clock from '@gamestdio/timer';
 import { EventEmitter } from 'events';
 
-import { Client, ClientState } from '.';
 import { Presence } from './presence/Presence';
 
 import { SchemaSerializer } from './serializer/SchemaSerializer';
 import { Serializer } from './serializer/Serializer';
 
-import { decode, Protocol, send } from './Protocol';
+import { Client, ClientState, decode, Protocol, send } from './Protocol';
 import { Deferred, spliceOne } from './Utils';
 
 import { debugAndPrintError, debugPatch } from './Debug';

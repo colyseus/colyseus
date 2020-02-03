@@ -1,7 +1,7 @@
-import { merge, retry } from './Utils';
+import { Client, Protocol } from './Protocol';
 
-import { Client, generateId } from './index';
-import { IpcProtocol, Protocol } from './Protocol';
+import { requestFromIPC, subscribeIPC } from './IPC';
+import { generateId, merge, REMOTE_ROOM_SHORT_TIMEOUT, retry } from './Utils';
 
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
 import { Room, RoomConstructor, RoomInternalState } from './Room';
@@ -24,11 +24,6 @@ export interface SeatReservation {
   room: RoomListingData;
 }
 
-// remote room call timeouts
-export const REMOTE_ROOM_SHORT_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_SHORT_TIMEOUT || 2000);
-
-type RemoteRoomResponse<T= any> = [string?, T?];
-
 const handlers: {[id: string]: RegisteredHandler} = {};
 const rooms: {[roomId: string]: Room} = {};
 
@@ -43,6 +38,15 @@ export function setup(_presence?: Presence, _driver?: MatchMakerDriver, _process
   driver = _driver || new LocalDriver();
   processId = _processId;
   isGracefullyShuttingDown = false;
+
+  /**
+   * Subscribe to remote `handleCreateRoom` calls.
+   */
+  subscribeIPC(presence, processId, getProcessChannel(), (_, args) => {
+    return handleCreateRoom.apply(undefined, args);
+  });
+
+  presence.hset(getRoomCountKey(), processId, '0');
 }
 
 /**
@@ -94,7 +98,7 @@ export async function joinById(roomId: string, options: ClientOptions = {}) {
 
     if (rejoinSessionId) {
       // handle re-connection!
-      const [_, hasReservedSeat] = await remoteRoomCall(room.roomId, 'hasReservedSeat', [rejoinSessionId]);
+      const hasReservedSeat = await remoteRoomCall(room.roomId, 'hasReservedSeat', [rejoinSessionId]);
 
       if (hasReservedSeat) {
         return { room, sessionId: rejoinSessionId };
@@ -158,50 +162,25 @@ export async function remoteRoomCall<R= any>(
   method: string,
   args?: any[],
   rejectionTimeout = REMOTE_ROOM_SHORT_TIMEOUT,
-): Promise<RemoteRoomResponse<R>> {
+): Promise<R> {
   const room = rooms[roomId];
 
   if (!room) {
-    return new Promise((resolve, reject) => {
-      let unsubscribeTimeout: NodeJS.Timer;
+    try {
+      return await requestFromIPC<R>(presence, getRoomChannel(roomId), method, args);
 
-      const requestId = generateId();
-      const channel = `${roomId}:${requestId}`;
-
-      const unsubscribe = () => {
-        presence.unsubscribe(channel);
-        clearTimeout(unsubscribeTimeout);
-      };
-
-      presence.subscribe(channel, (message) => {
-        const [code, data] = message;
-        if (code === IpcProtocol.SUCCESS) {
-          resolve(data);
-
-        } else if (code === IpcProtocol.ERROR) {
-          reject(data);
-        }
-        unsubscribe();
-      });
-
-      presence.publish(getRoomChannel(roomId), [method, requestId, args]);
-
-      unsubscribeTimeout = setTimeout(() => {
-        unsubscribe();
-
-        const request = `${method}${ args && ' with args ' + JSON.stringify(args) || '' }`;
-        reject(new Error(`remote room (${roomId}) timed out, requesting "${request}". ` +
-          `Timeout setting: ${rejectionTimeout}ms`));
-      }, rejectionTimeout);
-    });
+    } catch (e) {
+      const request = `${method}${args && ' with args ' + JSON.stringify(args) || ''}`;
+      throw new MatchMakeError(
+        `remote room (${roomId}) timed out, requesting "${request}". (${rejectionTimeout}ms exceeded)`,
+        Protocol.ERR_MATCHMAKE_UNHANDLED,
+      );
+    }
 
   } else {
-    return [
-      processId,
-      (!args && typeof (room[method]) !== 'function')
+    return (!args && typeof (room[method]) !== 'function')
         ? room[method]
-        : (await room[method].apply(room, args)),
-    ];
+        : (await room[method].apply(room, args));
   }
 }
 
@@ -228,6 +207,44 @@ export function hasHandler(name: string) {
  * Create a room
  */
 export async function createRoom(roomName: string, clientOptions: ClientOptions): Promise<RoomListingData> {
+  const roomsSpawnedByProcessId = await presence.hgetall(getRoomCountKey());
+
+  const processIdWithFewerRooms = (
+    Object.keys(roomsSpawnedByProcessId).sort((p1, p2) => {
+      return (roomsSpawnedByProcessId[p1] > roomsSpawnedByProcessId[p2])
+        ? 1
+        : -1;
+    })[0]
+  ) || processId;
+
+  if (processIdWithFewerRooms === processId) {
+    // create the room on this process!
+    return await handleCreateRoom(roomName, clientOptions);
+
+  } else {
+    // ask other process to create the room!
+    let room: RoomListingData;
+
+    try {
+      room = await requestFromIPC<RoomListingData>(
+        presence,
+        getProcessChannel(processIdWithFewerRooms),
+        undefined,
+        [roomName, clientOptions],
+        REMOTE_ROOM_SHORT_TIMEOUT,
+      );
+
+    } catch (e) {
+      // if other process failed to respond, create the room on this process
+      debugAndPrintError(e);
+      room = await handleCreateRoom(roomName, clientOptions);
+    }
+
+    return room;
+  }
+}
+
+async function handleCreateRoom(roomName: string, clientOptions: ClientOptions): Promise<RoomListingData> {
   const registeredHandler = handlers[roomName];
 
   if (!registeredHandler) {
@@ -251,6 +268,9 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
   if (room.onCreate) {
     try {
       await room.onCreate(merge({}, clientOptions, registeredHandler.options));
+
+      // increment amount of rooms this process is handling
+      presence.hincrby(getRoomCountKey(), processId, 1);
 
     } catch (e) {
       debugAndPrintError(e);
@@ -293,6 +313,14 @@ export function gracefullyShutdown(): Promise<any> {
 
   isGracefullyShuttingDown = true;
 
+  debugMatchMaking(`${processId} is shutting down!`);
+
+  // remove processId from room count key
+  presence.hdel(getRoomCountKey(), processId);
+
+  // unsubscribe from process id channel
+  presence.unsubscribe(getProcessChannel());
+
   const promises: Array<Promise<any>> = [];
 
   for (const roomId in rooms) {
@@ -319,10 +347,10 @@ export async function reserveSeatFor(room: RoomListingData, options: any) {
   let successfulSeatReservation: boolean;
 
   try {
-    const [_, ok] = await remoteRoomCall(room.roomId, '_reserveSeat', [sessionId, options]);
-    successfulSeatReservation = ok;
+    successfulSeatReservation = await remoteRoomCall(room.roomId, '_reserveSeat', [sessionId, options]);
 
   } catch (e) {
+    debugMatchMaking(e);
     successfulSeatReservation = false;
   }
 
@@ -360,52 +388,23 @@ async function cleanupStaleRooms(roomName: string) {
 async function createRoomReferences(room: Room, init: boolean = false): Promise<boolean> {
   rooms[room.roomId] = room;
 
-  // add unlocked room reference
-  await presence.sadd(room.roomName, room.roomId);
-
   if (init) {
-    await presence.subscribe(getRoomChannel(room.roomId), (message) => {
-      const [method, requestId, args] = message;
-
-      const reply = (code, data) => {
-        presence.publish(`${room.roomId}:${requestId}`, [code, [processId, data]]);
-      };
-
-      // reply with property value
-      if (!args && typeof (room[method]) !== 'function') {
-        return reply(IpcProtocol.SUCCESS, room[method]);
-      }
-
-      // reply with method result
-      let response: any;
-      try {
-        response = room[method].apply(room, args);
-
-      } catch (e) {
-        debugAndPrintError(e);
-        return reply(IpcProtocol.ERROR, e.message || e);
-      }
-
-      if (!(response instanceof Promise)) {
-        return reply(IpcProtocol.SUCCESS, response);
-      }
-
-      response.
-        then((result) => reply(IpcProtocol.SUCCESS, result)).
-        catch((e) => {
-          // user might have called `reject()` without arguments.
-          const err = e && e.message || e;
-          reply(IpcProtocol.ERROR, err);
-        });
-    });
+    await subscribeIPC(
+      presence,
+      processId,
+      getRoomChannel(room.roomId),
+      (method, args) => {
+        return (!args && typeof (room[method]) !== 'function')
+          ? room[method]
+          : room[method].apply(room, args);
+      },
+    );
   }
 
   return true;
 }
 
 function clearRoomReferences(room: Room) {
-  presence.srem(room.roomName, room.roomId);
-
   // clear list of connecting clients.
   presence.del(room.roomId);
 }
@@ -445,7 +444,15 @@ function getRoomChannel(roomId: string) {
 }
 
 function getHandlerConcurrencyKey(name: string) {
-  return `${name}:c`;
+  return `c:${name}`;
+}
+
+function getProcessChannel(id: string = processId) {
+  return `p:${id}`;
+}
+
+function getRoomCountKey() {
+  return 'roomcount';
 }
 
 function onClientJoinRoom(room: Room, client: Client) {
@@ -473,6 +480,11 @@ async function unlockRoom(roomName: string, room: Room) {
 
 function disposeRoom(roomName: string, room: Room): void {
   debugMatchMaking('disposing \'%s\' (%s) on processId \'%s\'', roomName, room.roomId, processId);
+
+  // decrease amount of rooms this process is handling
+  if (!isGracefullyShuttingDown) {
+    presence.hincrby(getRoomCountKey(), processId, -1);
+  }
 
   // remove from room listing
   room.listing.remove();
