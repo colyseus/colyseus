@@ -30,7 +30,7 @@ export class TCPTransport extends Transport {
     this.server.close();
   }
 
-  protected onConnection (client: net.Socket & any) {
+  protected onConnection(client: net.Socket & any) {
     // compatibility with ws / uws
     const upgradeReq: any = {};
 
