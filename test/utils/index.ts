@@ -9,15 +9,18 @@ import { LocalDriver } from "../../src/matchmaker/drivers/LocalDriver";
 import { MongooseDriver } from "../../src/matchmaker/drivers/MongooseDriver";
 import { LocalPresence, RedisPresence, Presence } from "../../src";
 
-export const DRIVERS = [
-  new LocalDriver(),
-  new MongooseDriver('mongodb://127.0.0.1:27017/colyseus_test'),
-];
+export const DRIVERS = [ new LocalDriver(), ];
+export const PRESENCE_IMPLEMENTATIONS: Presence[] = [ new LocalPresence(), ];
 
-export const PRESENCE_IMPLEMENTATIONS: Presence[] = [
-  new LocalPresence(),
-  new RedisPresence()
-];
+// export const DRIVERS = [
+//   new LocalDriver(),
+//   new MongooseDriver('mongodb://127.0.0.1:27017/colyseus_test'),
+// ];
+
+// export const PRESENCE_IMPLEMENTATIONS: Presence[] = [
+//   new LocalPresence(),
+//   new RedisPresence()
+// ];
 
 export class Client extends EventEmitter {
   public sessionId: string;

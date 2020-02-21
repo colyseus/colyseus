@@ -59,18 +59,6 @@ export type Client = WebSocket & {
   _enqueuedMessages: any[];
 };
 
-export function decode(message: any) {
-  try {
-    message = msgpack.decode(Buffer.from(message));
-
-  } catch (e) {
-    debugAndPrintError(`message couldn't be decoded: ${message}\n${e.stack}`);
-    return;
-  }
-
-  return message;
-}
-
 export const send = {
   raw: (client: Client, bytes: Buffer | number[]) => {
     if (client.readyState !== WebSocket.OPEN) { return; }

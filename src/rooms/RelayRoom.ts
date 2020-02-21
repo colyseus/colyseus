@@ -48,6 +48,18 @@ export class RelayRoom extends Room<State> { // tslint:disable-line
     if (options.metadata) {
       this.setMetadata(options.metadata);
     }
+
+    this.onMessage("hello", (client: Client, message) => {
+      /**
+       * append `sessionId` into the message for broadcast.
+       */
+      if (typeof (message) === 'object' && !Array.isArray(message)) {
+        message.sessionId = client.sessionId;
+      }
+
+      this.broadcast(message, { except: client });
+    });
+
   }
 
   public onJoin(client: Client, options: any) {
@@ -56,17 +68,6 @@ export class RelayRoom extends Room<State> { // tslint:disable-line
     player.sessionId = client.sessionId;
 
     this.state.players[client.sessionId] = player;
-  }
-
-  public onMessage(client: Client, message: any) {
-    /**
-     * append `sessionId` into the message for broadcast.
-     */
-    if (typeof(message) === 'object' && !Array.isArray(message)) {
-      message.sessionId = client.sessionId;
-    }
-
-    this.broadcast(message, { except: client });
   }
 
   public async onLeave(client: Client, consented: boolean) {

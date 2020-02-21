@@ -286,12 +286,12 @@ async function handleCreateRoom(roomName: string, clientOptions: ClientOptions):
   // imediatelly ask client to join the room
   debugMatchMaking('spawning \'%s\', roomId: %s, processId: %s', roomName, room.roomId, processId);
 
-  room.on('lock', lockRoom.bind(this, roomName, room));
-  room.on('unlock', unlockRoom.bind(this, roomName, room));
-  room.on('join', onClientJoinRoom.bind(this, room));
-  room.on('leave', onClientLeaveRoom.bind(this, room));
-  room.once('dispose', disposeRoom.bind(this, roomName, room));
-  room.once('disconnect', () => room.removeAllListeners());
+  room._events.on('lock', lockRoom.bind(this, roomName, room));
+  room._events.on('unlock', unlockRoom.bind(this, roomName, room));
+  room._events.on('join', onClientJoinRoom.bind(this, room));
+  room._events.on('leave', onClientLeaveRoom.bind(this, room));
+  room._events.once('dispose', disposeRoom.bind(this, roomName, room));
+  room._events.once('disconnect', () => room._events.removeAllListeners());
 
   // room always start unlocked
   await createRoomReferences(room, true);

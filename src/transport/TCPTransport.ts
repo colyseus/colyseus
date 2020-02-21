@@ -1,7 +1,7 @@
 import * as net from 'net';
 
 import { generateId } from '../';
-import { decode, Protocol, send } from '../Protocol';
+import { Protocol, send } from '../Protocol';
 import * as matchMaker from './../MatchMaker';
 import { ServerOptions } from './../Server';
 import { Transport } from './Transport';
@@ -46,7 +46,7 @@ export class TCPTransport extends Transport {
     client.on('error', (err) => debugError(err.message + '\n' + err.stack));
     // client.on('pong', heartbeat);
 
-    client.on('data', (data) => this.onMessage(client, decode(data)));
+    // client.on('data', (data) => this.onMessage(client, decode(data)));
   }
 
   protected async onMessage(client: net.Socket & any, message: any) {
