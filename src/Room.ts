@@ -291,6 +291,10 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
     const delayedDisconnection = new Promise((resolve) =>
       this.once('disconnect', () => resolve()));
 
+    for (const reconnection of Object.values(this.reconnections)) {
+      reconnection.reject();
+    }
+
     let numClients = this.clients.length;
     if (numClients > 0) {
       // prevent new clients to join while this room is disconnecting.
@@ -298,17 +302,8 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
 
       // clients may have `async onLeave`, room will be disposed after they all run
       while (numClients--) {
-        const client = this.clients[numClients];
-        const reconnection = this.reconnections[client.sessionId];
-
-        if (reconnection) {
-          reconnection.reject();
-
-        } else {
-          this._forciblyCloseClient(client, Protocol.WS_CLOSE_CONSENTED);
-        }
+        this._forciblyCloseClient(this.clients[numClients], Protocol.WS_CLOSE_CONSENTED);
       }
-
     } else {
       // no clients connected, dispose immediately.
       this.emit('dispose');
