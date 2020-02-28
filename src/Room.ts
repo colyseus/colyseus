@@ -409,22 +409,24 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
     }
   }
 
-  protected async allowReconnection(client: Client, seconds: number = 15): Promise<Client> {
+  protected allowReconnection(client: Client, seconds: number = Infinity): Deferred {
     if (this._internalState === RoomInternalState.DISCONNECTING) {
       this._disposeIfEmpty(); // gracefully shutting down
       throw new Error('disconnecting');
     }
 
     const sessionId = client.sessionId;
-    await this._reserveSeat(sessionId, true, seconds, true);
+    this._reserveSeat(sessionId, true, seconds, true);
 
     // keep reconnection reference in case the user reconnects into this room.
     const reconnection = new Deferred();
     this.reconnections[sessionId] = reconnection;
 
-    // expire seat reservation after timeout
-    this.reservedSeatTimeouts[sessionId] = setTimeout(() =>
-      reconnection.reject(false), seconds * 1000);
+    if (seconds !== Infinity) {
+      // expire seat reservation after timeout
+      this.reservedSeatTimeouts[sessionId] = setTimeout(() =>
+        reconnection.reject(false), seconds * 1000);
+    }
 
     const cleanup = () => {
       delete this.reservedSeats[sessionId];
@@ -443,7 +445,7 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
         this._disposeIfEmpty();
       });
 
-    return await reconnection.promise;
+    return reconnection;
   }
 
   protected async _reserveSeat(
