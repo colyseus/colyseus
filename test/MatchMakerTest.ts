@@ -1,6 +1,6 @@
 import assert from "assert";
 import { matchMaker, Room } from "../src";
-import { DummyRoom, Room2Clients, createDummyClient, timeout, ReconnectRoom, Room3Clients, DRIVERS } from "./utils";
+import { DummyRoom, Room2Clients, createDummyClient, timeout, ReconnectRoom, Room3Clients, DRIVERS, ReconnectTokenRoom } from "./utils";
 import { DEFAULT_SEAT_RESERVATION_TIME } from "../src/Room";
 
 describe("MatchMaker", () => {
@@ -14,6 +14,7 @@ describe("MatchMaker", () => {
     matchMaker.defineRoomType("room2", Room2Clients);
     matchMaker.defineRoomType("room3", Room3Clients);
     matchMaker.defineRoomType("reconnect", ReconnectRoom);
+    matchMaker.defineRoomType("reconnect_token", ReconnectTokenRoom);
 
     matchMaker
       .defineRoomType("room2_filtered", Room2Clients)
@@ -294,6 +295,62 @@ describe("MatchMaker", () => {
 
           await assert.rejects(async() => await matchMaker.joinById(room.roomId, { sessionId: client1.sessionId }), /expired/);
         });
+
+        it("using token: should allow to reconnect", async () => {
+          const reservedSeat1 = await matchMaker.joinOrCreate("reconnect_token");
+
+          const client1 = createDummyClient(reservedSeat1);
+          const room = matchMaker.getRoomById(reservedSeat1.room.roomId) as ReconnectTokenRoom;
+          await room._onJoin(client1 as any);
+
+          assert.equal(1, room.clients.length);
+
+          client1.close();
+          await timeout(100);
+
+          let rooms = await matchMaker.query({});
+          assert.equal(1, rooms.length);
+          assert.equal(1, rooms[0].clients, "should keep seat reservation after disconnection");
+
+          await matchMaker.joinById(room.roomId, { sessionId: client1.sessionId });
+          await room._onJoin(client1 as any);
+
+          rooms = await matchMaker.query({});
+          assert.equal(1, rooms.length);
+          assert.equal(1, rooms[0].clients);
+          assert.equal(1, room.clients.length);
+
+          client1.close();
+          await timeout(100);
+        });
+
+        it("using token: should not allow to reconnect", async () => {
+          const reservedSeat1 = await matchMaker.joinOrCreate("reconnect_token");
+          const reservedSeat2 = await matchMaker.joinOrCreate("reconnect_token");
+
+          const client1 = createDummyClient(reservedSeat1);
+          const room = matchMaker.getRoomById(reservedSeat1.room.roomId) as ReconnectTokenRoom;
+          await room._onJoin(client1 as any);
+
+          /**
+           * Create a second client so the room won't dispose
+           */
+          const client2 = createDummyClient(reservedSeat2);
+          await room._onJoin(client2 as any);
+          assert.equal(2, room.clients.length);
+
+          client1.close();
+
+          await timeout(100);
+
+          room.token.reject();
+          await timeout(100);
+
+          assert.equal(1, room.clients.length);
+
+          await assert.rejects(async() => await matchMaker.joinById(room.roomId, { sessionId: client1.sessionId }), /expired/);
+        });
+
       });
 
       // define the same tests using multiple drivers
