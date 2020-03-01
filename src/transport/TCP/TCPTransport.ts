@@ -1,12 +1,12 @@
 import * as net from 'net';
 
-import { generateId } from '../';
-import { Protocol, send } from '../Protocol';
-import * as matchMaker from './../MatchMaker';
-import { ServerOptions } from './../Server';
-import { Transport } from './Transport';
+import { generateId } from '../..';
+import { Protocol, send } from '../../Protocol';
+import * as matchMaker from '../../MatchMaker';
+import { ServerOptions } from '../../Server';
+import { Transport } from '../Transport';
 
-import { debugAndPrintError, debugError } from './../Debug';
+import { debugAndPrintError, debugError } from '../../Debug';
 
 /**
  * TODO:

@@ -3,12 +3,15 @@ import Clock, { Delayed } from '@gamestdio/timer';
 // Core classes
 export { Server } from './Server';
 export { Room } from './Room';
-export { Client, Protocol } from './Protocol';
+export { Protocol } from './Protocol';
 export { RegisteredHandler, SortOptions } from './matchmaker/RegisteredHandler';
 
 // MatchMaker
 import * as matchMaker from './MatchMaker';
 export { matchMaker };
+
+// Transport
+export { Client } from './transport/Transport';
 
 // Presence
 export { Presence } from './presence/Presence';

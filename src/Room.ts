@@ -2,7 +2,7 @@ import http from 'http';
 import msgpack from 'notepack.io';
 
 import { Schema, Context } from '@colyseus/schema';
-import decode, { Iterator } from '@colyseus/schema/lib/encoding/decode';
+import * as decode from '@colyseus/schema/lib/encoding/decode';
 
 import Clock from '@gamestdio/timer';
 import { EventEmitter } from 'events';
@@ -12,12 +12,13 @@ import { Presence } from './presence/Presence';
 import { SchemaSerializer } from './serializer/SchemaSerializer';
 import { Serializer } from './serializer/Serializer';
 
-import { Client, ClientState, Protocol, send } from './Protocol';
+import { Protocol, send } from './Protocol';
 import { Deferred, spliceOne } from './Utils';
 
 import { debugAndPrintError, debugPatch } from './Debug';
 import { RoomListingData } from './matchmaker/drivers/Driver';
 import { FossilDeltaSerializer } from './serializer/FossilDeltaSerializer';
+import { Client, ClientState, ISendOptions } from './transport/Transport';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
@@ -27,10 +28,6 @@ export const DEFAULT_SEAT_RESERVATION_TIME = Number(process.env.COLYSEUS_SEAT_RE
 export type SimulationCallback = (deltaTime: number) => void;
 
 export type RoomConstructor<T= any> = new (presence?: Presence) => Room<T>;
-
-export interface ISendOptions {
-  afterNextPatch?: boolean;
-}
 
 export interface IBroadcastOptions extends ISendOptions {
   except?: Client;
@@ -76,13 +73,13 @@ export abstract class Room<State= any, Metadata= any> {
 
   protected reconnections: { [sessionId: string]: Deferred } = {};
 
+  private onMessageHandlers: {[id: string]: (client: Client, message: any) => void} = {};
+
   private _serializer: Serializer<State> = new FossilDeltaSerializer();
   private _afterNextPatchBroadcasts: Array<IArguments> = [];
 
   private _simulationInterval: NodeJS.Timer;
   private _patchInterval: NodeJS.Timer;
-
-  private _onmessage: {[id: string]: (client: Client, message: any) => void} = {};
 
   private _locked: boolean = false;
   private _lockedExplicitly: boolean = false;
@@ -107,9 +104,6 @@ export abstract class Room<State= any, Metadata= any> {
 
     this.setPatchRate(this.patchRate);
   }
-
-  // Abstract methods
-  // public onRawMessage(client: Client, data: any): void;
 
   // Optional abstract methods
   public onCreate?(options: any): void | Promise<any>;
@@ -300,24 +294,10 @@ export abstract class Room<State= any, Metadata= any> {
     }
   }
 
-  public onMessage<T = any>(
-    messageType: string,
-    callback: (client: Client, message: T) => void
-  )
-  public onMessage<T extends (typeof Schema & (new (...args: any[]) => any))>(
-    messageType: T,
-    callback: (client: Client, message: InstanceType<T>) => void
-  )
-  public onMessage(
-    messageType: typeof Schema | string,
-    callback: (client: Client, message: any) => void
-  ) {
-    if (typeof(messageType) !== "string") {
-      this._onmessage[messageType._typeid] = callback;
-
-    } else {
-      this._onmessage[messageType] = callback;
-    }
+  public onMessage<T = any>(messageType: '*', callback: (client: Client, type: string | number, message: T) => void)
+  public onMessage<T = any>(messageType: string | number, callback: (client: Client, message: T) => void)
+  public onMessage<T = any>(messageType: '*' | string | number, callback: (...args: any[]) => void) {
+    this.onMessageHandlers[messageType] = callback;
     return this;
   }
 
@@ -373,7 +353,7 @@ export abstract class Room<State= any, Metadata= any> {
     delete this.reservedSeats[sessionId];
 
     // bind clean-up callback when client connection closes
-    client.once('close', this._onLeave.bind(this, client));
+    client.ref.once('close', this._onLeave.bind(this, client));
 
     client.state = ClientState.JOINING;
     client._enqueuedMessages = [];
@@ -410,7 +390,7 @@ export abstract class Room<State= any, Metadata= any> {
     this._events.emit('join', client);
 
     // allow client to send messages after onJoin has succeeded.
-    client.on('message', this._onMessage.bind(this, client));
+    client.ref.on('message', this._onMessage.bind(this, client));
 
     // confirm room id that matches the room name requested to join
     send[Protocol.JOIN_ROOM](
@@ -418,37 +398,6 @@ export abstract class Room<State= any, Metadata= any> {
       this._serializer.id,
       this._serializer.handshake && this._serializer.handshake(),
     );
-  }
-
-  protected sendState(client: Client): void {
-    send[Protocol.ROOM_STATE](client, this._serializer.getFullState(client));
-  }
-
-  protected broadcastPatch(): boolean {
-    if (!this._simulationInterval) {
-      this.clock.tick();
-    }
-
-    if (!this.state) {
-      debugPatch('trying to broadcast null state. you should call #setState');
-      return false;
-    }
-
-    return this._serializer.applyPatches(this.clients, this.state);
-  }
-
-  protected broadcastAfterPatch() {
-    const length = this._afterNextPatchBroadcasts.length;
-
-    if (length > 0) {
-      for (let i = 0; i < length; i++) {
-        this.broadcast.apply(this, this._afterNextPatchBroadcasts[i]);
-      }
-
-      // new messages may have been added in the meantime,
-      // let's splice the ones that have been processed
-      this._afterNextPatchBroadcasts.splice(0, length);
-    }
   }
 
   protected async allowReconnection(client: Client, seconds: number = 15): Promise<Client> {
@@ -488,7 +437,51 @@ export abstract class Room<State= any, Metadata= any> {
     return await reconnection.promise;
   }
 
-  protected async _reserveSeat(
+  protected resetAutoDisposeTimeout(timeoutInSeconds: number) {
+    clearTimeout(this._autoDisposeTimeout);
+
+    if (!this.autoDispose) {
+      return;
+    }
+
+    this._autoDisposeTimeout = setTimeout(() => {
+      this._autoDisposeTimeout = undefined;
+      this._disposeIfEmpty();
+    }, timeoutInSeconds * 1000);
+  }
+
+  private sendState(client: Client): void {
+    send[Protocol.ROOM_STATE](client, this._serializer.getFullState(client));
+  }
+
+  private broadcastPatch(): boolean {
+    if (!this._simulationInterval) {
+      this.clock.tick();
+    }
+
+    if (!this.state) {
+      debugPatch('trying to broadcast null state. you should call #setState');
+      return false;
+    }
+
+    return this._serializer.applyPatches(this.clients, this.state);
+  }
+
+  private broadcastAfterPatch() {
+    const length = this._afterNextPatchBroadcasts.length;
+
+    if (length > 0) {
+      for (let i = 0; i < length; i++) {
+        this.broadcast.apply(this, this._afterNextPatchBroadcasts[i]);
+      }
+
+      // new messages may have been added in the meantime,
+      // let's splice the ones that have been processed
+      this._afterNextPatchBroadcasts.splice(0, length);
+    }
+  }
+
+  private async _reserveSeat(
     sessionId: string,
     joinOptions: any = true,
     seconds: number = this.seatReservationTime,
@@ -515,20 +508,7 @@ export abstract class Room<State= any, Metadata= any> {
     return true;
   }
 
-  protected resetAutoDisposeTimeout(timeoutInSeconds: number) {
-    clearTimeout(this._autoDisposeTimeout);
-
-    if (!this.autoDispose) {
-      return;
-    }
-
-    this._autoDisposeTimeout = setTimeout(() => {
-      this._autoDisposeTimeout = undefined;
-      this._disposeIfEmpty();
-    }, timeoutInSeconds * 1000);
-  }
-
-  protected _disposeIfEmpty() {
+  private _disposeIfEmpty() {
     const willDispose = (
       this.autoDispose &&
       this._autoDisposeTimeout === undefined &&
@@ -543,7 +523,7 @@ export abstract class Room<State= any, Metadata= any> {
     return willDispose;
   }
 
-  protected async _dispose(): Promise<any> {
+  private async _dispose(): Promise<any> {
     let userReturnData;
 
     if (this.onDispose) {
@@ -573,11 +553,8 @@ export abstract class Room<State= any, Metadata= any> {
   }
 
   private _onMessage(client: Client, bytes: number[]) {
-    const it: Iterator = { offset: 0 };
+    const it: decode.Iterator = { offset: 0 };
     const code = decode.uint8(bytes, it);
-
-    // > Array.from(msgpack.encode([Protocol.ROOM_DATA]))
-    // [145, 13]
 
     if (!bytes) {
       debugAndPrintError(`${this.roomName} (${this.roomId}), couldn't decode message: ${bytes}`);
@@ -585,27 +562,20 @@ export abstract class Room<State= any, Metadata= any> {
     }
 
     if (code === Protocol.ROOM_DATA) {
-      // Check if message has type, or it's a Schema-based message.
-      if (decode.stringCheck(bytes, it)) {
-        const type = decode.string(bytes, it);
-        if (this._onmessage[type]) {
-          this._onmessage[type](client, msgpack.decode(bytes.slice(it.offset, bytes.length)));
+      const messageType = (decode.stringCheck(bytes, it))
+        ? decode.string(bytes, it)
+        : decode.number(bytes, it);
 
-        } else {
-          debugAndPrintError(`onMessage for "${type}" not registered.`);
-        }
+      const message = msgpack.decode(bytes.slice(it.offset, bytes.length));
+
+      if (this.onMessageHandlers[messageType]) {
+        this.onMessageHandlers[messageType](client, message);
+
+      } else if (this.onMessageHandlers['*']) {
+        (this.onMessageHandlers['*'] as any)(client, messageType, message);
 
       } else {
-        const typeid = decode.number(bytes, it);
-        const context: Context = (this.state as any).constructor._context;
-        const type = context.get(typeid);
-        if (this._onmessage[typeid]) {
-          const instance: Schema = new (type as any)();
-          instance.decode(bytes, it);
-          this._onmessage[typeid](client, instance);
-        } else {
-          debugAndPrintError(`onMessage for ${type.name} not registered.`);
-        }
+        debugAndPrintError(`onMessage for "${messageType}" not registered.`);
       }
 
     } else if (code === Protocol.JOIN_ROOM) {
@@ -631,12 +601,12 @@ export abstract class Room<State= any, Metadata= any> {
 
   private _forciblyCloseClient(client: Client, closeCode: number) {
     // stop receiving messages from this client
-    client.removeAllListeners('message');
+    client.ref.removeAllListeners('message');
 
     // prevent "onLeave" from being called twice if player asks to leave
-    const closeListeners: any[] = client.listeners('close');
+    const closeListeners: any[] = client.ref.listeners('close');
     if (closeListeners.length >= 2) {
-      client.removeListener('close', closeListeners[1]);
+      client.ref.removeListener('close', closeListeners[1]);
     }
 
     // only effectively close connection when "onLeave" is fulfilled

@@ -1,7 +1,7 @@
 import { Context, defineTypes, MapSchema, Schema } from '@colyseus/schema';
 
-import { Client } from '../Protocol';
 import { Room } from '../Room';
+import { Client } from '../transport/Transport';
 
 /**
  * Create another context to avoid these types from being in the user's global `Context`
@@ -49,7 +49,7 @@ export class RelayRoom extends Room<State> { // tslint:disable-line
       this.setMetadata(options.metadata);
     }
 
-    this.onMessage("hello", (client: Client, message) => {
+    this.onMessage("*", (client: Client, type: string, message: any) => {
       /**
        * append `sessionId` into the message for broadcast.
        */
@@ -57,9 +57,8 @@ export class RelayRoom extends Room<State> { // tslint:disable-line
         message.sessionId = client.sessionId;
       }
 
-      this.broadcast(message, { except: client });
+      this.broadcast(type, message, { except: client });
     });
-
   }
 
   public onJoin(client: Client, options: any) {

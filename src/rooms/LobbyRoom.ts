@@ -24,10 +24,6 @@ export class LobbyRoom extends Room<LobbyState> { // tslint:disable-line
     // TODO: make .driver available on this scope!
   }
 
-  public onMessage() {
-    // TODO:
-  }
-
   public onDispose() {
     // TODO:
   }

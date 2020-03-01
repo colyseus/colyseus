@@ -1,4 +1,4 @@
-import { Client, Protocol } from './Protocol';
+import { Protocol } from './Protocol';
 
 import { requestFromIPC, subscribeIPC } from './IPC';
 import { generateId, merge, REMOTE_ROOM_SHORT_TIMEOUT, retry } from './Utils';
@@ -14,6 +14,7 @@ import { MatchMakeError } from './errors/MatchMakeError';
 import { SeatReservationError } from './errors/SeatReservationError';
 import { MatchMakerDriver, RoomListingData } from './matchmaker/drivers/Driver';
 import { LocalDriver } from './matchmaker/drivers/LocalDriver';
+import { Client } from './transport/Transport';
 
 export { MatchMakerDriver, MatchMakeError };
 

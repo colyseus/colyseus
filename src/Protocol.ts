@@ -1,8 +1,7 @@
-import http from 'http';
 import msgpack from 'notepack.io';
 import WebSocket from 'ws';
 
-import { debugAndPrintError } from './Debug';
+import { Client, ClientState } from './transport/Transport';
 
 // Colyseus protocol codes range between 0~100
 export enum Protocol {
@@ -39,26 +38,6 @@ export enum IpcProtocol {
   TIMEOUT = 2,
 }
 
-export enum ClientState { JOINING, JOINED, RECONNECTED }
-
-// Export 'WebSocket' as 'Client' with 'id' property.
-export type Client = WebSocket & {
-  upgradeReq?: http.IncomingMessage; // cross-compatibility for ws (v3.x+) and uws
-  // id: string;
-
-  id: string;
-  sessionId: string; // TODO: remove sessionId on version 1.0.0
-
-  /**
-   * auth data provided by your `onAuth`
-   */
-  auth?: any;
-
-  pingCount: number; // ping / pong
-  state: ClientState;
-  _enqueuedMessages: any[];
-};
-
 export const send = {
   raw: (client: Client, bytes: Buffer | number[]) => {
     if (client.readyState !== WebSocket.OPEN) { return; }
@@ -71,7 +50,7 @@ export const send = {
       return;
     }
 
-    client.send(bytes, { binary: true });
+    client.raw(bytes);
   },
 
   [Protocol.JOIN_ERROR]: (client: Client, message: string) => {
@@ -79,7 +58,7 @@ export const send = {
     const buff = Buffer.allocUnsafe(1 + utf8Length(message));
     buff.writeUInt8(Protocol.JOIN_ERROR, 0);
     utf8Write(buff, 1, message);
-    client.send(buff, { binary: true });
+    client.raw(buff);
   },
 
   [Protocol.JOIN_ROOM]: async (client: Client, serializerId: string, handshake?: number[]) => {
@@ -101,24 +80,12 @@ export const send = {
       }
     }
 
-    client.send(buff, { binary: true });
+    client.raw(buff);
   },
 
   [Protocol.ROOM_STATE]: (client: Client, bytes: number[]) => {
     send.raw(client, [Protocol.ROOM_STATE, ...bytes]);
   },
-
-  // [Protocol.ROOM_STATE_PATCH]: (client: Client, bytes: number[]) => {
-  //   if (
-  //     client.state === ClientState.JOINING &&
-  //     client.readyState !== WebSocket.OPEN
-  //   ) {
-  //     return;
-  //   }
-  //   console.log({ bytes });
-  //   client.send(Buffer.alloc(1, Protocol.ROOM_STATE_PATCH), { binary: true });
-  //   client.send(bytes, { binary: true });
-  // },
 
   /**
    * TODO: refactor me. Move this to `SchemaSerializer` / `FossilDeltaSerializer`
