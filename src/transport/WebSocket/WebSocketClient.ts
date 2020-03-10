@@ -1,10 +1,15 @@
 import WebSocket from "ws";
 
-import { Client, ClientState } from "../Transport";
+import { Client, ClientState, ISendOptions } from "../Transport";
+import { getMessageBytes, Protocol } from "../../Protocol";
+import { Schema } from "@colyseus/schema";
+
+const SEND_OPTS = { binary: true };
 
 export class WebSocketClient implements Client {
   sessionId: string;
-  state: ClientState;
+  state: ClientState = ClientState.JOINING;
+  _enqueuedMessages: any[] = [];
 
   constructor (
     public id: string,
@@ -13,11 +18,34 @@ export class WebSocketClient implements Client {
     this.sessionId = id;
   }
 
-  send<T = any>(type: string | number, data?: T) {
+  send(messageOrType: any, messageOrOptions?: any | ISendOptions, options?: ISendOptions) {
+    //
+    // TODO: implement `options.afterNextPatch`
+    //
+
+    if (messageOrType instanceof Schema) {
+      this.raw(getMessageBytes[Protocol.ROOM_DATA_SCHEMA](messageOrType));
+
+    } else {
+      this.raw(getMessageBytes[Protocol.ROOM_DATA](messageOrType, messageOrOptions));
+    }
   }
 
-  raw(data: any, options?) {
-    this.ref.send(data, options);
+  raw(data: ArrayLike<number>, options?: ISendOptions) {
+    if (this.ref.readyState !== WebSocket.OPEN) {
+      console.warn("trying to send data to inactive client", this.sessionId);
+      return;
+    }
+
+    if (this.state === ClientState.JOINING) {
+      // sending messages during `onJoin`.
+      // - the client-side cannot register "onMessage" callbacks at this point.
+      // - enqueue the messages to be send after JOIN_ROOM message has been sent
+      this._enqueuedMessages.push(data);
+      return;
+    }
+
+    this.ref.send(data, SEND_OPTS);
   }
 
   error(code: number, message?: string) {

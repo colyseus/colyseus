@@ -232,16 +232,8 @@ export abstract class Room<State= any, Metadata= any> {
   public send(client: Client, message: Schema, options?: ISendOptions): void
   public send(client: Client, type: string, message: any, options?: ISendOptions): void
   public send(client: Client, messageOrType: any, messageOrOptions?: any | ISendOptions, options?: ISendOptions): void {
-    if (messageOrType instanceof Schema) {
-      send.raw(client, [
-        Protocol.ROOM_DATA_SCHEMA,
-        (messageOrType.constructor as typeof Schema)._typeid,
-        ...messageOrType.encodeAll(),
-      ]);
-
-    } else {
-      send[Protocol.ROOM_DATA](client, messageOrType, messageOrOptions);
-    }
+    console.warn("DEPRECATION WARNING: use client.send(...) instead of this.send(client, ...)");
+    client.send(messageOrType, messageOrOptions, options);
   }
 
   public broadcast<T extends Schema>(message: T, options: IBroadcastOptions)
@@ -273,7 +265,7 @@ export abstract class Room<State= any, Metadata= any> {
       const client = this.clients[numClients];
 
       if (options.except !== client) {
-        send.raw(client, encodedMessage);
+        client.raw(encodedMessage);
       }
     }
   }
@@ -289,7 +281,7 @@ export abstract class Room<State= any, Metadata= any> {
       const client = this.clients[numClients];
 
       if (options.except !== client) {
-        send.raw(client, encodedMessage);
+        client.raw(encodedMessage);
       }
     }
   }
@@ -354,9 +346,6 @@ export abstract class Room<State= any, Metadata= any> {
 
     // bind clean-up callback when client connection closes
     client.ref.once('close', this._onLeave.bind(this, client));
-
-    client.state = ClientState.JOINING;
-    client._enqueuedMessages = [];
 
     this.clients.push(client);
 
@@ -589,7 +578,7 @@ export abstract class Room<State= any, Metadata= any> {
 
       // dequeue messages sent before client has joined effectively (on user-defined `onJoin`)
       if (client._enqueuedMessages.length > 0) {
-        client._enqueuedMessages.forEach((bytes) => send.raw(client, bytes));
+        client._enqueuedMessages.forEach((bytes) => client.raw(bytes));
       }
       delete client._enqueuedMessages;
 

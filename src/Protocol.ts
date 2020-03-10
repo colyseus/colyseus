@@ -2,6 +2,8 @@ import msgpack from 'notepack.io';
 import WebSocket from 'ws';
 
 import { Client, ClientState } from './transport/Transport';
+import { Schema } from '@colyseus/schema';
+import * as encode from '@colyseus/schema/lib/encoding/encode';
 
 // Colyseus protocol codes range between 0~100
 export enum Protocol {
@@ -38,21 +40,8 @@ export enum IpcProtocol {
   TIMEOUT = 2,
 }
 
+// TODO: move `send[Protocol.xxx]` messages to `getMessageBytes[Protocol.xxx]()`.
 export const send = {
-  raw: (client: Client, bytes: Buffer | number[]) => {
-    if (client.readyState !== WebSocket.OPEN) { return; }
-
-    if (client.state === ClientState.JOINING) {
-      // sending messages during `onJoin`.
-      // - the client-side cannot register "onMessage" callbacks at this point.
-      // - enqueue the messages to be send after JOIN_ROOM message has been sent
-      client._enqueuedMessages.push(bytes);
-      return;
-    }
-
-    client.raw(bytes);
-  },
-
   [Protocol.JOIN_ERROR]: (client: Client, message: string) => {
     if (client.readyState !== WebSocket.OPEN) { return; }
     const buff = Buffer.allocUnsafe(1 + utf8Length(message));
@@ -84,16 +73,44 @@ export const send = {
   },
 
   [Protocol.ROOM_STATE]: (client: Client, bytes: number[]) => {
-    send.raw(client, [Protocol.ROOM_STATE, ...bytes]);
+    client.raw([Protocol.ROOM_STATE, ...bytes]);
   },
 
   /**
    * TODO: refactor me. Move this to `SchemaSerializer` / `FossilDeltaSerializer`
    */
   [Protocol.ROOM_DATA]: (client: Client, message: any, encode: boolean = true) => {
-    send.raw(client, [Protocol.ROOM_DATA, ...(encode && msgpack.encode(message) || message)]);
+    client.raw([Protocol.ROOM_DATA, ...(encode && msgpack.encode(message) || message)]);
   },
 
+};
+
+export const getMessageBytes = {
+  [Protocol.ROOM_DATA_SCHEMA]: (message: Schema) => {
+    return [
+      Protocol.ROOM_DATA_SCHEMA,
+      (message.constructor as typeof Schema)._typeid,
+      ...message.encodeAll(),
+    ]
+  },
+
+  [Protocol.ROOM_DATA]: (type: string | number, message: any) => {
+    const encoded = msgpack.encode(message);
+    const initialBytes: number[] = [Protocol.ROOM_DATA];
+
+    if (typeof (type) === "string") {
+      encode.string(initialBytes, type);
+
+    } else {
+      encode.number(initialBytes, type);
+    }
+
+    const arr = new Uint8Array(initialBytes.length + encoded.byteLength);
+    arr.set(new Uint8Array(initialBytes), 0);
+    arr.set(new Uint8Array(encoded), initialBytes.length);
+
+    return arr;
+  }
 };
 
 export function utf8Write(buff: Buffer, offset: number, str: string = '') {

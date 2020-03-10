@@ -1,7 +1,9 @@
 import * as http from 'http';
 import * as https from 'https';
 import * as net from 'net';
+
 import { EventEmitter } from 'events';
+import { Schema } from '@colyseus/schema';
 
 export abstract class Transport {
     public server: net.Server | http.Server | https.Server;
@@ -21,8 +23,12 @@ export enum ClientState { JOINING, JOINED, RECONNECTED }
 export interface Client {
   readyState: number;
 
-  raw(data: any, options?): void;
-  send<T = any>(type: string | number, data?: T): void;
+  raw(data: ArrayLike<number>, options?: ISendOptions): void;
+
+  send(message: Schema, options?: ISendOptions): void;
+  send(type: string, message: any, options?: ISendOptions): void
+  send(messageOrType: any, messageOrOptions?: any | ISendOptions, options?: ISendOptions);
+
   error(code: number, message?: string): void;
   close(code?: number, data?: string): void;
 
