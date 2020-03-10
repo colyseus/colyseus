@@ -49,7 +49,7 @@ export class RelayRoom extends Room<State> { // tslint:disable-line
       this.setMetadata(options.metadata);
     }
 
-    this.onMessage("*", (client: Client, type: string, message: any) => {
+    this.onMessage('*', (client: Client, type: string, message: any) => {
       /**
        * append `sessionId` into the message for broadcast.
        */

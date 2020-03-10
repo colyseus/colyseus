@@ -1,8 +1,8 @@
 import * as net from 'net';
 
 import { generateId } from '../..';
-import { Protocol, send } from '../../Protocol';
 import * as matchMaker from '../../MatchMaker';
+import { Protocol, send } from '../../Protocol';
 import { ServerOptions } from '../../Server';
 import { Transport } from '../Transport';
 

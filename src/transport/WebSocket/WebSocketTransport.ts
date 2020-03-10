@@ -3,8 +3,8 @@ import querystring from 'querystring';
 import url from 'url';
 import WebSocket from 'ws';
 
-import { Protocol } from '../../Protocol';
 import * as matchMaker from '../../MatchMaker';
+import { Protocol } from '../../Protocol';
 
 import { send } from '../../Protocol';
 import { ServerOptions } from '../../Server';

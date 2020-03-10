@@ -1,9 +1,9 @@
 import msgpack from 'notepack.io';
 import WebSocket from 'ws';
 
-import { Client, ClientState } from './transport/Transport';
 import { Schema } from '@colyseus/schema';
 import * as encode from '@colyseus/schema/lib/encoding/encode';
+import { Client, ClientState } from './transport/Transport';
 
 // Colyseus protocol codes range between 0~100
 export enum Protocol {
@@ -49,14 +49,6 @@ export const send = {
     utf8Write(buff, 1, message);
     client.raw(buff);
   },
-
-  /**
-   * TODO: refactor me. Move this to `SchemaSerializer` / `FossilDeltaSerializer`
-   */
-  [Protocol.ROOM_DATA]: (client: Client, message: any, encode: boolean = true) => {
-    client.raw([Protocol.ROOM_DATA, ...(encode && msgpack.encode(message) || message)]);
-  },
-
 };
 
 export const getMessageBytes = {
@@ -90,14 +82,14 @@ export const getMessageBytes = {
       Protocol.ROOM_DATA_SCHEMA,
       (message.constructor as typeof Schema)._typeid,
       ...message.encodeAll(),
-    ]
+    ];
   },
 
   [Protocol.ROOM_DATA]: (type: string | number, message: any) => {
     const encoded = msgpack.encode(message);
     const initialBytes: number[] = [Protocol.ROOM_DATA];
 
-    if (typeof (type) === "string") {
+    if (typeof (type) === 'string') {
       encode.string(initialBytes, type);
 
     } else {
@@ -109,7 +101,7 @@ export const getMessageBytes = {
     arr.set(new Uint8Array(encoded), initialBytes.length);
 
     return arr;
-  }
+  },
 };
 
 export function utf8Write(buff: Buffer, offset: number, str: string = '') {

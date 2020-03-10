@@ -1,39 +1,37 @@
-import WebSocket from "ws";
+import WebSocket from 'ws';
 
-import { Client, ClientState, ISendOptions } from "../Transport";
-import { getMessageBytes, Protocol } from "../../Protocol";
-import { Schema } from "@colyseus/schema";
+import { Schema } from '@colyseus/schema';
+import { getMessageBytes, Protocol } from '../../Protocol';
+import { Client, ClientState, ISendOptions } from '../Transport';
 
 const SEND_OPTS = { binary: true };
 
 export class WebSocketClient implements Client {
-  sessionId: string;
-  state: ClientState = ClientState.JOINING;
-  _enqueuedMessages: any[] = [];
+  public sessionId: string;
+  public state: ClientState = ClientState.JOINING;
+  public _enqueuedMessages: any[] = [];
 
-  constructor (
+  constructor(
     public id: string,
     public ref: WebSocket,
   ) {
     this.sessionId = id;
   }
 
-  send(messageOrType: any, messageOrOptions?: any | ISendOptions, options?: ISendOptions) {
+  public send(messageOrType: any, messageOrOptions?: any | ISendOptions, options?: ISendOptions) {
     //
     // TODO: implement `options.afterNextPatch`
     //
-
-    if (messageOrType instanceof Schema) {
-      this.raw(getMessageBytes[Protocol.ROOM_DATA_SCHEMA](messageOrType));
-
-    } else {
-      this.raw(getMessageBytes[Protocol.ROOM_DATA](messageOrType, messageOrOptions));
-    }
+    this.raw(
+      (messageOrType instanceof Schema)
+        ? getMessageBytes[Protocol.ROOM_DATA_SCHEMA](messageOrType)
+        : getMessageBytes[Protocol.ROOM_DATA](messageOrType, messageOrOptions),
+    );
   }
 
-  raw(data: ArrayLike<number>, options?: ISendOptions) {
+  public raw(data: ArrayLike<number>, options?: ISendOptions) {
     if (this.ref.readyState !== WebSocket.OPEN) {
-      console.warn("trying to send data to inactive client", this.sessionId);
+      console.warn('trying to send data to inactive client', this.sessionId);
       return;
     }
 
@@ -48,7 +46,7 @@ export class WebSocketClient implements Client {
     this.ref.send(data, SEND_OPTS);
   }
 
-  error(code: number, message?: string) {
+  public error(code: number, message?: string) {
     // TODO: send code + message error
 
     // if (client.readyState !== WebSocket.OPEN) { return; }
@@ -62,11 +60,11 @@ export class WebSocketClient implements Client {
     return this.ref.readyState;
   }
 
-  close(code?: number, data?: string) {
+  public close(code?: number, data?: string) {
     this.ref.close(code, data);
   }
 
-  toJSON() {
+  public toJSON() {
     return { sessionId: this.sessionId, readyState: this.readyState };
   }
 }

@@ -1,7 +1,7 @@
 import http from 'http';
 import msgpack from 'notepack.io';
 
-import { Schema, Context } from '@colyseus/schema';
+import { Context, Schema } from '@colyseus/schema';
 import * as decode from '@colyseus/schema/lib/encoding/decode';
 
 import Clock from '@gamestdio/timer';
@@ -12,7 +12,7 @@ import { Presence } from './presence/Presence';
 import { SchemaSerializer } from './serializer/SchemaSerializer';
 import { Serializer } from './serializer/Serializer';
 
-import { Protocol, send, getMessageBytes } from './Protocol';
+import { getMessageBytes, Protocol, send } from './Protocol';
 import { Deferred, spliceOne } from './Utils';
 
 import { debugAndPrintError, debugPatch } from './Debug';
@@ -43,6 +43,10 @@ export abstract class Room<State= any, Metadata= any> {
 
   public get locked() {
     return this._locked;
+  }
+
+  public get metadata() {
+    return this.listing.metadata;
   }
 
   public listing: RoomListingData<Metadata>;
@@ -76,7 +80,7 @@ export abstract class Room<State= any, Metadata= any> {
   private onMessageHandlers: {[id: string]: (client: Client, message: any) => void} = {};
 
   private _serializer: Serializer<State> = new FossilDeltaSerializer();
-  private _afterNextPatchBroadcasts: Array<IArguments> = [];
+  private _afterNextPatchBroadcasts: IArguments[] = [];
 
   private _simulationInterval: NodeJS.Timer;
   private _patchInterval: NodeJS.Timer;
@@ -191,10 +195,6 @@ export abstract class Room<State= any, Metadata= any> {
     }
   }
 
-  public get metadata() {
-    return this.listing.metadata;
-  }
-
   public async lock() {
     // rooms locked internally aren't explicit locks.
     this._lockedExplicitly = (arguments[0] === undefined);
@@ -229,17 +229,21 @@ export abstract class Room<State= any, Metadata= any> {
     });
   }
 
-  public send(client: Client, message: Schema, options?: ISendOptions): void
-  public send(client: Client, type: string, message: any, options?: ISendOptions): void
+  public send(client: Client, message: Schema, options?: ISendOptions): void;
+  public send(client: Client, type: string, message: any, options?: ISendOptions): void;
   public send(client: Client, messageOrType: any, messageOrOptions?: any | ISendOptions, options?: ISendOptions): void {
-    console.warn("DEPRECATION WARNING: use client.send(...) instead of this.send(client, ...)");
+    console.warn('DEPRECATION WARNING: use client.send(...) instead of this.send(client, ...)');
     client.send(messageOrType, messageOrOptions, options);
   }
 
-  public broadcast<T extends Schema>(message: T, options: IBroadcastOptions)
-  public broadcast(type: string, message: any, options: IBroadcastOptions)
-  public broadcast(typeOrSchema: string | Schema, messageOrOptions: any | IBroadcastOptions, options?: IBroadcastOptions) {
-    const isSchema = (typeof(typeOrSchema) !== "string");
+  public broadcast<T extends Schema>(message: T, options: IBroadcastOptions);
+  public broadcast(type: string, message: any, options: IBroadcastOptions);
+  public broadcast(
+    typeOrSchema: string | Schema,
+    messageOrOptions: any | IBroadcastOptions,
+    options?: IBroadcastOptions,
+  ) {
+    const isSchema = (typeof(typeOrSchema) !== 'string');
     const opts = (isSchema) ? messageOrOptions : options;
 
     if (opts.afterNextPatch) {
@@ -256,38 +260,8 @@ export abstract class Room<State= any, Metadata= any> {
     }
   }
 
-  private broadcastMessageSchema<T extends Schema>(message: T, options: IBroadcastOptions) {
-    const typeId = (message.constructor as typeof Schema)._typeid;
-    const encodedMessage = Buffer.from([Protocol.ROOM_DATA_SCHEMA, typeId, ...message.encodeAll()]);
-
-    let numClients = this.clients.length;
-    while (numClients--) {
-      const client = this.clients[numClients];
-
-      if (options.except !== client) {
-        client.raw(encodedMessage);
-      }
-    }
-  }
-
-  private broadcastMessageType(type: string, message: any, options: IBroadcastOptions) {
-    // encode message with msgpack
-    const encodedMessage = (!(message instanceof Buffer))
-      ? Buffer.from([Protocol.ROOM_DATA, ...msgpack.encode(message)])
-      : message;
-
-    let numClients = this.clients.length;
-    while (numClients--) {
-      const client = this.clients[numClients];
-
-      if (options.except !== client) {
-        client.raw(encodedMessage);
-      }
-    }
-  }
-
-  public onMessage<T = any>(messageType: '*', callback: (client: Client, type: string | number, message: T) => void)
-  public onMessage<T = any>(messageType: string | number, callback: (client: Client, message: T) => void)
+  public onMessage<T = any>(messageType: '*', callback: (client: Client, type: string | number, message: T) => void);
+  public onMessage<T = any>(messageType: string | number, callback: (client: Client, message: T) => void);
   public onMessage<T = any>(messageType: '*' | string | number, callback: (...args: any[]) => void) {
     this.onMessageHandlers[messageType] = callback;
     return this;
@@ -438,6 +412,36 @@ export abstract class Room<State= any, Metadata= any> {
     }, timeoutInSeconds * 1000);
   }
 
+  private broadcastMessageSchema<T extends Schema>(message: T, options: IBroadcastOptions) {
+    const typeId = (message.constructor as typeof Schema)._typeid;
+    const encodedMessage = Buffer.from([Protocol.ROOM_DATA_SCHEMA, typeId, ...message.encodeAll()]);
+
+    let numClients = this.clients.length;
+    while (numClients--) {
+      const client = this.clients[numClients];
+
+      if (options.except !== client) {
+        client.raw(encodedMessage);
+      }
+    }
+  }
+
+  private broadcastMessageType(type: string, message: any, options: IBroadcastOptions) {
+    // encode message with msgpack
+    const encodedMessage = (!(message instanceof Buffer))
+      ? Buffer.from([Protocol.ROOM_DATA, ...msgpack.encode(message)])
+      : message;
+
+    let numClients = this.clients.length;
+    while (numClients--) {
+      const client = this.clients[numClients];
+
+      if (options.except !== client) {
+        client.raw(encodedMessage);
+      }
+    }
+  }
+
   private sendState(client: Client): void {
     client.raw(getMessageBytes[Protocol.ROOM_STATE](this._serializer.getFullState(client)));
   }
@@ -577,7 +581,7 @@ export abstract class Room<State= any, Metadata= any> {
 
       // dequeue messages sent before client has joined effectively (on user-defined `onJoin`)
       if (client._enqueuedMessages.length > 0) {
-        client._enqueuedMessages.forEach((bytes) => client.raw(bytes));
+        client._enqueuedMessages.forEach((enqueued) => client.raw(enqueued));
       }
       delete client._enqueuedMessages;
 

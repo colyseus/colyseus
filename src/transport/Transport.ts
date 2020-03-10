@@ -2,8 +2,8 @@ import * as http from 'http';
 import * as https from 'https';
 import * as net from 'net';
 
-import { EventEmitter } from 'events';
 import { Schema } from '@colyseus/schema';
+import { EventEmitter } from 'events';
 
 export abstract class Transport {
     public server: net.Server | http.Server | https.Server;
@@ -23,15 +23,6 @@ export enum ClientState { JOINING, JOINED, RECONNECTED }
 export interface Client {
   readyState: number;
 
-  raw(data: ArrayLike<number>, options?: ISendOptions): void;
-
-  send(message: Schema, options?: ISendOptions): void;
-  send(type: string, message: any, options?: ISendOptions): void
-  send(messageOrType: any, messageOrOptions?: any | ISendOptions, options?: ISendOptions);
-
-  error(code: number, message?: string): void;
-  close(code?: number, data?: string): void;
-
   id: string;
   sessionId: string; // TODO: remove sessionId on version 1.0.0
   state: ClientState;
@@ -46,6 +37,15 @@ export interface Client {
   auth?: any;
   pingCount?: number; // ping / pong
   _enqueuedMessages?: any[];
+
+  raw(data: ArrayLike<number>, options?: ISendOptions): void;
+
+  send(message: Schema, options?: ISendOptions): void;
+  send(type: string, message: any, options?: ISendOptions): void;
+  send(messageOrType: any, messageOrOptions?: any | ISendOptions, options?: ISendOptions);
+
+  error(code: number, message?: string): void;
+  close(code?: number, data?: string): void;
 }
 
 export { TCPTransport } from './TCP/TCPTransport';
