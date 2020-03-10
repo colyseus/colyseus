@@ -50,8 +50,17 @@ export const send = {
     client.raw(buff);
   },
 
-  [Protocol.JOIN_ROOM]: async (client: Client, serializerId: string, handshake?: number[]) => {
-    if (client.readyState !== WebSocket.OPEN) { return; }
+  /**
+   * TODO: refactor me. Move this to `SchemaSerializer` / `FossilDeltaSerializer`
+   */
+  [Protocol.ROOM_DATA]: (client: Client, message: any, encode: boolean = true) => {
+    client.raw([Protocol.ROOM_DATA, ...(encode && msgpack.encode(message) || message)]);
+  },
+
+};
+
+export const getMessageBytes = {
+  [Protocol.JOIN_ROOM]: (serializerId: string, handshake?: number[]) => {
     let offset = 0;
 
     const serializerIdLength = utf8Length(serializerId);
@@ -69,23 +78,13 @@ export const send = {
       }
     }
 
-    client.raw(buff);
+    return buff;
   },
 
-  [Protocol.ROOM_STATE]: (client: Client, bytes: number[]) => {
-    client.raw([Protocol.ROOM_STATE, ...bytes]);
+  [Protocol.ROOM_STATE]: (bytes: number[]) => {
+    return [Protocol.ROOM_STATE, ...bytes];
   },
 
-  /**
-   * TODO: refactor me. Move this to `SchemaSerializer` / `FossilDeltaSerializer`
-   */
-  [Protocol.ROOM_DATA]: (client: Client, message: any, encode: boolean = true) => {
-    client.raw([Protocol.ROOM_DATA, ...(encode && msgpack.encode(message) || message)]);
-  },
-
-};
-
-export const getMessageBytes = {
   [Protocol.ROOM_DATA_SCHEMA]: (message: Schema) => {
     return [
       Protocol.ROOM_DATA_SCHEMA,

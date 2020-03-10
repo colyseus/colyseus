@@ -49,6 +49,8 @@ export class WebSocketClient implements Client {
   }
 
   error(code: number, message?: string) {
+    // TODO: send code + message error
+
     // if (client.readyState !== WebSocket.OPEN) { return; }
     // const buff = Buffer.allocUnsafe(1 + utf8Length(message));
     // buff.writeUInt8(Protocol.JOIN_ERROR, 0);

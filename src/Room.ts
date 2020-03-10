@@ -12,7 +12,7 @@ import { Presence } from './presence/Presence';
 import { SchemaSerializer } from './serializer/SchemaSerializer';
 import { Serializer } from './serializer/Serializer';
 
-import { Protocol, send } from './Protocol';
+import { Protocol, send, getMessageBytes } from './Protocol';
 import { Deferred, spliceOne } from './Utils';
 
 import { debugAndPrintError, debugPatch } from './Debug';
@@ -382,11 +382,10 @@ export abstract class Room<State= any, Metadata= any> {
     client.ref.on('message', this._onMessage.bind(this, client));
 
     // confirm room id that matches the room name requested to join
-    send[Protocol.JOIN_ROOM](
-      client,
+    client.raw(getMessageBytes[Protocol.JOIN_ROOM](
       this._serializer.id,
       this._serializer.handshake && this._serializer.handshake(),
-    );
+    ));
   }
 
   protected async allowReconnection(client: Client, seconds: number = 15): Promise<Client> {
@@ -440,7 +439,7 @@ export abstract class Room<State= any, Metadata= any> {
   }
 
   private sendState(client: Client): void {
-    send[Protocol.ROOM_STATE](client, this._serializer.getFullState(client));
+    client.raw(getMessageBytes[Protocol.ROOM_STATE](this._serializer.getFullState(client)));
   }
 
   private broadcastPatch(): boolean {

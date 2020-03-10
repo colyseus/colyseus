@@ -117,6 +117,7 @@ export class WebSocketTransport extends Transport {
 
     } catch (e) {
       debugAndPrintError(e);
+      // TODO: call `client.error()`
       // client.error(e.code, e.message);
       send[Protocol.JOIN_ERROR](client, (e && e.message) || '');
       rawClient.close(Protocol.WS_CLOSE_WITH_ERROR);
