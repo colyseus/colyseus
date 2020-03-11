@@ -76,21 +76,27 @@ export function timeout(ms: number = 200) {
 }
 
 export class DummyRoom extends Room {
-  onCreate() { }
+  onCreate() {
+    this.onMessage("*", (_, type, message) => {
+      this.broadcast(type, message);
+    });
+  }
   onDispose() { }
   onJoin() { }
   onLeave() { }
-  onMessage(client, message) { this.broadcast(message); }
 }
 
 export class Room2Clients extends Room {
   maxClients = 2;
 
-  onCreate() { }
+  onCreate() {
+    this.onMessage("*", (_, type, message) => {
+      this.broadcast(type, message);
+    });
+  }
   onDispose() { }
   onJoin() { }
   onLeave() { }
-  onMessage(client, message) { this.broadcast(message); }
 }
 
 export class Room2ClientsExplicitLock extends Room {
@@ -110,17 +116,25 @@ export class Room2ClientsExplicitLock extends Room {
 export class Room3Clients extends Room {
   maxClients = 3;
 
-  onCreate() { }
+  onCreate() {
+    this.onMessage("*", (_, type, message) => {
+      this.broadcast(type, message);
+    });
+  }
+
   onDispose() { }
   onJoin() { }
   onLeave() { }
-  onMessage(client, message) { this.broadcast(message); }
 }
 
 export class ReconnectRoom extends Room {
   maxClients = 4;
 
-  onCreate() { }
+  onCreate() {
+    this.onMessage("*", (_, type, message) => {
+      this.broadcast(type, message);
+    });
+  }
   onDispose() { }
   onJoin() { }
 
@@ -133,7 +147,6 @@ export class ReconnectRoom extends Room {
       // console.log("allowReconnection, error =>", e.message);
     }
   }
-  onMessage(client, message) { this.broadcast(message); }
 }
 
 export class RoomWithAsync extends DummyRoom {

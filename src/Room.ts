@@ -237,14 +237,14 @@ export abstract class Room<State= any, Metadata= any> {
   }
 
   public broadcast<T extends Schema>(message: T, options: IBroadcastOptions);
-  public broadcast(type: string, message: any, options: IBroadcastOptions);
+  public broadcast(type: string | number, message: any, options?: IBroadcastOptions);
   public broadcast(
-    typeOrSchema: string | Schema,
+    typeOrSchema: string | number | Schema,
     messageOrOptions: any | IBroadcastOptions,
     options?: IBroadcastOptions,
   ) {
     const isSchema = (typeof(typeOrSchema) !== 'string');
-    const opts = (isSchema) ? messageOrOptions : options;
+    const opts: IBroadcastOptions = (isSchema) ? messageOrOptions : options;
 
     if (opts.afterNextPatch) {
       delete opts.afterNextPatch;
