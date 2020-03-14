@@ -7,7 +7,6 @@ import { debugAndPrintError, debugMatchMaking } from './Debug';
 import * as matchMaker from './MatchMaker';
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
 import { Presence } from './presence/Presence';
-import { TCPTransport, Transport, WebSocketTransport } from './transport/Transport';
 
 import { RoomConstructor } from './Room';
 import { registerGracefulShutdown } from './Utils';
@@ -18,6 +17,10 @@ import { LocalPresence } from './presence/LocalPresence';
 
 import { MatchMakeError } from './errors/MatchMakeError';
 import { Protocol } from './Protocol';
+import { Transport } from './transport/Transport';
+
+import { TCPTransport } from './transport/TCP/TCPTransport';
+import { WebSocketTransport } from './transport/WebSocket/WebSocketTransport';
 
 export type ServerOptions = IServerOptions & {
   pingInterval?: number,

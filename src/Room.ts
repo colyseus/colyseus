@@ -1,7 +1,7 @@
 import http from 'http';
 import msgpack from 'notepack.io';
 
-import { Context, Schema } from '@colyseus/schema';
+import { Schema } from '@colyseus/schema';
 import * as decode from '@colyseus/schema/lib/encoding/decode';
 
 import Clock from '@gamestdio/timer';
@@ -244,7 +244,7 @@ export abstract class Room<State= any, Metadata= any> {
     options?: IBroadcastOptions,
   ) {
     const isSchema = (typeof(typeOrSchema) !== 'string');
-    const opts: IBroadcastOptions = (isSchema) ? messageOrOptions : options;
+    const opts: IBroadcastOptions = ((isSchema) ? messageOrOptions : options) || {};
 
     if (opts.afterNextPatch) {
       delete opts.afterNextPatch;
@@ -253,10 +253,10 @@ export abstract class Room<State= any, Metadata= any> {
     }
 
     if (isSchema) {
-      this.broadcastMessageSchema(typeOrSchema as Schema, messageOrOptions);
+      this.broadcastMessageSchema(typeOrSchema as Schema, opts);
 
     } else {
-      this.broadcastMessageType(typeOrSchema as string, messageOrOptions, options);
+      this.broadcastMessageType(typeOrSchema as string, messageOrOptions, opts);
     }
   }
 
@@ -413,37 +413,33 @@ export abstract class Room<State= any, Metadata= any> {
   }
 
   private broadcastMessageSchema<T extends Schema>(message: T, options: IBroadcastOptions) {
-    const typeId = (message.constructor as typeof Schema)._typeid;
-    const encodedMessage = Buffer.from([Protocol.ROOM_DATA_SCHEMA, typeId, ...message.encodeAll()]);
+    const encodedMessage = getMessageBytes[Protocol.ROOM_DATA_SCHEMA](message);
 
     let numClients = this.clients.length;
     while (numClients--) {
       const client = this.clients[numClients];
 
       if (options.except !== client) {
-        client.raw(encodedMessage);
+        client.enqueueRaw(encodedMessage);
       }
     }
   }
 
   private broadcastMessageType(type: string, message: any, options: IBroadcastOptions) {
-    // encode message with msgpack
-    const encodedMessage = (!(message instanceof Buffer))
-      ? Buffer.from([Protocol.ROOM_DATA, ...msgpack.encode(message)])
-      : message;
+    const encodedMessage = getMessageBytes[Protocol.ROOM_DATA](type, message);
 
     let numClients = this.clients.length;
     while (numClients--) {
       const client = this.clients[numClients];
 
       if (options.except !== client) {
-        client.raw(encodedMessage);
+        client.enqueueRaw(encodedMessage);
       }
     }
   }
 
   private sendState(client: Client): void {
-    client.raw(getMessageBytes[Protocol.ROOM_STATE](this._serializer.getFullState(client)));
+    client.enqueueRaw(getMessageBytes[Protocol.ROOM_STATE](this._serializer.getFullState(client)));
   }
 
   private broadcastPatch(): boolean {

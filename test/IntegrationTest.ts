@@ -190,7 +190,6 @@ describe("Integration", () => {
               onLeave(client: Client, options: any) {
                 onLeaveCalled = true;
               }
-              onMessage(client, message) { }
             });
 
             const connection = await client.joinOrCreate('onleave');
@@ -259,38 +258,42 @@ describe("Integration", () => {
             assert.ok(onDisposeCalled);
           });
 
-          it("onMessage()", async () => {
-            const messageToSend = {
-              string: "hello",
-              number: 10,
-              float: Math.PI,
-              array: [1,2,3,4,5],
-              nested: {
+          describe("onMessage()", () => {
+            it("should support string", async () => {
+              const messageToSend = {
                 string: "hello",
                 number: 10,
                 float: Math.PI,
-              }
-            };
+                array: [1, 2, 3, 4, 5],
+                nested: {
+                  string: "hello",
+                  number: 10,
+                  float: Math.PI,
+                }
+              };
 
-            let onMessageCalled = false;
-            let sessionId: string;
+              let onMessageCalled = false;
+              let sessionId: string;
 
-            matchMaker.defineRoomType('onmessage', class _ extends Room {
-              onMessage(client: Client, message: any) {
-                sessionId = client.sessionId;
-                assert.deepEqual(messageToSend, message);
-                onMessageCalled = true;
-              }
+              matchMaker.defineRoomType('onmessage', class _ extends Room {
+                onCreate() {
+                  this.onMessage("msgtype", (client, message) => {
+                    sessionId = client.sessionId;
+                    assert.deepEqual(messageToSend, message);
+                    onMessageCalled = true;
+                  });
+                }
+              });
+
+              const connection = await client.joinOrCreate('onmessage');
+              connection.send("msgtype", messageToSend);
+              await timeout(20);
+
+              await connection.leave();
+
+              assert.equal(sessionId, connection.sessionId);
+              assert.ok(onMessageCalled);
             });
-
-            const connection = await client.joinOrCreate('onmessage');
-            connection.send(messageToSend);
-            await timeout(20);
-
-            await connection.leave();
-
-            assert.equal(sessionId, connection.sessionId);
-            assert.ok(onMessageCalled);
           });
 
           describe("setPatchRate()", () => {
@@ -351,25 +354,28 @@ describe("Integration", () => {
             it("all clients should receive broadcast data", async () => {
               matchMaker.defineRoomType('broadcast', class _ extends Room {
                 maxClients = 3;
-                onMessage(client: Client, message: any) {
-                  this.broadcast(message);
+
+                onCreate() {
+                  this.onMessage("*", (_, type, message) => {
+                    this.broadcast(type, message);
+                  })
                 }
               });
 
               const messages: string[] = [];
 
               const conn1 = await client.joinOrCreate('broadcast');
-              conn1.onMessage(message => messages.push(message));
+              conn1.onMessage("num", message => messages.push(message));
 
               const conn2 = await client.joinOrCreate('broadcast');
-              conn2.onMessage(message => messages.push(message));
+              conn2.onMessage("num", message => messages.push(message));
 
               const conn3 = await client.joinOrCreate('broadcast');
-              conn3.onMessage(message => messages.push(message));
+              conn3.onMessage("num", message => messages.push(message));
 
-              conn1.send("one");
-              conn2.send("two");
-              conn3.send("three");
+              conn1.send("num", "one");
+              conn2.send("num", "two");
+              conn3.send("num", "three");
 
               await timeout(200);
 
@@ -384,25 +390,28 @@ describe("Integration", () => {
             it("should broadcast except to specific client", async () => {
               matchMaker.defineRoomType('broadcast', class _ extends Room {
                 maxClients = 3;
-                onMessage(client: Client, message: any) {
-                  this.broadcast(message, { except: client });
+
+                onCreate() {
+                  this.onMessage("*", (client, type, message) => {
+                    this.broadcast(type, message, { except: client });
+                  })
                 }
               });
 
               const messages: string[] = [];
 
               const conn1 = await client.joinOrCreate('broadcast');
-              conn1.onMessage(message => messages.push(message));
+              conn1.onMessage("num", message => messages.push(message));
 
               const conn2 = await client.joinOrCreate('broadcast');
-              conn2.onMessage(message => messages.push(message));
+              conn2.onMessage("num", message => messages.push(message));
 
               const conn3 = await client.joinOrCreate('broadcast');
-              conn3.onMessage(message => messages.push(message));
+              conn3.onMessage("num", message => messages.push(message));
 
-              conn1.send("one");
-              conn2.send("two");
-              conn3.send("three");
+              conn1.send("num", "one");
+              conn2.send("num", "two");
+              conn3.send("num", "three");
 
               await timeout(200);
 
@@ -417,7 +426,7 @@ describe("Integration", () => {
             it("should allow to broadcast during onJoin() for current client", async () => {
               matchMaker.defineRoomType('broadcast', class _ extends Room {
                 onJoin(client, options) {
-                  this.broadcast("hello");
+                  this.broadcast("startup", "hello");
                 }
                 onMessage(client, message) { }
               });
@@ -427,7 +436,7 @@ describe("Integration", () => {
               let onMessageCalled = false;
               let message: any;
 
-              conn.onMessage((_message) => {
+              conn.onMessage("startup", (_message) => {
                 onMessageCalled = true;
                 message = _message;
               });
@@ -451,7 +460,7 @@ describe("Integration", () => {
                   this.setState(new DummyState);
                 }
                 onJoin(client, options) {
-                  this.broadcast("hello", { afterNextPatch: true });
+                  this.broadcast("startup", "hello", { afterNextPatch: true });
                   this.state.number = 1;
                 }
                 onMessage(client, message) { }
@@ -462,7 +471,7 @@ describe("Integration", () => {
               let onMessageCalled = false;
               let message: any;
 
-              conn.onMessage((_message) => {
+              conn.onMessage("startup", (_message) => {
                 onMessageCalled = true;
                 message = _message;
               });
@@ -499,22 +508,24 @@ describe("Integration", () => {
               matchMaker.defineRoomType('sendschema', class _ extends Room {
                 onCreate() {
                   this.setState(new State());
-                }
-                onMessage(client, message) {
-                  const msg = new Message();
-                  msg.str = message;
-                  this.send(client, msg);
+
+                  this.onMessage("ping", (client, message) => {
+                    const msg = new Message();
+                    msg.str = message;
+                    client.send(msg);
+                  });
+
                 }
               });
 
               const connection = await client.joinOrCreate('sendschema', {}, State);
               let messageReceived: Message;
 
-              connection.onMessage((message) => {
+              connection.onMessage(Message, (message) => {
                 onMessageCalled = true;
                 messageReceived = message;
               });
-              connection.send("hello!");
+              connection.send("ping", "hello!");
               await timeout(100);
 
               await connection.leave();

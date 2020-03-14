@@ -39,7 +39,7 @@ export class FossilDeltaSerializer<T> implements Serializer<T> {
 
       while (numClients--) {
         const client = clients[numClients];
-        client.raw(this.patches);
+        client.enqueueRaw(this.patches);
       }
     }
 

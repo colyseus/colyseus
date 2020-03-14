@@ -45,7 +45,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
 
         while (numClients--) {
           const client = clients[numClients];
-          client.raw(patches);
+          client.enqueueRaw(patches);
         }
 
         if (debugPatch.enabled) {
@@ -62,7 +62,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
         // encode state multiple times, for each client
         while (numClients--) {
           const client = clients[numClients];
-          client.raw([Protocol.ROOM_STATE_PATCH, ...this.state.encodeFiltered(client)]);
+          client.enqueueRaw([Protocol.ROOM_STATE_PATCH, ...this.state.encodeFiltered(client)]);
         }
 
         this.state.discardAllChanges();

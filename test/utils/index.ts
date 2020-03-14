@@ -102,15 +102,12 @@ export class Room2Clients extends Room {
 export class Room2ClientsExplicitLock extends Room {
   maxClients = 2;
 
-  onCreate() { }
+  onCreate() {
+    this.onMessage("lock", () => this.lock());
+  }
   onDispose() { }
   onJoin() { }
   onLeave() { }
-  onMessage(client, message) {
-    if (message === "lock") {
-      this.lock();
-    }
-  }
 }
 
 export class Room3Clients extends Room {

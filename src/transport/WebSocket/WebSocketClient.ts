@@ -29,17 +29,21 @@ export class WebSocketClient implements Client {
     );
   }
 
-  public raw(data: ArrayLike<number>, options?: ISendOptions) {
-    if (this.ref.readyState !== WebSocket.OPEN) {
-      console.warn('trying to send data to inactive client', this.sessionId);
-      return;
-    }
-
+  public enqueueRaw(data: ArrayLike<number>, options?: ISendOptions) {
     if (this.state === ClientState.JOINING) {
       // sending messages during `onJoin`.
       // - the client-side cannot register "onMessage" callbacks at this point.
       // - enqueue the messages to be send after JOIN_ROOM message has been sent
       this._enqueuedMessages.push(data);
+      return;
+    }
+
+    this.raw(data, options);
+  }
+
+  public raw(data: ArrayLike<number>, options?: ISendOptions) {
+    if (this.ref.readyState !== WebSocket.OPEN) {
+      console.warn('trying to send data to inactive client', this.sessionId);
       return;
     }
 

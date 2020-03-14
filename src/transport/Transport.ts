@@ -18,7 +18,7 @@ export interface ISendOptions {
   afterNextPatch?: boolean;
 }
 
-export enum ClientState { JOINING, JOINED, RECONNECTED }
+export enum ClientState { JOINING, JOINED, RECONNECTED };
 
 export interface Client {
   readyState: number;
@@ -39,6 +39,7 @@ export interface Client {
   _enqueuedMessages?: any[];
 
   raw(data: ArrayLike<number>, options?: ISendOptions): void;
+  enqueueRaw(data: ArrayLike<number>, options?: ISendOptions): void;
 
   send(message: Schema, options?: ISendOptions): void;
   send(type: string, message: any, options?: ISendOptions): void;
@@ -47,6 +48,3 @@ export interface Client {
   error(code: number, message?: string): void;
   close(code?: number, data?: string): void;
 }
-
-export { TCPTransport } from './TCP/TCPTransport';
-export { WebSocketTransport } from './WebSocket/WebSocketTransport';
