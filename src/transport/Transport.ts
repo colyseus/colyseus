@@ -18,7 +18,7 @@ export interface ISendOptions {
   afterNextPatch?: boolean;
 }
 
-export enum ClientState { JOINING, JOINED, RECONNECTED };
+export enum ClientState { JOINING, JOINED, RECONNECTED }
 
 export interface Client {
   readyState: number;
