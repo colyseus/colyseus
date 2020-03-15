@@ -88,12 +88,16 @@ export const getMessageBytes = {
   [Protocol.ROOM_DATA]: (type: string | number, message: any) => {
     const encoded = msgpack.encode(message);
     const initialBytes: number[] = [Protocol.ROOM_DATA];
+    const messageType = typeof (type);
 
-    if (typeof (type) === 'string') {
+    if (messageType === "string") {
       encode.string(initialBytes, type);
 
-    } else {
+    } else if (messageType === "number") {
       encode.number(initialBytes, type);
+
+    } else {
+      throw new Error(`Protocol.ROOM_DATA: message type not supported "${type.toString()}"`)
     }
 
     const arr = new Uint8Array(initialBytes.length + encoded.byteLength);

@@ -22,10 +22,11 @@ export class WebSocketClient implements Client {
     //
     // TODO: implement `options.afterNextPatch`
     //
-    this.raw(
+    this.enqueueRaw(
       (messageOrType instanceof Schema)
         ? getMessageBytes[Protocol.ROOM_DATA_SCHEMA](messageOrType)
         : getMessageBytes[Protocol.ROOM_DATA](messageOrType, messageOrOptions),
+      options
     );
   }
 
