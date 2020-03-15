@@ -58,7 +58,6 @@ describe("Integration", () => {
                   assert.deepEqual({ string: "hello", number: 1 }, options);
                   onCreateCalled = true;
                 }
-                onMessage(client, message) { }
               });
 
               const connection = await client.joinOrCreate('oncreate', { string: "hello", number: 1 });
@@ -82,7 +81,6 @@ describe("Integration", () => {
                   }, 100)
                   );
                 }
-                onMessage(client, message) { }
               });
 
               const connection = await client.joinOrCreate('oncreate', { string: "hello", number: 1 });
@@ -101,7 +99,6 @@ describe("Integration", () => {
                   onJoinCalled = true;
                   assert.deepEqual({ string: "hello", number: 1 }, options);
                 }
-                onMessage(client, message) { }
               });
 
               const connection = await client.joinOrCreate('onjoin', { string: "hello", number: 1 });
@@ -120,7 +117,6 @@ describe("Integration", () => {
                     resolve();
                   }, 20));
                 }
-                onMessage(client, message) { }
               });
 
               const connection = await client.joinOrCreate('onjoin');
@@ -135,7 +131,6 @@ describe("Integration", () => {
                 async onJoin(client: Client, options: any) {
                   throw new MatchMakeError("not_allowed");
                 }
-                onMessage(client, message) { }
               });
 
               await assert.rejects(async () => await client.joinOrCreate('onjoin'));
@@ -146,7 +141,6 @@ describe("Integration", () => {
                 async onJoin(client: Client, options: any) {
                   return new Promise((resolve) => setTimeout(resolve, 100));
                 }
-                onMessage(client, message) { }
               });
 
               // keep one active connection to prevent room's disposal
@@ -177,7 +171,6 @@ describe("Integration", () => {
               async onAuth(client: Client, options: any) {
                 throw new MatchMakeError("not_allowed");
               }
-              onMessage(client, message) { }
             });
 
             await assert.rejects(async () => await client.joinOrCreate('onauth'));
@@ -209,7 +202,6 @@ describe("Integration", () => {
                   resolve();
                 }, 100));
               }
-              onMessage(client, message) { }
             });
 
             const connection = await client.joinOrCreate('onleave');
@@ -226,7 +218,6 @@ describe("Integration", () => {
               onDispose() {
                 onDisposeCalled = true;
               }
-              onMessage(client, message) { }
             });
 
             const connection = await client.joinOrCreate('onleave');
@@ -247,7 +238,6 @@ describe("Integration", () => {
                   resolve();
                 }, 100));
               }
-              onMessage(client, message) { }
             });
 
             const connection = await client.joinOrCreate('onleave');
@@ -259,7 +249,7 @@ describe("Integration", () => {
           });
 
           describe("onMessage()", () => {
-            it("should support string", async () => {
+            it("should support string key as message type", async () => {
               const messageToSend = {
                 string: "hello",
                 number: 10,
@@ -294,6 +284,52 @@ describe("Integration", () => {
               assert.equal(sessionId, connection.sessionId);
               assert.ok(onMessageCalled);
             });
+
+            it("should support number key as message type", async () => {
+              enum MessageTypes { REQUEST, RESPONSE }
+
+              const messageToSend = {
+                string: "hello",
+                number: 10,
+                float: Math.PI,
+                array: [1, 2, 3, 4, 5],
+                nested: {
+                  string: "hello",
+                  number: 10,
+                  float: Math.PI,
+                }
+              };
+
+              let onMessageCalled = false;
+              let onMessageReceived = false;
+              let sessionId: string;
+
+              matchMaker.defineRoomType('onmessage', class _ extends Room {
+                onCreate() {
+                  this.onMessage(MessageTypes.REQUEST, (client, message) => {
+                    sessionId = client.sessionId;
+                    client.send(MessageTypes.RESPONSE, message);
+                    assert.deepEqual(messageToSend, message);
+                    onMessageCalled = true;
+                  });
+                }
+              });
+
+              const connection = await client.joinOrCreate('onmessage');
+              connection.send(MessageTypes.REQUEST, messageToSend);
+
+              connection.onMessage(MessageTypes.RESPONSE, (message) => {
+                assert.deepEqual(messageToSend, message);
+                onMessageReceived = true;
+              });
+
+              await timeout(20);
+              await connection.leave();
+
+              assert.equal(sessionId, connection.sessionId);
+              assert.ok(onMessageCalled);
+              assert.ok(onMessageReceived);
+            });
           });
 
           describe("setPatchRate()", () => {
@@ -308,7 +344,6 @@ describe("Integration", () => {
                   this.setPatchRate(20);
                   this.setSimulationInterval(() => this.state.number++);
                 }
-                onMessage() {}
               });
 
               const connection = await client.create<PatchState>('patchinterval');
@@ -331,7 +366,6 @@ describe("Integration", () => {
                   this.setPatchRate(null);
                   this.setSimulationInterval(() => this.state.number++);
                 }
-                onMessage() {}
               });
 
               const connection = await client.create<PatchState>('patchinterval');
@@ -423,28 +457,35 @@ describe("Integration", () => {
               await timeout(50);
             });
 
-            it("should allow to broadcast during onJoin() for current client", async () => {
+            it("should allow to send/broadcast during onJoin() for current client", async () => {
               matchMaker.defineRoomType('broadcast', class _ extends Room {
                 onJoin(client, options) {
-                  this.broadcast("startup", "hello");
+                  client.send("send", "hello");
+                  this.broadcast("broadcast", "hello");
                 }
-                onMessage(client, message) { }
               });
 
               const conn = await client.joinOrCreate('broadcast');
 
               let onMessageCalled = false;
-              let message: any;
+              let broadcastedMessage: any;
+              let sentMessage: any;
 
-              conn.onMessage("startup", (_message) => {
+              conn.onMessage("broadcast", (_message) => {
                 onMessageCalled = true;
-                message = _message;
+                broadcastedMessage = _message;
+              });
+
+              conn.onMessage("send", (_message) => {
+                onMessageCalled = true;
+                sentMessage = _message;
               });
 
               await timeout(300);
 
               assert.equal(true, onMessageCalled);
-              assert.equal("hello", message);
+              assert.equal("hello", broadcastedMessage);
+              assert.equal("hello", sentMessage);
 
               conn.leave();
             });
@@ -463,7 +504,6 @@ describe("Integration", () => {
                   this.broadcast("startup", "hello", { afterNextPatch: true });
                   this.state.number = 1;
                 }
-                onMessage(client, message) { }
               });
 
               const conn = await client.joinOrCreate('broadcast_afterpatch');
@@ -616,7 +656,6 @@ describe("Integration", () => {
                 onCreate() {
                   this.clock.setTimeout(() => this.disconnect(), 100);
                 }
-                onMessage() {}
               });
 
               let disconnected: number = 0;
@@ -649,7 +688,6 @@ describe("Integration", () => {
                     await this.presence.hset("created", "single3", "1");
                   }
                 }
-                onMessage() {}
               });
 
               let connections: Colyseus.Room[] = [];
