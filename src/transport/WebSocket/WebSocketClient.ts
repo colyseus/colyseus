@@ -26,7 +26,7 @@ export class WebSocketClient implements Client {
       (messageOrType instanceof Schema)
         ? getMessageBytes[Protocol.ROOM_DATA_SCHEMA](messageOrType)
         : getMessageBytes[Protocol.ROOM_DATA](messageOrType, messageOrOptions),
-      options
+      options,
     );
   }
 
