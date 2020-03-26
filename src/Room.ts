@@ -408,17 +408,17 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
     }
   }
 
-  protected allowReconnection(client: Client, seconds: number = Infinity): Deferred {
+  protected allowReconnection(previousClient: Client, seconds: number = Infinity): Deferred {
     if (this._internalState === RoomInternalState.DISCONNECTING) {
       this._disposeIfEmpty(); // gracefully shutting down
       throw new Error('disconnecting');
     }
 
-    const sessionId = client.sessionId;
+    const sessionId = previousClient.sessionId;
     this._reserveSeat(sessionId, true, seconds, true);
 
     // keep reconnection reference in case the user reconnects into this room.
-    const reconnection = new Deferred();
+    const reconnection = new Deferred<Client>();
     this.reconnections[sessionId] = reconnection;
 
     if (seconds !== Infinity) {
@@ -434,8 +434,9 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
     };
 
     reconnection.
-      then(() => {
-        client.state = ClientState.RECONNECTED;
+      then((newClient) => {
+        newClient.auth = previousClient.auth;
+        previousClient.state = ClientState.RECONNECTED;
         clearTimeout(this.reservedSeatTimeouts[sessionId]);
         cleanup();
       }).
