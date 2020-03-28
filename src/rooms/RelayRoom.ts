@@ -34,7 +34,11 @@ defineTypes(State, {
 export class RelayRoom extends Room<State> { // tslint:disable-line
   public allowReconnectionTime: number = 0;
 
-  public onCreate(options) {
+  public onCreate(options: Partial<{
+    maxClients: number,
+    allowReconnectionTime: number,
+    metadata: any,
+  }>) {
     this.setState(new State());
 
     if (options.maxClients) {

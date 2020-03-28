@@ -8,7 +8,8 @@ import * as matchMaker from './MatchMaker';
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
 import { Presence } from './presence/Presence';
 
-import { RoomConstructor } from './Room';
+import { Type } from './types';
+import { Room } from './Room';
 import { registerGracefulShutdown } from './Utils';
 
 import { generateId } from '.';
@@ -116,7 +117,11 @@ export class Server {
     });
   }
 
-  public define(name: string, handler: RoomConstructor, defaultOptions: any = {}): RegisteredHandler {
+  public define<T extends Type<Room>>(
+    name: string,
+    handler: T,
+    defaultOptions?: Parameters<InstanceType<T>['onCreate']>[0],
+  ): RegisteredHandler {
     return matchMaker.defineRoomType(name, handler, defaultOptions);
   }
 

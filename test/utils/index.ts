@@ -7,7 +7,7 @@ import { SeatReservation } from "../../src/MatchMaker";
 
 import { LocalDriver } from "../../src/matchmaker/drivers/LocalDriver";
 import { MongooseDriver } from "../../src/matchmaker/drivers/MongooseDriver";
-import { LocalPresence, RedisPresence, Presence, Client } from "../../src";
+import { LocalPresence, RedisPresence, Presence, Client, Deferred } from "../../src";
 import { ClientState } from "../../src/transport/Transport";
 
 export const DRIVERS = [ new LocalDriver(), ];
@@ -175,6 +175,36 @@ export class ReconnectRoom extends Room {
       // console.log("allowReconnection, error =>", e.message);
     }
   }
+}
+
+export class ReconnectTokenRoom extends Room {
+  maxClients = 4;
+  token: Deferred;
+
+  onCreate() {
+    this.setState({})
+  }
+  onDispose() { }
+
+  onJoin(client) {
+    this.state[client.sessionId] = "CONNECTED";
+  }
+
+  async onLeave(client, consented) {
+    if (!consented) {
+      const reconnection = this.allowReconnection(client);
+      this.token = reconnection;
+
+      try {
+        await reconnection;
+
+      } catch (e) {
+      }
+
+    }
+  }
+
+  onMessage(client, message) {}
 }
 
 export class RoomWithAsync extends DummyRoom {

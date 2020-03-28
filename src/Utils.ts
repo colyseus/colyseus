@@ -68,8 +68,8 @@ export class Deferred<T= any> {
     });
   }
 
-  public then(func: (value: any) => any) {
-    return this.promise.then(func);
+  public then(func: (value: T) => any) {
+    return this.promise.then.apply(this.promise, arguments);
   }
 
   public catch(func: (value: any) => any) {

@@ -274,6 +274,10 @@ export abstract class Room<State= any, Metadata= any> {
     const delayedDisconnection = new Promise((resolve) =>
       this._events.once('disconnect', () => resolve()));
 
+    for (const reconnection of Object.values(this.reconnections)) {
+      reconnection.reject();
+    }
+
     let numClients = this.clients.length;
     if (numClients > 0) {
       // prevent new clients to join while this room is disconnecting.
@@ -281,17 +285,8 @@ export abstract class Room<State= any, Metadata= any> {
 
       // clients may have `async onLeave`, room will be disposed after they all run
       while (numClients--) {
-        const client = this.clients[numClients];
-        const reconnection = this.reconnections[client.sessionId];
-
-        if (reconnection) {
-          reconnection.reject();
-
-        } else {
-          this._forciblyCloseClient(client, Protocol.WS_CLOSE_CONSENTED);
-        }
+        this._forciblyCloseClient(this.clients[numClients], Protocol.WS_CLOSE_CONSENTED);
       }
-
     } else {
       // no clients connected, dispose immediately.
       this._events.emit('dispose');
@@ -340,7 +335,6 @@ export abstract class Room<State= any, Metadata= any> {
         }
       } catch (e) {
         spliceOne(this.clients, this.clients.indexOf(client));
-        debugAndPrintError(e);
         throw e;
 
       } finally {
@@ -362,22 +356,24 @@ export abstract class Room<State= any, Metadata= any> {
     ));
   }
 
-  protected async allowReconnection(client: Client, seconds: number = 15): Promise<Client> {
+  protected allowReconnection(previousClient: Client, seconds: number = Infinity): Deferred {
     if (this._internalState === RoomInternalState.DISCONNECTING) {
       this._disposeIfEmpty(); // gracefully shutting down
       throw new Error('disconnecting');
     }
 
-    const sessionId = client.sessionId;
-    await this._reserveSeat(sessionId, true, seconds, true);
+    const sessionId = previousClient.sessionId;
+    this._reserveSeat(sessionId, true, seconds, true);
 
     // keep reconnection reference in case the user reconnects into this room.
-    const reconnection = new Deferred();
+    const reconnection = new Deferred<Client>();
     this.reconnections[sessionId] = reconnection;
 
-    // expire seat reservation after timeout
-    this.reservedSeatTimeouts[sessionId] = setTimeout(() =>
-      reconnection.reject(false), seconds * 1000);
+    if (seconds !== Infinity) {
+      // expire seat reservation after timeout
+      this.reservedSeatTimeouts[sessionId] = setTimeout(() =>
+        reconnection.reject(false), seconds * 1000);
+    }
 
     const cleanup = () => {
       delete this.reservedSeats[sessionId];
@@ -386,8 +382,9 @@ export abstract class Room<State= any, Metadata= any> {
     };
 
     reconnection.
-      then(() => {
-        client.state = ClientState.RECONNECTED;
+      then((newClient) => {
+        newClient.auth = previousClient.auth;
+        previousClient.state = ClientState.RECONNECTED;
         clearTimeout(this.reservedSeatTimeouts[sessionId]);
         cleanup();
       }).
@@ -396,7 +393,7 @@ export abstract class Room<State= any, Metadata= any> {
         this._disposeIfEmpty();
       });
 
-    return await reconnection.promise;
+    return reconnection;
   }
 
   protected resetAutoDisposeTimeout(timeoutInSeconds: number) {
