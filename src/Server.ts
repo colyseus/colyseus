@@ -9,7 +9,7 @@ import { RegisteredHandler } from './matchmaker/RegisteredHandler';
 import { Presence } from './presence/Presence';
 import { TCPTransport, Transport, WebSocketTransport } from './transport/Transport';
 
-import { RoomConstructor } from './Room';
+import { Room } from './Room';
 import { registerGracefulShutdown } from './Utils';
 
 import { generateId } from '.';
@@ -18,6 +18,7 @@ import { LocalPresence } from './presence/LocalPresence';
 
 import { MatchMakeError } from './errors/MatchMakeError';
 import { Protocol } from './Protocol';
+import { Type } from './types';
 
 export type ServerOptions = IServerOptions & {
   pingInterval?: number,
@@ -113,7 +114,11 @@ export class Server {
     });
   }
 
-  public define(name: string, handler: RoomConstructor, defaultOptions: any = {}): RegisteredHandler {
+  public define<T extends Type<Room>>(
+    name: string,
+    handler: T,
+    defaultOptions?: Parameters<InstanceType<T>['onCreate']>[0],
+  ): RegisteredHandler {
     return matchMaker.defineRoomType(name, handler, defaultOptions);
   }
 

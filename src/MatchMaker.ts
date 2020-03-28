@@ -4,7 +4,7 @@ import { requestFromIPC, subscribeIPC } from './IPC';
 import { generateId, merge, REMOTE_ROOM_SHORT_TIMEOUT, retry } from './Utils';
 
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
-import { Room, RoomConstructor, RoomInternalState } from './Room';
+import { Room, RoomInternalState } from './Room';
 
 import { LocalPresence } from './presence/LocalPresence';
 import { Presence } from './presence/Presence';
@@ -14,6 +14,7 @@ import { MatchMakeError } from './errors/MatchMakeError';
 import { SeatReservationError } from './errors/SeatReservationError';
 import { MatchMakerDriver, RoomListingData } from './matchmaker/drivers/Driver';
 import { LocalDriver } from './matchmaker/drivers/LocalDriver';
+import { Type } from './types';
 
 export { MatchMakerDriver, MatchMakeError };
 
@@ -184,7 +185,11 @@ export async function remoteRoomCall<R= any>(
   }
 }
 
-export function defineRoomType(name: string, klass: RoomConstructor, defaultOptions: any = {}) {
+export function defineRoomType<T extends Type<Room>>(
+  name: string,
+  klass: T,
+  defaultOptions?: Parameters<InstanceType<T>['onCreate']>[0],
+) {
   const registeredHandler = new RegisteredHandler(klass, defaultOptions);
 
   handlers[name] = registeredHandler;
