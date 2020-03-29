@@ -8,8 +8,8 @@ import * as matchMaker from './MatchMaker';
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
 import { Presence } from './presence/Presence';
 
-import { Type } from './types';
 import { Room } from './Room';
+import { Type } from './types';
 import { registerGracefulShutdown } from './Utils';
 
 import { generateId } from '.';
