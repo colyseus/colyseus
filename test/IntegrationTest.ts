@@ -330,6 +330,37 @@ describe("Integration", () => {
               assert.ok(onMessageCalled);
               assert.ok(onMessageReceived);
             });
+
+            it("should support messages with only key, without data", async () => {
+              let onMessageCalled = false;
+              let onMessageReceived = false;
+              let sessionId: string;
+
+              matchMaker.defineRoomType('onmessage', class _ extends Room {
+                onCreate() {
+                  this.onMessage(1, (client) => {
+                    sessionId = client.sessionId;
+                    onMessageCalled = true;
+                    client.send("response");
+                  });
+                }
+              });
+
+              const connection = await client.joinOrCreate('onmessage');
+              connection.send(1);
+
+              connection.onMessage("response", (message) => {
+                assert.ok(message === undefined);
+                onMessageReceived = true;
+              });
+
+              await timeout(20);
+              await connection.leave();
+
+              assert.equal(sessionId, connection.sessionId);
+              assert.ok(onMessageCalled);
+              assert.ok(onMessageReceived);
+            });
           });
 
           describe("setPatchRate()", () => {

@@ -552,7 +552,9 @@ export abstract class Room<State= any, Metadata= any> {
         ? decode.string(bytes, it)
         : decode.number(bytes, it);
 
-      const message = msgpack.decode(bytes.slice(it.offset, bytes.length));
+      const message = (bytes.length > it.offset)
+        ? msgpack.decode(bytes.slice(it.offset, bytes.length))
+        : undefined;
 
       if (this.onMessageHandlers[messageType]) {
         this.onMessageHandlers[messageType](client, message);
