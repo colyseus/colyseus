@@ -331,7 +331,7 @@ describe("Integration", () => {
               assert.ok(onMessageReceived);
             });
 
-            it("should support messages with only key, without data", async () => {
+            it("should support send/receive messages by type without payload.", async () => {
               let onMessageCalled = false;
               let onMessageReceived = false;
               let sessionId: string;
