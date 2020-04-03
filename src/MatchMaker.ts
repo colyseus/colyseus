@@ -216,7 +216,7 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
 
   const processIdWithFewerRooms = (
     Object.keys(roomsSpawnedByProcessId).sort((p1, p2) => {
-      return (roomsSpawnedByProcessId[p1] > roomsSpawnedByProcessId[p2])
+      return (Number(roomsSpawnedByProcessId[p1]) > Number(roomsSpawnedByProcessId[p2]))
         ? 1
         : -1;
     })[0]
