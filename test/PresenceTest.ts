@@ -155,6 +155,14 @@ describe("Presence", () => {
         assert.equal(0, await presence.scard("set"));
       });
 
+      it("sismember", async () => {
+        await presence.sadd("sis", "testvalue");
+        await presence.sadd("sis", "anothervalue");
+        assert.equal(1, await presence.sismember("sis", "testvalue"));
+        assert.equal(1, await presence.sismember("sis", "anothervalue"));
+        assert.equal(0, await presence.sismember("sis", "notexistskey"));
+      });
+
       it("sinter - intersection between sets", async () => {
         await presence.sadd("key1", "a");
         await presence.sadd("key1", "b");
