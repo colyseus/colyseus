@@ -84,7 +84,7 @@ export class LocalPresence implements Presence {
     }
 
     public async sismember(key: string, field: string) {
-        return this.hash[key] && this.hash[key][field];
+        return this.data[key] && this.data[key].includes(field) ? 1 : 0;
     }
 
     public srem(key: string, value: any) {
