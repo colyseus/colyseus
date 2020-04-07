@@ -120,8 +120,8 @@ export class RedisPresence implements Presence {
         return await this.smembersAsync(key);
     }
 
-    public async sismember(key: string, field: string): Promise<string[]> {
-        return await this.sismemberAsync(key);
+    public async sismember(key: string, field: string): Promise<number> {
+        return await this.sismemberAsync(key, field);
     }
 
     public async srem(key: string, value: any) {
