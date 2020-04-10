@@ -10,8 +10,8 @@ import { LocalPresence } from './presence/LocalPresence';
 import { Presence } from './presence/Presence';
 
 import { debugAndPrintError, debugMatchMaking } from './Debug';
-import { ServerError } from './errors/ServerError';
 import { SeatReservationError } from './errors/SeatReservationError';
+import { ServerError } from './errors/ServerError';
 import { MatchMakerDriver, RoomListingData } from './matchmaker/drivers/Driver';
 import { LocalDriver } from './matchmaker/drivers/LocalDriver';
 import { Client } from './transport/Transport';

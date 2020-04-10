@@ -48,10 +48,10 @@ export class WebSocketClient implements Client {
       return;
     }
 
-    this.ref.send(data, SEND_OPTS, );
+    this.ref.send(data, SEND_OPTS);
   }
 
-  public error(code: number, message: string = "") {
+  public error(code: number, message: string = '') {
     this.raw(getMessageBytes[Protocol.ERROR](code, message));
   }
 

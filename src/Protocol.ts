@@ -65,7 +65,7 @@ export const getMessageBytes = {
     return buff;
   },
 
-  [Protocol.ERROR]: (code: number, message: string = "") => {
+  [Protocol.ERROR]: (code: number, message: string = '') => {
     const bytes = [Protocol.ERROR];
 
     encode.number(bytes, code);

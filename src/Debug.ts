@@ -15,4 +15,3 @@ export const debugAndPrintError = (e: Error | string) => {
 
   debugError.call(debugError, message);
 };
-

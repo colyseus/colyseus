@@ -17,7 +17,7 @@ import { registerNode, unregisterNode } from './discovery';
 import { LocalPresence } from './presence/LocalPresence';
 
 import { ServerError } from './errors/ServerError';
-import { Protocol, ErrorCode } from './Protocol';
+import { ErrorCode, Protocol } from './Protocol';
 import { Transport } from './transport/Transport';
 
 import { TCPTransport } from './transport/TCP/TCPTransport';
@@ -186,7 +186,7 @@ export class Server {
     } else if (req.method === 'POST') {
       const matchedParams = req.url.match(this.allowedRoomNameChars);
       const method = matchedParams[1];
-      const name = matchedParams[2] || "";
+      const name = matchedParams[2] || '';
 
       const data = [];
       req.on('data', (chunk) => data.push(chunk));

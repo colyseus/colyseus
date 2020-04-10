@@ -12,14 +12,14 @@ import { Presence } from './presence/Presence';
 import { SchemaSerializer } from './serializer/SchemaSerializer';
 import { Serializer } from './serializer/Serializer';
 
-import { getMessageBytes, Protocol, ErrorCode } from './Protocol';
+import { ErrorCode, getMessageBytes, Protocol } from './Protocol';
 import { Deferred, spliceOne } from './Utils';
 
 import { debugAndPrintError, debugPatch } from './Debug';
+import { ServerError } from './errors/ServerError';
 import { RoomListingData } from './matchmaker/drivers/Driver';
 import { FossilDeltaSerializer } from './serializer/FossilDeltaSerializer';
 import { Client, ClientState, ISendOptions } from './transport/Transport';
-import { ServerError } from './errors/ServerError';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
