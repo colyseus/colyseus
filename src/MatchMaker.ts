@@ -189,7 +189,7 @@ export async function remoteRoomCall<R= any>(
 export function defineRoomType<T extends Type<Room>>(
   name: string,
   klass: T,
-  defaultOptions?: Parameters<InstanceType<T>['onCreate']>[0],
+  defaultOptions?: Parameters<NonNullable<InstanceType<T>['onCreate']>>[0],
 ) {
   const registeredHandler = new RegisteredHandler(klass, defaultOptions);
 

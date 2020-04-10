@@ -108,10 +108,8 @@ export abstract class Room<State= any, Metadata= any> {
     this.setPatchRate(this.patchRate);
   }
 
-  // onCreate is mandatory.
-  public abstract onCreate(options: any): void | Promise<any>;
-
   // Optional abstract methods
+  public onCreate?(options: any): void | Promise<any>;
   public onJoin?(client: Client, options?: any, auth?: any): void | Promise<any>;
   public onLeave?(client: Client, consented?: boolean): void | Promise<any>;
   public onDispose?(): void | Promise<any>;

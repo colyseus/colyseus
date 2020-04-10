@@ -120,7 +120,7 @@ export class Server {
   public define<T extends Type<Room>>(
     name: string,
     handler: T,
-    defaultOptions?: Parameters<InstanceType<T>['onCreate']>[0],
+    defaultOptions?: Parameters<NonNullable<InstanceType<T>['onCreate']>>[0],
   ): RegisteredHandler {
     return matchMaker.defineRoomType(name, handler, defaultOptions);
   }
