@@ -295,8 +295,8 @@ async function handleCreateRoom(roomName: string, clientOptions: ClientOptions):
   // imediatelly ask client to join the room
   debugMatchMaking('spawning \'%s\', roomId: %s, processId: %s', roomName, room.roomId, processId);
 
-  room._events.on('lock', lockRoom.bind(this, roomName, room));
-  room._events.on('unlock', unlockRoom.bind(this, roomName, room));
+  room._events.on('lock', lockRoom.bind(this, room));
+  room._events.on('unlock', unlockRoom.bind(this, room));
   room._events.on('join', onClientJoinRoom.bind(this, room));
   room._events.on('leave', onClientLeaveRoom.bind(this, room));
   room._events.once('dispose', disposeRoom.bind(this, roomName, room));
@@ -317,7 +317,7 @@ export function getRoomById(roomId: string) {
 
 export function gracefullyShutdown(): Promise<any> {
   if (isGracefullyShuttingDown) {
-    return Promise.reject(false);
+    return Promise.reject('already_shutting_down');
   }
 
   isGracefullyShuttingDown = true;
@@ -388,8 +388,6 @@ async function cleanupStaleRooms(roomName: string) {
     } catch (e) {
       debugMatchMaking(`cleaning up stale room '${roomName}', roomId: ${room.roomId}`);
       room.remove();
-
-      clearRoomReferences({ roomId: room.roomId, roomName } as Room);
     }
   }));
 }
@@ -411,11 +409,6 @@ async function createRoomReferences(room: Room, init: boolean = false): Promise<
   }
 
   return true;
-}
-
-function clearRoomReferences(room: Room) {
-  // clear list of connecting clients.
-  presence.del(room.roomId);
 }
 
 async function awaitRoomAvailable(roomToJoin: string, callback: Function): Promise<RoomListingData> {
@@ -448,6 +441,56 @@ async function awaitRoomAvailable(roomToJoin: string, callback: Function): Promi
   });
 }
 
+function onClientJoinRoom(room: Room, client: Client) {
+  handlers[room.roomName].emit('join', room, client);
+}
+
+function onClientLeaveRoom(room: Room, client: Client, willDispose: boolean) {
+  handlers[room.roomName].emit('leave', room, client, willDispose);
+}
+
+function lockRoom(room: Room): void {
+  // emit public event on registered handler
+  handlers[room.roomName].emit('lock', room);
+}
+
+async function unlockRoom(room: Room) {
+  if (await createRoomReferences(room)) {
+    // emit public event on registered handler
+    handlers[room.roomName].emit('unlock', room);
+  }
+}
+
+async function disposeRoom(roomName: string, room: Room) {
+  debugMatchMaking('disposing \'%s\' (%s) on processId \'%s\'', roomName, room.roomId, processId);
+
+  // decrease amount of rooms this process is handling
+  if (!isGracefullyShuttingDown) {
+    presence.hincrby(getRoomCountKey(), processId, -1);
+  }
+
+  // remove from room listing (already removed if `disconnect()` has been called)
+  if (room.internalState !== RoomInternalState.DISCONNECTING) {
+    await room.listing.remove();
+  }
+
+  // emit disposal on registered session handler
+  handlers[roomName].emit('dispose', room);
+
+  // remove concurrency key
+  presence.del(getHandlerConcurrencyKey(roomName));
+
+  // unsubscribe from remote connections
+  presence.unsubscribe(getRoomChannel(room.roomId));
+
+  // remove actual room reference
+  delete rooms[room.roomId];
+}
+
+//
+// Presence keys
+//
+
 function getRoomChannel(roomId: string) {
   return `$${roomId}`;
 }
@@ -462,54 +505,4 @@ function getProcessChannel(id: string = processId) {
 
 function getRoomCountKey() {
   return 'roomcount';
-}
-
-function onClientJoinRoom(room: Room, client: Client) {
-  handlers[room.roomName].emit('join', room, client);
-}
-
-function onClientLeaveRoom(room: Room, client: Client) {
-  handlers[room.roomName].emit('leave', room, client);
-}
-
-function lockRoom(roomName: string, room: Room): void {
-  clearRoomReferences(room);
-
-  // emit public event on registered handler
-  handlers[room.roomName].emit('lock', room);
-}
-
-async function unlockRoom(roomName: string, room: Room) {
-  if (await createRoomReferences(room)) {
-
-    // emit public event on registered handler
-    handlers[room.roomName].emit('unlock', room);
-  }
-}
-
-function disposeRoom(roomName: string, room: Room): void {
-  debugMatchMaking('disposing \'%s\' (%s) on processId \'%s\'', roomName, room.roomId, processId);
-
-  // decrease amount of rooms this process is handling
-  if (!isGracefullyShuttingDown) {
-    presence.hincrby(getRoomCountKey(), processId, -1);
-  }
-
-  // remove from room listing
-  room.listing.remove();
-
-  // emit disposal on registered session handler
-  handlers[roomName].emit('dispose', room);
-
-  // remove concurrency key
-  presence.del(getHandlerConcurrencyKey(roomName));
-
-  // remove from available rooms
-  clearRoomReferences(room);
-
-  // unsubscribe from remote connections
-  presence.unsubscribe(getRoomChannel(room.roomId));
-
-  // remove actual room reference
-  delete rooms[room.roomId];
 }

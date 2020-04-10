@@ -10,6 +10,7 @@ export { ServerError } from './errors/ServerError';
 // MatchMaker
 import * as matchMaker from './MatchMaker';
 export { matchMaker };
+export { updateLobby, subscribeLobby } from './matchmaker/Lobby';
 
 // Transport
 export { Client } from './transport/Transport';
@@ -19,9 +20,6 @@ export { Presence } from './presence/Presence';
 export { LocalPresence } from './presence/LocalPresence';
 export { RedisPresence } from './presence/RedisPresence';
 
-// Default rooms
-export { RelayRoom } from './rooms/RelayRoom';
-
 // Serializers
 export { FossilDeltaSerializer } from './serializer/FossilDeltaSerializer';
 export { SchemaSerializer } from './serializer/SchemaSerializer';
@@ -30,3 +28,7 @@ export { SchemaSerializer } from './serializer/SchemaSerializer';
 export { Clock, Delayed };
 export { nonenumerable as nosync } from 'nonenumerable'; // TODO: remove me on 1.0.0 (FossilDelta stuff)
 export { generateId, Deferred } from './Utils';
+
+// Default rooms
+export { LobbyRoom } from './rooms/LobbyRoom';
+export { RelayRoom } from './rooms/RelayRoom';

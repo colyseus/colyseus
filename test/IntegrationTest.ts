@@ -41,7 +41,7 @@ describe("Integration", () => {
           await server.listen(TEST_PORT);
         });
 
-        after(() => server.transport.shutdown());
+        after(() => server.gracefullyShutdown(false));
 
         describe("Room lifecycle", () => {
 

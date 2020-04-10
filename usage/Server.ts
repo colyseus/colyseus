@@ -2,7 +2,7 @@ import http from "http";
 import cors from "cors";
 import express from "express";
 
-import { Server, RedisPresence, RelayRoom } from "../src";
+import { Server, RedisPresence, RelayRoom, LobbyRoom } from "../src";
 import { DummyRoom } from "./DummyRoom";
 
 import { MongooseDriver } from "../src/matchmaker/drivers/MongooseDriver";
@@ -21,12 +21,14 @@ const gameServer = new Server({
   // engine: WebSocket.Server,
   server: server,
   // presence: new RedisPresence(),
-  // driver: new MongooseDriver(),
+  driver: new MongooseDriver(),
 });
 
 app.get("/hello", (req, res) => {
   res.json({hello: "world!"});
 });
+
+gameServer.define("lobby", LobbyRoom);
 
 // Define RelayRoom as "relay"
 gameServer.define("relay", RelayRoom);

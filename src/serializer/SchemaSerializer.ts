@@ -32,13 +32,12 @@ export class SchemaSerializer<T> implements Serializer<T> {
     if (hasChanges) {
       let numClients = clients.length;
 
+      // dump changes for patch debugging
+      if (debugPatch.enabled) {
+        (debugPatch as any).dumpChanges = dumpChanges(this.state);
+      }
+
       if (!this.hasFiltersByClient) {
-
-        // dump changes for patch debugging
-        if (debugPatch.enabled) {
-          (debugPatch as any).dumpChanges = dumpChanges(this.state);
-        }
-
         // encode changes once, for all clients
         const patches = this.state.encode();
         patches.unshift(Protocol.ROOM_STATE_PATCH);
@@ -63,6 +62,14 @@ export class SchemaSerializer<T> implements Serializer<T> {
         while (numClients--) {
           const client = clients[numClients];
           client.enqueueRaw([Protocol.ROOM_STATE_PATCH, ...this.state.encodeFiltered(client)]);
+        }
+
+        if (debugPatch.enabled) {
+          debugPatch(
+            'filterd patch sent to %d clients, %j',
+            clients.length,
+            (debugPatch as any).dumpChanges,
+          );
         }
 
         this.state.discardAllChanges();

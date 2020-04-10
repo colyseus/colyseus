@@ -170,7 +170,7 @@ export abstract class Room<State= any, Metadata= any> {
     this.state = newState;
   }
 
-  public setMetadata(meta: Partial<Metadata>) {
+  public async setMetadata(meta: Partial<Metadata>) {
     if (!this.listing.metadata) {
       this.listing.metadata = meta as Metadata;
 
@@ -179,10 +179,15 @@ export abstract class Room<State= any, Metadata= any> {
         if (!meta.hasOwnProperty(field)) { continue; }
         this.listing.metadata[field] = meta[field];
       }
+
+      // `MongooseDriver` workaround: persit metadata mutations
+      if ('markModified' in this.listing) {
+        (this.listing as any).markModified('metadata');
+      }
     }
 
     if (this.internalState === RoomInternalState.CREATED) {
-      this.listing.save();
+      await this.listing.save();
     }
   }
 
@@ -190,7 +195,7 @@ export abstract class Room<State= any, Metadata= any> {
     this.listing.private = bool;
 
     if (this.internalState === RoomInternalState.CREATED) {
-      return await this.listing.save();
+      await this.listing.save();
     }
   }
 
@@ -201,13 +206,13 @@ export abstract class Room<State= any, Metadata= any> {
     // skip if already locked.
     if (this._locked) { return; }
 
-    this._events.emit('lock');
-
     this._locked = true;
 
-    return await this.listing.updateOne({
+    await this.listing.updateOne({
       $set: { locked: this._locked },
     });
+
+    this._events.emit('lock');
   }
 
   public async unlock() {
@@ -219,13 +224,13 @@ export abstract class Room<State= any, Metadata= any> {
     // skip if already locked
     if (!this._locked) { return; }
 
-    this._events.emit('unlock');
-
     this._locked = false;
 
-    return await this.listing.updateOne({
+    await this.listing.updateOne({
       $set: { locked: this._locked },
     });
+
+    this._events.emit('unlock');
   }
 
   public send(client: Client, message: Schema, options?: ISendOptions): void;
@@ -266,8 +271,10 @@ export abstract class Room<State= any, Metadata= any> {
     return this;
   }
 
-  public disconnect(): Promise<any> {
+  public async disconnect(): Promise<any> {
     this.internalState = RoomInternalState.DISCONNECTING;
+    await this.listing.remove();
+
     this.autoDispose = true;
 
     const delayedDisconnection = new Promise((resolve) =>
@@ -279,10 +286,7 @@ export abstract class Room<State= any, Metadata= any> {
 
     let numClients = this.clients.length;
     if (numClients > 0) {
-      // prevent new clients to join while this room is disconnecting.
-      this.lock();
-
-      // clients may have `async onLeave`, room will be disposed after they all run
+      // clients may have `async onLeave`, room will be disposed after they're fulfilled
       while (numClients--) {
         this._forciblyCloseClient(this.clients[numClients], Protocol.WS_CLOSE_CONSENTED);
       }
@@ -291,7 +295,7 @@ export abstract class Room<State= any, Metadata= any> {
       this._events.emit('dispose');
     }
 
-    return delayedDisconnection;
+    return await delayedDisconnection;
   }
 
   public async ['_onJoin'](client: Client, req?: http.IncomingMessage) {
@@ -361,7 +365,7 @@ export abstract class Room<State= any, Metadata= any> {
     ));
   }
 
-  protected allowReconnection(previousClient: Client, seconds: number = Infinity): Deferred {
+  public allowReconnection(previousClient: Client, seconds: number = Infinity): Deferred {
     if (this.internalState === RoomInternalState.DISCONNECTING) {
       this._disposeIfEmpty(); // gracefully shutting down
       throw new Error('disconnecting');
@@ -396,13 +400,13 @@ export abstract class Room<State= any, Metadata= any> {
       }).
       catch(() => {
         cleanup();
-        this._disposeIfEmpty();
+        this.resetAutoDisposeTimeout();
       });
 
     return reconnection;
   }
 
-  protected resetAutoDisposeTimeout(timeoutInSeconds: number) {
+  protected resetAutoDisposeTimeout(timeoutInSeconds: number = 1) {
     clearTimeout(this._autoDisposeTimeout);
 
     if (!this.autoDispose) {
@@ -609,27 +613,22 @@ export abstract class Room<State= any, Metadata= any> {
   private async _onLeave(client: Client, code?: number): Promise<any> {
     const success = spliceOne(this.clients, this.clients.indexOf(client));
 
-    // call abstract 'onLeave' method only if the client has been successfully accepted.
-    if (success) {
-      if (this.onLeave) {
-        try {
-          await this.onLeave(client, (code === Protocol.WS_CLOSE_CONSENTED));
+    // call 'onLeave' method only if the client has been successfully accepted.
+    if (success && this.onLeave) {
+      try {
+        await this.onLeave(client, (code === Protocol.WS_CLOSE_CONSENTED));
 
-        } catch (e) {
-          debugAndPrintError(`onLeave error: ${(e && e.message || e || 'promise rejected')}`);
-        }
-      }
-
-      if (client.state !== ClientState.RECONNECTED) {
-        this._events.emit('leave', client);
+      } catch (e) {
+        debugAndPrintError(`onLeave error: ${(e && e.message || e || 'promise rejected')}`);
       }
     }
 
-    // skip next checks if client has reconnected successfully (through `allowReconnection()`)
-    if (client.state === ClientState.RECONNECTED) { return; }
+    if (client.state !== ClientState.RECONNECTED) {
+      // try to dispose immediatelly if client reconnection isn't set up.
+      const willDispose = await this._decrementClientCount();
 
-    // try to dispose immediatelly if client reconnection isn't set up.
-    await this._decrementClientCount();
+      this._events.emit('leave', client, willDispose);
+    }
   }
 
   private async _incrementClientCount() {
@@ -648,6 +647,10 @@ export abstract class Room<State= any, Metadata= any> {
   private async _decrementClientCount() {
     const willDispose = this._disposeIfEmpty();
 
+    if (this.internalState === RoomInternalState.DISCONNECTING) {
+      return;
+    }
+
     // unlock if room is available for new connections
     if (!willDispose) {
       if (this._maxClientsReached && !this._lockedExplicitly) {
@@ -661,6 +664,8 @@ export abstract class Room<State= any, Metadata= any> {
         $set: { locked: this._locked },
       });
     }
+
+    return willDispose;
   }
 
 }
