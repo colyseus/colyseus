@@ -16,8 +16,8 @@ import { generateId } from '.';
 import { registerNode, unregisterNode } from './discovery';
 import { LocalPresence } from './presence/LocalPresence';
 
-import { MatchMakeError } from './errors/MatchMakeError';
-import { Protocol } from './Protocol';
+import { ServerError } from './errors/ServerError';
+import { Protocol, ErrorCode } from './Protocol';
 import { Transport } from './transport/Transport';
 
 import { TCPTransport } from './transport/TCP/TCPTransport';
@@ -185,8 +185,8 @@ export class Server {
 
     } else if (req.method === 'POST') {
       const matchedParams = req.url.match(this.allowedRoomNameChars);
-      const method = matchedParams[matchedParams.length - 2];
-      const name = matchedParams[matchedParams.length - 1];
+      const method = matchedParams[1];
+      const name = matchedParams[2] || "";
 
       const data = [];
       req.on('data', (chunk) => data.push(chunk));
@@ -197,7 +197,7 @@ export class Server {
         const body = JSON.parse(Buffer.concat(data).toString());
         try {
           if (this.exposedMethods.indexOf(method) === -1) {
-            throw new MatchMakeError(`invalid method "${method}"`);
+            throw new ServerError(`invalid method "${method}"`, ErrorCode.MATCHMAKE_NO_HANDLER);
           }
 
           const response = await matchMaker[method](name, body);
@@ -205,7 +205,7 @@ export class Server {
 
         } catch (e) {
           res.write(JSON.stringify({
-            code: e.code || Protocol.ERR_MATCHMAKE_UNHANDLED,
+            code: e.code || ErrorCode.MATCHMAKE_UNHANDLED,
             error: e.message,
           }));
         }

@@ -45,5 +45,6 @@ export interface Client {
   send(type: string | number, message?: any, options?: ISendOptions): void;
 
   error(code: number, message?: string): void;
+  leave(code?: number, data?: string): void;
   close(code?: number, data?: string): void;
 }

@@ -6,7 +6,6 @@ import WebSocket from 'ws';
 import * as matchMaker from '../../MatchMaker';
 import { Protocol } from '../../Protocol';
 
-import { send } from '../../Protocol';
 import { ServerOptions } from '../../Server';
 import { Transport } from '../Transport';
 
@@ -117,9 +116,7 @@ export class WebSocketTransport extends Transport {
 
     } catch (e) {
       debugAndPrintError(e);
-      // TODO: call `client.error()`
-      // client.error(e.code, e.message);
-      send[Protocol.JOIN_ERROR](client, (e && e.message) || '');
+      client.error(e.code, e.message);
       rawClient.close(Protocol.WS_CLOSE_WITH_ERROR);
     }
   }

@@ -1,7 +1,7 @@
 import WebSocket from 'ws';
 
 import { Schema } from '@colyseus/schema';
-import { getMessageBytes, Protocol } from '../../Protocol';
+import { getMessageBytes, Protocol, utf8Length } from '../../Protocol';
 import { Client, ClientState, ISendOptions } from '../Transport';
 
 const SEND_OPTS = { binary: true };
@@ -48,25 +48,29 @@ export class WebSocketClient implements Client {
       return;
     }
 
-    this.ref.send(data, SEND_OPTS);
+    this.ref.send(data, SEND_OPTS, );
   }
 
-  public error(code: number, message?: string) {
-    // TODO: send code + message error
-
-    // if (client.readyState !== WebSocket.OPEN) { return; }
-    // const buff = Buffer.allocUnsafe(1 + utf8Length(message));
-    // buff.writeUInt8(Protocol.JOIN_ERROR, 0);
-    // utf8Write(buff, 1, message);
-    // client.send(buff, { binary: true });
+  public error(code: number, message: string = "") {
+    this.raw(getMessageBytes[Protocol.ERROR](code, message));
   }
 
   get readyState() {
     return this.ref.readyState;
   }
 
-  public close(code?: number, data?: string) {
+  public leave(code?: number, data?: string) {
     this.ref.close(code, data);
+  }
+
+  public close(code?: number, data?: string) {
+    console.warn('DEPRECATION WARNING: use client.leave() instead of client.close()');
+    try {
+      throw new Error();
+    } catch (e) {
+      console.log(e.stack);
+    }
+    this.leave(code, data);
   }
 
   public toJSON() {

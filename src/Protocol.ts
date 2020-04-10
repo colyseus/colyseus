@@ -1,15 +1,13 @@
 import msgpack from 'notepack.io';
-import WebSocket from 'ws';
 
 import { Schema } from '@colyseus/schema';
 import * as encode from '@colyseus/schema/lib/encoding/encode';
-import { Client, ClientState } from './transport/Transport';
 
 // Colyseus protocol codes range between 0~100
 export enum Protocol {
   // Room-related (10~19)
   JOIN_ROOM = 10,
-  JOIN_ERROR = 11,
+  ERROR = 11,
   LEAVE_ROOM = 12,
   ROOM_DATA = 13,
   ROOM_STATE = 14,
@@ -24,13 +22,18 @@ export enum Protocol {
   WS_CLOSE_WITH_ERROR = 4002,
   WS_SERVER_DISCONNECT = 4201,
   WS_TOO_MANY_CLIENTS = 4202,
+}
 
+export enum ErrorCode {
   // MatchMaking Error Codes
-  ERR_MATCHMAKE_NO_HANDLER = 4210,
-  ERR_MATCHMAKE_INVALID_CRITERIA = 4211,
-  ERR_MATCHMAKE_INVALID_ROOM_ID = 4212,
-  ERR_MATCHMAKE_UNHANDLED = 4213, // generic exception during onCreate/onJoin
-  ERR_MATCHMAKE_EXPIRED = 4214, // generic exception during onCreate/onJoin
+  MATCHMAKE_NO_HANDLER = 4210,
+  MATCHMAKE_INVALID_CRITERIA = 4211,
+  MATCHMAKE_INVALID_ROOM_ID = 4212,
+  MATCHMAKE_UNHANDLED = 4213, // generic exception during onCreate/onJoin
+  MATCHMAKE_EXPIRED = 4214, // generic exception during onCreate/onJoin
+
+  AUTH_FAILED = 4215,
+  APPLICATION_ERROR = 4216,
 }
 
 // Inter-process communication protocol
@@ -39,17 +42,6 @@ export enum IpcProtocol {
   ERROR = 1,
   TIMEOUT = 2,
 }
-
-// TODO: move `send[Protocol.xxx]` messages to `getMessageBytes[Protocol.xxx]()`.
-export const send = {
-  [Protocol.JOIN_ERROR]: (client: Client, message: string) => {
-    if (client.readyState !== WebSocket.OPEN) { return; }
-    const buff = Buffer.allocUnsafe(1 + utf8Length(message));
-    buff.writeUInt8(Protocol.JOIN_ERROR, 0);
-    utf8Write(buff, 1, message);
-    client.raw(buff);
-  },
-};
 
 export const getMessageBytes = {
   [Protocol.JOIN_ROOM]: (serializerId: string, handshake?: number[]) => {
@@ -71,6 +63,15 @@ export const getMessageBytes = {
     }
 
     return buff;
+  },
+
+  [Protocol.ERROR]: (code: number, message: string = "") => {
+    const bytes = [Protocol.ERROR];
+
+    encode.number(bytes, code);
+    encode.string(bytes, message);
+
+    return bytes;
   },
 
   [Protocol.ROOM_STATE]: (bytes: number[]) => {

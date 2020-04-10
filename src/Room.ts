@@ -12,13 +12,14 @@ import { Presence } from './presence/Presence';
 import { SchemaSerializer } from './serializer/SchemaSerializer';
 import { Serializer } from './serializer/Serializer';
 
-import { getMessageBytes, Protocol, send } from './Protocol';
+import { getMessageBytes, Protocol, ErrorCode } from './Protocol';
 import { Deferred, spliceOne } from './Utils';
 
 import { debugAndPrintError, debugPatch } from './Debug';
 import { RoomListingData } from './matchmaker/drivers/Driver';
 import { FossilDeltaSerializer } from './serializer/FossilDeltaSerializer';
 import { Client, ClientState, ISendOptions } from './transport/Transport';
+import { ServerError } from './errors/ServerError';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
@@ -63,9 +64,7 @@ export abstract class Room<State= any, Metadata= any> {
   public presence: Presence;
 
   public clients: Client[] = [];
-
-  /** @internal */
-  public _internalState: RoomInternalState = RoomInternalState.CREATING;
+  public internalState: RoomInternalState = RoomInternalState.CREATING;
 
   /** @internal */
   public _events = new EventEmitter();
@@ -182,7 +181,7 @@ export abstract class Room<State= any, Metadata= any> {
       }
     }
 
-    if (this._internalState === RoomInternalState.CREATED) {
+    if (this.internalState === RoomInternalState.CREATED) {
       this.listing.save();
     }
   }
@@ -190,7 +189,7 @@ export abstract class Room<State= any, Metadata= any> {
   public async setPrivate(bool: boolean = true) {
     this.listing.private = bool;
 
-    if (this._internalState === RoomInternalState.CREATED) {
+    if (this.internalState === RoomInternalState.CREATED) {
       return await this.listing.save();
     }
   }
@@ -268,7 +267,7 @@ export abstract class Room<State= any, Metadata= any> {
   }
 
   public disconnect(): Promise<any> {
-    this._internalState = RoomInternalState.DISCONNECTING;
+    this.internalState = RoomInternalState.DISCONNECTING;
     this.autoDispose = true;
 
     const delayedDisconnection = new Promise((resolve) =>
@@ -327,7 +326,7 @@ export abstract class Room<State= any, Metadata= any> {
         client.auth = await this.onAuth(client, options, req);
 
         if (!client.auth) {
-          throw new Error('onAuth failed.');
+          throw new ServerError(ErrorCode.AUTH_FAILED, 'onAuth failed');
         }
 
         if (this.onJoin) {
@@ -335,6 +334,12 @@ export abstract class Room<State= any, Metadata= any> {
         }
       } catch (e) {
         spliceOne(this.clients, this.clients.indexOf(client));
+
+        // make sure an error code is provided.
+        if (!e.code) {
+          e.code = ErrorCode.APPLICATION_ERROR;
+        }
+
         throw e;
 
       } finally {
@@ -357,7 +362,7 @@ export abstract class Room<State= any, Metadata= any> {
   }
 
   protected allowReconnection(previousClient: Client, seconds: number = Infinity): Deferred {
-    if (this._internalState === RoomInternalState.DISCONNECTING) {
+    if (this.internalState === RoomInternalState.DISCONNECTING) {
       this._disposeIfEmpty(); // gracefully shutting down
       throw new Error('disconnecting');
     }
@@ -598,7 +603,7 @@ export abstract class Room<State= any, Metadata= any> {
     }
 
     // only effectively close connection when "onLeave" is fulfilled
-    this._onLeave(client, closeCode).then(() => client.close(Protocol.WS_CLOSE_NORMAL));
+    this._onLeave(client, closeCode).then(() => client.leave(Protocol.WS_CLOSE_NORMAL));
   }
 
   private async _onLeave(client: Client, code?: number): Promise<any> {

@@ -81,9 +81,13 @@ export class WebSocketClient implements Client {
     return this.ref.readyState;
   }
 
-  close (code?: number) {
+  leave(code?: number) {
     this.ref.readyState = WebSocket.CLOSED;
     this.ref.emit('close');
+  }
+
+  close (code?: number) {
+    this.leave(code);
   }
 
   terminate() {

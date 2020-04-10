@@ -3,9 +3,9 @@ import sinon from "sinon";
 import * as Colyseus from "colyseus.js";
 import { Schema, type, Context } from "@colyseus/schema";
 
-import { matchMaker, Room, Client, Server } from "../src";
+import { matchMaker, Room, Client, Server, ErrorCode } from "../src";
 import { DummyRoom, DRIVERS, timeout, Room3Clients, PRESENCE_IMPLEMENTATIONS, Room2Clients, Room2ClientsExplicitLock } from "./utils";
-import { MatchMakeError } from "../src/MatchMaker";
+import { ServerError } from "../src/errors/ServerError";
 
 import WebSocket from "ws";
 
@@ -44,10 +44,6 @@ describe("Integration", () => {
         after(() => server.transport.shutdown());
 
         describe("Room lifecycle", () => {
-          // after(() => {
-          //   matchMaker.removeRoomType('oncreate');
-          //   matchMaker.removeRoomType('onjoin');
-          // });
 
           describe("onCreate()", () => {
             it("sync onCreate()", async () => {
@@ -129,7 +125,7 @@ describe("Integration", () => {
             it("error during onJoin should reject client-side promise", async () => {
               matchMaker.defineRoomType('onjoin', class _ extends Room {
                 async onJoin(client: Client, options: any) {
-                  throw new MatchMakeError("not_allowed");
+                  throw new Error("not_allowed");
                 }
               });
 
@@ -169,7 +165,7 @@ describe("Integration", () => {
           it("onAuth() error should reject join promise", async() => {
             matchMaker.defineRoomType('onauth', class _ extends Room {
               async onAuth(client: Client, options: any) {
-                throw new MatchMakeError("not_allowed");
+                throw new Error("not_allowed");
               }
             });
 
@@ -714,7 +710,7 @@ describe("Integration", () => {
                 async onCreate() {
                   const hasRoom = await presence.hget("created", "single3");
                   if (hasRoom) {
-                    throw new MatchMakeError("only_one_room_of_this_type_allowed");
+                    throw new Error("only_one_room_of_this_type_allowed");
                   } else {
                     await this.presence.hset("created", "single3", "1");
                   }
@@ -795,8 +791,98 @@ describe("Integration", () => {
 
           })
 
-
         });
+
+        describe("Error handling", () => {
+            it("ErrorCode.MATCHMAKE_NO_HANDLER", async () => {
+              try {
+                await client.joinOrCreate('nonexisting')
+                assert.fail("joinOrCreate should have failed.");
+
+              } catch (e) {
+                assert.equal(ErrorCode.MATCHMAKE_NO_HANDLER, e.code)
+              }
+            });
+
+            it("should have reasonable error message when providing an empty room name", async () => {
+              try {
+                await client.joinOrCreate('')
+                assert.fail("joinOrCreate should have failed.");
+
+              } catch (e) {
+                assert.equal(ErrorCode.MATCHMAKE_NO_HANDLER, e.code)
+                assert.equal('provided room name "" not defined', e.message);
+              }
+            });
+
+            it("ErrorCode.AUTH_FAILED", async () => {
+              matchMaker.defineRoomType('onAuthFail', class _ extends Room {
+                async onAuth(client: Client, options: any) {
+                  return false;
+                }
+              });
+
+              try {
+                await client.joinOrCreate('onAuthFail')
+                assert.fail("joinOrCreate should have failed.");
+
+              } catch (e) {
+                assert.equal(ErrorCode.AUTH_FAILED, e.code)
+              }
+            });
+
+            it("onAuth: custom error", async () => {
+              matchMaker.defineRoomType('onAuthFail', class _ extends Room {
+                async onAuth(client: Client, options: any) {
+                  throw new ServerError(1, "invalid token");
+                }
+              });
+
+              try {
+                await client.joinOrCreate('onAuthFail')
+                assert.fail("joinOrCreate should have failed.");
+
+              } catch (e) {
+                assert.equal(1, e.code);
+                assert.equal("invalid token", e.message);
+              }
+            });
+
+            it("onJoin: application error", async () => {
+              matchMaker.defineRoomType('onJoinError', class _ extends Room {
+                async onJoin(client: Client, options: any) {
+                  throw new Error("unexpected error");
+                }
+              });
+
+              try {
+                await client.joinOrCreate('onJoinError')
+                assert.fail("joinOrCreate should have failed.");
+
+              } catch (e) {
+                assert.equal(ErrorCode.APPLICATION_ERROR, e.code)
+                assert.equal("unexpected error", e.message)
+              }
+            });
+
+            it("onJoin: application error with custom code", async () => {
+              matchMaker.defineRoomType('onJoinError', class _ extends Room {
+                async onJoin(client: Client, options: any) {
+                  throw new ServerError(2, "unexpected error");
+                }
+              });
+
+              try {
+                await client.joinOrCreate('onJoinError')
+                assert.fail("joinOrCreate should have failed.");
+
+              } catch (e) {
+                assert.equal(2, e.code)
+                assert.equal("unexpected error", e.message)
+              }
+            });
+        });
+
 
       });
 

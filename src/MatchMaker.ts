@@ -1,4 +1,4 @@
-import { Protocol } from './Protocol';
+import { ErrorCode } from './Protocol';
 
 import { requestFromIPC, subscribeIPC } from './IPC';
 import { generateId, merge, REMOTE_ROOM_SHORT_TIMEOUT, retry } from './Utils';
@@ -10,14 +10,14 @@ import { LocalPresence } from './presence/LocalPresence';
 import { Presence } from './presence/Presence';
 
 import { debugAndPrintError, debugMatchMaking } from './Debug';
-import { MatchMakeError } from './errors/MatchMakeError';
+import { ServerError } from './errors/ServerError';
 import { SeatReservationError } from './errors/SeatReservationError';
 import { MatchMakerDriver, RoomListingData } from './matchmaker/drivers/Driver';
 import { LocalDriver } from './matchmaker/drivers/LocalDriver';
 import { Client } from './transport/Transport';
 import { Type } from './types';
 
-export { MatchMakerDriver, MatchMakeError };
+export { MatchMakerDriver };
 
 export type ClientOptions = any;
 
@@ -82,7 +82,7 @@ export async function join(roomName: string, options: ClientOptions = {}) {
     const room = await findOneRoomAvailable(roomName, options);
 
     if (!room) {
-      throw new MatchMakeError(`no rooms found with provided criteria`, Protocol.ERR_MATCHMAKE_INVALID_CRITERIA);
+      throw new ServerError(ErrorCode.MATCHMAKE_INVALID_CRITERIA, `no rooms found with provided criteria`);
     }
 
     return reserveSeatFor(room, options);
@@ -106,7 +106,7 @@ export async function joinById(roomId: string, options: ClientOptions = {}) {
         return { room, sessionId: rejoinSessionId };
 
       } else {
-        throw new MatchMakeError(`session expired`, Protocol.ERR_MATCHMAKE_EXPIRED);
+        throw new ServerError(ErrorCode.MATCHMAKE_EXPIRED, `session expired: ${rejoinSessionId}`);
 
       }
 
@@ -114,12 +114,12 @@ export async function joinById(roomId: string, options: ClientOptions = {}) {
       return reserveSeatFor(room, options);
 
     } else {
-      throw new MatchMakeError(`room "${roomId}" is locked`, Protocol.ERR_MATCHMAKE_INVALID_ROOM_ID);
+      throw new ServerError( ErrorCode.MATCHMAKE_INVALID_ROOM_ID, `room "${roomId}" is locked`);
 
     }
 
   } else {
-    throw new MatchMakeError(`room "${roomId}" not found`, Protocol.ERR_MATCHMAKE_INVALID_ROOM_ID);
+    throw new ServerError( ErrorCode.MATCHMAKE_INVALID_ROOM_ID, `room "${roomId}" not found`);
   }
 
 }
@@ -138,7 +138,7 @@ export async function findOneRoomAvailable(roomName: string, options: ClientOpti
   return await awaitRoomAvailable(roomName, async () => {
     const handler = handlers[roomName];
     if (!handler) {
-      throw new MatchMakeError(`"${roomName}" not defined`, Protocol.ERR_MATCHMAKE_NO_HANDLER);
+      throw new ServerError( ErrorCode.MATCHMAKE_NO_HANDLER, `provided room name "${roomName}" not defined`);
     }
 
     const roomQuery = driver.findOne({
@@ -173,9 +173,9 @@ export async function remoteRoomCall<R= any>(
 
     } catch (e) {
       const request = `${method}${args && ' with args ' + JSON.stringify(args) || ''}`;
-      throw new MatchMakeError(
+      throw new ServerError(
+        ErrorCode.MATCHMAKE_UNHANDLED,
         `remote room (${roomId}) timed out, requesting "${request}". (${rejectionTimeout}ms exceeded)`,
-        Protocol.ERR_MATCHMAKE_UNHANDLED,
       );
     }
 
@@ -217,7 +217,7 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
 
   const processIdWithFewerRooms = (
     Object.keys(roomsSpawnedByProcessId).sort((p1, p2) => {
-      return (roomsSpawnedByProcessId[p1] > roomsSpawnedByProcessId[p2])
+      return (Number(roomsSpawnedByProcessId[p1]) > Number(roomsSpawnedByProcessId[p2]))
         ? 1
         : -1;
     })[0]
@@ -254,7 +254,7 @@ async function handleCreateRoom(roomName: string, clientOptions: ClientOptions):
   const registeredHandler = handlers[roomName];
 
   if (!registeredHandler) {
-    throw new MatchMakeError(`"${roomName}" not defined`, Protocol.ERR_MATCHMAKE_NO_HANDLER);
+    throw new ServerError( ErrorCode.MATCHMAKE_NO_HANDLER, `provided room name "${roomName}" not defined`);
   }
 
   const room = new registeredHandler.klass();
@@ -280,11 +280,14 @@ async function handleCreateRoom(roomName: string, clientOptions: ClientOptions):
 
     } catch (e) {
       debugAndPrintError(e);
-      throw new MatchMakeError(e.message);
+      throw new ServerError(
+        e.code || ErrorCode.MATCHMAKE_UNHANDLED,
+        e.message,
+      );
     }
   }
 
-  room._internalState = RoomInternalState.CREATED;
+  room.internalState = RoomInternalState.CREATED;
 
   room.listing.roomId = room.roomId;
   room.listing.maxClients = room.maxClients;

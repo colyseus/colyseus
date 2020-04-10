@@ -2,7 +2,7 @@ import * as net from 'net';
 
 import { generateId } from '../..';
 import * as matchMaker from '../../MatchMaker';
-import { Protocol, send } from '../../Protocol';
+import { Protocol } from '../../Protocol';
 import { ServerOptions } from '../../Server';
 import { Transport } from '../Transport';
 
@@ -76,7 +76,7 @@ export class TCPTransport extends Transport {
 
       } catch (e) {
         debugAndPrintError(e);
-        send[Protocol.JOIN_ERROR](client, (e && e.message) || '');
+        // send[Protocol.ERROR](client, (e && e.message) || '');
         client.close(Protocol.WS_CLOSE_WITH_ERROR);
       }
 
