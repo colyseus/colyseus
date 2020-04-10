@@ -197,7 +197,7 @@ export class Server {
         const body = JSON.parse(Buffer.concat(data).toString());
         try {
           if (this.exposedMethods.indexOf(method) === -1) {
-            throw new ServerError(`invalid method "${method}"`, ErrorCode.MATCHMAKE_NO_HANDLER);
+            throw new ServerError(ErrorCode.MATCHMAKE_NO_HANDLER, `invalid method "${method}"`);
           }
 
           const response = await matchMaker[method](name, body);
