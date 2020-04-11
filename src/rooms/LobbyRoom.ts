@@ -11,8 +11,8 @@ import { Client } from '../transport/Transport';
 // }
 
 export interface FilterInput {
-  name?: string,
-  metadata?: any
+  name?: string;
+  metadata?: any;
 }
 
 export interface LobbyOptions {
