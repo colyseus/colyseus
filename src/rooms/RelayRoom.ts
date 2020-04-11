@@ -9,10 +9,12 @@ import { Client } from '../transport/Transport';
 const context = new Context();
 
 class Player extends Schema { // tslint:disable-line
+  public name: boolean;
   public connected: boolean;
   public sessionId: string;
 }
 defineTypes(Player, {
+  name: 'string',
   connected: 'boolean',
   sessionId: 'string',
 }, context);
@@ -54,21 +56,19 @@ export class RelayRoom extends Room<State> { // tslint:disable-line
     }
 
     this.onMessage('*', (client: Client, type: string, message: any) => {
-      /**
-       * append `sessionId` into the message for broadcast.
-       */
-      if (typeof (message) === 'object' && !Array.isArray(message)) {
-        message.sessionId = client.sessionId;
-      }
-
-      this.broadcast(type, message, { except: client });
+      this.broadcast(type, [client.sessionId, message], { except: client });
     });
   }
 
-  public onJoin(client: Client, options: any) {
+  public onJoin(client: Client, options: any = {}) {
     const player = new Player();
+
     player.connected = true;
     player.sessionId = client.sessionId;
+
+    if (options.name) {
+      player.name = options.name;
+    }
 
     this.state.players[client.sessionId] = player;
   }
