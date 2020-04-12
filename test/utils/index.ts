@@ -10,18 +10,18 @@ import { MongooseDriver } from "../../src/matchmaker/drivers/MongooseDriver";
 import { LocalPresence, RedisPresence, Presence, Client, Deferred } from "../../src";
 import { ClientState } from "../../src/transport/Transport";
 
-export const DRIVERS = [ new LocalDriver(), ];
-export const PRESENCE_IMPLEMENTATIONS: Presence[] = [ new LocalPresence(), ];
+// export const DRIVERS = [ new LocalDriver(), ];
+// export const PRESENCE_IMPLEMENTATIONS: Presence[] = [ new LocalPresence(), ];
 
-// export const DRIVERS = [
-//   new LocalDriver(),
-//   new MongooseDriver('mongodb://127.0.0.1:27017/colyseus_test'),
-// ];
+export const DRIVERS = [
+  new LocalDriver(),
+  new MongooseDriver('mongodb://127.0.0.1:27017/colyseus_test'),
+];
 
-// export const PRESENCE_IMPLEMENTATIONS: Presence[] = [
-//   new LocalPresence(),
-//   new RedisPresence()
-// ];
+export const PRESENCE_IMPLEMENTATIONS: Presence[] = [
+  new LocalPresence(),
+  new RedisPresence()
+];
 
 export class RawClient extends EventEmitter {
   readyState: number;

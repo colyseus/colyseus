@@ -9,13 +9,13 @@ import { Client } from '../transport/Transport';
 const context = new Context();
 
 class Player extends Schema { // tslint:disable-line
-  public name: boolean;
   public connected: boolean;
+  public name: boolean;
   public sessionId: string;
 }
 defineTypes(Player, {
-  name: 'string',
   connected: 'boolean',
+  name: 'string',
   sessionId: 'string',
 }, context);
 
