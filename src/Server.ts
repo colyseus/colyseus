@@ -7,18 +7,21 @@ import { debugAndPrintError, debugMatchMaking } from './Debug';
 import * as matchMaker from './MatchMaker';
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
 import { Presence } from './presence/Presence';
-import { TCPTransport, Transport, WebSocketTransport } from './transport/Transport';
 
 import { Room } from './Room';
+import { Type } from './types';
 import { registerGracefulShutdown } from './Utils';
 
 import { generateId } from '.';
 import { registerNode, unregisterNode } from './discovery';
 import { LocalPresence } from './presence/LocalPresence';
 
-import { MatchMakeError } from './errors/MatchMakeError';
-import { Protocol } from './Protocol';
-import { Type } from './types';
+import { ServerError } from './errors/ServerError';
+import { ErrorCode, Protocol } from './Protocol';
+import { Transport } from './transport/Transport';
+
+import { TCPTransport } from './transport/TCP/TCPTransport';
+import { WebSocketTransport } from './transport/WebSocket/WebSocketTransport';
 
 export type ServerOptions = IServerOptions & {
   pingInterval?: number,
@@ -117,7 +120,7 @@ export class Server {
   public define<T extends Type<Room>>(
     name: string,
     handler: T,
-    defaultOptions?: Parameters<InstanceType<T>['onCreate']>[0],
+    defaultOptions?: Parameters<NonNullable<InstanceType<T>['onCreate']>>[0],
   ): RegisteredHandler {
     return matchMaker.defineRoomType(name, handler, defaultOptions);
   }
@@ -182,8 +185,8 @@ export class Server {
 
     } else if (req.method === 'POST') {
       const matchedParams = req.url.match(this.allowedRoomNameChars);
-      const method = matchedParams[matchedParams.length - 2];
-      const name = matchedParams[matchedParams.length - 1];
+      const method = matchedParams[1];
+      const name = matchedParams[2] || '';
 
       const data = [];
       req.on('data', (chunk) => data.push(chunk));
@@ -194,7 +197,7 @@ export class Server {
         const body = JSON.parse(Buffer.concat(data).toString());
         try {
           if (this.exposedMethods.indexOf(method) === -1) {
-            throw new MatchMakeError(`invalid method "${method}"`);
+            throw new ServerError(ErrorCode.MATCHMAKE_NO_HANDLER, `invalid method "${method}"`);
           }
 
           const response = await matchMaker[method](name, body);
@@ -202,7 +205,7 @@ export class Server {
 
         } catch (e) {
           res.write(JSON.stringify({
-            code: e.code || Protocol.ERR_MATCHMAKE_UNHANDLED,
+            code: e.code || ErrorCode.MATCHMAKE_UNHANDLED,
             error: e.message,
           }));
         }

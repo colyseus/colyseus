@@ -1,14 +1,13 @@
-import http from 'http';
 import msgpack from 'notepack.io';
-import WebSocket from 'ws';
 
-import { debugAndPrintError } from './Debug';
+import { Schema } from '@colyseus/schema';
+import * as encode from '@colyseus/schema/lib/encoding/encode';
 
 // Colyseus protocol codes range between 0~100
 export enum Protocol {
   // Room-related (10~19)
   JOIN_ROOM = 10,
-  JOIN_ERROR = 11,
+  ERROR = 11,
   LEAVE_ROOM = 12,
   ROOM_DATA = 13,
   ROOM_STATE = 14,
@@ -23,13 +22,18 @@ export enum Protocol {
   WS_CLOSE_WITH_ERROR = 4002,
   WS_SERVER_DISCONNECT = 4201,
   WS_TOO_MANY_CLIENTS = 4202,
+}
 
+export enum ErrorCode {
   // MatchMaking Error Codes
-  ERR_MATCHMAKE_NO_HANDLER = 4210,
-  ERR_MATCHMAKE_INVALID_CRITERIA = 4211,
-  ERR_MATCHMAKE_INVALID_ROOM_ID = 4212,
-  ERR_MATCHMAKE_UNHANDLED = 4213, // generic exception during onCreate/onJoin
-  ERR_MATCHMAKE_EXPIRED = 4214, // generic exception during onCreate/onJoin
+  MATCHMAKE_NO_HANDLER = 4210,
+  MATCHMAKE_INVALID_CRITERIA = 4211,
+  MATCHMAKE_INVALID_ROOM_ID = 4212,
+  MATCHMAKE_UNHANDLED = 4213, // generic exception during onCreate/onJoin
+  MATCHMAKE_EXPIRED = 4214, // generic exception during onCreate/onJoin
+
+  AUTH_FAILED = 4215,
+  APPLICATION_ERROR = 4216,
 }
 
 // Inter-process communication protocol
@@ -39,63 +43,8 @@ export enum IpcProtocol {
   TIMEOUT = 2,
 }
 
-export enum ClientState { JOINING, JOINED, RECONNECTED }
-
-// Export 'WebSocket' as 'Client' with 'id' property.
-export type Client = WebSocket & {
-  upgradeReq?: http.IncomingMessage; // cross-compatibility for ws (v3.x+) and uws
-  // id: string;
-
-  id: string;
-  sessionId: string; // TODO: remove sessionId on version 1.0.0
-
-  /**
-   * auth data provided by your `onAuth`
-   */
-  auth?: any;
-
-  pingCount: number; // ping / pong
-  state: ClientState;
-  _enqueuedMessages: any[];
-};
-
-export function decode(message: any) {
-  try {
-    message = msgpack.decode(Buffer.from(message));
-
-  } catch (e) {
-    debugAndPrintError(`message couldn't be decoded: ${message}\n${e.stack}`);
-    return;
-  }
-
-  return message;
-}
-
-export const send = {
-  raw: (client: Client, bytes: Buffer | number[]) => {
-    if (client.readyState !== WebSocket.OPEN) { return; }
-
-    if (client.state === ClientState.JOINING) {
-      // sending messages during `onJoin`.
-      // - the client-side cannot register "onMessage" callbacks at this point.
-      // - enqueue the messages to be send after JOIN_ROOM message has been sent
-      client._enqueuedMessages.push(bytes);
-      return;
-    }
-
-    client.send(bytes, { binary: true });
-  },
-
-  [Protocol.JOIN_ERROR]: (client: Client, message: string) => {
-    if (client.readyState !== WebSocket.OPEN) { return; }
-    const buff = Buffer.allocUnsafe(1 + utf8Length(message));
-    buff.writeUInt8(Protocol.JOIN_ERROR, 0);
-    utf8Write(buff, 1, message);
-    client.send(buff, { binary: true });
-  },
-
-  [Protocol.JOIN_ROOM]: async (client: Client, serializerId: string, handshake?: number[]) => {
-    if (client.readyState !== WebSocket.OPEN) { return; }
+export const getMessageBytes = {
+  [Protocol.JOIN_ROOM]: (serializerId: string, handshake?: number[]) => {
     let offset = 0;
 
     const serializerIdLength = utf8Length(serializerId);
@@ -113,32 +62,58 @@ export const send = {
       }
     }
 
-    client.send(buff, { binary: true });
+    return buff;
   },
 
-  [Protocol.ROOM_STATE]: (client: Client, bytes: number[]) => {
-    send.raw(client, [Protocol.ROOM_STATE, ...bytes]);
+  [Protocol.ERROR]: (code: number, message: string = '') => {
+    const bytes = [Protocol.ERROR];
+
+    encode.number(bytes, code);
+    encode.string(bytes, message);
+
+    return bytes;
   },
 
-  // [Protocol.ROOM_STATE_PATCH]: (client: Client, bytes: number[]) => {
-  //   if (
-  //     client.state === ClientState.JOINING &&
-  //     client.readyState !== WebSocket.OPEN
-  //   ) {
-  //     return;
-  //   }
-  //   console.log({ bytes });
-  //   client.send(Buffer.alloc(1, Protocol.ROOM_STATE_PATCH), { binary: true });
-  //   client.send(bytes, { binary: true });
-  // },
-
-  /**
-   * TODO: refactor me. Move this to `SchemaSerializer` / `FossilDeltaSerializer`
-   */
-  [Protocol.ROOM_DATA]: (client: Client, message: any, encode: boolean = true) => {
-    send.raw(client, [Protocol.ROOM_DATA, ...(encode && msgpack.encode(message) || message)]);
+  [Protocol.ROOM_STATE]: (bytes: number[]) => {
+    return [Protocol.ROOM_STATE, ...bytes];
   },
 
+  [Protocol.ROOM_DATA_SCHEMA]: (message: Schema) => {
+    return [
+      Protocol.ROOM_DATA_SCHEMA,
+      (message.constructor as typeof Schema)._typeid,
+      ...message.encodeAll(),
+    ];
+  },
+
+  [Protocol.ROOM_DATA]: (type: string | number, message: any) => {
+    const initialBytes: number[] = [Protocol.ROOM_DATA];
+    const messageType = typeof (type);
+
+    if (messageType === 'string') {
+      encode.string(initialBytes, type);
+
+    } else if (messageType === 'number') {
+      encode.number(initialBytes, type);
+
+    } else {
+      throw new Error(`Protocol.ROOM_DATA: message type not supported "${type.toString()}"`);
+    }
+
+    let arr: Uint8Array;
+
+    if (message !== undefined) {
+      const encoded = msgpack.encode(message);
+      arr = new Uint8Array(initialBytes.length + encoded.byteLength);
+      arr.set(new Uint8Array(initialBytes), 0);
+      arr.set(new Uint8Array(encoded), initialBytes.length);
+
+    } else {
+      arr = new Uint8Array(initialBytes);
+    }
+
+    return arr;
+  },
 };
 
 export function utf8Write(buff: Buffer, offset: number, str: string = '') {

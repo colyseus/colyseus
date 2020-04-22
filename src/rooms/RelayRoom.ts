@@ -1,7 +1,7 @@
 import { Context, defineTypes, MapSchema, Schema } from '@colyseus/schema';
 
-import { Client } from '../Protocol';
 import { Room } from '../Room';
+import { Client } from '../transport/Transport';
 
 /**
  * Create another context to avoid these types from being in the user's global `Context`
@@ -10,10 +10,12 @@ const context = new Context();
 
 class Player extends Schema { // tslint:disable-line
   public connected: boolean;
+  public name: boolean;
   public sessionId: string;
 }
 defineTypes(Player, {
   connected: 'boolean',
+  name: 'string',
   sessionId: 'string',
 }, context);
 
@@ -52,25 +54,23 @@ export class RelayRoom extends Room<State> { // tslint:disable-line
     if (options.metadata) {
       this.setMetadata(options.metadata);
     }
+
+    this.onMessage('*', (client: Client, type: string, message: any) => {
+      this.broadcast(type, [client.sessionId, message], { except: client });
+    });
   }
 
-  public onJoin(client: Client, options: any) {
+  public onJoin(client: Client, options: any = {}) {
     const player = new Player();
+
     player.connected = true;
     player.sessionId = client.sessionId;
 
-    this.state.players[client.sessionId] = player;
-  }
-
-  public onMessage(client: Client, message: any) {
-    /**
-     * append `sessionId` into the message for broadcast.
-     */
-    if (typeof(message) === 'object' && !Array.isArray(message)) {
-      message.sessionId = client.sessionId;
+    if (options.name) {
+      player.name = options.name;
     }
 
-    this.broadcast(message, { except: client });
+    this.state.players[client.sessionId] = player;
   }
 
   public async onLeave(client: Client, consented: boolean) {

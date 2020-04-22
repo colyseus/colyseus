@@ -2,6 +2,8 @@ import http from 'http';
 import msgpack from 'notepack.io';
 
 import { Schema } from '@colyseus/schema';
+import * as decode from '@colyseus/schema/lib/encoding/decode';
+
 import Clock from '@gamestdio/timer';
 import { EventEmitter } from 'events';
 
@@ -10,12 +12,14 @@ import { Presence } from './presence/Presence';
 import { SchemaSerializer } from './serializer/SchemaSerializer';
 import { Serializer } from './serializer/Serializer';
 
-import { Client, ClientState, decode, Protocol, send } from './Protocol';
+import { ErrorCode, getMessageBytes, Protocol } from './Protocol';
 import { Deferred, spliceOne } from './Utils';
 
 import { debugAndPrintError, debugPatch } from './Debug';
+import { ServerError } from './errors/ServerError';
 import { RoomListingData } from './matchmaker/drivers/Driver';
 import { FossilDeltaSerializer } from './serializer/FossilDeltaSerializer';
+import { Client, ClientState, ISendOptions } from './transport/Transport';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
@@ -26,9 +30,8 @@ export type SimulationCallback = (deltaTime: number) => void;
 
 export type RoomConstructor<T= any> = new (presence?: Presence) => Room<T>;
 
-export interface BroadcastOptions {
+export interface IBroadcastOptions extends ISendOptions {
   except?: Client;
-  afterNextPatch?: boolean;
 }
 
 export enum RoomInternalState {
@@ -37,10 +40,14 @@ export enum RoomInternalState {
   DISCONNECTING = 2,
 }
 
-export abstract class Room<State= any, Metadata= any> extends EventEmitter {
+export abstract class Room<State= any, Metadata= any> {
 
   public get locked() {
     return this._locked;
+  }
+
+  public get metadata() {
+    return this.listing.metadata;
   }
 
   public listing: RoomListingData<Metadata>;
@@ -57,9 +64,10 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
   public presence: Presence;
 
   public clients: Client[] = [];
+  public internalState: RoomInternalState = RoomInternalState.CREATING;
 
   /** @internal */
-  public _internalState: RoomInternalState = RoomInternalState.CREATING;
+  public _events = new EventEmitter();
 
   // seat reservation & reconnection
   protected seatReservationTime: number = DEFAULT_SEAT_RESERVATION_TIME;
@@ -68,8 +76,10 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
 
   protected reconnections: { [sessionId: string]: Deferred } = {};
 
+  private onMessageHandlers: {[id: string]: (client: Client, message: any) => void} = {};
+
   private _serializer: Serializer<State> = new FossilDeltaSerializer();
-  private _afterNextPatchBroadcasts: Array<[any, BroadcastOptions]> = [];
+  private _afterNextPatchBroadcasts: IArguments[] = [];
 
   private _simulationInterval: NodeJS.Timer;
   private _patchInterval: NodeJS.Timer;
@@ -83,25 +93,20 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
   private _autoDisposeTimeout: NodeJS.Timer;
 
   constructor(presence?: Presence) {
-    super();
-
     this.presence = presence;
 
-    this.once('dispose', async () => {
+    this._events.once('dispose', async () => {
       try {
         await this._dispose();
 
       } catch (e) {
         debugAndPrintError(`onDispose error: ${(e && e.message || e || 'promise rejected')}`);
       }
-      this.emit('disconnect');
+      this._events.emit('disconnect');
     });
 
     this.setPatchRate(this.patchRate);
   }
-
-  // Abstract methods
-  public abstract onMessage(client: Client, data: any): void;
 
   // Optional abstract methods
   public onCreate?(options: any): void | Promise<any>;
@@ -165,7 +170,7 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
     this.state = newState;
   }
 
-  public setMetadata(meta: Partial<Metadata>) {
+  public async setMetadata(meta: Partial<Metadata>) {
     if (!this.listing.metadata) {
       this.listing.metadata = meta as Metadata;
 
@@ -174,23 +179,24 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
         if (!meta.hasOwnProperty(field)) { continue; }
         this.listing.metadata[field] = meta[field];
       }
+
+      // `MongooseDriver` workaround: persit metadata mutations
+      if ('markModified' in this.listing) {
+        (this.listing as any).markModified('metadata');
+      }
     }
 
-    if (this._internalState === RoomInternalState.CREATED) {
-      this.listing.save();
+    if (this.internalState === RoomInternalState.CREATED) {
+      await this.listing.save();
     }
   }
 
   public async setPrivate(bool: boolean = true) {
     this.listing.private = bool;
 
-    if (this._internalState === RoomInternalState.CREATED) {
-      return await this.listing.save();
+    if (this.internalState === RoomInternalState.CREATED) {
+      await this.listing.save();
     }
-  }
-
-  public get metadata() {
-    return this.listing.metadata;
   }
 
   public async lock() {
@@ -200,13 +206,13 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
     // skip if already locked.
     if (this._locked) { return; }
 
-    this.emit('lock');
-
     this._locked = true;
 
-    return await this.listing.updateOne({
+    await this.listing.updateOne({
       $set: { locked: this._locked },
     });
+
+    this._events.emit('lock');
   }
 
   public async unlock() {
@@ -218,78 +224,61 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
     // skip if already locked
     if (!this._locked) { return; }
 
-    this.emit('unlock');
-
     this._locked = false;
 
-    return await this.listing.updateOne({
+    await this.listing.updateOne({
       $set: { locked: this._locked },
     });
+
+    this._events.emit('unlock');
   }
 
-  public send(client: Client, message: any): void {
-    if (message instanceof Schema) {
-      send.raw(client, [
-        Protocol.ROOM_DATA_SCHEMA,
-        (message.constructor as typeof Schema)._typeid,
-        ...message.encodeAll(),
-      ]);
+  public send(client: Client, message: Schema, options?: ISendOptions): void;
+  public send(client: Client, type: string, message: any, options?: ISendOptions): void;
+  public send(client: Client, messageOrType: any, messageOrOptions?: any | ISendOptions, options?: ISendOptions): void {
+    console.warn('DEPRECATION WARNING: use client.send(...) instead of this.send(client, ...)');
+    client.send(messageOrType, messageOrOptions, options);
+  }
+
+  public broadcast<T extends Schema>(message: T, options: IBroadcastOptions);
+  public broadcast(type: string | number, message: any, options?: IBroadcastOptions);
+  public broadcast(
+    typeOrSchema: string | number | Schema,
+    messageOrOptions: any | IBroadcastOptions,
+    options?: IBroadcastOptions,
+  ) {
+    const isSchema = (typeof(typeOrSchema) !== 'string');
+    const opts: IBroadcastOptions = ((isSchema) ? messageOrOptions : options) || {};
+
+    if (opts.afterNextPatch) {
+      delete opts.afterNextPatch;
+      this._afterNextPatchBroadcasts.push(arguments);
+      return;
+    }
+
+    if (isSchema) {
+      this.broadcastMessageSchema(typeOrSchema as Schema, opts);
 
     } else {
-      send[Protocol.ROOM_DATA](client, message);
+      this.broadcastMessageType(typeOrSchema as string, messageOrOptions, opts);
     }
   }
 
-  public broadcast(message: any, options: BroadcastOptions = {}): boolean {
-    if (options.afterNextPatch) {
-      delete options.afterNextPatch;
-      this._afterNextPatchBroadcasts.push([message, options]);
-      return true;
-    }
-
-    // no data given, try to broadcast patched state
-    if (!message) {
-      throw new Error('Room#broadcast: \'data\' is required to broadcast.');
-    }
-
-    if (message instanceof Schema) {
-      const typeId = (message.constructor as typeof Schema)._typeid;
-      const encodedMessage = Buffer.from([Protocol.ROOM_DATA_SCHEMA, typeId, ...message.encodeAll()]);
-
-      let numClients = this.clients.length;
-      while (numClients--) {
-        const client = this.clients[numClients];
-
-        if (options.except !== client) {
-          send.raw(client, encodedMessage);
-        }
-      }
-
-    } else {
-      // encode message with msgpack
-      const encodedMessage = (!(message instanceof Buffer))
-        ? Buffer.from([Protocol.ROOM_DATA, ...msgpack.encode(message)])
-        : message;
-
-      let numClients = this.clients.length;
-      while (numClients--) {
-        const client = this.clients[numClients];
-
-        if (options.except !== client) {
-          send.raw(client, encodedMessage);
-        }
-      }
-    }
-
-    return true;
+  public onMessage<T = any>(messageType: '*', callback: (client: Client, type: string | number, message: T) => void);
+  public onMessage<T = any>(messageType: string | number, callback: (client: Client, message: T) => void);
+  public onMessage<T = any>(messageType: '*' | string | number, callback: (...args: any[]) => void) {
+    this.onMessageHandlers[messageType] = callback;
+    return this;
   }
 
-  public disconnect(): Promise<any> {
-    this._internalState = RoomInternalState.DISCONNECTING;
+  public async disconnect(): Promise<any> {
+    this.internalState = RoomInternalState.DISCONNECTING;
+    await this.listing.remove();
+
     this.autoDispose = true;
 
     const delayedDisconnection = new Promise((resolve) =>
-      this.once('disconnect', () => resolve()));
+      this._events.once('disconnect', () => resolve()));
 
     for (const reconnection of Object.values(this.reconnections)) {
       reconnection.reject();
@@ -297,19 +286,16 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
 
     let numClients = this.clients.length;
     if (numClients > 0) {
-      // prevent new clients to join while this room is disconnecting.
-      this.lock();
-
-      // clients may have `async onLeave`, room will be disposed after they all run
+      // clients may have `async onLeave`, room will be disposed after they're fulfilled
       while (numClients--) {
         this._forciblyCloseClient(this.clients[numClients], Protocol.WS_CLOSE_CONSENTED);
       }
     } else {
       // no clients connected, dispose immediately.
-      this.emit('dispose');
+      this._events.emit('dispose');
     }
 
-    return delayedDisconnection;
+    return await delayedDisconnection;
   }
 
   public async ['_onJoin'](client: Client, req?: http.IncomingMessage) {
@@ -331,10 +317,7 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
     delete this.reservedSeats[sessionId];
 
     // bind clean-up callback when client connection closes
-    client.once('close', this._onLeave.bind(this, client));
-
-    client.state = ClientState.JOINING;
-    client._enqueuedMessages = [];
+    client.ref.once('close', this._onLeave.bind(this, client));
 
     this.clients.push(client);
 
@@ -347,7 +330,7 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
         client.auth = await this.onAuth(client, options, req);
 
         if (!client.auth) {
-          throw new Error('onAuth failed.');
+          throw new ServerError(ErrorCode.AUTH_FAILED, 'onAuth failed');
         }
 
         if (this.onJoin) {
@@ -355,6 +338,12 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
         }
       } catch (e) {
         spliceOne(this.clients, this.clients.indexOf(client));
+
+        // make sure an error code is provided.
+        if (!e.code) {
+          e.code = ErrorCode.APPLICATION_ERROR;
+        }
+
         throw e;
 
       } finally {
@@ -364,52 +353,20 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
     }
 
     // emit 'join' to room handler
-    this.emit('join', client);
+    this._events.emit('join', client);
 
     // allow client to send messages after onJoin has succeeded.
-    client.on('message', this._onMessage.bind(this, client));
+    client.ref.on('message', this._onMessage.bind(this, client));
 
     // confirm room id that matches the room name requested to join
-    send[Protocol.JOIN_ROOM](
-      client,
+    client.raw(getMessageBytes[Protocol.JOIN_ROOM](
       this._serializer.id,
       this._serializer.handshake && this._serializer.handshake(),
-    );
+    ));
   }
 
-  protected sendState(client: Client): void {
-    send[Protocol.ROOM_STATE](client, this._serializer.getFullState(client));
-  }
-
-  protected broadcastPatch(): boolean {
-    if (!this._simulationInterval) {
-      this.clock.tick();
-    }
-
-    if (!this.state) {
-      debugPatch('trying to broadcast null state. you should call #setState');
-      return false;
-    }
-
-    return this._serializer.applyPatches(this.clients, this.state);
-  }
-
-  protected broadcastAfterPatch() {
-    const length = this._afterNextPatchBroadcasts.length;
-
-    if (length > 0) {
-      for (let i = 0; i < length; i++) {
-        this.broadcast.apply(this, this._afterNextPatchBroadcasts[i]);
-      }
-
-      // new messages may have been added in the meantime,
-      // let's splice the ones that have been processed
-      this._afterNextPatchBroadcasts.splice(0, length);
-    }
-  }
-
-  protected allowReconnection(previousClient: Client, seconds: number = Infinity): Deferred {
-    if (this._internalState === RoomInternalState.DISCONNECTING) {
+  public allowReconnection(previousClient: Client, seconds: number = Infinity): Deferred {
+    if (this.internalState === RoomInternalState.DISCONNECTING) {
       this._disposeIfEmpty(); // gracefully shutting down
       throw new Error('disconnecting');
     }
@@ -436,19 +393,90 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
     reconnection.
       then((newClient) => {
         newClient.auth = previousClient.auth;
+        previousClient.ref = newClient.ref; // swap "ref" for convenience
         previousClient.state = ClientState.RECONNECTED;
         clearTimeout(this.reservedSeatTimeouts[sessionId]);
         cleanup();
       }).
       catch(() => {
         cleanup();
-        this._disposeIfEmpty();
+        this.resetAutoDisposeTimeout();
       });
 
     return reconnection;
   }
 
-  protected async _reserveSeat(
+  protected resetAutoDisposeTimeout(timeoutInSeconds: number = 1) {
+    clearTimeout(this._autoDisposeTimeout);
+
+    if (!this.autoDispose) {
+      return;
+    }
+
+    this._autoDisposeTimeout = setTimeout(() => {
+      this._autoDisposeTimeout = undefined;
+      this._disposeIfEmpty();
+    }, timeoutInSeconds * 1000);
+  }
+
+  private broadcastMessageSchema<T extends Schema>(message: T, options: IBroadcastOptions) {
+    const encodedMessage = getMessageBytes[Protocol.ROOM_DATA_SCHEMA](message);
+
+    let numClients = this.clients.length;
+    while (numClients--) {
+      const client = this.clients[numClients];
+
+      if (options.except !== client) {
+        client.enqueueRaw(encodedMessage);
+      }
+    }
+  }
+
+  private broadcastMessageType(type: string, message: any, options: IBroadcastOptions) {
+    const encodedMessage = getMessageBytes[Protocol.ROOM_DATA](type, message);
+
+    let numClients = this.clients.length;
+    while (numClients--) {
+      const client = this.clients[numClients];
+
+      if (options.except !== client) {
+        client.enqueueRaw(encodedMessage);
+      }
+    }
+  }
+
+  private sendState(client: Client): void {
+    client.enqueueRaw(getMessageBytes[Protocol.ROOM_STATE](this._serializer.getFullState(client)));
+  }
+
+  private broadcastPatch(): boolean {
+    if (!this._simulationInterval) {
+      this.clock.tick();
+    }
+
+    if (!this.state) {
+      debugPatch('trying to broadcast null state. you should call #setState');
+      return false;
+    }
+
+    return this._serializer.applyPatches(this.clients, this.state);
+  }
+
+  private broadcastAfterPatch() {
+    const length = this._afterNextPatchBroadcasts.length;
+
+    if (length > 0) {
+      for (let i = 0; i < length; i++) {
+        this.broadcast.apply(this, this._afterNextPatchBroadcasts[i]);
+      }
+
+      // new messages may have been added in the meantime,
+      // let's splice the ones that have been processed
+      this._afterNextPatchBroadcasts.splice(0, length);
+    }
+  }
+
+  private async _reserveSeat(
     sessionId: string,
     joinOptions: any = true,
     seconds: number = this.seatReservationTime,
@@ -475,20 +503,7 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
     return true;
   }
 
-  protected resetAutoDisposeTimeout(timeoutInSeconds: number) {
-    clearTimeout(this._autoDisposeTimeout);
-
-    if (!this.autoDispose) {
-      return;
-    }
-
-    this._autoDisposeTimeout = setTimeout(() => {
-      this._autoDisposeTimeout = undefined;
-      this._disposeIfEmpty();
-    }, timeoutInSeconds * 1000);
-  }
-
-  protected _disposeIfEmpty() {
+  private _disposeIfEmpty() {
     const willDispose = (
       this.autoDispose &&
       this._autoDisposeTimeout === undefined &&
@@ -497,13 +512,13 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
     );
 
     if (willDispose) {
-      this.emit('dispose');
+      this._events.emit('dispose');
     }
 
     return willDispose;
   }
 
-  protected async _dispose(): Promise<any> {
+  private async _dispose(): Promise<any> {
     let userReturnData;
 
     if (this.onDispose) {
@@ -532,18 +547,35 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
     return await (userReturnData || Promise.resolve());
   }
 
-  private _onMessage(client: Client, message: any) {
-    message = decode(message);
+  private _onMessage(client: Client, bytes: number[]) {
+    const it: decode.Iterator = { offset: 0 };
+    const code = decode.uint8(bytes, it);
 
-    if (!message) {
-      debugAndPrintError(`${this.roomName} (${this.roomId}), couldn't decode message: ${message}`);
+    if (!bytes) {
+      debugAndPrintError(`${this.roomName} (${this.roomId}), couldn't decode message: ${bytes}`);
       return;
     }
 
-    if (message[0] === Protocol.ROOM_DATA) {
-      this.onMessage(client, message[1]);
+    if (code === Protocol.ROOM_DATA) {
+      const messageType = (decode.stringCheck(bytes, it))
+        ? decode.string(bytes, it)
+        : decode.number(bytes, it);
 
-    } else if (message[0] === Protocol.JOIN_ROOM) {
+      const message = (bytes.length > it.offset)
+        ? msgpack.decode(bytes.slice(it.offset, bytes.length))
+        : undefined;
+
+      if (this.onMessageHandlers[messageType]) {
+        this.onMessageHandlers[messageType](client, message);
+
+      } else if (this.onMessageHandlers['*']) {
+        (this.onMessageHandlers['*'] as any)(client, messageType, message);
+
+      } else {
+        debugAndPrintError(`onMessage for "${messageType}" not registered.`);
+      }
+
+    } else if (code === Protocol.JOIN_ROOM) {
       // join room has been acknowledged by the client
       client.state = ClientState.JOINED;
 
@@ -554,57 +586,49 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
 
       // dequeue messages sent before client has joined effectively (on user-defined `onJoin`)
       if (client._enqueuedMessages.length > 0) {
-        client._enqueuedMessages.forEach((bytes) => send.raw(client, bytes));
+        client._enqueuedMessages.forEach((enqueued) => client.raw(enqueued));
       }
       delete client._enqueuedMessages;
 
-    } else if (message[0] === Protocol.LEAVE_ROOM) {
+    } else if (code === Protocol.LEAVE_ROOM) {
       this._forciblyCloseClient(client, Protocol.WS_CLOSE_CONSENTED);
-
-    } else {
-      this.onMessage(client, message);
     }
 
   }
 
   private _forciblyCloseClient(client: Client, closeCode: number) {
     // stop receiving messages from this client
-    client.removeAllListeners('message');
+    client.ref.removeAllListeners('message');
 
     // prevent "onLeave" from being called twice if player asks to leave
-    const closeListeners: any[] = client.listeners('close');
+    const closeListeners: any[] = client.ref.listeners('close');
     if (closeListeners.length >= 2) {
-      client.removeListener('close', closeListeners[1]);
+      client.ref.removeListener('close', closeListeners[1]);
     }
 
     // only effectively close connection when "onLeave" is fulfilled
-    this._onLeave(client, closeCode).then(() => client.close(Protocol.WS_CLOSE_NORMAL));
+    this._onLeave(client, closeCode).then(() => client.leave(Protocol.WS_CLOSE_NORMAL));
   }
 
   private async _onLeave(client: Client, code?: number): Promise<any> {
     const success = spliceOne(this.clients, this.clients.indexOf(client));
 
-    // call abstract 'onLeave' method only if the client has been successfully accepted.
-    if (success) {
-      if (this.onLeave) {
-        try {
-          await this.onLeave(client, (code === Protocol.WS_CLOSE_CONSENTED));
+    // call 'onLeave' method only if the client has been successfully accepted.
+    if (success && this.onLeave) {
+      try {
+        await this.onLeave(client, (code === Protocol.WS_CLOSE_CONSENTED));
 
-        } catch (e) {
-          debugAndPrintError(`onLeave error: ${(e && e.message || e || 'promise rejected')}`);
-        }
-      }
-
-      if (client.state !== ClientState.RECONNECTED) {
-        this.emit('leave', client);
+      } catch (e) {
+        debugAndPrintError(`onLeave error: ${(e && e.message || e || 'promise rejected')}`);
       }
     }
 
-    // skip next checks if client has reconnected successfully (through `allowReconnection()`)
-    if (client.state === ClientState.RECONNECTED) { return; }
+    if (client.state !== ClientState.RECONNECTED) {
+      // try to dispose immediatelly if client reconnection isn't set up.
+      const willDispose = await this._decrementClientCount();
 
-    // try to dispose immediatelly if client reconnection isn't set up.
-    await this._decrementClientCount();
+      this._events.emit('leave', client, willDispose);
+    }
   }
 
   private async _incrementClientCount() {
@@ -623,6 +647,10 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
   private async _decrementClientCount() {
     const willDispose = this._disposeIfEmpty();
 
+    if (this.internalState === RoomInternalState.DISCONNECTING) {
+      return;
+    }
+
     // unlock if room is available for new connections
     if (!willDispose) {
       if (this._maxClientsReached && !this._lockedExplicitly) {
@@ -636,6 +664,8 @@ export abstract class Room<State= any, Metadata= any> extends EventEmitter {
         $set: { locked: this._locked },
       });
     }
+
+    return willDispose;
   }
 
 }

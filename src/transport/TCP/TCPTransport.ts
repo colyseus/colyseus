@@ -1,12 +1,12 @@
 import * as net from 'net';
 
-import { generateId } from '../';
-import { decode, Protocol, send } from '../Protocol';
-import * as matchMaker from './../MatchMaker';
-import { ServerOptions } from './../Server';
-import { Transport } from './Transport';
+import { generateId } from '../..';
+import * as matchMaker from '../../MatchMaker';
+import { Protocol } from '../../Protocol';
+import { ServerOptions } from '../../Server';
+import { Transport } from '../Transport';
 
-import { debugAndPrintError, debugError } from './../Debug';
+import { debugAndPrintError, debugError } from '../../Debug';
 
 /**
  * TODO:
@@ -46,7 +46,7 @@ export class TCPTransport extends Transport {
     client.on('error', (err) => debugError(err.message + '\n' + err.stack));
     // client.on('pong', heartbeat);
 
-    client.on('data', (data) => this.onMessage(client, decode(data)));
+    // client.on('data', (data) => this.onMessage(client, decode(data)));
   }
 
   protected async onMessage(client: net.Socket & any, message: any) {
@@ -76,7 +76,7 @@ export class TCPTransport extends Transport {
 
       } catch (e) {
         debugAndPrintError(e);
-        send[Protocol.JOIN_ERROR](client, (e && e.message) || '');
+        // send[Protocol.ERROR](client, (e && e.message) || '');
         client.close(Protocol.WS_CLOSE_WITH_ERROR);
       }
 

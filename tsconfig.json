@@ -5,6 +5,7 @@
         "lib": ["es5"],
         "target": "es2015",
         "declaration": true,
+        "forceConsistentCasingInFileNames": true,
         "esModuleInterop": true,
         "experimentalDecorators": true,
         "noImplicitAny": false,

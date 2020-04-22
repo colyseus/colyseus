@@ -7,7 +7,11 @@ import { SeatReservation } from "../../src/MatchMaker";
 
 import { LocalDriver } from "../../src/matchmaker/drivers/LocalDriver";
 import { MongooseDriver } from "../../src/matchmaker/drivers/MongooseDriver";
-import { LocalPresence, RedisPresence, Presence, Deferred } from "../../src";
+import { LocalPresence, RedisPresence, Presence, Client, Deferred } from "../../src";
+import { ClientState } from "../../src/transport/Transport";
+
+// export const DRIVERS = [ new LocalDriver(), ];
+// export const PRESENCE_IMPLEMENTATIONS: Presence[] = [ new LocalPresence(), ];
 
 export const DRIVERS = [
   new LocalDriver(),
@@ -19,16 +23,26 @@ export const PRESENCE_IMPLEMENTATIONS: Presence[] = [
   new RedisPresence()
 ];
 
-export class Client extends EventEmitter {
-  public sessionId: string;
-  public messages: Array<any> = [];
-  public readyState: number = WebSocket.OPEN;
+export class RawClient extends EventEmitter {
+  readyState: number;
+}
+
+export class WebSocketClient implements Client {
+  id: string;
+  sessionId: string;
+  ref: RawClient;
+  state: ClientState = ClientState.JOINING;
+
+  messages: any[] = [];
+  _enqueuedMessages: any[] = [];
+
+  errors: any[] = [];
 
   constructor (id?: string) {
-    super();
+    this.id = id || null;
     this.sessionId = id || null;
-
-    this.once('close', () => this.readyState = WebSocket.CLOSED);
+    this.ref = new RawClient();
+    this.ref.once('close', () => this.ref.readyState = WebSocket.CLOSED);
   }
 
   send (message) {
@@ -36,34 +50,58 @@ export class Client extends EventEmitter {
   }
 
   receive (message) {
-    this.emit('message', msgpack.encode(message));
+    this.ref.emit('message', msgpack.encode(message));
   }
 
   getMessageAt(index: number) {
     return msgpack.decode(this.messages[index]);
   }
 
+  raw(message, options) {
+    this.messages.push(message);
+  }
+
+  enqueueRaw(message, options) {
+    if (this.state === ClientState.JOINING) {
+      this._enqueuedMessages.push(message);
+      return;
+    }
+    this.messages.push(message);
+  }
+
+  error(code, message) {
+    this.errors.push([code, message]);
+  }
+
   get lastMessage () {
     return this.getMessageAt(this.messages.length - 1);
   }
 
+  get readyState () {
+    return this.ref.readyState;
+  }
+
+  leave(code?: number) {
+    this.ref.readyState = WebSocket.CLOSED;
+    this.ref.emit('close');
+  }
+
   close (code?: number) {
-    this.readyState = WebSocket.CLOSED;
-    this.emit('close');
+    this.leave(code);
   }
 
   terminate() {
-    this.emit('close');
+    this.ref.emit('close');
   }
 
 }
 
 export function createEmptyClient() {
-  return new Client();
+  return new WebSocketClient();
 }
 
 export function createDummyClient (seatReservation: SeatReservation, options: any = {}) {
-  let client = new Client(seatReservation.sessionId);
+  let client = new WebSocketClient(seatReservation.sessionId);
   (<any>client).options = options;
   return client;
 }
@@ -73,51 +111,62 @@ export function timeout(ms: number = 200) {
 }
 
 export class DummyRoom extends Room {
-  onCreate() { }
+  onCreate() {
+    this.onMessage("*", (_, type, message) => {
+      this.broadcast(type, message);
+    });
+  }
   onDispose() { }
   onJoin() { }
   onLeave() { }
-  onMessage(client, message) { this.broadcast(message); }
 }
 
 export class Room2Clients extends Room {
   maxClients = 2;
 
-  onCreate() { }
+  onCreate() {
+    this.onMessage("*", (_, type, message) => {
+      this.broadcast(type, message);
+    });
+  }
   onDispose() { }
   onJoin() { }
   onLeave() { }
-  onMessage(client, message) { this.broadcast(message); }
 }
 
 export class Room2ClientsExplicitLock extends Room {
   maxClients = 2;
 
-  onCreate() { }
+  onCreate() {
+    this.onMessage("lock", () => this.lock());
+  }
   onDispose() { }
   onJoin() { }
   onLeave() { }
-  onMessage(client, message) {
-    if (message === "lock") {
-      this.lock();
-    }
-  }
 }
 
 export class Room3Clients extends Room {
   maxClients = 3;
 
-  onCreate() { }
+  onCreate() {
+    this.onMessage("*", (_, type, message) => {
+      this.broadcast(type, message);
+    });
+  }
+
   onDispose() { }
   onJoin() { }
   onLeave() { }
-  onMessage(client, message) { this.broadcast(message); }
 }
 
 export class ReconnectRoom extends Room {
   maxClients = 4;
 
-  onCreate() { }
+  onCreate() {
+    this.onMessage("*", (_, type, message) => {
+      this.broadcast(type, message);
+    });
+  }
   onDispose() { }
   onJoin() { }
 
@@ -130,7 +179,6 @@ export class ReconnectRoom extends Room {
       // console.log("allowReconnection, error =>", e.message);
     }
   }
-  onMessage(client, message) { this.broadcast(message); }
 }
 
 export class ReconnectTokenRoom extends Room {

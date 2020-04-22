@@ -1,4 +1,4 @@
-import { Client, Protocol } from './Protocol';
+import { ErrorCode } from './Protocol';
 
 import { requestFromIPC, subscribeIPC } from './IPC';
 import { generateId, merge, REMOTE_ROOM_SHORT_TIMEOUT, retry } from './Utils';
@@ -10,13 +10,14 @@ import { LocalPresence } from './presence/LocalPresence';
 import { Presence } from './presence/Presence';
 
 import { debugAndPrintError, debugMatchMaking } from './Debug';
-import { MatchMakeError } from './errors/MatchMakeError';
 import { SeatReservationError } from './errors/SeatReservationError';
+import { ServerError } from './errors/ServerError';
 import { MatchMakerDriver, RoomListingData } from './matchmaker/drivers/Driver';
 import { LocalDriver } from './matchmaker/drivers/LocalDriver';
+import { Client } from './transport/Transport';
 import { Type } from './types';
 
-export { MatchMakerDriver, MatchMakeError };
+export { MatchMakerDriver };
 
 export type ClientOptions = any;
 
@@ -81,7 +82,7 @@ export async function join(roomName: string, options: ClientOptions = {}) {
     const room = await findOneRoomAvailable(roomName, options);
 
     if (!room) {
-      throw new MatchMakeError(`no rooms found with provided criteria`, Protocol.ERR_MATCHMAKE_INVALID_CRITERIA);
+      throw new ServerError(ErrorCode.MATCHMAKE_INVALID_CRITERIA, `no rooms found with provided criteria`);
     }
 
     return reserveSeatFor(room, options);
@@ -105,7 +106,7 @@ export async function joinById(roomId: string, options: ClientOptions = {}) {
         return { room, sessionId: rejoinSessionId };
 
       } else {
-        throw new MatchMakeError(`session expired`, Protocol.ERR_MATCHMAKE_EXPIRED);
+        throw new ServerError(ErrorCode.MATCHMAKE_EXPIRED, `session expired: ${rejoinSessionId}`);
 
       }
 
@@ -113,12 +114,12 @@ export async function joinById(roomId: string, options: ClientOptions = {}) {
       return reserveSeatFor(room, options);
 
     } else {
-      throw new MatchMakeError(`room "${roomId}" is locked`, Protocol.ERR_MATCHMAKE_INVALID_ROOM_ID);
+      throw new ServerError( ErrorCode.MATCHMAKE_INVALID_ROOM_ID, `room "${roomId}" is locked`);
 
     }
 
   } else {
-    throw new MatchMakeError(`room "${roomId}" not found`, Protocol.ERR_MATCHMAKE_INVALID_ROOM_ID);
+    throw new ServerError( ErrorCode.MATCHMAKE_INVALID_ROOM_ID, `room "${roomId}" not found`);
   }
 
 }
@@ -137,7 +138,7 @@ export async function findOneRoomAvailable(roomName: string, options: ClientOpti
   return await awaitRoomAvailable(roomName, async () => {
     const handler = handlers[roomName];
     if (!handler) {
-      throw new MatchMakeError(`"${roomName}" not defined`, Protocol.ERR_MATCHMAKE_NO_HANDLER);
+      throw new ServerError( ErrorCode.MATCHMAKE_NO_HANDLER, `provided room name "${roomName}" not defined`);
     }
 
     const roomQuery = driver.findOne({
@@ -172,9 +173,9 @@ export async function remoteRoomCall<R= any>(
 
     } catch (e) {
       const request = `${method}${args && ' with args ' + JSON.stringify(args) || ''}`;
-      throw new MatchMakeError(
+      throw new ServerError(
+        ErrorCode.MATCHMAKE_UNHANDLED,
         `remote room (${roomId}) timed out, requesting "${request}". (${rejectionTimeout}ms exceeded)`,
-        Protocol.ERR_MATCHMAKE_UNHANDLED,
       );
     }
 
@@ -188,7 +189,7 @@ export async function remoteRoomCall<R= any>(
 export function defineRoomType<T extends Type<Room>>(
   name: string,
   klass: T,
-  defaultOptions?: Parameters<InstanceType<T>['onCreate']>[0],
+  defaultOptions?: Parameters<NonNullable<InstanceType<T>['onCreate']>>[0],
 ) {
   const registeredHandler = new RegisteredHandler(klass, defaultOptions);
 
@@ -253,7 +254,7 @@ async function handleCreateRoom(roomName: string, clientOptions: ClientOptions):
   const registeredHandler = handlers[roomName];
 
   if (!registeredHandler) {
-    throw new MatchMakeError(`"${roomName}" not defined`, Protocol.ERR_MATCHMAKE_NO_HANDLER);
+    throw new ServerError( ErrorCode.MATCHMAKE_NO_HANDLER, `provided room name "${roomName}" not defined`);
   }
 
   const room = new registeredHandler.klass();
@@ -279,11 +280,14 @@ async function handleCreateRoom(roomName: string, clientOptions: ClientOptions):
 
     } catch (e) {
       debugAndPrintError(e);
-      throw new MatchMakeError(e.message);
+      throw new ServerError(
+        e.code || ErrorCode.MATCHMAKE_UNHANDLED,
+        e.message,
+      );
     }
   }
 
-  room._internalState = RoomInternalState.CREATED;
+  room.internalState = RoomInternalState.CREATED;
 
   room.listing.roomId = room.roomId;
   room.listing.maxClients = room.maxClients;
@@ -291,12 +295,12 @@ async function handleCreateRoom(roomName: string, clientOptions: ClientOptions):
   // imediatelly ask client to join the room
   debugMatchMaking('spawning \'%s\', roomId: %s, processId: %s', roomName, room.roomId, processId);
 
-  room.on('lock', lockRoom.bind(this, roomName, room));
-  room.on('unlock', unlockRoom.bind(this, roomName, room));
-  room.on('join', onClientJoinRoom.bind(this, room));
-  room.on('leave', onClientLeaveRoom.bind(this, room));
-  room.once('dispose', disposeRoom.bind(this, roomName, room));
-  room.once('disconnect', () => room.removeAllListeners());
+  room._events.on('lock', lockRoom.bind(this, room));
+  room._events.on('unlock', unlockRoom.bind(this, room));
+  room._events.on('join', onClientJoinRoom.bind(this, room));
+  room._events.on('leave', onClientLeaveRoom.bind(this, room));
+  room._events.once('dispose', disposeRoom.bind(this, roomName, room));
+  room._events.once('disconnect', () => room._events.removeAllListeners());
 
   // room always start unlocked
   await createRoomReferences(room, true);
@@ -313,7 +317,7 @@ export function getRoomById(roomId: string) {
 
 export function gracefullyShutdown(): Promise<any> {
   if (isGracefullyShuttingDown) {
-    return Promise.reject(false);
+    return Promise.reject('already_shutting_down');
   }
 
   isGracefullyShuttingDown = true;
@@ -384,8 +388,6 @@ async function cleanupStaleRooms(roomName: string) {
     } catch (e) {
       debugMatchMaking(`cleaning up stale room '${roomName}', roomId: ${room.roomId}`);
       room.remove();
-
-      clearRoomReferences({ roomId: room.roomId, roomName } as Room);
     }
   }));
 }
@@ -407,11 +409,6 @@ async function createRoomReferences(room: Room, init: boolean = false): Promise<
   }
 
   return true;
-}
-
-function clearRoomReferences(room: Room) {
-  // clear list of connecting clients.
-  presence.del(room.roomId);
 }
 
 async function awaitRoomAvailable(roomToJoin: string, callback: Function): Promise<RoomListingData> {
@@ -444,6 +441,56 @@ async function awaitRoomAvailable(roomToJoin: string, callback: Function): Promi
   });
 }
 
+function onClientJoinRoom(room: Room, client: Client) {
+  handlers[room.roomName].emit('join', room, client);
+}
+
+function onClientLeaveRoom(room: Room, client: Client, willDispose: boolean) {
+  handlers[room.roomName].emit('leave', room, client, willDispose);
+}
+
+function lockRoom(room: Room): void {
+  // emit public event on registered handler
+  handlers[room.roomName].emit('lock', room);
+}
+
+async function unlockRoom(room: Room) {
+  if (await createRoomReferences(room)) {
+    // emit public event on registered handler
+    handlers[room.roomName].emit('unlock', room);
+  }
+}
+
+async function disposeRoom(roomName: string, room: Room) {
+  debugMatchMaking('disposing \'%s\' (%s) on processId \'%s\'', roomName, room.roomId, processId);
+
+  // decrease amount of rooms this process is handling
+  if (!isGracefullyShuttingDown) {
+    presence.hincrby(getRoomCountKey(), processId, -1);
+  }
+
+  // remove from room listing (already removed if `disconnect()` has been called)
+  if (room.internalState !== RoomInternalState.DISCONNECTING) {
+    await room.listing.remove();
+  }
+
+  // emit disposal on registered session handler
+  handlers[roomName].emit('dispose', room);
+
+  // remove concurrency key
+  presence.del(getHandlerConcurrencyKey(roomName));
+
+  // unsubscribe from remote connections
+  presence.unsubscribe(getRoomChannel(room.roomId));
+
+  // remove actual room reference
+  delete rooms[room.roomId];
+}
+
+//
+// Presence keys
+//
+
 function getRoomChannel(roomId: string) {
   return `$${roomId}`;
 }
@@ -458,54 +505,4 @@ function getProcessChannel(id: string = processId) {
 
 function getRoomCountKey() {
   return 'roomcount';
-}
-
-function onClientJoinRoom(room: Room, client: Client) {
-  handlers[room.roomName].emit('join', room, client);
-}
-
-function onClientLeaveRoom(room: Room, client: Client) {
-  handlers[room.roomName].emit('leave', room, client);
-}
-
-function lockRoom(roomName: string, room: Room): void {
-  clearRoomReferences(room);
-
-  // emit public event on registered handler
-  handlers[room.roomName].emit('lock', room);
-}
-
-async function unlockRoom(roomName: string, room: Room) {
-  if (await createRoomReferences(room)) {
-
-    // emit public event on registered handler
-    handlers[room.roomName].emit('unlock', room);
-  }
-}
-
-function disposeRoom(roomName: string, room: Room): void {
-  debugMatchMaking('disposing \'%s\' (%s) on processId \'%s\'', roomName, room.roomId, processId);
-
-  // decrease amount of rooms this process is handling
-  if (!isGracefullyShuttingDown) {
-    presence.hincrby(getRoomCountKey(), processId, -1);
-  }
-
-  // remove from room listing
-  room.listing.remove();
-
-  // emit disposal on registered session handler
-  handlers[roomName].emit('dispose', room);
-
-  // remove concurrency key
-  presence.del(getHandlerConcurrencyKey(roomName));
-
-  // remove from available rooms
-  clearRoomReferences(room);
-
-  // unsubscribe from remote connections
-  presence.unsubscribe(getRoomChannel(room.roomId));
-
-  // remove actual room reference
-  delete rooms[room.roomId];
 }

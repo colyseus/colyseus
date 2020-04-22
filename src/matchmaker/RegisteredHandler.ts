@@ -2,6 +2,7 @@ import { EventEmitter } from 'events';
 
 import { RoomConstructor } from './../Room';
 import { RoomListingData } from './drivers/Driver';
+import { updateLobby } from './Lobby';
 
 export const INVALID_OPTION_KEYS: Array<keyof RoomListingData> = [
   'clients',
@@ -33,6 +34,20 @@ export class RegisteredHandler extends EventEmitter {
 
     this.klass = klass;
     this.options = options;
+  }
+
+  public enableRealtimeListing() {
+    this.on('create', (room) => updateLobby(room));
+    this.on('lock', (room) => updateLobby(room));
+    this.on('unlock', (room) => updateLobby(room));
+    this.on('join', (room) => updateLobby(room));
+    this.on('leave', (room, _, willDispose) => {
+      if (!willDispose) {
+        updateLobby(room);
+      }
+    });
+    this.on('dispose', (room) => updateLobby(room, true));
+    return this;
   }
 
   public filterBy(options: string[]) {
