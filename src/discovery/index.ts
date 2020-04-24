@@ -5,13 +5,14 @@ const NODES_SET = 'colyseus:nodes';
 const DISCOVERY_CHANNEL = 'colyseus:nodes:discovery';
 
 export interface Node {
-    port: number;
-    processId: string;
+  port: number;
+  processId: string;
 }
 
 async function getNodeAddress(node: Node) {
-  const ipv4 = await ip.v4();
-  return `${node.processId}/${ipv4}:${node.port}`;
+  const host = process.env.SELF_HOSTNAME || await ip.v4();
+  const port = process.end.SELF_PORT || node.port;
+  return `${node.processId}/${host}:${port}`;
 }
 
 export async function registerNode(presence: Presence, node: Node) {
