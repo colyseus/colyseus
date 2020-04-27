@@ -234,7 +234,7 @@ export abstract class Room<State= any, Metadata= any> {
   }
 
   public send(client: Client, message: Schema, options?: ISendOptions): void;
-  public send(client: Client, type: string, message: any, options?: ISendOptions): void;
+  public send(client: Client, type: string | number, message: any, options?: ISendOptions): void;
   public send(client: Client, messageOrType: any, messageOrOptions?: any | ISendOptions, options?: ISendOptions): void {
     console.warn('DEPRECATION WARNING: use client.send(...) instead of this.send(client, ...)');
     client.send(messageOrType, messageOrOptions, options);
@@ -247,7 +247,7 @@ export abstract class Room<State= any, Metadata= any> {
     messageOrOptions: any | IBroadcastOptions,
     options?: IBroadcastOptions,
   ) {
-    const isSchema = (typeof(typeOrSchema) !== 'string');
+    const isSchema = (typeof(typeOrSchema) === 'object');
     const opts: IBroadcastOptions = ((isSchema) ? messageOrOptions : options) || {};
 
     if (opts.afterNextPatch) {
