@@ -86,7 +86,7 @@ export const getMessageBytes = {
     ];
   },
 
-  [Protocol.ROOM_DATA]: (type: string | number, message: any) => {
+  [Protocol.ROOM_DATA]: (type: string | number, message?: any) => {
     const initialBytes: number[] = [Protocol.ROOM_DATA];
     const messageType = typeof (type);
 

@@ -41,8 +41,8 @@ export interface Client {
   raw(data: ArrayLike<number>, options?: ISendOptions): void;
   enqueueRaw(data: ArrayLike<number>, options?: ISendOptions): void;
 
-  send(message: Schema, options?: ISendOptions): void;
   send(type: string | number, message?: any, options?: ISendOptions): void;
+  send(message: Schema, options?: ISendOptions): void;
 
   error(code: number, message?: string): void;
   leave(code?: number, data?: string): void;

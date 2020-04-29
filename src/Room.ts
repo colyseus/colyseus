@@ -233,24 +233,24 @@ export abstract class Room<State= any, Metadata= any> {
     this._events.emit('unlock');
   }
 
-  public send(client: Client, message: Schema, options?: ISendOptions): void;
   public send(client: Client, type: string | number, message: any, options?: ISendOptions): void;
+  public send(client: Client, message: Schema, options?: ISendOptions): void;
   public send(client: Client, messageOrType: any, messageOrOptions?: any | ISendOptions, options?: ISendOptions): void {
     console.warn('DEPRECATION WARNING: use client.send(...) instead of this.send(client, ...)');
     client.send(messageOrType, messageOrOptions, options);
   }
 
+  public broadcast(type: string | number, message?: any, options?: IBroadcastOptions);
   public broadcast<T extends Schema>(message: T, options: IBroadcastOptions);
-  public broadcast(type: string | number, message: any, options?: IBroadcastOptions);
   public broadcast(
     typeOrSchema: string | number | Schema,
     messageOrOptions: any | IBroadcastOptions,
     options?: IBroadcastOptions,
   ) {
     const isSchema = (typeof(typeOrSchema) === 'object');
-    const opts: IBroadcastOptions = ((isSchema) ? messageOrOptions : options) || {};
+    const opts: IBroadcastOptions = ((isSchema) ? messageOrOptions : options);
 
-    if (opts.afterNextPatch) {
+    if (opts && opts.afterNextPatch) {
       delete opts.afterNextPatch;
       this._afterNextPatchBroadcasts.push(arguments);
       return;
@@ -419,7 +419,7 @@ export abstract class Room<State= any, Metadata= any> {
     }, timeoutInSeconds * 1000);
   }
 
-  private broadcastMessageSchema<T extends Schema>(message: T, options: IBroadcastOptions) {
+  private broadcastMessageSchema<T extends Schema>(message: T, options: IBroadcastOptions = {}) {
     const encodedMessage = getMessageBytes[Protocol.ROOM_DATA_SCHEMA](message);
 
     let numClients = this.clients.length;
@@ -432,7 +432,7 @@ export abstract class Room<State= any, Metadata= any> {
     }
   }
 
-  private broadcastMessageType(type: string, message: any, options: IBroadcastOptions) {
+  private broadcastMessageType(type: string, message?: any, options: IBroadcastOptions = {}) {
     const encodedMessage = getMessageBytes[Protocol.ROOM_DATA](type, message);
 
     let numClients = this.clients.length;
