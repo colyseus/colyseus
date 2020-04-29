@@ -241,10 +241,10 @@ export abstract class Room<State= any, Metadata= any> {
   }
 
   public broadcast(type: string | number, message?: any, options?: IBroadcastOptions);
-  public broadcast<T extends Schema>(message: T, options: IBroadcastOptions);
+  public broadcast<T extends Schema>(message: T, options?: IBroadcastOptions);
   public broadcast(
     typeOrSchema: string | number | Schema,
-    messageOrOptions: any | IBroadcastOptions,
+    messageOrOptions?: any | IBroadcastOptions,
     options?: IBroadcastOptions,
   ) {
     const isSchema = (typeof(typeOrSchema) === 'object');
