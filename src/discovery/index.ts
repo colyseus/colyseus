@@ -11,7 +11,7 @@ export interface Node {
 
 async function getNodeAddress(node: Node) {
   const host = process.env.SELF_HOSTNAME || await ip.v4();
-  const port = process.end.SELF_PORT || node.port;
+  const port = process.env.SELF_PORT || node.port;
   return `${node.processId}/${host}:${port}`;
 }
 
