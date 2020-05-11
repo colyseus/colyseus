@@ -57,7 +57,7 @@ export class WebSocketTransport extends Transport {
     }
   }
 
-  public listen(port: number, hostname?: string, backlog?: number, listeningListener?: Function) {
+  public listen(port: number, hostname?: string, backlog?: number, listeningListener?: () => void) {
     this.server.listen(port, hostname, backlog, listeningListener);
     return this;
   }

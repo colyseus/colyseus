@@ -1,6 +1,6 @@
 {
   "name": "colyseus",
-  "version": "0.13.5",
+  "version": "0.13.6",
   "description": "Multiplayer Game Server for Node.js.",
   "main": "./lib/index.js",
   "typings": "./lib/index.d.ts",
@@ -59,7 +59,7 @@
     "@types/koa": "^2.0.49",
     "@types/mocha": "^5.2.7",
     "@types/mongoose": "^5.5.12",
-    "@types/node": "^10.0.8",
+    "@types/node": "^13.13.5",
     "@types/sinon": "^4.3.3",
     "all-contributors-cli": "^5.4.0",
     "benchmark": "^2.1.1",

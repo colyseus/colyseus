@@ -21,7 +21,7 @@ export class TCPTransport extends Transport {
     this.server.on('connection', this.onConnection);
   }
 
-  public listen(port?: number, hostname?: string, backlog?: number, listeningListener?: Function): this {
+  public listen(port?: number, hostname?: string, backlog?: number, listeningListener?: () => void): this {
     this.server.listen(port, hostname, backlog, listeningListener);
     return this;
   }
