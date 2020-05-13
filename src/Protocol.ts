@@ -79,11 +79,14 @@ export const getMessageBytes = {
   },
 
   [Protocol.ROOM_DATA_SCHEMA]: (message: Schema) => {
-    return [
-      Protocol.ROOM_DATA_SCHEMA,
-      (message.constructor as typeof Schema)._typeid,
-      ...message.encodeAll(),
-    ];
+    const typeid = (message.constructor as typeof Schema)._typeid;
+
+    if (typeid === undefined) {
+      console.warn('Starting at colyseus >= 0.13 You must provide a type and message when calling `this.broadcast()` or `client.send()`. Please see: https://docs.colyseus.io/migrating/0.13/');
+      throw new Error(`an instance of Schema was expected, but ${JSON.stringify(message)} has been provided.`);
+    }
+
+    return [Protocol.ROOM_DATA_SCHEMA, typeid, ...message.encodeAll()];
   },
 
   [Protocol.ROOM_DATA]: (type: string | number, message?: any) => {
