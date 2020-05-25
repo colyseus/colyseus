@@ -5,7 +5,7 @@ import { Serializer } from './Serializer';
 
 import { Definition, dumpChanges, Reflection, Schema } from '@colyseus/schema';
 import { debugPatch } from '../Debug';
-import { Protocol, send } from '../Protocol';
+import { Protocol } from '../Protocol';
 
 export class SchemaSerializer<T> implements Serializer<T> {
   public id = 'schema';
@@ -32,20 +32,19 @@ export class SchemaSerializer<T> implements Serializer<T> {
     if (hasChanges) {
       let numClients = clients.length;
 
+      // dump changes for patch debugging
+      if (debugPatch.enabled) {
+        (debugPatch as any).dumpChanges = dumpChanges(this.state);
+      }
+
       if (!this.hasFiltersByClient) {
-
-        // dump changes for patch debugging
-        if (debugPatch.enabled) {
-          (debugPatch as any).dumpChanges = dumpChanges(this.state);
-        }
-
         // encode changes once, for all clients
         const patches = this.state.encode();
         patches.unshift(Protocol.ROOM_STATE_PATCH);
 
         while (numClients--) {
           const client = clients[numClients];
-          send.raw(client, patches);
+          client.enqueueRaw(patches);
         }
 
         if (debugPatch.enabled) {
@@ -62,7 +61,15 @@ export class SchemaSerializer<T> implements Serializer<T> {
         // encode state multiple times, for each client
         while (numClients--) {
           const client = clients[numClients];
-          send.raw(client, [Protocol.ROOM_STATE_PATCH, ...this.state.encodeFiltered(client)]);
+          client.enqueueRaw([Protocol.ROOM_STATE_PATCH, ...this.state.encodeFiltered(client)]);
+        }
+
+        if (debugPatch.enabled) {
+          debugPatch(
+            'filterd patch sent to %d clients, %j',
+            clients.length,
+            (debugPatch as any).dumpChanges,
+          );
         }
 
         this.state.discardAllChanges();

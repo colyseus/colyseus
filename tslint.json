@@ -22,8 +22,7 @@
       ]
     },
     "interface-name": [
-      true,
-      "never-prefix"
+      false
     ],
     "ban-types": {
       "options": [

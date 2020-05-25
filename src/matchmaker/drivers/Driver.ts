@@ -9,6 +9,7 @@ export interface RoomListingData<Metadata= any> {
   name: string;
   processId: string;
   roomId: string;
+  unlisted: boolean;
 
   updateOne(operations: any);
   save();

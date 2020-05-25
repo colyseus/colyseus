@@ -11,6 +11,7 @@ export class RoomCache implements RoomListingData {
   public processId: string;
   public roomId: string;
   public createdAt: Date;
+  public unlisted: boolean = false;
 
   private $rooms: RoomCache[];
 
@@ -63,7 +64,10 @@ export class RoomCache implements RoomListingData {
   }
 
   public remove() {
-    spliceOne(this.$rooms, this.$rooms.indexOf(this));
+    const roomIndex = this.$rooms.indexOf(this);
+    if (roomIndex === -1) { return; }
+
+    spliceOne(this.$rooms, roomIndex);
     this.$rooms = null;
   }
 }

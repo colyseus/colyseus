@@ -1,5 +1,5 @@
 import debug from 'debug';
-import { MatchMakeError } from './MatchMaker';
+import { ServerError } from './errors/ServerError';
 
 export const debugMatchMaking = debug('colyseus:matchmaking');
 export const debugPatch = debug('colyseus:patch');
@@ -9,7 +9,7 @@ export const debugConnection = debug('colyseus:connection');
 export const debugAndPrintError = (e: Error | string) => {
   const message = (e instanceof Error) ? e.stack : e;
 
-  if (!(e instanceof MatchMakeError)) {
+  if (!(e instanceof ServerError)) {
     console.error(message);
   }
 

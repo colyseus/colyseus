@@ -4,8 +4,8 @@ cache:
   npm: false
 
 node_js:
-  - 10
   - 12
+  - 13
 
 install:
   - 'npm install'

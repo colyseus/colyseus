@@ -16,6 +16,7 @@ export class RedisPresence implements Presence {
     protected subscriptions: { [channel: string]: Callback[] } = {};
 
     protected smembersAsync: any;
+    protected sismemberAsync: any;
     protected hgetAsync: any;
     protected hlenAsync: any;
     protected pubsubAsync: any;
@@ -37,6 +38,7 @@ export class RedisPresence implements Presence {
 
         // create promisified redis methods.
         this.smembersAsync = promisify(this.pub.smembers).bind(this.pub);
+        this.sismemberAsync = promisify(this.pub.sismember).bind(this.pub);
         this.hgetAsync = promisify(this.pub.hget).bind(this.pub);
         this.hlenAsync = promisify(this.pub.hlen).bind(this.pub);
         this.pubsubAsync = promisify(this.pub.pubsub).bind(this.pub);
@@ -116,6 +118,10 @@ export class RedisPresence implements Presence {
 
     public async smembers(key: string): Promise<string[]> {
         return await this.smembersAsync(key);
+    }
+
+    public async sismember(key: string, field: string): Promise<number> {
+        return await this.sismemberAsync(key, field);
     }
 
     public async srem(key: string, value: any) {

@@ -3,7 +3,7 @@ import fossilDelta from 'fossil-delta';
 import msgpack from 'notepack.io';
 
 import { Client } from '..';
-import { Protocol, send } from '../Protocol';
+import { Protocol } from '../Protocol';
 import { Serializer } from './Serializer';
 
 import jsonPatch from 'fast-json-patch'; // this is only used for debugging patches
@@ -39,7 +39,7 @@ export class FossilDeltaSerializer<T> implements Serializer<T> {
 
       while (numClients--) {
         const client = clients[numClients];
-        send.raw(client, this.patches);
+        client.enqueueRaw(this.patches);
       }
     }
 

@@ -11,6 +11,7 @@ export interface Presence {
     del(key: string): void;
     sadd(key: string, value: any);
     smembers(key: string): Promise<string[]>;
+    sismember(key: string, field: string);
     srem(key: string, value: any);
     scard(key: string);
     sinter(...keys: string[]): Promise<string[]>;

@@ -19,6 +19,26 @@ export class DummyRoom extends Room<State> {
     this.setMetadata({ password: true });
 
     this.setState(new State());
+
+    this.onMessage("*", (client, type, message) => {
+      console.log(client.sessionId, "sent message of type:", type, "=>", message);
+    });
+
+    this.onMessage("schema", this.handleSchema.bind(this));
+    this.onMessage("leave", this.handleLeave.bind(this));
+  }
+
+  handleSchema(client) {
+    this.state.lastMessage = "schema";
+    const message = new Message();
+    message.str = "Hello world!";
+    message.num = 10;
+    this.send(client, message);
+  }
+
+  handleLeave(client) {
+    this.state.lastMessage = "leave";
+    this.disconnect().then(() => console.log("yup, disconnected."));
   }
 
   async onAuth (client, options, req) {
@@ -47,23 +67,6 @@ export class DummyRoom extends Room<State> {
       this.state.lastMessage = `${client.sessionId} left.`;
       console.log("ChatRoom:", client.sessionId, "left!");
     }
-  }
-
-  onMessage (client, data) {
-    this.state.lastMessage = data;
-
-    if (data === "schema") {
-      const message = new Message();
-      message.str = "Hello world!";
-      message.num = 10;
-      this.send(client, message);
-    }
-
-    if (data === "leave") {
-      this.disconnect().then(() => console.log("yup, disconnected."));
-    }
-
-    console.log("ChatRoom:", client.sessionId, data);
   }
 
   onDispose () {

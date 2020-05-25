@@ -38,9 +38,9 @@ describe("Room Integration", () => {
       matchMaker.defineRoomType('fossil-delta', class _ extends Room {
         onCreate() {
           this.setState({ hello: "world!" });
-        }
-        onMessage(_, message) {
-          this.state.hello = message;
+          this.onMessage("*", (_, type) => {
+            this.state.hello = type;
+          });
         }
       });
 

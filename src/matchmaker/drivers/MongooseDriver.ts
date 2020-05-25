@@ -10,6 +10,7 @@ const RoomCacheSchema: Schema = new Schema<Document>({
   private: { type: Boolean, default: false },
   processId: String,
   roomId: String,
+  unlisted: { type: Boolean, default: false }, // used for default LobbyRoom (prevent from showing up on room listing)
 }, {
   strict: false,
   timestamps: true,

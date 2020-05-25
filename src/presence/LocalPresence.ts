@@ -83,6 +83,10 @@ export class LocalPresence implements Presence {
         return this.data[key] || [];
     }
 
+    public async sismember(key: string, field: string) {
+        return this.data[key] && this.data[key].includes(field) ? 1 : 0;
+    }
+
     public srem(key: string, value: any) {
         if (this.data[key]) {
             spliceOne(this.data[key], this.data[key].indexOf(value));

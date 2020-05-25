@@ -122,22 +122,24 @@ and chat rooms is expected to follow the [code of conduct](CODE_OF_CONDUCT.md).
 - TypeRush
 
 **Generous backers:**
-- Kyle Kemp
 - Wenish
 
 **Backers:**
 - Brian Hay
 - Damian Alberto Pastorini
-- Endre Johnsen
 - enriqueto
 - Eric McDaniel
+- Hooman Niktafar
 - James Jacoby
+- Joshua Jebadurai
 - João Mosmann
 - LeeSeHeon
+- Matt Greene
+- Mikal Dev
 - Nikita Borisov
-- Phil
+- Patryk Tyszko
 - Plaid World
-- Rob Drake
+- Thomas Summerall
 - tobi4s1337
 - Worph
 
