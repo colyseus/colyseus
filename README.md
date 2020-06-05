@@ -119,15 +119,16 @@ and chat rooms is expected to follow the [code of conduct](CODE_OF_CONDUCT.md).
 
 **Sponsors**
 - BubbleboxGames
-- TypeRush
 
 **Generous backers:**
+- Mobile Brain
 - Wenish
 
 **Backers:**
 - Brian Hay
 - Damian Alberto Pastorini
 - enriqueto
+- Eric Hasnoname
 - Eric McDaniel
 - Hooman Niktafar
 - James Jacoby
@@ -136,7 +137,6 @@ and chat rooms is expected to follow the [code of conduct](CODE_OF_CONDUCT.md).
 - LeeSeHeon
 - Matt Greene
 - Mikal Dev
-- Nikita Borisov
 - Patryk Tyszko
 - Plaid World
 - Thomas Summerall
