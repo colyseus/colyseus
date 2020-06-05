@@ -335,6 +335,7 @@ export abstract class Room<State= any, Metadata= any> {
 
         if (this.onJoin) {
           await this.onJoin(client, options, client.auth);
+          this.state.discardAllChanges()
         }
       } catch (e) {
         spliceOne(this.clients, this.clients.indexOf(client));
