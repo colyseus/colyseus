@@ -22,8 +22,8 @@ export class SchemaSerializer<T> implements Serializer<T> {
 
   public getFullState(client?: Client) {
     return (client && this.hasFiltersByClient)
-      ? this.state.encodeAllFiltered(client)
-      : this.state.encodeAll();
+      ? this.state.encodeFiltered(client)
+      : this.state.encode();
   }
 
   public applyPatches(clients: Client[]) {
