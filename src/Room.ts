@@ -284,10 +284,6 @@ export abstract class Room<State= any, Metadata= any> {
       reconnection.reject();
     }
 
-    for (const reconnection of Object.values(this.reconnections)) {
-      reconnection.reject();
-    }
-
     let numClients = this.clients.length;
     if (numClients > 0) {
       // clients may have `async onLeave`, room will be disposed after they're fulfilled
