@@ -419,7 +419,7 @@ export abstract class Room<State= any, Metadata= any> {
     }, timeoutInSeconds * 1000);
   }
 
-  private broadcastMessageSchema<T extends Schema>(message: T, options: IBroadcastOptions = {}) {
+  protected broadcastMessageSchema<T extends Schema>(message: T, options: IBroadcastOptions = {}) {
     const encodedMessage = getMessageBytes[Protocol.ROOM_DATA_SCHEMA](message);
 
     let numClients = this.clients.length;
@@ -432,7 +432,7 @@ export abstract class Room<State= any, Metadata= any> {
     }
   }
 
-  private broadcastMessageType(type: string, message?: any, options: IBroadcastOptions = {}) {
+  protected broadcastMessageType(type: string, message?: any, options: IBroadcastOptions = {}) {
     const encodedMessage = getMessageBytes[Protocol.ROOM_DATA](type, message);
 
     let numClients = this.clients.length;
@@ -445,11 +445,11 @@ export abstract class Room<State= any, Metadata= any> {
     }
   }
 
-  private sendState(client: Client): void {
+  protected sendState(client: Client): void {
     client.enqueueRaw(getMessageBytes[Protocol.ROOM_STATE](this._serializer.getFullState(client)));
   }
 
-  private broadcastPatch(): boolean {
+  protected broadcastPatch(): boolean {
     if (!this._simulationInterval) {
       this.clock.tick();
     }
@@ -462,7 +462,7 @@ export abstract class Room<State= any, Metadata= any> {
     return this._serializer.applyPatches(this.clients, this.state);
   }
 
-  private broadcastAfterPatch() {
+  protected broadcastAfterPatch() {
     const length = this._afterNextPatchBroadcasts.length;
 
     if (length > 0) {
