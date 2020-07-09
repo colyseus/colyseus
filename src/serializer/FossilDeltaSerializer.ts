@@ -55,7 +55,7 @@ export class FossilDeltaSerializer<T> implements Serializer<T> {
      * allow optimized state changes when using `Schema` class.
      */
     if (newState instanceof Schema) {
-      if (newState.$changed) {
+      if (newState['$changes'].changed) {
         changed = true;
         currentStateEncoded = msgpack.encode(currentState);
       }
