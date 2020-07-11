@@ -21,7 +21,8 @@ export class SchemaSerializer<T> implements Serializer<T> {
   }
 
   public getFullState(client?: Client) {
-    const fullEncodedState = this.state.encodeAll();;
+    const fullEncodedState = this.state.encodeAll();
+
     if (client && this.useFilters) {
       return this.state.applyFilters(fullEncodedState, client);
 
