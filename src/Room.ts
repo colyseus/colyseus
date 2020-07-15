@@ -9,6 +9,8 @@ import { EventEmitter } from 'events';
 
 import { Presence } from './presence/Presence';
 
+import { FossilDeltaSerializer } from './serializer/FossilDeltaSerializer';
+import { NoneSerializer } from './serializer/NoneSerializer';
 import { SchemaSerializer } from './serializer/SchemaSerializer';
 import { Serializer } from './serializer/Serializer';
 
@@ -18,7 +20,6 @@ import { Deferred, spliceOne } from './Utils';
 import { debugAndPrintError, debugPatch } from './Debug';
 import { ServerError } from './errors/ServerError';
 import { RoomListingData } from './matchmaker/drivers/Driver';
-import { FossilDeltaSerializer } from './serializer/FossilDeltaSerializer';
 import { Client, ClientState, ISendOptions } from './transport/Transport';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
@@ -78,7 +79,7 @@ export abstract class Room<State= any, Metadata= any> {
 
   private onMessageHandlers: {[id: string]: (client: Client, message: any) => void} = {};
 
-  private _serializer: Serializer<State> = new FossilDeltaSerializer();
+  private _serializer: Serializer<State> = new NoneSerializer();
   private _afterNextPatchBroadcasts: IArguments[] = [];
 
   private _simulationInterval: NodeJS.Timer;

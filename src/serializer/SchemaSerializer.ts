@@ -3,7 +3,7 @@
 import { Client } from '..';
 import { Serializer } from './Serializer';
 
-import { Definition, dumpChanges, Reflection, Schema, hasFilter } from '@colyseus/schema';
+import { dumpChanges, hasFilter, Reflection, Schema } from '@colyseus/schema';
 import { debugPatch } from '../Debug';
 import { Protocol } from '../Protocol';
 

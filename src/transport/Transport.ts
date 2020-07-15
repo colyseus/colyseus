@@ -32,6 +32,11 @@ export interface Client {
   upgradeReq?: http.IncomingMessage; // cross-compatibility for ws (v3.x+) and uws
 
   /**
+   * User-defined data can be attached to the Client instance through this variable.
+   */
+  userData?: any;
+
+  /**
    * auth data provided by your `onAuth`
    */
   auth?: any;

@@ -1,7 +1,7 @@
 import WebSocket from 'ws';
 
 import { Schema } from '@colyseus/schema';
-import { getMessageBytes, Protocol, utf8Length } from '../../Protocol';
+import { getMessageBytes, Protocol } from '../../Protocol';
 import { Client, ClientState, ISendOptions } from '../Transport';
 
 const SEND_OPTS = { binary: true };
