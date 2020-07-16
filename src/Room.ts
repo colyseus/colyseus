@@ -159,7 +159,7 @@ export abstract class Room<State= any, Metadata= any> {
   public setState(newState: State) {
     this.clock.start();
 
-    if ('_schema' in newState) {
+    if ('_definition' in newState) {
       this._serializer = new SchemaSerializer();
 
     } else {

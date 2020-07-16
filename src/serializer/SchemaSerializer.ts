@@ -32,7 +32,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
   }
 
   public applyPatches(clients: Client[]) {
-    const hasChanges = this.state['$changes'].changed;
+    const hasChanges = this.state['$changes'].changes.size > 0;
 
     if (hasChanges) {
       let numClients = clients.length;
