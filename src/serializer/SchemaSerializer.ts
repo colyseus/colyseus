@@ -21,10 +21,10 @@ export class SchemaSerializer<T> implements Serializer<T> {
   }
 
   public getFullState(client?: Client) {
-    const fullEncodedState = this.state.encodeAll();
+    const fullEncodedState = this.state.encodeAll(this.useFilters);
 
     if (client && this.useFilters) {
-      return this.state.applyFilters(fullEncodedState, client);
+      return this.state.applyFilters(client, true);
 
     } else {
       return fullEncodedState;
@@ -42,8 +42,8 @@ export class SchemaSerializer<T> implements Serializer<T> {
         (debugPatch as any).dumpChanges = dumpChanges(this.state);
       }
 
-      // get patches
-      const patches = this.state.encode();
+      // get patch bytes
+      const patches = this.state.encode(false, [], this.useFilters);
 
       if (!this.useFilters) {
         // encode changes once, for all clients
@@ -59,7 +59,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
         // encode state multiple times, for each client
         while (numClients--) {
           const client = clients[numClients];
-          const filteredPatches = this.state.applyFilters(patches, client);
+          const filteredPatches = this.state.applyFilters(client);
           client.enqueueRaw([Protocol.ROOM_STATE_PATCH, ...filteredPatches]);
         }
 
