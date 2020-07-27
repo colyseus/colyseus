@@ -121,27 +121,31 @@ and chat rooms is expected to follow the [code of conduct](CODE_OF_CONDUCT.md).
 - BubbleboxGames
 
 **Generous backers:**
+- Adrian Lotta
 - Mobile Brain
 - Wenish
 
 **Backers:**
-- Brian Hay
-- Damian Alberto Pastorini
-- enriqueto
+- Jake Cattrall
+- firetto
+- Carlos Quintero
+- Kevin Hayes
+- Kirill
+- Emy
 - Eric Hasnoname
-- Eric McDaniel
-- Hooman Niktafar
-- James Jacoby
-- Joshua Jebadurai
-- João Mosmann
-- LeeSeHeon
 - Matt Greene
-- Mikal Dev
-- Patryk Tyszko
-- Plaid World
 - Thomas Summerall
+- Hooman Niktafar
+- Mikal Dev
+- Eric McDaniel
+- Damian Alberto Pastorini
 - tobi4s1337
+- LeeSeHeon
+- enriqueto
 - Worph
+- João Mosmann
+- Brian Hay
+- Plaid World
 
 # License
 
