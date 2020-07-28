@@ -70,12 +70,13 @@ export class RelayRoom extends Room<State> { // tslint:disable-line
       player.name = options.name;
     }
 
-    this.state.players[client.sessionId] = player;
+    this.state.players.set(client.sessionId, player);
   }
 
   public async onLeave(client: Client, consented: boolean) {
     if (this.allowReconnectionTime > 0) {
-      this.state.players[client.sessionId].connected = false;
+      const player = this.state.players.get(client.sessionId);
+      player.connected = false;
 
       try {
         if (consented) {
@@ -83,10 +84,10 @@ export class RelayRoom extends Room<State> { // tslint:disable-line
         }
 
         await this.allowReconnection(client, this.allowReconnectionTime);
-        this.state.players[client.sessionId].connected = true;
+        player.connected = true;
 
       } catch (e) {
-        delete this.state.players[client.sessionId];
+        this.state.players.delete(client.sessionId);
       }
     }
   }
