@@ -55,7 +55,7 @@ export class FossilDeltaSerializer<T> implements Serializer<T> {
      * allow optimized state changes when using `Schema` class.
      */
     if (newState instanceof Schema) {
-      if (newState['$changes'].changes.size > 0) {
+      if (newState['$changes'].changes.size > 0) { // tslint:disable-line
         changed = true;
         currentStateEncoded = msgpack.encode(currentState);
       }
