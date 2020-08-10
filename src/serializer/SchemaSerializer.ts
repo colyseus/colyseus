@@ -6,6 +6,7 @@ import { Serializer } from './Serializer';
 import { dumpChanges, hasFilter, Reflection, Schema } from '@colyseus/schema';
 import { debugPatch } from '../Debug';
 import { Protocol } from '../Protocol';
+import { ClientState } from '../transport/Transport';
 
 export class SchemaSerializer<T> implements Serializer<T> {
   public id = 'schema';
@@ -51,7 +52,13 @@ export class SchemaSerializer<T> implements Serializer<T> {
 
         while (numClients--) {
           const client = clients[numClients];
-          client.enqueueRaw(patches);
+
+          //
+          // FIXME: avoid this check.
+          //
+          if (client.state === ClientState.JOINED) {
+            client.raw(patches);
+          }
         }
 
       } else {
@@ -59,8 +66,14 @@ export class SchemaSerializer<T> implements Serializer<T> {
         // encode state multiple times, for each client
         while (numClients--) {
           const client = clients[numClients];
-          const filteredPatches = this.state.applyFilters(client);
-          client.enqueueRaw([Protocol.ROOM_STATE_PATCH, ...filteredPatches]);
+
+          //
+          // FIXME: avoid this check.
+          //
+          if (client.state === ClientState.JOINED) {
+            const filteredPatches = this.state.applyFilters(client);
+            client.raw([Protocol.ROOM_STATE_PATCH, ...filteredPatches]);
+          }
         }
 
         this.state.discardAllChanges();
