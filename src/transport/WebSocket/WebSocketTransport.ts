@@ -42,7 +42,7 @@ export class WebSocketTransport extends Transport {
 
     this.pingIntervalMS = (options.pingInterval !== undefined)
       ? options.pingInterval
-      : 1500;
+      : 3000;
     this.pingMaxRetries = (options.pingMaxRetries !== undefined)
       ? options.pingMaxRetries
       : 2;
