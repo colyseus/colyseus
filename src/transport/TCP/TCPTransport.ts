@@ -30,6 +30,10 @@ export class TCPTransport extends Transport {
     this.server.close();
   }
 
+  public simulateLatency(milliseconds: number) {
+    throw new Error("not implemented.");
+  }
+
   protected onConnection(client: net.Socket & any) {
     // compatibility with ws / uws
     const upgradeReq: any = {};

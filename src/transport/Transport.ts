@@ -11,6 +11,7 @@ export abstract class Transport {
     public abstract listen(port?: number, hostname?: string, backlog?: number, listeningListener?: Function): this;
     public abstract shutdown(): void;
 
+    public abstract simulateLatency(milliseconds: number): void;
     public address() { return this.server.address() as net.AddressInfo; }
 }
 

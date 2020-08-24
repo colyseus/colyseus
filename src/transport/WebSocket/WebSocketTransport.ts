@@ -68,6 +68,13 @@ export class WebSocketTransport extends Transport {
     this.server.close();
   }
 
+  public simulateLatency(milliseconds: number) {
+    console.warn(`WebSocket: latency simulation enabled - ${milliseconds}ms latency.`);
+    const previousSend = WebSocket.prototype.send;
+    WebSocket.prototype.send = (...args: any[]) =>
+      setTimeout(() => previousSend.apply(this, args), milliseconds);
+  }
+
   protected autoTerminateUnresponsiveClients(pingInterval: number, pingMaxRetries: number) {
     // interval to detect broken connections
     this.pingInterval = setInterval(() => {
