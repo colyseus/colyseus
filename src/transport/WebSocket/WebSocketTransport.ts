@@ -69,7 +69,6 @@ export class WebSocketTransport extends Transport {
   }
 
   public simulateLatency(milliseconds: number) {
-    console.warn(`${this.constructor.name} latency simulation enabled → ${milliseconds}ms latency`);
     const previousSend = WebSocket.prototype.send;
     WebSocket.prototype.send = function (...args: any[]) {
       setTimeout(() => previousSend.apply(this, args), milliseconds);

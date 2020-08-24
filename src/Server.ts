@@ -92,6 +92,14 @@ export class Server {
       : new WebSocketTransport(options, engine);
   }
 
+  /**
+   * Bind the server into the port specified.
+   *
+   * @param port
+   * @param hostname
+   * @param backlog
+   * @param listeningListener
+   */
   public async listen(port: number, hostname?: string, backlog?: number, listeningListener?: Function) {
     return new Promise((resolve, reject) => {
       this.transport.listen(port, hostname, backlog, (err) => {
@@ -117,6 +125,13 @@ export class Server {
     });
   }
 
+  /**
+   * Define a new type of room for matchmaking.
+   *
+   * @param name public room identifier for match-making.
+   * @param handler Room class definition
+   * @param defaultOptions default options for `onCreate`
+   */
   public define<T extends Type<Room>>(
     name: string,
     handler: T,
@@ -146,6 +161,26 @@ export class Server {
     }
   }
 
+  /**
+   * Add simulated latency between client and server.
+   * @param milliseconds round trip latency in milliseconds.
+   */
+  public simulateLatency(milliseconds: number) {
+    const halfwayMS = (milliseconds / 2);
+
+    console.warn(`Colyseus latency simulation enabled → ${milliseconds}ms latency for round trip.`);
+    this.transport.simulateLatency(halfwayMS);
+
+    const _onMessage = Room.prototype['_onMessage'];
+    Room.prototype['_onMessage'] = function (...args: any[]) {
+      setTimeout(() => _onMessage.apply(this, args), halfwayMS);
+    }
+  }
+
+  /**
+   * Register a callback that is going to be executed before the server shuts down.
+   * @param callback
+   */
   public onShutdown(callback: () => void | Promise<any>) {
     this.onShutdownCallback = callback;
   }
