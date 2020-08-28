@@ -598,9 +598,6 @@ export abstract class Room<State= any, Metadata= any> {
   }
 
   private _forciblyCloseClient(client: Client, closeCode: number) {
-    // stop receiving messages from this client
-    client.ref.removeAllListeners('message');
-
     // prevent "onLeave" from being called twice if player asks to leave
     const closeListeners: any[] = client.ref.listeners('close');
     if (closeListeners.length >= 2) {
@@ -612,6 +609,9 @@ export abstract class Room<State= any, Metadata= any> {
   }
 
   private async _onLeave(client: Client, code?: number): Promise<any> {
+    // stop receiving messages from this client
+    client.ref.removeAllListeners('message');
+
     const success = spliceOne(this.clients, this.clients.indexOf(client));
 
     // call 'onLeave' method only if the client has been successfully accepted.

@@ -166,9 +166,9 @@ export class Server {
    * @param milliseconds round trip latency in milliseconds.
    */
   public simulateLatency(milliseconds: number) {
-    const halfwayMS = (milliseconds / 2);
-
     console.warn(`Colyseus latency simulation enabled → ${milliseconds}ms latency for round trip.`);
+
+    const halfwayMS = (milliseconds / 2);
     this.transport.simulateLatency(halfwayMS);
 
     const _onMessage = Room.prototype['_onMessage'];
