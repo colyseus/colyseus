@@ -549,6 +549,9 @@ export abstract class Room<State= any, Metadata= any> {
   }
 
   private _onMessage(client: Client, bytes: number[]) {
+    // skip if client is on LEAVING state.
+    if (client.state === ClientState.LEAVING) { return; }
+
     const it: decode.Iterator = { offset: 0 };
     const code = decode.uint8(bytes, it);
 
@@ -598,6 +601,9 @@ export abstract class Room<State= any, Metadata= any> {
   }
 
   private _forciblyCloseClient(client: Client, closeCode: number) {
+    // stop receiving messages from this client
+    client.ref.removeAllListeners('message');
+
     // prevent "onLeave" from being called twice if player asks to leave
     const closeListeners: any[] = client.ref.listeners('close');
     if (closeListeners.length >= 2) {
@@ -609,14 +615,12 @@ export abstract class Room<State= any, Metadata= any> {
   }
 
   private async _onLeave(client: Client, code?: number): Promise<any> {
-    // stop receiving messages from this client
-    client.ref.removeAllListeners('message');
-
     const success = spliceOne(this.clients, this.clients.indexOf(client));
 
     // call 'onLeave' method only if the client has been successfully accepted.
     if (success && this.onLeave) {
       try {
+        client.state = ClientState.LEAVING;
         await this.onLeave(client, (code === Protocol.WS_CLOSE_CONSENTED));
 
       } catch (e) {
