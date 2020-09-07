@@ -17,11 +17,11 @@
     <img src="https://img.shields.io/discord/525739117951320081.svg?style=for-the-badge&colorB=7581dc&logo=discord&logoColor=white">
   </a>
   <h3>
-    Multiplayer Game Server for Node.js. <br /><a href="https://docs.colyseus.io/">View documentation</a>
+    Multiplayer Framework for Node.js. <br /><a href="https://docs.colyseus.io/">View documentation</a>
   </h3>
 </div>
 
-Colyseus is an Authoritative Multiplayer Game Server for Node.js, with clients
+Colyseus is an Authoritative Multiplayer Framework for Node.js, with clients
 available for the Web, Unity3d, Defold, Haxe, and Cocos2d-X. ([See official clients](#%EF%B8%8F-official-client-integration))
 
 The project focuses on providing synchronizable data structures for realtime and
