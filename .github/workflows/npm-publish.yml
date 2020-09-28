@@ -20,7 +20,7 @@ jobs:
     - name: Publish if version has been updated
       uses: endel/npm-publish-action@master
       with:
-        tag_name: "v%s"
+        tag_name: "%s"
         tag_message: "v%s"
         commit_pattern: "^bump (\\S+)"
       env:

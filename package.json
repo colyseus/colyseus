@@ -1,6 +1,6 @@
 {
   "name": "colyseus",
-  "version": "0.14.0-alpha.17",
+  "version": "0.14.0-alpha.18",
   "description": "Multiplayer Framework for Node.js.",
   "main": "./lib/index.js",
   "typings": "./lib/index.d.ts",
