@@ -62,11 +62,11 @@ npm start
 # 🕹️ Official Client Integration
 
 - [JavaScript/TypeScript](https://github.com/colyseus/colyseus.js)
-- [Defold Engine](https://github.com/colyseus/colyseus-defold) ([defold.com](https://www.defold.com/))
 - [Unity](https://github.com/colyseus/colyseus-unity3d) ([unity3d.com](https://unity3d.com/))
+- [Defold Engine](https://github.com/colyseus/colyseus-defold) ([defold.com](https://www.defold.com/))
 - [Haxe](https://github.com/colyseus/colyseus-hx) ([haxe.org](https://haxe.org/))
-- [Cocos2d-x](https://github.com/colyseus/colyseus-cocos2d-x) ([cocos2d-x.org](https://cocos2d-x.org/))
 - [Construct 3](https://github.com/colyseus/colyseus-construct3) ([construct3.net](https://www.construct.net/))
+- [Cocos2d-x](https://github.com/colyseus/colyseus-cocos2d-x) ([cocos2d-x.org](https://cocos2d-x.org/))
 
 # 🛠️ Tools
 
@@ -78,7 +78,7 @@ npm start
 ## Tools made by the community ❤️
 
 - [colyseus-hxjs](https://github.com/serjek/colyseus-hxjs): Haxe externs for colyseus server (by [@serjek](https://github.com/serjek))
-- [colyseus-java](https://github.com/doorbash/colyseus-java): Client for Java (by [@doorbash](https://github.com/doorbash))
+- [colyseus-kotlin](https://github.com/doorbash/colyseus-kotlin): Client for Java/Kotlin (by [@doorbash](https://github.com/doorbash))
 - [Colyseus-ObjC](https://github.com/swittk/Colyseus-ObjC): Client for Objective C (by [@swittk](https://github.com/swittk))
 - [Colyseus-for-C2](https://github.com/Keevle/Colyseus-for-C2): Client for Construct 2 (by [@Keevle](https://github.com/Keevle))
 
