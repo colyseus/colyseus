@@ -131,14 +131,16 @@ export abstract class Room<State= any, Metadata= any> {
     return this.reservedSeats[sessionId] !== undefined;
   }
 
-  public setSimulationInterval( callback: SimulationCallback, delay: number = DEFAULT_SIMULATION_INTERVAL ): void {
+  public setSimulationInterval(onTickCallback?: SimulationCallback, delay: number = DEFAULT_SIMULATION_INTERVAL): void {
     // clear previous interval in case called setSimulationInterval more than once
-    if ( this._simulationInterval ) { clearInterval( this._simulationInterval ); }
+    if (this._simulationInterval) { clearInterval(this._simulationInterval); }
 
-    this._simulationInterval = setInterval( () => {
-      this.clock.tick();
-      callback(this.clock.deltaTime);
-    }, delay );
+    if (onTickCallback) {
+      this._simulationInterval = setInterval(() => {
+        this.clock.tick();
+        onTickCallback(this.clock.deltaTime);
+      }, delay);
+    }
   }
 
   public setPatchRate( milliseconds: number ): void {
@@ -148,7 +150,7 @@ export abstract class Room<State= any, Metadata= any> {
       this._patchInterval = undefined;
     }
 
-    if ( milliseconds !== null && milliseconds !== 0 ) {
+    if (milliseconds !== null && milliseconds !== 0) {
       this._patchInterval = setInterval(() => {
         this.broadcastPatch();
         this.broadcastAfterPatch();

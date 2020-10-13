@@ -70,9 +70,9 @@ export class WebSocketTransport extends Transport {
 
   public simulateLatency(milliseconds: number) {
     const previousSend = WebSocket.prototype.send;
-    WebSocket.prototype.send = function (...args: any[]) {
+    WebSocket.prototype.send = function(...args: any[]) {
       setTimeout(() => previousSend.apply(this, args), milliseconds);
-    }
+    };
   }
 
   protected autoTerminateUnresponsiveClients(pingInterval: number, pingMaxRetries: number) {

@@ -31,7 +31,7 @@ export class TCPTransport extends Transport {
   }
 
   public simulateLatency(milliseconds: number) {
-    throw new Error("not implemented.");
+    throw new Error('not implemented.');
   }
 
   protected onConnection(client: net.Socket & any) {

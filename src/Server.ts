@@ -171,10 +171,12 @@ export class Server {
     const halfwayMS = (milliseconds / 2);
     this.transport.simulateLatency(halfwayMS);
 
+    // @ts-ignore
     const _onMessage = Room.prototype['_onMessage'];
-    Room.prototype['_onMessage'] = function (...args: any[]) {
+    // @ts-ignore
+    Room.prototype['_onMessage'] = function(...args: any[]) {
       setTimeout(() => _onMessage.apply(this, args), halfwayMS);
-    }
+    };
   }
 
   /**
