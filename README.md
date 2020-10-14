@@ -79,6 +79,7 @@ npm start
 
 - [colyseus-hxjs](https://github.com/serjek/colyseus-hxjs): Haxe externs for colyseus server (by [@serjek](https://github.com/serjek))
 - [colyseus-kotlin](https://github.com/doorbash/colyseus-kotlin): Client for Java/Kotlin (by [@doorbash](https://github.com/doorbash))
+- [Stencyl Extension](http://community.stencyl.com/index.php/topic,61150.0.html): [Stencyl](http://stencyl.com) extension to communicate with a Colyseus server (by [MdotEdot](http://www.stencyl.com/users/index/32424))
 - [Colyseus-ObjC](https://github.com/swittk/Colyseus-ObjC): Client for Objective C (by [@swittk](https://github.com/swittk))
 - [Colyseus-for-C2](https://github.com/Keevle/Colyseus-for-C2): Client for Construct 2 (by [@Keevle](https://github.com/Keevle))
 
