@@ -123,25 +123,28 @@ and chat rooms is expected to follow the [code of conduct](CODE_OF_CONDUCT.md).
 
 **Generous backers:**
 - Adrian Lotta
+- Kevin Hayes
 - Mobile Brain
 - Wenish
 
 **Backers:**
+- Sergey On Line
+- Vitaliy Rotari
+- Paul Sawaya
+- Brian Peiris
+- Dr. Brian Burton
 - Jake Cattrall
-- firetto
-- Carlos Quintero
-- Kevin Hayes
 - Kirill
 - Emy
 - Eric Hasnoname
 - Matt Greene
 - Thomas Summerall
+- Joshua Jebadurai
 - Hooman Niktafar
 - Mikal Dev
 - Eric McDaniel
 - Damian Alberto Pastorini
 - tobi4s1337
-- LeeSeHeon
 - enriqueto
 - Worph
 - João Mosmann
