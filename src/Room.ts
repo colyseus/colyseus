@@ -143,7 +143,7 @@ export abstract class Room<State= any, Metadata= any> {
     }
   }
 
-  public setPatchRate( milliseconds: number ): void {
+  public setPatchRate(milliseconds: number): void {
     // clear previous interval in case called setPatchRate more than once
     if (this._patchInterval) {
       clearInterval(this._patchInterval);
@@ -151,10 +151,7 @@ export abstract class Room<State= any, Metadata= any> {
     }
 
     if (milliseconds !== null && milliseconds !== 0) {
-      this._patchInterval = setInterval(() => {
-        this.broadcastPatch();
-        this.broadcastAfterPatch();
-      }, milliseconds);
+      this._patchInterval = setInterval(() => this.broadcastPatch(), milliseconds);
     }
   }
 
@@ -422,6 +419,24 @@ export abstract class Room<State= any, Metadata= any> {
     }, timeoutInSeconds * 1000);
   }
 
+  protected broadcastPatch() {
+    if (!this._simulationInterval) {
+      this.clock.tick();
+    }
+
+    if (!this.state) {
+      debugPatch('trying to broadcast null state. you should call #setState');
+      return false;
+    }
+
+    const hasChanges = this._serializer.applyPatches(this.clients, this.state);
+
+    // broadcast messages enqueued for "after patch"
+    this.broadcastAfterPatch();
+
+    return hasChanges;
+  }
+
   private broadcastMessageSchema<T extends Schema>(message: T, options: IBroadcastOptions = {}) {
     const encodedMessage = getMessageBytes[Protocol.ROOM_DATA_SCHEMA](message);
 
@@ -448,21 +463,8 @@ export abstract class Room<State= any, Metadata= any> {
     }
   }
 
-  private sendState(client: Client): void {
+  private sendFullState(client: Client): void {
     client.enqueueRaw(getMessageBytes[Protocol.ROOM_STATE](this._serializer.getFullState(client)));
-  }
-
-  private broadcastPatch(): boolean {
-    if (!this._simulationInterval) {
-      this.clock.tick();
-    }
-
-    if (!this.state) {
-      debugPatch('trying to broadcast null state. you should call #setState');
-      return false;
-    }
-
-    return this._serializer.applyPatches(this.clients, this.state);
   }
 
   private broadcastAfterPatch() {
@@ -587,7 +589,7 @@ export abstract class Room<State= any, Metadata= any> {
 
       // send current state when new client joins the room
       if (this.state) {
-        this.sendState(client);
+        this.sendFullState(client);
       }
 
       // dequeue messages sent before client has joined effectively (on user-defined `onJoin`)
