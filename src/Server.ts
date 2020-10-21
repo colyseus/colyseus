@@ -171,9 +171,9 @@ export class Server {
     const halfwayMS = (milliseconds / 2);
     this.transport.simulateLatency(halfwayMS);
 
-    // @ts-ignore
+    /* tslint:disable:no-string-literal */
     const _onMessage = Room.prototype['_onMessage'];
-    // @ts-ignore
+    /* tslint:disable:no-string-literal */
     Room.prototype['_onMessage'] = function(...args: any[]) {
       setTimeout(() => _onMessage.apply(this, args), halfwayMS);
     };
