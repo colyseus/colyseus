@@ -333,11 +333,6 @@ export abstract class Room<State= any, Metadata= any> {
           throw new ServerError(ErrorCode.AUTH_FAILED, 'onAuth failed');
         }
 
-        // send default state when new client joins the room
-        if (this.state) {
-          this.sendState(client);
-        }
-
         if (this.onJoin) {
           await this.onJoin(client, options, client.auth);
         }
@@ -583,6 +578,11 @@ export abstract class Room<State= any, Metadata= any> {
     } else if (code === Protocol.JOIN_ROOM) {
       // join room has been acknowledged by the client
       client.state = ClientState.JOINED;
+
+      // send current state when new client joins the room
+      if (this.state) {
+        this.sendState(client);
+      }
 
       // dequeue messages sent before client has joined effectively (on user-defined `onJoin`)
       if (client._enqueuedMessages.length > 0) {
