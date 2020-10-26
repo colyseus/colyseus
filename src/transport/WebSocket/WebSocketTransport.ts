@@ -42,7 +42,7 @@ export class WebSocketTransport extends Transport {
 
     this.pingIntervalMS = (options.pingInterval !== undefined)
       ? options.pingInterval
-      : 1500;
+      : 3000;
     this.pingMaxRetries = (options.pingMaxRetries !== undefined)
       ? options.pingMaxRetries
       : 2;
@@ -66,6 +66,13 @@ export class WebSocketTransport extends Transport {
     clearInterval(this.pingInterval);
     this.wss.close();
     this.server.close();
+  }
+
+  public simulateLatency(milliseconds: number) {
+    const previousSend = WebSocket.prototype.send;
+    WebSocket.prototype.send = function(...args: any[]) {
+      setTimeout(() => previousSend.apply(this, args), milliseconds);
+    };
   }
 
   protected autoTerminateUnresponsiveClients(pingInterval: number, pingMaxRetries: number) {

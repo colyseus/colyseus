@@ -11,6 +11,7 @@ export abstract class Transport {
     public abstract listen(port?: number, hostname?: string, backlog?: number, listeningListener?: Function): this;
     public abstract shutdown(): void;
 
+    public abstract simulateLatency(milliseconds: number): void;
     public address() { return this.server.address() as net.AddressInfo; }
 }
 
@@ -18,7 +19,7 @@ export interface ISendOptions {
   afterNextPatch?: boolean;
 }
 
-export enum ClientState { JOINING, JOINED, RECONNECTED }
+export enum ClientState { JOINING, JOINED, RECONNECTED, LEAVING }
 
 export interface Client {
   readyState: number;
@@ -30,6 +31,11 @@ export interface Client {
   ref: EventEmitter;
 
   upgradeReq?: http.IncomingMessage; // cross-compatibility for ws (v3.x+) and uws
+
+  /**
+   * User-defined data can be attached to the Client instance through this variable.
+   */
+  userData?: any;
 
   /**
    * auth data provided by your `onAuth`

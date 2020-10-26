@@ -8,7 +8,7 @@
     <img src="https://img.shields.io/npm/dm/colyseus.svg?style=for-the-badge&logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAQAAAC1+jfqAAAABGdBTUEAALGPC/xhBQAAACBjSFJNAAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAAAAmJLR0QAAKqNIzIAAAAJcEhZcwAADsQAAA7EAZUrDhsAAAAHdElNRQfjAgETESWYxR33AAAAtElEQVQoz4WQMQrCQBRE38Z0QoTcwF4Qg1h4BO0sxGOk80iCtViksrIQRRBTewWxMI1mbELYjYu+4rPMDPtn12ChMT3gavb4US5Jym0tcBIta3oDHv4Gwmr7nC4QAxBrCdzM2q6XqUnm9m9r59h7Rc0n2pFv24k4ttGMUXW+sGELTJjSr7QDKuqLS6UKFChVWWuFkZw9Z2AAvAirKT+JTlppIRnd6XgaP4goefI2Shj++OnjB3tBmHYK8z9zAAAAJXRFWHRkYXRlOmNyZWF0ZQAyMDE5LTAyLTAxVDE4OjE3OjM3KzAxOjAwGQQixQAAACV0RVh0ZGF0ZTptb2RpZnkAMjAxOS0wMi0wMVQxODoxNzozNyswMTowMGhZmnkAAAAZdEVYdFNvZnR3YXJlAHd3dy5pbmtzY2FwZS5vcmeb7jwaAAAAAElFTkSuQmCC">
   </a>
   <a href="https://patreon.com/endel" title="Donate to this project using Patreon">
-    <img src="https://img.shields.io/badge/endpoint.svg?url=https%3A%2F%2Fshieldsio-patreon.herokuapp.com%2Fendel&style=for-the-badge" alt="Patreon donate button"/>
+    <img src="https://img.shields.io/badge/dynamic/json?logo=patreon&style=for-the-badge&color=%23e85b46&label=Patreon&query=data.attributes.patron_count&suffix=%20backers&url=https%3A%2F%2Fwww.patreon.com%2Fapi%2Fcampaigns%2F365642" alt="Patreon donate button"/>
   </a>
   <a href="http://discuss.colyseus.io" title="Discuss on Forum">
     <img src="https://img.shields.io/badge/discuss-on%20forum-brightgreen.svg?style=for-the-badge&colorB=0069b8&logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAQAAAC1+jfqAAAABGdBTUEAALGPC/xhBQAAACBjSFJNAAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAAAAmJLR0QAAKqNIzIAAAAJcEhZcwAADsQAAA7EAZUrDhsAAAAHdElNRQfjAgETDROxCNUzAAABB0lEQVQoz4WRvyvEARjGP193CnWRH+dHQmGwKZtFGcSmxHAL400GN95ktIpV2dzlLzDJgsGgGNRdDAzoQueS/PgY3HXHyT3T+/Y87/s89UANBKXBdoZo5J6L4K1K5ZxHfnjnlQUf3bKvkgy57a0r9hS3cXfMO1kWJMza++tj3Ac7/LY343x1NA9cNmYMwnSS/SP8JVFuSJmr44iFqvtmpjhmhBCrOOazCesq6H4P3bPBjFoIBydOk2bUA17I080Es+wSZ51B4DIA2zgjSpYcEe44Js01G0XjRcCU+y4ZMrDeLmfc9EnVd5M/o0VMeu6nJZxWJivLmhyw1WHTvrr2b4+2OFqra+ALwouTMDcqmjMAAAAldEVYdGRhdGU6Y3JlYXRlADIwMTktMDItMDFUMTg6MTM6MTkrMDE6MDAC9f6fAAAAJXRFWHRkYXRlOm1vZGlmeQAyMDE5LTAyLTAxVDE4OjEzOjE5KzAxOjAwc6hGIwAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAAASUVORK5CYII=" alt="Discussion forum" />
@@ -17,11 +17,11 @@
     <img src="https://img.shields.io/discord/525739117951320081.svg?style=for-the-badge&colorB=7581dc&logo=discord&logoColor=white">
   </a>
   <h3>
-    Multiplayer Game Server for Node.js. <br /><a href="https://docs.colyseus.io/">View documentation</a>
+    Multiplayer Framework for Node.js. <br /><a href="https://docs.colyseus.io/">View documentation</a>
   </h3>
 </div>
 
-Colyseus is an Authoritative Multiplayer Game Server for Node.js, with clients
+Colyseus is an Authoritative Multiplayer Framework for Node.js, with clients
 available for the Web, Unity3d, Defold, Haxe, and Cocos2d-X. ([See official clients](#%EF%B8%8F-official-client-integration))
 
 The project focuses on providing synchronizable data structures for realtime and
@@ -62,11 +62,11 @@ npm start
 # 🕹️ Official Client Integration
 
 - [JavaScript/TypeScript](https://github.com/colyseus/colyseus.js)
-- [Defold Engine](https://github.com/colyseus/colyseus-defold) ([defold.com](https://www.defold.com/))
 - [Unity](https://github.com/colyseus/colyseus-unity3d) ([unity3d.com](https://unity3d.com/))
+- [Defold Engine](https://github.com/colyseus/colyseus-defold) ([defold.com](https://www.defold.com/))
 - [Haxe](https://github.com/colyseus/colyseus-hx) ([haxe.org](https://haxe.org/))
-- [Cocos2d-x](https://github.com/colyseus/colyseus-cocos2d-x) ([cocos2d-x.org](https://cocos2d-x.org/))
 - [Construct 3](https://github.com/colyseus/colyseus-construct3) ([construct3.net](https://www.construct.net/))
+- [Cocos2d-x](https://github.com/colyseus/colyseus-cocos2d-x) ([cocos2d-x.org](https://cocos2d-x.org/))
 
 # 🛠️ Tools
 
@@ -78,7 +78,8 @@ npm start
 ## Tools made by the community ❤️
 
 - [colyseus-hxjs](https://github.com/serjek/colyseus-hxjs): Haxe externs for colyseus server (by [@serjek](https://github.com/serjek))
-- [colyseus-java](https://github.com/doorbash/colyseus-java): Client for Java (by [@doorbash](https://github.com/doorbash))
+- [colyseus-kotlin](https://github.com/doorbash/colyseus-kotlin): Client for Java/Kotlin (by [@doorbash](https://github.com/doorbash))
+- [Stencyl Extension](http://community.stencyl.com/index.php/topic,61150.0.html): [Stencyl](http://stencyl.com) extension to communicate with a Colyseus server (by [MdotEdot](http://www.stencyl.com/users/index/32424))
 - [Colyseus-ObjC](https://github.com/swittk/Colyseus-ObjC): Client for Objective C (by [@swittk](https://github.com/swittk))
 - [Colyseus-for-C2](https://github.com/Keevle/Colyseus-for-C2): Client for Construct 2 (by [@Keevle](https://github.com/Keevle))
 
@@ -121,27 +122,34 @@ and chat rooms is expected to follow the [code of conduct](CODE_OF_CONDUCT.md).
 - BubbleboxGames
 
 **Generous backers:**
+- Adrian Lotta
+- Kevin Hayes
 - Mobile Brain
 - Wenish
 
 **Backers:**
-- Brian Hay
-- Damian Alberto Pastorini
-- enriqueto
+- Sergey On Line
+- Vitaliy Rotari
+- Paul Sawaya
+- Brian Peiris
+- Dr. Brian Burton
+- Jake Cattrall
+- Kirill
+- Emy
 - Eric Hasnoname
-- Eric McDaniel
-- Hooman Niktafar
-- James Jacoby
-- Joshua Jebadurai
-- João Mosmann
-- LeeSeHeon
 - Matt Greene
-- Mikal Dev
-- Patryk Tyszko
-- Plaid World
 - Thomas Summerall
+- Joshua Jebadurai
+- Hooman Niktafar
+- Mikal Dev
+- Eric McDaniel
+- Damian Alberto Pastorini
 - tobi4s1337
+- enriqueto
 - Worph
+- João Mosmann
+- Brian Hay
+- Plaid World
 
 # License
 
