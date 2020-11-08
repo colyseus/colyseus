@@ -425,7 +425,6 @@ export abstract class Room<State= any, Metadata= any> {
     }
 
     if (!this.state) {
-      debugPatch('trying to broadcast null state. you should call #setState');
       return false;
     }
 
