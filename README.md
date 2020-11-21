@@ -122,12 +122,18 @@ and chat rooms is expected to follow the [code of conduct](CODE_OF_CONDUCT.md).
 - BubbleboxGames
 
 **Generous backers:**
+- Pavel Leonov
+- Soatok Dreamseeker
 - Adrian Lotta
 - Kevin Hayes
 - Mobile Brain
 - Wenish
 
 **Backers:**
+- Vincent Chabrette
+- Aymeric Chauvin
+- Ell Tee
+- dstrawberrygirl
 - Sergey On Line
 - Vitaliy Rotari
 - Paul Sawaya
