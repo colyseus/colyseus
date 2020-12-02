@@ -55,7 +55,7 @@ export class Server {
 
   protected presence: Presence;
   protected processId: string = generateId();
-  protected route = '/matchmake';
+  protected matchmakeRoute = 'matchmake';
 
   private exposedMethods = ['joinOrCreate', 'create', 'join', 'joinById'];
   private allowedRoomNameChars = /([a-zA-Z_\-0-9]+)/gi;
@@ -195,7 +195,7 @@ export class Server {
     server.removeAllListeners('request');
 
     server.on('request', (req, res) => {
-      if (req.url.indexOf('/matchmake') !== -1) {
+      if (req.url.indexOf(`/${this.matchmakeRoute}`) !== -1) {
         debugMatchMaking('received matchmake request: %s', req.url);
         this.handleMatchMakeRequest(req, res);
 
@@ -222,8 +222,9 @@ export class Server {
 
     } else if (req.method === 'POST') {
       const matchedParams = req.url.match(this.allowedRoomNameChars);
-      const method = matchedParams[1];
-      const name = matchedParams[2] || '';
+      const matchmakeIndex = matchedParams.indexOf(this.matchmakeRoute);
+      const method = matchedParams[matchmakeIndex + 1];
+      const name = matchedParams[matchmakeIndex + 2] || '';
 
       const data = [];
       req.on('data', (chunk) => data.push(chunk));
@@ -263,7 +264,7 @@ export class Server {
       };
 
       // TODO: improve me, "matchmake" room names aren't allowed this way.
-      if (roomName !== 'matchmake') {
+      if (roomName !== this.matchmakeRoute) {
         conditions.name = roomName;
       }
 
