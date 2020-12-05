@@ -42,17 +42,17 @@ export class WebSocketClient implements Client {
     this.raw(data, options);
   }
 
-  public raw(data: ArrayLike<number>, options?: ISendOptions) {
+  public raw(data: ArrayLike<number>, options?: ISendOptions, cb?: (err?: Error) => void) {
     if (this.ref.readyState !== WebSocket.OPEN) {
       console.warn('trying to send data to inactive client', this.sessionId);
       return;
     }
 
-    this.ref.send(data, SEND_OPTS);
+    this.ref.send(data, SEND_OPTS, cb);
   }
 
-  public error(code: number, message: string = '') {
-    this.raw(getMessageBytes[Protocol.ERROR](code, message));
+  public error(code: number, message: string = '', cb?: (err?: Error) => void) {
+    this.raw(getMessageBytes[Protocol.ERROR](code, message), undefined, cb);
   }
 
   get readyState() {

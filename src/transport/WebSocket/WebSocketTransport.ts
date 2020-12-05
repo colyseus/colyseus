@@ -123,8 +123,10 @@ export class WebSocketTransport extends Transport {
 
     } catch (e) {
       debugAndPrintError(e);
-      client.error(e.code, e.message);
-      rawClient.close(Protocol.WS_CLOSE_WITH_ERROR);
+
+      // send error code to client then terminate
+      client.error(e.code, e.message, () =>
+        rawClient.close(Protocol.WS_CLOSE_WITH_ERROR));
     }
   }
 
