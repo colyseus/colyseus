@@ -1,4 +1,4 @@
-import mongoose, { ConnectionStates, Document, Schema } from 'mongoose';
+import mongoose, { Document, Schema } from 'mongoose';
 import { MatchMakerDriver, QueryHelpers, RoomListingData } from './Driver';
 
 const RoomCacheSchema: Schema = new Schema({
@@ -25,7 +25,8 @@ const RoomCache = mongoose.model<Document>('RoomCache', RoomCacheSchema);
 export class MongooseDriver implements MatchMakerDriver {
 
   constructor(connectionURI?: string) {
-    if (mongoose.connection.readyState === ConnectionStates.disconnected) {
+
+    if (mongoose.connection.readyState === mongoose.STATES.disconnected) {
       mongoose.connect(connectionURI || process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/colyseus', {
         autoIndex: true,
         useCreateIndex: true,
