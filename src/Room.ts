@@ -277,7 +277,7 @@ export abstract class Room<State= any, Metadata= any> {
 
     this.autoDispose = true;
 
-    const delayedDisconnection = new Promise((resolve) =>
+    const delayedDisconnection = new Promise<void>((resolve) =>
       this._events.once('disconnect', () => resolve()));
 
     for (const reconnection of Object.values(this.reconnections)) {

@@ -64,6 +64,12 @@ export class RoomCache implements RoomListingData {
   }
 
   public remove() {
+    //
+    // WORKAROUND: prevent calling `.remove()` multiple times
+    // Seems to happen during disconnect + dispose: https://github.com/colyseus/colyseus/issues/390
+    //
+    if (!this.$rooms) { return; }
+
     const roomIndex = this.$rooms.indexOf(this);
     if (roomIndex === -1) { return; }
 
