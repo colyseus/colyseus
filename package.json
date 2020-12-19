@@ -63,7 +63,7 @@
     "@types/sinon": "^4.3.3",
     "all-contributors-cli": "^5.4.0",
     "benchmark": "^2.1.1",
-    "colyseus.js": "^0.14.0-alpha.4",
+    "colyseus.js": "^0.14.1",
     "cors": "^2.8.5",
     "express": "^4.16.2",
     "httpie": "^1.1.2",

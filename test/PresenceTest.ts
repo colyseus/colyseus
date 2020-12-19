@@ -94,8 +94,12 @@ describe("Presence", () => {
         assert.deepEqual([1, 2, 3, 4], messages);
 
         // leave all subscriptions...
+        assert.ok(presence['subscriptions']['topic-collide1']);
+        assert.ok(presence['subscriptions']['topic-collide2']);
         await presence.unsubscribe("topic-collide1", callback1);
         await presence.unsubscribe("topic-collide2", callback3);
+        assert.equal(undefined, presence['subscriptions']['topic-collide1']);
+        assert.equal(undefined, presence['subscriptions']['topic-collide2']);
 
         messages = [];
         await presence.publish("topic-collide1", 1000);

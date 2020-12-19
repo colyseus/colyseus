@@ -9,11 +9,11 @@ export class RedisPresence implements Presence {
     public sub: redis.RedisClient;
     public pub: redis.RedisClient;
 
+    protected subscriptions: { [channel: string]: Callback[] } = {};
+
     protected subscribeAsync: any;
     protected unsubscribeAsync: any;
     protected publishAsync: any;
-
-    protected subscriptions: { [channel: string]: Callback[] } = {};
 
     protected smembersAsync: any;
     protected sismemberAsync: any;
@@ -63,15 +63,19 @@ export class RedisPresence implements Presence {
     }
 
     public async unsubscribe(topic: string, callback?: Callback) {
+        const topicCallbacks = this.subscriptions[topic];
+        if (!topicCallbacks) { return; }
+
         if (callback) {
-          const index = this.subscriptions[topic].indexOf(callback);
-          this.subscriptions[topic].splice(index, 1);
+          const index = topicCallbacks.indexOf(callback);
+          topicCallbacks.splice(index, 1);
 
         } else {
           this.subscriptions[topic] = [];
         }
 
         if (this.subscriptions[topic].length === 0) {
+          delete this.subscriptions[topic];
           await this.unsubscribeAsync(topic);
         }
 

@@ -12,28 +12,36 @@ export class LocalPresence implements Presence {
 
     public keys: {[name: string]: string | number} = {};
 
-    private listenersByTopic: {[id: string]: Callback[]} = {};
+    protected subscriptions: {[id: string]: Callback[]} = {};
     private timeouts: {[name: string]: NodeJS.Timer} = {};
 
     public subscribe(topic: string, callback: (...args: any[]) => void) {
-        if (!this.listenersByTopic[topic]) { this.listenersByTopic[topic] = []; }
-        this.listenersByTopic[topic].push(callback);
+        if (!this.subscriptions[topic]) { this.subscriptions[topic] = []; }
+        this.subscriptions[topic].push(callback);
         this.channels.on(topic, callback);
         return this;
     }
 
     public unsubscribe(topic: string, callback?: Callback) {
+        const topicCallbacks = this.subscriptions[topic];
+        if (!topicCallbacks) { return; }
+
         if (callback)  {
-            const idx = this.listenersByTopic[topic].indexOf(callback);
+            const idx = topicCallbacks.indexOf(callback);
             if (idx !== -1) {
-                this.listenersByTopic[topic].splice(idx, 1);
+                topicCallbacks.splice(idx, 1);
                 this.channels.removeListener(topic, callback);
             }
 
-        } else if (this.listenersByTopic[topic]) {
-          this.listenersByTopic[topic].forEach((cb) => this.channels.removeListener(topic, cb));
-          delete this.listenersByTopic[topic];
+        } else {
+          topicCallbacks.forEach((cb) =>
+            this.channels.removeListener(topic, cb));
         }
+
+        if (topicCallbacks.length === 0) {
+          delete this.subscriptions[topic];
+        }
+
         return this;
     }
 
