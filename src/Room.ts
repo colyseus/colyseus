@@ -144,6 +144,8 @@ export abstract class Room<State= any, Metadata= any> {
   }
 
   public setPatchRate(milliseconds: number): void {
+    this.patchRate = milliseconds;
+
     // clear previous interval in case called setPatchRate more than once
     if (this._patchInterval) {
       clearInterval(this._patchInterval);
