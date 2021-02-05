@@ -5,7 +5,7 @@
   "main": "./lib/index.js",
   "typings": "./lib/index.d.ts",
   "scripts": {
-    "prepublish": "rm -rf lib && tsc -d",
+    "prepare": "rm -rf lib && tsc -d",
     "watch": "tsc -d -w",
     "start": "nodemon --watch 'src/**/*.ts' --exec 'ts-node' usage/Server.ts",
     "test": "COLYSEUS_SEAT_RESERVATION_TIME=0.3 COLYSEUS_PRESENCE_SHORT_TIMEOUT=300 nyc mocha --require ts-node/register test/**Test.ts test/**/**Test.ts --exit --timeout 15000",
