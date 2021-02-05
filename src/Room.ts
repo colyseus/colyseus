@@ -577,6 +577,7 @@ export abstract class Room<State= any, Metadata= any> {
         : undefined;
       } catch (e) {
         debugAndPrintError(e)
+        return
       }
 
       if (this.onMessageHandlers[messageType]) {
