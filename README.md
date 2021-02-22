@@ -85,6 +85,7 @@ npm start
 See the [official examples](https://github.com/colyseus/colyseus-examples) for
 usage reference with the latest version of Colyseus.
 
+- [Tech Demo: Shooting Gallery](https://github.com/colyseus/unity-demo-shooting-gallery) - Unity + Colyseus "Shooting Gallery" Tech Demo
 - [Colyseus + PixiJS Boilerplate](https://colyseus-pixijs-boilerplate.herokuapp.com/) ([source-code](https://github.com/endel/colyseus-pixijs-boilerplate)) - Simplistic agar.io implementation using [PixiJS](https://github.com/pixijs/pixi.js)
 - [Colyseus + BabylonJS Boilerplate](https://babylonjs-multiplayer.herokuapp.com/) ([source-code](https://github.com/endel/babylonjs-multiplayer-boilerplate)) - Bare-bones [BabylonJS](https://github.com/BabylonJS/Babylon.js) example
 - [Tic Tac Toe](https://tictactoe-colyseus.herokuapp.com) ([source-code](https://github.com/endel/tic-tac-toe)) - Tic Tac Toe using [PixiJS](https://github.com/pixijs/pixi.js) and [Defold Engine](https://defold.com)
