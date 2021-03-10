@@ -1,8 +1,7 @@
 import http from 'http';
 import msgpack from 'notepack.io';
 
-import { Schema } from '@colyseus/schema';
-import * as decode from '@colyseus/schema/lib/encoding/decode';
+import { Schema, Iterator, decode } from '@colyseus/schema';
 
 import Clock from '@gamestdio/timer';
 import { EventEmitter } from 'events';
@@ -557,7 +556,7 @@ export abstract class Room<State= any, Metadata= any> {
     // skip if client is on LEAVING state.
     if (client.state === ClientState.LEAVING) { return; }
 
-    const it: decode.Iterator = { offset: 0 };
+    const it: Iterator = { offset: 0 };
     const code = decode.uint8(bytes, it);
 
     if (!bytes) {

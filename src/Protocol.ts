@@ -1,7 +1,6 @@
 import msgpack from 'notepack.io';
 
-import { Schema } from '@colyseus/schema';
-import * as encode from '@colyseus/schema/lib/encoding/encode';
+import { Schema, encode } from '@colyseus/schema';
 
 // Colyseus protocol codes range between 0~100
 export enum Protocol {
