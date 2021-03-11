@@ -54,49 +54,49 @@ export function setup(_presence?: Presence, _driver?: MatchMakerDriver, _process
 /**
  * Join or create into a room and return seat reservation
  */
-export async function joinOrCreate(roomName: string, options: ClientOptions = {}) {
+export async function joinOrCreate(roomName: string, clientOptions: ClientOptions = {}) {
   return await retry<Promise<SeatReservation>>(async () => {
-    let room = await findOneRoomAvailable(roomName, options);
+    let room = await findOneRoomAvailable(roomName, clientOptions);
 
     if (!room) {
-      room = await createRoom(roomName, options);
+      room = await createRoom(roomName, clientOptions);
     }
 
-    return await reserveSeatFor(room, options);
+    return await reserveSeatFor(room, clientOptions);
   }, 5, [SeatReservationError]);
 }
 
 /**
  * Create a room and return seat reservation
  */
-export async function create(roomName: string, options: ClientOptions = {}) {
-  const room = await createRoom(roomName, options);
-  return reserveSeatFor(room, options);
+export async function create(roomName: string, clientOptions: ClientOptions = {}) {
+  const room = await createRoom(roomName, clientOptions);
+  return reserveSeatFor(room, clientOptions);
 }
 
 /**
  * Join a room and return seat reservation
  */
-export async function join(roomName: string, options: ClientOptions = {}) {
+export async function join(roomName: string, clientOptions: ClientOptions = {}) {
   return await retry<Promise<SeatReservation>>(async () => {
-    const room = await findOneRoomAvailable(roomName, options);
+    const room = await findOneRoomAvailable(roomName, clientOptions);
 
     if (!room) {
       throw new ServerError(ErrorCode.MATCHMAKE_INVALID_CRITERIA, `no rooms found with provided criteria`);
     }
 
-    return reserveSeatFor(room, options);
+    return reserveSeatFor(room, clientOptions);
   });
 }
 
 /**
  * Join a room by id and return seat reservation
  */
-export async function joinById(roomId: string, options: ClientOptions = {}) {
+export async function joinById(roomId: string, clientOptions: ClientOptions = {}) {
   const room = await driver.findOne({ roomId });
 
   if (room) {
-    const rejoinSessionId = options.sessionId;
+    const rejoinSessionId = clientOptions.sessionId;
 
     if (rejoinSessionId) {
       // handle re-connection!
@@ -111,7 +111,7 @@ export async function joinById(roomId: string, options: ClientOptions = {}) {
       }
 
     } else if (!room.locked) {
-      return reserveSeatFor(room, options);
+      return reserveSeatFor(room, clientOptions);
 
     } else {
       throw new ServerError( ErrorCode.MATCHMAKE_INVALID_ROOM_ID, `room "${roomId}" is locked`);
@@ -134,7 +134,7 @@ export async function query(conditions: any = {}) {
 /**
  * Find for a public and unlocked room available
  */
-export async function findOneRoomAvailable(roomName: string, options: ClientOptions): Promise<RoomListingData> {
+export async function findOneRoomAvailable(roomName: string, clientOptions: ClientOptions): Promise<RoomListingData> {
   return await awaitRoomAvailable(roomName, async () => {
     const handler = handlers[roomName];
     if (!handler) {
@@ -145,7 +145,7 @@ export async function findOneRoomAvailable(roomName: string, options: ClientOpti
       locked: false,
       name: roomName,
       private: false,
-      ...handler.getFilterOptions(options),
+      ...handler.getFilterOptions(clientOptions),
     });
 
     if (handler.sortOptions) {
