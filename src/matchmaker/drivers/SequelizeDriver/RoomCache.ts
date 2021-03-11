@@ -88,7 +88,7 @@ export class RoomCache
   }
 }
 
-export const RoomCacacheSchema: ModelAttributes<
+export const RoomCacheSchema: ModelAttributes<
   RoomCache,
   RoomCache['_attributes']
 > = {

@@ -1,6 +1,6 @@
 import { MatchMakerDriver, QueryHelpers, RoomListingData } from '../Driver';
 import { Sequelize, Options, Filterable, SyncOptions } from 'sequelize';
-import { RoomCache, RoomCacacheSchema } from './RoomCache';
+import { RoomCache, RoomCacheSchema } from './RoomCache';
 import { Query } from './Query';
 
 export class SequelizeDriver<TRecord extends {} = any, TResult = unknown[]>
@@ -10,7 +10,7 @@ export class SequelizeDriver<TRecord extends {} = any, TResult = unknown[]>
   public constructor(uri: string = 'sqlite::memory:', options?: Options) {
     this.connection = new Sequelize(uri, options);
 
-    RoomCache.init(RoomCacacheSchema, {
+    RoomCache.init(RoomCacheSchema, {
       sequelize: this.connection,
       modelName: 'RoomCache',
       tableName: 'room_caches',
