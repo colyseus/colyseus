@@ -345,8 +345,8 @@ export function gracefullyShutdown(): Promise<any> {
 /**
  * Reserve a seat for a client in a room
  */
-export async function reserveSeatFor(room: RoomListingData, options: any) {
-  const sessionId: string = generateId();
+export async function reserveSeatFor(room: RoomListingData, options: any, sessionId?: string) {
+  sessionId = sessionId || generateId();
 
   debugMatchMaking(
     'reserving seat. sessionId: \'%s\', roomId: \'%s\', processId: \'%s\'',
