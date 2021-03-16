@@ -142,7 +142,7 @@ export class Server {
 
   public async gracefullyShutdown(exit: boolean = true, err?: Error) {
     await unregisterNode(this.presence, {
-      port: this.transport.address().port,
+      port: this.transport.address()?.port,
       processId: this.processId,
     });
 
