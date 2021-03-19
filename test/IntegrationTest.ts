@@ -763,7 +763,7 @@ describe("Integration", () => {
               const conn = await client.joinOrCreate("dummy");
 
               // force websocket client to be unresponsive
-              conn.connection.ws._socket.removeAllListeners();
+              (conn.connection.transport as any).ws._socket.removeAllListeners();
 
               assert.ok(matchMaker.getRoomById(conn.id));
 
