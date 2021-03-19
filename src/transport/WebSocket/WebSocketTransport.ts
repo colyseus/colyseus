@@ -56,10 +56,10 @@ export class WebSocketTransport extends Transport {
     this.server = options.server;
 
     if (this.pingIntervalMS > 0 && this.pingMaxRetries > 0) {
-      this.server.on("listening", () =>
+      this.server.on('listening', () =>
         this.autoTerminateUnresponsiveClients(this.pingIntervalMS, this.pingMaxRetries));
 
-      this.server.on("close", () =>
+      this.server.on('close', () =>
         clearInterval(this.pingInterval));
     }
   }

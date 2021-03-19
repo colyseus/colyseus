@@ -102,7 +102,7 @@ export class Server {
    */
   public async listen(port: number, hostname?: string, backlog?: number, listeningListener?: Function) {
     return new Promise<void>((resolve, reject) => {
-      this.transport.server.on("error", (err) => reject(err));
+      this.transport.server.on('error', (err) => reject(err));
       this.transport.listen(port, hostname, backlog, (err) => {
         if (listeningListener) {
           listeningListener(err);
