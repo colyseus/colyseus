@@ -269,7 +269,8 @@ export abstract class Room<State= any, Metadata= any> {
   public onMessage<T = any>(messageType: string | number, callback: (client: Client, message: T) => void);
   public onMessage<T = any>(messageType: '*' | string | number, callback: (...args: any[]) => void) {
     this.onMessageHandlers[messageType] = callback;
-    return this;
+    // returns a method to unbind the callback
+    return () => delete this.onMessageHandlers[messageType]; 
   }
 
   public async disconnect(): Promise<any> {
