@@ -45,7 +45,7 @@ app.use(express.static(__dirname));
 
 gameServer.onShutdown(() => {
   console.log("CUSTOM SHUTDOWN ROUTINE: STARTED");
-  return new Promise((resolve, reject) => {
+  return new Promise<void>((resolve, reject) => {
     setTimeout(() => {
       console.log("CUSTOM SHUTDOWN ROUTINE: FINISHED");
       resolve();
@@ -53,8 +53,9 @@ gameServer.onShutdown(() => {
   })
 });
 
-process.on('unhandledRejection', r => console.log(r));
+process.on('unhandledRejection', r => console.log('unhandledRejection...', r));
 
-gameServer.listen(port);
+gameServer.listen(port)
+  .then(() => console.log(`Listening on ws://${endpoint}:${port}`))
+  .catch((err) => process.exit(1));
 
-console.log(`Listening on ws://${ endpoint }:${ port }`)

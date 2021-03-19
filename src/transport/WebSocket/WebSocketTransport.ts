@@ -50,10 +50,17 @@ export class WebSocketTransport extends Transport {
     this.wss = new engine(options);
     this.wss.on('connection', this.onConnection);
 
+    // this is required to allow the ECONNRESET error to trigger on the `server` instance.
+    this.wss.on('error', (err) => debugAndPrintError(err));
+
     this.server = options.server;
 
     if (this.pingIntervalMS > 0 && this.pingMaxRetries > 0) {
-      this.autoTerminateUnresponsiveClients(this.pingIntervalMS, this.pingMaxRetries);
+      this.server.on("listening", () =>
+        this.autoTerminateUnresponsiveClients(this.pingIntervalMS, this.pingMaxRetries));
+
+      this.server.on("close", () =>
+        clearInterval(this.pingInterval));
     }
   }
 
@@ -63,7 +70,6 @@ export class WebSocketTransport extends Transport {
   }
 
   public shutdown() {
-    clearInterval(this.pingInterval);
     this.wss.close();
     this.server.close();
   }
