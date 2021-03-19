@@ -34,7 +34,7 @@ describe("Room Integration", () => {
 
   describe("FossilDeltaSerializer", () => {
 
-    it("should transfer patches", async() => {
+    xit("should transfer patches", async() => {
       matchMaker.defineRoomType('fossil-delta', class _ extends Room {
         onCreate() {
           this.setState({ hello: "world!" });
