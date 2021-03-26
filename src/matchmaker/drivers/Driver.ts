@@ -34,5 +34,5 @@ export interface MatchMakerDriver {
     additionalProjectionFields?: any,
   ): Promise<RoomListingData[]> | RoomListingData[];
 
-  findOne(conditions: any): QueryHelpers<RoomListingData>;
+  findOne(conditions: Partial<IRoomListingData>): QueryHelpers<RoomListingData>;
 }

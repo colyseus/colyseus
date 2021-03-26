@@ -1,5 +1,5 @@
 import mongoose, { Document, Schema } from 'mongoose';
-import { MatchMakerDriver, QueryHelpers, RoomListingData } from './Driver';
+import { IRoomListingData, MatchMakerDriver, QueryHelpers, RoomListingData } from './Driver';
 
 const RoomCacheSchema: Schema = new Schema({
   clients: { type: Number, default: 0 },
@@ -41,7 +41,7 @@ export class MongooseDriver implements MatchMakerDriver {
     return (new RoomCache(initialValues) as any) as RoomListingData;
   }
 
-  public async find(conditions: any, additionalProjectionFields = {}) {
+  public async find(conditions: Partial<IRoomListingData>, additionalProjectionFields = {}) {
     return (await RoomCache.find(conditions, {
       _id: false,
       clients: true,
@@ -55,7 +55,7 @@ export class MongooseDriver implements MatchMakerDriver {
     })) as any as RoomListingData[];
   }
 
-  public findOne(conditions: any) {
+  public findOne(conditions: Partial<IRoomListingData>) {
     return (RoomCache.findOne(conditions, {
       _id: 0,
       locked: 1,
