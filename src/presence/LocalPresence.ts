@@ -33,12 +33,14 @@ export class LocalPresence implements Presence {
                 this.channels.removeListener(topic, callback);
             }
 
+            if (topicCallbacks.length === 0) {
+                delete this.subscriptions[topic];
+            }
+
         } else {
           topicCallbacks.forEach((cb) =>
             this.channels.removeListener(topic, cb));
-        }
 
-        if (topicCallbacks.length === 0) {
           delete this.subscriptions[topic];
         }
 
