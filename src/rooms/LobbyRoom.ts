@@ -29,8 +29,6 @@ export class LobbyRoom extends Room { // tslint:disable-line
     // prevent LobbyRoom to notify itself
     this.listing.unlisted = true;
 
-    this.setState({});
-
     this.unsubscribeLobby = await subscribeLobby((roomId, data) => {
       const roomIndex = this.rooms.findIndex((room) => room.roomId === roomId);
 

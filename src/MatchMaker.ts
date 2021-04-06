@@ -12,7 +12,7 @@ import { Presence } from './presence/Presence';
 import { debugAndPrintError, debugMatchMaking } from './Debug';
 import { SeatReservationError } from './errors/SeatReservationError';
 import { ServerError } from './errors/ServerError';
-import { MatchMakerDriver, RoomListingData } from './matchmaker/drivers/Driver';
+import { IRoomListingData, MatchMakerDriver, RoomListingData } from './matchmaker/drivers/Driver';
 import { LocalDriver } from './matchmaker/drivers/LocalDriver';
 import { Client } from './transport/Transport';
 import { Type } from './types';
@@ -127,7 +127,7 @@ export async function joinById(roomId: string, clientOptions: ClientOptions = {}
 /**
  * Perform a query for all cached rooms
  */
-export async function query(conditions: any = {}) {
+export async function query(conditions: Partial<IRoomListingData> = {}) {
   return await driver.find(conditions);
 }
 

@@ -1,7 +1,7 @@
 import http from 'http';
 import msgpack from 'notepack.io';
 
-import { Schema, Iterator, decode } from '@colyseus/schema';
+import { decode, Iterator, Schema } from '@colyseus/schema';
 
 import Clock from '@gamestdio/timer';
 import { EventEmitter } from 'events';
@@ -269,7 +269,8 @@ export abstract class Room<State= any, Metadata= any> {
   public onMessage<T = any>(messageType: string | number, callback: (client: Client, message: T) => void);
   public onMessage<T = any>(messageType: '*' | string | number, callback: (...args: any[]) => void) {
     this.onMessageHandlers[messageType] = callback;
-    return this;
+    // returns a method to unbind the callback
+    return () => delete this.onMessageHandlers[messageType];
   }
 
   public async disconnect(): Promise<any> {
@@ -569,14 +570,14 @@ export abstract class Room<State= any, Metadata= any> {
         ? decode.string(bytes, it)
         : decode.number(bytes, it);
 
-      let message = undefined;
+      let message;
       try {
         message = (bytes.length > it.offset)
         ? msgpack.decode(bytes.slice(it.offset, bytes.length))
         : undefined;
       } catch (e) {
-        debugAndPrintError(e)
-        return
+        debugAndPrintError(e);
+        return;
       }
 
       if (this.onMessageHandlers[messageType]) {

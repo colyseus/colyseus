@@ -1,4 +1,4 @@
-import { MatchMakerDriver, QueryHelpers, RoomListingData } from '../Driver';
+import { IRoomListingData, MatchMakerDriver, QueryHelpers, RoomListingData } from '../Driver';
 import { Query } from './Query';
 import { RoomCache } from './RoomData';
 
@@ -9,7 +9,7 @@ export class LocalDriver implements MatchMakerDriver {
     return new RoomCache(initialValues, this.rooms);
   }
 
-  public find(conditions: any) {
+  public find(conditions: Partial<IRoomListingData>) {
     return this.rooms.filter(((room) => {
       for (const field in conditions) {
         if (
@@ -23,7 +23,7 @@ export class LocalDriver implements MatchMakerDriver {
     }));
   }
 
-  public findOne(conditions: any) {
+  public findOne(conditions: Partial<IRoomListingData>) {
     return new Query<RoomListingData>(this.rooms, conditions) as any as QueryHelpers<RoomListingData>;
   }
 
