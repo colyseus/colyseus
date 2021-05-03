@@ -7,8 +7,7 @@ class Message extends Schema {
 }
 
 class State extends Schema {
-  @type("string")
-  lastMessage: string = "";
+  @type("string") lastMessage: string = "";
 }
 
 export class DummyRoom extends Room<State> {

@@ -3,6 +3,7 @@ import cors from "cors";
 import express from "express";
 
 import { Server, RedisPresence, RelayRoom, LobbyRoom } from "../src";
+import { uWebSocketsTransport } from "../src/transport/uWebSockets/uWebSocketsTransport";
 import { DummyRoom } from "./DummyRoom";
 
 import { MongooseDriver } from "../src/matchmaker/drivers/MongooseDriver";
@@ -18,10 +19,11 @@ app.use(express.json());
 // Create HTTP & WebSocket servers
 const server = http.createServer(app);
 const gameServer = new Server({
+  transport: uWebSocketsTransport,
   // engine: WebSocket.Server,
   server: server,
   // presence: new RedisPresence(),
-  driver: new MongooseDriver(),
+  // driver: new MongooseDriver(),
 });
 
 app.get("/hello", (req, res) => {

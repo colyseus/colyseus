@@ -9,7 +9,7 @@
     "build": "tsc -d && rollup -c rollup.config.js",
     "clear": "rimraf lib && rimraf esm",
     "watch": "tsc -d -w",
-    "start": "ts-node-dev --inspect --respawn --transpile-only usage/Server.ts",
+    "start": "ts-node-dev --respawn --transpile-only usage/Server.ts",
     "test": "COLYSEUS_SEAT_RESERVATION_TIME=0.3 COLYSEUS_PRESENCE_SHORT_TIMEOUT=300 nyc mocha --require ts-node/register test/**Test.ts test/**/**Test.ts --exit --timeout 15000",
     "tslint": "tslint --project .",
     "update-contributors": "all-contributors generate",
@@ -51,6 +51,7 @@
     "nanoid": "^2.0.0",
     "nonenumerable": "^1.0.1",
     "notepack.io": "^2.2.0",
+    "uWebSockets.js": "github:uNetworking/uWebSockets.js#v19.2.0",
     "ws": "^7.1.0"
   },
   "devDependencies": {

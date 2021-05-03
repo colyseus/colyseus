@@ -554,6 +554,8 @@ export abstract class Room<State= any, Metadata= any> {
   }
 
   private _onMessage(client: Client, bytes: number[]) {
+    console.log("_onMessage =>", bytes);
+
     // skip if client is on LEAVING state.
     if (client.state === ClientState.LEAVING) { return; }
 
@@ -572,9 +574,11 @@ export abstract class Room<State= any, Metadata= any> {
 
       let message;
       try {
+        console.log("!! msgpack.decode");
         message = (bytes.length > it.offset)
         ? msgpack.decode(bytes.slice(it.offset, bytes.length))
         : undefined;
+        console.log({ length: bytes.length, offset: it.offset }, `slice: ${bytes.slice(it.offset, bytes.length).join(", ")}`, message);
       } catch (e) {
         debugAndPrintError(e);
         return;

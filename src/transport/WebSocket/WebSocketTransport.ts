@@ -47,7 +47,7 @@ export class WebSocketTransport extends Transport {
       ? options.pingMaxRetries
       : 2;
 
-    this.wss = new engine(options);
+    this.wss = new WebSocket.Server(options);
     this.wss.on('connection', this.onConnection);
 
     // this is required to allow the ECONNRESET error to trigger on the `server` instance.

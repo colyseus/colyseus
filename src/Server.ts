@@ -5,6 +5,7 @@ import { ServerOptions as IServerOptions } from 'ws';
 
 import { debugAndPrintError, debugMatchMaking } from './Debug';
 import * as matchMaker from './MatchMaker';
+import * as matchMakerController from './matchmaker/controller';
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
 import { Presence } from './presence/Presence';
 
@@ -45,7 +46,7 @@ export type ServerOptions = IServerOptions & {
   verifyClient?: WebSocket.VerifyClientCallbackAsync
   presence?: Presence,
   driver?: matchMaker.MatchMakerDriver,
-  engine?: any,
+  transport?: any,
   ws?: any,
   gracefullyShutdown?: boolean,
 };
@@ -55,9 +56,8 @@ export class Server {
 
   protected presence: Presence;
   protected processId: string = generateId();
-  protected matchmakeRoute = 'matchmake';
 
-  private exposedMethods = ['joinOrCreate', 'create', 'join', 'joinById'];
+  private matchmakeRoute = 'matchmake';
   private allowedRoomNameChars = /([a-zA-Z_\-0-9]+)/gi;
 
   constructor(options: ServerOptions = {}) {
@@ -84,12 +84,10 @@ export class Server {
 
     this.attachMatchMakingRoutes(options.server);
 
-    const engine = options.engine || WebSocket.Server;
-    delete options.engine;
+    const transportKlass = options.transport || WebSocketTransport;
+    delete options.transport;
 
-    this.transport = (engine === net.Server)
-      ? new TCPTransport(options)
-      : new WebSocketTransport(options, engine);
+    this.transport = new transportKlass(options);
   }
 
   /**
@@ -233,20 +231,13 @@ export class Server {
         headers['Content-Type'] = 'application/json';
         res.writeHead(200, headers);
 
-        const body = JSON.parse(Buffer.concat(data).toString());
+        const clientOptions = JSON.parse(Buffer.concat(data).toString());
         try {
-          if (this.exposedMethods.indexOf(method) === -1) {
-            throw new ServerError(ErrorCode.MATCHMAKE_NO_HANDLER, `invalid method "${method}"`);
-          }
-
-          const response = await matchMaker[method](name, body);
+          const response = await matchMakerController.invokeMethod(method, name, clientOptions);
           res.write(JSON.stringify(response));
 
         } catch (e) {
-          res.write(JSON.stringify({
-            code: e.code || ErrorCode.MATCHMAKE_UNHANDLED,
-            error: e.message,
-          }));
+          res.write(JSON.stringify({ code: e.code, error: e.message, }));
         }
 
         res.end();
@@ -256,22 +247,9 @@ export class Server {
       const matchedParams = req.url.match(this.allowedRoomNameChars);
       const roomName = matchedParams[matchedParams.length - 1];
 
-      /**
-       * list public & unlocked rooms
-       */
-      const conditions: any = {
-        locked: false,
-        private: false,
-      };
-
-      // TODO: improve me, "matchmake" room names aren't allowed this way.
-      if (roomName !== this.matchmakeRoute) {
-        conditions.name = roomName;
-      }
-
       headers['Content-Type'] = 'application/json';
       res.writeHead(200, headers);
-      res.write(JSON.stringify(await matchMaker.query(conditions)));
+      res.write(JSON.stringify(await matchMakerController.getAvailableRooms(roomName)));
       res.end();
     }
 
