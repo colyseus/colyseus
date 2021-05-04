@@ -93,7 +93,7 @@ export class uWebSocketsTransport extends Transport {
 
             message: (ws: uWebSockets.WebSocket, message: ArrayBuffer, isBinary) => {
                 // emit 'close' on wrapper
-                this.clientWrappers.get(ws)?.emit('message', Array.from(new Uint8Array(message)));
+                this.clientWrappers.get(ws)?.emit('message', Buffer.from(message));
             },
 
         });
