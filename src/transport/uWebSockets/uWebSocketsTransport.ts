@@ -259,10 +259,10 @@ export class uWebSocketsTransport extends Transport {
 
             const url = req.getUrl();
             const matchedParams = url.match(allowedRoomNameChars);
-            const matchmakeIndex = matchedParams.indexOf(matchmakeRoute);
+            const roomName = matchedParams[matchedParams.length - 1];
 
             try {
-                const response = await matchMakerController.getAvailableRooms(matchedParams[matchmakeIndex + 2] || '')
+                const response = await matchMakerController.getAvailableRooms(roomName || '')
                 res.writeStatus("200 OK");
                 res.end(JSON.stringify(response));
 
@@ -272,8 +272,6 @@ export class uWebSocketsTransport extends Transport {
                     message: e.message
                 });
             }
-
-            res.writeStatus("200 OK");
         });
     }
 

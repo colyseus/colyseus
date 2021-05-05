@@ -14,6 +14,8 @@ export { updateLobby, subscribeLobby } from './matchmaker/Lobby';
 
 // Transport
 export { Client } from './transport/Transport';
+export { WebSocketTransport } from './transport/WebSocket/WebSocketTransport';
+export { uWebSocketsTransport } from './transport/uWebSockets/uWebSocketsTransport';
 
 // Presence
 export { Presence } from './presence/Presence';
