@@ -1,5 +1,5 @@
 import mongoose, { Document, Schema } from 'mongoose';
-import { IRoomListingData, MatchMakerDriver, QueryHelpers, RoomListingData } from './Driver';
+import { IRoomListingData, MatchMakerDriver, QueryHelpers, RoomListingData } from '.rc/matchmaker/drivers/Driver
 
 const RoomCacheSchema: Schema = new Schema({
   clients: { type: Number, default: 0 },

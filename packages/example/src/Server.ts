@@ -2,7 +2,7 @@ import http from "http";
 import cors from "cors";
 import express from "express";
 
-import { Server, RedisPresence, RelayRoom, LobbyRoom } from "../src";
+import { Server, RedisPresence, RelayRoom, LobbyRoom } from "colyseus";
 import { uWebSocketsTransport } from "../src/transport/uWebSockets/uWebSocketsTransport";
 import { DummyRoom } from "./DummyRoom";
 

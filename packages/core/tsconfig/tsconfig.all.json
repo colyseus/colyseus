@@ -1,8 +1,11 @@
 {
   "compilerOptions": {
+    "rootDir": "..",
     "module": "commonjs",
     "moduleResolution": "node",
     "lib": ["es6"],
+    "declarationDir": "../build",
+    "declaration": true,
     "forceConsistentCasingInFileNames": true,
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,

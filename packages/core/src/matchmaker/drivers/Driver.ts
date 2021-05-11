@@ -1,4 +1,4 @@
-import { SortOptions } from '../RegisteredHandler';
+import { SortOptions } from "../RegisteredHandler";
 
 export interface IRoomListingData {
   clients: number;

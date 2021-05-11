@@ -1,7 +1,7 @@
 import http from "http";
 import Koa from "koa";
 
-import { Server } from "../src";
+import { Server } from "@colyseus/core";
 import { DummyRoom } from "./DummyRoom";
 
 const app = new Koa();

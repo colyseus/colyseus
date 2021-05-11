@@ -233,6 +233,7 @@ export class uWebSocketsTransport extends Transport {
                     res.end(JSON.stringify(response));
 
                 } catch (e) {
+                    debugAndPrintError(e);
                     writeError(res, {
                         error: e.error || ErrorCode.MATCHMAKE_UNHANDLED,
                         message: e.message
@@ -267,6 +268,7 @@ export class uWebSocketsTransport extends Transport {
                 res.end(JSON.stringify(response));
 
             } catch (e) {
+                debugAndPrintError(e);
                 writeError(res, {
                     error: e.error || ErrorCode.MATCHMAKE_UNHANDLED,
                     message: e.message

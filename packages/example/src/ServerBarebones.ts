@@ -1,7 +1,7 @@
 /**
  * Barebones server without express.
  */
-import { Server } from "../src";
+import { Server } from "@colyseus/core";
 import { DummyRoom } from "./DummyRoom";
 
 const port = Number(process.env.PORT || 2567);

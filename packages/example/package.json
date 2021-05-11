@@ -1,0 +1,14 @@
+{
+    "name": "@colyseus/example",
+    "private": true,
+    "version": "0.0.0",
+    "author": "Endel Dreyer",
+    "license": "MIT",
+    "scripts": {
+      "start": "ts-node-dev src/Server.ts"
+    },
+    "dependencies": {
+      "colyseus": "^0.14.0"
+    }
+  }
+  

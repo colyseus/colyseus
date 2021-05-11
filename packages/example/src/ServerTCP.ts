@@ -4,7 +4,7 @@
  */
 import * as net from "net";
 
-import { Server } from "../src/Server";
+import { Server } from "@colyseus/core";
 import { DummyRoom } from "./DummyRoom";
 
 const port = Number(process.env.PORT || 8181);

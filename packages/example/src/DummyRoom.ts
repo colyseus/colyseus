@@ -1,4 +1,4 @@
-import { Room } from "../src";
+import { Room } from "@colyseus/core";
 import { Schema, type } from "@colyseus/schema";
 
 class Message extends Schema {
