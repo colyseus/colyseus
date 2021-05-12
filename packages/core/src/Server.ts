@@ -5,7 +5,6 @@ import { ServerOptions as IServerOptions } from 'ws';
 
 import { debugAndPrintError, debugMatchMaking } from './Debug';
 import * as matchMaker from './MatchMaker';
-import * as matchMakerController from './matchmaker/controller';
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
 import { Presence } from './presence/Presence';
 
@@ -17,32 +16,11 @@ import { generateId } from '.';
 import { registerNode, unregisterNode } from './discovery';
 import { LocalPresence } from './presence/LocalPresence';
 
-import { ServerError } from './errors/ServerError';
-import { ErrorCode, Protocol } from './Protocol';
 import { Transport } from './transport/Transport';
-
-import { TCPTransport } from './transport/TCP/TCPTransport';
-import { WebSocketTransport } from './transport/WebSocket/WebSocketTransport';
 
 export type ServerOptions = IServerOptions & {
   pingInterval?: number,
   pingMaxRetries?: number,
-
-  /**
-   * @deprecated use `pingInterval` instead
-   */
-  pingTimeout?: number,
-
-  /**
-   * @deprecated use `pingMaxRetries` instead
-   */
-  pingCountMax?: number,
-
-  /**
-   * @deprecated remove on version 0.12.x
-   */
-  express?: any,
-
   verifyClient?: WebSocket.VerifyClientCallbackAsync
   presence?: Presence,
   driver?: matchMaker.MatchMakerDriver,
@@ -84,7 +62,7 @@ export class Server {
 
     this.attachMatchMakingRoutes(options.server);
 
-    const transportKlass = options.transport || WebSocketTransport;
+    const transportKlass = options.transport || this.getDefaultTransport(options);
     delete options.transport;
 
     this.transport = new transportKlass(options);
@@ -186,6 +164,10 @@ export class Server {
     this.onShutdownCallback = callback;
   }
 
+  protected getDefaultTransport(_: ServerOptions) {
+    throw new Error("Please provide a 'transport' layer. Default transport not set.");
+  }
+
   protected onShutdownCallback: () => void | Promise<any> =
     () => Promise.resolve()
 
@@ -233,7 +215,7 @@ export class Server {
 
         const clientOptions = JSON.parse(Buffer.concat(data).toString());
         try {
-          const response = await matchMakerController.invokeMethod(method, name, clientOptions);
+          const response = await matchMaker.controller.invokeMethod(method, name, clientOptions);
           res.write(JSON.stringify(response));
 
         } catch (e) {
@@ -249,7 +231,7 @@ export class Server {
 
       headers['Content-Type'] = 'application/json';
       res.writeHead(200, headers);
-      res.write(JSON.stringify(await matchMakerController.getAvailableRooms(roomName)));
+      res.write(JSON.stringify(await matchMaker.controller.getAvailableRooms(roomName)));
       res.end();
     }
 

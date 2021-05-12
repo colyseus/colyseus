@@ -3,13 +3,7 @@ import querystring from 'querystring';
 import url from 'url';
 import WebSocket from 'ws';
 
-import * as matchMaker from '../../MatchMaker';
-import { Protocol } from '../../Protocol';
-
-import { ServerOptions } from '../../Server';
-import { Transport } from '../Transport';
-
-import { debugAndPrintError, debugConnection } from '../../Debug';
+import { matchMaker, Protocol, ServerOptions, Transport, debugAndPrintError, debugConnection  } from '@colyseus/core';
 import { WebSocketClient } from './WebSocketClient';
 
 function noop() {/* tslint:disable:no-empty */ }
@@ -29,16 +23,6 @@ export class WebSocketTransport extends Transport {
 
     // disable per-message deflate
     options.perMessageDeflate = false;
-
-    if (options.pingTimeout !== undefined) {
-      console.warn('"pingTimeout" is deprecated. Use "pingInterval" instead.');
-      options.pingInterval = options.pingTimeout;
-    }
-
-    if (options.pingCountMax !== undefined) {
-      console.warn('"pingCountMax" is deprecated. Use "pingMaxRetries" instead.');
-      options.pingMaxRetries = options.pingCountMax;
-    }
 
     this.pingIntervalMS = (options.pingInterval !== undefined)
       ? options.pingInterval
@@ -84,17 +68,17 @@ export class WebSocketTransport extends Transport {
   protected autoTerminateUnresponsiveClients(pingInterval: number, pingMaxRetries: number) {
     // interval to detect broken connections
     this.pingInterval = setInterval(() => {
-      this.wss.clients.forEach((client: RawWebSocketClient) => {
+      this.wss.clients.forEach((client: WebSocket) => {
         //
         // if client hasn't responded after the interval, terminate its connection.
         //
-        if (client.pingCount >= pingMaxRetries) {
+        if ((client as RawWebSocketClient).pingCount >= pingMaxRetries) {
           // debugConnection(`terminating unresponsive client ${client.sessionId}`);
           debugConnection(`terminating unresponsive client`);
           return client.terminate();
         }
 
-        client.pingCount++;
+        (client as RawWebSocketClient).pingCount++;
         client.ping(noop);
       });
     }, pingInterval);

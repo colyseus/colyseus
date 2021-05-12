@@ -4,12 +4,17 @@
   "type": "module",
   "workspaces": [
     "bundles/*",
-    "packages/*"
+    "packages/*",
+    "packages/drivers/*",
+    "packages/transport/*",
+    "packages/serializer/*"
   ],
   "scripts": {
+    "build": "rollup -c",
     "test": "lerna run test --stream",
     "example": "lerna run start --scope @colyseus/example --stream",
-    "update-contributors": "all-contributors generate"
+    "update-contributors": "all-contributors generate",
+    "graph": "lerna list --graph"
   },
   "devDependencies": {
     "@lerna/batch-packages": "^3.16.0",

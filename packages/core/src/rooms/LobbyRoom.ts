@@ -1,5 +1,6 @@
+
 import * as matchMaker from '../MatchMaker';
-import { RoomListingData } from '../matchmaker/drivers/Driver';
+import { RoomListingData } from '../matchmaker/drivers';
 import { subscribeLobby } from '../matchmaker/Lobby';
 import { Room } from '../Room';
 import { Client } from '../transport/Transport';

@@ -1,10 +1,8 @@
-import uWebSockets, { RecognizedString } from 'uWebSockets.js';
-
-import { Schema } from '@colyseus/schema';
-import { getMessageBytes, Protocol } from '../../Protocol';
-import { Client, ClientState, ISendOptions } from '../Transport';
-
 import EventEmitter from 'events';
+import uWebSockets from 'uWebSockets.js';
+
+import { getMessageBytes, Protocol, Client, ClientState, ISendOptions } from '@colyseus/core';
+import { Schema } from '@colyseus/schema';
 
 export class uWebSocketWrapper extends EventEmitter {
   constructor(public ws: uWebSockets.WebSocket) {

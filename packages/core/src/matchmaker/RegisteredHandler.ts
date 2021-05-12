@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events';
+import { RoomListingData, SortOptions } from './drivers/interfaces';
 
 import { RoomConstructor } from './../Room';
-import { RoomListingData } from './drivers/Driver';
 import { updateLobby } from './Lobby';
 
 export const INVALID_OPTION_KEYS: Array<keyof RoomListingData> = [
@@ -14,8 +14,6 @@ export const INVALID_OPTION_KEYS: Array<keyof RoomListingData> = [
   'processId',
   'roomId',
 ];
-
-export interface SortOptions { [fieldName: string]: 1 | -1 | 'asc' | 'desc' | 'ascending' | 'descending'; }
 
 export class RegisteredHandler extends EventEmitter {
   public klass: RoomConstructor;

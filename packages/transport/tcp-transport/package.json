@@ -1,5 +1,6 @@
 {
-    "name": "@colyseus/local-driver",
+    "private": true,
+    "name": "@colyseus/tcp-transport",
     "version": "0.14.0",
     "input": "./src/index.ts",
     "main": "./build/index.js",
@@ -10,11 +11,6 @@
     },
     "author": "Endel Dreyer",
     "license": "MIT",
-    "keywords": [
-      "colyseus",
-      "matchmaking",
-      "driver"
-    ],
     "files": [
       "build",
       "../../LICENSE",

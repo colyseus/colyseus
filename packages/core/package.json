@@ -48,7 +48,6 @@
     "nanoid": "^2.0.0",
     "nonenumerable": "^1.0.1",
     "notepack.io": "^2.2.0",
-    "uWebSockets.js": "github:uNetworking/uWebSockets.js#v19.2.0",
     "ws": "^7.1.0"
   },
   "optionalDependencies": {

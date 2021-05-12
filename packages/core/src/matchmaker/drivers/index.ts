@@ -1,4 +1,7 @@
-import { IRoomListingData, MatchMakerDriver, QueryHelpers, RoomListingData } from '../Driver';
+import { IRoomListingData, RoomListingData, QueryHelpers, MatchMakerDriver } from "./interfaces";
+
+// re-export
+export { IRoomListingData, RoomListingData, QueryHelpers, MatchMakerDriver };
 
 import { Query } from './Query';
 import { RoomCache } from './RoomData';

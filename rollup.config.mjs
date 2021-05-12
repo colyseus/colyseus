@@ -1,4 +1,5 @@
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import minimist from 'minimist';
 
@@ -34,10 +35,17 @@ async function main() {
   const { scope, ignore } = minimist(process.argv.slice(2));
   const packages = await getSortedPackages(scope, ignore);
 
-  const configs = packages.map(pkg => {
+  const configs = packages.filter(pkg => {
+    //
+    // FIXME: fix tsconfig locations!
+    // For now, we're ignoring packages that doesn't have a tsconfig at this exact location.
+    //
+    const basePath = path.relative(__dirname, pkg.location);
+    return fs.existsSync(path.join(basePath, 'tsconfig', 'tsconfig.esm.json'));
+
+  }).map(pkg => {
     // Absolute path to package directory
     const basePath = path.relative(__dirname, pkg.location);
-    console.log({ basePath });
 
     // "main" field from package.json file.
     const pkgJSON = pkg.toJSON();

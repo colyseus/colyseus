@@ -1,20 +1,9 @@
 import http from 'http';
 import querystring from 'querystring';
-import url, { URL } from 'url';
-import uWebSockets from 'uWebSockets.js';
+import uWebSockets, { WebSocket } from 'uWebSockets.js';
 
-import * as matchMaker from '../../MatchMaker';
-import * as matchMakerController from '../../matchmaker/controller';
-import { ErrorCode, Protocol } from '../../Protocol';
-
-import { ServerOptions } from '../../Server';
-import { Transport } from '../Transport';
-
-import { debugAndPrintError, debugConnection } from '../../Debug';
+import { ErrorCode, matchMaker, ServerOptions, Transport, debugAndPrintError, debugConnection, spliceOne } from '@colyseus/core';
 import { uWebSocketClient, uWebSocketWrapper } from './uWebSocketClient';
-import { spliceOne } from '../../Utils';
-
-type RawWebSocketClient = uWebSockets.WebSocket;
 
 export class uWebSocketsTransport extends Transport {
     protected app: uWebSockets.TemplatedApp;
@@ -57,12 +46,12 @@ export class uWebSocketsTransport extends Transport {
                     {
                         url: req.getUrl(),
                         query: req.getQuery(),
-                    }, req.getHeader('sec-websocket-key'),
+                    },
+                    req.getHeader('sec-websocket-key'),
                     req.getHeader('sec-websocket-protocol'),
                     req.getHeader('sec-websocket-extensions'),
                     context
                 );
-
             },
 
             open: (ws: uWebSockets.WebSocket) => {
@@ -128,7 +117,7 @@ export class uWebSocketsTransport extends Transport {
     protected autoTerminateUnresponsiveClients(pingInterval: number, pingMaxRetries: number) {
         // interval to detect broken connections
         this.pingInterval = setInterval(() => {
-            this.clients.forEach((client: RawWebSocketClient) => {
+            this.clients.forEach((client: WebSocket) => {
                 //
                 // if client hasn't responded after the interval, terminate its connection.
                 //
@@ -144,7 +133,7 @@ export class uWebSocketsTransport extends Transport {
         }, pingInterval);
     }
 
-    protected async onConnection(rawClient: RawWebSocketClient) {
+    protected async onConnection(rawClient: WebSocket) {
         const wrapper = new uWebSocketWrapper(rawClient);
         // keep reference to client and its wrapper
         this.clients.push(rawClient);
@@ -228,7 +217,7 @@ export class uWebSocketsTransport extends Transport {
                 const name = matchedParams[matchmakeIndex + 2] || '';
 
                 try {
-                    const response = await matchMakerController.invokeMethod(method, name, clientOptions);
+                    const response = await matchMaker.controller.invokeMethod(method, name, clientOptions);
                     res.writeStatus("200 OK");
                     res.end(JSON.stringify(response));
 
@@ -263,7 +252,7 @@ export class uWebSocketsTransport extends Transport {
             const roomName = matchedParams[matchedParams.length - 1];
 
             try {
-                const response = await matchMakerController.getAvailableRooms(roomName || '')
+                const response = await matchMaker.controller.getAvailableRooms(roomName || '')
                 res.writeStatus("200 OK");
                 res.end(JSON.stringify(response));
 

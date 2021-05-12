@@ -1,0 +1,32 @@
+{
+  "name": "@colyseus/uws-transport",
+  "version": "0.14.0",
+  "input": "./src/index.ts",
+  "main": "./build/index.js",
+  "module": "./build/index.mjs",
+  "typings": "./build/src/index.d.ts",
+  "dependencies": {
+    "@colyseus/core": "^0.14.0",
+    "@colyseus/schema": "^1.0.15",
+    "uWebSockets.js": "github:uNetworking/uWebSockets.js#v19.2.0"
+  },
+  "author": "Endel Dreyer",
+  "license": "MIT",
+  "keywords": [
+    "colyseus",
+    "matchmaking",
+    "driver",
+    "mongoose",
+    "mongodb"
+  ],
+  "files": [
+    "build",
+    "../../LICENSE",
+    "../../README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/colyseus/colyseus.git"
+  },
+  "homepage": "https://colyseus.io/"
+}

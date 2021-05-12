@@ -1,7 +1,11 @@
 {
   "packages": [
     "bundles/*",
-    "packages/*"
+    "packages/*",
+    "packages/drivers/*",
+    "packages/transport/*",
+    "packages/serializer/*"
   ],
-  "version": "0.14.15"
+  "version": "0.14.15",
+  "hoist": true
 }

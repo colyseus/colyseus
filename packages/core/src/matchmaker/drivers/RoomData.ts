@@ -1,5 +1,5 @@
-import { spliceOne } from '../../../Utils';
-import { RoomListingData } from '../Driver';
+import { spliceOne } from '../../Utils';
+import { RoomListingData } from './interfaces';
 
 export class RoomCache implements RoomListingData {
   public clients: number = 0;

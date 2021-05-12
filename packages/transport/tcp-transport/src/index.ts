@@ -1,12 +1,6 @@
 import * as net from 'net';
 
-import { generateId } from '../..';
-import * as matchMaker from '../../MatchMaker';
-import { Protocol } from '../../Protocol';
-import { ServerOptions } from '../../Server';
-import { Transport } from '../Transport';
-
-import { debugAndPrintError, debugError } from '../../Debug';
+import { generateId, matchMaker, Protocol, ServerOptions, Transport, debugAndPrintError, debugError } from '@colyseus/core';
 
 /**
  * TODO:

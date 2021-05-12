@@ -1,4 +1,4 @@
-import { SortOptions } from "../RegisteredHandler";
+export interface SortOptions { [fieldName: string]: 1 | -1 | 'asc' | 'desc' | 'ascending' | 'descending'; }
 
 export interface IRoomListingData {
   clients: number;

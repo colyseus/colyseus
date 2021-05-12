@@ -1,5 +1,4 @@
 import msgpack from 'notepack.io';
-
 import { encode, Schema } from '@colyseus/schema';
 
 // Colyseus protocol codes range between 0~100

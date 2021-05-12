@@ -18,8 +18,8 @@ import { Deferred, spliceOne } from './Utils';
 
 import { debugAndPrintError, debugPatch } from './Debug';
 import { ServerError } from './errors/ServerError';
-import { RoomListingData } from './matchmaker/drivers/Driver';
 import { Client, ClientState, ISendOptions } from './transport/Transport';
+import { RoomListingData } from './matchmaker/drivers';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)

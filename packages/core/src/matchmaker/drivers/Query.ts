@@ -1,5 +1,4 @@
-import { SortOptions } from '../../RegisteredHandler';
-import { QueryHelpers } from '../Driver';
+import { QueryHelpers, SortOptions } from './interfaces';
 
 export class Query<T> implements QueryHelpers<T> {
   private $rooms: T[];

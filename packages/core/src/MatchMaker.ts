@@ -12,12 +12,14 @@ import { Presence } from './presence/Presence';
 import { debugAndPrintError, debugMatchMaking } from './Debug';
 import { SeatReservationError } from './errors/SeatReservationError';
 import { ServerError } from './errors/ServerError';
-import { IRoomListingData, MatchMakerDriver, RoomListingData } from './matchmaker/drivers/Driver';
-import { LocalDriver } from './matchmaker/drivers/LocalDriver';
+
+import { IRoomListingData, MatchMakerDriver, RoomListingData, LocalDriver } from './matchmaker/drivers';
+import * as controller from './matchmaker/controller';
+
 import { Client } from './transport/Transport';
 import { Type } from './types';
 
-export { MatchMakerDriver };
+export { MatchMakerDriver, controller };
 
 export type ClientOptions = any;
 
