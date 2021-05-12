@@ -16,7 +16,7 @@ import { generateId } from '.';
 import { registerNode, unregisterNode } from './discovery';
 import { LocalPresence } from './presence/LocalPresence';
 
-import { Transport } from './transport/Transport';
+import { Transport } from './Transport';
 
 export type ServerOptions = IServerOptions & {
   pingInterval?: number,

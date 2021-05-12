@@ -6,7 +6,7 @@ import { Serializer } from './Serializer';
 import { dumpChanges, hasFilter, Reflection, Schema } from '@colyseus/schema';
 import { debugPatch } from '../Debug';
 import { Protocol } from '../Protocol';
-import { ClientState } from '../transport/Transport';
+import { ClientState } from '../Transport';
 
 export class SchemaSerializer<T> implements Serializer<T> {
   public id = 'schema';

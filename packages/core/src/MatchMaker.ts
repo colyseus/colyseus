@@ -13,10 +13,10 @@ import { debugAndPrintError, debugMatchMaking } from './Debug';
 import { SeatReservationError } from './errors/SeatReservationError';
 import { ServerError } from './errors/ServerError';
 
-import { IRoomListingData, MatchMakerDriver, RoomListingData, LocalDriver } from './matchmaker/drivers';
+import { IRoomListingData, MatchMakerDriver, RoomListingData, LocalDriver } from './matchmaker/driver';
 import * as controller from './matchmaker/controller';
 
-import { Client } from './transport/Transport';
+import { Client } from './Transport';
 import { Type } from './types';
 
 export { MatchMakerDriver, controller };

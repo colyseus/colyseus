@@ -11,7 +11,7 @@ export { ServerError } from './errors/ServerError';
 import * as matchMaker from './MatchMaker';
 export { matchMaker };
 export { updateLobby, subscribeLobby } from './matchmaker/Lobby';
-export * from './matchmaker/drivers';
+export * from './matchmaker/driver';
 
 // Transport
 export { Client, ClientState, Transport, ISendOptions } from './Transport';

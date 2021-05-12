@@ -1,9 +1,9 @@
 
 import * as matchMaker from '../MatchMaker';
-import { RoomListingData } from '../matchmaker/drivers';
+import { RoomListingData } from '../matchmaker/driver';
 import { subscribeLobby } from '../matchmaker/Lobby';
 import { Room } from '../Room';
-import { Client } from '../transport/Transport';
+import { Client } from '../Transport';
 
 // TODO: use Schema state & filters on version 1.0.0
 

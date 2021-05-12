@@ -1,4 +1,4 @@
-import { Client } from '../transport/Transport';
+import { Client } from '../Transport';
 import { Serializer } from './Serializer';
 
 export class NoneSerializer<T= any> implements Serializer<T> {

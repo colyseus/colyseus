@@ -1,7 +1,7 @@
 import { Context, defineTypes, MapSchema, Schema } from '@colyseus/schema';
 
 import { Room } from '../Room';
-import { Client } from '../transport/Transport';
+import { Client } from '../Transport';
 
 /**
  * Create another context to avoid these types from being in the user's global `Context`

@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { RoomListingData, SortOptions } from './drivers/interfaces';
+import { RoomListingData, SortOptions } from './driver/interfaces';
 
 import { RoomConstructor } from './../Room';
 import { updateLobby } from './Lobby';
