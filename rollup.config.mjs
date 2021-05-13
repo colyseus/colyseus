@@ -1,5 +1,4 @@
 import path from 'path';
-import fs from 'fs';
 import { fileURLToPath } from 'url';
 import minimist from 'minimist';
 
@@ -35,15 +34,7 @@ async function main() {
   const { scope, ignore } = minimist(process.argv.slice(2));
   const packages = await getSortedPackages(scope, ignore);
 
-  const configs = packages.filter(pkg => {
-    //
-    // FIXME: fix tsconfig locations!
-    // For now, we're ignoring packages that doesn't have a tsconfig at this exact location.
-    //
-    const basePath = path.relative(__dirname, pkg.location);
-    return fs.existsSync(path.join(basePath, 'tsconfig', 'tsconfig.esm.json'));
-
-  }).map(pkg => {
+  const configs = packages.map(pkg => {
     // Absolute path to package directory
     const basePath = path.relative(__dirname, pkg.location);
 
@@ -58,7 +49,7 @@ async function main() {
       input,
       cjsDIR: path.join(basePath, 'build', 'cjs'),
       esmDIR: path.join(basePath, 'build', 'esm'),
-      tsconfig: path.join(basePath, 'tsconfig', 'tsconfig.esm.json'),
+      // tsconfig: path.join(basePath, 'tsconfig', 'tsconfig.esm.json'),
     })
 
     //
@@ -89,8 +80,12 @@ async function main() {
         nodeResolve(),
         commonJs(),
         typescript({
-          // declarationDir: path.join(basePath, "build"),
-          tsconfig: path.join(basePath, 'tsconfig', 'tsconfig.esm.json')
+          rootDir: path.join(basePath, "src"),
+          declarationDir:  path.join(basePath, "build"),
+          declaration: true,
+          module: "ESNext",
+          target: "ESNext",
+          include: [path.join(basePath, "src", "**", "*.ts")],
         }),
       ],
     });

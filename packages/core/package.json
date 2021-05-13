@@ -5,7 +5,7 @@
   "input": "./src/index.ts",
   "main": "./build/index.js",
   "module": "./build/index.mjs",
-  "typings": "./build/src/index.d.ts",
+  "typings": "./build/index.d.ts",
   "scripts": {
     "clean": "rimraf build",
     "start": "ts-node-dev --respawn --transpile-only usage/Server.ts",

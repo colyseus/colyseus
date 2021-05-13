@@ -4,7 +4,7 @@
   "input": "./src/index.ts",
   "main": "./build/index.js",
   "module": "./build/index.mjs",
-  "typings": "./build/src/index.d.ts",
+  "typings": "./build/index.d.ts",
   "dependencies": {
     "@colyseus/core": "^0.14.0",
     "ws": "^7.1.0"
