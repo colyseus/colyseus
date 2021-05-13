@@ -1,13 +1,8 @@
-import { Schema } from '@colyseus/schema';
 import fossilDelta from 'fossil-delta';
 import msgpack from 'notepack.io';
 
-import { Client } from '..';
-import { Protocol } from '../Protocol';
-import { Serializer } from './Serializer';
-
+import { Client, Protocol, Serializer, debugPatch } from '@colyseus/core';
 import jsonPatch from 'fast-json-patch'; // this is only used for debugging patches
-import { debugPatch } from '../Debug';
 
 export class FossilDeltaSerializer<T> implements Serializer<T> {
   public id = 'fossil-delta';
@@ -15,7 +10,7 @@ export class FossilDeltaSerializer<T> implements Serializer<T> {
   // when a new user connects, it receives the 'previousState', which holds
   // the last binary snapshot other users already have, therefore the patches
   // that follow will be the same for all clients.
-  private previousState: T | Schema;
+  private previousState: T;
   private previousStateEncoded: any;
 
   private patches: any;
@@ -29,7 +24,7 @@ export class FossilDeltaSerializer<T> implements Serializer<T> {
     return this.previousStateEncoded;
   }
 
-  public applyPatches(clients: Client[], previousState: T | Schema) {
+  public applyPatches(clients: Client[], previousState: T) {
     const hasChanged = this.hasChanged(previousState);
 
     if (hasChanged) {
@@ -46,7 +41,7 @@ export class FossilDeltaSerializer<T> implements Serializer<T> {
     return hasChanged;
   }
 
-  public hasChanged(newState: T | Schema) {
+  public hasChanged(newState: T) {
     const currentState = newState;
     let changed: boolean = false;
     let currentStateEncoded;
@@ -54,7 +49,7 @@ export class FossilDeltaSerializer<T> implements Serializer<T> {
     /**
      * allow optimized state changes when using `Schema` class.
      */
-    if (newState instanceof Schema) {
+    if (newState?.['$changes']) {// tslint:disable-line
       if (newState['$changes'].changes.size > 0) { // tslint:disable-line
         changed = true;
         currentStateEncoded = msgpack.encode(currentState);

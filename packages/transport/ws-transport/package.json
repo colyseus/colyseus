@@ -6,6 +6,7 @@
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
   "dependencies": {
+    "@types/ws": "^6.0.1",
     "@colyseus/core": "^0.14.0",
     "ws": "^7.1.0"
   },

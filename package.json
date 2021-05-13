@@ -32,6 +32,7 @@
     "@types/node": "^13.13.5",
     "@types/sinon": "^4.3.3",
     "all-contributors-cli": "^5.4.0",
+    "assert": "^2.0.0",
     "benchmark": "^2.1.1",
     "colyseus.js": "^0.14.1",
     "cors": "^2.8.5",

@@ -42,8 +42,6 @@
     "@types/redis": "^2.8.12",
     "@types/ws": "^6.0.1",
     "debug": "^4.0.1",
-    "fast-json-patch": "^2.0.5",
-    "fossil-delta": "^1.0.1",
     "internal-ip": "^4.3.0",
     "nanoid": "^2.0.0",
     "nonenumerable": "^1.0.1",

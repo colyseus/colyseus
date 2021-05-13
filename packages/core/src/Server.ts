@@ -65,7 +65,7 @@ export class Server {
     const transportKlass = options.transport || this.getDefaultTransport(options);
     delete options.transport;
 
-    this.transport = new transportKlass(options);
+    this.transport = transportKlass;
   }
 
   /**

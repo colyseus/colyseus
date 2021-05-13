@@ -18,7 +18,7 @@ export class WebSocketTransport extends Transport {
   protected pingIntervalMS: number;
   protected pingMaxRetries: number;
 
-  constructor(options: ServerOptions = {}, engine: any) {
+  constructor(options: ServerOptions = {}) {
     super();
 
     // disable per-message deflate

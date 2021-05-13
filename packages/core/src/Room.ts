@@ -8,10 +8,9 @@ import { EventEmitter } from 'events';
 
 import { Presence } from './presence/Presence';
 
-import { FossilDeltaSerializer } from './serializer/FossilDeltaSerializer';
+import { Serializer } from './serializer/Serializer';
 import { NoneSerializer } from './serializer/NoneSerializer';
 import { SchemaSerializer } from './serializer/SchemaSerializer';
-import { Serializer } from './serializer/Serializer';
 
 import { ErrorCode, getMessageBytes, Protocol } from './Protocol';
 import { Deferred, spliceOne } from './Utils';
@@ -23,6 +22,7 @@ import { RoomListingData } from './matchmaker/driver';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
+const noneSerializer = new NoneSerializer();
 
 export const DEFAULT_SEAT_RESERVATION_TIME = Number(process.env.COLYSEUS_SEAT_RESERVATION_TIME || 15);
 
@@ -78,7 +78,7 @@ export abstract class Room<State= any, Metadata= any> {
 
   private onMessageHandlers: {[id: string]: (client: Client, message: any) => void} = {};
 
-  private _serializer: Serializer<State> = new NoneSerializer();
+  private _serializer: Serializer<State> = noneSerializer;
   private _afterNextPatchBroadcasts: IArguments[] = [];
 
   private _simulationInterval: NodeJS.Timer;
@@ -160,15 +160,16 @@ export abstract class Room<State= any, Metadata= any> {
     this.clock.start();
 
     if ('_definition' in newState) {
-      this._serializer = new SchemaSerializer();
-
-    } else {
-      this._serializer = new FossilDeltaSerializer();
+      this.setSerializer(new SchemaSerializer());
     }
 
     this._serializer.reset(newState);
 
     this.state = newState;
+  }
+
+  public setSerializer(serializer: Serializer<State>) {
+    this._serializer = serializer;
   }
 
   public async setMetadata(meta: Partial<Metadata>) {

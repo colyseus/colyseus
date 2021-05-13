@@ -22,7 +22,7 @@ export { LocalPresence } from './presence/LocalPresence';
 export { RedisPresence } from './presence/RedisPresence';
 
 // Serializers
-export { FossilDeltaSerializer } from './serializer/FossilDeltaSerializer';
+export { Serializer } from './serializer/Serializer';
 export { SchemaSerializer } from './serializer/SchemaSerializer';
 
 // Utilities
