@@ -8,8 +8,7 @@
   "typings": "./build/index.d.ts",
   "scripts": {
     "clean": "rimraf build",
-    "start": "ts-node-dev --respawn --transpile-only usage/Server.ts",
-    "test": "COLYSEUS_SEAT_RESERVATION_TIME=0.3 COLYSEUS_PRESENCE_SHORT_TIMEOUT=300 nyc mocha --require ts-node/register test/**Test.ts test/**/**Test.ts --exit --timeout 15000",
+    "test": "TS_NODE_PROJECT=../../tsconfig/tsconfig.test.json COLYSEUS_SEAT_RESERVATION_TIME=0.3 COLYSEUS_PRESENCE_SHORT_TIMEOUT=300 c8 mocha --require ts-node/register test/**Test.ts test/**/**Test.ts --exit --timeout 15000",
     "tslint": "tslint --project . --config ../../tslint.json",
     "prepublishOnly": "npm run clear && npm run build"
   },
