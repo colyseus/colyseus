@@ -1,7 +1,4 @@
 import http, { IncomingMessage, ServerResponse } from 'http';
-import net from 'net';
-import WebSocket from 'ws';
-import { ServerOptions as IServerOptions } from 'ws';
 
 import { debugAndPrintError, debugMatchMaking } from './Debug';
 import * as matchMaker from './MatchMaker';
@@ -18,14 +15,14 @@ import { LocalPresence } from './presence/LocalPresence';
 
 import { Transport } from './Transport';
 
-export type ServerOptions = IServerOptions & {
-  pingInterval?: number,
-  pingMaxRetries?: number,
-  verifyClient?: WebSocket.VerifyClientCallbackAsync
+// IServerOptions & 
+export type ServerOptions = {
+  // pingInterval?: number,
+  // pingMaxRetries?: number,
+  // verifyClient?: WebSocket.VerifyClientCallbackAsync
   presence?: Presence,
   driver?: matchMaker.MatchMakerDriver,
   transport?: any,
-  ws?: any,
   gracefullyShutdown?: boolean,
 };
 
@@ -143,7 +140,7 @@ export class Server {
    * @param milliseconds round trip latency in milliseconds.
    */
   public simulateLatency(milliseconds: number) {
-    console.warn(`Colyseus latency simulation enabled → ${milliseconds}ms latency for round trip.`);
+    console.warn(`📶️❗ Colyseus latency simulation enabled → ${milliseconds}ms latency for round trip.`);
 
     const halfwayMS = (milliseconds / 2);
     this.transport.simulateLatency(halfwayMS);

@@ -1,15 +1,20 @@
 import http from 'http';
 import querystring from 'querystring';
 import url from 'url';
-import WebSocket from 'ws';
+import WebSocket, { ServerOptions } from 'ws';
 
-import { matchMaker, Protocol, ServerOptions, Transport, debugAndPrintError, debugConnection  } from '@colyseus/core';
+import { matchMaker, Protocol, Transport, debugAndPrintError, debugConnection } from '@colyseus/core';
 import { WebSocketClient } from './WebSocketClient';
 
 function noop() {/* tslint:disable:no-empty */ }
 function heartbeat() { this.pingCount = 0; }
 
 type RawWebSocketClient = WebSocket & { pingCount: number };
+
+interface TransportOptions extends ServerOptions {
+  pingInterval?: number;
+  pingMaxRetries?: number;
+}
 
 export class WebSocketTransport extends Transport {
   protected wss: WebSocket.Server;
@@ -18,15 +23,18 @@ export class WebSocketTransport extends Transport {
   protected pingIntervalMS: number;
   protected pingMaxRetries: number;
 
-  constructor(options: ServerOptions = {}) {
+  constructor(options: TransportOptions = {}) {
     super();
 
-    // disable per-message deflate
-    options.perMessageDeflate = false;
+    // disable per-message deflate by default
+    if (options.perMessageDeflate === undefined) {
+      options.perMessageDeflate = false;
+    }
 
     this.pingIntervalMS = (options.pingInterval !== undefined)
       ? options.pingInterval
       : 3000;
+
     this.pingMaxRetries = (options.pingMaxRetries !== undefined)
       ? options.pingMaxRetries
       : 2;
