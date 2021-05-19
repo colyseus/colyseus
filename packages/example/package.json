@@ -8,7 +8,8 @@
       "start": "ts-node-dev src/Server.ts"
     },
     "dependencies": {
-      "colyseus": "^0.14.0"
+      "colyseus": "^0.14.0",
+      "@colyseus/uws-transport": "^0.14.0"
     }
   }
   

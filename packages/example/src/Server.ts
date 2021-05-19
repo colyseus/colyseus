@@ -2,11 +2,10 @@ import http from "http";
 import cors from "cors";
 import express from "express";
 
-import { Server, RedisPresence, RelayRoom, LobbyRoom } from "colyseus";
-import { uWebSocketsTransport } from "../src/transport/uWebSockets/uWebSocketsTransport";
-import { DummyRoom } from "./DummyRoom";
+import { Server, RelayRoom, LobbyRoom } from "colyseus";
+import { uWebSocketsTransport } from "@colyseus/uws-transport";
 
-import { MongooseDriver } from "../src/matchmaker/drivers/MongooseDriver";
+import { DummyRoom } from "./DummyRoom";
 
 const port = Number(process.env.PORT || 2567);
 const endpoint = "localhost";
@@ -18,8 +17,9 @@ app.use(express.json());
 
 // Create HTTP & WebSocket servers
 const server = http.createServer(app);
+
 const gameServer = new Server({
-  transport: uWebSocketsTransport,
+  transport: new uWebSocketsTransport(),
   // engine: WebSocket.Server,
   server: server,
   // presence: new RedisPresence(),
@@ -57,7 +57,12 @@ gameServer.onShutdown(() => {
 
 process.on('unhandledRejection', r => console.log('unhandledRejection...', r));
 
+console.log("will listen!");
+
 gameServer.listen(port)
   .then(() => console.log(`Listening on ws://${endpoint}:${port}`))
-  .catch((err) => process.exit(1));
+  .catch((err) => {
+    console.log(err);
+    process.exit(1)
+  });
 

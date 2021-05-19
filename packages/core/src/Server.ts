@@ -31,6 +31,8 @@ export class Server {
   public transport: Transport;
 
   protected presence: Presence;
+
+  protected port: number;
   protected processId: string = generateId();
 
   private matchmakeRoute = 'matchmake';
@@ -75,8 +77,10 @@ export class Server {
    * @param listeningListener
    */
   public async listen(port: number, hostname?: string, backlog?: number, listeningListener?: Function) {
+    this.port = port;
+
     return new Promise<void>((resolve, reject) => {
-      this.transport.server.on('error', (err) => reject(err));
+      this.transport.server?.on('error', (err) => reject(err));
       this.transport.listen(port, hostname, backlog, (err) => {
         if (listeningListener) {
           listeningListener(err);
@@ -95,7 +99,7 @@ export class Server {
   public registerProcessForDiscovery() {
     // register node for proxy/service discovery
     registerNode(this.presence, {
-      port: this.transport.address().port,
+      port: this.port,
       processId: this.processId,
     });
   }
@@ -117,7 +121,7 @@ export class Server {
 
   public async gracefullyShutdown(exit: boolean = true, err?: Error) {
     await unregisterNode(this.presence, {
-      port: this.transport.address()?.port,
+      port: this.port,
       processId: this.processId,
     });
 

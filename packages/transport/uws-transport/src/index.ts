@@ -1,1 +1,1 @@
-export { uWebSocketsTransport } from "./uWebSocketsTransport"
+export { uWebSocketsTransport, TransportOptions } from "./uWebSocketsTransport"

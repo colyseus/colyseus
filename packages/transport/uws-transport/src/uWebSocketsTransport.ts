@@ -1,6 +1,6 @@
 import http from 'http';
 import querystring from 'querystring';
-import uWebSockets, { AppOptions, WebSocket } from 'uWebSockets.js';
+import uWebSockets from 'uWebSockets.js';
 
 import { ErrorCode, matchMaker, Transport, debugAndPrintError, spliceOne } from '@colyseus/core';
 import { uWebSocketClient, uWebSocketWrapper } from './uWebSocketClient';
@@ -8,7 +8,7 @@ import { uWebSocketClient, uWebSocketWrapper } from './uWebSocketClient';
 export type TransportOptions = Omit<uWebSockets.WebSocketBehavior, "upgrade" | "open" | "pong" | "close" | "message">;
 
 export class uWebSocketsTransport extends Transport {
-    protected app: uWebSockets.TemplatedApp;
+    public app: uWebSockets.TemplatedApp;
 
     protected clients: uWebSockets.WebSocket[] = [];
     protected clientWrappers = new WeakMap<uWebSockets.WebSocket, uWebSocketWrapper>();
@@ -102,7 +102,7 @@ export class uWebSocketsTransport extends Transport {
         this.simulateLatencyMs = milliseconds;
     }
 
-    protected async onConnection(rawClient: WebSocket) {
+    protected async onConnection(rawClient: uWebSockets.WebSocket) {
         const wrapper = new uWebSocketWrapper(rawClient);
         // keep reference to client and its wrapper
         this.clients.push(rawClient);

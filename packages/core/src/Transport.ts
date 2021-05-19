@@ -6,13 +6,12 @@ import { Schema } from '@colyseus/schema';
 import { EventEmitter } from 'events';
 
 export abstract class Transport {
-    public server: net.Server | http.Server | https.Server;
+    public server?: net.Server | http.Server | https.Server;
 
     public abstract listen(port?: number, hostname?: string, backlog?: number, listeningListener?: Function): this;
     public abstract shutdown(): void;
 
     public abstract simulateLatency(milliseconds: number): void;
-    public address() { return this.server.address() as net.AddressInfo; }
 }
 
 export interface ISendOptions {
