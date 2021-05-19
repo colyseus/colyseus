@@ -27,7 +27,6 @@ export { SchemaSerializer } from './serializer/SchemaSerializer';
 
 // Utilities
 export { Clock, Delayed };
-export { nonenumerable as nosync } from 'nonenumerable'; // TODO: remove me on 1.0.0 (FossilDelta stuff)
 export { generateId, Deferred, spliceOne } from './Utils';
 
 // Debug
