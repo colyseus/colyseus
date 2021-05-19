@@ -14,10 +14,10 @@
   "license": "MIT",
   "keywords": [
     "colyseus",
-    "matchmaking",
-    "driver",
-    "mongoose",
-    "mongodb"
+    "transport",
+    "websockets",
+    "uws",
+    "native"
   ],
   "files": [
     "build",

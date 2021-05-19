@@ -11,10 +11,12 @@
   ],
   "scripts": {
     "build": "rollup -c",
+    "boot": "lerna bootstrap",
     "test": "lerna run test --stream",
     "example": "lerna run start --scope @colyseus/example --stream",
     "update-contributors": "all-contributors generate",
-    "graph": "lerna list --graph"
+    "graph": "lerna list --graph",
+    "watch": "rollup -c --watch"
   },
   "devDependencies": {
     "@lerna/batch-packages": "^3.16.0",

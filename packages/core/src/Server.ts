@@ -20,6 +20,7 @@ export type ServerOptions = {
   // pingInterval?: number,
   // pingMaxRetries?: number,
   // verifyClient?: WebSocket.VerifyClientCallbackAsync
+  server?: http.Server,
   presence?: Presence,
   driver?: matchMaker.MatchMakerDriver,
   transport?: any,

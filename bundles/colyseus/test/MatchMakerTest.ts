@@ -1,7 +1,8 @@
 import assert from "assert";
-import { matchMaker, Room } from "../src";
+import { matchMaker, Room } from "@colyseus/core";
 import { DummyRoom, Room2Clients, createDummyClient, timeout, ReconnectRoom, Room3Clients, DRIVERS, ReconnectTokenRoom } from "./utils";
-import { DEFAULT_SEAT_RESERVATION_TIME } from "../src/Room";
+
+const DEFAULT_SEAT_RESERVATION_TIME = Number(process.env.COLYSEUS_SEAT_RESERVATION_TIME);
 
 describe("MatchMaker", () => {
 
@@ -441,7 +442,7 @@ describe("MatchMaker", () => {
 
           const promises = [];
           for (let i = 0; i < numConnections; i++) {
-            promises.push(new Promise(async (resolve, reject) => {
+            promises.push(new Promise<void>(async (resolve, reject) => {
               try {
                 const reservedSeat = await matchMaker.joinOrCreate("room2");
                 const room = matchMaker.getRoomById(reservedSeat.room.roomId);

@@ -3,9 +3,9 @@ import sinon from "sinon";
 import * as Colyseus from "colyseus.js";
 import { Schema, type, Context } from "@colyseus/schema";
 
-import { matchMaker, Room, Client, Server, ErrorCode } from "../src";
+import { matchMaker, Room, Client, Server, ErrorCode } from "@colyseus/core";
 import { DummyRoom, DRIVERS, timeout, Room3Clients, PRESENCE_IMPLEMENTATIONS, Room2Clients, Room2ClientsExplicitLock } from "./utils";
-import { ServerError } from "../src/errors/ServerError";
+import { ServerError } from "@colyseus/core";
 
 import WebSocket from "ws";
 
@@ -21,8 +21,6 @@ describe("Integration", () => {
 
       describe(`Driver => ${(driver.constructor as any).name}, Presence => ${presence.constructor.name}`, () => {
         const server = new Server({
-          pingInterval: 150,
-          pingMaxRetries: 1,
           presence,
           driver
         });
@@ -71,7 +69,7 @@ describe("Integration", () => {
 
               matchMaker.defineRoomType('oncreate', class _ extends Room {
                 async onCreate(options) {
-                  return new Promise(resolve => setTimeout(() => {
+                  return new Promise<void>(resolve => setTimeout(() => {
                     onCreateCalled = true;
                     resolve();
                   }, 100)
@@ -108,7 +106,7 @@ describe("Integration", () => {
 
               matchMaker.defineRoomType('onjoin', class _ extends Room {
                 async onJoin(client: Client, options: any) {
-                  return new Promise(resolve => setTimeout(() => {
+                  return new Promise<void>(resolve => setTimeout(() => {
                     onJoinCalled = true;
                     resolve();
                   }, 20));
@@ -135,7 +133,7 @@ describe("Integration", () => {
             it("should discard connections when early disconnected", async () => {
               matchMaker.defineRoomType('onjoin', class _ extends Room {
                 async onJoin(client: Client, options: any) {
-                  return new Promise((resolve) => setTimeout(resolve, 100));
+                  return new Promise<void>((resolve) => setTimeout(resolve, 100));
                 }
               });
 
@@ -193,7 +191,7 @@ describe("Integration", () => {
 
             matchMaker.defineRoomType('onleave', class _ extends Room {
               async onLeave(client: Client, options: any) {
-                return new Promise(resolve => setTimeout(() => {
+                return new Promise<void>(resolve => setTimeout(() => {
                   onLeaveCalled = true;
                   resolve();
                 }, 100));
@@ -229,7 +227,7 @@ describe("Integration", () => {
 
             matchMaker.defineRoomType('onleave', class _ extends Room {
               async onDispose() {
-                return new Promise(resolve => setTimeout(() => {
+                return new Promise<void>(resolve => setTimeout(() => {
                   onDisposeCalled = true;
                   resolve();
                 }, 100));

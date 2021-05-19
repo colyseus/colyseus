@@ -1,7 +1,7 @@
 import * as httpClient from "httpie";
 import assert from "assert";
 
-import { Server, matchMaker } from "../src";
+import { Server, matchMaker } from "@colyseus/core";
 import { DummyRoom } from "./utils";
 
 describe("Server", () => {

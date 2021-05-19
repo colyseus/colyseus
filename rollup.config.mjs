@@ -1,4 +1,5 @@
 import path from 'path';
+import util from 'util';
 import { fileURLToPath } from 'url';
 import minimist from 'minimist';
 
@@ -44,14 +45,6 @@ async function main() {
     // Absolute path to input file
     const input = path.join(basePath, pkgJSON.input);
 
-    console.log({
-      pkgLocation: pkg.location,
-      input,
-      cjsDIR: path.join(basePath, 'build', 'cjs'),
-      esmDIR: path.join(basePath, 'build', 'esm'),
-      // tsconfig: path.join(basePath, 'tsconfig', 'tsconfig.esm.json'),
-    })
-
     //
     // Here's the individual rollup.config.js for each package
     //
@@ -91,7 +84,7 @@ async function main() {
     });
   });
 
-  console.log("ROLLUP CONFIGS:", configs);
+  console.log("ROLLUP CONFIGS:", util.inspect(configs, false, Infinity, true));
 
   return configs;
 }

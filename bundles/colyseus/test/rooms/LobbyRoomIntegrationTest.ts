@@ -20,8 +20,6 @@ describe("LobbyRoom: Integration", () => {
         const TEST_ENDPOINT = `ws://localhost:${TEST_PORT}`;
 
         const server = new Server({
-          pingInterval: 150,
-          pingMaxRetries: 1,
           presence,
           driver
         });

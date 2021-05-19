@@ -1,22 +1,8 @@
 import assert from "assert";
-import { Room, FossilDeltaSerializer, SchemaSerializer } from "../src";
+import { Room, SchemaSerializer } from "@colyseus/core";
 import { Schema } from "@colyseus/schema";
 
 describe("Room", () => {
-
-  describe("FossilDeltaSerializer", () => {
-    class MyRoom extends Room {
-      onCreate() { this.setState({}); }
-      onMessage() {}
-    }
-
-    it("setState() should select correct serializer", () => {
-      const room = new MyRoom()
-      room.onCreate();
-
-      assert.ok(room['_serializer'] instanceof FossilDeltaSerializer);
-    });
-  });
 
   describe("SchemaSerializer", () => {
     class State extends Schema {}

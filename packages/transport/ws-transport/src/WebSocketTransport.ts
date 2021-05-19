@@ -11,7 +11,7 @@ function heartbeat() { this.pingCount = 0; }
 
 type RawWebSocketClient = WebSocket & { pingCount: number };
 
-interface TransportOptions extends ServerOptions {
+export interface TransportOptions extends ServerOptions {
   pingInterval?: number;
   pingMaxRetries?: number;
 }

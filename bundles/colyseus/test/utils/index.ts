@@ -2,13 +2,17 @@ import msgpack from "notepack.io";
 import WebSocket from "ws";
 import { EventEmitter } from "events";
 
-import { Room } from "../../src/Room";
-import { SeatReservation } from "../../src/MatchMaker";
+import { Server, ServerOptions, Room, matchMaker, LocalDriver, ClientState, LocalPresence, RedisPresence, Presence, Client, Deferred } from "@colyseus/core";
+import { MongooseDriver } from "@colyseus/mongoose-driver";
 
-import { LocalDriver } from "../../src/matchmaker/drivers/LocalDriver";
-import { MongooseDriver } from "../../src/matchmaker/drivers/MongooseDriver";
-import { LocalPresence, RedisPresence, Presence, Client, Deferred } from "../../src";
-import { ClientState } from "../../src/transport/Transport";
+import { WebSocketTransport, TransportOptions } from '@colyseus/ws-transport';
+Server.prototype['getDefaultTransport'] = function (options: ServerOptions) {
+  return new WebSocketTransport({
+    server: options.server,
+    pingInterval: 150,
+    pingMaxRetries: 1,
+  });
+}
 
 // export const DRIVERS = [ new LocalDriver(), ];
 // export const PRESENCE_IMPLEMENTATIONS: Presence[] = [ new LocalPresence(), ];
@@ -100,7 +104,7 @@ export function createEmptyClient() {
   return new WebSocketClient();
 }
 
-export function createDummyClient (seatReservation: SeatReservation, options: any = {}) {
+export function createDummyClient (seatReservation: matchMaker.SeatReservation, options: any = {}) {
   let client = new WebSocketClient(seatReservation.sessionId);
   (<any>client).options = options;
   return client;

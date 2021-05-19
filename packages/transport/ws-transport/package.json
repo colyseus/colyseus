@@ -6,12 +6,18 @@
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
   "dependencies": {
-    "@types/ws": "^6.0.1",
     "@colyseus/core": "^0.14.0",
-    "ws": "^7.1.0"
+    "@colyseus/schema": "^1.0.15",
+    "@types/ws": "^7.4.4",
+    "ws": "^7.4.5"
   },
   "author": "Endel Dreyer",
   "license": "MIT",
+  "keywords": [
+    "colyseus",
+    "transport",
+    "websockets"
+  ],
   "files": [
     "build",
     "../../LICENSE",

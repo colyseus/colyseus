@@ -8,6 +8,7 @@
     "typings": "./build/index.d.ts",
     "scripts": {
       "clean": "rimraf build",
+      "test": "TS_NODE_PROJECT=../../tsconfig/tsconfig.test.json COLYSEUS_SEAT_RESERVATION_TIME=0.3 COLYSEUS_PRESENCE_SHORT_TIMEOUT=300 c8 mocha --require ts-node/register test/**Test.ts test/**/**Test.ts --exit --timeout 15000",
       "prepublishOnly": "npm run clear && npm run build"
     },
     "author": "Endel Dreyer",
@@ -36,7 +37,8 @@
     },
     "dependencies": {
       "@colyseus/core": "^0.14.0",
-      "@colyseus/ws-transport": "^0.14.0"
+      "@colyseus/ws-transport": "^0.14.0",
+      "@colyseus/mongoose-driver": "^0.14.0"
     }
   }
   
