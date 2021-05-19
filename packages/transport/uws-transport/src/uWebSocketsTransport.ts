@@ -1,9 +1,11 @@
 import http from 'http';
 import querystring from 'querystring';
-import uWebSockets, { WebSocket } from 'uWebSockets.js';
+import uWebSockets, { AppOptions, WebSocket } from 'uWebSockets.js';
 
-import { ErrorCode, matchMaker, ServerOptions, Transport, debugAndPrintError, debugConnection, spliceOne } from '@colyseus/core';
+import { ErrorCode, matchMaker, Transport, debugAndPrintError, spliceOne } from '@colyseus/core';
 import { uWebSocketClient, uWebSocketWrapper } from './uWebSocketClient';
+
+export type TransportOptions = Omit<uWebSockets.WebSocketBehavior, "upgrade" | "open" | "pong" | "close" | "message">;
 
 export class uWebSocketsTransport extends Transport {
     protected app: uWebSockets.TemplatedApp;
@@ -13,19 +15,27 @@ export class uWebSocketsTransport extends Transport {
 
     protected simulateLatencyMs: number;
 
-    constructor(options: ServerOptions & uWebSockets.AppOptions = {}) {
+    constructor(options: TransportOptions = {}, appOptions: uWebSockets.AppOptions = {}) {
         super();
 
-        this.app = uWebSockets.App({
-            // SSL options
-        });
+        this.app = (appOptions.cert_file_name && appOptions.key_file_name)
+            ? uWebSockets.SSLApp(appOptions)
+            : uWebSockets.App(appOptions);
+
+        if (!options.maxBackpressure) {
+            options.maxBackpressure = 1024 * 1024;
+        }
+
+        if (!options.compression) {
+            options.compression = uWebSockets.DISABLED;
+        }
+
+        if (!options.maxPayloadLength) {
+            options.maxPayloadLength = 1024 * 1024;
+        }
 
         this.app.ws('/*', {
-            //
-            // disable idle timeout. 
-            // use pingInterval/pingMaxRetries instead.
-            //
-            idleTimeout: 0, 
+            ...options,
 
             upgrade: (res, req, context) => {
                 /* This immediately calls open handler, you must not use res after this call */
@@ -43,7 +53,7 @@ export class uWebSocketsTransport extends Transport {
             },
 
             open: (ws: uWebSockets.WebSocket) => {
-                ws.pingCount = 0;
+                // ws.pingCount = 0;
                 this.onConnection(ws);
 
                 if (this.simulateLatencyMs) {
@@ -55,9 +65,9 @@ export class uWebSocketsTransport extends Transport {
                 }
             },
 
-            pong: (ws: uWebSockets.WebSocket) => {
-                ws.pingCount = 0;
-            },
+            // pong: (ws: uWebSockets.WebSocket) => {
+            //     ws.pingCount = 0;
+            // },
 
             close: (ws: uWebSockets.WebSocket, code: number, message: ArrayBuffer) => {
                 // remove from client list
@@ -74,8 +84,6 @@ export class uWebSocketsTransport extends Transport {
             },
 
         });
-
-        this.server = options.server;
 
         this.registerMatchMakeRequest();
     }
@@ -109,6 +117,10 @@ export class uWebSocketsTransport extends Transport {
 
         const room = matchMaker.getRoomById(roomId);
         const client = new uWebSocketClient(sessionId, wrapper);
+
+        //
+        // TODO: DRY code below with all transports
+        //
 
         try {
             if (!room || !room.hasReservedSeat(sessionId)) {

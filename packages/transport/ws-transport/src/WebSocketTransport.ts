@@ -112,6 +112,10 @@ export class WebSocketTransport extends Transport {
 
     const client = new WebSocketClient(sessionId, rawClient);
 
+    //
+    // TODO: DRY code below with all transports
+    //
+
     try {
       if (!room || !room.hasReservedSeat(sessionId)) {
         throw new Error('seat reservation expired.');
