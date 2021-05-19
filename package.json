@@ -7,10 +7,12 @@
     "packages/*",
     "packages/drivers/*",
     "packages/transport/*",
+    "packages/presence/*",
     "packages/serializer/*"
   ],
   "scripts": {
     "build": "rollup -c",
+    "clean": "lerna clean",
     "boot": "lerna bootstrap",
     "test": "lerna run test --stream",
     "example": "lerna run start --scope @colyseus/example --stream",

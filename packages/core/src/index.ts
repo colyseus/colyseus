@@ -19,7 +19,6 @@ export { Client, ClientState, Transport, ISendOptions } from './Transport';
 // Presence
 export { Presence } from './presence/Presence';
 export { LocalPresence } from './presence/LocalPresence';
-export { RedisPresence } from './presence/RedisPresence';
 
 // Serializers
 export { Serializer } from './serializer/Serializer';

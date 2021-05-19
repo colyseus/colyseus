@@ -1,7 +1,7 @@
 import redis from 'redis';
 import { promisify } from 'util';
 
-import { Presence } from './Presence';
+import { Presence } from '@colyseus/core';
 
 type Callback = (...args: any[]) => void;
 

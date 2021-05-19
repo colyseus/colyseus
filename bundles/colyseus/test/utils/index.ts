@@ -2,7 +2,8 @@ import msgpack from "notepack.io";
 import WebSocket from "ws";
 import { EventEmitter } from "events";
 
-import { Server, ServerOptions, Room, matchMaker, LocalDriver, ClientState, LocalPresence, RedisPresence, Presence, Client, Deferred } from "@colyseus/core";
+import { Server, ServerOptions, Room, matchMaker, LocalDriver, ClientState, LocalPresence, Presence, Client, Deferred } from "@colyseus/core";
+import { RedisPresence } from "@colyseus/redis-presence";
 import { MongooseDriver } from "@colyseus/mongoose-driver";
 
 import { WebSocketTransport, TransportOptions } from '@colyseus/ws-transport';

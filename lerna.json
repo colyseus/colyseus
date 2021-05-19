@@ -4,6 +4,7 @@
     "packages/*",
     "packages/drivers/*",
     "packages/transport/*",
+    "packages/presence/*",
     "packages/serializer/*"
   ],
   "version": "0.14.15",

@@ -37,6 +37,7 @@
     },
     "dependencies": {
       "@colyseus/core": "^0.14.0",
+      "@colyseus/redis-presence": "^0.14.0",
       "@colyseus/ws-transport": "^0.14.0",
       "@colyseus/mongoose-driver": "^0.14.0"
     }
