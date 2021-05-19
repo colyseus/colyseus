@@ -11,10 +11,6 @@ export class uWebSocketsTransport extends Transport {
     protected clients: uWebSockets.WebSocket[] = [];
     protected clientWrappers = new WeakMap<uWebSockets.WebSocket, uWebSocketWrapper>();
 
-    protected pingInterval: NodeJS.Timer;
-    protected pingIntervalMS: number;
-    protected pingMaxRetries: number;
-
     protected simulateLatencyMs: number;
 
     constructor(options: ServerOptions & uWebSockets.AppOptions = {}) {
@@ -23,14 +19,6 @@ export class uWebSocketsTransport extends Transport {
         this.app = uWebSockets.App({
             // SSL options
         });
-
-        this.pingIntervalMS = (options.pingInterval !== undefined)
-            ? options.pingInterval
-            : 3000;
-
-        this.pingMaxRetries = (options.pingMaxRetries !== undefined)
-            ? options.pingMaxRetries
-            : 2;
 
         this.app.ws('/*', {
             //
@@ -90,14 +78,6 @@ export class uWebSocketsTransport extends Transport {
         this.server = options.server;
 
         this.registerMatchMakeRequest();
-
-        // if (this.pingIntervalMS > 0 && this.pingMaxRetries > 0) {
-        //     this.server.on('listening', () =>
-        //         this.autoTerminateUnresponsiveClients(this.pingIntervalMS, this.pingMaxRetries));
-
-        //     this.server.on('close', () =>
-        //         clearInterval(this.pingInterval));
-        // }
     }
 
     public listen(port: number, hostname?: string, backlog?: number, listeningListener?: () => void) {
@@ -112,25 +92,6 @@ export class uWebSocketsTransport extends Transport {
 
     public simulateLatency(milliseconds: number) {
         this.simulateLatencyMs = milliseconds;
-    }
-
-    protected autoTerminateUnresponsiveClients(pingInterval: number, pingMaxRetries: number) {
-        // interval to detect broken connections
-        this.pingInterval = setInterval(() => {
-            this.clients.forEach((client: WebSocket) => {
-                //
-                // if client hasn't responded after the interval, terminate its connection.
-                //
-                if (client.pingCount >= pingMaxRetries) {
-                    // debugConnection(`terminating unresponsive client ${client.sessionId}`);
-                    debugConnection(`terminating unresponsive client`);
-                    return client.terminate();
-                }
-
-                client.pingCount++;
-                client.ping();
-            });
-        }, pingInterval);
     }
 
     protected async onConnection(rawClient: WebSocket) {
