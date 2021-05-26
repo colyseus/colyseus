@@ -27,4 +27,5 @@ export class LocalDriver implements MatchMakerDriver {
     return new Query<RoomListingData>(this.rooms, conditions) as any as QueryHelpers<RoomListingData>;
   }
 
+  public quit() {}
 }

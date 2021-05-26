@@ -54,6 +54,7 @@ export class Server {
   public transport: Transport;
 
   protected presence: Presence;
+  protected driver: matchMaker.MatchMakerDriver;
   protected processId: string = generateId();
   protected matchmakeRoute = 'matchmake';
 
@@ -64,9 +65,10 @@ export class Server {
     const { gracefullyShutdown = true } = options;
 
     this.presence = options.presence || new LocalPresence();
+    this.driver = options.driver;
 
     // setup matchmaker
-    matchMaker.setup(this.presence, options.driver, this.processId);
+    matchMaker.setup(this.presence, this.driver, this.processId);
 
     // "presence" option is not used from now on
     delete options.presence;
@@ -150,6 +152,11 @@ export class Server {
     try {
       await matchMaker.gracefullyShutdown();
       this.transport.shutdown();
+
+      if (this.driver) {
+        this.driver.quit();
+      }
+
       await this.onShutdownCallback();
 
     } catch (e) {
