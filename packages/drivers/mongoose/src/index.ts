@@ -61,4 +61,5 @@ export class MongooseDriver implements MatchMakerDriver {
     })) as any as QueryHelpers<RoomListingData>;
   }
 
+  public quit() {}
 }

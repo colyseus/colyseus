@@ -35,4 +35,6 @@ export interface MatchMakerDriver {
   ): Promise<RoomListingData[]> | RoomListingData[];
 
   findOne(conditions: Partial<IRoomListingData>): QueryHelpers<RoomListingData>;
+
+  quit();
 }
