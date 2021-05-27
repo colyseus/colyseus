@@ -217,6 +217,8 @@ export class uWebSocketsTransport extends Transport {
         // });
 
         this.app.get("/matchmake/*", async (res, req) => {
+            res.onAborted(() => onAborted(req));
+
             writeHeaders(res);
             res.writeHeader('Content-Type', 'application/json');
 
