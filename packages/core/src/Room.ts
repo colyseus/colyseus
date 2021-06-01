@@ -320,7 +320,8 @@ export abstract class Room<State= any, Metadata= any> {
     delete this.reservedSeats[sessionId];
 
     // bind clean-up callback when client connection closes
-    client.ref.once('close', this._onLeave.bind(this, client));
+    client.ref['onleave'] = this._onLeave.bind(this, client);
+    client.ref.once('close', client.ref['onleave']);
 
     this.clients.push(client);
 
@@ -617,10 +618,7 @@ export abstract class Room<State= any, Metadata= any> {
     client.ref.removeAllListeners('message');
 
     // prevent "onLeave" from being called twice if player asks to leave
-    const closeListeners: any[] = client.ref.listeners('close');
-    if (closeListeners.length >= 2) {
-      client.ref.removeListener('close', closeListeners[1]);
-    }
+    client.ref.removeListener('close', client.ref['onleave']);
 
     // only effectively close connection when "onLeave" is fulfilled
     this._onLeave(client, closeCode).then(() => client.leave(Protocol.WS_CLOSE_NORMAL));
