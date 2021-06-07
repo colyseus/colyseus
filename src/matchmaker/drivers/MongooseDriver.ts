@@ -58,9 +58,6 @@ export class MongooseDriver implements MatchMakerDriver {
   public findOne(conditions: Partial<IRoomListingData>) {
     return (RoomCache.findOne(conditions, {
       _id: 0,
-      locked: 1,
-      processId: 1,
-      roomId: 1,
     })) as any as QueryHelpers<RoomListingData>;
   }
 
