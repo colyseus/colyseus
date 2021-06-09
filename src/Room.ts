@@ -384,7 +384,7 @@ export abstract class Room<State= any, Metadata= any> {
     ));
   }
 
-  public allowReconnection(previousClient: Client, seconds: number = Infinity): Deferred {
+  public allowReconnection(previousClient: Client, seconds: number = Infinity): Deferred<Client> {
     if (this.internalState === RoomInternalState.DISCONNECTING) {
       this._disposeIfEmpty(); // gracefully shutting down
       throw new Error('disconnecting');
