@@ -266,6 +266,23 @@ export abstract class Room<State= any, Metadata= any> {
     }
   }
 
+  public broadcastPatch() {
+    if (!this._simulationInterval) {
+      this.clock.tick();
+    }
+
+    if (!this.state) {
+      return false;
+    }
+
+    const hasChanges = this._serializer.applyPatches(this.clients, this.state);
+
+    // broadcast messages enqueued for "after patch"
+    this.broadcastAfterPatch();
+
+    return hasChanges;
+  }
+
   public onMessage<T = any>(messageType: '*', callback: (client: Client, type: string | number, message: T) => void);
   public onMessage<T = any>(messageType: string | number, callback: (client: Client, message: T) => void);
   public onMessage<T = any>(messageType: '*' | string | number, callback: (...args: any[]) => void) {
@@ -369,7 +386,7 @@ export abstract class Room<State= any, Metadata= any> {
     ));
   }
 
-  public allowReconnection(previousClient: Client, seconds: number = Infinity): Deferred {
+  public allowReconnection(previousClient: Client, seconds: number = Infinity): Deferred<Client> {
     if (this.internalState === RoomInternalState.DISCONNECTING) {
       this._disposeIfEmpty(); // gracefully shutting down
       throw new Error('disconnecting');
@@ -421,23 +438,6 @@ export abstract class Room<State= any, Metadata= any> {
       this._autoDisposeTimeout = undefined;
       this._disposeIfEmpty();
     }, timeoutInSeconds * 1000);
-  }
-
-  protected broadcastPatch() {
-    if (!this._simulationInterval) {
-      this.clock.tick();
-    }
-
-    if (!this.state) {
-      return false;
-    }
-
-    const hasChanges = this._serializer.applyPatches(this.clients, this.state);
-
-    // broadcast messages enqueued for "after patch"
-    this.broadcastAfterPatch();
-
-    return hasChanges;
   }
 
   private broadcastMessageSchema<T extends Schema>(message: T, options: IBroadcastOptions = {}) {
