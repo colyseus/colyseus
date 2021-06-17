@@ -2,7 +2,7 @@ import WebSocket from 'ws';
 
 import { Schema } from '@colyseus/schema';
 import { getMessageBytes, Protocol } from '../../Protocol';
-import {IBroadcastOptions} from '../../Room';
+import {IBroadcastOptions, Room} from '../../Room';
 import { Client, ClientState, ISendOptions } from '../Transport';
 
 const SEND_OPTS = { binary: true };
@@ -11,8 +11,7 @@ export class WebSocketClient implements Client {
   public sessionId: string;
   public state: ClientState = ClientState.JOINING;
   public _enqueuedMessages: any[] = [];
-  public _afterNextPatchSends: IArguments[] = [];
-  public clients: Client[] = [];
+  public room: Room;
 
   constructor(
     public id: string,
@@ -25,19 +24,9 @@ export class WebSocketClient implements Client {
     //
     // TODO: implement `options.afterNextPatch`
     //
-    const isSchema = (typeof(messageOrType) === 'object');
-    const opts: ISendOptions = ((isSchema) ? messageOrOptions : options);
-
-    if (opts && opts.afterNextPatch) {
-      delete opts.afterNextPatch;
-      this._afterNextPatchSends.push(arguments);
-      return;
-    }
-
-    if (isSchema) {
-      this.sendMessageSchema(messageOrType as Schema, opts);
-    } else {
-      this.sendMessageType(messageOrType as string, messageOrOptions, opts);
+    if (options !== undefined && options.afterNextPatch) {
+      // @ts-ignore
+      this.room['_afterNextPatchBroadcasts'].push(['send', this, arguments]);
     }
 
     this.enqueueRaw(
@@ -46,32 +35,6 @@ export class WebSocketClient implements Client {
         : getMessageBytes[Protocol.ROOM_DATA](messageOrType, messageOrOptions),
       options,
     );
-  }
-
-  private sendMessageSchema<T extends Schema>(message: T, options: IBroadcastOptions = {}) {
-    const encodedMessage = getMessageBytes[Protocol.ROOM_DATA_SCHEMA](message);
-
-    let numClients = this.clients.length;
-    while (numClients--) {
-      const client = this.clients[numClients];
-
-      if (options.except !== client) {
-        client.enqueueRaw(encodedMessage);
-      }
-    }
-  }
-
-  private sendMessageType(type: string, message?: any, options: IBroadcastOptions = {}) {
-    const encodedMessage = getMessageBytes[Protocol.ROOM_DATA](type, message);
-
-    let numClients = this.clients.length;
-    while (numClients--) {
-      const client = this.clients[numClients];
-
-      if (options.except !== client) {
-        client.enqueueRaw(encodedMessage);
-      }
-    }
   }
 
   public enqueueRaw(data: ArrayLike<number>, options?: ISendOptions) {

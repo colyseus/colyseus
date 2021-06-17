@@ -6,6 +6,7 @@ import { Schema, type, Context } from "@colyseus/schema";
 import { matchMaker, Room, Client, Server, ErrorCode } from "../src";
 import { DummyRoom, DRIVERS, timeout, Room3Clients, PRESENCE_IMPLEMENTATIONS, Room2Clients, Room2ClientsExplicitLock } from "./utils";
 import { ServerError } from "../src/errors/ServerError";
+// import {Client} from '../src/transport/WebSocket/WebSocketClient';
 
 import WebSocket from "ws";
 
@@ -600,6 +601,52 @@ describe("Integration", () => {
               assert.ok(onMessageCalled);
               assert.equal(messageReceived.str, "hello!");
             });
+          });
+
+          it("send() afterNextPatch", async () => {
+            enum MessageTypes { REQUEST, RESPONSE }
+
+            const messageToSend = {
+              string: "hello",
+              number: 10,
+              float: Math.PI,
+              array: [1, 2, 3, 4, 5],
+              nested: {
+                string: "hello",
+                number: 10,
+                float: Math.PI,
+              }
+            };
+
+            let onMessageCalled = false;
+            let onMessageReceived = false;
+            let sessionId: string;
+
+            matchMaker.defineRoomType('onmessage', class _ extends Room {
+              onCreate() {
+                this.onMessage(MessageTypes.REQUEST, (client, message) => {
+                  sessionId = client.sessionId;
+                  client.send(MessageTypes.RESPONSE, message, {afterNextPatch: true});
+                  assert.deepEqual(messageToSend, message);
+                  onMessageCalled = true;
+                });
+              }
+            });
+
+            const connection = await client.joinOrCreate('onmessage');
+            connection.send(MessageTypes.REQUEST, messageToSend);
+
+            connection.onMessage(MessageTypes.RESPONSE, (message) => {
+              assert.deepEqual(messageToSend, message);
+              onMessageReceived = true;
+            });
+
+            await timeout(20);
+            await connection.leave();
+
+            assert.equal(sessionId, connection.sessionId);
+            assert.ok(onMessageCalled);
+            assert.ok(onMessageReceived);
           });
 
           describe("lock / unlock", () => {

@@ -68,6 +68,7 @@ export abstract class Room<State= any, Metadata= any> {
 
   /** @internal */
   public _events = new EventEmitter();
+  public _afterNextPatchBroadcasts: IArguments[] = [];
 
   // seat reservation & reconnection
   protected seatReservationTime: number = DEFAULT_SEAT_RESERVATION_TIME;
@@ -79,7 +80,6 @@ export abstract class Room<State= any, Metadata= any> {
   private onMessageHandlers: {[id: string]: (client: Client, message: any) => void} = {};
 
   private _serializer: Serializer<State> = new NoneSerializer();
-  private _afterNextPatchBroadcasts: IArguments[] = [];
 
   private _simulationInterval: NodeJS.Timer;
   private _patchInterval: NodeJS.Timer;
@@ -253,7 +253,9 @@ export abstract class Room<State= any, Metadata= any> {
 
     if (opts && opts.afterNextPatch) {
       delete opts.afterNextPatch;
-      this._afterNextPatchBroadcasts.push(arguments);
+      // this._afterNextPatchBroadcasts.push(arguments);
+      // @ts-ignore
+      this._afterNextPatchBroadcasts.push(['broadcast', arguments]);
       return;
     }
 
@@ -473,7 +475,12 @@ export abstract class Room<State= any, Metadata= any> {
 
     if (length > 0) {
       for (let i = 0; i < length; i++) {
-        this.broadcast.apply(this, this._afterNextPatchBroadcasts[i]);
+        const command = this._afterNextPatchBroadcasts[i];
+        if (command[0] === 'broadcast') {
+          this.broadcast.apply(this, this._afterNextPatchBroadcasts[i]);
+        } else {
+          this.send.apply(this, this._afterNextPatchBroadcasts[i]);
+        }
       }
 
       // new messages may have been added in the meantime,
