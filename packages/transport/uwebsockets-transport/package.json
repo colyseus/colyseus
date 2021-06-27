@@ -1,5 +1,5 @@
 {
-  "name": "@colyseus/uws-transport",
+  "name": "@colyseus/uwebsockets-transport",
   "version": "0.14.0",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -8,7 +8,8 @@
   "dependencies": {
     "@colyseus/core": "^0.14.0",
     "@colyseus/schema": "^1.0.15",
-    "uWebSockets.js": "github:uNetworking/uWebSockets.js#v19.2.0"
+    "uWebSockets.js": "github:uNetworking/uWebSockets.js#v19.2.0",
+    "uwebsockets-express": "^1.0.3"
   },
   "author": "Endel Dreyer",
   "license": "MIT",

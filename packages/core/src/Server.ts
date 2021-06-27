@@ -15,12 +15,12 @@ import { LocalPresence } from './presence/LocalPresence';
 
 import { Transport } from './Transport';
 
-// IServerOptions & 
+// IServerOptions &
 export type ServerOptions = {
   // pingInterval?: number,
   // pingMaxRetries?: number,
   // verifyClient?: WebSocket.VerifyClientCallbackAsync
-  server?: http.Server,
+  // server?: http.Server,
   presence?: Presence,
   driver?: matchMaker.MatchMakerDriver,
   transport?: any,
@@ -57,15 +57,15 @@ export class Server {
   }
 
   public attach(options: ServerOptions) {
-    if (!options.server) { options.server = http.createServer(); }
-    options.server.once('listening', () => this.registerProcessForDiscovery());
-
-    this.attachMatchMakingRoutes(options.server);
-
-    const transportKlass = options.transport || this.getDefaultTransport(options);
+    const transport = options.transport || this.getDefaultTransport(options);
     delete options.transport;
 
-    this.transport = transportKlass;
+    this.transport = transport;
+
+    if (this.transport.server) {
+      this.transport.server.once('listening', () => this.registerProcessForDiscovery());
+      this.attachMatchMakingRoutes(this.transport.server as http.Server);
+    }
   }
 
   /**
@@ -166,7 +166,7 @@ export class Server {
     this.onShutdownCallback = callback;
   }
 
-  protected getDefaultTransport(_: ServerOptions) {
+  protected getDefaultTransport(_: any): Transport {
     throw new Error("Please provide a 'transport' layer. Default transport not set.");
   }
 

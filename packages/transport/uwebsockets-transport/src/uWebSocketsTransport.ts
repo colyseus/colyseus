@@ -14,9 +14,12 @@ export class uWebSocketsTransport extends Transport {
     protected clientWrappers = new WeakMap<uWebSockets.WebSocket, uWebSocketWrapper>();
 
     protected simulateLatencyMs: number;
+    private _listeningSocket: any;
 
     constructor(options: TransportOptions = {}, appOptions: uWebSockets.AppOptions = {}) {
         super();
+
+        this.app.ws
 
         this.app = (appOptions.cert_file_name && appOptions.key_file_name)
             ? uWebSockets.SSLApp(appOptions)
@@ -89,13 +92,17 @@ export class uWebSocketsTransport extends Transport {
     }
 
     public listen(port: number, hostname?: string, backlog?: number, listeningListener?: () => void) {
-        this.app.listen(port, (socket) => listeningListener?.());
+        this.app.listen(port, (listeningSocket: any) => {
+          this._listeningSocket = listeningSocket;
+          listeningListener?.();
+        });
         return this;
     }
 
     public shutdown() {
-        // this.app.close();
-        // this.server.close();
+        if (this._listeningSocket) {
+            uWebSockets.us_listen_socket_close(this._listeningSocket);
+        }
     }
 
     public simulateLatency(milliseconds: number) {
@@ -183,7 +190,7 @@ export class uWebSocketsTransport extends Transport {
             const matchedParams = url.match(allowedRoomNameChars);
             const matchmakeIndex = matchedParams.indexOf(matchmakeRoute);
 
-            // read json body 
+            // read json body
             this.readJson(res, async (clientOptions) => {
 
                 const method = matchedParams[matchmakeIndex + 1];

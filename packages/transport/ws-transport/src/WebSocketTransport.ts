@@ -45,7 +45,7 @@ export class WebSocketTransport extends Transport {
     // this is required to allow the ECONNRESET error to trigger on the `server` instance.
     this.wss.on('error', (err) => debugAndPrintError(err));
 
-    this.server = options.server;
+    this.server = options.server || http.createServer();
 
     if (this.pingIntervalMS > 0 && this.pingMaxRetries > 0) {
       this.server.on('listening', () =>
