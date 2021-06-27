@@ -1,0 +1,44 @@
+{
+  "name": "@colyseus/arena",
+  "version": "0.14.14",
+  "description": "Colyseus Arena Tools",
+  "input": "./src/index.ts",
+  "main": "./build/index.js",
+  "module": "./build/index.mjs",
+  "typings": "./build/index.d.ts",
+  "scripts": {
+    "start": "ts-node-dev example/app-entrypoint.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/colyseus/arena.git"
+  },
+  "keywords": [
+    "colyseus",
+    "arena",
+    "multiplayer"
+  ],
+  "author": "Endel Dreyer",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/colyseus/arena/issues"
+  },
+  "files": [
+    "lib",
+    "bin",
+    "README.md"
+  ],
+  "homepage": "https://www.colyseus.io/arena",
+  "devDependencies": {
+    "@types/cors": "^2.8.10",
+    "@types/dotenv": "^8.2.0",
+    "@types/express": "^4.17.11",
+    "uwebsockets-express": "^1.0.5"
+  },
+  "dependencies": {
+    "@colyseus/core": "^0.14.0",
+    "cors": "^2.8.5",
+    "dotenv": "^8.2.0",
+    "express": "^4.17.1"
+  }
+}
