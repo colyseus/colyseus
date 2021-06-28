@@ -1,5 +1,4 @@
 import { uWebSocketsTransport } from "@colyseus/uwebsockets-transport";
-import expressify from "uwebsockets-express";
 
 import Arena from "../src";
 
@@ -10,12 +9,10 @@ export default Arena({
      * OPTIONAL:
      * - use uWebSockets.js transport
      * - use uWebSockets + Express compatibility layer!
-    getTransport: function () {
-        const transport = new uWebSocketsTransport({});
-        this.initializeExpress(expressify(transport.app));
-        return transport;
-    },
      */
+    initializeTransport: (options) => new uWebSocketsTransport({
+        ...options,
+    }),
 
     initializeExpress: (app) => {
         console.log("custom: initializeExpress()");
