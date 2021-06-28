@@ -19,8 +19,6 @@ export class uWebSocketsTransport extends Transport {
     constructor(options: TransportOptions = {}, appOptions: uWebSockets.AppOptions = {}) {
         super();
 
-        this.app.ws
-
         this.app = (appOptions.cert_file_name && appOptions.key_file_name)
             ? uWebSockets.SSLApp(appOptions)
             : uWebSockets.App(appOptions);
