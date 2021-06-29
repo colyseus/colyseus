@@ -58,16 +58,17 @@ export default function (options: ArenaOptions) {
  * @param options Arena options
  * @param port Port number to bind Colyseus + Express
  */
-export function listen(
+export async function listen(
     options: ArenaOptions,
     port: number = Number(process.env.PORT || 2567)
 ) {
+    const transport = await getTransport(options);
     const gameServer = new Server({
-        transport: getTransport(options),
+        transport,
         // ...?
     });
-    options.initializeGameServer?.(gameServer);
-    options.beforeListen?.();
+    await options.initializeGameServer?.(gameServer);
+    await options.beforeListen?.();
 
     gameServer.listen(port);
 
@@ -78,7 +79,7 @@ export function listen(
 }
 
 
-export function getTransport(options: ArenaOptions) {
+export async function getTransport(options: ArenaOptions) {
     let transport: Transport;
 
     if (!options.initializeTransport) {
@@ -88,7 +89,7 @@ export function getTransport(options: ArenaOptions) {
     let app: express.Express | undefined = express();
     let server = http.createServer(app);
 
-    transport = options.initializeTransport({ server });
+    transport = await options.initializeTransport({ server });
 
     if (options.initializeExpress) {
         // uWebSockets.js + Express compatibility layer.
@@ -111,7 +112,7 @@ export function getTransport(options: ArenaOptions) {
             app.use(cors());
             app.use(express.json());
 
-            options.initializeExpress(app);
+            await options.initializeExpress(app);
             console.info("✅ Express initialized");
         }
     }
