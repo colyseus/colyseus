@@ -16,7 +16,7 @@ export default Arena({
 
     initializeExpress: (app) => {
         console.log("custom: initializeExpress()");
-        app.get("/", (req, res) => res.send("Hello world!"));
+        app.get("/", (req, res) => res.end("Hello world!"));
     },
 
     initializeGameServer: (gameServer) => {
