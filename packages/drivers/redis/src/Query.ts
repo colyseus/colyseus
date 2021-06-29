@@ -1,5 +1,4 @@
-import { QueryHelpers } from '../Driver';
-import { SortOptions } from '../../RegisteredHandler';
+import { QueryHelpers, SortOptions } from '@colyseus/core';
 import { RoomData } from './RoomData';
 
 const DESC_RE = /^$(-1|desc|descending)/i;

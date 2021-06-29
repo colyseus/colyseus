@@ -1,4 +1,4 @@
-import { RoomListingData } from '../Driver';
+import { RoomListingData } from '@colyseus/core';
 import { getRedisClient } from './client';
 
 export class RoomData implements RoomListingData {

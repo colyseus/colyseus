@@ -1,7 +1,7 @@
-import { IRoomListingData, RoomListingData, QueryHelpers, MatchMakerDriver } from "./interfaces";
+import { IRoomListingData, SortOptions, RoomListingData, QueryHelpers, MatchMakerDriver } from "./interfaces";
 
 // re-export
-export { IRoomListingData, RoomListingData, QueryHelpers, MatchMakerDriver };
+export { IRoomListingData, SortOptions, RoomListingData, QueryHelpers, MatchMakerDriver };
 
 import { Query } from './Query';
 import { RoomCache } from './RoomData';
@@ -31,5 +31,5 @@ export class LocalDriver implements MatchMakerDriver {
     return new Query<RoomListingData>(this.rooms, conditions) as any as QueryHelpers<RoomListingData>;
   }
 
-  public quit() {}
+  public shutdown() {}
 }

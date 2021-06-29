@@ -36,5 +36,5 @@ export interface MatchMakerDriver {
 
   findOne(conditions: Partial<IRoomListingData>): QueryHelpers<RoomListingData>;
 
-  quit();
+  shutdown();
 }

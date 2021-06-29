@@ -1,0 +1,31 @@
+{
+  "name": "@colyseus/redis-driver",
+  "version": "0.14.0",
+  "input": "./src/index.ts",
+  "main": "./build/index.js",
+  "module": "./build/index.mjs",
+  "typings": "./build/index.d.ts",
+  "dependencies": {
+    "@colyseus/core": "^0.14.0",
+    "redis": "^2.8.0"
+  },
+  "author": "Endel Dreyer",
+  "license": "MIT",
+  "keywords": [
+    "colyseus",
+    "matchmaking",
+    "driver",
+    "mongoose",
+    "mongodb"
+  ],
+  "files": [
+    "build",
+    "../../LICENSE",
+    "../../README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/colyseus/colyseus.git"
+  },
+  "homepage": "https://colyseus.io/"
+}

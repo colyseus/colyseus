@@ -131,7 +131,7 @@ export class Server {
       this.transport.shutdown();
 
       if (this.driver) {
-        this.driver.quit();
+        this.driver.shutdown();
       }
 
       await this.onShutdownCallback();

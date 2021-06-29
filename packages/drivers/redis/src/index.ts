@@ -1,10 +1,12 @@
 import redis, { RedisClient, ClientOpts } from 'redis';
 import { promisify } from 'util';
+
 import {
   MatchMakerDriver,
   QueryHelpers,
   RoomListingData,
-} from '../Driver';
+} from '@colyseus/core';
+
 import { Query } from './Query';
 import { RoomData } from './RoomData';
 import { setRedisClient } from './client';
@@ -59,7 +61,7 @@ export class RedisDriver implements MatchMakerDriver {
     );
   }
 
-  public quit() {
+  public shutdown() {
     this.client.quit();
   }
 }
