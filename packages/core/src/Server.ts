@@ -17,14 +17,26 @@ import { Transport } from './Transport';
 
 // IServerOptions &
 export type ServerOptions = {
-  // pingInterval?: number,
-  // pingMaxRetries?: number,
-  // verifyClient?: WebSocket.VerifyClientCallbackAsync
-  // server?: http.Server,
   presence?: Presence,
   driver?: matchMaker.MatchMakerDriver,
-  transport?: any,
+  transport?: Transport,
   gracefullyShutdown?: boolean,
+
+  /**
+   * Options below are now part of WebSocketTransport (@colyseus/ws-transport)
+   * TODO: remove me on 0.15.0
+   */
+  /** @deprecated */
+  pingInterval?: number,
+
+  /** @deprecated */
+  pingMaxRetries?: number,
+
+  /** @deprecated */
+  verifyClient?: any,
+
+  /** @deprecated */
+  server?: http.Server,
 };
 
 export class Server {
@@ -58,6 +70,28 @@ export class Server {
   }
 
   public attach(options: ServerOptions) {
+    /**
+     * Display deprecation warnings for moved Transport options.
+     * TODO: Remove me on 0.15
+     */
+    if (
+      options.pingInterval !== undefined ||
+      options.pingMaxRetries !== undefined ||
+      options.server !== undefined ||
+      options.verifyClient !== undefined
+    ) {
+      console.warn("DEPRECATION WARNING: 'pingInterval', 'pingMaxRetries', 'server', and 'verifyClient' Server options will be permanently moved to WebSocketTransport on v0.15");
+      console.warn(`new Server({
+  transport: new WebSocketTransport({
+    pingInterval: ...,
+    pingMaxRetries: ...,
+    server: ...,
+    verifyClient: ...
+  })
+})`);
+      console.warn("👉 Documentation: https://docs.colyseus.io/server/transport/")
+    }
+
     const transport = options.transport || this.getDefaultTransport(options);
     delete options.transport;
 
