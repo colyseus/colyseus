@@ -79,7 +79,7 @@ export async function listen(
     gameServer.listen(port);
 
     const appId = options.getId?.() || "[ Colyseus ]";
-    if (appId) { console.log(`🏟 ${appId}`); }
+    if (appId) { console.log(`🏟  ${appId}`); }
 
     console.log(`⚔️  Listening on ws://localhost:${ port }`);
 }
