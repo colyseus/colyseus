@@ -24,8 +24,9 @@
     "url": "https://github.com/colyseus/arena/issues"
   },
   "files": [
-    "lib",
-    "bin",
+    "build",
+    "LICENSE",
+    "arena-logo.png",
     "README.md"
   ],
   "homepage": "https://www.colyseus.io/arena",
