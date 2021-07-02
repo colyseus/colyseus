@@ -1,6 +1,6 @@
 {
     "name": "colyseus",
-    "version": "0.14.16",
+    "version": "0.14.17",
     "description": "Multiplayer Framework for Node.js.",
     "input": "./src/index.ts",
     "main": "./build/index.js",
@@ -42,4 +42,3 @@
       "@colyseus/mongoose-driver": "^0.14.0"
     }
   }
-  
