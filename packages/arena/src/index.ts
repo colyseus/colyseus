@@ -9,7 +9,7 @@ import { Server, Transport } from "@colyseus/core";
 // try to import uWebSockets-express compatibility layer.
 let uWebSocketsExpressCompatibility: any;
 try { uWebSocketsExpressCompatibility = require('uwebsockets-express').default;
-} catch (e) { console.warn("Couldn't import 'uwebsockets-express'."); }
+} catch (e) {}
 
 /**
  * Do not auto-load `${environment}.env` file when using Arena service.
@@ -23,7 +23,7 @@ if (process.env.NODE_ARENA !== "true") {
 
     if (fs.existsSync(envPath)) {
         dotenv.config({ path: envPath });
-        console.log(`✅  ${envFilename} loaded.`);
+        console.log(`✅ ${envFilename} loaded.`);
 
     } else {
         console.log(`⚠️  ${envFilename} not found.`);
@@ -38,7 +38,13 @@ export interface ArenaOptions {
     beforeListen?: () => void,
 }
 
-const ALLOWED_KEYS: Array<keyof ArenaOptions> = ['getId', 'initializeTransport', 'initializeExpress', 'initializeGameServer', 'beforeListen'];
+const ALLOWED_KEYS: Array<keyof ArenaOptions> = [
+  'getId',
+  'initializeTransport',
+  'initializeExpress',
+  'initializeGameServer',
+  'beforeListen'
+];
 
 export default function (options: ArenaOptions) {
     for (let key in options) {
@@ -73,7 +79,7 @@ export async function listen(
     gameServer.listen(port);
 
     const appId = options.getId?.() || "[ Colyseus ]";
-    if (appId) { console.log(`👉 ${appId}`); }
+    if (appId) { console.log(`🏟 ${appId}`); }
 
     console.log(`⚔️  Listening on ws://localhost:${ port }`);
 }
@@ -103,6 +109,10 @@ export async function getTransport(options: ArenaOptions) {
                 app = uWebSocketsExpressCompatibility(transport['app']);
 
             } else {
+                console.warn("");
+                console.warn("❌ uWebSockets.js + Express compatibility mode couldn't be loaded, run the following command to fix:");
+                console.warn("👉 npm install --save uwebsockets-express");
+                console.warn("");
                 app = undefined;
             }
         }
