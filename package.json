@@ -20,7 +20,7 @@
     "graph": "lerna list --graph",
     "watch": "rollup -c --watch",
     "bump": "lerna version prerelease --force-publish --no-push --no-git-tag-version",
-    "publish-alpha": "lerna publish from-package --dist-tag alpha",
+    "publish-alpha": "lerna publish prerelease --dist-tag alpha",
     "preversion": "npm run build"
   },
   "devDependencies": {

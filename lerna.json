@@ -7,6 +7,9 @@
     "packages/presence/*",
     "packages/serializer/*"
   ],
-  "version": "0.14.17-alpha.4",
+  "version": "independent",
+  "publish": {
+    "message": "chore(release): publish"
+  },
   "hoist": true
 }
