@@ -20,10 +20,7 @@
     "websockets"
   ],
   "files": [
-    "lib",
-    "esm",
-    "../../LICENSE",
-    "../../README.md"
+    "build"
   ],
   "repository": {
     "type": "git",
