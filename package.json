@@ -18,7 +18,8 @@
     "example": "lerna run start --scope @colyseus/example --stream",
     "update-contributors": "all-contributors generate",
     "graph": "lerna list --graph",
-    "watch": "rollup -c --watch"
+    "watch": "rollup -c --watch",
+    "preversion": "npm run build"
   },
   "devDependencies": {
     "@lerna/batch-packages": "^3.16.0",

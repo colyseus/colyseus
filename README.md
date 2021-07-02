@@ -31,6 +31,8 @@ for any kind of project you can think of!
 You're encouraged to take a look on [some games being developed with
 it](https://discuss.colyseus.io/category/5/showcase) and make your own!
 
+> ⭐️ Enjoying Colyseus? Show your support by starring the project on GitHub ⭐️
+
 ## What Colyseus provides to you:
 
 - WebSocket-based communication
