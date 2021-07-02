@@ -7,9 +7,7 @@
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
   "scripts": {
-    "clean": "rimraf build",
-    "test": "TS_NODE_PROJECT=../../tsconfig/tsconfig.test.json COLYSEUS_SEAT_RESERVATION_TIME=0.3 COLYSEUS_PRESENCE_SHORT_TIMEOUT=300 c8 mocha --require ts-node/register test/**Test.ts test/**/**Test.ts --exit --timeout 15000",
-    "prepublishOnly": "npm run clear && npm run build"
+    "test": "TS_NODE_PROJECT=../../tsconfig/tsconfig.test.json COLYSEUS_SEAT_RESERVATION_TIME=0.3 COLYSEUS_PRESENCE_SHORT_TIMEOUT=300 c8 mocha --require ts-node/register test/**Test.ts test/**/**Test.ts --exit --timeout 15000"
   },
   "author": "Endel Dreyer",
   "license": "MIT",
@@ -41,5 +39,5 @@
     "@colyseus/redis-presence": "0.14.17-alpha.2",
     "@colyseus/ws-transport": "0.14.17-alpha.2"
   },
-  "gitHead": "7c11e50966fc2a45eda4f14e85314d33055e1130"
+  "gitHead": "ded39d89cef0045cd670ec6767a309e3ac74f350"
 }
