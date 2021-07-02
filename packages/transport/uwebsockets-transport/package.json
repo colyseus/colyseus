@@ -8,8 +8,7 @@
   "dependencies": {
     "@colyseus/core": "^0.14.17-alpha.5",
     "@colyseus/schema": "^1.0.15",
-    "uWebSockets.js": "github:uNetworking/uWebSockets.js#v19.2.0",
-    "uwebsockets-express": "^1.0.3"
+    "uWebSockets.js": "github:uNetworking/uWebSockets.js#v19.2.0"
   },
   "author": "Endel Dreyer",
   "license": "MIT",
