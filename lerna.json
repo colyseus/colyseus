@@ -7,6 +7,6 @@
     "packages/presence/*",
     "packages/serializer/*"
   ],
-  "version": "0.14.17-alpha.2",
+  "version": "0.14.17-alpha.3",
   "hoist": true
 }

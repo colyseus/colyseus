@@ -19,6 +19,8 @@
     "update-contributors": "all-contributors generate",
     "graph": "lerna list --graph",
     "watch": "rollup -c --watch",
+    "bump": "lerna version prerelease --exact --force-publish --no-push --no-git-tag-version",
+    "publish-alpha": "lerna publish --dist-tag alpha",
     "preversion": "npm run build"
   },
   "devDependencies": {
