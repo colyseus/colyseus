@@ -28,5 +28,8 @@
     "type": "git",
     "url": "git://github.com/colyseus/colyseus.git"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "homepage": "https://colyseus.io/"
 }

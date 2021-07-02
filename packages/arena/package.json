@@ -41,5 +41,8 @@
     "dotenv": "^8.2.0",
     "express": "^4.17.1"
   },
-  "gitHead": "ded39d89cef0045cd670ec6767a309e3ac74f350"
+  "publishConfig": {
+    "access": "public"
+  },
+  "gitHead": "fc05206e638e6ec77ca00b0911ed7647cdaa5cf7"
 }
