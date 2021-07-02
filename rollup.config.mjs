@@ -1,3 +1,4 @@
+import fs from 'fs';
 import path from 'path';
 import util from 'util';
 import { fileURLToPath } from 'url';
@@ -44,6 +45,13 @@ async function main() {
 
     // Absolute path to input file
     const input = path.join(basePath, pkgJSON.input);
+
+    // copy README and LICENSE into package's location.
+    ['README.md', 'LICENSE'].forEach(filename => {
+      const from = path.resolve(__dirname, filename);
+      const to = path.resolve(pkg.location, filename);
+      if (!fs.existsSync(to)) { fs.copyFileSync(from, to); }
+    });
 
     //
     // Here's the individual rollup.config.js for each package
