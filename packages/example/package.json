@@ -1,7 +1,7 @@
 {
   "name": "@colyseus/example",
   "private": true,
-  "version": "0.14.17-alpha.1",
+  "version": "0.14.17-alpha.2",
   "author": "Endel Dreyer",
   "license": "MIT",
   "scripts": {
@@ -9,6 +9,6 @@
   },
   "dependencies": {
     "@colyseus/uws-transport": "^0.14.0",
-    "colyseus": "^0.14.17-alpha.1"
+    "colyseus": "0.14.17-alpha.2"
   }
 }

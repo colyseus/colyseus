@@ -1,6 +1,6 @@
 {
   "name": "colyseus",
-  "version": "0.14.17-alpha.1",
+  "version": "0.14.17-alpha.2",
   "description": "Multiplayer Framework for Node.js.",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -36,9 +36,9 @@
     "node": ">= 12.x"
   },
   "dependencies": {
-    "@colyseus/core": "^0.14.17-alpha.1",
-    "@colyseus/mongoose-driver": "^0.14.17-alpha.1",
-    "@colyseus/redis-presence": "^0.14.17-alpha.1",
-    "@colyseus/ws-transport": "^0.14.17-alpha.1"
+    "@colyseus/core": "0.14.17-alpha.2",
+    "@colyseus/mongoose-driver": "0.14.17-alpha.2",
+    "@colyseus/redis-presence": "0.14.17-alpha.2",
+    "@colyseus/ws-transport": "0.14.17-alpha.2"
   }
 }
