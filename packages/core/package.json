@@ -7,9 +7,7 @@
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
   "scripts": {
-    "clean": "rimraf build",
-    "tslint": "tslint --project . --config ../../tslint.json",
-    "prepublishOnly": "npm run clear && npm run build"
+    "tslint": "tslint --project . --config ../../tslint.json"
   },
   "author": "Endel Dreyer",
   "license": "MIT",
@@ -42,5 +40,6 @@
     "internal-ip": "^4.3.0",
     "nanoid": "^2.0.0",
     "notepack.io": "^2.2.0"
-  }
+  },
+  "gitHead": "7c11e50966fc2a45eda4f14e85314d33055e1130"
 }

@@ -40,5 +40,6 @@
     "@colyseus/mongoose-driver": "0.14.17-alpha.2",
     "@colyseus/redis-presence": "0.14.17-alpha.2",
     "@colyseus/ws-transport": "0.14.17-alpha.2"
-  }
+  },
+  "gitHead": "7c11e50966fc2a45eda4f14e85314d33055e1130"
 }
