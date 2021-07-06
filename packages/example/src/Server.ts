@@ -3,7 +3,7 @@ import cors from "cors";
 import express from "express";
 
 import { Server, RelayRoom, LobbyRoom } from "colyseus";
-import { uWebSocketsTransport } from "@colyseus/uws-transport";
+// import { uWebSocketsTransport } from "@colyseus/uwebsockets-transport";
 
 import { DummyRoom } from "./DummyRoom";
 
@@ -19,7 +19,7 @@ app.use(express.json());
 const server = http.createServer(app);
 
 const gameServer = new Server({
-  transport: new uWebSocketsTransport(),
+  // transport: new uWebSocketsTransport(),
   // engine: WebSocket.Server,
   server: server,
   // presence: new RedisPresence(),

@@ -11,7 +11,7 @@
     "packages/serializer/*"
   ],
   "scripts": {
-    "build": "rollup -c",
+    "build": "rollup -c && lerna run build",
     "clean": "lerna clean",
     "boot": "lerna bootstrap",
     "test": "lerna run test --stream",
@@ -21,7 +21,8 @@
     "watch": "rollup -c --watch",
     "bump": "lerna version prerelease --force-publish --no-push --no-git-tag-version",
     "publish-alpha": "lerna publish prerelease --no-git-tag-version --dist-tag alpha",
-    "preversion": "npm run build"
+    "preversion": "npm run build",
+    "postinstall": "npm run boot"
   },
   "devDependencies": {
     "@lerna/batch-packages": "^3.16.0",

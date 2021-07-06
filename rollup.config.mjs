@@ -1,4 +1,3 @@
-import fs from 'fs';
 import path from 'path';
 import util from 'util';
 import { fileURLToPath } from 'url';
@@ -46,12 +45,11 @@ async function main() {
     // Absolute path to input file
     const input = path.join(basePath, pkgJSON.input);
 
-    // // copy README and LICENSE into package's location.
-    // ['README.md', 'LICENSE'].forEach(filename => {
-    //   const from = path.resolve(__dirname, filename);
-    //   const to = path.resolve(pkg.location, filename);
-    //   if (!fs.existsSync(to)) { fs.copyFileSync(from, to); }
-    // });
+    // Skip rollup build if package has "build" configured.
+    if (pkgJSON.scripts?.build) {
+      console.log(pkgJSON.name, "has custom build! skipping rollup build.");
+      return;
+    }
 
     //
     // Here's the individual rollup.config.js for each package
@@ -82,7 +80,7 @@ async function main() {
         commonJs(),
         typescript({
           rootDir: path.join(basePath, "src"),
-          declarationDir:  path.join(basePath, "build"),
+          declarationDir: path.join(basePath, "build"),
           declaration: true,
           module: "ESNext",
           target: "ESNext",
@@ -94,7 +92,7 @@ async function main() {
 
   console.log("ROLLUP CONFIGS:", util.inspect(configs, false, Infinity, true));
 
-  return configs;
+  return configs.filter(c => c !== undefined);
 }
 
 export default await main();
