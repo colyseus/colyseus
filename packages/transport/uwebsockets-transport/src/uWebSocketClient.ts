@@ -17,7 +17,7 @@ export class uWebSocketClient implements Client {
 
   constructor(
     public id: string,
-    public ref: uWebSocketWrapper, 
+    public ref: uWebSocketWrapper,
   ) {
     this.sessionId = id;
   }
@@ -60,11 +60,12 @@ export class uWebSocketClient implements Client {
   }
 
   public leave(code?: number, data?: string) {
-    if (code) {
-      console.warn(`uWebSockets.js does not allow to customize close code ${code}`);
-    }
+    if (code !== undefined) {
+      this.ref.ws.end(code, data);
 
-    this.ref.ws.close();
+    } else {
+      this.ref.ws.close();
+    }
   }
 
   public close(code?: number, data?: string) {
