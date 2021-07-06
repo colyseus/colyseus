@@ -39,13 +39,18 @@ export class WebSocketTransport extends Transport {
       ? options.pingMaxRetries
       : 2;
 
+    // create server by default
+    if (!options.server && !options.noServer) {
+      options.server = http.createServer();
+    }
+
     this.wss = new WebSocket.Server(options);
     this.wss.on('connection', this.onConnection);
 
     // this is required to allow the ECONNRESET error to trigger on the `server` instance.
     this.wss.on('error', (err) => debugAndPrintError(err));
 
-    this.server = options.server || http.createServer();
+    this.server = options.server;
 
     if (this.pingIntervalMS > 0 && this.pingMaxRetries > 0) {
       this.server.on('listening', () =>
