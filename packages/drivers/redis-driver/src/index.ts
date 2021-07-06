@@ -15,7 +15,8 @@ export class RedisDriver implements MatchMakerDriver {
   protected readonly client: RedisClient;
   private readonly hgetall: (key: string) => Promise<{ [key: string]: string }>;
 
-  constructor(options: ClientOpts, key: string = 'roomcaches') {
+  constructor(options?: ClientOpts, key: string = 'roomcaches') {
+    console.log(">> NEW REDIS DRIVER");
     this.client = redis.createClient(options);
     this.hgetall = promisify(this.client.hgetall).bind(this.client);
 
@@ -62,6 +63,7 @@ export class RedisDriver implements MatchMakerDriver {
   }
 
   public shutdown() {
+    console.log(">>> SHUTDOWN REDIS CLIENT")
     this.client.quit();
   }
 }

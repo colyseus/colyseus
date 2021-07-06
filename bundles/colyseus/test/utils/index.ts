@@ -4,7 +4,8 @@ import { EventEmitter } from "events";
 
 import { Server, ServerOptions, Room, matchMaker, LocalDriver, ClientState, LocalPresence, Presence, Client, Deferred } from "@colyseus/core";
 import { RedisPresence } from "@colyseus/redis-presence";
-import { MongooseDriver } from "@colyseus/mongoose-driver";
+import { RedisDriver } from "../../../../packages/drivers/redis-driver/build";
+import { MongooseDriver } from "../../../../packages/drivers/mongoose-driver/build";
 
 import { WebSocketTransport, TransportOptions } from '@colyseus/ws-transport';
 Server.prototype['getDefaultTransport'] = function (options: ServerOptions) {
@@ -20,12 +21,13 @@ Server.prototype['getDefaultTransport'] = function (options: ServerOptions) {
 
 export const DRIVERS = [
   new LocalDriver(),
-  new MongooseDriver('mongodb://127.0.0.1:27017/colyseus_test'),
+  // new RedisDriver(),
+  // new MongooseDriver('mongodb://127.0.0.1:27017/colyseus_test'),
 ];
 
 export const PRESENCE_IMPLEMENTATIONS: Presence[] = [
   new LocalPresence(),
-  new RedisPresence()
+  // new RedisPresence()
 ];
 
 export class RawClient extends EventEmitter {

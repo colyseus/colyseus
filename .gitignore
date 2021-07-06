@@ -8,3 +8,4 @@ build/
 .nyc_output
 coverage
 esm
+dump.rdb

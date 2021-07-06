@@ -9,8 +9,7 @@
   "scripts": {
     "start": "ts-node example/Server",
     "build": "webpack --env.production",
-    "prepublishOnly": "tsc && npm run build",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "prepublishOnly": "tsc && npm run build"
   },
   "repository": {
     "type": "git",
