@@ -2,6 +2,7 @@ import redis, { RedisClient, ClientOpts } from 'redis';
 import { promisify } from 'util';
 
 import {
+  IRoomListingData,
   MatchMakerDriver,
   QueryHelpers,
   RoomListingData,
@@ -9,65 +10,54 @@ import {
 
 import { Query } from './Query';
 import { RoomData } from './RoomData';
-import { setRedisClient } from './client';
 
 export class RedisDriver implements MatchMakerDriver {
-  protected readonly client: RedisClient;
+  private readonly _client: RedisClient;
   private readonly hgetall: (key: string) => Promise<{ [key: string]: string }>;
 
   constructor(options?: ClientOpts, key: string = 'roomcaches') {
-    console.log(">> NEW REDIS DRIVER");
-    this.client = redis.createClient(options);
-    this.hgetall = promisify(this.client.hgetall).bind(this.client);
-
-    setRedisClient(this.client);
+    this._client = redis.createClient(options);
+    this.hgetall = promisify(this._client.hgetall).bind(this._client);
   }
 
   public createInstance(initialValues: any = {}) {
-    return new RoomData(initialValues);
+    return new RoomData(initialValues, this._client);
   }
 
   public async find(conditions: any) {
-    return this.rooms.then((rooms) =>
-      rooms.filter((room) => {
-        if (!room.roomId) {
+    const rooms = await this.getRooms();
+    return rooms.filter((room) => {
+      if (!room.roomId) {
+        return false;
+      }
+
+      for (const field in conditions) {
+        if (
+          conditions.hasOwnProperty(field) &&
+          room[field] !== conditions[field]
+        ) {
           return false;
         }
-
-        for (const field in conditions) {
-          if (
-            conditions.hasOwnProperty(field) &&
-            room[field] !== conditions[field]
-          ) {
-            return false;
-          }
-        }
-        return true;
-      })
-    );
+      }
+      return true;
+    });
   }
 
-  public findOne(conditions: any) {
-    return (new Query<RoomListingData>(
-      this.rooms,
-      conditions
-    ) as any) as QueryHelpers<RoomListingData>;
+  public findOne(conditions: Partial<IRoomListingData>): QueryHelpers<RoomListingData> {
+    return (new Query<RoomListingData>(this.getRooms(), conditions) as any) as QueryHelpers<RoomListingData>;
   }
 
-  public get rooms() {
-    return this.hgetall('roomcaches').then((data) =>
-      Object.entries(data ?? []).map(
-        ([, room]) => new RoomData(JSON.parse(room))
-      )
+  public async getRooms() {
+    return Object.entries(await this.hgetall('roomcaches') ?? []).map(
+      ([, roomcache]) => new RoomData(JSON.parse(roomcache), this._client)
     );
   }
 
   public clear() {
-    this.client.del('roomcaches');
+    this._client.del('roomcaches');
   }
 
   public shutdown() {
-    console.log(">>> SHUTDOWN REDIS CLIENT")
-    this.client.quit();
+    this._client.quit();
   }
 }

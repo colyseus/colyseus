@@ -617,12 +617,8 @@ describe("Integration", () => {
               assert.strictEqual(2, room.clients.length);
               assert.strictEqual(true, room.locked);
 
-              console.log("ROOM, locked??, ", room.locked);
-
-              console.log("WILL QUERY...");
-              const roomListing = (await matchMaker.query({}))[0];
-              console.log("GOT:", roomListing);
-              assert.strictEqual(true, roomListing.locked);
+              const roomListing = (await matchMaker.query({ name: "room2" }));
+              assert.strictEqual(true, roomListing[0].locked);
 
               conn1.leave();
               conn2.leave();

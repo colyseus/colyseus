@@ -5,46 +5,46 @@ import { DummyRoom, Room2Clients, createDummyClient, timeout, ReconnectRoom, Roo
 const DEFAULT_SEAT_RESERVATION_TIME = Number(process.env.COLYSEUS_SEAT_RESERVATION_TIME);
 
 describe("MatchMaker", () => {
-
-  /**
-   * register room types
-   */
-  before(async () => {
-    matchMaker.defineRoomType("empty", DummyRoom);
-    matchMaker.defineRoomType("dummy", DummyRoom);
-    matchMaker.defineRoomType("room2", Room2Clients);
-    matchMaker.defineRoomType("room3", Room3Clients);
-    matchMaker.defineRoomType("reconnect", ReconnectRoom);
-    matchMaker.defineRoomType("reconnect_token", ReconnectTokenRoom);
-
-    matchMaker
-      .defineRoomType("room2_filtered", Room2Clients)
-      .filterBy(['mode']);
-
-    matchMaker
-      .defineRoomType("room3_sorted_desc", Room3Clients)
-      .filterBy(['clients'])
-      .sortBy({ clients: -1 });
-
-    matchMaker
-      .defineRoomType("room3_sorted_asc", Room3Clients)
-      .filterBy(['clients'])
-      .sortBy({ clients: 1 });
-
-    /**
-     * give some time for `cleanupStaleRooms()` to run
-     */
-    await timeout(50);
-  });
-
   for (let i = 0; i < DRIVERS.length; i++) {
-    const driver = new DRIVERS[i]();
+    describe(`Driver: ${DRIVERS[i].name}`, () => {
 
-    describe(`Driver: ${driver.constructor.name}`, () => {
       /**
        * `setup` matchmaker to re-set graceful shutdown status
        */
-      beforeEach(() => matchMaker.setup(undefined, driver, 'dummyProcessId'));
+      beforeEach(() => matchMaker.setup(undefined, new DRIVERS[i](), 'dummyProcessId'));
+
+      /**
+       * register room types
+       */
+      before(async () => {
+        matchMaker.setup(undefined, new DRIVERS[i](), 'dummyProcessId');
+
+        matchMaker.defineRoomType("empty", DummyRoom);
+        matchMaker.defineRoomType("dummy", DummyRoom);
+        matchMaker.defineRoomType("room2", Room2Clients);
+        matchMaker.defineRoomType("room3", Room3Clients);
+        matchMaker.defineRoomType("reconnect", ReconnectRoom);
+        matchMaker.defineRoomType("reconnect_token", ReconnectTokenRoom);
+
+        matchMaker
+          .defineRoomType("room2_filtered", Room2Clients)
+          .filterBy(['mode']);
+
+        matchMaker
+          .defineRoomType("room3_sorted_desc", Room3Clients)
+          .filterBy(['clients'])
+          .sortBy({ clients: -1 });
+
+        matchMaker
+          .defineRoomType("room3_sorted_asc", Room3Clients)
+          .filterBy(['clients'])
+          .sortBy({ clients: 1 });
+
+        /**
+         * give some time for `cleanupStaleRooms()` to run
+         */
+        await timeout(50);
+      });
 
       /**
        * ensure no rooms are avaialble in-between tests
@@ -145,69 +145,75 @@ describe("MatchMaker", () => {
         });
 
         it("sortBy(): sort desc by 'clients' field", async () => {
-          const room1 = await matchMaker.createRoom("room3_sorted_desc", {});
-          const room2 = await matchMaker.createRoom("room3_sorted_desc", {});
-          const room3 = await matchMaker.createRoom("room3_sorted_desc", {});
+          await matchMaker.createRoom("room3_sorted_desc", { roomId: "aaa" });
+          await matchMaker.createRoom("room3_sorted_desc", { roomId: "bbb" });
+          await matchMaker.createRoom("room3_sorted_desc", { roomId: "ccc" });
+
+          // The RedisDriver do not rely on insertion order when querying for rooms.
+          const roomsCachedOrder = await matchMaker.query({});
 
           const reservedSeat1 = await matchMaker.join("room3_sorted_desc");
-          assert.strictEqual(room1.roomId, reservedSeat1.room.roomId);
+          assert.strictEqual(roomsCachedOrder[0].roomId, reservedSeat1.room.roomId);
 
           const reservedSeat2 = await matchMaker.join("room3_sorted_desc");
-          assert.strictEqual(room1.roomId, reservedSeat2.room.roomId);
+          assert.strictEqual(roomsCachedOrder[0].roomId, reservedSeat2.room.roomId);
 
           const reservedSeat3 = await matchMaker.join("room3_sorted_desc");
-          assert.strictEqual(room1.roomId, reservedSeat3.room.roomId);
+          assert.strictEqual(roomsCachedOrder[0].roomId, reservedSeat3.room.roomId);
 
           const reservedSeat4 = await matchMaker.join("room3_sorted_desc");
-          assert.strictEqual(room2.roomId, reservedSeat4.room.roomId);
+          assert.strictEqual(roomsCachedOrder[1].roomId, reservedSeat4.room.roomId);
 
           const reservedSeat5 = await matchMaker.join("room3_sorted_desc");
-          assert.strictEqual(room2.roomId, reservedSeat5.room.roomId);
+          assert.strictEqual(roomsCachedOrder[1].roomId, reservedSeat5.room.roomId);
 
           const reservedSeat6 = await matchMaker.join("room3_sorted_desc");
-          assert.strictEqual(room2.roomId, reservedSeat6.room.roomId);
+          assert.strictEqual(roomsCachedOrder[1].roomId, reservedSeat6.room.roomId);
 
           const reservedSeat7 = await matchMaker.join("room3_sorted_desc");
-          assert.strictEqual(room3.roomId, reservedSeat7.room.roomId);
+          assert.strictEqual(roomsCachedOrder[2].roomId, reservedSeat7.room.roomId);
 
           const reservedSeat8 = await matchMaker.join("room3_sorted_desc");
-          assert.strictEqual(room3.roomId, reservedSeat8.room.roomId);
+          assert.strictEqual(roomsCachedOrder[2].roomId, reservedSeat8.room.roomId);
 
           const reservedSeat9 = await matchMaker.join("room3_sorted_desc");
-          assert.strictEqual(room3.roomId, reservedSeat9.room.roomId);
+          assert.strictEqual(roomsCachedOrder[2].roomId, reservedSeat9.room.roomId);
         });
 
         it("sortBy(): sort asc by 'clients' field", async () => {
-          const room1 = await matchMaker.createRoom("room3_sorted_asc", {});
-          const room2 = await matchMaker.createRoom("room3_sorted_asc", {});
-          const room3 = await matchMaker.createRoom("room3_sorted_asc", {});
+          await matchMaker.createRoom("room3_sorted_asc", { roomId: "aaa" });
+          await matchMaker.createRoom("room3_sorted_asc", { roomId: "bbb" });
+          await matchMaker.createRoom("room3_sorted_asc", { roomId: "ccc" });
+
+          // The RedisDriver do not rely on insertion order when querying for rooms.
+          const roomsCachedOrder = await matchMaker.query({});
 
           const reservedSeat1 = await matchMaker.join("room3_sorted_asc");
-          assert.strictEqual(room1.roomId, reservedSeat1.room.roomId);
+          assert.strictEqual(roomsCachedOrder[0].roomId, reservedSeat1.room.roomId);
 
           const reservedSeat2 = await matchMaker.join("room3_sorted_asc");
-          assert.strictEqual(room2.roomId, reservedSeat2.room.roomId);
+          assert.strictEqual(roomsCachedOrder[1].roomId, reservedSeat2.room.roomId);
 
           const reservedSeat3 = await matchMaker.join("room3_sorted_asc");
-          assert.strictEqual(room3.roomId, reservedSeat3.room.roomId);
+          assert.strictEqual(roomsCachedOrder[2].roomId, reservedSeat3.room.roomId);
 
           const reservedSeat4 = await matchMaker.join("room3_sorted_asc");
-          assert.strictEqual(room1.roomId, reservedSeat4.room.roomId);
+          assert.strictEqual(roomsCachedOrder[0].roomId, reservedSeat4.room.roomId);
 
           const reservedSeat5 = await matchMaker.join("room3_sorted_asc");
-          assert.strictEqual(room2.roomId, reservedSeat5.room.roomId);
+          assert.strictEqual(roomsCachedOrder[1].roomId, reservedSeat5.room.roomId);
 
           const reservedSeat6 = await matchMaker.join("room3_sorted_asc");
-          assert.strictEqual(room3.roomId, reservedSeat6.room.roomId);
+          assert.strictEqual(roomsCachedOrder[2].roomId, reservedSeat6.room.roomId);
 
           const reservedSeat7 = await matchMaker.join("room3_sorted_asc");
-          assert.strictEqual(room1.roomId, reservedSeat7.room.roomId);
+          assert.strictEqual(roomsCachedOrder[0].roomId, reservedSeat7.room.roomId);
 
           const reservedSeat8 = await matchMaker.join("room3_sorted_asc");
-          assert.strictEqual(room2.roomId, reservedSeat8.room.roomId);
+          assert.strictEqual(roomsCachedOrder[1].roomId, reservedSeat8.room.roomId);
 
           const reservedSeat9 = await matchMaker.join("room3_sorted_asc");
-          assert.strictEqual(room3.roomId, reservedSeat9.room.roomId);
+          assert.strictEqual(roomsCachedOrder[2].roomId, reservedSeat9.room.roomId);
         });
       });
 
@@ -401,7 +407,7 @@ describe("MatchMaker", () => {
       });
 
       it("should automatically lock rooms", async () => {
-        await matchMaker.joinOrCreate("room3");
+        const _firstRoom = await matchMaker.joinOrCreate("room3");
         await matchMaker.joinOrCreate("room3");
         await matchMaker.joinOrCreate("room3");
 
@@ -410,13 +416,16 @@ describe("MatchMaker", () => {
         assert.strictEqual(3, rooms[0].clients);
         assert.strictEqual(true, rooms[0].locked);
 
-        await matchMaker.joinOrCreate("room3");
+        const _secondRoom = await matchMaker.joinOrCreate("room3");
         rooms = await matchMaker.query({});
+
+        const firstRoom = rooms.find((r) => r.roomId === _firstRoom.room.roomId);
+        const secondRoom = rooms.find((r) => r.roomId === _secondRoom.room.roomId);
         assert.strictEqual(2, rooms.length);
-        assert.strictEqual(3, rooms[0].clients);
-        assert.strictEqual(1, rooms[1].clients);
-        assert.strictEqual(true, rooms[0].locked);
-        assert.strictEqual(false, rooms[1].locked);
+        assert.strictEqual(3, firstRoom.clients);
+        assert.strictEqual(1, secondRoom.clients);
+        assert.strictEqual(true, firstRoom.locked);
+        assert.strictEqual(false, secondRoom.locked);
       });
 
       it("should allow to manually lock rooms", async () => {

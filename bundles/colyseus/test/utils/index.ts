@@ -118,7 +118,8 @@ export function timeout(ms: number = 200) {
 }
 
 export class DummyRoom extends Room {
-  onCreate() {
+  onCreate(options: any) {
+    if (options.roomId) { this.roomId = options.roomId; }
     this.onMessage("*", (_, type, message) => {
       this.broadcast(type, message);
     });
@@ -131,7 +132,8 @@ export class DummyRoom extends Room {
 export class Room2Clients extends Room {
   maxClients = 2;
 
-  onCreate() {
+  onCreate(options: any) {
+    if (options.roomId) { this.roomId = options.roomId; }
     this.onMessage("*", (_, type, message) => {
       this.broadcast(type, message);
     });
@@ -144,7 +146,8 @@ export class Room2Clients extends Room {
 export class Room2ClientsExplicitLock extends Room {
   maxClients = 2;
 
-  onCreate() {
+  onCreate(options: any) {
+    if (options.roomId) { this.roomId = options.roomId; }
     this.onMessage("lock", () => this.lock());
   }
   onDispose() { }
@@ -155,7 +158,8 @@ export class Room2ClientsExplicitLock extends Room {
 export class Room3Clients extends Room {
   maxClients = 3;
 
-  onCreate() {
+  onCreate(options: any) {
+    if (options.roomId) { this.roomId = options.roomId; }
     this.onMessage("*", (_, type, message) => {
       this.broadcast(type, message);
     });
@@ -169,7 +173,8 @@ export class Room3Clients extends Room {
 export class ReconnectRoom extends Room {
   maxClients = 4;
 
-  onCreate() {
+  onCreate(options: any) {
+    if (options.roomId) { this.roomId = options.roomId; }
     this.onMessage("*", (_, type, message) => {
       this.broadcast(type, message);
     });
@@ -192,7 +197,8 @@ export class ReconnectTokenRoom extends Room {
   maxClients = 4;
   token: Deferred;
 
-  onCreate() {
+  onCreate(options: any) {
+    if (options.roomId) { this.roomId = options.roomId; }
     this.setState({})
   }
   onDispose() { }

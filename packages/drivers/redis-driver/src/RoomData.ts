@@ -1,5 +1,5 @@
 import { RoomListingData } from '@colyseus/core';
-import { getRedisClient } from './client';
+import { RedisClient } from 'redis';
 
 export class RoomData implements RoomListingData {
   public clients: number = 0;
@@ -13,7 +13,14 @@ export class RoomData implements RoomListingData {
   public createdAt: Date;
   public unlisted: boolean = false;
 
-  constructor(initialValues: any) {
+  #client: RedisClient;
+
+  constructor(
+    initialValues: any,
+    client: RedisClient
+  ) {
+    this.#client = client;
+
     this.createdAt = initialValues.createdAt
       ? new Date(initialValues.createdAt)
       : new Date();
@@ -39,7 +46,17 @@ export class RoomData implements RoomListingData {
 
   public async save() {
     if (this.roomId) {
-      await this.hset('roomcaches', this.roomId, JSON.stringify(this));
+      // FIXME: workaround so JSON.stringify() stringifies all dynamic fields.
+      const toJSON = this.toJSON;
+      this.toJSON = undefined;
+
+      const roomcache = JSON.stringify(this);
+      this.toJSON = toJSON;
+
+      await this.hset('roomcaches', this.roomId, roomcache);
+
+    } else {
+      console.warn("⚠️ RedisDriver: can't .save() without a `roomId`")
     }
   }
 
@@ -71,7 +88,7 @@ export class RoomData implements RoomListingData {
 
   private hset(key: string, field: string, value: string) {
     return new Promise((resolve, reject) => {
-      getRedisClient().hset(key, field, value, function (err, res) {
+      this.#client.hset(key, field, value, function (err, res) {
         if (err) {
           return reject(err);
         }
@@ -82,7 +99,7 @@ export class RoomData implements RoomListingData {
 
   private hdel(key: string, field: string) {
     return new Promise((resolve, reject) => {
-      getRedisClient().hdel(key, field, function (err, res) {
+      this.#client.hdel(key, field, function (err, res) {
         if (err) {
           return reject(err);
         }

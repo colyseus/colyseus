@@ -1,14 +1,12 @@
 import { QueryHelpers, SortOptions } from '@colyseus/core';
 import { RoomData } from './RoomData';
 
-const DESC_RE = /^$(-1|desc|descending)/i;
-
 export class Query<T> implements QueryHelpers<T> {
-  private readonly rooms: Promise<RoomData[]>;
+  private readonly rooms: Promise<T[]>;
   private conditions: any;
   protected order: Map<string, 1 | -1> = new Map();
 
-  constructor(rooms: Promise<RoomData[]>, conditions) {
+  constructor(rooms: Promise<T[]>, conditions) {
     this.conditions = conditions;
     this.rooms = rooms;
   }
@@ -19,11 +17,12 @@ export class Query<T> implements QueryHelpers<T> {
     const fields = Object.entries(options);
 
     if (fields.length) {
-      for (let [field, direction] of fields) {
-        if (DESC_RE.test(String(direction))) {
-          this.order.set(field, -1);
-        } else {
+      for (const [field, direction] of fields) {
+        if (direction === 1 || direction === 'asc' || direction === 'ascending') {
           this.order.set(field, 1);
+
+        } else {
+          this.order.set(field, -1);
         }
       }
     }
@@ -31,38 +30,38 @@ export class Query<T> implements QueryHelpers<T> {
     return this;
   }
 
-  public then(resolve: any, reject: (reason?: any) => void) {
-    return this.rooms
-      .then((rooms) => {
-        if (this.order.size) {
-          rooms.sort((room1, room2) => {
-            for (let [field, dir] of this.order) {
-              if (dir === 1) {
-                if (room1[field] > room2[field]) return 1;
-                if (room1[field] < room2[field]) return -1;
-              } else {
-                if (room1[field] > room2[field]) return -1;
-                if (room1[field] < room2[field]) return 1;
-              }
-            }
-          });
-        }
 
-        let conditions = Object.entries(this.conditions);
-        let withConditions = conditions.length > 0;
+  public then(resolve, reject) {
+    return this.rooms.then(rooms => {
 
-        return rooms.find((room) => {
-          if (withConditions) {
-            for (let [field, value] of conditions) {
-              if (room[field] !== value) {
-                return false;
-              }
+      if (this.order.size) {
+        rooms.sort((room1, room2) => {
+          for (const [field, direction] of this.order) {
+            if (direction === 1) {
+              if (room1[field] > room2[field]) return 1;
+              if (room1[field] < room2[field]) return -1;
+            } else {
+              if (room1[field] > room2[field]) return -1;
+              if (room1[field] < room2[field]) return 1;
             }
           }
-
-          return true;
         });
-      })
-      .then(resolve, reject) as any;
+      }
+
+      let conditions = Object.entries(this.conditions);
+      let withConditions = conditions.length > 0;
+
+      return resolve(rooms.find((room) => {
+        if (withConditions) {
+          for (let [field, value] of conditions) {
+            if (room[field] !== value) {
+              return false;
+            }
+          }
+        }
+
+        return true;
+      }));
+    })
   }
 }

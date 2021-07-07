@@ -1,9 +1,9 @@
 import assert from "assert";
-import { IRoomListingData, MatchMakerDriver } from "../src";
+import { generateId, IRoomListingData, MatchMakerDriver } from "../src";
 
 import { DRIVERS } from "./utils";
 
-describe("Driver", () => {
+describe("Driver implementations", () => {
   for (let i = 0; i < DRIVERS.length; i++) {
     let driver: MatchMakerDriver;
 
@@ -24,12 +24,12 @@ describe("Driver", () => {
       }
 
       it("createInstance, save, find", async () => {
-        const cache = await createAndSave({ name: "one", locked: false, clients: 0, maxClients: 2 });
+        const cache = await createAndSave({ roomId: generateId(), name: "one", locked: false, clients: 0, maxClients: 2 });
         assert.strictEqual(0, cache.clients);
         assert.strictEqual(false, cache.locked);
         assert.strictEqual(2, cache.maxClients);
 
-        const entries = await driver.find({name: "one"});
+        const entries = await driver.find({ name: "one" });
         const cachedEntry = entries[0];
         assert.strictEqual(1, entries.length);
         assert.strictEqual(0, cachedEntry.clients);
@@ -38,10 +38,10 @@ describe("Driver", () => {
       });
 
       it("find / findOne", async () => {
-        await createAndSave({ name: "one", locked: false, clients: 1, maxClients: 2, });
-        await createAndSave({ name: "one", locked: true, clients: 2, maxClients: 2, });
-        await createAndSave({ name: "one", locked: false, clients: 3, maxClients: 4, });
-        const lastEntry = await createAndSave({ name: "one", locked: true, clients: 4, maxClients: 4, });
+        await createAndSave({ roomId: generateId(), name: "one", locked: false, clients: 1, maxClients: 2, });
+        await createAndSave({ roomId: generateId(), name: "one", locked: true, clients: 2, maxClients: 2, });
+        await createAndSave({ roomId: generateId(), name: "one", locked: false, clients: 3, maxClients: 4, });
+        const lastEntry = await createAndSave({ roomId: generateId(), name: "one", locked: true, clients: 4, maxClients: 4, });
 
         const entries = await driver.find({});
         assert.strictEqual(4, entries.length);
