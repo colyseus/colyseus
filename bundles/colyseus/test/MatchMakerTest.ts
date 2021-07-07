@@ -38,7 +38,7 @@ describe("MatchMaker", () => {
   });
 
   for (let i = 0; i < DRIVERS.length; i++) {
-    const driver = DRIVERS[i];
+    const driver = new DRIVERS[i]();
 
     describe(`Driver: ${driver.constructor.name}`, () => {
       /**
@@ -67,7 +67,7 @@ describe("MatchMaker", () => {
           await room.setPrivate();
 
           const reservedSeat2 = await matchMaker.joinOrCreate("dummy");
-          assert.notEqual(reservedSeat2.room.roomId, reservedSeat.room.roomId, "should not join a private room");
+          assert.notStrictEqual(reservedSeat2.room.roomId, reservedSeat.room.roomId, "should not join a private room");
         });
 
         it("joinOrCreate() should not find locked rooms", async () => {
@@ -77,7 +77,7 @@ describe("MatchMaker", () => {
           await room.lock();
 
           const reservedSeat2 = await matchMaker.joinOrCreate("dummy");
-          assert.notEqual(reservedSeat2.room.roomId, reservedSeat.room.roomId, "should not join a locked room");
+          assert.notStrictEqual(reservedSeat2.room.roomId, reservedSeat.room.roomId, "should not join a locked room");
         });
 
         it("join() should fail if room doesn't exist", async () => {
@@ -90,7 +90,7 @@ describe("MatchMaker", () => {
           const reservedSeat2 = await matchMaker.join("dummy");
           const room = matchMaker.getRoomById(reservedSeat2.room.roomId);
 
-          assert.equal(reservedSeat1.room.roomId, reservedSeat2.room.roomId);
+          assert.strictEqual(reservedSeat1.room.roomId, reservedSeat2.room.roomId);
           assert.ok(room.hasReservedSeat(reservedSeat2.sessionId));
         });
 
@@ -99,7 +99,7 @@ describe("MatchMaker", () => {
           const reservedSeat2 = await matchMaker.create("dummy");
           const room = matchMaker.getRoomById(reservedSeat2.room.roomId);
 
-          assert.notEqual(reservedSeat1.room.roomId, reservedSeat2.room.roomId);
+          assert.notStrictEqual(reservedSeat1.room.roomId, reservedSeat2.room.roomId);
           assert.ok(reservedSeat2.room.roomId);
           assert.ok(room.hasReservedSeat(reservedSeat2.sessionId));
         });
@@ -109,7 +109,7 @@ describe("MatchMaker", () => {
           const reservedSeat2 = await matchMaker.joinById(reservedSeat1.room.roomId);
           const room = matchMaker.getRoomById(reservedSeat2.room.roomId);
 
-          assert.equal(reservedSeat1.room.roomId, reservedSeat2.room.roomId);
+          assert.strictEqual(reservedSeat1.room.roomId, reservedSeat2.room.roomId);
           assert.ok(room.hasReservedSeat(reservedSeat2.sessionId));
         });
 
@@ -125,7 +125,7 @@ describe("MatchMaker", () => {
           await room.setPrivate();
 
           const reservedSeat2 = await matchMaker.joinById(reservedSeat1.room.roomId)
-          assert.equal(reservedSeat1.room.roomId, reservedSeat2.room.roomId);
+          assert.strictEqual(reservedSeat1.room.roomId, reservedSeat2.room.roomId);
         });
 
         it("should throw error trying to create a room not defined", async () => {
@@ -136,12 +136,12 @@ describe("MatchMaker", () => {
         it("filterBy(): filter by 'mode' field", async () => {
           const reservedSeat1 = await matchMaker.joinOrCreate("room2_filtered", { mode: "squad" });
           const reservedSeat2 = await matchMaker.joinOrCreate("room2_filtered", { mode: "duo" });
-          assert.notEqual(reservedSeat1.room.roomId, reservedSeat2.room.roomId);
+          assert.notStrictEqual(reservedSeat1.room.roomId, reservedSeat2.room.roomId);
 
           const reservedSeat3 = await matchMaker.joinOrCreate("room2_filtered", { mode: "squad" });
           const reservedSeat4 = await matchMaker.joinOrCreate("room2_filtered", { mode: "duo" });
-          assert.equal(reservedSeat1.room.roomId, reservedSeat3.room.roomId);
-          assert.equal(reservedSeat2.room.roomId, reservedSeat4.room.roomId);
+          assert.strictEqual(reservedSeat1.room.roomId, reservedSeat3.room.roomId);
+          assert.strictEqual(reservedSeat2.room.roomId, reservedSeat4.room.roomId);
         });
 
         it("sortBy(): sort desc by 'clients' field", async () => {
@@ -150,31 +150,31 @@ describe("MatchMaker", () => {
           const room3 = await matchMaker.createRoom("room3_sorted_desc", {});
 
           const reservedSeat1 = await matchMaker.join("room3_sorted_desc");
-          assert.equal(room1.roomId, reservedSeat1.room.roomId);
+          assert.strictEqual(room1.roomId, reservedSeat1.room.roomId);
 
           const reservedSeat2 = await matchMaker.join("room3_sorted_desc");
-          assert.equal(room1.roomId, reservedSeat2.room.roomId);
+          assert.strictEqual(room1.roomId, reservedSeat2.room.roomId);
 
           const reservedSeat3 = await matchMaker.join("room3_sorted_desc");
-          assert.equal(room1.roomId, reservedSeat3.room.roomId);
+          assert.strictEqual(room1.roomId, reservedSeat3.room.roomId);
 
           const reservedSeat4 = await matchMaker.join("room3_sorted_desc");
-          assert.equal(room2.roomId, reservedSeat4.room.roomId);
+          assert.strictEqual(room2.roomId, reservedSeat4.room.roomId);
 
           const reservedSeat5 = await matchMaker.join("room3_sorted_desc");
-          assert.equal(room2.roomId, reservedSeat5.room.roomId);
+          assert.strictEqual(room2.roomId, reservedSeat5.room.roomId);
 
           const reservedSeat6 = await matchMaker.join("room3_sorted_desc");
-          assert.equal(room2.roomId, reservedSeat6.room.roomId);
+          assert.strictEqual(room2.roomId, reservedSeat6.room.roomId);
 
           const reservedSeat7 = await matchMaker.join("room3_sorted_desc");
-          assert.equal(room3.roomId, reservedSeat7.room.roomId);
+          assert.strictEqual(room3.roomId, reservedSeat7.room.roomId);
 
           const reservedSeat8 = await matchMaker.join("room3_sorted_desc");
-          assert.equal(room3.roomId, reservedSeat8.room.roomId);
+          assert.strictEqual(room3.roomId, reservedSeat8.room.roomId);
 
           const reservedSeat9 = await matchMaker.join("room3_sorted_desc");
-          assert.equal(room3.roomId, reservedSeat9.room.roomId);
+          assert.strictEqual(room3.roomId, reservedSeat9.room.roomId);
         });
 
         it("sortBy(): sort asc by 'clients' field", async () => {
@@ -183,31 +183,31 @@ describe("MatchMaker", () => {
           const room3 = await matchMaker.createRoom("room3_sorted_asc", {});
 
           const reservedSeat1 = await matchMaker.join("room3_sorted_asc");
-          assert.equal(room1.roomId, reservedSeat1.room.roomId);
+          assert.strictEqual(room1.roomId, reservedSeat1.room.roomId);
 
           const reservedSeat2 = await matchMaker.join("room3_sorted_asc");
-          assert.equal(room2.roomId, reservedSeat2.room.roomId);
+          assert.strictEqual(room2.roomId, reservedSeat2.room.roomId);
 
           const reservedSeat3 = await matchMaker.join("room3_sorted_asc");
-          assert.equal(room3.roomId, reservedSeat3.room.roomId);
+          assert.strictEqual(room3.roomId, reservedSeat3.room.roomId);
 
           const reservedSeat4 = await matchMaker.join("room3_sorted_asc");
-          assert.equal(room1.roomId, reservedSeat4.room.roomId);
+          assert.strictEqual(room1.roomId, reservedSeat4.room.roomId);
 
           const reservedSeat5 = await matchMaker.join("room3_sorted_asc");
-          assert.equal(room2.roomId, reservedSeat5.room.roomId);
+          assert.strictEqual(room2.roomId, reservedSeat5.room.roomId);
 
           const reservedSeat6 = await matchMaker.join("room3_sorted_asc");
-          assert.equal(room3.roomId, reservedSeat6.room.roomId);
+          assert.strictEqual(room3.roomId, reservedSeat6.room.roomId);
 
           const reservedSeat7 = await matchMaker.join("room3_sorted_asc");
-          assert.equal(room1.roomId, reservedSeat7.room.roomId);
+          assert.strictEqual(room1.roomId, reservedSeat7.room.roomId);
 
           const reservedSeat8 = await matchMaker.join("room3_sorted_asc");
-          assert.equal(room2.roomId, reservedSeat8.room.roomId);
+          assert.strictEqual(room2.roomId, reservedSeat8.room.roomId);
 
           const reservedSeat9 = await matchMaker.join("room3_sorted_asc");
-          assert.equal(room3.roomId, reservedSeat9.room.roomId);
+          assert.strictEqual(room3.roomId, reservedSeat9.room.roomId);
         });
       });
 
@@ -219,7 +219,7 @@ describe("MatchMaker", () => {
           }
 
           const rooms = await matchMaker.query({});
-          assert.equal(4, rooms.length);
+          assert.strictEqual(4, rooms.length);
         });
 
         it("should list only public and unlocked rooms", async () => {
@@ -240,9 +240,9 @@ describe("MatchMaker", () => {
             await matchMaker.remoteRoomCall(reservedSeat.room.roomId, "lock");
           }
 
-          assert.equal(8, (await matchMaker.query({})).length);
-          assert.equal(6, (await matchMaker.query({ private: false })).length);
-          assert.equal(4, (await matchMaker.query({ private: false, locked: false })).length);
+          assert.strictEqual(8, (await matchMaker.query({})).length);
+          assert.strictEqual(6, (await matchMaker.query({ private: false })).length);
+          assert.strictEqual(4, (await matchMaker.query({ private: false, locked: false })).length);
         });
       });
 
@@ -254,22 +254,22 @@ describe("MatchMaker", () => {
           const room = matchMaker.getRoomById(reservedSeat1.room.roomId);
           await room._onJoin(client1 as any);
 
-          assert.equal(1, room.clients.length);
+          assert.strictEqual(1, room.clients.length);
 
           client1.close();
           await timeout(100);
 
           let rooms = await matchMaker.query({});
-          assert.equal(1, rooms.length);
-          assert.equal(1, rooms[0].clients, "should keep seat reservation after disconnection");
+          assert.strictEqual(1, rooms.length);
+          assert.strictEqual(1, rooms[0].clients, "should keep seat reservation after disconnection");
 
           await matchMaker.joinById(room.roomId, { sessionId: client1.sessionId });
           await room._onJoin(client1 as any);
 
           rooms = await matchMaker.query({});
-          assert.equal(1, rooms.length);
-          assert.equal(1, rooms[0].clients);
-          assert.equal(1, room.clients.length);
+          assert.strictEqual(1, rooms.length);
+          assert.strictEqual(1, rooms[0].clients);
+          assert.strictEqual(1, room.clients.length);
 
           client1.close();
           await timeout(100);
@@ -288,11 +288,11 @@ describe("MatchMaker", () => {
            */
           const client2 = createDummyClient(reservedSeat2);
           await room._onJoin(client2 as any);
-          assert.equal(2, room.clients.length);
+          assert.strictEqual(2, room.clients.length);
 
           client1.close();
           await timeout(250);
-          assert.equal(1, room.clients.length);
+          assert.strictEqual(1, room.clients.length);
 
           await assert.rejects(async() => await matchMaker.joinById(room.roomId, { sessionId: client1.sessionId }), /expired/);
         });
@@ -304,22 +304,22 @@ describe("MatchMaker", () => {
           const room = matchMaker.getRoomById(reservedSeat1.room.roomId) as ReconnectTokenRoom;
           await room._onJoin(client1 as any);
 
-          assert.equal(1, room.clients.length);
+          assert.strictEqual(1, room.clients.length);
 
           client1.close();
           await timeout(100);
 
           let rooms = await matchMaker.query({});
-          assert.equal(1, rooms.length);
-          assert.equal(1, rooms[0].clients, "should keep seat reservation after disconnection");
+          assert.strictEqual(1, rooms.length);
+          assert.strictEqual(1, rooms[0].clients, "should keep seat reservation after disconnection");
 
           await matchMaker.joinById(room.roomId, { sessionId: client1.sessionId });
           await room._onJoin(client1 as any);
 
           rooms = await matchMaker.query({});
-          assert.equal(1, rooms.length);
-          assert.equal(1, rooms[0].clients);
-          assert.equal(1, room.clients.length);
+          assert.strictEqual(1, rooms.length);
+          assert.strictEqual(1, rooms[0].clients);
+          assert.strictEqual(1, room.clients.length);
 
           client1.close();
           await timeout(100);
@@ -338,7 +338,7 @@ describe("MatchMaker", () => {
            */
           const client2 = createDummyClient(reservedSeat2);
           await room._onJoin(client2 as any);
-          assert.equal(2, room.clients.length);
+          assert.strictEqual(2, room.clients.length);
 
           client1.close();
 
@@ -347,7 +347,7 @@ describe("MatchMaker", () => {
           room.token.reject();
           await timeout(100);
 
-          assert.equal(1, room.clients.length);
+          assert.strictEqual(1, room.clients.length);
 
           await assert.rejects(async() => await matchMaker.joinById(room.roomId, { sessionId: client1.sessionId }), /expired/);
         });
@@ -359,32 +359,32 @@ describe("MatchMaker", () => {
         // first client joins
         const reservedSeat1 = await matchMaker.joinOrCreate("room3");
         const room = matchMaker.getRoomById(reservedSeat1.room.roomId);
-        assert.equal(false, room.locked);
+        assert.strictEqual(false, room.locked);
 
         // more 2 clients join
         await matchMaker.joinOrCreate("room3");
         await matchMaker.joinOrCreate("room3");
 
         const roomsBeforeExpiration = await matchMaker.query({});
-        assert.equal(1, roomsBeforeExpiration.length);
-        assert.equal(3, roomsBeforeExpiration[0].clients);
-        assert.equal(true, room.locked);
-        assert.equal(true, roomsBeforeExpiration[0].locked);
+        assert.strictEqual(1, roomsBeforeExpiration.length);
+        assert.strictEqual(3, roomsBeforeExpiration[0].clients);
+        assert.strictEqual(true, room.locked);
+        assert.strictEqual(true, roomsBeforeExpiration[0].locked);
       });
 
       it("seat reservation should expire", async () => {
         const reservedSeat1 = await matchMaker.joinOrCreate("room3");
         const room = matchMaker.getRoomById(reservedSeat1.room.roomId);
-        assert.equal(false, room.locked);
+        assert.strictEqual(false, room.locked);
 
         // more 2 clients join
         await matchMaker.joinOrCreate("room3");
         await matchMaker.joinOrCreate("room3");
 
         const roomsBeforeExpiration = await matchMaker.query({});
-        assert.equal(1, roomsBeforeExpiration.length);
-        assert.equal(3, roomsBeforeExpiration[0].clients);
-        assert.equal(true, roomsBeforeExpiration[0].locked);
+        assert.strictEqual(1, roomsBeforeExpiration.length);
+        assert.strictEqual(3, roomsBeforeExpiration[0].clients);
+        assert.strictEqual(true, roomsBeforeExpiration[0].locked);
 
         // only 1 client actually joins the room, 2 of them are going to expire
         await room._onJoin(createDummyClient(reservedSeat1) as any);
@@ -395,9 +395,9 @@ describe("MatchMaker", () => {
         await matchMaker.joinOrCreate("room3");
         await matchMaker.joinOrCreate("room3");
         const roomsAfterExpiration2 = await matchMaker.query({});
-        assert.equal(1, roomsAfterExpiration2.length);
-        assert.equal(3, roomsAfterExpiration2[0].clients);
-        assert.equal(true, roomsAfterExpiration2[0].locked);
+        assert.strictEqual(1, roomsAfterExpiration2.length);
+        assert.strictEqual(3, roomsAfterExpiration2[0].clients);
+        assert.strictEqual(true, roomsAfterExpiration2[0].locked);
       });
 
       it("should automatically lock rooms", async () => {
@@ -406,17 +406,17 @@ describe("MatchMaker", () => {
         await matchMaker.joinOrCreate("room3");
 
         let rooms = await matchMaker.query({});
-        assert.equal(1, rooms.length);
-        assert.equal(3, rooms[0].clients);
-        assert.equal(true, rooms[0].locked);
+        assert.strictEqual(1, rooms.length);
+        assert.strictEqual(3, rooms[0].clients);
+        assert.strictEqual(true, rooms[0].locked);
 
         await matchMaker.joinOrCreate("room3");
         rooms = await matchMaker.query({});
-        assert.equal(2, rooms.length);
-        assert.equal(3, rooms[0].clients);
-        assert.equal(1, rooms[1].clients);
-        assert.equal(true, rooms[0].locked);
-        assert.equal(false, rooms[1].locked);
+        assert.strictEqual(2, rooms.length);
+        assert.strictEqual(3, rooms[0].clients);
+        assert.strictEqual(1, rooms[1].clients);
+        assert.strictEqual(true, rooms[0].locked);
+        assert.strictEqual(false, rooms[1].locked);
       });
 
       it("should allow to manually lock rooms", async () => {
@@ -430,10 +430,10 @@ describe("MatchMaker", () => {
         await matchMaker.remoteRoomCall(reservedSeat3.room.roomId, "lock");
 
         let rooms = await matchMaker.query({});
-        assert.equal(3, rooms.length);
-        assert.equal(true, rooms[0].locked);
-        assert.equal(true, rooms[1].locked);
-        assert.equal(true, rooms[2].locked);
+        assert.strictEqual(3, rooms.length);
+        assert.strictEqual(true, rooms[0].locked);
+        assert.strictEqual(true, rooms[1].locked);
+        assert.strictEqual(true, rooms[2].locked);
       });
 
       describe("concurrency", async () => {
@@ -457,14 +457,14 @@ describe("MatchMaker", () => {
 
           // await for all calls to be complete
           const results = await Promise.all(promises);
-          assert.equal(100, results.length);
+          assert.strictEqual(100, results.length);
 
           const rooms = await matchMaker.query({});
-          assert.equal(50, rooms.length);
+          assert.strictEqual(50, rooms.length);
 
           for (let i = 0; i < Math.floor(numConnections / 2); i++) {
-            assert.equal(2, rooms[i].clients);
-            assert.equal(true,rooms[i].locked);
+            assert.strictEqual(2, rooms[i].clients);
+            assert.strictEqual(true,rooms[i].locked);
           }
         });
       });

@@ -10,10 +10,10 @@ import { LobbyRoom } from "../../src";
 
 describe("LobbyRoom: Integration", () => {
   for (let i = 0; i < PRESENCE_IMPLEMENTATIONS.length; i++) {
-    const presence = PRESENCE_IMPLEMENTATIONS[i];
+    const presence = new PRESENCE_IMPLEMENTATIONS[i]();
 
     for (let j = 0; j < DRIVERS.length; j++) {
-      const driver = DRIVERS[j];
+      const driver = new DRIVERS[j]();
 
       describe(`Driver => ${(driver.constructor as any).name}, Presence => ${presence.constructor.name}`, () => {
         const TEST_PORT = 4000 + Math.floor((Math.random() * 1000));

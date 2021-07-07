@@ -4,7 +4,7 @@ import { timeout, PRESENCE_IMPLEMENTATIONS } from "./utils";
 describe("Presence", () => {
 
   for (let i = 0; i < PRESENCE_IMPLEMENTATIONS.length; i++) {
-    const presence = PRESENCE_IMPLEMENTATIONS[i];
+    const presence = new PRESENCE_IMPLEMENTATIONS[i]();
 
     describe((presence as any).constructor.name, () => {
 

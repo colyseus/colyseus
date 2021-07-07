@@ -14,10 +14,10 @@ const TEST_ENDPOINT = `ws://localhost:${TEST_PORT}`;
 
 describe("Integration", () => {
   for (let i = 0; i < PRESENCE_IMPLEMENTATIONS.length; i++) {
-    const presence = PRESENCE_IMPLEMENTATIONS[i];
+    const presence = new PRESENCE_IMPLEMENTATIONS[i]();
 
     for (let j = 0; j < DRIVERS.length; j++) {
-      const driver = DRIVERS[j];
+      const driver = new DRIVERS[j]();
 
       describe(`Driver => ${(driver.constructor as any).name}, Presence => ${presence.constructor.name}`, () => {
         const server = new Server({
@@ -59,7 +59,7 @@ describe("Integration", () => {
 
               // assert 'presence' implementation
               const room = matchMaker.getRoomById(connection.id);
-              assert.equal(presence, room.presence);
+              assert.strictEqual(presence, room.presence);
 
               await connection.leave();
             });
@@ -152,8 +152,8 @@ describe("Integration", () => {
 
               const rooms = await matchMaker.query({ name: "onjoin" });
 
-              assert.equal(1, room.clients.length);
-              assert.equal(1, rooms[0].clients);
+              assert.strictEqual(1, room.clients.length);
+              assert.strictEqual(1, rooms[0].clients);
 
               await activeConnection.leave();
               await timeout(50);
@@ -275,7 +275,7 @@ describe("Integration", () => {
 
               await connection.leave();
 
-              assert.equal(sessionId, connection.sessionId);
+              assert.strictEqual(sessionId, connection.sessionId);
               assert.ok(onMessageCalled);
             });
 
@@ -320,7 +320,7 @@ describe("Integration", () => {
               await timeout(20);
               await connection.leave();
 
-              assert.equal(sessionId, connection.sessionId);
+              assert.strictEqual(sessionId, connection.sessionId);
               assert.ok(onMessageCalled);
               assert.ok(onMessageReceived);
             });
@@ -351,7 +351,7 @@ describe("Integration", () => {
               await timeout(20);
               await connection.leave();
 
-              assert.equal(sessionId, connection.sessionId);
+              assert.strictEqual(sessionId, connection.sessionId);
               assert.ok(onMessageCalled);
               assert.ok(onMessageReceived);
             });
@@ -401,7 +401,7 @@ describe("Integration", () => {
               await timeout(500);
 
               // simulation interval may have run a short amount of cycles for the first ROOM_STATE message
-              assert.equal(1, stateChangeCount);
+              assert.strictEqual(1, stateChangeCount);
 
               connection.leave();
               await timeout(50);
@@ -508,9 +508,9 @@ describe("Integration", () => {
 
               await timeout(300);
 
-              assert.equal(true, onMessageCalled);
-              assert.equal("hello", broadcastedMessage);
-              assert.equal("hello", sentMessage);
+              assert.strictEqual(true, onMessageCalled);
+              assert.strictEqual("hello", broadcastedMessage);
+              assert.strictEqual("hello", sentMessage);
 
               conn.leave();
             });
@@ -543,12 +543,12 @@ describe("Integration", () => {
 
               await timeout(50);
 
-              assert.equal(false, onMessageCalled);
+              assert.strictEqual(false, onMessageCalled);
 
               await timeout(100);
 
-              assert.equal(true, onMessageCalled);
-              assert.equal("hello", message);
+              assert.strictEqual(true, onMessageCalled);
+              assert.strictEqual("hello", message);
 
               conn.leave();
             });
@@ -596,7 +596,7 @@ describe("Integration", () => {
               await connection.leave();
 
               assert.ok(onMessageCalled);
-              assert.equal(messageReceived.str, "hello!");
+              assert.strictEqual(messageReceived.str, "hello!");
             });
           });
 
@@ -610,15 +610,19 @@ describe("Integration", () => {
               const conn1 = await client.joinOrCreate('room2');
 
               const room = matchMaker.getRoomById(conn1.id);
-              assert.equal(false, room.locked);
+              assert.strictEqual(false, room.locked);
 
               const conn2 = await client.joinOrCreate('room2');
 
-              assert.equal(2, room.clients.length);
-              assert.equal(true, room.locked);
+              assert.strictEqual(2, room.clients.length);
+              assert.strictEqual(true, room.locked);
 
+              console.log("ROOM, locked??, ", room.locked);
+
+              console.log("WILL QUERY...");
               const roomListing = (await matchMaker.query({}))[0];
-              assert.equal(true, roomListing.locked);
+              console.log("GOT:", roomListing);
+              assert.strictEqual(true, roomListing.locked);
 
               conn1.leave();
               conn2.leave();
@@ -631,17 +635,17 @@ describe("Integration", () => {
               const conn2 = await client.joinOrCreate('room2');
 
               const room = matchMaker.getRoomById(conn1.id);
-              assert.equal(2, room.clients.length);
-              assert.equal(true, room.locked);
+              assert.strictEqual(2, room.clients.length);
+              assert.strictEqual(true, room.locked);
 
               conn2.leave();
               await timeout(50);
 
-              assert.equal(1, room.clients.length);
-              assert.equal(false, room.locked);
+              assert.strictEqual(1, room.clients.length);
+              assert.strictEqual(false, room.locked);
 
               const roomListing = (await matchMaker.query({ name: "room2" }))[0];
-              assert.equal(false, roomListing.locked);
+              assert.strictEqual(false, roomListing.locked);
 
               conn1.leave();
             });
@@ -651,22 +655,22 @@ describe("Integration", () => {
               const conn2 = await client.joinOrCreate('room_explicit_lock');
 
               const room = matchMaker.getRoomById(conn1.id);
-              assert.equal(2, room.clients.length);
-              assert.equal(true, room.locked);
+              assert.strictEqual(2, room.clients.length);
+              assert.strictEqual(true, room.locked);
 
               conn1.send("lock"); // send explicit lock to handler
               await timeout(50);
 
-              assert.equal(true, room.locked);
+              assert.strictEqual(true, room.locked);
 
               conn2.leave();
               await timeout(50);
 
-              assert.equal(1, room.clients.length);
-              assert.equal(true, room.locked);
+              assert.strictEqual(1, room.clients.length);
+              assert.strictEqual(true, room.locked);
 
               const roomListing = (await matchMaker.query({}))[0];
-              assert.equal(true, roomListing.locked);
+              assert.strictEqual(true, roomListing.locked);
 
               conn1.leave();
             });
@@ -690,10 +694,10 @@ describe("Integration", () => {
               const conn2 = await client.joinOrCreate('disconnect');
               conn2.onLeave(() => disconnected++);
 
-              assert.equal(conn1.id, conn2.id, "should've joined the same room");
+              assert.strictEqual(conn1.id, conn2.id, "should've joined the same room");
 
               await timeout(150);
-              assert.equal(2, disconnected, "both clients should've been disconnected");
+              assert.strictEqual(2, disconnected, "both clients should've been disconnected");
             });
 
           });
@@ -741,17 +745,17 @@ describe("Integration", () => {
               const rooms = await matchMaker.query({ name: "single3" });
               const room = rooms[0];
 
-              assert.equal(3, connections.length);
+              assert.strictEqual(3, connections.length);
               assert.deepEqual([room.roomId, room.roomId, room.roomId], connections.map(conn => conn.id));
 
-              assert.equal(1, rooms.length);
-              assert.equal(room.roomId, rooms[0].roomId);
+              assert.strictEqual(1, rooms.length);
+              assert.strictEqual(room.roomId, rooms[0].roomId);
             });
 
             it("consumeSeatReservation()", async () => {
               const seatReservation = await matchMaker.create("dummy", {});
               const conn = await client.consumeSeatReservation(seatReservation);
-              assert.equal(conn.id, seatReservation.room.roomId);
+              assert.strictEqual(conn.id, seatReservation.room.roomId);
               conn.leave();
             })
           });
@@ -798,7 +802,7 @@ describe("Integration", () => {
                 assert.fail("joinOrCreate should have failed.");
 
               } catch (e) {
-                assert.equal(ErrorCode.MATCHMAKE_NO_HANDLER, e.code)
+                assert.strictEqual(ErrorCode.MATCHMAKE_NO_HANDLER, e.code)
               }
             });
 
@@ -808,8 +812,8 @@ describe("Integration", () => {
                 assert.fail("joinOrCreate should have failed.");
 
               } catch (e) {
-                assert.equal(ErrorCode.MATCHMAKE_NO_HANDLER, e.code)
-                assert.equal('provided room name "" not defined', e.message);
+                assert.strictEqual(ErrorCode.MATCHMAKE_NO_HANDLER, e.code)
+                assert.strictEqual('provided room name "" not defined', e.message);
               }
             });
 
@@ -825,7 +829,7 @@ describe("Integration", () => {
                 assert.fail("joinOrCreate should have failed.");
 
               } catch (e) {
-                assert.equal(ErrorCode.AUTH_FAILED, e.code)
+                assert.strictEqual(ErrorCode.AUTH_FAILED, e.code)
               }
             });
 
@@ -841,8 +845,8 @@ describe("Integration", () => {
                 assert.fail("joinOrCreate should have failed.");
 
               } catch (e) {
-                assert.equal(1, e.code);
-                assert.equal("invalid token", e.message);
+                assert.strictEqual(1, e.code);
+                assert.strictEqual("invalid token", e.message);
               }
             });
 
@@ -858,8 +862,8 @@ describe("Integration", () => {
                 assert.fail("joinOrCreate should have failed.");
 
               } catch (e) {
-                assert.equal(ErrorCode.APPLICATION_ERROR, e.code)
-                assert.equal("unexpected error", e.message)
+                assert.strictEqual(ErrorCode.APPLICATION_ERROR, e.code)
+                assert.strictEqual("unexpected error", e.message)
               }
             });
 
@@ -875,8 +879,8 @@ describe("Integration", () => {
                 assert.fail("joinOrCreate should have failed.");
 
               } catch (e) {
-                assert.equal(2, e.code)
-                assert.equal("unexpected error", e.message)
+                assert.strictEqual(2, e.code)
+                assert.strictEqual("unexpected error", e.message)
               }
             });
         });

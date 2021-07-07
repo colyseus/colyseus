@@ -4,8 +4,8 @@ import { EventEmitter } from "events";
 
 import { Server, ServerOptions, Room, matchMaker, LocalDriver, ClientState, LocalPresence, Presence, Client, Deferred } from "@colyseus/core";
 import { RedisPresence } from "@colyseus/redis-presence";
-import { RedisDriver } from "../../../../packages/drivers/redis-driver/build";
-import { MongooseDriver } from "../../../../packages/drivers/mongoose-driver/build";
+import { RedisDriver } from "@colyseus/redis-driver";
+import { MongooseDriver } from "@colyseus/mongoose-driver";
 
 import { WebSocketTransport, TransportOptions } from '@colyseus/ws-transport';
 Server.prototype['getDefaultTransport'] = function (options: ServerOptions) {
@@ -16,18 +16,18 @@ Server.prototype['getDefaultTransport'] = function (options: ServerOptions) {
   });
 }
 
-// export const DRIVERS = [ new LocalDriver(), ];
-// export const PRESENCE_IMPLEMENTATIONS: Presence[] = [ new LocalPresence(), ];
+// export const DRIVERS = [ LocalDriver, ];
+// export const PRESENCE_IMPLEMENTATIONS = [ LocalPresence, ];
 
 export const DRIVERS = [
-  new LocalDriver(),
-  // new RedisDriver(),
-  // new MongooseDriver('mongodb://127.0.0.1:27017/colyseus_test'),
+  // LocalDriver,
+  RedisDriver,
+  // MongooseDriver,
 ];
 
-export const PRESENCE_IMPLEMENTATIONS: Presence[] = [
-  new LocalPresence(),
-  // new RedisPresence()
+export const PRESENCE_IMPLEMENTATIONS = [
+  LocalPresence,
+  // RedisPresence
 ];
 
 export class RawClient extends EventEmitter {

@@ -5,7 +5,7 @@ import { subscribeIPC, requestFromIPC } from "@colyseus/core/build/IPC";
 
 describe("Inter-process Communication", () => {
   for (let i = 0; i < PRESENCE_IMPLEMENTATIONS.length; i++) {
-    const presence = PRESENCE_IMPLEMENTATIONS[i];
+    const presence = new PRESENCE_IMPLEMENTATIONS[i]();
 
     describe(`Using presence: ${presence.constructor.name}`, () => {
 
