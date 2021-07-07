@@ -1,4 +1,4 @@
-import { IRoomListingData, MatchMakerDriver, QueryHelpers, RoomListingData } from '@colyseus/core';
+import { IRoomListingData, MatchMakerDriver, QueryHelpers, RoomListingData, debugDriver } from '@colyseus/core';
 import mongoose, { Document, Schema } from 'mongoose';
 
 const RoomCacheSchema: Schema = new Schema({
@@ -27,13 +27,17 @@ export class MongooseDriver implements MatchMakerDriver {
   constructor(connectionURI?: string) {
 
     if (mongoose.connection.readyState === mongoose.STATES.disconnected) {
-      mongoose.connect(connectionURI || process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/colyseus', {
+      connectionURI = connectionURI || process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/colyseus';
+
+      mongoose.connect(connectionURI, {
         autoIndex: true,
         useCreateIndex: true,
         useFindAndModify: true,
         useNewUrlParser: true,
         useUnifiedTopology: true,
       });
+
+      debugDriver("🗄️ Connected to", connectionURI);
     }
   }
 
@@ -61,7 +65,11 @@ export class MongooseDriver implements MatchMakerDriver {
     })) as any as QueryHelpers<RoomListingData>;
   }
 
-  public shutdown() {
-    mongoose.disconnect();
+  public async clear() {
+    await RoomCache.deleteMany({});
+  }
+
+  public async shutdown() {
+    await mongoose.disconnect();
   }
 }

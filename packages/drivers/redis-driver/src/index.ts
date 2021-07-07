@@ -62,6 +62,10 @@ export class RedisDriver implements MatchMakerDriver {
     );
   }
 
+  public clear() {
+    this.client.del('roomcaches');
+  }
+
   public shutdown() {
     console.log(">>> SHUTDOWN REDIS CLIENT")
     this.client.quit();

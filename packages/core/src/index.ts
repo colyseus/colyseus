@@ -31,7 +31,15 @@ export { Clock, Delayed };
 export { generateId, Deferred, spliceOne } from './Utils';
 
 // Debug
-export { debugMatchMaking, debugPatch, debugError, debugConnection, debugAndPrintError } from './Debug';
+export {
+  debugMatchMaking,
+  debugPatch,
+  debugError,
+  debugConnection,
+  debugDriver,
+  debugPresence,
+  debugAndPrintError,
+} from './Debug';
 
 // Default rooms
 export { LobbyRoom } from './rooms/LobbyRoom';
