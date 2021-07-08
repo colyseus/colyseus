@@ -5,11 +5,16 @@ import { getMessageBytes, Protocol, Client, ClientState, ISendOptions } from '@c
 import { Schema } from '@colyseus/schema';
 
 export class uWebSocketWrapper extends EventEmitter {
-  isClosed: boolean;
-
   constructor(public ws: uWebSockets.WebSocket) {
     super();
   }
+}
+
+export enum ReadyState {
+  CONNECTING = 0,
+  OPEN = 1,
+  CLOSING = 2,
+  CLOSED = 3,
 }
 
 export class uWebSocketClient implements Client {
@@ -17,12 +22,15 @@ export class uWebSocketClient implements Client {
   public state: ClientState = ClientState.JOINING;
   public _enqueuedMessages: any[] = [];
   public _afterNextPatchQueue;
+  public readyState: number = ReadyState.OPEN;
 
   constructor(
     public id: string,
     public ref: uWebSocketWrapper,
   ) {
     this.sessionId = id;
+
+    ref.on('close', () => this.readyState = ReadyState.CLOSED);
   }
 
   public send(messageOrType: any, messageOrOptions?: any | ISendOptions, options?: ISendOptions) {
@@ -53,7 +61,7 @@ export class uWebSocketClient implements Client {
   }
 
   public raw(data: ArrayLike<number>, options?: ISendOptions, cb?: (err?: Error) => void) {
-    if (this.ref.isClosed) {
+    if (this.readyState !== ReadyState.OPEN) {
       console.warn('trying to send data to inactive client', this.sessionId);
       return;
     }
@@ -63,11 +71,6 @@ export class uWebSocketClient implements Client {
 
   public error(code: number, message: string = '', cb?: (err?: Error) => void) {
     this.raw(getMessageBytes[Protocol.ERROR](code, message), undefined, cb);
-  }
-
-  get readyState() {
-    console.log("TRYING TO GET .readyState!!", this.ref.ws.readyState)
-    return this.ref.ws.readyState;
   }
 
   public leave(code?: number, data?: string) {

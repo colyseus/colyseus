@@ -81,7 +81,6 @@ export class uWebSocketsTransport extends Transport {
                   this.clientWrappers.delete(ws);
 
                   // emit 'close' on wrapper
-                  clientWrapper.isClosed = true;
                   clientWrapper.emit('close', code);
                 }
             },
