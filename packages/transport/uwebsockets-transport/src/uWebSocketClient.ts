@@ -5,6 +5,8 @@ import { getMessageBytes, Protocol, Client, ClientState, ISendOptions } from '@c
 import { Schema } from '@colyseus/schema';
 
 export class uWebSocketWrapper extends EventEmitter {
+  isClosed: boolean;
+
   constructor(public ws: uWebSockets.WebSocket) {
     super();
   }
@@ -35,7 +37,7 @@ export class uWebSocketClient implements Client {
   public enqueueRaw(data: ArrayLike<number>, options?: ISendOptions) {
     // use room's afterNextPatch queue
     if (options?.afterNextPatch) {
-      this._afterNextPatchQueue.push([this, data]);
+      this._afterNextPatchQueue.push([this, arguments]);
       return;
     }
 
@@ -51,6 +53,11 @@ export class uWebSocketClient implements Client {
   }
 
   public raw(data: ArrayLike<number>, options?: ISendOptions, cb?: (err?: Error) => void) {
+    if (this.ref.isClosed) {
+      console.warn('trying to send data to inactive client', this.sessionId);
+      return;
+    }
+
     this.ref.ws.send(new Uint8Array(data), true, false);
   }
 

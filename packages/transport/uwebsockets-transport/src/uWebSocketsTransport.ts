@@ -7,11 +7,13 @@ import { uWebSocketClient, uWebSocketWrapper } from './uWebSocketClient';
 
 export type TransportOptions = Omit<uWebSockets.WebSocketBehavior, "upgrade" | "open" | "pong" | "close" | "message">;
 
+type RawWebSocketClient = uWebSockets.WebSocket;
+
 export class uWebSocketsTransport extends Transport {
     public app: uWebSockets.TemplatedApp;
 
-    protected clients: uWebSockets.WebSocket[] = [];
-    protected clientWrappers = new WeakMap<uWebSockets.WebSocket, uWebSocketWrapper>();
+    protected clients: RawWebSocketClient[] = [];
+    protected clientWrappers = new WeakMap<RawWebSocketClient, uWebSocketWrapper>();
 
     protected simulateLatencyMs: number;
     private _listeningSocket: any;
@@ -53,9 +55,9 @@ export class uWebSocketsTransport extends Transport {
                 );
             },
 
-            open: (ws: uWebSockets.WebSocket) => {
+            open: async (ws: RawWebSocketClient) => {
                 // ws.pingCount = 0;
-                this.onConnection(ws);
+                await this.onConnection(ws);
 
                 if (this.simulateLatencyMs) {
                     const originalSend = ws.send;
@@ -66,20 +68,25 @@ export class uWebSocketsTransport extends Transport {
                 }
             },
 
-            // pong: (ws: uWebSockets.WebSocket) => {
+            // pong: (ws: RawWebSocketClient) => {
             //     ws.pingCount = 0;
             // },
 
-            close: (ws: uWebSockets.WebSocket, code: number, message: ArrayBuffer) => {
+            close: (ws: RawWebSocketClient, code: number, message: ArrayBuffer) => {
                 // remove from client list
                 spliceOne(this.clients, this.clients.indexOf(ws));
 
-                // emit 'close' on wrapper
-                this.clientWrappers.get(ws)?.emit('close', code);
-                this.clientWrappers.delete(ws);
+                const clientWrapper = this.clientWrappers.get(ws);
+                if (clientWrapper) {
+                  this.clientWrappers.delete(ws);
+
+                  // emit 'close' on wrapper
+                  clientWrapper.isClosed = true;
+                  clientWrapper.emit('close', code);
+                }
             },
 
-            message: (ws: uWebSockets.WebSocket, message: ArrayBuffer, isBinary) => {
+            message: (ws: RawWebSocketClient, message: ArrayBuffer, isBinary) => {
                 // emit 'close' on wrapper
                 this.clientWrappers.get(ws)?.emit('message', Buffer.from(message));
             },
@@ -107,7 +114,7 @@ export class uWebSocketsTransport extends Transport {
         this.simulateLatencyMs = milliseconds;
     }
 
-    protected async onConnection(rawClient: uWebSockets.WebSocket) {
+    protected async onConnection(rawClient: RawWebSocketClient) {
         const wrapper = new uWebSocketWrapper(rawClient);
         // keep reference to client and its wrapper
         this.clients.push(rawClient);
