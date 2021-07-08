@@ -9,6 +9,7 @@ export class WebSocketClient implements Client {
   public sessionId: string;
   public state: ClientState = ClientState.JOINING;
   public _enqueuedMessages: any[] = [];
+  public _afterNextPatchQueue;
 
   constructor(
     public id: string,
@@ -18,9 +19,6 @@ export class WebSocketClient implements Client {
   }
 
   public send(messageOrType: any, messageOrOptions?: any | ISendOptions, options?: ISendOptions) {
-    //
-    // TODO: implement `options.afterNextPatch`
-    //
     this.enqueueRaw(
       (messageOrType instanceof Schema)
         ? getMessageBytes[Protocol.ROOM_DATA_SCHEMA](messageOrType)
@@ -30,6 +28,12 @@ export class WebSocketClient implements Client {
   }
 
   public enqueueRaw(data: ArrayLike<number>, options?: ISendOptions) {
+    // use room's afterNextPatch queue
+    if (options?.afterNextPatch) {
+      this._afterNextPatchQueue.push([this, arguments]);
+      return;
+    }
+
     if (this.state === ClientState.JOINING) {
       // sending messages during `onJoin`.
       // - the client-side cannot register "onMessage" callbacks at this point.

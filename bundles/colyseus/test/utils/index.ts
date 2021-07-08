@@ -42,6 +42,7 @@ export class WebSocketClient implements Client {
 
   messages: any[] = [];
   _enqueuedMessages: any[] = [];
+  _afterNextPatchQueue;
 
   errors: any[] = [];
 

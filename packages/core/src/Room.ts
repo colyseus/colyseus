@@ -79,7 +79,7 @@ export abstract class Room<State= any, Metadata= any> {
   private onMessageHandlers: {[id: string]: (client: Client, message: any) => void} = {};
 
   private _serializer: Serializer<State> = noneSerializer;
-  private _afterNextPatchBroadcasts: IArguments[] = [];
+  private _afterNextPatchQueue: Array<[string | Client, IArguments]> = [];
 
   private _simulationInterval: NodeJS.Timer;
   private _patchInterval: NodeJS.Timer;
@@ -254,7 +254,7 @@ export abstract class Room<State= any, Metadata= any> {
 
     if (opts && opts.afterNextPatch) {
       delete opts.afterNextPatch;
-      this._afterNextPatchBroadcasts.push(arguments);
+      this._afterNextPatchQueue.push(['broadcast', arguments]);
       return;
     }
 
@@ -278,7 +278,7 @@ export abstract class Room<State= any, Metadata= any> {
     const hasChanges = this._serializer.applyPatches(this.clients, this.state);
 
     // broadcast messages enqueued for "after patch"
-    this.broadcastAfterPatch();
+    this._dequeueAfterPatchMessages();
 
     return hasChanges;
   }
@@ -335,6 +335,9 @@ export abstract class Room<State= any, Metadata= any> {
     // get seat reservation options and clear it
     const options = this.reservedSeats[sessionId];
     delete this.reservedSeats[sessionId];
+
+    // share "after next patch queue" reference with every client.
+    client._afterNextPatchQueue = this._afterNextPatchQueue;
 
     // bind clean-up callback when client connection closes
     client.ref['onleave'] = this._onLeave.bind(this, client);
@@ -470,17 +473,24 @@ export abstract class Room<State= any, Metadata= any> {
     client.enqueueRaw(getMessageBytes[Protocol.ROOM_STATE](this._serializer.getFullState(client)));
   }
 
-  private broadcastAfterPatch() {
-    const length = this._afterNextPatchBroadcasts.length;
+  private _dequeueAfterPatchMessages() {
+    const length = this._afterNextPatchQueue.length;
 
     if (length > 0) {
       for (let i = 0; i < length; i++) {
-        this.broadcast.apply(this, this._afterNextPatchBroadcasts[i]);
+        const [target, args] = this._afterNextPatchQueue[i];
+
+        if (target === "broadcast") {
+          this.broadcast.apply(this, args);
+
+        } else {
+          (target as Client).raw.apply(target, args);
+        }
       }
 
       // new messages may have been added in the meantime,
       // let's splice the ones that have been processed
-      this._afterNextPatchBroadcasts.splice(0, length);
+      this._afterNextPatchQueue.splice(0, length);
     }
   }
 

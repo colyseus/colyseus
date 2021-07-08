@@ -602,6 +602,44 @@ describe("Integration", () => {
               assert.ok(onMessageCalled);
               assert.strictEqual(messageReceived.str, "hello!");
             });
+
+            it("should send after patch", async () => {
+              class DummyState extends Schema {
+                @type("number") number: number = 0;
+              }
+
+              matchMaker.defineRoomType('send_afterpatch', class _ extends Room {
+                onCreate() {
+                  this.setPatchRate(100);
+                  this.setState(new DummyState);
+                }
+                onJoin(client: Client, options) {
+                  client.send("startup", "hello", { afterNextPatch: true });
+                  this.state.number = 1;
+                }
+              });
+
+              const conn = await client.joinOrCreate('send_afterpatch');
+
+              let onMessageCalled = false;
+              let message: any;
+
+              conn.onMessage("startup", (_message) => {
+                onMessageCalled = true;
+                message = _message;
+              });
+
+              await timeout(50);
+
+              assert.strictEqual(false, onMessageCalled);
+
+              await timeout(100);
+
+              assert.strictEqual(true, onMessageCalled);
+              assert.strictEqual("hello", message);
+
+              conn.leave();
+            });
           });
 
           describe("lock / unlock", () => {

@@ -41,7 +41,9 @@ export interface Client {
    */
   auth?: any;
   pingCount?: number; // ping / pong
+
   _enqueuedMessages?: any[];
+  _afterNextPatchQueue: Array<[string | Client, IArguments]>;
 
   raw(data: ArrayLike<number>, options?: ISendOptions): void;
   enqueueRaw(data: ArrayLike<number>, options?: ISendOptions): void;
