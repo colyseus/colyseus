@@ -20,14 +20,14 @@ Server.prototype['getDefaultTransport'] = function (options: ServerOptions) {
 // export const PRESENCE_IMPLEMENTATIONS = [ LocalPresence, ];
 
 export const DRIVERS = [
-  // LocalDriver,
+  LocalDriver,
   RedisDriver,
   // MongooseDriver,
 ];
 
 export const PRESENCE_IMPLEMENTATIONS = [
   LocalPresence,
-  // RedisPresence
+  RedisPresence
 ];
 
 export class RawClient extends EventEmitter {

@@ -40,9 +40,9 @@ describe("Integration", () => {
 
         beforeEach(async() => await driver.clear());
 
-        after(() => {
-          driver.clear();
-          server.gracefullyShutdown(false)
+        after(async () => {
+          await driver.clear();
+          await server.gracefullyShutdown(false)
         });
 
         describe("Room lifecycle", () => {
