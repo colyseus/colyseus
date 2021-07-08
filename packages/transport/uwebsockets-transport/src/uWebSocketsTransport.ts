@@ -168,10 +168,9 @@ export class uWebSocketsTransport extends Transport {
             }
         }
 
-        const writeError = (res: uWebSockets.HttpResponse, e: { error: number, message: string }) => {
-            res.write(JSON.stringify(e))
+        const writeError = (res: uWebSockets.HttpResponse, error: { code: number, error: string }) => {
             res.writeStatus("406 Not Acceptable");
-            res.end();
+            res.end(JSON.stringify(error));
         }
 
         const onAborted = (req: uWebSockets.HttpRequest) =>
@@ -209,15 +208,15 @@ export class uWebSocketsTransport extends Transport {
                 } catch (e) {
                     debugAndPrintError(e);
                     writeError(res, {
-                        error: e.error || ErrorCode.MATCHMAKE_UNHANDLED,
-                        message: e.message
+                        code: e.code || ErrorCode.MATCHMAKE_UNHANDLED,
+                        error: e.message
                     });
                 }
 
             }, () => {
                 writeError(res, {
-                    error: ErrorCode.APPLICATION_ERROR,
-                    message: "failed to read json body"
+                    code: ErrorCode.APPLICATION_ERROR,
+                    error: "failed to read json body"
                 });
             })
 

@@ -7,6 +7,8 @@ import { matchMaker, Room, Client, Server, ErrorCode } from "@colyseus/core";
 import { DummyRoom, DRIVERS, timeout, Room3Clients, PRESENCE_IMPLEMENTATIONS, Room2Clients, Room2ClientsExplicitLock } from "./utils";
 import { ServerError } from "@colyseus/core";
 
+import { uWebSocketsTransport } from "@colyseus/uwebsockets-transport";
+
 import WebSocket from "ws";
 
 const TEST_PORT = 8567;
@@ -21,7 +23,8 @@ describe("Integration", () => {
         const driver = new DRIVERS[j]();
         const server = new Server({
           presence,
-          driver
+          driver,
+          // transport: new uWebSocketsTransport(),
         });
 
         const client = new Colyseus.Client(TEST_ENDPOINT);
@@ -188,6 +191,27 @@ describe("Integration", () => {
 
             await timeout(50);
             assert.ok(onLeaveCalled);
+          });
+
+          it("client.leave() should support custom close code from the server", async () => {
+            const customCode = 4040;
+            matchMaker.defineRoomType('onleave_customcode', class _ extends Room {
+              onJoin(client: Client, options: any) {
+                setTimeout(() => client.leave(customCode), 10);
+              }
+            });
+
+            const connection = await client.joinOrCreate('onleave_customcode');
+
+            await new Promise<void>((resolve, reject) => {
+              let rejectTimeout = setTimeout(reject, 1000);
+              connection.onLeave((code) => {
+                clearTimeout(rejectTimeout);
+
+                assert.strictEqual(customCode, code);
+                resolve();
+              });
+            });
           });
 
           it("async onLeave()", async () => {
