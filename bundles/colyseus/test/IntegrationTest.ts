@@ -17,9 +17,8 @@ describe("Integration", () => {
     const presence = new PRESENCE_IMPLEMENTATIONS[i]();
 
     for (let j = 0; j < DRIVERS.length; j++) {
-      const driver = new DRIVERS[j]();
-
-      describe(`Driver => ${(driver.constructor as any).name}, Presence => ${presence.constructor.name}`, () => {
+      describe(`Driver => ${DRIVERS[j].name}, Presence => ${presence.constructor.name}`, () => {
+        const driver = new DRIVERS[j]();
         const server = new Server({
           presence,
           driver
@@ -39,7 +38,12 @@ describe("Integration", () => {
           await server.listen(TEST_PORT);
         });
 
-        after(() => server.gracefullyShutdown(false));
+        beforeEach(async() => await driver.clear());
+
+        after(() => {
+          driver.clear();
+          server.gracefullyShutdown(false)
+        });
 
         describe("Room lifecycle", () => {
 

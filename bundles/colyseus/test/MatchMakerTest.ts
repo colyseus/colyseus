@@ -9,11 +9,6 @@ describe("MatchMaker", () => {
     describe(`Driver: ${DRIVERS[i].name}`, () => {
 
       /**
-       * `setup` matchmaker to re-set graceful shutdown status
-       */
-      beforeEach(() => matchMaker.setup(undefined, new DRIVERS[i](), 'dummyProcessId'));
-
-      /**
        * register room types
        */
       before(async () => {
@@ -45,6 +40,14 @@ describe("MatchMaker", () => {
          */
         await timeout(50);
       });
+
+      // make sure driver is cleared out.
+      after(async() => await (new DRIVERS[i]().clear()));
+
+      /**
+       * `setup` matchmaker to re-set graceful shutdown status
+       */
+      beforeEach(() => matchMaker.setup(undefined, new DRIVERS[i](), 'dummyProcessId'));
 
       /**
        * ensure no rooms are avaialble in-between tests
