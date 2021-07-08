@@ -24,7 +24,7 @@ describe("Integration", () => {
         const server = new Server({
           presence,
           driver,
-          // transport: new uWebSocketsTransport(),
+          transport: new uWebSocketsTransport(),
         });
 
         const client = new Colyseus.Client(TEST_ENDPOINT);
@@ -175,6 +175,27 @@ describe("Integration", () => {
             });
 
             await assert.rejects(async () => await client.joinOrCreate('onauth'));
+          });
+
+          it("onAuth() getting IP address", async() => {
+            matchMaker.defineRoomType('onauth_ip_address', class _ extends Room {
+              async onAuth(client: Client, options: any, request: any) {
+                const ipAddress = request.connection.remoteAddress;
+                client.send("ip", ipAddress);
+                return true;
+              }
+            });
+
+            const connection = await client.joinOrCreate('onauth_ip_address');
+
+            await new Promise<void>((resolve, reject) => {
+              const rejectionTimeout = setTimeout(reject, 200);
+              connection.onMessage("ip", (address) => {
+                clearInterval(rejectionTimeout);
+                assert.ok(typeof(address) === "string");
+                resolve();
+              });
+            });
           });
 
           it("onLeave()", async () => {
@@ -824,6 +845,12 @@ describe("Integration", () => {
 
           describe("`pingTimeout` / `pingMaxRetries`", () => {
             it("should terminate unresponsive client after connection is ready", async () => {
+              if (server.transport instanceof uWebSocketsTransport) {
+                console.warn("WARNING: this test is being skipped. (not supported in uWebSocketsTransport)");
+                assert.ok(true);
+                return;
+              }
+
               const conn = await client.joinOrCreate("dummy");
 
               // force websocket client to be unresponsive

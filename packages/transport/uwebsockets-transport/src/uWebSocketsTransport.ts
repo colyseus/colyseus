@@ -7,7 +7,10 @@ import { uWebSocketClient, uWebSocketWrapper } from './uWebSocketClient';
 
 export type TransportOptions = Omit<uWebSockets.WebSocketBehavior, "upgrade" | "open" | "pong" | "close" | "message">;
 
-type RawWebSocketClient = uWebSockets.WebSocket;
+type RawWebSocketClient = uWebSockets.WebSocket & {
+  headers: {[key: string]: string},
+  connection: { remoteAddress: string },
+};
 
 export class uWebSocketsTransport extends Transport {
     public app: uWebSockets.TemplatedApp;
@@ -41,12 +44,22 @@ export class uWebSocketsTransport extends Transport {
             ...options,
 
             upgrade: (res, req, context) => {
+                // get all headers
+                const headers: {[id: string]: string} = {};
+                req.forEach((key, value) => headers[key] = value);
+
                 /* This immediately calls open handler, you must not use res after this call */
                 /* Spell these correctly */
                 res.upgrade(
                     {
                         url: req.getUrl(),
                         query: req.getQuery(),
+
+                        // compatibility with @colyseus/ws-transport
+                        headers,
+                        connection: {
+                          remoteAddress: Buffer.from(res.getRemoteAddressAsText()).toString()
+                        }
                     },
                     req.getHeader('sec-websocket-key'),
                     req.getHeader('sec-websocket-protocol'),
@@ -244,8 +257,8 @@ export class uWebSocketsTransport extends Transport {
             } catch (e) {
                 debugAndPrintError(e);
                 writeError(res, {
-                    error: e.error || ErrorCode.MATCHMAKE_UNHANDLED,
-                    message: e.message
+                    code: e.code || ErrorCode.MATCHMAKE_UNHANDLED,
+                    error: e.message
                 });
             }
         });
