@@ -24,7 +24,7 @@ describe("Integration", () => {
         const server = new Server({
           presence,
           driver,
-          transport: new uWebSocketsTransport(),
+          // transport: new uWebSocketsTransport(),
         });
 
         const client = new Colyseus.Client(TEST_ENDPOINT);

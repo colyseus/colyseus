@@ -18,7 +18,6 @@ export class uWebSocketsTransport extends Transport {
     protected clients: RawWebSocketClient[] = [];
     protected clientWrappers = new WeakMap<RawWebSocketClient, uWebSocketWrapper>();
 
-    protected simulateLatencyMs: number;
     private _listeningSocket: any;
 
     constructor(options: TransportOptions = {}, appOptions: uWebSockets.AppOptions = {}) {
@@ -71,14 +70,6 @@ export class uWebSocketsTransport extends Transport {
             open: async (ws: RawWebSocketClient) => {
                 // ws.pingCount = 0;
                 await this.onConnection(ws);
-
-                if (this.simulateLatencyMs) {
-                    const originalSend = ws.send;
-                    ws.send = (recognizedString, isBinary?, compress?) => {
-                        setTimeout(() => originalSend(recognizedString, true, false), this.simulateLatencyMs);
-                        return true;
-                    };
-                }
             },
 
             // pong: (ws: RawWebSocketClient) => {
@@ -98,9 +89,9 @@ export class uWebSocketsTransport extends Transport {
                 }
             },
 
-            message: (ws: RawWebSocketClient, message: ArrayBuffer, isBinary) => {
+            message: (ws: RawWebSocketClient, message: ArrayBuffer, isBinary: boolean) => {
                 // emit 'close' on wrapper
-                this.clientWrappers.get(ws)?.emit('message', Buffer.from(message));
+                this.clientWrappers.get(ws)?.emit('message', Buffer.from(message.slice(0)));
             },
 
         });
@@ -123,7 +114,10 @@ export class uWebSocketsTransport extends Transport {
     }
 
     public simulateLatency(milliseconds: number) {
-        this.simulateLatencyMs = milliseconds;
+        const originalRawSend = uWebSocketClient.prototype.raw;
+        uWebSocketClient.prototype.raw = function() {
+          setTimeout(() => originalRawSend.apply(this, arguments), milliseconds);
+        }
     }
 
     protected async onConnection(rawClient: RawWebSocketClient) {

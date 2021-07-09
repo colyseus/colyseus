@@ -193,8 +193,10 @@ export class Server {
     /* tslint:disable:no-string-literal */
     const _onMessage = Room.prototype['_onMessage'];
     /* tslint:disable:no-string-literal */
-    Room.prototype['_onMessage'] = function(...args: any[]) {
-      setTimeout(() => _onMessage.apply(this, args), halfwayMS);
+    Room.prototype['_onMessage'] = function (client, buffer) {
+      // uWebSockets.js: duplicate buffer because it is cleared at native layer before the timeout.
+      const cachedBuffer = Buffer.from(buffer);
+      setTimeout(() => _onMessage.call(this, client, cachedBuffer), halfwayMS);
     };
   }
 
