@@ -1,12 +1,12 @@
 {
   "name": "@colyseus/redis-presence",
-  "version": "0.14.17-alpha.6",
+  "version": "0.14.17-alpha.7",
   "input": "./src/index.ts",
   "main": "./build/index.js",
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
   "dependencies": {
-    "@colyseus/core": "^0.14.17-alpha.6",
+    "@colyseus/core": "^0.14.17-alpha.7",
     "redis": "^2.8.0"
   },
   "author": "Endel Dreyer",
@@ -24,5 +24,5 @@
   "publishConfig": {
     "access": "public"
   },
-  "gitHead": "6ce73f6f721b5260c51ad870d9f218803ee1ce4b"
+  "gitHead": "6dab67fa310af595ccf410f0a96ca7e2c72e6315"
 }
