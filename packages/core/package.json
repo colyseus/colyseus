@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/core",
-  "version": "0.14.17-alpha.7",
+  "version": "0.14.17-alpha.8",
   "description": "Multiplayer Framework for Node.js.",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -44,5 +44,5 @@
   "publishConfig": {
     "access": "public"
   },
-  "gitHead": "6dab67fa310af595ccf410f0a96ca7e2c72e6315"
+  "gitHead": "eef556ab5527ad5b9c36ce2823ec2097953cb8e9"
 }
