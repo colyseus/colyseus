@@ -4,7 +4,7 @@ import path from "path";
 import { getAPI } from './api';
 import './ext/Room';
 
-const frontendDirectory = path.resolve(__dirname, "..", "lib", "static");
+const frontendDirectory = path.resolve(__dirname, "..", "build", "static");
 
 export interface MonitorOptions {
     columns: Array<

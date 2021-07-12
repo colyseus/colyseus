@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/monitor",
-  "version": "0.14.17-alpha.6",
+  "version": "0.14.17-alpha.7",
   "description": "Web Monitoring Panel for Colyseus",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -30,7 +30,7 @@
   },
   "homepage": "https://github.com/colyseus/colyseus#readme",
   "devDependencies": {
-    "@colyseus/core": "^0.14.17-alpha.6",
+    "@colyseus/core": "^0.14.17-alpha.7",
     "@types/material-ui": "^0.21.1",
     "@types/node-os-utils": "^1.1.0",
     "@types/react": "^16.3.9",
@@ -61,5 +61,5 @@
   "peerDependencies": {
     "@colyseus/core": "^0.14.17-alpha.5"
   },
-  "gitHead": "6ce73f6f721b5260c51ad870d9f218803ee1ce4b"
+  "gitHead": "6dab67fa310af595ccf410f0a96ca7e2c72e6315"
 }
