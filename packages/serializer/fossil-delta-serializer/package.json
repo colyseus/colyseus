@@ -1,0 +1,30 @@
+{
+  "name": "@colyseus/fossil-delta-serializer",
+  "version": "0.14.17",
+  "input": "./src/index.ts",
+  "main": "./build/index.js",
+  "module": "./build/index.mjs",
+  "typings": "./build/index.d.ts",
+  "dependencies": {
+    "@colyseus/core": "^0.14.17",
+    "fast-json-patch": "^2.0.5",
+    "fossil-delta": "^1.0.1",
+    "notepack.io": "^2.2.0"
+  },
+  "author": "Endel Dreyer",
+  "license": "MIT",
+  "files": [
+    "build",
+    "../../LICENSE",
+    "../../README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/colyseus/colyseus.git"
+  },
+  "homepage": "https://colyseus.io/",
+  "publishConfig": {
+    "access": "public"
+  },
+  "gitHead": "320a0325f01eff3cd7afa8fb2efa80077ebdbf4a"
+}

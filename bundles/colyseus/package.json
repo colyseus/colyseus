@@ -1,0 +1,40 @@
+{
+  "name": "colyseus",
+  "version": "0.14.17",
+  "description": "Multiplayer Framework for Node.js.",
+  "input": "./src/index.ts",
+  "main": "./build/index.js",
+  "module": "./build/index.mjs",
+  "typings": "./build/index.d.ts",
+  "scripts": {
+    "test": "TS_NODE_PROJECT=../../tsconfig/tsconfig.test.json COLYSEUS_SEAT_RESERVATION_TIME=0.3 COLYSEUS_PRESENCE_SHORT_TIMEOUT=300 c8 mocha --require ts-node/register test/**Test.ts test/**/**Test.ts --exit --timeout 15000"
+  },
+  "author": "Endel Dreyer",
+  "license": "MIT",
+  "keywords": [
+    "colyseus",
+    "multiplayer",
+    "netcode",
+    "realtime",
+    "networking",
+    "websockets"
+  ],
+  "files": [
+    "build"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/colyseus/colyseus.git"
+  },
+  "homepage": "https://colyseus.io/",
+  "engines": {
+    "node": ">= 12.x"
+  },
+  "dependencies": {
+    "@colyseus/core": "^0.14.17",
+    "@colyseus/mongoose-driver": "^0.14.17",
+    "@colyseus/redis-presence": "^0.14.17",
+    "@colyseus/ws-transport": "^0.14.17"
+  },
+  "gitHead": "320a0325f01eff3cd7afa8fb2efa80077ebdbf4a"
+}

@@ -3,7 +3,9 @@ node_modules
 yarn.lock
 /lib
 .DS_Store
+build/
 
 .nyc_output
 coverage
 esm
+dump.rdb

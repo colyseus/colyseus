@@ -1,8 +1,14 @@
 {
   "compilerOptions": {
+    "rootDir": "..",
+
     "module": "commonjs",
+    "target": "es2015",
+
     "moduleResolution": "node",
     "lib": ["es6"],
+    "declarationDir": "../build",
+    "declaration": true,
     "forceConsistentCasingInFileNames": true,
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
@@ -10,8 +16,5 @@
     "noImplicitAny": false,
     "inlineSources": true,
     "sourceMap": true
-  },
-  "include": [
-    "../src/**/*.ts"
-  ]
+  }
 }
