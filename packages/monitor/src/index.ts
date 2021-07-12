@@ -23,7 +23,7 @@ export interface MonitorOptions {
  */
 export function monitor (opts: Partial<MonitorOptions> = {}): express.Router {
     const router = express.Router();
-    router.use('/', express.static(frontendDirectory));
+    router.use(express.static(frontendDirectory));
     router.use('/api', getAPI(opts));
     return router;
 }
