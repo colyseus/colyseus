@@ -2,8 +2,10 @@
 
 import http from "superagent";
 
-const ENDPOINT = process.env.GAME_SERVER_URL ||
-    `${window.location.protocol}//${window.location.host}${window.location.pathname}`;
+const ENDPOINT = (
+  process.env.GAME_SERVER_URL ||
+  `${window.location.protocol}//${window.location.host}${window.location.pathname}`
+).replace(/\/$/, ""); // remove trailing slash
 
 export function fetchRoomList () {
     return http.get(`${ENDPOINT}/api`).
