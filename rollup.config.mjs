@@ -1,3 +1,4 @@
+import fs from 'fs';
 import path from 'path';
 import util from 'util';
 import { fileURLToPath } from 'url';
@@ -51,43 +52,57 @@ async function main() {
       return;
     }
 
+    // Copy README.md and LICENSE into child package folder.
+    if (!fs.existsSync(path.join(basePath, "README.md"))) {
+      fs.copyFileSync(path.resolve(__dirname, "README.md"), path.join(basePath, "README.md"));
+      fs.copyFileSync(path.resolve(__dirname, "LICENSE"), path.join(basePath, "LICENSE"));
+    }
+
+    const tsconfig = {
+      rootDir: path.join(basePath, "src"),
+      declarationDir: path.join(basePath, "build"),
+      declaration: true,
+      include: [path.join(basePath, "src", "**", "*.ts")],
+    };
+
     //
     // Here's the individual rollup.config.js for each package
+    // Uses two separate builds: one for CJS and other for ESM.
     //
-    return ({
+    return [{
       input,
       preserveModules: true,
       output: [
-        {
-          dir: path.join(basePath, 'build'),
-          format: 'cjs',
-          sourcemap: true
-        },
-        {
-          dir: path.join(basePath, 'build'),
-          format: 'esm',
-          entryFileNames: '[name].mjs',
-          sourcemap: true
-        },
+        { dir: path.join(basePath, 'build'), format: 'cjs', sourcemap: true },
       ],
       plugins: [
-        externals({
-          deps: true,
-          peerDeps: true,
-          packagePath: path.join(basePath, "package.json"),
-        }),
+        externals({ deps: true, peerDeps: true, packagePath: path.join(basePath, "package.json"), }),
         nodeResolve(),
         commonJs(),
         typescript({
-          rootDir: path.join(basePath, "src"),
-          declarationDir: path.join(basePath, "build"),
-          declaration: true,
+          ...tsconfig,
           module: "ESNext",
-          target: "ESNext",
-          include: [path.join(basePath, "src", "**", "*.ts")],
+          target: "es2015",
         }),
       ],
-    });
+
+    }, {
+      input,
+      preserveModules: true,
+      output: [
+        { dir: path.join(basePath, 'build'), format: 'esm', entryFileNames: '[name].mjs', sourcemap: true },
+      ],
+      plugins: [
+        externals({ deps: true, peerDeps: true, packagePath: path.join(basePath, "package.json"), }),
+        nodeResolve(),
+        commonJs(),
+        typescript({
+          ...tsconfig,
+          module: "ESNext",
+          target: "ESNext",
+        }),
+      ],
+    }];
   });
 
   console.log("ROLLUP CONFIGS:", util.inspect(configs, false, Infinity, true));
@@ -95,4 +110,4 @@ async function main() {
   return configs.filter(c => c !== undefined);
 }
 
-export default await main();
+export default (await main()).flat();

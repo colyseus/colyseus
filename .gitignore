@@ -5,6 +5,9 @@ yarn.lock
 .DS_Store
 build/
 
+**/README.md
+**/LICENSE
+
 .nyc_output
 coverage
 esm
