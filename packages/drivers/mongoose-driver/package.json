@@ -20,8 +20,8 @@
   ],
   "files": [
     "build",
-    "../../LICENSE",
-    "../../README.md"
+    "LICENSE",
+    "README.md"
   ],
   "repository": {
     "type": "git",
