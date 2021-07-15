@@ -11,7 +11,9 @@ import { registerGracefulShutdown } from './Utils';
 
 import { generateId } from '.';
 import { registerNode, unregisterNode } from './discovery';
+
 import { LocalPresence } from './presence/LocalPresence';
+import { LocalDriver } from './matchmaker/driver';
 
 import { Transport } from './Transport';
 
@@ -54,7 +56,7 @@ export class Server {
     const { gracefullyShutdown = true } = options;
 
     this.presence = options.presence || new LocalPresence();
-    this.driver = options.driver;
+    this.driver = options.driver || new LocalDriver();
 
     // setup matchmaker
     matchMaker.setup(this.presence, this.driver, this.processId);

@@ -31,6 +31,7 @@ if (process.env.NODE_ARENA !== "true") {
 }
 
 export interface ArenaOptions {
+    gracefullyShutdown?: boolean;
     getId?: () => string,
     initializeTransport?: (options: any) => Transport,
     initializeExpress?: (app: express.Express) => void,
@@ -66,11 +67,12 @@ export default function (options: ArenaOptions) {
  */
 export async function listen(
     options: ArenaOptions,
-    port: number = Number(process.env.PORT || 2567)
+    port: number = Number(process.env.PORT || 2567),
 ) {
     const transport = await getTransport(options);
     const gameServer = new Server({
         transport,
+        gracefullyShutdown: options.gracefullyShutdown,
         // ...?
     });
     await options.initializeGameServer?.(gameServer);
@@ -82,6 +84,7 @@ export async function listen(
     if (appId) { console.log(`🏟  ${appId}`); }
 
     console.log(`⚔️  Listening on ws://localhost:${ port }`);
+    return gameServer;
 }
 
 

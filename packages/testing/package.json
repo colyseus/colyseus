@@ -1,0 +1,39 @@
+{
+  "name": "@colyseus/testing",
+  "version": "0.14.19",
+  "description": "Testing tools for Colyseus",
+  "input": "./src/index.ts",
+  "main": "./build/index.js",
+  "module": "./build/index.mjs",
+  "typings": "./build/index.d.ts",
+  "scripts": {
+    "test": "TS_NODE_PROJECT=../../tsconfig/tsconfig.test.json mocha --require ts-node/register test/**Test.ts test/**/**Test.ts --exit --timeout 15000",
+    "tslint": "tslint --project . --config ../../tslint.json"
+  },
+  "author": "Endel Dreyer",
+  "license": "MIT",
+  "files": [
+    "build",
+    "LICENSE",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/colyseus/colyseus.git"
+  },
+  "homepage": "https://colyseus.io/",
+  "engines": {
+    "node": ">= 14.x"
+  },
+  "dependencies": {
+    "@colyseus/arena": "^0.14.17",
+    "@colyseus/core": "^0.14.17",
+    "colyseus.js": "^0.14.13-alpha.0"
+  },
+  "devDependencies": {
+    "@colyseus/ws-transport": "^0.14.19"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

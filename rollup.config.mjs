@@ -82,7 +82,7 @@ async function main() {
         typescript({
           ...tsconfig,
           module: "ESNext",
-          target: "es2015",
+          target: "ESNext",
         }),
       ],
 
