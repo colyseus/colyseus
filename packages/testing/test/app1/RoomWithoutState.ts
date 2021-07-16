@@ -1,6 +1,7 @@
 import { Room } from "@colyseus/core";
 
 export class RoomWithoutState extends Room {
+  maxClients = 2;
 
   onCreate(options) {
     this.onMessage("one-ping", (client, message) =>

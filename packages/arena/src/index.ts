@@ -4,11 +4,12 @@ import path from "path";
 import cors from "cors";
 import express from "express";
 import dotenv from "dotenv";
-import { Server, Transport } from "@colyseus/core";
+import { Server, ServerOptions, Transport } from "@colyseus/core";
 
 // try to import uWebSockets-express compatibility layer.
 let uWebSocketsExpressCompatibility: any;
-try { uWebSocketsExpressCompatibility = require('uwebsockets-express').default;
+try {
+  uWebSocketsExpressCompatibility = require('uwebsockets-express').default;
 } catch (e) {}
 
 /**
@@ -31,7 +32,8 @@ if (process.env.NODE_ARENA !== "true") {
 }
 
 export interface ArenaOptions {
-    gracefullyShutdown?: boolean;
+    options?: ServerOptions,
+    displayLogs?: boolean,
     getId?: () => string,
     initializeTransport?: (options: any) => Transport,
     initializeExpress?: (app: express.Express) => void,
@@ -39,25 +41,27 @@ export interface ArenaOptions {
     beforeListen?: () => void,
 }
 
-const ALLOWED_KEYS: Array<keyof ArenaOptions> = [
-  'getId',
-  'initializeTransport',
-  'initializeExpress',
-  'initializeGameServer',
-  'beforeListen'
-];
+const ALLOWED_KEYS: { [key in keyof ArenaOptions]: string } = {
+  'displayLogs': "boolean",
+  'options': "object",
+  'getId': "function",
+  'initializeTransport': "function",
+  'initializeExpress': "function",
+  'initializeGameServer': "function",
+  'beforeListen': "function"
+};
 
 export default function (options: ArenaOptions) {
-    for (let key in options) {
-        if (ALLOWED_KEYS.indexOf(key as keyof ArenaOptions) === -1) {
-            throw new Error(`Invalid option '${key}'. Allowed options are: ${ALLOWED_KEYS.join(", ")}`);
-
-        } else if (typeof(options[key as keyof ArenaOptions]) !== "function") {
-            throw new Error(`'${key}' should be a function.`);
-        }
+  for (const option in options) {
+    if (!ALLOWED_KEYS[option]) {
+      throw new Error(`❌ Invalid option '${option}'. Allowed options are: ${Object.keys(ALLOWED_KEYS).join(", ")}`);
     }
+    if(typeof(options[option]) !== ALLOWED_KEYS[option]) {
+      throw new Error(`❌ Invalid type for ${option}: please provide a ${ALLOWED_KEYS[option]} value.`);
+    }
+  }
 
-    return options;
+  return options;
 }
 
 /**
@@ -69,21 +73,27 @@ export async function listen(
     options: ArenaOptions,
     port: number = Number(process.env.PORT || 2567),
 ) {
+    const serverOptions = options.options || {};
+    options.displayLogs = options.displayLogs ?? true;
+
     const transport = await getTransport(options);
     const gameServer = new Server({
+        ...serverOptions,
         transport,
-        gracefullyShutdown: options.gracefullyShutdown,
-        // ...?
     });
     await options.initializeGameServer?.(gameServer);
     await options.beforeListen?.();
 
     gameServer.listen(port);
 
-    const appId = options.getId?.() || "[ Colyseus ]";
-    if (appId) { console.log(`🏟  ${appId}`); }
+    if (options.displayLogs) {
+        const appId = options.getId?.() || "[ Colyseus ]";
+        if (appId) {
+            console.log(`🏟  ${appId}`);
+        }
 
-    console.log(`⚔️  Listening on ws://localhost:${ port }`);
+        console.log(`⚔️  Listening on ws://localhost:${port}`);
+    }
     return gameServer;
 }
 
@@ -105,17 +115,22 @@ export async function getTransport(options: ArenaOptions) {
         // @ts-ignore
         if (transport['app']) {
             if (typeof (uWebSocketsExpressCompatibility) === "function") {
-                console.info("✅ uWebSockets.js + Express compatibility enabled");
+                if (options.displayLogs){
+                  console.info("✅ uWebSockets.js + Express compatibility enabled");
+                }
+
                 // @ts-ignore
                 server = undefined;
                 // @ts-ignore
                 app = uWebSocketsExpressCompatibility(transport['app']);
 
             } else {
-                console.warn("");
-                console.warn("❌ uWebSockets.js + Express compatibility mode couldn't be loaded, run the following command to fix:");
-                console.warn("👉 npm install --save uwebsockets-express");
-                console.warn("");
+                if (options.displayLogs) {
+                    console.warn("");
+                    console.warn("❌ uWebSockets.js + Express compatibility mode couldn't be loaded, run the following command to fix:");
+                    console.warn("👉 npm install --save uwebsockets-express");
+                    console.warn("");
+                }
                 app = undefined;
             }
         }
@@ -126,7 +141,10 @@ export async function getTransport(options: ArenaOptions) {
             app.use(express.json());
 
             await options.initializeExpress(app);
-            console.info("✅ Express initialized");
+
+            if (options.displayLogs) {
+                console.info("✅ Express initialized");
+            }
         }
     }
 

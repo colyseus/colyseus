@@ -1,10 +1,13 @@
 import assert from "assert";
 import sinon from "sinon";
+import { matchMaker } from "@colyseus/core";
 
 import { before } from "mocha";
 import { boot, ColyseusTestServer } from "../src";
 
 import appConfig from "./app1/arena.config";
+import { State } from "./app1/RoomWithState";
+import { SimulationState } from "./app1/RoomWithSimulation";
 
 describe("@colyseus/testing", () => {
   let colyseus: ColyseusTestServer;
@@ -12,45 +15,116 @@ describe("@colyseus/testing", () => {
   before(async () => colyseus = await boot(appConfig));
   after(async () => colyseus.shutdown());
 
-  beforeEach(async () => await colyseus.cleanup());
-  afterEach(() => {});
-
-  it("should connect a client into the room", async () => {
-    const connection = await colyseus.clientSDK.joinOrCreate("room_with_state", {});
-    const room = colyseus.getRoomById(connection.id);
-
-    assert.strictEqual(connection.id, room.roomId);
+  beforeEach(async () => {
+    await colyseus.cleanup();
+    assert.strictEqual(0, (await matchMaker.query({})).length);
   });
 
-  it("should join a room by id - assert callCount", async () => {
-    const room = await colyseus.createRoom("room_with_state", {});
+  it("should be able to test http routes", async () => {
+    const response = await colyseus.http.get("/something");
+    assert.deepStrictEqual({ success: true }, response.data);
+    assert.strictEqual('1', response.headers['header-one']);
+  });
+
+  it("basic usage", async () => {
+    const client = await colyseus.sdk.joinOrCreate("room_with_state", {});
+    const room = colyseus.getRoomById(client.id);
+
+    assert.strictEqual(client.id, room.roomId);
+  });
+
+  it("colyseus.createRoom() + connectTo()", async () => {
+    const room = await colyseus.createRoom<State>("room_with_state", {});
 
     const onJoinSpy = sinon.spy(room, 'onJoin');
     const onLeaveSpy = sinon.spy(room, 'onLeave');
 
-    const connection = await colyseus.clientSDK.joinById(room.roomId);
+    const client = await colyseus.connectTo(room);
     sinon.assert.callCount(onJoinSpy, 1);
     sinon.assert.callCount(onLeaveSpy, 0);
 
-    await connection.leave();
+    // wait for next state
+    await room.waitForNextPatch();
+    assert.deepStrictEqual({
+      players: {
+        [client.sessionId]: {
+          playerNum: 1,
+          score: 0
+        }
+      }
+    }, client.state.toJSON());
+
+    await client.leave();
     sinon.assert.callCount(onLeaveSpy, 1);
   });
 
-  it("should assert for messages", async () => {
-    const client = await colyseus.clientSDK.joinOrCreate("room_without_state");
+  it("room.waitForNextMessage()", async () => {
+    const client = await colyseus.sdk.joinOrCreate("room_without_state");
     const room = colyseus.getRoomById(client.id);
 
     let received: boolean = false;
     client.onMessage("one-pong", (message) => {
-      console.log(">>> received pong!");
       assert.deepStrictEqual(message, ["one", "data"]);
       received = true;
     });
 
     client.send("one-ping", "data");
-    await room.waitForMessage();
+    await room.waitForNextMessage();
 
     assert.ok(received);
+  });
+
+  it("room.waitForNextPatch()", async () => {
+    const client1 = await colyseus.sdk.joinOrCreate<State>("room_with_state");
+    const client2 = await colyseus.sdk.joinOrCreate<State>("room_with_state");
+
+    const room = colyseus.getRoomById<State>(client1.id);
+    assert.strictEqual(0, room.state.players.get(client1.sessionId).score);
+
+    client1.send("mutate");
+    await room.waitForNextPatch();
+
+    assert.strictEqual(1, room.state.players.get(client1.sessionId).score);
+  });
+
+  it("waitForNextSimulationTick()", async () => {
+    const room = await colyseus.createRoom<SimulationState>("room_with_simulation");
+    const client = await colyseus.connectTo(room);
+
+    let currentTick = 0;
+    for (let i=0; i<5;i++) {
+      await room.waitForNextSimulationTick();
+      assert.strictEqual(++currentTick, room.state.tick);
+    }
+
+    await room.waitForNextPatch();
+    assert.strictEqual(currentTick, client.state.tick);
+  });
+
+  it("waitForNextSimulationTick()", async () => {
+    const client = await colyseus.sdk.joinOrCreate<SimulationState>("room_with_simulation");
+    const room = await colyseus.getRoomById(client.id);
+
+    let currentTick = 0;
+    for (let i=0; i<5;i++) {
+      await room.waitForNextSimulationTick();
+      assert.strictEqual(++currentTick, room.state.tick);
+    }
+
+    await room.waitForNextPatch();
+    assert.strictEqual(currentTick, client.state.tick);
+
+    assert.notStrictEqual(client.state.tick, room.state.tick);
+  });
+
+  it("should disconnect all connected clients after test is done", async () => {
+    const existingRooms = await matchMaker.query({ name: "room_with_state" });
+    assert.strictEqual(0, existingRooms.length);
+
+    const clients: any = [];
+    for (let i = 0; i < 10; i++) {
+      clients.push(await colyseus.sdk.joinOrCreate("room_with_state"));
+    }
   });
 
 });
