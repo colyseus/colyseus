@@ -198,6 +198,11 @@ export class RedisPresence implements Presence {
         return await this.decrAsync(key);
     }
 
+    public shutdown() {
+        this.sub.quit();
+        this.pub.quit();
+    }
+
     protected handleSubscription = (channel, message) => {
         if (this.subscriptions[channel]) {
           for (let i = 0, l = this.subscriptions[channel].length; i < l; i++) {

@@ -173,4 +173,8 @@ export class LocalPresence implements Presence {
         return this.keys[key];
     }
 
+    public shutdown() {
+      // noop
+    }
+
 }

@@ -25,4 +25,6 @@ export interface Presence {
 
     incr(key: string);
     decr(key: string);
+
+    shutdown(): void;
 }

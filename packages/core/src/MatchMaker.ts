@@ -317,6 +317,20 @@ export function getRoomById(roomId: string) {
   return rooms[roomId];
 }
 
+/**
+ * Disconnects every client on every room in the current process.
+ */
+export function disconnectAll() {
+  const promises: Array<Promise<any>> = [];
+
+  for (const roomId in rooms) {
+    if (!rooms.hasOwnProperty(roomId)) { continue; }
+    promises.push(rooms[roomId].disconnect());
+  }
+
+  return promises;
+}
+
 export function gracefullyShutdown(): Promise<any> {
   if (isGracefullyShuttingDown) {
     return Promise.reject('already_shutting_down');
@@ -332,16 +346,7 @@ export function gracefullyShutdown(): Promise<any> {
   // unsubscribe from process id channel
   presence.unsubscribe(getProcessChannel());
 
-  const promises: Array<Promise<any>> = [];
-
-  for (const roomId in rooms) {
-    if (!rooms.hasOwnProperty(roomId)) {
-      continue;
-    }
-    promises.push(rooms[roomId].disconnect());
-  }
-
-  return Promise.all(promises);
+  return Promise.all(disconnectAll());
 }
 
 /**

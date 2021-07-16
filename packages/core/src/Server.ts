@@ -164,11 +164,10 @@ export class Server {
 
     try {
       await matchMaker.gracefullyShutdown();
-      this.transport.shutdown();
 
-      if (this.driver) {
-        this.driver.shutdown();
-      }
+      this.transport.shutdown();
+      this.presence.shutdown();
+      this.driver.shutdown();
 
       await this.onShutdownCallback();
 
