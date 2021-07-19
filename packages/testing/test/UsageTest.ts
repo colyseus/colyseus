@@ -63,10 +63,14 @@ describe("@colyseus/testing", () => {
     const room = colyseus.getRoomById(client.id);
 
     let received: boolean = false;
-    client.onMessage("one-pong", (message) => {
-      assert.deepStrictEqual(message, ["one", "data"]);
+    // client.onMessage("one-pong", (message) => {
+    //   assert.deepStrictEqual(message, ["one", "data"]);
+    //   received = true;
+    // });
+
+    room.onMessage("one-ping", (client, message)=>{
       received = true;
-    });
+    })
 
     client.send("one-ping", "data");
     await room.waitForNextMessage();
@@ -92,29 +96,13 @@ describe("@colyseus/testing", () => {
     const client = await colyseus.connectTo(room);
 
     let currentTick = 0;
-    for (let i=0; i<5;i++) {
+    for (let i = 0; i < 5; i++) {
       await room.waitForNextSimulationTick();
       assert.strictEqual(++currentTick, room.state.tick);
     }
 
     await room.waitForNextPatch();
     assert.strictEqual(currentTick, client.state.tick);
-  });
-
-  it("waitForNextSimulationTick()", async () => {
-    const client = await colyseus.sdk.joinOrCreate<SimulationState>("room_with_simulation");
-    const room = await colyseus.getRoomById(client.id);
-
-    let currentTick = 0;
-    for (let i=0; i<5;i++) {
-      await room.waitForNextSimulationTick();
-      assert.strictEqual(++currentTick, room.state.tick);
-    }
-
-    await room.waitForNextPatch();
-    assert.strictEqual(currentTick, client.state.tick);
-
-    assert.notStrictEqual(client.state.tick, room.state.tick);
   });
 
   it("should disconnect all connected clients after test is done", async () => {
@@ -125,6 +113,41 @@ describe("@colyseus/testing", () => {
     for (let i = 0; i < 10; i++) {
       clients.push(await colyseus.sdk.joinOrCreate("room_with_state"));
     }
+  });
+
+  it("should wait for a particular message to arrive in the server", async () => {
+    const client1 = await colyseus.sdk.joinOrCreate("room_without_state");
+    const room = colyseus.getRoomById(client1.id);
+
+    client1.send("one-ping", "data");
+
+    const [ client, message ] = await room.waitForMessage("one-ping");
+    assert.strictEqual(client.sessionId, client1.sessionId);
+    assert.strictEqual("data", message);
+  });
+
+  describe("client-side", () => {
+
+    it("should wait for a particular message to arrive in the client-side", async () => {
+      const client1 = await colyseus.sdk.joinOrCreate("room_without_state");
+      client1.send("one-ping", "data");
+
+      const payload = await client1.waitForMessage("one-pong");
+      assert.deepStrictEqual(['one', 'data'], payload);
+
+      // waiting for a message that never arrives.
+      await assert.rejects(async () => await client1.waitForMessage("never-called", 100));
+    });
+
+    it("should wait for a particular message to arrive in the client-side", async () => {
+      const client1 = await colyseus.sdk.joinOrCreate("room_without_state");
+      client1.send("one-ping", "data");
+
+      const [type, payload] = await client1.waitForNextMessage();
+      assert.deepStrictEqual('one-pong', type);
+      assert.deepStrictEqual(['one', 'data'], payload);
+    });
+
   });
 
 });
