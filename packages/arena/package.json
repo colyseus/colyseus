@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/arena",
-  "version": "0.14.20",
+  "version": "0.14.21",
   "description": "Colyseus Arena Tools",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -36,7 +36,7 @@
     "uwebsockets-express": "^1.0.5"
   },
   "dependencies": {
-    "@colyseus/core": "^0.14.17",
+    "@colyseus/core": "0.14.20",
     "cors": "^2.8.5",
     "dotenv": "^8.2.0",
     "express": "^4.16.2"

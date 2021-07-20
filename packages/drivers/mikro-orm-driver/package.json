@@ -1,7 +1,7 @@
 {
   "private": true,
   "name": "@colyseus/mikro-orm-driver",
-  "version": "0.14.20",
+  "version": "0.14.21",
   "input": "./src/index.ts",
   "main": "./build/index.js",
   "module": "./build/index.mjs",

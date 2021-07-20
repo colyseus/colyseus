@@ -1,12 +1,12 @@
 {
   "name": "@colyseus/redis-driver",
-  "version": "0.14.20",
+  "version": "0.14.21",
   "input": "./src/index.ts",
   "main": "./build/index.js",
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
   "dependencies": {
-    "@colyseus/core": "^0.14.17",
+    "@colyseus/core": "0.14.20",
     "redis": "^2.8.0"
   },
   "author": "Endel Dreyer",

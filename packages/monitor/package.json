@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/monitor",
-  "version": "0.14.20",
+  "version": "0.14.21",
   "description": "Web Monitoring Panel for Colyseus",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -30,7 +30,7 @@
   },
   "homepage": "https://github.com/colyseus/colyseus#readme",
   "devDependencies": {
-    "@colyseus/core": "^0.14.17",
+    "@colyseus/core": "0.14.20",
     "@types/material-ui": "^0.21.1",
     "@types/node-os-utils": "^1.1.0",
     "@types/react": "^16.3.9",
