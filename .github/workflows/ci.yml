@@ -1,4 +1,4 @@
-name: npm-publish
+name: test-suite
 on:
   push:
     branches:
@@ -6,7 +6,7 @@ on:
       - dev
 jobs:
   test-suite:
-    name: Test Suite
+    name: test-suite
     runs-on: ubuntu-latest
 
     # use redis service
@@ -29,6 +29,8 @@ jobs:
         node-version: 14.0.0
     - name: Install dependencies
       run: npm install
+    - name: Lerna bootstrap
+      run: npm run boot
     - name: Test
       run: npm test
 
