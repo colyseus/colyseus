@@ -28,11 +28,11 @@ export class ColyseusTestServer {
 
     const httpEndpoint = `http://${hostname}:${port}`;
     this.http = {
-      get: (segments, opts) => httpie.get(`${httpEndpoint}${segments}`, opts),
-      post: (segments, opts) => httpie.post(`${httpEndpoint}${segments}`, opts),
-      patch: (segments, opts) => httpie.patch(`${httpEndpoint}${segments}`, opts),
-      delete: (segments, opts) => httpie.del(`${httpEndpoint}${segments}`, opts),
-      put: (segments, opts) => httpie.put(`${httpEndpoint}${segments}`, opts),
+      ['get']: (segments, opts) => httpie.get(`${httpEndpoint}${segments}`, opts),
+      ['post']: (segments, opts) => httpie.post(`${httpEndpoint}${segments}`, opts),
+      ['patch']: (segments, opts) => httpie.patch(`${httpEndpoint}${segments}`, opts),
+      ['delete']: (segments, opts) => httpie.del(`${httpEndpoint}${segments}`, opts),
+      ['put']: (segments, opts) => httpie.put(`${httpEndpoint}${segments}`, opts),
     };
 
     this.sdk = {

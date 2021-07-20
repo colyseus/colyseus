@@ -22,6 +22,7 @@
     "bump": "lerna version prerelease --force-publish --no-push --no-git-tag-version",
     "publish-alpha": "lerna publish prerelease --no-git-tag-version --dist-tag alpha",
     "publish-stable": "lerna publish patch --no-git-tag-version",
+    "release": "lerna version --exact --force-publish --no-push --no-git-tag-version",
     "preversion": "npm run build",
     "postinstall": "npm run boot"
   },

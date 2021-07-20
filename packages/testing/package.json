@@ -1,10 +1,10 @@
 {
   "name": "@colyseus/testing",
-  "version": "0.14.19",
+  "version": "0.14.20",
   "description": "Testing tools for Colyseus",
   "input": "./src/index.ts",
-  "main": "./build/index.js",
-  "module": "./build/index.mjs",
+  "main": "./build/src/index.js",
+  "module": "./build/src/index.mjs",
   "typings": "./build/index.d.ts",
   "scripts": {
     "test": "TS_NODE_PROJECT=../../tsconfig/tsconfig.test.json mocha --require ts-node/register test/**Test.ts test/**/**Test.ts --exit --timeout 15000",
@@ -28,7 +28,7 @@
   "dependencies": {
     "@colyseus/arena": "^0.14.17",
     "@colyseus/core": "^0.14.17",
-    "colyseus.js": "^0.14.13-alpha.0"
+    "colyseus.js": "^0.14.13"
   },
   "devDependencies": {
     "@colyseus/ws-transport": "^0.14.19"
