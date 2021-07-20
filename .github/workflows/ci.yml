@@ -1,0 +1,45 @@
+name: npm-publish
+on:
+  push:
+    branches:
+      - master
+      - dev
+jobs:
+  test-suite:
+    name: Test Suite
+    runs-on: ubuntu-latest
+
+    # use redis service
+    services:
+      redis:
+        image: redis
+        # Set health checks to wait until redis has started
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@master
+    - name: Set up Node.js
+      uses: actions/setup-node@master
+      with:
+        node-version: 14.0.0
+    - name: Install dependencies
+      run: npm install
+    - name: Test
+      run: npm test
+
+    # - name: Publish if version has been updated
+    #   uses: endel/npm-publish-action@master
+    #   with:
+    #     tag_name: "%s"
+    #     tag_message: "v%s"
+    #     commit_pattern: "^bump (\\S+)"
+    #   env:
+    #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    #     NPM_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
+
+
