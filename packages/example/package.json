@@ -1,13 +1,13 @@
 {
   "name": "@colyseus/example",
   "private": true,
-  "version": "0.14.18",
+  "version": "0.14.20",
   "author": "Endel Dreyer",
   "license": "MIT",
   "scripts": {
     "start": "ts-node-dev src/Server.ts"
   },
   "dependencies": {
-    "colyseus": "^0.14.18"
+    "colyseus": "^0.14.20"
   }
 }

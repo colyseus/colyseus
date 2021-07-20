@@ -1,13 +1,13 @@
 {
   "private": true,
   "name": "@colyseus/mikro-orm-driver",
-  "version": "0.14.18",
+  "version": "0.14.20",
   "input": "./src/index.ts",
   "main": "./build/index.js",
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
   "dependencies": {
-    "@colyseus/core": "^0.14.18",
+    "@colyseus/core": "^0.14.20",
     "@mikro-orm/core": "^4.5.4"
   },
   "author": "Endel Dreyer",

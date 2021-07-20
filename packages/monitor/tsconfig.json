@@ -9,6 +9,7 @@
         "esModuleInterop": true,
         "experimentalDecorators": true,
         "sourceMap": false,
+        "skipLibCheck": true,
         "jsx": "react"
     },
     "include": [

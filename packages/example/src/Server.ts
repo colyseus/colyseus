@@ -3,29 +3,29 @@ import cors from "cors";
 import express from "express";
 
 import { Server, RelayRoom, LobbyRoom } from "colyseus";
-// import { uWebSocketsTransport } from "@colyseus/uwebsockets-transport";
+import { uWebSocketsTransport } from "@colyseus/uwebsockets-transport";
+import expressify from "uwebsockets-express";
 
 import { DummyRoom } from "./DummyRoom";
 
 const port = Number(process.env.PORT || 2567);
 const endpoint = "localhost";
 
-const app = express();
-
-app.use(cors());
-app.use(express.json());
-
 // Create HTTP & WebSocket servers
-const server = http.createServer(app);
+// const server = http.createServer(app);
+const transport = new uWebSocketsTransport();
 
 const gameServer = new Server({
-  // transport: new uWebSocketsTransport(),
+  transport,
   // engine: WebSocket.Server,
-  server: server,
+  // server: server,
   // presence: new RedisPresence(),
   // driver: new MongooseDriver(),
 });
 
+const app = expressify(transport.app);
+app.use(cors());
+app.use(express.json());
 app.get("/hello", (req, res) => {
   res.json({hello: "world!"});
 });
@@ -56,8 +56,6 @@ gameServer.onShutdown(() => {
 });
 
 process.on('unhandledRejection', r => console.log('unhandledRejection...', r));
-
-console.log("will listen!");
 
 gameServer.listen(port)
   .then(() => console.log(`Listening on ws://${endpoint}:${port}`))
