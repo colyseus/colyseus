@@ -76,7 +76,7 @@ async function main() {
         { dir: path.join(basePath, 'build'), format: 'cjs', sourcemap: true },
       ],
       plugins: [
-        externals({ deps: true, peerDeps: true, packagePath: path.join(basePath, "package.json"), }),
+        externals({ deps: true, peerDeps: true, devDeps: true, packagePath: path.join(basePath, "package.json"), }),
         nodeResolve(),
         commonJs(),
         typescript({
@@ -93,7 +93,7 @@ async function main() {
         { dir: path.join(basePath, 'build'), format: 'esm', entryFileNames: '[name].mjs', sourcemap: true },
       ],
       plugins: [
-        externals({ deps: true, peerDeps: true, packagePath: path.join(basePath, "package.json"), }),
+        externals({ deps: true, peerDeps: true, devDeps: true, packagePath: path.join(basePath, "package.json"), }),
         nodeResolve(),
         commonJs(),
         typescript({
