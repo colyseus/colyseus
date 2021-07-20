@@ -74,6 +74,13 @@ export class uWebSocketClient implements Client {
   }
 
   public leave(code?: number, data?: string) {
+    if (this.readyState !== ReadyState.OPEN) {
+      // connection already closed. ignore.
+      return;
+    }
+
+    this.readyState = ReadyState.CLOSING;
+
     if (code !== undefined) {
       this.ref.ws.end(code, data);
 
