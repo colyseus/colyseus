@@ -20,7 +20,10 @@ if (process.env.NODE_ARENA !== "true") {
         ? "arena.env"
         : `${process.env.NODE_ENV || "development"}.env`
 
-    const envPath = path.resolve(path.dirname(require?.main?.filename || process.cwd()), "..", envFilename);
+    const isTest = (process.env.npm_lifecycle_event === "test");
+    const envPath = (!isTest)
+      ? path.resolve(path.dirname(require?.main?.filename || process.cwd()), "..", envFilename)
+      : path.resolve(process.cwd(), envFilename);
 
     if (fs.existsSync(envPath)) {
         dotenv.config({ path: envPath });
