@@ -1,0 +1,12 @@
+{
+    // Node Command
+    "terminal.integrated.shell.windows": "C:\\Windows\\System32\\cmd.exe",
+    "terminal.integrated.shellArgs.windows": [
+    "/k",
+    "E:\\Program Files\\nodejs\\nodevars.bat",
+    ],
+    "cSpell.words": [
+        "apiversion"
+    ],
+
+}

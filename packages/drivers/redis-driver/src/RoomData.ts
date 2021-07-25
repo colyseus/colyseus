@@ -12,15 +12,17 @@ export class RoomData implements RoomListingData {
   public roomId: string;
   public createdAt: Date;
   public unlisted: boolean = false;
+  public cachekey: string;
 
   #client: RedisClient;
 
   constructor(
     initialValues: any,
-    client: RedisClient
+    client: RedisClient,
+    _cachekey : string
   ) {
     this.#client = client;
-
+    this.cachekey = _cachekey;
     this.createdAt = initialValues.createdAt
       ? new Date(initialValues.createdAt)
       : new Date();
@@ -53,7 +55,7 @@ export class RoomData implements RoomListingData {
       const roomcache = JSON.stringify(this);
       this.toJSON = toJSON;
 
-      await this.hset('roomcaches', this.roomId, roomcache);
+      await this.hset(this.cachekey, this.roomId, roomcache);
 
     } else {
       console.warn("⚠️ RedisDriver: can't .save() without a `roomId`")
@@ -82,7 +84,7 @@ export class RoomData implements RoomListingData {
 
   public remove() {
     if (this.roomId) {
-      return this.hdel('roomcaches', this.roomId);
+      return this.hdel(this.cachekey, this.roomId);
     }
   }
 

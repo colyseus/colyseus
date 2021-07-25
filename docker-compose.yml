@@ -1,0 +1,27 @@
+version: '3.8'
+volumes:
+  node_modules: #empty to prevent local node_modules from overwriting installed server modules
+services:
+  colyseus_server:
+    build: 
+      context: .
+      target: dev
+    image: lucidsightinc/colyseus-k8:dev
+    ports:
+      - target: 2222
+        published: 2222
+        protocol: udp
+        mode: host
+      - "2567:2567"
+      - "9229:9229"
+    volumes:
+      #binding current dir to container directory so you can develop locally
+      - .:/colyseus/app/
+      - node_modules:/colyseus/node_modules
+    environment:
+      #if you want to override the image env variable
+      - NODE_ENV=development
+      - FORCE_ROOM_RELOAD=true
+      # - MONGO_URI=mongodb://host.docker.internal:61001/faznewtest
+    labels:
+      - "colyseus_server_master"

@@ -1,0 +1,21 @@
+{
+    "compilerOptions": {
+        "outDir": "build",
+        "module": "commonjs",
+        "lib": ["es6", "dom"],
+        "target": "es6",
+        "declaration": true,
+        "noImplicitAny": false,
+        "esModuleInterop": true,
+        "experimentalDecorators": true,
+        "sourceMap": false,
+        "skipLibCheck": true,
+        "jsx": "react"
+    },
+    "include": [
+      "src/**/*.ts"
+    ],
+    "exclude": [
+      "src/frontend/**"
+    ]
+}

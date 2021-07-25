@@ -1,0 +1,12 @@
+#make sure you BUILD your TS files first with 'npm run build' | colyseus-k8:0.14.8.HPG for hammerplay with clear node modules function
+version: '3.8'
+
+services:
+  colyseus_server:
+    build: 
+      context: .
+      target: prod
+    image: lucidsightinc/colyseus-k8-node14.17.3-buster-uws-redis:0.14.18
+    ports:
+      - "2567:2567"
+      - "9229:9229"

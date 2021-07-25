@@ -22,10 +22,13 @@ export class RedisPresence implements Presence {
     protected pubsubAsync: any;
     protected incrAsync: any;
     protected decrAsync: any;
+    
+    private prefix: string;
 
-    constructor(opts?: redis.ClientOpts) {
+    constructor(opts?: redis.ClientOpts, prefix?: string) {
         this.sub = redis.createClient(opts);
         this.pub = redis.createClient(opts);
+        this.prefix = (prefix !== undefined) ? prefix : "";
 
         // no listener limit
         this.sub.setMaxListeners(0);
@@ -47,6 +50,7 @@ export class RedisPresence implements Presence {
     }
 
     public async subscribe(topic: string, callback: Callback) {
+        topic = this.prefix+topic;
         if (!this.subscriptions[topic]) {
           this.subscriptions[topic] = [];
         }
@@ -63,6 +67,7 @@ export class RedisPresence implements Presence {
     }
 
     public async unsubscribe(topic: string, callback?: Callback) {
+        topic = this.prefix+topic;
         const topicCallbacks = this.subscriptions[topic];
         if (!topicCallbacks) { return; }
 
@@ -83,6 +88,7 @@ export class RedisPresence implements Presence {
     }
 
     public async publish(topic: string, data: any) {
+        topic = this.prefix+topic;
         if (data === undefined) {
             data = false;
         }
@@ -91,15 +97,18 @@ export class RedisPresence implements Presence {
     }
 
     public async exists(roomId: string): Promise<boolean> {
+        roomId = this.prefix+roomId;
         return (await this.pubsubAsync('channels', roomId)).length > 0;
     }
 
     public async setex(key: string, value: string, seconds: number) {
+        key = this.prefix+key;
       return new Promise((resolve) =>
         this.pub.setex(key, seconds, value, resolve));
     }
 
     public async get(key: string) {
+        key = this.prefix+key;
         return new Promise((resolve, reject) => {
             this.pub.get(key, (err, data) => {
                 if (err) { return reject(err); }
@@ -109,32 +118,38 @@ export class RedisPresence implements Presence {
     }
 
     public async del(roomId: string) {
+        roomId = this.prefix+roomId;
         return new Promise((resolve) => {
             this.pub.del(roomId, resolve);
         });
     }
 
     public async sadd(key: string, value: any) {
+        key = this.prefix+key;
         return new Promise((resolve) => {
             this.pub.sadd(key, value, resolve);
         });
     }
 
     public async smembers(key: string): Promise<string[]> {
+        key = this.prefix+key;
         return await this.smembersAsync(key);
     }
 
     public async sismember(key: string, field: string): Promise<number> {
+        key = this.prefix+key;
         return await this.sismemberAsync(key, field);
     }
 
     public async srem(key: string, value: any) {
+        key = this.prefix+key;
         return new Promise((resolve) => {
             this.pub.srem(key, value, resolve);
         });
     }
 
     public async scard(key: string) {
+        key = this.prefix+key;
         return new Promise((resolve, reject) => {
             this.pub.scard(key, (err, data) => {
                 if (err) { return reject(err); }
@@ -144,6 +159,10 @@ export class RedisPresence implements Presence {
     }
 
     public async sinter(...keys: string[]) {
+        for (let index = 0; index < keys.length; index++) {
+            const tkey = keys[index];
+            keys[index] = this.prefix+tkey;
+        }
         return new Promise<string[]>((resolve, reject) => {
             this.pub.sinter(...keys, (err, data) => {
                 if (err) { return reject(err); }
@@ -153,22 +172,26 @@ export class RedisPresence implements Presence {
     }
 
     public async hset(key: string, field: string, value: string) {
+        key = this.prefix+key;
         return new Promise((resolve) => {
             this.pub.hset(key, field, value, resolve);
         });
     }
 
     public async hincrby(key: string, field: string, value: number) {
+        key = this.prefix+key;
         return new Promise((resolve) => {
             this.pub.hincrby(key, field, value, resolve);
         });
     }
 
     public async hget(key: string, field: string) {
+        key = this.prefix+key;
         return await this.hgetAsync(key, field);
     }
 
     public async hgetall(key: string) {
+        key = this.prefix+key;
         return new Promise<{ [key: string]: string }>((resolve, reject) => {
             this.pub.hgetall(key, (err, values) => {
               if (err) { return reject(err); }
@@ -178,6 +201,7 @@ export class RedisPresence implements Presence {
     }
 
     public async hdel(key: string, field: string) {
+        key = this.prefix+key;
         return new Promise((resolve, reject) => {
             this.pub.hdel(key, field, (err, ok) => {
               if (err) { return reject(err); }
@@ -187,14 +211,17 @@ export class RedisPresence implements Presence {
     }
 
     public async hlen(key: string): Promise<number> {
+        key = this.prefix+key;
         return await this.hlenAsync(key);
     }
 
     public async incr(key: string): Promise<number> {
+        key = this.prefix+key;
         return await this.incrAsync(key);
     }
 
     public async decr(key: string): Promise<number> {
+        key = this.prefix+key;
         return await this.decrAsync(key);
     }
 
