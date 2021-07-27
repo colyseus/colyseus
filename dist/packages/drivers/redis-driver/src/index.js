@@ -17,6 +17,7 @@ class RedisDriver {
     createInstance(initialValues = {}) {
         return new RoomData_1.RoomData(initialValues, this._client, this._cachekey);
     }
+    //Prone to collisions 
     async find(conditions) {
         const rooms = await this.getRooms();
         return rooms.filter((room) => {
@@ -38,6 +39,7 @@ class RedisDriver {
     async getRooms() {
         return Object.entries(await this.hgetall(this._cachekey) ?? []).map(([, roomcache]) => new RoomData_1.RoomData(JSON.parse(roomcache), this._client, this._cachekey));
     }
+    //Only used for Testing
     clear() {
         this._client.del(this._cachekey);
     }

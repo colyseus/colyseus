@@ -144,7 +144,7 @@ const transport = new src_5.uWebSocketsTransport();
 const gameServer = new src_1.Server({
     transport,
     // server: server,
-    presence: (USE_REDIS != null) ? new src_3.RedisPresence({ port: REDIS_PORT, host: USE_REDIS }, API_KEY + "_roomcaches") : new src_2.LocalPresence(),
+    presence: (USE_REDIS != null) ? new src_3.RedisPresence({ port: REDIS_PORT, host: USE_REDIS }, API_KEY + "_presencecaches") : new src_2.LocalPresence(),
     driver: (USE_REDIS != null) ? new src_4.RedisDriver({ port: REDIS_PORT, host: USE_REDIS }, API_KEY + "_roomcaches") : new src_2.LocalDriver(),
 });
 const app = uwebsockets_express_1.default(transport.app);
