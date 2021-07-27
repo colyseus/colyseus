@@ -45,7 +45,7 @@ ENV NODE_ENV=development \
 
 ENV PATH=/colyseus/node_modules/.bin:$PATH
 
-RUN npm install
+# RUN npm install
 
 ENTRYPOINT ["/colyseus/app/dev-prelaunch-actions.sh"]
 CMD ["./node_modules/nodemon/bin/nodemon.js","--legacy-watch", "--exec", "ts-node", "--project", "./tsconfig.json",  "--transpile-only", "./server/index.ts", "--inspect=0.0.0.0:9229"]
@@ -55,8 +55,8 @@ FROM base as prod
 
 ENV NODE_ENV=production
 
-RUN npm install --only=production \
-    && npm cache clean --force
+# RUN npm install --only=production \
+#     && npm cache clean --force
 
 #copy into /colyseus
 WORKDIR /colyseus
@@ -66,6 +66,11 @@ COPY packageCombine.js .
 WORKDIR /colyseus/app
 COPY dist/. .
 
+WORKDIR /colyseus
+RUN npm install --only=production \
+    && npm cache clean --force
+
+WORKDIR /colyseus/app
 # RUN chown node:node .
 # USER node
 ENTRYPOINT ["/colyseus/prelaunch-actions.sh"]

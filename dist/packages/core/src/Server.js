@@ -28,6 +28,10 @@ const _1 = require(".");
 const discovery_1 = require("./discovery");
 const LocalPresence_1 = require("./presence/LocalPresence");
 const driver_1 = require("./matchmaker/driver");
+const ProxyController = __importStar(require("./controllers/proxyController"));
+const USE_PROXY = process.env.USE_PROXY || null;
+const USE_REDIS = process.env.USE_REDIS || null;
+const REDIS_PORT = Number(process.env.REDIS_PORT) || 6379;
 class Server {
     constructor(options = {}) {
         this.processId = _1.generateId();
@@ -37,6 +41,10 @@ class Server {
         const { gracefullyShutdown = true } = options;
         this.presence = options.presence || new LocalPresence_1.LocalPresence();
         this.driver = options.driver || new driver_1.LocalDriver();
+        // setup proxy if needed
+        if (USE_PROXY) {
+            ProxyController.initializeProxyRedis({ port: REDIS_PORT, host: USE_REDIS }, true);
+        }
         // setup matchmaker
         matchMaker.setup(this.presence, this.driver, this.processId);
         // "presence" option is not used from now on
@@ -117,6 +125,9 @@ class Server {
         return matchMaker.defineRoomType(name, handler, defaultOptions);
     }
     async gracefullyShutdown(exit = true, err) {
+        if (USE_PROXY) {
+            ProxyController.sendServerStateNotice(false);
+        }
         await discovery_1.unregisterNode(this.presence, {
             port: this.port,
             processId: this.processId,

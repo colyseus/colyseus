@@ -26,6 +26,7 @@ export class RedisDriver implements MatchMakerDriver {
     return new RoomData(initialValues, this._client, this._cachekey);
   }
 
+  //Prone to collisions 
   public async find(conditions: any) {
     const rooms = await this.getRooms();
     return rooms.filter((room) => {
@@ -55,6 +56,7 @@ export class RedisDriver implements MatchMakerDriver {
     );
   }
 
+  //Only used for Testing
   public clear() {
     this._client.del(this._cachekey);
   }

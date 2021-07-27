@@ -38,7 +38,7 @@ const morgan_1 = __importDefault(require("morgan"));
 const logger_1 = __importDefault(require("./utilities/logger"));
 const SHOW_ARENA_ERRORS = Boolean(Number(process.env.SHOW_ARENA_ERRORS || "1"));
 const SHOW_ARENA_ENV = Boolean(Number(process.env.SHOW_ARENA_ENV || "1"));
-const StatsController = __importStar(require("./controllers/statsController"));
+const StatsController = __importStar(require("../packages/core/src/controllers/statsController"));
 //Check to see if we need to load a different file
 let envFilename = (process.env.NODE_ENV === "production")
     ? "arena.env"

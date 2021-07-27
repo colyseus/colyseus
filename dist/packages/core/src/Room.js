@@ -1,4 +1,23 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -15,6 +34,7 @@ const Utils_1 = require("./Utils");
 const Debug_1 = require("./Debug");
 const ServerError_1 = require("./errors/ServerError");
 const Transport_1 = require("./Transport");
+const StatsController = __importStar(require("./controllers/statsController"));
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
 const noneSerializer = new NoneSerializer_1.NoneSerializer();
@@ -49,6 +69,10 @@ class Room {
         this.presence = presence;
         this._events.once('dispose', async () => {
             try {
+                if (this.locked) {
+                    StatsController.updateLockRoomStatsCount(false);
+                }
+                StatsController.updateTotalRoomStatsCount(false);
                 await this._dispose();
             }
             catch (e) {
@@ -57,6 +81,7 @@ class Room {
             this._events.emit('disconnect');
         });
         this.setPatchRate(this.patchRate);
+        StatsController.updateTotalRoomStatsCount(true);
     }
     get locked() {
         return this._locked;
@@ -144,6 +169,7 @@ class Room {
         if (this._locked) {
             return;
         }
+        StatsController.updateLockRoomStatsCount(true);
         this._locked = true;
         await this.listing.updateOne({
             $set: { locked: this._locked },
@@ -155,10 +181,11 @@ class Room {
         if (arguments[0] === undefined) {
             this._lockedExplicitly = false;
         }
-        // skip if already locked
+        // skip if already unlocked
         if (!this._locked) {
             return;
         }
+        StatsController.updateLockRoomStatsCount(false);
         this._locked = false;
         await this.listing.updateOne({
             $set: { locked: this._locked },
@@ -204,6 +231,7 @@ class Room {
     async disconnect() {
         this.internalState = RoomInternalState.DISCONNECTING;
         await this.listing.remove();
+        StatsController.decrementClientCount(this.listing);
         this.autoDispose = true;
         const delayedDisconnection = new Promise((resolve) => this._events.once('disconnect', () => resolve()));
         for (const reconnection of Object.values(this.reconnections)) {
@@ -491,6 +519,8 @@ class Room {
             this._maxClientsReached = true;
             this.lock.call(this, true);
         }
+        //Update Stats
+        StatsController.incrementClientStatsCount(this.listing);
         await this.listing.updateOne({
             $inc: { clients: 1 },
             $set: { locked: this._locked },
@@ -498,6 +528,8 @@ class Room {
     }
     async _decrementClientCount() {
         const willDispose = this._disposeIfEmpty();
+        //Update Stats
+        StatsController.decrementClientCount(this.listing);
         if (this.internalState === RoomInternalState.DISCONNECTING) {
             return;
         }

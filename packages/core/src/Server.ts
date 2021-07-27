@@ -17,6 +17,8 @@ import { LocalDriver } from './matchmaker/driver';
 
 import { Transport } from './Transport';
 
+import * as ProxyController from './controllers/proxyController';
+
 // IServerOptions &
 export type ServerOptions = {
   presence?: Presence,
@@ -41,6 +43,10 @@ export type ServerOptions = {
   server?: http.Server,
 };
 
+const USE_PROXY = process.env.USE_PROXY || null; 
+const USE_REDIS = process.env.USE_REDIS || null;
+const REDIS_PORT: number = Number(process.env.REDIS_PORT) || 6379; 
+
 export class Server {
   public transport: Transport;
 
@@ -57,6 +63,11 @@ export class Server {
 
     this.presence = options.presence || new LocalPresence();
     this.driver = options.driver || new LocalDriver();
+
+    // setup proxy if needed
+    if(USE_PROXY) { 
+      ProxyController.initializeProxyRedis({ port: REDIS_PORT, host : USE_REDIS }, true);
+    }
 
     // setup matchmaker
     matchMaker.setup(this.presence, this.driver, this.processId);
@@ -157,6 +168,11 @@ export class Server {
   }
 
   public async gracefullyShutdown(exit: boolean = true, err?: Error) {
+
+    if(USE_PROXY) { 
+      ProxyController.sendServerStateNotice(false);
+    }
+    
     await unregisterNode(this.presence, {
       port: this.port,
       processId: this.processId,

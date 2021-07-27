@@ -19,7 +19,7 @@ import logger from "./utilities/logger";
 const SHOW_ARENA_ERRORS =  Boolean(Number(process.env.SHOW_ARENA_ERRORS || "1" ));
 const SHOW_ARENA_ENV =  Boolean(Number(process.env.SHOW_ARENA_ENV || "1" ));
 
-import * as StatsController from './controllers/statsController';
+import * as StatsController from '../packages/core/src/controllers/statsController';
 //Check to see if we need to load a different file
 let envFilename = (process.env.NODE_ENV === "production") 
     ? "arena.env"

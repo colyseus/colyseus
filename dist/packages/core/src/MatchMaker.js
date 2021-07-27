@@ -32,6 +32,15 @@ const ServerError_1 = require("./errors/ServerError");
 const driver_1 = require("./matchmaker/driver");
 const controller = __importStar(require("./matchmaker/controller"));
 exports.controller = controller;
+const ProxyController = __importStar(require("./controllers/proxyController"));
+const DELAY_JOIN_MAX = Number(process.env.DELAY_JOIN_MAX || 1500);
+const USE_PROXY = process.env.USE_PROXY || null;
+const MY_POD_NAMESPACE = process.env.MY_POD_NAMESPACE || undefined;
+const MY_POD_NAME = process.env.MY_POD_NAME || 'proxy-dev';
+// const USE_PROXY_PORT = Number(process.env.USE_PROXY_PORT || 2567); 
+// const API_KEY = process.env.API_KEY || "LOCALKEY"; NO Need anymore as we setup Redis prefix keys at initi of driver
+// const MY_POD_IP = process.env.MY_POD_IP || '0.0.0.0';
+let MY_POD_IP = process.env.MY_POD_IP || '0.0.0.0';
 const handlers = {};
 const rooms = {};
 let isGracefullyShuttingDown;
@@ -49,10 +58,17 @@ function setup(_presence, _driver, _processId) {
     exports.presence.hset(getRoomCountKey(), exports.processId, '0');
 }
 exports.setup = setup;
+function delay(ms) {
+    return new Promise(resolve => {
+        setTimeout(resolve, ms);
+    });
+}
 /**
  * Join or create into a room and return seat reservation
  */
 async function joinOrCreate(roomName, clientOptions = {}) {
+    //TODO: FIX ME NOW!
+    await delay(100 + (Math.random() * DELAY_JOIN_MAX)); // wait
     return await Utils_1.retry(async () => {
         let room = await findOneRoomAvailable(roomName, clientOptions);
         if (!room) {
@@ -237,6 +253,9 @@ async function handleCreateRoom(roomName, clientOptions) {
     room.internalState = Room_1.RoomInternalState.CREATED;
     room.listing.roomId = room.roomId;
     room.listing.maxClients = room.maxClients;
+    room.listing.serverName = MY_POD_NAME;
+    room.listing.serverIP = MY_POD_IP;
+    room.listing.namespace = MY_POD_NAMESPACE;
     // imediatelly ask client to join the room
     Debug_1.debugMatchMaking('spawning \'%s\', roomId: %s, processId: %s', roomName, room.roomId, exports.processId);
     room._events.on('lock', lockRoom.bind(this, room));
@@ -245,11 +264,20 @@ async function handleCreateRoom(roomName, clientOptions) {
     room._events.on('leave', onClientLeaveRoom.bind(this, room));
     room._events.once('dispose', disposeRoom.bind(this, roomName, room));
     room._events.once('disconnect', () => room._events.removeAllListeners());
+    //Broadcast to proxy
+    await boradcastRoomIdToProxy(room.roomId, true);
     // room always start unlocked
     await createRoomReferences(room, true);
     await room.listing.save();
     registeredHandler.emit('create', room);
     return room.listing;
+}
+async function boradcastRoomIdToProxy(roomId, addToProxy) {
+    if (USE_PROXY == null) {
+        // console.log("MATCH MAKING - NOT USING PROXY for Multiple Server Support");
+        return;
+    }
+    ProxyController.sendRoomStateNotice(roomId, addToProxy);
 }
 function getRoomById(roomId) {
     return rooms[roomId];
