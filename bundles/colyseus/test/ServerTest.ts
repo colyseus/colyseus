@@ -11,7 +11,7 @@ describe("Server", () => {
   // bind & unbind server
   before(async () => new Promise((resolve) => {
     // setup matchmaker
-    matchMaker.setup(undefined, undefined, 'dummyProcessId')
+    matchMaker.setup(undefined, undefined, 'dummyServerProcessId')
 
     // define a room
     server.define("roomName", DummyRoom);

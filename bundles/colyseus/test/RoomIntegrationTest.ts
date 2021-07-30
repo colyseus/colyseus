@@ -20,7 +20,7 @@ describe("Room Integration", () => {
 
   before(async () => {
     // setup matchmaker
-    matchMaker.setup(presence, driver, 'dummyProcessId')
+    matchMaker.setup(presence, driver, 'dummyRoomIntegrationProcessId')
 
     // listen for testing
     await server.listen(TEST_PORT);

@@ -3,7 +3,7 @@ import sinon from "sinon";
 import * as Colyseus from "colyseus.js";
 import { Schema, type, Context } from "@colyseus/schema";
 
-import { matchMaker, Room, Client, Server, ErrorCode } from "@colyseus/core";
+import { matchMaker, Room, Client, Server, ErrorCode, MatchMakerDriver, Presence } from "@colyseus/core";
 import { DummyRoom, DRIVERS, timeout, Room3Clients, PRESENCE_IMPLEMENTATIONS, Room2Clients, Room2ClientsExplicitLock } from "./utils";
 import { ServerError } from "@colyseus/core";
 
@@ -16,22 +16,26 @@ const TEST_ENDPOINT = `ws://localhost:${TEST_PORT}`;
 
 describe("Integration", () => {
   for (let i = 0; i < PRESENCE_IMPLEMENTATIONS.length; i++) {
-    const presence = new PRESENCE_IMPLEMENTATIONS[i]();
-
     for (let j = 0; j < DRIVERS.length; j++) {
-      describe(`Driver => ${DRIVERS[j].name}, Presence => ${presence.constructor.name}`, () => {
-        const driver = new DRIVERS[j]();
-        const server = new Server({
-          presence,
-          driver,
-          // transport: new uWebSocketsTransport(),
-        });
+      describe(`Driver => ${DRIVERS[j].name}, Presence => ${PRESENCE_IMPLEMENTATIONS[i].name}`, () => {
+        let driver: MatchMakerDriver;
+        let server: Server;
+        let presence: Presence;
 
         const client = new Colyseus.Client(TEST_ENDPOINT);
 
         before(async () => {
+          driver = new DRIVERS[j]();
+          presence = new PRESENCE_IMPLEMENTATIONS[i]();
+
+          server = new Server({
+            presence,
+            driver,
+            // transport: new uWebSocketsTransport(),
+          });
+
           // setup matchmaker
-          matchMaker.setup(presence, driver, 'dummyProcessId')
+          matchMaker.setup(presence, driver, 'dummyIntegrationProcessId')
 
           // define a room
           server.define("dummy", DummyRoom);

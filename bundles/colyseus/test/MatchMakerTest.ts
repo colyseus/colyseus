@@ -1,5 +1,5 @@
 import assert from "assert";
-import { matchMaker, Room } from "@colyseus/core";
+import { matchMaker, MatchMakerDriver, Room } from "@colyseus/core";
 import { DummyRoom, Room2Clients, createDummyClient, timeout, ReconnectRoom, Room3Clients, DRIVERS, ReconnectTokenRoom } from "./utils";
 
 const DEFAULT_SEAT_RESERVATION_TIME = Number(process.env.COLYSEUS_SEAT_RESERVATION_TIME);
@@ -7,12 +7,14 @@ const DEFAULT_SEAT_RESERVATION_TIME = Number(process.env.COLYSEUS_SEAT_RESERVATI
 describe("MatchMaker", () => {
   for (let i = 0; i < DRIVERS.length; i++) {
     describe(`Driver: ${DRIVERS[i].name}`, () => {
+      let driver: MatchMakerDriver;
 
       /**
        * register room types
        */
       before(async () => {
-        matchMaker.setup(undefined, new DRIVERS[i](), 'dummyProcessId');
+        driver = new DRIVERS[i]();
+        matchMaker.setup(undefined, driver, 'dummyMatchMakerProcessId');
 
         matchMaker.defineRoomType("empty", DummyRoom);
         matchMaker.defineRoomType("dummy", DummyRoom);
@@ -42,12 +44,12 @@ describe("MatchMaker", () => {
       });
 
       // make sure driver is cleared out.
-      after(async() => await (new DRIVERS[i]().clear()));
+      after(async() => await driver.clear());
 
       /**
        * `setup` matchmaker to re-set graceful shutdown status
        */
-      beforeEach(() => matchMaker.setup(undefined, new DRIVERS[i](), 'dummyProcessId'));
+      beforeEach(() => matchMaker.setup(undefined, driver, 'dummyMatchMakerProcessId'));
 
       /**
        * ensure no rooms are avaialble in-between tests
