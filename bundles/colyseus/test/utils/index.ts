@@ -115,7 +115,7 @@ export function createDummyClient (seatReservation: matchMaker.SeatReservation, 
 }
 
 export function timeout(ms: number = 200) {
-  return new Promise((resolve, reject) => setTimeout(resolve, ms));
+  return new Promise<void>((resolve, reject) => setTimeout(resolve, ms));
 }
 
 export class DummyRoom extends Room {
