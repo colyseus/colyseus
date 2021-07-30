@@ -33,7 +33,7 @@
   "devDependencies": {
     "@types/cors": "^2.8.10",
     "@types/dotenv": "^8.2.0",
-    "uwebsockets-express": "^1.0.5"
+    "uwebsockets-express": "^1.1.10"
   },
   "dependencies": {
     "@colyseus/core": "0.14.20",
