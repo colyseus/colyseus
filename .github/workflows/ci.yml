@@ -31,6 +31,8 @@ jobs:
       run: npm install
     - name: Lerna bootstrap
       run: npm run boot -- --ci
+    - name: Build project
+      run: npm run build
     - name: Test
       run: npm test
 
