@@ -30,7 +30,7 @@ jobs:
     - name: Install dependencies
       run: npm install
     - name: Lerna bootstrap
-      run: npm run boot
+      run: npm run boot -- --ci
     - name: Test
       run: npm test
 
