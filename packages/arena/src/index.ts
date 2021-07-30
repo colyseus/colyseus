@@ -20,15 +20,15 @@ if (process.env.NODE_ARENA !== "true") {
         ? "arena.env"
         : `${process.env.NODE_ENV || "development"}.env`
 
-    const isTest = (process.env.npm_lifecycle_event === "test");
-    const envPath = (!isTest)
-      ? path.resolve(path.dirname(require?.main?.filename || process.cwd()), "..", envFilename)
-      : path.resolve(process.cwd(), envFilename);
+    // return the first .env path found
+    const envPath = [
+      path.resolve(path.dirname(require?.main?.filename || process.cwd()), "..", envFilename),
+      path.resolve(process.cwd(), envFilename)
+    ].find((envPath) => fs.existsSync(envPath));
 
-    if (fs.existsSync(envPath)) {
+    if (envPath) {
         dotenv.config({ path: envPath });
         console.log(`✅ ${envFilename} loaded.`);
-
     } else {
         console.log(`⚠️  ${envFilename} not found.`);
     }
