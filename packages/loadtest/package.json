@@ -36,10 +36,10 @@
   "dependencies": {
     "blessed": "^0.1.81",
     "colyseus.js": "^0.14.13",
-    "minimist": "^1.2.0",
+    "minimist": "^1.2.5",
     "ts-node": "^7.0.1",
-    "typescript": "^3.2.4",
-    "ws": "^6.1.4"
+    "typescript": "^4.3.5",
+    "ws": "^7.4.5"
   },
   "devDependencies": {
     "@types/blessed": "^0.1.10"
