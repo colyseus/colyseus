@@ -1,5 +1,5 @@
 {
-  "name": "colyseus-monorepo",
+  "name": "@colyseus/monorepo",
   "private": true,
   "type": "module",
   "workspaces": [
