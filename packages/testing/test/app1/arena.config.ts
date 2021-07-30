@@ -9,10 +9,10 @@ import { RoomWithState } from "./RoomWithState";
 import { RoomWithSimulation } from "./RoomWithSimulation";
 
 export default Arena({
-  options: {
-    driver: new MongooseDriver(),
-    presence: new RedisPresence(),
-  },
+  // options: {
+  //   driver: new MongooseDriver(),
+  //   presence: new RedisPresence(),
+  // },
 
   getId: () => "My App 1",
 
