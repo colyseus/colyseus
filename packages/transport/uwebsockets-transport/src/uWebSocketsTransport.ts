@@ -169,29 +169,39 @@ export class uWebSocketsTransport extends Transport {
         const allowedRoomNameChars = /([a-zA-Z_\-0-9]+)/gi;
 
         const writeHeaders = (res: uWebSockets.HttpResponse) => {
+            // skip if aborted
+            if (res.aborted) { return; }
+
             for (const header in headers) {
                 res.writeHeader(header, headers[header].toString());
             }
+
+            return true;
         }
 
         const writeError = (res: uWebSockets.HttpResponse, error: { code: number, error: string }) => {
+            // skip if aborted
+            if (res.aborted) { return; }
+
             res.writeStatus("406 Not Acceptable");
             res.end(JSON.stringify(error));
         }
 
-        const onAborted = (req: uWebSockets.HttpRequest) =>
-            console.warn("REQUEST ABORTED:", req.getMethod(), req.getUrl());
+        const onAborted = (res: uWebSockets.HttpResponse) => {
+          res.aborted = true;
+        };
 
         this.app.options("/matchmake/*", (res, req) => {
-            res.onAborted(() => onAborted(req));
+            res.onAborted(() => onAborted(res));
 
-            writeHeaders(res);
-            res.writeStatus("204 No Content");
-            res.end();
+            if (writeHeaders(res)) {
+              res.writeStatus("204 No Content");
+              res.end();
+            }
         });
 
         this.app.post("/matchmake/*", (res, req) => {
-            res.onAborted(() => onAborted(req));
+            res.onAborted(() => onAborted(res));
 
             writeHeaders(res);
             res.writeHeader('Content-Type', 'application/json');
@@ -202,14 +212,15 @@ export class uWebSocketsTransport extends Transport {
 
             // read json body
             this.readJson(res, async (clientOptions) => {
-
                 const method = matchedParams[matchmakeIndex + 1];
                 const name = matchedParams[matchmakeIndex + 2] || '';
 
                 try {
                     const response = await matchMaker.controller.invokeMethod(method, name, clientOptions);
-                    res.writeStatus("200 OK");
-                    res.end(JSON.stringify(response));
+                    if (!res.aborted) {
+                      res.writeStatus("200 OK");
+                      res.end(JSON.stringify(response));
+                    }
 
                 } catch (e) {
                     debugAndPrintError(e);
@@ -219,13 +230,7 @@ export class uWebSocketsTransport extends Transport {
                     });
                 }
 
-            }, () => {
-                writeError(res, {
-                    code: ErrorCode.APPLICATION_ERROR,
-                    error: "failed to read json body"
-                });
-            })
-
+            });
         });
 
         // this.app.any("/*", (res, req) => {
@@ -234,7 +239,7 @@ export class uWebSocketsTransport extends Transport {
         // });
 
         this.app.get("/matchmake/*", async (res, req) => {
-            res.onAborted(() => onAborted(req));
+            res.onAborted(() => onAborted(res));
 
             writeHeaders(res);
             res.writeHeader('Content-Type', 'application/json');
@@ -245,8 +250,10 @@ export class uWebSocketsTransport extends Transport {
 
             try {
                 const response = await matchMaker.controller.getAvailableRooms(roomName || '')
-                res.writeStatus("200 OK");
-                res.end(JSON.stringify(response));
+                if (!res.aborted) {
+                  res.writeStatus("200 OK");
+                  res.end(JSON.stringify(response));
+                }
 
             } catch (e) {
                 debugAndPrintError(e);
@@ -260,7 +267,7 @@ export class uWebSocketsTransport extends Transport {
 
     /* Helper function for reading a posted JSON body */
     /* Extracted from https://github.com/uNetworking/uWebSockets.js/blob/master/examples/JsonPost.js */
-    private readJson(res: uWebSockets.HttpResponse, cb: (json: any) => void, err: () => void) {
+    private readJson(res: uWebSockets.HttpResponse, cb: (json: any) => void) {
         let buffer: any;
         /* Register data cb */
         res.onData((ab, isLast) => {
@@ -274,6 +281,7 @@ export class uWebSocketsTransport extends Transport {
                     } catch (e) {
                         /* res.close calls onAborted */
                         res.close();
+                        cb(undefined);
                         return;
                     }
                     cb(json);
@@ -284,6 +292,7 @@ export class uWebSocketsTransport extends Transport {
                     } catch (e) {
                         /* res.close calls onAborted */
                         res.close();
+                        cb(undefined);
                         return;
                     }
                     cb(json);
@@ -296,9 +305,6 @@ export class uWebSocketsTransport extends Transport {
                 }
             }
         });
-
-        /* Register error cb */
-        res.onAborted(err);
     }
 
 }
