@@ -1,6 +1,7 @@
 import http from "http";
 import cors from "cors";
 import express from "express";
+import { monitor } from "@colyseus/monitor";
 
 import { Server, RelayRoom, LobbyRoom } from "colyseus";
 import { uWebSocketsTransport } from "@colyseus/uwebsockets-transport";
@@ -44,6 +45,7 @@ gameServer.define("dummy", DummyRoom)
   .on("dispose", (room) => console.log("room disposed!", room.roomId));
 
 app.use(express.static(__dirname));
+app.use("/monitor", monitor());
 
 gameServer.onShutdown(() => {
   console.log("CUSTOM SHUTDOWN ROUTINE: STARTED");

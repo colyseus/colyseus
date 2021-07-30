@@ -9,5 +9,8 @@
   },
   "dependencies": {
     "colyseus": "0.14.21"
+  },
+  "devDependencies": {
+    "@colyseus/monitor": "^0.14.0"
   }
 }

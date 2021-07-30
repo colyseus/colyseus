@@ -51,11 +51,6 @@ export class DummyRoom extends Room<State> {
     console.log(`client "${client.sessionId}" has joined, options =>`, options);
     console.log("auth response =>", auth);
     this.state.lastMessage = `${ client.sessionId } joined.`;
-
-    setTimeout(() => {
-      client.leave();
-      client.leave();
-    }, 2000);
   }
 
   // async onLeave (client, consented) {
