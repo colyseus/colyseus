@@ -9,18 +9,11 @@ jobs:
     name: test-suite
     runs-on: ubuntu-latest
 
-    # use redis service
-    services:
-      redis:
-        image: redis
-        # Set health checks to wait until redis has started
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
+    - name: Start Redis
+      uses: supercharge/redis-github-action@1.2.0
+      with:
+        redis-version: 6
     - name: Checkout repository
       uses: actions/checkout@master
     - name: Set up Node.js
