@@ -102,7 +102,7 @@ describe("@colyseus/testing", () => {
     }
 
     await room.waitForNextPatch();
-    assert.strictEqual(currentTick, client.state.tick);
+    assert.strictEqual(room.state.tick, client.state.tick);
   });
 
   it("should disconnect all connected clients after test is done", async () => {
