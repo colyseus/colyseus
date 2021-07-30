@@ -95,7 +95,7 @@ describe("@colyseus/testing", () => {
     const room = await colyseus.createRoom<SimulationState>("room_with_simulation");
     const client = await colyseus.connectTo(room);
 
-    let currentTick = 0;
+    let currentTick = room.state.tick;
     for (let i = 0; i < 5; i++) {
       await room.waitForNextSimulationTick();
       assert.strictEqual(++currentTick, room.state.tick);
