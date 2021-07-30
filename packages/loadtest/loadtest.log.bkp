@@ -1,0 +1,12 @@
+[7/30/2021, 1:59:53 PM] @colyseus/loadtest
+endpoint: ws://localhost:2567
+roomName: dummy
+numClients: 4
+scriptFile: /Users/endel/Projects/colyseus/colyseus/packages/loadtest/example/bot.mjs
+logLevel: all
+reestablishAllDelay: 5000
+output: /Users/endel/Projects/colyseus/colyseus/packages/loadtest/loadtest.log
+[7/30/2021, 1:59:55 PM] Finished. Summary:
+Successful connections: 4
+Failed connections: 0
+Total errors: 0

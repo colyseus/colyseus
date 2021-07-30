@@ -1,0 +1,47 @@
+{
+  "name": "@colyseus/loadtest",
+  "version": "0.14.6-alpha.3",
+  "description": "Utility tool for load testing Colyseus.",
+  "input": "./src/index.ts",
+  "main": "./build/index.js",
+  "module": "./build/index.mjs",
+  "typings": "./build/index.d.ts",
+  "bin": {
+    "colyseus-loadtest": "./bin.js",
+    "colyseus-loadtest-esm": "./bin.mjs"
+  },
+  "files": [
+    "build",
+    "bin.js",
+    "bin.mjs",
+    "tsconfig.json"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/colyseus/colyseus-loadtest.git"
+  },
+  "homepage": "https://colyseus.io/",
+  "keywords": [
+    "colyseus",
+    "load",
+    "test",
+    "load",
+    "testing"
+  ],
+  "author": "Endel Dreyer",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/colyseus/colyseus-loadtest/issues"
+  },
+  "dependencies": {
+    "blessed": "^0.1.81",
+    "colyseus.js": "^0.14.13",
+    "minimist": "^1.2.0",
+    "ts-node": "^7.0.1",
+    "typescript": "^3.2.4",
+    "ws": "^6.1.4"
+  },
+  "devDependencies": {
+    "@types/blessed": "^0.1.10"
+  }
+}
