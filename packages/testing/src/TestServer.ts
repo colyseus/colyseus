@@ -2,8 +2,6 @@ import { Server, Room, matchMaker } from "@colyseus/core";
 import { Client } from "colyseus.js";
 import * as httpie from "httpie";
 
-
-
 export class ColyseusTestServer {
   // matchmaking methods
   public sdk: {

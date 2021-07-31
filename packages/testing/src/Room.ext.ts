@@ -6,7 +6,7 @@
 import { Deferred, Room, Client } from "@colyseus/core";
 import { Room as ClientRoom } from "colyseus.js";
 
-import timers from "timers/promises";
+// import timers from "timers/promises";
 
 // ----------------------------------------------------------------------------------------
 // SERVER-SIDE EXTENSIONS
@@ -67,7 +67,8 @@ Room.prototype.waitForMessage = async function(this: Room, type: string, rejectT
 Room.prototype.waitForNextSimulationTick = async function(this: Room) {
   if (this['_simulationInterval']) {
     const milliseconds = this['_simulationInterval']['_idleTimeout'];
-    return timers.setTimeout(milliseconds);
+    return new Promise((resolve) => setTimeout(resolve, milliseconds));
+    // return timers.setTimeout(milliseconds);
 
   } else {
     console.warn("⚠️ waitForSimulation() - .setSimulationInterval() is a must.");
