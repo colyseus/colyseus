@@ -1,11 +1,12 @@
 {
   "projectName": "colyseus",
-  "projectOwner": "gamestdio",
+  "projectOwner": "colyseus",
   "files": [
     "README.md"
   ],
   "imageSize": 100,
   "commit": false,
+  "contributorsSortAlphabetically": true,
   "contributors": [
     {
       "login": "endel",
@@ -215,7 +216,17 @@
         "bug",
         "code"
       ]
-    }
+    },
+    {
+      "login": "Vidski",
+      "name": "David Rydwanski",
+      "avatar_url": "https://avatars.githubusercontent.com/u/36316706?v=4",
+      "profile": "https://github.com/Vidski",
+      "contributions": [
+        "question",
+        "code"
+      ]
+    },
   ],
   "repoType": "github"
 }

@@ -42,7 +42,7 @@
     "@types/mocha": "^5.2.7",
     "@types/node": "^16.3.2",
     "@types/sinon": "^10.0.2",
-    "all-contributors-cli": "^5.4.0",
+    "all-contributors-cli": "^6.20.0",
     "assert": "^2.0.0",
     "benchmark": "^2.1.1",
     "c8": "^7.7.2",
