@@ -1,5 +1,5 @@
 import assert from "assert";
-import sinon from "sinon";
+import sinon, { match } from "sinon";
 import * as Colyseus from "colyseus.js";
 import { Schema, type, Context } from "@colyseus/schema";
 
@@ -60,7 +60,7 @@ describe("Integration", () => {
 
               matchMaker.defineRoomType('oncreate', class _ extends Room {
                 onCreate(options) {
-                  assert.deepEqual({ string: "hello", number: 1 }, options);
+                  assert.deepStrictEqual({ string: "hello", number: 1 }, options);
                   onCreateCalled = true;
                 }
               });
@@ -102,7 +102,7 @@ describe("Integration", () => {
               matchMaker.defineRoomType('onjoin', class _ extends Room {
                 onJoin(client: Client, options: any) {
                   onJoinCalled = true;
-                  assert.deepEqual({ string: "hello", number: 1 }, options);
+                  assert.deepStrictEqual({ string: "hello", number: 1 }, options);
                 }
               });
 
@@ -316,7 +316,7 @@ describe("Integration", () => {
                 onCreate() {
                   this.onMessage("msgtype", (client, message) => {
                     sessionId = client.sessionId;
-                    assert.deepEqual(messageToSend, message);
+                    assert.deepStrictEqual(messageToSend, message);
                     onMessageCalled = true;
                   });
                 }
@@ -356,7 +356,7 @@ describe("Integration", () => {
                   this.onMessage(MessageTypes.REQUEST, (client, message) => {
                     sessionId = client.sessionId;
                     client.send(MessageTypes.RESPONSE, message);
-                    assert.deepEqual(messageToSend, message);
+                    assert.deepStrictEqual(messageToSend, message);
                     onMessageCalled = true;
                   });
                 }
@@ -366,7 +366,7 @@ describe("Integration", () => {
               connection.send(MessageTypes.REQUEST, messageToSend);
 
               connection.onMessage(MessageTypes.RESPONSE, (message) => {
-                assert.deepEqual(messageToSend, message);
+                assert.deepStrictEqual(messageToSend, message);
                 onMessageReceived = true;
               });
 
@@ -491,7 +491,7 @@ describe("Integration", () => {
 
               await timeout(200);
 
-              assert.deepEqual(["one", "one", "one", "three", "three", "three", "two", "two", "two"], messages.sort());
+              assert.deepStrictEqual(["one", "one", "one", "three", "three", "three", "two", "two", "two"], messages.sort());
 
               conn1.leave();
               conn2.leave();
@@ -527,7 +527,7 @@ describe("Integration", () => {
 
               await timeout(200);
 
-              assert.deepEqual(["one", "one", "three", "three", "two", "two"], messages.sort());
+              assert.deepStrictEqual(["one", "one", "three", "three", "two", "two"], messages.sort());
 
               conn1.leave();
               conn2.leave();
@@ -833,7 +833,7 @@ describe("Integration", () => {
               const room = rooms[0];
 
               assert.strictEqual(3, connections.length);
-              assert.deepEqual([room.roomId, room.roomId, room.roomId], connections.map(conn => conn.id));
+              assert.deepStrictEqual([room.roomId, room.roomId, room.roomId], connections.map(conn => conn.id));
 
               assert.strictEqual(1, rooms.length);
               assert.strictEqual(room.roomId, rooms[0].roomId);
