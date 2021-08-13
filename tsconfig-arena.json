@@ -12,7 +12,11 @@
       "sourceMap": true,
       "moduleResolution": "node",
       "skipLibCheck": true,
-  },
+      "baseUrl": ".",
+      "paths": {
+        "@colyseus/core": ["packages/core/src"]
+      }
+},
   "include": [
     "server/**/*.ts",
     "server/*.ts",
