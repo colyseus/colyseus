@@ -191,6 +191,17 @@ async function SetupArena() {
       logger.error("CRITICAL ERROR: Custom Game Server Rooms");
       console.error(error);
     }
+
+    try {
+      if(await arenaConfig.initializeExpress(app) === false) {
+        logger.error("ERROR: Failed Express Initialize Server");
+      } else {
+        logger.info("Success!");
+      }
+    } catch (error) {
+      logger.error("CRITICAL ERROR: Express Initialize");
+      console.error(error);
+    }
     
   }
 }
