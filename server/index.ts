@@ -98,6 +98,7 @@ const MY_POD_IP = process.env.MY_POD_IP != null ? (process.env.MY_POD_IP === "us
 const APIVERSION = process.env.APIVERSION || "0.14.18-Base";
 const API_KEY = process.env.API_KEY || "LOCALKEY";
 const SERVER_URL = process.env.SERVER_URL || "localhost";
+const CUSTOM_CORS = process.env.CUSTOM_CORS || false;
 
 //Sets Env for remaining app
 if(process.env.MY_POD_IP && process.env.MY_POD_IP === "useip") {
@@ -146,6 +147,17 @@ const gameServer = new Server({
 
 const app = expressify(transport.app);
 app.use(cors());
+
+//If Custom CORS is not set Open to all domains 
+if(CUSTOM_CORS === false) {
+  app.options("/*", function(req, res, next){
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
+    res.status(200).send("200");
+  });
+}
+
 app.use(express.json());
 app.use(morgan("combined", { "stream": logger.stream }));
 
@@ -167,8 +179,8 @@ app.get('/metrics/ccu', async (req, res) => {
 	}
 });
 
-app.get("/hello", (req, res) => {
-  res.json({hello: "world!"});
+app.get("/healthping", (req, res) => {
+  res.json({reply: "pong", timestamp: Date.now});
 });
 
 gameServer.define("lobby", LobbyRoom);
@@ -185,7 +197,7 @@ async function SetupArena() {
       if(await arenaConfig.initializeGameServer(gameServer) === false) {
         logger.error("ERROR: Failed Custom Game Server Rooms");
       } else {
-        logger.info("Success!");
+        // logger.info("Success!");
       }
     } catch (error) {
       logger.error("CRITICAL ERROR: Custom Game Server Rooms");
@@ -196,7 +208,7 @@ async function SetupArena() {
       if(await arenaConfig.initializeExpress(app) === false) {
         logger.error("ERROR: Failed Express Initialize Server");
       } else {
-        logger.info("Success!");
+        // logger.info("Success!");
       }
     } catch (error) {
       logger.error("CRITICAL ERROR: Express Initialize");
@@ -229,7 +241,7 @@ async function SetupArenaPreListen() {
       if(await arenaConfig.beforeListen() === false) {
         logger.error("ERROR: Failed Pre Listen Functions");
       } else {
-        logger.info("Success!");
+        // logger.info("Success!");
       }
     } catch (error) {
       logger.error("CRITICAL ERROR: Pre Listen Functions");
