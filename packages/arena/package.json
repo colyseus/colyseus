@@ -36,7 +36,7 @@
     "uwebsockets-express": "^1.1.10"
   },
   "dependencies": {
-    "@colyseus/core": "0.14.20",
+    "@colyseus/core": "^0.14.20",
     "cors": "^2.8.5",
     "dotenv": "^8.2.0",
     "express": "^4.16.2"
