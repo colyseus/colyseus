@@ -1,6 +1,6 @@
 {
   "name": "colyseus",
-  "version": "0.14.21",
+  "version": "0.14.22",
   "description": "Multiplayer Framework for Node.js.",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -28,7 +28,7 @@
   },
   "homepage": "https://colyseus.io/",
   "engines": {
-    "node": ">= 12.x"
+    "node": ">= 14.x"
   },
   "dependencies": {
     "@colyseus/core": "0.14.20",
