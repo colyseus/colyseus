@@ -2,11 +2,18 @@ import path from "path";
 import util from "util";
 import blessed from "blessed";
 import WebSocket from "ws";
-import timer from "timers/promises"
+// import timer from "timers/promises"
 import minimist from "minimist";
 
 import * as logWriter from "./logWriter";
 import { Client, Room } from "colyseus.js";
+
+// TODO: use "timers/promises" instead (drop Node.js v14)
+const timer = {
+    setTimeout(milliseconds: number, ...args: any) {
+        return new Promise((resolve) => setTimeout(resolve, milliseconds, ...args));
+    }
+}
 
 const argv = minimist(process.argv.slice(2));
 
