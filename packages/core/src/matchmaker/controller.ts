@@ -18,9 +18,10 @@ export function getAvailableRooms(roomName: string) {
     const conditions: any = {
         locked: false,
         private: false,
-        name: roomName,
     };
-
+    if (roomName) {
+        conditions["name"] = roomName;
+    }
     return matchMaker.query(conditions);
 }
 
