@@ -246,7 +246,7 @@ export class uWebSocketsTransport extends Transport {
 
             const url = req.getUrl();
             const matchedParams = url.match(allowedRoomNameChars);
-            const roomName = matchedParams[matchedParams.length - 1];
+            const roomName = matchedParams.length > 1 ? matchedParams[matchedParams.length - 1] : "";
 
             try {
                 const response = await matchMaker.controller.getAvailableRooms(roomName || '')
