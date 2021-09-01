@@ -9,11 +9,11 @@ jobs:
 
     runs-on: ubuntu-latest
     env:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      NPM_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
 
     strategy:
       matrix:
-        node-version: [16.x]
+        node-version: [16.1.0]
 
     steps:
       - uses: actions/checkout@v2
@@ -25,6 +25,5 @@ jobs:
       - run: npm run boot -- --ci
       - run: npm run build
       - run: npm install get-monorepo-packages
-      - run: npm install npmview
       - run: npm install semver
       - run: node ./.github/scripts/package-publisher.js
