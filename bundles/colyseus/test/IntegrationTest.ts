@@ -886,6 +886,29 @@ describe("Integration", () => {
 
           })
 
+          describe("Matchmaker queries", () => {
+            const createDummyRooms = async () => {
+              matchMaker.defineRoomType('allroomstest', class _ extends Room {});
+              matchMaker.defineRoomType('allroomstest2', class _ extends Room {});
+              await matchMaker.create("allroomstest");
+              await matchMaker.create("allroomstest2");
+            }
+            it("client.getAvailableRooms() should recieve all rooms when roomName is undefined", async () => {
+              await createDummyRooms();
+              const rooms = await client.getAvailableRooms(undefined);
+              assert.strictEqual(2, rooms.length);
+            });
+            it("client.getAvailableRooms() should recieve the room when roomName is given", async () => {
+              await createDummyRooms();
+              const rooms = await client.getAvailableRooms("allroomstest");
+              assert.strictEqual("allroomstest", rooms[0]["name"]);
+            });
+            it("client.getAvailableRooms() should recieve empty list if no room exists for the given roomName", async () => {
+              await createDummyRooms();
+              const rooms = await client.getAvailableRooms("incorrectRoomName");
+              assert.strictEqual(0, rooms.length);
+            });
+          })
         });
 
         describe("Error handling", () => {
