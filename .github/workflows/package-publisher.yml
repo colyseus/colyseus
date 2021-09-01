@@ -26,4 +26,4 @@ jobs:
       - run: npm run build
       - run: npm install get-monorepo-packages
       - run: npm install semver
-      - run: node ./.github/scripts/package-publisher.js
+      - run: node ./.github/scripts/package-publisher.cjs
