@@ -272,7 +272,7 @@ export class Server {
 
     } else if (req.method === 'GET') {
       const matchedParams = req.url.match(this.allowedRoomNameChars);
-      const roomName = matchedParams[matchedParams.length - 1];
+      const roomName = matchedParams.length > 1 ? matchedParams[matchedParams.length - 1] : "";
 
       headers['Content-Type'] = 'application/json';
       res.writeHead(200, headers);
