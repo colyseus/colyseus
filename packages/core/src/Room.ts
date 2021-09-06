@@ -28,7 +28,7 @@ export const DEFAULT_SEAT_RESERVATION_TIME = Number(process.env.COLYSEUS_SEAT_RE
 
 export type SimulationCallback = (deltaTime: number) => void;
 
-export type RoomConstructor<T= any> = new (presence?: Presence) => Room<T>;
+export type RoomConstructor<T= any> = new (roomId: string, roomName: string, presence?: Presence) => Room<T>;
 
 export interface IBroadcastOptions extends ISendOptions {
   except?: Client;
@@ -50,11 +50,20 @@ export abstract class Room<State= any, Metadata= any> {
     return this.listing.metadata;
   }
 
+  public get roomId() {
+    return this.#roomId;
+  }
+
+  public get roomName() {
+    return this.#roomName;
+  }
+
+  protected set roomId(roomId: string) {
+    this.#roomId = roomId;
+  }
+
   public listing: RoomListingData<Metadata>;
   public clock: Clock = new Clock();
-
-  public roomId: string;
-  public roomName: string;
 
   public maxClients: number = Infinity;
   public patchRate: number = DEFAULT_PATCH_RATE;
@@ -92,7 +101,12 @@ export abstract class Room<State= any, Metadata= any> {
   // ever had success joining into it on the specified interval.
   private _autoDisposeTimeout: NodeJS.Timer;
 
-  constructor(presence?: Presence) {
+  #roomId: string;
+  #roomName: string;
+
+  constructor(roomId: string, roomName: string, presence?: Presence) {
+    this.#roomId = roomId;
+    this.#roomName = roomName;
     this.presence = presence;
 
     this._events.once('dispose', async () => {
@@ -575,7 +589,7 @@ export abstract class Room<State= any, Metadata= any> {
     const code = decode.uint8(bytes, it);
 
     if (!bytes) {
-      debugAndPrintError(`${this.roomName} (${this.roomId}), couldn't decode message: ${bytes}`);
+      debugAndPrintError(`${this.#roomName} (${this.#roomId}), couldn't decode message: ${bytes}`);
       return;
     }
 

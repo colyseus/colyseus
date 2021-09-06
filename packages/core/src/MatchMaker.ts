@@ -259,11 +259,9 @@ async function handleCreateRoom(roomName: string, clientOptions: ClientOptions):
     throw new ServerError( ErrorCode.MATCHMAKE_NO_HANDLER, `provided room name "${roomName}" not defined`);
   }
 
-  const room = new registeredHandler.klass();
+  const room = new registeredHandler.klass(generateId(), roomName);
 
   // set room public attributes
-  room.roomId = generateId();
-  room.roomName = roomName;
   room.presence = presence;
 
   // create a RoomCache reference.
