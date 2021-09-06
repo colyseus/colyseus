@@ -42,6 +42,10 @@ export enum RoomInternalState {
 
 export abstract class Room<State= any, Metadata= any> {
 
+  public get _events() {
+    return this.#_events;
+  }
+
   public get locked() {
     return this._locked;
   }
@@ -75,9 +79,6 @@ export abstract class Room<State= any, Metadata= any> {
   public clients: Client[] = [];
   public internalState: RoomInternalState = RoomInternalState.CREATING;
 
-  /** @internal */
-  public _events = new EventEmitter();
-
   // seat reservation & reconnection
   protected seatReservationTime: number = DEFAULT_SEAT_RESERVATION_TIME;
   protected reservedSeats: { [sessionId: string]: any } = {};
@@ -101,6 +102,9 @@ export abstract class Room<State= any, Metadata= any> {
   // ever had success joining into it on the specified interval.
   private _autoDisposeTimeout: NodeJS.Timer;
 
+  /** @internal */
+  #_events = new EventEmitter();
+
   #roomId: string;
   #roomName: string;
 
@@ -109,14 +113,14 @@ export abstract class Room<State= any, Metadata= any> {
     this.#roomName = roomName;
     this.presence = presence;
 
-    this._events.once('dispose', async () => {
+    this.#_events.once('dispose', async () => {
       try {
         await this._dispose();
 
       } catch (e) {
         debugAndPrintError(`onDispose error: ${(e && e.message || e || 'promise rejected')}`);
       }
-      this._events.emit('disconnect');
+      this.#_events.emit('disconnect');
     });
 
     this.setPatchRate(this.patchRate);
@@ -230,7 +234,7 @@ export abstract class Room<State= any, Metadata= any> {
       $set: { locked: this._locked },
     });
 
-    this._events.emit('lock');
+    this.#_events.emit('lock');
   }
 
   public async unlock() {
@@ -248,7 +252,7 @@ export abstract class Room<State= any, Metadata= any> {
       $set: { locked: this._locked },
     });
 
-    this._events.emit('unlock');
+    this.#_events.emit('unlock');
   }
 
   public send(client: Client, type: string | number, message: any, options?: ISendOptions): void;
@@ -314,7 +318,7 @@ export abstract class Room<State= any, Metadata= any> {
     this.autoDispose = true;
 
     const delayedDisconnection = new Promise<void>((resolve) =>
-      this._events.once('disconnect', () => resolve()));
+      this.#_events.once('disconnect', () => resolve()));
 
     for (const reconnection of Object.values(this.reconnections)) {
       reconnection.reject();
@@ -328,7 +332,7 @@ export abstract class Room<State= any, Metadata= any> {
       }
     } else {
       // no clients connected, dispose immediately.
-      this._events.emit('dispose');
+      this.#_events.emit('dispose');
     }
 
     return await delayedDisconnection;
@@ -393,7 +397,7 @@ export abstract class Room<State= any, Metadata= any> {
     }
 
     // emit 'join' to room handler
-    this._events.emit('join', client);
+    this.#_events.emit('join', client);
 
     // allow client to send messages after onJoin has succeeded.
     client.ref.on('message', this._onMessage.bind(this, client));
@@ -546,7 +550,7 @@ export abstract class Room<State= any, Metadata= any> {
     );
 
     if (willDispose) {
-      this._events.emit('dispose');
+      this.#_events.emit('dispose');
     }
 
     return willDispose;
@@ -668,7 +672,7 @@ export abstract class Room<State= any, Metadata= any> {
       // try to dispose immediatelly if client reconnection isn't set up.
       const willDispose = await this._decrementClientCount();
 
-      this._events.emit('leave', client, willDispose);
+      this.#_events.emit('leave', client, willDispose);
     }
   }
 
