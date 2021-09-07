@@ -1,5 +1,5 @@
 import { Server, Room, matchMaker } from "@colyseus/core";
-import { Client } from "colyseus.js";
+import { Client, registerSerializer } from "colyseus.js";
 import * as httpie from "httpie";
 
 export class ColyseusTestServer {
@@ -9,6 +9,7 @@ export class ColyseusTestServer {
     join: Client['join'],
     create: Client['create'],
     joinById: Client['joinById'],
+    registerSerializer: typeof registerSerializer
   };
 
   public http: {
@@ -40,6 +41,7 @@ export class ColyseusTestServer {
       join: client.join.bind(client),
       create: client.create.bind(client),
       joinById: client.joinById.bind(client),
+      registerSerializer,
     };
   }
 
@@ -67,5 +69,4 @@ export class ColyseusTestServer {
   async shutdown() {
     await this.server.gracefullyShutdown(false);
   }
-
 }
