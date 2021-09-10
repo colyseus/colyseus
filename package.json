@@ -59,7 +59,6 @@
     "rollup": "^2.56.2",
     "rollup-plugin-node-externals": "^2.2.0",
     "sinon": "^11.1.2",
-    "ts-jest": "^27.0.4",
     "ts-node": "^7.0.1",
     "ts-node-dev": "^1.1.6",
     "tslint": "^5.11.0",

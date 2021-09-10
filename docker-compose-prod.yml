@@ -6,7 +6,7 @@ services:
     build: 
       context: .
       target: prod
-    image: lucidsightinc/colyseus-k8-node14.17.3-buster-uws-redis:0.14.18
+    image: lucidsightinc/colyseus-k8-node14.17.3-buster-uws-redis:0.14.18_v2
     ports:
       - "2567:2567"
       - "9229:9229"

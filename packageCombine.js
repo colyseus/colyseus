@@ -80,6 +80,25 @@ function MergeFile(orgFile, newFile) {
 
         objOrg.dependencies = result;
 
+        //Copy workspace
+        let orgWorkspaces = objOrg.workspaces;
+        let newWorkspaces = objNew.workspaces;
+        let workspaceNew = [];
+        
+        if(newWorkspaces !== undefined) {
+            console.log("Adding New Workspaces");
+            for (let ii = 0; ii < newWorkspaces.length; ii++) {
+                const element = newWorkspaces[ii];
+                workspaceNew.push("app/server/arena/"+element);              
+            }
+        }
+       
+        if(orgWorkspaces === undefined) {
+            objOrg["workspaces"] = workspaceNew;
+        } else {
+            objOrg["workspaces"] = orgWorkspaces.concat(workspaceNew);
+        }
+        
         // console.log("Merged results")
         // console.log(result);
 
