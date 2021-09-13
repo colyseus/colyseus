@@ -20,6 +20,8 @@ import { ServerError } from './errors/ServerError';
 import { Client, ClientState, ISendOptions } from './Transport';
 import { RoomListingData } from './matchmaker/driver';
 
+import * as StatsController from './controllers/statsController';
+
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
 const noneSerializer = new NoneSerializer();
@@ -97,6 +99,10 @@ export abstract class Room<State= any, Metadata= any> {
 
     this._events.once('dispose', async () => {
       try {
+        if(this.locked) {
+          StatsController.updateLockRoomStatsCount(false);
+        }
+        StatsController.updateTotalRoomStatsCount(false);
         await this._dispose();
 
       } catch (e) {
@@ -108,6 +114,7 @@ export abstract class Room<State= any, Metadata= any> {
     this.setPatchRate(this.patchRate);
     // set default _autoDisposeTimeout
     this.resetAutoDisposeTimeout(this.seatReservationTime);
+    StatsController.updateTotalRoomStatsCount(true);
   }
 
   // Optional abstract methods
@@ -210,6 +217,8 @@ export abstract class Room<State= any, Metadata= any> {
     // skip if already locked.
     if (this._locked) { return; }
 
+    StatsController.updateLockRoomStatsCount(true);
+
     this._locked = true;
 
     await this.listing.updateOne({
@@ -225,8 +234,10 @@ export abstract class Room<State= any, Metadata= any> {
       this._lockedExplicitly = false;
     }
 
-    // skip if already locked
+    // skip if already unlocked
     if (!this._locked) { return; }
+
+    StatsController.updateLockRoomStatsCount(false);
 
     this._locked = false;
 
@@ -296,6 +307,8 @@ export abstract class Room<State= any, Metadata= any> {
   public async disconnect(): Promise<any> {
     this.internalState = RoomInternalState.DISCONNECTING;
     await this.listing.remove();
+
+    StatsController.decrementClientCount(this.listing);
 
     this.autoDispose = true;
 
@@ -665,6 +678,9 @@ export abstract class Room<State= any, Metadata= any> {
       this.lock.call(this, true);
     }
 
+    //Update Stats
+    StatsController.incrementClientStatsCount(this.listing);
+
     await this.listing.updateOne({
       $inc: { clients: 1 },
       $set: { locked: this._locked },
@@ -673,6 +689,9 @@ export abstract class Room<State= any, Metadata= any> {
 
   private async _decrementClientCount() {
     const willDispose = this._disposeIfEmpty();
+
+    //Update Stats
+    StatsController.decrementClientCount(this.listing);
 
     if (this.internalState === RoomInternalState.DISCONNECTING) {
       return;

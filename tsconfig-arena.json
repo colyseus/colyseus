@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+      "outDir": "dist/",
+      "module": "commonjs",
+      "lib": ["es2015","es5","ESNext"],
+      "target": "ESNext",
+      "declaration": true,
+      "forceConsistentCasingInFileNames": true,
+      "esModuleInterop": true,
+      "experimentalDecorators": true,
+      "noImplicitAny": false,
+      "sourceMap": true,
+      "moduleResolution": "node",
+      "skipLibCheck": true,
+      "baseUrl": ".",
+      "paths": {
+        "@colyseus/core": ["packages/core/src"]
+      }
+},
+  "include": [
+    "server/**/*.ts",
+    "server/*.ts",
+ ]
+}

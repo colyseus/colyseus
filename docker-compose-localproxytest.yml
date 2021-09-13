@@ -1,0 +1,59 @@
+version: '3.8'
+volumes:
+  node_modules: #empty to prevent local node_modules from overwriting installed server modules
+services:
+  redis:
+    hostname: redis
+    image: redis:latest
+    ports:
+      - "6379:6379"
+    networks:
+      - frontend
+  proxy:
+    hostname: proxy
+    image: lucidsightinc/colyseus-0v14-proxy:dev
+    ports:
+      - "2567:2567"
+    networks:
+      - frontend
+    environment:
+      #if you want to override the image env variable
+      - USE_REDIS=redis
+      - REDIS_PORT=6379
+      - USE_PROXY=true
+      - HTTP_PORT=2567
+  colyseus_server:
+    build: 
+      context: .
+      target: dev
+    image: lucidsightinc/colyseus-k8:dev
+    networks:
+      - frontend
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    # ports:
+    #   - target: 2222
+    #     published: 2222
+    #     protocol: udp
+    #     mode: host
+      # - "2567:2567"
+      # - "9229:9229"
+    volumes:
+      #binding current dir to container directory so you can develop locally
+      - .:/colyseus/app/
+      - node_modules:/colyseus/node_modules
+    environment:
+      #if you want to override the image env variable
+      - NODE_ENV=development
+      - FORCE_ROOM_RELOAD=true
+      - USE_REDIS=redis
+      - REDIS_PORT=6379
+      - USE_PROXY=true
+      # - MONGO_URI=mongodb://host.docker.internal:61001/faznewtest
+    labels:
+      - "colyseus_server_master"
+networks:
+  frontend:
+    name: localtest_net

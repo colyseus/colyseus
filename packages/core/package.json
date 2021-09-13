@@ -3,8 +3,7 @@
   "version": "0.14.24",
   "description": "Multiplayer Framework for Node.js.",
   "input": "./src/index.ts",
-  "main": "./build/index.js",
-  "module": "./build/index.mjs",
+  "main": "./src/index.js",
   "typings": "./build/index.d.ts",
   "scripts": {
     "tslint": "tslint --project . --config ../../tslint.json"
@@ -38,7 +37,7 @@
     "@types/redis": "^2.8.12",
     "debug": "^4.0.1",
     "internal-ip": "^4.3.0",
-    "nanoid": "^2.0.0",
+    "nanoid": "^3.1.23",
     "notepack.io": "^2.2.0"
   },
   "publishConfig": {

@@ -3,8 +3,7 @@
   "version": "0.14.23",
   "description": "Multiplayer Framework for Node.js.",
   "input": "./src/index.ts",
-  "main": "./build/index.js",
-  "module": "./build/index.mjs",
+  "main": "./src/index.js",
   "typings": "./build/index.d.ts",
   "scripts": {
     "test": "TS_NODE_PROJECT=../../tsconfig/tsconfig.test.json COLYSEUS_SEAT_RESERVATION_TIME=0.3 COLYSEUS_PRESENCE_SHORT_TIMEOUT=300 c8 mocha --require ts-node/register test/**Test.ts test/**/**Test.ts --exit --timeout 15000"
@@ -31,10 +30,7 @@
     "node": ">= 14.x"
   },
   "dependencies": {
-    "@colyseus/core": "^0.14.20",
-    "@colyseus/mongoose-driver": "^0.14.21",
-    "@colyseus/redis-presence": "^0.14.20",
-    "@colyseus/ws-transport": "^0.14.21"
+    "@colyseus/core": "0.14.20"
   },
   "gitHead": "320a0325f01eff3cd7afa8fb2efa80077ebdbf4a"
 }

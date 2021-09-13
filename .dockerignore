@@ -1,0 +1,12 @@
+.git
+.gitignore
+*Dockerfile*
+*docker-compose*
+**/node_modules
+*/node_modules
+node_modules
+test
+src
+media
+*.ppk
+.vscode
