@@ -1,9 +1,5 @@
 import { Room, Client } from "colyseus.js";
 
-export function requestJoinOptions (this: Client, i: number) {
-    return { requestNumber: i };
-}
-
 export async function main(options: any) {
     const client = new Client(options.endpoint);
     const room: Room = await client.joinOrCreate(options.roomName, options.requestJoinOptions);

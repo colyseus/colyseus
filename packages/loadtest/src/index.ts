@@ -348,9 +348,13 @@ function handleError (message) {
     screen.render();
 }
 
+const requestJoinOptions = function(i: number) {
+    return { requestNumber: i };
+}
+
 async function connect(scripting: any, i: number) {
     try {
-        options.requestJoinOptions = scripting.requestJoinOptions(i);
+        options.requestJoinOptions = requestJoinOptions(i);
         await scripting.main(options);
     } catch (e) {
         handleError(e);
