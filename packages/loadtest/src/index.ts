@@ -54,6 +54,7 @@ const options = {
     reestablishAllDelay: argv.reestablishAllDelay || 0,
     retryFailed: argv.retryFailed || 0,
     output: path.resolve(argv.output || "loadtest.log"),
+    requestJoinOptions: {}
 }
 
 if (!options.scriptFile) {
@@ -349,6 +350,7 @@ function handleError (message) {
 
 async function connect(scripting: any, i: number) {
     try {
+        options.requestJoinOptions = scripting.requestJoinOptions(i);
         await scripting.main(options);
     } catch (e) {
         handleError(e);

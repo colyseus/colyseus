@@ -4,22 +4,15 @@ export function requestJoinOptions (this: Client, i: number) {
     return { requestNumber: i };
 }
 
-export function onJoin(this: Room) {
-    console.log(this.sessionId, "joined.");
-
-    this.onMessage("*", (type, message) => {
-        console.log("onMessage:", type, message);
+export async function main(options: any) {
+    const client = new Client(options.endpoint);
+    const room: Room = await client.joinOrCreate(options.roomName, options.requestJoinOptions);
+    room.send('message-type', {})
+    room.onMessage("message-type", (payload) => {
+        // logic
     });
-}
-
-export function onLeave(this: Room) {
-    console.log(this.sessionId, "left.");
-}
-
-export function onError(this: Room, err) {
-    console.error(this.sessionId, "!! ERROR !!", err.message);
-}
-
-export function onStateChange(this: Room, state) {
-    // console.log(this.sessionId, "new state:", state);
+    room.onLeave((code) => {
+        // logic
+    });
+    await room.leave(true);
 }
