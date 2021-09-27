@@ -8,6 +8,7 @@ import minimist from "minimist";
 import * as logWriter from "./logWriter";
 import { Client, Room } from "colyseus.js";
 
+
 // TODO: use "timers/promises" instead (drop Node.js v14)
 const timer = {
     setTimeout(milliseconds: number, ...args: any) {
@@ -347,77 +348,16 @@ function handleError (message) {
 }
 
 async function connect(scripting: any, i: number) {
-    const tryReconnect = () => {
-        if (options.retryFailed > 0) {
-            setTimeout(() => connect(scripting, i), options.retryFailed);
-        }
-    };
-    const client = new Client(options.endpoint);
-
-    const clientOptions = (typeof (scripting.requestJoinOptions) === "function")
-        ? await scripting.requestJoinOptions.call(client, i)
-        : {};
-
-    (options.roomName ? client.joinOrCreate(options.roomName, clientOptions) : client.joinById(options.roomId, clientOptions)).then(room => {
-        connections.push(room);
-
-        // display serialization method in the UI
-        const serializerIdText = (headerBox.children[2] as blessed.Widgets.TextElement);
-        serializerIdText.content = `{yellow-fg}serialization method:{/yellow-fg} ${room.serializerId}`;
-
-        const ws: WebSocket = (room.connection.transport as any).ws;
-        ws.addEventListener('message', (event) => {
-            bytesReceived += new Uint8Array(event.data).length;
-        });
-
-        // overwrite original send function to trap sent bytes.
-        const _send = ws.send;
-        ws.send = function (data: ArrayBuffer) {
-            bytesSent += data.byteLength;
-            _send.call(ws, data);
-        }
-
-        currentStats.connected++;
-        totalStats.connected++;
-        successfulConnectionBox.content = `{yellow-fg}connected:{/yellow-fg} ${currentStats.connected}`;
-        screen.render();
-
-        room.onError.once(handleError);
-
-        room.onLeave.once((code) => {
-            currentStats.connected--;
-            successfulConnectionBox.content = `{yellow-fg}connected:{/yellow-fg} ${currentStats.connected}`;
-            screen.render();
-
-            if (code > 1000) {
-                tryReconnect();
-            }
-        });
-
-        if (scripting.onJoin) {
-            scripting.onJoin.call(room);
-        }
-
-        if (scripting.onLeave) {
-            room.onLeave(scripting.onLeave.bind(room));
-        }
-
-        if (scripting.onError) {
-            room.onError(scripting.onError.bind(room));
-        }
-
-        if (scripting.onStateChange) {
-            room.onStateChange(scripting.onStateChange.bind(room));
-        }
-    }).catch((err) => {
-        handleError(err);
-        tryReconnect();
-    });
+    try {
+        await scripting.main(options);
+    } catch (e) {
+        handleError(e);
+    }
 }
 
 async function connectAll(scripting: any) {
     for (let i = 0; i < options.numClients; i++) {
-        connect(scripting, i);
+        await connect(scripting, i);
 
         if (options.delay > 0) {
             await timer.setTimeout(options.delay);
@@ -435,6 +375,53 @@ async function reestablishAll(scripting: any) {
 
     // connect again
     await connectAll(scripting);
+}
+
+const handleClientJoin = function(room: Room) {
+    // display serialization method in the UI
+    const serializerIdText = (headerBox.children[2] as blessed.Widgets.TextElement);
+    serializerIdText.content = `{yellow-fg}serialization method:{/yellow-fg} ${room.serializerId}`;
+
+    const ws: WebSocket = (room.connection.transport as any).ws;
+    ws.addEventListener('message', (event) => {
+        bytesReceived += new Uint8Array(event.data).length;
+    });
+
+    // overwrite original send function to trap sent bytes.
+    const _send = ws.send;
+    ws.send = function (data: ArrayBuffer) {
+        bytesSent += data.byteLength;
+        _send.call(ws, data);
+    }
+
+    currentStats.connected++;
+    totalStats.connected++;
+    successfulConnectionBox.content = `{yellow-fg}connected:{/yellow-fg} ${currentStats.connected}`;
+    screen.render();
+    connections.push(room);
+}
+
+const _originalJoinOrCreate = Client.prototype.joinOrCreate;
+Client.prototype.joinOrCreate = async function(this: Client) {
+    const room = await _originalJoinOrCreate.apply(this, arguments);
+    handleClientJoin(room);
+    return room;
+}
+
+const _originalJoin = Client.prototype.join;
+Client.prototype.join = async function(this: Client) {
+    const room = await _originalJoin.apply(this, arguments);
+    handleClientJoin(room);
+    return room;
+}
+
+const _originalRoomLeave = Room.prototype.leave;
+Room.prototype.leave = async function(this: Room) {
+    const result = await _originalRoomLeave.apply(this, arguments);
+    currentStats.connected--;
+    successfulConnectionBox.content = `{yellow-fg}connected:{/yellow-fg} ${currentStats.connected}`;
+    screen.render();
+    return result;
 }
 
 try {
