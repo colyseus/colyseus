@@ -9,7 +9,7 @@ import { Room } from './Room';
 import { Type } from './types';
 import { registerGracefulShutdown } from './Utils';
 
-import { generateId } from '.';
+import {generateId} from '.';
 import { registerNode, unregisterNode } from './discovery';
 
 import { LocalPresence } from './presence/LocalPresence';
@@ -17,12 +17,15 @@ import { LocalDriver } from './matchmaker/driver';
 
 import { Transport } from './Transport';
 
+import { Logger } from './Logger';
+
 // IServerOptions &
 export type ServerOptions = {
   presence?: Presence,
   driver?: matchMaker.MatchMakerDriver,
   transport?: Transport,
   gracefullyShutdown?: boolean,
+  logger?: any;
 
   /**
    * Options below are now part of WebSocketTransport (@colyseus/ws-transport)
@@ -52,6 +55,8 @@ export class Server {
   private matchmakeRoute = 'matchmake';
   private allowedRoomNameChars = /([a-zA-Z_\-0-9]+)/gi;
 
+  private log: any;
+
   constructor(options: ServerOptions = {}) {
     const { gracefullyShutdown = true } = options;
 
@@ -69,6 +74,11 @@ export class Server {
     if (gracefullyShutdown) {
       registerGracefulShutdown((err) => this.gracefullyShutdown(true, err));
     }
+
+    if(options.logger) {
+      Logger.setLogger(options.logger);
+    }
+    this.log = Logger.getLogger();
   }
 
   public attach(options: ServerOptions) {
@@ -82,8 +92,8 @@ export class Server {
       options.server !== undefined ||
       options.verifyClient !== undefined
     ) {
-      console.warn("DEPRECATION WARNING: 'pingInterval', 'pingMaxRetries', 'server', and 'verifyClient' Server options will be permanently moved to WebSocketTransport on v0.15");
-      console.warn(`new Server({
+      this.log.warn("DEPRECATION WARNING: 'pingInterval', 'pingMaxRetries', 'server', and 'verifyClient' Server options will be permanently moved to WebSocketTransport on v0.15");
+      this.log.warn(`new Server({
   transport: new WebSocketTransport({
     pingInterval: ...,
     pingMaxRetries: ...,
@@ -91,7 +101,7 @@ export class Server {
     verifyClient: ...
   })
 })`);
-      console.warn("👉 Documentation: https://docs.colyseus.io/server/transport/")
+      this.log.warn("👉 Documentation: https://docs.colyseus.io/server/transport/")
     }
 
     const transport = options.transport || this.getDefaultTransport(options);
@@ -186,7 +196,7 @@ export class Server {
    * @param milliseconds round trip latency in milliseconds.
    */
   public simulateLatency(milliseconds: number) {
-    console.warn(`📶️❗ Colyseus latency simulation enabled → ${milliseconds}ms latency for round trip.`);
+    this.log.warn(`📶️❗ Colyseus latency simulation enabled → ${milliseconds}ms latency for round trip.`);
 
     const halfwayMS = (milliseconds / 2);
     this.transport.simulateLatency(halfwayMS);
