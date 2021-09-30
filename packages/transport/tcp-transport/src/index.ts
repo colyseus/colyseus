@@ -1,6 +1,17 @@
 import * as net from 'net';
 
-import { generateId, matchMaker, Protocol, ServerOptions, Transport, debugAndPrintError, debugError } from '@colyseus/core';
+import {
+  generateId,
+  matchMaker,
+  Protocol,
+  ServerOptions,
+  Transport,
+  debugAndPrintError,
+  debugError,
+  Logger
+} from '@colyseus/core';
+
+const log = Logger.getLogger();
 
 /**
  * TODO:
@@ -48,7 +59,7 @@ export class TCPTransport extends Transport {
   }
 
   protected async onMessage(client: net.Socket & any, message: any) {
-    console.log('RECEIVED:', message);
+    log.info('RECEIVED:', message);
 
     if (message[0] === Protocol.JOIN_ROOM) {
       const roomId = message[1];
@@ -57,7 +68,7 @@ export class TCPTransport extends Transport {
       client.id = sessionId;
       client.sessionId = sessionId;
 
-      console.log('EFFECTIVELY CONNECT INTO ROOM', roomId, client.id, client.options);
+      log.info('EFFECTIVELY CONNECT INTO ROOM', roomId, client.id, client.options);
 
       client.removeAllListeners('data');
 

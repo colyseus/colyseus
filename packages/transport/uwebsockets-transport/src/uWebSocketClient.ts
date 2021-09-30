@@ -1,7 +1,7 @@
 import EventEmitter from 'events';
 import uWebSockets from 'uWebSockets.js';
 
-import { getMessageBytes, Protocol, Client, ClientState, ISendOptions } from '@colyseus/core';
+import {getMessageBytes, Protocol, Client, ClientState, ISendOptions, Logger} from '@colyseus/core';
 import { Schema } from '@colyseus/schema';
 
 export class uWebSocketWrapper extends EventEmitter {
@@ -16,6 +16,8 @@ export enum ReadyState {
   CLOSING = 2,
   CLOSED = 3,
 }
+
+const log = Logger.getLogger();
 
 export class uWebSocketClient implements Client {
   public sessionId: string;
@@ -62,7 +64,7 @@ export class uWebSocketClient implements Client {
 
   public raw(data: ArrayLike<number>, options?: ISendOptions, cb?: (err?: Error) => void) {
     if (this.readyState !== ReadyState.OPEN) {
-      console.warn('trying to send data to inactive client', this.sessionId);
+      log.warn('trying to send data to inactive client', this.sessionId);
       return;
     }
 
@@ -90,11 +92,11 @@ export class uWebSocketClient implements Client {
   }
 
   public close(code?: number, data?: string) {
-    console.warn('DEPRECATION WARNING: use client.leave() instead of client.close()');
+    log.warn('DEPRECATION WARNING: use client.leave() instead of client.close()');
     try {
       throw new Error();
     } catch (e) {
-      console.log(e.stack);
+      log.info(e.stack);
     }
     this.leave(code, data);
   }

@@ -1,3 +1,6 @@
+//
+// Abstract logging adaptor
+//
 export class Logger {
   private static _instance: any;
 
