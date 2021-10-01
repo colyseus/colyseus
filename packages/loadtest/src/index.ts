@@ -8,6 +8,23 @@ import minimist from "minimist";
 import * as logWriter from "./logWriter";
 import { Client, Room } from "colyseus.js";
 
+export type RequestJoinOperations = {
+    requestNumber?: number
+}
+
+export type Options = {
+    endpoint: string,
+    roomName: string,
+    roomId: string,
+    numClients: number,
+    scriptFile: string,
+    delay: number,
+    logLevel: string,
+    reestablishAllDelay: number,
+    retryFailed: number,
+    output: string,
+    requestJoinOptions?: RequestJoinOperations
+}
 
 // TODO: use "timers/promises" instead (drop Node.js v14)
 const timer = {
@@ -43,7 +60,7 @@ Example:
 
 if (argv.help) { displayHelpAndExit(); }
 
-const options = {
+const options: Options = {
     endpoint: argv.endpoint || `ws://localhost:2567`,
     roomName: argv.room,
     roomId: argv.roomId,
@@ -348,13 +365,9 @@ function handleError (message) {
     screen.render();
 }
 
-const requestJoinOptions = function(i: number) {
-    return { requestNumber: i };
-}
-
 async function connect(scripting: any, i: number) {
     try {
-        options.requestJoinOptions = requestJoinOptions(i);
+        options.requestJoinOptions.requestNumber = i;
         await scripting.main(options);
     } catch (e) {
         handleError(e);
