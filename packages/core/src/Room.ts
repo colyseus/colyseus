@@ -5,7 +5,7 @@ import { decode, Iterator, Schema } from '@colyseus/schema';
 
 import Clock from '@gamestdio/timer';
 import { EventEmitter } from 'events';
-import {Logger} from './Logger';
+import { Logger as LOG } from './Logger';
 
 import { Presence } from './presence/Presence';
 
@@ -24,8 +24,6 @@ import { RoomListingData } from './matchmaker/driver';
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
 const noneSerializer = new NoneSerializer();
-
-const log = Logger.getLogger();
 
 export const DEFAULT_SEAT_RESERVATION_TIME = Number(process.env.COLYSEUS_SEAT_RESERVATION_TIME || 15);
 
@@ -243,7 +241,7 @@ export abstract class Room<State= any, Metadata= any> {
   public send(client: Client, type: string | number, message: any, options?: ISendOptions): void;
   public send(client: Client, message: Schema, options?: ISendOptions): void;
   public send(client: Client, messageOrType: any, messageOrOptions?: any | ISendOptions, options?: ISendOptions): void {
-    log.warn('DEPRECATION WARNING: use client.send(...) instead of this.send(client, ...)');
+    LOG.warn('DEPRECATION WARNING: use client.send(...) instead of this.send(client, ...)');
     client.send(messageOrType, messageOrOptions, options);
   }
 

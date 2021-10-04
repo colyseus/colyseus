@@ -17,7 +17,7 @@ import { LocalDriver } from './matchmaker/driver';
 
 import { Transport } from './Transport';
 
-import { Logger } from './Logger';
+import { Logger as LOG } from './Logger';
 
 // IServerOptions &
 export type ServerOptions = {
@@ -55,8 +55,6 @@ export class Server {
   private matchmakeRoute = 'matchmake';
   private allowedRoomNameChars = /([a-zA-Z_\-0-9]+)/gi;
 
-  private log: any;
-
   constructor(options: ServerOptions = {}) {
     const { gracefullyShutdown = true } = options;
 
@@ -76,9 +74,8 @@ export class Server {
     }
 
     if(options.logger) {
-      Logger.setLogger(options.logger);
+      LOG.setLogger(options.logger);
     }
-    this.log = Logger.getLogger();
   }
 
   public attach(options: ServerOptions) {
@@ -92,8 +89,8 @@ export class Server {
       options.server !== undefined ||
       options.verifyClient !== undefined
     ) {
-      this.log.warn("DEPRECATION WARNING: 'pingInterval', 'pingMaxRetries', 'server', and 'verifyClient' Server options will be permanently moved to WebSocketTransport on v0.15");
-      this.log.warn(`new Server({
+      LOG.warn("DEPRECATION WARNING: 'pingInterval', 'pingMaxRetries', 'server', and 'verifyClient' Server options will be permanently moved to WebSocketTransport on v0.15");
+      LOG.warn(`new Server({
   transport: new WebSocketTransport({
     pingInterval: ...,
     pingMaxRetries: ...,
@@ -101,7 +98,7 @@ export class Server {
     verifyClient: ...
   })
 })`);
-      this.log.warn("👉 Documentation: https://docs.colyseus.io/server/transport/")
+      LOG.warn("👉 Documentation: https://docs.colyseus.io/server/transport/")
     }
 
     const transport = options.transport || this.getDefaultTransport(options);
@@ -196,7 +193,7 @@ export class Server {
    * @param milliseconds round trip latency in milliseconds.
    */
   public simulateLatency(milliseconds: number) {
-    this.log.warn(`📶️❗ Colyseus latency simulation enabled → ${milliseconds}ms latency for round trip.`);
+    LOG.warn(`📶️❗ Colyseus latency simulation enabled → ${milliseconds}ms latency for round trip.`);
 
     const halfwayMS = (milliseconds / 2);
     this.transport.simulateLatency(halfwayMS);
