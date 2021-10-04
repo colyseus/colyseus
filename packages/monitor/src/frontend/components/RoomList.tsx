@@ -1,4 +1,3 @@
-import {Logger} from '@colyseus/core';
 import * as React from "react";
 import * as http from "superagent";
 
@@ -35,8 +34,6 @@ const largeColumnWidth = { width: "34%" };
 
 const UPDATE_ROOM_LIST_INTERVAL = 5000;
 
-const log = Logger.getLogger();
-
 export class RoomList extends React.Component {
   state = {
     selected: [1],
@@ -62,7 +59,7 @@ export class RoomList extends React.Component {
       this.setState((await fetchRoomList()).body);
 
     } catch (err) {
-      log.error(err)
+      console.error(err)
     }
 
     clearInterval(this.updateRoomListInterval);

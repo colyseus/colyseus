@@ -4,10 +4,7 @@ import path from "path";
 import cors from "cors";
 import express from "express";
 import dotenv from "dotenv";
-import {Logger, Server, ServerOptions, Transport} from '@colyseus/core';
-
-// system logger
-const log = Logger.getLogger();
+import {Logger as LOG, Server, ServerOptions, Transport} from '@colyseus/core';
 
 // try to import uWebSockets-express compatibility layer.
 let uWebSocketsExpressCompatibility: any;
@@ -31,9 +28,9 @@ if (process.env.NODE_ARENA !== "true") {
 
     if (envPath) {
         dotenv.config({ path: envPath });
-        log.info(`✅ ${envFilename} loaded.`);
+        LOG.info(`✅ ${envFilename} loaded.`);
     } else {
-        log.info(`⚠️  ${envFilename} not found.`);
+        LOG.info(`⚠️  ${envFilename} not found.`);
     }
 }
 
@@ -95,10 +92,10 @@ export async function listen(
     if (options.displayLogs) {
         const appId = options.getId?.() || "[ Colyseus ]";
         if (appId) {
-            log.info(`🏟  ${appId}`);
+            LOG.info(`🏟  ${appId}`);
         }
 
-        log.info(`⚔️  Listening on ws://localhost:${port}`);
+        LOG.info(`⚔️  Listening on ws://localhost:${port}`);
     }
     return gameServer;
 }
@@ -122,7 +119,7 @@ export async function getTransport(options: ArenaOptions) {
         if (transport['app']) {
             if (typeof (uWebSocketsExpressCompatibility) === "function") {
                 if (options.displayLogs){
-                  log.info("✅ uWebSockets.js + Express compatibility enabled");
+                  LOG.info("✅ uWebSockets.js + Express compatibility enabled");
                 }
 
                 // @ts-ignore
@@ -132,10 +129,10 @@ export async function getTransport(options: ArenaOptions) {
 
             } else {
                 if (options.displayLogs) {
-                    log.warn("");
-                    log.warn("❌ uWebSockets.js + Express compatibility mode couldn't be loaded, run the following command to fix:");
-                    log.warn("👉 npm install --save uwebsockets-express");
-                    log.warn("");
+                    LOG.warn("");
+                    LOG.warn("❌ uWebSockets.js + Express compatibility mode couldn't be loaded, run the following command to fix:");
+                    LOG.warn("👉 npm install --save uwebsockets-express");
+                    LOG.warn("");
                 }
                 app = undefined;
             }
@@ -149,7 +146,7 @@ export async function getTransport(options: ArenaOptions) {
             await options.initializeExpress(app);
 
             if (options.displayLogs) {
-                log.info("✅ Express initialized");
+                LOG.info("✅ Express initialized");
             }
         }
     }
