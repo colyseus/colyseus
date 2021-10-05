@@ -46,4 +46,4 @@ export { LobbyRoom } from './rooms/LobbyRoom';
 export { RelayRoom } from './rooms/RelayRoom';
 
 // Abstract logging support
-export { Logger } from './Logger'
+export { logger } from './Logger'

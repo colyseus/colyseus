@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import {Logger} from '../Logger';
+import { logger } from '../Logger';
 import { RoomListingData, SortOptions } from './driver/interfaces';
 
 import { RoomConstructor } from './../Room';
@@ -16,8 +16,6 @@ export const INVALID_OPTION_KEYS: Array<keyof RoomListingData> = [
   'roomId',
 ];
 
-const log = Logger.getLogger();
-
 export class RegisteredHandler extends EventEmitter {
   public klass: RoomConstructor;
   public options: any;
@@ -29,7 +27,7 @@ export class RegisteredHandler extends EventEmitter {
     super();
 
     if (typeof(klass) !== 'function') {
-      log.debug('You are likely not importing your room class correctly.');
+      logger.debug('You are likely not importing your room class correctly.');
       throw new Error(`class is expected but ${typeof(klass)} was provided.`);
     }
 
@@ -66,7 +64,7 @@ export class RegisteredHandler extends EventEmitter {
       const field = arr[i];
       if (options[field]) {
         if (INVALID_OPTION_KEYS.indexOf(field as any) !== -1) {
-          log.warn(`option "${field}" has internal usage and is going to be ignored.`);
+          logger.warn(`option "${field}" has internal usage and is going to be ignored.`);
 
         } else {
           prev[field] = options[field];

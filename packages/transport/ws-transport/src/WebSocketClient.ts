@@ -1,11 +1,9 @@
 import WebSocket from 'ws';
 
-import {Protocol, Client, ClientState, ISendOptions, getMessageBytes, Logger} from '@colyseus/core';
+import {Protocol, Client, ClientState, ISendOptions, getMessageBytes, logger} from '@colyseus/core';
 import { Schema } from '@colyseus/schema';
 
 const SEND_OPTS = { binary: true };
-
-const log = Logger.getLogger();
 
 export class WebSocketClient implements Client {
   public sessionId: string;
@@ -49,7 +47,7 @@ export class WebSocketClient implements Client {
 
   public raw(data: ArrayLike<number>, options?: ISendOptions, cb?: (err?: Error) => void) {
     if (this.ref.readyState !== WebSocket.OPEN) {
-      log.warn('trying to send data to inactive client', this.sessionId);
+      logger.warn('trying to send data to inactive client', this.sessionId);
       return;
     }
 
@@ -69,11 +67,11 @@ export class WebSocketClient implements Client {
   }
 
   public close(code?: number, data?: string) {
-    log.warn('DEPRECATION WARNING: use client.leave() instead of client.close()');
+    logger.warn('DEPRECATION WARNING: use client.leave() instead of client.close()');
     try {
       throw new Error();
     } catch (e) {
-      log.info(e.stack);
+      logger.info(e.stack);
     }
     this.leave(code, data);
   }

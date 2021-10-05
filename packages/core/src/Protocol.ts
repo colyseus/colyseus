@@ -1,6 +1,6 @@
 import msgpack from 'notepack.io';
 import { encode, Schema } from '@colyseus/schema';
-import { Logger as LOG } from './Logger';
+import { logger } from './Logger';
 
 // Colyseus protocol codes range between 0~100
 export enum Protocol {
@@ -81,7 +81,7 @@ export const getMessageBytes = {
     const typeid = (message.constructor as typeof Schema)._typeid;
 
     if (typeid === undefined) {
-      LOG.warn('Starting at colyseus >= 0.13 You must provide a type and message when calling `this.broadcast()` or `client.send()`. Please see: https://docs.colyseus.io/migrating/0.13/');
+      logger.warn('Starting at colyseus >= 0.13 You must provide a type and message when calling `this.broadcast()` or `client.send()`. Please see: https://docs.colyseus.io/migrating/0.13/');
       throw new Error(`an instance of Schema was expected, but ${JSON.stringify(message)} has been provided.`);
     }
 

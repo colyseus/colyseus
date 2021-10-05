@@ -5,7 +5,7 @@ import { decode, Iterator, Schema } from '@colyseus/schema';
 
 import Clock from '@gamestdio/timer';
 import { EventEmitter } from 'events';
-import { Logger as LOG } from './Logger';
+import { logger } from './Logger';
 
 import { Presence } from './presence/Presence';
 
@@ -241,7 +241,7 @@ export abstract class Room<State= any, Metadata= any> {
   public send(client: Client, type: string | number, message: any, options?: ISendOptions): void;
   public send(client: Client, message: Schema, options?: ISendOptions): void;
   public send(client: Client, messageOrType: any, messageOrOptions?: any | ISendOptions, options?: ISendOptions): void {
-    LOG.warn('DEPRECATION WARNING: use client.send(...) instead of this.send(client, ...)');
+    logger.warn('DEPRECATION WARNING: use client.send(...) instead of this.send(client, ...)');
     client.send(messageOrType, messageOrOptions, options);
   }
 

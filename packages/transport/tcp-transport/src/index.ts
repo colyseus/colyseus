@@ -8,10 +8,8 @@ import {
   Transport,
   debugAndPrintError,
   debugError,
-  Logger
+  logger
 } from '@colyseus/core';
-
-const log = Logger.getLogger();
 
 /**
  * TODO:
@@ -59,7 +57,7 @@ export class TCPTransport extends Transport {
   }
 
   protected async onMessage(client: net.Socket & any, message: any) {
-    log.info('RECEIVED:', message);
+    logger.info('RECEIVED:', message);
 
     if (message[0] === Protocol.JOIN_ROOM) {
       const roomId = message[1];
@@ -68,7 +66,7 @@ export class TCPTransport extends Transport {
       client.id = sessionId;
       client.sessionId = sessionId;
 
-      log.info('EFFECTIVELY CONNECT INTO ROOM', roomId, client.id, client.options);
+      logger.info('EFFECTIVELY CONNECT INTO ROOM', roomId, client.id, client.options);
 
       client.removeAllListeners('data');
 

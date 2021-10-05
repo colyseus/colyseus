@@ -2,39 +2,29 @@
 // Abstract logging adaptor
 //
 export class Logger {
-  private static _instance: any;
-
-  private constructor() {}
-
-  public static getLogger() {
-    if(!Logger._instance) {
-      Logger._instance = console;
-    }
-    return Logger._instance;
+  debug(...args) {
+    logger.debug(...args);
   }
 
-  public static setLogger(logger: any) {
-    Logger._instance = logger;
+  error(...args) {
+    logger.error(...args);
   }
 
-  public static debug(...args) {
-    Logger._instance.debug(...args);
+  info(...args) {
+    logger.info(...args);
   }
 
-  public static error(...args) {
-    Logger._instance.error(args);
+  trace(...args) {
+    logger.trace(...args);
   }
 
-  public static info(...args) {
-    Logger._instance.info(...args);
-  }
-
-  public static trace(...args) {
-    Logger._instance.trace(...args);
-  }
-
-  public static warn(...args) {
-    Logger._instance.warn(...args);
+  warn(...args) {
+    logger.warn(...args);
   }
 }
 
+export let logger: Logger = console;
+
+export function setLogger(instance: Logger) {
+  logger = instance;
+}
