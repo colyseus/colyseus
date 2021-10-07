@@ -9,8 +9,8 @@ import * as logWriter from "./logWriter";
 import { Client, Room } from "colyseus.js";
 
 export type RequestJoinOperations = {
-    requestNumber?: number
-}
+    requestNumber?: number,
+};
 
 export type Options = {
     endpoint: string,
@@ -23,8 +23,8 @@ export type Options = {
     reestablishAllDelay: number,
     retryFailed: number,
     output: string,
-    requestJoinOptions?: RequestJoinOperations
-}
+    requestJoinOptions?: RequestJoinOperations,
+};
 
 // TODO: use "timers/promises" instead (drop Node.js v14)
 const timer = {
@@ -71,7 +71,6 @@ const options: Options = {
     reestablishAllDelay: argv.reestablishAllDelay || 0,
     retryFailed: argv.retryFailed || 0,
     output: path.resolve(argv.output || "loadtest.log"),
-    requestJoinOptions: {}
 }
 
 if (!options.scriptFile) {
@@ -367,8 +366,11 @@ function handleError (message) {
 
 async function connect(scripting: any, i: number) {
     try {
-        options.requestJoinOptions.requestNumber = i;
-        await scripting.main(options);
+        if (scripting.main) {
+            await scripting.main(options);
+        } else {
+            handleError("Entrypoint \'main\' cannot be found! Please refer https://docs.colyseus.io/colyseus/migrating/0.15");
+        }
     } catch (e) {
         handleError(e);
     }
@@ -409,7 +411,9 @@ const handleClientJoin = function(room: Room) {
     // overwrite original send function to trap sent bytes.
     const _send = ws.send;
     ws.send = function (data: ArrayBuffer) {
-        bytesSent += data.byteLength;
+        if (ws.readyState == 1) {
+            bytesSent += data.byteLength;
+        }
         _send.call(ws, data);
     }
 
@@ -458,6 +462,6 @@ try {
         }
     })();
 
-} catch(e) {
+} catch (e) {
     error(e.stack);
 }
