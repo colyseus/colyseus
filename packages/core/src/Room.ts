@@ -8,17 +8,17 @@ import { EventEmitter } from 'events';
 
 import { Presence } from './presence/Presence';
 
-import { Serializer } from './serializer/Serializer';
 import { NoneSerializer } from './serializer/NoneSerializer';
 import { SchemaSerializer } from './serializer/SchemaSerializer';
+import { Serializer } from './serializer/Serializer';
 
 import { ErrorCode, getMessageBytes, Protocol } from './Protocol';
-import { Deferred, spliceOne } from './Utils';
+import {Deferred, HybridArray, spliceOne} from './Utils';
 
 import { debugAndPrintError, debugPatch } from './Debug';
 import { ServerError } from './errors/ServerError';
-import { Client, ClientState, ISendOptions } from './Transport';
 import { RoomListingData } from './matchmaker/driver';
+import { Client, ClientState, ISendOptions } from './Transport';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
@@ -63,7 +63,7 @@ export abstract class Room<State= any, Metadata= any> {
   public state: State;
   public presence: Presence;
 
-  public clients: Client[] = [];
+  public clients: HybridArray<Client> = new HybridArray<Client>("sessionId");
   public internalState: RoomInternalState = RoomInternalState.CREATING;
 
   /** @internal */
@@ -277,7 +277,7 @@ export abstract class Room<State= any, Metadata= any> {
       return false;
     }
 
-    const hasChanges = this._serializer.applyPatches(this.clients, this.state);
+    const hasChanges = this._serializer.applyPatches(this.clients.array, this.state);
 
     // broadcast messages enqueued for "after patch"
     this._dequeueAfterPatchMessages();
@@ -310,7 +310,7 @@ export abstract class Room<State= any, Metadata= any> {
     if (numClients > 0) {
       // clients may have `async onLeave`, room will be disposed after they're fulfilled
       while (numClients--) {
-        this._forciblyCloseClient(this.clients[numClients], Protocol.WS_CLOSE_CONSENTED);
+        this._forciblyCloseClient(this.clients.array[numClients], Protocol.WS_CLOSE_CONSENTED);
       }
     } else {
       // no clients connected, dispose immediately.
@@ -345,7 +345,7 @@ export abstract class Room<State= any, Metadata= any> {
     client.ref['onleave'] = this._onLeave.bind(this, client);
     client.ref.once('close', client.ref['onleave']);
 
-    this.clients.push(client);
+    this.clients.add(client);
 
     const reconnection = this.reconnections[sessionId];
     if (reconnection) {
@@ -363,7 +363,7 @@ export abstract class Room<State= any, Metadata= any> {
           await this.onJoin(client, options, client.auth);
         }
       } catch (e) {
-        spliceOne(this.clients, this.clients.indexOf(client));
+        spliceOne(this.clients.array, this.clients.indexOf(client));
 
         // make sure an error code is provided.
         if (!e.code) {
@@ -450,7 +450,7 @@ export abstract class Room<State= any, Metadata= any> {
 
     let numClients = this.clients.length;
     while (numClients--) {
-      const client = this.clients[numClients];
+      const client = this.clients.array[numClients];
 
       if (options.except !== client) {
         client.enqueueRaw(encodedMessage);
@@ -463,7 +463,7 @@ export abstract class Room<State= any, Metadata= any> {
 
     let numClients = this.clients.length;
     while (numClients--) {
-      const client = this.clients[numClients];
+      const client = this.clients.array[numClients];
 
       if (options.except !== client) {
         client.enqueueRaw(encodedMessage);
@@ -637,7 +637,8 @@ export abstract class Room<State= any, Metadata= any> {
   }
 
   private async _onLeave(client: Client, code?: number): Promise<any> {
-    const success = spliceOne(this.clients, this.clients.indexOf(client));
+    const success = spliceOne(this.clients.array, this.clients.indexOf(client));
+    this.clients.removeByObject(client);
 
     // call 'onLeave' method only if the client has been successfully accepted.
     if (success && this.onLeave) {

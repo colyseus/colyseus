@@ -107,3 +107,94 @@ export function merge(a: any, ...objs: any[]): any {
   }
   return a;
 }
+
+export interface HashedArray<T> {
+  [key: string]: T;
+}
+
+export class HybridArray<T> {
+  public uniqueProperty: string;
+  public hashedArray: HashedArray<T>;
+  public array: T[];
+
+  constructor(uniquePropertyName: string, elements?: T[]) {
+    this.uniqueProperty = uniquePropertyName;
+    this.hashedArray = {};
+    this.array = [];
+    if (elements) {
+      this.array = this.array.concat(elements);
+      for (const element of elements) {
+        this.hashedArray[element[this.uniqueProperty]] = element;
+      }
+    }
+  }
+
+  public get length(): number {
+    return this.array.length;
+  }
+
+  public get(indexOrKey: number | string): T {
+    if (typeof indexOrKey === 'number') {
+      return this.array[indexOrKey];
+    } else if (typeof indexOrKey === 'string') {
+      return this.hashedArray[indexOrKey];
+    }
+  }
+
+  public add(element: T) {
+    if (!this.hashedArray[element[this.uniqueProperty]]) {
+      this.array.push(element);
+      this.hashedArray[element[this.uniqueProperty]] = element;
+    } else {
+      console.error(`Element already exists for ${this.uniqueProperty}: '${element[this.uniqueProperty]}'.`);
+    }
+  }
+
+  public remove(indexOrKey: number | string) {
+    if (typeof indexOrKey == 'number') {
+      if (indexOrKey >= this.array.length) {
+        this.indexError(indexOrKey);
+      } else {
+        const removable = this.array.splice(indexOrKey, 1);
+        delete this.hashedArray[removable[this.uniqueProperty]];
+      }
+    } else if (typeof indexOrKey == 'string') {
+      if (!this.hashedArray[indexOrKey]) {
+        this.invalidKeyError(indexOrKey);
+      } else {
+        this.array = this.array.filter((element) => {
+          return element[this.uniqueProperty] != indexOrKey;
+        })
+        delete this.hashedArray[indexOrKey];
+      }
+    }
+  }
+
+  public removeByObject(obj: T) {
+    if(this.hashedArray[obj[this.uniqueProperty]]) {
+      this.remove(obj[this.uniqueProperty]);
+    } else if(this.indexOf(obj) != -1) {
+      this.remove(this.indexOf(obj));
+    } else {
+      console.error("Invalid object has been provided!")
+    }
+  }
+
+  public forEach(fn) {
+    for (let element of this.array) {
+      fn(element);
+    }
+  }
+
+  public indexOf(element: T): number {
+    return this.array.indexOf(element);
+  }
+
+  private indexError(index) {
+    console.error(`Index out of range, index: ${index}`);
+  }
+
+  private invalidKeyError(key) {
+    console.error(`No such element for property '${this.uniqueProperty}': '${key}'.`)
+  }
+}
