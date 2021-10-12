@@ -187,7 +187,15 @@ export class HybridArray<T> {
     }
   }
 
-  public spliceOne(index: number): T {
+  private indexError(index) {
+    console.error(`Index out of range, index: ${index}`);
+  }
+
+  private invalidKeyError(key) {
+    console.error(`No such element for property '${this.uniqueProperty}': '${key}'.`)
+  }
+
+  private spliceOne(index: number): T {
     // manually splice availableRooms array
     // http://jsperf.com/manual-splice
     if (index === -1 || index >= this.array.length) {
@@ -201,13 +209,5 @@ export class HybridArray<T> {
     }
     this.array.length = len;
     return removable;
-  }
-
-  private indexError(index) {
-    console.error(`Index out of range, index: ${index}`);
-  }
-
-  private invalidKeyError(key) {
-    console.error(`No such element for property '${this.uniqueProperty}': '${key}'.`)
   }
 }
