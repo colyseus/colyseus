@@ -13,7 +13,7 @@ import { SchemaSerializer } from './serializer/SchemaSerializer';
 import { Serializer } from './serializer/Serializer';
 
 import { ErrorCode, getMessageBytes, Protocol } from './Protocol';
-import {Deferred, HybridArray, spliceOne} from './Utils';
+import { Deferred, HybridArray } from './Utils';
 
 import { debugAndPrintError, debugPatch } from './Debug';
 import { ServerError } from './errors/ServerError';
@@ -363,7 +363,7 @@ export abstract class Room<State= any, Metadata= any> {
           await this.onJoin(client, options, client.auth);
         }
       } catch (e) {
-        spliceOne(this.clients.array, this.clients.indexOf(client));
+        this.clients.removeByObject(client);
 
         // make sure an error code is provided.
         if (!e.code) {
@@ -637,8 +637,7 @@ export abstract class Room<State= any, Metadata= any> {
   }
 
   private async _onLeave(client: Client, code?: number): Promise<any> {
-    const success = spliceOne(this.clients.array, this.clients.indexOf(client));
-    this.clients.removeByObject(client);
+    const success = this.clients.removeByObject(client);
 
     // call 'onLeave' method only if the client has been successfully accepted.
     if (success && this.onLeave) {

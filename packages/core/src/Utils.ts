@@ -78,24 +78,6 @@ export class Deferred<T= any> {
 
 }
 
-export function spliceOne(arr: any[], index: number): boolean {
-  // manually splice availableRooms array
-  // http://jsperf.com/manual-splice
-  if (index === -1 || index >= arr.length) {
-    return false;
-  }
-
-  const len = arr.length - 1;
-
-  for (let i = index; i < len; i++) {
-    arr[i] = arr[i + 1];
-  }
-
-  arr.length = len;
-
-  return true;
-}
-
 export function merge(a: any, ...objs: any[]): any {
   for (let i = 0, len = objs.length; i < len; i++) {
     const b = objs[i];
@@ -133,14 +115,6 @@ export class HybridArray<T> {
     return this.array.length;
   }
 
-  public get(indexOrKey: number | string): T {
-    if (typeof indexOrKey === 'number') {
-      return this.array[indexOrKey];
-    } else if (typeof indexOrKey === 'string') {
-      return this.hashedArray[indexOrKey];
-    }
-  }
-
   public add(element: T) {
     if (!this.hashedArray[element[this.uniqueProperty]]) {
       this.array.push(element);
@@ -150,33 +124,11 @@ export class HybridArray<T> {
     }
   }
 
-  public remove(indexOrKey: number | string) {
-    if (typeof indexOrKey == 'number') {
-      if (indexOrKey >= this.array.length) {
-        this.indexError(indexOrKey);
-      } else {
-        const removable = this.array.splice(indexOrKey, 1);
-        delete this.hashedArray[removable[this.uniqueProperty]];
-      }
-    } else if (typeof indexOrKey == 'string') {
-      if (!this.hashedArray[indexOrKey]) {
-        this.invalidKeyError(indexOrKey);
-      } else {
-        this.array = this.array.filter((element) => {
-          return element[this.uniqueProperty] != indexOrKey;
-        })
-        delete this.hashedArray[indexOrKey];
-      }
-    }
-  }
-
-  public removeByObject(obj: T) {
-    if(this.hashedArray[obj[this.uniqueProperty]]) {
-      this.remove(obj[this.uniqueProperty]);
-    } else if(this.indexOf(obj) != -1) {
-      this.remove(this.indexOf(obj));
+  public at(index: number) {
+    if (index >= this.array.length) {
+      this.indexError(index);
     } else {
-      console.error("Invalid object has been provided!")
+      return this.array[index];
     }
   }
 
@@ -186,8 +138,69 @@ export class HybridArray<T> {
     }
   }
 
+  public get(key: string): T {
+    return this.hashedArray[key];
+  }
+
   public indexOf(element: T): number {
     return this.array.indexOf(element);
+  }
+
+  public map(callback) {
+    const result = [];
+    for (let index = 0; index < this.array.length; index++) {
+      result.push(callback(this.array[index], index, this.array));
+    }
+    return result;
+  }
+
+  public removeByIndex(index: number) {
+    if (index >= this.array.length) {
+      this.indexError(index);
+      return undefined;
+    } else {
+      const removable = this.spliceOne(index);
+      delete this.hashedArray[removable[this.uniqueProperty]];
+      return removable;
+    }
+  }
+
+  public removeByKey(key: string): T {
+    if (!this.hashedArray[key]) {
+      this.invalidKeyError(key);
+      return undefined;
+    } else {
+      const removable = this.spliceOne(this.indexOf(this.hashedArray[key]));
+      delete this.hashedArray[key];
+      return removable;
+    }
+  }
+
+  public removeByObject(obj: T): T {
+    if (this.hashedArray[obj[this.uniqueProperty]]) {
+      return this.removeByKey(obj[this.uniqueProperty]);
+    } else if (this.indexOf(obj) != -1) {
+      return this.removeByIndex(this.indexOf(obj));
+    } else {
+      console.error("Invalid object has been provided!");
+      return undefined;
+    }
+  }
+
+  public spliceOne(index: number): T {
+    // manually splice availableRooms array
+    // http://jsperf.com/manual-splice
+    if (index === -1 || index >= this.array.length) {
+      this.indexError(index);
+      return undefined;
+    }
+    const removable = this.array[index];
+    const len = this.array.length - 1;
+    for (let i = index; i < len; i++) {
+      this.array[i] = this.array[i + 1];
+    }
+    this.array.length = len;
+    return removable;
   }
 
   private indexError(index) {
