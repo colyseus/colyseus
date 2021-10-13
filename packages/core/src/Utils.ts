@@ -55,6 +55,22 @@ export function retry<T = any>(
   });
 }
 
+export function spliceOne(arr: any[], index: number): boolean {
+  // manually splice availableRooms array
+  // http://jsperf.com/manual-splice
+  if (index === -1 || index >= arr.length) {
+    return false;
+  }
+
+  const len = arr.length - 1;
+  for (let i = index; i < len; i++) {
+    arr[i] = arr[i + 1];
+  }
+
+  arr.length = len;
+  return true;
+}
+
 export class Deferred<T= any> {
   public promise: Promise<T>;
 
@@ -132,6 +148,15 @@ export class HybridArray<T> {
     }
   }
 
+  public concat(elements: T[]) {
+    if(elements) {
+      for(const element of elements) {
+        this.hashedArray[element[this.uniqueProperty]] = element;
+      }
+      this.array.concat(elements);
+    }
+  }
+
   public forEach(fn) {
     for (let element of this.array) {
       fn(element);
@@ -140,6 +165,10 @@ export class HybridArray<T> {
 
   public get(key: string): T {
     return this.hashedArray[key];
+  }
+
+  public includes(element: T) {
+    return this.hashedArray[element[this.uniqueProperty]] !== undefined;
   }
 
   public indexOf(element: T): number {
