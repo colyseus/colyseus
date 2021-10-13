@@ -363,7 +363,7 @@ export abstract class Room<State= any, Metadata= any> {
           await this.onJoin(client, options, client.auth);
         }
       } catch (e) {
-        this.clients.removeByObject(client);
+        this.clients.delete(client);
 
         // make sure an error code is provided.
         if (!e.code) {
@@ -637,7 +637,7 @@ export abstract class Room<State= any, Metadata= any> {
   }
 
   private async _onLeave(client: Client, code?: number): Promise<any> {
-    const success = this.clients.removeByObject(client);
+    const success = this.clients.delete(client);
 
     // call 'onLeave' method only if the client has been successfully accepted.
     if (success && this.onLeave) {

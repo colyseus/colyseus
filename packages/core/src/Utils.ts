@@ -183,7 +183,7 @@ export class HybridArray<T> {
     return result;
   }
 
-  public removeByIndex(index: number) {
+  public deleteAt(index: number) {
     if (index >= this.array.length) {
       this.indexError(index);
       return undefined;
@@ -194,7 +194,7 @@ export class HybridArray<T> {
     }
   }
 
-  public removeByKey(key: string): T {
+  public deleteByKey(key: string): T {
     if (!this.hashedArray[key]) {
       this.invalidKeyError(key);
       return undefined;
@@ -205,11 +205,11 @@ export class HybridArray<T> {
     }
   }
 
-  public removeByObject(obj: T): T {
+  public delete(obj: T): T {
     if (this.hashedArray[obj[this.uniqueProperty]]) {
-      return this.removeByKey(obj[this.uniqueProperty]);
+      return this.deleteByKey(obj[this.uniqueProperty]);
     } else if (this.indexOf(obj) != -1) {
-      return this.removeByIndex(this.indexOf(obj));
+      return this.deleteAt(this.indexOf(obj));
     } else {
       console.error("Invalid object has been provided!");
       return undefined;

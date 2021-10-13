@@ -43,7 +43,7 @@ describe("@colyseus/utility/testing", () => {
 
     it("should remove object by key successfully", () => {
         const lengthBeforeRemoving = hybridArray.length;
-        const removed = hybridArray.removeByKey(sample1.sessionId);
+        const removed = hybridArray.deleteByKey(sample1.sessionId);
         assert.strictEqual(sample1, removed);
         assert.strictEqual(hybridArray.length, lengthBeforeRemoving - 1 );
         assert.strictEqual(hybridArray.get(sample1.sessionId), undefined);
@@ -53,7 +53,7 @@ describe("@colyseus/utility/testing", () => {
     it("should remove object by index successfully", () => {
         const index = hybridArray.indexOf(sample2);
         const lengthBeforeRemoving = hybridArray.length;
-        const removed = hybridArray.removeByIndex(index);
+        const removed = hybridArray.deleteAt(index);
         assert.strictEqual(sample2, removed);
         assert.strictEqual(hybridArray.length, lengthBeforeRemoving - 1 );
         assert.strictEqual(hybridArray.get(sample2.sessionId), undefined);
@@ -62,7 +62,7 @@ describe("@colyseus/utility/testing", () => {
 
     it("should remove object by object itself successfully", () => {
         const lengthBeforeRemoving = hybridArray.length;
-        const removed = hybridArray.removeByObject(sample3);
+        const removed = hybridArray.delete(sample3);
         assert.strictEqual(sample3, removed);
         assert.strictEqual(hybridArray.length, lengthBeforeRemoving - 1 );
         assert.strictEqual(hybridArray.get(sample3.sessionId), undefined);
