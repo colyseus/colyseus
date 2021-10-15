@@ -98,9 +98,12 @@ export async function joinById(roomId: string, clientOptions: ClientOptions = {}
   const room = await driver.findOne({ roomId });
 
   if (room) {
-    const rejoinSessionId = clientOptions.sessionId;
+    if(clientOptions.hasOwnProperty("sessionId") && !clientOptions.sessionId) {
+      throw new ServerError( ErrorCode.MATCHMAKE_INVALID_SESSION_ID, `Invalid session Id.`);
 
-    if (rejoinSessionId) {
+    } else if(clientOptions.sessionId) {
+      const rejoinSessionId = clientOptions.sessionId;
+
       // handle re-connection!
       const hasReservedSeat = await remoteRoomCall(room.roomId, 'hasReservedSeat', [rejoinSessionId]);
 
