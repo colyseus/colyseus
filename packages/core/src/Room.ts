@@ -111,6 +111,7 @@ export abstract class Room<State= any, Metadata= any> {
   }
 
   // Optional abstract methods
+  public onBeforePatch?(state: State): void | Promise<any>;
   public onCreate?(options: any): void | Promise<any>;
   public onJoin?(client: Client, options?: any, auth?: any): void | Promise<any>;
   public onLeave?(client: Client, consented?: boolean): void | Promise<any>;
@@ -269,6 +270,10 @@ export abstract class Room<State= any, Metadata= any> {
   }
 
   public broadcastPatch() {
+    if (this.onBeforePatch) {
+      this.onBeforePatch(this.state);
+    }
+
     if (!this._simulationInterval) {
       this.clock.tick();
     }
