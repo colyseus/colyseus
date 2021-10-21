@@ -40,6 +40,15 @@ export enum RoomInternalState {
   DISCONNECTING = 2,
 }
 
+export interface SchemaType<T extends Schema = Schema> {
+  new(...args: any[]): T
+}
+
+export interface SchemaHandler<T extends Schema = Schema> {
+  schemaType: SchemaType<T>
+  callback: (client: Client, schema: T) => void
+}
+
 export abstract class Room<State= any, Metadata= any> {
 
   public get locked() {
@@ -77,6 +86,7 @@ export abstract class Room<State= any, Metadata= any> {
   protected reconnections: { [sessionId: string]: Deferred } = {};
 
   private onMessageHandlers: {[id: string]: (client: Client, message: any) => void} = {};
+  private onSchemaHandlers: {[id: string]: SchemaHandler } = {};
 
   private _serializer: Serializer<State> = noneSerializer;
   private _afterNextPatchQueue: Array<[string | Client, IArguments]> = [];
@@ -287,10 +297,18 @@ export abstract class Room<State= any, Metadata= any> {
 
   public onMessage<T = any>(messageType: '*', callback: (client: Client, type: string | number, message: T) => void);
   public onMessage<T = any>(messageType: string | number, callback: (client: Client, message: T) => void);
-  public onMessage<T = any>(messageType: '*' | string | number, callback: (...args: any[]) => void) {
-    this.onMessageHandlers[messageType] = callback;
-    // returns a method to unbind the callback
-    return () => delete this.onMessageHandlers[messageType];
+  public onMessage<T extends Schema>(messageType: SchemaType<T>, callback: (client: Client, message: T) => void);
+  public onMessage<T = any>(messageType: '*' | string | number | SchemaType, callback: (...args: any[]) => void) {
+    if (typeof messageType === 'string' || typeof messageType === 'number') {
+      this.onMessageHandlers[messageType] = callback;
+      // returns a method to unbind the callback
+      return () => delete this.onMessageHandlers[messageType];
+    } else {
+      const schemaType = messageType
+      this.onSchemaHandlers[messageType.name] = { schemaType, callback };
+      // returns a method to unbind the callback
+      return () => delete this.onSchemaHandlers[messageType.name];
+    }
   }
 
   public async disconnect(): Promise<any> {
@@ -604,6 +622,25 @@ export abstract class Room<State= any, Metadata= any> {
         debugAndPrintError(`onMessage for "${messageType}" not registered.`);
       }
 
+    } else if (code === Protocol.ROOM_DATA_SCHEMA) {
+      const schemaName = decode.string(bytes, it)
+
+      if (!this.onSchemaHandlers[schemaName]) {
+        debugAndPrintError(`onSchema for "${schemaName}" not registered.`);
+        return;
+      }
+
+      const { schemaType, callback } = this.onSchemaHandlers[schemaName]
+
+      const schema = new schemaType()
+      try {
+        schema.decode(Array.from(bytes.slice(it.offset, bytes.length)))
+      } catch (e) {
+        debugAndPrintError(e);
+        return;
+      }
+      
+      callback(client, schema)
     } else if (code === Protocol.JOIN_ROOM) {
       // join room has been acknowledged by the client
       client.state = ClientState.JOINED;
