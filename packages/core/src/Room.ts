@@ -40,12 +40,10 @@ export enum RoomInternalState {
   DISCONNECTING = 2,
 }
 
-export interface SchemaType<T extends Schema = Schema> {
-  new(...args: any[]): T
-}
+export type SchemaConstructor<T= any> = new (...args: any[]) => T;
 
 export interface SchemaHandler<T extends Schema = Schema> {
-  schemaType: SchemaType<T>
+  constructor: SchemaConstructor<T>
   callback: (client: Client, schema: T) => void
 }
 
@@ -297,15 +295,14 @@ export abstract class Room<State= any, Metadata= any> {
 
   public onMessage<T = any>(messageType: '*', callback: (client: Client, type: string | number, message: T) => void);
   public onMessage<T = any>(messageType: string | number, callback: (client: Client, message: T) => void);
-  public onMessage<T extends Schema>(messageType: SchemaType<T>, callback: (client: Client, message: T) => void);
-  public onMessage<T = any>(messageType: '*' | string | number | SchemaType, callback: (...args: any[]) => void) {
+  public onMessage<T = any>(messageType: SchemaConstructor<T>, callback: (client: Client, message: T) => void);
+  public onMessage<T = any>(messageType: '*' | string | number | SchemaConstructor, callback: (...args: any[]) => void) {
     if (typeof messageType === 'string' || typeof messageType === 'number') {
       this.onMessageHandlers[messageType] = callback;
       // returns a method to unbind the callback
       return () => delete this.onMessageHandlers[messageType];
     } else {
-      const schemaType = messageType
-      this.onSchemaHandlers[messageType.name] = { schemaType, callback };
+      this.onSchemaHandlers[messageType.name] = { constructor: messageType, callback };
       // returns a method to unbind the callback
       return () => delete this.onSchemaHandlers[messageType.name];
     }
@@ -630,9 +627,9 @@ export abstract class Room<State= any, Metadata= any> {
         return;
       }
 
-      const { schemaType, callback } = this.onSchemaHandlers[schemaName]
+      const { constructor, callback } = this.onSchemaHandlers[schemaName]
 
-      const schema = new schemaType()
+      const schema = new constructor()
       try {
         schema.decode(Array.from(bytes.slice(it.offset, bytes.length)))
       } catch (e) {
