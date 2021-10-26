@@ -39,6 +39,12 @@ export class uWebSocketsTransport extends Transport {
             options.maxPayloadLength = 1024 * 1024;
         }
 
+        // https://github.com/colyseus/colyseus/issues/458
+        // Adding a mock object for Transport.server
+        if(!this.server) {
+          this.server = http.createServer();
+        }
+
         this.app.ws('/*', {
             ...options,
 
@@ -103,13 +109,15 @@ export class uWebSocketsTransport extends Transport {
         this.app.listen(port, (listeningSocket: any) => {
           this._listeningSocket = listeningSocket;
           listeningListener?.();
+          this.server.emit("listening"); // Mocking Transport.server behaviour, https://github.com/colyseus/colyseus/issues/458
         });
         return this;
     }
 
     public shutdown() {
         if (this._listeningSocket) {
-            uWebSockets.us_listen_socket_close(this._listeningSocket);
+          uWebSockets.us_listen_socket_close(this._listeningSocket);
+          this.server.emit("close"); // Mocking Transport.server behaviour, https://github.com/colyseus/colyseus/issues/458
         }
     }
 
