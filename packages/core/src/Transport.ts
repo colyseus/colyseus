@@ -4,9 +4,10 @@ import * as net from 'net';
 
 import { Schema } from '@colyseus/schema';
 import { EventEmitter } from 'events';
+import { DummyServer } from "./Utils";
 
 export abstract class Transport {
-    public server?: net.Server | http.Server | https.Server;
+    public server?: net.Server | http.Server | https.Server | DummyServer;
 
     public abstract listen(port?: number, hostname?: string, backlog?: number, listeningListener?: Function): this;
     public abstract shutdown(): void;
