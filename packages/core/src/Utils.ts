@@ -107,3 +107,12 @@ export function merge(a: any, ...objs: any[]): any {
   }
   return a;
 }
+
+export declare interface DummyServer {
+  constructor(options?: ServerOpts, connectionListener?: (socket: Socket) => void);
+
+  listen(port?: number, hostname?: string, backlog?: number, listeningListener?: () => void): this;
+  close(callback?: (err?: Error) => void): this;
+}
+
+export class DummyServer extends EventEmitter {}
