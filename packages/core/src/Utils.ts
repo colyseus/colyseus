@@ -1,6 +1,8 @@
 import nanoid from 'nanoid';
 
 import { debugAndPrintError } from './Debug';
+import { EventEmitter } from "events";
+import { ServerOpts, Socket } from "net";
 
 // remote room call timeouts
 export const REMOTE_ROOM_SHORT_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_SHORT_TIMEOUT || 2000);
@@ -107,3 +109,12 @@ export function merge(a: any, ...objs: any[]): any {
   }
   return a;
 }
+
+export declare interface DummyServer {
+  constructor(options?: ServerOpts, connectionListener?: (socket: Socket) => void);
+
+  listen(port?: number, hostname?: string, backlog?: number, listeningListener?: () => void): this;
+  close(callback?: (err?: Error) => void): this;
+}
+
+export class DummyServer extends EventEmitter {}
