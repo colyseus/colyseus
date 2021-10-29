@@ -61,7 +61,7 @@ export class RegisteredHandler extends EventEmitter {
   public getFilterOptions(options: any) {
     return this.filterOptions.reduce((prev, curr, i, arr) => {
       const field = arr[i];
-      if (options[field]) {
+      if (options.hasOwnProperty(field)) {
         if (INVALID_OPTION_KEYS.indexOf(field as any) !== -1) {
           console.warn(`option "${field}" has internal usage and is going to be ignored.`);
 
