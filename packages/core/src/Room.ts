@@ -391,7 +391,16 @@ export abstract class Room<State= any, Metadata= any> {
     ));
   }
 
-  public allowReconnection(previousClient: Client, seconds: number = Infinity): Deferred<Client> {
+  public allowReconnection(previousClient: Client, seconds: number | "manual"): Deferred<Client> {
+    if (seconds === undefined) { // TODO: remove this check
+      console.warn("DEPRECATED: allowReconnection() requires a second argument. Using \"manual\" mode.");
+      seconds = "manual";
+    }
+
+    if (seconds === "manual") {
+      seconds = Infinity;
+    }
+
     if (this.internalState === RoomInternalState.DISCONNECTING) {
       this._disposeIfEmpty(); // gracefully shutting down
       throw new Error('disconnecting');
