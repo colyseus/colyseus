@@ -1,7 +1,14 @@
 import { ErrorCode } from './Protocol';
 
 import { requestFromIPC, subscribeIPC } from './IPC';
-import { generateId, merge, REMOTE_ROOM_SHORT_TIMEOUT, retry } from './Utils';
+import {
+  generateId,
+  createReconnectionToken,
+  merge,
+  REMOTE_ROOM_SHORT_TIMEOUT,
+  retry,
+  decryptReconnectionToken
+} from './Utils';
 
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
 import { Room, RoomInternalState } from './Room';
@@ -122,6 +129,42 @@ export async function joinById(roomId: string, clientOptions: ClientOptions = {}
 
   } else {
     throw new ServerError( ErrorCode.MATCHMAKE_INVALID_ROOM_ID, `room "${roomId}" not found`);
+  }
+
+}
+
+/**
+ * Join a room by reconnection token and return seat reservation.
+ */
+export async function joinByToken(token: string, clientOptions: ClientOptions = {}) {
+  const clientData = decryptReconnectionToken(token);
+  const room = await driver.findOne({ roomId: clientData["roomId"] });
+
+  if (room) {
+    const rejoinSessionId = clientData["sessionId"];
+
+    if (rejoinSessionId) {
+      // handle re-connection!
+      const hasReservedSeat = await remoteRoomCall(room.roomId, 'hasReservedSeat', [rejoinSessionId]);
+
+      if (hasReservedSeat) {
+        return { room, reconnectionToken: token, sessionId: rejoinSessionId };
+
+      } else {
+        throw new ServerError(ErrorCode.MATCHMAKE_EXPIRED, `session expired: ${rejoinSessionId}`);
+
+      }
+
+    } else if (!room.locked) {
+      return reserveSeatFor(room, clientOptions);
+
+    } else {
+      throw new ServerError( ErrorCode.MATCHMAKE_INVALID_ROOM_ID, `room "${clientData["roomId"]}" is locked`);
+
+    }
+
+  } else {
+    throw new ServerError( ErrorCode.MATCHMAKE_INVALID_ROOM_ID, `room "${clientData["roomId"]}" not found`);
   }
 
 }
@@ -374,7 +417,9 @@ export async function reserveSeatFor(room: RoomListingData, options: any) {
     throw new SeatReservationError(`${room.roomId} is already full.`);
   }
 
-  return { room, sessionId };
+  const reconnectionToken = createReconnectionToken(sessionId, room.roomId);
+
+  return { reconnectionToken, room, sessionId };
 }
 
 async function cleanupStaleRooms(roomName: string) {

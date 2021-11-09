@@ -250,7 +250,7 @@ export class Server {
       const matchedParams = req.url.match(this.allowedRoomNameChars);
       const matchmakeIndex = matchedParams.indexOf(this.matchmakeRoute);
       const method = matchedParams[matchmakeIndex + 1];
-      const name = matchedParams[matchmakeIndex + 2] || '';
+      let nameOrToken = matchedParams[matchmakeIndex + 2] || '';
 
       const data = [];
       req.on('data', (chunk) => data.push(chunk));
@@ -259,8 +259,12 @@ export class Server {
         res.writeHead(200, headers);
 
         const clientOptions = JSON.parse(Buffer.concat(data).toString());
+        if(method === "joinByToken") {
+          nameOrToken = clientOptions["reconnectionToken"];
+          delete clientOptions["reconnectionToken"]; // value no longer necessary
+        }
         try {
-          const response = await matchMaker.controller.invokeMethod(method, name, clientOptions);
+          const response = await matchMaker.controller.invokeMethod(method, nameOrToken, clientOptions);
           res.write(JSON.stringify(response));
 
         } catch (e) {

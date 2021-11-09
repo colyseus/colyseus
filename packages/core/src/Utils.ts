@@ -1,6 +1,10 @@
+import AES from "crypto-js/aes";
+import Utf8 from "crypto-js/enc-utf8";
 import nanoid from 'nanoid';
 
 import { debugAndPrintError } from './Debug';
+
+const RECONNECTION_TOKEN_SECRET = "abc123";
 
 // remote room call timeouts
 export const REMOTE_ROOM_SHORT_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_SHORT_TIMEOUT || 2000);
@@ -106,4 +110,27 @@ export function merge(a: any, ...objs: any[]): any {
     }
   }
   return a;
+}
+
+export function createReconnectionToken(sessionId: string, roomId: string) {
+  const tokenData = JSON.stringify({
+    "roomId": roomId,
+    "sessionId": sessionId
+  });
+  try {
+    return AES.encrypt(tokenData, RECONNECTION_TOKEN_SECRET).toString();
+  } catch (error) {
+    console.error(error);
+    throw new Error("Reconnection token generation failed!");
+  }
+}
+
+export function decryptReconnectionToken(token: string) {
+  try {
+    const decryptedData = AES.decrypt(token, RECONNECTION_TOKEN_SECRET).toString(Utf8);
+    return JSON.parse(decryptedData);
+  } catch (error) {
+    console.error(error);
+    throw new Error("Error occurred while decrypting reconnection token!");
+  }
 }
