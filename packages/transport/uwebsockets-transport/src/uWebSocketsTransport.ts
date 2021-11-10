@@ -2,7 +2,7 @@ import http from 'http';
 import querystring from 'querystring';
 import uWebSockets from 'uWebSockets.js';
 
-import { ErrorCode, matchMaker, Transport, debugAndPrintError, spliceOne } from '@colyseus/core';
+import { DummyServer, ErrorCode, matchMaker, Transport, debugAndPrintError, spliceOne } from '@colyseus/core';
 import { uWebSocketClient, uWebSocketWrapper } from './uWebSocketClient';
 
 export type TransportOptions = Omit<uWebSockets.WebSocketBehavior, "upgrade" | "open" | "pong" | "close" | "message">;
@@ -37,6 +37,12 @@ export class uWebSocketsTransport extends Transport {
 
         if (!options.maxPayloadLength) {
             options.maxPayloadLength = 1024 * 1024;
+        }
+
+        // https://github.com/colyseus/colyseus/issues/458
+        // Adding a mock object for Transport.server
+        if(!this.server) {
+          this.server = new DummyServer();
         }
 
         this.app.ws('/*', {
@@ -103,13 +109,15 @@ export class uWebSocketsTransport extends Transport {
         this.app.listen(port, (listeningSocket: any) => {
           this._listeningSocket = listeningSocket;
           listeningListener?.();
+          this.server.emit("listening"); // Mocking Transport.server behaviour, https://github.com/colyseus/colyseus/issues/458
         });
         return this;
     }
 
     public shutdown() {
         if (this._listeningSocket) {
-            uWebSockets.us_listen_socket_close(this._listeningSocket);
+          uWebSockets.us_listen_socket_close(this._listeningSocket);
+          this.server.emit("close"); // Mocking Transport.server behaviour, https://github.com/colyseus/colyseus/issues/458
         }
     }
 
@@ -306,5 +314,4 @@ export class uWebSocketsTransport extends Transport {
             }
         });
     }
-
 }
