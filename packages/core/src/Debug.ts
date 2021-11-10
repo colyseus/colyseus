@@ -1,4 +1,5 @@
 import debug from 'debug';
+import { logger } from './Logger';
 import { ServerError } from './errors/ServerError';
 
 export const debugMatchMaking = debug('colyseus:matchmaking');
@@ -12,7 +13,7 @@ export const debugAndPrintError = (e: Error | string) => {
   const message = (e instanceof Error) ? e.stack : e;
 
   if (!(e instanceof ServerError)) {
-    console.error(message);
+    logger.error(message);
   }
 
   debugError.call(debugError, message);
