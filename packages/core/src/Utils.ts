@@ -4,7 +4,7 @@ import nanoid from 'nanoid';
 
 import { debugAndPrintError } from './Debug';
 
-const RECONNECTION_TOKEN_SECRET = "abc123";
+const RECONNECTION_SECRET = process.env.RECONNECTION_SECRET || "e)f$q3Us$-%H*";
 
 // remote room call timeouts
 export const REMOTE_ROOM_SHORT_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_SHORT_TIMEOUT || 2000);
@@ -118,7 +118,7 @@ export function createReconnectionToken(sessionId: string, roomId: string) {
     "sessionId": sessionId
   });
   try {
-    return AES.encrypt(tokenData, RECONNECTION_TOKEN_SECRET).toString();
+    return AES.encrypt(tokenData, RECONNECTION_SECRET).toString();
   } catch (error) {
     console.error(error);
     throw new Error("Reconnection token generation failed!");
@@ -127,7 +127,7 @@ export function createReconnectionToken(sessionId: string, roomId: string) {
 
 export function decryptReconnectionToken(token: string) {
   try {
-    const decryptedData = AES.decrypt(token, RECONNECTION_TOKEN_SECRET).toString(Utf8);
+    const decryptedData = AES.decrypt(token, RECONNECTION_SECRET).toString(Utf8);
     return JSON.parse(decryptedData);
   } catch (error) {
     console.error(error);
