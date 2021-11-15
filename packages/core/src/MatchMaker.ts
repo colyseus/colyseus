@@ -57,14 +57,14 @@ export function setup(_presence?: Presence, _driver?: MatchMakerDriver, _process
  * Join or create into a room and return seat reservation
  */
 export async function joinOrCreate(roomName: string, clientOptions: ClientOptions = {}) {
-  return await retry<Promise<SeatReservation>>(async () => {
+  return retry<Promise<SeatReservation>>(async () => {
     let room = await findOneRoomAvailable(roomName, clientOptions);
 
     if (!room) {
       room = await createRoom(roomName, clientOptions);
     }
 
-    return await reserveSeatFor(room, clientOptions);
+    return reserveSeatFor(room, clientOptions);
   }, 5, [SeatReservationError]);
 }
 
@@ -94,36 +94,45 @@ export async function join(roomName: string, clientOptions: ClientOptions = {}) 
 /**
  * Join a room by id and return seat reservation
  */
-export async function joinById(roomId: string, clientOptions: ClientOptions = {}) {
+export const joinById = async (roomId: string, clientOptions: ClientOptions = {}):Promise<ClientOptions> => {
   const room = await driver.findOne({ roomId });
 
-  if (room) {
-    const rejoinSessionId = clientOptions.sessionId;
-
-    if (rejoinSessionId) {
-      // handle re-connection!
-      const hasReservedSeat = await remoteRoomCall(room.roomId, 'hasReservedSeat', [rejoinSessionId]);
-
-      if (hasReservedSeat) {
-        return { room, sessionId: rejoinSessionId };
-
-      } else {
-        throw new ServerError(ErrorCode.MATCHMAKE_EXPIRED, `session expired: ${rejoinSessionId}`);
-
-      }
-
-    } else if (!room.locked) {
-      return reserveSeatFor(room, clientOptions);
-
-    } else {
-      throw new ServerError( ErrorCode.MATCHMAKE_INVALID_ROOM_ID, `room "${roomId}" is locked`);
-
-    }
-
-  } else {
+  if (!room) {
     throw new ServerError( ErrorCode.MATCHMAKE_INVALID_ROOM_ID, `room "${roomId}" not found`);
   }
 
+  // no need to check permissions if the room is opened to everyone
+  if (!room.locked) {
+    return reserveSeatFor(room, clientOptions);
+  }
+
+  const { reToken, sessionId } = clientOptions;
+  if (!sessionId) {
+    throw new ServerError( ErrorCode.MATCHMAKE_INVALID_ROOM_ID, `room "${roomId}" is locked`);
+  }
+
+  if (!reToken){
+    throw new ServerError( ErrorCode.MATCHMAKE_NOT_PERMITTED, `user is not permitted to join the room: ${roomId}`);
+  }
+
+  const hasReservedSeat = await remoteRoomCall(room.roomId, 'hasReservedSeat', [sessionId]);
+
+  if (!hasReservedSeat) {
+    throw new ServerError(ErrorCode.MATCHMAKE_EXPIRED, `session expired: ${sessionId}`);
+  }
+
+  // If the token is not valid, then the session has been hached
+  const isValidReconnectionToken = await remoteRoomCall(room.roomId, 'isValidReconnectionToken', [reToken]);
+
+  if (!isValidReconnectionToken) {
+    throw new ServerError(ErrorCode.MATCHMAKE_NOT_PERMITTED, `user is not permitted to join the room: ${roomId}`);
+  }
+
+  return {
+    room,
+    sessionId,
+    reToken
+  }
 }
 
 /**
@@ -161,7 +170,7 @@ export async function findOneRoomAvailable(roomName: string, clientOptions: Clie
 /**
  * Call a method or return a property on a remote room.
  */
-export async function remoteRoomCall<R= any>(
+export async function remoteRoomCall<R = any>(
   roomId: string,
   method: string,
   args?: any[],
@@ -354,27 +363,31 @@ export function gracefullyShutdown(): Promise<any> {
  */
 export async function reserveSeatFor(room: RoomListingData, options: any) {
   const sessionId: string = generateId();
+  const reToken: string = generateId();
 
   debugMatchMaking(
-    'reserving seat. sessionId: \'%s\', roomId: \'%s\', processId: \'%s\'',
-    sessionId, room.roomId, processId,
+    `reserving seat. sessionId: '${sessionId}', roomId: '${room.roomId}', processId: '${processId}', reToken: '${reToken}'`
   );
 
-  let successfulSeatReservation: boolean;
-
   try {
-    successfulSeatReservation = await remoteRoomCall(room.roomId, '_reserveSeat', [sessionId, options]);
+    const isReserved = await remoteRoomCall(room.roomId, '_reserveSeat', [sessionId, options]);
+    if(!isReserved) {
+      const message = `room is full. sessionId: '${sessionId}', roomId: '${room.roomId}', processId: '${processId}', reToken: '${reToken}'`;
+      throw new Error(message);
+    }
 
+    // New reconnection token
+    room.addReconnectionToken(reToken);
+
+    return {
+      room,
+      sessionId,
+      reToken
+    };
   } catch (e) {
     debugMatchMaking(e);
-    successfulSeatReservation = false;
-  }
-
-  if (!successfulSeatReservation) {
     throw new SeatReservationError(`${room.roomId} is already full.`);
   }
-
-  return { room, sessionId };
 }
 
 async function cleanupStaleRooms(roomName: string) {

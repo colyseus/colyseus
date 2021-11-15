@@ -75,6 +75,7 @@ export abstract class Room<State= any, Metadata= any> {
   protected reservedSeatTimeouts: { [sessionId: string]: NodeJS.Timer } = {};
 
   protected reconnections: { [sessionId: string]: Deferred } = {};
+  private reconnectionTokens:string[] = [];
 
   private onMessageHandlers: {[id: string]: (client: Client, message: any) => void} = {};
 
@@ -129,7 +130,11 @@ export abstract class Room<State= any, Metadata= any> {
   }
 
   public hasReservedSeat(sessionId: string): boolean {
-    return this.reservedSeats[sessionId] !== undefined;
+    return !!this.reservedSeats[sessionId];
+  }
+
+  public isValidReconnectionToken(token: string): boolean {
+    return this.reconnectionTokens.some(t => t === token);
   }
 
   public setSimulationInterval(onTickCallback?: SimulationCallback, delay: number = DEFAULT_SIMULATION_INTERVAL): void {
@@ -430,6 +435,10 @@ export abstract class Room<State= any, Metadata= any> {
       });
 
     return reconnection;
+  }
+
+  public addReconnectionToken(token: string): void {
+    this.reconnectionTokens.push(token);
   }
 
   protected resetAutoDisposeTimeout(timeoutInSeconds: number = 1) {
