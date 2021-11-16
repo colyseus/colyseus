@@ -1,6 +1,7 @@
 import assert from "assert";
 import { matchMaker, MatchMakerDriver, Room } from "@colyseus/core";
 import { DummyRoom, Room2Clients, createDummyClient, timeout, ReconnectRoom, Room3Clients, DRIVERS, ReconnectTokenRoom } from "./utils";
+import {createReconnectionToken} from "@colyseus/core/build/Utils";
 
 const DEFAULT_SEAT_RESERVATION_TIME = Number(process.env.COLYSEUS_SEAT_RESERVATION_TIME);
 
@@ -112,6 +113,16 @@ describe("MatchMaker", () => {
         it("joinById() should allow to join a room by id", async () => {
           const reservedSeat1 = await matchMaker.create("room2");
           const reservedSeat2 = await matchMaker.joinById(reservedSeat1.room.roomId);
+          const room = matchMaker.getRoomById(reservedSeat2.room.roomId);
+
+          assert.strictEqual(reservedSeat1.room.roomId, reservedSeat2.room.roomId);
+          assert.ok(room.hasReservedSeat(reservedSeat2.sessionId));
+        });
+
+        it("joinByToken() should allow to join a room by reconnection token", async () => {
+          const reservedSeat1 = await matchMaker.create("room2");
+          const reconnectionToken = createReconnectionToken(reservedSeat1.sessionId, reservedSeat1.room.roomId);
+          const reservedSeat2 = await matchMaker.joinByToken(reconnectionToken);
           const room = matchMaker.getRoomById(reservedSeat2.room.roomId);
 
           assert.strictEqual(reservedSeat1.room.roomId, reservedSeat2.room.roomId);
