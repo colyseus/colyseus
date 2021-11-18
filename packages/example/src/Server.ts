@@ -3,11 +3,14 @@ import cors from "cors";
 import express from "express";
 import { monitor } from "@colyseus/monitor";
 
-import { Server, RelayRoom, LobbyRoom } from "colyseus";
+import { Server, RelayRoom, LobbyRoom, RedisPresence, MongooseDriver } from "colyseus";
 import { uWebSocketsTransport } from "@colyseus/uwebsockets-transport";
+import { WebSocketTransport } from "@colyseus/ws-transport";
+import { RedisDriver } from "@colyseus/redis-driver";
 import expressify from "uwebsockets-express";
 
 import { DummyRoom } from "./DummyRoom";
+import { MyRoom } from "./MyRoom";
 
 const port = Number(process.env.PORT || 2567);
 const endpoint = "localhost";
@@ -15,22 +18,30 @@ const endpoint = "localhost";
 // Create HTTP & WebSocket servers
 // const server = http.createServer(app);
 const transport = new uWebSocketsTransport();
+// const transport = new WebSocketTransport({
+//   pingInterval: 0,
+// });
 
 const gameServer = new Server({
   transport,
-  // engine: WebSocket.Server,
   // server: server,
-  // presence: new RedisPresence(),
+  presence: new RedisPresence(),
+  driver: new RedisDriver(),
+
   // driver: new MongooseDriver(),
+  publicAddress: `localhost:${port}`,
 });
 
+// const app = express();
 const app = expressify(transport.app);
+
 app.use(cors());
 app.use(express.json());
 app.get("/hello", (req, res) => {
   res.json({hello: "world!"});
 });
 
+gameServer.define("my_room", MyRoom);
 gameServer.define("lobby", LobbyRoom);
 
 // Define RelayRoom as "relay"

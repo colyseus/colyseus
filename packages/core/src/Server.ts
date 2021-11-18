@@ -16,11 +16,12 @@ import { LocalPresence } from './presence/LocalPresence';
 import { LocalDriver } from './matchmaker/driver';
 
 import { Transport } from './Transport';
-
-import {logger, setLogger} from './Logger';
+import { logger, setLogger } from './Logger';
 
 // IServerOptions &
 export type ServerOptions = {
+  publicAddress?: string,
+
   presence?: Presence,
   driver?: matchMaker.MatchMakerDriver,
   transport?: Transport,
@@ -48,12 +49,10 @@ export class Server {
   public transport: Transport;
 
   protected presence: Presence;
-  protected port: number;
   protected driver: matchMaker.MatchMakerDriver;
   protected processId: string = generateId();
 
-  private matchmakeRoute = 'matchmake';
-  private allowedRoomNameChars = /([a-zA-Z_\-0-9]+)/gi;
+  protected port: number;
 
   constructor(options: ServerOptions = {}) {
     const { gracefullyShutdown = true } = options;
@@ -61,13 +60,17 @@ export class Server {
     this.presence = options.presence || new LocalPresence();
     this.driver = options.driver || new LocalDriver();
 
-    // setup matchmaker
-    matchMaker.setup(this.presence, this.driver, this.processId);
-
     // "presence" option is not used from now on
     delete options.presence;
-
     this.attach(options);
+
+    // setup matchmaker
+    matchMaker.setup(
+      this.presence,
+      this.driver,
+      this.processId,
+      options.publicAddress,
+    );
 
     if (gracefullyShutdown) {
       registerGracefulShutdown((err) => this.gracefullyShutdown(true, err));
@@ -140,7 +143,7 @@ export class Server {
     });
   }
 
-  public registerProcessForDiscovery() {
+  public async registerProcessForDiscovery() {
     // register node for proxy/service discovery
     registerNode(this.presence, {
       port: this.port,
@@ -228,7 +231,7 @@ export class Server {
     server.removeAllListeners('request');
 
     server.on('request', (req, res) => {
-      if (req.url.indexOf(`/${this.matchmakeRoute}`) !== -1) {
+      if (req.url.indexOf(`/${matchMaker.controller.matchmakeRoute}`) !== -1) {
         debugMatchMaking('received matchmake request: %s', req.url);
         this.handleMatchMakeRequest(req, res);
 
@@ -254,8 +257,8 @@ export class Server {
       res.end();
 
     } else if (req.method === 'POST') {
-      const matchedParams = req.url.match(this.allowedRoomNameChars);
-      const matchmakeIndex = matchedParams.indexOf(this.matchmakeRoute);
+      const matchedParams = req.url.match(matchMaker.controller.allowedRoomNameChars);
+      const matchmakeIndex = matchedParams.indexOf(matchMaker.controller.matchmakeRoute);
       const method = matchedParams[matchmakeIndex + 1];
       const name = matchedParams[matchmakeIndex + 2] || '';
 
@@ -278,7 +281,7 @@ export class Server {
       });
 
     } else if (req.method === 'GET') {
-      const matchedParams = req.url.match(this.allowedRoomNameChars);
+      const matchedParams = req.url.match(matchMaker.controller.allowedRoomNameChars);
       const roomName = matchedParams.length > 1 ? matchedParams[matchedParams.length - 1] : "";
 
       headers['Content-Type'] = 'application/json';

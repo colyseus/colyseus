@@ -31,16 +31,24 @@ export interface SeatReservation {
 const handlers: {[id: string]: RegisteredHandler} = {};
 const rooms: {[roomId: string]: Room} = {};
 
+export let publicAddress: string;
 export let processId: string;
 export let presence: Presence;
 export let driver: MatchMakerDriver;
 
 let isGracefullyShuttingDown: boolean;
 
-export function setup(_presence?: Presence, _driver?: MatchMakerDriver, _processId?: string) {
+export function setup(
+  _presence?: Presence,
+  _driver?: MatchMakerDriver,
+  _processId?: string,
+  _publicAddress?: string
+) {
   presence = _presence || new LocalPresence();
   driver = _driver || new LocalDriver();
   processId = _processId;
+  publicAddress = _publicAddress;
+
   isGracefullyShuttingDown = false;
 
   /**
@@ -269,11 +277,18 @@ async function handleCreateRoom(roomName: string, clientOptions: ClientOptions):
   room.roomName = roomName;
   room.presence = presence;
 
+  const additionalListingData: any = registeredHandler.getFilterOptions(clientOptions);
+
+  // assign public host
+  if (publicAddress) {
+    additionalListingData.publicAddress = publicAddress;
+  }
+
   // create a RoomCache reference.
   room.listing = driver.createInstance({
     name: roomName,
     processId,
-    ...registeredHandler.getFilterOptions(clientOptions),
+    ...additionalListingData
   });
 
   if (room.onCreate) {

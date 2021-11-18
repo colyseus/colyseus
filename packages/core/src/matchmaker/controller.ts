@@ -1,5 +1,5 @@
 /**
- * Matchmaking controller 
+ * Matchmaking controller
  * (for interoperability between different http frameworks, e.g. express, uWebSockets.js, etc)
  */
 
@@ -7,9 +7,9 @@ import { ErrorCode } from "../Protocol";
 import { ServerError } from "../errors/ServerError";
 import * as matchMaker from "../MatchMaker";
 
-const exposedMethods = ['joinOrCreate', 'create', 'join', 'joinById'];
-const allowedRoomNameChars = /([a-zA-Z_\-0-9]+)/gi;
-const matchmakeRoute = 'matchmake';
+export const exposedMethods = ['joinOrCreate', 'create', 'join', 'joinById'];
+export const allowedRoomNameChars = /([a-zA-Z_\-0-9]+)/gi;
+export const matchmakeRoute = 'matchmake';
 
 export function getAvailableRooms(roomName: string) {
     /**
