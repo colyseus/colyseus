@@ -136,8 +136,9 @@ export class uWebSocketsTransport extends Transport {
 
         const query = rawClient.query;
         const url = rawClient.url;
+        const searchParams = querystring.parse(query);
 
-        const sessionId = querystring.parse(query).sessionId as string;
+        const sessionId = searchParams.sessionId as string;
         const processAndRoomId = url.match(/\/[a-zA-Z0-9_\-]+\/([a-zA-Z0-9_\-]+)$/);
         const roomId = processAndRoomId && processAndRoomId[1];
 
@@ -149,7 +150,7 @@ export class uWebSocketsTransport extends Transport {
         //
 
         try {
-            if (!room || !room.hasReservedSeat(sessionId)) {
+            if (!room || !room.hasReservedSeat(sessionId, searchParams.reconnectionToken as string)) {
                 throw new Error('seat reservation expired.');
             }
 
@@ -221,10 +222,10 @@ export class uWebSocketsTransport extends Transport {
             // read json body
             this.readJson(res, async (clientOptions) => {
                 const method = matchedParams[matchmakeIndex + 1];
-                const name = matchedParams[matchmakeIndex + 2] || '';
+                const roomName = matchedParams[matchmakeIndex + 2] || '';
 
                 try {
-                    const response = await matchMaker.controller.invokeMethod(method, name, clientOptions);
+                    const response = await matchMaker.controller.invokeMethod(method, roomName, clientOptions);
                     if (!res.aborted) {
                       res.writeStatus("200 OK");
                       res.end(JSON.stringify(response));

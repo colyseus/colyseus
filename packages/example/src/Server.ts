@@ -3,10 +3,13 @@ import cors from "cors";
 import express from "express";
 import { monitor } from "@colyseus/monitor";
 
-import { Server, RelayRoom, LobbyRoom, RedisPresence, MongooseDriver } from "colyseus";
+import { Server, RelayRoom, LobbyRoom } from "@colyseus/core";
 import { uWebSocketsTransport } from "@colyseus/uwebsockets-transport";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import { RedisDriver } from "@colyseus/redis-driver";
+import { RedisPresence } from "@colyseus/redis-presence";
+import { MongooseDriver  } from "@colyseus/mongoose-driver";
+
 import expressify from "uwebsockets-express";
 
 import { DummyRoom } from "./DummyRoom";
@@ -24,6 +27,7 @@ const transport = new uWebSocketsTransport();
 
 const gameServer = new Server({
   transport,
+
   // server: server,
   presence: new RedisPresence(),
   driver: new RedisDriver(),

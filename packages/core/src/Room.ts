@@ -14,7 +14,7 @@ import { SchemaSerializer } from './serializer/SchemaSerializer';
 import { Serializer } from './serializer/Serializer';
 
 import { ErrorCode, getMessageBytes, Protocol } from './Protocol';
-import { Deferred, HybridArray } from './Utils';
+import { Deferred, HybridArray, generateId } from './Utils';
 
 import { debugAndPrintError, debugPatch } from './Debug';
 import { ServerError } from './errors/ServerError';
@@ -75,7 +75,8 @@ export abstract class Room<State= any, Metadata= any> {
   protected reservedSeats: { [sessionId: string]: any } = {};
   protected reservedSeatTimeouts: { [sessionId: string]: NodeJS.Timer } = {};
 
-  protected reconnections: { [sessionId: string]: Deferred } = {};
+  protected _reconnections: { [reconnectionToken: string]: [string, Deferred] } = {};
+  private _reconnectingSessionId = new Map<string, string>();
 
   private onMessageHandlers: {[id: string]: (client: Client, message: any) => void} = {};
 
@@ -130,8 +131,35 @@ export abstract class Room<State= any, Metadata= any> {
     return this;
   }
 
-  public hasReservedSeat(sessionId: string): boolean {
-    return this.reservedSeats[sessionId] !== undefined;
+  public hasReservedSeat(sessionId: string, reconnectionToken?: string): boolean {
+    if (reconnectionToken !== undefined) {
+      const reconnection = this._reconnections[reconnectionToken];
+      return (
+        reconnection &&
+        reconnection[0] === sessionId &&
+        this.reservedSeats[sessionId] !== undefined &&
+        this._reconnectingSessionId.has(sessionId)
+      );
+
+    } else {
+      return (
+        this.reservedSeats[sessionId] !== undefined &&
+        !this._reconnectingSessionId.has(sessionId) // prevent possible "reconnect" requests without a reconnection token
+      );
+    }
+  }
+
+  public checkReconnectionToken(reconnectionToken: string) {
+    const reconnection = this._reconnections[reconnectionToken];
+    const sessionId = (reconnection && reconnection[0]);
+
+    if (this.hasReservedSeat(sessionId)) {
+      this._reconnectingSessionId.set(sessionId, reconnectionToken);
+      return sessionId;
+
+    } else {
+      return undefined;
+    }
   }
 
   public setSimulationInterval(onTickCallback?: SimulationCallback, delay: number = DEFAULT_SIMULATION_INTERVAL): void {
@@ -308,7 +336,7 @@ export abstract class Room<State= any, Metadata= any> {
     const delayedDisconnection = new Promise<void>((resolve) =>
       this._events.once('disconnect', () => resolve()));
 
-    for (const reconnection of Object.values(this.reconnections)) {
+    for (const [_, reconnection] of Object.values(this._reconnections)) {
       reconnection.reject();
     }
 
@@ -328,6 +356,9 @@ export abstract class Room<State= any, Metadata= any> {
 
   public async ['_onJoin'](client: Client, req?: http.IncomingMessage) {
     const sessionId = client.sessionId;
+
+    // generate unique private reconnection token
+    client._reconnectionToken = generateId();
 
     if (this.reservedSeatTimeouts[sessionId]) {
       clearTimeout(this.reservedSeatTimeouts[sessionId]);
@@ -353,9 +384,9 @@ export abstract class Room<State= any, Metadata= any> {
 
     this.clients.add(client);
 
-    const reconnection = this.reconnections[sessionId];
-    if (reconnection) {
-      reconnection.resolve(client);
+    const previousReconnectionToken = this._reconnectingSessionId.get(sessionId);
+    if (previousReconnectionToken) {
+      this._reconnections[previousReconnectionToken][1].resolve(client);
 
     } else {
       try {
@@ -392,6 +423,7 @@ export abstract class Room<State= any, Metadata= any> {
 
     // confirm room id that matches the room name requested to join
     client.raw(getMessageBytes[Protocol.JOIN_ROOM](
+      client._reconnectionToken,
       this._serializer.id,
       this._serializer.handshake && this._serializer.handshake(),
     ));
@@ -413,11 +445,13 @@ export abstract class Room<State= any, Metadata= any> {
     }
 
     const sessionId = previousClient.sessionId;
+    const reconnectionToken = previousClient._reconnectionToken;
+
     this._reserveSeat(sessionId, true, seconds, true);
 
     // keep reconnection reference in case the user reconnects into this room.
     const reconnection = new Deferred<Client>();
-    this.reconnections[sessionId] = reconnection;
+    this._reconnections[reconnectionToken] = [sessionId, reconnection];
 
     if (seconds !== Infinity) {
       // expire seat reservation after timeout
@@ -426,9 +460,10 @@ export abstract class Room<State= any, Metadata= any> {
     }
 
     const cleanup = () => {
+      delete this._reconnections[reconnectionToken];
       delete this.reservedSeats[sessionId];
-      delete this.reconnections[sessionId];
       delete this.reservedSeatTimeouts[sessionId];
+      this._reconnectingSessionId.delete(sessionId);
     };
 
     reconnection.

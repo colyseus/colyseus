@@ -43,6 +43,7 @@ export interface Client {
   auth?: any;
   pingCount?: number; // ping / pong
 
+  _reconnectionToken: string;
   _enqueuedMessages?: any[];
   _afterNextPatchQueue: Array<[string | Client, IArguments]>;
 

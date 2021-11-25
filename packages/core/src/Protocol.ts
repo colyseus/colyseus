@@ -43,14 +43,18 @@ export enum IpcProtocol {
 }
 
 export const getMessageBytes = {
-  [Protocol.JOIN_ROOM]: (serializerId: string, handshake?: number[]) => {
+  [Protocol.JOIN_ROOM]: (reconnectionToken: string, serializerId: string, handshake?: number[]) => {
     let offset = 0;
 
+    const reconnectionTokenLength = utf8Length(reconnectionToken);
     const serializerIdLength = utf8Length(serializerId);
     const handshakeLength = (handshake) ? handshake.length : 0;
 
-    const buff = Buffer.allocUnsafe(1 + serializerIdLength + handshakeLength);
+    const buff = Buffer.allocUnsafe(1 + reconnectionTokenLength + serializerIdLength + handshakeLength);
     buff.writeUInt8(Protocol.JOIN_ROOM, offset++);
+
+    utf8Write(buff, offset, reconnectionToken);
+    offset += reconnectionTokenLength;
 
     utf8Write(buff, offset, serializerId);
     offset += serializerIdLength;

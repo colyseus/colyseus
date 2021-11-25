@@ -260,7 +260,7 @@ export class Server {
       const matchedParams = req.url.match(matchMaker.controller.allowedRoomNameChars);
       const matchmakeIndex = matchedParams.indexOf(matchMaker.controller.matchmakeRoute);
       const method = matchedParams[matchmakeIndex + 1];
-      const name = matchedParams[matchmakeIndex + 2] || '';
+      const roomName = matchedParams[matchmakeIndex + 2] || '';
 
       const data = [];
       req.on('data', (chunk) => data.push(chunk));
@@ -270,7 +270,7 @@ export class Server {
 
         const clientOptions = JSON.parse(Buffer.concat(data).toString());
         try {
-          const response = await matchMaker.controller.invokeMethod(method, name, clientOptions);
+          const response = await matchMaker.controller.invokeMethod(method, roomName, clientOptions);
           res.write(JSON.stringify(response));
 
         } catch (e) {

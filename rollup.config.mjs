@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import minimist from 'minimist';
 
 import typescript from '@rollup/plugin-typescript';
+import json from '@rollup/plugin-json';
 import { nodeResolve } from '@rollup/plugin-node-resolve'
 import commonJs from '@rollup/plugin-commonjs'
 import externals from 'rollup-plugin-node-externals';
@@ -79,6 +80,7 @@ async function main() {
         externals({ deps: true, peerDeps: true, devDeps: true, packagePath: path.join(basePath, "package.json"), }),
         nodeResolve(),
         commonJs(),
+        json(),
         typescript({
           ...tsconfig,
           module: "ESNext",
@@ -96,6 +98,7 @@ async function main() {
         externals({ deps: true, peerDeps: true, devDeps: true, packagePath: path.join(basePath, "package.json"), }),
         nodeResolve(),
         commonJs(),
+        json(),
         typescript({
           ...tsconfig,
           module: "ESNext",
@@ -104,8 +107,6 @@ async function main() {
       ],
     }];
   });
-
-  console.log("ROLLUP CONFIGS:", util.inspect(configs, false, Infinity, true));
 
   return configs.filter(c => c !== undefined);
 }

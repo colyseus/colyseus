@@ -7,7 +7,7 @@ import { ErrorCode } from "../Protocol";
 import { ServerError } from "../errors/ServerError";
 import * as matchMaker from "../MatchMaker";
 
-export const exposedMethods = ['joinOrCreate', 'create', 'join', 'joinById'];
+export const exposedMethods = ['joinOrCreate', 'create', 'join', 'joinById', 'reconnect'];
 export const allowedRoomNameChars = /([a-zA-Z_\-0-9]+)/gi;
 export const matchmakeRoute = 'matchmake';
 

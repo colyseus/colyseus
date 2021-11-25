@@ -1,6 +1,6 @@
 import WebSocket from 'ws';
 
-import {Protocol, Client, ClientState, ISendOptions, getMessageBytes, logger} from '@colyseus/core';
+import { Protocol, Client, ClientState, ISendOptions, getMessageBytes, logger } from '@colyseus/core';
 import { Schema } from '@colyseus/schema';
 
 const SEND_OPTS = { binary: true };
@@ -10,6 +10,7 @@ export class WebSocketClient implements Client {
   public state: ClientState = ClientState.JOINING;
   public _enqueuedMessages: any[] = [];
   public _afterNextPatchQueue;
+  public _reconnectionToken: string;
 
   constructor(
     public id: string,

@@ -102,39 +102,38 @@ export async function join(roomName: string, clientOptions: ClientOptions = {}) 
 /**
  * Join a room by id and return seat reservation
  */
+export async function reconnect(roomId: string, clientOptions: ClientOptions = {}) {
+  const room = await driver.findOne({ roomId });
+  if (!room) { throw new ServerError(ErrorCode.MATCHMAKE_INVALID_ROOM_ID, `room "${roomId}" not found`); }
+
+  // check for reconnection
+  const reconnectionToken = clientOptions.reconnectionToken;
+  if (!reconnectionToken) { throw new ServerError(ErrorCode.MATCHMAKE_UNHANDLED, `'reconnectionToken' must be provided for reconnection.`); }
+
+  // respond to  re-connection!
+  const sessionId = await remoteRoomCall(room.roomId, 'checkReconnectionToken', [reconnectionToken]);
+  if (sessionId) {
+    return { room, sessionId };
+
+  } else {
+    throw new ServerError(ErrorCode.MATCHMAKE_EXPIRED, `invalid reconnection token or expired.`);
+  }
+}
+
+/**
+ * Join a room by id and return seat reservation
+ */
 export async function joinById(roomId: string, clientOptions: ClientOptions = {}) {
   const room = await driver.findOne({ roomId });
 
-  if (room) {
-    if(clientOptions.hasOwnProperty("sessionId")) {
-      if(!clientOptions.sessionId) {
-        throw new ServerError(ErrorCode.MATCHMAKE_UNHANDLED, `Invalid session Id has been provided.`);
-      }
-      const rejoinSessionId = clientOptions.sessionId;
+  if (!room) {
+    throw new ServerError(ErrorCode.MATCHMAKE_INVALID_ROOM_ID, `room "${roomId}" not found`);
 
-      // handle re-connection!
-      const hasReservedSeat = await remoteRoomCall(room.roomId, 'hasReservedSeat', [rejoinSessionId]);
-
-      if (hasReservedSeat) {
-        return { room, sessionId: rejoinSessionId };
-
-      } else {
-        throw new ServerError(ErrorCode.MATCHMAKE_EXPIRED, `session expired: ${rejoinSessionId}`);
-
-      }
-
-    } else if (!room.locked) {
-      return reserveSeatFor(room, clientOptions);
-
-    } else {
-      throw new ServerError( ErrorCode.MATCHMAKE_INVALID_ROOM_ID, `room "${roomId}" is locked`);
-
-    }
-
-  } else {
-    throw new ServerError( ErrorCode.MATCHMAKE_INVALID_ROOM_ID, `room "${roomId}" not found`);
+  } else if (room.locked) {
+    throw new ServerError(ErrorCode.MATCHMAKE_INVALID_ROOM_ID, `room "${roomId}" is locked`);
   }
 
+  return reserveSeatFor(room, clientOptions);
 }
 
 /**

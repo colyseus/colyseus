@@ -1,6 +1,5 @@
 import http from 'http';
-import querystring from 'querystring';
-import url from 'url';
+import { URL } from 'url';
 import WebSocket, { ServerOptions } from 'ws';
 
 import { matchMaker, Protocol, Transport, debugAndPrintError, debugConnection } from '@colyseus/core';
@@ -104,9 +103,9 @@ export class WebSocketTransport extends Transport {
 
     // compatibility with ws / uws
     const upgradeReq = req || (rawClient as any).upgradeReq;
-    const parsedURL = url.parse(upgradeReq.url);
+    const parsedURL = new URL(upgradeReq.url);
 
-    const sessionId = querystring.parse(parsedURL.query).sessionId as string;
+    const sessionId = parsedURL.searchParams.get("sessionId");
     const processAndRoomId = parsedURL.pathname.match(/\/[a-zA-Z0-9_\-]+\/([a-zA-Z0-9_\-]+)$/);
     const roomId = processAndRoomId && processAndRoomId[1];
 
@@ -122,7 +121,7 @@ export class WebSocketTransport extends Transport {
     //
 
     try {
-      if (!room || !room.hasReservedSeat(sessionId)) {
+      if (!room || !room.hasReservedSeat(sessionId, parsedURL.searchParams.get("reconnectionToken"))) {
         throw new Error('seat reservation expired.');
       }
 
