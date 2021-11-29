@@ -1,12 +1,15 @@
 import assert from "assert";
+import { Presence } from "../src";
 import { timeout, PRESENCE_IMPLEMENTATIONS } from "./utils";
 
 describe("Presence", () => {
 
   for (let i = 0; i < PRESENCE_IMPLEMENTATIONS.length; i++) {
-    const presence = new PRESENCE_IMPLEMENTATIONS[i]();
+    let presence: Presence;
 
-    describe((presence as any).constructor.name, () => {
+    describe((PRESENCE_IMPLEMENTATIONS[i]).constructor.name, () => {
+      beforeEach(() => presence = new PRESENCE_IMPLEMENTATIONS[i]())
+      afterEach(() => presence.shutdown());
 
       it("subscribe", (done) => {
         let i = 0;

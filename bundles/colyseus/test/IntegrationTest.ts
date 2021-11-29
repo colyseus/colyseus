@@ -29,6 +29,7 @@ describe("Integration", () => {
           presence = new PRESENCE_IMPLEMENTATIONS[i]();
 
           server = new Server({
+            gracefullyShutdown: false,
             presence,
             driver,
             // transport: new uWebSocketsTransport(),

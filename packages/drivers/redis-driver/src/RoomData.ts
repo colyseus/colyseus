@@ -1,5 +1,5 @@
 import { RoomListingData } from '@colyseus/core';
-import { RedisClient } from 'redis';
+import Redis from 'ioredis';
 
 export class RoomData implements RoomListingData {
   public clients: number = 0;
@@ -14,11 +14,11 @@ export class RoomData implements RoomListingData {
   public createdAt: Date;
   public unlisted: boolean = false;
 
-  #client: RedisClient;
+  #client: Redis.Redis;
 
   constructor(
     initialValues: any,
-    client: RedisClient
+    client: Redis.Redis
   ) {
     this.#client = client;
 
@@ -88,25 +88,11 @@ export class RoomData implements RoomListingData {
     }
   }
 
-  private hset(key: string, field: string, value: string) {
-    return new Promise((resolve, reject) => {
-      this.#client.hset(key, field, value, function (err, res) {
-        if (err) {
-          return reject(err);
-        }
-        resolve(res);
-      });
-    });
+  private async hset(key: string, field: string, value: string) {
+    return await this.#client.hset(key, field, value);
   }
 
-  private hdel(key: string, field: string) {
-    return new Promise((resolve, reject) => {
-      this.#client.hdel(key, field, function (err, res) {
-        if (err) {
-          return reject(err);
-        }
-        resolve(res);
-      });
-    });
+  private async hdel(key: string, field: string) {
+    return await this.#client.hdel(key, field);
   }
 }

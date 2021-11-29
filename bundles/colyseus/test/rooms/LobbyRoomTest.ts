@@ -1,6 +1,8 @@
 import assert from "assert";
-import { matchMaker, LobbyRoom } from "../../src";
+import { matchMaker, LobbyRoom, Presence, MatchMakerDriver, Server } from "../../src";
 import { PRESENCE_IMPLEMENTATIONS, DRIVERS, DummyRoom, timeout } from "../utils";
+
+const TEST_PORT = 8567;
 
 async function createLobbyRoom () {
   const room = await matchMaker.createRoom("lobby", {});
@@ -9,28 +11,41 @@ async function createLobbyRoom () {
 
 describe("LobbyRoom", () => {
   for (let i = 0; i < PRESENCE_IMPLEMENTATIONS.length; i++) {
-    const presence = new PRESENCE_IMPLEMENTATIONS[i]();
 
     for (let j = 0; j < DRIVERS.length; j++) {
-      const driver = new DRIVERS[j]();
+      let presence: Presence;
+      let driver: MatchMakerDriver;
+      let server: Server;
 
-      describe(`Driver => ${(driver.constructor as any).name}, Presence => ${presence.constructor.name}`, () => {
+      describe(`Driver => ${DRIVERS[j].name}, Presence => ${PRESENCE_IMPLEMENTATIONS[i].name}`, () => {
         /**
          * `setup` matchmaker to re-set graceful shutdown status
          */
-        beforeEach(() => {
+        beforeEach(async () => {
+          driver = new DRIVERS[j]();
+          presence = new PRESENCE_IMPLEMENTATIONS[i]();
+
+          server = new Server({
+            gracefullyShutdown: false,
+            presence,
+            driver,
+            // transport: new uWebSocketsTransport(),
+          });
+
+          // setup matchmaker
           matchMaker.setup(presence, driver, 'dummyLobbyRoomProcessId')
           matchMaker.defineRoomType("lobby", LobbyRoom);
           matchMaker.defineRoomType("dummy_1", DummyRoom).enableRealtimeListing();
           matchMaker.defineRoomType("dummy_2", DummyRoom).enableRealtimeListing();
-        });
 
-        beforeEach(async() => driver.clear());
+          // listen for testing
+          await server.listen(TEST_PORT);
+        });
 
         /**
          * ensure no rooms are avaialble in-between tests
          */
-        afterEach(async () => await matchMaker.gracefullyShutdown());
+        afterEach(async () => await server.gracefullyShutdown(false));
 
         it("initial room list should be empty", async () => {
           const lobby = await createLobbyRoom();
@@ -51,7 +66,7 @@ describe("LobbyRoom", () => {
           await matchMaker.createRoom("dummy_1", {});
 
           // wait a bit until LobbyRoom received the update
-          await timeout(10);
+          await timeout(50);
           assert.strictEqual(1, lobby.rooms.length);
         });
 
