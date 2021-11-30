@@ -54,8 +54,8 @@ export abstract class Room<State= any, Metadata= any> {
   public listing: RoomListingData<Metadata>;
   public clock: Clock = new Clock();
 
-  public roomId: string;
-  public roomName: string;
+  #_roomId: string;
+  #_roomName: string;
 
   public maxClients: number = Infinity;
   public patchRate: number = DEFAULT_PATCH_RATE;
@@ -110,6 +110,24 @@ export abstract class Room<State= any, Metadata= any> {
     this.setPatchRate(this.patchRate);
     // set default _autoDisposeTimeout
     this.resetAutoDisposeTimeout(this.seatReservationTime);
+  }
+
+  public get roomName() { return this.#_roomName; }
+  public set roomName(roomName: string) {
+    if (this.#_roomName) {
+      // prevent user from setting roomName after it has been defined.
+      throw new ServerError(ErrorCode.APPLICATION_ERROR, "'roomName' cannot be overwritten.");
+    }
+    this.#_roomName = roomName;
+  }
+
+  public get roomId() { return this.#_roomId; }
+  public set roomId(roomId: string) {
+    if (this.internalState !== RoomInternalState.CREATING) {
+      // prevent user from setting roomId after room has been created.
+      throw new ServerError(ErrorCode.APPLICATION_ERROR, "'roomId' can only be overriden upon room creation.");
+    }
+    this.#_roomId = roomId;
   }
 
   // Optional abstract methods
