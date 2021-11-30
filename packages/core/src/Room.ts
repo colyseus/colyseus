@@ -150,7 +150,7 @@ export abstract class Room<State= any, Metadata= any> {
   }
 
   public hasReservedSeat(sessionId: string, reconnectionToken?: string): boolean {
-    if (reconnectionToken !== undefined) {
+    if (reconnectionToken) {
       const reconnection = this._reconnections[reconnectionToken];
       return (
         reconnection &&

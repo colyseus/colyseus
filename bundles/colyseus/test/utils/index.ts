@@ -43,6 +43,7 @@ export class WebSocketClient implements Client {
   messages: any[] = [];
   _enqueuedMessages: any[] = [];
   _afterNextPatchQueue;
+  _reconnectionToken;
 
   errors: any[] = [];
 
@@ -210,7 +211,7 @@ export class ReconnectTokenRoom extends Room {
 
   async onLeave(client, consented) {
     if (!consented) {
-      const reconnection = this.allowReconnection(client);
+      const reconnection = this.allowReconnection(client, 10);
       this.token = reconnection;
 
       try {

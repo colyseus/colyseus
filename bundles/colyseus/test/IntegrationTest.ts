@@ -615,11 +615,11 @@ describe("Integration", () => {
               const ctx = new Context();
 
               class State extends Schema {
-                @type("number", ctx) num = 1;
+                @type("number", { context: ctx }) num = 1;
               }
 
               class Message extends Schema {
-                @type("string", ctx) str: string = "Hello world";
+                @type("string", { context: ctx }) str: string = "Hello world";
               }
 
               let onMessageCalled = false;
