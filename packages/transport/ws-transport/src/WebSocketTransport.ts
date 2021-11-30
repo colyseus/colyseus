@@ -103,7 +103,7 @@ export class WebSocketTransport extends Transport {
 
     // compatibility with ws / uws
     const upgradeReq = req || (rawClient as any).upgradeReq;
-    const parsedURL = new URL(upgradeReq.url);
+    const parsedURL = new URL(`ws://server/${upgradeReq.url}`);
 
     const sessionId = parsedURL.searchParams.get("sessionId");
     const processAndRoomId = parsedURL.pathname.match(/\/[a-zA-Z0-9_\-]+\/([a-zA-Z0-9_\-]+)$/);
