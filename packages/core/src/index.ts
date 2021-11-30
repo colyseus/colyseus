@@ -33,6 +33,7 @@ export { generateId, Deferred, DummyServer, spliceOne } from './Utils';
 // Debug
 export {
   debugMatchMaking,
+  debugMessage,
   debugPatch,
   debugError,
   debugConnection,

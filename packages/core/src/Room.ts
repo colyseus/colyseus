@@ -16,7 +16,7 @@ import { Serializer } from './serializer/Serializer';
 import { ErrorCode, getMessageBytes, Protocol } from './Protocol';
 import { Deferred, HybridArray, generateId } from './Utils';
 
-import {debugAndPrintError, debugMessages, debugPatch} from './Debug';
+import { debugAndPrintError, debugMessage } from './Debug';
 import { ServerError } from './errors/ServerError';
 import { RoomListingData } from './matchmaker/driver';
 import { Client, ClientState, ISendOptions } from './Transport';
@@ -497,8 +497,7 @@ export abstract class Room<State= any, Metadata= any> {
   }
 
   private broadcastMessageSchema<T extends Schema>(message: T, options: IBroadcastOptions = {}) {
-    debugMessages("broadcastMessageSchema: ");
-    debugMessages(message);
+    debugMessage("broadcast: %O", message);
     const encodedMessage = getMessageBytes[Protocol.ROOM_DATA_SCHEMA](message);
 
     let numClients = this.clients.length;
@@ -512,8 +511,7 @@ export abstract class Room<State= any, Metadata= any> {
   }
 
   private broadcastMessageType(type: string, message?: any, options: IBroadcastOptions = {}) {
-    debugMessages("broadcastMessageType: ");
-    debugMessages(message);
+    debugMessage("broadcast: %O", message);
     const encodedMessage = getMessageBytes[Protocol.ROOM_DATA](type, message);
 
     let numClients = this.clients.length;
@@ -644,8 +642,8 @@ export abstract class Room<State= any, Metadata= any> {
         message = (bytes.length > it.offset)
         ? msgpack.decode(bytes.slice(it.offset, bytes.length))
         : undefined;
-        debugMessages("onMessage: ");
-        debugMessages(message);
+        debugMessage("received: '%s' -> %j", messageType, message);
+
       } catch (e) {
         debugAndPrintError(e);
         return;

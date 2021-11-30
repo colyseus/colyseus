@@ -1,6 +1,6 @@
 import WebSocket from 'ws';
 
-import { Protocol, Client, ClientState, ISendOptions, getMessageBytes, logger } from '@colyseus/core';
+import { Protocol, Client, ClientState, ISendOptions, getMessageBytes, logger, debugMessage } from '@colyseus/core';
 import { Schema } from '@colyseus/schema';
 
 const SEND_OPTS = { binary: true };
@@ -20,6 +20,8 @@ export class WebSocketClient implements Client {
   }
 
   public send(messageOrType: any, messageOrOptions?: any | ISendOptions, options?: ISendOptions) {
+    debugMessage("send(to %s): '%s' -> %j", this.sessionId, messageOrType, messageOrOptions);
+
     this.enqueueRaw(
       (messageOrType instanceof Schema)
         ? getMessageBytes[Protocol.ROOM_DATA_SCHEMA](messageOrType)

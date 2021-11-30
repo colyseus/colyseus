@@ -1,7 +1,7 @@
 import EventEmitter from 'events';
 import uWebSockets from 'uWebSockets.js';
 
-import { getMessageBytes, Protocol, Client, ClientState, ISendOptions, logger } from '@colyseus/core';
+import { getMessageBytes, Protocol, Client, ClientState, ISendOptions, logger, debugMessage } from '@colyseus/core';
 import { Schema } from '@colyseus/schema';
 
 export class uWebSocketWrapper extends EventEmitter {
@@ -35,6 +35,8 @@ export class uWebSocketClient implements Client {
   }
 
   public send(messageOrType: any, messageOrOptions?: any | ISendOptions, options?: ISendOptions) {
+    debugMessage("send(to %s): '%s' -> %O", this.sessionId, messageOrType, messageOrOptions);
+
     this.enqueueRaw(
       (messageOrType instanceof Schema)
         ? getMessageBytes[Protocol.ROOM_DATA_SCHEMA](messageOrType)
