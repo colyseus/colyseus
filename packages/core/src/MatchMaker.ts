@@ -16,6 +16,7 @@ import { ServerError } from './errors/ServerError';
 import { IRoomListingData, MatchMakerDriver, RoomListingData, LocalDriver } from './matchmaker/driver';
 import * as controller from './matchmaker/controller';
 
+import { logger } from './Logger';
 import { Client } from './Transport';
 import { Type } from './types';
 
@@ -104,19 +105,23 @@ export async function join(roomName: string, clientOptions: ClientOptions = {}) 
  */
 export async function reconnect(roomId: string, clientOptions: ClientOptions = {}) {
   const room = await driver.findOne({ roomId });
-  if (!room) { throw new ServerError(ErrorCode.MATCHMAKE_INVALID_ROOM_ID, `room "${roomId}" not found`); }
+  if (!room) {
+    logger.info(`❌ room "${roomId}" has been disposed. Did you missed .allowReconnection()?\n👉 https://docs.colyseus.io/colyseus/server/room/#allowreconnection-client-seconds`);
+    throw new ServerError(ErrorCode.MATCHMAKE_INVALID_ROOM_ID, `room "${roomId}" has been disposed.`);
+  }
 
   // check for reconnection
   const reconnectionToken = clientOptions.reconnectionToken;
   if (!reconnectionToken) { throw new ServerError(ErrorCode.MATCHMAKE_UNHANDLED, `'reconnectionToken' must be provided for reconnection.`); }
 
-  // respond to  re-connection!
+  // respond to re-connection!
   const sessionId = await remoteRoomCall(room.roomId, 'checkReconnectionToken', [reconnectionToken]);
   if (sessionId) {
     return { room, sessionId };
 
   } else {
-    throw new ServerError(ErrorCode.MATCHMAKE_EXPIRED, `invalid reconnection token or expired.`);
+    logger.info(`❌ reconnection token invalid or expired. Did you missed .allowReconnection()?\n👉 https://docs.colyseus.io/colyseus/server/room/#allowreconnection-client-seconds`);
+    throw new ServerError(ErrorCode.MATCHMAKE_EXPIRED, `reconnection token invalid or expired.`);
   }
 }
 
