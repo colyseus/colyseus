@@ -1,5 +1,4 @@
 import Redis from 'ioredis';
-import { promisify } from 'util';
 
 import {
   IRoomListingData,
@@ -51,11 +50,16 @@ export class RedisDriver implements MatchMakerDriver {
     );
   }
 
+  public shutdown() {
+    this._client.quit();
+  }
+
+  //
+  // only relevant for the test-suite.
+  // not used during runtime.
+  //
   public clear() {
     this._client.del('roomcaches');
   }
 
-  public shutdown() {
-    this._client.quit();
-  }
 }
