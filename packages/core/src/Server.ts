@@ -244,13 +244,11 @@ export class Server {
   }
 
   protected async handleMatchMakeRequest(req: IncomingMessage, res: ServerResponse) {
-    const headers = {
-      'Access-Control-Allow-Headers': 'Origin, X-Requested-With, Content-Type, Accept',
-      'Access-Control-Allow-Methods': 'OPTIONS, POST, GET',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Max-Age': 2592000,
-      // ...
-    };
+    const headers = Object.assign(
+      {},
+      matchMaker.controller.DEFAULT_CORS_HEADERS,
+      matchMaker.controller.getCorsHeaders.call(undefined, req)
+    );
 
     if (req.method === 'OPTIONS') {
       res.writeHead(204, headers);

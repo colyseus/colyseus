@@ -165,21 +165,20 @@ export class uWebSocketsTransport extends Transport {
     }
 
     protected registerMatchMakeRequest() {
-        const headers = {
-            'Access-Control-Allow-Headers': 'Origin, X-Requested-With, Content-Type, Accept',
-            'Access-Control-Allow-Methods': 'OPTIONS, POST, GET',
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Max-Age': 2592000,
-            // ...
-        };
 
         // TODO: DRY with Server.ts
         const matchmakeRoute = 'matchmake';
         const allowedRoomNameChars = /([a-zA-Z_\-0-9]+)/gi;
 
-        const writeHeaders = (res: uWebSockets.HttpResponse) => {
+        const writeHeaders = (req: uWebSockets.HttpRequest, res: uWebSockets.HttpResponse) => {
             // skip if aborted
             if (res.aborted) { return; }
+
+            const headers = Object.assign(
+                {},
+                matchMaker.controller.DEFAULT_CORS_HEADERS,
+                matchMaker.controller.getCorsHeaders.call(undefined, req)
+            );
 
             for (const header in headers) {
                 res.writeHeader(header, headers[header].toString());
@@ -203,7 +202,7 @@ export class uWebSocketsTransport extends Transport {
         this.app.options("/matchmake/*", (res, req) => {
             res.onAborted(() => onAborted(res));
 
-            if (writeHeaders(res)) {
+            if (writeHeaders(req, res)) {
               res.writeStatus("204 No Content");
               res.end();
             }
@@ -212,7 +211,7 @@ export class uWebSocketsTransport extends Transport {
         this.app.post("/matchmake/*", (res, req) => {
             res.onAborted(() => onAborted(res));
 
-            writeHeaders(res);
+            writeHeaders(req, res);
             res.writeHeader('Content-Type', 'application/json');
 
             const url = req.getUrl();
@@ -250,7 +249,7 @@ export class uWebSocketsTransport extends Transport {
         this.app.get("/matchmake/*", async (res, req) => {
             res.onAborted(() => onAborted(res));
 
-            writeHeaders(res);
+            writeHeaders(req, res);
             res.writeHeader('Content-Type', 'application/json');
 
             const url = req.getUrl();

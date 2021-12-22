@@ -3,6 +3,7 @@ import assert from "assert";
 
 import { Server, matchMaker } from "@colyseus/core";
 import { DummyRoom } from "./utils";
+import { URL } from "url";
 
 describe("Server", () => {
 
@@ -48,6 +49,39 @@ describe("Server", () => {
     it("server.define() should throw error if argument is invalid", () => {
       assert.throws(() => server.define("dummy", undefined));
     });
+  });
+
+  describe("CORS headers", () => {
+    let originalGetCorsHeaders = matchMaker.controller.getCorsHeaders;
+    after(() => matchMaker.controller.getCorsHeaders = originalGetCorsHeaders);
+
+    it("should allow to customize getCorsHeaders()", async () => {
+      let refererHeader: string;
+
+      matchMaker.controller.getCorsHeaders = function (req) {
+        const referer = new URL(req.headers.referer);
+
+        if (referer.hostname !== "safedomain.com") {
+          refererHeader = "safedomain.com";
+
+        } else {
+          refererHeader = referer.hostname;
+
+        }
+
+        return {
+          'Access-Control-Allow-Origin': refererHeader,
+        }
+      };
+
+      await httpClient.post("http://localhost:8567/matchmake/joinOrCreate/roomName", {
+        body: "{}",
+        headers: { referer: "https://safedomain.com/page" }
+      });
+
+      assert.strictEqual("safedomain.com", refererHeader);
+    });
+
   });
 
 });
