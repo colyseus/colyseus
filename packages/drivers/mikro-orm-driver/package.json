@@ -7,7 +7,7 @@
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
   "dependencies": {
-    "@colyseus/core": "0.15.0-preview.0",
+    "@colyseus/core": "0.15.0-preview.1",
     "@mikro-orm/core": "^4.5.4"
   },
   "author": "Endel Dreyer",

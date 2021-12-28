@@ -27,7 +27,7 @@
   },
   "dependencies": {
     "@colyseus/arena": "0.15.0-preview.0",
-    "@colyseus/core": "0.15.0-preview.0",
+    "@colyseus/core": "0.15.0-preview.1",
     "colyseus.js": "0.15.0-preview.0",
     "httpie": "^2.0.0-next.13"
   },

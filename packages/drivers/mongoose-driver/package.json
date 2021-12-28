@@ -6,7 +6,7 @@
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
   "dependencies": {
-    "@colyseus/core": "0.15.0-preview.0",
+    "@colyseus/core": "0.15.0-preview.1",
     "mongoose": "^5.11.3"
   },
   "author": "Endel Dreyer",
