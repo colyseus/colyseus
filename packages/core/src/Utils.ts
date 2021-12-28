@@ -108,19 +108,13 @@ export function merge(a: any, ...objs: any[]): any {
   return a;
 }
 
-export interface HashedArray<T> {
-  [key: string]: T;
-}
-
 export class HybridArray<T> {
   public uniqueProperty: string;
-  public hashedArray: HashedArray<T>;
-  public array: T[];
+  public hashedArray: { [key: string]: T } = {};
+  public array: T[] = [];
 
   constructor(uniquePropertyName: string, elements?: T[]) {
     this.uniqueProperty = uniquePropertyName;
-    this.hashedArray = {};
-    this.array = [];
     if (elements) {
       this.array = this.array.concat(elements);
       for (const element of elements) {
@@ -151,12 +145,19 @@ export class HybridArray<T> {
   }
 
   public concat(elements: T[]) {
-    if(elements) {
-      for(const element of elements) {
+    if (elements) {
+      for (const element of elements) {
         this.hashedArray[element[this.uniqueProperty]] = element;
       }
       this.array.concat(elements);
     }
+    return this;
+  }
+
+  public find<S extends T>(predicate: (this: void, value: T, index: number, obj: T[]) => value is S, thisArg?: any): S;
+  public find(predicate: (value: T, index: number, obj: T[]) => unknown, thisArg?: any): T;
+  public find(predicate: any, thisArg?: any): T | undefined {
+    return this.array.find(predicate, thisArg);
   }
 
   public forEach(fn) {
