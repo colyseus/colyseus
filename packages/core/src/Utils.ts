@@ -136,7 +136,7 @@ export class HybridArray<T> {
     }
   }
 
-  public at(index: number) {
+  public at(index: number): T | undefined {
     if (index >= this.array.length) {
       this.indexError(index);
     } else {
@@ -166,7 +166,7 @@ export class HybridArray<T> {
     }
   }
 
-  public get(key: string): T {
+  public get(key: string): T | undefined {
     return this.hashedArray[key];
   }
 
@@ -179,7 +179,7 @@ export class HybridArray<T> {
   }
 
   public map(callback) {
-    const result = [];
+    const result: T[] = [];
     for (let index = 0; index < this.array.length; index++) {
       result.push(callback(this.array[index], index, this.array));
     }
