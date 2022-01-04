@@ -32,7 +32,7 @@ export type SimulationCallback = (deltaTime: number) => void;
 export type RoomConstructor<T= any> = new (presence?: Presence) => Room<T>;
 
 export interface IBroadcastOptions extends ISendOptions {
-  except?: Client;
+  except?: Client | Client[];
 }
 
 export enum RoomInternalState {
@@ -517,12 +517,17 @@ export abstract class Room<State= any, Metadata= any> {
   private broadcastMessageSchema<T extends Schema>(message: T, options: IBroadcastOptions = {}) {
     debugMessage("broadcast: %O", message);
     const encodedMessage = getMessageBytes[Protocol.ROOM_DATA_SCHEMA](message);
+    const except = (typeof (options.except) !== "undefined")
+      ? Array.isArray(options.except)
+        ? options.except
+        : [options.except]
+      : undefined;
 
     let numClients = this.clients.length;
     while (numClients--) {
       const client = this.clients.array[numClients];
 
-      if (options.except !== client) {
+      if (!except || !except.includes(client)) {
         client.enqueueRaw(encodedMessage);
       }
     }
@@ -531,12 +536,17 @@ export abstract class Room<State= any, Metadata= any> {
   private broadcastMessageType(type: string, message?: any, options: IBroadcastOptions = {}) {
     debugMessage("broadcast: %O", message);
     const encodedMessage = getMessageBytes[Protocol.ROOM_DATA](type, message);
+    const except = (typeof (options.except) !== "undefined")
+      ? Array.isArray(options.except)
+        ? options.except
+        : [options.except]
+      : undefined;
 
     let numClients = this.clients.length;
     while (numClients--) {
       const client = this.clients.array[numClients];
 
-      if (options.except !== client) {
+      if (!except || !except.includes(client)) {
         client.enqueueRaw(encodedMessage);
       }
     }
