@@ -258,8 +258,8 @@ export class Server {
         headers['Content-Type'] = 'application/json';
         res.writeHead(200, headers);
 
-        const clientOptions = JSON.parse(Buffer.concat(data).toString());
         try {
+          const clientOptions = JSON.parse(Buffer.concat(data).toString());
           const response = await matchMaker.controller.invokeMethod(method, name, clientOptions);
           res.write(JSON.stringify(response));
 
