@@ -14,12 +14,12 @@ import { RoomData } from './RoomData';
 export class RedisDriver implements MatchMakerDriver {
   private readonly _client: Redis.Redis;
 
-  constructor(options?: Redis.RedisOptions, key: string = 'roomcaches') {
+  constructor(options?: Redis.RedisOptions, private readonly key = 'roomcaches') {
     this._client = new Redis(options);
   }
 
   public createInstance(initialValues: any = {}) {
-    return new RoomData(initialValues, this._client);
+    return new RoomData(initialValues, this._client, this.key);
   }
 
   public async find(conditions: any) {
@@ -46,13 +46,13 @@ export class RedisDriver implements MatchMakerDriver {
   }
 
   public async getRooms() {
-    return Object.entries(await this._client.hgetall('roomcaches') ?? []).map(
-      ([, roomcache]) => new RoomData(JSON.parse(roomcache), this._client)
+    return Object.entries(await this._client.hgetall(this.key) ?? []).map(
+      ([, roomcache]) => new RoomData(JSON.parse(roomcache), this._client, this.key)
     );
   }
 
   public clear() {
-    this._client.del('roomcaches');
+    this._client.del(this.key);
   }
 
   public shutdown() {
