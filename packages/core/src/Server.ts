@@ -157,19 +157,19 @@ export class Server {
   }
 
   public async gracefullyShutdown(exit: boolean = true, err?: Error) {
-    await unregisterNode(this.presence, {
-      port: this.port,
-      processId: this.processId,
-    });
-
     try {
+      await this.onShutdownCallback();
+
+      await unregisterNode(this.presence, {
+        port: this.port,
+        processId: this.processId,
+      });
+
       await matchMaker.gracefullyShutdown();
 
       this.transport.shutdown();
       this.presence.shutdown();
       this.driver.shutdown();
-
-      await this.onShutdownCallback();
 
     } catch (e) {
       debugAndPrintError(`error during shutdown: ${e}`);
@@ -258,8 +258,8 @@ export class Server {
         headers['Content-Type'] = 'application/json';
         res.writeHead(200, headers);
 
-        const clientOptions = JSON.parse(Buffer.concat(data).toString());
         try {
+          const clientOptions = JSON.parse(Buffer.concat(data).toString());
           const response = await matchMaker.controller.invokeMethod(method, name, clientOptions);
           res.write(JSON.stringify(response));
 
