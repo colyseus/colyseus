@@ -160,6 +160,11 @@ export class HybridArray<T> {
     return this.array.find(predicate, thisArg);
   }
 
+  public filter(predicate: (value: T, index: number, array: T[]) => unknown, thisArg?: any): T[]
+  public filter<S extends T>(predicate: (value: T, index: number, array: T[]) => value is S, thisArg?: any): S[] {
+    return this.array.filter(predicate, thisArg);
+  }
+
   public forEach(fn) {
     for (let element of this.array) {
       fn(element);
