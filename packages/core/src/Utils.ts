@@ -3,6 +3,7 @@ import nanoid from 'nanoid';
 import { debugAndPrintError } from './Debug';
 import { EventEmitter } from "events";
 import { ServerOpts, Socket } from "net";
+import { logger } from './Logger';
 
 // remote room call timeouts
 export const REMOTE_ROOM_SHORT_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_SHORT_TIMEOUT || 2000);
@@ -113,11 +114,11 @@ export class HybridArray<T> {
   public hashedArray: { [key: string]: T } = {};
   public array: T[] = [];
 
-  constructor(uniquePropertyName: string, elements?: T[]) {
+  constructor(uniquePropertyName: string, items?: T[]) {
     this.uniqueProperty = uniquePropertyName;
-    if (elements) {
-      this.array = this.array.concat(elements);
-      for (const element of elements) {
+    if (items) {
+      this.array = this.array.concat(items);
+      for (const element of items) {
         this.hashedArray[element[this.uniqueProperty]] = element;
       }
     }
@@ -127,29 +128,31 @@ export class HybridArray<T> {
     return this.array.length;
   }
 
-  public add(element: T) {
-    if (!this.hashedArray[element[this.uniqueProperty]]) {
-      this.array.push(element);
-      this.hashedArray[element[this.uniqueProperty]] = element;
+  public add(item: T) {
+    if (!this.hashedArray[item[this.uniqueProperty]]) {
+      this.array.push(item);
+      this.hashedArray[item[this.uniqueProperty]] = item;
+
     } else {
-      console.error(`Element already exists for ${this.uniqueProperty}: '${element[this.uniqueProperty]}'.`);
+      logger.warn(`.add(): element already exists:`, item[this.uniqueProperty]);
     }
   }
 
   public at(index: number): T | undefined {
     if (index >= this.array.length) {
-      this.indexError(index);
+      this._badIndexWarning(index);
+
     } else {
       return this.array[index];
     }
   }
 
-  public concat(elements: T[]) {
-    if (elements) {
-      for (const element of elements) {
-        this.hashedArray[element[this.uniqueProperty]] = element;
+  public concat(items: T[]) {
+    if (items) {
+      for (const item of items) {
+        this.hashedArray[item[this.uniqueProperty]] = item;
       }
-      this.array.concat(elements);
+      this.array.concat(items);
     }
     return this;
   }
@@ -165,10 +168,8 @@ export class HybridArray<T> {
     return this.array.filter(predicate, thisArg);
   }
 
-  public forEach(fn) {
-    for (let element of this.array) {
-      fn(element);
-    }
+  public forEach(callbackfn: (value: T, index: number, array: T[]) => void, thisArg?: any): void {
+    Array.prototype.forEach.call(this.array, callbackfn);
   }
 
   public get(key: string): T | undefined {
@@ -193,8 +194,9 @@ export class HybridArray<T> {
 
   public deleteAt(index: number) {
     if (index >= this.array.length) {
-      this.indexError(index);
+      this._badIndexWarning(index);
       return undefined;
+
     } else {
       const removable = this.spliceOne(index);
       delete this.hashedArray[removable[this.uniqueProperty]];
@@ -204,7 +206,7 @@ export class HybridArray<T> {
 
   public deleteByKey(key: string): T {
     if (!this.hashedArray[key]) {
-      this.invalidKeyError(key);
+      logger.error(`deleteByKey(): no such element for '${key}'.`);
       return undefined;
     } else {
       const removable = this.spliceOne(this.indexOf(this.hashedArray[key]));
@@ -216,36 +218,36 @@ export class HybridArray<T> {
   public delete(obj: T): T {
     if (this.hashedArray[obj[this.uniqueProperty]]) {
       return this.deleteByKey(obj[this.uniqueProperty]);
+
     } else if (this.indexOf(obj) != -1) {
       return this.deleteAt(this.indexOf(obj));
+
     } else {
-      console.error("Invalid object has been provided!");
       return undefined;
     }
   }
 
-  private indexError(index) {
-    console.error(`Index out of range, index: ${index}`);
-  }
-
-  private invalidKeyError(key) {
-    console.error(`No such element for property '${this.uniqueProperty}': '${key}'.`)
+  private _badIndexWarning(index) {
+    logger.warn(`Index out of range, index: ${index}`);
   }
 
   private spliceOne(index: number): T {
     // manually splice availableRooms array
     // http://jsperf.com/manual-splice
     if (index === -1 || index >= this.array.length) {
-      this.indexError(index);
+      this._badIndexWarning(index);
       return undefined;
     }
-    const removable = this.array[index];
+
+    const itemRemoved = this.array[index];
+
     const len = this.array.length - 1;
     for (let i = index; i < len; i++) {
       this.array[i] = this.array[i + 1];
     }
     this.array.length = len;
-    return removable;
+
+    return itemRemoved;
   }
 }
 
