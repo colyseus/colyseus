@@ -10,6 +10,24 @@ describe('RedisDriver', () => {
 
   afterEach(redis.flushall);
 
+  it('connects to a single Redis node', async () => {
+    const {
+      RedisDriver,
+    } = require('../../../packages/drivers/redis-driver/src/index');
+    const driver: RedisDriver = new RedisDriver();
+
+    assert.strictEqual((driver as any)._client instanceof MockRedis.Cluster, false);
+  })
+
+  it('connects to a Redis cluster', async () => {
+    const {
+      RedisDriver,
+    } = require('../../../packages/drivers/redis-driver/src/index');
+    const driver: RedisDriver = new RedisDriver(['redis://127.0.0.1:6379']);
+
+    assert.strictEqual((driver as any)._client instanceof MockRedis.Cluster, true);
+  })
+
   for (const [keyArgument, expectedKey] of [
     [undefined, 'roomcaches'],
     ['another-key', 'another-key'],
@@ -18,7 +36,7 @@ describe('RedisDriver', () => {
       const {
         RedisDriver,
       } = require('../../../packages/drivers/redis-driver/src/index');
-      const driver: RedisDriver = new RedisDriver(undefined, keyArgument);
+      const driver: RedisDriver = new RedisDriver(undefined, undefined, keyArgument);
 
       const room = driver.createInstance({ roomId: 'test-room-id' });
       await room.save();

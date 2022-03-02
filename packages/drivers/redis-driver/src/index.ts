@@ -11,10 +11,19 @@ import { Query } from './Query';
 import { RoomData } from './RoomData';
 
 export class RedisDriver implements MatchMakerDriver {
-  private readonly _client: Redis.Redis;
+  private readonly _client: Redis.Redis | Redis.Cluster;
 
-  constructor(options?: Redis.RedisOptions, private readonly key = 'roomcaches') {
-    this._client = new Redis(options);
+  /**
+   * @param options Redis options. Enable cluster mode by passing in an array of Redis connection strings or `ioredis.ClusterNode` objects.
+   * @param clusterOptions Extra cluster options passed to `ioredis.Cluster`. Only used in cluster mode.
+   * @param key Redis key. Set a non-default value to implement namespacing.
+   */
+  constructor(options?: Redis.RedisOptions | Redis.ClusterNode[], clusterOptions?: Redis.ClusterOptions, private readonly key = 'roomcaches') {
+    if (Array.isArray(options)) {
+      this._client = new Redis.Cluster(options, clusterOptions);
+    } else {
+      this._client = new Redis(options);
+    }
   }
 
   public createInstance(initialValues: any = {}) {

@@ -4,14 +4,23 @@ import { Presence } from '@colyseus/core';
 type Callback = (...args: any[]) => void;
 
 export class RedisPresence implements Presence {
-    public sub: Redis.Redis;
-    public pub: Redis.Redis;
+    public sub: Redis.Redis | Redis.Cluster;
+    public pub: Redis.Redis | Redis.Cluster;
 
     protected subscriptions: { [channel: string]: Callback[] } = {};
 
-    constructor(opts?: Redis.RedisOptions) {
-        this.sub = new Redis(opts);
-        this.pub = new Redis(opts);
+    /**
+     * @param options Redis options. Enable cluster mode by passing in an array of Redis connection strings or `ioredis.ClusterNode` objects.
+     * @param clusterOptions Extra cluster options passed to `ioredis.Cluster`. Only used in cluster mode.
+     */
+    constructor(options?: Redis.RedisOptions | Redis.ClusterNode[], clusterOptions?: Redis.ClusterOptions) {
+        if (Array.isArray(options)) {
+            this.sub = new Redis.Cluster(options, clusterOptions);
+            this.pub = new Redis.Cluster(options, clusterOptions);
+        } else {
+            this.sub = new Redis(options);
+            this.pub = new Redis(options);
+        }
 
         // no listener limit
         this.sub.setMaxListeners(0);

@@ -13,11 +13,11 @@ export class RoomData implements RoomListingData {
   public createdAt: Date;
   public unlisted: boolean = false;
 
-  #client: Redis.Redis;
+  #client: Redis.Redis | Redis.Cluster;
 
   constructor(
     initialValues: any,
-    client: Redis.Redis,
+    client: Redis.Redis | Redis.Cluster,
     private readonly key: string,
   ) {
     this.#client = client;
