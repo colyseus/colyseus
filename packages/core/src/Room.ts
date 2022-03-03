@@ -535,7 +535,7 @@ export abstract class Room<State= any, Metadata= any> {
 
   private broadcastMessageType(type: string, message?: any, options: IBroadcastOptions = {}) {
     debugMessage("broadcast: %O", message);
-    const encodedMessage = getMessageBytes[Protocol.ROOM_DATA](type, message);
+    const encodedMessage = getMessageBytes.raw(Protocol.ROOM_DATA, type, message);
     const except = (typeof (options.except) !== "undefined")
       ? Array.isArray(options.except)
         ? options.except
@@ -668,14 +668,31 @@ export abstract class Room<State= any, Metadata= any> {
       let message;
       try {
         message = (bytes.length > it.offset)
-        ? msgpack.decode(bytes.slice(it.offset, bytes.length))
-        : undefined;
+          ? msgpack.decode(bytes.slice(it.offset, bytes.length))
+          : undefined;
         debugMessage("received: '%s' -> %j", messageType, message);
-
       } catch (e) {
         debugAndPrintError(e);
         return;
       }
+
+      if (this.onMessageHandlers[messageType]) {
+        this.onMessageHandlers[messageType](client, message);
+
+      } else if (this.onMessageHandlers['*']) {
+        (this.onMessageHandlers['*'] as any)(client, messageType, message);
+
+      } else {
+        debugAndPrintError(`onMessage for "${messageType}" not registered.`);
+      }
+
+    } else if (code === Protocol.ROOM_DATA_BYTES) {
+      const messageType = (decode.stringCheck(bytes, it))
+        ? decode.string(bytes, it)
+        : decode.number(bytes, it);
+
+      const message = bytes.slice(it.offset, bytes.length);
+      debugMessage("received: '%s' -> %j", messageType, message);
 
       if (this.onMessageHandlers[messageType]) {
         this.onMessageHandlers[messageType](client, message);

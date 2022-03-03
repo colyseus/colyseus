@@ -409,6 +409,30 @@ describe("Integration", () => {
               assert.ok(onMessageCalled);
               assert.ok(onMessageReceived);
             });
+
+            it("should support sending and receiving raw bytes", async () => {
+              const pingBytes = [1, 2, 3, 4, 5];
+
+              matchMaker.defineRoomType('onmessage_bytes', class _ extends Room {
+                onCreate() {
+                  this.onMessage("bytes", (client, payload) => {
+                    client.sendBytes("bytes", payload);
+                  });
+                }
+              });
+
+              const connection = await client.joinOrCreate('onmessage_bytes');
+
+              let receivedBytes: Buffer;
+              connection.onMessage("bytes", (pongBytes) => { receivedBytes = pongBytes; });
+
+              connection.sendBytes("bytes", pingBytes);
+
+              await timeout(20);
+              await connection.leave();
+
+              assert.deepStrictEqual(pingBytes, Array.from(new Uint8Array(receivedBytes)));
+            })
           });
 
           describe("setPatchRate()", () => {

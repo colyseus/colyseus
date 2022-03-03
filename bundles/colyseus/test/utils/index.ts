@@ -2,7 +2,7 @@ import msgpack from "notepack.io";
 import WebSocket from "ws";
 import { EventEmitter } from "events";
 
-import { Server, ServerOptions, Room, matchMaker, LocalDriver, ClientState, LocalPresence, Presence, Client, Deferred } from "@colyseus/core";
+import { Server, ServerOptions, Room, matchMaker, LocalDriver, ClientState, LocalPresence, Presence, Client, Deferred, ISendOptions } from "@colyseus/core";
 import { RedisPresence } from "@colyseus/redis-presence";
 import { RedisDriver } from "@colyseus/redis-driver";
 import { MongooseDriver } from "@colyseus/mongoose-driver";
@@ -52,6 +52,10 @@ export class WebSocketClient implements Client {
     this.sessionId = id || null;
     this.ref = new RawClient();
     this.ref.once('close', () => this.ref.readyState = WebSocket.CLOSED);
+  }
+
+  sendBytes(type: string | number, bytes: number[] | Uint8Array, options?: ISendOptions): void {
+    this.messages.push(bytes);
   }
 
   send (message) {

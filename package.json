@@ -49,7 +49,7 @@
     "assert": "^2.0.0",
     "benchmark": "^2.1.1",
     "c8": "^7.7.2",
-    "colyseus.js": "^0.15.0-preview.0",
+    "colyseus.js": "^0.15.0-preview.3",
     "cors": "^2.8.5",
     "express": "^4.16.2",
     "httpie": "^2.0.0-next.13",

@@ -47,11 +47,13 @@ export interface Client {
   _enqueuedMessages?: any[];
   _afterNextPatchQueue: Array<[string | Client, IArguments]>;
 
-  raw(data: ArrayLike<number>, options?: ISendOptions): void;
+  raw(data: ArrayLike<number>, options?: ISendOptions, cb?: (err?: Error) => void): void;
   enqueueRaw(data: ArrayLike<number>, options?: ISendOptions): void;
 
   send(type: string | number, message?: any, options?: ISendOptions): void;
   send(message: Schema, options?: ISendOptions): void;
+
+  sendBytes(type: string | number, bytes: number[] | Uint8Array, options?: ISendOptions): void;
 
   error(code: number, message?: string): void;
   leave(code?: number, data?: string): void;

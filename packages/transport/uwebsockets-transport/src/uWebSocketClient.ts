@@ -34,13 +34,22 @@ export class uWebSocketClient implements Client {
     ref.on('close', () => this.readyState = ReadyState.CLOSED);
   }
 
+  public sendBytes(type: any, bytes?: any | ISendOptions, options?: ISendOptions) {
+    debugMessage("send bytes(to %s): '%s' -> %j", this.sessionId, type, bytes);
+
+    this.enqueueRaw(
+      getMessageBytes.raw(Protocol.ROOM_DATA_BYTES, type, undefined, bytes),
+      options,
+    );
+  }
+
   public send(messageOrType: any, messageOrOptions?: any | ISendOptions, options?: ISendOptions) {
     debugMessage("send(to %s): '%s' -> %O", this.sessionId, messageOrType, messageOrOptions);
 
     this.enqueueRaw(
       (messageOrType instanceof Schema)
         ? getMessageBytes[Protocol.ROOM_DATA_SCHEMA](messageOrType)
-        : getMessageBytes[Protocol.ROOM_DATA](messageOrType, messageOrOptions),
+        : getMessageBytes.raw(Protocol.ROOM_DATA, messageOrType, messageOrOptions),
       options,
     );
   }
