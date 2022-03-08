@@ -28,8 +28,21 @@ export interface SeatReservation {
   room: RoomListingData;
 }
 
+interface DevModeRoomData {
+  [roomId: string]: {
+    state?: any;
+    clients?: any;
+    clientOptions: any;
+    roomId: string,
+    roomName: string,
+  },
+}
+
 const handlers: {[id: string]: RegisteredHandler} = {};
 const rooms: {[roomId: string]: Room} = {};
+
+const DEV_MODE = process.env.DEV_MODE;
+const devModeMetaData: DevModeRoomData = {};
 
 export let processId: string;
 export let presence: Presence;
@@ -51,6 +64,19 @@ export function setup(_presence?: Presence, _driver?: MatchMakerDriver, _process
   });
 
   presence.hset(getRoomCountKey(), processId, '0');
+
+  if(DEV_MODE) {
+    reloadRoomsFromCache();
+  }
+}
+
+async function reloadRoomsFromCache() {
+  const data = JSON.parse(require('fs').readFileSync('./data.json')) as DevModeRoomData;
+  for(const room of Object.values(data)) {
+    const roomListingData = await createRoom(room.roomName, room["clientOptions"]);
+    rooms[roomListingData.roomId].secondaryRoomId = room.roomId;
+    rooms[roomListingData.roomId].state = room.state;
+  }
 }
 
 /**
@@ -225,14 +251,12 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
     })[0]
   ) || processId;
 
+  let room: RoomListingData;
   if (processIdWithFewerRooms === processId) {
     // create the room on this process!
-    return await handleCreateRoom(roomName, clientOptions);
-
+    room = await handleCreateRoom(roomName, clientOptions);
   } else {
     // ask other process to create the room!
-    let room: RoomListingData;
-
     try {
       room = await requestFromIPC<RoomListingData>(
         presence,
@@ -247,9 +271,16 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
       debugAndPrintError(e);
       room = await handleCreateRoom(roomName, clientOptions);
     }
-
-    return room;
   }
+
+  if(DEV_MODE) {
+    devModeMetaData[room.roomId] = {
+      roomId: room.roomId,
+      roomName: roomName,
+      clientOptions: clientOptions
+    }
+  }
+  return room;
 }
 
 async function handleCreateRoom(roomName: string, clientOptions: ClientOptions): Promise<RoomListingData> {
@@ -279,7 +310,6 @@ async function handleCreateRoom(roomName: string, clientOptions: ClientOptions):
 
       // increment amount of rooms this process is handling
       presence.hincrby(getRoomCountKey(), processId, 1);
-
     } catch (e) {
       debugAndPrintError(e);
       throw new ServerError(
@@ -332,6 +362,13 @@ export function disconnectAll() {
 }
 
 export function gracefullyShutdown(): Promise<any> {
+  if(DEV_MODE) {
+    for(const room of Object.values(rooms)) {
+      devModeMetaData[room.roomId].state = room.state;
+      devModeMetaData[room.roomId].clients = room.clients;
+    }
+    require('fs').writeFileSync('data.json', JSON.stringify(devModeMetaData), {flag:'w'});
+  }
   if (isGracefullyShuttingDown) {
     return Promise.reject('already_shutting_down');
   }
@@ -492,6 +529,10 @@ async function disposeRoom(roomName: string, room: Room) {
 
   // remove actual room reference
   delete rooms[room.roomId];
+
+  if(DEV_MODE) {
+    delete devModeMetaData[room.roomId];
+  }
 }
 
 //
