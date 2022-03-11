@@ -1,7 +1,15 @@
 import { ErrorCode } from './Protocol';
 
 import { requestFromIPC, subscribeIPC } from './IPC';
-import { generateId, merge, REMOTE_ROOM_SHORT_TIMEOUT, retry } from './Utils';
+import {
+  cacheRoomHistoryList,
+  generateId,
+  getRoomHistoryListFromCache,
+  merge,
+  REMOTE_ROOM_SHORT_TIMEOUT,
+  retry,
+  RoomHistoryList
+} from './Utils';
 
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
 import { Room, RoomInternalState } from './Room';
@@ -28,21 +36,11 @@ export interface SeatReservation {
   room: RoomListingData;
 }
 
-interface DevModeRoomData {
-  [roomId: string]: {
-    state?: any;
-    clients?: any;
-    clientOptions: any;
-    roomId: string,
-    roomName: string,
-  },
-}
-
 const handlers: {[id: string]: RegisteredHandler} = {};
 const rooms: {[roomId: string]: Room} = {};
 
 const DEV_MODE = process.env.DEV_MODE;
-const devModeMetaData: DevModeRoomData = {};
+const roomHistoryList: RoomHistoryList = {};
 
 export let processId: string;
 export let presence: Presence;
@@ -71,11 +69,11 @@ export function setup(_presence?: Presence, _driver?: MatchMakerDriver, _process
 }
 
 async function reloadRoomsFromCache() {
-  const data = JSON.parse(require('fs').readFileSync('./data.json')) as DevModeRoomData;
-  for(const room of Object.values(data)) {
-    const roomListingData = await createRoom(room.roomName, room["clientOptions"]);
-    rooms[roomListingData.roomId].secondaryRoomId = room.roomId;
-    rooms[roomListingData.roomId].state = room.state;
+  const roomHistoryList = getRoomHistoryListFromCache();
+  for(const roomHistory of Object.values(roomHistoryList)) {
+    const roomListingData = await createRoom(roomHistory.roomName, roomHistory.clientOptions);
+    rooms[roomListingData.roomId].secondaryRoomId = roomHistory.roomId;
+    rooms[roomListingData.roomId].state = roomHistory.state;
   }
 }
 
@@ -274,7 +272,7 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
   }
 
   if(DEV_MODE) {
-    devModeMetaData[room.roomId] = {
+    roomHistoryList[room.roomId] = {
       roomId: room.roomId,
       roomName: roomName,
       clientOptions: clientOptions
@@ -364,10 +362,10 @@ export function disconnectAll() {
 export function gracefullyShutdown(): Promise<any> {
   if(DEV_MODE) {
     for(const room of Object.values(rooms)) {
-      devModeMetaData[room.roomId].state = room.state;
-      devModeMetaData[room.roomId].clients = room.clients;
+      roomHistoryList[room.roomId].state = room.state;
+      roomHistoryList[room.roomId].clients = room.clients;
     }
-    require('fs').writeFileSync('data.json', JSON.stringify(devModeMetaData), {flag:'w'});
+    cacheRoomHistoryList(roomHistoryList);
   }
   if (isGracefullyShuttingDown) {
     return Promise.reject('already_shutting_down');
@@ -531,7 +529,7 @@ async function disposeRoom(roomName: string, room: Room) {
   delete rooms[room.roomId];
 
   if(DEV_MODE) {
-    delete devModeMetaData[room.roomId];
+    delete roomHistoryList[room.roomId];
   }
 }
 

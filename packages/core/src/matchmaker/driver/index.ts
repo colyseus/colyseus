@@ -35,5 +35,6 @@ export class LocalDriver implements MatchMakerDriver {
     this.rooms = [];
   }
 
-  public shutdown() {}
+  public shutdown() {
+  }
 }
