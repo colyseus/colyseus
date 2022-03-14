@@ -2,13 +2,10 @@ import { ErrorCode } from './Protocol';
 
 import { requestFromIPC, subscribeIPC } from './IPC';
 import {
-  cacheRoomHistoryList,
   generateId,
-  getRoomHistoryListFromCache,
   merge,
   REMOTE_ROOM_SHORT_TIMEOUT,
-  retry,
-  RoomHistoryList
+  retry
 } from './Utils';
 
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
@@ -39,8 +36,7 @@ export interface SeatReservation {
 const handlers: {[id: string]: RegisteredHandler} = {};
 const rooms: {[roomId: string]: Room} = {};
 
-const DEV_MODE = process.env.DEV_MODE;
-const roomHistoryList: RoomHistoryList = {};
+const DEV_MODE: boolean = Boolean(process.env.DEV_MODE);
 
 export let processId: string;
 export let presence: Presence;
@@ -61,19 +57,9 @@ export function setup(_presence?: Presence, _driver?: MatchMakerDriver, _process
     return handleCreateRoom.apply(undefined, args);
   });
 
-  presence.hset(getRoomCountKey(), processId, '0');
-
-  if(DEV_MODE) {
-    reloadRoomsFromCache();
-  }
-}
-
-async function reloadRoomsFromCache() {
-  const roomHistoryList = getRoomHistoryListFromCache();
-  for(const roomHistory of Object.values(roomHistoryList)) {
-    const roomListingData = await createRoom(roomHistory.roomName, roomHistory.clientOptions);
-    rooms[roomListingData.roomId].secondaryRoomId = roomHistory.roomId;
-    rooms[roomListingData.roomId].state = roomHistory.state;
+  if(!DEV_MODE) {
+    console.log(presence.hlen(getRoomCountKey()));
+    presence.hset(getRoomCountKey(), processId, '0');
   }
 }
 
@@ -221,14 +207,18 @@ export function defineRoomType<T extends Type<Room>>(
 
   handlers[name] = registeredHandler;
 
-  cleanupStaleRooms(name);
+  if(!DEV_MODE) {
+    cleanupStaleRooms(name);
+  }
 
   return registeredHandler;
 }
 
 export function removeRoomType(name: string) {
   delete handlers[name];
-  cleanupStaleRooms(name);
+  if(!DEV_MODE) {
+    cleanupStaleRooms(name);
+  }
 }
 
 export function hasHandler(name: string) {
@@ -271,13 +261,6 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
     }
   }
 
-  if(DEV_MODE) {
-    roomHistoryList[room.roomId] = {
-      roomId: room.roomId,
-      roomName: roomName,
-      clientOptions: clientOptions
-    }
-  }
   return room;
 }
 
@@ -360,13 +343,6 @@ export function disconnectAll() {
 }
 
 export function gracefullyShutdown(): Promise<any> {
-  if(DEV_MODE) {
-    for(const room of Object.values(rooms)) {
-      roomHistoryList[room.roomId].state = room.state;
-      roomHistoryList[room.roomId].clients = room.clients;
-    }
-    cacheRoomHistoryList(roomHistoryList);
-  }
   if (isGracefullyShuttingDown) {
     return Promise.reject('already_shutting_down');
   }
@@ -375,13 +351,15 @@ export function gracefullyShutdown(): Promise<any> {
 
   debugMatchMaking(`${processId} is shutting down!`);
 
-  // remove processId from room count key
-  presence.hdel(getRoomCountKey(), processId);
+  if(!DEV_MODE) {
+    // remove processId from room count key
+    presence.hdel(getRoomCountKey(), processId);
 
-  // unsubscribe from process id channel
-  presence.unsubscribe(getProcessChannel());
+    // unsubscribe from process id channel
+    presence.unsubscribe(getProcessChannel());
 
-  return Promise.all(disconnectAll());
+    return Promise.all(disconnectAll());
+  }
 }
 
 /**
@@ -527,10 +505,6 @@ async function disposeRoom(roomName: string, room: Room) {
 
   // remove actual room reference
   delete rooms[room.roomId];
-
-  if(DEV_MODE) {
-    delete roomHistoryList[room.roomId];
-  }
 }
 
 //

@@ -2,21 +2,9 @@ import fs from 'fs';
 import nanoid from 'nanoid';
 
 import { debugAndPrintError } from './Debug';
-import {createRoom} from "./MatchMaker";
 
 // remote room call timeouts
 export const REMOTE_ROOM_SHORT_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_SHORT_TIMEOUT || 2000);
-const ROOM_HISTORY_DATA_FILE = "./history.json"
-
-export interface RoomHistoryList {
-  [roomId: string]: {
-    state?: any;
-    clients?: any;
-    clientOptions: any;
-    roomId: string,
-    roomName: string,
-  },
-}
 
 export function generateId(length: number = 9) {
   return nanoid(length);
@@ -119,21 +107,4 @@ export function merge(a: any, ...objs: any[]): any {
     }
   }
   return a;
-}
-
-export function getRoomHistoryListFromCache(): RoomHistoryList {
-  try{
-    return JSON.parse(fs.readFileSync(ROOM_HISTORY_DATA_FILE).toString()) as RoomHistoryList;
-  } catch (err) {
-    console.error(err);
-  }
-  return {};
-}
-
-export function cacheRoomHistoryList(data: RoomHistoryList) {
-  try {
-    fs.writeFileSync(ROOM_HISTORY_DATA_FILE, JSON.stringify(data), {flag:'w'});
-  } catch (err) {
-    console.error(err);
-  }
 }

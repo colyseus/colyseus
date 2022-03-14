@@ -56,7 +56,6 @@ export abstract class Room<State= any, Metadata= any> {
 
   public roomId: string;
   public roomName: string;
-  public secondaryRoomId: string;
 
   public maxClients: number = Infinity;
   public patchRate: number = DEFAULT_PATCH_RATE;
