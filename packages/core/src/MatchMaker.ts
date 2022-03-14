@@ -1,12 +1,7 @@
 import { ErrorCode } from './Protocol';
 
 import { requestFromIPC, subscribeIPC } from './IPC';
-import {
-  generateId,
-  merge,
-  REMOTE_ROOM_SHORT_TIMEOUT,
-  retry
-} from './Utils';
+import { generateId, merge, REMOTE_ROOM_SHORT_TIMEOUT, retry } from './Utils';
 
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
 import { Room, RoomInternalState } from './Room';
@@ -58,7 +53,6 @@ export function setup(_presence?: Presence, _driver?: MatchMakerDriver, _process
   });
 
   if(!DEV_MODE) {
-    console.log(presence.hlen(getRoomCountKey()));
     presence.hset(getRoomCountKey(), processId, '0');
   }
 }
