@@ -39,7 +39,7 @@ export let driver: MatchMakerDriver;
 
 let isGracefullyShuttingDown: boolean;
 
-export function setup(_presence?: Presence, _driver?: MatchMakerDriver, _processId?: string) {
+export async function setup(_presence?: Presence, _driver?: MatchMakerDriver, _processId?: string) {
   presence = _presence || new LocalPresence();
   driver = _driver || new LocalDriver();
   processId = _processId;
@@ -52,8 +52,31 @@ export function setup(_presence?: Presence, _driver?: MatchMakerDriver, _process
     return handleCreateRoom.apply(undefined, args);
   });
 
-  if(!DEV_MODE) {
-    presence.hset(getRoomCountKey(), processId, '0');
+  presence.hset(getRoomCountKey(), processId, '0');
+  if(DEV_MODE) {
+    const roomHistoryList = await presence.hgetall(getRoomHistoryListKey());
+    if(roomHistoryList) {
+      for(const [key, value] of Object.entries(roomHistoryList)) {
+        const roomHistory = JSON.parse(value);
+        const tempRoomListingData = await createRoom(roomHistory.roomName, roomHistory.clientOptions);
+        const tempRoom = rooms[tempRoomListingData.roomId];
+        const tempRoomCache = JSON.parse(await presence.hget(getRoomCacheKey(), key));
+
+        // Delete temporary room references from cache
+        delete rooms[tempRoomListingData.roomId];
+        await presence.hdel(getRoomCacheKey(), key);
+        await presence.hdel(getRoomCacheKey(), tempRoomListingData.roomId);
+        await presence.hdel(getRoomHistoryListKey(), tempRoomListingData.roomId);
+
+        // Restore previous roomId and state
+        tempRoom.roomId = key;
+        tempRoom.state = roomHistory.state;
+        tempRoomCache.processId = tempRoomListingData.processId;
+        tempRoomCache.roomId = key;
+        await presence.hset(getRoomCacheKey(), key, JSON.stringify(tempRoomCache));
+        rooms[key] = tempRoom;
+      }
+    }
   }
 }
 
@@ -255,6 +278,12 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
     }
   }
 
+  if(DEV_MODE) {
+    presence.hset(getRoomHistoryListKey(), room.roomId, JSON.stringify({
+      "clientOptions": clientOptions,
+      "roomName": roomName
+    }));
+  }
   return room;
 }
 
@@ -336,7 +365,7 @@ export function disconnectAll() {
   return promises;
 }
 
-export function gracefullyShutdown(): Promise<any> {
+export async function gracefullyShutdown(): Promise<any> {
   if (isGracefullyShuttingDown) {
     return Promise.reject('already_shutting_down');
   }
@@ -353,6 +382,16 @@ export function gracefullyShutdown(): Promise<any> {
     presence.unsubscribe(getProcessChannel());
 
     return Promise.all(disconnectAll());
+  } else {
+    for(const room of Object.values(rooms)) {
+      const roomHistoryResult = await presence.hget(getRoomHistoryListKey(), room.roomId);
+      if(roomHistoryResult) {
+        const roomHistory = JSON.parse(roomHistoryResult);
+        roomHistory["state"] = room.state;
+        await presence.hdel(getRoomHistoryListKey(), room.roomId);
+        await presence.hset(getRoomHistoryListKey(), room.roomId, JSON.stringify(roomHistory));
+      }
+    }
   }
 }
 
@@ -497,6 +536,11 @@ async function disposeRoom(roomName: string, room: Room) {
   // unsubscribe from remote connections
   presence.unsubscribe(getRoomChannel(room.roomId));
 
+  // dispose dev mode cached data
+  if(DEV_MODE) {
+    presence.hdel(getRoomHistoryListKey(), room.roomId);
+  }
+
   // remove actual room reference
   delete rooms[room.roomId];
 }
@@ -519,4 +563,12 @@ function getProcessChannel(id: string = processId) {
 
 function getRoomCountKey() {
   return 'roomcount';
+}
+
+function getRoomCacheKey() {
+  return 'roomcaches';
+}
+
+function getRoomHistoryListKey() {
+  return 'roomhistory';
 }
