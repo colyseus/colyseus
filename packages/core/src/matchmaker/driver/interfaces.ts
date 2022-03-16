@@ -11,6 +11,7 @@ export interface IRoomListingData {
   roomId: string;
   unlisted: boolean;
   [property: string]: any;
+  devMode?: boolean;
 }
 
 export interface RoomListingData<Metadata= any> extends IRoomListingData {
