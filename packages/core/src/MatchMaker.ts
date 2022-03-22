@@ -1,7 +1,15 @@
 import { ErrorCode } from './Protocol';
 
 import { requestFromIPC, subscribeIPC } from './IPC';
-import { generateId, merge, REMOTE_ROOM_SHORT_TIMEOUT, retry } from './Utils';
+import {
+  cacheRoomHistory,
+  generateId, getRoomCountKey,
+  getRoomHistoryListKey,
+  merge,
+  reloadFromCache,
+  REMOTE_ROOM_SHORT_TIMEOUT,
+  retry
+} from './Utils';
 
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
 import { Room, RoomInternalState } from './Room';
@@ -32,6 +40,8 @@ export interface SeatReservation {
 const handlers: {[id: string]: RegisteredHandler} = {};
 const rooms: {[roomId: string]: Room} = {};
 
+const DEV_MODE: boolean = Boolean(process.env.DEV_MODE);
+
 export let publicAddress: string;
 export let processId: string;
 export let presence: Presence;
@@ -39,12 +49,7 @@ export let driver: MatchMakerDriver;
 
 let isGracefullyShuttingDown: boolean;
 
-export function setup(
-  _presence?: Presence,
-  _driver?: MatchMakerDriver,
-  _processId?: string,
-  _publicAddress?: string
-) {
+export async function setup(_presence?: Presence, _driver?: MatchMakerDriver, _processId?: string) {
   presence = _presence || new LocalPresence();
   driver = _driver || new LocalDriver();
   processId = _processId;
@@ -60,6 +65,10 @@ export function setup(
   });
 
   presence.hset(getRoomCountKey(), processId, '0');
+
+  if(DEV_MODE) {
+    await reloadFromCache(rooms);
+  }
 }
 
 /**
@@ -212,14 +221,18 @@ export function defineRoomType<T extends Type<Room>>(
 
   handlers[name] = registeredHandler;
 
-  cleanupStaleRooms(name);
+  if(!DEV_MODE) {
+    cleanupStaleRooms(name);
+  }
 
   return registeredHandler;
 }
 
 export function removeRoomType(name: string) {
   delete handlers[name];
-  cleanupStaleRooms(name);
+  if(!DEV_MODE) {
+    cleanupStaleRooms(name);
+  }
 }
 
 export function hasHandler(name: string) {
@@ -240,14 +253,12 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
     })[0]
   ) || processId;
 
+  let room: RoomListingData;
   if (processIdWithFewerRooms === processId) {
     // create the room on this process!
-    return await handleCreateRoom(roomName, clientOptions);
-
+    room = await handleCreateRoom(roomName, clientOptions);
   } else {
     // ask other process to create the room!
-    let room: RoomListingData;
-
     try {
       room = await requestFromIPC<RoomListingData>(
         presence,
@@ -262,9 +273,16 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
       debugAndPrintError(e);
       room = await handleCreateRoom(roomName, clientOptions);
     }
-
-    return room;
   }
+
+  if(DEV_MODE) {
+    presence.hset(getRoomHistoryListKey(), room.roomId, JSON.stringify({
+      "clientOptions": clientOptions,
+      "roomName": roomName
+    }));
+    room.devMode = true;
+  }
+  return room;
 }
 
 async function handleCreateRoom(roomName: string, clientOptions: ClientOptions): Promise<RoomListingData> {
@@ -301,7 +319,6 @@ async function handleCreateRoom(roomName: string, clientOptions: ClientOptions):
 
       // increment amount of rooms this process is handling
       presence.hincrby(getRoomCountKey(), processId, 1);
-
     } catch (e) {
       debugAndPrintError(e);
       throw new ServerError(
@@ -353,7 +370,7 @@ export function disconnectAll() {
   return promises;
 }
 
-export function gracefullyShutdown(): Promise<any> {
+export async function gracefullyShutdown(): Promise<any> {
   if (isGracefullyShuttingDown) {
     return Promise.reject('already_shutting_down');
   }
@@ -362,13 +379,17 @@ export function gracefullyShutdown(): Promise<any> {
 
   debugMatchMaking(`${processId} is shutting down!`);
 
-  // remove processId from room count key
-  presence.hdel(getRoomCountKey(), processId);
+  if(!DEV_MODE) {
+    // remove processId from room count key
+    presence.hdel(getRoomCountKey(), processId);
 
-  // unsubscribe from process id channel
-  presence.unsubscribe(getProcessChannel());
+    // unsubscribe from process id channel
+    presence.unsubscribe(getProcessChannel());
 
-  return Promise.all(disconnectAll());
+    return Promise.all(disconnectAll());
+  } else {
+    await cacheRoomHistory(rooms);
+  }
 }
 
 /**
@@ -512,6 +533,11 @@ async function disposeRoom(roomName: string, room: Room) {
   // unsubscribe from remote connections
   presence.unsubscribe(getRoomChannel(room.roomId));
 
+  // dispose dev mode cached data
+  if(DEV_MODE) {
+    presence.hdel(getRoomHistoryListKey(), room.roomId);
+  }
+
   // remove actual room reference
   delete rooms[room.roomId];
 }
@@ -532,6 +558,3 @@ function getProcessChannel(id: string = processId) {
   return `p:${id}`;
 }
 
-function getRoomCountKey() {
-  return 'roomcount';
-}
