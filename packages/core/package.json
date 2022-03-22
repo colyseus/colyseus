@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/core",
-  "version": "0.14.24",
+  "version": "0.15.0-preview.4",
   "description": "Multiplayer Framework for Node.js.",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -33,7 +33,7 @@
     "node": ">= 14.x"
   },
   "dependencies": {
-    "@colyseus/schema": "^1.0.15",
+    "@colyseus/schema": "^2.0.0",
     "@gamestdio/timer": "^1.3.0",
     "@types/redis": "^2.8.12",
     "debug": "^4.0.1",
@@ -44,5 +44,5 @@
   "publishConfig": {
     "access": "public"
   },
-  "gitHead": "320a0325f01eff3cd7afa8fb2efa80077ebdbf4a"
+  "gitHead": "25ba61e283429bb4fa02db0454f804ea218259eb"
 }

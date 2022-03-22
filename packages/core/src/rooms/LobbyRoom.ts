@@ -32,8 +32,7 @@ export class LobbyRoom extends Room { // tslint:disable-line
 
     this.unsubscribeLobby = await subscribeLobby((roomId, data) => {
       const roomIndex = this.rooms.findIndex((room) => room.roomId === roomId);
-
-      // console.log("LOBBY RECEIVING UPDATE:", { roomId, data, roomIndex });
+      const clients = this.clients.filter((client) => this.clientOptions[client.sessionId]);
 
       if (!data) {
         // remove room listing data
@@ -42,7 +41,7 @@ export class LobbyRoom extends Room { // tslint:disable-line
 
           this.rooms.splice(roomIndex, 1);
 
-          this.clients.forEach((client) => {
+          clients.forEach((client) => {
             if (this.filterItemForClient(previousData, this.clientOptions[client.sessionId].filter)) {
               client.send('-', roomId);
             }
@@ -53,7 +52,7 @@ export class LobbyRoom extends Room { // tslint:disable-line
         // append room listing data
         this.rooms.push(data);
 
-        this.clients.forEach((client) => {
+        clients.forEach((client) => {
           if (this.filterItemForClient(data, this.clientOptions[client.sessionId].filter)) {
             client.send('+', [roomId, data]);
           }
@@ -65,7 +64,7 @@ export class LobbyRoom extends Room { // tslint:disable-line
         // replace room listing data
         this.rooms[roomIndex] = data;
 
-        this.clients.forEach((client) => {
+        clients.forEach((client) => {
           const hadData = this.filterItemForClient(previousData, this.clientOptions[client.sessionId].filter);
           const hasData = this.filterItemForClient(data, this.clientOptions[client.sessionId].filter);
 

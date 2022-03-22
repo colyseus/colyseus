@@ -1,49 +1,20 @@
-import redis from 'redis';
-import { promisify } from 'util';
-
+import Redis from 'ioredis';
 import { Presence } from '@colyseus/core';
 
 type Callback = (...args: any[]) => void;
 
 export class RedisPresence implements Presence {
-    public sub: redis.RedisClient;
-    public pub: redis.RedisClient;
+    public sub: Redis.Redis;
+    public pub: Redis.Redis;
 
     protected subscriptions: { [channel: string]: Callback[] } = {};
 
-    protected subscribeAsync: any;
-    protected unsubscribeAsync: any;
-    protected publishAsync: any;
-
-    protected smembersAsync: any;
-    protected sismemberAsync: any;
-    protected hgetAsync: any;
-    protected hlenAsync: any;
-    protected pubsubAsync: any;
-    protected incrAsync: any;
-    protected decrAsync: any;
-
-    constructor(opts?: redis.ClientOpts) {
-        this.sub = redis.createClient(opts);
-        this.pub = redis.createClient(opts);
+    constructor(opts?: Redis.RedisOptions) {
+        this.sub = new Redis(opts);
+        this.pub = new Redis(opts);
 
         // no listener limit
         this.sub.setMaxListeners(0);
-
-        // create promisified pub/sub methods.
-        this.subscribeAsync = promisify(this.sub.subscribe).bind(this.sub);
-        this.unsubscribeAsync = promisify(this.sub.unsubscribe).bind(this.sub);
-
-        this.publishAsync = promisify(this.pub.publish).bind(this.pub);
-
-        // create promisified redis methods.
-        this.smembersAsync = promisify(this.pub.smembers).bind(this.pub);
-        this.sismemberAsync = promisify(this.pub.sismember).bind(this.pub);
-        this.hgetAsync = promisify(this.pub.hget).bind(this.pub);
-        this.hlenAsync = promisify(this.pub.hlen).bind(this.pub);
-        this.pubsubAsync = promisify(this.pub.pubsub).bind(this.pub);
-        this.incrAsync = promisify(this.pub.incr).bind(this.pub);
-        this.decrAsync = promisify(this.pub.decr).bind(this.pub);
     }
 
     public async subscribe(topic: string, callback: Callback) {
@@ -54,10 +25,10 @@ export class RedisPresence implements Presence {
         this.subscriptions[topic].push(callback);
 
         if (this.sub.listeners('message').length === 0) {
-          this.sub.addListener('message', this.handleSubscription);
+          this.sub.on('message', this.handleSubscription);
         }
 
-        await this.subscribeAsync(topic);
+        await this.sub.subscribe(topic);
 
         return this;
     }
@@ -76,7 +47,7 @@ export class RedisPresence implements Presence {
 
         if (this.subscriptions[topic].length === 0) {
           delete this.subscriptions[topic];
-          await this.unsubscribeAsync(topic);
+          await this.sub.unsubscribe(topic);
         }
 
         return this;
@@ -87,11 +58,11 @@ export class RedisPresence implements Presence {
             data = false;
         }
 
-        await this.publishAsync(topic, JSON.stringify(data));
+        await this.pub.publish(topic, JSON.stringify(data));
     }
 
     public async exists(roomId: string): Promise<boolean> {
-        return (await this.pubsubAsync('channels', roomId)).length > 0;
+        return (await (this.pub as any).pubsub("channels", roomId)).length > 0;
     }
 
     public async setex(key: string, value: string, seconds: number) {
@@ -121,81 +92,55 @@ export class RedisPresence implements Presence {
     }
 
     public async smembers(key: string): Promise<string[]> {
-        return await this.smembersAsync(key);
+        return await this.pub.smembers(key);
     }
 
     public async sismember(key: string, field: string): Promise<number> {
-        return await this.sismemberAsync(key, field);
+        return await this.pub.sismember(key, field);
     }
 
     public async srem(key: string, value: any) {
-        return new Promise((resolve) => {
-            this.pub.srem(key, value, resolve);
-        });
+        return await this.pub.srem(key, value);
     }
 
     public async scard(key: string) {
-        return new Promise((resolve, reject) => {
-            this.pub.scard(key, (err, data) => {
-                if (err) { return reject(err); }
-                resolve(data);
-            });
-        });
+        return await this.pub.scard(key);
     }
 
     public async sinter(...keys: string[]) {
-        return new Promise<string[]>((resolve, reject) => {
-            this.pub.sinter(...keys, (err, data) => {
-                if (err) { return reject(err); }
-                resolve(data);
-            });
-        });
+        return await this.pub.sinter(...keys);
     }
 
     public async hset(key: string, field: string, value: string) {
-        return new Promise((resolve) => {
-            this.pub.hset(key, field, value, resolve);
-        });
+        return await this.pub.hset(key, field, value);
     }
 
     public async hincrby(key: string, field: string, value: number) {
-        return new Promise((resolve) => {
-            this.pub.hincrby(key, field, value, resolve);
-        });
+        return await this.pub.hincrby(key, field, value);
     }
 
     public async hget(key: string, field: string) {
-        return await this.hgetAsync(key, field);
+        return await this.pub.hget(key, field);
     }
 
     public async hgetall(key: string) {
-        return new Promise<{ [key: string]: string }>((resolve, reject) => {
-            this.pub.hgetall(key, (err, values) => {
-              if (err) { return reject(err); }
-              resolve(values);
-            });
-        });
+        return await this.pub.hgetall(key);
     }
 
     public async hdel(key: string, field: string) {
-        return new Promise((resolve, reject) => {
-            this.pub.hdel(key, field, (err, ok) => {
-              if (err) { return reject(err); }
-              resolve(ok);
-            });
-        });
+        return await this.pub.hdel(key, field);
     }
 
     public async hlen(key: string): Promise<number> {
-        return await this.hlenAsync(key);
+        return await this.pub.hlen(key);
     }
 
     public async incr(key: string): Promise<number> {
-        return await this.incrAsync(key);
+        return await this.pub.incr(key);
     }
 
     public async decr(key: string): Promise<number> {
-        return await this.decrAsync(key);
+        return await this.pub.decr(key);
     }
 
     public shutdown() {

@@ -1,11 +1,10 @@
-import Benchmark from "benchmark";
-
-import { Room, Server, matchMaker, Protocol } from "../../src";
 import WebSocket from "ws";
-import { Deferred } from "../../src/Utils";
+import { Deferred, Room, Server, matchMaker, Protocol  } from "@colyseus/core";
+import { WebSocketTransport } from "@colyseus/ws-transport";
+import Benchmark from "benchmark";
 import msgpack from "notepack.io";
 
-const numClients = 5;
+const numClients = 30;
 const suite = new Benchmark.Suite();
 const connections: WebSocket[] = [];
 
@@ -16,10 +15,13 @@ class MyRoom extends Room {
 
 let received: number = 0;
 
-const server = new Server();
+const server = new Server({
+  transport: new WebSocketTransport()
+});
 server.define("room", MyRoom);
 server.listen(9999, undefined, undefined, async () => {
   const roomCreated = await matchMaker.createRoom("room", {});
+
   const room = matchMaker.getRoomById(roomCreated.roomId);
 
   const future = new Deferred();
@@ -46,6 +48,9 @@ server.listen(9999, undefined, undefined, async () => {
   await future.promise;
   console.log("ALL CONNECTIONS OPEN!");
 
+  const exceptClient = room.clients.at(15);
+  const exceptClause = {except: exceptClient};
+
   /**
    * 0.11.x =>
    * broadcast x 7,478 ops/sec ±16.50% (60 runs sampled)
@@ -60,6 +65,10 @@ server.listen(9999, undefined, undefined, async () => {
    */
   suite.add('broadcast', function () {
     room.broadcast("hello world!");
+  });
+
+  suite.add('broadcast + except (single)', function () {
+    room.broadcast("hello world!", exceptClause);
   });
 
   suite.on('cycle', (event) => {

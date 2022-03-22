@@ -1,5 +1,4 @@
-import redis, { RedisClient, ClientOpts } from 'redis';
-import { promisify } from 'util';
+import Redis from 'ioredis';
 
 import {
   IRoomListingData,
@@ -12,12 +11,10 @@ import { Query } from './Query';
 import { RoomData } from './RoomData';
 
 export class RedisDriver implements MatchMakerDriver {
-  private readonly _client: RedisClient;
-  private readonly hgetall: (key: string) => Promise<{ [key: string]: string }>;
+  private readonly _client: Redis.Redis;
 
-  constructor(options?: ClientOpts, key: string = 'roomcaches') {
-    this._client = redis.createClient(options);
-    this.hgetall = promisify(this._client.hgetall).bind(this._client);
+  constructor(options?: Redis.RedisOptions, key: string = 'roomcaches') {
+    this._client = new Redis(options);
   }
 
   public createInstance(initialValues: any = {}) {
@@ -48,16 +45,21 @@ export class RedisDriver implements MatchMakerDriver {
   }
 
   public async getRooms() {
-    return Object.entries(await this.hgetall('roomcaches') ?? []).map(
+    return Object.entries(await this._client.hgetall('roomcaches') ?? []).map(
       ([, roomcache]) => new RoomData(JSON.parse(roomcache), this._client)
     );
-  }
-
-  public clear() {
-    this._client.del('roomcaches');
   }
 
   public shutdown() {
     this._client.quit();
   }
+
+  //
+  // only relevant for the test-suite.
+  // not used during runtime.
+  //
+  public clear() {
+    this._client.del('roomcaches');
+  }
+
 }

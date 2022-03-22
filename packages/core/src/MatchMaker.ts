@@ -24,6 +24,7 @@ import { ServerError } from './errors/ServerError';
 import { IRoomListingData, MatchMakerDriver, RoomListingData, LocalDriver } from './matchmaker/driver';
 import * as controller from './matchmaker/controller';
 
+import { logger } from './Logger';
 import { Client } from './Transport';
 import { Type } from './types';
 
@@ -41,6 +42,7 @@ const rooms: {[roomId: string]: Room} = {};
 
 const DEV_MODE: boolean = Boolean(process.env.DEV_MODE);
 
+export let publicAddress: string;
 export let processId: string;
 export let presence: Presence;
 export let driver: MatchMakerDriver;
@@ -51,6 +53,8 @@ export async function setup(_presence?: Presence, _driver?: MatchMakerDriver, _p
   presence = _presence || new LocalPresence();
   driver = _driver || new LocalDriver();
   processId = _processId;
+  publicAddress = _publicAddress;
+
   isGracefullyShuttingDown = false;
 
   /**
@@ -108,36 +112,42 @@ export async function join(roomName: string, clientOptions: ClientOptions = {}) 
 /**
  * Join a room by id and return seat reservation
  */
+export async function reconnect(roomId: string, clientOptions: ClientOptions = {}) {
+  const room = await driver.findOne({ roomId });
+  if (!room) {
+    logger.info(`❌ room "${roomId}" has been disposed. Did you missed .allowReconnection()?\n👉 https://docs.colyseus.io/colyseus/server/room/#allowreconnection-client-seconds`);
+    throw new ServerError(ErrorCode.MATCHMAKE_INVALID_ROOM_ID, `room "${roomId}" has been disposed.`);
+  }
+
+  // check for reconnection
+  const reconnectionToken = clientOptions.reconnectionToken;
+  if (!reconnectionToken) { throw new ServerError(ErrorCode.MATCHMAKE_UNHANDLED, `'reconnectionToken' must be provided for reconnection.`); }
+
+  // respond to re-connection!
+  const sessionId = await remoteRoomCall(room.roomId, 'checkReconnectionToken', [reconnectionToken]);
+  if (sessionId) {
+    return { room, sessionId };
+
+  } else {
+    logger.info(`❌ reconnection token invalid or expired. Did you missed .allowReconnection()?\n👉 https://docs.colyseus.io/colyseus/server/room/#allowreconnection-client-seconds`);
+    throw new ServerError(ErrorCode.MATCHMAKE_EXPIRED, `reconnection token invalid or expired.`);
+  }
+}
+
+/**
+ * Join a room by id and return seat reservation
+ */
 export async function joinById(roomId: string, clientOptions: ClientOptions = {}) {
   const room = await driver.findOne({ roomId });
 
-  if (room) {
-    const rejoinSessionId = clientOptions.sessionId;
+  if (!room) {
+    throw new ServerError(ErrorCode.MATCHMAKE_INVALID_ROOM_ID, `room "${roomId}" not found`);
 
-    if (rejoinSessionId) {
-      // handle re-connection!
-      const hasReservedSeat = await remoteRoomCall(room.roomId, 'hasReservedSeat', [rejoinSessionId]);
-
-      if (hasReservedSeat) {
-        return { room, sessionId: rejoinSessionId };
-
-      } else {
-        throw new ServerError(ErrorCode.MATCHMAKE_EXPIRED, `session expired: ${rejoinSessionId}`);
-
-      }
-
-    } else if (!room.locked) {
-      return reserveSeatFor(room, clientOptions);
-
-    } else {
-      throw new ServerError( ErrorCode.MATCHMAKE_INVALID_ROOM_ID, `room "${roomId}" is locked`);
-
-    }
-
-  } else {
-    throw new ServerError( ErrorCode.MATCHMAKE_INVALID_ROOM_ID, `room "${roomId}" not found`);
+  } else if (room.locked) {
+    throw new ServerError(ErrorCode.MATCHMAKE_INVALID_ROOM_ID, `room "${roomId}" is locked`);
   }
 
+  return reserveSeatFor(room, clientOptions);
 }
 
 /**
@@ -289,11 +299,18 @@ async function handleCreateRoom(roomName: string, clientOptions: ClientOptions):
   room.roomName = roomName;
   room.presence = presence;
 
+  const additionalListingData: any = registeredHandler.getFilterOptions(clientOptions);
+
+  // assign public host
+  if (publicAddress) {
+    additionalListingData.publicAddress = publicAddress;
+  }
+
   // create a RoomCache reference.
   room.listing = driver.createInstance({
     name: roomName,
     processId,
-    ...registeredHandler.getFilterOptions(clientOptions),
+    ...additionalListingData
   });
 
   if (room.onCreate) {

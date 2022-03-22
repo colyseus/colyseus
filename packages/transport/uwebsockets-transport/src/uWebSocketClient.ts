@@ -1,7 +1,7 @@
 import EventEmitter from 'events';
 import uWebSockets from 'uWebSockets.js';
 
-import {getMessageBytes, Protocol, Client, ClientState, ISendOptions, logger} from '@colyseus/core';
+import { getMessageBytes, Protocol, Client, ClientState, ISendOptions, logger, debugMessage } from '@colyseus/core';
 import { Schema } from '@colyseus/schema';
 
 export class uWebSocketWrapper extends EventEmitter {
@@ -20,9 +20,10 @@ export enum ReadyState {
 export class uWebSocketClient implements Client {
   public sessionId: string;
   public state: ClientState = ClientState.JOINING;
+  public readyState: number = ReadyState.OPEN;
   public _enqueuedMessages: any[] = [];
   public _afterNextPatchQueue;
-  public readyState: number = ReadyState.OPEN;
+  public _reconnectionToken: string;
 
   constructor(
     public id: string,
@@ -33,11 +34,22 @@ export class uWebSocketClient implements Client {
     ref.on('close', () => this.readyState = ReadyState.CLOSED);
   }
 
+  public sendBytes(type: any, bytes?: any | ISendOptions, options?: ISendOptions) {
+    debugMessage("send bytes(to %s): '%s' -> %j", this.sessionId, type, bytes);
+
+    this.enqueueRaw(
+      getMessageBytes.raw(Protocol.ROOM_DATA_BYTES, type, undefined, bytes),
+      options,
+    );
+  }
+
   public send(messageOrType: any, messageOrOptions?: any | ISendOptions, options?: ISendOptions) {
+    debugMessage("send(to %s): '%s' -> %O", this.sessionId, messageOrType, messageOrOptions);
+
     this.enqueueRaw(
       (messageOrType instanceof Schema)
         ? getMessageBytes[Protocol.ROOM_DATA_SCHEMA](messageOrType)
-        : getMessageBytes[Protocol.ROOM_DATA](messageOrType, messageOrOptions),
+        : getMessageBytes.raw(Protocol.ROOM_DATA, messageOrType, messageOrOptions),
       options,
     );
   }

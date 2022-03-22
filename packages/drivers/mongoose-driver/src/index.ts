@@ -8,6 +8,7 @@ const RoomCacheSchema: Schema = new Schema({
   metadata: Schema.Types.Mixed,
   name: String,
   private: { type: Boolean, default: false },
+  publicAddress: String,
   processId: String,
   roomId: String,
   unlisted: { type: Boolean, default: false }, // used for default LobbyRoom (prevent from showing up on room listing)

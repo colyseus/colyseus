@@ -12,6 +12,7 @@ export enum Protocol {
   ROOM_STATE = 14,
   ROOM_STATE_PATCH = 15,
   ROOM_DATA_SCHEMA = 16, // used to send schema instances via room.send()
+  ROOM_DATA_BYTES = 17,
 
   // WebSocket close codes (https://github.com/Luka967/websocket-close-codes)
   WS_CLOSE_NORMAL = 1000,
@@ -43,14 +44,18 @@ export enum IpcProtocol {
 }
 
 export const getMessageBytes = {
-  [Protocol.JOIN_ROOM]: (serializerId: string, handshake?: number[]) => {
+  [Protocol.JOIN_ROOM]: (reconnectionToken: string, serializerId: string, handshake?: number[]) => {
     let offset = 0;
 
+    const reconnectionTokenLength = utf8Length(reconnectionToken);
     const serializerIdLength = utf8Length(serializerId);
     const handshakeLength = (handshake) ? handshake.length : 0;
 
-    const buff = Buffer.allocUnsafe(1 + serializerIdLength + handshakeLength);
+    const buff = Buffer.allocUnsafe(1 + reconnectionTokenLength + serializerIdLength + handshakeLength);
     buff.writeUInt8(Protocol.JOIN_ROOM, offset++);
+
+    utf8Write(buff, offset, reconnectionToken);
+    offset += reconnectionTokenLength;
 
     utf8Write(buff, offset, serializerId);
     offset += serializerIdLength;
@@ -88,8 +93,8 @@ export const getMessageBytes = {
     return [Protocol.ROOM_DATA_SCHEMA, typeid, ...message.encodeAll()];
   },
 
-  [Protocol.ROOM_DATA]: (type: string | number, message?: any) => {
-    const initialBytes: number[] = [Protocol.ROOM_DATA];
+  raw: (code: Protocol, type: string | number, message?: any, rawMessage?: ArrayLike<number> | Buffer) => {
+    const initialBytes: number[] = [code];
     const messageType = typeof (type);
 
     if (messageType === 'string') {
@@ -110,12 +115,18 @@ export const getMessageBytes = {
       arr.set(new Uint8Array(initialBytes), 0);
       arr.set(new Uint8Array(encoded), initialBytes.length);
 
+    } else if (rawMessage !== undefined) {
+      arr = new Uint8Array(initialBytes.length + ((rawMessage as Buffer).byteLength || rawMessage.length));
+      arr.set(new Uint8Array(initialBytes), 0);
+      arr.set(new Uint8Array(rawMessage), initialBytes.length);
+
     } else {
       arr = new Uint8Array(initialBytes);
     }
 
     return arr;
   },
+
 };
 
 export function utf8Write(buff: Buffer, offset: number, str: string = '') {

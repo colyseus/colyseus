@@ -53,20 +53,20 @@ export class DummyRoom extends Room<State> {
     this.state.lastMessage = `${ client.sessionId } joined.`;
   }
 
-  // async onLeave (client, consented) {
-  //   console.log("IS CONSENTED?", consented);
+  async onLeave (client, consented) {
+    console.log("IS CONSENTED?", consented);
 
-  //   try {
-  //     if (consented) throw new Error("just close!");
+    try {
+      if (consented) throw new Error("just close!");
 
-  //     await this.allowReconnection(client, 10);
-  //     console.log("CLIENT RECONNECTED");
+      await this.allowReconnection(client, 25);
+      console.log("CLIENT RECONNECTED");
 
-  //   } catch (e) {
-  //     this.state.lastMessage = `${client.sessionId} left.`;
-  //     console.log("ChatRoom:", client.sessionId, "left!");
-  //   }
-  // }
+    } catch (e) {
+      this.state.lastMessage = `${client.sessionId} left.`;
+      console.log("ChatRoom:", client.sessionId, "left!");
+    }
+  }
 
   onDispose () {
     console.log("Disposing ChatRoom...");

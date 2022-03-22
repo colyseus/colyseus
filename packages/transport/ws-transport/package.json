@@ -1,13 +1,13 @@
 {
   "name": "@colyseus/ws-transport",
-  "version": "0.14.21",
+  "version": "0.15.0-preview.2",
   "input": "./src/index.ts",
   "main": "./build/index.js",
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
   "dependencies": {
-    "@colyseus/core": "^0.14.20",
-    "@colyseus/schema": "^1.0.15",
+    "@colyseus/core": "^0.15.0-preview.2",
+    "@colyseus/schema": "^2.0.0",
     "@types/ws": "^7.4.4",
     "ws": "^7.4.5"
   },

@@ -1,6 +1,6 @@
 import WebSocket from 'ws';
 
-import {Protocol, Client, ClientState, ISendOptions, getMessageBytes, logger} from '@colyseus/core';
+import { Protocol, Client, ClientState, ISendOptions, getMessageBytes, logger, debugMessage } from '@colyseus/core';
 import { Schema } from '@colyseus/schema';
 
 const SEND_OPTS = { binary: true };
@@ -10,6 +10,7 @@ export class WebSocketClient implements Client {
   public state: ClientState = ClientState.JOINING;
   public _enqueuedMessages: any[] = [];
   public _afterNextPatchQueue;
+  public _reconnectionToken: string;
 
   constructor(
     public id: string,
@@ -18,11 +19,22 @@ export class WebSocketClient implements Client {
     this.sessionId = id;
   }
 
+  public sendBytes(type: string | number, bytes: number[] | Uint8Array, options?: ISendOptions) {
+    debugMessage("send bytes(to %s): '%s' -> %j", this.sessionId, type, bytes);
+
+    this.enqueueRaw(
+      getMessageBytes.raw(Protocol.ROOM_DATA_BYTES, type, undefined, bytes),
+      options,
+    );
+  }
+
   public send(messageOrType: any, messageOrOptions?: any | ISendOptions, options?: ISendOptions) {
+    debugMessage("send(to %s): '%s' -> %j", this.sessionId, messageOrType, messageOrOptions);
+
     this.enqueueRaw(
       (messageOrType instanceof Schema)
         ? getMessageBytes[Protocol.ROOM_DATA_SCHEMA](messageOrType)
-        : getMessageBytes[Protocol.ROOM_DATA](messageOrType, messageOrOptions),
+        : getMessageBytes.raw(Protocol.ROOM_DATA, messageOrType, messageOrOptions),
       options,
     );
   }

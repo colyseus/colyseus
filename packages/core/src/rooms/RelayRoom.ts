@@ -17,14 +17,14 @@ defineTypes(Player, {
   connected: 'boolean',
   name: 'string',
   sessionId: 'string',
-}, context);
+}, { context });
 
 class State extends Schema { // tslint:disable-line
   public players = new MapSchema<Player>();
 }
 defineTypes(State, {
   players: { map: Player },
-}, context);
+}, { context });
 
 /**
  * client.joinOrCreate("relayroom", {

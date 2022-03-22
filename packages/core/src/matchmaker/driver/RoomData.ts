@@ -8,6 +8,7 @@ export class RoomCache implements RoomListingData {
   public maxClients: number = Infinity;
   public metadata: any;
   public name: string;
+  public publicAddress: string;
   public processId: string;
   public roomId: string;
   public createdAt: Date;
@@ -34,6 +35,7 @@ export class RoomCache implements RoomListingData {
       maxClients: this.maxClients,
       metadata: this.metadata,
       name: this.name,
+      publicAddress: this.publicAddress,
       processId: this.processId,
       roomId: this.roomId,
     };

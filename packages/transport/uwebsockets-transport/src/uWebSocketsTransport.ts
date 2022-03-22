@@ -2,7 +2,7 @@ import http from 'http';
 import querystring from 'querystring';
 import uWebSockets from 'uWebSockets.js';
 
-import { ErrorCode, matchMaker, Transport, debugAndPrintError, spliceOne } from '@colyseus/core';
+import { DummyServer, ErrorCode, matchMaker, Transport, debugAndPrintError, spliceOne } from '@colyseus/core';
 import { uWebSocketClient, uWebSocketWrapper } from './uWebSocketClient';
 
 export type TransportOptions = Omit<uWebSockets.WebSocketBehavior, "upgrade" | "open" | "pong" | "close" | "message">;
@@ -37,6 +37,12 @@ export class uWebSocketsTransport extends Transport {
 
         if (!options.maxPayloadLength) {
             options.maxPayloadLength = 1024 * 1024;
+        }
+
+        // https://github.com/colyseus/colyseus/issues/458
+        // Adding a mock object for Transport.server
+        if(!this.server) {
+          this.server = new DummyServer();
         }
 
         this.app.ws('/*', {
@@ -103,13 +109,15 @@ export class uWebSocketsTransport extends Transport {
         this.app.listen(port, (listeningSocket: any) => {
           this._listeningSocket = listeningSocket;
           listeningListener?.();
+          this.server.emit("listening"); // Mocking Transport.server behaviour, https://github.com/colyseus/colyseus/issues/458
         });
         return this;
     }
 
     public shutdown() {
         if (this._listeningSocket) {
-            uWebSockets.us_listen_socket_close(this._listeningSocket);
+          uWebSockets.us_listen_socket_close(this._listeningSocket);
+          this.server.emit("close"); // Mocking Transport.server behaviour, https://github.com/colyseus/colyseus/issues/458
         }
     }
 
@@ -128,8 +136,9 @@ export class uWebSocketsTransport extends Transport {
 
         const query = rawClient.query;
         const url = rawClient.url;
+        const searchParams = querystring.parse(query);
 
-        const sessionId = querystring.parse(query).sessionId as string;
+        const sessionId = searchParams.sessionId as string;
         const processAndRoomId = url.match(/\/[a-zA-Z0-9_\-]+\/([a-zA-Z0-9_\-]+)$/);
         const roomId = processAndRoomId && processAndRoomId[1];
 
@@ -141,7 +150,7 @@ export class uWebSocketsTransport extends Transport {
         //
 
         try {
-            if (!room || !room.hasReservedSeat(sessionId)) {
+            if (!room || !room.hasReservedSeat(sessionId, searchParams.reconnectionToken as string)) {
                 throw new Error('seat reservation expired.');
             }
 
@@ -156,21 +165,20 @@ export class uWebSocketsTransport extends Transport {
     }
 
     protected registerMatchMakeRequest() {
-        const headers = {
-            'Access-Control-Allow-Headers': 'Origin, X-Requested-With, Content-Type, Accept',
-            'Access-Control-Allow-Methods': 'OPTIONS, POST, GET',
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Max-Age': 2592000,
-            // ...
-        };
 
         // TODO: DRY with Server.ts
         const matchmakeRoute = 'matchmake';
         const allowedRoomNameChars = /([a-zA-Z_\-0-9]+)/gi;
 
-        const writeHeaders = (res: uWebSockets.HttpResponse) => {
+        const writeHeaders = (req: uWebSockets.HttpRequest, res: uWebSockets.HttpResponse) => {
             // skip if aborted
             if (res.aborted) { return; }
+
+            const headers = Object.assign(
+                {},
+                matchMaker.controller.DEFAULT_CORS_HEADERS,
+                matchMaker.controller.getCorsHeaders.call(undefined, req)
+            );
 
             for (const header in headers) {
                 res.writeHeader(header, headers[header].toString());
@@ -194,7 +202,7 @@ export class uWebSocketsTransport extends Transport {
         this.app.options("/matchmake/*", (res, req) => {
             res.onAborted(() => onAborted(res));
 
-            if (writeHeaders(res)) {
+            if (writeHeaders(req, res)) {
               res.writeStatus("204 No Content");
               res.end();
             }
@@ -203,7 +211,7 @@ export class uWebSocketsTransport extends Transport {
         this.app.post("/matchmake/*", (res, req) => {
             res.onAborted(() => onAborted(res));
 
-            writeHeaders(res);
+            writeHeaders(req, res);
             res.writeHeader('Content-Type', 'application/json');
 
             const url = req.getUrl();
@@ -213,10 +221,10 @@ export class uWebSocketsTransport extends Transport {
             // read json body
             this.readJson(res, async (clientOptions) => {
                 const method = matchedParams[matchmakeIndex + 1];
-                const name = matchedParams[matchmakeIndex + 2] || '';
+                const roomName = matchedParams[matchmakeIndex + 2] || '';
 
                 try {
-                    const response = await matchMaker.controller.invokeMethod(method, name, clientOptions);
+                    const response = await matchMaker.controller.invokeMethod(method, roomName, clientOptions);
                     if (!res.aborted) {
                       res.writeStatus("200 OK");
                       res.end(JSON.stringify(response));
@@ -241,7 +249,7 @@ export class uWebSocketsTransport extends Transport {
         this.app.get("/matchmake/*", async (res, req) => {
             res.onAborted(() => onAborted(res));
 
-            writeHeaders(res);
+            writeHeaders(req, res);
             res.writeHeader('Content-Type', 'application/json');
 
             const url = req.getUrl();
@@ -306,5 +314,4 @@ export class uWebSocketsTransport extends Transport {
             }
         });
     }
-
 }

@@ -274,7 +274,7 @@ describe("MatchMaker", () => {
           assert.strictEqual(1, rooms.length);
           assert.strictEqual(1, rooms[0].clients, "should keep seat reservation after disconnection");
 
-          await matchMaker.joinById(room.roomId, { sessionId: client1.sessionId });
+          await matchMaker.reconnect(room.roomId, { reconnectionToken: client1._reconnectionToken });
           await room._onJoin(client1 as any);
 
           rooms = await matchMaker.query({});
@@ -305,7 +305,9 @@ describe("MatchMaker", () => {
           await timeout(250);
           assert.strictEqual(1, room.clients.length);
 
-          await assert.rejects(async() => await matchMaker.joinById(room.roomId, { sessionId: client1.sessionId }), /expired/);
+          await assert.rejects(async () => await matchMaker.reconnect(room.roomId, {
+            reconnectionToken: client1._reconnectionToken
+          }), /expired/);
         });
 
         it("using token: should allow to reconnect", async () => {
@@ -324,7 +326,7 @@ describe("MatchMaker", () => {
           assert.strictEqual(1, rooms.length);
           assert.strictEqual(1, rooms[0].clients, "should keep seat reservation after disconnection");
 
-          await matchMaker.joinById(room.roomId, { sessionId: client1.sessionId });
+          await matchMaker.reconnect(room.roomId, { reconnectionToken: client1._reconnectionToken });
           await room._onJoin(client1 as any);
 
           rooms = await matchMaker.query({});
@@ -360,7 +362,7 @@ describe("MatchMaker", () => {
 
           assert.strictEqual(1, room.clients.length);
 
-          await assert.rejects(async() => await matchMaker.joinById(room.roomId, { sessionId: client1.sessionId }), /expired/);
+          await assert.rejects(async() => await matchMaker.reconnect(room.roomId, { reconnectionToken: client1._reconnectionToken }), /expired/);
         });
 
       });
@@ -482,6 +484,7 @@ describe("MatchMaker", () => {
           }
         });
       });
+
     });
 
   }

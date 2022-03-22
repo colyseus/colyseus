@@ -7,6 +7,7 @@ export interface IRoomListingData {
   maxClients: number;
   metadata: any;
   name: string;
+  publicAddress?: string;
   processId: string;
   roomId: string;
   unlisted: boolean;
