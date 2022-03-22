@@ -40,7 +40,7 @@ export interface SeatReservation {
 const handlers: {[id: string]: RegisteredHandler} = {};
 const rooms: {[roomId: string]: Room} = {};
 
-const DEV_MODE: boolean = Boolean(process.env.DEV_MODE);
+const devMode: boolean = Boolean(process.env.DEV_MODE);
 
 export let publicAddress: string;
 export let processId: string;
@@ -49,7 +49,12 @@ export let driver: MatchMakerDriver;
 
 let isGracefullyShuttingDown: boolean;
 
-export async function setup(_presence?: Presence, _driver?: MatchMakerDriver, _processId?: string) {
+export async function setup(
+  _presence?: Presence,
+  _driver?: MatchMakerDriver,
+  _processId?: string,
+  _publicAddress?: string
+) {
   presence = _presence || new LocalPresence();
   driver = _driver || new LocalDriver();
   processId = _processId;
@@ -66,7 +71,7 @@ export async function setup(_presence?: Presence, _driver?: MatchMakerDriver, _p
 
   presence.hset(getRoomCountKey(), processId, '0');
 
-  if(DEV_MODE) {
+  if(devMode) {
     await reloadFromCache(rooms);
   }
 }
@@ -221,7 +226,7 @@ export function defineRoomType<T extends Type<Room>>(
 
   handlers[name] = registeredHandler;
 
-  if(!DEV_MODE) {
+  if(!devMode) {
     cleanupStaleRooms(name);
   }
 
@@ -230,7 +235,7 @@ export function defineRoomType<T extends Type<Room>>(
 
 export function removeRoomType(name: string) {
   delete handlers[name];
-  if(!DEV_MODE) {
+  if(!devMode) {
     cleanupStaleRooms(name);
   }
 }
@@ -275,12 +280,11 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
     }
   }
 
-  if(DEV_MODE) {
+  if(devMode) {
     presence.hset(getRoomHistoryListKey(), room.roomId, JSON.stringify({
       "clientOptions": clientOptions,
       "roomName": roomName
     }));
-    room.devMode = true;
   }
   return room;
 }
@@ -379,7 +383,7 @@ export async function gracefullyShutdown(): Promise<any> {
 
   debugMatchMaking(`${processId} is shutting down!`);
 
-  if(!DEV_MODE) {
+  if(!devMode) {
     // remove processId from room count key
     presence.hdel(getRoomCountKey(), processId);
 
@@ -417,7 +421,7 @@ export async function reserveSeatFor(room: RoomListingData, options: any) {
     throw new SeatReservationError(`${room.roomId} is already full.`);
   }
 
-  return { room, sessionId };
+  return { room, sessionId, devMode };
 }
 
 async function cleanupStaleRooms(roomName: string) {
@@ -534,7 +538,7 @@ async function disposeRoom(roomName: string, room: Room) {
   presence.unsubscribe(getRoomChannel(room.roomId));
 
   // dispose dev mode cached data
-  if(DEV_MODE) {
+  if(devMode) {
     presence.hdel(getRoomHistoryListKey(), room.roomId);
   }
 
