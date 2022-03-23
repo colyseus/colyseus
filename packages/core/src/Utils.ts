@@ -1,11 +1,24 @@
 import nanoid from 'nanoid';
 
-import { debugAndPrintError } from './Debug';
-import { createRoom, presence } from "./MatchMaker";
-import { Room } from "./Room";
+import {debugAndPrintError, debugMatchMaking} from './Debug';
+import {
+  createRoom, createRoomReferences,
+  disposeRoom,
+  driver, handlers,
+  lockRoom, onClientJoinRoom, onClientLeaveRoom,
+  presence,
+  processId,
+  publicAddress,
+  remoteRoomCall, unlockRoom
+} from "./MatchMaker";
+import {Room, RoomInternalState} from "./Room";
 import { EventEmitter } from "events";
 import { ServerOpts, Socket } from "net";
 import { logger } from './Logger';
+import {subscribeIPC} from "./IPC";
+import {ServerError} from "./errors/ServerError";
+import {ErrorCode} from "./Protocol";
+import {RegisteredHandler} from "./matchmaker/RegisteredHandler";
 
 // remote room call timeouts
 export const REMOTE_ROOM_SHORT_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_SHORT_TIMEOUT || 2000);
@@ -260,30 +273,85 @@ export declare interface DummyServer {
   close(callback?: (err?: Error) => void): this;
 }
 
-export class DummyServer extends EventEmitter {}
+export class DummyServer extends EventEmitter {};
 
 export async function reloadFromCache(rooms: {[roomId: string]: Room}) {
   const roomHistoryList = await presence.hgetall(getRoomHistoryListKey());
   if(roomHistoryList) {
     for(const [key, value] of Object.entries(roomHistoryList)) {
       const roomHistory = JSON.parse(value);
-      const tempRoomListingData = await createRoom(roomHistory.roomName, roomHistory.clientOptions);
-      const tempRoom = rooms[tempRoomListingData.roomId];
-      const tempRoomCache = JSON.parse(await presence.hget(getRoomCacheKey(), key));
 
-      // Delete temporary room references from cache
-      delete rooms[tempRoomListingData.roomId];
-      await presence.hdel(getRoomCacheKey(), key);
-      await presence.hdel(getRoomCacheKey(), tempRoomListingData.roomId);
-      await presence.hdel(getRoomHistoryListKey(), tempRoomListingData.roomId);
+      // Create the room from cached history
+      const registeredHandler = handlers[roomHistory.roomName];
 
-      // Restore previous roomId and state
-      tempRoom.roomId = key;
-      tempRoom.state = roomHistory.state;
-      tempRoomCache.processId = tempRoomListingData.processId;
-      tempRoomCache.roomId = key;
-      await presence.hset(getRoomCacheKey(), key, JSON.stringify(tempRoomCache));
-      rooms[key] = tempRoom;
+      if (!registeredHandler) {
+        throw new ServerError( ErrorCode.MATCHMAKE_NO_HANDLER, `provided room name "${roomHistory.roomName}" not defined`);
+      }
+
+      const recreatedRoom = new registeredHandler.klass();
+
+      // set room public attributes
+      recreatedRoom.roomId = key;
+      recreatedRoom.roomName = roomHistory.roomName;
+      recreatedRoom.presence = presence;
+
+      const additionalListingData: any = registeredHandler.getFilterOptions(roomHistory.clientOptions);
+
+      // assign public host
+      if (publicAddress) {
+        additionalListingData.publicAddress = publicAddress;
+      }
+
+      // create a RoomCache reference.
+      recreatedRoom.listing = driver.createInstance({
+        name: roomHistory.roomName,
+        processId,
+        ...additionalListingData
+      });
+
+      if (recreatedRoom.onCreate) {
+        try {
+          await recreatedRoom.onCreate(merge({}, roomHistory.clientOptions, registeredHandler.options));
+
+          // increment amount of rooms this process is handling
+          presence.hincrby(getRoomCountKey(), processId, 1);
+        } catch (e) {
+          debugAndPrintError(e);
+          throw new ServerError(
+            e.code || ErrorCode.MATCHMAKE_UNHANDLED,
+            e.message,
+          );
+        }
+      }
+
+      recreatedRoom.internalState = RoomInternalState.CREATED;
+
+      recreatedRoom.listing.roomId = recreatedRoom.roomId;
+      recreatedRoom.listing.maxClients = recreatedRoom.maxClients;
+
+      // imediatelly ask client to join the room
+      debugMatchMaking('spawning \'%s\', roomId: %s, processId: %s', roomHistory.roomName, recreatedRoom.roomId, processId);
+
+      recreatedRoom._events.on('lock', lockRoom.bind(this, recreatedRoom));
+      recreatedRoom._events.on('unlock', unlockRoom.bind(this, recreatedRoom));
+      recreatedRoom._events.on('join', onClientJoinRoom.bind(this, recreatedRoom));
+      recreatedRoom._events.on('leave', onClientLeaveRoom.bind(this, recreatedRoom));
+      recreatedRoom._events.once('dispose', disposeRoom.bind(this, roomHistory.roomName, recreatedRoom));
+      recreatedRoom._events.once('disconnect', () => recreatedRoom._events.removeAllListeners());
+
+      // room always start unlocked
+      await createRoomReferences(recreatedRoom, true);
+      await recreatedRoom.listing.save();
+
+      registeredHandler.emit('create', roomHistory);
+
+      // Restore cached room state
+      recreatedRoom.state = roomHistory.state;
+
+      // Reserve seats for clients from cached history
+      for(const session of roomHistory.clients) {
+        await remoteRoomCall(key, '_reserveSeat', [session.sessionId, {}]);
+      }
     }
   }
 }
@@ -294,7 +362,7 @@ export async function cacheRoomHistory(rooms: {[roomId: string]: Room}) {
     if(roomHistoryResult) {
       const roomHistory = JSON.parse(roomHistoryResult);
       roomHistory["state"] = room.state;
-      roomHistory["clients"] = room.clients;
+      roomHistory["clients"] = room.clients.array;
       // Rewrite updated room history
       await presence.hdel(getRoomHistoryListKey(), room.roomId);
       await presence.hset(getRoomHistoryListKey(), room.roomId, JSON.stringify(roomHistory));

@@ -37,7 +37,7 @@ export interface SeatReservation {
   room: RoomListingData;
 }
 
-const handlers: {[id: string]: RegisteredHandler} = {};
+export const handlers: {[id: string]: RegisteredHandler} = {};
 const rooms: {[roomId: string]: Room} = {};
 
 const devMode: boolean = Boolean(process.env.DEV_MODE);
@@ -446,7 +446,7 @@ async function cleanupStaleRooms(roomName: string) {
   }));
 }
 
-async function createRoomReferences(room: Room, init: boolean = false): Promise<boolean> {
+export async function createRoomReferences(room: Room, init: boolean = false): Promise<boolean> {
   rooms[room.roomId] = room;
 
   if (init) {
@@ -495,27 +495,27 @@ async function awaitRoomAvailable(roomToJoin: string, callback: Function): Promi
   });
 }
 
-function onClientJoinRoom(room: Room, client: Client) {
+export function onClientJoinRoom(room: Room, client: Client) {
   handlers[room.roomName].emit('join', room, client);
 }
 
-function onClientLeaveRoom(room: Room, client: Client, willDispose: boolean) {
+export function onClientLeaveRoom(room: Room, client: Client, willDispose: boolean) {
   handlers[room.roomName].emit('leave', room, client, willDispose);
 }
 
-function lockRoom(room: Room): void {
+export function lockRoom(room: Room): void {
   // emit public event on registered handler
   handlers[room.roomName].emit('lock', room);
 }
 
-async function unlockRoom(room: Room) {
+export async function unlockRoom(room: Room) {
   if (await createRoomReferences(room)) {
     // emit public event on registered handler
     handlers[room.roomName].emit('unlock', room);
   }
 }
 
-async function disposeRoom(roomName: string, room: Room) {
+export async function disposeRoom(roomName: string, room: Room) {
   debugMatchMaking('disposing \'%s\' (%s) on processId \'%s\'', roomName, room.roomId, processId);
 
   // decrease amount of rooms this process is handling

@@ -123,9 +123,9 @@ export abstract class Room<State= any, Metadata= any> {
 
   public get roomId() { return this.#_roomId; }
   public set roomId(roomId: string) {
-    if (this.internalState !== RoomInternalState.CREATING) {
+    if (this.internalState !== RoomInternalState.CREATING && !Boolean(process.env.DEV_MODE)) {
       // prevent user from setting roomId after room has been created.
-      throw new ServerError(ErrorCode.APPLICATION_ERROR, "'roomId' can only be overriden upon room creation.");
+      throw new ServerError(ErrorCode.APPLICATION_ERROR, "'roomId' can only be overridden upon room creation.");
     }
     this.#_roomId = roomId;
   }
