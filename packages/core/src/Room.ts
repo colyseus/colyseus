@@ -14,7 +14,7 @@ import { SchemaSerializer } from './serializer/SchemaSerializer';
 import { Serializer } from './serializer/Serializer';
 
 import { ErrorCode, getMessageBytes, Protocol } from './Protocol';
-import { Deferred, HybridArray, generateId } from './Utils';
+import {Deferred, HybridArray, generateId, DEV_MODE} from './Utils';
 
 import { debugAndPrintError, debugMessage } from './Debug';
 import { ServerError } from './errors/ServerError';
@@ -123,7 +123,7 @@ export abstract class Room<State= any, Metadata= any> {
 
   public get roomId() { return this.#_roomId; }
   public set roomId(roomId: string) {
-    if (this.internalState !== RoomInternalState.CREATING && !Boolean(process.env.DEV_MODE)) {
+    if (this.internalState !== RoomInternalState.CREATING && !DEV_MODE) {
       // prevent user from setting roomId after room has been created.
       throw new ServerError(ErrorCode.APPLICATION_ERROR, "'roomId' can only be overridden upon room creation.");
     }

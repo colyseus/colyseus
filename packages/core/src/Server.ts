@@ -7,10 +7,10 @@ import { Presence } from './presence/Presence';
 
 import { Room } from './Room';
 import { Type } from './types';
-import { registerGracefulShutdown } from './Utils';
+import { DEV_MODE, getPreviousProcessId, registerGracefulShutdown } from './Utils';
 
-import {generateId} from '.';
-import { registerNode, unregisterNode } from './discovery';
+import { generateId } from '.';
+import { getHostname, registerNode, unregisterNode} from './discovery';
 
 import { LocalPresence } from './presence/LocalPresence';
 import { LocalDriver } from './matchmaker/driver';
@@ -64,7 +64,6 @@ export class Server {
     delete options.presence;
     this.attach(options);
 
-    // setup matchmaker
     matchMaker.setup(
       this.presence,
       this.driver,
@@ -144,8 +143,15 @@ export class Server {
   }
 
   public async registerProcessForDiscovery() {
+    if(DEV_MODE) {
+      const previousProcessId = await getPreviousProcessId(await getHostname());
+      if(previousProcessId) {
+        this.processId = previousProcessId;
+      }
+    }
+
     // register node for proxy/service discovery
-    registerNode(this.presence, {
+    await registerNode(this.presence, {
       port: this.port,
       processId: this.processId,
     });

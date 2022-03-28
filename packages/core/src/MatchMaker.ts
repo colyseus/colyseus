@@ -2,8 +2,8 @@ import { ErrorCode } from './Protocol';
 
 import { requestFromIPC, subscribeIPC } from './IPC';
 import {
-  cacheRoomHistory,
-  generateId, getRoomCountKey,
+  cacheRoomHistory, DEV_MODE,
+  generateId, getPreviousProcessId, getRoomCountKey,
   getRoomHistoryListKey,
   merge,
   reloadFromCache,
@@ -27,6 +27,7 @@ import * as controller from './matchmaker/controller';
 import { logger } from './Logger';
 import { Client } from './Transport';
 import { Type } from './types';
+import {getHostname} from "./discovery";
 
 export { MatchMakerDriver, controller };
 
@@ -39,8 +40,6 @@ export interface SeatReservation {
 
 export const handlers: {[id: string]: RegisteredHandler} = {};
 const rooms: {[roomId: string]: Room} = {};
-
-const devMode: boolean = Boolean(process.env.DEV_MODE);
 
 export let publicAddress: string;
 export let processId: string;
@@ -62,6 +61,13 @@ export async function setup(
 
   isGracefullyShuttingDown = false;
 
+  if(DEV_MODE) {
+    const previousProcessId = await getPreviousProcessId(await getHostname());
+    if(previousProcessId) {
+      this.processId = previousProcessId;
+    }
+  }
+
   /**
    * Subscribe to remote `handleCreateRoom` calls.
    */
@@ -71,8 +77,8 @@ export async function setup(
 
   presence.hset(getRoomCountKey(), processId, '0');
 
-  if(devMode) {
-    await reloadFromCache(rooms);
+  if(DEV_MODE) {
+    reloadFromCache();
   }
 }
 
@@ -226,7 +232,7 @@ export function defineRoomType<T extends Type<Room>>(
 
   handlers[name] = registeredHandler;
 
-  if(!devMode) {
+  if(!DEV_MODE) {
     cleanupStaleRooms(name);
   }
 
@@ -235,7 +241,7 @@ export function defineRoomType<T extends Type<Room>>(
 
 export function removeRoomType(name: string) {
   delete handlers[name];
-  if(!devMode) {
+  if(!DEV_MODE) {
     cleanupStaleRooms(name);
   }
 }
@@ -280,10 +286,11 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
     }
   }
 
-  if(devMode) {
+  if(DEV_MODE) {
     presence.hset(getRoomHistoryListKey(), room.roomId, JSON.stringify({
       "clientOptions": clientOptions,
-      "roomName": roomName
+      "roomName": roomName,
+      "processId": processId
     }));
   }
   return room;
@@ -383,7 +390,7 @@ export async function gracefullyShutdown(): Promise<any> {
 
   debugMatchMaking(`${processId} is shutting down!`);
 
-  if(!devMode) {
+  if(!DEV_MODE) {
     // remove processId from room count key
     presence.hdel(getRoomCountKey(), processId);
 
@@ -421,7 +428,7 @@ export async function reserveSeatFor(room: RoomListingData, options: any) {
     throw new SeatReservationError(`${room.roomId} is already full.`);
   }
 
-  return { room, sessionId, devMode };
+  return { room, sessionId, devMode: DEV_MODE };
 }
 
 async function cleanupStaleRooms(roomName: string) {
@@ -538,8 +545,8 @@ export async function disposeRoom(roomName: string, room: Room) {
   presence.unsubscribe(getRoomChannel(room.roomId));
 
   // dispose dev mode cached data
-  if(devMode) {
-    presence.hdel(getRoomHistoryListKey(), room.roomId);
+  if(DEV_MODE) {
+    await presence.hdel(getRoomHistoryListKey(), room.roomId);
   }
 
   // remove actual room reference
@@ -561,4 +568,3 @@ function getHandlerConcurrencyKey(name: string) {
 function getProcessChannel(id: string = processId) {
   return `p:${id}`;
 }
-

@@ -9,8 +9,12 @@ export interface Node {
   processId: string;
 }
 
+export async function getHostname() {
+  return process.env.SELF_HOSTNAME || await ip.v4();
+}
+
 async function getNodeAddress(node: Node) {
-  const host = process.env.SELF_HOSTNAME || await ip.v4();
+  const host = await getHostname();
   const port = process.env.SELF_PORT || node.port;
   return `${node.processId}/${host}:${port}`;
 }

@@ -2,7 +2,7 @@ import nanoid from 'nanoid';
 
 import {debugAndPrintError, debugMatchMaking} from './Debug';
 import {
-  createRoom, createRoomReferences,
+  createRoomReferences,
   disposeRoom,
   driver, handlers,
   lockRoom, onClientJoinRoom, onClientLeaveRoom,
@@ -15,12 +15,11 @@ import {Room, RoomInternalState} from "./Room";
 import { EventEmitter } from "events";
 import { ServerOpts, Socket } from "net";
 import { logger } from './Logger';
-import {subscribeIPC} from "./IPC";
 import {ServerError} from "./errors/ServerError";
 import {ErrorCode} from "./Protocol";
-import {RegisteredHandler} from "./matchmaker/RegisteredHandler";
 
 // remote room call timeouts
+export const DEV_MODE: boolean = Boolean(process.env.DEV_MODE);
 export const REMOTE_ROOM_SHORT_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_SHORT_TIMEOUT || 2000);
 
 export function generateId(length: number = 9) {
@@ -273,9 +272,9 @@ export declare interface DummyServer {
   close(callback?: (err?: Error) => void): this;
 }
 
-export class DummyServer extends EventEmitter {};
+export class DummyServer extends EventEmitter {}
 
-export async function reloadFromCache(rooms: {[roomId: string]: Room}) {
+export async function reloadFromCache() {
   const roomHistoryList = await presence.hgetall(getRoomHistoryListKey());
   if(roomHistoryList) {
     for(const [key, value] of Object.entries(roomHistoryList)) {
@@ -350,7 +349,7 @@ export async function reloadFromCache(rooms: {[roomId: string]: Room}) {
 
       // Reserve seats for clients from cached history
       for(const session of roomHistory.clients) {
-        await remoteRoomCall(key, '_reserveSeat', [session.sessionId, {}]);
+        await remoteRoomCall(key, '_reserveSeat', [session.sessionId, {}, 360]);
       }
     }
   }
@@ -370,6 +369,10 @@ export async function cacheRoomHistory(rooms: {[roomId: string]: Room}) {
   }
 }
 
+export async function getPreviousProcessId(hostname) {
+  return await presence.hget(getProcessHistoryKey(), hostname);
+}
+
 export function getRoomCountKey() {
   return 'roomcount';
 }
@@ -380,4 +383,8 @@ export function getRoomCacheKey() {
 
 export function getRoomHistoryListKey() {
   return 'roomhistory';
+}
+
+export function getProcessHistoryKey() {
+  return 'processhistory';
 }
