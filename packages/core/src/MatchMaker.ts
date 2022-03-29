@@ -296,7 +296,7 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
   return room;
 }
 
-async function handleCreateRoom(roomName: string, clientOptions: ClientOptions): Promise<RoomListingData> {
+export async function handleCreateRoom(roomName: string, clientOptions: ClientOptions): Promise<RoomListingData> {
   const registeredHandler = handlers[roomName];
 
   if (!registeredHandler) {
@@ -306,7 +306,12 @@ async function handleCreateRoom(roomName: string, clientOptions: ClientOptions):
   const room = new registeredHandler.klass();
 
   // set room public attributes
-  room.roomId = generateId();
+  if(DEV_MODE && clientOptions.hasOwnProperty("previousRoomId")) {
+    room.roomId = clientOptions.previousRoomId;
+    delete clientOptions["previousRoomId"];
+  } else {
+    room.roomId = generateId();
+  }
   room.roomName = roomName;
   room.presence = presence;
 
@@ -453,7 +458,7 @@ async function cleanupStaleRooms(roomName: string) {
   }));
 }
 
-export async function createRoomReferences(room: Room, init: boolean = false): Promise<boolean> {
+async function createRoomReferences(room: Room, init: boolean = false): Promise<boolean> {
   rooms[room.roomId] = room;
 
   if (init) {
@@ -502,27 +507,27 @@ async function awaitRoomAvailable(roomToJoin: string, callback: Function): Promi
   });
 }
 
-export function onClientJoinRoom(room: Room, client: Client) {
+function onClientJoinRoom(room: Room, client: Client) {
   handlers[room.roomName].emit('join', room, client);
 }
 
-export function onClientLeaveRoom(room: Room, client: Client, willDispose: boolean) {
+function onClientLeaveRoom(room: Room, client: Client, willDispose: boolean) {
   handlers[room.roomName].emit('leave', room, client, willDispose);
 }
 
-export function lockRoom(room: Room): void {
+function lockRoom(room: Room): void {
   // emit public event on registered handler
   handlers[room.roomName].emit('lock', room);
 }
 
-export async function unlockRoom(room: Room) {
+async function unlockRoom(room: Room) {
   if (await createRoomReferences(room)) {
     // emit public event on registered handler
     handlers[room.roomName].emit('unlock', room);
   }
 }
 
-export async function disposeRoom(roomName: string, room: Room) {
+async function disposeRoom(roomName: string, room: Room) {
   debugMatchMaking('disposing \'%s\' (%s) on processId \'%s\'', roomName, room.roomId, processId);
 
   // decrease amount of rooms this process is handling

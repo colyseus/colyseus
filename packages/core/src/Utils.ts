@@ -1,25 +1,15 @@
 import nanoid from 'nanoid';
 
-import {debugAndPrintError, debugMatchMaking} from './Debug';
-import {
-  createRoomReferences,
-  disposeRoom,
-  driver, handlers,
-  lockRoom, onClientJoinRoom, onClientLeaveRoom,
-  presence,
-  processId,
-  publicAddress,
-  remoteRoomCall, unlockRoom
-} from "./MatchMaker";
-import {Room, RoomInternalState} from "./Room";
+import { debugAndPrintError } from './Debug';
+import { getRoomById, handleCreateRoom, presence, remoteRoomCall } from "./MatchMaker";
+import { Room } from "./Room";
 import { EventEmitter } from "events";
 import { ServerOpts, Socket } from "net";
 import { logger } from './Logger';
-import {ServerError} from "./errors/ServerError";
-import {ErrorCode} from "./Protocol";
+
+export const DEV_MODE: boolean = Boolean(process.env.DEV_MODE);
 
 // remote room call timeouts
-export const DEV_MODE: boolean = Boolean(process.env.DEV_MODE);
 export const REMOTE_ROOM_SHORT_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_SHORT_TIMEOUT || 2000);
 
 export function generateId(length: number = 9) {
@@ -279,77 +269,18 @@ export async function reloadFromCache() {
   if(roomHistoryList) {
     for(const [key, value] of Object.entries(roomHistoryList)) {
       const roomHistory = JSON.parse(value);
+      roomHistory.clientOptions["previousRoomId"] = key;
+      const recreatedRoomListing = await handleCreateRoom(roomHistory.roomName, roomHistory.clientOptions);
 
-      // Create the room from cached history
-      const registeredHandler = handlers[roomHistory.roomName];
-
-      if (!registeredHandler) {
-        throw new ServerError( ErrorCode.MATCHMAKE_NO_HANDLER, `provided room name "${roomHistory.roomName}" not defined`);
+      // Set previous state
+      if(roomHistory.hasOwnProperty("state")) {
+        const recreatedRoom = getRoomById(recreatedRoomListing.roomId);
+        recreatedRoom.state = roomHistory.state;
       }
-
-      const recreatedRoom = new registeredHandler.klass();
-
-      // set room public attributes
-      recreatedRoom.roomId = key;
-      recreatedRoom.roomName = roomHistory.roomName;
-      recreatedRoom.presence = presence;
-
-      const additionalListingData: any = registeredHandler.getFilterOptions(roomHistory.clientOptions);
-
-      // assign public host
-      if (publicAddress) {
-        additionalListingData.publicAddress = publicAddress;
-      }
-
-      // create a RoomCache reference.
-      recreatedRoom.listing = driver.createInstance({
-        name: roomHistory.roomName,
-        processId,
-        ...additionalListingData
-      });
-
-      if (recreatedRoom.onCreate) {
-        try {
-          await recreatedRoom.onCreate(merge({}, roomHistory.clientOptions, registeredHandler.options));
-
-          // increment amount of rooms this process is handling
-          presence.hincrby(getRoomCountKey(), processId, 1);
-        } catch (e) {
-          debugAndPrintError(e);
-          throw new ServerError(
-            e.code || ErrorCode.MATCHMAKE_UNHANDLED,
-            e.message,
-          );
-        }
-      }
-
-      recreatedRoom.internalState = RoomInternalState.CREATED;
-
-      recreatedRoom.listing.roomId = recreatedRoom.roomId;
-      recreatedRoom.listing.maxClients = recreatedRoom.maxClients;
-
-      // imediatelly ask client to join the room
-      debugMatchMaking('spawning \'%s\', roomId: %s, processId: %s', roomHistory.roomName, recreatedRoom.roomId, processId);
-
-      recreatedRoom._events.on('lock', lockRoom.bind(this, recreatedRoom));
-      recreatedRoom._events.on('unlock', unlockRoom.bind(this, recreatedRoom));
-      recreatedRoom._events.on('join', onClientJoinRoom.bind(this, recreatedRoom));
-      recreatedRoom._events.on('leave', onClientLeaveRoom.bind(this, recreatedRoom));
-      recreatedRoom._events.once('dispose', disposeRoom.bind(this, roomHistory.roomName, recreatedRoom));
-      recreatedRoom._events.once('disconnect', () => recreatedRoom._events.removeAllListeners());
-
-      // room always start unlocked
-      await createRoomReferences(recreatedRoom, true);
-      await recreatedRoom.listing.save();
-
-      registeredHandler.emit('create', roomHistory);
-
-      // Restore cached room state
-      recreatedRoom.state = roomHistory.state;
 
       // Reserve seats for clients from cached history
       for(const session of roomHistory.clients) {
-        await remoteRoomCall(key, '_reserveSeat', [session.sessionId, {}, 360]);
+        await remoteRoomCall(recreatedRoomListing.roomId, '_reserveSeat', [session.sessionId, {}, 60]);
       }
     }
   }
