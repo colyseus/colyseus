@@ -38,7 +38,7 @@ export interface SeatReservation {
   room: RoomListingData;
 }
 
-export const handlers: {[id: string]: RegisteredHandler} = {};
+const handlers: {[id: string]: RegisteredHandler} = {};
 const rooms: {[roomId: string]: Room} = {};
 
 export let publicAddress: string;
@@ -296,7 +296,7 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
   return room;
 }
 
-export async function handleCreateRoom(roomName: string, clientOptions: ClientOptions): Promise<RoomListingData> {
+export async function handleCreateRoom(roomName: string, clientOptions: ClientOptions, reloading?:boolean): Promise<RoomListingData> {
   const registeredHandler = handlers[roomName];
 
   if (!registeredHandler) {
@@ -306,7 +306,7 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
   const room = new registeredHandler.klass();
 
   // set room public attributes
-  if(DEV_MODE && clientOptions.hasOwnProperty("previousRoomId")) {
+  if(reloading && DEV_MODE && clientOptions.hasOwnProperty("previousRoomId")) {
     room.roomId = clientOptions.previousRoomId;
     delete clientOptions["previousRoomId"];
   } else {

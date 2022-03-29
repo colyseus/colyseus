@@ -270,7 +270,7 @@ export async function reloadFromCache() {
     for(const [key, value] of Object.entries(roomHistoryList)) {
       const roomHistory = JSON.parse(value);
       roomHistory.clientOptions["previousRoomId"] = key;
-      const recreatedRoomListing = await handleCreateRoom(roomHistory.roomName, roomHistory.clientOptions);
+      const recreatedRoomListing = await handleCreateRoom(roomHistory.roomName, roomHistory.clientOptions, true);
 
       // Set previous state
       if(roomHistory.hasOwnProperty("state")) {
