@@ -8,6 +8,7 @@ import { ServerOpts, Socket } from "net";
 import { logger } from './Logger';
 
 export const DEV_MODE: boolean = Boolean(process.env.DEV_MODE);
+const DEV_MODE_SEAT_RESERVATION_TIMEOUT = process.env.DEV_MODE_SEAT_RES_TIMEOUT? process.env.DEV_MODE_SEAT_RES_TIMEOUT: 60;
 
 // remote room call timeouts
 export const REMOTE_ROOM_SHORT_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_SHORT_TIMEOUT || 2000);
@@ -275,12 +276,12 @@ export async function reloadFromCache() {
       // Set previous state
       if(roomHistory.hasOwnProperty("state")) {
         const recreatedRoom = getRoomById(recreatedRoomListing.roomId);
-        recreatedRoom.state = roomHistory.state;
+        recreatedRoom.setState(roomHistory.state) ;
       }
 
       // Reserve seats for clients from cached history
       for(const session of roomHistory.clients) {
-        await remoteRoomCall(recreatedRoomListing.roomId, '_reserveSeat', [session.sessionId, {}, 60]);
+        await remoteRoomCall(recreatedRoomListing.roomId, '_reserveSeat', [session.sessionId, {}, DEV_MODE_SEAT_RESERVATION_TIMEOUT]);
       }
     }
   }

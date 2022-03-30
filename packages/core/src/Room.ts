@@ -162,7 +162,7 @@ export abstract class Room<State= any, Metadata= any> {
     } else {
       return (
         this.reservedSeats[sessionId] !== undefined &&
-        !this._reconnectingSessionId.has(sessionId) // prevent possible "reconnect" requests without a reconnection token
+        (DEV_MODE || !this._reconnectingSessionId.has(sessionId)) // prevent possible "reconnect" requests without a reconnection token
       );
     }
   }
