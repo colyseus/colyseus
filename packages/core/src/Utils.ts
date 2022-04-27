@@ -276,14 +276,15 @@ export async function reloadFromCache() {
       // Set previous state
       if(roomHistory.hasOwnProperty("state")) {
         const recreatedRoom = getRoomById(recreatedRoomListing.roomId);
-        const tempState = recreatedRoom.state.clone();
-        tempState.decode(roomHistory.state)
-        recreatedRoom.state = tempState;
+        recreatedRoom.state.decode(roomHistory.state);
+        recreatedRoom.state = recreatedRoom.state.clone();
+
       }
 
       // Reserve seats for clients from cached history
       for(const session of roomHistory.clients) {
-        await remoteRoomCall(recreatedRoomListing.roomId, '_reserveSeat', [session.sessionId, {}, DEV_MODE_SEAT_RESERVATION_TIMEOUT]);
+        await remoteRoomCall(recreatedRoomListing.roomId, '_reserveSeat',
+          [session.sessionId, {}, DEV_MODE_SEAT_RESERVATION_TIMEOUT]);
       }
     }
   }
@@ -294,7 +295,7 @@ export async function cacheRoomHistory(rooms: {[roomId: string]: Room}) {
     const roomHistoryResult = await presence.hget(getRoomHistoryListKey(), room.roomId);
     if(roomHistoryResult) {
       const roomHistory = JSON.parse(roomHistoryResult);
-      roomHistory["state"] = room.state.clone().encodeAll();
+      roomHistory["state"] = room.state.encodeAll();
       roomHistory["clients"] = room.clients.array;
       // Rewrite updated room history
       await presence.hdel(getRoomHistoryListKey(), room.roomId);
