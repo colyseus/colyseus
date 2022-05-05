@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import nanoid from 'nanoid';
 
 import { debugAndPrintError } from './Debug';
@@ -6,9 +7,11 @@ import { Room } from "./Room";
 import { EventEmitter } from "events";
 import { ServerOpts, Socket } from "net";
 import { logger } from './Logger';
+import { LocalPresence } from "./presence/LocalPresence";
 
 export const DEV_MODE: boolean = Boolean(process.env.DEV_MODE);
 const DEV_MODE_SEAT_RESERVATION_TIMEOUT = process.env.DEV_MODE_SEAT_RES_TIMEOUT? process.env.DEV_MODE_SEAT_RES_TIMEOUT: 60;
+const LOCAL_PRESENCE_CACHE_FILE = './.tmp.json';
 
 // remote room call timeouts
 export const REMOTE_ROOM_SHORT_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_SHORT_TIMEOUT || 2000);
@@ -266,10 +269,20 @@ export declare interface DummyServer {
 export class DummyServer extends EventEmitter {}
 
 export async function reloadFromCache() {
-  const roomHistoryList = await presence.hgetall(getRoomHistoryListKey());
+  let roomHistoryList = {};
+  if (presence instanceof LocalPresence) {
+    try {
+      const cacheData = fs.readFileSync(LOCAL_PRESENCE_CACHE_FILE, { encoding: 'utf-8' });
+      roomHistoryList = JSON.parse(cacheData) as { [key: string]: any; };
+    } catch (err) {
+      console.error(err)
+    }
+  } else {
+    roomHistoryList = await presence.hgetall(getRoomHistoryListKey());
+  }
   if(roomHistoryList) {
     for(const [key, value] of Object.entries(roomHistoryList)) {
-      const roomHistory = JSON.parse(value);
+      const roomHistory = JSON.parse(value.toString());
       roomHistory.clientOptions["previousRoomId"] = key;
       const recreatedRoomListing = await handleCreateRoom(roomHistory.roomName, roomHistory.clientOptions, true);
 
@@ -300,6 +313,13 @@ export async function cacheRoomHistory(rooms: {[roomId: string]: Room}) {
       // Rewrite updated room history
       await presence.hdel(getRoomHistoryListKey(), room.roomId);
       await presence.hset(getRoomHistoryListKey(), room.roomId, JSON.stringify(roomHistory));
+    }
+  }
+  if (presence instanceof LocalPresence) {
+    try {
+      fs.writeFileSync(LOCAL_PRESENCE_CACHE_FILE, JSON.stringify(await presence.hgetall(getRoomHistoryListKey())), 'utf-8');
+    } catch (err) {
+      console.error(err)
     }
   }
 }
