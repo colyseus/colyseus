@@ -3,7 +3,7 @@ import { ErrorCode, Protocol } from './Protocol';
 import { requestFromIPC, subscribeIPC } from './IPC';
 
 import { Deferred, generateId, merge, REMOTE_ROOM_SHORT_TIMEOUT, retry } from './utils/Utils';
-import { isDevMode, setDevMode, cacheRoomHistory, getPreviousProcessId, getRoomCountKey, getRoomRestoreListKey, reloadFromCache } from './utils/DevMode';
+import { isDevMode, cacheRoomHistory, getPreviousProcessId, getRoomCountKey, getRoomRestoreListKey, reloadFromCache } from './utils/DevMode';
 
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
 import { Room, RoomInternalState } from './Room';
@@ -47,17 +47,13 @@ export async function setup(
   _presence?: Presence,
   _driver?: MatchMakerDriver,
   _publicAddress?: string,
-  _devMode?: boolean,
 ) {
   presence = _presence || new LocalPresence();
   driver = _driver || new LocalDriver();
   publicAddress = _publicAddress;
 
   // devMode: try to retrieve previous processId
-  if (_devMode) {
-    setDevMode(_devMode);
-    processId = await getPreviousProcessId(await getHostname());
-  }
+  if (isDevMode) { processId = await getPreviousProcessId(await getHostname()); }
 
   // ensure processId is set
   if (!processId) { processId = generateId(); }

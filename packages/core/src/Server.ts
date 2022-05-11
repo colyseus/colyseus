@@ -16,6 +16,7 @@ import { LocalDriver } from './matchmaker/driver';
 
 import { Transport } from './Transport';
 import { logger, setLogger } from './Logger';
+import { setDevMode, isDevMode } from './utils/DevMode';
 
 // IServerOptions &
 export type ServerOptions = {
@@ -62,6 +63,8 @@ export class Server {
   constructor(options: ServerOptions = {}) {
     const { gracefullyShutdown = true } = options;
 
+    setDevMode(options.devMode);
+
     this.presence = options.presence || new LocalPresence();
     this.driver = options.driver || new LocalDriver();
 
@@ -71,7 +74,6 @@ export class Server {
       this.presence,
       this.driver,
       options.publicAddress,
-      options.devMode,
     );
 
     if (gracefullyShutdown) {
@@ -196,7 +198,7 @@ export class Server {
 
     } finally {
       if (exit) {
-        process.exit(err ? 1 : 0);
+        process.exit((err && !isDevMode) ? 1 : 0);
       }
     }
   }

@@ -1,8 +1,15 @@
+import fs from "fs";
+import path from "path";
+
 import { EventEmitter } from 'events';
 import { spliceOne } from '../utils/Utils';
 import { Presence } from './Presence';
 
+import { isDevMode } from '../utils/DevMode';
+
 type Callback = (...args: any[]) => void;
+
+const DEVMODE_CACHE_FILE_PATH = path.resolve(".devmode.json");
 
 export class LocalPresence implements Presence {
     public channels = new EventEmitter();
@@ -14,6 +21,22 @@ export class LocalPresence implements Presence {
 
     protected subscriptions: {[id: string]: Callback[]} = {};
     private timeouts: {[name: string]: NodeJS.Timer} = {};
+
+    constructor() {
+      //
+      // reload from local cache on devMode
+      //
+      if (
+        isDevMode &&
+        fs.existsSync(DEVMODE_CACHE_FILE_PATH)
+      ) {
+        const cache = fs.readFileSync(DEVMODE_CACHE_FILE_PATH).toString('utf-8') || "{}";
+        const parsed = JSON.parse(cache);
+        this.data = parsed.data;
+        this.hash = parsed.hash;
+        this.keys = parsed.keys;
+      }
+    }
 
     public subscribe(topic: string, callback: (...args: any[]) => void) {
         if (!this.subscriptions[topic]) { this.subscriptions[topic] = []; }
@@ -174,7 +197,14 @@ export class LocalPresence implements Presence {
     }
 
     public shutdown() {
-      // noop
+      if (isDevMode) {
+        const cache = JSON.stringify({
+          data: this.data,
+          hash: this.hash,
+          keys: this.keys
+        });
+        fs.writeFileSync(DEVMODE_CACHE_FILE_PATH, cache, { encoding: "utf-8" });
+      }
     }
 
 }
