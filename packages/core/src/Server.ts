@@ -7,10 +7,9 @@ import { Presence } from './presence/Presence';
 
 import { Room } from './Room';
 import { Type } from './types';
-import { DEV_MODE, getPreviousProcessId, registerGracefulShutdown } from './Utils';
+import { registerGracefulShutdown } from './utils/Utils';
 
-import { generateId } from '.';
-import { getHostname, registerNode, unregisterNode} from './discovery';
+import { registerNode, unregisterNode} from './discovery';
 
 import { LocalPresence } from './presence/LocalPresence';
 import { LocalDriver } from './matchmaker/driver';
@@ -21,12 +20,19 @@ import { logger, setLogger } from './Logger';
 // IServerOptions &
 export type ServerOptions = {
   publicAddress?: string,
-
   presence?: Presence,
   driver?: matchMaker.MatchMakerDriver,
   transport?: Transport,
   gracefullyShutdown?: boolean,
   logger?: any;
+
+  /**
+   * If enabled, rooms are going to be restored in the server-side upon restart,
+   * clients are going to automatically re-connect when server reboots.
+   *
+   * (This operation is costly and should never be used in a production environment)
+   */
+  devMode?: boolean,
 
   /**
    * Options below are now part of WebSocketTransport (@colyseus/ws-transport)
@@ -50,7 +56,6 @@ export class Server {
 
   protected presence: Presence;
   protected driver: matchMaker.MatchMakerDriver;
-  protected processId: string = generateId();
 
   protected port: number;
 
@@ -60,22 +65,20 @@ export class Server {
     this.presence = options.presence || new LocalPresence();
     this.driver = options.driver || new LocalDriver();
 
-    // "presence" option is not used from now on
-    delete options.presence;
     this.attach(options);
 
     matchMaker.setup(
       this.presence,
       this.driver,
-      this.processId,
       options.publicAddress,
+      options.devMode,
     );
 
     if (gracefullyShutdown) {
       registerGracefulShutdown((err) => this.gracefullyShutdown(true, err));
     }
 
-    if(options.logger) {
+    if (options.logger) {
       setLogger(options.logger);
     }
   }
@@ -125,6 +128,12 @@ export class Server {
   public async listen(port: number, hostname?: string, backlog?: number, listeningListener?: Function) {
     this.port = port;
 
+    //
+    // Make sure matchmaker is ready before accepting connections
+    // (isDevMode: matchmaker may take extra milliseconds to restore the rooms)
+    //
+    await matchMaker.onReady;
+
     return new Promise<void>((resolve, reject) => {
       this.transport.server?.on('error', (err) => reject(err));
       this.transport.listen(port, hostname, backlog, (err) => {
@@ -143,17 +152,10 @@ export class Server {
   }
 
   public async registerProcessForDiscovery() {
-    if(DEV_MODE) {
-      const previousProcessId = await getPreviousProcessId(await getHostname());
-      if(previousProcessId) {
-        this.processId = previousProcessId;
-      }
-    }
-
     // register node for proxy/service discovery
     await registerNode(this.presence, {
       port: this.port,
-      processId: this.processId,
+      processId: matchMaker.processId,
     });
   }
 
@@ -173,18 +175,20 @@ export class Server {
   }
 
   public async gracefullyShutdown(exit: boolean = true, err?: Error) {
+    if (matchMaker.isGracefullyShuttingDown) {
+      return;
+    }
+
     await unregisterNode(this.presence, {
       port: this.port,
-      processId: this.processId,
+      processId: matchMaker.processId,
     });
 
     try {
       await matchMaker.gracefullyShutdown();
-
       this.transport.shutdown();
       this.presence.shutdown();
       this.driver.shutdown();
-
       await this.onShutdownCallback();
 
     } catch (e) {
@@ -295,5 +299,6 @@ export class Server {
     }
 
   }
+
 
 }

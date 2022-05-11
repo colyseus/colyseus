@@ -1,7 +1,7 @@
 import { debugAndPrintError } from './Debug';
 import { Presence } from './presence/Presence';
 import { IpcProtocol } from './Protocol';
-import { generateId, REMOTE_ROOM_SHORT_TIMEOUT } from './Utils';
+import { generateId, REMOTE_ROOM_SHORT_TIMEOUT } from './utils/Utils';
 
 export async function requestFromIPC<T>(
   presence: Presence,

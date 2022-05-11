@@ -14,7 +14,8 @@ import { SchemaSerializer } from './serializer/SchemaSerializer';
 import { Serializer } from './serializer/Serializer';
 
 import { ErrorCode, getMessageBytes, Protocol } from './Protocol';
-import {Deferred, HybridArray, generateId, DEV_MODE} from './Utils';
+import { Deferred, HybridArray, generateId } from './utils/Utils';
+import { isDevMode } from './utils/DevMode';
 
 import { debugAndPrintError, debugMessage } from './Debug';
 import { ServerError } from './errors/ServerError';
@@ -123,7 +124,7 @@ export abstract class Room<State= any, Metadata= any> {
 
   public get roomId() { return this.#_roomId; }
   public set roomId(roomId: string) {
-    if (this.internalState !== RoomInternalState.CREATING && !DEV_MODE) {
+    if (this.internalState !== RoomInternalState.CREATING && !isDevMode) {
       // prevent user from setting roomId after room has been created.
       throw new ServerError(ErrorCode.APPLICATION_ERROR, "'roomId' can only be overridden upon room creation.");
     }
@@ -139,6 +140,21 @@ export abstract class Room<State= any, Metadata= any> {
   public onAuth(client: Client, options: any, request?: http.IncomingMessage): any | Promise<any> {
     return true;
   }
+
+  /**
+   * devMode: When `devMode` is enabled, `onCacheRoom` method is called during
+   * graceful shutdown.
+   *
+   * Implement this method to return custom data to be cached. `onRestoreRoom`
+   * will be called with the data returned by `onCacheRoom`
+   */
+  public onCacheRoom?(): any;
+
+  /**
+   * devMode: When `devMode` is enabled, `onRestoreRoom` method is called during
+   * process startup, with the data returned by the `onCacheRoom` method.
+   */
+  public onRestoreRoom?(cached?: any): void;
 
   public hasReachedMaxClients(): boolean {
     return (this.clients.length + Object.keys(this.reservedSeats).length) >= this.maxClients;
@@ -162,7 +178,10 @@ export abstract class Room<State= any, Metadata= any> {
     } else {
       return (
         this.reservedSeats[sessionId] !== undefined &&
-        (DEV_MODE || !this._reconnectingSessionId.has(sessionId)) // prevent possible "reconnect" requests without a reconnection token
+        (
+          !this._reconnectingSessionId.has(sessionId) || // prevent possible "reconnect" requests without a reconnection token
+          (this._reconnectingSessionId.get(sessionId) === sessionId) // devMode reconnection
+        )
       );
     }
   }
@@ -346,7 +365,13 @@ export abstract class Room<State= any, Metadata= any> {
     return () => delete this.onMessageHandlers[messageType];
   }
 
-  public async disconnect(): Promise<any> {
+  /**
+   * Disconnect all connected clients, and then dispose the room.
+   *
+   * @param closeCode WebSocket close code (default = 4000, which is a "consented leave")
+   * @returns Promise<void>
+   */
+  public async disconnect(closeCode: number = Protocol.WS_CLOSE_CONSENTED): Promise<any> {
     this.internalState = RoomInternalState.DISCONNECTING;
     await this.listing.remove();
 
@@ -363,7 +388,7 @@ export abstract class Room<State= any, Metadata= any> {
     if (numClients > 0) {
       // clients may have `async onLeave`, room will be disposed after they're fulfilled
       while (numClients--) {
-        this._forciblyCloseClient(this.clients.array[numClients], Protocol.WS_CLOSE_CONSENTED);
+        this._forciblyCloseClient(this.clients.array[numClients], closeCode);
       }
     } else {
       // no clients connected, dispose immediately.
@@ -405,7 +430,7 @@ export abstract class Room<State= any, Metadata= any> {
 
     const previousReconnectionToken = this._reconnectingSessionId.get(sessionId);
     if (previousReconnectionToken) {
-      this._reconnections[previousReconnectionToken][1].resolve(client);
+      this._reconnections[previousReconnectionToken]?.[1].resolve(client);
 
     } else {
       try {
@@ -582,6 +607,7 @@ export abstract class Room<State= any, Metadata= any> {
     joinOptions: any = true,
     seconds: number = this.seatReservationTime,
     allowReconnection: boolean = false,
+    devModeReconnection?: boolean,
   ) {
     if (!allowReconnection && this.hasReachedMaxClients()) {
       return false;
@@ -599,6 +625,13 @@ export abstract class Room<State= any, Metadata= any> {
       }, seconds * 1000);
 
       this.resetAutoDisposeTimeout(seconds);
+    }
+
+    //
+    // isDevMode workaround to allow players to reconnect on devMode
+    //
+    if (devModeReconnection) {
+      this._reconnectingSessionId.set(sessionId, sessionId);
     }
 
     return true;
@@ -733,7 +766,7 @@ export abstract class Room<State= any, Metadata= any> {
     client.ref.removeListener('close', client.ref['onleave']);
 
     // only effectively close connection when "onLeave" is fulfilled
-    this._onLeave(client, closeCode).then(() => client.leave(Protocol.WS_CLOSE_NORMAL));
+    this._onLeave(client, closeCode).then(() => client.leave(closeCode));
   }
 
   private async _onLeave(client: Client, code?: number): Promise<any> {

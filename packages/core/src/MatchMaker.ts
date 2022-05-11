@@ -1,15 +1,9 @@
-import { ErrorCode } from './Protocol';
+import { ErrorCode, Protocol } from './Protocol';
 
 import { requestFromIPC, subscribeIPC } from './IPC';
-import {
-  cacheRoomHistory, DEV_MODE,
-  generateId, getPreviousProcessId, getRoomCountKey,
-  getRoomHistoryListKey,
-  merge,
-  reloadFromCache,
-  REMOTE_ROOM_SHORT_TIMEOUT,
-  retry
-} from './Utils';
+
+import { Deferred, generateId, merge, REMOTE_ROOM_SHORT_TIMEOUT, retry } from './utils/Utils';
+import { isDevMode, setDevMode, cacheRoomHistory, getPreviousProcessId, getRoomCountKey, getRoomRestoreListKey, reloadFromCache } from './utils/DevMode';
 
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
 import { Room, RoomInternalState } from './Room';
@@ -27,7 +21,7 @@ import * as controller from './matchmaker/controller';
 import { logger } from './Logger';
 import { Client } from './Transport';
 import { Type } from './types';
-import {getHostname} from "./discovery";
+import { getHostname } from "./discovery";
 
 export { MatchMakerDriver, controller };
 
@@ -46,27 +40,29 @@ export let processId: string;
 export let presence: Presence;
 export let driver: MatchMakerDriver;
 
-let isGracefullyShuttingDown: boolean;
+export let isGracefullyShuttingDown: boolean;
+export let onReady = new Deferred();
 
 export async function setup(
   _presence?: Presence,
   _driver?: MatchMakerDriver,
-  _processId?: string,
-  _publicAddress?: string
+  _publicAddress?: string,
+  _devMode?: boolean,
 ) {
   presence = _presence || new LocalPresence();
   driver = _driver || new LocalDriver();
-  processId = _processId;
   publicAddress = _publicAddress;
 
-  isGracefullyShuttingDown = false;
-
-  if(DEV_MODE) {
-    const previousProcessId = await getPreviousProcessId(await getHostname());
-    if(previousProcessId) {
-      this.processId = previousProcessId;
-    }
+  // devMode: try to retrieve previous processId
+  if (_devMode) {
+    setDevMode(_devMode);
+    processId = await getPreviousProcessId(await getHostname());
   }
+
+  // ensure processId is set
+  if (!processId) { processId = generateId(); }
+
+  isGracefullyShuttingDown = false;
 
   /**
    * Subscribe to remote `handleCreateRoom` calls.
@@ -75,11 +71,13 @@ export async function setup(
     return handleCreateRoom.apply(undefined, args);
   });
 
-  presence.hset(getRoomCountKey(), processId, '0');
+  await presence.hset(getRoomCountKey(), processId, '0');
 
-  if(DEV_MODE) {
-    reloadFromCache();
+  if (isDevMode) {
+    await reloadFromCache();
   }
+
+  onReady.resolve();
 }
 
 /**
@@ -232,7 +230,7 @@ export function defineRoomType<T extends Type<Room>>(
 
   handlers[name] = registeredHandler;
 
-  if(!DEV_MODE) {
+  if (!isDevMode) {
     cleanupStaleRooms(name);
   }
 
@@ -241,7 +239,8 @@ export function defineRoomType<T extends Type<Room>>(
 
 export function removeRoomType(name: string) {
   delete handlers[name];
-  if(!DEV_MODE) {
+
+  if (!isDevMode) {
     cleanupStaleRooms(name);
   }
 }
@@ -286,17 +285,18 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
     }
   }
 
-  if(DEV_MODE) {
-    presence.hset(getRoomHistoryListKey(), room.roomId, JSON.stringify({
+  if (isDevMode) {
+    presence.hset(getRoomRestoreListKey(), room.roomId, JSON.stringify({
       "clientOptions": clientOptions,
       "roomName": roomName,
       "processId": processId
     }));
   }
+
   return room;
 }
 
-export async function handleCreateRoom(roomName: string, clientOptions: ClientOptions, reloading?:boolean): Promise<RoomListingData> {
+export async function handleCreateRoom(roomName: string, clientOptions: ClientOptions, restoringRoomId?: string): Promise<RoomListingData> {
   const registeredHandler = handlers[roomName];
 
   if (!registeredHandler) {
@@ -306,12 +306,13 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
   const room = new registeredHandler.klass();
 
   // set room public attributes
-  if(reloading && DEV_MODE && clientOptions.hasOwnProperty("previousRoomId")) {
-    room.roomId = clientOptions.previousRoomId;
-    delete clientOptions["previousRoomId"];
+  if (restoringRoomId && isDevMode) {
+    room.roomId = restoringRoomId;
+
   } else {
     room.roomId = generateId();
   }
+
   room.roomName = roomName;
   room.presence = presence;
 
@@ -375,12 +376,12 @@ export function getRoomById(roomId: string) {
 /**
  * Disconnects every client on every room in the current process.
  */
-export function disconnectAll() {
+export function disconnectAll(closeCode?: number) {
   const promises: Array<Promise<any>> = [];
 
   for (const roomId in rooms) {
     if (!rooms.hasOwnProperty(roomId)) { continue; }
-    promises.push(rooms[roomId].disconnect());
+    promises.push(rooms[roomId].disconnect(closeCode));
   }
 
   return promises;
@@ -395,7 +396,7 @@ export async function gracefullyShutdown(): Promise<any> {
 
   debugMatchMaking(`${processId} is shutting down!`);
 
-  if(!DEV_MODE) {
+  if (!isDevMode) {
     // remove processId from room count key
     presence.hdel(getRoomCountKey(), processId);
 
@@ -403,9 +404,12 @@ export async function gracefullyShutdown(): Promise<any> {
     presence.unsubscribe(getProcessChannel());
 
     return Promise.all(disconnectAll());
+
   } else {
     await cacheRoomHistory(rooms);
+    return Promise.all(disconnectAll(Protocol.WS_CLOSE_DEVMODE_RESTART));
   }
+
 }
 
 /**
@@ -433,7 +437,7 @@ export async function reserveSeatFor(room: RoomListingData, options: any) {
     throw new SeatReservationError(`${room.roomId} is already full.`);
   }
 
-  return { room, sessionId, devMode: DEV_MODE };
+  return { room, sessionId, devMode: isDevMode };
 }
 
 async function cleanupStaleRooms(roomName: string) {
@@ -533,6 +537,11 @@ async function disposeRoom(roomName: string, room: Room) {
   // decrease amount of rooms this process is handling
   if (!isGracefullyShuttingDown) {
     presence.hincrby(getRoomCountKey(), processId, -1);
+
+    // remove from devMode restore list
+    if (isDevMode) {
+      await presence.hdel(getRoomRestoreListKey(), room.roomId);
+    }
   }
 
   // remove from room listing (already removed if `disconnect()` has been called)
@@ -548,11 +557,6 @@ async function disposeRoom(roomName: string, room: Room) {
 
   // unsubscribe from remote connections
   presence.unsubscribe(getRoomChannel(room.roomId));
-
-  // dispose dev mode cached data
-  if(DEV_MODE) {
-    await presence.hdel(getRoomHistoryListKey(), room.roomId);
-  }
 
   // remove actual room reference
   delete rooms[room.roomId];

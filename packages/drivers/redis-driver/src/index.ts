@@ -50,8 +50,8 @@ export class RedisDriver implements MatchMakerDriver {
     );
   }
 
-  public shutdown() {
-    this._client.quit();
+  public async shutdown() {
+    await this._client.quit();
   }
 
   //

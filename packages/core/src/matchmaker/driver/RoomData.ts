@@ -1,4 +1,4 @@
-import { spliceOne } from '../../Utils';
+import { spliceOne } from '../../utils/Utils';
 import { RoomListingData } from './interfaces';
 
 export class RoomCache implements RoomListingData {

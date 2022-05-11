@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { spliceOne } from '../Utils';
+import { spliceOne } from '../utils/Utils';
 import { Presence } from './Presence';
 
 type Callback = (...args: any[]) => void;

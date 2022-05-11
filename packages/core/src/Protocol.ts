@@ -20,6 +20,8 @@ export enum Protocol {
   // WebSocket error codes
   WS_CLOSE_CONSENTED = 4000,
   WS_CLOSE_WITH_ERROR = 4002,
+  WS_CLOSE_DEVMODE_RESTART = 4010,
+
   WS_SERVER_DISCONNECT = 4201,
   WS_TOO_MANY_CLIENTS = 4202,
 }

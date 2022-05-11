@@ -4,7 +4,7 @@ import * as net from 'net';
 
 import { Schema } from '@colyseus/schema';
 import { EventEmitter } from 'events';
-import { DummyServer } from "./Utils";
+import { DummyServer } from "./utils/Utils";
 
 export abstract class Transport {
     public server?: net.Server | http.Server | https.Server | DummyServer;
