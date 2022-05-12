@@ -31,7 +31,12 @@ export type ServerOptions = {
    * If enabled, rooms are going to be restored in the server-side upon restart,
    * clients are going to automatically re-connect when server reboots.
    *
-   * (This operation is costly and should never be used in a production environment)
+   * Beware of "schema mismatch" issues. When updating Schema structures and
+   * reloading existing data, you may see "schema mismatch" errors in the
+   * client-side.
+   *
+   * (This operation is costly and should never be used in a production
+   * environment)
    */
   devMode?: boolean,
 
