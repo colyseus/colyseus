@@ -1,16 +1,15 @@
-import http from "http";
-import cors from "cors";
 import express from "express";
-import { monitor } from "@colyseus/monitor";
 
 import { Server, RelayRoom, LobbyRoom } from "@colyseus/core";
-import { uWebSocketsTransport } from "@colyseus/uwebsockets-transport";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import { RedisDriver } from "@colyseus/redis-driver";
 import { RedisPresence } from "@colyseus/redis-presence";
-import { MongooseDriver  } from "@colyseus/mongoose-driver";
+import { monitor } from "@colyseus/monitor";
 
-import expressify from "uwebsockets-express";
+// import { MongooseDriver  } from "@colyseus/mongoose-driver";
+// import { uWebSocketsTransport } from "@colyseus/uwebsockets-transport";
+
+// import expressify from "uwebsockets-express";
 
 import { DummyRoom } from "./DummyRoom";
 import { MyRoom } from "./MyRoom";
@@ -20,26 +19,25 @@ const endpoint = "localhost";
 
 // Create HTTP & WebSocket servers
 // const server = http.createServer(app);
-const transport = new uWebSocketsTransport();
-// const transport = new WebSocketTransport({
-//   pingInterval: 0,
-// });
+// const transport = new uWebSocketsTransport();
+const transport = new WebSocketTransport();
 
 const gameServer = new Server({
   transport,
 
   // server: server,
-  presence: new RedisPresence(),
+  // presence: new RedisPresence(),
   driver: new RedisDriver(),
 
-  // driver: new MongooseDriver(),
-  publicAddress: `localhost:${port}`,
+  devMode: true,
+
+  // // driver: new MongooseDriver(),
+  // publicAddress: `localhost:${port}`,
 });
 
-// const app = express();
-const app = expressify(transport.app);
+const app = express();
+// const app = expressify(transport.app);
 
-app.use(cors());
 app.use(express.json());
 app.get("/hello", (req, res) => {
   res.json({hello: "world!"});
@@ -64,6 +62,7 @@ app.use("/monitor", monitor());
 
 gameServer.onShutdown(() => {
   console.log("CUSTOM SHUTDOWN ROUTINE: STARTED");
+
   return new Promise<void>((resolve, reject) => {
     setTimeout(() => {
       console.log("CUSTOM SHUTDOWN ROUTINE: FINISHED");
@@ -72,7 +71,7 @@ gameServer.onShutdown(() => {
   })
 });
 
-process.on('unhandledRejection', r => console.log('unhandledRejection...', r));
+// process.on('unhandledRejection', r => console.log('unhandledRejection...', r));
 
 gameServer.listen(port)
   .then(() => console.log(`Listening on ws://${endpoint}:${port}`))
