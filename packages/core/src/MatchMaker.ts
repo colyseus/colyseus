@@ -30,6 +30,7 @@ export type ClientOptions = any;
 export interface SeatReservation {
   sessionId: string;
   room: RoomListingData;
+  devMode?: boolean;
 }
 
 const handlers: {[id: string]: RegisteredHandler} = {};
@@ -433,7 +434,13 @@ export async function reserveSeatFor(room: RoomListingData, options: any) {
     throw new SeatReservationError(`${room.roomId} is already full.`);
   }
 
-  return { room, sessionId, devMode: isDevMode };
+  const response: SeatReservation = { room, sessionId };
+
+  if (isDevMode) {
+    response.devMode = isDevMode;
+  }
+
+  return response;
 }
 
 async function cleanupStaleRooms(roomName: string) {
