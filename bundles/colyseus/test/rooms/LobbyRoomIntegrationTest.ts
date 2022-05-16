@@ -33,7 +33,7 @@ describe("LobbyRoom: Integration", () => {
 
         beforeEach(async () => {
           // setup matchmaker
-          matchMaker.setup(presence, driver, 'dummyLobbyRoomIntegrationProcessId')
+          matchMaker.setup(presence, driver)
 
           // define a room
           matchMaker.defineRoomType("lobby", LobbyRoom);

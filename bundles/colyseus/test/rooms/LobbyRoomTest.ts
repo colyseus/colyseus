@@ -33,7 +33,7 @@ describe("LobbyRoom", () => {
           });
 
           // setup matchmaker
-          matchMaker.setup(presence, driver, 'dummyLobbyRoomProcessId')
+          matchMaker.setup(presence, driver);
           matchMaker.defineRoomType("lobby", LobbyRoom);
           matchMaker.defineRoomType("dummy_1", DummyRoom).enableRealtimeListing();
           matchMaker.defineRoomType("dummy_2", DummyRoom).enableRealtimeListing();

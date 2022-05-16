@@ -36,7 +36,7 @@ describe("Integration", () => {
           });
 
           // setup matchmaker
-          matchMaker.setup(presence, driver, 'dummyIntegrationProcessId')
+          matchMaker.setup(presence, driver);
 
           // define a room
           server.define("dummy", DummyRoom);

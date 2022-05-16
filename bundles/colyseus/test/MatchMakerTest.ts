@@ -14,7 +14,7 @@ describe("MatchMaker", () => {
        */
       before(async () => {
         driver = new DRIVERS[i]();
-        matchMaker.setup(undefined, driver, 'dummyMatchMakerProcessId');
+        matchMaker.setup(undefined, driver);
 
         matchMaker.defineRoomType("empty", DummyRoom);
         matchMaker.defineRoomType("dummy", DummyRoom);
@@ -49,7 +49,7 @@ describe("MatchMaker", () => {
       /**
        * `setup` matchmaker to re-set graceful shutdown status
        */
-      beforeEach(() => matchMaker.setup(undefined, driver, 'dummyMatchMakerProcessId'));
+      beforeEach(() => matchMaker.setup(undefined, driver));
 
       /**
        * ensure no rooms are avaialble in-between tests
