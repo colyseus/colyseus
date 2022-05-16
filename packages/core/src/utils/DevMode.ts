@@ -93,10 +93,6 @@ export async function getPreviousProcessId(hostname) {
   return await presence.hget(getProcessRestoreKey(), hostname);
 }
 
-export function getRoomCountKey() {
-  return 'roomcount';
-}
-
 export function getRoomRestoreListKey() {
   return 'roomhistory';
 }

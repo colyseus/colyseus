@@ -68,7 +68,7 @@ export class Server {
   constructor(options: ServerOptions = {}) {
     const { gracefullyShutdown = true } = options;
 
-    setDevMode(options.devMode);
+    setDevMode(options.devMode === true);
 
     this.presence = options.presence || new LocalPresence();
     this.driver = options.driver || new LocalDriver();

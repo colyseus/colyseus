@@ -3,7 +3,7 @@ import { ErrorCode, Protocol } from './Protocol';
 import { requestFromIPC, subscribeIPC } from './IPC';
 
 import { Deferred, generateId, merge, REMOTE_ROOM_SHORT_TIMEOUT, retry } from './utils/Utils';
-import { isDevMode, cacheRoomHistory, getPreviousProcessId, getRoomCountKey, getRoomRestoreListKey, reloadFromCache } from './utils/DevMode';
+import { isDevMode, cacheRoomHistory, getPreviousProcessId, getRoomRestoreListKey, reloadFromCache } from './utils/DevMode';
 
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
 import { Room, RoomInternalState } from './Room';
@@ -42,13 +42,14 @@ export let presence: Presence;
 export let driver: MatchMakerDriver;
 
 export let isGracefullyShuttingDown: boolean;
-export let onReady = new Deferred();
+export let onReady: Deferred;
 
 export async function setup(
   _presence?: Presence,
   _driver?: MatchMakerDriver,
   _publicAddress?: string,
 ) {
+  onReady = new Deferred();
   presence = _presence || new LocalPresence();
   driver = _driver || new LocalDriver();
   publicAddress = _publicAddress;
@@ -333,6 +334,7 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
 
       // increment amount of rooms this process is handling
       presence.hincrby(getRoomCountKey(), processId, 1);
+
     } catch (e) {
       debugAndPrintError(e);
       throw new ServerError(
@@ -393,20 +395,21 @@ export async function gracefullyShutdown(): Promise<any> {
 
   debugMatchMaking(`${processId} is shutting down!`);
 
-  if (!isDevMode) {
-    // remove processId from room count key
-    presence.hdel(getRoomCountKey(), processId);
-
-    // unsubscribe from process id channel
-    presence.unsubscribe(getProcessChannel());
-
-    return Promise.all(disconnectAll());
-
-  } else {
+  if (isDevMode) {
     await cacheRoomHistory(rooms);
-    return Promise.all(disconnectAll(Protocol.WS_CLOSE_DEVMODE_RESTART));
   }
 
+  // remove processId from room count key
+  presence.hdel(getRoomCountKey(), processId);
+
+  // unsubscribe from process id channel
+  presence.unsubscribe(getProcessChannel());
+
+  return Promise.all(disconnectAll(
+    (isDevMode)
+      ? Protocol.WS_CLOSE_DEVMODE_RESTART
+      : undefined
+  ));
 }
 
 /**
@@ -568,6 +571,9 @@ async function disposeRoom(roomName: string, room: Room) {
 //
 // Presence keys
 //
+export function getRoomCountKey() {
+  return 'roomcount';
+}
 
 function getRoomChannel(roomId: string) {
   return `$${roomId}`;
