@@ -261,6 +261,13 @@ export class Server {
   }
 
   protected async handleMatchMakeRequest(req: IncomingMessage, res: ServerResponse) {
+    // do not accept matchmaking requests if already shutting down
+    if (matchMaker.isGracefullyShuttingDown) {
+      res.writeHead(503, {});
+      res.end();
+      return;
+    }
+
     const headers = Object.assign(
       {},
       matchMaker.controller.DEFAULT_CORS_HEADERS,

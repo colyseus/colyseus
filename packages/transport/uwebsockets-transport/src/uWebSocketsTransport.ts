@@ -211,6 +211,11 @@ export class uWebSocketsTransport extends Transport {
         this.app.post("/matchmake/*", (res, req) => {
             res.onAborted(() => onAborted(res));
 
+            // do not accept matchmaking requests if already shutting down
+            if (matchMaker.isGracefullyShuttingDown) {
+              return res.close();
+            }
+
             writeHeaders(req, res);
             res.writeHeader('Content-Type', 'application/json');
 
