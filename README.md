@@ -83,6 +83,8 @@ If so [Colyseus Arena](https://www.colyseus.io/arena) cloud hosting is the solut
 
 ## Tools made by the community ❤️
 
+- [godot-colyseus](https://github.com/gsioteam/godot-colyseus): Colyseus SDK for Godot, written in GDScript (by [@gsioteam](https://github.com/gsioteam))
+- [colyseus-ue4](https://github.com/charisma-ai/colyseus-ue4): Colyseus SDK for Unreal Engine 4 (by [@bensalilijames](https://github.com/bensalilijames))
 - [colyseus-hxjs](https://github.com/serjek/colyseus-hxjs): Haxe externs for colyseus server (by [@serjek](https://github.com/serjek))
 - [colyseus-kotlin](https://github.com/doorbash/colyseus-kotlin): Client for Java/Kotlin (by [@doorbash](https://github.com/doorbash))
 - [Stencyl Extension](http://community.stencyl.com/index.php/topic,61150.0.html): [Stencyl](http://stencyl.com) extension to communicate with a Colyseus server (by [MdotEdot](http://www.stencyl.com/users/index/32424))
