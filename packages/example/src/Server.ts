@@ -27,9 +27,9 @@ const gameServer = new Server({
 
   // server: server,
   // presence: new RedisPresence(),
-  driver: new RedisDriver(),
+  // driver: new RedisDriver(),
 
-  devMode: true,
+  // devMode: true,
 
   // // driver: new MongooseDriver(),
   // publicAddress: `localhost:${port}`,
