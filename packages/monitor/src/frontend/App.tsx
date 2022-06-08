@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React from "react";
 import { createHashHistory } from "history";
 import { Router, Route } from "react-router-dom";
