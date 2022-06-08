@@ -1,3 +1,4 @@
+import http from "http";
 import express from "express";
 
 import { Server, RelayRoom, LobbyRoom } from "@colyseus/core";
@@ -18,9 +19,12 @@ const port = Number(process.env.PORT || 2567);
 const endpoint = "localhost";
 
 // Create HTTP & WebSocket servers
-// const server = http.createServer(app);
+const app = express();
+const server = http.createServer(app);
+const transport = new WebSocketTransport({server});
+
 // const transport = new uWebSocketsTransport();
-const transport = new WebSocketTransport();
+// const app = expressify(transport.app);
 
 const gameServer = new Server({
   transport,
@@ -34,9 +38,6 @@ const gameServer = new Server({
   // // driver: new MongooseDriver(),
   // publicAddress: `localhost:${port}`,
 });
-
-const app = express();
-// const app = expressify(transport.app);
 
 app.use(express.json());
 app.get("/hello", (req, res) => {
