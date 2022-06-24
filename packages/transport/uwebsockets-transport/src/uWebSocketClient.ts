@@ -26,11 +26,17 @@ export class uWebSocketClient implements Client {
 
   constructor(
     public id: string,
-    public ref: uWebSocketWrapper,
+    public _ref: uWebSocketWrapper,
   ) {
     this.sessionId = id;
 
-    ref.on('close', () => this.readyState = ReadyState.CLOSED);
+    _ref.on('close', () => this.readyState = ReadyState.CLOSED);
+  }
+
+  get ref() { return this._ref; }
+  set ref(_ref: uWebSocketWrapper) {
+    this._ref = _ref;
+    this.readyState = ReadyState.OPEN;
   }
 
   public send(messageOrType: any, messageOrOptions?: any | ISendOptions, options?: ISendOptions) {
@@ -66,7 +72,7 @@ export class uWebSocketClient implements Client {
       return;
     }
 
-    this.ref.ws.send(new Uint8Array(data), true, false);
+    this._ref.ws.send(new Uint8Array(data), true, false);
   }
 
   public error(code: number, message: string = '', cb?: (err?: Error) => void) {
@@ -82,10 +88,10 @@ export class uWebSocketClient implements Client {
     this.readyState = ReadyState.CLOSING;
 
     if (code !== undefined) {
-      this.ref.ws.end(code, data);
+      this._ref.ws.end(code, data);
 
     } else {
-      this.ref.ws.close();
+      this._ref.ws.close();
     }
   }
 
