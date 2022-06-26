@@ -9,6 +9,7 @@ export class ColyseusTestServer {
     join: Client['join'],
     create: Client['create'],
     joinById: Client['joinById'],
+    reconnect: Client['reconnect'],
   };
 
   public http: {
@@ -40,6 +41,7 @@ export class ColyseusTestServer {
       join: client.join.bind(client),
       create: client.create.bind(client),
       joinById: client.joinById.bind(client),
+      reconnect: client.reconnect.bind(client),
     };
   }
 
