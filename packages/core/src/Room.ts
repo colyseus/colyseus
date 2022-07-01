@@ -15,7 +15,7 @@ import { SchemaSerializer } from './serializer/SchemaSerializer';
 import { ErrorCode, getMessageBytes, Protocol } from './Protocol';
 import { Deferred, spliceOne } from './Utils';
 
-import { debugAndPrintError, debugPatch } from './Debug';
+import {debugAndPrintError, debugMessages, debugPatch} from './Debug';
 import { ServerError } from './errors/ServerError';
 import { Client, ClientState, ISendOptions } from './Transport';
 import { RoomListingData } from './matchmaker/driver';
@@ -264,6 +264,7 @@ export abstract class Room<State= any, Metadata= any> {
       this.broadcastMessageSchema(typeOrSchema as Schema, opts);
 
     } else {
+
       this.broadcastMessageType(typeOrSchema as string, messageOrOptions, opts);
     }
   }
@@ -446,6 +447,8 @@ export abstract class Room<State= any, Metadata= any> {
   }
 
   private broadcastMessageSchema<T extends Schema>(message: T, options: IBroadcastOptions = {}) {
+    debugMessages("broadcastMessageSchema: ");
+    debugMessages(message);
     const encodedMessage = getMessageBytes[Protocol.ROOM_DATA_SCHEMA](message);
 
     let numClients = this.clients.length;
@@ -459,6 +462,8 @@ export abstract class Room<State= any, Metadata= any> {
   }
 
   private broadcastMessageType(type: string, message?: any, options: IBroadcastOptions = {}) {
+    debugMessages("broadcastMessageType: ");
+    debugMessages(message);
     const encodedMessage = getMessageBytes[Protocol.ROOM_DATA](type, message);
 
     let numClients = this.clients.length;
@@ -589,6 +594,8 @@ export abstract class Room<State= any, Metadata= any> {
         message = (bytes.length > it.offset)
         ? msgpack.decode(bytes.slice(it.offset, bytes.length))
         : undefined;
+        debugMessages("onMessage: ");
+        debugMessages(message);
       } catch (e) {
         debugAndPrintError(e);
         return;
