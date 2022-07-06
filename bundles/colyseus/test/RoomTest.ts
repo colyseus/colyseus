@@ -12,7 +12,7 @@ describe("Room", () => {
     }
 
     it("setState() should select correct serializer", () => {
-      const room = new MyRoom()
+      const room = new MyRoom("roomId", "roomName")
       room.onCreate();
 
       assert.ok(room['_serializer'] instanceof SchemaSerializer);

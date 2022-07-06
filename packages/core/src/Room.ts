@@ -28,7 +28,7 @@ export const DEFAULT_SEAT_RESERVATION_TIME = Number(process.env.COLYSEUS_SEAT_RE
 
 export type SimulationCallback = (deltaTime: number) => void;
 
-export type RoomConstructor<T= any> = new (presence?: Presence) => Room<T>;
+export type RoomConstructor<T= any> = new (roomId: string, roomName: string, presence?: Presence) => Room<T>;
 
 export interface IBroadcastOptions extends ISendOptions {
   except?: Client;
@@ -42,19 +42,32 @@ export enum RoomInternalState {
 
 export abstract class Room<State= any, Metadata= any> {
 
+  public get _events() {
+    return this.#_events;
+  }
+
   public get locked() {
-    return this._locked;
+    return this.#_locked;
   }
 
   public get metadata() {
     return this.listing.metadata;
   }
 
+  public get roomId() {
+    return this.#roomId;
+  }
+
+  public get roomName() {
+    return this.#roomName;
+  }
+
+  protected set roomId(roomId: string) {
+    this.#roomId = roomId;
+  }
+
   public listing: RoomListingData<Metadata>;
   public clock: Clock = new Clock();
-
-  public roomId: string;
-  public roomName: string;
 
   public maxClients: number = Infinity;
   public patchRate: number = DEFAULT_PATCH_RATE;
@@ -65,9 +78,6 @@ export abstract class Room<State= any, Metadata= any> {
 
   public clients: Client[] = [];
   public internalState: RoomInternalState = RoomInternalState.CREATING;
-
-  /** @internal */
-  public _events = new EventEmitter();
 
   // seat reservation & reconnection
   protected seatReservationTime: number = DEFAULT_SEAT_RESERVATION_TIME;
@@ -84,25 +94,33 @@ export abstract class Room<State= any, Metadata= any> {
   private _simulationInterval: NodeJS.Timer;
   private _patchInterval: NodeJS.Timer;
 
-  private _locked: boolean = false;
-  private _lockedExplicitly: boolean = false;
-  private _maxClientsReached: boolean = false;
-
   // this timeout prevents rooms that are created by one process, but no client
   // ever had success joining into it on the specified interval.
   private _autoDisposeTimeout: NodeJS.Timer;
 
-  constructor(presence?: Presence) {
+  /** @internal */
+  #_events = new EventEmitter();
+
+  #_locked: boolean = false;
+  #_lockedExplicitly: boolean = false;
+  #_maxClientsReached: boolean = false;
+
+  #roomId: string;
+  #roomName: string;
+
+  constructor(roomId: string, roomName: string, presence?: Presence) {
+    this.#roomId = roomId;
+    this.#roomName = roomName;
     this.presence = presence;
 
-    this._events.once('dispose', async () => {
+    this.#_events.once('dispose', async () => {
       try {
         await this._dispose();
 
       } catch (e) {
         debugAndPrintError(`onDispose error: ${(e && e.message || e || 'promise rejected')}`);
       }
-      this._events.emit('disconnect');
+      this.#_events.emit('disconnect');
     });
 
     this.setPatchRate(this.patchRate);
@@ -205,36 +223,36 @@ export abstract class Room<State= any, Metadata= any> {
 
   public async lock() {
     // rooms locked internally aren't explicit locks.
-    this._lockedExplicitly = (arguments[0] === undefined);
+    this.#_lockedExplicitly = (arguments[0] === undefined);
 
     // skip if already locked.
-    if (this._locked) { return; }
+    if (this.#_locked) { return; }
 
-    this._locked = true;
+    this.#_locked = true;
 
     await this.listing.updateOne({
-      $set: { locked: this._locked },
+      $set: { locked: this.#_locked },
     });
 
-    this._events.emit('lock');
+    this.#_events.emit('lock');
   }
 
   public async unlock() {
     // only internal usage passes arguments to this function.
     if (arguments[0] === undefined) {
-      this._lockedExplicitly = false;
+      this.#_lockedExplicitly = false;
     }
 
     // skip if already locked
-    if (!this._locked) { return; }
+    if (!this.#_locked) { return; }
 
-    this._locked = false;
+    this.#_locked = false;
 
     await this.listing.updateOne({
-      $set: { locked: this._locked },
+      $set: { locked: this.#_locked },
     });
 
-    this._events.emit('unlock');
+    this.#_events.emit('unlock');
   }
 
   public send(client: Client, type: string | number, message: any, options?: ISendOptions): void;
@@ -300,7 +318,7 @@ export abstract class Room<State= any, Metadata= any> {
     this.autoDispose = true;
 
     const delayedDisconnection = new Promise<void>((resolve) =>
-      this._events.once('disconnect', () => resolve()));
+      this.#_events.once('disconnect', () => resolve()));
 
     for (const reconnection of Object.values(this.reconnections)) {
       reconnection.reject();
@@ -314,7 +332,7 @@ export abstract class Room<State= any, Metadata= any> {
       }
     } else {
       // no clients connected, dispose immediately.
-      this._events.emit('dispose');
+      this.#_events.emit('dispose');
     }
 
     return await delayedDisconnection;
@@ -379,7 +397,7 @@ export abstract class Room<State= any, Metadata= any> {
     }
 
     // emit 'join' to room handler
-    this._events.emit('join', client);
+    this.#_events.emit('join', client);
 
     // allow client to send messages after onJoin has succeeded.
     client.ref.on('message', this._onMessage.bind(this, client));
@@ -532,7 +550,7 @@ export abstract class Room<State= any, Metadata= any> {
     );
 
     if (willDispose) {
-      this._events.emit('dispose');
+      this.#_events.emit('dispose');
     }
 
     return willDispose;
@@ -575,7 +593,7 @@ export abstract class Room<State= any, Metadata= any> {
     const code = decode.uint8(bytes, it);
 
     if (!bytes) {
-      debugAndPrintError(`${this.roomName} (${this.roomId}), couldn't decode message: ${bytes}`);
+      debugAndPrintError(`${this.#roomName} (${this.#roomId}), couldn't decode message: ${bytes}`);
       return;
     }
 
@@ -654,20 +672,20 @@ export abstract class Room<State= any, Metadata= any> {
       // try to dispose immediatelly if client reconnection isn't set up.
       const willDispose = await this._decrementClientCount();
 
-      this._events.emit('leave', client, willDispose);
+      this.#_events.emit('leave', client, willDispose);
     }
   }
 
   private async _incrementClientCount() {
     // lock automatically when maxClients is reached
-    if (!this._locked && this.hasReachedMaxClients()) {
-      this._maxClientsReached = true;
+    if (!this.#_locked && this.hasReachedMaxClients()) {
+      this.#_maxClientsReached = true;
       this.lock.call(this, true);
     }
 
     await this.listing.updateOne({
       $inc: { clients: 1 },
-      $set: { locked: this._locked },
+      $set: { locked: this.#_locked },
     });
   }
 
@@ -680,15 +698,15 @@ export abstract class Room<State= any, Metadata= any> {
 
     // unlock if room is available for new connections
     if (!willDispose) {
-      if (this._maxClientsReached && !this._lockedExplicitly) {
-        this._maxClientsReached = false;
+      if (this.#_maxClientsReached && !this.#_lockedExplicitly) {
+        this.#_maxClientsReached = false;
         this.unlock.call(this, true);
       }
 
       // update room listing cache
       await this.listing.updateOne({
         $inc: { clients: -1 },
-        $set: { locked: this._locked },
+        $set: { locked: this.#_locked },
       });
     }
 
