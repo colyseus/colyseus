@@ -1,5 +1,5 @@
 import fossilDelta from 'fossil-delta';
-import msgpack from 'notepack.io';
+import { pack, unpack } from 'msgpackr';
 
 import { Client, Protocol, Serializer, debugPatch } from '@colyseus/core';
 import jsonPatch from 'fast-json-patch'; // this is only used for debugging patches
@@ -17,7 +17,7 @@ export class FossilDeltaSerializer<T> implements Serializer<T> {
 
   public reset(newState: T) {
     this.previousState = newState;
-    this.previousStateEncoded = msgpack.encode(this.previousState);
+    this.previousStateEncoded = pack(this.previousState);
   }
 
   public getFullState(_?: Client) {
@@ -52,11 +52,11 @@ export class FossilDeltaSerializer<T> implements Serializer<T> {
     if (newState?.['$changes']) {// tslint:disable-line
       if (newState['$changes'].changes.size > 0) { // tslint:disable-line
         changed = true;
-        currentStateEncoded = msgpack.encode(currentState);
+        currentStateEncoded = pack(currentState);
       }
 
     } else {
-      currentStateEncoded = msgpack.encode(currentState);
+      currentStateEncoded = pack(currentState);
       changed = !currentStateEncoded.equals(this.previousStateEncoded);
     }
 
@@ -70,7 +70,7 @@ export class FossilDeltaSerializer<T> implements Serializer<T> {
         debugPatch(
           '%d bytes, %j',
           this.patches.length,
-          jsonPatch.compare(msgpack.decode(this.previousStateEncoded), currentState),
+          jsonPatch.compare(unpack(this.previousStateEncoded), currentState),
         );
       }
 

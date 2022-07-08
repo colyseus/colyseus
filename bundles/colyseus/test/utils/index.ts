@@ -1,6 +1,7 @@
-import msgpack from "notepack.io";
 import WebSocket from "ws";
 import { EventEmitter } from "events";
+
+import { pack, unpack } from "msgpackr";
 
 import { Server, ServerOptions, Room, matchMaker, LocalDriver, ClientState, LocalPresence, Presence, Client, Deferred, ISendOptions } from "@colyseus/core";
 import { RedisPresence } from "@colyseus/redis-presence";
@@ -63,11 +64,11 @@ export class WebSocketClient implements Client {
   }
 
   receive (message) {
-    this.ref.emit('message', msgpack.encode(message));
+    this.ref.emit('message', pack(message));
   }
 
   getMessageAt(index: number) {
-    return msgpack.decode(this.messages[index]);
+    return unpack(this.messages[index]);
   }
 
   raw(message, options) {

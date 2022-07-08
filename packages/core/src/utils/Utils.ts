@@ -1,9 +1,11 @@
 import nanoid from 'nanoid';
+import { addExtension } from 'msgpackr';
 
 import { debugAndPrintError } from '../Debug';
 import { EventEmitter } from "events";
 import { ServerOpts, Socket } from "net";
 import { logger } from '../Logger';
+import { Schema } from "@colyseus/schema";
 
 // remote room call timeouts
 export const REMOTE_ROOM_SHORT_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_SHORT_TIMEOUT || 2000);
@@ -259,3 +261,18 @@ export declare interface DummyServer {
 }
 
 export class DummyServer extends EventEmitter {}
+
+// Add msgpackr extension to avoid circular references when encoding
+// https://github.com/kriszyp/msgpackr#custom-extensions
+addExtension({
+  Class: Schema,
+  type: 0,
+
+  read(datum: any): any {
+    return datum;
+  },
+
+  write(instance: any): any {
+    return instance.toJSON();
+  }
+});

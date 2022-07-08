@@ -2,7 +2,7 @@ import WebSocket from "ws";
 import { Deferred, Room, Server, matchMaker, Protocol  } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import Benchmark from "benchmark";
-import msgpack from "notepack.io";
+import { pack } from "msgpackr";
 
 const numClients = 30;
 const suite = new Benchmark.Suite();
@@ -34,7 +34,7 @@ server.listen(9999, undefined, undefined, async () => {
       connections.push(room);
 
       room.on("message", (message: Buffer) => {
-        room.send(msgpack.encode([Protocol.JOIN_ROOM]), { binary: true }, (err) => {
+        room.send(pack([Protocol.JOIN_ROOM]), { binary: true }, (err) => {
           // give some time for confirmation to be acknowledged
           if (connections.length === numClients) {
             setTimeout(() => future.resolve(), 100);
