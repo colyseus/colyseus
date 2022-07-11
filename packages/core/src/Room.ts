@@ -1,6 +1,6 @@
 import http from 'http';
-import msgpack from 'notepack.io';
 
+import { unpack } from 'msgpackr';
 import { decode, Iterator, Schema } from '@colyseus/schema';
 
 import Clock from '@gamestdio/timer';
@@ -701,7 +701,7 @@ export abstract class Room<State= any, Metadata= any> {
       let message;
       try {
         message = (bytes.length > it.offset)
-          ? msgpack.decode(bytes.slice(it.offset, bytes.length))
+          ? unpack(new Uint8Array(bytes.slice(it.offset, bytes.length)))
           : undefined;
         debugMessage("received: '%s' -> %j", messageType, message);
       } catch (e) {

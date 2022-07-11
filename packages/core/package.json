@@ -39,7 +39,7 @@
     "debug": "^4.0.1",
     "internal-ip": "^4.3.0",
     "nanoid": "^2.0.0",
-    "notepack.io": "^2.2.0"
+    "msgpackr": "^1.6.1"
   },
   "publishConfig": {
     "access": "public"

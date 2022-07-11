@@ -1,4 +1,4 @@
-import msgpack from 'notepack.io';
+import { pack } from 'msgpackr';
 import { encode, Schema } from '@colyseus/schema';
 import { logger } from './Logger';
 
@@ -112,7 +112,7 @@ export const getMessageBytes = {
     let arr: Uint8Array;
 
     if (message !== undefined) {
-      const encoded = msgpack.encode(message);
+      const encoded = pack(message);
       arr = new Uint8Array(initialBytes.length + encoded.byteLength);
       arr.set(new Uint8Array(initialBytes), 0);
       arr.set(new Uint8Array(encoded), initialBytes.length);
