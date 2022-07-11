@@ -16,7 +16,7 @@ import { SeatReservationError } from './errors/SeatReservationError';
 import { ServerError } from './errors/ServerError';
 
 import { IRoomListingData, MatchMakerDriver, RoomListingData, LocalDriver } from './matchmaker/driver';
-import * as controller from './matchmaker/controller';
+import controller from './matchmaker/controller';
 
 import { logger } from './Logger';
 import { Client } from './Transport';

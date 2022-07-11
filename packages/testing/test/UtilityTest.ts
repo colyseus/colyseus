@@ -1,4 +1,4 @@
-import {HybridArray} from "@colyseus/core/src/Utils";
+import { HybridArray } from "@colyseus/core";
 import assert from "assert";
 
 const idGen = () => {

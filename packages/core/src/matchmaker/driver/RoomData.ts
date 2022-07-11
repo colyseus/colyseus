@@ -25,20 +25,12 @@ export class RoomCache implements RoomListingData {
       }
     }
 
-    this.$rooms = rooms;
-  }
-
-  public toJSON() {
-    return {
-      clients: this.clients,
-      createdAt: this.createdAt,
-      maxClients: this.maxClients,
-      metadata: this.metadata,
-      name: this.name,
-      publicAddress: this.publicAddress,
-      processId: this.processId,
-      roomId: this.roomId,
-    };
+    // make $rooms non-enumerable, so it can be serialized (circular references)
+    Object.defineProperty(this, "$rooms", {
+      value: rooms,
+      enumerable: false,
+      writable: true,
+    });
   }
 
   public save() {

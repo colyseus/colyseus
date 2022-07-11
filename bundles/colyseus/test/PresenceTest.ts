@@ -11,10 +11,10 @@ describe("Presence", () => {
       beforeEach(() => presence = new PRESENCE_IMPLEMENTATIONS[i]())
       afterEach(() => presence.shutdown());
 
-      it("subscribe", (done) => {
+      it("subscribe", async () => {
         let i = 0;
 
-        presence.subscribe("topic", (data) => {
+        await presence.subscribe("topic", (data) => {
           if (i === 0) {
             assert.equal("string", data);
 
@@ -29,13 +29,16 @@ describe("Presence", () => {
 
           if (i === 3) {
             presence.unsubscribe("topic");
-            done();
           }
         });
 
-        presence.publish("topic", "string");
-        presence.publish("topic", 1000);
-        presence.publish("topic", { object: "hello world" });
+        await presence.publish("topic", "string");
+        await presence.publish("topic", 1000);
+        await presence.publish("topic", { object: "hello world" });
+
+        await timeout(10);
+
+        assert.equal(i, 3);
       });
 
       it("subscribe: multiple callbacks for same topic", async () => {
