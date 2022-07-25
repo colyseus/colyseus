@@ -4,7 +4,7 @@ import * as net from 'net';
 
 import { Schema } from '@colyseus/schema';
 import { EventEmitter } from 'events';
-import { DummyServer } from "./utils/Utils";
+import { DummyServer } from './utils/Utils';
 
 export abstract class Transport {
     public server?: net.Server | http.Server | https.Server | DummyServer;
@@ -21,10 +21,21 @@ export interface ISendOptions {
 
 export enum ClientState { JOINING, JOINED, RECONNECTED, LEAVING }
 
+/**
+ * The client instance from the server-side is responsible for the transport layer between the server and the client.
+ * It should not be confused with the Client from the client-side SDK, as they have completely different purposes!
+ * You operate on client instances from `this.clients`, `Room#onJoin()`, `Room#onLeave()` and `Room#onMessage()`.
+ *
+ * - This is the raw WebSocket connection coming from the `ws` package. There are more methods available which aren't
+ *  encouraged to use along with Colyseus.
+ */
 export interface Client {
   readyState: number;
 
   id: string;
+  /**
+   * Unique id per session.
+   */
   sessionId: string; // TODO: remove sessionId on version 1.0.0
   state: ClientState;
 
@@ -34,6 +45,8 @@ export interface Client {
 
   /**
    * User-defined data can be attached to the Client instance through this variable.
+   * - Can be used to store custom data about the client's connection. userData is not synchronized with the client,
+   * and should be used only to keep player-specific with its connection.
    */
   userData?: any;
 
@@ -51,7 +64,8 @@ export interface Client {
   enqueueRaw(data: ArrayLike<number>, options?: ISendOptions): void;
 
   /**
-  * Send message payload to a specific client.
+   * Send a type of message to the client. Messages are encoded with MsgPack and can hold any
+   * JSON-serializable data structure.
    *
    * @param type String or Number identifier the client SDK will use to receive this message
    * @param message Message payload. (automatically encoded with msgpack.)
@@ -72,9 +86,9 @@ export interface Client {
   /**
    * Disconnect this client from the room.
    *
-   * @param code Custom close code. Default is 1000
+   * @param code Custom close code. Default value is 1000.
    * @param data
-   * @see https://docs.colyseus.io/colyseus/server/room/#leavecode-number
+   * @see {@link https://docs.colyseus.io/colyseus/server/room/#leavecode-number}
    */
   leave(code?: number, data?: string): void;
 

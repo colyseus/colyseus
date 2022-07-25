@@ -42,6 +42,13 @@ export enum RoomInternalState {
   DISCONNECTING = 2,
 }
 
+/**
+ * A Room class is meant to implement a game session, and/or serve as the communication channel
+ * between a group of clients.
+ *
+ * - Rooms are created on demand during matchmaking by default
+ * - Room classes must be exposed using `.define()`
+ */
 export abstract class Room<State= any, Metadata= any> {
 
   public get locked() {
@@ -53,19 +60,59 @@ export abstract class Room<State= any, Metadata= any> {
   }
 
   public listing: RoomListingData<Metadata>;
+
+  /**
+   * A ClockTimer instance, used for timing events.
+   */
   public clock: Clock = new Clock();
 
+  /**
+   * A unique, auto-generated, 9-character-long id of the room.
+   * You may replace `this.roomId` during `onCreate()`.
+   */
   #_roomId: string;
+  /**
+   * The name of the room you provided as first argument for `gameServer.define()`.
+   */
   #_roomName: string;
 
+  /**
+   * Maximum number of clients allowed to connect into the room. When room reaches this limit,
+   * it is locked automatically. Unless the room was explicitly locked by you via `lock()` method,
+   * the room will be unlocked as soon as a client disconnects from it.
+   */
   public maxClients: number = Infinity;
+  /**
+   * Frequency to send the room state to connected clients, in milliseconds.
+   *
+   * @default 50ms (20fps)
+   */
   public patchRate: number = DEFAULT_PATCH_RATE;
+  /**
+   * Automatically dispose the room when last client disconnects.
+   *
+   * @default true
+   */
   public autoDispose: boolean = true;
 
+  /**
+   * The state instance you provided to `setState()`.
+   */
   public state: State;
+  /**
+   * The presence instance. Check Presence API for more details.
+   *
+   * @see {@link https://docs.colyseus.io/colyseus/server/presence/|Presence API}
+   */
   public presence: Presence;
 
+  /**
+   * The array of connected clients.
+   *
+   * @see {@link https://docs.colyseus.io/colyseus/server/room/#client|Client instance}
+   */
   public clients: HybridArray<Client> = new HybridArray<Client>("sessionId");
+
   public internalState: RoomInternalState = RoomInternalState.CREATING;
 
   /** @internal */
@@ -87,6 +134,13 @@ export abstract class Room<State= any, Metadata= any> {
   private _simulationInterval: NodeJS.Timer;
   private _patchInterval: NodeJS.Timer;
 
+  /**
+   * This property will change on these situations:
+   * - The maximum number of allowed clients has been reached (`maxClients`)
+   * - You manually locked, or unlocked the room using lock() or `unlock()`.
+   *
+   * @readonly
+   */
   private _locked: boolean = false;
   private _lockedExplicitly: boolean = false;
   private _maxClientsReached: boolean = false;
@@ -156,10 +210,26 @@ export abstract class Room<State= any, Metadata= any> {
    */
   public onRestoreRoom?(cached?: any): void;
 
+  /**
+   * Returns whether the sum of connected clients and reserved seats exceeds maximum number of clients.
+   *
+   * @returns boolean
+   */
   public hasReachedMaxClients(): boolean {
     return (this.clients.length + Object.keys(this.reservedSeats).length) >= this.maxClients;
   }
 
+  /**
+   * Set the number of seconds a room can wait for a client to effectively join the room.
+   * You should consider how long your `onAuth()` will have to wait for setting a different seat reservation time.
+   * The default value is 15 seconds. You may set the `COLYSEUS_SEAT_RESERVATION_TIME`
+   * environment variable if you'd like to change the seat reservation time globally.
+   *
+   * @default 15 seconds
+   *
+   * @param seconds - number of seconds.
+   * @returns The modified Room object.
+   */
   public setSeatReservationTime(seconds: number) {
     this.seatReservationTime = seconds;
     return this;
@@ -199,6 +269,16 @@ export abstract class Room<State= any, Metadata= any> {
     }
   }
 
+  /**
+   * (Optional) Set a simulation interval that can change the state of the game.
+   * The simulation interval is your game loop.
+   *
+   * @default 16.6ms (60fps)
+   *
+   * @param onTickCallback - You can implement your physics or world updates here!
+   *  This is a good place to update the room state.
+   * @param delay - Interval delay on executing `onTickCallback` in milliseconds.
+   */
   public setSimulationInterval(onTickCallback?: SimulationCallback, delay: number = DEFAULT_SIMULATION_INTERVAL): void {
     // clear previous interval in case called setSimulationInterval more than once
     if (this._simulationInterval) { clearInterval(this._simulationInterval); }
@@ -270,6 +350,9 @@ export abstract class Room<State= any, Metadata= any> {
     }
   }
 
+  /**
+   * Locking the room will remove it from the pool of available rooms for new clients to connect to.
+   */
   public async lock() {
     // rooms locked internally aren't explicit locks.
     this._lockedExplicitly = (arguments[0] === undefined);
@@ -286,6 +369,9 @@ export abstract class Room<State= any, Metadata= any> {
     this._events.emit('lock');
   }
 
+  /**
+   * Unlocking the room returns it to the pool of available rooms for new clients to connect to.
+   */
   public async unlock() {
     // only internal usage passes arguments to this function.
     if (arguments[0] === undefined) {
@@ -336,6 +422,9 @@ export abstract class Room<State= any, Metadata= any> {
     }
   }
 
+  /**
+   * This method will check whether mutations have occurred in the state, and broadcast them to all connected clients.
+   */
   public broadcastPatch() {
     if (this.onBeforePatch) {
       this.onBeforePatch(this.state);
@@ -473,6 +562,16 @@ export abstract class Room<State= any, Metadata= any> {
     ));
   }
 
+  /**
+   * Allow the specified client to reconnect into the room. Must be used inside `onLeave()` method.
+   * If seconds is provided, the reconnection is going to be cancelled after the provided amount of seconds.
+   *
+   * @param previousClient - The client which is to be waiting until re-connection happens.
+   * @param seconds - Timeout period on re-connection in seconds.
+   *
+   * @returns Deferred<Client> - The differed is a promise like type.
+   *  This type can forcibly reject the promise by calling `.reject()`.
+   */
   public allowReconnection(previousClient: Client, seconds: number | "manual"): Deferred<Client> {
     if (seconds === undefined) { // TODO: remove this check
       console.warn("DEPRECATED: allowReconnection() requires a second argument. Using \"manual\" mode.");
@@ -511,17 +610,17 @@ export abstract class Room<State= any, Metadata= any> {
     };
 
     reconnection.
-      then((newClient) => {
-        newClient.auth = previousClient.auth;
-        previousClient.ref = newClient.ref; // swap "ref" for convenience
-        previousClient.state = ClientState.RECONNECTED;
-        clearTimeout(this.reservedSeatTimeouts[sessionId]);
-        cleanup();
-      }).
-      catch(() => {
-        cleanup();
-        this.resetAutoDisposeTimeout();
-      });
+    then((newClient) => {
+      newClient.auth = previousClient.auth;
+      previousClient.ref = newClient.ref; // swap "ref" for convenience
+      previousClient.state = ClientState.RECONNECTED;
+      clearTimeout(this.reservedSeatTimeouts[sessionId]);
+      cleanup();
+    }).
+    catch(() => {
+      cleanup();
+      this.resetAutoDisposeTimeout();
+    });
 
     return reconnection;
   }
@@ -784,7 +883,7 @@ export abstract class Room<State= any, Metadata= any> {
     }
 
     if (client.state !== ClientState.RECONNECTED) {
-      // try to dispose immediatelly if client reconnection isn't set up.
+      // try to dispose immediately if client reconnection isn't set up.
       const willDispose = await this._decrementClientCount();
 
       this._events.emit('leave', client, willDispose);
