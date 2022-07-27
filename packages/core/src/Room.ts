@@ -51,6 +51,13 @@ export enum RoomInternalState {
  */
 export abstract class Room<State= any, Metadata= any> {
 
+  /**
+   * This property will change on these situations:
+   * - The maximum number of allowed clients has been reached (`maxClients`)
+   * - You manually locked, or unlocked the room using lock() or `unlock()`.
+   *
+   * @readonly
+   */
   public get locked() {
     return this._locked;
   }
@@ -66,14 +73,7 @@ export abstract class Room<State= any, Metadata= any> {
    */
   public clock: Clock = new Clock();
 
-  /**
-   * A unique, auto-generated, 9-character-long id of the room.
-   * You may replace `this.roomId` during `onCreate()`.
-   */
   #_roomId: string;
-  /**
-   * The name of the room you provided as first argument for `gameServer.define()`.
-   */
   #_roomName: string;
 
   /**
@@ -134,13 +134,6 @@ export abstract class Room<State= any, Metadata= any> {
   private _simulationInterval: NodeJS.Timer;
   private _patchInterval: NodeJS.Timer;
 
-  /**
-   * This property will change on these situations:
-   * - The maximum number of allowed clients has been reached (`maxClients`)
-   * - You manually locked, or unlocked the room using lock() or `unlock()`.
-   *
-   * @readonly
-   */
   private _locked: boolean = false;
   private _lockedExplicitly: boolean = false;
   private _maxClientsReached: boolean = false;
@@ -167,7 +160,17 @@ export abstract class Room<State= any, Metadata= any> {
     this.resetAutoDisposeTimeout(this.seatReservationTime);
   }
 
+  /**
+   * The name of the room you provided as first argument for `gameServer.define()`.
+   *
+   * @returns roomName string
+   */
   public get roomName() { return this.#_roomName; }
+  /**
+   * Setting the name of the room. Overwriting this property is restricted.
+   *
+   * @param roomName
+   */
   public set roomName(roomName: string) {
     if (this.#_roomName) {
       // prevent user from setting roomName after it has been defined.
@@ -176,7 +179,19 @@ export abstract class Room<State= any, Metadata= any> {
     this.#_roomName = roomName;
   }
 
+  /**
+   * A unique, auto-generated, 9-character-long id of the room.
+   * You may replace `this.roomId` during `onCreate()`.
+   *
+   * @returns roomId string
+   */
   public get roomId() { return this.#_roomId; }
+  /**
+   * Setting the roomId, is restricted in room lifetime except upon room creation.
+   *
+   * @param roomId
+   * @returns roomId string
+   */
   public set roomId(roomId: string) {
     if (this.internalState !== RoomInternalState.CREATING && !isDevMode) {
       // prevent user from setting roomId after room has been created.
@@ -423,7 +438,7 @@ export abstract class Room<State= any, Metadata= any> {
   }
 
   /**
-   * This method will check whether mutations have occurred in the state, and broadcast them to all connected clients.
+   * Checks whether mutations have occurred in the state, and broadcast them to all connected clients.
    */
   public broadcastPatch() {
     if (this.onBeforePatch) {
