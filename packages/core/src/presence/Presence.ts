@@ -17,7 +17,7 @@ export interface Presence {
     sinter(...keys: string[]): Promise<string[]>;
 
     hset(key: string, field: string, value: string);
-    hincrby(key: string, field: string, value: number);
+    hincrby(key: string, field: string, value: number): number | Promise<number>;
     hget(key: string, field: string): Promise<string>;
     hgetall(key: string): Promise<{ [key: string]: string }>;
     hdel(key: string, field: string);

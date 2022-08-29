@@ -197,19 +197,52 @@ describe("Presence", () => {
       it("incr", async () => {
         await presence.del("num"); //ensure key doens't exist before testing
 
-        await presence.incr("num");
-        await presence.incr("num");
-        await presence.incr("num");
+        var incr: number;
+
+        incr = await presence.incr("num");
+        assert.strictEqual(1, incr);
+
+        incr = await presence.incr("num");
+        assert.strictEqual(2, incr);
+
+        incr = await presence.incr("num");
+        assert.strictEqual(3, incr);
+
         assert.equal(3, await presence.get("num"));
       });
 
       it("decr", async () => {
         await presence.del("num"); //ensure key doens't exist before testing
 
-        await presence.decr("num");
-        await presence.decr("num");
-        await presence.decr("num");
+        var decr: number;
+
+        decr = await presence.decr("num");
+        assert.strictEqual(-1, decr);
+
+        decr = await presence.decr("num");
+        assert.strictEqual(-2, decr);
+
+        decr = await presence.decr("num");
+        assert.strictEqual(-3, decr);
+
         assert.equal(-3, await presence.get("num"));
+      });
+
+      it("hincrby", async () => {
+        await presence.del("hincrby"); //ensure key doens't exist before testing
+
+        var hincrby: number;
+
+        hincrby = await presence.hincrby("hincrby", "one", 1);
+        assert.strictEqual(1, hincrby);
+
+        hincrby = await presence.hincrby("hincrby", "one", 1);
+        assert.strictEqual(2, hincrby);
+
+        hincrby = await presence.hincrby("hincrby", "one", 1);
+        assert.strictEqual(3, hincrby);
+
+        assert.strictEqual('3', await presence.hget("hincrby", "one"));
       });
 
     });
