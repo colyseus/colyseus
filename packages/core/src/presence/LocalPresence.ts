@@ -164,7 +164,7 @@ export class LocalPresence implements Presence {
             this.keys[key] = 0;
         }
         (this.keys[key] as number)++;
-        return this.keys[key];
+        return this.keys[key] as number;
     }
 
     public async decr(key: string) {
@@ -172,7 +172,7 @@ export class LocalPresence implements Presence {
             this.keys[key] = 0;
         }
         (this.keys[key] as number)--;
-        return this.keys[key];
+        return this.keys[key] as number;
     }
 
     public shutdown() {

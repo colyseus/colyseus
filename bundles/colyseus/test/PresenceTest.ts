@@ -1,10 +1,11 @@
 import assert from "assert";
 import { timeout, PRESENCE_IMPLEMENTATIONS } from "./utils";
+import { Presence } from "@colyseus/core";
 
 describe("Presence", () => {
 
   for (let i = 0; i < PRESENCE_IMPLEMENTATIONS.length; i++) {
-    const presence = new PRESENCE_IMPLEMENTATIONS[i]();
+    const presence: Presence = new PRESENCE_IMPLEMENTATIONS[i]();
 
     describe((presence as any).constructor.name, () => {
 
