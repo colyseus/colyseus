@@ -419,11 +419,9 @@ export abstract class Room<State= any, Metadata= any> {
     reconnection.
       then((newClient) => {
         newClient.auth = previousClient.auth;
+        newClient.userData = previousClient.userData;
         previousClient.ref = newClient.ref; // swap "ref" for convenience
         previousClient.state = ClientState.RECONNECTED;
-        if('userData' in previousClient) {
-          newClient.userData = previousClient.userData;
-        }
         clearTimeout(this.reservedSeatTimeouts[sessionId]);
         cleanup();
       }).
