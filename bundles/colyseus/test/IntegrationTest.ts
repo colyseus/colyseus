@@ -5,7 +5,7 @@ import { Schema, type, Context } from "@colyseus/schema";
 
 import { matchMaker, Room, Client, Server, ErrorCode, MatchMakerDriver, Presence } from "@colyseus/core";
 import { DummyRoom, DRIVERS, timeout, Room3Clients, PRESENCE_IMPLEMENTATIONS, Room2Clients, Room2ClientsExplicitLock } from "./utils";
-import { ServerError } from "@colyseus/core";
+import { ServerError, Protocol } from "@colyseus/core";
 
 import { uWebSocketsTransport } from "@colyseus/uwebsockets-transport";
 
@@ -168,6 +168,16 @@ describe("Integration", () => {
 
               await activeConnection.leave();
               await timeout(50);
+            });
+
+            it("server should deny sending acknowledgement packet twice", async () => {
+              matchMaker.defineRoomType('onjoin_ack_twice', class _ extends Room {});
+
+              const room = await client.joinOrCreate('onjoin_ack_twice');
+              room.connection.send([Protocol.JOIN_ROOM]);
+
+              await timeout(50);
+              assert.ok(true);
             });
           });
 
