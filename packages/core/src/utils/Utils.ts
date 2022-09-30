@@ -1,11 +1,11 @@
-import nanoid from 'nanoid';
 import { addExtension } from 'msgpackr';
+import nanoid from 'nanoid';
 
+import { Schema } from '@colyseus/schema';
+import { EventEmitter } from 'events';
+import { ServerOpts, Socket } from 'net';
 import { debugAndPrintError } from '../Debug';
-import { EventEmitter } from "events";
-import { ServerOpts, Socket } from "net";
 import { logger } from '../Logger';
-import { Schema } from "@colyseus/schema";
 
 // remote room call timeouts
 export const REMOTE_ROOM_SHORT_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_SHORT_TIMEOUT || 2000);
@@ -52,7 +52,6 @@ export function retry<T = any>(
               then(resolve).
               catch((e2) => reject(e2));
           }, Math.floor(Math.random() * Math.pow(2, retries) * 400));
-
         } else {
           reject(e);
         }
@@ -165,7 +164,7 @@ export class HybridArray<T> {
     return this.array.find(predicate, thisArg);
   }
 
-  public filter(predicate: (value: T, index: number, array: T[]) => unknown, thisArg?: any): T[]
+  public filter(predicate: (value: T, index: number, array: T[]) => unknown, thisArg?: any): T[];
   public filter<S extends T>(predicate: (value: T, index: number, array: T[]) => value is S, thisArg?: any): S[] {
     return this.array.filter(predicate, thisArg);
   }
@@ -220,13 +219,13 @@ export class HybridArray<T> {
   public delete(obj: T): T {
     if (this.hashedArray[obj[this.uniqueProperty]]) {
       return this.deleteByKey(obj[this.uniqueProperty]);
-
-    } else if (this.indexOf(obj) != -1) {
-      return this.deleteAt(this.indexOf(obj));
-
-    } else {
-      return undefined;
     }
+
+    if (this.indexOf(obj) !== -1) {
+      return this.deleteAt(this.indexOf(obj));
+    }
+
+    return undefined;
   }
 
   private _badIndexWarning(index) {
@@ -254,7 +253,7 @@ export class HybridArray<T> {
 }
 
 export declare interface DummyServer {
-  constructor(options?: ServerOpts, connectionListener?: (socket: Socket) => void);
+  new(options?: ServerOpts, connectionListener?: (socket: Socket) => void);
 
   listen(port?: number, hostname?: string, backlog?: number, listeningListener?: () => void): this;
   close(callback?: (err?: Error) => void): this;
@@ -274,5 +273,5 @@ addExtension({
 
   write(instance: any): any {
     return instance.toJSON();
-  }
+  },
 });

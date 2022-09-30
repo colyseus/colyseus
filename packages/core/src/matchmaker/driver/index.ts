@@ -1,4 +1,4 @@
-import { IRoomListingData, SortOptions, RoomListingData, QueryHelpers, MatchMakerDriver } from "./interfaces";
+import { IRoomListingData, MatchMakerDriver, QueryHelpers, RoomListingData, SortOptions } from './interfaces';
 
 // re-export
 export { IRoomListingData, SortOptions, RoomListingData, QueryHelpers, MatchMakerDriver };

@@ -18,7 +18,7 @@ export class RoomData implements RoomListingData {
 
   constructor(
     initialValues: any,
-    client: Redis.Redis
+    client: Redis.Redis,
   ) {
     this.#client = client;
 
@@ -40,8 +40,8 @@ export class RoomData implements RoomListingData {
       maxClients: this.maxClients,
       metadata: this.metadata,
       name: this.name,
-      publicAddress: this.publicAddress,
       processId: this.processId,
+      publicAddress: this.publicAddress,
       roomId: this.roomId,
     };
   }
@@ -56,13 +56,12 @@ export class RoomData implements RoomListingData {
       this.toJSON = toJSON;
 
       await this.hset('roomcaches', this.roomId, roomcache);
-
     } else {
-      console.warn("⚠️ RedisDriver: can't .save() without a `roomId`")
+      console.warn('⚠️ RedisDriver: can\'t .save() without a `roomId`');
     }
   }
 
-  public updateOne(operations: any) {
+  public async updateOne(operations: any) {
     if (operations.$set) {
       for (const field in operations.$set) {
         if (operations.$set.hasOwnProperty(field)) {

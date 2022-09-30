@@ -1,8 +1,7 @@
 import { EventEmitter } from 'events';
 import { logger } from '../Logger';
-import { RoomListingData, SortOptions } from './driver/interfaces';
-
-import { RoomConstructor } from './../Room';
+import { RoomConstructor } from '../Room';
+import { RoomListingData, SortOptions } from './driver';
 import { updateLobby } from './Lobby';
 
 export const INVALID_OPTION_KEYS: Array<keyof RoomListingData> = [

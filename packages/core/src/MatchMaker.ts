@@ -2,8 +2,8 @@ import { ErrorCode, Protocol } from './Protocol';
 
 import { requestFromIPC, subscribeIPC } from './IPC';
 
+import { cacheRoomHistory, getPreviousProcessId, getRoomRestoreListKey, isDevMode, reloadFromCache } from './utils/DevMode';
 import { Deferred, generateId, merge, REMOTE_ROOM_SHORT_TIMEOUT, retry } from './utils/Utils';
-import { isDevMode, cacheRoomHistory, getPreviousProcessId, getRoomRestoreListKey, reloadFromCache } from './utils/DevMode';
 
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
 import { Room, RoomInternalState } from './Room';
@@ -15,13 +15,13 @@ import { debugAndPrintError, debugMatchMaking } from './Debug';
 import { SeatReservationError } from './errors/SeatReservationError';
 import { ServerError } from './errors/ServerError';
 
-import { IRoomListingData, MatchMakerDriver, RoomListingData, LocalDriver } from './matchmaker/driver';
 import controller from './matchmaker/controller';
+import { IRoomListingData, LocalDriver, MatchMakerDriver, RoomListingData } from './matchmaker/driver';
 
+import { getHostname } from './discovery';
 import { logger } from './Logger';
 import { Client } from './Transport';
 import { Type } from './types';
-import { getHostname } from "./discovery";
 
 export { MatchMakerDriver, controller };
 
@@ -143,10 +143,10 @@ export async function reconnect(roomId: string, clientOptions: ClientOptions = {
 
 /**
  * Join a room by id and return client seat reservation. An exception is thrown if a room is not found for roomId.
- * 
- * @param roomId - The Id of the specific room instance.
- * @param clientOptions - Options for the client seat reservation (for `onJoin`/`onAuth`) 
- * 
+ *
+ * @param roomId - The ID of the specific room instance.
+ * @param clientOptions - Options for the client seat reservation (for `onJoin`/`onAuth`)
+ *
  * @returns Promise<SeatReservation> - A promise which contains `sessionId` and `RoomListingData`.
  */
 export async function joinById(roomId: string, clientOptions: ClientOptions = {}) {
@@ -171,11 +171,11 @@ export async function query(conditions: Partial<IRoomListingData> = {}) {
 
 /**
  * Find for a public and unlocked room available.
- * 
- * @param roomName - The Id of the specific room.
+ *
+ * @param roomName - The ID of the specific room.
  * @param clientOptions - Options for the client seat reservation (for `onJoin`/`onAuth`).
- * 
- * @returns Promise<RoomListingData> - A promise contaning an object which includes room metadata and configurations.
+ *
+ * @returns Promise<RoomListingData> - A promise containing an object which includes room metadata and configurations.
  */
 export async function findOneRoomAvailable(roomName: string, clientOptions: ClientOptions): Promise<RoomListingData> {
   return await awaitRoomAvailable(roomName, async () => {
@@ -201,11 +201,12 @@ export async function findOneRoomAvailable(roomName: string, clientOptions: Clie
 
 /**
  * Call a method or return a property on a remote room.
- * 
- * @param roomId - The Id of the specific room instance.
- * @param method - Method or attribute to call or retrive.
+ *
+ * @param roomId - The ID of the specific room instance.
+ * @param method - Method or attribute to call or retrieve.
  * @param args - Array of arguments for the method
- * 
+ * @param rejectionTimeout - Timeout
+ *
  * @returns Promise<any> - Returned value from the called or retrieved method/attribute.
  */
 export async function remoteRoomCall<R= any>(
@@ -265,11 +266,11 @@ export function hasHandler(name: string) {
 
 /**
  * Creates a new room.
- * 
+ *
  * @param roomName - The identifier you defined on `gameServer.define()`
  * @param clientOptions - Options for `onCreate`
- * 
- * @returns Promise<RoomListingData> - A promise contaning an object which includes room metadata and configurations.
+ *
+ * @returns Promise<RoomListingData> - A promise containing an object which includes room metadata and configurations.
  */
 export async function createRoom(roomName: string, clientOptions: ClientOptions): Promise<RoomListingData> {
   const roomsSpawnedByProcessId = await presence.hgetall(getRoomCountKey());
@@ -315,7 +316,11 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
   return room;
 }
 
-export async function handleCreateRoom(roomName: string, clientOptions: ClientOptions, restoringRoomId?: string): Promise<RoomListingData> {
+export async function handleCreateRoom(
+  roomName: string,
+  clientOptions: ClientOptions,
+  restoringRoomId?: string,
+): Promise<RoomListingData> {
   const registeredHandler = handlers[roomName];
 
   if (!registeredHandler) {
@@ -346,7 +351,7 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
   room.listing = driver.createInstance({
     name: roomName,
     processId,
-    ...additionalListingData
+    ...additionalListingData,
   });
 
   if (room.onCreate) {
@@ -370,7 +375,7 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
   room.listing.roomId = room.roomId;
   room.listing.maxClients = room.maxClients;
 
-  // imediatelly ask client to join the room
+  // immediately ask client to join the room
   debugMatchMaking('spawning \'%s\', roomId: %s, processId: %s', roomName, room.roomId, processId);
 
   room._events.on('lock', lockRoom.bind(this, room));

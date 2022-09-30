@@ -11,20 +11,20 @@ import { registerGracefulShutdown } from './utils/Utils';
 
 import { registerNode, unregisterNode} from './discovery';
 
-import { LocalPresence } from './presence/LocalPresence';
 import { LocalDriver } from './matchmaker/driver';
+import { LocalPresence } from './presence/LocalPresence';
 
-import { Transport } from './Transport';
 import { logger, setLogger } from './Logger';
-import { setDevMode, isDevMode } from './utils/DevMode';
+import { Transport } from './Transport';
+import { isDevMode, setDevMode } from './utils/DevMode';
 
 // IServerOptions &
-export type ServerOptions = {
-  publicAddress?: string,
-  presence?: Presence,
-  driver?: matchMaker.MatchMakerDriver,
-  transport?: Transport,
-  gracefullyShutdown?: boolean,
+export interface ServerOptions {
+  publicAddress?: string;
+  presence?: Presence;
+  driver?: matchMaker.MatchMakerDriver;
+  transport?: Transport;
+  gracefullyShutdown?: boolean;
   logger?: any;
 
   /**
@@ -38,24 +38,24 @@ export type ServerOptions = {
    * (This operation is costly and should never be used in a production
    * environment)
    */
-  devMode?: boolean,
+  devMode?: boolean;
 
   /**
    * Options below are now part of WebSocketTransport (@colyseus/ws-transport)
    * TODO: remove me on 0.15.0
    */
   /** @deprecated */
-  pingInterval?: number,
+  pingInterval?: number;
 
   /** @deprecated */
-  pingMaxRetries?: number,
+  pingMaxRetries?: number;
 
   /** @deprecated */
-  verifyClient?: any,
+  verifyClient?: any;
 
   /** @deprecated */
-  server?: http.Server,
-};
+  server?: http.Server;
+}
 
 export class Server {
   public transport: Transport;
@@ -79,7 +79,7 @@ export class Server {
       this.presence,
       this.driver,
       options.publicAddress,
-    );
+    ).catch(debugAndPrintError);
 
     if (gracefullyShutdown) {
       registerGracefulShutdown((err) => this.gracefullyShutdown(true, err));
@@ -101,7 +101,7 @@ export class Server {
       options.server !== undefined ||
       options.verifyClient !== undefined
     ) {
-      logger.warn("DEPRECATION WARNING: 'pingInterval', 'pingMaxRetries', 'server', and 'verifyClient' Server options will be permanently moved to WebSocketTransport on v0.15");
+      logger.warn('DEPRECATION WARNING: \'pingInterval\', \'pingMaxRetries\', \'server\', and \'verifyClient\' Server options will be permanently moved to WebSocketTransport on v0.15');
       logger.warn(`new Server({
   transport: new WebSocketTransport({
     pingInterval: ...,
@@ -110,7 +110,7 @@ export class Server {
     verifyClient: ...
   })
 })`);
-      logger.warn("👉 Documentation: https://docs.colyseus.io/server/transport/")
+      logger.warn('👉 Documentation: https://docs.colyseus.io/server/transport/');
     }
 
     const transport = options.transport || this.getDefaultTransport(options);
@@ -221,7 +221,7 @@ export class Server {
     /* tslint:disable:no-string-literal */
     const _onMessage = Room.prototype['_onMessage'];
     /* tslint:disable:no-string-literal */
-    Room.prototype['_onMessage'] = function (client, buffer) {
+    Room.prototype['_onMessage'] = function(client, buffer) {
       // uWebSockets.js: duplicate buffer because it is cleared at native layer before the timeout.
       const cachedBuffer = Buffer.from(buffer);
       setTimeout(() => _onMessage.call(this, client, cachedBuffer), halfwayMS);
@@ -237,7 +237,7 @@ export class Server {
   }
 
   protected getDefaultTransport(_: any): Transport {
-    throw new Error("Please provide a 'transport' layer. Default transport not set.");
+    throw new Error('Please provide a \'transport\' layer. Default transport not set.');
   }
 
   protected onShutdownCallback: () => void | Promise<any> =
@@ -271,7 +271,7 @@ export class Server {
     const headers = Object.assign(
       {},
       matchMaker.controller.DEFAULT_CORS_HEADERS,
-      matchMaker.controller.getCorsHeaders.call(undefined, req)
+      matchMaker.controller.getCorsHeaders.call(undefined, req),
     );
 
     if (req.method === 'OPTIONS') {
@@ -296,7 +296,7 @@ export class Server {
           res.write(JSON.stringify(response));
 
         } catch (e) {
-          res.write(JSON.stringify({ code: e.code, error: e.message, }));
+          res.write(JSON.stringify({ code: e.code, error: e.message }));
         }
 
         res.end();
@@ -304,15 +304,13 @@ export class Server {
 
     } else if (req.method === 'GET') {
       const matchedParams = req.url.match(matchMaker.controller.allowedRoomNameChars);
-      const roomName = matchedParams.length > 1 ? matchedParams[matchedParams.length - 1] : "";
+      const roomName = matchedParams.length > 1 ? matchedParams[matchedParams.length - 1] : '';
 
       headers['Content-Type'] = 'application/json';
       res.writeHead(200, headers);
       res.write(JSON.stringify(await matchMaker.controller.getAvailableRooms(roomName)));
       res.end();
     }
-
   }
-
 
 }

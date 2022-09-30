@@ -1,11 +1,10 @@
-import Redis from 'ioredis';
-
 import {
   IRoomListingData,
   MatchMakerDriver,
   QueryHelpers,
   RoomListingData,
 } from '@colyseus/core';
+import Redis from 'ioredis';
 
 import { Query } from './Query';
 import { RoomData } from './RoomData';
@@ -46,7 +45,7 @@ export class RedisDriver implements MatchMakerDriver {
 
   public async getRooms() {
     return Object.entries(await this._client.hgetall('roomcaches') ?? []).map(
-      ([, roomcache]) => new RoomData(JSON.parse(roomcache), this._client)
+      ([, roomcache]) => new RoomData(JSON.parse(roomcache), this._client),
     );
   }
 

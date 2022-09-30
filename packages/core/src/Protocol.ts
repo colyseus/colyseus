@@ -1,5 +1,5 @@
-import { pack } from 'msgpackr';
 import { encode, Schema } from '@colyseus/schema';
+import { pack } from 'msgpackr';
 import { logger } from './Logger';
 
 // Colyseus protocol codes range between 0~100

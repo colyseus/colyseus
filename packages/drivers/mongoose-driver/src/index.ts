@@ -1,4 +1,4 @@
-import { IRoomListingData, MatchMakerDriver, QueryHelpers, RoomListingData, debugDriver } from '@colyseus/core';
+import { debugDriver, IRoomListingData, MatchMakerDriver, QueryHelpers, RoomListingData } from '@colyseus/core';
 import mongoose, { Document, Schema } from 'mongoose';
 
 const RoomCacheSchema: Schema = new Schema({
@@ -8,8 +8,8 @@ const RoomCacheSchema: Schema = new Schema({
   metadata: Schema.Types.Mixed,
   name: String,
   private: { type: Boolean, default: false },
-  publicAddress: String,
   processId: String,
+  publicAddress: String,
   roomId: String,
   unlisted: { type: Boolean, default: false }, // used for default LobbyRoom (prevent from showing up on room listing)
 }, {
@@ -38,7 +38,7 @@ export class MongooseDriver implements MatchMakerDriver {
         useUnifiedTopology: true,
       });
 
-      debugDriver("🗄️ Connected to", connectionURI);
+      debugDriver('🗄️ Connected to', connectionURI);
     }
   }
 

@@ -1,5 +1,5 @@
-import fs from "fs";
-import path from "path";
+import fs from 'fs';
+import path from 'path';
 
 import { EventEmitter } from 'events';
 import { spliceOne } from '../utils/Utils';
@@ -9,7 +9,7 @@ import { isDevMode } from '../utils/DevMode';
 
 type Callback = (...args: any[]) => void;
 
-const DEVMODE_CACHE_FILE_PATH = path.resolve(".devmode.json");
+const DEVMODE_CACHE_FILE_PATH = path.resolve('.devmode.json');
 
 export class LocalPresence implements Presence {
     public channels = new EventEmitter();
@@ -30,7 +30,7 @@ export class LocalPresence implements Presence {
         isDevMode &&
         fs.existsSync(DEVMODE_CACHE_FILE_PATH)
       ) {
-        const cache = fs.readFileSync(DEVMODE_CACHE_FILE_PATH).toString('utf-8') || "{}";
+        const cache = fs.readFileSync(DEVMODE_CACHE_FILE_PATH).toString('utf-8') || '{}';
         const parsed = JSON.parse(cache);
         this.data = parsed.data;
         this.hash = parsed.hash;

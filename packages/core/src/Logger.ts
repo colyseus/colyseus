@@ -2,23 +2,23 @@
 // Abstract logging adaptor
 //
 export class Logger {
-  debug(...args) {
+  public debug(...args) {
     logger.debug(...args);
   }
 
-  error(...args) {
+  public error(...args) {
     logger.error(...args);
   }
 
-  info(...args) {
+  public info(...args) {
     logger.info(...args);
   }
 
-  trace(...args) {
+  public trace(...args) {
     logger.trace(...args);
   }
 
-  warn(...args) {
+  public  warn(...args) {
     logger.warn(...args);
   }
 }

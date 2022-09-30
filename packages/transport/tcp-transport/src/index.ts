@@ -1,14 +1,14 @@
 import * as net from 'net';
 
 import {
+  debugAndPrintError,
+  debugError,
   generateId,
+  logger,
   matchMaker,
   Protocol,
   ServerOptions,
   Transport,
-  debugAndPrintError,
-  debugError,
-  logger
 } from '@colyseus/core';
 
 /**
