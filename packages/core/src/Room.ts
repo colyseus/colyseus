@@ -534,7 +534,6 @@ export abstract class Room<State= any, Metadata= any> {
     const previousReconnectionToken = this._reconnectingSessionId.get(sessionId);
     if (previousReconnectionToken) {
       this._reconnections[previousReconnectionToken]?.[1].resolve(client);
-
     } else {
       try {
         client.auth = await this.onAuth(client, options, req);
@@ -581,61 +580,72 @@ export abstract class Room<State= any, Metadata= any> {
    *
    * @param previousClient - The client which is to be waiting until re-connection happens.
    * @param seconds - Timeout period on re-connection in seconds.
+   * @param abortController - Allows you to forcibly abort re-connection.
    *
-   * @returns Deferred<Client> - The differed is a promise like type.
-   *  This type can forcibly reject the promise by calling `.reject()`.
+   * @returns Promise<void>
    */
-  public allowReconnection(previousClient: Client, seconds: number | "manual"): Deferred<Client> {
-    if (seconds === undefined) { // TODO: remove this check
-      console.warn('DEPRECATED: allowReconnection() requires a second argument. Using "manual" mode.');
-      seconds = 'manual';
-    }
-
-    if (seconds === 'manual') {
-      seconds = Infinity;
-    }
-
+  public async allowReconnection(
+    previousClient: Client,
+    seconds: number | 'manual',
+    abortController?: AbortController,
+  ): Promise<void> {
     if (this.internalState === RoomInternalState.DISCONNECTING) {
       this._disposeIfEmpty(); // gracefully shutting down
       throw new Error('disconnecting');
     }
 
-    const sessionId = previousClient.sessionId;
-    const reconnectionToken = previousClient._reconnectionToken;
+    return new Promise(async (resolve, reject) => {
+      if (seconds === undefined) { // TODO: remove this check
+        console.warn('DEPRECATED: allowReconnection() requires a second argument. Using "manual" mode.');
+        seconds = 'manual';
+      }
 
-    this._reserveSeat(sessionId, true, seconds, true);
+      if (seconds === 'manual') {
+        seconds = Infinity;
+      }
 
-    // keep reconnection reference in case the user reconnects into this room.
-    const reconnection = new Deferred<Client>();
-    this._reconnections[reconnectionToken] = [sessionId, reconnection];
+      const sessionId = previousClient.sessionId;
+      const reconnectionToken = previousClient._reconnectionToken;
 
-    if (seconds !== Infinity) {
-      // expire seat reservation after timeout
-      this.reservedSeatTimeouts[sessionId] = setTimeout(() =>
-        reconnection.reject(false), seconds * 1000);
-    }
+      await this._reserveSeat(sessionId, true, seconds, true);
 
-    const cleanup = () => {
-      delete this._reconnections[reconnectionToken];
-      delete this.reservedSeats[sessionId];
-      delete this.reservedSeatTimeouts[sessionId];
-      this._reconnectingSessionId.delete(sessionId);
-    };
+      // keep reconnection reference in case the user reconnects into this room.
+      const reconnection = new Deferred<Client>();
+      this._reconnections[reconnectionToken] = [sessionId, reconnection];
 
-    reconnection.
-    then((newClient) => {
-      newClient.auth = previousClient.auth;
-      previousClient.ref = newClient.ref; // swap "ref" for convenience
-      previousClient.state = ClientState.RECONNECTED;
-      clearTimeout(this.reservedSeatTimeouts[sessionId]);
-      cleanup();
-    }).
-    catch(() => {
-      cleanup();
-      this.resetAutoDisposeTimeout();
+      if (seconds !== Infinity) {
+        // expire seat reservation after timeout
+        this.reservedSeatTimeouts[sessionId] = setTimeout(() =>
+          reconnection.reject(false), seconds * 1000);
+      }
+
+      if (abortController) {
+        abortController.signal.addEventListener('abort', () =>
+          reconnection.reject(false));
+      }
+
+      const cleanup = () => {
+        delete this._reconnections[reconnectionToken];
+        delete this.reservedSeats[sessionId];
+        delete this.reservedSeatTimeouts[sessionId];
+        this._reconnectingSessionId.delete(sessionId);
+      };
+
+      reconnection
+        .then((newClient) => {
+          newClient.auth = previousClient.auth;
+          previousClient.ref = newClient.ref; // swap "ref" for convenience
+          previousClient.state = ClientState.RECONNECTED;
+          clearTimeout(this.reservedSeatTimeouts[sessionId]);
+          cleanup();
+          resolve();
+        })
+        .catch((e) => {
+          cleanup();
+          this.resetAutoDisposeTimeout();
+          reject(e);
+        });
     });
-
-    return reconnection;
   }
 
   protected resetAutoDisposeTimeout(timeoutInSeconds: number = 1) {
