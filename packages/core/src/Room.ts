@@ -154,7 +154,7 @@ export abstract class Room<State= any, Metadata= any> {
    *
    * @see {@link https://docs.colyseus.io/colyseus/server/room/#client|Client instance}
    */
-  public clients: HybridArray<Client> = new HybridArray<Client>("sessionId");
+  public readonly clients: HybridArray<Client> = new HybridArray<Client>('sessionId');
 
   public internalState: RoomInternalState = RoomInternalState.CREATING;
 
