@@ -177,7 +177,7 @@ export class Server {
     name: string,
     handler: T,
     defaultOptions?: Parameters<NonNullable<InstanceType<T>['onCreate']>>[0],
-  ): RegisteredHandler {
+  ): Promise<RegisteredHandler> {
     return matchMaker.defineRoomType(name, handler, defaultOptions);
   }
 
