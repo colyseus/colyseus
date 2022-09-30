@@ -59,43 +59,35 @@ export class RedisPresence implements Presence {
         }
 
         await this.pub.publish(topic, JSON.stringify(data));
+
+        return this;
     }
 
-    public async exists(roomId: string): Promise<boolean> {
-        return (await (this.pub as any).pubsub("channels", roomId)).length > 0;
+    public async exists(roomId: string) {
+        return (await (this.pub as any).pubsub('channels', roomId)).length > 0;
     }
 
     public async setex(key: string, value: string, seconds: number) {
-      return new Promise((resolve) =>
-        this.pub.setex(key, seconds, value, resolve));
+        return await this.pub.setex(key, seconds, value);
     }
 
     public async get(key: string) {
-        return new Promise((resolve, reject) => {
-            this.pub.get(key, (err, data) => {
-                if (err) { return reject(err); }
-                resolve(data);
-            });
-        });
+        return await this.pub.get('key');
     }
 
-    public async del(roomId: string) {
-        return new Promise((resolve) => {
-            this.pub.del(roomId, resolve);
-        });
+    public async del(key: string) {
+        return await this.pub.del(key);
     }
 
     public async sadd(key: string, value: any) {
-        return new Promise((resolve) => {
-            this.pub.sadd(key, value, resolve);
-        });
+        return await this.pub.sadd(key, value);
     }
 
-    public async smembers(key: string): Promise<string[]> {
+    public async smembers(key: string) {
         return await this.pub.smembers(key);
     }
 
-    public async sismember(key: string, field: string): Promise<number> {
+    public async sismember(key: string, field: string) {
         return await this.pub.sismember(key, field);
     }
 
@@ -143,9 +135,9 @@ export class RedisPresence implements Presence {
         return await this.pub.decr(key);
     }
 
-    public shutdown() {
-        this.sub.quit();
-        this.pub.quit();
+    public async shutdown() {
+        await this.sub.quit();
+        await this.pub.quit();
     }
 
     protected handleSubscription = (channel, message) => {
@@ -155,5 +147,4 @@ export class RedisPresence implements Presence {
           }
         }
     }
-
 }

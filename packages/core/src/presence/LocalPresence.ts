@@ -38,14 +38,14 @@ export class LocalPresence implements Presence {
       }
     }
 
-    public subscribe(topic: string, callback: (...args: any[]) => void) {
+    public async subscribe(topic: string, callback: (...args: any[]) => void) {
         if (!this.subscriptions[topic]) { this.subscriptions[topic] = []; }
         this.subscriptions[topic].push(callback);
         this.channels.on(topic, callback);
         return this;
     }
 
-    public unsubscribe(topic: string, callback?: Callback) {
+    public async unsubscribe(topic: string, callback?: Callback) {
         const topicCallbacks = this.subscriptions[topic];
         if (!topicCallbacks) { return; }
 
@@ -70,16 +70,16 @@ export class LocalPresence implements Presence {
         return this;
     }
 
-    public publish(topic: string, data: any) {
+    public async publish(topic: string, data: any) {
         this.channels.emit(topic, data);
         return this;
     }
 
-    public async exists(roomId: string): Promise<boolean> {
+    public async exists(roomId: string) {
         return this.channels.listenerCount(roomId) > 0;
     }
 
-    public setex(key: string, value: string, seconds: number) {
+    public async setex(key: string, value: string, seconds: number) {
         // ensure previous timeout is clear before setting another one.
         if (this.timeouts[key]) {
             clearTimeout(this.timeouts[key]);
@@ -90,19 +90,25 @@ export class LocalPresence implements Presence {
             delete this.keys[key];
             delete this.timeouts[key];
         }, seconds * 1000);
+
+        return 'OK';
     }
 
-    public get(key: string) {
-        return this.keys[key];
+    public async get(key: string) {
+        return this.keys[key] ? String(this.keys[key]) : '';
     }
 
-    public del(key: string) {
+    public async del(key: string) {
+        const len = (this.data[key] || []).length;
+
         delete this.keys[key];
         delete this.data[key];
         delete this.hash[key];
+
+        return len;
     }
 
-    public sadd(key: string, value: any) {
+    public async sadd(key: string, value: any) {
         if (!this.data[key]) {
             this.data[key] = [];
         }
@@ -110,9 +116,11 @@ export class LocalPresence implements Presence {
         if (this.data[key].indexOf(value) === -1) {
             this.data[key].push(value);
         }
+
+        return 1;
     }
 
-    public async smembers(key: string): Promise<string[]> {
+    public async smembers(key: string) {
         return this.data[key] || [];
     }
 
@@ -120,13 +128,16 @@ export class LocalPresence implements Presence {
         return this.data[key] && this.data[key].includes(field) ? 1 : 0;
     }
 
-    public srem(key: string, value: any) {
+    public async srem(key: string, value: any) {
         if (this.data[key]) {
             spliceOne(this.data[key], this.data[key].indexOf(value));
+            return 1;
         }
+
+        return 0;
     }
 
-    public scard(key: string) {
+    public async scard(key: string) {
         return (this.data[key] || []).length;
     }
 
@@ -151,16 +162,24 @@ export class LocalPresence implements Presence {
       }, []);
     }
 
-    public hset(key: string, field: string, value: string) {
-        if (!this.hash[key]) { this.hash[key] = {}; }
+    public async hset(key: string, field: string, value: string) {
+        if (!this.hash[key]) {
+            this.hash[key] = {};
+        }
+
         this.hash[key][field] = value;
+
+        return 1;
     }
 
-    public hincrby(key: string, field: string, incrBy: number) {
-        if (!this.hash[key]) { this.hash[key] = {}; }
-        let value = Number(this.hash[key][field] || '0');
-        value += incrBy;
+    public async hincrby(key: string, field: string, incrBy: number) {
+        if (!this.hash[key]) {
+            this.hash[key] = {};
+        }
+
+        const value = Number(this.hash[key][field] || '0') + incrBy;
         this.hash[key][field] = value.toString();
+
         return value;
     }
 
@@ -172,10 +191,13 @@ export class LocalPresence implements Presence {
         return this.hash[key] || {};
     }
 
-    public hdel(key: string, field: any) {
+    public async hdel(key: string, field: any) {
         if (this.hash[key]) {
             delete this.hash[key][field];
+            return 1;
         }
+
+        return 0;
     }
 
     public async hlen(key: string) {
@@ -186,6 +208,7 @@ export class LocalPresence implements Presence {
         if (!this.keys[key]) {
             this.keys[key] = 0;
         }
+
         (this.keys[key] as number)++;
         return this.keys[key] as number;
     }
@@ -198,14 +221,14 @@ export class LocalPresence implements Presence {
         return this.keys[key] as number;
     }
 
-    public shutdown() {
+    public async shutdown() {
       if (isDevMode) {
         const cache = JSON.stringify({
           data: this.data,
           hash: this.hash,
-          keys: this.keys
+          keys: this.keys,
         });
-        fs.writeFileSync(DEVMODE_CACHE_FILE_PATH, cache, { encoding: "utf-8" });
+        fs.writeFileSync(DEVMODE_CACHE_FILE_PATH, cache, { encoding: 'utf-8' });
       }
     }
 
