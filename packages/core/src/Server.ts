@@ -194,13 +194,11 @@ export class Server {
     try {
       await matchMaker.gracefullyShutdown();
       this.transport.shutdown();
-      this.presence.shutdown();
-      this.driver.shutdown();
+      await this.presence.shutdown();
+      await this.driver.shutdown();
       await this.onShutdownCallback();
-
     } catch (e) {
       debugAndPrintError(`error during shutdown: ${e}`);
-
     } finally {
       if (exit) {
         process.exit((err && !isDevMode) ? 1 : 0);
@@ -247,11 +245,10 @@ export class Server {
     const listeners = server.listeners('request').slice(0);
     server.removeAllListeners('request');
 
-    server.on('request', (req, res) => {
+    server.on('request', async (req, res) => {
       if (req.url.indexOf(`/${matchMaker.controller.matchmakeRoute}`) !== -1) {
-        debugMatchMaking('received matchmake request: %s', req.url);
-        this.handleMatchMakeRequest(req, res);
-
+        debugMatchMaking('received matchmaker request: %s', req.url);
+        await this.handleMatchMakeRequest(req, res);
       } else {
         for (let i = 0, l = listeners.length; i < l; i++) {
           listeners[i].call(server, req, res);

@@ -65,7 +65,7 @@ export async function setup(
   /**
    * Subscribe to remote `handleCreateRoom` calls.
    */
-  subscribeIPC(presence, processId, getProcessChannel(), (_, args) => {
+  await subscribeIPC(presence, processId, getProcessChannel(), (_, args) => {
     return handleCreateRoom.apply(undefined, args);
   });
 
@@ -165,8 +165,8 @@ export async function joinById(roomId: string, clientOptions: ClientOptions = {}
 /**
  * Perform a query for all cached rooms
  */
-export async function query(conditions: Partial<IRoomListingData> = {}) {
-  return await driver.find(conditions);
+export function query(conditions: Partial<IRoomListingData> = {}) {
+  return driver.find(conditions);
 }
 
 /**
@@ -195,7 +195,7 @@ export async function findOneRoomAvailable(roomName: string, clientOptions: Clie
       roomQuery.sort(handler.sortOptions);
     }
 
-    return await roomQuery;
+    return roomQuery;
   });
 }
 
@@ -236,7 +236,7 @@ export async function remoteRoomCall<R= any>(
   }
 }
 
-export function defineRoomType<T extends Type<Room>>(
+export async function defineRoomType<T extends Type<Room>>(
   name: string,
   klass: T,
   defaultOptions?: Parameters<NonNullable<InstanceType<T>['onCreate']>>[0],
@@ -246,17 +246,17 @@ export function defineRoomType<T extends Type<Room>>(
   handlers[name] = registeredHandler;
 
   if (!isDevMode) {
-    cleanupStaleRooms(name);
+    await cleanupStaleRooms(name);
   }
 
   return registeredHandler;
 }
 
-export function removeRoomType(name: string) {
+export async function removeRoomType(name: string) {
   delete handlers[name];
 
   if (!isDevMode) {
-    cleanupStaleRooms(name);
+    await cleanupStaleRooms(name);
   }
 }
 
@@ -306,10 +306,10 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
   }
 
   if (isDevMode) {
-    presence.hset(getRoomRestoreListKey(), room.roomId, JSON.stringify({
-      "clientOptions": clientOptions,
-      "roomName": roomName,
-      "processId": processId
+    await presence.hset(getRoomRestoreListKey(), room.roomId, JSON.stringify({
+      clientOptions,
+      processId,
+      roomName,
     }));
   }
 
@@ -359,8 +359,7 @@ export async function handleCreateRoom(
       await room.onCreate(merge({}, clientOptions, registeredHandler.options));
 
       // increment amount of rooms this process is handling
-      presence.hincrby(getRoomCountKey(), processId, 1);
-
+      await presence.hincrby(getRoomCountKey(), processId, 1);
     } catch (e) {
       debugAndPrintError(e);
       throw new ServerError(
@@ -426,15 +425,15 @@ export async function gracefullyShutdown(): Promise<any> {
   }
 
   // remove processId from room count key
-  presence.hdel(getRoomCountKey(), processId);
+  await presence.hdel(getRoomCountKey(), processId);
 
   // unsubscribe from process id channel
-  presence.unsubscribe(getProcessChannel());
+  await presence.unsubscribe(getProcessChannel());
 
   return Promise.all(disconnectAll(
     (isDevMode)
       ? Protocol.WS_CLOSE_DEVMODE_RESTART
-      : undefined
+      : undefined,
   ));
 }
 
@@ -486,10 +485,9 @@ async function cleanupStaleRooms(roomName: string) {
     try {
       // use hardcoded short timeout for cleaning up stale rooms.
       await remoteRoomCall(room.roomId, 'roomId');
-
     } catch (e) {
       debugMatchMaking(`cleaning up stale room '${roomName}', roomId: ${room.roomId}`);
-      room.remove();
+      await room.remove();
     }
   }));
 }
@@ -568,7 +566,7 @@ async function disposeRoom(roomName: string, room: Room) {
 
   // decrease amount of rooms this process is handling
   if (!isGracefullyShuttingDown) {
-    presence.hincrby(getRoomCountKey(), processId, -1);
+    await presence.hincrby(getRoomCountKey(), processId, -1);
 
     // remove from devMode restore list
     if (isDevMode) {
@@ -585,10 +583,10 @@ async function disposeRoom(roomName: string, room: Room) {
   handlers[roomName].emit('dispose', room);
 
   // remove concurrency key
-  presence.del(getHandlerConcurrencyKey(roomName));
+  await presence.del(getHandlerConcurrencyKey(roomName));
 
   // unsubscribe from remote connections
-  presence.unsubscribe(getRoomChannel(room.roomId));
+  await presence.unsubscribe(getRoomChannel(room.roomId));
 
   // remove actual room reference
   delete rooms[room.roomId];

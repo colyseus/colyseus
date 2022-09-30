@@ -4,11 +4,11 @@ import { RoomListingData } from './driver';
 
 const LOBBY_CHANNEL = '$lobby';
 
-export function updateLobby(room: Room, removed: boolean = false) {
+export async function updateLobby(room: Room, removed: boolean = false) {
   const listing = room.listing;
 
   if (!listing.unlisted && !listing.private) {
-    matchMaker.presence.publish(LOBBY_CHANNEL, `${listing.roomId},${removed ? 1 : 0}`);
+    await matchMaker.presence.publish(LOBBY_CHANNEL, `${listing.roomId},${removed ? 1 : 0}`);
   }
 }
 
