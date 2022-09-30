@@ -21,8 +21,8 @@ export interface ISendOptions {
 
 export enum ClientState { JOINING, JOINED, RECONNECTED, LEAVING }
 
-export interface ClientRef extends EventEmitter {
-  onLeave(client: Client, code?: number): Promise<any>;
+export interface IClientRef extends EventEmitter {
+  onLeave: (client: Client, code?: number) => Promise<any>;
 }
 
 /**
@@ -43,7 +43,7 @@ export interface Client {
   sessionId: string; // TODO: remove sessionId on version 1.0.0
   state: ClientState;
 
-  ref: ClientRef;
+  ref: IClientRef;
 
   upgradeReq?: http.IncomingMessage; // cross-compatibility for ws (v3.x+) and uws
 

@@ -1,13 +1,15 @@
 import EventEmitter from 'events';
 import uWebSockets from 'uWebSockets.js';
 
-import { getMessageBytes, Protocol, Client, ClientState, ISendOptions, logger, debugMessage } from '@colyseus/core';
+import { getMessageBytes, Protocol, Client, ClientState, IClientRef, ISendOptions, logger, debugMessage } from '@colyseus/core';
 import { Schema } from '@colyseus/schema';
 
-export class uWebSocketWrapper extends EventEmitter {
+export class uWebSocketWrapper extends EventEmitter implements IClientRef {
   constructor(public ws: uWebSockets.WebSocket) {
     super();
   }
+
+  onLeave: (client: Client, code?: number) => Promise<any>;
 }
 
 export enum ReadyState {
