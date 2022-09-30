@@ -17,9 +17,9 @@ export interface IRoomListingData {
 export interface RoomListingData<Metadata= any> extends IRoomListingData {
   metadata: Metadata;
 
-  updateOne(operations: any);
-  save();
-  remove();
+  updateOne(operations: any): Promise<void>;
+  save(): Promise<void>;
+  remove(): Promise<number>;
 }
 
 export interface QueryHelpers<T> {
@@ -48,7 +48,7 @@ export interface MatchMakerDriver {
   find(
     conditions: Partial<IRoomListingData>,
     additionalProjectionFields?: any,
-  ): Promise<RoomListingData[]> | RoomListingData[];
+  ): Promise<RoomListingData[]>;
 
   /**
    * Query for a room in room cache for given conditions.
@@ -62,10 +62,10 @@ export interface MatchMakerDriver {
   /**
    * Empty the room cache.
    */
-  clear(): void;
+  clear(): Promise<void>;
 
   /**
    * Dispose the connection of the room cache medium.
    */
-  shutdown(): void;
+  shutdown(): Promise<void>;
 }

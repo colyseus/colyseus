@@ -78,13 +78,14 @@ export class RoomData implements RoomListingData {
       }
     }
 
-    return this.save();
+    await this.save();
   }
 
-  public remove() {
+  public async remove() {
     if (this.roomId) {
-      return this.hdel('roomcaches', this.roomId);
+      return await this.hdel('roomcaches', this.roomId);
     }
+    return 0;
   }
 
   private async hset(key: string, field: string, value: string) {

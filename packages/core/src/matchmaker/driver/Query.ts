@@ -2,7 +2,7 @@ import { QueryHelpers, SortOptions } from './interfaces';
 
 export class Query<T> implements QueryHelpers<T> {
   private $rooms: T[];
-  private conditions: any;
+  private readonly conditions: any;
 
   constructor(rooms: any[], conditions) {
     this.$rooms = rooms.slice(0);
