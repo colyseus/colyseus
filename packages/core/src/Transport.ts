@@ -21,6 +21,10 @@ export interface ISendOptions {
 
 export enum ClientState { JOINING, JOINED, RECONNECTED, LEAVING }
 
+export interface ClientRef extends EventEmitter {
+  onLeave(client: Client, code?: number): Promise<any>;
+}
+
 /**
  * The client instance from the server-side is responsible for the transport layer between the server and the client.
  * It should not be confused with the Client from the client-side SDK, as they have completely different purposes!
@@ -39,7 +43,7 @@ export interface Client {
   sessionId: string; // TODO: remove sessionId on version 1.0.0
   state: ClientState;
 
-  ref: EventEmitter;
+  ref: ClientRef;
 
   upgradeReq?: http.IncomingMessage; // cross-compatibility for ws (v3.x+) and uws
 
