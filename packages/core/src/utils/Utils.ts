@@ -26,7 +26,7 @@ export function registerGracefulShutdown(callback: (err?: Error) => void) {
    */
   process.on('uncaughtException', (err) => {
     debugAndPrintError(err);
-    callback(err);
+    return callback(err);
   });
 
   signals.forEach((signal) =>

@@ -4,7 +4,7 @@ import { decode, Iterator, Schema } from '@colyseus/schema';
 import { unpack } from 'msgpackr';
 
 import Clock from '@gamestdio/timer';
-import { EventEmitter } from 'events';
+import { EventEmitter, once } from 'events';
 import { logger } from './Logger';
 
 import { Presence } from './presence/Presence';
@@ -195,6 +195,10 @@ export abstract class Room<State= any, Metadata= any> {
         debugAndPrintError(`onDispose error: ${(e && e.message || e || 'promise rejected')}`);
       }
       this._events.emit('disconnect');
+    });
+
+    this._events.once('disconnect', () => {
+      this._events.removeAllListeners();
     });
 
     this.setPatchRate(this.patchRate);
@@ -480,8 +484,7 @@ export abstract class Room<State= any, Metadata= any> {
 
     this.autoDispose = true;
 
-    const delayedDisconnection = new Promise<void>((resolve) =>
-      this._events.once('disconnect', () => resolve()));
+    const delayedDisconnection = once(this._events, 'disconnect');
 
     for (const [_, reconnection] of Object.values(this._reconnections)) {
       reconnection.reject();
@@ -489,10 +492,14 @@ export abstract class Room<State= any, Metadata= any> {
 
     let numClients = this.clients.length;
     if (numClients > 0) {
+      const closeClientPromises = [];
+
       // clients may have `async onLeave`, room will be disposed after they're fulfilled
       while (numClients--) {
-        this._forciblyCloseClient(this.clients.array[numClients], closeCode);
+        closeClientPromises.push(this._forciblyCloseClient(this.clients.array[numClients], closeCode));
       }
+
+      await Promise.allSettled(closeClientPromises);
     } else {
       // no clients connected, dispose immediately.
       this._events.emit('dispose');
@@ -803,7 +810,7 @@ export abstract class Room<State= any, Metadata= any> {
     return await (userReturnData || Promise.resolve());
   }
 
-  private _onMessage(client: Client, bytes: number[]) {
+  private async _onMessage(client: Client, bytes: number[]) {
     // skip if client is on LEAVING state.
     if (client.state === ClientState.LEAVING) { return; }
 
@@ -840,7 +847,6 @@ export abstract class Room<State= any, Metadata= any> {
       } else {
         debugAndPrintError(`onMessage for "${messageType}" not registered.`);
       }
-
     } else if (code === Protocol.ROOM_DATA_BYTES) {
       const messageType = (decode.stringCheck(bytes, it))
         ? decode.string(bytes, it)
@@ -873,14 +879,12 @@ export abstract class Room<State= any, Metadata= any> {
         client._enqueuedMessages.forEach((enqueued) => client.raw(enqueued));
       }
       delete client._enqueuedMessages;
-
     } else if (code === Protocol.LEAVE_ROOM) {
-      this._forciblyCloseClient(client, Protocol.WS_CLOSE_CONSENTED);
+      await this._forciblyCloseClient(client, Protocol.WS_CLOSE_CONSENTED);
     }
-
   }
 
-  private _forciblyCloseClient(client: Client, closeCode: number) {
+  private async _forciblyCloseClient(client: Client, closeCode: number) {
     // stop receiving messages from this client
     client.ref.removeAllListeners('message');
 
@@ -888,7 +892,7 @@ export abstract class Room<State= any, Metadata= any> {
     client.ref.removeListener('close', client.ref.onLeave);
 
     // only effectively close connection when "onLeave" is fulfilled
-    this._onLeave(client, closeCode).then(() => client.leave(closeCode));
+    await this._onLeave(client, closeCode).then(() => client.leave(closeCode));
   }
 
   private async _onLeave(client: Client, code?: number): Promise<any> {

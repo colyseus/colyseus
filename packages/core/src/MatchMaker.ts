@@ -381,8 +381,8 @@ export async function handleCreateRoom(
   room._events.on('unlock', unlockRoom.bind(this, room));
   room._events.on('join', onClientJoinRoom.bind(this, room));
   room._events.on('leave', onClientLeaveRoom.bind(this, room));
+
   room._events.once('dispose', disposeRoom.bind(this, roomName, room));
-  room._events.once('disconnect', () => room._events.removeAllListeners());
 
   // room always start unlocked
   await createRoomReferences(room, true);
