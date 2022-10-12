@@ -70,4 +70,17 @@ export class RoomCache implements RoomListingData {
     spliceOne(this.$rooms, roomIndex);
     this.$rooms = null;
   }
+
+  public toJSON() {
+    return {
+      clients: this.clients,
+      createdAt: this.createdAt,
+      maxClients: this.maxClients,
+      metadata: this.metadata,
+      name: this.name,
+      publicAddress: this.publicAddress,
+      processId: this.processId,
+      roomId: this.roomId,
+    };
+  }
 }
