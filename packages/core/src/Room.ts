@@ -852,7 +852,7 @@ export abstract class Room<State= any, Metadata= any> {
         debugAndPrintError(`onMessage for "${messageType}" not registered.`);
       }
 
-    } else if (code === Protocol.JOIN_ROOM) {
+    } else if (code === Protocol.JOIN_ROOM && client.state === ClientState.JOINING) {
       // join room has been acknowledged by the client
       client.state = ClientState.JOINED;
 
