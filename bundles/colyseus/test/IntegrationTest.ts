@@ -5,7 +5,7 @@ import { Schema, type, Context } from "@colyseus/schema";
 
 import { matchMaker, Room, Client, Server, ErrorCode, MatchMakerDriver, Presence } from "@colyseus/core";
 import { DummyRoom, DRIVERS, timeout, Room3Clients, PRESENCE_IMPLEMENTATIONS, Room2Clients, Room2ClientsExplicitLock } from "./utils";
-import { ServerError } from "@colyseus/core";
+import { ServerError, Protocol } from "@colyseus/core";
 
 import { uWebSocketsTransport } from "@colyseus/uwebsockets-transport";
 
@@ -169,6 +169,16 @@ describe("Integration", () => {
 
               await activeConnection.leave();
               await timeout(50);
+            });
+
+            it("server should deny sending acknowledgement packet twice", async () => {
+              matchMaker.defineRoomType('onjoin_ack_twice', class _ extends Room {});
+
+              const room = await client.joinOrCreate('onjoin_ack_twice');
+              room.connection.send([Protocol.JOIN_ROOM]);
+
+              await timeout(50);
+              assert.ok(true);
             });
           });
 
@@ -918,17 +928,17 @@ describe("Integration", () => {
               await matchMaker.create("allroomstest");
               await matchMaker.create("allroomstest2");
             }
-            it("client.getAvailableRooms() should recieve all rooms when roomName is undefined", async () => {
+            it("client.getAvailableRooms() should receive all rooms when roomName is undefined", async () => {
               await createDummyRooms();
               const rooms = await client.getAvailableRooms(undefined);
               assert.strictEqual(2, rooms.length);
             });
-            it("client.getAvailableRooms() should recieve the room when roomName is given", async () => {
+            it("client.getAvailableRooms() should receive the room when roomName is given", async () => {
               await createDummyRooms();
               const rooms = await client.getAvailableRooms("allroomstest");
               assert.strictEqual("allroomstest", rooms[0]["name"]);
             });
-            it("client.getAvailableRooms() should recieve empty list if no room exists for the given roomName", async () => {
+            it("client.getAvailableRooms() should receive empty list if no room exists for the given roomName", async () => {
               await createDummyRooms();
               const rooms = await client.getAvailableRooms("incorrectRoomName");
               assert.strictEqual(0, rooms.length);

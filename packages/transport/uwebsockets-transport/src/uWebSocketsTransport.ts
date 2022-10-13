@@ -225,10 +225,14 @@ export class uWebSocketsTransport extends Transport {
 
             // read json body
             this.readJson(res, async (clientOptions) => {
-                const method = matchedParams[matchmakeIndex + 1];
-                const roomName = matchedParams[matchmakeIndex + 2] || '';
-
                 try {
+                    if (clientOptions === undefined) {
+                      throw new Error("invalid JSON input");
+                    }
+
+                    const method = matchedParams[matchmakeIndex + 1];
+                    const roomName = matchedParams[matchmakeIndex + 2] || '';
+
                     const response = await matchMaker.controller.invokeMethod(method, roomName, clientOptions);
                     if (!res.aborted) {
                       res.writeStatus("200 OK");
@@ -293,7 +297,7 @@ export class uWebSocketsTransport extends Transport {
                         json = JSON.parse(Buffer.concat([buffer, chunk]));
                     } catch (e) {
                         /* res.close calls onAborted */
-                        res.close();
+                        // res.close();
                         cb(undefined);
                         return;
                     }
@@ -304,7 +308,7 @@ export class uWebSocketsTransport extends Transport {
                         json = JSON.parse(chunk);
                     } catch (e) {
                         /* res.close calls onAborted */
-                        res.close();
+                        // res.close();
                         cb(undefined);
                         return;
                     }

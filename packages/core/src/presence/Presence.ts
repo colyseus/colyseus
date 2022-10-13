@@ -113,24 +113,29 @@ export interface Presence {
      * If field already exists in the hash, it is overwritten.
      */
     hset(key: string, field: string, value: string);
+
     /**
      * Increments the number stored at field in the hash stored at key by increment. If key does not exist, a new key
      * holding a hash is created. If field does not exist the value is set to 0 before the operation is performed.
      */
     hincrby(key: string, field: string, value: number): number | Promise<number>;
+
     /**
      * Returns the value associated with field in the hash stored at key.
      */
     hget(key: string, field: string): Promise<string>;
+
     /**
      * Returns all fields and values of the hash stored at key.
      */
     hgetall(key: string): Promise<{ [key: string]: string }>;
+
     /**
      * Removes the specified fields from the hash stored at key. Specified fields that do not exist within
      * this hash are ignored. If key does not exist, it is treated as an empty hash and this command returns 0.
      */
     hdel(key: string, field: string);
+
     /**
      * Returns the number of fields contained in the hash stored at key
      */
@@ -142,6 +147,7 @@ export interface Presence {
      * contains a string that can not be represented as integer. This operation is limited to 64-bit signed integers.
      */
     incr(key: string): number | Promise<number>;
+
     /**
      * Decrements the number stored at key by one. If the key does not exist, it is set to 0 before performing
      * the operation. An error is returned if the key contains a value of the wrong type or contains a string

@@ -625,17 +625,18 @@ export abstract class Room<State= any, Metadata= any> {
     };
 
     reconnection.
-    then((newClient) => {
-      newClient.auth = previousClient.auth;
-      previousClient.ref = newClient.ref; // swap "ref" for convenience
-      previousClient.state = ClientState.RECONNECTED;
-      clearTimeout(this.reservedSeatTimeouts[sessionId]);
-      cleanup();
-    }).
-    catch(() => {
-      cleanup();
-      this.resetAutoDisposeTimeout();
-    });
+      then((newClient) => {
+        newClient.auth = previousClient.auth;
+        newClient.userData = previousClient.userData;
+        previousClient.ref = newClient.ref; // swap "ref" for convenience
+        previousClient.state = ClientState.RECONNECTED;
+        clearTimeout(this.reservedSeatTimeouts[sessionId]);
+        cleanup();
+      }).
+      catch(() => {
+        cleanup();
+        this.resetAutoDisposeTimeout();
+      });
 
     return reconnection;
   }
