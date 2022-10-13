@@ -228,8 +228,7 @@ console.error = function(...args) {
 };
 
 process.on("uncaughtException", (e) => {
-    error(e);
-    process.exit();
+    console.error(e);
 });
 
 let isExiting = false;
