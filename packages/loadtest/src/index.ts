@@ -1,3 +1,4 @@
+import fs from "fs";
 import path from "path";
 import util from "util";
 import blessed from "blessed";
@@ -5,8 +6,35 @@ import WebSocket from "ws";
 // import timer from "timers/promises"
 import minimist from "minimist";
 
-import * as logWriter from "./logWriter";
 import { Client, Room } from "colyseus.js";
+
+const logWriter = {
+    handle: null as fs.WriteStream,
+    isClosing: false as boolean,
+    create(filepath: string) {
+        if (fs.existsSync(filepath)) {
+            const moveTo = `${path.basename(filepath)}.bkp`;
+            console.log(`Moving previous "${path.basename(filepath)}" file to "${moveTo}"`);
+            fs.renameSync(filepath, path.resolve(path.dirname(filepath), moveTo));
+        }
+        this.handle = fs.createWriteStream(filepath);
+    },
+
+    write(contents: any, close?: boolean) {
+        if (!this.handle || this.isClosing) { return; }
+        if (close) { this.isClosing = true; }
+
+        return new Promise<void>((resolve, reject) => {
+            const now = new Date();
+            this.handle.write(`[${now.toLocaleString()}] ${contents}\n`, (err) => {
+                if (err) { return reject(err); }
+                if (this.isClosing) { this.handle.close(); }
+                resolve();
+            });
+
+        })
+    }
+};
 
 export type RequestJoinOperations = {
     requestNumber?: number,
