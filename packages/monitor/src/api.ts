@@ -28,7 +28,7 @@ export function getAPI (opts: Partial<MonitorOptions>) {
             res.json({
                 columns: opts.columns || DEFAULT_COLUMNS,
                 rooms: rooms.map(room => {
-                    const data = room.toJSON();
+                    const data = JSON.parse(JSON.stringify(room));
 
                     connections += room.clients;
 
