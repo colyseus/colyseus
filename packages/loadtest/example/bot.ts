@@ -15,5 +15,5 @@ export async function main(options: Options) {
         // logic
     });
 
-    await room.leave(true);
+    // await room.leave(true);
 }
