@@ -1,0 +1,29 @@
+{
+  "name": "@colyseus/greeting-banner",
+  "version": "1.0.0",
+  "description": "Greeting banner for Colyseus/Arena services",
+  "input": "./src/index.ts",
+  "main": "./build/index.js",
+  "module": "./build/index.mjs",
+  "typings": "./build/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/colyseus/colyseus.git"
+  },
+  "keywords": [
+    "colyseus",
+    "arena",
+    "multiplayer"
+  ],
+  "author": "Endel Dreyer",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/colyseus/colyseus/issues"
+  },
+  "files": [ "build" ],
+  "homepage": "https://www.colyseus.io/arena",
+  "dependencies": {},
+  "publishConfig": {
+    "access": "public"
+  }
+}
