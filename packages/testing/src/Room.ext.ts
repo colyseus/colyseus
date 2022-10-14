@@ -42,7 +42,7 @@ Room.prototype.waitForMessage = async function(this: Room, type: string, rejectT
   const originalMessageHandler = this['onMessageHandlers'][type] || (() => {});
   const room = this;
 
-  return new Promise((resolve, reject) => {
+  return new Promise<[Client, any]>((resolve, reject) => {
     const rejectionTimeout = setTimeout(() => reject(new Error(`message '${type}' was not called. timed out (${rejectTimeout}ms)`)), rejectTimeout);
 
     room['onMessageHandlers'][type] = async function (client, message) {
