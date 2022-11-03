@@ -1,11 +1,13 @@
-import { IRoomListingData, MatchMakerDriver, QueryHelpers, RoomListingData, debugDriver } from '@colyseus/core';
-import mongoose, { Document, Schema } from 'mongoose';
+import type { RoomListingData, QueryHelpers, IRoomListingData, MatchMakerDriver } from '@colyseus/core';
+import { debugDriver } from '@colyseus/core';
+import type { Document } from 'mongoose';
+import Mongoose from 'mongoose';
 
-const RoomCacheSchema: Schema = new Schema({
+const RoomCacheSchema: Mongoose.Schema = new Mongoose.Schema({
   clients: { type: Number, default: 0 },
   locked: { type: Boolean, default: false },
   maxClients: { type: Number, default: Infinity },
-  metadata: Schema.Types.Mixed,
+  metadata: Mongoose.Schema.Types.Mixed,
   name: String,
   private: { type: Boolean, default: false },
   processId: String,
@@ -20,21 +22,15 @@ const RoomCacheSchema: Schema = new Schema({
 RoomCacheSchema.index({ name: 1, locked: -1 });
 RoomCacheSchema.index({ roomId: 1 });
 
-const RoomCache = mongoose.model<Document>('RoomCache', RoomCacheSchema);
+const RoomCache = Mongoose.model<Document>('RoomCache', RoomCacheSchema);
 
 export class MongooseDriver implements MatchMakerDriver {
-
   constructor(connectionURI?: string) {
-
-    if (mongoose.connection.readyState === mongoose.STATES.disconnected) {
+    if (Mongoose.connection.readyState === Mongoose.STATES.disconnected) {
       connectionURI = connectionURI || process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/colyseus';
 
-      mongoose.connect(connectionURI, {
+      Mongoose.connect(connectionURI, {
         autoIndex: true,
-        useCreateIndex: true,
-        useFindAndModify: true,
-        useNewUrlParser: true,
-        useUnifiedTopology: true,
       });
 
       debugDriver("🗄️ Connected to", connectionURI);
@@ -70,6 +66,6 @@ export class MongooseDriver implements MatchMakerDriver {
   }
 
   public async shutdown() {
-    await mongoose.disconnect();
+    await Mongoose.disconnect();
   }
 }
