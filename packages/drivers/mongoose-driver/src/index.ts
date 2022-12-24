@@ -55,6 +55,7 @@ export class MongooseDriver implements MatchMakerDriver {
       metadata: true,
       name: true,
       roomId: true,
+      processId: true,
       ...additionalProjectionFields,
     })) as any as RoomListingData[];
   }
