@@ -16,7 +16,7 @@ export function getAPI (opts: Partial<MonitorOptions>) {
             const columns = opts.columns || ['roomId', 'name', 'clients', 'maxClients', 'locked', 'elapsedTime'];
 
             // extend columns to expose "publicAddress", if present
-            if (rooms[0] && rooms[0].publicAddress !== undefined) {
+            if (!opts.columns && rooms[0] && rooms[0].publicAddress !== undefined) {
                 columns.push("publicAddress");
             }
 
