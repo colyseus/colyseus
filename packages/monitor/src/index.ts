@@ -14,7 +14,8 @@ export interface MonitorOptions {
         'maxClients' |
         'locked' |
         'elapsedTime' |
-        { metadata: string }
+        { metadata: string } |
+        "publicAddress"
     >
 }
 
