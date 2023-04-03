@@ -57,13 +57,6 @@ npm init colyseus-app my-colyseus-server
 cd my-colyseus-server
 npm start
 ```
-# 🏟 Colyseus Arena: Fast & Scalable Cloud Hosting
-
-- Looking for a fully managed solution for your Colyseus game server?
-- Want to focus on game development and not on the hosting and infrastructure?
-- Launching a production title and need a solution for 1,000 to 100,000+ CCUs?
-
-If so [Colyseus Arena](https://www.colyseus.io/arena) cloud hosting is the solution you are looking for. Easily upload your existing Colyseus Server code and get started today for Free!
 
 # 🕹️ Official Client Integration
 
