@@ -25,9 +25,6 @@
       "avatar_url": "https://avatars0.githubusercontent.com/u/2628698?v=4",
       "profile": "https://github.com/fazriz",
       "contributions": [
-        "question",
-        "code",
-        "ideas",
         "business"
       ]
     },
@@ -226,7 +223,7 @@
         "question",
         "code"
       ]
-    },
+    }
   ],
   "repoType": "github"
 }

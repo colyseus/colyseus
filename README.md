@@ -95,7 +95,7 @@ usage reference with the latest version of Colyseus.
 - [Collaborative Drawing Prototype](https://colyseus-drawing-prototype.herokuapp.com/) ([source-code](https://github.com/endel/colyseus-collaborative-drawing)) - Collaborative drawing using HTML5 canvas.
 - (outdated: < v0.8.x): [tanx](https://playcanvas.com/project/367035/overview/tanxcolyseus), [react-example](https://github.com/endel/colyseus-react-example), [LD35 entry: dotower](http://ludumdare.com/compo/ludum-dare-35/?action=preview&uid=50958)
 
-# Contributors
+# Contributors ✨
 
 Thanks goes to these wonderful people ([emoji key](https://github.com/kentcdodds/all-contributors#emoji-key)):
 
@@ -114,7 +114,7 @@ Thanks goes to these wonderful people ([emoji key](https://github.com/kentcdodds
   </tr>
   <tr>
     <td align="center"><a href="https://github.com/enriqueto"><img src="https://avatars2.githubusercontent.com/u/5557196?v=4?s=100" width="100px;" alt=""/><br /><sub><b>Enriqueto</b></sub></a><br /><a href="#business-enriqueto" title="Business development">💼</a></td>
-    <td align="center"><a href="https://github.com/fazriz"><img src="https://avatars0.githubusercontent.com/u/2628698?v=4?s=100" width="100px;" alt=""/><br /><sub><b>Fazri Zubair</b></sub></a><br /><a href="#question-fazriz" title="Answering Questions">💬</a> <a href="https://github.com/colyseus/colyseus/commits?author=fazriz" title="Code">💻</a> <a href="#ideas-fazriz" title="Ideas, Planning, & Feedback">🤔</a> <a href="#business-fazriz" title="Business development">💼</a></td>
+    <td align="center"><a href="https://github.com/fazriz"><img src="https://avatars0.githubusercontent.com/u/2628698?v=4?s=100" width="100px;" alt=""/><br /><sub><b>Fazri Zubair</b></sub></a><br /><a href="#business-fazriz" title="Business development">💼</a></td>
     <td align="center"><a href="https://twitter.com/Federkun"><img src="https://avatars2.githubusercontent.com/u/21344385?v=4?s=100" width="100px;" alt=""/><br /><sub><b>Federico</b></sub></a><br /><a href="https://github.com/colyseus/colyseus/issues?q=author%3AFederkun" title="Bug reports">🐛</a> <a href="https://github.com/colyseus/colyseus/commits?author=Federkun" title="Code">💻</a></td>
     <td align="center"><a href="https://github.com/mobyjames/"><img src="https://avatars0.githubusercontent.com/u/1327007?v=4?s=100" width="100px;" alt=""/><br /><sub><b>James Jacoby</b></sub></a><br /><a href="#question-mobyjames" title="Answering Questions">💬</a> <a href="#example-mobyjames" title="Examples">💡</a> <a href="#content-mobyjames" title="Content">🖋</a></td>
     <td align="center"><a href="http://wenish.github.io/portfolio/"><img src="https://avatars0.githubusercontent.com/u/18367963?v=4?s=100" width="100px;" alt=""/><br /><sub><b>Jonas Voland</b></sub></a><br /><a href="#question-Wenish" title="Answering Questions">💬</a> <a href="https://github.com/colyseus/colyseus/issues?q=author%3AWenish" title="Bug reports">🐛</a> <a href="https://github.com/colyseus/colyseus/commits?author=Wenish" title="Code">💻</a> <a href="#ideas-Wenish" title="Ideas, Planning, & Feedback">🤔</a> <a href="#example-Wenish" title="Examples">💡</a></td>
