@@ -13,7 +13,7 @@ async function getNodeAddress(node: Node) {
   const host = process.env.SELF_HOSTNAME || await ip.v4();
   const port = process.env.SELF_PORT ?? node.port;
   const baseAddress = `${node.processId}/${host}`
-  const shouldPortBeAddedToAddress = !!port;
+  const shouldPortBeAddedToAddress: boolean = !!port;
   return shouldPortBeAddedToAddress ? `${baseAddress}:${port}` : baseAddress;
 }
 
