@@ -12,7 +12,8 @@ export interface Node {
 async function getNodeAddress(node: Node) {
   const host = process.env.SELF_HOSTNAME || await ip.v4();
   const port = process.env.SELF_PORT ?? node.port;
-  return !!port ? `${node.processId}/${host}:${port}` : `${node.processId}/${host}`;
+  const isPortSet = !!port;
+  return isPortSet ? `${node.processId}/${host}:${port}` : `${node.processId}/${host}`;
 }
 
 export async function registerNode(presence: Presence, node: Node) {
