@@ -12,29 +12,22 @@ try {
   uWebSocketsExpressCompatibility = require('uwebsockets-express').default;
 } catch (e) {}
 
-/**
- * Do not auto-load `${environment}.env` file when using Arena service.
- */
-if (process.env.NODE_ARENA !== "true") {
-    const envFilename = (process.env.NODE_ENV === "production")
-        ? "arena.env"
-        : `${process.env.NODE_ENV || "development"}.env`
+const envFilename = `${process.env.NODE_ENV || "development"}.env`;
 
-    // return the first .env path found
-    const envPath = [
-      path.resolve(path.dirname(require?.main?.filename || process.cwd()), "..", envFilename),
-      path.resolve(process.cwd(), envFilename)
-    ].find((envPath) => fs.existsSync(envPath));
+// return the first .env path found
+const envPath = [
+  path.resolve(path.dirname(require?.main?.filename || process.cwd()), "..", envFilename),
+  path.resolve(process.cwd(), envFilename)
+].find((envPath) => fs.existsSync(envPath));
 
-    if (envPath) {
-        dotenv.config({ path: envPath });
-        logger.info(`✅ ${envFilename} loaded.`);
-    } else {
-        logger.info(`⚠️  ${envFilename} not found.`);
-    }
+if (envPath) {
+    dotenv.config({ path: envPath });
+    logger.info(`✅ ${envFilename} loaded.`);
+} else {
+    logger.info(`⚠️  ${envFilename} not found.`);
 }
 
-export interface ArenaOptions {
+export interface ConfigOptions {
     options?: ServerOptions,
     displayLogs?: boolean,
     getId?: () => string,
@@ -44,7 +37,7 @@ export interface ArenaOptions {
     beforeListen?: () => void,
 }
 
-const ALLOWED_KEYS: { [key in keyof ArenaOptions]: string } = {
+const ALLOWED_KEYS: { [key in keyof ConfigOptions]: string } = {
   'displayLogs': "boolean",
   'options': "object",
   'getId': "function",
@@ -54,7 +47,7 @@ const ALLOWED_KEYS: { [key in keyof ArenaOptions]: string } = {
   'beforeListen': "function"
 };
 
-export default function (options: ArenaOptions) {
+export default function (options: ConfigOptions) {
   for (const option in options) {
     if (!ALLOWED_KEYS[option]) {
       throw new Error(`❌ Invalid option '${option}'. Allowed options are: ${Object.keys(ALLOWED_KEYS).join(", ")}`);
@@ -69,11 +62,11 @@ export default function (options: ArenaOptions) {
 
 /**
  * Listen on your development environment
- * @param options Arena options
+ * @param options Application options
  * @param port Port number to bind Colyseus + Express
  */
 export async function listen(
-    options: ArenaOptions,
+    options: ConfigOptions,
     port: number = Number(process.env.PORT || 2567),
 ) {
     const serverOptions = options.options || {};
@@ -109,7 +102,7 @@ export async function listen(
 }
 
 
-export async function getTransport(options: ArenaOptions) {
+export async function getTransport(options: ConfigOptions) {
     let transport: Transport;
 
     if (!options.initializeTransport) {
