@@ -87,6 +87,14 @@ export async function listen(
     await options.initializeGameServer?.(gameServer);
     await options.beforeListen?.();
 
+    //
+    // Handling multiple processes
+    // Use NODE_APP_INSTANCE to play nicely with pm2
+    //
+    const processNumber = Number(process.env.NODE_APP_INSTANCE || "0");
+    port += processNumber;
+
+    // listening on port
     gameServer.listen(port);
 
     if (options.displayLogs) {
