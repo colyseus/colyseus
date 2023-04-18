@@ -111,7 +111,7 @@ export async function listen(
 
         // when using multiple processes
         if (os.cpus().length > 1) {
-            serverOptions.publicAddress += "/" + processNumber + "/";
+            serverOptions.publicAddress += "/" + processNumber;
         }
     }
 
