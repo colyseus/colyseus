@@ -1,4 +1,5 @@
 import fs from "fs";
+import os from "os";
 import http from "http";
 import path from "path";
 import cors from "cors";
@@ -72,6 +73,23 @@ export async function listen(
     const serverOptions = options.options || {};
     options.displayLogs = options.displayLogs ?? true;
 
+    //
+    // Handling multiple processes
+    // Use NODE_APP_INSTANCE to play nicely with pm2
+    //
+    const processNumber = Number(process.env.NODE_APP_INSTANCE || "0");
+    port += processNumber;
+
+    // force "publicAddress" when deployed on "Colyseus Cloud".
+    if (process.env.COLYSEUS_CLOUD !== undefined) {
+        serverOptions.publicAddress = process.env.SUBDOMAIN + "." + process.env.SERVER_NAME;
+
+        // when using multiple processes
+        if (os.cpus().length > 1) {
+            serverOptions.publicAddress += "/" + processNumber + "/";
+        }
+    }
+
     const transport = await getTransport(options);
     const gameServer = new Server({
         ...serverOptions,
@@ -79,13 +97,6 @@ export async function listen(
     });
     await options.initializeGameServer?.(gameServer);
     await options.beforeListen?.();
-
-    //
-    // Handling multiple processes
-    // Use NODE_APP_INSTANCE to play nicely with pm2
-    //
-    const processNumber = Number(process.env.NODE_APP_INSTANCE || "0");
-    port += processNumber;
 
     // listening on port
     gameServer.listen(port);
