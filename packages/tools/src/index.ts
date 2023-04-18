@@ -80,8 +80,33 @@ export async function listen(
     const processNumber = Number(process.env.NODE_APP_INSTANCE || "0");
     port += processNumber;
 
-    // force "publicAddress" when deployed on "Colyseus Cloud".
+    // automatically configure for production under Colyseus Cloud
     if (process.env.COLYSEUS_CLOUD !== undefined) {
+        if (!serverOptions.driver) {
+            let RedisDriver: any = undefined;
+            try {
+                RedisDriver = require('@colyseus/redis-driver').RedisDriver;
+                serverOptions.driver = new RedisDriver();
+            } catch (e) {
+                logger.warn("");
+                logger.warn("❌ coult not initialize RedisDriver.");
+                logger.warn("👉 npm install --save @colyseus/redis-driver");
+                logger.warn("");
+            }
+
+            let RedisPresence: any = undefined;
+            try {
+                RedisPresence = require('@colyseus/redis-presence').RedisPresence;
+                serverOptions.presence = new RedisPresence();
+            } catch (e) {
+                logger.warn("");
+                logger.warn("❌ coult not initialize RedisPresence.");
+                logger.warn("👉 npm install --save @colyseus/redis-presence");
+                logger.warn("");
+            }
+        }
+
+        // force "publicAddress" when deployed on "Colyseus Cloud".
         serverOptions.publicAddress = process.env.SUBDOMAIN + "." + process.env.SERVER_NAME;
 
         // when using multiple processes
