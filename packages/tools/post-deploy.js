@@ -49,6 +49,9 @@ function updateAndReloadNginx() {
     // "pm2 save"
     pm2.dump(function(err, ret) {
       bailOnErr(err);
+
+      // exit with success!
+      process.exit();
     });
   });
 
@@ -68,6 +71,8 @@ function updateAndReloadNginx() {
 function bailOnErr(err) {
   if (err) {
     console.error(err);
+
+    // exit with error!
     process.exit(1);
   }
 }
