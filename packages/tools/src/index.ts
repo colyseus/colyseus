@@ -124,7 +124,10 @@ export async function listen(
     await options.beforeListen?.();
 
     // listening on port
-    gameServer.listen(port);
+    await gameServer.listen(port);
+
+    // notify process manager (production)
+    process.send('ready');
 
     if (options.displayLogs) {
         const appId = options.getId?.() || "[ Colyseus ]";
