@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/tools",
-  "version": "0.15.0-preview.5",
+  "version": "0.15.0-preview.6",
   "description": "Colyseus Tools for Production",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -8,6 +8,9 @@
   "typings": "./build/index.d.ts",
   "scripts": {
     "start": "ts-node-dev example/app.ts"
+  },
+  "bin": {
+    "colyseus-post-deploy": "post-deploy.js"
   },
   "repository": {
     "type": "git",
