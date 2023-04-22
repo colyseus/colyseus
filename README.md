@@ -28,23 +28,13 @@ client-side.
 The mission of the framework is to be a standard netcode & matchmaking solution
 for any kind of project you can think of!
 
-You're encouraged to take a look on [some games being developed with
-it](https://discuss.colyseus.io/category/5/showcase) and make your own!
-
-> ⭐️ Enjoying Colyseus? Show your support by starring the project on GitHub ⭐️
-
-## What Colyseus provides to you:
+## Key features:
 
 - WebSocket-based communication
 - Simple API in the server-side and client-side.
-- Automatic state synchronization between server and client.
-- Matchmaking clients into game sessions
+- Automatic state synchronization from server-to-client (delta compressed)
+- Matchmaking clients into game rooms/sessions
 - Scale vertically or horizontally
-
-## What Colyseus won't provide:
-
-- Game Engine: Colyseus is agnostic of the engine you're using. Need Physics? Add your own logic / package.
-- Database: It's up to you to configure and select which database you'd like to use.
 
 See [roadmap](https://github.com/colyseus/colyseus/wiki/Roadmap) for our future plans.
 
@@ -57,38 +47,14 @@ npm init colyseus-app my-colyseus-server
 cd my-colyseus-server
 npm start
 ```
-# 🏟 Colyseus Arena: Fast & Scalable Cloud Hosting
 
-- Looking for a fully managed solution for your Colyseus game server?
-- Want to focus on game development and not on the hosting and infrastructure?
-- Launching a production title and need a solution for 1,000 to 100,000+ CCUs?
+# Sponsors
 
-If so [Colyseus Arena](https://www.colyseus.io/arena) cloud hosting is the solution you are looking for. Easily upload your existing Colyseus Server code and get started today for Free!
+The sustainability of the project relies on **Colyseus Cloud** subscriptions and sponsorships. If you are not using Colyseus Cloud, please consider [sponsoring the project](https://github.com/sponsors/endel) 💖
 
-# 🕹️ Official Client Integration
-
-- [JavaScript/TypeScript](https://github.com/colyseus/colyseus.js)
-- [Unity](https://github.com/colyseus/colyseus-unity3d) ([unity3d.com](https://unity3d.com/))
-- [Defold Engine](https://github.com/colyseus/colyseus-defold) ([defold.com](https://www.defold.com/))
-- [Haxe](https://github.com/colyseus/colyseus-hx) ([haxe.org](https://haxe.org/))
-- [Construct 3](https://github.com/colyseus/colyseus-construct3) ([construct3.net](https://www.construct.net/))
-- [Cocos2d-x](https://github.com/colyseus/colyseus-cocos2d-x) ([cocos2d-x.org](https://cocos2d-x.org/))
-
-# 🛠️ Tools
-
-- [@colyseus/proxy](https://github.com/colyseus/proxy) - Proxy & Service Discovery for scaling Colyseus
-- [@colyseus/monitor](https://github.com/colyseus/colyseus-monitor) - A Web Monitoring Panel for Colyseus
-- [@colyseus/loadtest](https://github.com/colyseus/colyseus-loadtest) - Utility tool for load testing Colyseus
-
-## Tools made by the community ❤️
-
-- [godot-colyseus](https://github.com/gsioteam/godot-colyseus): Colyseus SDK for Godot, written in GDScript (by [@gsioteam](https://github.com/gsioteam))
-- [colyseus-ue4](https://github.com/charisma-ai/colyseus-ue4): Colyseus SDK for Unreal Engine 4 (by [@bensalilijames](https://github.com/bensalilijames))
-- [colyseus-hxjs](https://github.com/serjek/colyseus-hxjs): Haxe externs for colyseus server (by [@serjek](https://github.com/serjek))
-- [colyseus-kotlin](https://github.com/doorbash/colyseus-kotlin): Client for Java/Kotlin (by [@doorbash](https://github.com/doorbash))
-- [Stencyl Extension](http://community.stencyl.com/index.php/topic,61150.0.html): [Stencyl](http://stencyl.com) extension to communicate with a Colyseus server (by [MdotEdot](http://www.stencyl.com/users/index/32424))
-- [Colyseus-ObjC](https://github.com/swittk/Colyseus-ObjC): Client for Objective C (by [@swittk](https://github.com/swittk))
-- [Colyseus-for-C2](https://github.com/Keevle/Colyseus-for-C2): Client for Construct 2 (by [@Keevle](https://github.com/Keevle))
+<a href="https://colyseus.io/sponsorkit/sponsors.svg">
+  <img src="https://github.com/colyseus/colyseus.github.io/blob/master/sponsorkit/sponsors.svg?raw=1" width="100%" />
+</a>
 
 # Usage examples
 
@@ -101,6 +67,17 @@ usage reference with the latest version of Colyseus.
 - [Tic Tac Toe](https://tictactoe-colyseus.herokuapp.com) ([source-code](https://github.com/endel/tic-tac-toe)) - Tic Tac Toe using [PixiJS](https://github.com/pixijs/pixi.js) and [Defold Engine](https://defold.com)
 - [Collaborative Drawing Prototype](https://colyseus-drawing-prototype.herokuapp.com/) ([source-code](https://github.com/endel/colyseus-collaborative-drawing)) - Collaborative drawing using HTML5 canvas.
 - (outdated: < v0.8.x): [tanx](https://playcanvas.com/project/367035/overview/tanxcolyseus), [react-example](https://github.com/endel/colyseus-react-example), [LD35 entry: dotower](http://ludumdare.com/compo/ludum-dare-35/?action=preview&uid=50958)
+
+
+## Tools made by the community ❤️
+
+- [godot-colyseus](https://github.com/gsioteam/godot-colyseus): Colyseus SDK for Godot, written in GDScript (by [@gsioteam](https://github.com/gsioteam))
+- [colyseus-ue4](https://github.com/charisma-ai/colyseus-ue4): Colyseus SDK for Unreal Engine 4 (by [@bensalilijames](https://github.com/bensalilijames))
+- [colyseus-hxjs](https://github.com/serjek/colyseus-hxjs): Haxe externs for colyseus server (by [@serjek](https://github.com/serjek))
+- [colyseus-kotlin](https://github.com/doorbash/colyseus-kotlin): Client for Java/Kotlin (by [@doorbash](https://github.com/doorbash))
+- [Stencyl Extension](http://community.stencyl.com/index.php/topic,61150.0.html): [Stencyl](http://stencyl.com) extension to communicate with a Colyseus server (by [MdotEdot](http://www.stencyl.com/users/index/32424))
+- [Colyseus-ObjC](https://github.com/swittk/Colyseus-ObjC): Client for Objective C (by [@swittk](https://github.com/swittk))
+- [Colyseus-for-C2](https://github.com/Keevle/Colyseus-for-C2): Client for Construct 2 (by [@Keevle](https://github.com/Keevle))
 
 # Contributors
 
@@ -154,10 +131,6 @@ guide](.github/CONTRIBUTING.md) for guidelines about how to proceed. Join us!
 
 Everyone interacting in Colyseus and its sub-projects' codebases, issue trackers
 and chat rooms is expected to follow the [code of conduct](CODE_OF_CONDUCT.md).
-
-# Backers / Supporters via Patreon
-
-As of February 2021, Colyseus is owned and sponsored by [Lucid Sight](https://www.lucidsight.com/). A warm **thank you** for previous supporters of the project is forever documented in the [early supporters wiki page](https://github.com/colyseus/colyseus/wiki/Early-supporters-(2017-2021)).
 
 # License
 
