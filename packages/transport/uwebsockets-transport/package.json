@@ -7,8 +7,10 @@
   "typings": "./build/index.d.ts",
   "dependencies": {
     "@colyseus/core": "^0.15.0-preview.2",
-    "@colyseus/schema": "^2.0.0",
     "uWebSockets.js": "github:uNetworking/uWebSockets.js#v19.2.0"
+  },
+  "peerDependencies": {
+    "@colyseus/schema": ">=1.0.0"
   },
   "author": "Endel Dreyer",
   "license": "MIT",
