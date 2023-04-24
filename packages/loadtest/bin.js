@@ -1,9 +1,3 @@
 #!/usr/bin/env node
-const path = require('path');
-
-require('ts-node').register({
-  ignore: [],
-  project: process.env.TS_NODE_PROJECT || path.resolve(__dirname,  'tsconfig.json')
-});
-
-require('./build');
+console.log("DEPRECATED: @colyseus/loadtest usage has changed. Please check the documentation: https://docs.colyseus.io/colyseus/tools/loadtest/#usage")
+process.exit();

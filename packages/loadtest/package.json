@@ -1,14 +1,13 @@
 {
   "name": "@colyseus/loadtest",
-  "version": "0.15.0-preview.6",
+  "version": "0.15.0-preview.7",
   "description": "Utility tool for load testing Colyseus.",
   "input": "./src/index.ts",
   "main": "./build/index.js",
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
   "bin": {
-    "colyseus-loadtest": "./bin.js",
-    "colyseus-loadtest-esm": "./bin.mjs"
+    "colyseus-loadtest": "./bin.js"
   },
   "files": [
     "build",

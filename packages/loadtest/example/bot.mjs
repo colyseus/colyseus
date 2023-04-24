@@ -1,6 +1,7 @@
+import { cli } from "../src";
 import { Client } from "colyseus.js";
 
-export async function main(options) {
+async function main(options) {
     const client = new Client(options.endpoint);
     const room = await client.joinOrCreate(options.roomName, options.requestJoinOptions);
 
@@ -16,3 +17,5 @@ export async function main(options) {
 
     // await room.leave(true);
 }
+
+cli(main);
