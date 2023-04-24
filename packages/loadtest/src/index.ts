@@ -17,7 +17,6 @@ export type Options = {
     roomName: string,
     roomId: string,
     numClients: number,
-    scriptFile: string,
     delay: number,
     logLevel: string,
     reestablishAllDelay: number,
@@ -63,19 +62,19 @@ export function cli(main: (options: Options) => Promise<void>) {
     function displayHelpAndExit() {
         console.log(`${packageJson.name} v${packageJson.version}
 
-    Options:
-        --endpoint: WebSocket endpoint for all connections (default: ws://localhost:2567)
-        --room: room handler name (you can also use --roomId instead to join by id)
-        --roomId: room id (specify instead of --room)
-        [--numClients]: number of connections to open (default is 1)
-        [--delay]: delay to start each connection (in milliseconds)
-        [--project]: specify a tsconfig.json file path
-        [--reestablishAllDelay]: delay for closing and re-establishing all connections (in milliseconds)
-        [--retryFailed]: delay to retry failed connections (in milliseconds)
-        [--output]: specify an output file (default to loadtest.log)
+Options:
+    --endpoint: WebSocket endpoint for all connections (default: ws://localhost:2567)
+    --room: room handler name (you can also use --roomId instead to join by id)
+    --roomId: room id (specify instead of --room)
+    [--numClients]: number of connections to open (default is 1)
+    [--delay]: delay to start each connection (in milliseconds)
+    [--project]: specify a tsconfig.json file path
+    [--reestablishAllDelay]: delay for closing and re-establishing all connections (in milliseconds)
+    [--retryFailed]: delay to retry failed connections (in milliseconds)
+    [--output]: specify an output file (default to loadtest.log)
 
-    Example:
-        colyseus-loadtest example/bot.ts --endpoint ws://localhost:2567 --room state_handler`);
+Example:
+    colyseus-loadtest example/bot.ts --endpoint ws://localhost:2567 --room state_handler`);
         process.exit();
 
     }
@@ -87,7 +86,6 @@ export function cli(main: (options: Options) => Promise<void>) {
         roomName: argv.room,
         roomId: argv.roomId,
         numClients: argv.numClients || 1,
-        scriptFile: argv._[0] && path.resolve(argv._[0]),
         delay: argv.delay || 0,
         logLevel: argv.logLevel?.toLowerCase() || "all", // TODO: not being used atm
         reestablishAllDelay: argv.reestablishAllDelay || 0,
@@ -95,13 +93,12 @@ export function cli(main: (options: Options) => Promise<void>) {
         output: path.resolve(argv.output || "loadtest.log"),
     }
 
-    if (!options.scriptFile) {
-        console.error("❌ You must specify a script file.");
+    if (!main) {
+        console.error("❌ You must specify a handler function.");
         console.error("");
         displayHelpAndExit();
     }
 
-    const scriptModule = main;
     const connections: Room[] = [];
 
     if (!options.roomName && !options.roomId) {
@@ -470,7 +467,7 @@ export function cli(main: (options: Options) => Promise<void>) {
 
     try {
         (async () => {
-            const scripting = await scriptModule;
+            const scripting = await main;
             await connectAll(scripting);
 
             if (options.reestablishAllDelay > 0) {
