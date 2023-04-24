@@ -43,5 +43,5 @@
   "devDependencies": {
     "@types/blessed": "^0.1.10"
   },
-  "gitHead": "b05ea513d75330bc394f403c0cac4ffd262fd7fd"
+  "gitHead": "eeb9e1101fc49bca10cc52707baf08f060f1960d"
 }
