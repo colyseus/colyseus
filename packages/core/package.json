@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/core",
-  "version": "0.15.0-preview.6",
+  "version": "0.15.0-preview.7",
   "description": "Multiplayer Framework for Node.js.",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -9,6 +9,7 @@
   "scripts": {
     "tslint": "tslint --project . --config ../../tslint.json"
   },
+  "funding": "https://github.com/sponsors/endel",
   "author": "Endel Dreyer",
   "license": "MIT",
   "keywords": [
