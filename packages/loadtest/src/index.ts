@@ -25,7 +25,9 @@ export type Options = {
     requestJoinOptions?: RequestJoinOperations,
 };
 
-export function cli(main: (options: Options) => Promise<void>) {
+export type MainCallback = (options: Options) => Promise<void>;
+
+export function cli(main: MainCallback) {
     const logWriter = {
         handle: null as fs.WriteStream,
         isClosing: false as boolean,
@@ -94,7 +96,7 @@ Example:
     }
 
     if (!main) {
-        console.error("❌ You must specify a handler function.");
+        console.error("❌ You must specify an entrypoint function.");
         console.error("");
         displayHelpAndExit();
     }
@@ -382,21 +384,17 @@ Example:
         screen.render();
     }
 
-    async function connect(scripting: any, i: number) {
+    async function connect(main: MainCallback, i: number) {
         try {
-            if (scripting.main) {
-                await scripting.main(options);
-            } else {
-                handleError("Entrypoint \'main\' cannot be found! Please refer https://docs.colyseus.io/colyseus/migrating/0.15");
-            }
+            await main(options);
         } catch (e) {
             handleError(e);
         }
     }
 
-    async function connectAll(scripting: any) {
+    async function connectAll(main: MainCallback) {
         for (let i = 0; i < options.numClients; i++) {
-            await connect(scripting, i);
+            await connect(main, i);
 
             if (options.delay > 0) {
                 await timer.setTimeout(options.delay);
@@ -467,15 +465,14 @@ Example:
 
     try {
         (async () => {
-            const scripting = await main;
-            await connectAll(scripting);
+            await connectAll(main);
 
             if (options.reestablishAllDelay > 0) {
                 while (true) {
                     // wait for delay
                     await timer.setTimeout(options.reestablishAllDelay);
 
-                    await reestablishAll(scripting);
+                    await reestablishAll(main);
                 }
             }
         })();
