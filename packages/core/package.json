@@ -39,11 +39,11 @@
     "@types/redis": "^2.8.12",
     "debug": "^4.3.4",
     "internal-ip": "^4.3.0",
-    "nanoid": "^2.0.0",
-    "msgpackr": "^1.6.1"
+    "msgpackr": "^1.6.1",
+    "nanoid": "^2.0.0"
   },
   "publishConfig": {
     "access": "public"
   },
-  "gitHead": "25ba61e283429bb4fa02db0454f804ea218259eb"
+  "gitHead": "b05ea513d75330bc394f403c0cac4ffd262fd7fd"
 }

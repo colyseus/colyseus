@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/loadtest",
-  "version": "0.15.0-preview.8",
+  "version": "0.15.0-preview.9",
   "description": "Utility tool for load testing Colyseus.",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -42,5 +42,6 @@
   },
   "devDependencies": {
     "@types/blessed": "^0.1.10"
-  }
+  },
+  "gitHead": "b05ea513d75330bc394f403c0cac4ffd262fd7fd"
 }
