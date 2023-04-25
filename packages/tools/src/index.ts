@@ -13,7 +13,7 @@ try {
   uWebSocketsExpressCompatibility = require('uwebsockets-express').default;
 } catch (e) {}
 
-const envFilename = `${process.env.NODE_ENV || "development"}.env`;
+const envFilename = `.env.${process.env.NODE_ENV || "development"}`;
 
 // return the first .env path found
 const envPath = [
