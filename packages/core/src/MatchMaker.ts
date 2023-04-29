@@ -143,10 +143,10 @@ export async function reconnect(roomId: string, clientOptions: ClientOptions = {
 
 /**
  * Join a room by id and return client seat reservation. An exception is thrown if a room is not found for roomId.
- * 
+ *
  * @param roomId - The Id of the specific room instance.
- * @param clientOptions - Options for the client seat reservation (for `onJoin`/`onAuth`) 
- * 
+ * @param clientOptions - Options for the client seat reservation (for `onJoin`/`onAuth`)
+ *
  * @returns Promise<SeatReservation> - A promise which contains `sessionId` and `RoomListingData`.
  */
 export async function joinById(roomId: string, clientOptions: ClientOptions = {}) {
@@ -171,10 +171,10 @@ export async function query(conditions: Partial<IRoomListingData> = {}) {
 
 /**
  * Find for a public and unlocked room available.
- * 
+ *
  * @param roomName - The Id of the specific room.
  * @param clientOptions - Options for the client seat reservation (for `onJoin`/`onAuth`).
- * 
+ *
  * @returns Promise<RoomListingData> - A promise contaning an object which includes room metadata and configurations.
  */
 export async function findOneRoomAvailable(roomName: string, clientOptions: ClientOptions): Promise<RoomListingData> {
@@ -201,11 +201,11 @@ export async function findOneRoomAvailable(roomName: string, clientOptions: Clie
 
 /**
  * Call a method or return a property on a remote room.
- * 
+ *
  * @param roomId - The Id of the specific room instance.
  * @param method - Method or attribute to call or retrive.
  * @param args - Array of arguments for the method
- * 
+ *
  * @returns Promise<any> - Returned value from the called or retrieved method/attribute.
  */
 export async function remoteRoomCall<R= any>(
@@ -265,10 +265,10 @@ export function hasHandler(name: string) {
 
 /**
  * Creates a new room.
- * 
+ *
  * @param roomName - The identifier you defined on `gameServer.define()`
  * @param clientOptions - Options for `onCreate`
- * 
+ *
  * @returns Promise<RoomListingData> - A promise contaning an object which includes room metadata and configurations.
  */
 export async function createRoom(roomName: string, clientOptions: ClientOptions): Promise<RoomListingData> {
