@@ -181,6 +181,14 @@ export class Server {
     return matchMaker.defineRoomType(name, handler, defaultOptions);
   }
 
+  /**
+   * Remove a room definition from matchmaking.
+   * This method does not destroy any room. It only dissallows matchmaking
+   */
+  public removeRoomType(name: string): void {
+    matchMaker.removeRoomType(name);
+  }
+
   public async gracefullyShutdown(exit: boolean = true, err?: Error) {
     if (matchMaker.isGracefullyShuttingDown) {
       return;
