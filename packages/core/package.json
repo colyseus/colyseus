@@ -1,10 +1,6 @@
 {
   "name": "@colyseus/core",
-<<<<<<< HEAD
-  "version": "0.15.0-preview.8",
-=======
-  "version": "0.14.36",
->>>>>>> master
+  "version": "0.15.0-preview.9",
   "description": "Multiplayer Framework for Node.js.",
   "input": "./src/index.ts",
   "main": "./build/index.js",
