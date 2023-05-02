@@ -6,11 +6,10 @@ export default String.raw`
     \____/\___/|_|\__, |___/\___|\__,_|___/
                   |___/
 
-A Fast, Powerful, Open-source Multiplayer Framework
+Multiplayer Framework for Node.js · Open-source
 
-Get a worry-free, enterprise grade, and scalable hosting solution with Colyseus Arena
-→ https://bit.ly/colyseus-arena
+💖 Sponsor Colyseus on GitHub → https://github.com/sponsors/endel
+🌟 Give it a star on GitHub → https://github.com/colyseus/colyseus
+☁️  Easily deploy and scale your project on Colyseus Cloud → https://cloud.colyseus.io
 
-Get Unity, Babylon, Cocos, Construct or other SDKs and full project/demos
-→ https://bit.ly/colyseus-docs
 `;
