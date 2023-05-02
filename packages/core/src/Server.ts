@@ -1,4 +1,5 @@
 import http, { IncomingMessage, ServerResponse } from 'http';
+import greeting from "@colyseus/greeting-banner";
 
 import { debugAndPrintError, debugMatchMaking } from './Debug';
 import * as matchMaker from './MatchMaker';
@@ -41,6 +42,12 @@ export type ServerOptions = {
   devMode?: boolean,
 
   /**
+   * Display greeting message on server start.
+   * Default: true
+   */
+  greet?: boolean,
+
+  /**
    * Options below are now part of WebSocketTransport (@colyseus/ws-transport)
    * TODO: remove me on 0.15.0
    */
@@ -64,14 +71,16 @@ export class Server {
   protected driver: matchMaker.MatchMakerDriver;
 
   protected port: number;
+  protected greet: boolean;
 
   constructor(options: ServerOptions = {}) {
-    const { gracefullyShutdown = true } = options;
+    const { gracefullyShutdown = true, greet = true } = options;
 
     setDevMode(options.devMode === true);
 
     this.presence = options.presence || new LocalPresence();
     this.driver = options.driver || new LocalDriver();
+    this.greet = greet;
 
     this.attach(options);
 
@@ -140,6 +149,13 @@ export class Server {
     // (isDevMode: matchmaker may take extra milliseconds to restore the rooms)
     //
     await matchMaker.onReady;
+
+    /**
+     * Greetings!
+     */
+    if (this.greet) {
+      console.log(greeting);
+    }
 
     return new Promise<void>((resolve, reject) => {
       this.transport.server?.on('error', (err) => reject(err));

@@ -231,7 +231,7 @@ export async function remoteRoomCall<R= any>(
   } else {
     return (!args && typeof (room[method]) !== 'function')
         ? room[method]
-        : (await room[method].apply(room, args));
+        : (await room[method].apply(room, args && args.map((arg) => JSON.parse(JSON.stringify(arg)))));
   }
 }
 

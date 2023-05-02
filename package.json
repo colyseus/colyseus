@@ -26,6 +26,7 @@
     "publish-from-package-stable": "lerna publish from-package --dist-tag preview",
     "publish-from-package-preview": "lerna publish from-package --dist-tag preview",
     "release": "lerna version --force-publish --no-push --no-git-tag-version",
+    "release-from-package": "lerna publish from-package",
     "preversion": "npm run build",
     "postinstall": "npm run boot"
   },
