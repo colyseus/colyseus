@@ -5,7 +5,7 @@ import { matchMaker } from "@colyseus/core";
 import { before } from "mocha";
 import { boot, ColyseusTestServer } from "../src";
 
-import appConfig from "./app1/arena.config";
+import appConfig from "./app1/app.config";
 import { State } from "./app1/RoomWithState";
 import { SimulationState } from "./app1/RoomWithSimulation";
 
@@ -98,6 +98,11 @@ describe("@colyseus/testing", () => {
     let currentTick = room.state.tick;
     for (let i = 0; i < 5; i++) {
       await room.waitForNextSimulationTick();
+
+      console.log({
+        i, currentTick, roomStateTick: room.state.tick
+      });
+
       assert.strictEqual(++currentTick, room.state.tick);
     }
 
