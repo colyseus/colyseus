@@ -1,6 +1,6 @@
 {
   "name": "colyseus",
-  "version": "0.15.0-preview.4",
+  "version": "0.15.0-preview.5",
   "description": "Multiplayer Framework for Node.js.",
   "input": "./src/index.ts",
   "main": "./build/index.js",

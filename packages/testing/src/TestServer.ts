@@ -45,16 +45,16 @@ export class ColyseusTestServer {
     };
   }
 
-  async createRoom<State = any, Metadata = any>(roomName: string, clientOptions: any = {}) {
+  async createRoom<State extends object = any, Metadata = any>(roomName: string, clientOptions: any = {}) {
     const room = await matchMaker.createRoom(roomName, clientOptions);
     return this.getRoomById<State, Metadata>(room.roomId);
   }
 
-  connectTo<T>(room: Room<T>, clientOptions: any = {}) {
+  connectTo<T extends object=any>(room: Room<T>, clientOptions: any = {}) {
     return this.sdk.joinById<T>(room.roomId, clientOptions);
   }
 
-  getRoomById<State = any, Metadata = any>(roomId: string) {
+  getRoomById<State extends object= any, Metadata = any>(roomId: string) {
     return matchMaker.getRoomById(roomId) as Room<State, Metadata>;
   }
 

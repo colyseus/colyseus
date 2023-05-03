@@ -30,7 +30,7 @@ export const DEFAULT_SEAT_RESERVATION_TIME = Number(process.env.COLYSEUS_SEAT_RE
 
 export type SimulationCallback = (deltaTime: number) => void;
 
-export type RoomConstructor<T= any> = new (presence?: Presence) => Room<T>;
+export type RoomConstructor<T extends object= any> = new (presence?: Presence) => Room<T>;
 
 export interface IBroadcastOptions extends ISendOptions {
   except?: Client | Client[];
@@ -49,7 +49,7 @@ export enum RoomInternalState {
  * - Rooms are created on demand during matchmaking by default
  * - Room classes must be exposed using `.define()`
  */
-export abstract class Room<State= any, Metadata= any> {
+export abstract class Room<State extends object= any, Metadata= any> {
 
   /**
    * This property will change on these situations:

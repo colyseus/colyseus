@@ -5,9 +5,9 @@ import uWebSockets from 'uWebSockets.js';
 import { DummyServer, ErrorCode, matchMaker, Transport, debugAndPrintError, spliceOne } from '@colyseus/core';
 import { uWebSocketClient, uWebSocketWrapper } from './uWebSocketClient';
 
-export type TransportOptions = Omit<uWebSockets.WebSocketBehavior, "upgrade" | "open" | "pong" | "close" | "message">;
+export type TransportOptions = Omit<uWebSockets.WebSocketBehavior<any>, "upgrade" | "open" | "pong" | "close" | "message">;
 
-type RawWebSocketClient = uWebSockets.WebSocket & {
+type RawWebSocketClient = uWebSockets.WebSocket<any> & {
   headers: {[key: string]: string},
   connection: { remoteAddress: string },
 };
@@ -134,7 +134,14 @@ export class uWebSocketsTransport extends Transport {
         this.clients.push(rawClient);
         this.clientWrappers.set(rawClient, wrapper);
 
+        // @ts-ignore
+      console.log("QUERY?? =>", rawClient.query);
+        // @ts-ignore
+      console.log("URL?? =>", rawClient.url);
+
+        // @ts-ignore
         const query = rawClient.query;
+        // @ts-ignore
         const url = rawClient.url;
         const searchParams = querystring.parse(query);
 
@@ -208,6 +215,8 @@ export class uWebSocketsTransport extends Transport {
             }
         });
 
+
+        // @ts-ignore
         this.app.post("/matchmake/*", (res, req) => {
             res.onAborted(() => onAborted(res));
 

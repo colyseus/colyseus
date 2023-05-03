@@ -5,7 +5,7 @@ import { getMessageBytes, Protocol, Client, ClientState, ISendOptions, logger, d
 import { Schema } from '@colyseus/schema';
 
 export class uWebSocketWrapper extends EventEmitter {
-  constructor(public ws: uWebSockets.WebSocket) {
+  constructor(public ws: uWebSockets.WebSocket<any>) {
     super();
   }
 }
