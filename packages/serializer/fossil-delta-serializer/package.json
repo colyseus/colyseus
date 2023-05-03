@@ -9,7 +9,7 @@
     "@colyseus/core": "^0.15.0-preview.2",
     "fast-json-patch": "^2.0.5",
     "fossil-delta": "^1.0.1",
-    "msgpackr": "^1.6.1"
+    "msgpackr": "^1.9.1"
   },
   "author": "Endel Dreyer",
   "license": "MIT",
