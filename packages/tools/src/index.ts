@@ -137,11 +137,6 @@ export async function listen(
     }
 
     if (options.displayLogs) {
-        const appId = options.getId?.() || "[ Colyseus ]";
-        if (appId) {
-            logger.info(`🏟  ${appId}`);
-        }
-
         logger.info(`⚔️  Listening on ws://localhost:${port}`);
     }
     return gameServer;
