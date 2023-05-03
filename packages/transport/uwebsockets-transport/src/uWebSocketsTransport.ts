@@ -135,11 +135,6 @@ export class uWebSocketsTransport extends Transport {
         this.clientWrappers.set(rawClient, wrapper);
 
         // @ts-ignore
-      console.log("QUERY?? =>", rawClient.query);
-        // @ts-ignore
-      console.log("URL?? =>", rawClient.url);
-
-        // @ts-ignore
         const query = rawClient.query;
         // @ts-ignore
         const url = rawClient.url;
