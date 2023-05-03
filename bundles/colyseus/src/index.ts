@@ -10,4 +10,4 @@ Server.prototype['getDefaultTransport'] = function(options: any) {
     return new WebSocketTransport(options);
 }
 export { RedisPresence } from '@colyseus/redis-presence';
-export { MongooseDriver } from '@colyseus/mongoose-driver';
+export { RedisDriver } from '@colyseus/redis-driver';

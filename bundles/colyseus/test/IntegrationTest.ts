@@ -29,6 +29,7 @@ describe("Integration", () => {
           presence = new PRESENCE_IMPLEMENTATIONS[i]();
 
           server = new Server({
+            greet: false,
             gracefullyShutdown: false,
             presence,
             driver,

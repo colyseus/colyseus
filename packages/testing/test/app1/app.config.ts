@@ -9,6 +9,8 @@ import { RoomWithState } from "./RoomWithState";
 import { RoomWithSimulation } from "./RoomWithSimulation";
 
 export default config({
+  options: { greet: false, },
+
   // options: {
   //   driver: new MongooseDriver(),
   //   presence: new RedisPresence(),

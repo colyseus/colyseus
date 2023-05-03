@@ -7,7 +7,7 @@ import { URL } from "url";
 
 describe("Server", () => {
 
-  const server = new Server();
+  const server = new Server({greet: false});
 
   // bind & unbind server
   before(async () => new Promise((resolve) => {

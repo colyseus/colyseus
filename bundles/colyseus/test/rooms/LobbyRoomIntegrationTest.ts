@@ -20,6 +20,7 @@ describe("LobbyRoom: Integration", () => {
         const TEST_ENDPOINT = `ws://localhost:${TEST_PORT}`;
 
         const server = new Server({
+          greet: false,
           presence,
           driver
         });

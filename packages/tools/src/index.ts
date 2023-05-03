@@ -132,7 +132,9 @@ export async function listen(
     await gameServer.listen(port);
 
     // notify process manager (production)
-    process.send('ready');
+    if (typeof(process.send) === "function") {
+        process.send('ready');
+    }
 
     if (options.displayLogs) {
         const appId = options.getId?.() || "[ Colyseus ]";
