@@ -10,6 +10,6 @@ Multiplayer Framework for Node.js · Open-source
 
 💖 Sponsor Colyseus on GitHub → https://github.com/sponsors/endel
 🌟 Give it a star on GitHub → https://github.com/colyseus/colyseus
-☁️  Easily deploy and scale your project on Colyseus Cloud → https://cloud.colyseus.io
+☁️  Deploy and scale your project on Colyseus Cloud → https://cloud.colyseus.io
 
 `;
