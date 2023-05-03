@@ -40,7 +40,7 @@
     "@types/redis": "^2.8.12",
     "debug": "^4.3.4",
     "internal-ip": "^4.3.0",
-    "msgpackr": "^1.6.1",
+    "msgpackr": "^1.9.1",
     "nanoid": "^2.0.0"
   },
   "publishConfig": {
