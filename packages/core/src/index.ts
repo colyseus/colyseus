@@ -16,7 +16,7 @@ export { updateLobby, subscribeLobby } from './matchmaker/Lobby';
 export * from './matchmaker/driver';
 
 // Transport
-export { Client, ClientState, Transport, ISendOptions } from './Transport';
+export { Client, ClientState, ClientArray, Transport, ISendOptions } from './Transport';
 
 // Presence
 export { Presence } from './presence/Presence';
@@ -28,7 +28,7 @@ export { SchemaSerializer } from './serializer/SchemaSerializer';
 
 // Utilities
 export { Clock, Delayed };
-export { generateId, Deferred, DummyServer, spliceOne, HybridArray } from './utils/Utils';
+export { generateId, Deferred, DummyServer, spliceOne } from './utils/Utils';
 export { isDevMode } from './utils/DevMode';
 
 // Debug

@@ -14,13 +14,13 @@ import { SchemaSerializer } from './serializer/SchemaSerializer';
 import { Serializer } from './serializer/Serializer';
 
 import { ErrorCode, getMessageBytes, Protocol } from './Protocol';
-import { Deferred, HybridArray, generateId } from './utils/Utils';
+import { Deferred, generateId } from './utils/Utils';
 import { isDevMode } from './utils/DevMode';
 
 import { debugAndPrintError, debugMessage } from './Debug';
 import { ServerError } from './errors/ServerError';
 import { RoomListingData } from './matchmaker/driver';
-import { Client, ClientState, ISendOptions } from './Transport';
+import { Client, ClientArray, ClientState, ISendOptions } from './Transport';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
@@ -111,7 +111,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
    *
    * @see {@link https://docs.colyseus.io/colyseus/server/room/#client|Client instance}
    */
-  public clients: HybridArray<Client> = new HybridArray<Client>("sessionId");
+  public clients: ClientArray<any> = new ClientArray();
 
   public internalState: RoomInternalState = RoomInternalState.CREATING;
 
@@ -453,7 +453,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
       return false;
     }
 
-    const hasChanges = this._serializer.applyPatches(this.clients.array, this.state);
+    const hasChanges = this._serializer.applyPatches(this.clients, this.state);
 
     // broadcast messages enqueued for "after patch"
     this._dequeueAfterPatchMessages();
@@ -492,7 +492,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
     if (numClients > 0) {
       // clients may have `async onLeave`, room will be disposed after they're fulfilled
       while (numClients--) {
-        this._forciblyCloseClient(this.clients.array[numClients], closeCode);
+        this._forciblyCloseClient(this.clients[numClients], closeCode);
       }
     } else {
       // no clients connected, dispose immediately.
@@ -530,7 +530,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
     client.ref['onleave'] = this._onLeave.bind(this, client);
     client.ref.once('close', client.ref['onleave']);
 
-    this.clients.add(client);
+    this.clients.push(client);
 
     const previousReconnectionToken = this._reconnectingSessionId.get(sessionId);
     if (previousReconnectionToken) {
@@ -665,7 +665,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
 
     let numClients = this.clients.length;
     while (numClients--) {
-      const client = this.clients.array[numClients];
+      const client = this.clients[numClients];
 
       if (!except || !except.includes(client)) {
         client.enqueueRaw(encodedMessage);
@@ -684,7 +684,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
 
     let numClients = this.clients.length;
     while (numClients--) {
-      const client = this.clients.array[numClients];
+      const client = this.clients[numClients];
 
       if (!except || !except.includes(client)) {
         client.enqueueRaw(encodedMessage);

@@ -5,6 +5,7 @@ import * as net from 'net';
 import { Schema } from '@colyseus/schema';
 import { EventEmitter } from 'events';
 import { DummyServer } from './utils/Utils';
+import { spliceOne } from './Utils';
 
 export abstract class Transport {
     public server?: net.Server | http.Server | https.Server | DummyServer;
@@ -29,7 +30,7 @@ export enum ClientState { JOINING, JOINED, RECONNECTED, LEAVING }
  * - This is the raw WebSocket connection coming from the `ws` package. There are more methods available which aren't
  *  encouraged to use along with Colyseus.
  */
-export interface Client {
+export interface Client<UserData=any> {
   readyState: number;
 
   id: string;
@@ -48,7 +49,7 @@ export interface Client {
    * - Can be used to store custom data about the client's connection. userData is not synchronized with the client,
    * and should be used only to keep player-specific with its connection.
    */
-  userData?: any;
+  userData?: UserData;
 
   /**
    * auth data provided by your `onAuth`
@@ -104,4 +105,14 @@ export interface Client {
    * @param message
    */
   error(code: number, message?: string): void;
+}
+
+export class ClientArray<UserData> extends Array<Client<UserData>> {
+  public getById(sessionId: string): Client<UserData> | undefined {
+    return this.find((client) => client.sessionId === sessionId);
+  }
+
+  public delete(client: Client<UserData>): boolean {
+    return spliceOne(this, this.indexOf(client));
+  }
 }
