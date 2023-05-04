@@ -99,10 +99,6 @@ describe("@colyseus/testing", () => {
     for (let i = 0; i < 5; i++) {
       await room.waitForNextSimulationTick();
 
-      console.log({
-        i, currentTick, roomStateTick: room.state.tick
-      });
-
       assert.strictEqual(++currentTick, room.state.tick);
     }
 

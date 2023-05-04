@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/testing",
-  "version": "0.15.0",
+  "version": "0.15.1",
   "description": "Testing tools for Colyseus",
   "input": "./src/index.ts",
   "main": "./build/index.js",

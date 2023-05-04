@@ -16,6 +16,7 @@ export async function boot(config: ConfigOptions | Server, port: number = DEFAUL
     if (!config.options) { config.options = {}; }
 
     // override server options for testing.
+    config.options.greet = false;
     config.options.gracefullyShutdown = false;
 
     // Force LocalDriver & LocalPresence ??
