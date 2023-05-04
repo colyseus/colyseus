@@ -8,6 +8,8 @@ import { uWebSocketClient, uWebSocketWrapper } from './uWebSocketClient';
 export type TransportOptions = Omit<uWebSockets.WebSocketBehavior<any>, "upgrade" | "open" | "pong" | "close" | "message">;
 
 type RawWebSocketClient = uWebSockets.WebSocket<any> & {
+  url: string,
+  query: string,
   headers: {[key: string]: string},
   connection: { remoteAddress: string },
 };
@@ -134,9 +136,7 @@ export class uWebSocketsTransport extends Transport {
         this.clients.push(rawClient);
         this.clientWrappers.set(rawClient, wrapper);
 
-        // @ts-ignore
         const query = rawClient.query;
-        // @ts-ignore
         const url = rawClient.url;
         const searchParams = querystring.parse(query);
 
