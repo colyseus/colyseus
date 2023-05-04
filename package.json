@@ -46,7 +46,7 @@
     "assert": "^2.0.0",
     "benchmark": "^2.1.1",
     "c8": "^7.7.2",
-    "colyseus.js": "^0.15.0-preview.5",
+    "colyseus.js": "^0.15.0",
     "cors": "^2.8.5",
     "esbuild": "^0.14.43",
     "express": "^4.16.2",

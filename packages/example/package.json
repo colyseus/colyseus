@@ -1,21 +1,21 @@
 {
   "name": "@colyseus/example",
   "private": true,
-  "version": "0.15.0-preview.0",
+  "version": "0.15.0",
   "author": "Endel Dreyer",
   "license": "MIT",
   "scripts": {
     "start": "ts-node-dev --respawn --transpile-only src/Server.ts"
   },
   "dependencies": {
-    "@colyseus/core": "^0.15.0-preview.4"
+    "@colyseus/core": "^0.15.0"
   },
   "devDependencies": {
-    "@colyseus/monitor": "^0.15.0-preview.0",
-    "@colyseus/uwebsockets-transport": "^0.15.0-preview.0",
-    "@colyseus/ws-transport": "^0.15.0-preview.0",
-    "@colyseus/redis-driver": "^0.15.0-preview.0",
-    "@colyseus/redis-presence": "^0.15.0-preview.0",
-    "@colyseus/mongoose-driver": "^0.15.0-preview.0"
+    "@colyseus/monitor": "^0.15.0",
+    "@colyseus/uwebsockets-transport": "^0.15.0",
+    "@colyseus/ws-transport": "^0.15.0",
+    "@colyseus/redis-driver": "^0.15.0",
+    "@colyseus/redis-presence": "^0.15.0",
+    "@colyseus/mongoose-driver": "^0.15.0"
   }
 }

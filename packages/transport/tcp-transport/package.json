@@ -1,13 +1,13 @@
 {
   "private": true,
   "name": "@colyseus/tcp-transport",
-  "version": "0.15.0-preview.1",
+  "version": "0.15.0",
   "input": "./src/index.ts",
   "main": "./build/index.js",
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
   "dependencies": {
-    "@colyseus/core": "^0.15.0-preview.2"
+    "@colyseus/core": "^0.15.0"
   },
   "author": "Endel Dreyer",
   "license": "MIT",
