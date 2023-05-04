@@ -23,7 +23,7 @@
     "bump": "lerna version prerelease --force-publish --no-push --no-git-tag-version",
     "publish-alpha": "lerna publish prerelease --no-git-tag-version --dist-tag alpha",
     "publish-stable": "lerna publish patch --no-git-tag-version",
-    "publish-from-package-stable": "lerna publish from-package --dist-tag preview",
+    "publish-from-package-stable": "lerna publish from-package",
     "publish-from-package-preview": "lerna publish from-package --dist-tag preview",
     "release": "lerna version --force-publish --no-push --no-git-tag-version",
     "release-from-package": "lerna publish from-package",
