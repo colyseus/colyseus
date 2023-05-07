@@ -17,9 +17,9 @@ body:
     attributes:
       label: Bug description
       description: >-
-	Explain where Colyseus does not behave as you would expect it to. Be as
-	specific as possible. If you have found a workaround or a fix for the problem,
-	please let us maintainers (and all other users) know.
+        Explain where Colyseus does not behave as you would expect it to. Be as
+        specific as possible. If you have found a workaround or a fix for the problem,
+        please let us maintainers (and all other users) know.
     validations:
       required: true
 
@@ -55,9 +55,9 @@ body:
       description: >-
         Please include relevant version information:
       placeholder: |-
-	Colyseus version: ...
-	Node.js version: ...
-	TypeScript version: ...
-	Operating system: ...
+        Colyseus version: ...
+        Node.js version: ...
+        TypeScript version: ...
+        Operating system: ...
     validations:
       required: true
