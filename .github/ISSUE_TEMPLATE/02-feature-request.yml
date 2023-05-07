@@ -1,0 +1,33 @@
+name: Feature request
+description: Want to submit an idea? Propose a change or feature request
+body:
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Context & Description
+      description: >-
+        Please provide the context for the idea you want to propose, helping us to understand what you are working on
+        and what you are trying to achieve. If the context is not relevant, you
+        can leave this field empty.
+    validations:
+      required: true
+
+  - type: textarea
+    id: usecase
+    attributes:
+      label: Use cases
+      description: >-
+        Elaborate on how the change would positively impact not only you but
+        the community and how it aligns with the goals and philosophy of the
+        project.
+    validations:
+      required: true
+
+  - type: textarea
+    id: api
+    attributes:
+      label: Proposed API
+      description: >-
+        If your request is an addition or change to the current API, please
+        provide proposed API here. (This field is optional.)

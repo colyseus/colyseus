@@ -1,0 +1,63 @@
+name: Report a bug
+description: Something is not working? Report a bug
+body:
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: >-
+        This field is optional. You may provide additional context for the bug
+        you want to report, helping us to understand what you are working on and
+        what you are trying to achieve. If the context is not relevant, you can
+        leave this field empty.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug description
+      description: >-
+	Explain where Colyseus does not behave as you would expect it to. Be as
+	specific as possible. If you have found a workaround or a fix for the problem,
+	please let us maintainers (and all other users) know.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: >-
+        Please create a __.zip file__ with a __minimal reproduction__ for the bug.
+      placeholder: |-
+        Drag and drop the .zip file with minimal reproduction here.
+
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to reproduce
+      description: >-
+        Please provide a detailed list of instructions, guiding us maintainers
+        through the required steps, helping us to recreate the problem using the
+        minimal reproduction you provided. Be as specific as possible and as
+        verbose as necessary – try not to leave anything out.
+      placeholder: |-
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment & Versions
+      description: >-
+        Please include relevant version information:
+      placeholder: |-
+	Colyseus version: ...
+	Node.js version: ...
+	TypeScript version: ...
+	Operating system: ...
+    validations:
+      required: true

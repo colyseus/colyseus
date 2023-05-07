@@ -1,0 +1,10 @@
+
+blank_issues_enabled: false
+contact_links:
+  - name: Ask a question
+    url: https://github.com/orgs/colyseus/discussions
+    about: Have a question or need help? Connect with the community on our discussion board
+
+  - name: Ask on Discord
+    url: http://chat.colyseus.io
+    about: Join the Discord community and ask on the \#help channel.
