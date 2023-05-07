@@ -1,5 +1,7 @@
 name: Feature request
 description: Want to submit an idea? Propose a change or feature request
+title: "[Feature]: "
+labels: [':rocket: feature', ':eyes: triage']
 body:
 
   - type: textarea
