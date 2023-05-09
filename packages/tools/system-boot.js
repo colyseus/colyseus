@@ -23,16 +23,17 @@ function updateNOFileConfig(cb) {
   const totalmemMB = os.totalmem() / 1024 / 1024;
   const estimatedCCUPerGB = 4000;
 
-  const maxCCU = (totalmemMB / 1024) * estimatedCCUPerGB;
+  const maxCCU = Math.floor((totalmemMB / 1024) * estimatedCCUPerGB);
   const systemMaxNOFileLimit = maxCCU * 4;
   const nginxMaxNOFileLimit = maxCCU * 3; // 3x because of nginx -> proxy_pass -> node:port
 
   // immediatelly apply new nofile limit
+  // (apparently this has no effect)
   exec(`ulimit -n ${systemMaxNOFileLimit}`, bailOnErr);
 
   // update "/etc/security/limits.conf" file.
   fs.writeFileSync(LIMITS_CONF_FILE, `
-* - nofile $NOFILE_LIMIT
+* - nofile ${systemMaxNOFileLimit}
 `, bailOnErr);
 
   if (fs.existsSync(NGINX_LIMITS_CONFIG_FILE)) {
