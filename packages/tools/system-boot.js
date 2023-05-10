@@ -21,11 +21,12 @@ function bailOnErr(err) {
 function updateNOFileConfig(cb) {
   // const numCPU = os.cpus().length;
   const totalmemMB = os.totalmem() / 1024 / 1024;
-  const estimatedCCUPerGB = 4000;
+  const estimatedCCUPerGB = 5000;
 
   const maxCCU = Math.floor((totalmemMB / 1024) * estimatedCCUPerGB);
-  const systemMaxNOFileLimit = maxCCU * 4;
-  const nginxMaxNOFileLimit = maxCCU * 3; // 3x because of nginx -> proxy_pass -> node:port
+  const workerConnections = maxCCU * 2; // 2x because of proxy_pass
+  const nginxMaxNOFileLimit = workerConnections * 2; // 2x
+  const systemMaxNOFileLimit = workerConnections * 3; // 3x for other system operations
 
   // immediatelly apply new nofile limit
   // (apparently this has no effect)
@@ -41,11 +42,11 @@ function updateNOFileConfig(cb) {
 worker_rlimit_nofile ${nginxMaxNOFileLimit};
 
 events {
-    worker_connections ${maxCCU};
+    worker_connections ${workerConnections};
     # multi_accept on;
 }
 `, cb);
-    console.log("new nofile limit:", { maxCCU, systemMaxNOFileLimit, nginxMaxNOFileLimit });
+    console.log("new nofile limit:", { workerConnections, systemMaxNOFileLimit, nginxMaxNOFileLimit });
 
   } else {
     console.warn(NGINX_LIMITS_CONFIG_FILE, "not found.");
