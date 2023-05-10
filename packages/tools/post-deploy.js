@@ -41,7 +41,7 @@ function updateAndReloadNginx() {
     const addresses = [];
 
     apps.forEach(function(app) {
-      addresses.push(`127.0.0.1:${ port + app.pm2_env.NODE_APP_INSTANCE }`);
+      addresses.push(`unix:/run/colyseus/${ port + app.pm2_env.NODE_APP_INSTANCE }.sock`);
     });
 
     fs.writeFileSync(NGINX_SERVERS_CONFIG_FILE, addresses.map(address => `server ${address};`).join("\n"), bailOnErr);
