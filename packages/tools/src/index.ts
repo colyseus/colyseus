@@ -128,8 +128,16 @@ export async function listen(
     await options.initializeGameServer?.(gameServer);
     await options.beforeListen?.();
 
-    // listening on port
-    await gameServer.listen(port);
+
+    if (process.env.COLYSEUS_CLOUD !== undefined) {
+        // listening on socket
+        // @ts-ignore
+        await gameServer.listen(`/var/tmp/colyseus.${port}.sock`);
+
+    } else {
+        // listening on port
+        await gameServer.listen(port);
+    }
 
     // notify process manager (production)
     if (typeof(process.send) === "function") {

@@ -108,11 +108,20 @@ export class uWebSocketsTransport extends Transport {
     }
 
     public listen(port: number, hostname?: string, backlog?: number, listeningListener?: () => void) {
-        this.app.listen(port, (listeningSocket: any) => {
+        const callback = (listeningSocket: any) => {
           this._listeningSocket = listeningSocket;
           listeningListener?.();
           this.server.emit("listening"); // Mocking Transport.server behaviour, https://github.com/colyseus/colyseus/issues/458
-        });
+        };
+
+        if (typeof(port) === "string") {
+            // @ts-ignore
+            this.app.listen_unix(callback, port);
+
+        } else {
+            this.app.listen(port, callback);
+
+        }
         return this;
     }
 
