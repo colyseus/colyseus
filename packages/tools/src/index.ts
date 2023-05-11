@@ -132,7 +132,7 @@ export async function listen(
     if (process.env.COLYSEUS_CLOUD !== undefined) {
         // listening on socket
         // @ts-ignore
-        await gameServer.listen(`/var/tmp/colyseus.${port}.sock`);
+        await gameServer.listen(`/run/colyseus/${port}.sock`);
 
     } else {
         // listening on port
