@@ -40,10 +40,10 @@ See [roadmap](https://github.com/colyseus/colyseus/wiki/Roadmap) for our future 
 
 # 🚀 Quickstart
 
-Create a bare-bones Colyseus server by using `npm init colyseus-app`.
+Create a bare-bones Colyseus server by using `npm create colyseus-app@latest`:
 
 ```
-npm init colyseus-app my-colyseus-server
+npm create colyseus-app@latest my-colyseus-server
 cd my-colyseus-server
 npm start
 ```
