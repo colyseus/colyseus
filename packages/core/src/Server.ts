@@ -144,18 +144,18 @@ export class Server {
   public async listen(port: number, hostname?: string, backlog?: number, listeningListener?: Function) {
     this.port = port;
 
-    //
-    // Make sure matchmaker is ready before accepting connections
-    // (isDevMode: matchmaker may take extra milliseconds to restore the rooms)
-    //
-    await matchMaker.onReady;
-
     /**
      * Greetings!
      */
     if (this.greet) {
       console.log(greeting);
     }
+
+    //
+    // Make sure matchmaker is ready before accepting connections
+    // (isDevMode: matchmaker may take extra milliseconds to restore the rooms)
+    //
+    await matchMaker.onReady;
 
     return new Promise<void>((resolve, reject) => {
       this.transport.server?.on('error', (err) => reject(err));
