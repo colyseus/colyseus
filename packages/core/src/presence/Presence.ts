@@ -41,6 +41,14 @@ export interface Presence {
     exists(roomId: string): Promise<boolean>;
 
     /**
+     * Set key to hold the string value.
+     *
+     * @param key - Identifier.
+     * @param value - Message body/object.
+     */
+    set(key: string, value: string);
+
+    /**
      * Set key to hold the string value and set key to timeout after a given number of seconds.
      *
      * @param key - Identifier.

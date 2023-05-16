@@ -65,6 +65,11 @@ export class RedisPresence implements Presence {
         return (await (this.pub as any).pubsub("channels", roomId)).length > 0;
     }
 
+    public async set(key: string, value: string) {
+      return new Promise((resolve) =>
+        this.pub.set(key, value, resolve));
+    }
+
     public async setex(key: string, value: string, seconds: number) {
       return new Promise((resolve) =>
         this.pub.setex(key, seconds, value, resolve));

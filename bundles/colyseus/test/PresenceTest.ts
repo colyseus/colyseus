@@ -127,6 +127,14 @@ describe("Presence", () => {
         assert.equal(false, await presence.exists("exists2"));
       });
 
+      it("set", async () => {
+        await presence.set("setval1", "hello world");
+        assert.equal("hello world", await presence.get("setval1"));
+
+        await presence.del("setval1");
+        assert.equal(undefined, await presence.get("setval1"));
+      });
+
       it("setex", async () => {
         await presence.setex("setex1", "hello world", 1);
         assert.equal("hello world", await presence.get("setex1"));

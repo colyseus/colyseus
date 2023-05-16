@@ -79,6 +79,10 @@ export class LocalPresence implements Presence {
         return this.channels.listenerCount(roomId) > 0;
     }
 
+    public set(key: string, value: string) {
+        this.keys[key] = value;
+    }
+
     public setex(key: string, value: string, seconds: number) {
         // ensure previous timeout is clear before setting another one.
         if (this.timeouts[key]) {
