@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/tools",
-  "version": "0.15.7",
+  "version": "0.15.8",
   "description": "Colyseus Tools for Production",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -41,6 +41,7 @@
   },
   "dependencies": {
     "@colyseus/core": "^0.15.0",
+    "@colyseus/ws-transport": "^0.15.0",
     "cors": "^2.8.5",
     "dotenv": "^8.2.0",
     "express": "^4.16.2"

@@ -6,6 +6,7 @@ import cors from "cors";
 import express from "express";
 import dotenv from "dotenv";
 import { logger, Server, ServerOptions, Transport } from '@colyseus/core';
+import { WebSocketTransport } from '@colyseus/ws-transport';
 
 // try to import uWebSockets-express compatibility layer.
 let uWebSocketsExpressCompatibility: any;
@@ -155,7 +156,8 @@ export async function getTransport(options: ConfigOptions) {
     let transport: Transport;
 
     if (!options.initializeTransport) {
-        options.initializeTransport = Server.prototype['getDefaultTransport'];
+        // use WebSocketTransport by default
+        options.initializeTransport = (options: any) => new WebSocketTransport(options);
     }
 
     let app: express.Express | undefined = express();
