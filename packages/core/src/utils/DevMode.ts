@@ -17,17 +17,15 @@ export async function reloadFromCache() {
   debugDevMode("rooms to restore: %i", roomHistoryList.length);
 
   for (const [roomId, value] of roomHistoryList) {
-    let recreatedRoom: Room;
-
     const roomHistory = JSON.parse(value);
     debugDevMode("restoring room %s (%s)", roomHistory.roomName, roomId);
 
     const recreatedRoomListing = await handleCreateRoom(roomHistory.roomName, roomHistory.clientOptions, roomId);
+    const recreatedRoom = getRoomById(recreatedRoomListing.roomId);
     console.debug(`🔄 room '${roomId}' has been restored.`);
 
     // Set previous state
     if (roomHistory.hasOwnProperty("state")) {
-      recreatedRoom = getRoomById(recreatedRoomListing.roomId);
       recreatedRoom.state.decode(roomHistory.state);
 
       //
