@@ -74,6 +74,11 @@ export async function listen(
     const serverOptions = options.options || {};
     options.displayLogs = options.displayLogs ?? true;
 
+    // Force 2567 port on Colyseus Cloud
+    if (process.env.COLYSEUS_CLOUD !== undefined) {
+        port = 2567;
+    }
+
     //
     // Handling multiple processes
     // Use NODE_APP_INSTANCE to play nicely with pm2
