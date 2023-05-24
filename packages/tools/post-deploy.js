@@ -8,6 +8,12 @@ const maxCPU = os.cpus().length;
 
 const NGINX_SERVERS_CONFIG_FILE = '/etc/nginx/colyseus_servers.conf';
 
+// allow deploying from other path as root.
+if (process.env.npm_config_prefix) {
+  process.chdir(process.env.npm_config_prefix);
+  pm2.cwd = process.env.npm_config_prefix;
+}
+
 pm2.list(function(err, apps) {
   bailOnErr(err);
 
