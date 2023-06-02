@@ -151,7 +151,7 @@ export async function listen(
     }
 
     if (options.displayLogs) {
-        logger.info(`⚔️  Listening on ws://localhost:${port}`);
+        logger.info(`⚔️  Listening on http://localhost:${port}`);
     }
     return gameServer;
 }
