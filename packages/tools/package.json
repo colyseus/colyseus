@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/tools",
-  "version": "0.15.12",
+  "version": "0.15.13",
   "description": "Colyseus Tools for Production",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -48,6 +48,5 @@
   },
   "publishConfig": {
     "access": "public"
-  },
-  "gitHead": "320a0325f01eff3cd7afa8fb2efa80077ebdbf4a"
+  }
 }

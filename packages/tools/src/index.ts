@@ -14,19 +14,23 @@ try {
   uWebSocketsExpressCompatibility = require('uwebsockets-express').default;
 } catch (e) {}
 
-const envFilename = `.env.${process.env.NODE_ENV || "development"}`;
+const NODE_ENV = process.env.NODE_ENV || "development";
+const REGION = (process.env.REGION || "unknown").toLowerCase(); // EU, NA, AS, AF, AU, SA, UNKNOWN
+
+const envPaths = [];
+[`.env.${REGION}.${NODE_ENV}`, `.env.${NODE_ENV}`, `.env`].forEach((envFilename) => {
+  envPaths.push(path.resolve(path.dirname(require?.main?.filename || process.cwd()), "..", envFilename));
+  envPaths.push(path.resolve(process.cwd(), envFilename));
+});
 
 // return the first .env path found
-const envPath = [
-  path.resolve(path.dirname(require?.main?.filename || process.cwd()), "..", envFilename),
-  path.resolve(process.cwd(), envFilename)
-].find((envPath) => fs.existsSync(envPath));
+const envPath = envPaths.find((envPath) => fs.existsSync(envPath));
 
 if (envPath) {
     dotenv.config({ path: envPath });
-    logger.info(`✅ ${envFilename} loaded.`);
+    logger.info(`✅ ${path.basename(envPath)} loaded.`);
 } else {
-    logger.info(`⚠️  ${envFilename} not found.`);
+    logger.info(`⚠️  env file not found.`);
 }
 
 export interface ConfigOptions {
