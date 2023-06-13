@@ -23,7 +23,7 @@ function getRegion() {
   return (process.env.REGION || "unknown").toLowerCase();;
 }
 
-function loadEnvFile(envFileOptions: string[], log: boolean = false) {
+function loadEnvFile(envFileOptions: string[], log: 'none' | 'success' | 'both'  = 'none') {
     const envPaths = [];
     envFileOptions.forEach((envFilename) => {
       envPaths.push(path.resolve(path.dirname(require?.main?.filename || process.cwd()), "..", envFilename));
@@ -36,12 +36,12 @@ function loadEnvFile(envFileOptions: string[], log: boolean = false) {
     if (envPath) {
         dotenv.config({ path: envPath });
 
-        if (log) {
+        if (log !== "none") {
             logger.info(`✅ ${path.basename(envPath)} loaded.`);
         }
 
-    } else if (log) {
-        logger.info(`⚠️  env file not found.`);
+    } else if (log === "both") {
+        logger.info(`ℹ️  optional .env file not found: ${envFileOptions.join(", ")}`);
     }
 }
 
@@ -51,7 +51,11 @@ if (process.env.COLYSEUS_CLOUD !== undefined) {
 }
 
 // (overrides previous env configs)
-loadEnvFile([`.env.${getRegion()}.${getNodeEnv()}`, `.env.${getNodeEnv()}`, `.env`], true);
+loadEnvFile([`.env.${getNodeEnv()}`, `.env`], 'both');
+
+if (process.env.REGION !== undefined) {
+  loadEnvFile([`.env.${getRegion()}.${getNodeEnv()}`], 'success');
+}
 
 export interface ConfigOptions {
     options?: ServerOptions,
