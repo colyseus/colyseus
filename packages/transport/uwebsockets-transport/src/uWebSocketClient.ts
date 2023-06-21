@@ -79,8 +79,8 @@ export class uWebSocketClient implements Client {
   }
 
   public raw(data: ArrayLike<number>, options?: ISendOptions, cb?: (err?: Error) => void) {
+    // skip if client not open
     if (this.readyState !== ReadyState.OPEN) {
-      logger.warn('trying to send data to inactive client', this.sessionId);
       return;
     }
 
