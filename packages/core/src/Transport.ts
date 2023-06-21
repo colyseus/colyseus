@@ -107,12 +107,12 @@ export interface Client<UserData=any, AuthData=any> {
   error(code: number, message?: string): void;
 }
 
-export class ClientArray<UserData> extends Array<Client<UserData>> {
-  public getById(sessionId: string): Client<UserData> | undefined {
+export class ClientArray<UserData = any, AuthData = any> extends Array<Client<UserData, AuthData>> {
+  public getById(sessionId: string): Client<UserData, AuthData> | undefined {
     return this.find((client) => client.sessionId === sessionId);
   }
 
-  public delete(client: Client<UserData>): boolean {
+  public delete(client: Client<UserData, AuthData>): boolean {
     return spliceOne(this, this.indexOf(client));
   }
 }

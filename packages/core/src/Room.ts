@@ -42,6 +42,9 @@ export enum RoomInternalState {
   DISPOSING = 2,
 }
 
+type ExtractUserData<T> = T extends ClientArray<infer U> ? U : never;
+type ExtractAuthData<T> = T extends ClientArray<infer _, infer U> ? U : never;
+
 /**
  * A Room class is meant to implement a game session, and/or serve as the communication channel
  * between a group of clients.
@@ -111,7 +114,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
    *
    * @see {@link https://docs.colyseus.io/colyseus/server/room/#client|Client instance}
    */
-  public clients: ClientArray<any> = new ClientArray();
+  public clients: ClientArray = new ClientArray();
 
   /** @internal */
   public _events = new EventEmitter();
@@ -202,10 +205,21 @@ export abstract class Room<State extends object= any, Metadata= any> {
   // Optional abstract methods
   public onBeforePatch?(state: State): void | Promise<any>;
   public onCreate?(options: any): void | Promise<any>;
-  public onJoin?(client: Client, options?: any, auth?: any): void | Promise<any>;
-  public onLeave?(client: Client, consented?: boolean): void | Promise<any>;
+  public onJoin?(
+    client: Client<ExtractUserData<typeof this['clients']>, ExtractAuthData<typeof this['clients']>>,
+    options?: any,
+    auth?: ExtractAuthData<typeof this['clients']>,
+  ): void | Promise<any>;
+  public onLeave?(
+    client: Client<ExtractUserData<typeof this['clients']>, ExtractAuthData<typeof this['clients']>>,
+    consented?: boolean,
+  ): void | Promise<any>;
   public onDispose?(): void | Promise<any>;
-  public onAuth(client: Client, options: any, request?: http.IncomingMessage): any | Promise<any> {
+  public onAuth(
+    client: Client<ExtractUserData<typeof this['clients']>, ExtractAuthData<typeof this['clients']>>,
+    options: any,
+    request?: http.IncomingMessage
+  ): any | Promise<any> {
     return true;
   }
 
@@ -463,8 +477,14 @@ export abstract class Room<State extends object= any, Metadata= any> {
     return hasChanges;
   }
 
-  public onMessage<T = any>(messageType: '*', callback: (client: Client, type: string | number, message: T) => void);
-  public onMessage<T = any>(messageType: string | number, callback: (client: Client, message: T) => void);
+  public onMessage<T = any>(
+    messageType: '*',
+    callback: (client: Client<ExtractUserData<typeof this['clients']>, ExtractAuthData<typeof this['clients']>>, type: string | number, message: T) => void
+  );
+  public onMessage<T = any>(
+    messageType: string | number,
+    callback: (client: Client<ExtractUserData<typeof this['clients']>, ExtractAuthData<typeof this['clients']>>, message: T) => void
+  );
   public onMessage<T = any>(messageType: '*' | string | number, callback: (...args: any[]) => void) {
     this.onMessageHandlers[messageType] = callback;
     // returns a method to unbind the callback
