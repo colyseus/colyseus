@@ -46,6 +46,10 @@ export class MongooseDriver implements MatchMakerDriver {
     return (new RoomCache(initialValues) as any) as RoomListingData;
   }
 
+  public async has(roomId: string) {
+    return !!(await RoomCache.findOne({ roomId }));
+  };
+
   public async find(conditions: Partial<IRoomListingData>, additionalProjectionFields = {}) {
     return (await RoomCache.find(conditions, {
       _id: false,

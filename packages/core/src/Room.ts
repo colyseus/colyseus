@@ -39,7 +39,7 @@ export interface IBroadcastOptions extends ISendOptions {
 export enum RoomInternalState {
   CREATING = 0,
   CREATED = 1,
-  DISCONNECTING = 2,
+  DISPOSING = 2,
 }
 
 /**
@@ -113,8 +113,6 @@ export abstract class Room<State extends object= any, Metadata= any> {
    */
   public clients: ClientArray<any> = new ClientArray();
 
-  public internalState: RoomInternalState = RoomInternalState.CREATING;
-
   /** @internal */
   public _events = new EventEmitter();
 
@@ -134,6 +132,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
   private _simulationInterval: NodeJS.Timer;
   private _patchInterval: NodeJS.Timer;
 
+  private _internalState: RoomInternalState = RoomInternalState.CREATING;
   private _locked: boolean = false;
   private _lockedExplicitly: boolean = false;
   private _maxClientsReached: boolean = false;
@@ -193,7 +192,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
    * @returns roomId string
    */
   public set roomId(roomId: string) {
-    if (this.internalState !== RoomInternalState.CREATING && !isDevMode) {
+    if (this._internalState !== RoomInternalState.CREATING && !isDevMode) {
       // prevent user from setting roomId after room has been created.
       throw new ServerError(ErrorCode.APPLICATION_ERROR, "'roomId' can only be overridden upon room creation.");
     }
@@ -231,7 +230,10 @@ export abstract class Room<State extends object= any, Metadata= any> {
    * @returns boolean
    */
   public hasReachedMaxClients(): boolean {
-    return (this.clients.length + Object.keys(this.reservedSeats).length) >= this.maxClients;
+    return (
+      (this.clients.length + Object.keys(this.reservedSeats).length) >= this.maxClients ||
+      this._internalState === RoomInternalState.DISPOSING
+    );
   }
 
   /**
@@ -352,7 +354,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
       }
     }
 
-    if (this.internalState === RoomInternalState.CREATED) {
+    if (this._internalState === RoomInternalState.CREATED) {
       await this.listing.save();
     }
   }
@@ -360,7 +362,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
   public async setPrivate(bool: boolean = true) {
     this.listing.private = bool;
 
-    if (this.internalState === RoomInternalState.CREATED) {
+    if (this._internalState === RoomInternalState.CREATED) {
       await this.listing.save();
     }
   }
@@ -476,7 +478,12 @@ export abstract class Room<State extends object= any, Metadata= any> {
    * @returns Promise<void>
    */
   public async disconnect(closeCode: number = Protocol.WS_CLOSE_CONSENTED): Promise<any> {
-    this.internalState = RoomInternalState.DISCONNECTING;
+    // skip if already disposing
+    if (this._internalState === RoomInternalState.DISPOSING) {
+      return;
+    }
+
+    this._internalState = RoomInternalState.DISPOSING;
     await this.listing.remove();
 
     this.autoDispose = true;
@@ -597,7 +604,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
       seconds = Infinity;
     }
 
-    if (this.internalState === RoomInternalState.DISCONNECTING) {
+    if (this._internalState === RoomInternalState.DISPOSING) {
       this._disposeIfEmpty(); // gracefully shutting down
       throw new Error('disconnecting');
     }
@@ -768,8 +775,11 @@ export abstract class Room<State extends object= any, Metadata= any> {
   }
 
   private async _dispose(): Promise<any> {
-    let userReturnData;
+    this._internalState = RoomInternalState.DISPOSING;
 
+    await this.listing.remove();
+
+    let userReturnData;
     if (this.onDispose) {
       userReturnData = this.onDispose();
     }
@@ -922,8 +932,8 @@ export abstract class Room<State extends object= any, Metadata= any> {
   private async _decrementClientCount() {
     const willDispose = this._disposeIfEmpty();
 
-    if (this.internalState === RoomInternalState.DISCONNECTING) {
-      return;
+    if (this._internalState === RoomInternalState.DISPOSING) {
+      return true;
     }
 
     // unlock if room is available for new connections

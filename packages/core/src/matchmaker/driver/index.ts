@@ -13,6 +13,10 @@ export class LocalDriver implements MatchMakerDriver {
     return new RoomCache(initialValues, this.rooms);
   }
 
+  public has(roomId: string) {
+    return this.rooms.some((room) => room.roomId === roomId);
+  }
+
   public find(conditions: Partial<IRoomListingData>) {
     return this.rooms.filter(((room) => {
       for (const field in conditions) {

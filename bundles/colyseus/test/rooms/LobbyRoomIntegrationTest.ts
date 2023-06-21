@@ -109,14 +109,14 @@ describe("LobbyRoom: Integration", () => {
 
           await client.create('dummy_1');
           const dummy_1 = await client.create('dummy_1');
-          const dummyRoomId = dummy_1.id;
+          const dummyRoomId = dummy_1.roomId;
 
           lobby.onMessage("-", (roomId) => {
             onRemoveCalled++;
             assert.equal(roomId, dummyRoomId);
           });
 
-          dummy_1.leave();
+          await dummy_1.leave();
           await timeout(50);
 
           assert.ok(onMessageCalled);

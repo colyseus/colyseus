@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/mongoose-driver",
-  "version": "0.15.0",
+  "version": "0.15.1",
   "input": "./src/index.ts",
   "main": "./build/index.js",
   "module": "./build/index.mjs",

@@ -1,4 +1,4 @@
-import { RoomListingData } from '@colyseus/core';
+import { RoomListingData, logger } from '@colyseus/core';
 import Redis from 'ioredis';
 
 export class RoomData implements RoomListingData {
@@ -15,6 +15,7 @@ export class RoomData implements RoomListingData {
   public unlisted: boolean = false;
 
   #client: Redis.Redis;
+  #removed: boolean = false;
 
   constructor(
     initialValues: any,
@@ -47,6 +48,9 @@ export class RoomData implements RoomListingData {
   }
 
   public async save() {
+    // skip if already removed.
+    if (this.#removed) { return; }
+
     if (this.roomId) {
       // FIXME: workaround so JSON.stringify() stringifies all dynamic fields.
       const toJSON = this.toJSON;
@@ -58,7 +62,7 @@ export class RoomData implements RoomListingData {
       await this.hset('roomcaches', this.roomId, roomcache);
 
     } else {
-      console.warn("⚠️ RedisDriver: can't .save() without a `roomId`")
+      logger.warn("RedisDriver: can't .save() without a `roomId`")
     }
   }
 
@@ -84,6 +88,7 @@ export class RoomData implements RoomListingData {
 
   public remove() {
     if (this.roomId) {
+      this.#removed = true;
       return this.hdel('roomcaches', this.roomId);
     }
   }

@@ -21,6 +21,10 @@ export class RedisDriver implements MatchMakerDriver {
     return new RoomData(initialValues, this._client);
   }
 
+  public async has(roomId: string) {
+    return await this._client.hexists('roomcaches', roomId) === 1;
+  }
+
   public async find(conditions: any) {
     const rooms = await this.getRooms();
     return rooms.filter((room) => {
@@ -41,7 +45,25 @@ export class RedisDriver implements MatchMakerDriver {
   }
 
   public findOne(conditions: Partial<IRoomListingData>): QueryHelpers<RoomListingData> {
-    return (new Query<RoomListingData>(this.getRooms(), conditions) as any) as QueryHelpers<RoomListingData>;
+    if (typeof conditions.roomId !== 'undefined') {
+      // get room by roomId
+
+      //
+      // TODO: refactor driver APIs.
+      // the API here is legacy from MongooseDriver which made sense on versions <= 0.14.0
+      //
+
+      // @ts-ignore
+      return new Promise<RoomListingData>((resolve, reject) => {
+        this._client.hget('roomcaches', conditions.roomId).then((roomcache) => {
+          resolve(new RoomData(JSON.parse(roomcache), this._client));
+        }).catch(reject);
+      });
+
+    } else {
+      // filter list by other conditions
+      return (new Query<RoomListingData>(this.getRooms(), conditions) as any) as QueryHelpers<RoomListingData>;
+    }
   }
 
   public async getRooms() {

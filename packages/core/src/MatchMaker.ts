@@ -298,6 +298,13 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
       );
 
     } catch (e) {
+      //
+      // clean-up possibly stale process from redis.
+      // when a process disconnects ungracefully, it may leave its previous processId under "roomcount"
+      // if the process is still alive, it will re-add itself shortly after the load-balancer selects it again.
+      //
+      await presence.hdel(getRoomCountKey(), processIdWithFewerRooms);
+
       // if other process failed to respond, create the room on this process
       debugAndPrintError(e);
       room = await handleCreateRoom(roomName, clientOptions);
@@ -365,7 +372,7 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
     }
   }
 
-  room.internalState = RoomInternalState.CREATED;
+  room['_internalState'] = RoomInternalState.CREATED;
 
   room.listing.roomId = room.roomId;
   room.listing.maxClients = room.maxClients;
@@ -569,11 +576,6 @@ async function disposeRoom(roomName: string, room: Room) {
     if (isDevMode) {
       await presence.hdel(getRoomRestoreListKey(), room.roomId);
     }
-  }
-
-  // remove from room listing (already removed if `disconnect()` has been called)
-  if (room.internalState !== RoomInternalState.DISCONNECTING) {
-    await room.listing.remove();
   }
 
   // emit disposal on registered session handler

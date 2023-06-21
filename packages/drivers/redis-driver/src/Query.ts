@@ -1,5 +1,4 @@
 import { QueryHelpers, SortOptions } from '@colyseus/core';
-import { RoomData } from './RoomData';
 
 export class Query<T> implements QueryHelpers<T> {
   private readonly rooms: Promise<T[]>;
