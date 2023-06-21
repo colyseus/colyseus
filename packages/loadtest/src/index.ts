@@ -139,17 +139,20 @@ Example:
 
     const currentStats = {
         connected: 0,
+        disconnected: 0,
         failed: 0,
     };
 
     const totalStats = {
         connected: 0,
+        disconnected: 0,
         failed: 0,
         errors: 0,
     };
 
     const successfulConnectionBox = blessed.text({ top: 2, left: 1, tags: true, content: `{yellow-fg}connected:{/yellow-fg} ${currentStats.connected}` });
-    const failedConnectionBox = blessed.text({ top: 3, left: 1, tags: true, content: `{yellow-fg}failed:{/yellow-fg} ${currentStats.failed}` });
+    const disconnectedClientsBox = blessed.text({ top: 3, left: 1, tags: true, content: `{yellow-fg}disconnected:{/yellow-fg} ${currentStats.disconnected}` });
+    const failedConnectionBox = blessed.text({ top: 4, left: 1, tags: true, content: `{yellow-fg}failed:{/yellow-fg} ${currentStats.failed}` });
 
     const clientsBox = blessed.box({
         label: ' clients ',
@@ -159,6 +162,7 @@ Example:
         children: [
             blessed.text({ top: 1, left: 1, tags: true, content: `{yellow-fg}numClients:{/yellow-fg} ${options.numClients}` }),
             successfulConnectionBox,
+            disconnectedClientsBox,
             failedConnectionBox
         ],
         border: { type: 'line' },
@@ -171,7 +175,7 @@ Example:
 
     const processingBox = blessed.box({
         label: ' processing ',
-        top: 6,
+        top: 7,
         left: "70%",
         width: "30%",
         height: 'shrink',
@@ -190,7 +194,7 @@ Example:
 
     const networkingBox = blessed.box({
         label: ' networking ',
-        top: 11,
+        top: 12,
         left: "70%",
         width: "30%",
         border: { type: 'line' },
@@ -437,6 +441,15 @@ Example:
         totalStats.connected++;
         successfulConnectionBox.content = `{yellow-fg}connected:{/yellow-fg} ${currentStats.connected}`;
         screen.render();
+
+        // update stats on leave
+        room.onLeave(() => {
+            currentStats.disconnected++;
+            totalStats.disconnected++;
+            disconnectedClientsBox.content = `{yellow-fg}disconnected:{/yellow-fg} ${currentStats.disconnected}`;
+            screen.render();
+        });
+
         connections.push(room);
     }
 
@@ -452,15 +465,6 @@ Example:
         const room = await _originalJoin.apply(this, arguments);
         handleClientJoin(room);
         return room;
-    }
-
-    const _originalRoomLeave = Room.prototype.leave;
-    Room.prototype.leave = async function(this: Room) {
-        const result = await _originalRoomLeave.apply(this, arguments);
-        currentStats.connected--;
-        successfulConnectionBox.content = `{yellow-fg}connected:{/yellow-fg} ${currentStats.connected}`;
-        screen.render();
-        return result;
     }
 
     try {
