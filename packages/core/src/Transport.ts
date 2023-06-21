@@ -30,7 +30,7 @@ export enum ClientState { JOINING, JOINED, RECONNECTED, LEAVING }
  * - This is the raw WebSocket connection coming from the `ws` package. There are more methods available which aren't
  *  encouraged to use along with Colyseus.
  */
-export interface Client<UserData=any> {
+export interface Client<UserData=any, AuthData=any> {
   readyState: number;
 
   id: string;
@@ -54,7 +54,7 @@ export interface Client<UserData=any> {
   /**
    * auth data provided by your `onAuth`
    */
-  auth?: any;
+  auth?: AuthData;
   pingCount?: number; // ping / pong
 
   _reconnectionToken: string;
