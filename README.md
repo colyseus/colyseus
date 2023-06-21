@@ -36,7 +36,7 @@ for any kind of project you can think of!
 - Matchmaking clients into game rooms/sessions
 - Scale vertically or horizontally
 
-See [roadmap](https://github.com/colyseus/colyseus/wiki/Roadmap) for our future plans.
+See [public roadmap](https://github.com/colyseus/colyseus/wiki/Public-Roadmap) for future plans.
 
 # 🚀 Quickstart
 
