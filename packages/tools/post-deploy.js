@@ -2,6 +2,7 @@
 const pm2 = require('pm2');
 const os = require('os');
 const fs = require('fs');
+const path = require('path');
 
 const opts = { env: process.env.NODE_ENV || "production" };
 const maxCPU = os.cpus().length;
@@ -14,16 +15,27 @@ if (process.env.npm_config_local_prefix) {
   pm2.cwd = process.env.npm_config_local_prefix;
 }
 
+const CONFIG_FILE = [
+  'ecosystem.config.cjs',
+  'ecosystem.config.js',
+  'pm2.config.cjs',
+  'pm2.config.js',
+].find((filename) => fs.existsSync(path.resolve(pm2.cwd, filename)));
+
+if (!CONFIG_FILE) {
+  throw new Error('missing ecosystem config file. make sure to provide one with a valid "script" entrypoint file path.');
+}
+
 pm2.list(function(err, apps) {
   bailOnErr(err);
 
   if (apps.length === 0) {
     // first deploy
-    pm2.start('ecosystem.config.js', {...opts}, updateAndReloadNginx);
+    pm2.start(CONFIG_FILE, {...opts}, updateAndReloadNginx);
 
   } else {
     // reload existing apps
-    pm2.reload('ecosystem.config.js', {...opts}, function(err, apps) {
+    pm2.reload(CONFIG_FILE, {...opts}, function(err, apps) {
       bailOnErr(err);
 
       const name = apps[0].name;
