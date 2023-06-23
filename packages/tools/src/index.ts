@@ -5,7 +5,8 @@ import path from "path";
 import cors from "cors";
 import express from "express";
 import dotenv from "dotenv";
-import { logger, Server, ServerOptions, Transport } from '@colyseus/core';
+import osUtils from "node-os-utils";
+import { logger, Server, ServerOptions, Transport, matchMaker } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 
 // try to import uWebSockets-express compatibility layer.
@@ -20,7 +21,7 @@ function getNodeEnv() {
 
 function getRegion() {
   // EU, NA, AS, AF, AU, SA, UNKNOWN
-  return (process.env.REGION || "unknown").toLowerCase();;
+  return (process.env.REGION || "unknown").toLowerCase();
 }
 
 function loadEnvFile(envFileOptions: string[], log: 'none' | 'success' | 'both'  = 'none') {
@@ -222,18 +223,51 @@ export async function getTransport(options: ConfigOptions) {
                 app = undefined;
             }
         }
+    }
 
-        if (app) {
-            // Enable CORS + JSON parsing.
-            app.use(cors());
-            app.use(express.json());
+    if (app) {
+      // Enable CORS + JSON parsing.
+      app.use(cors());
+      app.use(express.json());
 
-            await options.initializeExpress(app);
+      if (options.initializeExpress) {
+          await options.initializeExpress(app);
+      }
 
-            if (options.displayLogs) {
-                logger.info("✅ Express initialized");
-            }
-        }
+      app.get("/__cloudstats", async (req, res) => {
+          if (req.headers.authorization !== process.env.CLOUD_SECRET) {
+              res.status(401).end();
+              return;
+          }
+
+          const roomCountPerProcess = await matchMaker.presence.hgetall("roomcount");
+          let rooms = 0;
+          for (const processId in roomCountPerProcess) {
+              rooms += Number(roomCountPerProcess[processId]);
+          }
+
+          const mem = await osUtils.mem.used();
+          const totalMem = mem.totalMemMb / 1024;
+          const usedMem = mem.usedMemMb / 1024;
+
+          const cpu = (1 / os.loadavg()[1]);
+          const ccu = await matchMaker.presence.get("_ccu");
+
+          res.json({
+              memory: {
+                total: totalMem,
+                used: usedMem,
+              },
+              mem: (usedMem / totalMem),
+              cpu,
+              ccu,
+              rooms,
+          });
+      });
+
+      if (options.displayLogs) {
+          logger.info("✅ Express initialized");
+      }
     }
 
     return transport;

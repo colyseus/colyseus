@@ -546,10 +546,14 @@ async function awaitRoomAvailable(roomToJoin: string, callback: Function): Promi
 }
 
 function onClientJoinRoom(room: Room, client: Client) {
+  // increment global CCU
+  presence.incr(getGlobalCCUCounter());
   handlers[room.roomName].emit('join', room, client);
 }
 
 function onClientLeaveRoom(room: Room, client: Client, willDispose: boolean) {
+  // decrement global CCU
+  presence.decr(getGlobalCCUCounter());
   handlers[room.roomName].emit('leave', room, client, willDispose);
 }
 
@@ -608,4 +612,8 @@ function getHandlerConcurrencyKey(name: string) {
 
 function getProcessChannel(id: string = processId) {
   return `p:${id}`;
+}
+
+function getGlobalCCUCounter() {
+  return "_ccu";
 }
