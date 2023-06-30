@@ -235,7 +235,10 @@ export async function getTransport(options: ConfigOptions) {
       }
 
       app.get("/__cloudstats", async (req, res) => {
-          if (req.headers.authorization !== process.env.CLOUD_SECRET) {
+          if (
+              process.env.CLOUD_SECRET &&
+              req.headers.authorization !== process.env.CLOUD_SECRET
+          ) {
               res.status(401).end();
               return;
           }
@@ -246,19 +249,13 @@ export async function getTransport(options: ConfigOptions) {
               rooms += Number(roomCountPerProcess[processId]);
           }
 
-          const mem = await osUtils.mem.used();
-          const totalMem = mem.totalMemMb / 1024;
-          const usedMem = mem.usedMemMb / 1024;
-
-          const cpu = (1 / os.loadavg()[1]);
           const ccu = await matchMaker.presence.get("_ccu");
+          const mem = await osUtils.mem.used();
+          const cpu = (await osUtils.cpu.usage()) / 100;
 
           res.json({
-              memory: {
-                total: totalMem,
-                used: usedMem,
-              },
-              mem: (usedMem / totalMem),
+              version: 1,
+              mem: (mem.usedMemMb / mem.totalMemMb),
               cpu,
               ccu,
               rooms,
