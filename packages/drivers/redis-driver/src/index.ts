@@ -56,7 +56,11 @@ export class RedisDriver implements MatchMakerDriver {
       // @ts-ignore
       return new Promise<RoomListingData>((resolve, reject) => {
         this._client.hget('roomcaches', conditions.roomId).then((roomcache) => {
-          resolve(new RoomData(JSON.parse(roomcache), this._client));
+          if (roomcache) {
+            resolve(new RoomData(JSON.parse(roomcache), this._client));
+          } else {
+            resolve(undefined);
+          }
         }).catch(reject);
       });
 

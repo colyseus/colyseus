@@ -23,7 +23,7 @@ export class RoomData implements RoomListingData {
   ) {
     this.#client = client;
 
-    this.createdAt = initialValues.createdAt
+    this.createdAt = (initialValues && initialValues.createdAt)
       ? new Date(initialValues.createdAt)
       : new Date();
 

@@ -969,6 +969,16 @@ describe("Integration", () => {
               }
             });
 
+            it("ErrorCode.MATCHMAKE_INVALID_ROOM_ID", async () => {
+              try {
+                await client.joinById('abcdedfgh')
+                assert.fail("joinById with invalid id should fail.");
+
+              } catch (e) {
+                assert.strictEqual(ErrorCode.MATCHMAKE_INVALID_ROOM_ID, e.code)
+              }
+            });
+
             it("ErrorCode.AUTH_FAILED", async () => {
               matchMaker.defineRoomType('onAuthFail', class _ extends Room {
                 async onAuth(client: Client, options: any) {
