@@ -118,13 +118,13 @@ export async function listen(
     // automatically configure for production under Colyseus Cloud
     if (process.env.COLYSEUS_CLOUD !== undefined) {
         // special configuration is required when using multiple processes
-        const isMultiProcess = (os.cpus().length > 1);
+        const useRedisConfig = (os.cpus().length > 1) || (process.env.REDIS_URI !== undefined);
 
-        if (!serverOptions.driver && isMultiProcess) {
+        if (!serverOptions.driver && useRedisConfig) {
             let RedisDriver: any = undefined;
             try {
                 RedisDriver = require('@colyseus/redis-driver').RedisDriver;
-                serverOptions.driver = new RedisDriver();
+                serverOptions.driver = new RedisDriver(process.env.REDIS_URI);
             } catch (e) {
                 logger.warn("");
                 logger.warn("❌ coult not initialize RedisDriver.");
@@ -133,11 +133,11 @@ export async function listen(
             }
         }
 
-        if (!serverOptions.presence && isMultiProcess) {
+        if (!serverOptions.presence && useRedisConfig) {
             let RedisPresence: any = undefined;
             try {
                 RedisPresence = require('@colyseus/redis-presence').RedisPresence;
-                serverOptions.presence = new RedisPresence();
+                serverOptions.presence = new RedisPresence(process.env.REDIS_URI);
             } catch (e) {
                 logger.warn("");
                 logger.warn("❌ coult not initialize RedisPresence.");
@@ -150,7 +150,7 @@ export async function listen(
         serverOptions.publicAddress = process.env.SUBDOMAIN + "." + process.env.SERVER_NAME;
 
         // nginx is responsible for forwarding /{port}/ to this process
-        if (isMultiProcess) {
+        if (useRedisConfig) {
             serverOptions.publicAddress += "/" + port;
         }
     }
