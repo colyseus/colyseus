@@ -1,5 +1,5 @@
 import { RoomListingData, logger } from '@colyseus/core';
-import Redis from 'ioredis';
+import Redis, { Cluster } from 'ioredis';
 
 export class RoomData implements RoomListingData {
   public clients: number = 0;
@@ -14,12 +14,12 @@ export class RoomData implements RoomListingData {
   public createdAt: Date;
   public unlisted: boolean = false;
 
-  #client: Redis.Redis;
+  #client: Redis | Cluster;
   #removed: boolean = false;
 
   constructor(
     initialValues: any,
-    client: Redis.Redis
+    client: Redis | Cluster
   ) {
     this.#client = client;
 
