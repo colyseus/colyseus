@@ -1,6 +1,6 @@
 {
   "name": "colyseus",
-  "version": "0.15.6",
+  "version": "0.15.7",
   "description": "Multiplayer Framework for Node.js.",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -32,8 +32,8 @@
   },
   "dependencies": {
     "@colyseus/core": "^0.15.6",
-    "@colyseus/redis-driver": "^0.15.2",
-    "@colyseus/redis-presence": "^0.15.1",
+    "@colyseus/redis-driver": "^0.15.3",
+    "@colyseus/redis-presence": "^0.15.2",
     "@colyseus/ws-transport": "^0.15.1"
   },
   "gitHead": "25ba61e283429bb4fa02db0454f804ea218259eb"

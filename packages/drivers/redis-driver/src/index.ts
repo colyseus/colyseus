@@ -1,4 +1,4 @@
-import Redis from 'ioredis';
+import Redis, { Cluster, ClusterNode, ClusterOptions, RedisOptions } from 'ioredis';
 
 import {
   IRoomListingData,
@@ -11,10 +11,12 @@ import { Query } from './Query';
 import { RoomData } from './RoomData';
 
 export class RedisDriver implements MatchMakerDriver {
-  private readonly _client: Redis.Redis;
+  private readonly _client: Redis | Cluster;
 
-  constructor(options?: Redis.RedisOptions, key: string = 'roomcaches') {
-    this._client = new Redis(options);
+  constructor(options?: RedisOptions | ClusterNode[], clusterOptions?: ClusterOptions) {
+    this._client = (Array.isArray(options))
+      ? new Cluster(options, clusterOptions)
+      : new Redis(options);
   }
 
   public createInstance(initialValues: any = {}) {

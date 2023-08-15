@@ -1,13 +1,13 @@
 {
   "name": "@colyseus/redis-driver",
-  "version": "0.15.2",
+  "version": "0.15.3",
   "input": "./src/index.ts",
   "main": "./build/index.js",
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
   "dependencies": {
     "@colyseus/core": "^0.15.0",
-    "ioredis": "^4.27.9"
+    "ioredis": "^5.3.2"
   },
   "author": "Endel Dreyer",
   "license": "MIT",
