@@ -71,5 +71,9 @@
       "lcov"
     ],
     "all": true
+  },
+  "engines": {
+    "node": "16.10.0",
+    "npm": "7.1.2"
   }
 }
