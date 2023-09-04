@@ -147,6 +147,13 @@ export abstract class Room<State extends object= any, Metadata= any> {
   constructor(presence?: Presence) {
     this.presence = presence;
 
+    this.onBeforePatch = this.proxyError(this.onBeforePatch?.bind(this));
+    this.onCreate = this.proxyError(this.onCreate?.bind(this));
+    this.onJoin = this.proxyError(this.onJoin?.bind(this));
+    this.onLeave = this.proxyError(this.onLeave?.bind(this));
+    this.onDispose = this.proxyError(this.onDispose?.bind(this));
+    this.onAuth = this.proxyError(this.onAuth?.bind(this));
+
     this._events.once('dispose', async () => {
       try {
         await this._dispose();
@@ -160,6 +167,31 @@ export abstract class Room<State extends object= any, Metadata= any> {
     this.setPatchRate(this.patchRate);
     // set default _autoDisposeTimeout
     this.resetAutoDisposeTimeout(this.seatReservationTime);
+  }
+
+  public onUncaughtException(error: any) {
+    throw error;
+  }
+
+  proxyError<A extends unknown[], R extends Promise<unknown> | void>(
+    callback: (...arguments_: A) => R
+  ) {
+    if(!callback) return undefined;
+    return (...arguments_: A) => {
+      try {
+        const returnValue = callback(...arguments_);
+
+        if (
+          returnValue instanceof Promise &&
+          typeof returnValue.catch === "function"
+        )
+          return returnValue?.catch(this.onUncaughtException);
+
+        return returnValue;
+      } catch (error) {
+        this.onUncaughtException(error);
+      }
+    };
   }
 
   /**

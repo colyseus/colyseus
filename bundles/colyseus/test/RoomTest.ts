@@ -20,4 +20,25 @@ describe("Room", () => {
 
   });
 
+
+  describe("ExceptionHandler", () => {
+    let caughtError: unknown;
+    class MyRoom extends Room {
+      onCreate() { throw Error("onCreate Error") }
+      onMessage() {}
+
+      onUncaughtException(error: any): void {
+        caughtError = error;
+      }
+    }
+
+    it("onCreate error should be caught", () => {
+      const room = new MyRoom()
+      room.onCreate();
+      assert.ok(caughtError instanceof Error);
+      assert.equal(caughtError.message, "onCreate Error");
+    });
+
+  });
+
 });
