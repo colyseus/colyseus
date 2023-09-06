@@ -17,9 +17,9 @@ export interface IRoomListingData {
 export interface RoomListingData<Metadata= any> extends IRoomListingData {
   metadata: Metadata;
 
-  updateOne(operations: any);
-  save();
-  remove();
+  updateOne(operations: any): Promise<void>;
+  save(): Promise<void>;
+  remove(): Promise<number>;
 }
 
 export interface QueryHelpers<T> {
@@ -28,33 +28,33 @@ export interface QueryHelpers<T> {
 }
 
 export interface MatchMakerDriver {
-
   /**
    * Initialize a room cache which contains CRUD operations for room listings.
-   * 
+   *
    * @param initialValues - Predefined room properties.
-   * 
+   *
    * @returns RoomData - New room cache.
    */
   createInstance(initialValues: any): RoomListingData;
 
   /**
    * Query rooms in room cache for given conditions.
-   * 
+   *
    * @param conditions - Filtering conditions.
-   * 
+   * @param additionalProjectionFields
+   *
    * @returns Promise<RoomListingData[]> | RoomListingData[] - A promise or an object contaning room metadata list.
    */
   find(
     conditions: Partial<IRoomListingData>,
     additionalProjectionFields?: any,
-  ): Promise<RoomListingData[]> | RoomListingData[];
+  ): Promise<RoomListingData[]>;
 
   /**
    * Query for a room in room cache for given conditions.
-   * 
+   *
    * @param conditions - Filtering conditions.
-   * 
+   *
    * @returns `RoomListingData` - An object contaning filtered room metadata.
    */
   findOne(conditions: Partial<IRoomListingData>): QueryHelpers<RoomListingData>;
@@ -62,10 +62,10 @@ export interface MatchMakerDriver {
   /**
    * Empty the room cache.
    */
-  clear(): void;
+  clear(): Promise<void>;
 
   /**
    * Dispose the connection of the room cache medium.
    */
-  shutdown(): void;
+  shutdown(): Promise<void>;
 }

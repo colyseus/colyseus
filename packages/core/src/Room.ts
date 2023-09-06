@@ -1,10 +1,10 @@
 import http from 'http';
 
-import { unpack } from 'msgpackr';
 import { decode, Iterator, Schema } from '@colyseus/schema';
+import { unpack } from 'msgpackr';
 
 import Clock from '@gamestdio/timer';
-import { EventEmitter } from 'events';
+import { EventEmitter, once } from 'events';
 import { logger } from './Logger';
 
 import { Presence } from './presence/Presence';
@@ -14,8 +14,8 @@ import { SchemaSerializer } from './serializer/SchemaSerializer';
 import { Serializer } from './serializer/Serializer';
 
 import { ErrorCode, getMessageBytes, Protocol } from './Protocol';
-import { Deferred, HybridArray, generateId } from './utils/Utils';
 import { isDevMode } from './utils/DevMode';
+import { Deferred, generateId, HybridArray } from './utils/Utils';
 
 import { debugAndPrintError, debugMessage } from './Debug';
 import { ServerError } from './errors/ServerError';
@@ -66,6 +66,46 @@ export abstract class Room<State extends object= any, Metadata= any> {
     return this.listing.metadata;
   }
 
+  /**
+   * The name of the room you provided as first argument for `gameServer.define()`.
+   *
+   * @returns roomName string
+   */
+  public get roomName() { return this.#_roomName; }
+  /**
+   * Setting the name of the room. Overwriting this property is restricted.
+   *
+   * @param roomName
+   */
+  public set roomName(roomName: string) {
+    if (this.#_roomName) {
+      // prevent user from setting roomName after it has been defined.
+      throw new ServerError(ErrorCode.APPLICATION_ERROR, '\'roomName\' cannot be overwritten.');
+    }
+    this.#_roomName = roomName;
+  }
+
+  /**
+   * A unique, auto-generated, 9-character-long id of the room.
+   * You may replace `this.roomId` during `onCreate()`.
+   *
+   * @returns roomId string
+   */
+  public get roomId() { return this.#_roomId; }
+  /**
+   * Setting the roomId, is restricted in room lifetime except upon room creation.
+   *
+   * @param roomId
+   * @returns roomId string
+   */
+  public set roomId(roomId: string) {
+    if (this.internalState !== RoomInternalState.CREATING && !isDevMode) {
+      // prevent user from setting roomId after room has been created.
+      throw new ServerError(ErrorCode.APPLICATION_ERROR, '\'roomId\' can only be overridden upon room creation.');
+    }
+    this.#_roomId = roomId;
+  }
+
   public listing: RoomListingData<Metadata>;
 
   /**
@@ -73,8 +113,8 @@ export abstract class Room<State extends object= any, Metadata= any> {
    */
   public clock: Clock = new Clock();
 
-  #_roomId: string;
-  #_roomName: string;
+  public #_roomId: string;
+  public #_roomName: string;
 
   /**
    * Maximum number of clients allowed to connect into the room. When room reaches this limit,
@@ -82,12 +122,14 @@ export abstract class Room<State extends object= any, Metadata= any> {
    * the room will be unlocked as soon as a client disconnects from it.
    */
   public maxClients: number = Infinity;
+
   /**
    * Frequency to send the room state to connected clients, in milliseconds.
    *
    * @default 50ms (20fps)
    */
   public patchRate: number = DEFAULT_PATCH_RATE;
+
   /**
    * Automatically dispose the room when last client disconnects.
    *
@@ -99,6 +141,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
    * The state instance you provided to `setState()`.
    */
   public state: State;
+
   /**
    * The presence instance. Check Presence API for more details.
    *
@@ -111,16 +154,16 @@ export abstract class Room<State extends object= any, Metadata= any> {
    *
    * @see {@link https://docs.colyseus.io/colyseus/server/room/#client|Client instance}
    */
-  public clients: HybridArray<Client> = new HybridArray<Client>("sessionId");
+  public readonly clients: HybridArray<Client> = new HybridArray<Client>('sessionId');
 
   public internalState: RoomInternalState = RoomInternalState.CREATING;
 
   /** @internal */
-  public _events = new EventEmitter();
+  public readonly _events = new EventEmitter();
+  public readonly reservedSeats: { [sessionId: string]: any } = {};
 
   // seat reservation & reconnection
   protected seatReservationTime: number = DEFAULT_SEAT_RESERVATION_TIME;
-  protected reservedSeats: { [sessionId: string]: any } = {};
   protected reservedSeatTimeouts: { [sessionId: string]: NodeJS.Timer } = {};
 
   protected _reconnections: { [reconnectionToken: string]: [string, Deferred] } = {};
@@ -148,56 +191,19 @@ export abstract class Room<State extends object= any, Metadata= any> {
     this._events.once('dispose', async () => {
       try {
         await this._dispose();
-
       } catch (e) {
         debugAndPrintError(`onDispose error: ${(e && e.message || e || 'promise rejected')}`);
       }
       this._events.emit('disconnect');
     });
 
+    this._events.once('disconnect', () => {
+      this._events.removeAllListeners();
+    });
+
     this.setPatchRate(this.patchRate);
     // set default _autoDisposeTimeout
     this.resetAutoDisposeTimeout(this.seatReservationTime);
-  }
-
-  /**
-   * The name of the room you provided as first argument for `gameServer.define()`.
-   *
-   * @returns roomName string
-   */
-  public get roomName() { return this.#_roomName; }
-  /**
-   * Setting the name of the room. Overwriting this property is restricted.
-   *
-   * @param roomName
-   */
-  public set roomName(roomName: string) {
-    if (this.#_roomName) {
-      // prevent user from setting roomName after it has been defined.
-      throw new ServerError(ErrorCode.APPLICATION_ERROR, "'roomName' cannot be overwritten.");
-    }
-    this.#_roomName = roomName;
-  }
-
-  /**
-   * A unique, auto-generated, 9-character-long id of the room.
-   * You may replace `this.roomId` during `onCreate()`.
-   *
-   * @returns roomId string
-   */
-  public get roomId() { return this.#_roomId; }
-  /**
-   * Setting the roomId, is restricted in room lifetime except upon room creation.
-   *
-   * @param roomId
-   * @returns roomId string
-   */
-  public set roomId(roomId: string) {
-    if (this.internalState !== RoomInternalState.CREATING && !isDevMode) {
-      // prevent user from setting roomId after room has been created.
-      throw new ServerError(ErrorCode.APPLICATION_ERROR, "'roomId' can only be overridden upon room creation.");
-    }
-    this.#_roomId = roomId;
   }
 
   // Optional abstract methods
@@ -253,22 +259,22 @@ export abstract class Room<State extends object= any, Metadata= any> {
   public hasReservedSeat(sessionId: string, reconnectionToken?: string): boolean {
     if (reconnectionToken) {
       const reconnection = this._reconnections[reconnectionToken];
+
       return (
         reconnection &&
         reconnection[0] === sessionId &&
         this.reservedSeats[sessionId] !== undefined &&
         this._reconnectingSessionId.has(sessionId)
       );
-
-    } else {
-      return (
-        this.reservedSeats[sessionId] !== undefined &&
-        (
-          !this._reconnectingSessionId.has(sessionId) || // prevent possible "reconnect" requests without a reconnection token
-          (this._reconnectingSessionId.get(sessionId) === sessionId) // devMode reconnection
-        )
-      );
     }
+
+    return (
+      this.reservedSeats[sessionId] !== undefined &&
+      (
+        !this._reconnectingSessionId.has(sessionId) || // prevent possible "reconnect" requests without a reconnection token
+        (this._reconnectingSessionId.get(sessionId) === sessionId) // devMode reconnection
+      )
+    );
   }
 
   public checkReconnectionToken(reconnectionToken: string) {
@@ -278,7 +284,6 @@ export abstract class Room<State extends object= any, Metadata= any> {
     if (this.hasReservedSeat(sessionId)) {
       this._reconnectingSessionId.set(sessionId, reconnectionToken);
       return sessionId;
-
     } else {
       return undefined;
     }
@@ -430,9 +435,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
 
     if (isSchema) {
       this.broadcastMessageSchema(typeOrSchema as Schema, opts);
-
     } else {
-
       this.broadcastMessageType(typeOrSchema as string, messageOrOptions, opts);
     }
   }
@@ -481,8 +484,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
 
     this.autoDispose = true;
 
-    const delayedDisconnection = new Promise<void>((resolve) =>
-      this._events.once('disconnect', () => resolve()));
+    const delayedDisconnection = once(this._events, 'disconnect');
 
     for (const [_, reconnection] of Object.values(this._reconnections)) {
       reconnection.reject();
@@ -490,10 +492,14 @@ export abstract class Room<State extends object= any, Metadata= any> {
 
     let numClients = this.clients.length;
     if (numClients > 0) {
+      const closeClientPromises = [];
+
       // clients may have `async onLeave`, room will be disposed after they're fulfilled
       while (numClients--) {
-        this._forciblyCloseClient(this.clients.array[numClients], closeCode);
+        closeClientPromises.push(this._forciblyCloseClient(this.clients.array[numClients], closeCode));
       }
+
+      await Promise.allSettled(closeClientPromises);
     } else {
       // no clients connected, dispose immediately.
       this._events.emit('dispose');
@@ -527,15 +533,14 @@ export abstract class Room<State extends object= any, Metadata= any> {
     client._afterNextPatchQueue = this._afterNextPatchQueue;
 
     // bind clean-up callback when client connection closes
-    client.ref['onleave'] = this._onLeave.bind(this, client);
-    client.ref.once('close', client.ref['onleave']);
+    client.ref.onLeave = this._onLeave.bind(this, client);
+    client.ref.once('close', client.ref.onLeave);
 
     this.clients.add(client);
 
     const previousReconnectionToken = this._reconnectingSessionId.get(sessionId);
     if (previousReconnectionToken) {
       this._reconnections[previousReconnectionToken]?.[1].resolve(client);
-
     } else {
       try {
         client.auth = await this.onAuth(client, options, req);
@@ -556,7 +561,6 @@ export abstract class Room<State extends object= any, Metadata= any> {
         }
 
         throw e;
-
       } finally {
         // remove seat reservation
         delete this.reservedSeats[sessionId];
@@ -583,62 +587,73 @@ export abstract class Room<State extends object= any, Metadata= any> {
    *
    * @param previousClient - The client which is to be waiting until re-connection happens.
    * @param seconds - Timeout period on re-connection in seconds.
+   * @param abortController - Allows you to forcibly abort re-connection.
    *
-   * @returns Deferred<Client> - The differed is a promise like type.
-   *  This type can forcibly reject the promise by calling `.reject()`.
+   * @returns Promise<void>
    */
-  public allowReconnection(previousClient: Client, seconds: number | "manual"): Deferred<Client> {
-    if (seconds === undefined) { // TODO: remove this check
-      console.warn("DEPRECATED: allowReconnection() requires a second argument. Using \"manual\" mode.");
-      seconds = "manual";
-    }
-
-    if (seconds === "manual") {
-      seconds = Infinity;
-    }
-
+  public async allowReconnection(
+    previousClient: Client,
+    seconds: number | 'manual',
+    abortController?: AbortController,
+  ): Promise<void> {
     if (this.internalState === RoomInternalState.DISCONNECTING) {
       this._disposeIfEmpty(); // gracefully shutting down
       throw new Error('disconnecting');
     }
 
-    const sessionId = previousClient.sessionId;
-    const reconnectionToken = previousClient._reconnectionToken;
+    return new Promise(async (resolve, reject) => {
+      if (seconds === undefined) { // TODO: remove this check
+        console.warn('DEPRECATED: allowReconnection() requires a second argument. Using "manual" mode.');
+        seconds = 'manual';
+      }
 
-    this._reserveSeat(sessionId, true, seconds, true);
+      if (seconds === 'manual') {
+        seconds = Infinity;
+      }
 
-    // keep reconnection reference in case the user reconnects into this room.
-    const reconnection = new Deferred<Client>();
-    this._reconnections[reconnectionToken] = [sessionId, reconnection];
+      const sessionId = previousClient.sessionId;
+      const reconnectionToken = previousClient._reconnectionToken;
 
-    if (seconds !== Infinity) {
-      // expire seat reservation after timeout
-      this.reservedSeatTimeouts[sessionId] = setTimeout(() =>
-        reconnection.reject(false), seconds * 1000);
-    }
+      await this._reserveSeat(sessionId, true, seconds, true);
 
-    const cleanup = () => {
-      delete this._reconnections[reconnectionToken];
-      delete this.reservedSeats[sessionId];
-      delete this.reservedSeatTimeouts[sessionId];
-      this._reconnectingSessionId.delete(sessionId);
-    };
+      // keep reconnection reference in case the user reconnects into this room.
+      const reconnection = new Deferred<Client>();
+      this._reconnections[reconnectionToken] = [sessionId, reconnection];
 
-    reconnection.
-      then((newClient) => {
-        newClient.auth = previousClient.auth;
-        newClient.userData = previousClient.userData;
-        previousClient.ref = newClient.ref; // swap "ref" for convenience
-        previousClient.state = ClientState.RECONNECTED;
-        clearTimeout(this.reservedSeatTimeouts[sessionId]);
-        cleanup();
-      }).
-      catch(() => {
-        cleanup();
-        this.resetAutoDisposeTimeout();
-      });
+      if (seconds !== Infinity) {
+        // expire seat reservation after timeout
+        this.reservedSeatTimeouts[sessionId] = setTimeout(() =>
+          reconnection.reject(false), seconds * 1000);
+      }
 
-    return reconnection;
+      if (abortController) {
+        abortController.signal.addEventListener('abort', () =>
+          reconnection.reject(false));
+      }
+
+      const cleanup = () => {
+        delete this._reconnections[reconnectionToken];
+        delete this.reservedSeats[sessionId];
+        delete this.reservedSeatTimeouts[sessionId];
+        this._reconnectingSessionId.delete(sessionId);
+      };
+
+      reconnection
+        .then((newClient) => {
+          newClient.auth = previousClient.auth;
+          newClient.userData = previousClient.userData;
+          previousClient.ref = newClient.ref; // swap "ref" for convenience
+          previousClient.state = ClientState.RECONNECTED;
+          clearTimeout(this.reservedSeatTimeouts[sessionId]);
+          cleanup();
+          resolve();
+        })
+        .catch((e) => {
+          cleanup();
+          this.resetAutoDisposeTimeout();
+          reject(e);
+        });
+    });
   }
 
   protected resetAutoDisposeTimeout(timeoutInSeconds: number = 1) {
@@ -655,9 +670,9 @@ export abstract class Room<State extends object= any, Metadata= any> {
   }
 
   private broadcastMessageSchema<T extends Schema>(message: T, options: IBroadcastOptions = {}) {
-    debugMessage("broadcast: %O", message);
+    debugMessage('broadcast: %O', message);
     const encodedMessage = getMessageBytes[Protocol.ROOM_DATA_SCHEMA](message);
-    const except = (typeof (options.except) !== "undefined")
+    const except = (typeof (options.except) !== 'undefined')
       ? Array.isArray(options.except)
         ? options.except
         : [options.except]
@@ -674,9 +689,9 @@ export abstract class Room<State extends object= any, Metadata= any> {
   }
 
   private broadcastMessageType(type: string, message?: any, options: IBroadcastOptions = {}) {
-    debugMessage("broadcast: %O", message);
+    debugMessage('broadcast: %O', message);
     const encodedMessage = getMessageBytes.raw(Protocol.ROOM_DATA, type, message);
-    const except = (typeof (options.except) !== "undefined")
+    const except = (typeof (options.except) !== 'undefined')
       ? Array.isArray(options.except)
         ? options.except
         : [options.except]
@@ -703,7 +718,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
       for (let i = 0; i < length; i++) {
         const [target, args] = this._afterNextPatchQueue[i];
 
-        if (target === "broadcast") {
+        if (target === 'broadcast') {
           this.broadcast.apply(this, args);
 
         } else {
@@ -796,7 +811,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
     return await (userReturnData || Promise.resolve());
   }
 
-  private _onMessage(client: Client, bytes: number[]) {
+  private async _onMessage(client: Client, bytes: number[]) {
     // skip if client is on LEAVING state.
     if (client.state === ClientState.LEAVING) { return; }
 
@@ -818,7 +833,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
         message = (bytes.length > it.offset)
           ? unpack(new Uint8Array(bytes.slice(it.offset, bytes.length)))
           : undefined;
-        debugMessage("received: '%s' -> %j", messageType, message);
+        debugMessage('received: \'%s\' -> %j', messageType, message);
       } catch (e) {
         debugAndPrintError(e);
         return;
@@ -833,14 +848,13 @@ export abstract class Room<State extends object= any, Metadata= any> {
       } else {
         debugAndPrintError(`onMessage for "${messageType}" not registered.`);
       }
-
     } else if (code === Protocol.ROOM_DATA_BYTES) {
       const messageType = (decode.stringCheck(bytes, it))
         ? decode.string(bytes, it)
         : decode.number(bytes, it);
 
       const message = bytes.slice(it.offset, bytes.length);
-      debugMessage("received: '%s' -> %j", messageType, message);
+      debugMessage('received: \'%s\' -> %j', messageType, message);
 
       if (this.onMessageHandlers[messageType]) {
         this.onMessageHandlers[messageType](client, message);
@@ -866,22 +880,20 @@ export abstract class Room<State extends object= any, Metadata= any> {
         client._enqueuedMessages.forEach((enqueued) => client.raw(enqueued));
       }
       delete client._enqueuedMessages;
-
     } else if (code === Protocol.LEAVE_ROOM) {
-      this._forciblyCloseClient(client, Protocol.WS_CLOSE_CONSENTED);
+      await this._forciblyCloseClient(client, Protocol.WS_CLOSE_CONSENTED);
     }
-
   }
 
-  private _forciblyCloseClient(client: Client, closeCode: number) {
+  private async _forciblyCloseClient(client: Client, closeCode: number) {
     // stop receiving messages from this client
     client.ref.removeAllListeners('message');
 
     // prevent "onLeave" from being called twice if player asks to leave
-    client.ref.removeListener('close', client.ref['onleave']);
+    client.ref.removeListener('close', client.ref.onLeave);
 
     // only effectively close connection when "onLeave" is fulfilled
-    this._onLeave(client, closeCode).then(() => client.leave(closeCode));
+    await this._onLeave(client, closeCode).then(() => client.leave(closeCode));
   }
 
   private async _onLeave(client: Client, code?: number): Promise<any> {
@@ -942,5 +954,4 @@ export abstract class Room<State extends object= any, Metadata= any> {
 
     return willDispose;
   }
-
 }

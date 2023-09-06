@@ -3,12 +3,10 @@ import { URL } from 'url';
 import WebSocket, { ServerOptions } from 'ws';
 
 import { matchMaker, Protocol, Transport, debugAndPrintError, debugConnection } from '@colyseus/core';
-import { WebSocketClient } from './WebSocketClient';
+import { WebSocketClient, WebSocketClientRef } from './WebSocketClient';
 
 function noop() {/* tslint:disable:no-empty */ }
 function heartbeat() { this.pingCount = 0; }
-
-type RawWebSocketClient = WebSocket & { pingCount: number };
 
 export interface TransportOptions extends ServerOptions {
   pingInterval?: number;
@@ -84,19 +82,19 @@ export class WebSocketTransport extends Transport {
         //
         // if client hasn't responded after the interval, terminate its connection.
         //
-        if ((client as RawWebSocketClient).pingCount >= pingMaxRetries) {
+        if ((client as WebSocketClientRef).pingCount >= pingMaxRetries) {
           // debugConnection(`terminating unresponsive client ${client.sessionId}`);
           debugConnection(`terminating unresponsive client`);
           return client.terminate();
         }
 
-        (client as RawWebSocketClient).pingCount++;
+        (client as WebSocketClientRef).pingCount++;
         client.ping(noop);
       });
     }, pingInterval);
   }
 
-  protected async onConnection(rawClient: RawWebSocketClient, req?: http.IncomingMessage & any) {
+  protected async onConnection(rawClient: WebSocketClientRef, req?: http.IncomingMessage & any) {
     // prevent server crashes if a single client had unexpected error
     rawClient.on('error', (err) => debugAndPrintError(err.message + '\n' + err.stack));
     rawClient.on('pong', heartbeat);

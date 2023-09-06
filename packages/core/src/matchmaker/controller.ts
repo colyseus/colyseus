@@ -3,9 +3,9 @@
  * (for interoperability between different http frameworks, e.g. express, uWebSockets.js, etc)
  */
 
-import { ErrorCode } from "../Protocol";
-import { ServerError } from "../errors/ServerError";
-import * as matchMaker from "../MatchMaker";
+import { ServerError } from '../errors/ServerError';
+import * as matchMaker from '../MatchMaker';
+import { ErrorCode } from '../Protocol';
 
 export default {
   DEFAULT_CORS_HEADERS: {
@@ -16,8 +16,8 @@ export default {
     // ...
   },
 
-  exposedMethods: ['joinOrCreate', 'create', 'join', 'joinById', 'reconnect'],
   allowedRoomNameChars: /([a-zA-Z_\-0-9]+)/gi,
+  exposedMethods: ['joinOrCreate', 'create', 'join', 'joinById', 'reconnect'],
   matchmakeRoute: 'matchmake',
 
   /**
@@ -47,7 +47,7 @@ export default {
       private: false,
     };
     if (roomName) {
-      conditions["name"] = roomName;
+      conditions.name = roomName;
     }
     return matchMaker.query(conditions);
   },
@@ -63,7 +63,6 @@ export default {
     } catch (e) {
       throw new ServerError(e.code || ErrorCode.MATCHMAKE_UNHANDLED, e.message);
     }
-  }
+  },
 
-}
-
+};

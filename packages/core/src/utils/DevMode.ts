@@ -1,8 +1,7 @@
-import debug from "debug";
-import { debugAndPrintError } from "../Debug";
-
-import { getRoomById, handleCreateRoom, presence, remoteRoomCall } from "../MatchMaker";
-import type { Room } from "../Room";
+import debug from 'debug';
+import { debugAndPrintError } from '../Debug';
+import { getRoomById, handleCreateRoom, presence, remoteRoomCall } from '../MatchMaker';
+import type { Room } from '../Room';
 
 export const debugDevMode = debug('colyseus:devmode');
 
@@ -14,19 +13,19 @@ export function setDevMode(bool: boolean) {
 
 export async function reloadFromCache() {
   const roomHistoryList = Object.entries(await presence.hgetall(getRoomRestoreListKey()));
-  debugDevMode("rooms to restore: %i", roomHistoryList.length);
+  debugDevMode('rooms to restore: %i', roomHistoryList.length);
 
   for (const [roomId, value] of roomHistoryList) {
     let recreatedRoom: Room;
 
     const roomHistory = JSON.parse(value);
-    debugDevMode("restoring room %s (%s)", roomHistory.roomName, roomId);
+    debugDevMode('restoring room %s (%s)', roomHistory.roomName, roomId);
 
     const recreatedRoomListing = await handleCreateRoom(roomHistory.roomName, roomHistory.clientOptions, roomId);
     console.debug(`🔄 room '${roomId}' has been restored.`);
 
     // Set previous state
-    if (roomHistory.hasOwnProperty("state")) {
+    if (roomHistory.hasOwnProperty('state')) {
       recreatedRoom = getRoomById(recreatedRoomListing.roomId);
       recreatedRoom.state.decode(roomHistory.state);
 
@@ -38,8 +37,8 @@ export async function reloadFromCache() {
       console.debug(`📋 room '${roomId}' state =>`, recreatedRoom.state.toJSON());
     }
 
-    // call `onRestoreRoom` with custom 'cache'd property.
-    recreatedRoom.onRestoreRoom?.(roomHistory["cache"]);
+    // call `onRestoreRoom` with custom cached property.
+    recreatedRoom.onRestoreRoom?.(roomHistory.cache);
 
     // Reserve seats for clients from cached history
     for (const previousSessionId of roomHistory.clients) {
@@ -49,7 +48,7 @@ export async function reloadFromCache() {
   }
 
   if (roomHistoryList.length > 0) {
-    console.debug("✅", roomHistoryList.length, "room(s) have been restored.");
+    console.debug('✅', roomHistoryList.length, 'room(s) have been restored.');
   }
 }
 
@@ -61,27 +60,24 @@ export async function cacheRoomHistory(rooms: { [roomId: string]: Room }) {
         const roomHistory = JSON.parse(roomHistoryResult);
 
         // custom cache method
-        roomHistory["cache"] = room.onCacheRoom?.();
+        roomHistory.cache = room.onCacheRoom?.();
 
         // encode state
-        debugDevMode("caching room %s (%s)", room.roomName, room.roomId);
+        debugDevMode('caching room %s (%s)', room.roomName, room.roomId);
 
         if (room.state) {
-          roomHistory["state"] = room.state.encodeAll();
+          roomHistory.state = room.state.encodeAll();
         }
 
         // cache active clients and reserved seats
-        roomHistory["clients"] = room.clients.map((client) => client.sessionId);
+        roomHistory.clients = room.clients.map((client) => client.sessionId);
 
-        for (const sessionId in room['reservedSeats']) {
-          roomHistory["clients"].push(sessionId);
-        }
+        roomHistory.clients.push(...Object.keys(room.reservedSeats));
 
         await presence.hset(getRoomRestoreListKey(), room.roomId, JSON.stringify(roomHistory));
 
         // Rewrite updated room history
-        console.debug(`💾 caching room '${room.roomId}' (clients: ${room.clients.length}, state size: ${(roomHistory["state"] || []).length} bytes)`);
-
+        console.debug(`💾 caching room '${room.roomId}' (clients: ${room.clients.length}, state size: ${(roomHistory.state || []).length} bytes)`);
       } catch (e) {
         debugAndPrintError(`❌ couldn't cache room '${room.roomId}', due to:\n${e.stack}`);
       }

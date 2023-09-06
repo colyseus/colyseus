@@ -1,8 +1,7 @@
 import { EventEmitter } from 'events';
 import { logger } from '../Logger';
-import { RoomListingData, SortOptions } from './driver/interfaces';
-
-import { RoomConstructor } from './../Room';
+import { RoomConstructor } from '../Room';
+import { RoomListingData, SortOptions } from './driver';
 import { updateLobby } from './Lobby';
 
 export const INVALID_OPTION_KEYS: Array<keyof RoomListingData> = [
@@ -36,13 +35,13 @@ export class RegisteredHandler extends EventEmitter {
   }
 
   public enableRealtimeListing() {
-    this.on('create', (room) => updateLobby(room));
-    this.on('lock', (room) => updateLobby(room));
-    this.on('unlock', (room) => updateLobby(room));
-    this.on('join', (room) => updateLobby(room));
-    this.on('leave', (room, _, willDispose) => {
+    this.on('create', updateLobby);
+    this.on('lock', updateLobby);
+    this.on('unlock', updateLobby);
+    this.on('join', updateLobby);
+    this.on('leave', async (room, _, willDispose) => {
       if (!willDispose) {
-        updateLobby(room);
+        await updateLobby(room);
       }
     });
     this.on('dispose', (room) => updateLobby(room, true));

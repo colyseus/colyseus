@@ -1,4 +1,4 @@
-import { IRoomListingData, SortOptions, RoomListingData, QueryHelpers, MatchMakerDriver } from "./interfaces";
+import { IRoomListingData, MatchMakerDriver, QueryHelpers, RoomListingData, SortOptions } from './interfaces';
 
 // re-export
 export { IRoomListingData, SortOptions, RoomListingData, QueryHelpers, MatchMakerDriver };
@@ -13,7 +13,7 @@ export class LocalDriver implements MatchMakerDriver {
     return new RoomCache(initialValues, this.rooms);
   }
 
-  public find(conditions: Partial<IRoomListingData>) {
+  public async find(conditions: Partial<IRoomListingData>) {
     return this.rooms.filter(((room) => {
       for (const field in conditions) {
         if (
@@ -31,10 +31,11 @@ export class LocalDriver implements MatchMakerDriver {
     return new Query<RoomListingData>(this.rooms, conditions) as any as QueryHelpers<RoomListingData>;
   }
 
-  public clear() {
+  public async clear() {
     this.rooms = [];
   }
 
-  public shutdown() {
+  public async shutdown() {
+    return Promise.resolve();
   }
 }

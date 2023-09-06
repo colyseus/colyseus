@@ -36,7 +36,7 @@ defineTypes(State, {
 export class RelayRoom extends Room<State> { // tslint:disable-line
   public allowReconnectionTime: number = 0;
 
-  public onCreate(options: Partial<{
+  public async onCreate(options: Partial<{
     maxClients: number,
     allowReconnectionTime: number,
     metadata: any,
@@ -52,7 +52,7 @@ export class RelayRoom extends Room<State> { // tslint:disable-line
     }
 
     if (options.metadata) {
-      this.setMetadata(options.metadata);
+      await this.setMetadata(options.metadata);
     }
 
     this.onMessage('*', (client: Client, type: string, message: any) => {
@@ -74,22 +74,23 @@ export class RelayRoom extends Room<State> { // tslint:disable-line
   }
 
   public async onLeave(client: Client, consented: boolean) {
-    if (this.allowReconnectionTime > 0) {
-      const player = this.state.players.get(client.sessionId);
-      player.connected = false;
+    if (!this.allowReconnectionTime) {
+      return;
+    }
 
-      try {
-        if (consented) {
-          throw new Error('consented leave');
-        }
+    if (consented) {
+      this.state.players.delete(client.sessionId);
+      return;
+    }
 
-        await this.allowReconnection(client, this.allowReconnectionTime);
-        player.connected = true;
+    const player = this.state.players.get(client.sessionId);
+    player.connected = false;
 
-      } catch (e) {
-        this.state.players.delete(client.sessionId);
-      }
+    try {
+      await this.allowReconnection(client, this.allowReconnectionTime);
+      player.connected = true;
+    } catch (e) {
+      this.state.players.delete(client.sessionId);
     }
   }
-
 }

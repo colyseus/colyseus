@@ -1,9 +1,13 @@
 import WebSocket from 'ws';
 
-import { Protocol, Client, ClientState, ISendOptions, getMessageBytes, logger, debugMessage } from '@colyseus/core';
+import { Protocol, Client, ClientState, IClientRef, ISendOptions, getMessageBytes, logger, debugMessage } from '@colyseus/core';
 import { Schema } from '@colyseus/schema';
 
 const SEND_OPTS = { binary: true };
+
+export type WebSocketClientRef = WebSocket & IClientRef & {
+  pingCount: number;
+};
 
 export class WebSocketClient implements Client {
   public sessionId: string;
@@ -14,7 +18,7 @@ export class WebSocketClient implements Client {
 
   constructor(
     public id: string,
-    public ref: WebSocket,
+    public ref: WebSocketClientRef,
   ) {
     this.sessionId = id;
   }
