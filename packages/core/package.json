@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/core",
-  "version": "0.15.0-preview.6",
+  "version": "0.15.0-preview.10",
   "description": "Multiplayer Framework for Node.js.",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -9,6 +9,7 @@
   "scripts": {
     "tslint": "tslint --project . --config ../../tslint.json"
   },
+  "funding": "https://github.com/sponsors/endel",
   "author": "Endel Dreyer",
   "license": "MIT",
   "keywords": [
@@ -33,16 +34,17 @@
     "node": ">= 14.x"
   },
   "dependencies": {
-    "@colyseus/schema": "^2.0.0",
+    "@colyseus/greeting-banner": "^2.0.0",
+    "@colyseus/schema": "^2.0.4",
     "@gamestdio/timer": "^1.3.0",
     "@types/redis": "^2.8.12",
-    "debug": "^4.0.1",
+    "debug": "^4.3.4",
     "internal-ip": "^4.3.0",
-    "nanoid": "^2.0.0",
-    "msgpackr": "^1.6.1"
+    "msgpackr": "^1.9.1",
+    "nanoid": "^2.0.0"
   },
   "publishConfig": {
     "access": "public"
   },
-  "gitHead": "25ba61e283429bb4fa02db0454f804ea218259eb"
+  "gitHead": "c45b410e99eadffff4b74e701339992e2faa15f8"
 }

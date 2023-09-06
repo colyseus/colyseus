@@ -1,4 +1,5 @@
 import fs from "fs";
+import os from "os";
 import http from "http";
 import path from "path";
 import cors from "cors";
@@ -12,29 +13,22 @@ try {
   uWebSocketsExpressCompatibility = require('uwebsockets-express').default;
 } catch (e) {}
 
-/**
- * Do not auto-load `${environment}.env` file when using Arena service.
- */
-if (process.env.NODE_ARENA !== "true") {
-    const envFilename = (process.env.NODE_ENV === "production")
-        ? "arena.env"
-        : `${process.env.NODE_ENV || "development"}.env`
+const envFilename = `.env.${process.env.NODE_ENV || "development"}`;
 
-    // return the first .env path found
-    const envPath = [
-      path.resolve(path.dirname(require?.main?.filename || process.cwd()), "..", envFilename),
-      path.resolve(process.cwd(), envFilename)
-    ].find((envPath) => fs.existsSync(envPath));
+// return the first .env path found
+const envPath = [
+  path.resolve(path.dirname(require?.main?.filename || process.cwd()), "..", envFilename),
+  path.resolve(process.cwd(), envFilename)
+].find((envPath) => fs.existsSync(envPath));
 
-    if (envPath) {
-        dotenv.config({ path: envPath });
-        logger.info(`✅ ${envFilename} loaded.`);
-    } else {
-        logger.info(`⚠️  ${envFilename} not found.`);
-    }
+if (envPath) {
+    dotenv.config({ path: envPath });
+    logger.info(`✅ ${envFilename} loaded.`);
+} else {
+    logger.info(`⚠️  ${envFilename} not found.`);
 }
 
-export interface ArenaOptions {
+export interface ConfigOptions {
     options?: ServerOptions,
     displayLogs?: boolean,
     getId?: () => string,
@@ -44,7 +38,7 @@ export interface ArenaOptions {
     beforeListen?: () => void,
 }
 
-const ALLOWED_KEYS: { [key in keyof ArenaOptions]: string } = {
+const ALLOWED_KEYS: { [key in keyof ConfigOptions]: string } = {
   'displayLogs': "boolean",
   'options': "object",
   'getId': "function",
@@ -54,7 +48,7 @@ const ALLOWED_KEYS: { [key in keyof ArenaOptions]: string } = {
   'beforeListen': "function"
 };
 
-export default function (options: ArenaOptions) {
+export default function (options: ConfigOptions) {
   for (const option in options) {
     if (!ALLOWED_KEYS[option]) {
       throw new Error(`❌ Invalid option '${option}'. Allowed options are: ${Object.keys(ALLOWED_KEYS).join(", ")}`);
@@ -69,15 +63,62 @@ export default function (options: ArenaOptions) {
 
 /**
  * Listen on your development environment
- * @param options Arena options
+ * @param options Application options
  * @param port Port number to bind Colyseus + Express
  */
 export async function listen(
-    options: ArenaOptions,
+    options: ConfigOptions,
     port: number = Number(process.env.PORT || 2567),
 ) {
     const serverOptions = options.options || {};
     options.displayLogs = options.displayLogs ?? true;
+
+    //
+    // Handling multiple processes
+    // Use NODE_APP_INSTANCE to play nicely with pm2
+    //
+    const processNumber = Number(process.env.NODE_APP_INSTANCE || "0");
+    port += processNumber;
+
+    // automatically configure for production under Colyseus Cloud
+    if (process.env.COLYSEUS_CLOUD !== undefined) {
+        // special configuration is required when using multiple processes
+        const isMultiProcess = (os.cpus().length > 1);
+
+        if (!serverOptions.driver && isMultiProcess) {
+            let RedisDriver: any = undefined;
+            try {
+                RedisDriver = require('@colyseus/redis-driver').RedisDriver;
+                serverOptions.driver = new RedisDriver();
+            } catch (e) {
+                logger.warn("");
+                logger.warn("❌ coult not initialize RedisDriver.");
+                logger.warn("👉 npm install --save @colyseus/redis-driver");
+                logger.warn("");
+            }
+        }
+
+        if (!serverOptions.presence && isMultiProcess) {
+            let RedisPresence: any = undefined;
+            try {
+                RedisPresence = require('@colyseus/redis-presence').RedisPresence;
+                serverOptions.presence = new RedisPresence();
+            } catch (e) {
+                logger.warn("");
+                logger.warn("❌ coult not initialize RedisPresence.");
+                logger.warn("👉 npm install --save @colyseus/redis-presence");
+                logger.warn("");
+            }
+        }
+
+        // force "publicAddress" when deployed on "Colyseus Cloud".
+        serverOptions.publicAddress = process.env.SUBDOMAIN + "." + process.env.SERVER_NAME;
+
+        // nginx is responsible for forwarding /{port}/ to this process
+        if (isMultiProcess) {
+            serverOptions.publicAddress += "/" + port;
+        }
+    }
 
     const transport = await getTransport(options);
     const gameServer = new Server({
@@ -87,21 +128,22 @@ export async function listen(
     await options.initializeGameServer?.(gameServer);
     await options.beforeListen?.();
 
-    gameServer.listen(port);
+    // listening on port
+    await gameServer.listen(port);
+
+    // notify process manager (production)
+    if (typeof(process.send) === "function") {
+        process.send('ready');
+    }
 
     if (options.displayLogs) {
-        const appId = options.getId?.() || "[ Colyseus ]";
-        if (appId) {
-            logger.info(`🏟  ${appId}`);
-        }
-
         logger.info(`⚔️  Listening on ws://localhost:${port}`);
     }
     return gameServer;
 }
 
 
-export async function getTransport(options: ArenaOptions) {
+export async function getTransport(options: ConfigOptions) {
     let transport: Transport;
 
     if (!options.initializeTransport) {

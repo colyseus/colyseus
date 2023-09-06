@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/monitor",
-  "version": "0.15.0-preview.1",
+  "version": "0.15.0-preview.3",
   "description": "Web Monitoring Panel for Colyseus",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -8,7 +8,7 @@
   "typings": "./build/index.d.ts",
   "scripts": {
     "start": "ts-node example/Server",
-    "build": "webpack --env.production",
+    "build": "tsc && webpack --env.production",
     "prepublishOnly": "tsc && npm run build"
   },
   "repository": {

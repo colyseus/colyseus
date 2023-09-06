@@ -2,6 +2,6 @@
 import { listen } from "../src";
 
 // import arena configuration file
-import arena from "./arena.config";
+import app from "./colyseus.config";
 
-listen(arena);
+listen(app);

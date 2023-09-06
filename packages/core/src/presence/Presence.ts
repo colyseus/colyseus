@@ -123,7 +123,7 @@ export interface Presence {
      * Increments the number stored at field in the hash stored at key by increment. If key does not exist, a new key
      * holding a hash is created. If field does not exist the value is set to 0 before the operation is performed.
      */
-    hincrby(key: string, field: string, value: number): Promise<number>;
+    hincrby(key: string, field: string, value: number): number | Promise<number>;
 
     /**
      * Returns the value associated with field in the hash stored at key.

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>[Please wait...] Colyseus Cloud</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@200&display=swap" rel="stylesheet">
+    <style>
+      body {
+        font-family: 'Noto Serif JP'; margin: 0; text-align: center; font-size: 1.8em; height: 100vh; display: flex; align-items: center; justify-content: center;
+        color: #000;
+        background: rgb(250,250,250);
+        background: linear-gradient(180deg, rgba(250,250,250,1) 0%, rgba(236,236,236,1) 100%);
+      }
+      @media (prefers-color-scheme: dark) {
+        body {
+          color: #fff;
+          background: rgb(0,0,0);
+          background: linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(23,0,47,1) 100%);
+        }
+      }
+      span { opacity: 0.5; }
+    </style>
+
+    <script type="text/javascript">
+      // reload
+      setTimeout(function(){ window.location.reload(1); }, 2000);
+    </script>
+  </head>
+  <body>
+    <div>
+      <h2>
+        <img width="400" src="https://github.com/colyseus/colyseus/blob/0.15/media/logo-cloud.svg?raw=1" />
+      </h2>
+      <p>Your application is starting...</p>
+    </div>
+  </body>
+</html>

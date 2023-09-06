@@ -1,9 +1,14 @@
 #!/usr/bin/env node
-const path = require('path');
+const minimist = require("minimist");
+const argv = minimist(process.argv.slice(2));
 
-require('ts-node').register({
-  ignore: [],
-  project: process.env.TS_NODE_PROJECT || path.resolve(__dirname,  'tsconfig.json')
-});
+console.warn("DEPRECATED: @colyseus/loadtest usage has changed. Please check the documentation: https://docs.colyseus.io/colyseus/tools/loadtest/#usage")
 
-require('./build');
+if (argv._[0]) {
+    console.log("")
+    console.log("Usage:");
+    console.log("\tnode " + argv._[0]);
+    console.log("")
+}
+
+process.exit();

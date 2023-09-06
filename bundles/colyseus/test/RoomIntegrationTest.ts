@@ -12,6 +12,7 @@ describe("Room Integration", () => {
   const driver = new LocalDriver();
 
   const server = new Server({
+    greet: false,
     presence,
     driver
   });

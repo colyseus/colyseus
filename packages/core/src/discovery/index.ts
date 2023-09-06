@@ -15,8 +15,10 @@ export async function getHostname() {
 
 async function getNodeAddress(node: Node) {
   const host = await getHostname();
-  const port = process.env.SELF_PORT || node.port;
-  return `${node.processId}/${host}:${port}`;
+  const port = process.env.SELF_PORT ?? node.port;
+  return (port)
+    ? `${node.processId}/${host}:${port}`
+    : `${node.processId}/${host}`;
 }
 
 export async function registerNode(presence: Presence, node: Node) {

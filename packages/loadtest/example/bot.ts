@@ -1,7 +1,7 @@
-import { Options } from "@colyseus/loadtest";
+import { cli, Options } from "../src";
 import { Client, Room } from "colyseus.js";
 
-export async function main(options: Options) {
+async function main(options: Options) {
     const client = new Client(options.endpoint);
     const room: Room = await client.joinOrCreate(options.roomName, options.requestJoinOptions);
 
@@ -15,5 +15,7 @@ export async function main(options: Options) {
         // logic
     });
 
-    await room.leave(true);
+    // await room.leave(true);
 }
+
+cli(main);

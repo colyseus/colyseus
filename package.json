@@ -1,5 +1,6 @@
 {
   "name": "@colyseus/monorepo",
+  "version": "0.15.0",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -25,6 +26,7 @@
     "publish-from-package-stable": "lerna publish from-package --dist-tag preview",
     "publish-from-package-preview": "lerna publish from-package --dist-tag preview",
     "release": "lerna version --force-publish --no-push --no-git-tag-version",
+    "release-from-package": "lerna publish from-package",
     "preversion": "npm run build",
     "postinstall": "npm run boot"
   },
@@ -57,10 +59,10 @@
     "rimraf": "^2.7.1",
     "sinon": "^11.1.1",
     "ts-jest": "^28.0.3",
-    "ts-node": "^7.0.1",
-    "ts-node-dev": "^1.1.6",
+    "ts-node": ">=10.9.1",
+    "ts-node-dev": "^2.0.0",
     "tslint": "^5.11.0",
-    "typescript": "4.3.5"
+    "typescript": ">=4.3.5"
   },
   "nyc": {
     "extension": [

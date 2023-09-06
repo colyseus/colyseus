@@ -1,4 +1,5 @@
 import http, { IncomingMessage, ServerResponse } from 'http';
+import greeting from "@colyseus/greeting-banner";
 
 import { debugAndPrintError, debugMatchMaking } from './Debug';
 import * as matchMaker from './MatchMaker';
@@ -41,6 +42,12 @@ export interface ServerOptions {
   devMode?: boolean;
 
   /**
+   * Display greeting message on server start.
+   * Default: true
+   */
+  greet?: boolean,
+
+  /**
    * Options below are now part of WebSocketTransport (@colyseus/ws-transport)
    * TODO: remove me on 0.15.0
    */
@@ -64,14 +71,16 @@ export class Server {
   protected driver: matchMaker.MatchMakerDriver;
 
   protected port: number;
+  protected greet: boolean;
 
   constructor(options: ServerOptions = {}) {
-    const { gracefullyShutdown = true } = options;
+    const { gracefullyShutdown = true, greet = true } = options;
 
     setDevMode(options.devMode === true);
 
     this.presence = options.presence || new LocalPresence();
     this.driver = options.driver || new LocalDriver();
+    this.greet = greet;
 
     this.attach(options);
 
@@ -141,6 +150,13 @@ export class Server {
     //
     await matchMaker.onReady;
 
+    /**
+     * Greetings!
+     */
+    if (this.greet) {
+      console.log(greeting);
+    }
+
     return new Promise<void>((resolve, reject) => {
       this.transport.server?.on('error', (err) => reject(err));
       this.transport.listen(port, hostname, backlog, (err) => {
@@ -179,6 +195,14 @@ export class Server {
     defaultOptions?: Parameters<NonNullable<InstanceType<T>['onCreate']>>[0],
   ): Promise<RegisteredHandler> {
     return matchMaker.defineRoomType(name, handler, defaultOptions);
+  }
+
+  /**
+   * Remove a room definition from matchmaking.
+   * This method does not destroy any room. It only dissallows matchmaking
+   */
+  public removeRoomType(name: string): void {
+    matchMaker.removeRoomType(name);
   }
 
   public async gracefullyShutdown(exit: boolean = true, err?: Error) {
@@ -287,8 +311,8 @@ export class Server {
         headers['Content-Type'] = 'application/json';
         res.writeHead(200, headers);
 
-        const clientOptions = JSON.parse(Buffer.concat(data).toString());
         try {
+          const clientOptions = JSON.parse(Buffer.concat(data).toString());
           const response = await matchMaker.controller.invokeMethod(method, roomName, clientOptions);
           res.write(JSON.stringify(response));
 

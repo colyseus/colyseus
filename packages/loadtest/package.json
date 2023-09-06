@@ -1,14 +1,13 @@
 {
   "name": "@colyseus/loadtest",
-  "version": "0.15.0-preview.0",
+  "version": "0.15.0-preview.10",
   "description": "Utility tool for load testing Colyseus.",
   "input": "./src/index.ts",
   "main": "./build/index.js",
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
   "bin": {
-    "colyseus-loadtest": "./bin.js",
-    "colyseus-loadtest-esm": "./bin.mjs"
+    "colyseus-loadtest": "./bin.js"
   },
   "files": [
     "build",
@@ -18,7 +17,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/colyseus/colyseus-loadtest.git"
+    "url": "git://github.com/colyseus/colyseus.git"
   },
   "homepage": "https://colyseus.io/",
   "keywords": [
@@ -31,17 +30,18 @@
   "author": "Endel Dreyer",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/colyseus/colyseus-loadtest/issues"
+    "url": "https://github.com/colyseus/colyseus/issues"
   },
   "dependencies": {
     "blessed": "^0.1.81",
     "colyseus.js": "^0.15.0-preview.5",
     "minimist": "^1.2.5",
-    "ts-node": "^7.0.1",
-    "typescript": "4.3.5",
+    "ts-node": ">=10.9.1",
+    "typescript": ">=4.3.5",
     "ws": "^7.4.5"
   },
   "devDependencies": {
     "@types/blessed": "^0.1.10"
-  }
+  },
+  "gitHead": "c45b410e99eadffff4b74e701339992e2faa15f8"
 }

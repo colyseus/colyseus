@@ -1,4 +1,4 @@
-import Arena from "@colyseus/arena";
+import config from "@colyseus/tools";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 
 import { MongooseDriver } from "@colyseus/mongoose-driver";
@@ -8,13 +8,13 @@ import { RoomWithoutState } from "./RoomWithoutState";
 import { RoomWithState } from "./RoomWithState";
 import { RoomWithSimulation } from "./RoomWithSimulation";
 
-export default Arena({
+export default config({
+  options: { greet: false, },
+
   // options: {
   //   driver: new MongooseDriver(),
   //   presence: new RedisPresence(),
   // },
-
-  getId: () => "My App 1",
 
   initializeTransport: (options) => new WebSocketTransport(options),
 

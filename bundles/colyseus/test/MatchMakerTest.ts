@@ -452,6 +452,27 @@ describe("MatchMaker", () => {
         assert.strictEqual(true, rooms[2].locked);
       });
 
+      it("remote room call should always serialize as JSON", async () => {
+        matchMaker.defineRoomType('remoteroomcall', class _ extends Room {
+          methodName(arg1, arg2) {
+            return [arg1, arg2];
+          }
+        });
+
+        class CustomClass {
+          attr = 1;
+        }
+
+        const reservedSeat = await matchMaker.joinOrCreate("remoteroomcall");
+        const result = await matchMaker.remoteRoomCall(reservedSeat.room.roomId, "methodName", [new CustomClass(), new CustomClass()]);
+
+        assert.ok(!(result[0] instanceof CustomClass));
+        assert.ok(!(result[1] instanceof CustomClass));
+
+        assert.strictEqual(result[0].attr, 1);
+        assert.strictEqual(result[1].attr, 1);
+      });
+
       describe("concurrency", async () => {
         it("should create 50 rooms", async () => {
           const numConnections = 100;

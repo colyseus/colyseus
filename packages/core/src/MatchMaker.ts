@@ -122,7 +122,7 @@ export async function join(roomName: string, clientOptions: ClientOptions = {}) 
 export async function reconnect(roomId: string, clientOptions: ClientOptions = {}) {
   const room = await driver.findOne({ roomId });
   if (!room) {
-    logger.info(`❌ room "${roomId}" has been disposed. Did you missed .allowReconnection()?\n👉 https://docs.colyseus.io/colyseus/server/room/#allowreconnection-client-seconds`);
+    logger.info(`❌ room "${roomId}" has been disposed. Did you missed .allowReconnection()?\n👉 https://docs.colyseus.io/server/room/#allowreconnection-client-seconds`);
     throw new ServerError(ErrorCode.MATCHMAKE_INVALID_ROOM_ID, `room "${roomId}" has been disposed.`);
   }
 
@@ -136,7 +136,7 @@ export async function reconnect(roomId: string, clientOptions: ClientOptions = {
     return { room, sessionId };
 
   } else {
-    logger.info(`❌ reconnection token invalid or expired. Did you missed .allowReconnection()?\n👉 https://docs.colyseus.io/colyseus/server/room/#allowreconnection-client-seconds`);
+    logger.info(`❌ reconnection token invalid or expired. Did you missed .allowReconnection()?\n👉 https://docs.colyseus.io/server/room/#allowreconnection-client-seconds`);
     throw new ServerError(ErrorCode.MATCHMAKE_EXPIRED, `reconnection token invalid or expired.`);
   }
 }
@@ -144,7 +144,7 @@ export async function reconnect(roomId: string, clientOptions: ClientOptions = {
 /**
  * Join a room by id and return client seat reservation. An exception is thrown if a room is not found for roomId.
  *
- * @param roomId - The ID of the specific room instance.
+ * @param roomId - The Id of the specific room instance.
  * @param clientOptions - Options for the client seat reservation (for `onJoin`/`onAuth`)
  *
  * @returns Promise<SeatReservation> - A promise which contains `sessionId` and `RoomListingData`.
@@ -172,10 +172,10 @@ export function query(conditions: Partial<IRoomListingData> = {}) {
 /**
  * Find for a public and unlocked room available.
  *
- * @param roomName - The ID of the specific room.
+ * @param roomName - The Id of the specific room.
  * @param clientOptions - Options for the client seat reservation (for `onJoin`/`onAuth`).
  *
- * @returns Promise<RoomListingData> - A promise containing an object which includes room metadata and configurations.
+ * @returns Promise<RoomListingData> - A promise contaning an object which includes room metadata and configurations.
  */
 export async function findOneRoomAvailable(roomName: string, clientOptions: ClientOptions): Promise<RoomListingData> {
   return await awaitRoomAvailable(roomName, async () => {
@@ -202,10 +202,9 @@ export async function findOneRoomAvailable(roomName: string, clientOptions: Clie
 /**
  * Call a method or return a property on a remote room.
  *
- * @param roomId - The ID of the specific room instance.
- * @param method - Method or attribute to call or retrieve.
+ * @param roomId - The Id of the specific room instance.
+ * @param method - Method or attribute to call or retrive.
  * @param args - Array of arguments for the method
- * @param rejectionTimeout - Timeout
  *
  * @returns Promise<any> - Returned value from the called or retrieved method/attribute.
  */
@@ -232,7 +231,7 @@ export async function remoteRoomCall<R= any>(
   } else {
     return (!args && typeof (room[method]) !== 'function')
         ? room[method]
-        : (await room[method].apply(room, args));
+        : (await room[method].apply(room, args && args.map((arg) => JSON.parse(JSON.stringify(arg)))));
   }
 }
 
@@ -270,7 +269,7 @@ export function hasHandler(name: string) {
  * @param roomName - The identifier you defined on `gameServer.define()`
  * @param clientOptions - Options for `onCreate`
  *
- * @returns Promise<RoomListingData> - A promise containing an object which includes room metadata and configurations.
+ * @returns Promise<RoomListingData> - A promise contaning an object which includes room metadata and configurations.
  */
 export async function createRoom(roomName: string, clientOptions: ClientOptions): Promise<RoomListingData> {
   const roomsSpawnedByProcessId = await presence.hgetall(getRoomCountKey());

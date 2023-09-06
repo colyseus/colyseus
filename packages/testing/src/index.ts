@@ -1,12 +1,12 @@
 import "./Room.ext";
 
 import { Server } from "@colyseus/core";
-import { ArenaOptions, listen } from "@colyseus/arena";
+import { ConfigOptions, listen } from "@colyseus/tools";
 import { ColyseusTestServer } from "./TestServer";
 
 const DEFAULT_TEST_PORT = 2568;
 
-export async function boot(config: ArenaOptions | Server, port: number = DEFAULT_TEST_PORT) {
+export async function boot(config: ConfigOptions | Server, port: number = DEFAULT_TEST_PORT) {
   if (config instanceof Server) {
     const gameServer = config;
     await gameServer.listen(DEFAULT_TEST_PORT);
