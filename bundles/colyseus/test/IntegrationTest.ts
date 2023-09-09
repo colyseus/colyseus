@@ -7,7 +7,7 @@ import { matchMaker, Room, Client, Server, ErrorCode, MatchMakerDriver, Presence
 import { DummyRoom, DRIVERS, timeout, Room3Clients, PRESENCE_IMPLEMENTATIONS, Room2Clients, Room2ClientsExplicitLock } from "./utils";
 import { ServerError, Protocol } from "@colyseus/core";
 
-import { uWebSocketsTransport } from "@colyseus/uwebsockets-transport";
+// import { uWebSocketsTransport } from "@colyseus/uwebsockets-transport";
 
 import WebSocket from "ws";
 
@@ -885,11 +885,11 @@ describe("Integration", () => {
 
           describe("`pingTimeout` / `pingMaxRetries`", () => {
             it("should terminate unresponsive client after connection is ready", async () => {
-              if (server.transport instanceof uWebSocketsTransport) {
-                console.warn("WARNING: this test is being skipped. (not supported in uWebSocketsTransport)");
-                assert.ok(true);
-                return;
-              }
+             // if (server.transport instanceof uWebSocketsTransport) {
+              //   console.warn("WARNING: this test is being skipped. (not supported in uWebSocketsTransport)");
+              //   assert.ok(true);
+              //   return;
+              // }
 
               const conn = await client.joinOrCreate("dummy");
 

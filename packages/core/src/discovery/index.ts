@@ -1,4 +1,3 @@
-import ip from 'internal-ip';
 import { Presence } from '../presence/Presence';
 
 const NODES_SET = 'colyseus:nodes';
@@ -10,7 +9,7 @@ export interface Node {
 }
 
 export async function getHostname() {
-  return process.env.SELF_HOSTNAME || await ip.v4();
+  return process.env.SELF_HOSTNAME;
 }
 
 async function getNodeAddress(node: Node) {
