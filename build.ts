@@ -32,7 +32,6 @@ async function main() {
 
   // Support --scope and --ignore globs if passed in via commandline
   const argv = minimist(process.argv.slice(2));
-  console.log("ARGV:", argv);
 
   const packages = await getSortedPackages(argv.scope, argv.ignore);
 
@@ -56,7 +55,7 @@ async function main() {
     }
 
     // Get all .ts as input files
-    const entryPoints = glob.sync(path.resolve(basePath, "src", "**", "**.ts")
+    const entrypoints = glob.sync(path.resolve(basePath, "src", "**", "**.ts")
       .replace(/\\/g, '/')); // windows support
 
     const outdir = path.join(basePath, 'build');
@@ -64,12 +63,12 @@ async function main() {
     // Emit only .d.ts files
     const emitTSDeclaration = () => {
       console.log("Generating .d.ts files for...", pkgJSON.name);
-      const program = ts.createProgram(entryPoints, {
+      const program = ts.createProgram(entrypoints, {
         declaration: true,
         emitDeclarationOnly: true,
         skipLibCheck: true,
-        module: "commonjs",
-        target: "es2015",
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2015,
         outDir: outdir,
         downlevelIteration: true, // (redis-driver)
         esModuleInterop: true,
@@ -94,7 +93,7 @@ async function main() {
 
     // CommonJS output
     esbuild.build({
-      entryPoints,
+      entryPoints: entrypoints,
       outdir,
       format: "cjs",
       sourcemap: "external",
@@ -104,7 +103,7 @@ async function main() {
 
     // ESM output
     esbuild.build({
-      entryPoints,
+      entryPoints: entrypoints,
       outdir,
       format: "esm",
       sourcemap: "external",

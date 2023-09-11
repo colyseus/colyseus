@@ -12,7 +12,7 @@
     "packages/serializer/*"
   ],
   "scripts": {
-    "build": "node compile-packages.mjs",
+    "build": "bun run build.ts",
     "clean": "lerna clean",
     "test": "lerna run test --stream",
     "example": "lerna run start --scope @colyseus/example --stream",
@@ -51,9 +51,8 @@
     "rimraf": "^2.7.1",
     "sinon": "^11.1.1",
     "ts-jest": "^28.0.3",
-    "ts-node": ">=10.9.1",
-    "ts-node-dev": "^2.0.0",
     "tslint": "^5.11.0",
+    "tsx": "^3.12.8",
     "typescript": "^5.1.6"
   },
   "nyc": {
