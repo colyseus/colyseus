@@ -69,8 +69,8 @@ export class WebSocketClient implements Client {
       return;
     }
 
-    // FIXME: is this good?
-    this.ref.ws.sendBinary(data as unknown as ArrayBufferLike);
+    // FIXME: can we avoid creating a new buffer here?
+    this.ref.ws.sendBinary(Buffer.from(data as unknown as ArrayBufferLike));
   }
 
   public error(code: number, message: string = '', cb?: (err?: Error) => void) {
