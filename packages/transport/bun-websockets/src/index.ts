@@ -1,2 +1,2 @@
 export { WebSocketClient } from "./WebSocketClient";
-export { WebSocketTransport, TransportOptions } from "./WebSocketTransport";
+export { BunWebSocket, TransportOptions } from "./BunWebSocket";

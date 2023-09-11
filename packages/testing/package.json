@@ -7,7 +7,7 @@
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
   "scripts": {
-    "test": "TS_NODE_PROJECT=../../tsconfig/tsconfig.test.json mocha --require ts-node/register test/**Test.ts test/**/**Test.ts --exit --timeout 15000",
+    "test": "TS_NODE_PROJECT=../../tsconfig/tsconfig.test.json mocha --require tsx test/**Test.ts test/**/**Test.ts --exit --timeout 15000",
     "tslint": "tslint --project . --config ../../tslint.json"
   },
   "author": "Endel Dreyer",
