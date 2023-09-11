@@ -15,7 +15,7 @@ interface WebSocketData {
   // connection: { remoteAddress: string },
 }
 
-export class BunWebSocket extends Transport {
+export class BunWebSockets extends Transport {
   public bunServer: Bun.Server;
 
   protected clients: ServerWebSocket<WebSocketData>[] = [];
@@ -31,7 +31,7 @@ export class BunWebSocket extends Transport {
   }
 
   public listen(port: number | string, hostname?: string, backlog?: number, listeningListener?: () => void) {
-    const handleMatchMakeRequest = this.handleMatchMakeRequest;
+    const self = this;
 
     this.bunServer = Bun.serve<WebSocketData>({
       port,
@@ -42,7 +42,7 @@ export class BunWebSocket extends Transport {
 
         if (url.pathname.startsWith(`/${matchMaker.controller.matchmakeRoute}`)) {
           try {
-            const [code, response, headers] = await handleMatchMakeRequest(req, server, url);
+            const [code, response, headers] = await self.handleMatchMakeRequest(req, server, url);
             //
             // success response
             //
@@ -82,7 +82,7 @@ export class BunWebSocket extends Transport {
         ...this.options,
 
         async open(ws) {
-          await this.onConnection(ws);
+          await self.onConnection(ws);
         },
 
         message(ws, message) {
@@ -92,11 +92,11 @@ export class BunWebSocket extends Transport {
 
         close(ws, code, reason) {
           // remove from client list
-          spliceOne(this.clients, this.clients.indexOf(ws));
+          spliceOne(self.clients, self.clients.indexOf(ws));
 
-          const clientWrapper = this.clientWrappers.get(ws);
+          const clientWrapper = self.clientWrappers.get(ws);
           if (clientWrapper) {
-            this.clientWrappers.delete(ws);
+            self.clientWrappers.delete(ws);
 
             // emit 'close' on wrapper
             clientWrapper.emit('close', code);
