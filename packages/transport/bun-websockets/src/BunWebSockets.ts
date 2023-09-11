@@ -87,7 +87,7 @@ export class BunWebSockets extends Transport {
 
         message(ws, message) {
           // this.clientWrappers.get(ws)?.emit('message', Buffer.from(message.slice(0)));
-          this.clientWrappers.get(ws)?.emit('message', message);
+          self.clientWrappers.get(ws)?.emit('message', message);
         },
 
         close(ws, code, reason) {
