@@ -10,10 +10,11 @@ import { logger, Server, ServerOptions, Transport, matchMaker } from '@colyseus/
 import { WebSocketTransport } from '@colyseus/ws-transport';
 
 // try to import uWebSockets-express compatibility layer.
-let uWebSocketsExpressCompatibility: any;
-try {
-  uWebSocketsExpressCompatibility = require('uwebsockets-express').default;
-} catch (e) {}
+let uWebSocketsExpressCompatibility: any = undefined;
+try { uWebSocketsExpressCompatibility = require('uwebsockets-express').default; } catch (e) {}
+
+let BunWebSockets: any = undefined;
+try { BunWebSockets = require('@colyseus/bun-websockets'); } catch (e) {}
 
 function getNodeEnv() {
   return process.env.NODE_ENV || "development";
@@ -190,8 +191,14 @@ export async function getTransport(options: ConfigOptions) {
     let transport: Transport;
 
     if (!options.initializeTransport) {
-        // use WebSocketTransport by default
-        options.initializeTransport = (options: any) => new WebSocketTransport(options);
+        if (BunWebSockets !== undefined) {
+          // @colyseus/bun-websockets
+          options.initializeTransport = (options: any) => new BunWebSockets.BunWebSockets(options);
+
+        } else {
+          // use WebSocketTransport by default
+          options.initializeTransport = (options: any) => new WebSocketTransport(options);
+        }
     }
 
     let app: express.Express | undefined = express();
