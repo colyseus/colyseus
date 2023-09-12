@@ -199,6 +199,12 @@ export async function getTransport(options: ConfigOptions) {
 
     transport = await options.initializeTransport({ server });
 
+    // TODO: refactor me!
+    // There's no need to instantiate "app" and "server" for BunWebSockets above
+    if (transport['expressApp']) {
+      app = transport['expressApp'];
+    }
+
     if (options.initializeExpress) {
         // uWebSockets.js + Express compatibility layer.
         // @ts-ignore

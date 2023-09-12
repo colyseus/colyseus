@@ -2,9 +2,11 @@
 import Bun, { Server, ServerWebSocket, WebSocketHandler } from "bun";
 
 import http from 'http';
+import bunExpress from "bun-serve-express";
 
 import { DummyServer, ErrorCode, matchMaker, Transport, debugAndPrintError, spliceOne, ServerError } from '@colyseus/core';
 import { WebSocketClient, WebSocketWrapper } from './WebSocketClient';
+import { Application, Request, Response } from "express";
 
 export type TransportOptions = Partial<Omit<WebSocketHandler, "message" | "open" | "drain" | "close" | "ping" | "pong">>;
 
@@ -16,68 +18,19 @@ interface WebSocketData {
 }
 
 export class BunWebSockets extends Transport {
-  public bunServer: Bun.Server;
+  public expressApp: Application;
 
   protected clients: ServerWebSocket<WebSocketData>[] = [];
   protected clientWrappers = new WeakMap<ServerWebSocket<WebSocketData>, WebSocketWrapper>();
 
+  private _listening: any;
+
   constructor(private options: TransportOptions = {}) {
     super();
 
-    // Adding a mock object for Transport.server
-    if (!this.server) {
-      this.server = new DummyServer();
-    }
-  }
-
-  public listen(port: number | string, hostname?: string, backlog?: number, listeningListener?: () => void) {
     const self = this;
 
-    this.bunServer = Bun.serve<WebSocketData>({
-      port,
-      hostname,
-
-      async fetch(req, server) {
-        const url = new URL(req.url);
-
-        if (url.pathname.startsWith(`/${matchMaker.controller.matchmakeRoute}`)) {
-          try {
-            const [code, response, headers] = await self.handleMatchMakeRequest(req, server, url);
-            //
-            // success response
-            //
-            return new Response(response, {
-              status: code,
-              headers: Object.assign(
-                headers,
-                matchMaker.controller.DEFAULT_CORS_HEADERS,
-                matchMaker.controller.getCorsHeaders.call(undefined, req)
-              )
-            });
-
-          } catch (e) {
-            //
-            // error response
-            //
-            return new Response(JSON.stringify({ code: e.code, error: e.message }), {
-              status: e.code || ErrorCode.MATCHMAKE_UNHANDLED,
-              headers: Object.assign(
-                { 'Content-Type': 'application/json' },
-                matchMaker.controller.DEFAULT_CORS_HEADERS,
-                matchMaker.controller.getCorsHeaders.call(undefined, req)
-              )
-            });
-          }
-
-
-        } else {
-          // req.headers.get("Cookie");
-          server.upgrade(req, { data: { url } });
-
-          return undefined;
-        }
-      },
-
+    this.expressApp = bunExpress({
       websocket: {
         ...this.options,
 
@@ -102,11 +55,28 @@ export class BunWebSockets extends Transport {
             clientWrapper.emit('close', code);
           }
         },
-
       }
     });
 
-    listeningListener?.();
+    // Adding a mock object for Transport.server
+    if (!this.server) {
+      this.server = new DummyServer();
+    }
+  }
+
+  public listen(port: number, hostname?: string, backlog?: number, listeningListener?: () => void) {
+    this._listening = this.expressApp.listen(port, listeningListener);
+
+    this.expressApp.use(`/${matchMaker.controller.matchmakeRoute}`, async (req, res) => {
+      try {
+        await this.handleMatchMakeRequest(req, res);
+      } catch (e) {
+        res.status(e.code || ErrorCode.MATCHMAKE_UNHANDLED).json({
+          code: e.code,
+          error: e.message
+        });
+      }
+    });
 
     // Mocking Transport.server behaviour, https://github.com/colyseus/colyseus/issues/458
     // @ts-ignore
@@ -116,8 +86,8 @@ export class BunWebSockets extends Transport {
   }
 
   public shutdown() {
-    if (this.bunServer) {
-      this.bunServer.stop(true);
+    if (this._listening) {
+      this._listening.close();
 
       // @ts-ignore
       this.server.emit("close"); // Mocking Transport.server behaviour, https://github.com/colyseus/colyseus/issues/458
@@ -165,50 +135,57 @@ export class BunWebSockets extends Transport {
     }
   }
 
-  protected async handleMatchMakeRequest (req: Request, server: Server, url: URL): Promise<[number, string, { [key: string]: string }]> {
-    switch (req.method) {
-      case 'OPTIONS': return [200, undefined, {}];
-
-      case 'GET': {
-        const matchedParams = url.pathname.match(matchMaker.controller.allowedRoomNameChars);
-        const roomName = matchedParams.length > 1 ? matchedParams[matchedParams.length - 1] : "";
-
-        return [
-          200,
-          JSON.stringify(await matchMaker.controller.getAvailableRooms(roomName || '')), {
-            'Content-Type': 'application/json'
-          }
-        ];
-      }
-
-      case 'POST': {
-        // do not accept matchmaking requests if already shutting down
-        if (matchMaker.isGracefullyShuttingDown) {
-          throw new ServerError(503, "server is shutting down");
+  protected async handleMatchMakeRequest (req: Request, res: Response) {
+    try {
+      switch (req.method) {
+        case 'OPTIONS': {
+          res.set(Object.assign(
+            {},
+            matchMaker.controller.DEFAULT_CORS_HEADERS,
+            matchMaker.controller.getCorsHeaders.call(undefined, req)
+          ));
+          res.status(200).end();
         }
 
-        const matchedParams = url.pathname.match(matchMaker.controller.allowedRoomNameChars);
-        const matchmakeIndex = matchedParams.indexOf(matchMaker.controller.matchmakeRoute);
-
-        const clientOptions = Bun.readableStreamToJSON(req.body);
-
-        if (clientOptions === undefined) {
-          throw new Error("invalid JSON input");
+        case 'GET': {
+          const matchedParams = req.path.match(matchMaker.controller.allowedRoomNameChars);
+          const roomName = matchedParams.length > 1 ? matchedParams[matchedParams.length - 1] : "";
+          res.json(await matchMaker.controller.getAvailableRooms(roomName || ''));
         }
 
-        const method = matchedParams[matchmakeIndex + 1];
-        const roomName = matchedParams[matchmakeIndex + 2] || '';
-
-        return [
-          200,
-          JSON.stringify(await matchMaker.controller.invokeMethod(method, roomName, clientOptions)), {
-            'Content-Type': 'application/json'
+        case 'POST': {
+          // do not accept matchmaking requests if already shutting down
+          if (matchMaker.isGracefullyShuttingDown) {
+            throw new ServerError(503, "server is shutting down");
           }
-        ];
+
+          const matchedParams = req.path.match(matchMaker.controller.allowedRoomNameChars);
+          const matchmakeIndex = matchedParams.indexOf(matchMaker.controller.matchmakeRoute);
+          const clientOptions = Bun.readableStreamToJSON(req.body);
+
+          if (clientOptions === undefined) {
+            throw new Error("invalid JSON input");
+          }
+
+          const method = matchedParams[matchmakeIndex + 1];
+          const roomName = matchedParams[matchmakeIndex + 2] || '';
+          res.json(await matchMaker.controller.invokeMethod(method, roomName, clientOptions));
+        }
+
+        default: throw new Error("invalid request method");
       }
 
-      default: return undefined;
+    } catch (e) {
+      res
+        .set(Object.assign(
+          {},
+          matchMaker.controller.DEFAULT_CORS_HEADERS,
+          matchMaker.controller.getCorsHeaders.call(undefined, req)
+        ))
+        .status(e.code || ErrorCode.MATCHMAKE_UNHANDLED)
+        .json({ code: e.code, error: e.message });
     }
+
   }
 
 }
