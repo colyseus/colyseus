@@ -9,14 +9,14 @@ export class RedisPresence implements Presence {
 
     protected subscriptions: { [channel: string]: Callback[] } = {};
 
-    constructor(options?: RedisOptions | ClusterNode[], clusterOptions?: ClusterOptions) {
+    constructor(options?: number | string | RedisOptions | ClusterNode[], clusterOptions?: ClusterOptions) {
         if (Array.isArray(options)) {
             this.sub = new Cluster(options, clusterOptions)
             this.sub = new Cluster(options, clusterOptions);
 
         } else {
-            this.sub = new Redis(options);
-            this.pub = new Redis(options);
+            this.sub = new Redis(options as RedisOptions);
+            this.pub = new Redis(options as RedisOptions);
         }
 
         // no listener limit

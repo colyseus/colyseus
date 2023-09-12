@@ -13,10 +13,10 @@ import { RoomData } from './RoomData';
 export class RedisDriver implements MatchMakerDriver {
   private readonly _client: Redis | Cluster;
 
-  constructor(options?: RedisOptions | ClusterNode[], clusterOptions?: ClusterOptions) {
+  constructor(options?: number | string | RedisOptions | ClusterNode[], clusterOptions?: ClusterOptions) {
     this._client = (Array.isArray(options))
       ? new Cluster(options, clusterOptions)
-      : new Redis(options);
+      : new Redis(options as RedisOptions);
   }
 
   public createInstance(initialValues: any = {}) {
