@@ -1,5 +1,5 @@
 /// <reference types="bun-types" />
-import Bun, { Server, ServerWebSocket, WebSocketHandler } from "bun";
+import Bun, { ServerWebSocket, WebSocketHandler } from "bun";
 
 import http from 'http';
 import bunExpress from "bun-serve-express";
@@ -71,7 +71,7 @@ export class BunWebSockets extends Transport {
       try {
         await this.handleMatchMakeRequest(req, res);
       } catch (e) {
-        res.status(e.code || ErrorCode.MATCHMAKE_UNHANDLED).json({
+        res.status(500).json({
           code: e.code,
           error: e.message
         });
@@ -145,12 +145,14 @@ export class BunWebSockets extends Transport {
             matchMaker.controller.getCorsHeaders.call(undefined, req)
           ));
           res.status(200).end();
+          break;
         }
 
         case 'GET': {
           const matchedParams = req.path.match(matchMaker.controller.allowedRoomNameChars);
           const roomName = matchedParams.length > 1 ? matchedParams[matchedParams.length - 1] : "";
           res.json(await matchMaker.controller.getAvailableRooms(roomName || ''));
+          break;
         }
 
         case 'POST': {
@@ -161,18 +163,19 @@ export class BunWebSockets extends Transport {
 
           const matchedParams = req.path.match(matchMaker.controller.allowedRoomNameChars);
           const matchmakeIndex = matchedParams.indexOf(matchMaker.controller.matchmakeRoute);
-          const clientOptions = Bun.readableStreamToJSON(req.body);
+          const clientOptions = req.body; // Bun.readableStreamToJSON(req.body);
 
           if (clientOptions === undefined) {
-            throw new Error("invalid JSON input");
+            throw new ServerError(500, "invalid JSON input");
           }
 
           const method = matchedParams[matchmakeIndex + 1];
           const roomName = matchedParams[matchmakeIndex + 2] || '';
           res.json(await matchMaker.controller.invokeMethod(method, roomName, clientOptions));
+          break;
         }
 
-        default: throw new Error("invalid request method");
+        default: throw new ServerError(500, "invalid request method");
       }
 
     } catch (e) {
@@ -182,7 +185,7 @@ export class BunWebSockets extends Transport {
           matchMaker.controller.DEFAULT_CORS_HEADERS,
           matchMaker.controller.getCorsHeaders.call(undefined, req)
         ))
-        .status(e.code || ErrorCode.MATCHMAKE_UNHANDLED)
+        .status(500)
         .json({ code: e.code, error: e.message });
     }
 
