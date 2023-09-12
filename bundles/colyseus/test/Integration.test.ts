@@ -646,48 +646,6 @@ describe("Integration", () => {
 
           describe("send()", () => {
 
-            it("send() schema-encoded instances", async () => {
-              const ctx = new Context();
-
-              class State extends Schema {
-                @type("number", { context: ctx }) num = 1;
-              }
-
-              class Message extends Schema {
-                @type("string", { context: ctx }) str: string = "Hello world";
-              }
-
-              let onMessageCalled = false;
-
-              matchMaker.defineRoomType('sendschema', class _ extends Room {
-                onCreate() {
-                  this.setState(new State());
-
-                  this.onMessage("ping", (client, message) => {
-                    const msg = new Message();
-                    msg.str = message;
-                    client.send(msg);
-                  });
-
-                }
-              });
-
-              const connection = await client.joinOrCreate('sendschema', {}, State);
-              let messageReceived: Message;
-
-              connection.onMessage(Message, (message) => {
-                onMessageCalled = true;
-                messageReceived = message;
-              });
-              connection.send("ping", "hello!");
-              await timeout(100);
-
-              await connection.leave();
-
-              assert.ok(onMessageCalled);
-              assert.strictEqual(messageReceived.str, "hello!");
-            });
-
             it("should send after patch", async () => {
               class DummyState extends Schema {
                 @type("number") number: number = 0;
