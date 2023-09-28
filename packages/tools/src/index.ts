@@ -249,6 +249,11 @@ export async function getTransport(options: ConfigOptions) {
           await options.initializeExpress(app);
       }
 
+      // health check for load balancers
+      app.get("/__healthcheck", (req, res) => {
+        res.status(200).end();
+      });
+
       app.get("/__cloudstats", async (req, res) => {
           if (
               process.env.CLOUD_SECRET &&
