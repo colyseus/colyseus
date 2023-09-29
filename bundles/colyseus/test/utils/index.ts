@@ -32,7 +32,7 @@ export const PRESENCE_IMPLEMENTATIONS = [ LocalPresence, ];
 // ];
 
 export class RawClient extends EventEmitter {
-  readyState: number;
+  readyState: number = WebSocket.OPEN;
 }
 
 export class WebSocketClient implements Client {

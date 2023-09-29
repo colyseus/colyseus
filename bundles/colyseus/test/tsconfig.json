@@ -3,12 +3,14 @@
         "outDir": "lib",
         "module": "commonjs",
         "lib": ["es5"],
-        "target": "es2015",
+        "target": "ESNext",
         "declaration": true,
         "esModuleInterop": true,
         "experimentalDecorators": true,
+        "useDefineForClassFields": false,
         "noImplicitAny": false,
-        "sourceMap": false
+        "sourceMap": false,
+        "skipLibCheck": true,
     },
     "include": [
       "**/*.ts",
