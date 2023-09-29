@@ -16,6 +16,7 @@ export enum Protocol {
 
   // WebSocket close codes (https://github.com/Luka967/websocket-close-codes)
   WS_CLOSE_NORMAL = 1000,
+  WS_CLOSE_GOING_AWAY = 1001,
 
   // WebSocket error codes
   WS_CLOSE_CONSENTED = 4000,

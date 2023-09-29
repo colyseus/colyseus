@@ -3,7 +3,7 @@ import sinon, { match } from "sinon";
 import * as Colyseus from "colyseus.js";
 import { Schema, type, Context } from "@colyseus/schema";
 
-import { matchMaker, Room, Client, Server, ErrorCode, MatchMakerDriver, Presence } from "@colyseus/core";
+import { matchMaker, Room, Client, Server, ErrorCode, MatchMakerDriver, Presence, Deferred } from "@colyseus/core";
 import { DummyRoom, DRIVERS, timeout, Room3Clients, PRESENCE_IMPLEMENTATIONS, Room2Clients, Room2ClientsExplicitLock } from "./utils";
 import { ServerError, Protocol } from "@colyseus/core";
 
@@ -212,6 +212,38 @@ describe("Integration", () => {
                 resolve();
               });
             });
+          });
+
+          it("async onAuth() - should not call onJoin if client left early", async() => {
+            let onJoinCalled = false;
+            let onLeaveCalled = false;
+            let onAuthDeferred = new Deferred();
+            matchMaker.defineRoomType('async_onauth', class _ extends Room {
+              async onAuth() {
+                setTimeout(() => {
+                  console.log("resolve auth...")
+                  onAuthDeferred.resolve(true);
+                }, 100);
+                return onAuthDeferred;
+              }
+              onJoin() {
+                console.log("onJoin called!")
+                onJoinCalled = true;
+              }
+              onLeave() {
+                console.log("onLeave called!")
+                onLeaveCalled = true;
+              }
+            });
+
+            // Quickly close WebSocket connetion before onAuth completes
+            const seatReservation = await matchMaker.joinOrCreate('async_onauth', {});
+            const lostConnection = new WebSocket(`${TEST_ENDPOINT}/${seatReservation.room.processId}/${seatReservation.room.roomId}?sessionId=${seatReservation.sessionId}`);
+            lostConnection.on("open", () => lostConnection.close());
+
+            await onAuthDeferred;
+            assert.ok(!onJoinCalled);
+            assert.ok(!onLeaveCalled);
           });
 
           it("onLeave()", async () => {
@@ -466,7 +498,7 @@ describe("Integration", () => {
               connection.onStateChange(() => patchesReceived++);
 
               await timeout(20 * 25);
-              assert.ok(patchesReceived > 20, "should have received > 20 patches");
+              assert.ok(patchesReceived > 20, "should have received > 20 patches. got " + patchesReceived);
               assert.ok(connection.state.number >= 20);
 
               connection.leave();

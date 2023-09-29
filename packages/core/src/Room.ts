@@ -1,4 +1,5 @@
 import http from 'http';
+import WebSocket from 'ws'; // TODO: move this to Transport
 
 import { unpack } from 'msgpackr';
 import { decode, Iterator, Schema } from '@colyseus/schema';
@@ -557,19 +558,27 @@ export abstract class Room<State extends object= any, Metadata= any> {
     client.ref['onleave'] = this._onLeave.bind(this, client);
     client.ref.once('close', client.ref['onleave']);
 
-    this.clients.push(client);
-
     const previousReconnectionToken = this._reconnectingSessionId.get(sessionId);
     if (previousReconnectionToken) {
+      this.clients.push(client);
       this._reconnections[previousReconnectionToken]?.[1].resolve(client);
 
     } else {
       try {
         client.auth = await this.onAuth(client, options, req);
 
+        //
+        // On async onAuth, client may have been disconnected.
+        //
+        if (client.readyState !== WebSocket.OPEN) {
+          throw new ServerError(Protocol.WS_CLOSE_GOING_AWAY, 'already disconnected');
+        }
+
         if (!client.auth) {
           throw new ServerError(ErrorCode.AUTH_FAILED, 'onAuth failed');
         }
+
+        this.clients.push(client);
 
         if (this.onJoin) {
           await this.onJoin(client, options, client.auth);
