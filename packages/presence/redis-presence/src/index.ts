@@ -12,7 +12,7 @@ export class RedisPresence implements Presence {
     constructor(options?: number | string | RedisOptions | ClusterNode[], clusterOptions?: ClusterOptions) {
         if (Array.isArray(options)) {
             this.sub = new Cluster(options, clusterOptions)
-            this.sub = new Cluster(options, clusterOptions);
+            this.pub = new Cluster(options, clusterOptions);
 
         } else {
             this.sub = new Redis(options as RedisOptions);
