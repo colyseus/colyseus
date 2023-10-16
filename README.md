@@ -52,8 +52,8 @@ npm start
 
 The sustainability of the project relies on **Colyseus Cloud** subscriptions and sponsorships. If you are not using Colyseus Cloud, please consider [sponsoring the project](https://github.com/sponsors/endel) 💖
 
-<a href="https://colyseus.io/sponsorkit/sponsors.svg">
-  <img src="https://colyseus.io/sponsorkit/sponsors.svg" width="100%" />
+<a href="https://cdn.jsdelivr.net/gh/colyseus/.github/sponsorkit/sponsors.svg">
+  <img src="https://cdn.jsdelivr.net/gh/colyseus/.github/sponsorkit/sponsors.svg" width="100%" />
 </a>
 
 # Contributors ✨
