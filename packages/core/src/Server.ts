@@ -48,6 +48,11 @@ export type ServerOptions = {
   greet?: boolean,
 
   /**
+   * specify whether to balance room creation based on # of room or CCU (# of players)
+   */
+  balanceMode?: matchMaker.BalanceMode,
+
+  /**
    * Options below are now part of WebSocketTransport (@colyseus/ws-transport)
    * TODO: remove me on 0.15.0
    */
@@ -88,6 +93,7 @@ export class Server {
       this.presence,
       this.driver,
       options.publicAddress,
+      options.balanceMode,
     );
 
     if (gracefullyShutdown) {

@@ -33,6 +33,11 @@ export interface SeatReservation {
   devMode?: boolean;
 }
 
+export enum BalanceMode {
+  rooms = 1,
+  players = 2,
+}
+
 const handlers: {[id: string]: RegisteredHandler} = {};
 const rooms: {[roomId: string]: Room} = {};
 
@@ -44,17 +49,26 @@ export let driver: MatchMakerDriver;
 export let isGracefullyShuttingDown: boolean;
 export let onReady: Deferred;
 
-export let roomCount = 0;
+//
+// tracking of server load
+//
+let roomCount: number = 0;
+let playersCount: number = 0;
+let lastLoadUpdated: number = 0;
+let lastLoadValue: number = -1;
+let balanceMode: BalanceMode = BalanceMode.rooms;
 
 export async function setup(
   _presence?: Presence,
   _driver?: MatchMakerDriver,
   _publicAddress?: string,
+  _balanceMode?: BalanceMode,
 ) {
   onReady = new Deferred();
   presence = _presence || new LocalPresence();
   driver = _driver || new LocalDriver();
   publicAddress = _publicAddress;
+  balanceMode = _balanceMode ?? BalanceMode.rooms;
 
   // devMode: try to retrieve previous processId
   if (isDevMode) { processId = await getPreviousProcessId(await getHostname()); }
@@ -71,7 +85,7 @@ export async function setup(
     return handleCreateRoom.apply(undefined, args);
   });
 
-  await presence.hset(getRoomCountKey(), processId, roomCount.toString());
+  await saveLoadValue();
 
   if (isDevMode) {
     await reloadFromCache();
@@ -274,15 +288,14 @@ export function hasHandler(name: string) {
  * @returns Promise<RoomListingData> - A promise contaning an object which includes room metadata and configurations.
  */
 export async function createRoom(roomName: string, clientOptions: ClientOptions): Promise<RoomListingData> {
-  const roomsSpawnedByProcessId = await presence.hgetall(getRoomCountKey());
+  const roomsSpawnedByProcessId = await presence.hgetall(getLoadKey());
 
-  const processIdWithFewerRooms = (
-    Object.keys(roomsSpawnedByProcessId).sort((p1, p2) => {
-      return (Number(roomsSpawnedByProcessId[p1]) > Number(roomsSpawnedByProcessId[p2]))
-        ? 1
-        : -1;
-    })[0]
-  ) || processId;
+  // a sort is a lot more computational than just finding the min value
+  const processIdWithFewerRooms = Object.keys(roomsSpawnedByProcessId).reduce((current, p) => {
+    return (!current || Number(roomsSpawnedByProcessId[p]) < Number(roomsSpawnedByProcessId[current])
+      ? p
+      : current);
+  }, undefined) || processId;
 
   let room: RoomListingData;
   if (processIdWithFewerRooms === processId) {
@@ -305,7 +318,7 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
       // when a process disconnects ungracefully, it may leave its previous processId under "roomcount"
       // if the process is still alive, it will re-add itself shortly after the load-balancer selects it again.
       //
-      await presence.hdel(getRoomCountKey(), processIdWithFewerRooms);
+      await presence.hdel(getLoadKey(), processIdWithFewerRooms);
 
       // if other process failed to respond, create the room on this process
       debugAndPrintError(e);
@@ -364,7 +377,7 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
 
       // increment amount of rooms this process is handling
       roomCount++;
-      presence.hset(getRoomCountKey(), processId, roomCount.toString());
+      saveLoadValue();
     } catch (e) {
       debugAndPrintError(e);
       throw new ServerError(
@@ -430,7 +443,7 @@ export async function gracefullyShutdown(): Promise<any> {
   }
 
   // remove processId from room count key
-  presence.hdel(getRoomCountKey(), processId);
+  presence.hdel(getLoadKey(), processId);
 
   // unsubscribe from process id channel
   presence.unsubscribe(getProcessChannel());
@@ -549,13 +562,17 @@ async function awaitRoomAvailable(roomToJoin: string, callback: Function): Promi
 
 function onClientJoinRoom(room: Room, client: Client) {
   // increment global CCU
+  playersCount++;
   presence.incr(getGlobalCCUCounter());
+  saveLoadValue();
   handlers[room.roomName].emit('join', room, client);
 }
 
 function onClientLeaveRoom(room: Room, client: Client, willDispose: boolean) {
   // decrement global CCU
+  playersCount--;
   presence.decr(getGlobalCCUCounter());
+  saveLoadValue();
   handlers[room.roomName].emit('leave', room, client, willDispose);
 }
 
@@ -574,10 +591,10 @@ async function unlockRoom(room: Room) {
 async function disposeRoom(roomName: string, room: Room) {
   debugMatchMaking('disposing \'%s\' (%s) on processId \'%s\'', roomName, room.roomId, processId);
 
+  roomCount--;
   // decrease amount of rooms this process is handling
   if (!isGracefullyShuttingDown) {
-    roomCount--;
-    presence.hset(getRoomCountKey(), processId, roomCount.toString());
+    saveLoadValue();
 
     // remove from devMode restore list
     if (isDevMode) {
@@ -599,10 +616,43 @@ async function disposeRoom(roomName: string, room: Room) {
 }
 
 //
+// functions to handle load
+//
+
+// save our load value to redis for distributing rooms across servers.
+async function saveLoadValue() {
+  let load: number = balanceMode === BalanceMode.players ? playersCount : roomCount;
+
+  // if load unchanged, don't save
+  if (load === lastLoadValue) return;
+
+  // players count changes A LOT so limit updates to 1 per second
+  if (balanceMode === BalanceMode.players) {
+    const now = Date.now();
+    if (now - lastLoadUpdated < 1000) {
+      return;
+    }
+  }
+
+  lastLoadUpdated = Date.now();
+  lastLoadValue = load;
+  await presence.hset(getLoadKey(), processId, load.toString());
+}
+
+//
 // Presence keys
 //
+
+// maintain this export for backward compatibility, but it is no
+// longer used internally.
 export function getRoomCountKey() {
   return 'roomcount';
+}
+
+function getLoadKey() {
+  // maintain 'roomcount' keys for room mode, for backward compatibility
+  // another those that might use roomcount.
+  return balanceMode === BalanceMode.players ? 'loadcount' : 'roomcount';
 }
 
 function getRoomChannel(roomId: string) {
