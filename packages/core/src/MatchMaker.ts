@@ -520,8 +520,13 @@ async function awaitRoomAvailable(roomToJoin: string, callback: Function): Promi
     const concurrencyKey = getHandlerConcurrencyKey(roomToJoin);
     const concurrency = await presence.incr(concurrencyKey) - 1;
 
+    //
     // avoid having too long timeout if 10+ clients ask to join at the same time
-    const concurrencyTimeout = Math.min(concurrency * 100, REMOTE_ROOM_SHORT_TIMEOUT);
+    //
+    // TODO: we need a better solution here. either a lock or queue system should be implemented instead.
+    // https://github.com/colyseus/colyseus/issues/466
+    //
+    const concurrencyTimeout = Math.min(concurrency * 100, 500);
 
     if (concurrency > 0) {
       debugMatchMaking(
