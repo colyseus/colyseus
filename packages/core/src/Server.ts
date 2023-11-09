@@ -19,7 +19,6 @@ import { Transport } from './Transport';
 import { logger, setLogger } from './Logger';
 import { setDevMode, isDevMode } from './utils/DevMode';
 
-// IServerOptions &
 export type ServerOptions = {
   publicAddress?: string,
   presence?: Presence,
@@ -36,7 +35,7 @@ export type ServerOptions = {
    * reloading existing data, you may see "schema mismatch" errors in the
    * client-side.
    *
-   * (This operation is costly and should never be used in a production
+   * (This operation is costly and should not be used in a production
    * environment)
    */
   devMode?: boolean,
@@ -186,15 +185,36 @@ export class Server {
    * Define a new type of room for matchmaking.
    *
    * @param name public room identifier for match-making.
-   * @param handler Room class definition
+   * @param roomClass Room class definition
    * @param defaultOptions default options for `onCreate`
    */
   public define<T extends Type<Room>>(
+    roomClass: T,
+    defaultOptions?: Parameters<NonNullable<InstanceType<T>['onCreate']>>[0],
+  ): RegisteredHandler
+  public define<T extends Type<Room>>(
     name: string,
-    handler: T,
+    roomClass: T,
+    defaultOptions?: Parameters<NonNullable<InstanceType<T>['onCreate']>>[0],
+  ): RegisteredHandler
+  public define<T extends Type<Room>>(
+    nameOrHandler: string | T,
+    handlerOrOptions: T | Parameters<NonNullable<InstanceType<T>['onCreate']>>[0],
     defaultOptions?: Parameters<NonNullable<InstanceType<T>['onCreate']>>[0],
   ): RegisteredHandler {
-    return matchMaker.defineRoomType(name, handler, defaultOptions);
+    const name = (typeof(nameOrHandler) === "string")
+      ? nameOrHandler
+      : nameOrHandler.name;
+
+    const roomClass = (typeof(nameOrHandler) === "string")
+      ? handlerOrOptions
+      : nameOrHandler;
+
+    const options = (typeof(nameOrHandler) === "string")
+      ? defaultOptions
+      : handlerOrOptions;
+
+    return matchMaker.defineRoomType(name, roomClass, options);
   }
 
   /**
