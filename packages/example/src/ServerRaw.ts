@@ -2,7 +2,10 @@
  * Barebones server without express.
  */
 import { Server } from "@colyseus/core";
-import { DummyRoom } from "./DummyRoom";
+import { JsonWebToken } from "@colyseus/auth";
+import { MyRoom } from "./MyRoom";
+
+JsonWebToken.options.secret = "AIzaSyAMkKUsvM14ctkHUemX3A_h8EBEFPkGII4";
 
 const port = Number(process.env.PORT || 2567);
 const endpoint = "localhost";
@@ -10,8 +13,12 @@ const endpoint = "localhost";
 // Create HTTP & WebSocket servers
 const gameServer = new Server();
 
-// Define DummyRoom as "chat"
-gameServer.define("chat", DummyRoom)
+// Define MyRoom as "my_room"
+gameServer.define("my_room_firebase", MyRoom)
+  .onAuth(async (token, req) => {
+    console.log("onAuth, token => ", token);
+    return await JsonWebToken.verify(token);
+  })
   // Matchmaking filters
   // .filterBy(['progress'])
 
@@ -23,11 +30,11 @@ gameServer.define("chat", DummyRoom)
 
 gameServer.onShutdown(() => {
   console.log("CUSTOM SHUTDOWN ROUTINE: STARTED");
-  return new Promise((resolve, reject) => {
+  return new Promise<void>((resolve, reject) => {
     setTimeout(() => {
       console.log("CUSTOM SHUTDOWN ROUTINE: FINISHED");
       resolve();
-    }, 1000);
+    }, 200);
   })
 });
 

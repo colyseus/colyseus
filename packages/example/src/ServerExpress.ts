@@ -3,16 +3,14 @@ import express from "express";
 
 import { Server, RelayRoom, LobbyRoom } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
-import { RedisDriver } from "@colyseus/redis-driver";
-import { RedisPresence } from "@colyseus/redis-presence";
 import { monitor } from "@colyseus/monitor";
+import { JsonWebToken } from "@colyseus/auth";
 
 // import { MongooseDriver  } from "@colyseus/mongoose-driver";
 // import { uWebSocketsTransport } from "@colyseus/uwebsockets-transport";
 
 // import expressify from "uwebsockets-express";
 
-import { DummyRoom } from "./DummyRoom";
 import { MyRoom } from "./MyRoom";
 
 const port = Number(process.env.PORT || 2567);
@@ -21,7 +19,7 @@ const endpoint = "localhost";
 // Create HTTP & WebSocket servers
 const app = express();
 const server = http.createServer(app);
-const transport = new WebSocketTransport({server});
+const transport = new WebSocketTransport({ server });
 
 // const transport = new uWebSocketsTransport();
 // const app = expressify(transport.app);
@@ -41,17 +39,16 @@ const gameServer = new Server({
 
 app.use(express.json());
 app.get("/hello", (req, res) => {
-  res.json({hello: "world!"});
+  res.json({ hello: "world!" });
 });
+
+gameServer.define(MyRoom).useAuthToken();
 
 gameServer.define("my_room", MyRoom);
 gameServer.define("lobby", LobbyRoom);
 
 // Define RelayRoom as "relay"
-gameServer.define("relay", RelayRoom);
-
-// Define DummyRoom as "chat"
-gameServer.define("dummy", DummyRoom)
+gameServer.define("relay", RelayRoom)
   // demonstrating public events.
   .on("create", (room) => console.log("room created!", room.roomId))
   .on("join", (room, client) => console.log("client", client.sessionId, "joined", room.roomId))
