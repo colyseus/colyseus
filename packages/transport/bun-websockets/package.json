@@ -11,7 +11,6 @@
     "express": "^4.17.1"
   },
   "devDependencies": {
-    "bun-types": "^1.0.1"
   },
   "peerDependencies": {
     "@colyseus/schema": ">=1.0.0"

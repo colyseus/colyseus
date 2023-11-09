@@ -1,5 +1,8 @@
-/// <reference types="bun-types" />
-import Bun, { ServerWebSocket, WebSocketHandler } from "bun";
+// <reference types="bun-types" />
+
+// "bun-types" is currently conflicting with "ws" types.
+// @ts-ignore
+import { ServerWebSocket, WebSocketHandler } from "bun";
 
 import http from 'http';
 import bunExpress from "bun-serve-express";

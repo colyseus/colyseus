@@ -1,5 +1,8 @@
- /// <reference types="bun-types" />
-import Bun, { ServerWebSocket } from "bun";
+// <reference types="bun-types" />
+
+// "bun-types" is currently conflicting with "ws" types.
+// @ts-ignore
+import { ServerWebSocket } from "bun";
 import EventEmitter from 'events';
 
 import { Protocol, Client, ClientState, ISendOptions, getMessageBytes, logger, debugMessage } from '@colyseus/core';
@@ -65,6 +68,9 @@ export class WebSocketClient implements Client {
 
   public raw(data: ArrayLike<number>, options?: ISendOptions, cb?: (err?: Error) => void) {
     // skip if client not open
+
+    // WebSocket is globally available on Bun runtime
+    // @ts-ignore
     if (this.ref.ws.readyState !== WebSocket.OPEN) {
       return;
     }
