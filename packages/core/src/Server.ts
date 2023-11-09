@@ -336,6 +336,15 @@ export class Server {
 
         try {
           const clientOptions = JSON.parse(Buffer.concat(data).toString());
+
+          const handler = matchMaker.getHandler(roomName);
+          if (handler['onAuthCallback']) {
+            const authHeader = req.headers['authorization'];
+            const authToken = (authHeader && authHeader.startsWith("Bearer ") && authHeader.substring(7, authHeader.length)) || undefined;
+            console.log({ authToken })
+            clientOptions['$auth'] = await handler['onAuthCallback'](authToken, req);
+          }
+
           const response = await matchMaker.controller.invokeMethod(method, roomName, clientOptions);
           res.write(JSON.stringify(response));
 

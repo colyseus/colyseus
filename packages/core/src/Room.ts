@@ -565,7 +565,14 @@ export abstract class Room<State extends object= any, Metadata= any> {
 
     } else {
       try {
-        client.auth = await this.onAuth(client, options, req);
+        if (options['$auth']) {
+          client.auth = options['$auth'];
+          delete options['$auth'];
+
+        } else if (this.onAuth !== Room.prototype.onAuth) {
+          console.warn("onAuth() will be deprecated soon. Please use gameServer.define(...).useAuth()");
+          client.auth = await this.onAuth(client, options, req);
+        }
 
         //
         // On async onAuth, client may have been disconnected.

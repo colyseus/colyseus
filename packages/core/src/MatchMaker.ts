@@ -181,10 +181,7 @@ export async function query(conditions: Partial<IRoomListingData> = {}) {
  */
 export async function findOneRoomAvailable(roomName: string, clientOptions: ClientOptions): Promise<RoomListingData> {
   return await awaitRoomAvailable(roomName, async () => {
-    const handler = handlers[roomName];
-    if (!handler) {
-      throw new ServerError( ErrorCode.MATCHMAKE_NO_HANDLER, `provided room name "${roomName}" not defined`);
-    }
+    const handler = getHandler(roomName);
 
     const roomQuery = driver.findOne({
       locked: false,
@@ -238,31 +235,43 @@ export async function remoteRoomCall<R= any>(
 }
 
 export function defineRoomType<T extends Type<Room>>(
-  name: string,
+  roomName: string,
   klass: T,
   defaultOptions?: Parameters<NonNullable<InstanceType<T>['onCreate']>>[0],
 ) {
   const registeredHandler = new RegisteredHandler(klass, defaultOptions);
 
-  handlers[name] = registeredHandler;
+  handlers[roomName] = registeredHandler;
 
   if (!isDevMode) {
-    cleanupStaleRooms(name);
+    cleanupStaleRooms(roomName);
   }
 
   return registeredHandler;
 }
 
-export function removeRoomType(name: string) {
-  delete handlers[name];
+export function removeRoomType(roomName: string) {
+  delete handlers[roomName];
 
   if (!isDevMode) {
-    cleanupStaleRooms(name);
+    cleanupStaleRooms(roomName);
   }
 }
 
-export function hasHandler(name: string) {
-  return handlers[ name ] !== undefined;
+// TODO: legacy; remove me on 1.0
+export function hasHandler(roomName: string) {
+  console.warn("hasHandler() is deprecated. Use getHandler() instead.");
+  return handlers[roomName] !== undefined;
+}
+
+export function getHandler(roomName: string) {
+  const handler = handlers[roomName];
+
+  if (!handler) {
+    throw new ServerError(ErrorCode.MATCHMAKE_NO_HANDLER, `provided room name "${roomName}" not defined`);
+  }
+
+  return handler;
 }
 
 /**
@@ -325,13 +334,8 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
 }
 
 export async function handleCreateRoom(roomName: string, clientOptions: ClientOptions, restoringRoomId?: string): Promise<RoomListingData> {
-  const registeredHandler = handlers[roomName];
-
-  if (!registeredHandler) {
-    throw new ServerError( ErrorCode.MATCHMAKE_NO_HANDLER, `provided room name "${roomName}" not defined`);
-  }
-
-  const room = new registeredHandler.klass();
+  const handler = getHandler(roomName);
+  const room = new handler.klass();
 
   // set room public attributes
   if (restoringRoomId && isDevMode) {
@@ -344,7 +348,7 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
   room.roomName = roomName;
   room.presence = presence;
 
-  const additionalListingData: any = registeredHandler.getFilterOptions(clientOptions);
+  const additionalListingData: any = handler.getFilterOptions(clientOptions);
 
   // assign public host
   if (publicAddress) {
@@ -360,7 +364,7 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
 
   if (room.onCreate) {
     try {
-      await room.onCreate(merge({}, clientOptions, registeredHandler.options));
+      await room.onCreate(merge({}, clientOptions, handler.options));
 
       // increment amount of rooms this process is handling
       roomCount++;
@@ -393,7 +397,7 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
   await createRoomReferences(room, true);
   await room.listing.save();
 
-  registeredHandler.emit('create', room);
+  handler.emit('create', room);
 
   return room.listing;
 }

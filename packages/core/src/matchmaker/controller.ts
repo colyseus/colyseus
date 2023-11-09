@@ -3,14 +3,16 @@
  * (for interoperability between different http frameworks, e.g. express, uWebSockets.js, etc)
  */
 
+import { IncomingMessage } from "http";
 import { ErrorCode } from "../Protocol";
 import { ServerError } from "../errors/ServerError";
 import * as matchMaker from "../MatchMaker";
 
 export default {
   DEFAULT_CORS_HEADERS: {
-    'Access-Control-Allow-Headers': 'Origin, X-Requested-With, Content-Type, Accept',
+    'Access-Control-Allow-Headers': 'Origin, X-Requested-With, Content-Type, Accept, Authorization',
     'Access-Control-Allow-Methods': 'OPTIONS, POST, GET',
+    'Access-Control-Allow-Credentials': 'true',
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Max-Age': '2592000',
     // ...
@@ -34,8 +36,10 @@ export default {
    *    }
    *    ```
    */
-  getCorsHeaders(request: any): { [header: string]: string } {
-    return {};
+  getCorsHeaders(req: IncomingMessage): { [header: string]: string } {
+    return {
+      ['Access-Control-Allow-Origin']: req.headers['origin'],
+    };
   },
 
   getAvailableRooms(roomName: string) {
