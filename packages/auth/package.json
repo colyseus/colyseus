@@ -1,0 +1,45 @@
+{
+  "name": "@colyseus/auth",
+  "version": "0.15.0-alpha.0",
+  "description": "Authentication Utilities for Colyseus",
+  "input": "./src/index.ts",
+  "main": "./build/index.js",
+  "module": "./build/index.mjs",
+  "typings": "./build/index.d.ts",
+  "scripts": {
+    "test": "TS_NODE_PROJECT=../../tsconfig/tsconfig.test.json c8 mocha --require tsx test/**.test.ts test/**/**.test.ts --exit --timeout 15000"
+  },
+  "funding": "https://github.com/sponsors/endel",
+  "author": "Endel Dreyer",
+  "license": "MIT",
+  "keywords": [
+    "colyseus",
+    "authentication",
+    "auth",
+    "oauth"
+  ],
+  "files": [
+    "build",
+    "LICENSE",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/colyseus/colyseus.git"
+  },
+  "homepage": "https://colyseus.io/",
+  "engines": {
+    "node": ">= 14.x"
+  },
+  "dependencies": {
+    "express-jwt": "^8.4.1",
+    "express-session": "^1.17.3",
+    "grant": "^5.4.22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "optionalDependencies": {
+
+  }
+}
