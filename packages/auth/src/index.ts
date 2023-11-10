@@ -3,24 +3,8 @@ import grant, { GrantProvider, GrantConfig, GrantSession } from 'grant';
 import session from "express-session";
 import jsonwebtoken, { JwtPayload, Jwt } from "jsonwebtoken";
 import { expressjwt, Request } from 'express-jwt';
-import { IncomingMessage } from 'http';
 
 export type { Request, JwtPayload, Jwt };
-
-export type ValidateAuthTokenCallback = (token: string, request?: IncomingMessage) => Promise<any>;
-let authCallback: ValidateAuthTokenCallback = async (token, req) => await JsonWebToken.verify(token);
-
-/**
- * Set authentication callback
- * @param callback
- */
-export function setDefaultAuthCallback(callback: ValidateAuthTokenCallback) {
-  authCallback = callback;
-}
-
-export function getDefaultAuthCallback() {
-  return authCallback;
-}
 
 export const JsonWebToken = {
   options: {

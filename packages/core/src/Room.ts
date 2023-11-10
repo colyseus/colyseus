@@ -1,4 +1,4 @@
-import http from 'http';
+import http, { IncomingMessage } from 'http';
 import WebSocket from 'ws'; // TODO: move this to Transport
 
 import { unpack } from 'msgpackr';
@@ -30,8 +30,6 @@ const noneSerializer = new NoneSerializer();
 export const DEFAULT_SEAT_RESERVATION_TIME = Number(process.env.COLYSEUS_SEAT_RESERVATION_TIME || 15);
 
 export type SimulationCallback = (deltaTime: number) => void;
-
-export type RoomConstructor<T extends object= any> = new (presence?: Presence) => Room<T>;
 
 export interface IBroadcastOptions extends ISendOptions {
   except?: Client | Client[];
@@ -145,6 +143,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
   // ever had success joining into it on the specified interval.
   private _autoDisposeTimeout: NodeJS.Timer;
 
+  // TODO: remove "presence" from constructor on 0.16.0
   constructor(presence?: Presence) {
     this.presence = presence;
 
@@ -216,11 +215,19 @@ export abstract class Room<State extends object= any, Metadata= any> {
     consented?: boolean,
   ): void | Promise<any>;
   public onDispose?(): void | Promise<any>;
+
+  /**
+   * @deprecated Please use onAuth as a static method instead, with its new method signature.
+   */
   public onAuth(
     client: Client<ExtractUserData<typeof this['clients']>, ExtractAuthData<typeof this['clients']>>,
     options: any,
     request?: http.IncomingMessage
   ): any | Promise<any> {
+    return true;
+  }
+
+  static async onAuth(token: string, req: IncomingMessage): Promise<unknown> {
     return true;
   }
 
@@ -570,7 +577,6 @@ export abstract class Room<State extends object= any, Metadata= any> {
           delete options['$auth'];
 
         } else if (this.onAuth !== Room.prototype.onAuth) {
-          console.warn("onAuth() will be deprecated soon. Please use gameServer.define(...).useAuth()");
           client.auth = await this.onAuth(client, options, req);
         }
 

@@ -243,6 +243,11 @@ export function defineRoomType<T extends Type<Room>>(
 
   handlers[roomName] = registeredHandler;
 
+  // TODO: remove this check on version 0.16
+  if (klass.prototype['onAuth'] !== Room.prototype['onAuth']) {
+    console.warn("onAuth() at the instance level will be deprecated soon. Please use static onAuth() instead.");
+  }
+
   if (!isDevMode) {
     cleanupStaleRooms(roomName);
   }
@@ -272,6 +277,10 @@ export function getHandler(roomName: string) {
   }
 
   return handler;
+}
+
+export function getRoomClass(roomName: string) {
+  return getHandler(roomName).klass as unknown as typeof Room
 }
 
 /**

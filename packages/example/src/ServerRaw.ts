@@ -15,10 +15,6 @@ const gameServer = new Server();
 
 // Define MyRoom as "my_room"
 gameServer.define("my_room_firebase", MyRoom)
-  .onAuth(async (token, req) => {
-    console.log("onAuth, token => ", token);
-    return await JsonWebToken.verify(token);
-  })
   // Matchmaking filters
   // .filterBy(['progress'])
 

@@ -336,13 +336,14 @@ export class Server {
 
         try {
           const clientOptions = JSON.parse(Buffer.concat(data).toString());
+          const roomClass = matchMaker.getRoomClass(roomName);
 
-          const handler = matchMaker.getHandler(roomName);
-          if (handler['onAuthCallback']) {
+          // check if static onAuth is implemented
+          // (default implementation is just to satisfy TypeScript )
+          if (roomClass['onAuth'] !== Room['onAuth']) {
             const authHeader = req.headers['authorization'];
             const authToken = (authHeader && authHeader.startsWith("Bearer ") && authHeader.substring(7, authHeader.length)) || undefined;
-            console.log({ authToken })
-            clientOptions['$auth'] = await handler['onAuthCallback'](authToken, req);
+            clientOptions['$auth'] = await roomClass['onAuth'](authToken, req);
           }
 
           const response = await matchMaker.controller.invokeMethod(method, roomName, clientOptions);
