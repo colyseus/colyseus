@@ -245,7 +245,11 @@ export function defineRoomType<T extends Type<Room>>(
 
   // TODO: remove this check on version 0.16
   if (klass.prototype['onAuth'] !== Room.prototype['onAuth']) {
-    console.warn("onAuth() at the instance level will be deprecated soon. Please use static onAuth() instead.");
+    console.warn("DEPRECATION WARNING: onAuth() at the instance level will be deprecated soon. Please use static onAuth() instead.");
+
+    if (klass['onAuth'] !== Room['onAuth']) {
+      console.log('❌ onAuth() defined at the instance level will be ignored.');
+    }
   }
 
   if (!isDevMode) {
