@@ -51,7 +51,7 @@ export const JsonWebToken = {
   /**
    * Get express middleware that verifies JsonWebTokens and sets `req.auth`.
    */
-  middleware(params?: Parameters<typeof expressjwt>[0]) {
+  middleware(params?: Partial<Parameters<typeof expressjwt>[0]>) {
     if (!this.options.secret) {
       console.error("❌ Please provide 'JWT_SECRET' environment variable, or set 'jwt.options.secret'.");
     }
