@@ -234,7 +234,7 @@ export async function remoteRoomCall<R= any>(
 
   if (!room) {
     try {
-      return await requestFromIPC<R>(presence, getRoomChannel(roomId), method, args);
+      return await requestFromIPC<R>(presence, getRoomChannel(roomId), method, args, rejectionTimeout);
 
     } catch (e) {
       const request = `${method}${args && ' with args ' + JSON.stringify(args) || ''}`;
