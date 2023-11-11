@@ -72,8 +72,25 @@ export class RedisDriver implements MatchMakerDriver {
     }
   }
 
+  // gets recent room caches w/o making multiple simultaneous reads to REDIS
+  private _roomCachePromise: Promise<Record<string, string>> | null = null;
+  private getRoomCaches() {
+    if (this._roomCachePromise !== null) {
+      // give same list to all those who wait.
+      return this._roomCachePromise;
+    }
+    var newPromise = this._client.hgetall('roomcaches');
+    this._roomCachePromise = newPromise;
+    newPromise.then((result) => {
+      // clear shared promise so we can read it again
+      this._roomCachePromise = null;
+      return result;
+    });
+    return newPromise;
+  }
+
   public async getRooms() {
-    return Object.entries(await this._client.hgetall('roomcaches') ?? []).map(
+    return Object.entries(await this.getRoomCaches() ?? []).map(
       ([, roomcache]) => new RoomData(JSON.parse(roomcache), this._client)
     );
   }
