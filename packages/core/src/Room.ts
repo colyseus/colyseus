@@ -558,6 +558,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
     client.ref['onleave'] = this._onLeave.bind(this, client);
     client.ref.once('close', client.ref['onleave']);
 
+    let disconnected = false;
     const previousReconnectionToken = this._reconnectingSessionId.get(sessionId);
     if (previousReconnectionToken) {
       this.clients.push(client);
@@ -583,6 +584,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
         if (this.onJoin) {
           await this.onJoin(client, options, client.auth);
         }
+        disconnected = (client.state !== ClientState.JOINING);
       } catch (e) {
         this.clients.delete(client);
 
@@ -600,17 +602,25 @@ export abstract class Room<State extends object= any, Metadata= any> {
     }
 
     // emit 'join' to room handler
-    this._events.emit('join', client);
+    // if we reconnected, we never sent 'leave' so we should not send another 'join'
+    if (!previousReconnectionToken) this._events.emit('join', client);
 
-    // allow client to send messages after onJoin has succeeded.
-    client.ref.on('message', this._onMessage.bind(this, client));
+    if (!disconnected) {
+      client.state = ClientState.JOINED;
+      // allow client to send messages after onJoin has succeeded.
+      client.ref.on('message', this._onMessage.bind(this, client));
 
-    // confirm room id that matches the room name requested to join
-    client.raw(getMessageBytes[Protocol.JOIN_ROOM](
-      client._reconnectionToken,
-      this._serializer.id,
-      this._serializer.handshake && this._serializer.handshake(),
-    ));
+      // confirm room id that matches the room name requested to join
+      client.raw(getMessageBytes[Protocol.JOIN_ROOM](
+        client._reconnectionToken,
+        this._serializer.id,
+        this._serializer.handshake && this._serializer.handshake(),
+      ));      
+    } else {
+      // client disconnected while joining, we need to send the OnLeave events.
+      // but we only do this AFTER we 
+      this._onLeave(client, Protocol.WS_CLOSE_CONSENTED);
+    }
   }
 
   /**
@@ -891,9 +901,9 @@ export abstract class Room<State extends object= any, Metadata= any> {
         debugAndPrintError(`onMessage for "${messageType}" not registered.`);
       }
 
-    } else if (code === Protocol.JOIN_ROOM && client.state === ClientState.JOINING) {
+    } else if (code === Protocol.JOIN_ROOM && client.state === ClientState.JOINED) {
       // join room has been acknowledged by the client
-      client.state = ClientState.JOINED;
+      client.state = ClientState.CLIENTJOINED;
 
       // send current state when new client joins the room
       if (this.state) {
@@ -924,6 +934,11 @@ export abstract class Room<State extends object= any, Metadata= any> {
   }
 
   private async _onLeave(client: Client, code?: number): Promise<any> {
+    if (client.state === ClientState.JOINING) {
+      client.state = ClientState.DISCONNECTED;
+      return; // will need to leave if join completes.
+    }
+    // don't call onLeave if we did not complete onJoin process.
     const success = this.clients.delete(client);
 
     // call 'onLeave' method only if the client has been successfully accepted.
@@ -941,7 +956,8 @@ export abstract class Room<State extends object= any, Metadata= any> {
       // try to dispose immediately if client reconnection isn't set up.
       const willDispose = await this._decrementClientCount();
 
-      this._events.emit('leave', client, willDispose);
+      // only emit `leave` if we also emitted `join`
+      if (success) this._events.emit('leave', client, willDispose);
     }
   }
 

@@ -56,7 +56,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
           //
           // FIXME: avoid this check.
           //
-          if (client.state === ClientState.JOINED) {
+          if (client.state === ClientState.CLIENTJOINED) {
             client.raw(patches);
           }
         }
@@ -70,7 +70,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
           //
           // FIXME: avoid this check.
           //
-          if (client.state === ClientState.JOINED) {
+          if (client.state === ClientState.CLIENTJOINED) {
             const filteredPatches = this.state.applyFilters(client);
             client.raw([Protocol.ROOM_STATE_PATCH, ...filteredPatches]);
           }

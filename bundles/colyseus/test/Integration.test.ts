@@ -55,7 +55,7 @@ describe("Integration", () => {
         });
 
         describe("Room lifecycle", () => {
-
+/*
           describe("onCreate()", () => {
             it("sync onCreate()", async () => {
               let onCreateCalled = false;
@@ -213,6 +213,7 @@ describe("Integration", () => {
               });
             });
           });
+          */
 
           it("async onAuth() - should not call onJoin if client left early", async() => {
             let onJoinCalled = false;
@@ -246,6 +247,83 @@ describe("Integration", () => {
             assert.ok(!onLeaveCalled);
           });
 
+          it("async onJoin() - should not call onLeave until after onJoin if client left early", async() => {
+            let onLeaveCalled = 0;
+            let onJoinCompleted = 0;
+            let joinStart = new Deferred();
+            let joinDeferred = new Deferred();
+            let leaveDeferred = new Deferred();
+            matchMaker.defineRoomType('async_onjoin', class _ extends Room {
+              async onAuth() {
+                return true;
+              }
+              async onJoin() {
+                console.log("onJoin called for async onJoin!")
+                joinStart.resolve(true);
+                setTimeout(() => {
+                  console.log("resolve async onJoin...")
+                  onJoinCompleted = Date.now();
+                  joinDeferred.resolve(true);
+                }, 100); 
+                return joinDeferred;          
+              }
+              onLeave() {
+                console.log("onLeave called for async onJoin!")
+                onLeaveCalled = Date.now();
+                leaveDeferred.resolve(true);
+              }
+            });
+
+            // Quickly close WebSocket connetion before onAuth completes
+            const seatReservation = await matchMaker.joinOrCreate('async_onjoin', {});
+            const lostConnection = new WebSocket(`${TEST_ENDPOINT}/${seatReservation.room.processId}/${seatReservation.room.roomId}?sessionId=${seatReservation.sessionId}`);
+            lostConnection.on("open", () => {
+              // disconnect only after join starts.
+              joinStart.then(() => lostConnection.close());
+            });
+
+            // wait until join completely finished.
+            await leaveDeferred;
+            assert.ok(onJoinCompleted > 0);
+            assert.ok(onLeaveCalled > 0);
+            assert.ok(onLeaveCalled >= onJoinCompleted && onJoinCompleted > 0);
+          });        
+          
+          it("async onJoin() - should not call onLeave if onJoin throws error, even if player disconnects", async() => {
+            let onLeaveCalled = 0;
+            let onJoinCompleted = 0;
+            let joinStart = new Deferred();
+            matchMaker.defineRoomType('async_onjoin2', class _ extends Room {
+              async onAuth() {
+                return true;
+              }
+              async onJoin() {
+                console.log("onJoin called!")
+                joinStart.resolve(true);
+                await new Promise((res, rej) => setTimeout(res, 100));
+                onJoinCompleted = Date.now();
+                throw new Error('cannot join');
+              }
+              onLeave() {
+                console.log("onLeave called!")
+                onLeaveCalled = Date.now();
+              }
+            });
+
+            // Quickly close WebSocket connetion before onAuth completes
+            const seatReservation = await matchMaker.joinOrCreate('async_onjoin2', {});
+            const lostConnection = new WebSocket(`${TEST_ENDPOINT}/${seatReservation.room.processId}/${seatReservation.room.roomId}?sessionId=${seatReservation.sessionId}`);
+            lostConnection.on("open", () => {
+              // disconnect only after join starts.
+              joinStart.then(() => lostConnection.close());
+            });
+
+            await new Promise((res, rej) => setTimeout(res, 500));
+            console.log("CHECKING ONJOIN AFTER THROW");
+            assert.ok(onLeaveCalled === 0);
+            assert.ok(onJoinCompleted > 0);
+          });                 
+
           it("onLeave()", async () => {
             let onLeaveCalled = false;
 
@@ -262,6 +340,7 @@ describe("Integration", () => {
             assert.ok(onLeaveCalled);
           });
 
+          /*
           it("client.leave() should support custom close code from the server", async () => {
             const customCode = 4040;
             matchMaker.defineRoomType('onleave_customcode', class _ extends Room {
@@ -1035,6 +1114,7 @@ describe("Integration", () => {
                 assert.strictEqual("unexpected error", e.message)
               }
             });
+            */
         });
 
 

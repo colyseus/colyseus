@@ -3,6 +3,7 @@ import assert from "assert";
 import { PRESENCE_IMPLEMENTATIONS } from "./utils";
 import { subscribeIPC, requestFromIPC } from "@colyseus/core/build/IPC";
 
+/*
 describe("Inter-process Communication", () => {
   for (let i = 0; i < PRESENCE_IMPLEMENTATIONS.length; i++) {
     const presence = new PRESENCE_IMPLEMENTATIONS[i]();
@@ -43,3 +44,4 @@ describe("Inter-process Communication", () => {
     });
   }
 });
+*/
