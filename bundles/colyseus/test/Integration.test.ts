@@ -55,7 +55,6 @@ describe("Integration", () => {
         });
 
         describe("Room lifecycle", () => {
-/*
           describe("onCreate()", () => {
             it("sync onCreate()", async () => {
               let onCreateCalled = false;
@@ -213,7 +212,6 @@ describe("Integration", () => {
               });
             });
           });
-          */
 
           it("async onAuth() - should not call onJoin if client left early", async() => {
             let onJoinCalled = false;
@@ -340,7 +338,6 @@ describe("Integration", () => {
             assert.ok(onLeaveCalled);
           });
 
-          /*
           it("client.leave() should support custom close code from the server", async () => {
             const customCode = 4040;
             matchMaker.defineRoomType('onleave_customcode', class _ extends Room {
@@ -1114,10 +1111,7 @@ describe("Integration", () => {
                 assert.strictEqual("unexpected error", e.message)
               }
             });
-            */
         });
-
-
       });
 
     }

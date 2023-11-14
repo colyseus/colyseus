@@ -5,7 +5,7 @@ import { Server, matchMaker } from "@colyseus/core";
 import { DummyRoom } from "./utils";
 import { URL } from "url";
 
-/*
+
 describe("Server", () => {
 
   const server = new Server({greet: false});
@@ -86,4 +86,3 @@ describe("Server", () => {
   });
 
 });
-*/
