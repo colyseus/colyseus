@@ -1,7 +1,7 @@
 import Clock, { Delayed } from '@gamestdio/timer';
 
 // Core classes
-export { Server, ServerOptions } from './Server';
+export { Server, type ServerOptions } from './Server';
 export { Room, RoomInternalState } from './Room';
 export { Protocol, ErrorCode, getMessageBytes } from './Protocol';
 export { RegisteredHandler } from './matchmaker/RegisteredHandler';
@@ -16,14 +16,14 @@ export { updateLobby, subscribeLobby } from './matchmaker/Lobby';
 export * from './matchmaker/driver';
 
 // Transport
-export { Client, ClientState, ClientArray, Transport, ISendOptions } from './Transport';
+export { type Client, ClientState, ClientArray, Transport, type ISendOptions } from './Transport';
 
 // Presence
-export { Presence } from './presence/Presence';
+export { type Presence } from './presence/Presence';
 export { LocalPresence } from './presence/LocalPresence';
 
 // Serializers
-export { Serializer } from './serializer/Serializer';
+export { type Serializer } from './serializer/Serializer';
 export { SchemaSerializer } from './serializer/SchemaSerializer';
 
 // Utilities

@@ -7,7 +7,7 @@ import { RegisteredHandler } from './matchmaker/RegisteredHandler';
 import { Presence } from './presence/Presence';
 
 import { Room } from './Room';
-import { Type } from './types';
+import { Type } from './utils/types';
 import { registerGracefulShutdown } from './utils/Utils';
 
 import { registerNode, unregisterNode} from './discovery';
@@ -27,6 +27,12 @@ export type ServerOptions = {
   transport?: Transport,
   gracefullyShutdown?: boolean,
   logger?: any;
+
+  /**
+   * Custom function to determine which process should handle room creation.
+   * Default: assign new rooms the process with least amount of rooms created
+   */
+  assignRoomToProcessId?: matchMaker.AssignRoomProcessIdCallback;
 
   /**
    * If enabled, rooms are going to be restored in the server-side upon restart,
@@ -88,6 +94,7 @@ export class Server {
       this.presence,
       this.driver,
       options.publicAddress,
+      options.assignRoomToProcessId,
     );
 
     if (gracefullyShutdown) {

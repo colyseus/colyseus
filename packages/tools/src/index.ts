@@ -269,7 +269,7 @@ export async function getTransport(options: ConfigOptions) {
               rooms += Number(roomCountPerProcess[processId]);
           }
 
-          const ccu = await matchMaker.presence.get("_ccu");
+          const ccu = await matchMaker.stats.getGlobalCCU();
           const mem = await osUtils.mem.used();
           const cpu = (await osUtils.cpu.usage()) / 100;
 
