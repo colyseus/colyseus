@@ -584,6 +584,8 @@ export abstract class Room<State extends object= any, Metadata= any> {
         if (this.onJoin) {
           await this.onJoin(client, options, client.auth);
         }
+        // don't throw after onJoin, because we need to send room
+        // an onLeave
         disconnected = (client.state !== ClientState.JOINING);
       } catch (e) {
         this.clients.delete(client);
@@ -592,6 +594,12 @@ export abstract class Room<State extends object= any, Metadata= any> {
         if (!e.code) {
           e.code = ErrorCode.APPLICATION_ERROR;
         }
+
+        // decrement count on the room, since it was incremented
+        // with the reservation creation, and we are not making it to the onLeave
+        // because we never completed the onJoin. reservation removed in the `finally`
+        // below.
+        this._decrementClientCount();
 
         throw e;
 
@@ -606,7 +614,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
     if (!previousReconnectionToken) this._events.emit('join', client);
 
     if (!disconnected) {
-      client.state = ClientState.JOINED;
+      client.state = ClientState.JOINED; // during reconnection, this gets set to RECONNECTED after this.
       // allow client to send messages after onJoin has succeeded.
       client.ref.on('message', this._onMessage.bind(this, client));
 
