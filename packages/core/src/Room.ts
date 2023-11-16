@@ -599,6 +599,8 @@ export abstract class Room<State extends object= any, Metadata= any> {
       } catch (e) {
         this.clients.delete(client);
 
+        this._decrementClientCount();
+
         // make sure an error code is provided.
         if (!e.code) {
           e.code = ErrorCode.APPLICATION_ERROR;

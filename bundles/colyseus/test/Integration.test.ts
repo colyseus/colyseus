@@ -1095,7 +1095,10 @@ describe("Integration", () => {
           it("should not call onLeave if onJoin throws error, even if player disconnects", async () => {
             let onLeaveCalled = 0;
             let onJoinCompleted = 0;
+
             let joinStart = new Deferred();
+            let onRoomDisposed = new Deferred();
+
             matchMaker.defineRoomType('async_onjoin2', class _ extends Room {
               async onAuth() { return true; }
               async onJoin() {
@@ -1108,6 +1111,9 @@ describe("Integration", () => {
               onLeave() {
                 console.log("onLeave called!")
                 onLeaveCalled = Date.now();
+              }
+              onDispose() {
+                onRoomDisposed.resolve(true);
               }
             });
 
@@ -1123,6 +1129,14 @@ describe("Integration", () => {
             console.log("CHECKING ONJOIN AFTER THROW");
             assert.strictEqual(0, onLeaveCalled);
             assert.strictEqual(true, onJoinCompleted > 0);
+
+            console.log("STATS:", matchMaker.stats.local);
+
+            await onRoomDisposed;
+
+            assert.strictEqual(0, matchMaker.stats.local.roomCount);
+            assert.strictEqual(0, matchMaker.stats.local.ccu);
+
           });
 
 
