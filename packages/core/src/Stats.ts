@@ -46,6 +46,14 @@ export function persist() {
   }
 }
 
+export function reset() {
+  lastPersisted = 0;
+  clearTimeout(persistTimeout);
+  local.roomCount = 0;
+  local.ccu = 0;
+  return persist();
+}
+
 export function excludeProcess(_processId: string) {
   return presence.hdel(getRoomCountKey(), _processId);
 }

@@ -86,7 +86,7 @@ export async function setup(
     return handleCreateRoom.apply(undefined, args);
   });
 
-  await stats.persist();
+  await stats.reset();
 
   if (isDevMode) {
     await reloadFromCache();
@@ -371,10 +371,6 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
     try {
       await room.onCreate(merge({}, clientOptions, registeredHandler.options));
 
-      // increment amount of rooms this process is handling
-      stats.local.roomCount++;
-      stats.persist();
-
     } catch (e) {
       debugAndPrintError(e);
       throw new ServerError(
@@ -391,6 +387,10 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
 
   // imediatelly ask client to join the room
   debugMatchMaking('spawning \'%s\', roomId: %s, processId: %s', roomName, room.roomId, processId);
+
+  // increment amount of rooms this process is handling
+  stats.local.roomCount++;
+  stats.persist();
 
   room._events.on('lock', lockRoom.bind(this, room));
   room._events.on('unlock', unlockRoom.bind(this, room));

@@ -554,9 +554,9 @@ export abstract class Room<State extends object= any, Metadata= any> {
     // share "after next patch queue" reference with every client.
     client._afterNextPatchQueue = this._afterNextPatchQueue;
 
-    // bind clean-up callback when client connection closes
-    client.ref['onleave'] = this._onLeave.bind(this, client);
-    client.ref.once('close', client.ref['onleave']);
+    // add temporary callback to keep track of disconnections during `onJoin`.
+    const onCloseWhileJoining = (_) => client.state = ClientState.LEAVING;
+    client.ref.once('close', onCloseWhileJoining);
 
     const previousReconnectionToken = this._reconnectingSessionId.get(sessionId);
     if (previousReconnectionToken) {
@@ -583,6 +583,19 @@ export abstract class Room<State extends object= any, Metadata= any> {
         if (this.onJoin) {
           await this.onJoin(client, options, client.auth);
         }
+
+        client.ref.removeListener('close', onCloseWhileJoining);
+
+        // client left during `onJoin`, call _onLeave immediately.
+        if (client.state === ClientState.LEAVING) {
+          await this._onLeave(client, Protocol.WS_CLOSE_GOING_AWAY);
+
+        } else {
+          // only bind _onLeave after onJoin has been successful
+          client.ref['onleave'] = this._onLeave.bind(this, client);
+          client.ref.once('close', client.ref['onleave']);
+        }
+
       } catch (e) {
         this.clients.delete(client);
 
@@ -599,18 +612,23 @@ export abstract class Room<State extends object= any, Metadata= any> {
       }
     }
 
-    // emit 'join' to room handler
-    this._events.emit('join', client);
+    // emit 'join' to room handler (if not reconnecting)
+    if (!previousReconnectionToken) {
+      this._events.emit('join', client);
+    }
 
-    // allow client to send messages after onJoin has succeeded.
-    client.ref.on('message', this._onMessage.bind(this, client));
+    // state might already be ClientState.LEAVING here
+    if (client.state === ClientState.JOINING) {
+      // allow client to send messages after onJoin has succeeded.
+      client.ref.on('message', this._onMessage.bind(this, client));
 
-    // confirm room id that matches the room name requested to join
-    client.raw(getMessageBytes[Protocol.JOIN_ROOM](
-      client._reconnectionToken,
-      this._serializer.id,
-      this._serializer.handshake && this._serializer.handshake(),
-    ));
+      // confirm room id that matches the room name requested to join
+      client.raw(getMessageBytes[Protocol.JOIN_ROOM](
+        client._reconnectionToken,
+        this._serializer.id,
+        this._serializer.handshake && this._serializer.handshake(),
+      ));
+    }
   }
 
   /**
@@ -927,13 +945,16 @@ export abstract class Room<State extends object= any, Metadata= any> {
     const success = this.clients.delete(client);
 
     // call 'onLeave' method only if the client has been successfully accepted.
-    if (success && this.onLeave) {
-      try {
-        client.state = ClientState.LEAVING;
-        await this.onLeave(client, (code === Protocol.WS_CLOSE_CONSENTED));
+    if (success) {
+      client.state = ClientState.LEAVING;
 
-      } catch (e) {
-        debugAndPrintError(`onLeave error: ${(e && e.message || e || 'promise rejected')}`);
+      if (this.onLeave) {
+        try {
+          await this.onLeave(client, (code === Protocol.WS_CLOSE_CONSENTED));
+
+        } catch (e) {
+          debugAndPrintError(`onLeave error: ${(e && e.message || e || 'promise rejected')}`);
+        }
       }
     }
 
