@@ -1038,8 +1038,8 @@ describe("Integration", () => {
             });
         });
 
-        describe("async onJoin/onLeave order", () => {
-          it("early-leave: onLeave should only be called after onJoin finished", async () => {
+        describe("early-leave on async onJoin", () => {
+          it("onLeave should only be called after onJoin finished", async () => {
             let onLeaveCalled = 0;
             let onJoinCompleted = 0;
 
@@ -1060,14 +1060,14 @@ describe("Integration", () => {
                 }, 100);
                 return onJoinFinished;
               }
-              onLeave() {
+              async onLeave(client) {
                 console.log("onLeave called for async onJoin!")
                 onLeaveCalled = Date.now();
+                // if left early - allow reconnection should be no-op
+                await this.allowReconnection(client, 1);
                 onLeaveFinished.resolve(true);
               }
-              onDispose() {
-                onRoomDisposed.resolve(true);
-              }
+              onDispose() { onRoomDisposed.resolve(true); }
             });
 
             // Close WebSocket connetion before `onJoin` completes
@@ -1102,19 +1102,15 @@ describe("Integration", () => {
             matchMaker.defineRoomType('async_onjoin2', class _ extends Room {
               async onAuth() { return true; }
               async onJoin() {
-                console.log("onJoin called!")
                 joinStart.resolve(true);
                 await new Promise((res, rej) => setTimeout(res, 100));
                 onJoinCompleted = Date.now();
                 throw new Error('cannot join');
               }
               onLeave() {
-                console.log("onLeave called!")
                 onLeaveCalled = Date.now();
               }
-              onDispose() {
-                onRoomDisposed.resolve(true);
-              }
+              onDispose() { onRoomDisposed.resolve(true); }
             });
 
             // Quickly close WebSocket connetion before onAuth completes

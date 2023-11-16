@@ -644,6 +644,16 @@ export abstract class Room<State extends object= any, Metadata= any> {
    *  This type can forcibly reject the promise by calling `.reject()`.
    */
   public allowReconnection(previousClient: Client, seconds: number | "manual"): Deferred<Client> {
+    //
+    // skip reconnection if client has never fully JOINED.
+    //
+    // (having `_enqueuedMessages !== undefined` means that the client has never
+    // been at "ClientState.JOINED" state)
+    //
+    if (previousClient._enqueuedMessages !== undefined) {
+      return;
+    }
+
     if (seconds === undefined) { // TODO: remove this check
       console.warn("DEPRECATED: allowReconnection() requires a second argument. Using \"manual\" mode.");
       seconds = "manual";
