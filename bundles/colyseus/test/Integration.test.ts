@@ -1134,8 +1134,87 @@ describe("Integration", () => {
 
           });
 
-
         })
+
+        describe("reconnection", () => {
+
+          it("should dispose room on allowReconnection timeout", async () => {
+            const onRoomDisposed = new Deferred();
+            matchMaker.defineRoomType('allow_reconnection', class _ extends Room {
+              async onJoin() {}
+              async onLeave(client, consented) {
+                try {
+                  if (consented) {
+                    throw new Error("consented!");
+                  }
+                  await this.allowReconnection(client, 0.1);
+                } catch (e) {}
+              }
+              onDispose() {
+                onRoomDisposed.resolve();
+              }
+            });
+
+            const roomConnection = await client.joinOrCreate('allow_reconnection');
+
+            assert.strictEqual(1, matchMaker.stats.local.roomCount);
+            assert.strictEqual(1, matchMaker.stats.local.ccu);
+
+            // forcibly close connection
+            roomConnection.connection.transport.close();
+
+            // wait for reconnection to timeout
+            await timeout(150);
+            await onRoomDisposed;
+
+            const rooms = await matchMaker.query({});
+            assert.strictEqual(0, rooms.length);
+            assert.strictEqual(0, matchMaker.stats.local.roomCount);
+            assert.strictEqual(0, matchMaker.stats.local.ccu);
+          });
+
+          it("should maintain correct stats on successful reconnections", async () => {
+            const onRoomDisposed = new Deferred();
+            matchMaker.defineRoomType('allow_reconnection', class _ extends Room {
+              async onJoin() {}
+              async onLeave(client, consented) {
+                try {
+                  if (consented) {
+                    throw new Error("consented!");
+                  }
+                  await this.allowReconnection(client, 0.1);
+                } catch (e) {
+                  console.log("did not reconnected!")
+                }
+              }
+              onDispose() {
+                onRoomDisposed.resolve();
+              }
+            });
+
+            const roomConnection = await client.joinOrCreate('allow_reconnection');
+
+            assert.strictEqual(1, matchMaker.stats.local.roomCount);
+            assert.strictEqual(1, matchMaker.stats.local.ccu);
+
+            // forcibly close connection
+            roomConnection.connection.transport.close();
+
+            // wait for reconnection to timeout
+            await timeout(5);
+
+            const roomReconnection = await client.reconnect(roomConnection.reconnectionToken);
+            await roomReconnection.leave();
+
+            await onRoomDisposed;
+
+            const rooms = await matchMaker.query({});
+            assert.strictEqual(0, rooms.length);
+            assert.strictEqual(0, matchMaker.stats.local.roomCount);
+            assert.strictEqual(0, matchMaker.stats.local.ccu);
+          });
+
+        });
 
       });
 

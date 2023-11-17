@@ -286,6 +286,29 @@ describe("MatchMaker", () => {
           await timeout(100);
         });
 
+        it("room should be disposed on reconnection timeout", async () => {
+          const reservedSeat1 = await matchMaker.joinOrCreate("reconnect");
+          const client1 = createDummyClient(reservedSeat1);
+          const room = matchMaker.getRoomById(reservedSeat1.room.roomId);
+          await client1.confirmJoinRoom(room);
+
+          const reservedSeat2 = await matchMaker.joinOrCreate("reconnect");
+          const client2 = createDummyClient(reservedSeat2);
+          await client2.confirmJoinRoom(room);
+
+          assert.strictEqual(2, room.clients.length);
+
+          client1.terminate();
+          client2.terminate();
+          await timeout(1300); // resetAutoDisposeTimeout is 1000ms by default
+
+          assert.strictEqual(0, matchMaker.stats.local.ccu);
+          assert.strictEqual(0, matchMaker.stats.local.roomCount);
+
+          let rooms = await matchMaker.query({});
+          assert.strictEqual(0, rooms.length, "should have disposed room if client did not reconnected.");
+        });
+
         it("should not allow to reconnect", async () => {
           const reservedSeat1 = await matchMaker.joinOrCreate("reconnect");
           const reservedSeat2 = await matchMaker.joinOrCreate("reconnect");

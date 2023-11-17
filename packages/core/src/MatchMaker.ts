@@ -139,7 +139,11 @@ export async function join(roomName: string, clientOptions: ClientOptions = {}) 
 export async function reconnect(roomId: string, clientOptions: ClientOptions = {}) {
   const room = await driver.findOne({ roomId });
   if (!room) {
-    logger.info(`❌ room "${roomId}" has been disposed. Did you missed .allowReconnection()?\n👉 https://docs.colyseus.io/server/room/#allowreconnection-client-seconds`);
+    // TODO: support a "logLevel" out of the box?
+    if (process.env.NODE_ENV !== 'production') {
+      logger.info(`❌ room "${roomId}" has been disposed. Did you missed .allowReconnection()?\n👉 https://docs.colyseus.io/server/room/#allowreconnection-client-seconds`);
+    }
+
     throw new ServerError(ErrorCode.MATCHMAKE_INVALID_ROOM_ID, `room "${roomId}" has been disposed.`);
   }
 
@@ -153,7 +157,10 @@ export async function reconnect(roomId: string, clientOptions: ClientOptions = {
     return { room, sessionId };
 
   } else {
-    logger.info(`❌ reconnection token invalid or expired. Did you missed .allowReconnection()?\n👉 https://docs.colyseus.io/server/room/#allowreconnection-client-seconds`);
+    // TODO: support a "logLevel" out of the box?
+    if (process.env.NODE_ENV !== 'production') {
+      logger.info(`❌ reconnection token invalid or expired. Did you missed .allowReconnection()?\n👉 https://docs.colyseus.io/server/room/#allowreconnection-client-seconds`);
+    }
     throw new ServerError(ErrorCode.MATCHMAKE_EXPIRED, `reconnection token invalid or expired.`);
   }
 }
