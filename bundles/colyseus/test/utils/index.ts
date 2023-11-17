@@ -85,6 +85,11 @@ export class WebSocketClient implements Client {
 
   async confirmJoinRoom(room: Room) {
     await room._onJoin(this);
+
+    //
+    // this simulates when the client-side has sent the `Protocol.JOIN_ROOM` message
+    // (see `Room._onMessage`)
+    //
     this.state = ClientState.JOINED;
     delete this._enqueuedMessages;
   }
