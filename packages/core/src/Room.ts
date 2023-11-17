@@ -555,8 +555,8 @@ export abstract class Room<State extends object= any, Metadata= any> {
     client._afterNextPatchQueue = this._afterNextPatchQueue;
 
     // add temporary callback to keep track of disconnections during `onJoin`.
-    const onCloseWhileJoining = (_) => client.state = ClientState.LEAVING;
-    client.ref.once('close', onCloseWhileJoining);
+    client.ref['onleave'] = (_) => client.state = ClientState.LEAVING;
+    client.ref.once('close', client.ref['onleave']);
 
     const previousReconnectionToken = this._reconnectingSessionId.get(sessionId);
     if (previousReconnectionToken) {
@@ -584,7 +584,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
           await this.onJoin(client, options, client.auth);
         }
 
-        client.ref.removeListener('close', onCloseWhileJoining);
+        client.ref.removeListener('close', client.ref['onleave']);
 
         // client left during `onJoin`, call _onLeave immediately.
         if (client.state === ClientState.LEAVING) {

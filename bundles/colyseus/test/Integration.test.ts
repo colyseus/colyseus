@@ -914,24 +914,27 @@ describe("Integration", () => {
           })
 
           describe("Matchmaker queries", () => {
-            const createDummyRooms = async () => {
+            beforeEach(async () => {
               matchMaker.defineRoomType('allroomstest', class _ extends Room {});
               matchMaker.defineRoomType('allroomstest2', class _ extends Room {});
               await matchMaker.create("allroomstest");
               await matchMaker.create("allroomstest2");
-            }
+            })
+
+            // make sure rooms are disposed after each test.
+            afterEach(async () => await matchMaker.disconnectAll());
+
             it("client.getAvailableRooms() should receive all rooms when roomName is undefined", async () => {
-              await createDummyRooms();
               const rooms = await client.getAvailableRooms(undefined);
               assert.strictEqual(2, rooms.length);
             });
+
             it("client.getAvailableRooms() should receive the room when roomName is given", async () => {
-              await createDummyRooms();
               const rooms = await client.getAvailableRooms("allroomstest");
               assert.strictEqual("allroomstest", rooms[0]["name"]);
             });
+
             it("client.getAvailableRooms() should receive empty list if no room exists for the given roomName", async () => {
-              await createDummyRooms();
               const rooms = await client.getAvailableRooms("incorrectRoomName");
               assert.strictEqual(0, rooms.length);
             });
@@ -1054,14 +1057,12 @@ describe("Integration", () => {
                 console.log("onJoin called for async onJoin!")
                 onJoinStart.resolve(true);
                 setTimeout(() => {
-                  console.log("resolve async onJoin...")
                   onJoinCompleted = Date.now();
                   onJoinFinished.resolve(true);
                 }, 100);
                 return onJoinFinished;
               }
               async onLeave(client) {
-                console.log("onLeave called for async onJoin!")
                 onLeaveCalled = Date.now();
                 // if left early - allow reconnection should be no-op
                 await this.allowReconnection(client, 1);
@@ -1075,7 +1076,6 @@ describe("Integration", () => {
             const lostConnection = new WebSocket(`${TEST_ENDPOINT}/${seatReservation.room.processId}/${seatReservation.room.roomId}?sessionId=${seatReservation.sessionId}`);
             lostConnection.on("open", () => {
               // force disconnect when onJoin starts
-              console.log("onJoin... Let's close WebSocket connection!");
               onJoinStart.then(() => lostConnection.close());
             });
 
@@ -1122,7 +1122,6 @@ describe("Integration", () => {
             });
 
             await new Promise((res, rej) => setTimeout(res, 500));
-            console.log("CHECKING ONJOIN AFTER THROW");
             assert.strictEqual(0, onLeaveCalled);
             assert.strictEqual(true, onJoinCompleted > 0);
 
