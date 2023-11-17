@@ -94,7 +94,7 @@ export class Server {
       this.presence,
       this.driver,
       options.publicAddress,
-      options.assignRoomToProcessId,
+      options.selectProcessIdToCreateRoom,
     );
 
     if (gracefullyShutdown) {
