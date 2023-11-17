@@ -32,7 +32,7 @@ export type ServerOptions = {
    * Custom function to determine which process should handle room creation.
    * Default: assign new rooms the process with least amount of rooms created
    */
-  assignRoomToProcessId?: matchMaker.AssignRoomProcessIdCallback;
+  selectProcessIdToCreateRoom?: matchMaker.SelectProcessIdCallback;
 
   /**
    * If enabled, rooms are going to be restored in the server-side upon restart,

@@ -27,7 +27,7 @@ import { getHostname } from "./discovery";
 export { controller, stats, type MatchMakerDriver };
 
 export type ClientOptions = any;
-export type AssignRoomProcessIdCallback = (roomName: string, clientOptions: ClientOptions) => Promise<string>;
+export type SelectProcessIdCallback = (roomName: string, clientOptions: ClientOptions) => Promise<string>;
 
 export interface SeatReservation {
   sessionId: string;
@@ -42,7 +42,7 @@ export let publicAddress: string;
 export let processId: string;
 export let presence: Presence;
 export let driver: MatchMakerDriver;
-export let assignRoomToProcessId: AssignRoomProcessIdCallback;
+export let selectProcessIdToCreateRoom: SelectProcessIdCallback;
 
 export let isGracefullyShuttingDown: boolean;
 export let onReady: Deferred;
@@ -54,7 +54,7 @@ export async function setup(
   _presence?: Presence,
   _driver?: MatchMakerDriver,
   _publicAddress?: string,
-  _assignRoomToProcessId?: AssignRoomProcessIdCallback,
+  _selectProcessIdToCreateRoom?: SelectProcessIdCallback,
 ) {
   onReady = new Deferred();
   presence = _presence || new LocalPresence();
@@ -73,7 +73,7 @@ export async function setup(
    * Define default `assignRoomToProcessId` method.
    * By default, return the process with least amount of rooms created
    */
-  assignRoomToProcessId = _assignRoomToProcessId || async function () {
+  selectProcessIdToCreateRoom = _selectProcessIdToCreateRoom || async function () {
     return (await stats.fetchAll())
       .sort((p1, p2) => p1.roomCount > p2.roomCount ? 1 : -1)[0]
       .processId;
@@ -289,10 +289,10 @@ export function hasHandler(name: string) {
  * @returns Promise<RoomListingData> - A promise contaning an object which includes room metadata and configurations.
  */
 export async function createRoom(roomName: string, clientOptions: ClientOptions): Promise<RoomListingData> {
-  const assignedProcessId = await assignRoomToProcessId(roomName, clientOptions);
+  const selectedProcessId = await selectProcessIdToCreateRoom(roomName, clientOptions);
 
   let room: RoomListingData;
-  if (assignedProcessId === processId) {
+  if (selectedProcessId === processId) {
     // create the room on this process!
     room = await handleCreateRoom(roomName, clientOptions);
 
@@ -301,7 +301,7 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
     try {
       room = await requestFromIPC<RoomListingData>(
         presence,
-        getProcessChannel(assignedProcessId),
+        getProcessChannel(selectedProcessId),
         undefined,
         [roomName, clientOptions],
         REMOTE_ROOM_SHORT_TIMEOUT,
@@ -315,7 +315,7 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
       // when a process disconnects ungracefully, it may leave its previous processId under "roomcount"
       // if the process is still alive, it will re-add itself shortly after the load-balancer selects it again.
       //
-      await stats.excludeProcess(assignedProcessId);
+      await stats.excludeProcess(selectedProcessId);
 
       // if other process failed to respond, create the room on this process
       room = await handleCreateRoom(roomName, clientOptions);
