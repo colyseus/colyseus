@@ -584,6 +584,9 @@ export abstract class Room<State extends object= any, Metadata= any> {
           await this.onJoin(client, options, client.auth);
         }
 
+        // emit 'join' to room handler (if not reconnecting)
+        this._events.emit('join', client);
+
         client.ref.removeListener('close', client.ref['onleave']);
 
         // client left during `onJoin`, call _onLeave immediately.
@@ -612,11 +615,6 @@ export abstract class Room<State extends object= any, Metadata= any> {
         // remove seat reservation
         delete this.reservedSeats[sessionId];
       }
-    }
-
-    // emit 'join' to room handler (if not reconnecting)
-    if (!previousReconnectionToken) {
-      this._events.emit('join', client);
     }
 
     // state might already be ClientState.LEAVING here
