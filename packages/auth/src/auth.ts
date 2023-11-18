@@ -1,9 +1,10 @@
 import express from 'express';
 import { generateId } from "@colyseus/core";
 import { OAuthCallback, oAuthCallback, oauth } from "./oauth";
+import { JsonWebToken } from './JsonWebToken';
 
-export type OnRegisterCallback = (email: string, password: string) => Promise<any>;
-export type OnLoginCallback = (email: string, password: string) => Promise<any>;
+export type OnRegisterCallback = (email: string, password: string) => Promise<unknown>;
+export type OnLoginCallback = (email: string, password: string) => Promise<unknown>;
 
 export interface AuthSettings {
   onRegister: OnRegisterCallback,
@@ -12,11 +13,13 @@ export interface AuthSettings {
 };
 
 let onLoginCallback: OnLoginCallback = (email: string, password: string) => {
-  return Promise.resolve({});
+  throw new Error("'onLogin' not set.");
+  // return Promise.resolve({});
 };
 
 let onRegisterCallback: OnRegisterCallback = (email: string, password: string) => {
-  return Promise.resolve({});
+  throw new Error("'onRegister' not set.");
+  // return Promise.resolve({});
 };
 
 export const auth = {
@@ -25,8 +28,18 @@ export const auth = {
   routes: function (settings: Partial<AuthSettings> = {}) {
     const router = express.Router();
 
-    router.post("/login", (req, res) => {
-      res.json({  });
+    // set register/login callbacks
+    if (settings.onRegister) { onRegisterCallback = settings.onRegister; }
+    if (settings.onLogin) { onLoginCallback = settings.onLogin; }
+
+    router.post("/login", async (req, res) => {
+      try {
+        const user = await onLoginCallback(req.body.email, req.body.password);
+        const token = await JsonWebToken.sign(user);
+        res.json({ user, token, });
+      } catch (e) {
+        res.status(401).json({ error: e.message });
+      }
     });
 
     router.post("/register", async (req, res) => {
@@ -41,14 +54,21 @@ export const auth = {
         return res.status(400).json({ error: "Password too short" });
       }
 
-      const user = await onRegisterCallback(email, password);
+      try {
+        const user = await onRegisterCallback(email, password);
+        const token = await JsonWebToken.sign(user);
+        res.json({ user, token, });
 
-      res.json({});
+      } catch (e) {
+        res.status(401).json({ error: e.message });
+      }
+
     });
 
-    router.post("/anonymous", (req, res) => {
-      generateId(21); // collision probability similar to UUID v4
-      res.json({});
+    router.post("/anonymous", async (req, res) => {
+      const user = { id: generateId(21), anonymous: true };
+      const token = await JsonWebToken.sign(user);
+      res.json({ user, token, });
     });
 
     /**
