@@ -36,7 +36,7 @@ export interface MatchMakerDriver {
    *
    * @returns RoomData - New room cache.
    */
-  createInstance(initialValues: any): RoomListingData;
+  createInstance(initialValues: Partial<IRoomListingData>): RoomListingData;
 
   /**
    * Check if a room exists in room cache.

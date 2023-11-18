@@ -15,17 +15,19 @@ import { debugAndPrintError, debugMatchMaking } from './Debug';
 import { SeatReservationError } from './errors/SeatReservationError';
 import { ServerError } from './errors/ServerError';
 
-import { IRoomListingData, MatchMakerDriver, RoomListingData, LocalDriver } from './matchmaker/driver';
+import { IRoomListingData, RoomListingData, LocalDriver, MatchMakerDriver } from './matchmaker/driver';
 import controller from './matchmaker/controller';
+import * as stats from "./Stats";
 
 import { logger } from './Logger';
 import { Client } from './Transport';
-import { Type } from './types';
+import { Type } from './utils/types';
 import { getHostname } from "./discovery";
 
-export { MatchMakerDriver, controller };
+export { controller, stats, type MatchMakerDriver };
 
 export type ClientOptions = any;
+export type SelectProcessIdCallback = (roomName: string, clientOptions: ClientOptions) => Promise<string>;
 
 export interface SeatReservation {
   sessionId: string;
@@ -40,16 +42,19 @@ export let publicAddress: string;
 export let processId: string;
 export let presence: Presence;
 export let driver: MatchMakerDriver;
+export let selectProcessIdToCreateRoom: SelectProcessIdCallback;
 
 export let isGracefullyShuttingDown: boolean;
 export let onReady: Deferred;
 
-export let roomCount = 0;
-
+/**
+ * @private
+ */
 export async function setup(
   _presence?: Presence,
   _driver?: MatchMakerDriver,
   _publicAddress?: string,
+  _selectProcessIdToCreateRoom?: SelectProcessIdCallback,
 ) {
   onReady = new Deferred();
   presence = _presence || new LocalPresence();
@@ -65,13 +70,23 @@ export async function setup(
   isGracefullyShuttingDown = false;
 
   /**
+   * Define default `assignRoomToProcessId` method.
+   * By default, return the process with least amount of rooms created
+   */
+  selectProcessIdToCreateRoom = _selectProcessIdToCreateRoom || async function () {
+    return (await stats.fetchAll())
+      .sort((p1, p2) => p1.roomCount > p2.roomCount ? 1 : -1)[0]
+      .processId;
+  };
+
+  /**
    * Subscribe to remote `handleCreateRoom` calls.
    */
   subscribeIPC(presence, processId, getProcessChannel(), (_, args) => {
     return handleCreateRoom.apply(undefined, args);
   });
 
-  await presence.hset(getRoomCountKey(), processId, roomCount.toString());
+  await stats.reset();
 
   if (isDevMode) {
     await reloadFromCache();
@@ -124,7 +139,11 @@ export async function join(roomName: string, clientOptions: ClientOptions = {}) 
 export async function reconnect(roomId: string, clientOptions: ClientOptions = {}) {
   const room = await driver.findOne({ roomId });
   if (!room) {
-    logger.info(`❌ room "${roomId}" has been disposed. Did you missed .allowReconnection()?\n👉 https://docs.colyseus.io/server/room/#allowreconnection-client-seconds`);
+    // TODO: support a "logLevel" out of the box?
+    if (process.env.NODE_ENV !== 'production') {
+      logger.info(`❌ room "${roomId}" has been disposed. Did you missed .allowReconnection()?\n👉 https://docs.colyseus.io/server/room/#allowreconnection-client-seconds`);
+    }
+
     throw new ServerError(ErrorCode.MATCHMAKE_INVALID_ROOM_ID, `room "${roomId}" has been disposed.`);
   }
 
@@ -138,7 +157,10 @@ export async function reconnect(roomId: string, clientOptions: ClientOptions = {
     return { room, sessionId };
 
   } else {
-    logger.info(`❌ reconnection token invalid or expired. Did you missed .allowReconnection()?\n👉 https://docs.colyseus.io/server/room/#allowreconnection-client-seconds`);
+    // TODO: support a "logLevel" out of the box?
+    if (process.env.NODE_ENV !== 'production') {
+      logger.info(`❌ reconnection token invalid or expired. Did you missed .allowReconnection()?\n👉 https://docs.colyseus.io/server/room/#allowreconnection-client-seconds`);
+    }
     throw new ServerError(ErrorCode.MATCHMAKE_EXPIRED, `reconnection token invalid or expired.`);
   }
 }
@@ -217,7 +239,7 @@ export async function remoteRoomCall<R= any>(
 
   if (!room) {
     try {
-      return await requestFromIPC<R>(presence, getRoomChannel(roomId), method, args);
+      return await requestFromIPC<R>(presence, getRoomChannel(roomId), method, args, rejectionTimeout);
 
     } catch (e) {
       const request = `${method}${args && ' with args ' + JSON.stringify(args) || ''}`;
@@ -296,41 +318,35 @@ export function getRoomClass(roomName: string) {
  * @returns Promise<RoomListingData> - A promise contaning an object which includes room metadata and configurations.
  */
 export async function createRoom(roomName: string, clientOptions: ClientOptions): Promise<RoomListingData> {
-  const roomsSpawnedByProcessId = await presence.hgetall(getRoomCountKey());
-
-  const processIdWithFewerRooms = (
-    Object.keys(roomsSpawnedByProcessId).sort((p1, p2) => {
-      return (Number(roomsSpawnedByProcessId[p1]) > Number(roomsSpawnedByProcessId[p2]))
-        ? 1
-        : -1;
-    })[0]
-  ) || processId;
+  const selectedProcessId = await selectProcessIdToCreateRoom(roomName, clientOptions);
 
   let room: RoomListingData;
-  if (processIdWithFewerRooms === processId) {
+  if (selectedProcessId === processId) {
     // create the room on this process!
     room = await handleCreateRoom(roomName, clientOptions);
+
   } else {
     // ask other process to create the room!
     try {
       room = await requestFromIPC<RoomListingData>(
         presence,
-        getProcessChannel(processIdWithFewerRooms),
+        getProcessChannel(selectedProcessId),
         undefined,
         [roomName, clientOptions],
         REMOTE_ROOM_SHORT_TIMEOUT,
       );
 
     } catch (e) {
+      debugAndPrintError(e);
+
       //
       // clean-up possibly stale process from redis.
       // when a process disconnects ungracefully, it may leave its previous processId under "roomcount"
       // if the process is still alive, it will re-add itself shortly after the load-balancer selects it again.
       //
-      await presence.hdel(getRoomCountKey(), processIdWithFewerRooms);
+      await stats.excludeProcess(selectedProcessId);
 
       // if other process failed to respond, create the room on this process
-      debugAndPrintError(e);
       room = await handleCreateRoom(roomName, clientOptions);
     }
   }
@@ -379,9 +395,6 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
     try {
       await room.onCreate(merge({}, clientOptions, handler.options));
 
-      // increment amount of rooms this process is handling
-      roomCount++;
-      presence.hset(getRoomCountKey(), processId, roomCount.toString());
     } catch (e) {
       debugAndPrintError(e);
       throw new ServerError(
@@ -398,6 +411,10 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
 
   // imediatelly ask client to join the room
   debugMatchMaking('spawning \'%s\', roomId: %s, processId: %s', roomName, room.roomId, processId);
+
+  // increment amount of rooms this process is handling
+  stats.local.roomCount++;
+  stats.persist();
 
   room._events.on('lock', lockRoom.bind(this, room));
   room._events.on('unlock', unlockRoom.bind(this, room));
@@ -447,7 +464,7 @@ export async function gracefullyShutdown(): Promise<any> {
   }
 
   // remove processId from room count key
-  presence.hdel(getRoomCountKey(), processId);
+  stats.excludeProcess(processId);
 
   // unsubscribe from process id channel
   presence.unsubscribe(getProcessChannel());
@@ -570,14 +587,18 @@ async function awaitRoomAvailable(roomToJoin: string, callback: Function): Promi
 }
 
 function onClientJoinRoom(room: Room, client: Client) {
-  // increment global CCU
-  presence.incr(getGlobalCCUCounter());
+  // increment local CCU
+  stats.local.ccu++;
+  stats.persist();
+
   handlers[room.roomName].emit('join', room, client);
 }
 
 function onClientLeaveRoom(room: Room, client: Client, willDispose: boolean) {
-  // decrement global CCU
-  presence.decr(getGlobalCCUCounter());
+  // decrement local CCU
+  stats.local.ccu--;
+  stats.persist();
+
   handlers[room.roomName].emit('leave', room, client, willDispose);
 }
 
@@ -598,8 +619,8 @@ async function disposeRoom(roomName: string, room: Room) {
 
   // decrease amount of rooms this process is handling
   if (!isGracefullyShuttingDown) {
-    roomCount--;
-    presence.hset(getRoomCountKey(), processId, roomCount.toString());
+    stats.local.roomCount--;
+    stats.persist();
 
     // remove from devMode restore list
     if (isDevMode) {
@@ -623,10 +644,6 @@ async function disposeRoom(roomName: string, room: Room) {
 //
 // Presence keys
 //
-export function getRoomCountKey() {
-  return 'roomcount';
-}
-
 function getRoomChannel(roomId: string) {
   return `$${roomId}`;
 }
@@ -637,8 +654,4 @@ function getHandlerConcurrencyKey(name: string) {
 
 function getProcessChannel(id: string = processId) {
   return `p:${id}`;
-}
-
-function getGlobalCCUCounter() {
-  return "_ccu";
 }

@@ -1,7 +1,7 @@
 import { IRoomListingData, SortOptions, RoomListingData, QueryHelpers, MatchMakerDriver } from "./interfaces";
 
 // re-export
-export { IRoomListingData, SortOptions, RoomListingData, QueryHelpers, MatchMakerDriver };
+export type { IRoomListingData, SortOptions, RoomListingData, QueryHelpers, MatchMakerDriver };
 
 import { Query } from './Query';
 import { RoomCache } from './RoomData';

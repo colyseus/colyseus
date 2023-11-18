@@ -19,7 +19,7 @@ export class RedisDriver implements MatchMakerDriver {
       : new Redis(options as RedisOptions);
   }
 
-  public createInstance(initialValues: any = {}) {
+  public createInstance(initialValues: Partial<IRoomListingData> = {}) {
     return new RoomData(initialValues, this._client);
   }
 
@@ -27,7 +27,7 @@ export class RedisDriver implements MatchMakerDriver {
     return await this._client.hexists('roomcaches', roomId) === 1;
   }
 
-  public async find(conditions: any) {
+  public async find(conditions: Partial<IRoomListingData>) {
     const rooms = await this.getRooms();
     return rooms.filter((room) => {
       if (!room.roomId) {
@@ -68,14 +68,44 @@ export class RedisDriver implements MatchMakerDriver {
 
     } else {
       // filter list by other conditions
-      return (new Query<RoomListingData>(this.getRooms(), conditions) as any) as QueryHelpers<RoomListingData>;
+      return (new Query<RoomListingData>(this.getRooms(conditions['name']), conditions) as any) as QueryHelpers<RoomListingData>;
     }
   }
 
-  public async getRooms() {
-    return Object.entries(await this._client.hgetall('roomcaches') ?? []).map(
-      ([, roomcache]) => new RoomData(JSON.parse(roomcache), this._client)
-    );
+  // gets recent room caches w/o making multiple simultaneous reads to REDIS
+  private _concurrentRoomCacheRequest?: Promise<Record<string, string>>;
+  private _roomCacheRequestByName: {[roomName: string]: Promise<RoomData[]>} = {};
+  private getRooms(roomName?: string) {
+    // if there's a shared request, return it
+    if (this._roomCacheRequestByName[roomName] !== undefined) {
+      return this._roomCacheRequestByName[roomName];
+    }
+
+    const roomCacheRequest = this._concurrentRoomCacheRequest || this._client.hgetall('roomcaches');
+    this._concurrentRoomCacheRequest = roomCacheRequest;
+
+    this._roomCacheRequestByName[roomName] = roomCacheRequest.then((result) => {
+      // clear shared promises so we can read it again
+      this._concurrentRoomCacheRequest = undefined;
+      delete this._roomCacheRequestByName[roomName];
+
+      let roomcaches = Object.entries(result ?? []);
+
+      //
+      // micro optimization:
+      // filter rooms by name before parsing JSON
+      //
+      if (roomName !== undefined) {
+        const roomNameField = `"name":"${roomName}"`;
+        roomcaches = roomcaches.filter(([, roomcache]) => roomcache.includes(roomNameField));
+      }
+
+      return roomcaches.map(
+        ([, roomcache]) => new RoomData(JSON.parse(roomcache), this._client)
+      );
+    });
+
+    return this._roomCacheRequestByName[roomName];
   }
 
   public async shutdown() {

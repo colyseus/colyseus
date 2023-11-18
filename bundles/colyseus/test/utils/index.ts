@@ -3,10 +3,10 @@ import { EventEmitter } from "events";
 
 import { pack, unpack } from "msgpackr";
 
-import { Server, ServerOptions, Room, matchMaker, LocalDriver, ClientState, LocalPresence, Presence, Client, Deferred, ISendOptions } from "@colyseus/core";
-import { RedisPresence } from "@colyseus/redis-presence";
-import { RedisDriver } from "@colyseus/redis-driver";
-import { MongooseDriver } from "@colyseus/mongoose-driver";
+import { Server, ServerOptions, Room, matchMaker, LocalDriver, ClientState, LocalPresence, Protocol, Presence, Client, Deferred, ISendOptions, getMessageBytes } from "@colyseus/core";
+// import { RedisPresence } from "@colyseus/redis-presence";
+// import { RedisDriver } from "@colyseus/redis-driver";
+// import { MongooseDriver } from "@colyseus/mongoose-driver";
 
 import { WebSocketTransport, TransportOptions } from '@colyseus/ws-transport';
 Server.prototype['getDefaultTransport'] = function (options: ServerOptions) {
@@ -81,6 +81,17 @@ export class WebSocketClient implements Client {
       return;
     }
     this.messages.push(message);
+  }
+
+  async confirmJoinRoom(room: Room) {
+    await room._onJoin(this);
+
+    //
+    // this simulates when the client-side has sent the `Protocol.JOIN_ROOM` message
+    // (see `Room._onMessage`)
+    //
+    this.state = ClientState.JOINED;
+    delete this._enqueuedMessages;
   }
 
   error(code, message) {

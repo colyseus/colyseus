@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/tools",
-  "version": "0.15.21",
+  "version": "0.15.23",
   "description": "Colyseus Tools for Production",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -40,7 +40,7 @@
     "uwebsockets-express": "^1.1.10"
   },
   "dependencies": {
-    "@colyseus/core": "^0.15.0",
+    "@colyseus/core": "^0.15.13",
     "@colyseus/ws-transport": "^0.15.0",
     "node-os-utils": "^1.3.7",
     "cors": "^2.8.5",
