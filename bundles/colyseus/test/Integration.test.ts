@@ -1138,6 +1138,49 @@ describe("Integration", () => {
 
         describe("reconnection", () => {
 
+          it("reconnected client should received messages from previous and new 'client' instance", async () => {
+            const onRoomDisposed = new Deferred();
+            matchMaker.defineRoomType('allow_reconnection', class _ extends Room {
+              async onJoin() {}
+              async onLeave(client, consented) {
+                try {
+                  if (consented) { throw new Error("consented!"); }
+
+                  await this.allowReconnection(client, 0.5);
+
+                  //
+                  // TODO: what should happen if sending messages while reconnection is in progress?
+                  //
+
+                  // sending message from previous client instance
+                  // client.send("reconnected", "previous");
+
+                  // sending message from new client instance
+                  this.clients.getById(client.sessionId).send("reconnected", "new");
+                } catch (e) {}
+              }
+              onDispose() { onRoomDisposed.resolve(); }
+            });
+
+            const roomConnection = await client.joinOrCreate('allow_reconnection');
+
+            // forcibly close connection
+            roomConnection.connection.transport.close();
+
+            // wait for reconnection to timeout
+            await timeout(50);
+            const reconnectedRoom = await client.reconnect(roomConnection.reconnectionToken);
+
+            let receivedMessages: string[] = [];
+            reconnectedRoom.onMessage("reconnected", (value) => receivedMessages.push(value));
+
+            await timeout(200);
+            assert.deepStrictEqual(['new'], receivedMessages);
+            // assert.deepStrictEqual(['previous', 'new'], receivedMessages);
+
+            await reconnectedRoom.leave();
+          });
+
           it("should dispose room on allowReconnection timeout", async () => {
             const onRoomDisposed = new Deferred();
             matchMaker.defineRoomType('allow_reconnection', class _ extends Room {
