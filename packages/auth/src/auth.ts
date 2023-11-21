@@ -3,46 +3,51 @@ import { generateId } from "@colyseus/core";
 import { OAuthCallback, oAuthCallback, oauth } from "./oauth";
 import { JsonWebToken } from './JsonWebToken';
 
-export type OnRegisterCallback = (email: string, password: string) => Promise<unknown>;
-export type OnLoginCallback = (email: string, password: string) => Promise<unknown>;
+export type RegisterCallback = (email: string, password: string) => Promise<unknown>;
+export type LoginCallback = (email: string, password: string) => Promise<unknown>;
+export type GenerateTokenCallback = (userdata: unknown) => Promise<unknown>;
 
 export interface AuthSettings {
-  onRegister: OnRegisterCallback,
-  onLogin: OnLoginCallback,
-  oAuthCallback: OAuthCallback,
+  onRegister: RegisterCallback,
+  onLogin: LoginCallback,
+  onGenerateToken: GenerateTokenCallback,
+
+  onOAuthCallback: OAuthCallback,
 };
 
-let onLoginCallback: OnLoginCallback = (email: string, password: string) => {
-  throw new Error("'onLogin' not set.");
-  // return Promise.resolve({});
-};
-
-let onRegisterCallback: OnRegisterCallback = (email: string, password: string) => {
-  throw new Error("'onRegister' not set.");
-  // return Promise.resolve({});
-};
+let onLoginCallback: LoginCallback = (email: string, password: string) => { throw new Error("'onLogin' not set."); };
+let onRegisterCallback: RegisterCallback = (email: string, password: string) => { throw new Error("'onRegister' not set."); };
+let onGenerateToken: GenerateTokenCallback = async (userdata: unknown) => { return await JsonWebToken.sign(userdata); };
 
 export const auth = {
+  settings: {
+    onRegister: onRegisterCallback,
+    onLogin: onLoginCallback,
+    onGenerateToken: onGenerateToken,
+  },
+
   prefix: "/auth",
+  middleware: JsonWebToken.middleware,
 
   routes: function (settings: Partial<AuthSettings> = {}) {
     const router = express.Router();
 
     // set register/login callbacks
-    if (settings.onRegister) { onRegisterCallback = settings.onRegister; }
-    if (settings.onLogin) { onLoginCallback = settings.onLogin; }
+    if (settings.onRegister) { auth.settings.onRegister = settings.onRegister; }
+    if (settings.onLogin) { auth.settings.onLogin = settings.onLogin; }
+    if (settings.onGenerateToken) { auth.settings.onGenerateToken = settings.onGenerateToken; }
 
-    router.post("/login", async (req, res) => {
+    router.post("/login", express.json(), async (req, res) => {
       try {
-        const user = await onLoginCallback(req.body.email, req.body.password);
-        const token = await JsonWebToken.sign(user);
+        const user = await auth.settings.onLogin(req.body.email, req.body.password);
+        const token = await auth.settings.onGenerateToken(user);
         res.json({ user, token, });
       } catch (e) {
         res.status(401).json({ error: e.message });
       }
     });
 
-    router.post("/register", async (req, res) => {
+    router.post("/register", express.json(), async (req, res) => {
       const email = req.body.email;
       const password = req.body.password;
 
@@ -55,8 +60,8 @@ export const auth = {
       }
 
       try {
-        const user = await onRegisterCallback(email, password);
-        const token = await JsonWebToken.sign(user);
+        const user = await auth.settings.onRegister(email, password);
+        const token = await auth.settings.onGenerateToken(user);
         res.json({ user, token, });
 
       } catch (e) {
@@ -67,15 +72,15 @@ export const auth = {
 
     router.post("/anonymous", async (req, res) => {
       const user = { id: generateId(21), anonymous: true };
-      const token = await JsonWebToken.sign(user);
+      const token = await onGenerateToken(user);
       res.json({ user, token, });
     });
 
     /**
      * oAuth (optional)
      */
-    if (settings.oAuthCallback) {
-      oauth.onCallback(settings.oAuthCallback);
+    if (settings.onOAuthCallback) {
+      oauth.onCallback(settings.onOAuthCallback);
     }
 
     if (oAuthCallback) {

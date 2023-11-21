@@ -36,6 +36,9 @@
     "express-session": "^1.17.3",
     "grant": "^5.4.22"
   },
+  "devDependencies": {
+    "httpie": "^2.0.0-next.13"
+  },
   "publishConfig": {
     "access": "public"
   },
