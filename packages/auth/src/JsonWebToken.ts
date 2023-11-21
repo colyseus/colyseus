@@ -29,7 +29,7 @@ export const JsonWebToken = {
     });
   },
 
-  verify: function<T> (token: string, options: jsonwebtoken.VerifyOptions = JsonWebToken.settings.verify) {
+  verify: function (token: string, options: jsonwebtoken.VerifyOptions = JsonWebToken.settings.verify) {
     return new Promise<JwtPayload | Jwt | string>((resolve, reject) => {
       jsonwebtoken.verify(token, JsonWebToken.settings.secret, options, function (err, decoded) {
         if (err) reject(err);
