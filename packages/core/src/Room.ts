@@ -600,16 +600,9 @@ export abstract class Room<State extends object= any, Metadata= any> {
         // emit 'join' to room handler (if not reconnecting)
         this._events.emit('join', client);
 
-        client.ref.removeListener('close', client.ref['onleave']);
-
         // client left during `onJoin`, call _onLeave immediately.
         if (client.state === ClientState.LEAVING) {
           await this._onLeave(client, Protocol.WS_CLOSE_GOING_AWAY);
-
-        } else {
-          // only bind _onLeave after onJoin has been successful
-          client.ref['onleave'] = this._onLeave.bind(this, client);
-          client.ref.once('close', client.ref['onleave']);
         }
 
       } catch (e) {
@@ -632,6 +625,12 @@ export abstract class Room<State extends object= any, Metadata= any> {
 
     // state might already be ClientState.LEAVING here
     if (client.state === ClientState.JOINING) {
+      client.ref.removeListener('close', client.ref['onleave']);
+
+      // only bind _onLeave after onJoin has been successful
+      client.ref['onleave'] = this._onLeave.bind(this, client);
+      client.ref.once('close', client.ref['onleave']);
+
       // allow client to send messages after onJoin has succeeded.
       client.ref.on('message', this._onMessage.bind(this, client));
 
