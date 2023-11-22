@@ -32,7 +32,7 @@
   },
   "dependencies": {
     "@colyseus/auth": "^0.15.0",
-    "@colyseus/core": "^0.15.13",
+    "@colyseus/core": "workspace:*",
     "@colyseus/redis-driver": "^0.15.3",
     "@colyseus/redis-presence": "^0.15.2",
     "@colyseus/ws-transport": "^0.15.1"

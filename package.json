@@ -23,7 +23,6 @@
     "publish-from-package-preview": "npm run build && lerna publish from-package --dist-tag preview"
   },
   "devDependencies": {
-    "@lerna/batch-packages": "^3.16.0",
     "@lerna/filter-packages": "^6.4.1",
     "@lerna/project": "^6.4.1",
     "@types/debug": "^0.0.31",

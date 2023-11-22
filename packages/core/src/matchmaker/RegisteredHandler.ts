@@ -5,7 +5,7 @@ import { RoomListingData, SortOptions } from './driver/interfaces';
 
 import { Room } from './../Room';
 import { updateLobby } from './Lobby';
-import { Type } from '../types';
+import { Type } from '../utils/types';
 
 let ColyseusAuth: any = undefined;
 try { ColyseusAuth = require('@colyseus/auth'); } catch (e) {}

@@ -7,7 +7,6 @@ import ts from "typescript";
 
 import { getPackages } from '@lerna/project';
 import { filterPackages } from '@lerna/filter-packages';
-import batchPackages from '@lerna/batch-packages';
 
 import esbuild from "esbuild";
 
@@ -17,15 +16,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /**
  * Get a list of the non-private sorted packages
  */
-async function getSortedPackages(scope, ignore) {
+async function getAllPackages(scope, ignore) {
   const packages = await getPackages(__dirname);
-  const filtered = filterPackages(packages,
-    scope,
-    ignore,
-    false);
-
-  return batchPackages(filtered)
-    .reduce((arr, batch) => arr.concat(batch), []);
+  return filterPackages(packages, scope, ignore, false);
 }
 
 async function main() {
@@ -33,7 +26,7 @@ async function main() {
   // Support --scope and --ignore globs if passed in via commandline
   const argv = minimist(process.argv.slice(2));
 
-  const packages = await getSortedPackages(argv.scope, argv.ignore);
+  const packages = await getAllPackages(argv.scope, argv.ignore);
 
   const configs = packages.map(pkg => {
     // Absolute path to package directory
