@@ -1,7 +1,7 @@
 import express from 'express';
 import { generateId } from "@colyseus/core";
 import { OAuthCallback, oAuthCallback, oauth } from "./oauth";
-import { JsonWebToken } from './JsonWebToken';
+import { JWT } from './JWT';
 
 export type RegisterCallback = (email: string, password: string) => Promise<unknown>;
 export type LoginCallback = (email: string, password: string) => Promise<unknown>;
@@ -17,7 +17,7 @@ export interface AuthSettings {
 
 let onLoginCallback: LoginCallback = (email: string, password: string) => { throw new Error("'onLogin' not set."); };
 let onRegisterCallback: RegisterCallback = (email: string, password: string) => { throw new Error("'onRegister' not set."); };
-let onGenerateToken: GenerateTokenCallback = async (userdata: unknown) => { return await JsonWebToken.sign(userdata); };
+let onGenerateToken: GenerateTokenCallback = async (userdata: unknown) => { return await JWT.sign(userdata); };
 
 export const auth = {
   settings: {
@@ -27,7 +27,7 @@ export const auth = {
   },
 
   prefix: "/auth",
-  middleware: JsonWebToken.middleware,
+  middleware: JWT.middleware,
 
   routes: function (settings: Partial<AuthSettings> = {}) {
     const router = express.Router();

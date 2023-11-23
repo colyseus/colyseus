@@ -3,7 +3,7 @@ import { expressjwt } from 'express-jwt';
 
 export type { VerifyOptions, Jwt, JwtPayload };
 
-export const JsonWebToken = {
+export const JWT = {
   settings: {
     /**
      * The secret used to sign and verify the JWTs.
@@ -21,10 +21,10 @@ export const JsonWebToken = {
   sign: function (payload: any, options: jsonwebtoken.SignOptions = {}) {
     return new Promise<string>((resolve, reject) => {
       if (options.algorithm === undefined) {
-        options.algorithm = JsonWebToken.settings.verify.algorithms[0];
+        options.algorithm = JWT.settings.verify.algorithms[0];
       }
 
-      jsonwebtoken.sign(payload, JsonWebToken.settings.secret, options, (err, token) => {
+      jsonwebtoken.sign(payload, JWT.settings.secret, options, (err, token) => {
         if (err) reject(err.message);
         resolve(token);
       });
@@ -33,10 +33,10 @@ export const JsonWebToken = {
 
   verify: function (token: string, options?: VerifyOptions) {
     if (!options) {
-      options = JsonWebToken.settings.verify;
+      options = JWT.settings.verify;
     }
     return new Promise<JwtPayload | Jwt | string>((resolve, reject) => {
-      jsonwebtoken.verify(token, JsonWebToken.settings.secret, options, function (err, decoded) {
+      jsonwebtoken.verify(token, JWT.settings.secret, options, function (err, decoded) {
         if (err) reject(err);
         resolve(decoded);
       });
@@ -52,15 +52,15 @@ export const JsonWebToken = {
    * Get express middleware that verifies JsonWebTokens and sets `req.auth`.
    */
   middleware: function(params?: Partial<Parameters<typeof expressjwt>[0]>) {
-    if (!JsonWebToken.settings.secret) {
+    if (!JWT.settings.secret) {
       console.error("❌ Please provide 'JWT_SECRET' environment variable, or set 'JsonWebToken.options.secret'.");
     }
 
     return expressjwt(Object.assign({
-      secret: JsonWebToken.settings.secret,
+      secret: JWT.settings.secret,
       // credentialsRequired: false,
-      algorithms: JsonWebToken.settings.verify.algorithms,
-      ...JsonWebToken.settings.verify,
+      algorithms: JWT.settings.verify.algorithms,
+      ...JWT.settings.verify,
     }, params));
   },
 };

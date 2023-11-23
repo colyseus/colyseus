@@ -1,6 +1,6 @@
 import { Request } from 'express-jwt';
 
-import { JsonWebToken, JwtPayload, Jwt } from "./JsonWebToken";
+import { JWT, JwtPayload, Jwt } from "./JWT";
 import { auth, RegisterCallback, GenerateTokenCallback, LoginCallback } from './auth';
 import { OAuthCallback, oauth } from './oauth';
 
@@ -16,4 +16,4 @@ export type {
   OAuthCallback,
 };
 
-export { JsonWebToken, auth, oauth, };
+export { JWT, auth, oauth, };

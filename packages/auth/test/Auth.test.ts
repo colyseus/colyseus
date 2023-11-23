@@ -1,7 +1,7 @@
 import assert from "assert";
 import http from "http";
 import * as httpie from "httpie";
-import { JsonWebToken, JwtPayload, auth } from "../src/index";
+import { JWT, JwtPayload, auth } from "../src/index";
 import express from "express";
 
 const TEST_PORT = 8888;
@@ -14,8 +14,8 @@ function post(segments: string, opts: Partial<httpie.Options> = undefined) {
 }
 
 // JWT Secret for testing
-// JsonWebToken.options.verify.algorithms = ['HS512'];
-JsonWebToken.settings.secret = "@%^&";
+// JWT.options.verify.algorithms = ['HS512'];
+JWT.settings.secret = "@%^&";
 
 describe("Auth", () => {
 
@@ -70,7 +70,7 @@ describe("Auth", () => {
       assert.deepStrictEqual({ ["endel@colyseus.io"]: "123456" }, fakedb);
       assert.deepStrictEqual({ id: 100, email: "endel@colyseus.io", }, register.data.user);
 
-      const token: any = await JsonWebToken.verify(register.data.token);
+      const token: any = await JWT.verify(register.data.token);
       assert.strictEqual(register.data.user.id, token.id);
       assert.strictEqual(register.data.user.email, token.email);
     });
@@ -99,18 +99,18 @@ describe("Auth", () => {
 
       assert.deepStrictEqual({ id: 100, email: "endel@colyseus.io", }, loginSuccess.data.user);
 
-      const token: any = await JsonWebToken.verify(loginSuccess.data.token);
+      const token: any = await JWT.verify(loginSuccess.data.token);
       assert.strictEqual(loginSuccess.data.user.id, token.id);
       assert.strictEqual(loginSuccess.data.user.email, token.email);
     });
   });
 
-  describe("JsonWebToken", () => {
+  describe("JWT", () => {
     it("should sign and verify token", async () => {
       const data = { id: 1, name: "Jake Badlands", email: "jake@badlands.io" }
-      const token = await JsonWebToken.sign(data);
+      const token = await JWT.sign(data);
 
-      const verify = await JsonWebToken.verify(token) as JwtPayload;
+      const verify = await JWT.verify(token) as JwtPayload;
       delete verify.iat;
 
       assert.deepEqual(data, verify);
