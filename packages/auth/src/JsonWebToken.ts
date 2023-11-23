@@ -1,5 +1,7 @@
-import jsonwebtoken, { JwtPayload, Jwt } from "jsonwebtoken";
+import jsonwebtoken, { JwtPayload, Jwt, VerifyOptions } from "jsonwebtoken";
 import { expressjwt } from 'express-jwt';
+
+export type { VerifyOptions, Jwt, JwtPayload };
 
 export const JsonWebToken = {
   settings: {
@@ -13,7 +15,7 @@ export const JsonWebToken = {
        * The first algorithm in the list is used to sign new tokens.
        */
       algorithms: ['HS256'],
-    } as jsonwebtoken.VerifyOptions,
+    } as VerifyOptions,
   },
 
   sign: function (payload: any, options: jsonwebtoken.SignOptions = {}) {
@@ -29,7 +31,10 @@ export const JsonWebToken = {
     });
   },
 
-  verify: function (token: string, options: jsonwebtoken.VerifyOptions = JsonWebToken.settings.verify) {
+  verify: function (token: string, options?: VerifyOptions) {
+    if (!options) {
+      options = JsonWebToken.settings.verify;
+    }
     return new Promise<JwtPayload | Jwt | string>((resolve, reject) => {
       jsonwebtoken.verify(token, JsonWebToken.settings.secret, options, function (err, decoded) {
         if (err) reject(err);
@@ -46,7 +51,7 @@ export const JsonWebToken = {
   /**
    * Get express middleware that verifies JsonWebTokens and sets `req.auth`.
    */
-  middleware(params?: Partial<Parameters<typeof expressjwt>[0]>) {
+  middleware: function(params?: Partial<Parameters<typeof expressjwt>[0]>) {
     if (!JsonWebToken.settings.secret) {
       console.error("❌ Please provide 'JWT_SECRET' environment variable, or set 'JsonWebToken.options.secret'.");
     }
