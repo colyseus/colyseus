@@ -32,15 +32,13 @@ export const auth = {
   routes: function (settings: Partial<AuthSettings> = {}) {
     const router = express.Router();
 
-    router.use(auth.middleware());
-
     // set register/login callbacks
     if (settings.onRegister) { auth.settings.onRegister = settings.onRegister; }
     if (settings.onLogin) { auth.settings.onLogin = settings.onLogin; }
     if (settings.onUserData) { auth.settings.onUserData = settings.onUserData; }
     if (settings.onGenerateToken) { auth.settings.onGenerateToken = settings.onGenerateToken; }
 
-    router.get("/userdata", async (req: Request, res) => {
+    router.get("/userdata", auth.middleware(), async (req: Request, res) => {
       try {
         res.json(await auth.settings.onUserData(req.auth));
       } catch (e) {
