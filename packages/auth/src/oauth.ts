@@ -70,7 +70,7 @@ export const oauth = {
   /**
    * Route prefix for OAuth routes.
    */
-  prefix: "/oauth",
+  prefix: "/provider",
   providers: {} as { [providerId in OAuthProviderName]: OAuthProviderConfig },
 
   /**
@@ -95,9 +95,7 @@ export const oauth = {
    * @returns Express Router
    */
   routes: function (callback?: OAuthCallback) {
-    if (callback) {
-      this.onCallback(callback);
-    }
+    if (callback) { this.onCallback(callback); }
 
     const router = express.Router();
 

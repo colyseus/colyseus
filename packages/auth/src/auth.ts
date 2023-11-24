@@ -38,6 +38,22 @@ export const auth = {
     if (settings.onUserData) { auth.settings.onUserData = settings.onUserData; }
     if (settings.onGenerateToken) { auth.settings.onGenerateToken = settings.onGenerateToken; }
 
+    /**
+     * OAuth (optional)
+     */
+    if (settings.onOAuthCallback) {
+      oauth.onCallback(settings.onOAuthCallback);
+    }
+
+    if (oAuthCallback) {
+      const prefix = oauth.prefix;
+
+      // make sure oauth.prefix contains the full prefix
+      oauth.prefix = auth.prefix + prefix;
+
+      router.use(prefix, oauth.routes());
+    }
+
     router.get("/userdata", auth.middleware(), async (req: Request, res) => {
       try {
         res.json(await auth.settings.onUserData(req.auth));
@@ -83,17 +99,6 @@ export const auth = {
       const token = await onGenerateToken(user);
       res.json({ user, token, });
     });
-
-    /**
-     * oAuth (optional)
-     */
-    if (settings.onOAuthCallback) {
-      oauth.onCallback(settings.onOAuthCallback);
-    }
-
-    if (oAuthCallback) {
-      router.use(oauth.prefix, oauth.routes());
-    }
 
     return router;
   },
