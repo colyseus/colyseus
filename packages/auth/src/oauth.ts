@@ -117,9 +117,19 @@ export const oauth = {
 
     router.get("/:providerId/callback", async (req, res) => {
       const session = (req as any).session as unknown & { grant: GrantSession };
-      const user = await oAuthCallback(session.grant.response, session.grant.provider as OAuthProviderName);
-      const token = await auth.settings.onGenerateToken(user);
-      const response = { user, token };
+
+      let user = null;
+      let token = null;
+      let response = undefined;
+
+      if (session.grant.response.error) {
+        response = { error: session.grant.response.error, user, token, };
+
+      } else {
+        user = await oAuthCallback(session.grant.response, session.grant.provider as OAuthProviderName);
+        token = await auth.settings.onGenerateToken(user);
+        response = { user, token };
+      }
 
       /**
        * I believe it is safe to use "*" in the origin here, since the token and origin are already validated by the OAuth provider.

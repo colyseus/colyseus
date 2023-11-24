@@ -78,7 +78,6 @@ export const auth = {
       } catch (e) {
         res.status(401).json({ error: e.message });
       }
-
     });
 
     router.post("/anonymous", async (req, res) => {
