@@ -94,7 +94,7 @@ export const oauth = {
    * @param callback (optional) Callback function that is called when OAuth is successful.
    * @returns Express Router
    */
-  callback: function (callback?: OAuthCallback) {
+  routes: function (callback?: OAuthCallback) {
     if (callback) {
       this.onCallback(callback);
     }
