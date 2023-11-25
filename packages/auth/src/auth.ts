@@ -56,7 +56,7 @@ export const auth = {
 
     router.get("/userdata", auth.middleware(), async (req: Request, res) => {
       try {
-        res.json(await auth.settings.onUserData(req.auth));
+        res.json({ user: await auth.settings.onUserData(req.auth), });
       } catch (e) {
         res.status(401).json({ error: e.message });
       }
