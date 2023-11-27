@@ -111,7 +111,37 @@ export const oauth = {
     config.defaults.prefix = oauth.prefix;
 
     router.use(sessionMiddleware);
-    router.use(grant.express(config));
+
+    router.get("/:providerId", async (req, res, next) => {
+      const providerId = req.params.providerId as OAuthProviderName;
+      if (oauth.providers[providerId]) {
+        next();
+
+      } else {
+        // TODO: do not display help message on "production" environment.
+        const helpURLs = (await import('./oauth_help_urls.json'));
+        const providerUrl = helpURLs[providerId];
+        return `<!doctype html>
+<html>
+<head>
+<title>Missing "${providerId}" provider configuration</title>
+<style>p { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans",Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji"; }</style>
+</head>
+<body>
+<p>Missing config for "${providerId}" OAuth provider.</p>
+<hr />
+<p><small><strong>Config example:</strong></small></p>
+<pre><code>import { oauth } from "@colyseus/auth";<br />
+oauth.addProvider("${providerId}", {
+  key: "xxx",
+  secret: "xxx",
+});
+</code></pre>
+${(providerUrl) ? `<hr/><p><small><em>(Get your keys from <a href="${providerUrl}">${providerUrl}</a>)</em></small></p>` : ""}
+</body>
+</html>`;
+      }
+    });
 
     router.get("/:providerId/callback", async (req, res) => {
       const session = (req as any).session as unknown & { grant: GrantSession };
@@ -136,6 +166,8 @@ export const oauth = {
       res.send(`<!DOCTYPE html><html><head><script type="text/javascript">window.opener.postMessage(${JSON.stringify(response)}, '*');</script></head><body></body></html>`);
       res.end();
     });
+
+    router.use(grant.express(config));
 
     return router;
   }
