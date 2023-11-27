@@ -60,7 +60,7 @@ if (process.env.REGION !== undefined) {
 }
 
 export interface ConfigOptions {
-    options?: ServerOptions & { cors: boolean },
+    options?: ServerOptions,
     displayLogs?: boolean,
     getId?: () => string,
     initializeTransport?: (options: any) => Transport,
@@ -242,12 +242,7 @@ export async function getTransport(options: ConfigOptions) {
 
     if (app) {
       // Enable CORS
-      if (options.options?.cors !== false) {
-        app.use(cors({
-          origin: true,
-          credentials: true,
-        }));
-      }
+      app.use(cors({ origin: true, credentials: true, }));
 
       // Enable JSON parsing.
       app.use(express.json());

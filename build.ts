@@ -59,6 +59,7 @@ async function main() {
       const program = ts.createProgram(entrypoints, {
         declaration: true,
         emitDeclarationOnly: true,
+        resolveJsonModule: true,
         skipLibCheck: true,
         module: ts.ModuleKind.CommonJS,
         target: ts.ScriptTarget.ES2015,
