@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/auth",
-  "version": "0.15.0-preview.10",
+  "version": "0.15.0-preview.11",
   "description": "Authentication Utilities for Colyseus",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -20,6 +20,7 @@
   ],
   "files": [
     "build",
+    "oauth_help_urls.json",
     "LICENSE",
     "README.md"
   ],

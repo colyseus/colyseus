@@ -119,7 +119,7 @@ export const oauth = {
 
       } else {
         // TODO: do not display help message on "production" environment.
-        const helpURLs = (await import('./oauth_help_urls.json'));
+        const helpURLs = (await import('../oauth_help_urls.json'));
         const providerUrl = helpURLs[providerId];
         return `<!doctype html>
 <html>
