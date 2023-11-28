@@ -121,7 +121,7 @@ export const oauth = {
         // TODO: do not display help message on "production" environment.
         const helpURLs = (await import('../oauth_help_urls.json'));
         const providerUrl = helpURLs[providerId];
-        return `<!doctype html>
+        res.send(`<!doctype html>
 <html>
 <head>
 <title>Missing "${providerId}" provider configuration</title>
@@ -137,11 +137,13 @@ oauth.addProvider("${providerId}", {
   secret: "xxx",
 });
 </code></pre>
-${(providerUrl) ? `<hr/><p><small><em>(Get your keys from <a href="${providerUrl}">${providerUrl}</a>)</em></small></p>` : ""}
+${(providerUrl) ? `<hr/><p><small><em>(Get your keys from <a href="${providerUrl}" target="_blank">${providerUrl}</a>)</em></small></p>` : ""}
 </body>
-</html>`;
+</html>`);
       }
     });
+
+    router.use(grant.express(config));
 
     router.get("/:providerId/callback", async (req, res) => {
       const session = (req as any).session as unknown & { grant: GrantSession };
@@ -166,8 +168,6 @@ ${(providerUrl) ? `<hr/><p><small><em>(Get your keys from <a href="${providerUrl
       res.send(`<!DOCTYPE html><html><head><script type="text/javascript">window.opener.postMessage(${JSON.stringify(response)}, '*');</script></head><body></body></html>`);
       res.end();
     });
-
-    router.use(grant.express(config));
 
     return router;
   }

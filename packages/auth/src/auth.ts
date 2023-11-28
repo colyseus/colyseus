@@ -1,30 +1,59 @@
 import express from 'express';
+import crypto from 'crypto';
 import { generateId } from "@colyseus/core";
 import { Request } from 'express-jwt';
 import { OAuthCallback, oAuthCallback, oauth } from "./oauth";
 import { JWT, JwtPayload } from './JWT';
+import { Hash } from './Hash';
 
-export type RegisterCallback = (email: string, password: string) => Promise<unknown>;
-export type LoginCallback = (email: string, password: string) => Promise<unknown>;
-export type UserDataCallback = (token: JwtPayload) => Promise<unknown> | unknown;
+export type RegisterCallback<T=any> = (email: string, password: string, options: T) => Promise<unknown>;
+export type FindByEmailCallback = (email: string) => Promise<unknown & { password: string }>;
+export type ParseTokenCallback = (token: JwtPayload) => Promise<unknown> | unknown;
 export type GenerateTokenCallback = (userdata: unknown) => Promise<unknown>;
+export type HashPasswordCallback = (password: string) => Promise<string>;
 
 export interface AuthSettings {
   onRegister: RegisterCallback,
-  onLogin: LoginCallback,
-  onUserData: UserDataCallback,
-  onGenerateToken: GenerateTokenCallback,
-
-  onOAuthCallback: OAuthCallback,
+  onFindByEmail: FindByEmailCallback,
+  onOAuthCallback?: OAuthCallback,
+  onParseToken?: ParseTokenCallback,
+  onGenerateToken?: GenerateTokenCallback,
+  onHashPassword?: HashPasswordCallback,
 };
 
-let onLogin: LoginCallback = (email: string, password: string) => { throw new Error("'onLogin' not set."); };
-let onRegister: RegisterCallback = (email: string, password: string) => { throw new Error("'onRegister' not set."); };
-let onUserData: UserDataCallback = (jwt: JwtPayload) => { return jwt; };
+let onRegister: RegisterCallback = (email: string, password: string) => { throw new Error('`auth.settings.onRegister` not set.'); };
+let onFindByEmail: FindByEmailCallback = (email: string) => { throw new Error('`auth.settings.onFindByEmail` not set.'); };
+let onParseToken: ParseTokenCallback = (jwt: JwtPayload) => { return jwt; };
 let onGenerateToken: GenerateTokenCallback = async (userdata: unknown) => { return await JWT.sign(userdata); };
+let onHashPassword: HashPasswordCallback = async (password: string) => { return Hash.make(password); };
 
 export const auth = {
-  settings: { onRegister, onLogin, onUserData, onGenerateToken, },
+  settings: {
+    /**
+     * Register user by email and password.
+     */
+    onRegister,
+
+    /**
+     * Find user by email.
+     */
+    onFindByEmail,
+
+    /**
+     * By default, it returns the contents of the JWT token. (onGenerateToken)
+     */
+    onParseToken,
+
+    /**
+     * By default, it encodes the full `userdata` object into the JWT token.
+     */
+    onGenerateToken,
+
+    /**
+     * Hash password before storing it. By default, it uses SHA1 + process.env.AUTH_SALT.
+     */
+    onHashPassword,
+  } as AuthSettings,
 
   prefix: "/auth",
   middleware: JWT.middleware,
@@ -33,10 +62,9 @@ export const auth = {
     const router = express.Router();
 
     // set register/login callbacks
-    if (settings.onRegister) { auth.settings.onRegister = settings.onRegister; }
-    if (settings.onLogin) { auth.settings.onLogin = settings.onLogin; }
-    if (settings.onUserData) { auth.settings.onUserData = settings.onUserData; }
-    if (settings.onGenerateToken) { auth.settings.onGenerateToken = settings.onGenerateToken; }
+    Object.keys(settings).forEach(key => {
+      auth.settings[key] = settings[key];
+    });
 
     /**
      * OAuth (optional)
@@ -56,7 +84,7 @@ export const auth = {
 
     router.get("/userdata", auth.middleware(), async (req: Request, res) => {
       try {
-        res.json({ user: await auth.settings.onUserData(req.auth), });
+        res.json({ user: await auth.settings.onParseToken(req.auth), });
       } catch (e) {
         res.status(401).json({ error: e.message });
       }
@@ -64,9 +92,19 @@ export const auth = {
 
     router.post("/login", express.json(), async (req, res) => {
       try {
-        const user = await auth.settings.onLogin(req.body.email, req.body.password);
-        const token = await auth.settings.onGenerateToken(user);
-        res.json({ user, token, });
+        const email = req.body.email;
+        if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) {
+          return res.status(400).json({ error: "Please provide a valid email address." });
+        }
+
+        const user = await auth.settings.onFindByEmail(email);
+        if (user.password === Hash.make(req.body.password)) {
+          res.json({ user, token: await auth.settings.onGenerateToken(user) });
+
+        } else {
+          throw new Error("invalid_credentials");
+        }
+
       } catch (e) {
         res.status(401).json({ error: e.message });
       }
@@ -77,15 +115,19 @@ export const auth = {
       const password = req.body.password;
 
       if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) {
-        return res.status(400).json({ error: "Please provide a valid email address." });
-      }
-
-      if (password.length < 5) {
-        return res.status(400).json({ error: "Password too short" });
+        return res.status(400).json({ error: "email_malformed" });
       }
 
       try {
-        const user = await auth.settings.onRegister(email, password);
+        if (await auth.settings.onFindByEmail(email)) {
+          throw new Error("email_already_in_use");
+        }
+
+        if (password.length < 5) {
+          return res.status(400).json({ error: "password_too_short" });
+        }
+
+        const user = await auth.settings.onRegister(email, Hash.make(password), req.body.options);
         const token = await auth.settings.onGenerateToken(user);
         res.json({ user, token, });
 

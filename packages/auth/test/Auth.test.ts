@@ -29,7 +29,7 @@ describe("Auth", () => {
         fakedb[email] = password
         return { id: 100, email, };
       },
-      onLogin: async (email: string, password: string) => {
+      onFindByEmail: async (email: string, password: string) => {
         if (fakedb[email] === password) {
           return { id: 100, email, };
         } else {

@@ -1,19 +1,17 @@
 import { Request } from 'express-jwt';
 
-import { JWT, JwtPayload, Jwt } from "./JWT";
-import { auth, RegisterCallback, GenerateTokenCallback, LoginCallback } from './auth';
+import { JWT, JwtPayload, Jwt } from './JWT';
+import { auth, AuthSettings, RegisterCallback, FindByEmailCallback, ParseTokenCallback, GenerateTokenCallback, HashPasswordCallback,} from './auth';
+
 import { OAuthCallback, oauth } from './oauth';
+import { Hash } from './Hash';
 
 export type {
-  Request,
-  JwtPayload,
-  Jwt,
+  Request, JwtPayload, Jwt,
 
-  RegisterCallback as OnRegisterCallback,
-  GenerateTokenCallback as OnGenerateToken,
-  LoginCallback as OnLoginCallback,
+  AuthSettings, RegisterCallback, FindByEmailCallback, ParseTokenCallback, GenerateTokenCallback, HashPasswordCallback,
 
   OAuthCallback,
 };
 
-export { JWT, auth, oauth, };
+export { Hash, JWT, auth, oauth, };
