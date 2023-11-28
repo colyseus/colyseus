@@ -1,8 +1,7 @@
 import express from 'express';
-import crypto from 'crypto';
-import { generateId } from "@colyseus/core";
+import { generateId } from '@colyseus/core';
 import { Request } from 'express-jwt';
-import { OAuthCallback, oAuthCallback, oauth } from "./oauth";
+import { OAuthCallback, oAuthCallback, oauth } from './oauth';
 import { JWT, JwtPayload } from './JWT';
 import { Hash } from './Hash';
 
