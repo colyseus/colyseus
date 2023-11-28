@@ -93,7 +93,7 @@ export const auth = {
       try {
         const email = req.body.email;
         if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) {
-          return res.status(400).json({ error: "Please provide a valid email address." });
+          throw new Error("email_malformed");
         }
 
         const user = await auth.settings.onFindByEmail(email);
@@ -117,8 +117,18 @@ export const auth = {
         return res.status(400).json({ error: "email_malformed" });
       }
 
+      let existingUser: any;
       try {
-        if (await auth.settings.onFindByEmail(email)) {
+        existingUser = await auth.settings.onFindByEmail(email)
+
+      } catch (e) {
+        console.error('@colyseus/auth, onFindByEmail exception:', e.message);
+      }
+
+      try {
+        // TODO: allow to set password on existing user, if valid token is equivalent to email
+        //  (existingUser.password && existingUser.password.length > 0)
+        if (existingUser) {
           throw new Error("email_already_in_use");
         }
 
