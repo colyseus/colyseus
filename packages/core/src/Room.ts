@@ -323,7 +323,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
     }
   }
 
-  public setPatchRate(milliseconds: number): void {
+  public setPatchRate(milliseconds: number | null): void {
     this.patchRate = milliseconds;
 
     // clear previous interval in case called setPatchRate more than once
