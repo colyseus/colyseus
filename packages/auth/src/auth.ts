@@ -1,5 +1,5 @@
 import express from 'express';
-import { generateId } from '@colyseus/core';
+import { generateId, logger } from '@colyseus/core';
 import { Request } from 'express-jwt';
 import { OAuthCallback, oAuthCallback, oauth } from './oauth';
 import { JWT, JwtPayload } from './JWT';
@@ -105,6 +105,7 @@ export const auth = {
         }
 
       } catch (e) {
+        logger.error(e);
         res.status(401).json({ error: e.message });
       }
     });
@@ -122,7 +123,7 @@ export const auth = {
         existingUser = await auth.settings.onFindByEmail(email)
 
       } catch (e) {
-        console.error('@colyseus/auth, onFindByEmail exception:', e.message);
+        logger.error('@colyseus/auth, onFindByEmail exception:' + e.stack);
       }
 
       try {
@@ -136,11 +137,15 @@ export const auth = {
           return res.status(400).json({ error: "password_too_short" });
         }
 
-        const user = await auth.settings.onRegister(email, Hash.make(password), req.body.options);
+        // Register
+        await auth.settings.onRegister(email, Hash.make(password), req.body.options);
+
+        const user = await auth.settings.onFindByEmail(email);
         const token = await auth.settings.onGenerateToken(user);
         res.json({ user, token, });
 
       } catch (e) {
+        logger.error(e);
         res.status(401).json({ error: e.message });
       }
     });
