@@ -9,7 +9,12 @@ import { Hash } from './Hash';
 export type {
   Request, JwtPayload, Jwt,
 
-  AuthSettings, RegisterWithEmailAndPasswordCallback as RegisterCallback, FindUserByEmailCallback as FindByEmailCallback, ParseTokenCallback, GenerateTokenCallback, HashPasswordCallback,
+  AuthSettings,
+  RegisterWithEmailAndPasswordCallback,
+  FindUserByEmailCallback,
+  ParseTokenCallback,
+  GenerateTokenCallback,
+  HashPasswordCallback,
 
   OAuthProviderCallback as OAuthCallback,
 };

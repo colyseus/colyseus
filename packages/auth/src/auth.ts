@@ -24,9 +24,9 @@ export interface AuthSettings {
 
 let onFindUserByEmail: FindUserByEmailCallback = (email: string) => { throw new Error('`auth.settings.onFindByEmail` not set.'); };
 let onRegisterWithEmailAndPassword: RegisterWithEmailAndPasswordCallback = (email: string, password: string) => { throw new Error('`auth.settings.onRegister` not set.'); };
-let onParseToken: ParseTokenCallback = (jwt: JwtPayload) => { return jwt; };
-let onGenerateToken: GenerateTokenCallback = async (userdata: unknown) => { return await JWT.sign(userdata); };
-let onHashPassword: HashPasswordCallback = async (password: string) => { return Hash.make(password); };
+let onParseToken: ParseTokenCallback = (jwt: JwtPayload) => jwt;
+let onGenerateToken: GenerateTokenCallback = async (userdata: unknown) => await JWT.sign(userdata);
+let onHashPassword: HashPasswordCallback = async (password: string) => Hash.make(password);
 
 export const auth = {
   /**
