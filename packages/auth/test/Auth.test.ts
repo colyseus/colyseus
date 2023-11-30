@@ -25,11 +25,11 @@ describe("Auth", () => {
   beforeEach(async () => {
     app = express();
     app.use(auth.prefix, auth.routes({
-      onRegister: async (email: string, password: string) => {
+      onRegisterWithEmailAndPassword: async (email: string, password: string) => {
         fakedb[email] = password
         return { id: 100, email, };
       },
-      onFindByEmail: async (email: string, password: string) => {
+      onFindUserByEmail: async (email: string, password: string) => {
         if (fakedb[email] === password) {
           return { id: 100, email, };
         } else {

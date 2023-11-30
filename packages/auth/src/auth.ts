@@ -1,42 +1,54 @@
 import express from 'express';
 import { generateId, logger } from '@colyseus/core';
 import { Request } from 'express-jwt';
-import { OAuthCallback, oAuthCallback, oauth } from './oauth';
+import { OAuthProviderCallback, oAuthProviderCallback, oauth } from './oauth';
 import { JWT, JwtPayload } from './JWT';
 import { Hash } from './Hash';
 
-export type RegisterCallback<T=any> = (email: string, password: string, options: T) => Promise<unknown>;
-export type FindByEmailCallback = (email: string) => Promise<unknown & { password: string }>;
+export type RegisterWithEmailAndPasswordCallback<T = any> = (email: string, password: string, options: T) => Promise<unknown>;
+export type RegisterAnonymouslyCallback<T = any> = (options: T) => Promise<unknown>;
+export type FindUserByEmailCallback = (email: string) => Promise<unknown & { password: string }>;
 export type ParseTokenCallback = (token: JwtPayload) => Promise<unknown> | unknown;
 export type GenerateTokenCallback = (userdata: unknown) => Promise<unknown>;
 export type HashPasswordCallback = (password: string) => Promise<string>;
 
 export interface AuthSettings {
-  onRegister: RegisterCallback,
-  onFindByEmail: FindByEmailCallback,
-  onOAuthCallback?: OAuthCallback,
+  onFindUserByEmail: FindUserByEmailCallback,
+  onRegisterWithEmailAndPassword: RegisterWithEmailAndPasswordCallback,
+  onRegisterAnonymously: RegisterAnonymouslyCallback,
+  onOAuthProviderCallback?: OAuthProviderCallback,
   onParseToken?: ParseTokenCallback,
   onGenerateToken?: GenerateTokenCallback,
   onHashPassword?: HashPasswordCallback,
 };
 
-let onRegister: RegisterCallback = (email: string, password: string) => { throw new Error('`auth.settings.onRegister` not set.'); };
-let onFindByEmail: FindByEmailCallback = (email: string) => { throw new Error('`auth.settings.onFindByEmail` not set.'); };
+let onFindUserByEmail: FindUserByEmailCallback = (email: string) => { throw new Error('`auth.settings.onFindByEmail` not set.'); };
+let onRegisterWithEmailAndPassword: RegisterWithEmailAndPasswordCallback = (email: string, password: string) => { throw new Error('`auth.settings.onRegister` not set.'); };
 let onParseToken: ParseTokenCallback = (jwt: JwtPayload) => { return jwt; };
 let onGenerateToken: GenerateTokenCallback = async (userdata: unknown) => { return await JWT.sign(userdata); };
 let onHashPassword: HashPasswordCallback = async (password: string) => { return Hash.make(password); };
 
 export const auth = {
-  settings: {
-    /**
-     * Register user by email and password.
-     */
-    onRegister,
+  /**
+   * OAuth utilities
+   */
+  oauth: oauth,
 
+  settings: {
     /**
      * Find user by email.
      */
-    onFindByEmail,
+    onFindUserByEmail,
+
+    /**
+     * Register user by email and password.
+     */
+    onRegisterWithEmailAndPassword,
+
+    /**
+     * (Optional) Register anonymous user.
+     */
+    onRegisterAnonymously: undefined as RegisterAnonymouslyCallback,
 
     /**
      * By default, it returns the contents of the JWT token. (onGenerateToken)
@@ -65,14 +77,24 @@ export const auth = {
       auth.settings[key] = settings[key];
     });
 
+    if (!auth.settings.onParseToken) {
+      auth.settings.onParseToken = onParseToken;
+    }
+    if (!auth.settings.onGenerateToken) {
+      auth.settings.onGenerateToken = onGenerateToken;
+    }
+    if (!auth.settings.onHashPassword) {
+      auth.settings.onHashPassword = onHashPassword;
+    }
+
     /**
      * OAuth (optional)
      */
-    if (settings.onOAuthCallback) {
-      oauth.onCallback(settings.onOAuthCallback);
+    if (settings.onOAuthProviderCallback) {
+      oauth.onCallback(settings.onOAuthProviderCallback);
     }
 
-    if (oAuthCallback) {
+    if (oAuthProviderCallback) {
       const prefix = oauth.prefix;
 
       // make sure oauth.prefix contains the full prefix
@@ -92,11 +114,9 @@ export const auth = {
     router.post("/login", express.json(), async (req, res) => {
       try {
         const email = req.body.email;
-        if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) {
-          throw new Error("email_malformed");
-        }
+        if (!isValidEmail(email)) { throw new Error("email_malformed"); }
 
-        const user = await auth.settings.onFindByEmail(email);
+        const user = await auth.settings.onFindUserByEmail(email);
         if (user.password === Hash.make(req.body.password)) {
           res.json({ user, token: await auth.settings.onGenerateToken(user) });
 
@@ -114,13 +134,13 @@ export const auth = {
       const email = req.body.email;
       const password = req.body.password;
 
-      if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) {
+      if (!isValidEmail(email)) {
         return res.status(400).json({ error: "email_malformed" });
       }
 
       let existingUser: any;
       try {
-        existingUser = await auth.settings.onFindByEmail(email)
+        existingUser = await auth.settings.onFindUserByEmail(email)
 
       } catch (e) {
         logger.error('@colyseus/auth, onFindByEmail exception:' + e.stack);
@@ -138,9 +158,9 @@ export const auth = {
         }
 
         // Register
-        await auth.settings.onRegister(email, Hash.make(password), req.body.options);
+        await auth.settings.onRegisterWithEmailAndPassword(email, Hash.make(password), req.body.options);
 
-        const user = await auth.settings.onFindByEmail(email);
+        const user = await auth.settings.onFindUserByEmail(email);
         const token = await auth.settings.onGenerateToken(user);
         res.json({ user, token, });
 
@@ -151,11 +171,23 @@ export const auth = {
     });
 
     router.post("/anonymous", async (req, res) => {
-      const user = { id: generateId(21), anonymous: true };
-      const token = await onGenerateToken(user);
-      res.json({ user, token, });
+      const options = req.body.options;
+
+      // register anonymous user, if callback is defined.
+      const user = (auth.settings.onRegisterAnonymously)
+        ? await auth.settings.onRegisterAnonymously(options)
+        : { ...options, id: undefined, anonymousId: generateId(21), anonymous: true }
+
+      res.json({
+        user,
+        token: await onGenerateToken(user)
+      });
     });
 
     return router;
   },
 };
+
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)
+}

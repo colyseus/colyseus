@@ -49,8 +49,8 @@ export type OAuthProviderConfig = {
 // const client = redis.createClient();
 // const RedisStore = connectRedis(session);
 
-export type OAuthCallback = (data: GrantSession['response'], provider: OAuthProviderName) => Promise<unknown>;
-export let oAuthCallback: (data: GrantSession['response'], provider: OAuthProviderName) => Promise<unknown> = async (data, provider) => {
+export type OAuthProviderCallback = (data: GrantSession['response'], provider: OAuthProviderName) => Promise<unknown>;
+export let oAuthProviderCallback: (data: GrantSession['response'], provider: OAuthProviderName) => Promise<unknown> = async (data, provider) => {
   console.debug("OAuth callback missing. Use oauth.onCallback() to persist user data.");
   return data;
 };
@@ -85,8 +85,8 @@ export const oauth = {
   /**
    * Provides a callback function that is called when OAuth is successful.
    */
-  onCallback: function (callback: OAuthCallback) {
-    oAuthCallback = callback;
+  onCallback: function (callback: OAuthProviderCallback) {
+    oAuthProviderCallback = callback;
   },
 
   /**
@@ -94,7 +94,7 @@ export const oauth = {
    * @param callback (optional) Callback function that is called when OAuth is successful.
    * @returns Express Router
    */
-  routes: function (callback?: OAuthCallback) {
+  routes: function (callback?: OAuthProviderCallback) {
     if (callback) { this.onCallback(callback); }
 
     const router = express.Router();
@@ -157,7 +157,7 @@ ${(providerUrl) ? `<hr/><p><small><em>(Get your keys from <a href="${providerUrl
         response = { error: session.grant.response.error, user, token, };
 
       } else {
-        user = await oAuthCallback(session.grant.response, session.grant.provider as OAuthProviderName);
+        user = await oAuthProviderCallback(session.grant.response, session.grant.provider as OAuthProviderName);
         token = await auth.settings.onGenerateToken(user);
         response = { user, token };
       }
