@@ -263,11 +263,10 @@ export async function getTransport(options: ConfigOptions) {
               return;
           }
 
-          const roomCountPerProcess = await matchMaker.presence.hgetall("roomcount");
-          let rooms = 0;
-          for (const processId in roomCountPerProcess) {
-              rooms += Number(roomCountPerProcess[processId]);
-          }
+          // count rooms per process
+          const rooms = (await matchMaker.stats.fetchAll()).reduce((prev, curr) => {
+            return prev + curr.roomCount;
+          }, 0);
 
           const ccu = await matchMaker.stats.getGlobalCCU();
           const mem = await osUtils.mem.used();
