@@ -53,7 +53,7 @@ export const JWT = {
    */
   middleware: function(params?: Partial<Parameters<typeof expressjwt>[0]>) {
     if (!JWT.settings.secret) {
-      console.error("❌ Please provide 'JWT_SECRET' environment variable, or set 'JsonWebToken.options.secret'.");
+      console.error("❌ Please provide 'JWT_SECRET' environment variable, or set 'JWT.settings.secret'.");
     }
 
     return expressjwt(Object.assign({

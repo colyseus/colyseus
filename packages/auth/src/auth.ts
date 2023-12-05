@@ -1,4 +1,7 @@
+import fs from 'fs/promises';
+import path from 'path';
 import express from 'express';
+import { existsSync } from 'fs';
 import { generateId, logger } from '@colyseus/core';
 import { Request } from 'express-jwt';
 import { OAuthProviderCallback, oAuthProviderCallback, oauth } from './oauth';
@@ -9,6 +12,8 @@ export type RegisterWithEmailAndPasswordCallback<T = any> = (email: string, pass
 export type RegisterAnonymouslyCallback<T = any> = (options: T) => Promise<unknown>;
 export type FindUserByEmailCallback = (email: string) => Promise<unknown & { password: string }>;
 export type ParseTokenCallback = (token: JwtPayload) => Promise<unknown> | unknown;
+export type ForgotPasswordCallback = (email: string, htmlContents: string, resetPasswordLink: string) => Promise<boolean>;
+export type ResetPasswordCallback = (email: string, password: string) => Promise<unknown>;
 export type GenerateTokenCallback = (userdata: unknown) => Promise<unknown>;
 export type HashPasswordCallback = (password: string) => Promise<string>;
 
@@ -16,17 +21,30 @@ export interface AuthSettings {
   onFindUserByEmail: FindUserByEmailCallback,
   onRegisterWithEmailAndPassword: RegisterWithEmailAndPasswordCallback,
   onRegisterAnonymously: RegisterAnonymouslyCallback,
+
+  onForgotPassword?: ForgotPasswordCallback,
+  onPasswordReset?: ResetPasswordCallback,
+
   onOAuthProviderCallback?: OAuthProviderCallback,
   onParseToken?: ParseTokenCallback,
   onGenerateToken?: GenerateTokenCallback,
   onHashPassword?: HashPasswordCallback,
 };
 
-let onFindUserByEmail: FindUserByEmailCallback = (email: string) => { throw new Error('`auth.settings.onFindByEmail` not set.'); };
-let onRegisterWithEmailAndPassword: RegisterWithEmailAndPasswordCallback = (email: string, password: string) => { throw new Error('`auth.settings.onRegister` not set.'); };
+let onFindUserByEmail: FindUserByEmailCallback = (email: string) => { throw new Error('`auth.settings.onFindByEmail` not implemented.'); };
+let onRegisterWithEmailAndPassword: RegisterWithEmailAndPasswordCallback = () => { throw new Error('`auth.settings.onRegister` not implemented.'); };
+let onForgotPassword: ForgotPasswordCallback = () => { throw new Error('`auth.settings.onForgotPassword` not implemented.'); };
 let onParseToken: ParseTokenCallback = (jwt: JwtPayload) => jwt;
 let onGenerateToken: GenerateTokenCallback = async (userdata: unknown) => await JWT.sign(userdata);
 let onHashPassword: HashPasswordCallback = async (password: string) => Hash.make(password);
+
+/**
+ * Detect HTML template path (for password reset form)
+ */
+const htmlTemplatePath = [
+  path.join(process.cwd(), "html"),
+  path.join(__dirname, "html"),
+].find((filePath) => existsSync(filePath));
 
 export const auth = {
   /**
@@ -49,6 +67,16 @@ export const auth = {
      * (Optional) Register anonymous user.
      */
     onRegisterAnonymously: undefined as RegisterAnonymouslyCallback,
+
+    /**
+     * (Optional) Send reset password link via email.
+     */
+    onForgotPassword,
+
+    /**
+     * (Optional) Reset password action.
+     */
+    onPasswordReset: undefined as ResetPasswordCallback,
 
     /**
      * By default, it returns the contents of the JWT token. (onGenerateToken)
@@ -103,6 +131,9 @@ export const auth = {
       router.use(prefix, oauth.routes());
     }
 
+    /**
+     * Get user data from JWT token.
+     */
     router.get("/userdata", auth.middleware(), async (req: Request, res) => {
       try {
         res.json({ user: await auth.settings.onParseToken(req.auth), });
@@ -111,6 +142,9 @@ export const auth = {
       }
     });
 
+    /**
+     * Login user by email and password.
+     */
     router.post("/login", express.json(), async (req, res) => {
       try {
         const email = req.body.email;
@@ -118,6 +152,7 @@ export const auth = {
 
         const user = await auth.settings.onFindUserByEmail(email);
         if (user.password === Hash.make(req.body.password)) {
+          delete user.password; // remove password from response
           res.json({ user, token: await auth.settings.onGenerateToken(user) });
 
         } else {
@@ -130,6 +165,9 @@ export const auth = {
       }
     });
 
+    /**
+     * Register user by email and password.
+     */
     router.post("/register", express.json(), async (req, res) => {
       const email = req.body.email;
       const password = req.body.password;
@@ -161,6 +199,8 @@ export const auth = {
         await auth.settings.onRegisterWithEmailAndPassword(email, Hash.make(password), req.body.options);
 
         const user = await auth.settings.onFindUserByEmail(email);
+        delete user.password; // remove password from response
+
         const token = await auth.settings.onGenerateToken(user);
         res.json({ user, token, });
 
@@ -170,7 +210,10 @@ export const auth = {
       }
     });
 
-    router.post("/anonymous", async (req, res) => {
+    /**
+     * Anonymous sign-in
+     */
+    router.post("/anonymous", express.json(), async (req, res) => {
       const options = req.body.options;
 
       // register anonymous user, if callback is defined.
@@ -182,6 +225,54 @@ export const auth = {
         user,
         token: await onGenerateToken(user)
       });
+    });
+
+    router.post("/forgot-password", express.json(), async (req, res) => {
+      try {
+        const email = req.body.email;
+        const user = await auth.settings.onFindUserByEmail(email);
+        if (!user) {
+          throw new Error("email_not_found");
+        }
+
+        const token = JWT.sign({ email }, { expiresIn: "1h" });
+
+        // TODO: append backend URL
+        const passwordResetLink = auth.prefix + "/reset-password?token=" + token;
+
+        const htmlEmail = (await fs .readFile(path.join(htmlTemplatePath, "reset-password-email.html"), "utf-8"))
+          .replace("[PASSWORD_RESET_LINK]", passwordResetLink);
+
+        const result = auth.settings.onForgotPassword(email, htmlEmail, passwordResetLink);
+
+        res.json(result);
+      } catch (e) {
+        res.status(401).json({ error: e.message });
+      }
+    });
+
+    // reset password form
+    router.get("/reset-password", express.json(), async (req, res) => {
+      try {
+        const htmlForm = await fs.readFile(path.join(htmlTemplatePath, "reset-password-form.html"), "utf-8");
+        htmlForm.replace("[ACTION]", auth.prefix + "/reset-password")
+        res.set("content-type", "text/html").send(htmlForm);
+      } catch (e) {
+        logger.debug(e);
+        res.end("Invalid link");
+      }
+    });
+
+    // reset password form ACTION
+    router.post("/reset-password", express.json(), async (req, res) => {
+      try {
+        // auth.settings.onPasswordReset()
+
+        res.json({ });
+        // res.json({ user: await auth.settings.onParseToken(req.auth), });
+      } catch (e) {
+        res.status(401).json({ error: e.message });
+      }
     });
 
     return router;

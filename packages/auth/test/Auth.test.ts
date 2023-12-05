@@ -1,7 +1,7 @@
 import assert from "assert";
 import http from "http";
 import * as httpie from "httpie";
-import { JWT, JwtPayload, auth } from "../src/index";
+import { JWT, JwtPayload, auth, Hash } from "../src/index";
 import express from "express";
 
 const TEST_PORT = 8888;
@@ -12,6 +12,8 @@ function get(segments: string, opts: Partial<httpie.Options> = undefined) {
 function post(segments: string, opts: Partial<httpie.Options> = undefined) {
   return httpie.post(`http://localhost:${TEST_PORT}${segments}`, opts);
 }
+
+const passwordPlainText = "123456";
 
 // JWT Secret for testing
 // JWT.options.verify.algorithms = ['HS512'];
@@ -25,17 +27,20 @@ describe("Auth", () => {
   beforeEach(async () => {
     app = express();
     app.use(auth.prefix, auth.routes({
+
       onRegisterWithEmailAndPassword: async (email: string, password: string) => {
-        fakedb[email] = password
-        return { id: 100, email, };
+        fakedb[email] = password;
+        return { id: 100, email };
       },
-      onFindUserByEmail: async (email: string, password: string) => {
-        if (fakedb[email] === password) {
-          return { id: 100, email, };
+
+      onFindUserByEmail: async (email: string) => {
+        if (fakedb[email] !== undefined) {
+          return { id: 100, email, password: fakedb[email] };
         } else {
-          throw new Error("Invalid credentials");
+          return null;
         }
       },
+
       // onGenerateToken
     }));
     app.get("/unprotected_route", (req, res) => res.json({ ok: true }));
@@ -51,7 +56,7 @@ describe("Auth", () => {
     it("should allow to sign-in as 'anonymous'", async () => {
       const signIn = await post("/auth/anonymous");
       assert.ok(signIn.data.user);
-      assert.ok(signIn.data.user.id);
+      assert.ok(signIn.data.user.anonymousId);
       assert.ok(signIn.data.user.anonymous);
       assert.ok(signIn.data.token);
     });
@@ -63,11 +68,11 @@ describe("Auth", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: "endel@colyseus.io",
-          password: "123456"
+          password: passwordPlainText
         }),
       });
 
-      assert.deepStrictEqual({ ["endel@colyseus.io"]: "123456" }, fakedb);
+      assert.deepStrictEqual({ ["endel@colyseus.io"]: Hash.make(passwordPlainText) }, fakedb);
       assert.deepStrictEqual({ id: 100, email: "endel@colyseus.io", }, register.data.user);
 
       const token: any = await JWT.verify(register.data.token);
@@ -77,7 +82,7 @@ describe("Auth", () => {
 
     it("onLogin: should allow to login", async () => {
       // create fake db entry
-      fakedb["endel@colyseus.io"] = "123456";
+      fakedb["endel@colyseus.io"] = Hash.make(passwordPlainText);
 
       assert.rejects(async () => {
         await post("/auth/login", {
@@ -93,7 +98,7 @@ describe("Auth", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: "endel@colyseus.io",
-          password: "123456"
+          password: passwordPlainText
         }),
       });
 
