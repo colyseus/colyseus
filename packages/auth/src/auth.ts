@@ -2,7 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import express from 'express';
 import { existsSync } from 'fs';
-import { generateId, logger } from '@colyseus/core';
+import { generateId, logger, ServerError, matchMaker } from '@colyseus/core';
 import { Request } from 'express-jwt';
 import { OAuthProviderCallback, oAuthProviderCallback, oauth } from './oauth';
 import { JWT, JwtPayload } from './JWT';
@@ -12,7 +12,7 @@ export type RegisterWithEmailAndPasswordCallback<T = any> = (email: string, pass
 export type RegisterAnonymouslyCallback<T = any> = (options: T) => Promise<unknown>;
 export type FindUserByEmailCallback = (email: string) => Promise<unknown & { password: string }>;
 export type ParseTokenCallback = (token: JwtPayload) => Promise<unknown> | unknown;
-export type ForgotPasswordCallback = (email: string, htmlContents: string, resetPasswordLink: string) => Promise<boolean>;
+export type ForgotPasswordCallback = (email: string, htmlContents: string, resetPasswordLink: string) => Promise<boolean | unknown>;
 export type ResetPasswordCallback = (email: string, password: string) => Promise<unknown>;
 export type GenerateTokenCallback = (userdata: unknown) => Promise<unknown>;
 export type HashPasswordCallback = (password: string) => Promise<string>;
@@ -23,7 +23,7 @@ export interface AuthSettings {
   onRegisterAnonymously: RegisterAnonymouslyCallback,
 
   onForgotPassword?: ForgotPasswordCallback,
-  onPasswordReset?: ResetPasswordCallback,
+  onResetPassword?: ResetPasswordCallback,
 
   onOAuthProviderCallback?: OAuthProviderCallback,
   onParseToken?: ParseTokenCallback,
@@ -43,8 +43,10 @@ let onHashPassword: HashPasswordCallback = async (password: string) => Hash.make
  */
 const htmlTemplatePath = [
   path.join(process.cwd(), "html"),
-  path.join(__dirname, "html"),
+  path.join(__dirname, "..", "html"),
 ].find((filePath) => existsSync(filePath));
+
+const RESET_PASSWORD_TOKEN_EXPIRATION_MINUTES = 30;
 
 export const auth = {
   /**
@@ -76,7 +78,7 @@ export const auth = {
     /**
      * (Optional) Reset password action.
      */
-    onPasswordReset: undefined as ResetPasswordCallback,
+    onResetPassword: undefined as ResetPasswordCallback,
 
     /**
      * By default, it returns the contents of the JWT token. (onGenerateToken)
@@ -191,7 +193,7 @@ export const auth = {
           throw new Error("email_already_in_use");
         }
 
-        if (password.length < 5) {
+        if (!isValidPassword(password)) {
           return res.status(400).json({ error: "password_too_short" });
         }
 
@@ -229,49 +231,83 @@ export const auth = {
 
     router.post("/forgot-password", express.json(), async (req, res) => {
       try {
+        //
+        // check if "forgot password" feature is fully implemented
+        //
+        if (typeof (auth.settings.onForgotPassword) !== "function") {
+          throw new Error("auth.settings.onForgotPassword must be implemented.");
+        }
+
+        if (typeof (auth.settings.onResetPassword) !== "function") {
+          throw new Error("auth.settings.onResetPassword must be implemented.");
+        }
+
         const email = req.body.email;
         const user = await auth.settings.onFindUserByEmail(email);
         if (!user) {
           throw new Error("email_not_found");
         }
 
-        const token = JWT.sign({ email }, { expiresIn: "1h" });
+        const token = await JWT.sign({ email }, { expiresIn: RESET_PASSWORD_TOKEN_EXPIRATION_MINUTES + "m" });
 
-        // TODO: append backend URL
-        const passwordResetLink = auth.prefix + "/reset-password?token=" + token;
+        const fullUrl = req.protocol + '://' + req.get('host');
+        const passwordResetLink = fullUrl + auth.prefix + "/reset-password?token=" + token;
 
         const htmlEmail = (await fs .readFile(path.join(htmlTemplatePath, "reset-password-email.html"), "utf-8"))
           .replace("[PASSWORD_RESET_LINK]", passwordResetLink);
 
-        const result = auth.settings.onForgotPassword(email, htmlEmail, passwordResetLink);
-
+        const result = (await auth.settings.onForgotPassword(email, htmlEmail, passwordResetLink)) ?? true;
         res.json(result);
+
       } catch (e) {
         res.status(401).json({ error: e.message });
       }
     });
 
     // reset password form
-    router.get("/reset-password", express.json(), async (req, res) => {
+    router.get("/reset-password", async (req, res) => {
       try {
-        const htmlForm = await fs.readFile(path.join(htmlTemplatePath, "reset-password-form.html"), "utf-8");
-        htmlForm.replace("[ACTION]", auth.prefix + "/reset-password")
-        res.set("content-type", "text/html").send(htmlForm);
+        const token = (req.query.token || "").toString();
+
+        const htmlForm = (await fs.readFile(path.join(htmlTemplatePath, "reset-password-form.html"), "utf-8"))
+          .replace("[ACTION]", auth.prefix + "/reset-password")
+          .replace("[TOKEN]", token);
+
+        res
+          .set("content-type", "text/html")
+          .send(htmlForm);
+
       } catch (e) {
         logger.debug(e);
-        res.end("Invalid link");
+        res.end(`Error: ${e.message}`);
       }
     });
 
     // reset password form ACTION
-    router.post("/reset-password", express.json(), async (req, res) => {
-      try {
-        // auth.settings.onPasswordReset()
+    router.post("/reset-password", express.urlencoded({ extended: false }), async (req, res) => {
+      const token = req.body.token;
+      const password = req.body.password;
 
-        res.json({ });
-        // res.json({ user: await auth.settings.onParseToken(req.auth), });
+      try {
+        const data = await JWT.verify<{ email: string }>(token);
+
+        if (matchMaker.presence?.get("reset-password:" + token)) {
+          throw new Error("token_already_used");
+        }
+
+        if (!isValidPassword(password)) {
+          throw new Error("Password is too short.");
+        }
+
+        const result = await auth.settings.onResetPassword(data.email, Hash.make(password)) ?? true;
+
+        // invalidate used token for 30m
+        matchMaker.presence?.setex("reset-password:" + token, "1", 60 * RESET_PASSWORD_TOKEN_EXPIRATION_MINUTES);
+
+        res.redirect(auth.prefix + "/reset-password?success=" + (result || "Password reset successfully!"));
+
       } catch (e) {
-        res.status(401).json({ error: e.message });
+        res.redirect(auth.prefix + "/reset-password?token=" + token + "&error=" + e.message);
       }
     });
 
@@ -281,4 +317,8 @@ export const auth = {
 
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)
+}
+
+function isValidPassword(password: string) {
+  return password.length >= 6;
 }

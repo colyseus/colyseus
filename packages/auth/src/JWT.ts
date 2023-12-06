@@ -31,14 +31,14 @@ export const JWT = {
     });
   },
 
-  verify: function (token: string, options?: VerifyOptions) {
+  verify: function<T = JwtPayload | Jwt | string> (token: string, options?: VerifyOptions) {
     if (!options) {
       options = JWT.settings.verify;
     }
-    return new Promise<JwtPayload | Jwt | string>((resolve, reject) => {
+    return new Promise<T>((resolve, reject) => {
       jsonwebtoken.verify(token, JWT.settings.secret, options, function (err, decoded) {
         if (err) reject(err);
-        resolve(decoded);
+        resolve(decoded as T);
       });
     });
   },

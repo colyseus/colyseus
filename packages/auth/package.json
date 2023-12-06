@@ -20,6 +20,7 @@
   ],
   "files": [
     "build",
+    "html",
     "oauth_help_urls.json",
     "LICENSE",
     "README.md"
