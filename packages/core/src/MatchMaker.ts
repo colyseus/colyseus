@@ -80,11 +80,43 @@ export async function setup(
   };
 
   /**
-   * Subscribe to remote `handleCreateRoom` calls.
+   * Process-level subscription
+   * - handle `handleCreateRoom` calls
+   * - handle remote "health checks"
    */
-  subscribeIPC(presence, processId, getProcessChannel(), (_, args) => {
-    return handleCreateRoom.apply(undefined, args);
+  subscribeIPC(presence, processId, getProcessChannel(), (method, args) => {
+    if (method === 'healthcheck') {
+      // health check for processId
+      return true;
+
+    } else {
+      return handleCreateRoom.apply(undefined, args);
+    }
   });
+
+  /**
+   * Check for leftover/invalid processId's on startup
+   */
+  const previousStats = await stats.fetchAll();
+  if (previousStats.length > 0) {
+    logger.debug(`${previousStats.length} previous processId(s) found, health-checking...`);
+    await Promise.all(previousStats.map(async (stat) => {
+      try {
+        await requestFromIPC<RoomListingData>(
+          presence,
+          getProcessChannel(stat.processId),
+          'healthcheck',
+          [],
+          REMOTE_ROOM_SHORT_TIMEOUT,
+        );
+        // process succeeded to respond - nothing to do
+      } catch (e) {
+        // process failed to respond - remove it from stats
+        logger.debug(`process ${stat.processId} failed to respond. excluding from stats`);
+        await stats.excludeProcess(stat.processId);
+      }
+    }));
+  }
 
   await stats.reset();
 
@@ -447,7 +479,7 @@ export async function gracefullyShutdown(): Promise<any> {
   }
 
   // remove processId from room count key
-  stats.excludeProcess(processId);
+  await stats.excludeProcess(processId);
 
   // unsubscribe from process id channel
   presence.unsubscribe(getProcessChannel());
