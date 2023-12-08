@@ -81,15 +81,16 @@ export async function setup(
 
   /**
    * Process-level subscription
-   * - handle `handleCreateRoom` calls
-   * - handle remote "health checks"
+   * - handle remote process healthcheck
+   * - handle remote room creation
    */
   subscribeIPC(presence, processId, getProcessChannel(), (method, args) => {
     if (method === 'healthcheck') {
-      // health check for processId
+      // health check for this processId
       return true;
 
     } else {
+      // handle room creation
       return handleCreateRoom.apply(undefined, args);
     }
   });
