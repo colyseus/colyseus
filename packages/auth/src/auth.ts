@@ -301,10 +301,14 @@ export const auth = {
 
         const result = await auth.settings.onResetPassword(data.email, Hash.make(password)) ?? true;
 
+        if (!result) {
+          throw new Error("Could not reset password.");
+        }
+
         // invalidate used token for 30m
         matchMaker.presence?.setex("reset-password:" + token, "1", 60 * RESET_PASSWORD_TOKEN_EXPIRATION_MINUTES);
 
-        res.redirect(auth.prefix + "/reset-password?success=" + (result || "Password reset successfully!"));
+        res.redirect(auth.prefix + "/reset-password?success=" + encodeURIComponent("Password reset successfully!"));
 
       } catch (e) {
         res.redirect(auth.prefix + "/reset-password?token=" + token + "&error=" + e.message);
