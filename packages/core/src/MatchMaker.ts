@@ -45,7 +45,7 @@ export let driver: MatchMakerDriver;
 export let selectProcessIdToCreateRoom: SelectProcessIdCallback;
 
 export let isGracefullyShuttingDown: boolean;
-export let onReady: Deferred;
+export let onReady: Deferred = new Deferred(); // onReady needs to be immediately available to @colyseus/auth integration.
 
 /**
  * @private
@@ -56,7 +56,14 @@ export async function setup(
   _publicAddress?: string,
   _selectProcessIdToCreateRoom?: SelectProcessIdCallback,
 ) {
-  onReady = new Deferred();
+  if (onReady === undefined) {
+    //
+    // for testing purposes only: onReady is turned into undefined on shutdown
+    // (needs refactoring.)
+    //
+    onReady = new Deferred();
+  }
+
   presence = _presence || new LocalPresence();
   driver = _driver || new LocalDriver();
   publicAddress = _publicAddress;
@@ -456,6 +463,7 @@ export async function gracefullyShutdown(): Promise<any> {
   }
 
   isGracefullyShuttingDown = true;
+  onReady = undefined;
 
   debugMatchMaking(`${processId} is shutting down!`);
 
