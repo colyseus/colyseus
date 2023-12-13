@@ -2,7 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import express from 'express';
 import { existsSync } from 'fs';
-import { generateId, logger, ServerError, matchMaker } from '@colyseus/core';
+import { generateId, logger, matchMaker } from '@colyseus/core';
 import { Request } from 'express-jwt';
 import { OAuthProviderCallback, oAuthProviderCallback, oauth } from './oauth';
 import { JWT, JwtPayload } from './JWT';

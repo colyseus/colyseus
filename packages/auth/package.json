@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/auth",
-  "version": "0.15.0",
+  "version": "0.15.1",
   "description": "Authentication Utilities for Colyseus",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -34,6 +34,7 @@
     "node": ">= 14.x"
   },
   "dependencies": {
+    "connect-redis": "^7.1.0",
     "express-jwt": "^8.4.1",
     "express-session": "^1.17.3",
     "grant": "^5.4.22"
