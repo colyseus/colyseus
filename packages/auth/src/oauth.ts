@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import express from 'express';
 import grant, { GrantProvider, GrantConfig, GrantSession } from 'grant';
 import session from 'express-session';
@@ -123,11 +125,20 @@ export const oauth = {
           next();
 
         } else {
-          // TODO: do not display help message on "production" environment.
-          const jsonFilePath = '../oauth_help_urls.json';
-          const helpURLs = (await import(jsonFilePath));
-          const providerUrl = helpURLs[providerId];
-          res.send(`<!doctype html>
+          if (process.env.NODE_ENV === "production") {
+            //
+            // Production environment:
+            //
+            res.send(`Missing OAuth provider configuration for "${providerId}".`);
+
+          } else {
+            //
+            // Development environment:
+            // Display help URL for missing OAuth provider configuration
+            //
+            const helpURLs = JSON.parse(fs.readFileSync(path.normalize(__dirname + '/../oauth_help_urls.json')).toString());
+            const providerUrl = helpURLs[providerId];
+            res.send(`<!doctype html>
 <html>
 <head>
 <title>Missing "${providerId}" provider configuration</title>
@@ -146,6 +157,7 @@ auth.oauth.addProvider("${providerId}", {
 ${(providerUrl) ? `<hr/><p><small><em>(Get your keys from <a href="${providerUrl}" target="_blank">${providerUrl}</a>)</em></small></p>` : ""}
 </body>
 </html>`);
+          }
         }
       });
 
