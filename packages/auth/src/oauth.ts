@@ -95,38 +95,39 @@ export const oauth = {
 
     const router = express.Router();
 
-    //
-    // Here we are using the same Redis connection from the MatchMaker.
-    // FIXME: make it type-safe. (This is a hacky way to auto-detection)
-    //
-    const store = (matchMaker.presence['pub'])
-      ? new RedisStore({ client: matchMaker.presence['pub'] })
-      : undefined;
+    matchMaker.onReady.then(() => {
+      //
+      // Here we are using the same Redis connection from the MatchMaker.
+      // FIXME: make it type-safe. (This is a hacky way to auto-detection)
+      //
+      const store = (matchMaker.presence['pub'])
+        ? new RedisStore({ client: matchMaker.presence['pub'] })
+        : undefined;
 
-    const sessionMiddleware = session({
-      secret: process.env.SESSION_SECRET,
-      resave: false,
-      saveUninitialized: false, // true
-      store
-    });
+      const sessionMiddleware = session({
+        secret: process.env.SESSION_SECRET,
+        resave: false,
+        saveUninitialized: false, // true
+        store
+      });
 
-    // set prefix
-    const config: GrantConfig = Object.assign({ defaults: this.defaults }, this.providers);
-    config.defaults.prefix = oauth.prefix;
+      // set prefix
+      const config: GrantConfig = Object.assign({ defaults: this.defaults }, this.providers);
+      config.defaults.prefix = oauth.prefix;
 
-    router.use(sessionMiddleware);
+      router.use(sessionMiddleware);
 
-    router.get("/:providerId", async (req, res, next) => {
-      const providerId = req.params.providerId as OAuthProviderName;
-      if (oauth.providers[providerId]) {
-        next();
+      router.get("/:providerId", async (req, res, next) => {
+        const providerId = req.params.providerId as OAuthProviderName;
+        if (oauth.providers[providerId]) {
+          next();
 
-      } else {
-        // TODO: do not display help message on "production" environment.
-        const jsonFilePath = '../oauth_help_urls.json';
-        const helpURLs = (await import(jsonFilePath));
-        const providerUrl = helpURLs[providerId];
-        res.send(`<!doctype html>
+        } else {
+          // TODO: do not display help message on "production" environment.
+          const jsonFilePath = '../oauth_help_urls.json';
+          const helpURLs = (await import(jsonFilePath));
+          const providerUrl = helpURLs[providerId];
+          res.send(`<!doctype html>
 <html>
 <head>
 <title>Missing "${providerId}" provider configuration</title>
@@ -136,8 +137,8 @@ export const oauth = {
 <p>Missing config for "${providerId}" OAuth provider.</p>
 <hr />
 <p><small><strong>Config example:</strong></small></p>
-<pre><code>import { oauth } from "@colyseus/auth";<br />
-oauth.addProvider("${providerId}", {
+<pre><code>import { auth } from "@colyseus/auth";<br />
+auth.oauth.addProvider("${providerId}", {
   key: "xxx",
   secret: "xxx",
 });
@@ -145,33 +146,34 @@ oauth.addProvider("${providerId}", {
 ${(providerUrl) ? `<hr/><p><small><em>(Get your keys from <a href="${providerUrl}" target="_blank">${providerUrl}</a>)</em></small></p>` : ""}
 </body>
 </html>`);
-      }
-    });
+        }
+      });
 
-    router.use(grant.express(config));
+      router.use(grant.express(config));
 
-    router.get("/:providerId/callback", async (req, res) => {
-      const session = (req as any).session as unknown & { grant: GrantSession };
+      router.get("/:providerId/callback", async (req, res) => {
+        const session = (req as any).session as unknown & { grant: GrantSession };
 
-      let user = null;
-      let token = null;
-      let response = undefined;
+        let user = null;
+        let token = null;
+        let response = undefined;
 
-      if (session.grant.response.error) {
-        response = { error: session.grant.response.error, user, token, };
+        if (session.grant.response.error) {
+          response = { error: session.grant.response.error, user, token, };
 
-      } else {
-        user = await oAuthProviderCallback(session.grant.response, session.grant.provider as OAuthProviderName);
-        token = await auth.settings.onGenerateToken(user);
-        response = { user, token };
-      }
+        } else {
+          user = await oAuthProviderCallback(session.grant.response, session.grant.provider as OAuthProviderName);
+          token = await auth.settings.onGenerateToken(user);
+          response = { user, token };
+        }
 
-      /**
-       * I believe it is safe to use "*" in the origin here, since the token and origin are already validated by the OAuth provider.
-       * => https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage
-       */
-      res.send(`<!DOCTYPE html><html><head><script type="text/javascript">window.opener.postMessage(${JSON.stringify(response)}, '*');</script></head><body></body></html>`);
-      res.end();
+        /**
+         * I believe it is safe to use "*" in the origin here, since the token and origin are already validated by the OAuth provider.
+         * => https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage
+         */
+        res.send(`<!DOCTYPE html><html><head><script type="text/javascript">window.opener.postMessage(${JSON.stringify(response)}, '*');</script></head><body></body></html>`);
+        res.end();
+      });
     });
 
     return router;
