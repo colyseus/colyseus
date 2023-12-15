@@ -31,8 +31,8 @@ export interface AuthSettings {
   onHashPassword?: HashPasswordCallback,
 };
 
-let onFindUserByEmail: FindUserByEmailCallback = (email: string) => { throw new Error('`auth.settings.onFindByEmail` not implemented.'); };
-let onRegisterWithEmailAndPassword: RegisterWithEmailAndPasswordCallback = () => { throw new Error('`auth.settings.onRegister` not implemented.'); };
+let onFindUserByEmail: FindUserByEmailCallback = (email: string) => { throw new Error('`auth.settings.onFindUserByEmail` not implemented.'); };
+let onRegisterWithEmailAndPassword: RegisterWithEmailAndPasswordCallback = () => { throw new Error('`auth.settings.onRegisterWithEmailAndPassword` not implemented.'); };
 let onForgotPassword: ForgotPasswordCallback = () => { throw new Error('`auth.settings.onForgotPassword` not implemented.'); };
 let onParseToken: ParseTokenCallback = (jwt: JwtPayload) => jwt;
 let onGenerateToken: GenerateTokenCallback = async (userdata: unknown) => await JWT.sign(userdata);
@@ -153,7 +153,7 @@ export const auth = {
         if (!isValidEmail(email)) { throw new Error("email_malformed"); }
 
         const user = await auth.settings.onFindUserByEmail(email);
-        if (user.password === Hash.make(req.body.password)) {
+        if (user.password === await Hash.make(req.body.password)) {
           delete user.password; // remove password from response
           res.json({ user, token: await auth.settings.onGenerateToken(user) });
 
@@ -183,7 +183,7 @@ export const auth = {
         existingUser = await auth.settings.onFindUserByEmail(email)
 
       } catch (e) {
-        logger.error('@colyseus/auth, onFindByEmail exception:' + e.stack);
+        logger.error('@colyseus/auth, onFindUserByEmail exception:' + e.stack);
       }
 
       try {
@@ -198,7 +198,7 @@ export const auth = {
         }
 
         // Register
-        await auth.settings.onRegisterWithEmailAndPassword(email, Hash.make(password), req.body.options);
+        await auth.settings.onRegisterWithEmailAndPassword(email, await Hash.make(password), req.body.options);
 
         const user = await auth.settings.onFindUserByEmail(email);
         delete user.password; // remove password from response
@@ -299,7 +299,7 @@ export const auth = {
           throw new Error("Password is too short.");
         }
 
-        const result = await auth.settings.onResetPassword(data.email, Hash.make(password)) ?? true;
+        const result = await auth.settings.onResetPassword(data.email, await Hash.make(password)) ?? true;
 
         if (!result) {
           throw new Error("Could not reset password.");

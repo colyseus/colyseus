@@ -1,5 +1,6 @@
 import assert from "assert";
 import http from "http";
+import crypto from "crypto";
 import * as httpie from "httpie";
 import { JWT, JwtPayload, auth, Hash } from "../src/index";
 import express from "express";
@@ -72,7 +73,7 @@ describe("Auth", () => {
         }),
       });
 
-      assert.deepStrictEqual({ ["endel@colyseus.io"]: Hash.make(passwordPlainText) }, fakedb);
+      assert.deepStrictEqual({ ["endel@colyseus.io"]: await Hash.make(passwordPlainText) }, fakedb);
       assert.deepStrictEqual({ id: 100, email: "endel@colyseus.io", }, register.data.user);
 
       const token: any = await JWT.verify(register.data.token);
@@ -82,7 +83,7 @@ describe("Auth", () => {
 
     it("onLogin: should allow to login", async () => {
       // create fake db entry
-      fakedb["endel@colyseus.io"] = Hash.make(passwordPlainText);
+      fakedb["endel@colyseus.io"] = await Hash.make(passwordPlainText);
 
       assert.rejects(async () => {
         await post("/auth/login", {
@@ -140,6 +141,16 @@ describe("Auth", () => {
         withCredentials: true,
       })).data;
       assert.deepStrictEqual({ ok: true }, protected_route);
+    });
+  })
+
+  describe("Hash", () => {
+    it("should allow to use different hashing algorithms", async () => {
+      Hash.algorithm = "sha1";
+      assert.strictEqual(await Hash.make("123456"), crypto.createHash("sha1").update("123456" + "## SALT ##").digest("hex"));
+
+      // revert to default algorithm
+      Hash.algorithm = "scrypt";
     });
   })
 
