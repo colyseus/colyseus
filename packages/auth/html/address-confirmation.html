@@ -1,5 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Email Address Confirmation</title>
+</head>
+<body>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <title>Password reset</title>
@@ -13,7 +22,7 @@
         justify-content: center;
         height: 100vh;
       }
-      form {
+      main {
         text-align: center;
         background: #fff;
         margin: 0 auto;
@@ -32,12 +41,10 @@
     </style>
   </head>
   <body>
-    <form id="reset-password" action="[ACTION]" method="post">
-      <h2>🗝️ Reset Password</h2>
-      <input type="hidden" name="token" value="[TOKEN]" />
-      <input type="password" name="password" />
-      <input type="submit" value="Reset password" />
-    </form>
+    <main>
+      <h2>Email confirmation</h2>
+      <!-- Success or Error message will be appended here based on query param. -->
+    </main>
 
     <!-- Display error from query param -->
     <script type="text/javascript">
@@ -49,14 +56,14 @@
         var errorEl = document.createElement("p");
         errorEl.className = "error";
         errorEl.innerText = errorMessage;
-        document.querySelector("form#reset-password").appendChild(errorEl);
+        document.querySelector("main").appendChild(errorEl);
       }
 
       if (successMessage) {
         var errorEl = document.createElement("p");
         errorEl.className = "success";
         errorEl.innerText = successMessage;
-        document.querySelector("form#reset-password").appendChild(errorEl);
+        document.querySelector("main").appendChild(errorEl);
       }
     </script>
   </body>

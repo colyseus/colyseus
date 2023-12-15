@@ -11,9 +11,14 @@ import { Hash } from './Hash';
 export type RegisterWithEmailAndPasswordCallback<T = any> = (email: string, password: string, options: T) => Promise<unknown>;
 export type RegisterAnonymouslyCallback<T = any> = (options: T) => Promise<unknown>;
 export type FindUserByEmailCallback = (email: string) => Promise<unknown & { password: string }>;
-export type ParseTokenCallback = (token: JwtPayload) => Promise<unknown> | unknown;
+
+export type SendEmailConfirmationCallback = (email: string, htmlContents: string, confirmEmailLink: string) => Promise<unknown>;
+export type EmailConfirmedCallback = (email: string) => Promise<unknown>;
+
 export type ForgotPasswordCallback = (email: string, htmlContents: string, resetPasswordLink: string) => Promise<boolean | unknown>;
 export type ResetPasswordCallback = (email: string, password: string) => Promise<unknown>;
+
+export type ParseTokenCallback = (token: JwtPayload) => Promise<unknown> | unknown;
 export type GenerateTokenCallback = (userdata: unknown) => Promise<unknown>;
 export type HashPasswordCallback = (password: string) => Promise<string>;
 
@@ -21,6 +26,9 @@ export interface AuthSettings {
   onFindUserByEmail: FindUserByEmailCallback,
   onRegisterWithEmailAndPassword: RegisterWithEmailAndPasswordCallback,
   onRegisterAnonymously: RegisterAnonymouslyCallback,
+
+  onSendEmailConfirmation?: SendEmailConfirmationCallback,
+  onEmailConfirmed?: EmailConfirmedCallback,
 
   onForgotPassword?: ForgotPasswordCallback,
   onResetPassword?: ResetPasswordCallback,
@@ -69,6 +77,16 @@ export const auth = {
      * (Optional) Register anonymous user.
      */
     onRegisterAnonymously: undefined as RegisterAnonymouslyCallback,
+
+    /**
+     * (Optional) Send email address verification confirmation email.
+     */
+    onSendEmailConfirmation: undefined as SendEmailConfirmationCallback,
+
+    /**
+     * (Optional) Send email address verification confirmation email.
+     */
+    onEmailConfirmed: undefined as EmailConfirmedCallback,
 
     /**
      * (Optional) Send reset password link via email.
@@ -204,11 +222,40 @@ export const auth = {
         delete user.password; // remove password from response
 
         const token = await auth.settings.onGenerateToken(user);
+
+        // Call `onSendEmailConfirmation` callback, if defined.
+        if (typeof (auth.settings.onSendEmailConfirmation) === "function") {
+          const fullUrl = req.protocol + '://' + req.get('host');
+          const confirmEmailLink = fullUrl + auth.prefix + "/confirm-email?token=" + token;
+          const htmlContents = (await fs.readFile(path.join(htmlTemplatePath, "address-confirmation-email.html"), "utf-8"))
+            .replace("[LINK]", confirmEmailLink);
+
+          await auth.settings.onSendEmailConfirmation(email, htmlContents, confirmEmailLink);
+        }
+
         res.json({ user, token, });
 
       } catch (e) {
         logger.error(e);
         res.status(401).json({ error: e.message });
+      }
+    });
+
+    router.get("/confirm-email", async (req, res) => {
+      // send "address confirmed" message
+      if (typeof (auth.settings.onEmailConfirmed) !== "function") {
+        return res.status(404).end('Not found.');
+      }
+
+      try {
+        const token = (req.query.token || "").toString();
+        const data = await JWT.verify<{ email: string }>(token);
+
+        await auth.settings.onEmailConfirmed(data.email);
+        res.redirect(auth.prefix + "/confirm-email?success=" + encodeURIComponent("Email confirmed successfully!"));
+
+      } catch (e) {
+        res.redirect(auth.prefix + "/confirm-email?error=" + e.message);
       }
     });
 
@@ -252,11 +299,10 @@ export const auth = {
 
         const fullUrl = req.protocol + '://' + req.get('host');
         const passwordResetLink = fullUrl + auth.prefix + "/reset-password?token=" + token;
+        const htmlContents = (await fs.readFile(path.join(htmlTemplatePath, "reset-password-email.html"), "utf-8"))
+          .replace("[LINK]", passwordResetLink);
 
-        const htmlEmail = (await fs .readFile(path.join(htmlTemplatePath, "reset-password-email.html"), "utf-8"))
-          .replace("[PASSWORD_RESET_LINK]", passwordResetLink);
-
-        const result = (await auth.settings.onForgotPassword(email, htmlEmail, passwordResetLink)) ?? true;
+        const result = (await auth.settings.onForgotPassword(email, htmlContents, passwordResetLink)) ?? true;
         res.json(result);
 
       } catch (e) {
