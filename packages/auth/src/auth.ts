@@ -172,7 +172,7 @@ export const auth = {
 
         const user = await auth.settings.onFindUserByEmail(email);
         if (user.password === await Hash.make(req.body.password)) {
-          delete user.password; // remove password from response
+          delete user.password; // remove password from JWT payload
           res.json({ user, token: await auth.settings.onGenerateToken(user) });
 
         } else {
@@ -219,7 +219,7 @@ export const auth = {
         await auth.settings.onRegisterWithEmailAndPassword(email, await Hash.make(password), req.body.options);
 
         const user = await auth.settings.onFindUserByEmail(email);
-        delete user.password; // remove password from response
+        delete user.password; // remove password from JWT payload
 
         const token = await auth.settings.onGenerateToken(user);
 
