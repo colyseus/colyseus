@@ -19,7 +19,7 @@ jobs:
     - name: Set up Node.js
       uses: actions/setup-node@master
       with:
-        node-version: 16.1.0
+        node-version: 20.9.0
     - name: Install dependencies
       run: pnpm install
     - name: Build project
