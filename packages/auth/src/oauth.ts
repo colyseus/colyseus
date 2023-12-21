@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import express from 'express';
+import express, { Router } from 'express';
 import grant, { GrantProvider, GrantConfig, GrantSession } from 'grant';
 import session from 'express-session';
 import { auth } from './auth';
@@ -92,7 +92,7 @@ export const oauth = {
    * @param callback (optional) Callback function that is called when OAuth is successful.
    * @returns Express Router
    */
-  routes: function (callback?: OAuthProviderCallback) {
+  routes: function (callback?: OAuthProviderCallback): Router {
     if (callback) { this.onCallback(callback); }
 
     const router = express.Router();

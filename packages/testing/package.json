@@ -26,8 +26,8 @@
     "node": ">= 14.x"
   },
   "dependencies": {
-    "@colyseus/tools": "workspace:*",
-    "@colyseus/core": "workspace:*",
+    "@colyseus/tools": "workspace:^",
+    "@colyseus/core": "workspace:^",
     "colyseus.js": "^0.15.0",
     "httpie": "^2.0.0-next.13"
   },

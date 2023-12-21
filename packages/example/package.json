@@ -8,7 +8,7 @@
     "start": "ts-node-dev --respawn --transpile-only src/Server.ts"
   },
   "dependencies": {
-    "@colyseus/core": "^0.15.0"
+    "@colyseus/core": "workspace:^"
   },
   "devDependencies": {
     "@colyseus/monitor": "^0.15.0",

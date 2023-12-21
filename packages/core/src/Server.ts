@@ -345,9 +345,11 @@ export class Server {
           const clientOptions = JSON.parse(Buffer.concat(data).toString());
           const roomClass = matchMaker.getRoomClass(roomName);
 
-          // check if static onAuth is implemented
-          // (default implementation is just to satisfy TypeScript )
-          if (roomClass['onAuth'] !== Room['onAuth']) {
+          /**
+           * Check if static onAuth is implemented (default implementation is just to satisfy TypeScript)
+           * - On "reconnect" requests, the `roomClass` is undefined, as the "roomName" variable actually corresponds to the `roomId`.
+           */
+          if (roomClass && roomClass['onAuth'] !== Room['onAuth']) {
             const authHeader = req.headers['authorization'];
             const authToken = (authHeader && authHeader.startsWith("Bearer ") && authHeader.substring(7, authHeader.length)) || undefined;
             clientOptions['$auth'] = await roomClass['onAuth'](authToken, req);

@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import express from 'express';
+import express, { Router } from 'express';
 import { existsSync } from 'fs';
 import { generateId, logger, matchMaker } from '@colyseus/core';
 import { Request } from 'express-jwt';
@@ -12,10 +12,10 @@ export type RegisterWithEmailAndPasswordCallback<T = any> = (email: string, pass
 export type RegisterAnonymouslyCallback<T = any> = (options: T) => Promise<unknown>;
 export type FindUserByEmailCallback = (email: string) => Promise<unknown & { password: string }>;
 
-export type SendEmailConfirmationCallback = (email: string, htmlContents: string, confirmEmailLink: string) => Promise<unknown>;
+export type SendEmailConfirmationCallback = (email: string, html: string, confirmLink: string) => Promise<unknown>;
 export type EmailConfirmedCallback = (email: string) => Promise<unknown>;
 
-export type ForgotPasswordCallback = (email: string, htmlContents: string, resetPasswordLink: string) => Promise<boolean | unknown>;
+export type ForgotPasswordCallback = (email: string, html: string, resetLink: string) => Promise<boolean | unknown>;
 export type ResetPasswordCallback = (email: string, password: string) => Promise<unknown>;
 
 export type ParseTokenCallback = (token: JwtPayload) => Promise<unknown> | unknown;
@@ -117,7 +117,7 @@ export const auth = {
   prefix: "/auth",
   middleware: JWT.middleware,
 
-  routes: function (settings: Partial<AuthSettings> = {}) {
+  routes: function (settings: Partial<AuthSettings> = {}): Router {
     const router = express.Router();
 
     // set register/login callbacks
@@ -227,10 +227,10 @@ export const auth = {
         if (typeof (auth.settings.onSendEmailConfirmation) === "function") {
           const fullUrl = req.protocol + '://' + req.get('host');
           const confirmEmailLink = fullUrl + auth.prefix + "/confirm-email?token=" + token;
-          const htmlContents = (await fs.readFile(path.join(htmlTemplatePath, "address-confirmation-email.html"), "utf-8"))
+          const html = (await fs.readFile(path.join(htmlTemplatePath, "address-confirmation-email.html"), "utf-8"))
             .replace("[LINK]", confirmEmailLink);
 
-          await auth.settings.onSendEmailConfirmation(email, htmlContents, confirmEmailLink);
+          await auth.settings.onSendEmailConfirmation(email, html, confirmEmailLink);
         }
 
         res.json({ user, token, });
@@ -299,10 +299,10 @@ export const auth = {
 
         const fullUrl = req.protocol + '://' + req.get('host');
         const passwordResetLink = fullUrl + auth.prefix + "/reset-password?token=" + token;
-        const htmlContents = (await fs.readFile(path.join(htmlTemplatePath, "reset-password-email.html"), "utf-8"))
+        const html = (await fs.readFile(path.join(htmlTemplatePath, "reset-password-email.html"), "utf-8"))
           .replace("[LINK]", passwordResetLink);
 
-        const result = (await auth.settings.onForgotPassword(email, htmlContents, passwordResetLink)) ?? true;
+        const result = (await auth.settings.onForgotPassword(email, html, passwordResetLink)) ?? true;
         res.json(result);
 
       } catch (e) {

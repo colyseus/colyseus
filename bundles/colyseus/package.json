@@ -1,6 +1,6 @@
 {
   "name": "colyseus",
-  "version": "0.15.14-preview.0",
+  "version": "0.15.15",
   "description": "Multiplayer Framework for Node.js",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -31,11 +31,11 @@
     "node": ">= 14.x"
   },
   "dependencies": {
-    "@colyseus/auth": "^0.15.0",
-    "@colyseus/core": "workspace:*",
-    "@colyseus/redis-driver": "^0.15.3",
-    "@colyseus/redis-presence": "^0.15.2",
-    "@colyseus/ws-transport": "^0.15.1"
+    "@colyseus/auth": "workspace:^",
+    "@colyseus/core": "workspace:^",
+    "@colyseus/redis-driver": "workspace:^",
+    "@colyseus/redis-presence": "workspace:^",
+    "@colyseus/ws-transport": "workspace:^"
   },
   "gitHead": "25ba61e283429bb4fa02db0454f804ea218259eb"
 }

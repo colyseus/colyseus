@@ -28,7 +28,7 @@ async function main() {
 
   const packages = await getAllPackages(argv.scope, argv.ignore);
 
-  const configs = packages.map(pkg => {
+  packages.map(pkg => {
     // Absolute path to package directory
     const basePath = path.relative(__dirname, pkg.location);
 

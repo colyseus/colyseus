@@ -158,6 +158,7 @@ export async function reconnect(roomId: string, clientOptions: ClientOptions = {
   const reconnectionToken = clientOptions.reconnectionToken;
   if (!reconnectionToken) { throw new ServerError(ErrorCode.MATCHMAKE_UNHANDLED, `'reconnectionToken' must be provided for reconnection.`); }
 
+
   // respond to re-connection!
   const sessionId = await remoteRoomCall(room.roomId, 'checkReconnectionToken', [reconnectionToken]);
   if (sessionId) {
@@ -272,12 +273,12 @@ export function defineRoomType<T extends Type<Room>>(
 
   handlers[roomName] = registeredHandler;
 
-  // TODO: remove this check on version 0.16
   if (klass.prototype['onAuth'] !== Room.prototype['onAuth']) {
-    console.warn("DEPRECATION WARNING: onAuth() at the instance level will be deprecated soon. Please use static onAuth() instead.");
+    // TODO: soft-deprecate instance level `onAuth` on 0.16
+    // console.warn("DEPRECATION WARNING: onAuth() at the instance level will be deprecated soon. Please use static onAuth() instead.");
 
     if (klass['onAuth'] !== Room['onAuth']) {
-      console.log('❌ onAuth() defined at the instance level will be ignored.');
+      console.log(`❌ "${roomName}"'s onAuth() defined at the instance level will be ignored.`);
     }
   }
 
@@ -313,7 +314,7 @@ export function getHandler(roomName: string) {
 }
 
 export function getRoomClass(roomName: string) {
-  return getHandler(roomName).klass as unknown as typeof Room
+  return handlers[roomName]?.klass;
 }
 
 /**

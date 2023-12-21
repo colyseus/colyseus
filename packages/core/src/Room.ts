@@ -216,8 +216,11 @@ export abstract class Room<State extends object= any, Metadata= any> {
   ): void | Promise<any>;
   public onDispose?(): void | Promise<any>;
 
+  // TODO: flag as @deprecated on v0.16
+  // TOOD: remove instance level `onAuth` on 1.0
   /**
-   * @deprecated Please use onAuth as a static method instead, with its new method signature.
+   * onAuth at the instance level will be deprecated in the future.
+   * Please use "static onAuth(token, req) instead
    */
   public onAuth(
     client: Client<ExtractUserData<typeof this['clients']>, ExtractAuthData<typeof this['clients']>>,
@@ -578,6 +581,10 @@ export abstract class Room<State extends object= any, Metadata= any> {
 
         } else if (this.onAuth !== Room.prototype.onAuth) {
           client.auth = await this.onAuth(client, options, req);
+
+          if (!client.auth) {
+            throw new ServerError(ErrorCode.AUTH_FAILED, 'onAuth failed');
+          }
         }
 
         //
@@ -585,10 +592,6 @@ export abstract class Room<State extends object= any, Metadata= any> {
         //
         if (client.readyState !== WebSocket.OPEN) {
           throw new ServerError(Protocol.WS_CLOSE_GOING_AWAY, 'already disconnected');
-        }
-
-        if (!client.auth) {
-          throw new ServerError(ErrorCode.AUTH_FAILED, 'onAuth failed');
         }
 
         this.clients.push(client);

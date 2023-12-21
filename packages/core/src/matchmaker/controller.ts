@@ -38,7 +38,7 @@ export default {
    */
   getCorsHeaders(req: IncomingMessage): { [header: string]: string } {
     return {
-      ['Access-Control-Allow-Origin']: req.headers['origin'],
+      ['Access-Control-Allow-Origin']: req.headers['origin'] || "*",
     };
   },
 
