@@ -8,7 +8,7 @@ export const JWT = {
     /**
      * The secret used to sign and verify the JWTs.
      */
-    secret: process.env.JWT_SECRET as jsonwebtoken.Secret,
+    secret: undefined as jsonwebtoken.Secret,
 
     verify: {
       /**
@@ -24,7 +24,7 @@ export const JWT = {
         options.algorithm = JWT.settings.verify.algorithms[0];
       }
 
-      jsonwebtoken.sign(payload, JWT.settings.secret, options, (err, token) => {
+      jsonwebtoken.sign(payload, getJWTSecret(), options, (err, token) => {
         if (err) reject(err.message);
         resolve(token);
       });
@@ -32,11 +32,8 @@ export const JWT = {
   },
 
   verify: function<T = JwtPayload | Jwt | string> (token: string, options?: VerifyOptions) {
-    if (!options) {
-      options = JWT.settings.verify;
-    }
     return new Promise<T>((resolve, reject) => {
-      jsonwebtoken.verify(token, JWT.settings.secret, options, function (err, decoded) {
+      jsonwebtoken.verify(token, getJWTSecret(), options || JWT.settings.verify, function (err, decoded) {
         if (err) reject(err);
         resolve(decoded as T);
       });
@@ -51,16 +48,22 @@ export const JWT = {
   /**
    * Get express middleware that verifies JsonWebTokens and sets `req.auth`.
    */
-  middleware: function(params?: Partial<Parameters<typeof expressjwt>[0]>): (req: any, res: any, next: any) => void {
-    if (!JWT.settings.secret) {
-      console.error("❌ Please provide 'JWT_SECRET' environment variable, or set 'JWT.settings.secret'.");
-    }
-
+  middleware: function (params?: Partial<Parameters<typeof expressjwt>[0]>): (req: any, res: any, next: any) => void {
     return expressjwt(Object.assign({
-      secret: JWT.settings.secret,
+      secret: getJWTSecret(),
       // credentialsRequired: false,
       algorithms: JWT.settings.verify.algorithms,
       ...JWT.settings.verify,
     }, params));
   },
 };
+
+function getJWTSecret() {
+  JWT.settings.secret ||= process.env.JWT_SECRET;
+
+  if (!JWT.settings.secret) {
+    console.error("❌ Please provide 'JWT_SECRET' environment variable, or set 'JWT.settings.secret'.");
+  }
+
+  return JWT.settings.secret;
+}

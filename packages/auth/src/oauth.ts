@@ -3,11 +3,12 @@ import path from 'path';
 import express, { Router } from 'express';
 import grant, { GrantProvider, GrantConfig, GrantSession } from 'grant';
 import session from 'express-session';
-import { auth } from './auth';
+import { MayHaveUpgradeToken, auth } from './auth';
 import { matchMaker } from '@colyseus/core';
 
 // @ts-ignore
 import RedisStore from "connect-redis";
+import { JWT } from './JWT';
 
 export type OAuthProviderName = '23andme' | '500px' | 'acton' | 'acuityscheduling' | 'adobe' | 'aha' | 'alchemer' | 'amazon' | 'angellist' | 'apple' | 'arcgis' | 'asana' | 'assembla' | 'atlassian' | 'auth0' | 'authentiq' | 'authing' | 'autodesk' | 'aweber' | 'axosoft' | 'baidu' | 'basecamp' | 'battlenet' | 'beatport' | 'bitbucket' | 'bitly' | 'box' | 'buffer' | 'campaignmonitor' | 'cas' | 'cheddar' | 'clio' | 'cognito' | 'coinbase' | 'concur' | 'constantcontact' | 'coursera' | 'crossid' | 'dailymotion' | 'deezer' | 'delivery' | 'deputy' | 'deviantart' | 'digitalocean' | 'discogs' | 'discord' | 'disqus' | 'docusign' | 'dribbble' | 'dropbox' | 'ebay' | 'echosign' | 'ecwid' | 'edmodo' | 'egnyte' | 'etsy' | 'eventbrite' | 'evernote' | 'eyeem' | 'facebook' | 'familysearch' | 'feedly' | 'figma' | 'fitbit' | 'flickr' | 'formstack' | 'foursquare' | 'freeagent' | 'freelancer' | 'freshbooks' | 'fusionauth' | 'garmin' | 'geeklist' | 'genius' | 'getbase' | 'getpocket' | 'gitbook' | 'github' | 'gitlab' | 'gitter' | 'goodreads' | 'google' | 'groove' | 'gumroad' | 'harvest' | 'hellosign' | 'heroku' | 'homeaway' | 'hootsuite' | 'huddle' | 'ibm' | 'iconfinder' | 'idme' | 'idonethis' | 'imgur' | 'infusionsoft' | 'instagram' | 'intuit' | 'jamendo' | 'jumplead' | 'kakao' | 'keycloak' | 'line' | 'linkedin' | 'live' | 'livechat' | 'logingov' | 'lyft' | 'mailchimp' | 'mailup' | 'mailxpert' | 'mapmyfitness' | 'mastodon' | 'medium' | 'meetup' | 'mendeley' | 'mention' | 'microsoft' | 'mixcloud' | 'moxtra' | 'myob' | 'naver' | 'nest' | 'netlify' | 'nokotime' | 'notion' | 'nylas' | 'okta' | 'onelogin' | 'openstreetmap' | 'optimizely' | 'osu' | 'patreon' | 'paypal' | 'phantauth' | 'pinterest' | 'plurk' | 'podio' | 'procore' | 'producthunt' | 'projectplace' | 'pushbullet' | 'qq' | 'ravelry' | 'redbooth' | 'reddit' | 'runkeeper' | 'salesforce' | 'sellsy' | 'shoeboxed' | 'shopify' | 'skyrock' | 'slack' | 'slice' | 'smartsheet' | 'smugmug' | 'snapchat' | 'snowflake' | 'socialpilot' | 'socrata' | 'soundcloud' | 'spotify' | 'square' | 'stackexchange' | 'stocktwits' | 'stormz' | 'storyblok' | 'strava' | 'stripe' | 'surveymonkey' | 'surveysparrow' | 'thingiverse' | 'ticketbud' | 'tiktok' | 'timelyapp' | 'todoist' | 'trakt' | 'traxo' | 'trello' | 'tripit' | 'trustpilot' | 'tumblr' | 'twitch' | 'twitter' | 'typeform' | 'uber' | 'unbounce' | 'underarmour' | 'unsplash' | 'untappd' | 'upwork' | 'uservoice' | 'vend' | 'venmo' | 'vercel' | 'verticalresponse' | 'viadeo' | 'vimeo' | 'visualstudio' | 'vk' | 'wechat' | 'weekdone' | 'weibo' | 'withings' | 'wordpress' | 'workos' | 'wrike' | 'xero' | 'xing' | 'yahoo' | 'yammer' | 'yandex' | 'zendesk' | 'zoom';
 export type OAuthProviderConfig = {
@@ -47,8 +48,8 @@ export type OAuthProviderConfig = {
   response?: Array<'tokens' | 'raw' | 'jwt' | 'profile'>
 }
 
-export type OAuthProviderCallback = (data: GrantSession['response'], provider: OAuthProviderName) => Promise<unknown>;
-export let oAuthProviderCallback: (data: GrantSession['response'], provider: OAuthProviderName) => Promise<unknown> = async (data, provider) => {
+export type OAuthProviderCallback = (data: GrantSession['response'] & MayHaveUpgradeToken, provider: OAuthProviderName) => Promise<unknown>;
+export let oAuthProviderCallback: (data: GrantSession['response'] & MayHaveUpgradeToken, provider: OAuthProviderName) => Promise<unknown> = async (data, provider) => {
   console.debug("OAuth callback missing. Use oauth.onCallback() to persist user data.");
   return data;
 };
@@ -174,7 +175,17 @@ ${(providerUrl) ? `<hr/><p><small><em>(Get your keys from <a href="${providerUrl
           response = { error: session.grant.response.error, user, token, };
 
         } else {
-          user = await oAuthProviderCallback(session.grant.response, session.grant.provider as OAuthProviderName);
+          const data: GrantSession['response'] & MayHaveUpgradeToken = session.grant.response;
+
+          /**
+           * Verify existing token, if available
+           * (Upgrading user)
+           */
+          if (session.grant.dynamic?.token) {
+            data.upgradingToken = await JWT.verify(session.grant.dynamic?.token);
+          }
+
+          user = await oAuthProviderCallback(data, session.grant.provider as OAuthProviderName);
           token = await auth.settings.onGenerateToken(user);
           response = { user, token };
         }

@@ -8,7 +8,9 @@ import { OAuthProviderCallback, oAuthProviderCallback, oauth } from './oauth';
 import { JWT, JwtPayload } from './JWT';
 import { Hash } from './Hash';
 
-export type RegisterWithEmailAndPasswordCallback<T = any> = (email: string, password: string, options: T) => Promise<unknown>;
+export type MayHaveUpgradeToken = { upgradingToken?: JwtPayload };
+
+export type RegisterWithEmailAndPasswordCallback<T = any> = (email: string, password: string, options: T & MayHaveUpgradeToken) => Promise<unknown>;
 export type RegisterAnonymouslyCallback<T = any> = (options: T) => Promise<unknown>;
 export type FindUserByEmailCallback = (email: string) => Promise<unknown & { password: string }>;
 
@@ -187,8 +189,9 @@ export const auth = {
 
     /**
      * Register user by email and password.
+     * - auth.middleware() is used here to allow upgrading anonymous users.
      */
-    router.post("/register", express.json(), async (req, res) => {
+    router.post("/register", auth.middleware(), express.json(), async (req: Request, res) => {
       const email = req.body.email;
       const password = req.body.password;
 
@@ -215,8 +218,12 @@ export const auth = {
           return res.status(400).json({ error: "password_too_short" });
         }
 
+        // Build options
+        const options: MayHaveUpgradeToken = req.body.options || {};
+        options.upgradingToken = req.auth;
+
         // Register
-        await auth.settings.onRegisterWithEmailAndPassword(email, await Hash.make(password), req.body.options);
+        await auth.settings.onRegisterWithEmailAndPassword(email, await Hash.make(password), options);
 
         const user = await auth.settings.onFindUserByEmail(email);
         delete user.password; // remove password from JWT payload
