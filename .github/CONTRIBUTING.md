@@ -14,6 +14,10 @@ Observations:
 - We use [Lerna](https://github.com/lerna/lerna) for managing the multiple packages.
 - Packages that have a `"build"` script are not going to be built with `rollup` (e.g. @colyseus/monitor)
 
+Publishing:
+
+For publishing the packages, run `pnpm -r publish`
+
 ---
 
 ## **Reporting an issue**
