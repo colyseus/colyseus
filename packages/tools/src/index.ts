@@ -128,7 +128,7 @@ export async function listen(
                 serverOptions.driver = new RedisDriver(process.env.REDIS_URI);
             } catch (e) {
                 logger.warn("");
-                logger.warn("❌ coult not initialize RedisDriver.");
+                logger.warn("❌ could not initialize RedisDriver.");
                 logger.warn("👉 npm install --save @colyseus/redis-driver");
                 logger.warn("");
             }
@@ -141,7 +141,7 @@ export async function listen(
                 serverOptions.presence = new RedisPresence(process.env.REDIS_URI);
             } catch (e) {
                 logger.warn("");
-                logger.warn("❌ coult not initialize RedisPresence.");
+                logger.warn("❌ could not initialize RedisPresence.");
                 logger.warn("👉 npm install --save @colyseus/redis-presence");
                 logger.warn("");
             }
@@ -241,8 +241,10 @@ export async function getTransport(options: ConfigOptions) {
     }
 
     if (app) {
-      // Enable CORS + JSON parsing.
-      app.use(cors());
+      // Enable CORS
+      app.use(cors({ origin: true, credentials: true, }));
+
+      // Enable JSON parsing.
       app.use(express.json());
 
       if (options.initializeExpress) {

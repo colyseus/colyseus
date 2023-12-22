@@ -19,15 +19,13 @@ jobs:
     - name: Set up Node.js
       uses: actions/setup-node@master
       with:
-        node-version: 16.1.0
+        node-version: 20.9.0
     - name: Install dependencies
-      run: npm install
-    - name: Lerna bootstrap
-      run: npm run boot -- --ci
+      run: pnpm install
     - name: Build project
-      run: npm run build
+      run: pnpm build
     - name: Test
-      run: npm test
+      run: pnpm test
 
     # - name: Publish if version has been updated
     #   uses: endel/npm-publish-action@master

@@ -3,10 +3,10 @@
 ## Working on Colyseus source files
 
 - Clone the repository: `git clone git@github.com:colyseus/colyseus.git`
-- Checkout `engines` on the root package.json, ensure you use the correct node, npm version
-- Install its dependencies: `npm install`
-- Build packages: `npm run build` (rebuild after any code change & before testing)
-- To run the test suite: `npm test`
+- Make sure to use Node.js LTS version
+- Colyseus uses `pnpm` as package manager. Install dependencies with `pnpm install`.
+- Build packages: `pnpm build` (rebuild after any code change & before testing)
+- To run the test suite: `pnpm test`
 
 Observations:
 

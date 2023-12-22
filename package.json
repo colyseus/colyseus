@@ -12,7 +12,7 @@
     "packages/serializer/*"
   ],
   "scripts": {
-    "build": "bun run build.ts",
+    "build": "tsx build.ts",
     "clean": "lerna clean",
     "test": "lerna run test --stream",
     "example": "lerna run start --scope @colyseus/example --stream",
@@ -23,7 +23,6 @@
     "publish-from-package-preview": "npm run build && lerna publish from-package --dist-tag preview"
   },
   "devDependencies": {
-    "@lerna/batch-packages": "^3.16.0",
     "@lerna/filter-packages": "^6.4.1",
     "@lerna/project": "^6.4.1",
     "@types/debug": "^0.0.31",
@@ -38,7 +37,7 @@
     "assert": "^2.0.0",
     "benchmark": "^2.1.1",
     "c8": "^7.7.2",
-    "colyseus.js": "^0.15.0",
+    "colyseus.js": "0.15.15-preview.21",
     "cors": "^2.8.5",
     "esbuild": "^0.14.43",
     "express": "^4.16.2",
@@ -70,7 +69,7 @@
     "all": true
   },
   "engines": {
-    "node": "16.10.0",
-    "npm": "7.1.2"
+    "node": "20.0.0",
+    "pnpm": "^8.6.1"
   }
 }

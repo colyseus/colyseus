@@ -1,4 +1,4 @@
-import http from 'http';
+import http, { IncomingMessage } from 'http';
 import WebSocket from 'ws'; // TODO: move this to Transport
 
 import { unpack } from 'msgpackr';
@@ -30,8 +30,6 @@ const noneSerializer = new NoneSerializer();
 export const DEFAULT_SEAT_RESERVATION_TIME = Number(process.env.COLYSEUS_SEAT_RESERVATION_TIME || 15);
 
 export type SimulationCallback = (deltaTime: number) => void;
-
-export type RoomConstructor<T extends object= any> = new (presence?: Presence) => Room<T>;
 
 export interface IBroadcastOptions extends ISendOptions {
   except?: Client | Client[];
@@ -145,6 +143,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
   // ever had success joining into it on the specified interval.
   private _autoDisposeTimeout: NodeJS.Timer;
 
+  // TODO: remove "presence" from constructor on 0.16.0
   constructor(presence?: Presence) {
     this.presence = presence;
 
@@ -216,11 +215,22 @@ export abstract class Room<State extends object= any, Metadata= any> {
     consented?: boolean,
   ): void | Promise<any>;
   public onDispose?(): void | Promise<any>;
+
+  // TODO: flag as @deprecated on v0.16
+  // TOOD: remove instance level `onAuth` on 1.0
+  /**
+   * onAuth at the instance level will be deprecated in the future.
+   * Please use "static onAuth(token, req) instead
+   */
   public onAuth(
     client: Client<ExtractUserData<typeof this['clients']>, ExtractAuthData<typeof this['clients']>>,
     options: any,
     request?: http.IncomingMessage
   ): any | Promise<any> {
+    return true;
+  }
+
+  static async onAuth(token: string, req: IncomingMessage): Promise<unknown> {
     return true;
   }
 
@@ -565,17 +575,23 @@ export abstract class Room<State extends object= any, Metadata= any> {
 
     } else {
       try {
-        client.auth = await this.onAuth(client, options, req);
+        if (options['$auth']) {
+          client.auth = options['$auth'];
+          delete options['$auth'];
+
+        } else if (this.onAuth !== Room.prototype.onAuth) {
+          client.auth = await this.onAuth(client, options, req);
+
+          if (!client.auth) {
+            throw new ServerError(ErrorCode.AUTH_FAILED, 'onAuth failed');
+          }
+        }
 
         //
         // On async onAuth, client may have been disconnected.
         //
         if (client.readyState !== WebSocket.OPEN) {
           throw new ServerError(Protocol.WS_CLOSE_GOING_AWAY, 'already disconnected');
-        }
-
-        if (!client.auth) {
-          throw new ServerError(ErrorCode.AUTH_FAILED, 'onAuth failed');
         }
 
         this.clients.push(client);

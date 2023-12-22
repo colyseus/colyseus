@@ -1,9 +1,14 @@
+import { IncomingMessage } from 'http';
 import { EventEmitter } from 'events';
 import { logger } from '../Logger';
 import { RoomListingData, SortOptions } from './driver/interfaces';
 
-import { RoomConstructor } from './../Room';
+import { Room } from './../Room';
 import { updateLobby } from './Lobby';
+import { Type } from '../utils/types';
+
+let ColyseusAuth: any = undefined;
+try { ColyseusAuth = require('@colyseus/auth'); } catch (e) {}
 
 export const INVALID_OPTION_KEYS: Array<keyof RoomListingData> = [
   'clients',
@@ -16,14 +21,16 @@ export const INVALID_OPTION_KEYS: Array<keyof RoomListingData> = [
   'roomId',
 ];
 
+export type ValidateAuthTokenCallback = (token: string, request?: IncomingMessage) => Promise<any>;
+
 export class RegisteredHandler extends EventEmitter {
-  public klass: RoomConstructor;
+  public klass: Type<Room>;
   public options: any;
 
   public filterOptions: string[] = [];
   public sortOptions?: SortOptions;
 
-  constructor(klass: RoomConstructor, options: any) {
+  constructor(klass: Type<Room>, options: any) {
     super();
 
     if (typeof(klass) !== 'function') {

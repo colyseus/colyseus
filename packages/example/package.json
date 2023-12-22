@@ -8,14 +8,13 @@
     "start": "ts-node-dev --respawn --transpile-only src/Server.ts"
   },
   "dependencies": {
-    "@colyseus/core": "^0.15.0"
+    "@colyseus/core": "workspace:^"
   },
   "devDependencies": {
     "@colyseus/monitor": "^0.15.0",
     "@colyseus/uwebsockets-transport": "^0.15.0",
     "@colyseus/ws-transport": "^0.15.0",
     "@colyseus/redis-driver": "^0.15.0",
-    "@colyseus/redis-presence": "^0.15.0",
-    "@colyseus/mongoose-driver": "^0.15.0"
+    "@colyseus/redis-presence": "^0.15.0"
   }
 }

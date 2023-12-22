@@ -45,7 +45,7 @@ export let driver: MatchMakerDriver;
 export let selectProcessIdToCreateRoom: SelectProcessIdCallback;
 
 export let isGracefullyShuttingDown: boolean;
-export let onReady: Deferred;
+export let onReady: Deferred = new Deferred(); // onReady needs to be immediately available to @colyseus/auth integration.
 
 /**
  * @private
@@ -56,7 +56,14 @@ export async function setup(
   _publicAddress?: string,
   _selectProcessIdToCreateRoom?: SelectProcessIdCallback,
 ) {
-  onReady = new Deferred();
+  if (onReady === undefined) {
+    //
+    // for testing purposes only: onReady is turned into undefined on shutdown
+    // (needs refactoring.)
+    //
+    onReady = new Deferred();
+  }
+
   presence = _presence || new LocalPresence();
   driver = _driver || new LocalDriver();
   publicAddress = _publicAddress;
@@ -151,6 +158,7 @@ export async function reconnect(roomId: string, clientOptions: ClientOptions = {
   const reconnectionToken = clientOptions.reconnectionToken;
   if (!reconnectionToken) { throw new ServerError(ErrorCode.MATCHMAKE_UNHANDLED, `'reconnectionToken' must be provided for reconnection.`); }
 
+
   // respond to re-connection!
   const sessionId = await remoteRoomCall(room.roomId, 'checkReconnectionToken', [reconnectionToken]);
   if (sessionId) {
@@ -203,10 +211,7 @@ export async function query(conditions: Partial<IRoomListingData> = {}) {
  */
 export async function findOneRoomAvailable(roomName: string, clientOptions: ClientOptions): Promise<RoomListingData> {
   return await awaitRoomAvailable(roomName, async () => {
-    const handler = handlers[roomName];
-    if (!handler) {
-      throw new ServerError( ErrorCode.MATCHMAKE_NO_HANDLER, `provided room name "${roomName}" not defined`);
-    }
+    const handler = getHandler(roomName);
 
     const roomQuery = driver.findOne({
       locked: false,
@@ -260,31 +265,56 @@ export async function remoteRoomCall<R= any>(
 }
 
 export function defineRoomType<T extends Type<Room>>(
-  name: string,
+  roomName: string,
   klass: T,
   defaultOptions?: Parameters<NonNullable<InstanceType<T>['onCreate']>>[0],
 ) {
   const registeredHandler = new RegisteredHandler(klass, defaultOptions);
 
-  handlers[name] = registeredHandler;
+  handlers[roomName] = registeredHandler;
+
+  if (klass.prototype['onAuth'] !== Room.prototype['onAuth']) {
+    // TODO: soft-deprecate instance level `onAuth` on 0.16
+    // console.warn("DEPRECATION WARNING: onAuth() at the instance level will be deprecated soon. Please use static onAuth() instead.");
+
+    if (klass['onAuth'] !== Room['onAuth']) {
+      console.log(`❌ "${roomName}"'s onAuth() defined at the instance level will be ignored.`);
+    }
+  }
 
   if (!isDevMode) {
-    cleanupStaleRooms(name);
+    cleanupStaleRooms(roomName);
   }
 
   return registeredHandler;
 }
 
-export function removeRoomType(name: string) {
-  delete handlers[name];
+export function removeRoomType(roomName: string) {
+  delete handlers[roomName];
 
   if (!isDevMode) {
-    cleanupStaleRooms(name);
+    cleanupStaleRooms(roomName);
   }
 }
 
-export function hasHandler(name: string) {
-  return handlers[ name ] !== undefined;
+// TODO: legacy; remove me on 1.0
+export function hasHandler(roomName: string) {
+  console.warn("hasHandler() is deprecated. Use getHandler() instead.");
+  return handlers[roomName] !== undefined;
+}
+
+export function getHandler(roomName: string) {
+  const handler = handlers[roomName];
+
+  if (!handler) {
+    throw new ServerError(ErrorCode.MATCHMAKE_NO_HANDLER, `provided room name "${roomName}" not defined`);
+  }
+
+  return handler;
+}
+
+export function getRoomClass(roomName: string) {
+  return handlers[roomName]?.klass;
 }
 
 /**
@@ -341,13 +371,8 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
 }
 
 export async function handleCreateRoom(roomName: string, clientOptions: ClientOptions, restoringRoomId?: string): Promise<RoomListingData> {
-  const registeredHandler = handlers[roomName];
-
-  if (!registeredHandler) {
-    throw new ServerError( ErrorCode.MATCHMAKE_NO_HANDLER, `provided room name "${roomName}" not defined`);
-  }
-
-  const room = new registeredHandler.klass();
+  const handler = getHandler(roomName);
+  const room = new handler.klass();
 
   // set room public attributes
   if (restoringRoomId && isDevMode) {
@@ -360,7 +385,7 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
   room.roomName = roomName;
   room.presence = presence;
 
-  const additionalListingData: any = registeredHandler.getFilterOptions(clientOptions);
+  const additionalListingData: any = handler.getFilterOptions(clientOptions);
 
   // assign public host
   if (publicAddress) {
@@ -376,7 +401,7 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
 
   if (room.onCreate) {
     try {
-      await room.onCreate(merge({}, clientOptions, registeredHandler.options));
+      await room.onCreate(merge({}, clientOptions, handler.options));
 
     } catch (e) {
       debugAndPrintError(e);
@@ -410,7 +435,7 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
   await createRoomReferences(room, true);
   await room.listing.save();
 
-  registeredHandler.emit('create', room);
+  handler.emit('create', room);
 
   return room.listing;
 }
@@ -439,6 +464,7 @@ export async function gracefullyShutdown(): Promise<any> {
   }
 
   isGracefullyShuttingDown = true;
+  onReady = undefined;
 
   debugMatchMaking(`${processId} is shutting down!`);
 

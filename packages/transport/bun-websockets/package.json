@@ -6,12 +6,11 @@
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
   "dependencies": {
-    "@colyseus/core": "^0.15.0",
+    "@colyseus/core": "workspace:^",
     "bun-serve-express": "^1.0.2",
     "express": "^4.17.1"
   },
   "devDependencies": {
-    "bun-types": "^1.0.1"
   },
   "peerDependencies": {
     "@colyseus/schema": ">=1.0.0"
