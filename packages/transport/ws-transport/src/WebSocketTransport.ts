@@ -22,6 +22,8 @@ export class WebSocketTransport extends Transport {
   protected pingIntervalMS: number;
   protected pingMaxRetries: number;
 
+  private _originalSend: typeof WebSocket.prototype.send | null = null;
+
   constructor(options: TransportOptions = {}) {
     super();
 
@@ -71,9 +73,14 @@ export class WebSocketTransport extends Transport {
   }
 
   public simulateLatency(milliseconds: number) {
-    const previousSend = WebSocket.prototype.send;
-    WebSocket.prototype.send = function(...args: any[]) {
-      setTimeout(() => previousSend.apply(this, args), milliseconds);
+    if (this._originalSend == null) {
+      this._originalSend = WebSocket.prototype.send;
+    }
+
+    const originalSend = this._originalSend;
+
+    WebSocket.prototype.send = milliseconds <= Number.EPSILON ? originalSend : function (...args: any[]) {
+      setTimeout(() => originalSend.apply(this, args), milliseconds);
     };
   }
 
