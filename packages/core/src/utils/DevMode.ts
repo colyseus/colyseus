@@ -1,4 +1,5 @@
 import debug from "debug";
+import { logger } from "../Logger";
 import { debugAndPrintError } from "../Debug";
 
 import { getRoomById, handleCreateRoom, presence, remoteRoomCall } from "../MatchMaker";
@@ -22,7 +23,7 @@ export async function reloadFromCache() {
 
     const recreatedRoomListing = await handleCreateRoom(roomHistory.roomName, roomHistory.clientOptions, roomId);
     const recreatedRoom = getRoomById(recreatedRoomListing.roomId);
-    console.debug(`🔄 room '${roomId}' has been restored.`);
+    logger.debug(`🔄 room '${roomId}' has been restored.`);
 
     // Set previous state
     if (roomHistory.hasOwnProperty("state")) {
@@ -33,7 +34,7 @@ export async function reloadFromCache() {
       // state. thus, we need a fresh clone immediately after decoding
       //
       recreatedRoom.setState(recreatedRoom.state.clone());
-      console.debug(`📋 room '${roomId}' state =>`, recreatedRoom.state.toJSON());
+      logger.debug(`📋 room '${roomId}' state =>`, recreatedRoom.state.toJSON());
     }
 
     // call `onRestoreRoom` with custom 'cache'd property.
@@ -47,7 +48,7 @@ export async function reloadFromCache() {
   }
 
   if (roomHistoryList.length > 0) {
-    console.debug("✅", roomHistoryList.length, "room(s) have been restored.");
+    logger.debug("✅", roomHistoryList.length, "room(s) have been restored.");
   }
 }
 
@@ -78,7 +79,7 @@ export async function cacheRoomHistory(rooms: { [roomId: string]: Room }) {
         await presence.hset(getRoomRestoreListKey(), room.roomId, JSON.stringify(roomHistory));
 
         // Rewrite updated room history
-        console.debug(`💾 caching room '${room.roomId}' (clients: ${room.clients.length}, state size: ${(roomHistory["state"] || []).length} bytes)`);
+        logger.debug(`💾 caching room '${room.roomId}' (clients: ${room.clients.length}, state size: ${(roomHistory["state"] || []).length} bytes)`);
 
       } catch (e) {
         debugAndPrintError(`❌ couldn't cache room '${room.roomId}', due to:\n${e.stack}`);

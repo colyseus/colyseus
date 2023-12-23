@@ -32,9 +32,9 @@ export class LocalPresence implements Presence {
       ) {
         const cache = fs.readFileSync(DEVMODE_CACHE_FILE_PATH).toString('utf-8') || "{}";
         const parsed = JSON.parse(cache);
-        this.data = parsed.data;
-        this.hash = parsed.hash;
-        this.keys = parsed.keys;
+        if (parsed.data) { this.data = parsed.data; }
+        if (parsed.hash) { this.hash = parsed.hash; }
+        if (parsed.keys) { this.keys = parsed.keys; }
       }
     }
 
