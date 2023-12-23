@@ -25,12 +25,15 @@ describe("Auth", () => {
   let app: ReturnType<typeof express>;
   let server: http.Server;
   let fakedb: any = {};
+  let onRegisterOptions: any;
+
   beforeEach(async () => {
     app = express();
     app.use(auth.prefix, auth.routes({
 
-      onRegisterWithEmailAndPassword: async (email: string, password: string) => {
+      onRegisterWithEmailAndPassword: async (email: string, password: string, options: any) => {
         fakedb[email] = password;
+        onRegisterOptions = options;
         return { id: 100, email };
       },
 
@@ -46,7 +49,10 @@ describe("Auth", () => {
     }));
     app.get("/unprotected_route", (req, res) => res.json({ ok: true }));
     app.get("/protected_route", auth.middleware(), (req, res) => res.json({ ok: true }));
+
     fakedb = {}; // reset fakedb
+    onRegisterOptions = undefined; // reset onRegisterOptions
+
     return new Promise<void>((resolve) => {
       server = app.listen(TEST_PORT, () => resolve());
     })
@@ -72,6 +78,29 @@ describe("Auth", () => {
           password: passwordPlainText
         }),
       });
+
+      assert.deepStrictEqual({ ["endel@colyseus.io"]: await Hash.make(passwordPlainText) }, fakedb);
+      assert.deepStrictEqual({ id: 100, email: "endel@colyseus.io", }, register.data.user);
+
+      const token: any = await JWT.verify(register.data.token);
+      assert.strictEqual(register.data.user.id, token.id);
+      assert.strictEqual(register.data.user.email, token.email);
+    });
+
+    it("onRegister: should allow to upgrade token", async () => {
+      const register = await post("/auth/register", {
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${await JWT.sign({ id: 50, name: "Anonymous" })}`
+        },
+        body: JSON.stringify({
+          email: "endel@colyseus.io",
+          password: passwordPlainText
+        }),
+      });
+
+      assert.strictEqual(onRegisterOptions.upgradingToken.id, 50);
+      assert.strictEqual(onRegisterOptions.upgradingToken.name, "Anonymous");
 
       assert.deepStrictEqual({ ["endel@colyseus.io"]: await Hash.make(passwordPlainText) }, fakedb);
       assert.deepStrictEqual({ id: 100, email: "endel@colyseus.io", }, register.data.user);

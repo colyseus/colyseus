@@ -191,7 +191,7 @@ export const auth = {
      * Register user by email and password.
      * - auth.middleware() is used here to allow upgrading anonymous users.
      */
-    router.post("/register", auth.middleware(), express.json(), async (req: Request, res) => {
+    router.post("/register", express.json(), async (req: Request, res) => {
       const email = req.body.email;
       const password = req.body.password;
 
@@ -220,7 +220,13 @@ export const auth = {
 
         // Build options
         const options: MayHaveUpgradeToken = req.body.options || {};
-        options.upgradingToken = req.auth;
+
+        // Verify Authorization header, if present.
+        if (req.headers.authorization) {
+          const authHeader = req.headers.authorization;
+          const authToken = (authHeader.startsWith("Bearer ") && authHeader.substring(7, authHeader.length)) || undefined;
+          options.upgradingToken = await JWT.verify(authToken);
+        }
 
         // Register
         await auth.settings.onRegisterWithEmailAndPassword(email, await Hash.make(password), options);
