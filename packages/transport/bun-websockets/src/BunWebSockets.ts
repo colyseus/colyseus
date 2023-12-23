@@ -24,6 +24,7 @@ export class BunWebSockets extends Transport {
   protected clientWrappers = new WeakMap<ServerWebSocket<WebSocketData>, WebSocketWrapper>();
 
   private _listening: any;
+  private _originalRawSend: typeof WebSocketClient.prototype.raw | null = null;
 
   constructor(private options: TransportOptions = {}) {
     super();
@@ -95,10 +96,14 @@ export class BunWebSockets extends Transport {
   }
 
   public simulateLatency(milliseconds: number) {
-    const originalRawSend = WebSocketClient.prototype.raw;
-    WebSocketClient.prototype.raw = function () {
-      setTimeout(() => originalRawSend.apply(this, arguments), milliseconds);
+    if (this._originalRawSend == null) {
+      this._originalRawSend = WebSocketClient.prototype.raw;
     }
+
+    const originalRawSend = this._originalRawSend;
+    WebSocketClient.prototype.raw = milliseconds <= Number.EPSILON ? originalRawSend : function () {
+      setTimeout(() => originalRawSend.apply(this, arguments), milliseconds);
+    };
   }
 
   protected async onConnection(rawClient: ServerWebSocket<WebSocketData>) {
