@@ -1259,6 +1259,100 @@ describe("Integration", () => {
 
         });
 
+        describe.only("Server.simulateLatency", () => {
+          it("clients should receive messages at least after X ms of latency", async () => {
+            const LATENCY = 300;
+            const HALF_LATENCY = LATENCY / 2; // that's how simulateLatency works
+            const timeout = 30;
+
+            let startedAt = 0;
+            let receivedOnServerAt = 0;
+            let receivedOnClientAt = 0;
+            let running = new Deferred();
+            let elapsedTimeForRequest = 0;
+            let elapsedTimeForResponse = 0;
+
+            matchMaker.defineRoomType('onmessage', class _ extends Room {
+              onCreate() {
+                this.onMessage("request", (client) => {
+                  receivedOnServerAt = Date.now();
+                  client.send('response', '');
+                });
+              }
+            });
+
+            server.simulateLatency(LATENCY);
+
+            const connection = await client.joinOrCreate('onmessage');
+            connection.onMessage('response', () => {
+              receivedOnClientAt = Date.now();
+              running.resolve(true);
+            });
+
+            startedAt = Date.now();
+            connection.send("request", '');
+
+            await running;
+
+            elapsedTimeForRequest = receivedOnServerAt - startedAt;
+            elapsedTimeForResponse = receivedOnClientAt - receivedOnServerAt;
+
+            assert.ok(elapsedTimeForRequest >= HALF_LATENCY, `latency for outgoing messages should be at least ${HALF_LATENCY}ms, got: ${elapsedTimeForRequest}ms`);
+            assert.ok(elapsedTimeForRequest < (HALF_LATENCY + timeout), `latency for outgoing messages should be at most ${HALF_LATENCY + timeout}ms, got: ${elapsedTimeForRequest}ms`);
+
+            assert.ok(elapsedTimeForResponse >= HALF_LATENCY, `latency for incoming messages should be at least ${HALF_LATENCY}ms, got: ${elapsedTimeForResponse}ms`);
+            assert.ok(elapsedTimeForResponse < (HALF_LATENCY + timeout), `latency for incoming messages should be at most ${HALF_LATENCY + timeout}ms, got: ${elapsedTimeForResponse}ms`);
+
+            await connection.leave();
+          });
+
+          it("only the latest call of simulateLatency should be applied", async () => {
+            const LATENCY = 300;
+            const HALF_LATENCY = LATENCY / 2; // that's how simulateLatency works
+            const timeout = 30;
+
+            let startedAt = 0;
+            let receivedOnServerAt = 0;
+            let receivedOnClientAt = 0;
+            let running = new Deferred();
+            let elapsedTimeForRequest = 0;
+            let elapsedTimeForResponse = 0;
+
+            matchMaker.defineRoomType('onmessage', class _ extends Room {
+              onCreate() {
+                this.onMessage("request", (client) => {
+                  receivedOnServerAt = Date.now();
+                  client.send('response', '');
+                });
+              }
+            });
+
+            server.simulateLatency(1500); // first call
+            server.simulateLatency(LATENCY); // last call
+
+            const connection = await client.joinOrCreate('onmessage');
+            connection.onMessage('response', () => {
+              receivedOnClientAt = Date.now();
+              running.resolve(true);
+            });
+
+            startedAt = Date.now();
+            connection.send("request", '');
+
+            await running;
+
+            elapsedTimeForRequest = receivedOnServerAt - startedAt;
+            elapsedTimeForResponse = receivedOnClientAt - receivedOnServerAt;
+
+            assert.ok(elapsedTimeForRequest >= HALF_LATENCY, `latency for outgoing messages should be at least ${HALF_LATENCY}ms, got: ${elapsedTimeForRequest}ms`);
+            assert.ok(elapsedTimeForRequest < (HALF_LATENCY + timeout), `latency for outgoing messages should be at most ${HALF_LATENCY + timeout}ms, got: ${elapsedTimeForRequest}ms`);
+
+            assert.ok(elapsedTimeForResponse >= HALF_LATENCY, `latency for incoming messages should be at least ${HALF_LATENCY}ms, got: ${elapsedTimeForResponse}ms`);
+            assert.ok(elapsedTimeForResponse < (HALF_LATENCY + timeout), `latency for incoming messages should be at most ${HALF_LATENCY + timeout}ms, got: ${elapsedTimeForResponse}ms`);
+
+            await connection.leave();
+          });
+        });
       });
 
     }
