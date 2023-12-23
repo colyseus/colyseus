@@ -138,15 +138,23 @@ export class BunWebSockets extends Transport {
     }
   }
 
-  protected async handleMatchMakeRequest (req: Request, res: Response) {
+  protected async handleMatchMakeRequest(req: Request, res: Response) {
+    const writeHeaders = (req: Request, res: Response) => {
+      if (res.destroyed) return;
+
+      res.set(Object.assign(
+        {},
+        matchMaker.controller.DEFAULT_CORS_HEADERS,
+        matchMaker.controller.getCorsHeaders.call(undefined, req)
+      ));
+
+      return true;
+    };
+
     try {
       switch (req.method) {
         case 'OPTIONS': {
-          res.set(Object.assign(
-            {},
-            matchMaker.controller.DEFAULT_CORS_HEADERS,
-            matchMaker.controller.getCorsHeaders.call(undefined, req)
-          ));
+          writeHeaders(req, res);
           res.status(200).end();
           break;
         }
@@ -154,6 +162,8 @@ export class BunWebSockets extends Transport {
         case 'GET': {
           const matchedParams = req.path.match(matchMaker.controller.allowedRoomNameChars);
           const roomName = matchedParams.length > 1 ? matchedParams[matchedParams.length - 1] : "";
+
+          writeHeaders(req, res);
           res.json(await matchMaker.controller.getAvailableRooms(roomName || ''));
           break;
         }
@@ -174,6 +184,8 @@ export class BunWebSockets extends Transport {
 
           const method = matchedParams[matchmakeIndex + 1];
           const roomName = matchedParams[matchmakeIndex + 2] || '';
+
+          writeHeaders(req, res);
           res.json(await matchMaker.controller.invokeMethod(method, roomName, clientOptions));
           break;
         }
@@ -182,16 +194,10 @@ export class BunWebSockets extends Transport {
       }
 
     } catch (e) {
-      res
-        .set(Object.assign(
-          {},
-          matchMaker.controller.DEFAULT_CORS_HEADERS,
-          matchMaker.controller.getCorsHeaders.call(undefined, req)
-        ))
-        .status(500)
+      writeHeaders(req, res);
+      res.status(500)
         .json({ code: e.code, error: e.message });
     }
-
   }
 
 }
