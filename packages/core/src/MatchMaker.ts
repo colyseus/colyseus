@@ -434,6 +434,8 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
 
   room._events.on('lock', lockRoom.bind(this, room));
   room._events.on('unlock', unlockRoom.bind(this, room));
+  room._events.on('setPrivate', setPrivateRoom.bind(this, room));
+  room._events.on('setPublic', setPublicRoom.bind(this, room));
   room._events.on('join', onClientJoinRoom.bind(this, room));
   room._events.on('leave', onClientLeaveRoom.bind(this, room));
   room._events.once('dispose', disposeRoom.bind(this, roomName, room));
@@ -628,6 +630,14 @@ async function unlockRoom(room: Room) {
     // emit public event on registered handler
     handlers[room.roomName].emit('unlock', room);
   }
+}
+
+function setPrivateRoom(room: Room): void {
+  handlers[room.roomName].emit('setPrivate', room);
+}
+
+function setPublicRoom(room: Room): void {
+  handlers[room.roomName].emit('setPublic', room);
 }
 
 async function disposeRoom(roomName: string, room: Room) {

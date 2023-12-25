@@ -375,11 +375,17 @@ export abstract class Room<State extends object= any, Metadata= any> {
   }
 
   public async setPrivate(bool: boolean = true) {
+    if (this.listing.private === bool) return;
+
     this.listing.private = bool;
 
     if (this._internalState === RoomInternalState.CREATED) {
       await this.listing.save();
     }
+
+    const evName = bool ? 'setPrivate' : 'setPublic';
+
+    this._events.emit(evName);
   }
 
   /**

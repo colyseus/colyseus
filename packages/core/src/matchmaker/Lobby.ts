@@ -8,8 +8,12 @@ const LOBBY_CHANNEL = '$lobby';
 export function updateLobby(room: Room, removed: boolean = false) {
   const listing = room.listing;
 
-  if (!listing.unlisted && !listing.private) {
-    matchMaker.presence.publish(LOBBY_CHANNEL, `${listing.roomId},${removed ? 1 : 0}`);
+  if (listing.unlisted) return;
+
+  if (removed) {
+    matchMaker.presence.publish(LOBBY_CHANNEL, `${listing.roomId},1`);
+  } else if (!listing.private) {
+    matchMaker.presence.publish(LOBBY_CHANNEL, `${listing.roomId},0`);
   }
 }
 
