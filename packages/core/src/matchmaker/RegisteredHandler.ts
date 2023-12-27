@@ -52,9 +52,8 @@ export class RegisteredHandler extends EventEmitter {
         updateLobby(room);
       }
     });
-    this.on('dispose', (room) => updateLobby(room, true));
-    this.on('setPublic', (room) => updateLobby(room));
-    this.on('setPrivate', (room) => updateLobby(room, true));
+    this.on('dispose', (room) => updateLobby(room, false));
+    this.on('visibility-change', (room, isVisible) => updateLobby(room, isVisible));
 
     return this;
   }

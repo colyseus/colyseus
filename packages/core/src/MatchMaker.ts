@@ -459,10 +459,9 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
 
   room._events.on('lock', lockRoom.bind(this, room));
   room._events.on('unlock', unlockRoom.bind(this, room));
-  room._events.on('setPrivate', setPrivateRoom.bind(this, room));
-  room._events.on('setPublic', setPublicRoom.bind(this, room));
   room._events.on('join', onClientJoinRoom.bind(this, room));
   room._events.on('leave', onClientLeaveRoom.bind(this, room));
+  room._events.on('visibility-change', onVisibilityChange.bind(this, room));
   room._events.once('dispose', disposeRoom.bind(this, roomName, room));
   room._events.once('disconnect', () => room._events.removeAllListeners());
 
@@ -658,12 +657,8 @@ async function unlockRoom(room: Room) {
   }
 }
 
-function setPrivateRoom(room: Room): void {
-  handlers[room.roomName].emit('setPrivate', room);
-}
-
-function setPublicRoom(room: Room): void {
-  handlers[room.roomName].emit('setPublic', room);
+function onVisibilityChange(room: Room, isInvisible: boolean): void {
+  handlers[room.roomName].emit('visibility-change', room, isInvisible);
 }
 
 async function disposeRoom(roomName: string, room: Room) {

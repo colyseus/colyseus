@@ -393,9 +393,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
       await this.listing.save();
     }
 
-    const evName = bool ? 'setPrivate' : 'setPublic';
-
-    this._events.emit(evName);
+    this._events.emit('visibility-change', bool);
   }
 
   /**

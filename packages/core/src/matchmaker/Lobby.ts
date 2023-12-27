@@ -5,6 +5,17 @@ import { RoomListingData } from './driver/interfaces';
 
 const LOBBY_CHANNEL = '$lobby';
 
+/*
+ * TODO: refactor this on v0.16
+ *
+ * Some users might be relying on "1" = "removed" from the lobby due to this workaround: https://github.com/colyseus/colyseus/issues/617
+ * Though, for consistency, we should invert as "0" = "invisible" and "1" = "visible".
+ *
+ * - rename "removed" to "isVisible" and swap the logic
+ * - emit "visibility-change" with inverted value (isVisible)
+ * - update "subscribeLobby" to check "1" as "isVisible" instead of "removed"
+ */
+
 export function updateLobby(room: Room, removed: boolean = false) {
   const listing = room.listing;
 
