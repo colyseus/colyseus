@@ -10,7 +10,7 @@ const context = new Context();
 
 class Player extends Schema { // tslint:disable-line
   public connected: boolean;
-  public name: boolean;
+  public name: string;
   public sessionId: string;
 }
 defineTypes(Player, {
