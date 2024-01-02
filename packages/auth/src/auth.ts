@@ -173,7 +173,7 @@ export const auth = {
         if (!isValidEmail(email)) { throw new Error("email_malformed"); }
 
         const user = await auth.settings.onFindUserByEmail(email);
-        if (user.password === await Hash.make(req.body.password)) {
+        if (user && user.password === await Hash.make(req.body.password)) {
           delete user.password; // remove password from JWT payload
           res.json({ user, token: await auth.settings.onGenerateToken(user) });
 
