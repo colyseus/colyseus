@@ -378,17 +378,23 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
       );
 
     } catch (e) {
-      debugAndPrintError(e);
+      if (e.message === "ipc_timeout") {
+        debugAndPrintError(`${e.message}: create room request timed out for ${roomName} on processId ${selectedProcessId}.`);
 
-      //
-      // clean-up possibly stale process from redis.
-      // when a process disconnects ungracefully, it may leave its previous processId under "roomcount"
-      // if the process is still alive, it will re-add itself shortly after the load-balancer selects it again.
-      //
-      await stats.excludeProcess(selectedProcessId);
+        //
+        // clean-up possibly stale process from redis.
+        // when a process disconnects ungracefully, it may leave its previous processId under "roomcount"
+        // if the process is still alive, it will re-add itself shortly after the load-balancer selects it again.
+        //
+        await stats.excludeProcess(selectedProcessId);
 
-      // if other process failed to respond, create the room on this process
-      room = await handleCreateRoom(roomName, clientOptions);
+        // if other process failed to respond, create the room on this process
+        room = await handleCreateRoom(roomName, clientOptions);
+
+      } else {
+        // re-throw intentional exception thrown during remote onCreate()
+        throw e;
+      }
     }
   }
 

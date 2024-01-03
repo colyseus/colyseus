@@ -26,7 +26,7 @@ export async function requestFromIPC<T>(
       if (code === IpcProtocol.SUCCESS) {
         resolve(data);
       } else if (code === IpcProtocol.ERROR) {
-        reject(data);
+        reject(new Error(data));
       }
       unsubscribe();
     });
@@ -35,7 +35,7 @@ export async function requestFromIPC<T>(
 
     unsubscribeTimeout = setTimeout(() => {
       unsubscribe();
-      reject(`IPC timed out. method: ${method}, args: ${JSON.stringify(args)}`);
+      reject(new Error("ipc_timeout"));
     }, rejectionTimeout);
   });
 }

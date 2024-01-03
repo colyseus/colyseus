@@ -40,6 +40,31 @@ describe("Inter-process Communication", () => {
         });
       });
 
+      it("IPC timeout error should be thrown", async () => {
+        try {
+          await requestFromIPC(presence, "nonexisting", "nonexisting", [])
+          throw new Error("should have errored.");
+        } catch (e) {
+          assert.strictEqual(e.message, "ipc_timeout");
+        }
+      });
+
+      it("should reject with error message", async () => {
+        const channel = 'error-channel';
+
+        subscribeIPC(presence, "anything", channel, (method, args) => {
+          throw new Error("error message");
+        });
+
+        try {
+          await requestFromIPC(presence, channel, "anything", []);
+          throw new Error("should have errored.");
+
+        } catch (e) {
+          assert.strictEqual(e.message, "error message");
+        }
+      });
+
     });
   }
 });
