@@ -161,8 +161,8 @@ export async function listen(
         ...serverOptions,
         transport,
     });
-    // await matchMaker.onReady;
     await options.initializeGameServer?.(gameServer);
+    await matchMaker.onReady;
     await options.beforeListen?.();
 
     if (process.env.COLYSEUS_CLOUD !== undefined) {
