@@ -161,6 +161,7 @@ export async function listen(
         ...serverOptions,
         transport,
     });
+    await matchMaker.onReady;
     await options.initializeGameServer?.(gameServer);
     await options.beforeListen?.();
 
