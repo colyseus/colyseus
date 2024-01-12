@@ -512,14 +512,17 @@ export abstract class Room<State extends object= any, Metadata= any> {
    * @param closeCode WebSocket close code (default = 4000, which is a "consented leave")
    * @returns Promise<void>
    */
-  public async disconnect(closeCode: number = Protocol.WS_CLOSE_CONSENTED): Promise<any> {
+  public disconnect(closeCode: number = Protocol.WS_CLOSE_CONSENTED): Promise<any> {
     // skip if already disposing
     if (this._internalState === RoomInternalState.DISPOSING) {
       return;
+
+    } else if (this._internalState === RoomInternalState.CREATING) {
+      throw new Error("cannot disconnect during onCreate()");
     }
 
     this._internalState = RoomInternalState.DISPOSING;
-    await this.listing.remove();
+    this.listing.remove();
 
     this.autoDispose = true;
 
@@ -541,7 +544,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
       this._events.emit('dispose');
     }
 
-    return await delayedDisconnection;
+    return delayedDisconnection;
   }
 
   public async ['_onJoin'](client: Client, req?: http.IncomingMessage) {

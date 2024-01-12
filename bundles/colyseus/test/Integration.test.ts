@@ -814,6 +814,28 @@ describe("Integration", () => {
               assert.strictEqual(2, disconnected, "both clients should've been disconnected");
             });
 
+            it("disconnect during onCreate is not allowed", async() => {
+              let onCreateResolved = false;
+              let onJoinResolved = false;
+
+              matchMaker.defineRoomType('disconnect_oncreate', class _ extends Room {
+                onCreate() {
+                  this.disconnect();
+                  onCreateResolved = true;
+                }
+              });
+
+              assert.rejects(async () => {
+                await client.joinOrCreate('disconnect_oncreate');
+                onJoinResolved = true;
+              }, { message: "cannot disconnect during onCreate()" });
+
+              await timeout(50);
+
+              assert.strictEqual(false, onCreateResolved);
+              assert.strictEqual(false, onJoinResolved);
+            });
+
           });
 
           describe("Seat reservation", () => {
@@ -1125,8 +1147,6 @@ describe("Integration", () => {
             assert.strictEqual(0, onLeaveCalled);
             assert.strictEqual(true, onJoinCompleted > 0);
 
-            console.log("STATS:", matchMaker.stats.local);
-
             await onRoomDisposed;
 
             assert.strictEqual(0, matchMaker.stats.local.roomCount);
@@ -1226,9 +1246,7 @@ describe("Integration", () => {
                     throw new Error("consented!");
                   }
                   await this.allowReconnection(client, 0.1);
-                } catch (e) {
-                  console.log("did not reconnected!")
-                }
+                } catch (e) {}
               }
               onDispose() {
                 onRoomDisposed.resolve();
