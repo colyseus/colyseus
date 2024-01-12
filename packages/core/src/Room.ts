@@ -566,7 +566,6 @@ export abstract class Room<State extends object= any, Metadata= any> {
 
     // get seat reservation options and clear it
     const options = this.reservedSeats[sessionId];
-    delete this.reservedSeats[sessionId];
 
     // share "after next patch queue" reference with every client.
     client._afterNextPatchQueue = this._afterNextPatchQueue;
