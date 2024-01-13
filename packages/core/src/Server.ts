@@ -8,7 +8,7 @@ import { Presence } from './presence/Presence';
 
 import { Room } from './Room';
 import { Type } from './utils/types';
-import { registerGracefulShutdown } from './utils/Utils';
+import { getBearerToken, registerGracefulShutdown } from './utils/Utils';
 
 import { registerNode, unregisterNode} from './discovery';
 
@@ -355,19 +355,12 @@ export class Server {
 
         try {
           const clientOptions = JSON.parse(Buffer.concat(data).toString());
-          const roomClass = matchMaker.getRoomClass(roomName);
-
-          /**
-           * Check if static onAuth is implemented (default implementation is just to satisfy TypeScript)
-           * - On "reconnect" requests, the `roomClass` is undefined, as the "roomName" variable actually corresponds to the `roomId`.
-           */
-          if (roomClass && roomClass['onAuth'] !== Room['onAuth']) {
-            const authHeader = req.headers['authorization'];
-            const authToken = (authHeader && authHeader.startsWith("Bearer ") && authHeader.substring(7, authHeader.length)) || undefined;
-            clientOptions['$auth'] = await roomClass['onAuth'](authToken, req);
-          }
-
-          const response = await matchMaker.controller.invokeMethod(method, roomName, clientOptions);
+          const response = await matchMaker.controller.invokeMethod(
+            method,
+            roomName,
+            clientOptions,
+            getBearerToken(req.headers['authorization']),
+          );
           res.write(JSON.stringify(response));
 
         } catch (e) {

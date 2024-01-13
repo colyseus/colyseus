@@ -138,22 +138,27 @@ export async function setup(
 /**
  * Join or create into a room and return seat reservation
  */
-export async function joinOrCreate(roomName: string, clientOptions: ClientOptions = {}) {
+export async function joinOrCreate(roomName: string, clientOptions: ClientOptions = {}, authToken?: string) {
   return await retry<Promise<SeatReservation>>(async () => {
     let room = await findOneRoomAvailable(roomName, clientOptions);
+
+    //
+    // TODO: call static onAuth here, if defined
+    // (before createRoom)
+    //
 
     if (!room) {
       room = await createRoom(roomName, clientOptions);
     }
 
-    return await reserveSeatFor(room, clientOptions);
+    return await reserveSeatFor(room, clientOptions, authToken);
   }, 5, [SeatReservationError]);
 }
 
 /**
  * Create a room and return seat reservation
  */
-export async function create(roomName: string, clientOptions: ClientOptions = {}) {
+export async function create(roomName: string, clientOptions: ClientOptions = {}, authToken?: string) {
   const room = await createRoom(roomName, clientOptions);
   return reserveSeatFor(room, clientOptions);
 }
@@ -161,7 +166,7 @@ export async function create(roomName: string, clientOptions: ClientOptions = {}
 /**
  * Join a room and return seat reservation
  */
-export async function join(roomName: string, clientOptions: ClientOptions = {}) {
+export async function join(roomName: string, clientOptions: ClientOptions = {}, authToken?: string) {
   return await retry<Promise<SeatReservation>>(async () => {
     const room = await findOneRoomAvailable(roomName, clientOptions);
 
@@ -214,7 +219,7 @@ export async function reconnect(roomId: string, clientOptions: ClientOptions = {
  *
  * @returns Promise<SeatReservation> - A promise which contains `sessionId` and `RoomListingData`.
  */
-export async function joinById(roomId: string, clientOptions: ClientOptions = {}) {
+export async function joinById(roomId: string, clientOptions: ClientOptions = {}, authToken?: string) {
   const room = await driver.findOne({ roomId });
 
   if (!room) {
@@ -528,7 +533,7 @@ export async function gracefullyShutdown(): Promise<any> {
 /**
  * Reserve a seat for a client in a room
  */
-export async function reserveSeatFor(room: RoomListingData, options: any) {
+export async function reserveSeatFor(room: RoomListingData, options: ClientOptions, authToken?: string) {
   const sessionId: string = generateId();
 
   debugMatchMaking(
@@ -539,7 +544,7 @@ export async function reserveSeatFor(room: RoomListingData, options: any) {
   let successfulSeatReservation: boolean;
 
   try {
-    successfulSeatReservation = await remoteRoomCall(room.roomId, '_reserveSeat', [sessionId, options]);
+    successfulSeatReservation = await remoteRoomCall(room.roomId, '_reserveSeat', [sessionId, options, authToken]);
 
   } catch (e) {
     debugMatchMaking(e);

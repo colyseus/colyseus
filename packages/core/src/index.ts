@@ -28,7 +28,7 @@ export { SchemaSerializer } from './serializer/SchemaSerializer';
 
 // Utilities
 export { Clock, Delayed };
-export { generateId, Deferred, DummyServer, spliceOne } from './utils/Utils';
+export { generateId, Deferred, DummyServer, spliceOne, getBearerToken } from './utils/Utils';
 export { isDevMode } from './utils/DevMode';
 
 // Debug

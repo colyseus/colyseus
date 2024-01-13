@@ -805,6 +805,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
   private async _reserveSeat(
     sessionId: string,
     joinOptions: any = true,
+    authToken: string = undefined,
     seconds: number = this.seatReservationTime,
     allowReconnection: boolean = false,
     devModeReconnection?: boolean,
@@ -826,6 +827,18 @@ export abstract class Room<State extends object= any, Metadata= any> {
 
       this.resetAutoDisposeTimeout(seconds);
     }
+
+
+    /**
+     * Check if static onAuth is implemented (default implementation is just to satisfy TypeScript)
+     * - On "reconnect" requests, the `roomClass` is undefined, as the "roomName" variable actually corresponds to the `roomId`.
+     */
+    if (authToken !== undefined && this.constructor['onAuth'] !== Room['onAuth']) {
+      const authHeader = req.headers['authorization'];
+      const authToken = (authHeader && authHeader.startsWith("Bearer ") && authHeader.substring(7, authHeader.length)) || undefined;
+      clientOptions['$auth'] = await roomClass['onAuth'](authToken, req);
+    }
+
 
     //
     // isDevMode workaround to allow players to reconnect on devMode

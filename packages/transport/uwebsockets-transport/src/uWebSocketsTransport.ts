@@ -2,7 +2,7 @@ import http from 'http';
 import querystring from 'querystring';
 import uWebSockets from 'uWebSockets.js';
 
-import { DummyServer, ErrorCode, matchMaker, Room, Transport, debugAndPrintError, spliceOne } from '@colyseus/core';
+import { DummyServer, ErrorCode, matchMaker, getBearerToken, Transport, debugAndPrintError, spliceOne } from '@colyseus/core';
 import { uWebSocketClient, uWebSocketWrapper } from './uWebSocketClient';
 
 export type TransportOptions = Omit<uWebSockets.WebSocketBehavior<any>, "upgrade" | "open" | "pong" | "close" | "message">;
@@ -250,19 +250,14 @@ export class uWebSocketsTransport extends Transport {
 
                     const method = matchedParams[matchmakeIndex + 1];
                     const roomName = matchedParams[matchmakeIndex + 2] || '';
-                    const roomClass = matchMaker.getRoomClass(roomName);
 
-                    /**
-                     * Check if static onAuth is implemented (default implementation is just to satisfy TypeScript)
-                     * - On "reconnect" requests, the `roomClass` is undefined, as the "roomName" variable actually corresponds to the `roomId`.
-                     */
-                    if (roomClass && roomClass['onAuth'] !== Room['onAuth']) {
-                      const authHeader = req.getHeader('authorization');
-                      const authToken = (authHeader && authHeader.startsWith("Bearer ") && authHeader.substring(7, authHeader.length)) || undefined;
-                      clientOptions['$auth'] = await roomClass['onAuth'](authToken, req);
-                    }
+                    const response = await matchMaker.controller.invokeMethod(
+                      method,
+                      roomName,
+                      clientOptions,
+                      getBearerToken(req.getHeader('authorization'))
+                    );
 
-                    const response = await matchMaker.controller.invokeMethod(method, roomName, clientOptions);
                     if (!res.aborted) {
                       res.writeStatus("200 OK");
                       res.end(JSON.stringify(response));
