@@ -609,6 +609,9 @@ export abstract class Room<State extends object= any, Metadata= any> {
         // emit 'join' to room handler (if not reconnecting)
         this._events.emit('join', client);
 
+        // remove seat reservation
+        delete this.reservedSeats[sessionId];
+
         // client left during `onJoin`, call _onLeave immediately.
         if (client.state === ClientState.LEAVING) {
           await this._onLeave(client, Protocol.WS_CLOSE_GOING_AWAY);
@@ -616,6 +619,9 @@ export abstract class Room<State extends object= any, Metadata= any> {
 
       } catch (e) {
         this.clients.delete(client);
+
+        // remove seat reservation
+        delete this.reservedSeats[sessionId];
 
         this._decrementClientCount();
 
@@ -625,10 +631,6 @@ export abstract class Room<State extends object= any, Metadata= any> {
         }
 
         throw e;
-
-      } finally {
-        // remove seat reservation
-        delete this.reservedSeats[sessionId];
       }
     }
 
