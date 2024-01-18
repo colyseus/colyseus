@@ -204,7 +204,7 @@ export async function getTransport(options: ConfigOptions) {
     let app: express.Express | undefined = express();
     let server = http.createServer(app);
 
-    transport = await options.initializeTransport({ server });
+    transport = await options.initializeTransport({ server, app });
 
     //
     // TODO: refactor me!
