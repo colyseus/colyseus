@@ -240,6 +240,11 @@ export class uWebSocketsTransport extends Transport {
             const url = req.getUrl();
             const matchedParams = url.match(allowedRoomNameChars);
             const matchmakeIndex = matchedParams.indexOf(matchmakeRoute);
+            const authToken = getBearerToken(req.getHeader('authorization'));
+
+            // cache all headers
+            const headers = {};
+            req.forEach((key, value) => headers[key] = value);
 
             // read json body
             this.readJson(res, async (clientOptions) => {
@@ -255,7 +260,7 @@ export class uWebSocketsTransport extends Transport {
                       method,
                       roomName,
                       clientOptions,
-                      { token: getBearerToken(req.getHeader('authorization')), request: req }
+                      { token: authToken, request: { headers } }
                     );
 
                     if (!res.aborted) {
