@@ -57,13 +57,18 @@ export default {
     return matchMaker.query(conditions);
   },
 
-  async invokeMethod(method: string, roomName: string, clientOptions: any = {}, authToken?: string) {
+  async invokeMethod(
+    method: string,
+    roomName: string,
+    clientOptions: matchMaker.ClientOptions = {},
+    authOptions?: matchMaker.AuthOptions,
+  ) {
     if (this.exposedMethods.indexOf(method) === -1) {
       throw new ServerError(ErrorCode.MATCHMAKE_NO_HANDLER, `invalid method "${method}"`);
     }
 
     try {
-      return await matchMaker[method](roomName, clientOptions, authToken);
+      return await matchMaker[method](roomName, clientOptions, authOptions);
 
     } catch (e) {
       throw new ServerError(e.code || ErrorCode.MATCHMAKE_UNHANDLED, e.message);

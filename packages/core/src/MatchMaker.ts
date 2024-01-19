@@ -27,6 +27,7 @@ import { getHostname } from "./discovery";
 export { controller, stats, type MatchMakerDriver };
 
 export type ClientOptions = any;
+export type AuthOptions = { token?: string, request?: any };
 export type SelectProcessIdCallback = (roomName: string, clientOptions: ClientOptions) => Promise<string>;
 
 export interface SeatReservation {
@@ -138,43 +139,47 @@ export async function setup(
 /**
  * Join or create into a room and return seat reservation
  */
-export async function joinOrCreate(roomName: string, clientOptions: ClientOptions = {}, authToken?: string) {
+export async function joinOrCreate(roomName: string, clientOptions: ClientOptions = {}, authOptions?: AuthOptions) {
   return await retry<Promise<SeatReservation>>(async () => {
+    const authData = await callOnAuth(roomName, authOptions);
     let room = await findOneRoomAvailable(roomName, clientOptions);
 
     //
-    // TODO: call static onAuth here, if defined
-    // (before createRoom)
+    // TODO [?]
+    //    should we expose the "creator" auth data of the room during `onCreate()`?
+    //    it would be useful, though it could be accessed via `onJoin()` for now.
     //
 
     if (!room) {
       room = await createRoom(roomName, clientOptions);
     }
 
-    return await reserveSeatFor(room, clientOptions, authToken);
+    return await reserveSeatFor(room, clientOptions, authData);
   }, 5, [SeatReservationError]);
 }
 
 /**
  * Create a room and return seat reservation
  */
-export async function create(roomName: string, clientOptions: ClientOptions = {}, authToken?: string) {
+export async function create(roomName: string, clientOptions: ClientOptions = {}, authOptions?: AuthOptions) {
+  const authData = await callOnAuth(roomName, authOptions);
   const room = await createRoom(roomName, clientOptions);
-  return reserveSeatFor(room, clientOptions);
+  return reserveSeatFor(room, clientOptions, authData);
 }
 
 /**
  * Join a room and return seat reservation
  */
-export async function join(roomName: string, clientOptions: ClientOptions = {}, authToken?: string) {
+export async function join(roomName: string, clientOptions: ClientOptions = {}, authOptions?: AuthOptions) {
   return await retry<Promise<SeatReservation>>(async () => {
+    const authData = await callOnAuth(roomName, authOptions);
     const room = await findOneRoomAvailable(roomName, clientOptions);
 
     if (!room) {
       throw new ServerError(ErrorCode.MATCHMAKE_INVALID_CRITERIA, `no rooms found with provided criteria`);
     }
 
-    return reserveSeatFor(room, clientOptions);
+    return reserveSeatFor(room, clientOptions, authData);
   });
 }
 
@@ -219,7 +224,7 @@ export async function reconnect(roomId: string, clientOptions: ClientOptions = {
  *
  * @returns Promise<SeatReservation> - A promise which contains `sessionId` and `RoomListingData`.
  */
-export async function joinById(roomId: string, clientOptions: ClientOptions = {}, authToken?: string) {
+export async function joinById(roomId: string, clientOptions: ClientOptions = {}, authOptions?: AuthOptions) {
   const room = await driver.findOne({ roomId });
 
   if (!room) {
@@ -229,7 +234,9 @@ export async function joinById(roomId: string, clientOptions: ClientOptions = {}
     throw new ServerError(ErrorCode.MATCHMAKE_INVALID_ROOM_ID, `room "${roomId}" is locked`);
   }
 
-  return reserveSeatFor(room, clientOptions);
+  const authData = await callOnAuth(room.name, authOptions);
+
+  return reserveSeatFor(room, clientOptions, authData);
 }
 
 /**
@@ -298,7 +305,7 @@ export async function remoteRoomCall<R= any>(
   } else {
     return (!args && typeof (room[method]) !== 'function')
         ? room[method]
-        : (await room[method].apply(room, args && args.map((arg) => JSON.parse(JSON.stringify(arg)))));
+        : (await room[method].apply(room, args && JSON.parse(JSON.stringify(args))));
   }
 }
 
@@ -351,9 +358,10 @@ export function getHandler(roomName: string) {
   return handler;
 }
 
-export function getRoomClass(roomName: string) {
+export function getRoomClass(roomName: string): Type<Room> {
   return handlers[roomName]?.klass;
 }
+
 
 /**
  * Creates a new room.
@@ -533,7 +541,7 @@ export async function gracefullyShutdown(): Promise<any> {
 /**
  * Reserve a seat for a client in a room
  */
-export async function reserveSeatFor(room: RoomListingData, options: ClientOptions, authToken?: string) {
+export async function reserveSeatFor(room: RoomListingData, options: ClientOptions, authData?: any) {
   const sessionId: string = generateId();
 
   debugMatchMaking(
@@ -544,7 +552,7 @@ export async function reserveSeatFor(room: RoomListingData, options: ClientOptio
   let successfulSeatReservation: boolean;
 
   try {
-    successfulSeatReservation = await remoteRoomCall(room.roomId, '_reserveSeat', [sessionId, options, authToken]);
+    successfulSeatReservation = await remoteRoomCall(room.roomId, '_reserveSeat', [sessionId, options, authData]);
 
   } catch (e) {
     debugMatchMaking(e);
@@ -562,6 +570,13 @@ export async function reserveSeatFor(room: RoomListingData, options: ClientOptio
   }
 
   return response;
+}
+
+function callOnAuth(roomName: string, authOptions?: AuthOptions) {
+  const roomClass = getRoomClass(roomName);
+  return (roomClass && roomClass['onAuth'] && roomClass['onAuth'] !== Room['onAuth'])
+    ? roomClass['onAuth'](authOptions.token, authOptions.request)
+    : undefined;
 }
 
 async function cleanupStaleRooms(roomName: string) {

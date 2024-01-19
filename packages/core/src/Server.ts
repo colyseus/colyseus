@@ -359,7 +359,7 @@ export class Server {
             method,
             roomName,
             clientOptions,
-            getBearerToken(req.headers['authorization']),
+            { token: getBearerToken(req.headers['authorization']), request: req },
           );
           res.write(JSON.stringify(response));
 

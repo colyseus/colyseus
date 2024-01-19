@@ -15,7 +15,7 @@ export function generateId(length: number = 9) {
 }
 
 export function getBearerToken(authHeader: string) {
-  return (authHeader && authHeader.startsWith("Bearer ") && authHeader.substring(7, authorizationHeader.length)) || undefined;
+  return (authHeader && authHeader.startsWith("Bearer ") && authHeader.substring(7, authHeader.length)) || undefined;
 }
 
 // nodemon sends SIGUSR2 before reloading

@@ -120,7 +120,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
 
   // seat reservation & reconnection
   protected seatReservationTime: number = DEFAULT_SEAT_RESERVATION_TIME;
-  protected reservedSeats: { [sessionId: string]: any } = {};
+  protected reservedSeats: { [sessionId: string]: [any, any] } = {};
   protected reservedSeatTimeouts: { [sessionId: string]: NodeJS.Timer } = {};
 
   protected _reconnections: { [reconnectionToken: string]: [string, Deferred] } = {};
@@ -565,7 +565,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
     }
 
     // get seat reservation options and clear it
-    const options = this.reservedSeats[sessionId];
+    const [joinOptions, authData] = this.reservedSeats[sessionId];
 
     // share "after next patch queue" reference with every client.
     client._afterNextPatchQueue = this._afterNextPatchQueue;
@@ -581,12 +581,11 @@ export abstract class Room<State extends object= any, Metadata= any> {
 
     } else {
       try {
-        if (options['$auth']) {
-          client.auth = options['$auth'];
-          delete options['$auth'];
+        if (authData) {
+          client.auth = authData;
 
         } else if (this.onAuth !== Room.prototype.onAuth) {
-          client.auth = await this.onAuth(client, options, req);
+          client.auth = await this.onAuth(client, joinOptions, req);
 
           if (!client.auth) {
             throw new ServerError(ErrorCode.AUTH_FAILED, 'onAuth failed');
@@ -603,7 +602,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
         this.clients.push(client);
 
         if (this.onJoin) {
-          await this.onJoin(client, options, client.auth);
+          await this.onJoin(client, joinOptions, client.auth);
         }
 
         // emit 'join' to room handler (if not reconnecting)
@@ -692,7 +691,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
     const sessionId = previousClient.sessionId;
     const reconnectionToken = previousClient._reconnectionToken;
 
-    this._reserveSeat(sessionId, true, seconds, true);
+    this._reserveSeat(sessionId, true, previousClient.auth, seconds, true);
 
     // keep reconnection reference in case the user reconnects into this room.
     const reconnection = new Deferred<Client>();
@@ -807,7 +806,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
   private async _reserveSeat(
     sessionId: string,
     joinOptions: any = true,
-    authToken: string = undefined,
+    authData: any = undefined,
     seconds: number = this.seatReservationTime,
     allowReconnection: boolean = false,
     devModeReconnection?: boolean,
@@ -816,7 +815,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
       return false;
     }
 
-    this.reservedSeats[sessionId] = joinOptions;
+    this.reservedSeats[sessionId] = [joinOptions, authData];
 
     if (!allowReconnection) {
       await this._incrementClientCount();
@@ -829,18 +828,6 @@ export abstract class Room<State extends object= any, Metadata= any> {
 
       this.resetAutoDisposeTimeout(seconds);
     }
-
-
-    /**
-     * Check if static onAuth is implemented (default implementation is just to satisfy TypeScript)
-     * - On "reconnect" requests, the `roomClass` is undefined, as the "roomName" variable actually corresponds to the `roomId`.
-     */
-    if (authToken !== undefined && this.constructor['onAuth'] !== Room['onAuth']) {
-      const authHeader = req.headers['authorization'];
-      const authToken = (authHeader && authHeader.startsWith("Bearer ") && authHeader.substring(7, authHeader.length)) || undefined;
-      clientOptions['$auth'] = await roomClass['onAuth'](authToken, req);
-    }
-
 
     //
     // isDevMode workaround to allow players to reconnect on devMode

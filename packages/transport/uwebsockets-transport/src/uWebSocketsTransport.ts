@@ -255,7 +255,7 @@ export class uWebSocketsTransport extends Transport {
                       method,
                       roomName,
                       clientOptions,
-                      getBearerToken(req.getHeader('authorization'))
+                      { token: getBearerToken(req.getHeader('authorization')), request: req }
                     );
 
                     if (!res.aborted) {
