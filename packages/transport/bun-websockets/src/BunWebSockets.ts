@@ -7,7 +7,7 @@ import { ServerWebSocket, WebSocketHandler } from "bun";
 import http from 'http';
 import bunExpress from "bun-serve-express";
 
-import { DummyServer, ErrorCode, matchMaker, Transport, debugAndPrintError, spliceOne, ServerError } from '@colyseus/core';
+import { DummyServer, matchMaker, Transport, debugAndPrintError, spliceOne, ServerError, getBearerToken } from '@colyseus/core';
 import { WebSocketClient, WebSocketWrapper } from './WebSocketClient';
 import { Application, Request, Response } from "express";
 
@@ -191,7 +191,12 @@ export class BunWebSockets extends Transport {
           const roomName = matchedParams[matchmakeIndex + 2] || '';
 
           writeHeaders(req, res);
-          res.json(await matchMaker.controller.invokeMethod(method, roomName, clientOptions));
+          res.json(await matchMaker.controller.invokeMethod(
+            method,
+            roomName,
+            clientOptions,
+            { token: getBearerToken(req.headers['authorization']), request: req },
+          ));
           break;
         }
 

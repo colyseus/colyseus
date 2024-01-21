@@ -4,7 +4,7 @@ import express, { Router } from 'express';
 import grant, { GrantProvider, GrantConfig, GrantSession } from 'grant';
 import session from 'express-session';
 import { MayHaveUpgradeToken, auth } from './auth';
-import { matchMaker } from '@colyseus/core';
+import { matchMaker, logger } from '@colyseus/core';
 
 // @ts-ignore
 import RedisStore from "connect-redis";
@@ -118,6 +118,16 @@ export const oauth = {
       const config: GrantConfig = Object.assign({ defaults: this.defaults }, this.providers);
       config.defaults.prefix = oauth.prefix;
 
+      // if origin is not set, guess it from environment
+      if (!this.defaults.origin) {
+        const isProduction = (process.env.NODE_ENV && process.env.NODE_ENV !== "development" || process.env.COLYSEUS_CLOUD)
+        const hostname = (process.env.SUBDOMAIN && process.env.SERVER_NAME)
+          ? `${process.env.SUBDOMAIN}.${process.env.SERVER_NAME}`
+          : `localhost:${process.env.PORT || "2567"}`;
+        this.defaults.origin = `${(isProduction) ? "https" : "http"}://${hostname}`;
+        logger.info(`OAuth: 'auth.oauth.defaults.origin' not set. Guessing it from environment: '${this.defaults.origin}'`);
+      }
+
       router.use(sessionMiddleware);
 
       router.get("/:providerId", async (req, res, next) => {
@@ -185,6 +195,11 @@ ${(providerUrl) ? `<hr/><p><small><em>(Get your keys from <a href="${providerUrl
             data.upgradingToken = await JWT.verify(session.grant.dynamic?.token);
           }
 
+          // transform profile data
+          if (data.profile) {
+            data.profile = oauth.transformProfileData(data.profile);
+          }
+
           user = await oAuthProviderCallback(data, session.grant.provider as OAuthProviderName);
           token = await auth.settings.onGenerateToken(user);
           response = { user, token };
@@ -200,5 +215,25 @@ ${(providerUrl) ? `<hr/><p><small><em>(Get your keys from <a href="${providerUrl
     });
 
     return router;
+  },
+
+  /**
+   * Transform raw profile data into a single object.
+   * (e.g. Twitch returns an array of profiles, but we only need the first one)
+   * @param raw
+   */
+  transformProfileData(raw: any) {
+    if (raw.data && Array.isArray(raw.data) && raw.data.length === 1) {
+      //
+      // Twitch:
+      // Twitch returns an array of profiles, but we only need the first one
+      //
+      return raw.data[0];
+    } else {
+      //
+      // Fallback: return raw data
+      //
+      return raw;
+    }
   }
 }

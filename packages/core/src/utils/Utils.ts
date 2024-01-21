@@ -14,7 +14,10 @@ export function generateId(length: number = 9) {
   return nanoid(length);
 }
 
-//
+export function getBearerToken(authHeader: string) {
+  return (authHeader && authHeader.startsWith("Bearer ") && authHeader.substring(7, authHeader.length)) || undefined;
+}
+
 // nodemon sends SIGUSR2 before reloading
 // (https://github.com/remy/nodemon#controlling-shutdown-of-your-script)
 //
