@@ -1,22 +1,64 @@
 // import WebSocket from 'ws';
 
 import { Protocol, Client, ClientState, ISendOptions, getMessageBytes, logger, debugMessage } from '@colyseus/core';
+import { WebTransportSession } from '@fails-components/webtransport';
+import { EventEmitter } from 'stream';
 
-const SEND_OPTS = { binary: true };
+export class H3Client implements Client {
+  public id: string;
+  public ref: EventEmitter = new EventEmitter();
 
-export class WebTransportClient implements Client {
   public sessionId: string;
   public state: ClientState = ClientState.JOINING;
   public _enqueuedMessages: any[] = [];
   public _afterNextPatchQueue;
   public _reconnectionToken: string;
 
-  constructor(
-    public id: string,
-    public ref: WebSocket,
-  ) {
-    this.sessionId = id;
+  // TODO: remove readyState
+  public readyState: number;
+
+  private _datagramReader: any;
+  private _datagramWriter: any;
+
+  constructor(private _wtSession: WebTransportSession) {
+    _wtSession.closed
+      .then(() => console.log("session closed => successfully"))
+      .catch((e: any) => console.error("session closed =>", e))
+      .finally(() => this._close());
+
+    _wtSession.ready.then(() => {
+
+      _wtSession.createBidirectionalStream().then((bidi) => {
+        const reader = bidi.readable.getReader();
+        const writer = bidi.writable.getWriter();
+
+        reader.closed.catch((e: any) => console.log("writer closed with error!", e));
+        writer.closed.catch((e: any) => console.log("writer closed with error!", e));
+
+        this.ref.emit('open');
+
+      }).catch((e: any) => {
+        console.log("failed to create bidirectional stream!", e);
+        this._close();
+      });
+
+      // // reading datagrams
+      this._datagramReader = _wtSession.datagrams.readable.getReader();
+      this._datagramReader.closed.catch((e: any) =>
+        console.log("datagram reader closed with error!", e));
+
+    }).catch((e: any) => {
+      console.error("session failed to open =>", e);
+      this._close();
+    });
   }
+
+  // constructor(
+  //   public id: string,
+  //   public ref: WebSocket,
+  // ) {
+  //   this.sessionId = id;
+  // }
 
   public sendBytes(type: string | number, bytes: number[] | Uint8Array, options?: ISendOptions) {
     debugMessage("send bytes(to %s): '%s' -> %j", this.sessionId, type, bytes);
@@ -25,6 +67,20 @@ export class WebTransportClient implements Client {
       getMessageBytes.raw(Protocol.ROOM_DATA_BYTES, type, undefined, bytes),
       options,
     );
+  }
+
+  public sendDatagram(bytes: number[] | Uint8Array) {
+    if (!this._datagramWriter) {
+      this._datagramWriter = this._wtSession.datagrams.writable.getWriter();
+      this._datagramWriter.closed
+        .then(() => console.log("datagram writer closed successfully!"))
+        .catch((e: any) => console.log("datagram writer closed with error!", e));
+    }
+    this._datagramWriter.write(bytes);
+  }
+
+  public readDatagram() {
+
   }
 
   public send(messageOrType: any, messageOrOptions?: any | ISendOptions, options?: ISendOptions) {
@@ -60,19 +116,15 @@ export class WebTransportClient implements Client {
       return;
     }
 
-    this.ref.send(data, SEND_OPTS, cb);
+    this.ref.send(data);
   }
 
   public error(code: number, message: string = '', cb?: (err?: Error) => void) {
     this.raw(getMessageBytes[Protocol.ERROR](code, message), undefined, cb);
   }
 
-  get readyState() {
-    return this.ref.readyState;
-  }
-
   public leave(code?: number, data?: string) {
-    this.ref.close(code, data);
+    this._wtSession.close({ reason: data, closeCode: code });
   }
 
   public close(code?: number, data?: string) {
@@ -87,5 +139,11 @@ export class WebTransportClient implements Client {
 
   public toJSON() {
     return { sessionId: this.sessionId, readyState: this.readyState };
+  }
+
+  private _close() {
+    this.readyState = 3; // WebSocket.CLOSED;
+    this.ref.emit('close');
+    this.ref.removeAllListeners();
   }
 }

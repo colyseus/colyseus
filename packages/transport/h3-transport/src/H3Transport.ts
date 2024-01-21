@@ -3,8 +3,8 @@ import https from 'https';
 import { Http3Server } from "@fails-components/webtransport";
 import { URL } from 'url';
 
-import { matchMaker, Protocol, Transport, debugAndPrintError, debugConnection, registerGracefulShutdown } from '@colyseus/core';
-import { WebTransportClient } from './WebTransportClient';
+import { matchMaker, Protocol, Transport, debugAndPrintError, spliceOne } from '@colyseus/core';
+import { H3Client } from './H3Client';
 import { generateWebTransportCertificate } from './utils/mkcert';
 
 export type CertLike = string | Buffer;
@@ -19,7 +19,7 @@ export interface TransportOptions {
   app?: any, // express app
 }
 
-export class WebTransport extends Transport {
+export class H3Transport extends Transport {
   protected http: http.Server;
   protected https: https.Server;
   protected h3Server: Http3Server;
@@ -28,7 +28,7 @@ export class WebTransport extends Transport {
   private isListening = false;
   private _originalSend: any = null;
 
-  clients: WebTransportClient[] = [];
+  clients: H3Client[] = [];
 
   constructor(options: TransportOptions) {
     super();
@@ -128,7 +128,7 @@ export class WebTransport extends Transport {
     // set client id
     rawClient.pingCount = 0;
 
-    const client = new WebTransportClient(sessionId, rawClient);
+    const client = new H3Client(sessionId, rawClient);
 
     //
     // TODO: DRY code below with all transports
@@ -161,43 +161,10 @@ export class WebTransport extends Transport {
         const { done, value } = await sessionReader.read();
         if (done) { break; }
 
-        //
-        // TODO: move this to WebTransportClient
-        //
-
-        value.closed.then(() => {
-          console.log("Session closed successfully!");
-        }).catch((e: any) => {
-          console.log("Session closed with error! " + e);
-        });
-
-        value.ready.then(() => {
-          value.createBidirectionalStream().then((bidi) => {
-            const reader = bidi.readable.getReader();
-            const writer = bidi.writable.getWriter();
-
-            reader.closed.catch((e: any) => console.log("writer closed with error!", e));
-            writer.closed.catch((e: any) => console.log("writer closed with error!", e));
-
-          }).catch((e: any) => {
-            console.log("failed to create bidirectional stream!", e);
-          });
-
-          // reading datagrams
-          const datagramReader = value.datagrams.readable.getReader();
-          datagramReader.closed.catch((e: any) => console.log("datagram reader closed with error!", e));
-
-          // writing datagrams
-          const datagramWriter = value.datagrams.writable.getWriter();
-          datagramWriter.closed
-            .then(() => console.log("datagram writer closed successfully!"))
-            .catch((e: any) => console.log("datagram writer closed with error!", e));
-          datagramWriter.write(new Uint8Array([1, 2, 3, 4, 5]));
-          datagramWriter.write(new Uint8Array([6, 7, 8, 9, 10]));
-
-        }).catch((e: any) => {
-          console.log("session failed to be ready!");
-        });
+        // create client instance
+        const client = new H3Client(value);
+        client.ref.on('open', () => this.clients.push(client));
+        client.ref.on("close", () => spliceOne(this.clients, this.clients.indexOf(client)));
       }
 
     } catch (e) {
