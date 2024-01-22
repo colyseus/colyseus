@@ -79,8 +79,9 @@ export class H3Client implements Client {
     this._datagramWriter.write(bytes);
   }
 
-  public readDatagram() {
-
+  public async readDatagram() {
+    const read = await this._datagramReader.read();
+    return read.value;
   }
 
   public send(messageOrType: any, messageOrOptions?: any | ISendOptions, options?: ISendOptions) {

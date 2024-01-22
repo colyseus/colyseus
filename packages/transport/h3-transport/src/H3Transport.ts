@@ -20,6 +20,9 @@ export interface TransportOptions {
 }
 
 export class H3Transport extends Transport {
+  public protocol: string = "h3";
+  public clients: H3Client[] = [];
+
   protected http: http.Server;
   protected https: https.Server;
   protected h3Server: Http3Server;
@@ -27,8 +30,6 @@ export class H3Transport extends Transport {
   private options: TransportOptions;
   private isListening = false;
   private _originalSend: any = null;
-
-  clients: H3Client[] = [];
 
   constructor(options: TransportOptions) {
     super();
