@@ -16,7 +16,6 @@ export interface TransportOptions extends ServerOptions {
 }
 
 export class WebSocketTransport extends Transport {
-  public protocol: string = "ws";
   protected wss: WebSocket.Server;
 
   protected pingInterval: NodeJS.Timer;

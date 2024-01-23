@@ -15,7 +15,6 @@ type RawWebSocketClient = uWebSockets.WebSocket<any> & {
 };
 
 export class uWebSocketsTransport extends Transport {
-    public protocol: string = "ws";
     public app: uWebSockets.TemplatedApp;
 
     protected clients: RawWebSocketClient[] = [];
