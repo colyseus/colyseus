@@ -1,4 +1,4 @@
-import { Room, Client, ClientArray } from "colyseus";
+import { Room, Client, ClientArray } from "@colyseus/core";
 import { Schema, type, MapSchema } from "@colyseus/schema";
 import { IncomingMessage } from "http";
 

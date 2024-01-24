@@ -208,20 +208,23 @@ importers:
         specifier: workspace:^
         version: link:../core
     devDependencies:
-      '@colyseus/monitor':
-        specifier: ^0.15.0
-        version: 0.15.4
+      '@colyseus/h3-transport':
+        specifier: workspace:^
+        version: link:../transport/h3-transport
       '@colyseus/redis-driver':
-        specifier: ^0.15.0
+        specifier: workspace:^
         version: link:../drivers/redis-driver
       '@colyseus/redis-presence':
-        specifier: ^0.15.0
+        specifier: workspace:^
         version: link:../presence/redis-presence
+      '@colyseus/schema':
+        specifier: '*'
+        version: 2.0.25
       '@colyseus/uwebsockets-transport':
-        specifier: ^0.15.0
+        specifier: workspace:^
         version: link:../transport/uwebsockets-transport
       '@colyseus/ws-transport':
-        specifier: ^0.15.0
+        specifier: workspace:^
         version: link:../transport/ws-transport
 
   packages/greeting-banner: {}
@@ -337,6 +340,21 @@ importers:
         specifier: ^4.17.1
         version: 4.18.2
 
+  packages/transport/h3-transport:
+    dependencies:
+      '@colyseus/core':
+        specifier: workspace:^
+        version: link:../../core
+      '@fails-components/webtransport':
+        specifier: 1.0.8
+        version: 1.0.8
+      '@fails-components/webtransport-transport-http3-quiche':
+        specifier: ^1.0.8
+        version: 1.0.8
+      node-forge:
+        specifier: ^1.3.1
+        version: 1.3.1
+
   packages/transport/tcp-transport:
     dependencies:
       '@colyseus/core':
@@ -354,21 +372,6 @@ importers:
       uWebSockets.js:
         specifier: github:uNetworking/uWebSockets.js#v20.24.0
         version: github.com/uNetworking/uWebSockets.js/6545da07696855e77de1480d5b55bb661746ddd3
-
-  packages/transport/webtransport:
-    dependencies:
-      '@colyseus/core':
-        specifier: workspace:^
-        version: link:../../core
-      '@fails-components/webtransport':
-        specifier: 1.0.8
-        version: 1.0.8
-      '@fails-components/webtransport-transport-http3-quiche':
-        specifier: ^1.0.8
-        version: 1.0.8
-      node-forge:
-        specifier: ^1.3.1
-        version: 1.3.1
 
   packages/transport/ws-transport:
     dependencies:
@@ -719,16 +722,6 @@ packages:
 
   /@bcoe/v8-coverage@0.2.3:
     resolution: {integrity: sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==}
-    dev: true
-
-  /@colyseus/monitor@0.15.4:
-    resolution: {integrity: sha512-g4xwIhjH1LCyCwIoUpVq6Es4qhRQP51Bth2pWJXcAxbwyy3nXpdQVlEh5A3dSbIHv3Cy51QJzhse7gm17nGRgg==}
-    dependencies:
-      express: 4.18.2
-      node-os-utils: 1.3.7
-      superagent: 3.8.3
-    transitivePeerDependencies:
-      - supports-color
     dev: true
 
   /@colyseus/schema@2.0.25:
@@ -3106,10 +3099,6 @@ packages:
       dot-prop: 5.3.0
     dev: true
 
-  /component-emitter@1.3.1:
-    resolution: {integrity: sha512-T0+barUSQRTUQASh8bx02dl+DhF54GtIDY13Y3m9oWTklKbb3Wv974meRpeZ3lp1JpLVECWWNHC4vaG2XHXouQ==}
-    dev: true
-
   /concat-map@0.0.1:
     resolution: {integrity: sha512-/Srv4dswyQNBfohGpz9o6Yb3Gz3SrUDqBH5rTuhGR7ahtlbYKnVxw2bCFMRljaA7EXHaXZ8wsHdodFvbkhKmqg==}
     dev: true
@@ -3249,10 +3238,6 @@ packages:
     resolution: {integrity: sha512-YZ3GUyn/o8gfKJlnlX7g7xq4gyO6OSuhGPKaaGssGB2qgDUS0gPgtTvoyZLTt9Ab6dC4hfc9dV5arkvc/OCmrw==}
     engines: {node: '>= 0.6'}
 
-  /cookiejar@2.1.4:
-    resolution: {integrity: sha512-LDx6oHrK+PhzLKJU9j5S7/Y3jM/mUHvD/DeI1WQmJn652iPC5Y4TBzC9l+5OMOXlyTTA+SmVUPm0HQUwpD5Jqw==}
-    dev: true
-
   /cookies@0.8.0:
     resolution: {integrity: sha512-8aPsApQfebXnuI+537McwYsDtjVxGm8gTIzQI3FDW6t5t/DAhERxtnbEPN/8RX+uZthoz4eCOgloXaE5cYyNow==}
     engines: {node: '>= 0.8'}
@@ -3336,17 +3321,6 @@ packages:
     dependencies:
       ms: 2.0.0
     dev: false
-
-  /debug@3.2.7:
-    resolution: {integrity: sha512-CFjzYYAi4ThfiQvizrFQevTTXHtnCqWfe7x1AhgEscTz6ZbLbfoLRLPugTQyBth6f8ZERVUSyWHFD/7Wu4t1XQ==}
-    peerDependencies:
-      supports-color: '*'
-    peerDependenciesMeta:
-      supports-color:
-        optional: true
-    dependencies:
-      ms: 2.1.3
-    dev: true
 
   /debug@4.3.4(supports-color@8.1.1):
     resolution: {integrity: sha512-PRWFHuSU3eDtQJPvnNY7Jcket1j0t5OuOsFzPPzsekD52Zl8qUfFIPEiswXqIvHWGVHOgX+7G/vCNNhehwxfkQ==}
@@ -4056,10 +4030,6 @@ packages:
     transitivePeerDependencies:
       - supports-color
 
-  /extend@3.0.2:
-    resolution: {integrity: sha512-fjquC59cD7CyW6urNXK0FBufkZcoiGG80wTuPujX590cB5Ttln20E2UB4S/WARVqhXffZl2LNgS+gQdPIIim/g==}
-    dev: true
-
   /external-editor@3.1.0:
     resolution: {integrity: sha512-hMQ4CX1p1izmuLYyZqLMO/qGNw10wSv9QDCPfzXfyFrOaCSSoRfqE1Kf1s5an66J5JZC62NewG+mK49jOCtQew==}
     engines: {node: '>=4'}
@@ -4203,15 +4173,6 @@ packages:
       signal-exit: 4.1.0
     dev: true
 
-  /form-data@2.5.1:
-    resolution: {integrity: sha512-m21N3WOmEEURgk6B9GLOE4RuWOFf28Lhh9qGYeNlGq4VDXUlJy2th2slBNU8Gp8EzloYZOibZJ7t5ecIrFSjVA==}
-    engines: {node: '>= 0.12'}
-    dependencies:
-      asynckit: 0.4.0
-      combined-stream: 1.0.8
-      mime-types: 2.1.35
-    dev: true
-
   /form-data@4.0.0:
     resolution: {integrity: sha512-ETEklSGi5t0QMZuiXoA/Q6vcnxcLQP5vdugSpuAyi6SVGi2clPPp+xgEhuMaHC+zGgn31Kd235W35f7Hykkaww==}
     engines: {node: '>= 6'}
@@ -4219,11 +4180,6 @@ packages:
       asynckit: 0.4.0
       combined-stream: 1.0.8
       mime-types: 2.1.35
-
-  /formidable@1.2.6:
-    resolution: {integrity: sha512-KcpbcpuLNOwrEjnbpMC0gS+X8ciDoZE1kkqzat4a8vrprf+s9pKNQ/QIwWfbfs4ltgmFl3MD177SNTkve3BwGQ==}
-    deprecated: 'Please upgrade to latest, formidable@v2 or formidable@v3! Check these notes: https://bit.ly/2ZEqIau'
-    dev: true
 
   /forwarded@0.2.0:
     resolution: {integrity: sha512-buRG0fpBtRHSTCOASe6hD258tEubFoRLb4ZNA6NxMVHNw2gOcwHo9wyablzMzOA5z9xA9L1KNjk/Nt6MT9aYow==}
@@ -6637,6 +6593,7 @@ packages:
 
   /node-os-utils@1.3.7:
     resolution: {integrity: sha512-fvnX9tZbR7WfCG5BAy3yO/nCLyjVWD6MghEq0z5FDfN+ZXpLWNITBdbifxQkQ25ebr16G0N7eRWJisOcMEHG3Q==}
+    dev: false
 
   /node-releases@2.0.14:
     resolution: {integrity: sha512-y10wOWt8yZpqXmOgRo77WaHEmhYQYGNA6y421PKsKYWEK8aW+cqAphborZDhqfyKrbZEN92CN1X2KbafY2s7Yw==}
@@ -7347,6 +7304,7 @@ packages:
     engines: {node: '>=0.6'}
     dependencies:
       side-channel: 1.0.4
+    dev: false
 
   /queue-microtask@1.2.3:
     resolution: {integrity: sha512-NuaNSa6flKT5JaSYQzJok04JzTL1CA6aGhv5rfLW3PgqA+M2ChpZQnAC8h8i4ZFkBS8X5RqkDBHA7r4hej3K9A==}
@@ -8042,25 +8000,6 @@ packages:
       duplexer: 0.1.2
       minimist: 1.2.8
       through: 2.3.8
-    dev: true
-
-  /superagent@3.8.3:
-    resolution: {integrity: sha512-GLQtLMCoEIK4eDv6OGtkOoSMt3D+oq0y3dsxMuYuDvaNUvuT8eFBuLmfR0iYYzHC1e8hpzC6ZsxbuP6DIalMFA==}
-    engines: {node: '>= 4.0'}
-    deprecated: Please upgrade to v7.0.2+ of superagent.  We have fixed numerous issues with streams, form-data, attach(), filesystem errors not bubbling up (ENOENT on attach()), and all tests are now passing.  See the releases tab for more information at <https://github.com/visionmedia/superagent/releases>.
-    dependencies:
-      component-emitter: 1.3.1
-      cookiejar: 2.1.4
-      debug: 3.2.7
-      extend: 3.0.2
-      form-data: 2.5.1
-      formidable: 1.2.6
-      methods: 1.1.2
-      mime: 1.6.0
-      qs: 6.11.2
-      readable-stream: 2.3.8
-    transitivePeerDependencies:
-      - supports-color
     dev: true
 
   /supports-color@5.5.0:

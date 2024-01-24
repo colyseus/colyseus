@@ -17,6 +17,9 @@ export class H3Client implements Client {
   // TODO: remove readyState
   public readyState: number;
 
+  private _bidiReader: any;
+  private _bidiWriter: any;
+
   private _datagramReader: any;
   private _datagramWriter: any;
 
@@ -29,11 +32,13 @@ export class H3Client implements Client {
     _wtSession.ready.then(() => {
 
       _wtSession.createBidirectionalStream().then((bidi) => {
-        const reader = bidi.readable.getReader();
-        const writer = bidi.writable.getWriter();
+        // @ts-ignore
+        this._bidiReader = bidi.readable.getReader();
+        // @ts-ignore
+        this._bidiWriter = bidi.writable.getWriter();
 
-        reader.closed.catch((e: any) => console.log("writer closed with error!", e));
-        writer.closed.catch((e: any) => console.log("writer closed with error!", e));
+        this._bidiReader.closed.catch((e: any) => console.log("writer closed with error!", e));
+        this._bidiWriter.closed.catch((e: any) => console.log("writer closed with error!", e));
 
         this.ref.emit('open');
 
@@ -113,11 +118,11 @@ export class H3Client implements Client {
 
   public raw(data: ArrayLike<number>, options?: ISendOptions, cb?: (err?: Error) => void) {
     // skip if client not open
-    if (this.ref.readyState !== WebSocket.OPEN) {
+    if (this.readyState !== 1) {
       return;
     }
 
-    this.ref.send(data);
+    this._bidiWriter.write(data);
   }
 
   public error(code: number, message: string = '', cb?: (err?: Error) => void) {

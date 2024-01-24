@@ -10,13 +10,16 @@ import { generateWebTransportCertificate } from './utils/mkcert';
 export type CertLike = string | Buffer;
 
 export interface TransportOptions {
-  cert: CertLike,
-  key: CertLike,
+  app: any, // express app
+
+  cert?: CertLike,
+  key?: CertLike,
 
   secret?: string,
 
   server?: http.Server,
-  app?: any, // express app
+
+  localProxy?: string,
 }
 
 export class H3Transport extends Transport {
@@ -29,32 +32,67 @@ export class H3Transport extends Transport {
 
   private options: TransportOptions;
   private isListening = false;
+
   private _originalSend: any = null;
 
   constructor(options: TransportOptions) {
     super();
 
     this.options = options;
+
+    // local proxy (frontend)
+    if (options.localProxy) {
+      if (this.options.server) {
+        console.warn("H3Transport: 'server' option is ignored when 'localProxy' is set.");
+      }
+
+      const uri = new URL(
+        (!options.localProxy.startsWith("http"))
+          ? `http://${options.localProxy}`
+          : options.localProxy
+      );
+
+      this.options.server = http.createServer((req, res) => {
+        const proxyReq = http.request({
+          host: uri.hostname,
+          port: uri.port,
+          path: req.url,
+          method: req.method,
+          headers: req.headers,
+        }, (proxyRes) => {
+          res.writeHead(proxyRes.statusCode!, proxyRes.headers);
+          proxyRes.pipe(res, { end: true });
+        });
+        req.pipe(proxyReq, { end: true });
+        proxyReq.on('error', (err) => {
+          console.error('Proxy request error:', err);
+          res.end();
+        });
+      });
+
+    }
   }
 
   public listen(port: number, hostname: string = 'localhost', backlog?: number, listeningListener?: () => void) {
     const createServers = (cert: CertLike, key: CertLike, fingerprint?: string) => {
       this.http = this.options.server || http.createServer(this.options.app);
-      this.http.listen(port + 1000);
+      this.http.listen(port);
 
-      this.https = https.createServer({ cert, key }, this.options.app || function(req, res) {
-        //
-        // respond to __fingerprint request (development only)
-        //
-        if (req.url.substring(1) === "__fingerprint") {
-          res.writeHead(200, { "content-type": "application/json" });
-          res.end(JSON.stringify(fingerprint!.split(":").map((hex) => parseInt(hex, 16))));
-          return;
-        } else {
-          res.writeHead(404);
-          res.end();
-        }
-      });
+      if (fingerprint) {
+        // return fingerprint on __fingerprint request (development only)
+        this.options.app.get("/__fingerprint", (req: any, res: any) => {
+          res.json(fingerprint!.split(":").map((hex) => parseInt(hex, 16)));
+        });
+      }
+
+      if (this.options.localProxy) {
+        // use http proxy server
+        this.options.app.use((req: any, res: any) => {
+          this.options.server.emit('request', req, res);
+        });
+      }
+
+      this.https = https.createServer({ cert, key }, this.options.app);
       this.https.listen(port, hostname, backlog, listeningListener);
 
       this.h3Server = new Http3Server({
@@ -83,7 +121,7 @@ export class H3Transport extends Transport {
       ], {
         days: 10,
       }).then((generated) => {
-        createServers(generated.cert, generated.private);
+        createServers(generated.cert, generated.private, generated.fingerprint);
       });
 
     } else {
@@ -129,6 +167,7 @@ export class H3Transport extends Transport {
     // set client id
     rawClient.pingCount = 0;
 
+    // @ts-ignore
     const client = new H3Client(sessionId, rawClient);
 
     //

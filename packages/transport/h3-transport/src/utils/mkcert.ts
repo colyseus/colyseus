@@ -53,7 +53,6 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. */
 
-// @ts-expect-error node-forge has no types and @types/node-forge do not include oids
 import forge from 'node-forge'
 import { webcrypto as crypto, X509Certificate } from 'crypto'
 
