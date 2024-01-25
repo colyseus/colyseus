@@ -3,7 +3,7 @@ import https from 'https';
 import { Http3Server } from "@fails-components/webtransport";
 import { URL } from 'url';
 
-import { matchMaker, Protocol, Transport, debugAndPrintError, spliceOne } from '@colyseus/core';
+import { matchMaker, Protocol, Transport, debugAndPrintError, spliceOne, getBearerToken } from '@colyseus/core';
 import { H3Client } from './H3Client';
 import { generateWebTransportCertificate } from './utils/mkcert';
 
@@ -18,7 +18,6 @@ export interface TransportOptions {
   secret?: string,
 
   server?: http.Server,
-
   localProxy?: string,
 }
 
@@ -85,6 +84,8 @@ export class H3Transport extends Transport {
         });
       }
 
+      this.registerMatchMakeRoutes(fingerprint);
+
       if (this.options.localProxy) {
         // use http proxy server
         this.options.app.use((req: any, res: any) => {
@@ -148,6 +149,85 @@ export class H3Transport extends Transport {
     // WebSocket.prototype.send = milliseconds <= Number.EPSILON ? originalSend : function (...args: any[]) {
     //   setTimeout(() => originalSend.apply(this, args), milliseconds);
     // };
+  }
+
+  protected registerMatchMakeRoutes(fingerprint?: string) {
+    this.options.app.use((req, res, next) => {
+      if (req.method === 'OPTIONS') {
+        const headers = Object.assign(
+          {},
+          matchMaker.controller.DEFAULT_CORS_HEADERS,
+          matchMaker.controller.getCorsHeaders.call(undefined, req)
+        );
+        res.writeHead(204, headers);
+        res.end();
+      } else {
+        next();
+      }
+    });
+
+    this.options.app.post(`/${matchMaker.controller.matchmakeRoute}/:method/:roomName`, async (req, res) => {
+      // do not accept matchmaking requests if already shutting down
+      if (matchMaker.isGracefullyShuttingDown) {
+        res.writeHead(503, {});
+        res.end();
+        return;
+      }
+
+      const matchedParams = req.url.match(matchMaker.controller.allowedRoomNameChars);
+      const matchmakeIndex = matchedParams.indexOf(matchMaker.controller.matchmakeRoute);
+      const method = matchedParams[matchmakeIndex + 1];
+      const roomName = matchedParams[matchmakeIndex + 2] || '';
+
+      const headers = Object.assign(
+        {},
+        matchMaker.controller.DEFAULT_CORS_HEADERS,
+        matchMaker.controller.getCorsHeaders.call(undefined, req)
+      );
+      headers['Content-Type'] = 'application/json';
+      res.writeHead(200, headers);
+
+      try {
+        const clientOptions = req.body;
+        const response = await matchMaker.controller.invokeMethod(
+          method,
+          roomName,
+          clientOptions,
+          { token: getBearerToken(req.headers['authorization']), request: req },
+        );
+
+        // specify protocol, if available.
+        if (this.protocol !== undefined) {
+          response.protocol = this.protocol;
+        }
+
+        if (fingerprint) {
+          response.fingerprint = fingerprint.split(":").map((hex) => parseInt(hex, 16));
+        }
+
+        res.write(JSON.stringify(response));
+
+      } catch (e) {
+        res.write(JSON.stringify({ code: e.code, error: e.message, }));
+      }
+
+      res.end();
+    });
+
+    this.options.app.get(`/${matchMaker.controller.matchmakeRoute}/:roomName`, async (req, res) => {
+      const matchedParams = req.url.match(matchMaker.controller.allowedRoomNameChars);
+      const roomName = matchedParams.length > 1 ? matchedParams[matchedParams.length - 1] : "";
+
+      const headers = Object.assign(
+        {},
+        matchMaker.controller.DEFAULT_CORS_HEADERS,
+        matchMaker.controller.getCorsHeaders.call(undefined, req)
+      );
+      headers['Content-Type'] = 'application/json';
+      res.writeHead(200, headers);
+      res.write(JSON.stringify(await matchMaker.controller.getAvailableRooms(roomName)));
+      res.end();
+    });
   }
 
   protected async onConnection(rawClient: any, req?: http.IncomingMessage & any) {
