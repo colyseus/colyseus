@@ -3,6 +3,7 @@
   "version": "0.15.0",
   "private": true,
   "type": "module",
+  "packageManager":"pnpm@8.15.1",
   "workspaces": [
     "bundles/*",
     "packages/*",
@@ -69,7 +70,7 @@
     "all": true
   },
   "engines": {
-    "node": "20.0.0",
-    "pnpm": "^8.6.1"
+    "node": "^20.0.0",
+    "pnpm": "^8.15.1"
   }
 }
