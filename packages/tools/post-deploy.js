@@ -62,13 +62,14 @@ function updateColyseusBootService() {
   const COLYSEUS_CLOUD_BOOT_SERVICE = '/etc/systemd/system/colyseus-boot.service';
 
   // ignore if no boot service found
-  if (!fs.existsSync(COLYSEUS_CLOUD_BOOT_SERVICE)) { return; }
+  if (!fs.existsSync(COLYSEUS_CLOUD_BOOT_SERVICE)) {
+    return;
+  }
 
   const workingDirectory = pm2.cwd;
-  const execStart = __filename;
+  const execStart = `${detectPackageManager()} run colyseus-post-deploy`;
 
   const contents = fs.readFileSync(COLYSEUS_CLOUD_BOOT_SERVICE, 'utf8');
-
   try {
     fs.writeFileSync(COLYSEUS_CLOUD_BOOT_SERVICE, contents
       .replace(/WorkingDirectory=(.*)/, `WorkingDirectory=${workingDirectory}`)
@@ -118,6 +119,23 @@ function updateAndReloadNginx() {
     });
 
   });
+}
+
+function detectPackageManager() {
+  const lockfiles = {
+    npm: path.resolve(pm2.cwd, 'package-lock.json'),
+    yarn: path.resolve(pm2.cwd, 'yarn.lock'),
+    pnpm: path.resolve(pm2.cwd, 'pnpm-lock.yaml'),
+    bun: path.resolve(pm2.cwd, 'bun.lockb'),
+  };
+
+  for (const [key, value] of Object.entries(lockfiles)) {
+    if (fs.existsSync(value)) {
+      return key;
+    }
+  }
+
+  return "npm";
 }
 
 function bailOnErr(err) {
