@@ -32,20 +32,42 @@ pm2.list(function(err, apps) {
     pm2.start(CONFIG_FILE, {...opts}, onAppRunning);
 
   } else {
-    // reload existing apps
-    pm2.reload(CONFIG_FILE, {...opts}, function(err, apps) {
-      bailOnErr(err);
 
-      const name = apps[0].name;
+    //
+    // detect if cwd has changed, and restart PM2 if it has
+    //
+    if (apps[0].pm2_env.pm_cwd !== pm2.cwd) {
 
-      // scale app to use all CPUs available
-      if (apps.length !== maxCPU) {
-        pm2.scale(name, maxCPU, onAppRunning);
+      //
+      // remove all and start again with new cwd
+      //
+      pm2.delete('all', function(err) {
+        // force to remove ~/.pm2 folder to avoid conflicts
+        fs.rmdirSync(path.join(process.env.HOME, '.pm2'), { recursive: true });
 
-      } else {
-        onAppRunning();
-      }
-    });
+        // start again
+        pm2.start(CONFIG_FILE, { ...opts }, onAppRunning);
+      });
+
+    } else {
+      //
+      // reload existing apps
+      //
+      pm2.reload(CONFIG_FILE, {...opts}, function(err, apps) {
+        bailOnErr(err);
+
+        const name = apps[0].name;
+
+        // scale app to use all CPUs available
+        if (apps.length !== maxCPU) {
+          pm2.scale(name, maxCPU, onAppRunning);
+
+        } else {
+          onAppRunning();
+        }
+      });
+    }
+
   }
 });
 
