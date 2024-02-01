@@ -42,11 +42,12 @@ pm2.list(function(err, apps) {
       // remove all and start again with new cwd
       //
       pm2.delete('all', function(err) {
-        // force to remove ~/.pm2 folder to avoid conflicts
-        fs.rmdirSync(path.join(process.env.HOME, '.pm2'), { recursive: true });
 
-        // start again
-        pm2.start(CONFIG_FILE, { ...opts }, onAppRunning);
+        // kill & start again
+        pm2.kill(function() {
+          pm2.start(CONFIG_FILE, { ...opts }, onAppRunning);
+        });
+
       });
 
     } else {
@@ -89,7 +90,7 @@ function updateColyseusBootService() {
   }
 
   const workingDirectory = pm2.cwd;
-  const execStart = `${detectPackageManager()} run colyseus-post-deploy`;
+  const execStart = `${detectPackageManager()} colyseus-post-deploy`;
 
   const contents = fs.readFileSync(COLYSEUS_CLOUD_BOOT_SERVICE, 'utf8');
   try {
@@ -145,10 +146,17 @@ function updateAndReloadNginx() {
 
 function detectPackageManager() {
   const lockfiles = {
-    npm: path.resolve(pm2.cwd, 'package-lock.json'),
-    yarn: path.resolve(pm2.cwd, 'yarn.lock'),
-    pnpm: path.resolve(pm2.cwd, 'pnpm-lock.yaml'),
-    bun: path.resolve(pm2.cwd, 'bun.lockb'),
+    // npm
+    "npm exec": path.resolve(pm2.cwd, 'package-lock.json'),
+
+    // yarn
+    "yarn exec": path.resolve(pm2.cwd, 'yarn.lock'),
+
+    // pnpm
+    "pnpm exec": path.resolve(pm2.cwd, 'pnpm-lock.yaml'),
+
+    // bun
+    "bunx": path.resolve(pm2.cwd, 'bun.lockb'),
   };
 
   for (const [key, value] of Object.entries(lockfiles)) {
