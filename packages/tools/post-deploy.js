@@ -69,9 +69,13 @@ function updateColyseusBootService() {
 
   const contents = fs.readFileSync(COLYSEUS_CLOUD_BOOT_SERVICE, 'utf8');
 
-  fs.writeFileSync(COLYSEUS_CLOUD_BOOT_SERVICE, contents
-    .replace(/WorkingDirectory=(.*)/, `WorkingDirectory=${workingDirectory}`)
-    .replace(/ExecStart=(.*)/, `ExecStart=${execStart}`));
+  try {
+    fs.writeFileSync(COLYSEUS_CLOUD_BOOT_SERVICE, contents
+      .replace(/WorkingDirectory=(.*)/, `WorkingDirectory=${workingDirectory}`)
+      .replace(/ExecStart=(.*)/, `ExecStart=${execStart}`));
+  } catch (e) {
+    // couldn't write to file
+  }
 }
 
 function updateAndReloadNginx() {
