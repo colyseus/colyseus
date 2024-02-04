@@ -281,17 +281,21 @@ Please give feedback and report any issues you may find at https://github.com/co
      * Anonymous sign-in
      */
     router.post("/anonymous", express.json(), async (req, res) => {
-      const options = req.body.options;
+      try {
+        const options = req.body.options;
 
-      // register anonymous user, if callback is defined.
-      const user = (auth.settings.onRegisterAnonymously)
-        ? await auth.settings.onRegisterAnonymously(options)
-        : { ...options, id: undefined, anonymousId: generateId(21), anonymous: true }
+        // register anonymous user, if callback is defined.
+        const user = (auth.settings.onRegisterAnonymously)
+          ? await auth.settings.onRegisterAnonymously(options)
+          : { ...options, id: undefined, anonymousId: generateId(21), anonymous: true }
 
-      res.json({
-        user,
-        token: await onGenerateToken(user)
-      });
+        res.json({
+          user,
+          token: await onGenerateToken(user)
+        });
+      } catch(e) {
+        res.status(401).json({ error: e.message });
+      }
     });
 
     router.post("/forgot-password", express.json(), async (req, res) => {
