@@ -2,6 +2,7 @@ import http from 'http';
 import https from 'https';
 import { Http3Server } from "@fails-components/webtransport";
 import { URL } from 'url';
+import { decode, Iterator } from "@colyseus/schema";
 
 import { matchMaker, Protocol, Transport, debugAndPrintError, spliceOne, getBearerToken } from '@colyseus/core';
 import { H3Client } from './H3Client';
@@ -25,7 +26,7 @@ export class H3Transport extends Transport {
   public protocol: string = "h3";
   public clients: H3Client[] = [];
 
-  protected http: http.Server;
+  // protected http: http.Server;
   protected https: https.Server;
   protected h3Server: Http3Server;
 
@@ -73,16 +74,9 @@ export class H3Transport extends Transport {
   }
 
   public listen(port: number, hostname: string = 'localhost', backlog?: number, listeningListener?: () => void) {
-    const createServers = (cert: CertLike, key: CertLike, fingerprint?: string) => {
-      this.http = this.options.server || http.createServer(this.options.app);
-      this.http.listen(port);
-
-      if (fingerprint) {
-        // return fingerprint on __fingerprint request (development only)
-        this.options.app.get("/__fingerprint", (req: any, res: any) => {
-          res.json(fingerprint!.split(":").map((hex) => parseInt(hex, 16)));
-        });
-      }
+    const createServers = (cert: CertLike, key: CertLike, fingerprint?: number[]) => {
+      // this.http = this.options.server || http.createServer(this.options.app);
+      // this.http.listen(port);
 
       this.registerMatchMakeRoutes(fingerprint);
 
@@ -96,12 +90,14 @@ export class H3Transport extends Transport {
       this.https = https.createServer({ cert, key }, this.options.app);
       this.https.listen(port, hostname, backlog, listeningListener);
 
+      console.log({ hostname, port, cert, key });
+
       this.h3Server = new Http3Server({
         host: hostname,
         port,
         secret: this.options.secret || "mysecret",
-        cert: this.options.cert as string,
-        privKey: this.options.key as string,
+        cert: cert,
+        privKey: key,
       });
       this.h3Server.startServer();
 
@@ -122,7 +118,8 @@ export class H3Transport extends Transport {
       ], {
         days: 10,
       }).then((generated) => {
-        createServers(generated.cert, generated.private, generated.fingerprint);
+        const fingerprint = generated.fingerprint.split(":").map((hex) => parseInt(hex, 16));
+        createServers(generated.cert, generated.private, fingerprint);
       });
 
     } else {
@@ -134,7 +131,7 @@ export class H3Transport extends Transport {
 
   public shutdown() {
     this.isListening = false;
-    this.http.close();
+    // this.http.close();
     this.https.close();
     this.h3Server.stopServer();
   }
@@ -151,7 +148,7 @@ export class H3Transport extends Transport {
     // };
   }
 
-  protected registerMatchMakeRoutes(fingerprint?: string) {
+  protected registerMatchMakeRoutes(fingerprint?: number[]) {
     this.options.app.use((req, res, next) => {
       if (req.method === 'OPTIONS') {
         const headers = Object.assign(
@@ -202,7 +199,7 @@ export class H3Transport extends Transport {
         }
 
         if (fingerprint) {
-          response.fingerprint = fingerprint.split(":").map((hex) => parseInt(hex, 16));
+          response.fingerprint = fingerprint;
         }
 
         res.write(JSON.stringify(response));
@@ -230,43 +227,33 @@ export class H3Transport extends Transport {
     });
   }
 
-  protected async onConnection(rawClient: any, req?: http.IncomingMessage & any) {
-    // prevent server crashes if a single client had unexpected error
-    rawClient.on('error', (err) => debugAndPrintError(err.message + '\n' + err.stack));
-
+  protected async onConnection(h3Client: H3Client, data: ArrayBufferLike, req?: http.IncomingMessage & any) {
     // compatibility with ws / uws
-    const upgradeReq = req || (rawClient as any).upgradeReq;
-    const parsedURL = new URL(`ws://server/${upgradeReq.url}`);
+    const it: Iterator = { offset: 0 };
 
-    const sessionId = parsedURL.searchParams.get("sessionId");
-    const processAndRoomId = parsedURL.pathname.match(/\/[a-zA-Z0-9_\-]+\/([a-zA-Z0-9_\-]+)$/);
-    const roomId = processAndRoomId && processAndRoomId[1];
+    const roomId = decode.string(data, it);
+    const sessionId = decode.string(data, it);
+    const reconnectionToken = it.offset < data.byteLength ? decode.string(data, it) : undefined;
 
     const room = matchMaker.getRoomById(roomId);
-
-    // set client id
-    rawClient.pingCount = 0;
-
-    // @ts-ignore
-    const client = new H3Client(sessionId, rawClient);
 
     //
     // TODO: DRY code below with all transports
     //
 
     try {
-      if (!room || !room.hasReservedSeat(sessionId, parsedURL.searchParams.get("reconnectionToken"))) {
+      if (!room || !room.hasReservedSeat(sessionId, reconnectionToken)) {
         throw new Error('seat reservation expired.');
       }
 
-      await room._onJoin(client, upgradeReq);
+      await room._onJoin(h3Client, req);
 
     } catch (e) {
       debugAndPrintError(e);
 
       // send error code to client then terminate
-      client.error(e.code, e.message, () =>
-        rawClient.close(Protocol.WS_CLOSE_WITH_ERROR));
+      h3Client.error(e.code, e.message, () =>
+        h3Client.close(Protocol.WS_CLOSE_WITH_ERROR));
     }
   }
 
@@ -281,8 +268,10 @@ export class H3Transport extends Transport {
         const { done, value } = await sessionReader.read();
         if (done) { break; }
 
+        console.log("new H3Client!", value);
+
         // create client instance
-        const client = new H3Client(value);
+        const client = new H3Client(value, (message) => this.onConnection(client, message));
         client.ref.on('open', () => this.clients.push(client));
         client.ref.on("close", () => spliceOne(this.clients, this.clients.indexOf(client)));
       }

@@ -23,7 +23,7 @@ export class H3Client implements Client {
   private _datagramReader: any;
   private _datagramWriter: any;
 
-  constructor(private _wtSession: WebTransportSession) {
+  constructor(private _wtSession: WebTransportSession, onInitialMessage: (message: any) => void) {
     _wtSession.closed
       .then(() => console.log("session closed => successfully"))
       .catch((e: any) => console.error("session closed =>", e))
@@ -36,6 +36,8 @@ export class H3Client implements Client {
         this._bidiReader = bidi.readable.getReader();
         // @ts-ignore
         this._bidiWriter = bidi.writable.getWriter();
+
+        this._bidiReader.read().then((read: any) => onInitialMessage(read.value));
 
         this._bidiReader.closed.catch((e: any) => console.log("writer closed with error!", e));
         this._bidiWriter.closed.catch((e: any) => console.log("writer closed with error!", e));
