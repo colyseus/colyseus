@@ -567,6 +567,18 @@ export abstract class Room<State extends object= any, Metadata= any> {
     // get seat reservation options and clear it
     const [joinOptions, authData] = this.reservedSeats[sessionId];
 
+    //
+    // TODO: remove this check on 1.0.0
+    // - the seat reservation is used to keep track of number of clients and their pending seats (see `hasReachedMaxClients`)
+    // - when we fully migrate to static onAuth(), the seat reservation can be removed immediately here
+    // - if async onAuth() is in use, the seat reservation is removed after onAuth() is fulfilled.
+    // - mark reservation as "consumed"
+    //
+    if (this.reservedSeats[sessionId].length > 2) {
+      throw new ServerError(ErrorCode.MATCHMAKE_EXPIRED, "already consumed");
+    }
+    this.reservedSeats[sessionId].push(true);
+
     // share "after next patch queue" reference with every client.
     client._afterNextPatchQueue = this._afterNextPatchQueue;
 

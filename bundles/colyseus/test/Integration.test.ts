@@ -247,6 +247,38 @@ describe("Integration", () => {
             assert.ok(!onLeaveCalled);
           });
 
+          it("async onAuth() - maxClients should be respected", async() => {
+            let roomId: string;
+            let roomsCreated = 0;
+
+            matchMaker.defineRoomType('async_onauth_maxclients', class _ extends Room {
+              maxClients = 2;
+              onCreate() {
+                roomsCreated++;
+                roomId = this.roomId;
+              }
+              onAuth() {
+                return new Promise<boolean>((resolve) => {
+                  setTimeout(() => resolve(true), 500);
+                });
+              }
+              onJoin() {}
+              onLeave() {}
+            });
+
+            await Promise.allSettled([
+              client.joinOrCreate('async_onauth_maxclients', {}),
+              client.joinOrCreate('async_onauth_maxclients', {}),
+              client.joinOrCreate('async_onauth_maxclients', {}),
+              client.joinOrCreate('async_onauth_maxclients', {}),
+            ]);
+
+            const room = matchMaker.getRoomById(roomId);
+
+            assert.strictEqual(2, room.clients.length);
+            assert.strictEqual(2, roomsCreated);
+          });
+
           it("onLeave()", async () => {
             let onLeaveCalled = false;
 
