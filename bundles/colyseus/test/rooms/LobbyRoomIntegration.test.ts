@@ -29,7 +29,8 @@ describe("LobbyRoom: Integration", () => {
 
         beforeEach(async () => {
           // setup matchmaker
-          matchMaker.setup(presence, driver);
+          await matchMaker.setup(presence, driver);
+          await matchMaker.accept();
 
           // define a room
           matchMaker.defineRoomType("lobby", LobbyRoom);

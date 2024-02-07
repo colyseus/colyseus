@@ -66,6 +66,7 @@ export async function setup(
   }
 
   presence = _presence || new LocalPresence();
+
   driver = _driver || new LocalDriver();
   publicAddress = _publicAddress;
 
@@ -86,6 +87,17 @@ export async function setup(
       .sort((p1, p2) => p1.roomCount > p2.roomCount ? 1 : -1)[0]
       .processId;
   };
+
+  onReady.resolve();
+}
+
+/**
+ * - Accept receiving remote room creation requests
+ * - Check for leftover/invalid processId's on startup
+ * @private
+ */
+export async function accept() {
+  await onReady; // make sure "processId" is available
 
   /**
    * Process-level subscription
@@ -132,8 +144,6 @@ export async function setup(
   if (isDevMode) {
     await reloadFromCache();
   }
-
-  onReady.resolve();
 }
 
 /**
