@@ -23,11 +23,10 @@ export class H3Client implements Client {
   private _datagramReader: any;
   private _datagramWriter: any;
 
-  constructor(private _wtSession: WebTransportSession, onInitialMessage: (message: any) => void) {
-    _wtSession.closed
-      .then(() => console.log("session closed => successfully"))
-      .catch((e: any) => console.error("session closed =>", e))
-      .finally(() => this._close());
+  constructor(
+    private _wtSession: WebTransportSession,
+    onInitialMessage: (message: any) => void
+  ) {
 
     _wtSession.ready.then(() => {
 
@@ -39,8 +38,8 @@ export class H3Client implements Client {
 
         this._bidiReader.read().then((read: any) => onInitialMessage(read.value));
 
-        this._bidiReader.closed.catch((e: any) => console.log("writer closed with error!", e));
-        this._bidiWriter.closed.catch((e: any) => console.log("writer closed with error!", e));
+        this._bidiReader.closed.catch((e: any) => {/* console.log("writer closed with error!", e) */});
+        this._bidiWriter.closed.catch((e: any) => {/* console.log("reader closed with error!", e) */});
 
         this.ref.emit('open');
         this.readIncoming();
@@ -59,14 +58,13 @@ export class H3Client implements Client {
       console.error("session failed to open =>", e);
       this._close();
     });
-  }
 
-  // constructor(
-  //   public id: string,
-  //   public ref: WebSocket,
-  // ) {
-  //   this.sessionId = id;
-  // }
+    _wtSession.closed
+      .then((e) => this.leave(Protocol.WS_CLOSE_NORMAL, e.reason))
+      .catch((e: any) => this.leave(Protocol.WS_CLOSE_WITH_ERROR, e.reason))
+      .finally(() => this._close());
+
+  }
 
   public sendBytes(type: string | number, bytes: number[] | Uint8Array, options?: ISendOptions) {
     debugMessage("send bytes(to %s): '%s' -> %j", this.sessionId, type, bytes);
@@ -88,7 +86,7 @@ export class H3Client implements Client {
   }
 
   public async readIncoming() {
-    while (true) {
+    while (this.readyState === 1) {
       const { value, done } = await this._bidiReader.read();
       if (done) { break; }
 
@@ -130,7 +128,7 @@ export class H3Client implements Client {
 
   public raw(data: ArrayLike<number>, options?: ISendOptions, cb?: (err?: Error) => void) {
     // skip if client not open
-    if (this.readyState !== 1) {
+    if (this.readyState !== 1) {// OPEN
       return;
     }
 
@@ -142,6 +140,7 @@ export class H3Client implements Client {
   }
 
   public leave(code?: number, data?: string) {
+    this.readyState = 2; // CLOSING;
     this._wtSession.close({ reason: data, closeCode: code });
   }
 
@@ -160,7 +159,7 @@ export class H3Client implements Client {
   }
 
   private _close() {
-    this.readyState = 3; // WebSocket.CLOSED;
+    this.readyState = 3; // CLOSED;
     this.ref.emit('close');
     this.ref.removeAllListeners();
   }

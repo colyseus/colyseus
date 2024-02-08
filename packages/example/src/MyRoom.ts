@@ -23,10 +23,17 @@ export class MyRoom extends Room<MyRoomState> {
     this.state.mapWidth = 800;
     this.state.mapHeight = 600;
 
-    this.onMessage('input', (client, input) => {
-      // handle player input
-      const player = this.state.players.get(client.sessionId);
-      player.x += 1; //dummy mutation
+    this.onMessage("*", (client, type, message) => {
+      client.send(type, message);
+    });
+
+    this.setSimulationInterval(() => this.update());
+  }
+
+  update() {
+    this.state.players.forEach((player, key) => {
+      player.x += 1;
+      player.y += 1;
     });
   }
 

@@ -90,8 +90,6 @@ export class H3Transport extends Transport {
       this.https = https.createServer({ cert, key }, this.options.app);
       this.https.listen(port, hostname, backlog, listeningListener);
 
-      console.log({ hostname, port, cert, key });
-
       this.h3Server = new Http3Server({
         host: hostname,
         port,
@@ -267,7 +265,6 @@ export class H3Transport extends Transport {
       sessionReader.closed.catch((e: any) => console.log("session reader closed with error!", e));
 
       while (this.isListening) {
-        console.log("sessionReader.read() - waiting for session...");
         const { done, value } = await sessionReader.read();
         if (done) { break; }
 
