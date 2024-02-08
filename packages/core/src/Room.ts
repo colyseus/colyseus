@@ -887,6 +887,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
   }
 
   private _onMessage(client: Client, bytes: number[]) {
+    console.log("_onMessage =>", bytes);
     // skip if client is on LEAVING state.
     if (client.state === ClientState.LEAVING) { return; }
 

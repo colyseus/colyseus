@@ -102,7 +102,7 @@ export class H3Transport extends Transport {
       this.h3Server.startServer();
 
       this.isListening = true;
-      this.loop();
+      this.acceptIncomingSessions();
     };
 
     if (!this.options.cert || !this.options.key) {
@@ -235,6 +235,9 @@ export class H3Transport extends Transport {
     const sessionId = decode.string(data, it);
     const reconnectionToken = it.offset < data.byteLength ? decode.string(data, it) : undefined;
 
+    h3Client.sessionId = sessionId;
+    h3Client.readyState = 1;
+
     const room = matchMaker.getRoomById(roomId);
 
     //
@@ -257,7 +260,7 @@ export class H3Transport extends Transport {
     }
   }
 
-  protected async loop() {
+  protected async acceptIncomingSessions() {
     try {
       const sessionStream = await this.h3Server.sessionStream("/");
       const sessionReader = sessionStream.getReader();
@@ -267,8 +270,6 @@ export class H3Transport extends Transport {
         console.log("sessionReader.read() - waiting for session...");
         const { done, value } = await sessionReader.read();
         if (done) { break; }
-
-        console.log("new H3Client!", value);
 
         // create client instance
         const client = new H3Client(value, (message) => this.onConnection(client, message));

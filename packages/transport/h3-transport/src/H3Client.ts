@@ -43,6 +43,7 @@ export class H3Client implements Client {
         this._bidiWriter.closed.catch((e: any) => console.log("writer closed with error!", e));
 
         this.ref.emit('open');
+        this.readIncoming();
 
       }).catch((e: any) => {
         console.log("failed to create bidirectional stream!", e);
@@ -86,6 +87,15 @@ export class H3Client implements Client {
     this._datagramWriter.write(bytes);
   }
 
+  public async readIncoming() {
+    while (true) {
+      const { value, done } = await this._bidiReader.read();
+      if (done) { break; }
+
+      this.ref.emit('message', Array.from(value));
+    }
+  }
+
   public async readDatagram() {
     const read = await this._datagramReader.read();
     return read.value;
@@ -124,7 +134,7 @@ export class H3Client implements Client {
       return;
     }
 
-    this._bidiWriter.write(data);
+    this._bidiWriter.write(new Uint8Array(data).buffer);
   }
 
   public error(code: number, message: string = '', cb?: (err?: Error) => void) {
