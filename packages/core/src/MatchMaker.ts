@@ -84,8 +84,7 @@ export async function setup(
    */
   selectProcessIdToCreateRoom = _selectProcessIdToCreateRoom || async function () {
     return (await stats.fetchAll())
-      .sort((p1, p2) => p1.roomCount > p2.roomCount ? 1 : -1)[0]
-      .processId;
+      .sort((p1, p2) => p1.roomCount > p2.roomCount ? 1 : -1)[0]?.processId || processId;
   };
 
   onReady.resolve();
