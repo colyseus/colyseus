@@ -103,7 +103,7 @@ export async function accept() {
    * - handle remote process healthcheck
    * - handle remote room creation
    */
-  subscribeIPC(presence, processId, getProcessChannel(), (method, args) => {
+  await subscribeIPC(presence, processId, getProcessChannel(), (method, args) => {
     if (method === 'healthcheck') {
       // health check for this processId
       return true;
