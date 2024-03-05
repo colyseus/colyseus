@@ -24,17 +24,24 @@ export class MyRoom extends Room<MyRoomState> {
     this.state.mapHeight = 600;
 
     this.onMessage("*", (client, type, message) => {
-      client.send(type, message);
+      console.log("received", { type, message });
+      // client.send(type, message);
     });
+
+    this.onMessage("move", (client, message) => {
+      const player = this.state.players.get(client.sessionId);
+      player.x = message.x;
+      player.y = message.y;
+    })
 
     this.setSimulationInterval(() => this.update());
   }
 
   update() {
-    this.state.players.forEach((player, key) => {
-      player.x += 1;
-      player.y += 1;
-    });
+    // this.state.players.forEach((player, key) => {
+    //   player.x += 1;
+    //   player.y += 1;
+    // });
   }
 
   onJoin(client: Client, options: any) {

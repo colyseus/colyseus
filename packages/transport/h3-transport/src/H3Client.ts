@@ -31,9 +31,7 @@ export class H3Client implements Client {
     _wtSession.ready.then(() => {
 
       _wtSession.createBidirectionalStream().then((bidi) => {
-        // @ts-ignore
         this._bidiReader = bidi.readable.getReader();
-        // @ts-ignore
         this._bidiWriter = bidi.writable.getWriter();
 
         this._bidiReader.read().then((read: any) => onInitialMessage(read.value));
@@ -41,8 +39,12 @@ export class H3Client implements Client {
         this._bidiReader.closed.catch((e: any) => {/* console.log("writer closed with error!", e) */});
         this._bidiWriter.closed.catch((e: any) => {/* console.log("reader closed with error!", e) */});
 
+        this.readyState = 1;
+
         this.ref.emit('open');
+
         this.readIncoming();
+        this.readIncomingUnreliable();
 
       }).catch((e: any) => {
         console.log("failed to create bidirectional stream!", e);
@@ -86,17 +88,40 @@ export class H3Client implements Client {
   }
 
   public async readIncoming() {
-    while (this.readyState === 1) {
-      const { value, done } = await this._bidiReader.read();
-      if (done) { break; }
+    let read = undefined;
 
-      this.ref.emit('message', Array.from(value));
+    while (this.readyState === 1) {
+      try {
+        read = await this._bidiReader.read();
+
+      } catch (e) {
+        return;
+      }
+
+      if (read.done) {
+        return;
+      }
+
+      this.ref.emit('message', Array.from(read.value));
     }
   }
 
-  public async readDatagram() {
-    const read = await this._datagramReader.read();
-    return read.value;
+  public async readIncomingUnreliable() {
+    let read = undefined;
+
+    while (this.readyState === 1) {
+      try {
+        read = await this._datagramReader.read();
+      } catch (e) {
+        return;
+      }
+
+      if (read.done) {
+        return;
+      }
+
+      this.ref.emit('message', Array.from(read.value));
+    }
   }
 
   public send(messageOrType: any, messageOrOptions?: any | ISendOptions, options?: ISendOptions) {
