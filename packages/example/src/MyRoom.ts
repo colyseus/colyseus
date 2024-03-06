@@ -54,9 +54,19 @@ export class MyRoom extends Room<MyRoomState> {
     this.state.players.set(client.sessionId, player);
   }
 
-  onLeave(client: Client, consented: boolean) {
-    console.log(client.sessionId, "left!");
-    this.state.players.delete(client.sessionId);
+  async onLeave(client: Client, consented: boolean) {
+    try {
+      if (consented) { throw new Error("consented leave"); }
+
+      console.log(client.sessionId, "waiting for reconnection...");
+      await this.allowReconnection(client, 10);
+
+      console.log(client.sessionId, "reconnected!");
+
+    } catch (e) {
+      this.state.players.delete(client.sessionId);
+      console.log(client.sessionId, "left!");
+    }
   }
 
   onCacheRoom() {
