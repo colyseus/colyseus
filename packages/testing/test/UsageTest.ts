@@ -8,8 +8,11 @@ import { boot, ColyseusTestServer } from "../src";
 import appConfig from "./app1/app.config";
 import { State } from "./app1/RoomWithState";
 import { SimulationState } from "./app1/RoomWithSimulation";
+import { JWT } from "../../auth";
 
 describe("@colyseus/testing", () => {
+  JWT.settings.secret = "secret";
+
   let colyseus: ColyseusTestServer;
 
   before(async () => colyseus = await boot(appConfig));
@@ -127,6 +130,26 @@ describe("@colyseus/testing", () => {
     assert.strictEqual("data", message);
   });
 
+  describe('auth-module', () => {
+    it('signs in with email and password', async () => {
+      const { user } = await colyseus.sdk.auth.signInWithEmailAndPassword("user@email.com", "password");
+      assert.deepStrictEqual(user, { name: "name" });
+    });
+
+    it('gets user data', async () => {
+      await colyseus.sdk.auth.signInWithEmailAndPassword("user@email.com", "password");
+
+      const { user } = await colyseus.sdk.auth.getUserData();
+
+      assert.strictEqual(user.name, "name");
+    });
+
+    it('signs in anonymously', async () => {
+      const { user } = await colyseus.sdk.auth.signInAnonymously();
+      assert.strictEqual(user.anonymous, true);
+    });
+  })
+
   describe("client-side", () => {
 
     it("should wait for a particular message to arrive in the client-side", async () => {
@@ -148,7 +171,5 @@ describe("@colyseus/testing", () => {
       assert.deepStrictEqual('one-pong', type);
       assert.deepStrictEqual(['one', 'data'], payload);
     });
-
   });
-
 });

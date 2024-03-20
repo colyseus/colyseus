@@ -10,6 +10,7 @@ export class ColyseusTestServer {
     create: Client['create'],
     joinById: Client['joinById'],
     reconnect: Client['reconnect'],
+    auth: Client['auth']
   };
 
   public http: {
@@ -42,6 +43,7 @@ export class ColyseusTestServer {
       create: client.create.bind(client),
       joinById: client.joinById.bind(client),
       reconnect: client.reconnect.bind(client),
+      auth: client.auth
     };
   }
 
@@ -60,10 +62,10 @@ export class ColyseusTestServer {
 
   async cleanup() {
     // ensure no rooms are still alive
-    await matchMaker.disconnectAll();
-
+    await Promise.all(matchMaker.disconnectAll());
+    await this.sdk.auth.signOut();
     const driver = this.server['driver'];
-    if (driver) { await driver.clear(); }
+    if (driver) { driver.clear(); }
   }
 
   async shutdown() {

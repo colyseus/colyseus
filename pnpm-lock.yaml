@@ -51,8 +51,8 @@ importers:
         specifier: ^7.7.2
         version: 7.14.0
       colyseus.js:
-        specifier: 0.15.15-preview.21
-        version: 0.15.15-preview.21
+        specifier: 0.15.18
+        version: 0.15.18
       cors:
         specifier: ^2.8.5
         version: 2.8.5
@@ -232,8 +232,8 @@ importers:
         specifier: ^0.1.81
         version: 0.1.81
       colyseus.js:
-        specifier: ^0.15.0
-        version: 0.15.14
+        specifier: ^0.15.18
+        version: 0.15.18
       minimist:
         specifier: ^1.2.5
         version: 1.2.8
@@ -281,8 +281,8 @@ importers:
         specifier: workspace:^
         version: link:../tools
       colyseus.js:
-        specifier: ^0.15.0
-        version: 0.15.14
+        specifier: ^0.15.18
+        version: 0.15.18
       httpie:
         specifier: ^2.0.0-next.13
         version: 2.0.0-next.13
@@ -2994,8 +2994,8 @@ packages:
       wcwidth: 1.0.1
     dev: true
 
-  /colyseus.js@0.15.14:
-    resolution: {integrity: sha512-hmsGWgaV/odvQ8kmwQQnv32bs/w3h3QGbJ5p11O+wNl4CqRnfzL8GFB8lyC5WSS7ge5wpa9RpIYAH2IE0DCokQ==}
+  /colyseus.js@0.15.18:
+    resolution: {integrity: sha512-/yLsqN0d0D1N2dhTlJkP80Z/YtKZU6MEaevu0q02V0qppQ/I53zzVqnDnaGAE1R/6NLB1I2Ry5+0l/tevnKDrw==}
     engines: {node: '>= 12.x'}
     dependencies:
       '@colyseus/schema': 2.0.25
@@ -3005,20 +3005,6 @@ packages:
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
-    dev: false
-
-  /colyseus.js@0.15.15-preview.21:
-    resolution: {integrity: sha512-NzUjDad2p9aOP3ST8vj/NAhRWFKLsusJxqBzKevfNXjBEwFJqmDxZke57evmmPgwV/yzskupXoIvh4UcIkM6hw==}
-    engines: {node: '>= 12.x'}
-    dependencies:
-      '@colyseus/schema': 2.0.25
-      httpie: 2.0.0-next.13
-      tslib: 2.6.2
-      ws: 8.15.1
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
-    dev: true
 
   /combined-stream@1.0.8:
     resolution: {integrity: sha512-FQN4MRfuJeHf7cBbBMJFXhKSDq+2kAArBlmRBvcvFE5BB1HZKXtSFASDhdlz9zOYwxh8lDdnvmMOe/+5cdoEdg==}
