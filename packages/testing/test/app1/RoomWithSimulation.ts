@@ -9,7 +9,7 @@ export class RoomWithSimulation extends Room<SimulationState> {
 
   onCreate(options) {
     this.setState(new SimulationState());
-    this.setSimulationInterval((dt) => this.tick(), 2000);
+    this.setSimulationInterval((dt) => this.tick(), 80);
   }
 
   tick() {

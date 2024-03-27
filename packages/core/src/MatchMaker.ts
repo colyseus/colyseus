@@ -230,7 +230,7 @@ export async function reconnect(roomId: string, clientOptions: ClientOptions = {
  *
  * @param roomId - The Id of the specific room instance.
  * @param clientOptions - Options for the client seat reservation (for `onJoin`/`onAuth`)
- * @param authOptions - Options for the authentication module
+ * @param authOptions - Optional authentication token
  *
  * @returns Promise<SeatReservation> - A promise which contains `sessionId` and `RoomListingData`.
  */

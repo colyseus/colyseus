@@ -10,9 +10,14 @@ export class ColyseusTestServer {
     create: Client['create'],
     joinById: Client['joinById'],
     reconnect: Client['reconnect'],
-    auth: Client['auth']
+    auth: Client['auth'],
+    http: Client['http']
   };
 
+  //
+  // TODO: deprecate this on Colyseus 1.0.
+  // Use `sdk.http` instead (which uses the auth token automatically)
+  //
   public http: {
     get: typeof httpie.get,
     post: typeof httpie.post,
@@ -43,7 +48,8 @@ export class ColyseusTestServer {
       create: client.create.bind(client),
       joinById: client.joinById.bind(client),
       reconnect: client.reconnect.bind(client),
-      auth: client.auth
+      auth: client.auth,
+      http: client.http,
     };
   }
 
@@ -64,6 +70,7 @@ export class ColyseusTestServer {
     // ensure no rooms are still alive
     await Promise.all(matchMaker.disconnectAll());
     await this.sdk.auth.signOut();
+
     const driver = this.server['driver'];
     if (driver) { driver.clear(); }
   }
