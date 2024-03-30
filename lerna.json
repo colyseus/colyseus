@@ -1,15 +1,9 @@
 {
-  "packages": [
-    "bundles/*",
-    "packages/*",
-    "packages/drivers/*",
-    "packages/transport/*",
-    "packages/presence/*",
-    "packages/serializer/*"
-  ],
   "version": "independent",
   "publish": {
     "message": "chore(release): publish"
   },
-  "hoist": true
+  "hoist": true,
+  "useWorkspaces": true,
+  "npmClient": "pnpm"
 }

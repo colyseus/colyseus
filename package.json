@@ -3,15 +3,7 @@
   "version": "0.15.0",
   "private": true,
   "type": "module",
-  "packageManager":"pnpm@8.15.1",
-  "workspaces": [
-    "bundles/*",
-    "packages/*",
-    "packages/drivers/*",
-    "packages/transport/*",
-    "packages/presence/*",
-    "packages/serializer/*"
-  ],
+  "packageManager": "pnpm@8.15.1",
   "scripts": {
     "build": "tsx build.ts",
     "clean": "lerna clean",
@@ -20,8 +12,8 @@
     "update-contributors": "all-contributors generate",
     "graph": "lerna list --graph",
     "watch": "node compile-packages.mjs --watch",
-    "publish-from-package-stable": "npm run build && lerna publish from-package",
-    "publish-from-package-preview": "npm run build && lerna publish from-package --dist-tag preview"
+    "publish-from-package-stable": "pnpm run build && lerna publish from-package",
+    "publish-from-package-preview": "pnpm run build && lerna publish from-package --dist-tag preview"
   },
   "devDependencies": {
     "@lerna/filter-packages": "^6.4.1",
