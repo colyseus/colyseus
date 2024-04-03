@@ -4,6 +4,5 @@
     "message": "chore(release): publish"
   },
   "hoist": true,
-  "useWorkspaces": true,
   "npmClient": "pnpm"
 }
