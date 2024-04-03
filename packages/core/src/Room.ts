@@ -77,6 +77,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
 
   #_roomId: string;
   #_roomName: string;
+  #_autoDispose: boolean = true;
 
   /**
    * Maximum number of clients allowed to connect into the room. When room reaches this limit,
@@ -90,12 +91,6 @@ export abstract class Room<State extends object= any, Metadata= any> {
    * @default 50ms (20fps)
    */
   public patchRate: number = DEFAULT_PATCH_RATE;
-  /**
-   * Automatically dispose the room when last client disconnects.
-   *
-   * @default true
-   */
-  public autoDispose: boolean = true;
 
   /**
    * The state instance you provided to `setState()`.
@@ -160,6 +155,22 @@ export abstract class Room<State extends object= any, Metadata= any> {
     this.setPatchRate(this.patchRate);
     // set default _autoDisposeTimeout
     this.resetAutoDisposeTimeout(this.seatReservationTime);
+  }
+
+  /**
+   * Automatically dispose the room when last client disconnects.
+   *
+   * @default true
+   */
+  public get autoDispose() { return this.#_autoDispose; }
+  public set autoDispose(value: boolean) {
+    if (
+      value !== this.#_autoDispose &&
+      this._internalState !== RoomInternalState.DISPOSING
+    ) {
+      this.#_autoDispose = value;
+      this.resetAutoDisposeTimeout();
+    }
   }
 
   /**
@@ -524,7 +535,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
     this._internalState = RoomInternalState.DISPOSING;
     this.listing.remove();
 
-    this.autoDispose = true;
+    this.#_autoDispose = true;
 
     const delayedDisconnection = new Promise<void>((resolve) =>
       this._events.once('disconnect', () => resolve()));
@@ -742,7 +753,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
   protected resetAutoDisposeTimeout(timeoutInSeconds: number = 1) {
     clearTimeout(this._autoDisposeTimeout);
 
-    if (!this.autoDispose) {
+    if (!this.#_autoDispose) {
       return;
     }
 
@@ -853,7 +864,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
 
   private _disposeIfEmpty() {
     const willDispose = (
-      this.autoDispose &&
+      this.#_autoDispose &&
       this._autoDisposeTimeout === undefined &&
       this.clients.length === 0 &&
       Object.keys(this.reservedSeats).length === 0

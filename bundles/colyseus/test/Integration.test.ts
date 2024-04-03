@@ -43,7 +43,7 @@ describe("Integration", () => {
           });
 
           // setup matchmaker
-          matchMaker.setup(presence, driver);
+          await matchMaker.setup(presence, driver);
 
           // define a room
           server.define("dummy", DummyRoom);
