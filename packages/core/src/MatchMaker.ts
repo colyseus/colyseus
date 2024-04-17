@@ -492,7 +492,14 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
   room._events.on('leave', onClientLeaveRoom.bind(this, room));
   room._events.on('visibility-change', onVisibilityChange.bind(this, room));
   room._events.once('dispose', disposeRoom.bind(this, roomName, room));
-  room._events.once('disconnect', () => room._events.removeAllListeners());
+
+  // when disconnect()'ing, keep only join/leave events for stat counting
+  room._events.once('disconnect', () => {
+    room._events.removeAllListeners('lock');
+    room._events.removeAllListeners('unlock');
+    room._events.removeAllListeners('visibility-change');
+    room._events.removeAllListeners('dispose');
+  });
 
   // room always start unlocked
   await createRoomReferences(room, true);

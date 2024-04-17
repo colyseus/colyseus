@@ -540,6 +540,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
     const delayedDisconnection = new Promise<void>((resolve) =>
       this._events.once('disconnect', () => resolve()));
 
+    // reject pending reconnections
     for (const [_, reconnection] of Object.values(this._reconnections)) {
       reconnection.reject();
     }
@@ -550,6 +551,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
       while (numClients--) {
         this._forciblyCloseClient(this.clients[numClients], closeCode);
       }
+
     } else {
       // no clients connected, dispose immediately.
       this._events.emit('dispose');
@@ -628,7 +630,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
           await this.onJoin(client, joinOptions, client.auth);
         }
 
-        // emit 'join' to room handler (if not reconnecting)
+        // emit 'join' to room handler
         this._events.emit('join', client);
 
         // remove seat reservation
@@ -1018,7 +1020,10 @@ export abstract class Room<State extends object= any, Metadata= any> {
       // try to dispose immediately if client reconnection isn't set up.
       const willDispose = await this._decrementClientCount();
 
-      this._events.emit('leave', client, willDispose);
+      // trigger 'leave' only if seat reservation has been fully consumed
+      if (this.reservedSeats[client.sessionId] === undefined) {
+        this._events.emit('leave', client, willDispose);
+      }
     }
   }
 
