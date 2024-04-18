@@ -78,7 +78,6 @@ describe("MatchMaker Stats", () => {
       let room: Room;
       const clients: Client[] = [];
       const onReadyToTest = new Deferred();
-      const onDispose = new Deferred();
       matchMaker.defineRoomType('disconnect_joining', class _ extends Room {
         onCreate() {
           room = this;
@@ -92,9 +91,6 @@ describe("MatchMaker Stats", () => {
         }
         async onLeave() {
           await timeout(5);
-        }
-        onDispose() {
-          onDispose.resolve();
         }
       });
 
@@ -110,7 +106,6 @@ describe("MatchMaker Stats", () => {
       assert.strictEqual(0, matchMaker.stats.local.ccu);
 
       await room.disconnect();
-      await onDispose;
       await timeout(100);
 
       assert.strictEqual(0, matchMaker.stats.local.roomCount);
