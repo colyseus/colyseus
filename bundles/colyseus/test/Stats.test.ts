@@ -32,11 +32,11 @@ describe("MatchMaker Stats", () => {
     });
 
     // setup matchmaker & listen
-    await matchMaker.setup(presence, driver);
     await server.listen(TEST_PORT);
   });
 
   beforeEach(async() => {
+    await matchMaker.setup(presence, driver);
     await matchMaker.stats.reset();
     await driver.clear()
   });
@@ -78,17 +78,23 @@ describe("MatchMaker Stats", () => {
       let room: Room;
       const clients: Client[] = [];
       const onReadyToTest = new Deferred();
+      const onDispose = new Deferred();
       matchMaker.defineRoomType('disconnect_joining', class _ extends Room {
         onCreate() {
           room = this;
         }
         async onJoin(client) {
           clients.push(client);
-          setTimeout(() => onReadyToTest.resolve(), 350);
+          if (clients.length === 3) {
+            onReadyToTest.resolve();
+          }
           await timeout(400);
         }
         async onLeave() {
           await timeout(5);
+        }
+        onDispose() {
+          onDispose.resolve();
         }
       });
 
@@ -97,7 +103,6 @@ describe("MatchMaker Stats", () => {
       client.joinOrCreate('disconnect_joining').catch((e) => { });
 
       await onReadyToTest;
-      // await timeout(390);
 
       assert.strictEqual(3, clients.length, "3 clients should be joining");
 
@@ -105,6 +110,7 @@ describe("MatchMaker Stats", () => {
       assert.strictEqual(0, matchMaker.stats.local.ccu);
 
       await room.disconnect();
+      await onDispose;
       await timeout(100);
 
       assert.strictEqual(0, matchMaker.stats.local.roomCount);
@@ -119,7 +125,9 @@ describe("MatchMaker Stats", () => {
       matchMaker.defineRoomType('manual_leave', class _ extends Room {
         async onJoin(client) {
           clients.push(client);
-          setTimeout(() => onReadyToTest.resolve(), 250);
+          if (clients.length === 2) {
+            onReadyToTest.resolve();
+          }
           await timeout(300);
         }
         async onLeave(client, consented) {}
@@ -158,7 +166,9 @@ describe("MatchMaker Stats", () => {
       matchMaker.defineRoomType(ROOM_NAME, class _ extends Room {
         async onJoin(client) {
           clients.push(client);
-          setTimeout(() => onReadyToTest.resolve(), 390);
+          if (clients.length === 3) {
+            onReadyToTest.resolve();
+          }
           await timeout(400);
         }
         async onLeave(client, consented) {
@@ -200,7 +210,9 @@ describe("MatchMaker Stats", () => {
       matchMaker.defineRoomType(ROOM_NAME, class _ extends Room {
         async onJoin(client) {
           clients.push(client);
-          setTimeout(() => onReadyToTest.resolve(), 390);
+          if (clients.length == 2) {
+            onReadyToTest.resolve();
+          }
           await timeout(400);
         }
         async onLeave(client, consented) {

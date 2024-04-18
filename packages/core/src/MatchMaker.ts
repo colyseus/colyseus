@@ -705,7 +705,7 @@ function onVisibilityChange(room: Room, isInvisible: boolean): void {
 }
 
 async function disposeRoom(roomName: string, room: Room) {
-  debugMatchMaking('disposing \'%s\' (%s) on processId \'%s\'', roomName, room.roomId, processId);
+  debugMatchMaking('disposing \'%s\' (%s) on processId \'%s\' (graceful shutdown: %s)', roomName, room.roomId, processId, isGracefullyShuttingDown);
 
   // decrease amount of rooms this process is handling
   if (!isGracefullyShuttingDown) {
