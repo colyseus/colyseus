@@ -66,6 +66,7 @@ export async function setup(
   }
 
   presence = _presence || new LocalPresence();
+
   driver = _driver || new LocalDriver();
   publicAddress = _publicAddress;
 
@@ -83,16 +84,26 @@ export async function setup(
    */
   selectProcessIdToCreateRoom = _selectProcessIdToCreateRoom || async function () {
     return (await stats.fetchAll())
-      .sort((p1, p2) => p1.roomCount > p2.roomCount ? 1 : -1)[0]
-      .processId;
+      .sort((p1, p2) => p1.roomCount > p2.roomCount ? 1 : -1)[0]?.processId || processId;
   };
+
+  onReady.resolve();
+}
+
+/**
+ * - Accept receiving remote room creation requests
+ * - Check for leftover/invalid processId's on startup
+ * @private
+ */
+export async function accept() {
+  await onReady; // make sure "processId" is available
 
   /**
    * Process-level subscription
    * - handle remote process healthcheck
    * - handle remote room creation
    */
-  subscribeIPC(presence, processId, getProcessChannel(), (method, args) => {
+  await subscribeIPC(presence, processId, getProcessChannel(), (method, args) => {
     if (method === 'healthcheck') {
       // health check for this processId
       return true;
@@ -132,8 +143,6 @@ export async function setup(
   if (isDevMode) {
     await reloadFromCache();
   }
-
-  onReady.resolve();
 }
 
 /**
@@ -221,6 +230,7 @@ export async function reconnect(roomId: string, clientOptions: ClientOptions = {
  *
  * @param roomId - The Id of the specific room instance.
  * @param clientOptions - Options for the client seat reservation (for `onJoin`/`onAuth`)
+ * @param authOptions - Optional authentication token
  *
  * @returns Promise<SeatReservation> - A promise which contains `sessionId` and `RoomListingData`.
  */
@@ -482,7 +492,14 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
   room._events.on('leave', onClientLeaveRoom.bind(this, room));
   room._events.on('visibility-change', onVisibilityChange.bind(this, room));
   room._events.once('dispose', disposeRoom.bind(this, roomName, room));
-  room._events.once('disconnect', () => room._events.removeAllListeners());
+
+  // when disconnect()'ing, keep only join/leave events for stat counting
+  room._events.once('disconnect', () => {
+    room._events.removeAllListeners('lock');
+    room._events.removeAllListeners('unlock');
+    room._events.removeAllListeners('visibility-change');
+    room._events.removeAllListeners('dispose');
+  });
 
   // room always start unlocked
   await createRoomReferences(room, true);
@@ -688,7 +705,7 @@ function onVisibilityChange(room: Room, isInvisible: boolean): void {
 }
 
 async function disposeRoom(roomName: string, room: Room) {
-  debugMatchMaking('disposing \'%s\' (%s) on processId \'%s\'', roomName, room.roomId, processId);
+  debugMatchMaking('disposing \'%s\' (%s) on processId \'%s\' (graceful shutdown: %s)', roomName, room.roomId, processId, isGracefullyShuttingDown);
 
   // decrease amount of rooms this process is handling
   if (!isGracefullyShuttingDown) {

@@ -1,4 +1,5 @@
 import { debugAndPrintError } from './Debug';
+import { ServerError } from './errors/ServerError';
 import { Presence } from './presence/Presence';
 import { IpcProtocol } from './Protocol';
 import { generateId, REMOTE_ROOM_SHORT_TIMEOUT } from './utils/Utils';
@@ -25,8 +26,19 @@ export async function requestFromIPC<T>(
       const [code, data] = message;
       if (code === IpcProtocol.SUCCESS) {
         resolve(data);
+
       } else if (code === IpcProtocol.ERROR) {
-        reject(new Error(data));
+        let error: any = data;
+
+        // parse error message + code
+        try { error = JSON.parse(data) } catch (e) {}
+
+        // turn string message into Error instance
+        if (typeof(error) === "string") {
+          error = new Error(error);
+        }
+
+        reject(error);
       }
       unsubscribe();
     });
@@ -60,7 +72,10 @@ export async function subscribeIPC(
 
     } catch (e) {
       debugAndPrintError(e);
-      return reply(IpcProtocol.ERROR, e.message || e);
+      const error = (typeof(e.code) !== "undefined")
+        ? { code: e.code, message: e.message }
+        : e.message;
+      return reply(IpcProtocol.ERROR, JSON.stringify(error));
     }
 
     if (!(response instanceof Promise)) {

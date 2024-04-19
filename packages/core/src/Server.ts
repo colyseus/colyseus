@@ -157,7 +157,7 @@ export class Server {
     // Make sure matchmaker is ready before accepting connections
     // (isDevMode: matchmaker may take extra milliseconds to restore the rooms)
     //
-    await matchMaker.onReady;
+    await matchMaker.accept();
 
     /**
      * Greetings!

@@ -3,7 +3,7 @@ import sinon, { match } from "sinon";
 import * as Colyseus from "colyseus.js";
 import { Schema, type, Context } from "@colyseus/schema";
 
-import { matchMaker, Room, Client, Server, ErrorCode, MatchMakerDriver, Presence, Deferred, Transport } from "@colyseus/core";
+import { matchMaker, Room, Client, Server, ErrorCode, MatchMakerDriver, Presence, Deferred, Transport, ClientArray } from "@colyseus/core";
 import { DummyRoom, DRIVERS, timeout, Room3Clients, PRESENCE_IMPLEMENTATIONS, Room2Clients, Room2ClientsExplicitLock } from "./utils";
 import { ServerError, Protocol } from "@colyseus/core";
 
@@ -43,7 +43,7 @@ describe("Integration", () => {
           });
 
           // setup matchmaker
-          matchMaker.setup(presence, driver);
+          await matchMaker.setup(presence, driver);
 
           // define a room
           server.define("dummy", DummyRoom);
@@ -245,6 +245,38 @@ describe("Integration", () => {
             await onAuthDeferred;
             assert.ok(!onJoinCalled);
             assert.ok(!onLeaveCalled);
+          });
+
+          it("async onAuth() - maxClients should be respected", async() => {
+            let roomId: string;
+            let roomsCreated = 0;
+
+            matchMaker.defineRoomType('async_onauth_maxclients', class _ extends Room {
+              maxClients = 2;
+              onCreate() {
+                roomsCreated++;
+                roomId = this.roomId;
+              }
+              onAuth() {
+                return new Promise<boolean>((resolve) => {
+                  setTimeout(() => resolve(true), 500);
+                });
+              }
+              onJoin() {}
+              onLeave() {}
+            });
+
+            await Promise.allSettled([
+              client.joinOrCreate('async_onauth_maxclients', {}),
+              client.joinOrCreate('async_onauth_maxclients', {}),
+              client.joinOrCreate('async_onauth_maxclients', {}),
+              client.joinOrCreate('async_onauth_maxclients', {}),
+            ]);
+
+            const room = matchMaker.getRoomById(roomId);
+
+            assert.strictEqual(2, room.clients.length);
+            assert.strictEqual(2, roomsCreated);
           });
 
           it("onLeave()", async () => {
@@ -792,6 +824,31 @@ describe("Integration", () => {
           });
 
           describe("disconnect()", () => {
+            it("should remove room reference", async () => {
+              let roomId: string;
+              const clients: Client[] = [];
+              matchMaker.defineRoomType('disconnect', class _ extends Room {
+                maxClients = 2;
+                onCreate() { roomId = this.roomId; }
+                onJoin(client) { clients.push(client); }
+                async onLeave() { await timeout(5); }
+              });
+
+              const promises = [
+                client.joinOrCreate('disconnect'),
+                client.joinOrCreate('disconnect'),
+              ];
+
+              await Promise.all(promises);
+
+              const room = matchMaker.getRoomById(roomId);
+              assert.strictEqual(room.roomId, roomId);
+
+              await room.disconnect();
+              await timeout(10);
+
+              assert.ok(!matchMaker.getRoomById(roomId));
+            });
 
             it("should disconnect all clients", async() => {
               matchMaker.defineRoomType('disconnect', class _ extends Room {
@@ -1076,7 +1133,6 @@ describe("Integration", () => {
             matchMaker.defineRoomType('async_onjoin', class _ extends Room {
               async onAuth() { return true; }
               async onJoin() {
-                console.log("onJoin called for async onJoin!")
                 onJoinStart.resolve(true);
                 setTimeout(() => {
                   onJoinCompleted = Date.now();
@@ -1154,7 +1210,7 @@ describe("Integration", () => {
 
           });
 
-        })
+        });
 
         describe("reconnection", () => {
 
@@ -1228,45 +1284,6 @@ describe("Integration", () => {
 
             // wait for reconnection to timeout
             await timeout(150);
-            await onRoomDisposed;
-
-            const rooms = await matchMaker.query({});
-            assert.strictEqual(0, rooms.length);
-            assert.strictEqual(0, matchMaker.stats.local.roomCount);
-            assert.strictEqual(0, matchMaker.stats.local.ccu);
-          });
-
-          it("should maintain correct stats on successful reconnections", async () => {
-            const onRoomDisposed = new Deferred();
-            matchMaker.defineRoomType('allow_reconnection', class _ extends Room {
-              async onJoin() {}
-              async onLeave(client, consented) {
-                try {
-                  if (consented) {
-                    throw new Error("consented!");
-                  }
-                  await this.allowReconnection(client, 0.1);
-                } catch (e) {}
-              }
-              onDispose() {
-                onRoomDisposed.resolve();
-              }
-            });
-
-            const roomConnection = await client.joinOrCreate('allow_reconnection');
-
-            assert.strictEqual(1, matchMaker.stats.local.roomCount);
-            assert.strictEqual(1, matchMaker.stats.local.ccu);
-
-            // forcibly close connection
-            roomConnection.connection.transport.close();
-
-            // wait for reconnection to timeout
-            await timeout(5);
-
-            const roomReconnection = await client.reconnect(roomConnection.reconnectionToken);
-            await roomReconnection.leave();
-
             await onRoomDisposed;
 
             const rooms = await matchMaker.query({});

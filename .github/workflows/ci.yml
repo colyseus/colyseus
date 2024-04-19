@@ -1,9 +1,11 @@
 name: test-suite
 on:
+  pull_request:
   push:
     branches:
       - master
       - dev
+
 jobs:
   test-suite:
     name: test-suite

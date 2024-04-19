@@ -147,11 +147,11 @@ export async function listen(
             }
         }
 
-        // force "publicAddress" when deployed on "Colyseus Cloud".
-        serverOptions.publicAddress = process.env.SUBDOMAIN + "." + process.env.SERVER_NAME;
-
-        // nginx is responsible for forwarding /{port}/ to this process
         if (useRedisConfig) {
+            // force "publicAddress" when more than 1 process is available
+            serverOptions.publicAddress = process.env.SUBDOMAIN + "." + process.env.SERVER_NAME;
+
+            // nginx is responsible for forwarding /{port}/ to this process
             serverOptions.publicAddress += "/" + port;
         }
     }

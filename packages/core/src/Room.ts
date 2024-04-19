@@ -77,6 +77,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
 
   #_roomId: string;
   #_roomName: string;
+  #_autoDispose: boolean = true;
 
   /**
    * Maximum number of clients allowed to connect into the room. When room reaches this limit,
@@ -90,12 +91,6 @@ export abstract class Room<State extends object= any, Metadata= any> {
    * @default 50ms (20fps)
    */
   public patchRate: number = DEFAULT_PATCH_RATE;
-  /**
-   * Automatically dispose the room when last client disconnects.
-   *
-   * @default true
-   */
-  public autoDispose: boolean = true;
 
   /**
    * The state instance you provided to `setState()`.
@@ -160,6 +155,22 @@ export abstract class Room<State extends object= any, Metadata= any> {
     this.setPatchRate(this.patchRate);
     // set default _autoDisposeTimeout
     this.resetAutoDisposeTimeout(this.seatReservationTime);
+  }
+
+  /**
+   * Automatically dispose the room when last client disconnects.
+   *
+   * @default true
+   */
+  public get autoDispose() { return this.#_autoDispose; }
+  public set autoDispose(value: boolean) {
+    if (
+      value !== this.#_autoDispose &&
+      this._internalState !== RoomInternalState.DISPOSING
+    ) {
+      this.#_autoDispose = value;
+      this.resetAutoDisposeTimeout();
+    }
   }
 
   /**
@@ -524,11 +535,12 @@ export abstract class Room<State extends object= any, Metadata= any> {
     this._internalState = RoomInternalState.DISPOSING;
     this.listing.remove();
 
-    this.autoDispose = true;
+    this.#_autoDispose = true;
 
     const delayedDisconnection = new Promise<void>((resolve) =>
       this._events.once('disconnect', () => resolve()));
 
+    // reject pending reconnections
     for (const [_, reconnection] of Object.values(this._reconnections)) {
       reconnection.reject();
     }
@@ -539,6 +551,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
       while (numClients--) {
         this._forciblyCloseClient(this.clients[numClients], closeCode);
       }
+
     } else {
       // no clients connected, dispose immediately.
       this._events.emit('dispose');
@@ -566,6 +579,18 @@ export abstract class Room<State extends object= any, Metadata= any> {
 
     // get seat reservation options and clear it
     const [joinOptions, authData] = this.reservedSeats[sessionId];
+
+    //
+    // TODO: remove this check on 1.0.0
+    // - the seat reservation is used to keep track of number of clients and their pending seats (see `hasReachedMaxClients`)
+    // - when we fully migrate to static onAuth(), the seat reservation can be removed immediately here
+    // - if async onAuth() is in use, the seat reservation is removed after onAuth() is fulfilled.
+    // - mark reservation as "consumed"
+    //
+    if (this.reservedSeats[sessionId].length > 2) {
+      throw new ServerError(ErrorCode.MATCHMAKE_EXPIRED, "already consumed");
+    }
+    this.reservedSeats[sessionId].push(true);
 
     // share "after next patch queue" reference with every client.
     client._afterNextPatchQueue = this._afterNextPatchQueue;
@@ -605,7 +630,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
           await this.onJoin(client, joinOptions, client.auth);
         }
 
-        // emit 'join' to room handler (if not reconnecting)
+        // emit 'join' to room handler
         this._events.emit('join', client);
 
         // remove seat reservation
@@ -730,7 +755,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
   protected resetAutoDisposeTimeout(timeoutInSeconds: number = 1) {
     clearTimeout(this._autoDisposeTimeout);
 
-    if (!this.autoDispose) {
+    if (!this.#_autoDispose) {
       return;
     }
 
@@ -841,7 +866,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
 
   private _disposeIfEmpty() {
     const willDispose = (
-      this.autoDispose &&
+      this.#_autoDispose &&
       this._autoDisposeTimeout === undefined &&
       this.clients.length === 0 &&
       Object.keys(this.reservedSeats).length === 0
@@ -995,7 +1020,10 @@ export abstract class Room<State extends object= any, Metadata= any> {
       // try to dispose immediately if client reconnection isn't set up.
       const willDispose = await this._decrementClientCount();
 
-      this._events.emit('leave', client, willDispose);
+      // trigger 'leave' only if seat reservation has been fully consumed
+      if (this.reservedSeats[client.sessionId] === undefined) {
+        this._events.emit('leave', client, willDispose);
+      }
     }
   }
 

@@ -49,7 +49,10 @@ describe("MatchMaker", () => {
       /**
        * `setup` matchmaker to re-set graceful shutdown status
        */
-      beforeEach(() => matchMaker.setup(undefined, driver));
+      beforeEach(async () => {
+        await matchMaker.setup(undefined, driver);
+        await matchMaker.accept();
+      });
 
       /**
        * ensure no rooms are avaialble in-between tests

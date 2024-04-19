@@ -7,8 +7,6 @@ const path = require('path');
 const opts = { env: process.env.NODE_ENV || "production" };
 const maxCPU = os.cpus().length;
 
-const NGINX_SERVERS_CONFIG_FILE = '/etc/nginx/colyseus_servers.conf';
-
 // allow deploying from other path as root.
 if (process.env.npm_config_local_prefix) {
   process.chdir(process.env.npm_config_local_prefix);
@@ -31,48 +29,80 @@ pm2.list(function(err, apps) {
 
   if (apps.length === 0) {
     // first deploy
-    pm2.start(CONFIG_FILE, {...opts}, updateAndReloadNginx);
+    pm2.start(CONFIG_FILE, {...opts}, onAppRunning);
 
   } else {
-    // reload existing apps
-    pm2.reload(CONFIG_FILE, {...opts}, function(err, apps) {
-      bailOnErr(err);
 
-      const name = apps[0].name;
+    //
+    // detect if cwd has changed, and restart PM2 if it has
+    //
+    if (apps[0].pm2_env.pm_cwd !== pm2.cwd) {
 
-      // scale app to use all CPUs available
-      if (apps.length !== maxCPU) {
-        pm2.scale(name, maxCPU, updateAndReloadNginx);
+      //
+      // remove all and start again with new cwd
+      //
+      pm2.delete('all', function(err) {
 
-      } else {
-        updateAndReloadNginx();
-      }
-    });
+        // kill & start again
+        pm2.kill(function() {
+          pm2.start(CONFIG_FILE, { ...opts }, onAppRunning);
+        });
+
+      });
+
+    } else {
+      //
+      // reload existing apps
+      //
+      pm2.reload(CONFIG_FILE, {...opts}, function(err, apps) {
+        bailOnErr(err);
+
+        const name = apps[0].name;
+
+        // scale app to use all CPUs available
+        if (apps.length !== maxCPU) {
+          pm2.scale(name, maxCPU, onAppRunning);
+
+        } else {
+          onAppRunning();
+        }
+      });
+    }
+
   }
 });
 
+function onAppRunning() {
+  updateColyseusBootService();
+  updateAndReloadNginx();
+}
+
+function updateColyseusBootService() {
+  //
+  // Update colyseus-boot.service to use the correct paths for the application
+  //
+
+  const COLYSEUS_CLOUD_BOOT_SERVICE = '/etc/systemd/system/colyseus-boot.service';
+
+  // ignore if no boot service found
+  if (!fs.existsSync(COLYSEUS_CLOUD_BOOT_SERVICE)) {
+    return;
+  }
+
+  const workingDirectory = pm2.cwd;
+  const execStart = `${detectPackageManager()} colyseus-post-deploy`;
+
+  const contents = fs.readFileSync(COLYSEUS_CLOUD_BOOT_SERVICE, 'utf8');
+  try {
+    fs.writeFileSync(COLYSEUS_CLOUD_BOOT_SERVICE, contents
+      .replace(/WorkingDirectory=(.*)/, `WorkingDirectory=${workingDirectory}`)
+      .replace(/ExecStart=(.*)/, `ExecStart=${execStart}`));
+  } catch (e) {
+    // couldn't write to file
+  }
+}
+
 function updateAndReloadNginx() {
-  pm2.list(function(err, apps) {
-    bailOnErr(err);
-
-    const port = 2567;
-    const addresses = [];
-
-    apps.forEach(function(app) {
-      addresses.push(`unix:/run/colyseus/${ port + app.pm2_env.NODE_APP_INSTANCE }.sock`);
-    });
-
-    fs.writeFileSync(NGINX_SERVERS_CONFIG_FILE, addresses.map(address => `server ${address};`).join("\n"), bailOnErr);
-
-    // "pm2 save"
-    pm2.dump(function(err, ret) {
-      bailOnErr(err);
-
-      // exit with success!
-      process.exit();
-    });
-  });
-
   //
   // If you are self-hosting and reading this file, consider using the
   // following in your self-hosted environment:
@@ -84,6 +114,58 @@ function updateAndReloadNginx() {
   // do
   //     service nginx reload
   // done
+
+  const NGINX_SERVERS_CONFIG_FILE = '/etc/nginx/colyseus_servers.conf';
+
+  pm2.list(function(err, apps) {
+    if (apps.length === 0) {
+      err = "no apps running.";
+    }
+    bailOnErr(err);
+
+    const port = 2567;
+    const addresses = [];
+
+    apps.forEach(function(app) {
+      addresses.push(`unix:/run/colyseus/${ port + app.pm2_env.NODE_APP_INSTANCE }.sock`);
+    });
+
+    // write NGINX config
+    fs.writeFileSync(NGINX_SERVERS_CONFIG_FILE, addresses.map(address => `server ${address};`).join("\n"), bailOnErr);
+
+    // "pm2 save"
+    pm2.dump(function (err, ret) {
+      bailOnErr(err);
+
+      // exit with success!
+      process.exit();
+    });
+
+  });
+}
+
+function detectPackageManager() {
+  const lockfiles = {
+    // npm
+    "npm exec": path.resolve(pm2.cwd, 'package-lock.json'),
+
+    // yarn
+    "yarn exec": path.resolve(pm2.cwd, 'yarn.lock'),
+
+    // pnpm
+    "pnpm exec": path.resolve(pm2.cwd, 'pnpm-lock.yaml'),
+
+    // bun
+    "bunx": path.resolve(pm2.cwd, 'bun.lockb'),
+  };
+
+  for (const [key, value] of Object.entries(lockfiles)) {
+    if (fs.existsSync(value)) {
+      return key;
+    }
+  }
+
+  return "npm";
 }
 
 function bailOnErr(err) {

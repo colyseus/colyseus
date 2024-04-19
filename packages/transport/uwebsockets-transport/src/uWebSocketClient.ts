@@ -88,7 +88,8 @@ export class uWebSocketClient implements Client {
   }
 
   public error(code: number, message: string = '', cb?: (err?: Error) => void) {
-    this.raw(getMessageBytes[Protocol.ERROR](code, message), undefined, cb);
+    this.raw(getMessageBytes[Protocol.ERROR](code, message));
+    cb(); // call imediatelly (just to keep same API as "ws" transport)
   }
 
   public leave(code?: number, data?: string) {
