@@ -8,7 +8,7 @@ import { matchMaker, Protocol, Transport, debugAndPrintError, spliceOne, getBear
 import { H3Client } from './H3Client';
 import { generateWebTransportCertificate } from './utils/mkcert';
 
-export type CertLike = string | Buffer;
+export type CertLike = string;
 
 export interface TransportOptions {
   app: any, // express app
