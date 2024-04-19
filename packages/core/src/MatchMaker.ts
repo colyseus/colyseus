@@ -492,7 +492,14 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
   room._events.on('leave', onClientLeaveRoom.bind(this, room));
   room._events.on('visibility-change', onVisibilityChange.bind(this, room));
   room._events.once('dispose', disposeRoom.bind(this, roomName, room));
-  room._events.once('disconnect', () => room._events.removeAllListeners());
+
+  // when disconnect()'ing, keep only join/leave events for stat counting
+  room._events.once('disconnect', () => {
+    room._events.removeAllListeners('lock');
+    room._events.removeAllListeners('unlock');
+    room._events.removeAllListeners('visibility-change');
+    room._events.removeAllListeners('dispose');
+  });
 
   // room always start unlocked
   await createRoomReferences(room, true);
@@ -698,7 +705,7 @@ function onVisibilityChange(room: Room, isInvisible: boolean): void {
 }
 
 async function disposeRoom(roomName: string, room: Room) {
-  debugMatchMaking('disposing \'%s\' (%s) on processId \'%s\'', roomName, room.roomId, processId);
+  debugMatchMaking('disposing \'%s\' (%s) on processId \'%s\' (graceful shutdown: %s)', roomName, room.roomId, processId, isGracefullyShuttingDown);
 
   // decrease amount of rooms this process is handling
   if (!isGracefullyShuttingDown) {

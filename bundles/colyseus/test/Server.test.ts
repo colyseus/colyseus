@@ -26,7 +26,10 @@ describe("Server", () => {
     server.listen(TEST_PORT, undefined, undefined, resolve);
   }));
 
-  after(() => server.transport.shutdown());
+  after(async () => {
+    await matchMaker.gracefullyShutdown();
+    await server.transport.shutdown()
+  });
 
   describe("matchmaking routes", () => {
 
