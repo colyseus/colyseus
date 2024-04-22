@@ -596,7 +596,7 @@ function callOnAuth(roomName: string, authOptions?: AuthOptions) {
     : undefined;
 }
 
-async function cleanupStaleRooms(roomName: string) {
+export async function cleanupStaleRooms(roomName: string) {
   //
   // clean-up possibly stale room ids
   // (ungraceful shutdowns using Redis can result on stale room ids still on memory.)
