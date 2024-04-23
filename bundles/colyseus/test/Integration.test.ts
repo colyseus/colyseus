@@ -850,6 +850,33 @@ describe("Integration", () => {
               assert.ok(!matchMaker.getRoomById(roomId));
             });
 
+            it("second .disconnect() call should return a resolved promise", async () => {
+              let roomId: string;
+              const clients: Client[] = [];
+              matchMaker.defineRoomType('disconnect', class _ extends Room {
+                maxClients = 2;
+                onCreate() { roomId = this.roomId; }
+                onJoin(client) { clients.push(client); }
+                async onLeave() { await timeout(20); }
+              });
+
+              const promises = [
+                client.joinOrCreate('disconnect'),
+                client.joinOrCreate('disconnect'),
+              ];
+
+              await Promise.all(promises);
+
+              const room = matchMaker.getRoomById(roomId);
+              assert.strictEqual(room.roomId, roomId);
+
+              room.disconnect();
+
+              assert.rejects(async () => {
+                await room.disconnect();
+              })
+            });
+
             it("should disconnect all clients", async() => {
               matchMaker.defineRoomType('disconnect', class _ extends Room {
                 maxClients = 2;
