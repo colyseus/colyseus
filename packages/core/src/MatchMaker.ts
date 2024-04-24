@@ -45,8 +45,19 @@ export let presence: Presence;
 export let driver: MatchMakerDriver;
 export let selectProcessIdToCreateRoom: SelectProcessIdCallback;
 
-export let isGracefullyShuttingDown: boolean;
+export let isGracefullyShuttingDown: boolean; // TODO: remove me on 1.0, use 'state' instead
 export let onReady: Deferred = new Deferred(); // onReady needs to be immediately available to @colyseus/auth integration.
+
+export enum MatchMakerState {
+  INITIALIZING,
+  READY,
+  SHUTTING_DOWN
+}
+
+/**
+ * Internal MatchMaker state
+ */
+export let state: MatchMakerState;
 
 /**
  * @private
@@ -64,6 +75,8 @@ export async function setup(
     //
     onReady = new Deferred();
   }
+
+  state = MatchMakerState.INITIALIZING;
 
   presence = _presence || new LocalPresence();
 
@@ -144,6 +157,8 @@ export async function accept() {
       }
     }));
   }
+
+  state = MatchMakerState.READY;
 
   await stats.persist();
 
@@ -389,7 +404,11 @@ export function getRoomClass(roomName: string): Type<Room> {
  * @returns Promise<RoomListingData> - A promise contaning an object which includes room metadata and configurations.
  */
 export async function createRoom(roomName: string, clientOptions: ClientOptions): Promise<RoomListingData> {
-  const selectedProcessId = (selectProcessIdToCreateRoom !== undefined)
+  //
+  // - select a process to create the room
+  // - use local processId if MatchMaker is not ready yet
+  //
+  const selectedProcessId = (state === MatchMakerState.READY)
     ? await selectProcessIdToCreateRoom(roomName, clientOptions)
     : processId;
 
@@ -554,6 +573,8 @@ export async function gracefullyShutdown(): Promise<any> {
   }
 
   isGracefullyShuttingDown = true;
+  state = MatchMakerState.SHUTTING_DOWN;
+
   onReady = undefined;
 
   debugMatchMaking(`${processId} is shutting down!`);
@@ -595,6 +616,8 @@ export async function reserveSeatFor(room: RoomListingData, options: ClientOptio
     successfulSeatReservation = await remoteRoomCall(room.roomId, '_reserveSeat', [sessionId, options, authData]);
 
   } catch (e) {
+    // throwing here generally means a room cache from an unavailable process is
+    // being used (room from a process not gracefully shut down)
     debugMatchMaking(e);
     throw e;
   }
