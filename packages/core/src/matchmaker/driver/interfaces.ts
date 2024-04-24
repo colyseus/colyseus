@@ -60,6 +60,12 @@ export interface MatchMakerDriver {
   ): Promise<RoomListingData[]> | RoomListingData[];
 
   /**
+   * Clean up rooms in room cache by process id.
+   * @param processId - The process id.
+   */
+  cleanup?(processId: string): Promise<void>;
+
+  /**
    * Query for a room in room cache for given conditions.
    *
    * @param conditions - Filtering conditions.

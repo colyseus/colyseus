@@ -57,6 +57,44 @@ describe("Driver implementations", () => {
         assert.strictEqual(false, lastEntryCached.locked);
       });
 
+      describe("cleanup", () => {
+        it("should remove 400 'stale' entries by processId", async () => {
+          const p1 = generateId();
+          const p2 = generateId();
+
+          const count = 400;
+          for (let i = 0; i < count; i++) {
+            await createAndSave({ processId: p1, roomId: generateId() });
+            await createAndSave({ processId: p2, roomId: generateId() });
+          }
+
+          assert.strictEqual(count, (await driver.find({ processId: p1 })).length);
+
+          await driver.cleanup(p1);
+
+          assert.strictEqual(0, (await driver.find({ processId: p1 })).length);
+          assert.strictEqual(count, (await driver.find({ processId: p2 })).length);
+        });
+
+        it("should remove 600 'stale' entries by processId", async () => {
+          const p1 = generateId();
+          const p2 = generateId();
+
+          const count = 600;
+          for (let i = 0; i < count; i++) {
+            await createAndSave({ processId: p1, roomId: generateId() });
+            await createAndSave({ processId: p2, roomId: generateId() });
+          }
+
+          assert.strictEqual(count, (await driver.find({ processId: p1 })).length);
+
+          await driver.cleanup(p1);
+
+          assert.strictEqual(0, (await driver.find({ processId: p1 })).length);
+          assert.strictEqual(count, (await driver.find({ processId: p2 })).length);
+        });
+      })
+
     });
   }
 });

@@ -133,7 +133,12 @@ export async function accept() {
       } catch (e) {
         // process failed to respond - remove it from stats
         logger.debug(`process ${stat.processId} failed to respond. excluding from stats`);
-        await stats.excludeProcess(stat.processId);
+        const isProcessExcluded = await stats.excludeProcess(stat.processId);
+
+        // clean-up possibly stale room ids
+        if (isProcessExcluded && !isDevMode) {
+          await removeRoomsByProcessId(stat.processId);
+        }
       }
     }));
   }
@@ -330,10 +335,10 @@ export function defineRoomType<T extends Type<Room>>(
 
   if (klass.prototype['onAuth'] !== Room.prototype['onAuth']) {
     // TODO: soft-deprecate instance level `onAuth` on 0.16
-    // console.warn("DEPRECATION WARNING: onAuth() at the instance level will be deprecated soon. Please use static onAuth() instead.");
+    // logger.warn("DEPRECATION WARNING: onAuth() at the instance level will be deprecated soon. Please use static onAuth() instead.");
 
     if (klass['onAuth'] !== Room['onAuth']) {
-      console.log(`❌ "${roomName}"'s onAuth() defined at the instance level will be ignored.`);
+      logger.info(`❌ "${roomName}"'s onAuth() defined at the instance level will be ignored.`);
     }
   }
 
@@ -354,7 +359,7 @@ export function removeRoomType(roomName: string) {
 
 // TODO: legacy; remove me on 1.0
 export function hasHandler(roomName: string) {
-  console.warn("hasHandler() is deprecated. Use getHandler() instead.");
+  logger.warn("hasHandler() is deprecated. Use getHandler() instead.");
   return handlers[roomName] !== undefined;
 }
 
@@ -597,25 +602,29 @@ function callOnAuth(roomName: string, authOptions?: AuthOptions) {
 }
 
 export async function cleanupStaleRooms(roomName: string) {
+  // remove connecting counts
+  await presence.del(getHandlerConcurrencyKey(roomName));
+}
+
+async function removeRoomsByProcessId(processId: string) {
   //
   // clean-up possibly stale room ids
   // (ungraceful shutdowns using Redis can result on stale room ids still on memory.)
   //
-  const cachedRooms = await driver.find({ name: roomName }, { _id: 1 });
+  if (typeof(driver.cleanup) === "function") {
+    await driver.cleanup(processId);
 
-  // remove connecting counts
-  await presence.del(getHandlerConcurrencyKey(roomName));
-
-  await Promise.all(cachedRooms.map(async (room) => {
-    try {
-      // use hardcoded short timeout for cleaning up stale rooms.
-      await remoteRoomCall(room.roomId, 'roomId');
-
-    } catch (e) {
-      debugMatchMaking(`cleaning up stale room '${roomName}', roomId: ${room.roomId}`);
-      room.remove();
-    }
-  }));
+  } else {
+    //
+    // TODO: remove this block on 1.0.
+    //
+    //  driver.cleanup() has been added mid-way through 0.15
+    //  some users may still be using older versions of the driver.
+    //
+    const cachedRooms = await driver.find({ processId }, { _id: 1 });
+    logger.debug("removing stale rooms by processId:", processId, `(${cachedRooms.length} rooms found)`);
+    cachedRooms.forEach((room) => room.remove());
+  }
 }
 
 async function createRoomReferences(room: Room, init: boolean = false): Promise<boolean> {

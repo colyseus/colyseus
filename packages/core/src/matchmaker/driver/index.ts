@@ -1,3 +1,4 @@
+import { logger } from "../../Logger";
 import { IRoomListingData, SortOptions, RoomListingData, QueryHelpers, MatchMakerDriver } from "./interfaces";
 
 // re-export
@@ -29,6 +30,14 @@ export class LocalDriver implements MatchMakerDriver {
       }
       return true;
     }));
+  }
+
+  public cleanup(processId: string) {
+    const cachedRooms = this.find({ processId });
+    logger.debug("removing stale rooms by processId:", processId, `(${cachedRooms.length} rooms found)`);
+
+    cachedRooms.forEach((room) => room.remove());
+    return Promise.resolve();
   }
 
   public findOne(conditions: Partial<IRoomListingData>) {

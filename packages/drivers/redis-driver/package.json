@@ -15,8 +15,7 @@
     "colyseus",
     "matchmaking",
     "driver",
-    "mongoose",
-    "mongodb"
+    "redis"
   ],
   "files": [
     "build",

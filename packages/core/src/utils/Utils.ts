@@ -4,7 +4,6 @@ import { addExtension } from 'msgpackr';
 import { debugAndPrintError } from '../Debug';
 import { EventEmitter } from "events";
 import { ServerOpts, Socket } from "net";
-import { logger } from '../Logger';
 import { Schema } from "@colyseus/schema";
 
 // remote room call timeouts

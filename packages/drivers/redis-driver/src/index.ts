@@ -5,10 +5,13 @@ import {
   MatchMakerDriver,
   QueryHelpers,
   RoomListingData,
+  logger,
 } from '@colyseus/core';
 
 import { Query } from './Query';
 import { RoomData } from './RoomData';
+
+const ROOMCACHES_KEY = 'roomcaches';
 
 export class RedisDriver implements MatchMakerDriver {
   private readonly _client: Redis | Cluster;
@@ -24,7 +27,7 @@ export class RedisDriver implements MatchMakerDriver {
   }
 
   public async has(roomId: string) {
-    return await this._client.hexists('roomcaches', roomId) === 1;
+    return await this._client.hexists(ROOMCACHES_KEY, roomId) === 1;
   }
 
   public async find(conditions: Partial<IRoomListingData>) {
@@ -46,6 +49,18 @@ export class RedisDriver implements MatchMakerDriver {
     });
   }
 
+  public async cleanup(processId: string) {
+    const cachedRooms = await this.find({ processId });
+    logger.debug("removing stale rooms by processId:", processId, `(${cachedRooms.length} rooms found)`);
+
+    const itemsPerCommand = 500;
+
+    // remove rooms in batches of 500
+    for (let i = 0; i < cachedRooms.length; i += itemsPerCommand) {
+      await this._client.hdel(ROOMCACHES_KEY, ...cachedRooms.slice(i, i + itemsPerCommand).map((room) => room.roomId));
+    }
+  }
+
   public findOne(conditions: Partial<IRoomListingData>): QueryHelpers<RoomListingData> {
     if (typeof conditions.roomId !== 'undefined') {
       // get room by roomId
@@ -57,7 +72,7 @@ export class RedisDriver implements MatchMakerDriver {
 
       // @ts-ignore
       return new Promise<RoomListingData>((resolve, reject) => {
-        this._client.hget('roomcaches', conditions.roomId).then((roomcache) => {
+        this._client.hget(ROOMCACHES_KEY, conditions.roomId).then((roomcache) => {
           if (roomcache) {
             resolve(new RoomData(JSON.parse(roomcache), this._client));
           } else {
@@ -81,7 +96,7 @@ export class RedisDriver implements MatchMakerDriver {
       return this._roomCacheRequestByName[roomName];
     }
 
-    const roomCacheRequest = this._concurrentRoomCacheRequest || this._client.hgetall('roomcaches');
+    const roomCacheRequest = this._concurrentRoomCacheRequest || this._client.hgetall(ROOMCACHES_KEY);
     this._concurrentRoomCacheRequest = roomCacheRequest;
 
     this._roomCacheRequestByName[roomName] = roomCacheRequest.then((result) => {
@@ -117,7 +132,7 @@ export class RedisDriver implements MatchMakerDriver {
   // not used during runtime.
   //
   public clear() {
-    this._client.del('roomcaches');
+    this._client.del(ROOMCACHES_KEY);
   }
 
 }

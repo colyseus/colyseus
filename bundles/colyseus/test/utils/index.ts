@@ -4,8 +4,9 @@ import { EventEmitter } from "events";
 import { pack, unpack } from "msgpackr";
 
 import { Server, ServerOptions, Room, matchMaker, LocalDriver, ClientState, LocalPresence, Protocol, Presence, Client, Deferred, ISendOptions, getMessageBytes } from "@colyseus/core";
-// import { RedisPresence } from "@colyseus/redis-presence";
-// import { RedisDriver } from "@colyseus/redis-driver";
+import { RedisPresence } from "@colyseus/redis-presence";
+import { RedisDriver } from "@colyseus/redis-driver";
+
 // import { MongooseDriver } from "@colyseus/mongoose-driver";
 
 import { WebSocketTransport, TransportOptions } from '@colyseus/ws-transport';
@@ -21,13 +22,13 @@ export const DRIVERS = [ LocalDriver, ];
 export const PRESENCE_IMPLEMENTATIONS = [ LocalPresence, ];
 
 // export const DRIVERS = [
-//   LocalDriver,
+//   // LocalDriver,
 //   RedisDriver,
 //   // MongooseDriver,
 // ];
-//
+
 // export const PRESENCE_IMPLEMENTATIONS = [
-//   LocalPresence,
+//   // LocalPresence,
 //   RedisPresence
 // ];
 
