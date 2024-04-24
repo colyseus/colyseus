@@ -70,6 +70,8 @@ export async function setup(
   driver = _driver || new LocalDriver();
   publicAddress = _publicAddress;
 
+  stats.reset(false);
+
   // devMode: try to retrieve previous processId
   if (isDevMode) { processId = await getPreviousProcessId(await getHostname()); }
 
@@ -143,7 +145,7 @@ export async function accept() {
     }));
   }
 
-  await stats.reset();
+  await stats.persist();
 
   if (isDevMode) {
     await reloadFromCache();
@@ -387,10 +389,15 @@ export function getRoomClass(roomName: string): Type<Room> {
  * @returns Promise<RoomListingData> - A promise contaning an object which includes room metadata and configurations.
  */
 export async function createRoom(roomName: string, clientOptions: ClientOptions): Promise<RoomListingData> {
-  const selectedProcessId = await selectProcessIdToCreateRoom(roomName, clientOptions);
+  const selectedProcessId = (selectProcessIdToCreateRoom !== undefined)
+    ? await selectProcessIdToCreateRoom(roomName, clientOptions)
+    : processId;
 
   let room: RoomListingData;
-  if (selectedProcessId === processId) {
+  if (selectedProcessId === undefined) {
+    throw new ServerError(ErrorCode.MATCHMAKE_UNHANDLED, `no processId available to create room ${roomName}`);
+
+  } else if (selectedProcessId === processId) {
     // create the room on this process!
     room = await handleCreateRoom(roomName, clientOptions);
 
@@ -526,8 +533,16 @@ export function disconnectAll(closeCode?: number) {
   const promises: Array<Promise<any>> = [];
 
   for (const roomId in rooms) {
-    if (!rooms.hasOwnProperty(roomId)) { continue; }
-    promises.push(rooms[roomId].disconnect(closeCode));
+    if (!rooms.hasOwnProperty(roomId)) {
+      continue;
+    }
+
+    const room = rooms[roomId];
+
+    // prevent touching stats when process is shutting down
+    room._events.removeAllListeners("leave");
+
+    promises.push(room.disconnect(closeCode));
   }
 
   return promises;
@@ -549,6 +564,9 @@ export async function gracefullyShutdown(): Promise<any> {
 
   // remove processId from room count key
   await stats.excludeProcess(processId);
+
+  // remove cached rooms of this process
+  await removeRoomsByProcessId(processId);
 
   // unsubscribe from process id channel
   presence.unsubscribe(getProcessChannel());
@@ -578,7 +596,7 @@ export async function reserveSeatFor(room: RoomListingData, options: ClientOptio
 
   } catch (e) {
     debugMatchMaking(e);
-    successfulSeatReservation = false;
+    throw e;
   }
 
   if (!successfulSeatReservation) {

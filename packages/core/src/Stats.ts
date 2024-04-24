@@ -46,12 +46,15 @@ export function persist() {
   }
 }
 
-export function reset() {
-  lastPersisted = 0;
-  clearTimeout(persistTimeout);
+export function reset(_persist: boolean = true) {
   local.roomCount = 0;
   local.ccu = 0;
-  return persist();
+
+  if (_persist) {
+    lastPersisted = 0;
+    clearTimeout(persistTimeout);
+    persist();
+  }
 }
 
 export function excludeProcess(_processId: string) {
