@@ -177,9 +177,11 @@ export class LocalPresence implements Presence {
     }
 
     public hdel(key: string, field: any) {
-        if (this.hash[key]) {
+        const success = this.hash?.[key]?.[field] !== undefined;
+        if (success) {
             delete this.hash[key][field];
         }
+        return success;
     }
 
     public async hlen(key: string) {

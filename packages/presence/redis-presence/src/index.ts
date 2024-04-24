@@ -144,7 +144,7 @@ export class RedisPresence implements Presence {
     }
 
     public async hdel(key: string, field: string) {
-        return await this.pub.hdel(key, field);
+        return (await this.pub.hdel(key, field)) > 0;
     }
 
     public async hlen(key: string): Promise<number> {
