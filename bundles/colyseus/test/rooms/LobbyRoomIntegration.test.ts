@@ -24,6 +24,7 @@ describe("LobbyRoom: Integration", () => {
 
         before(async () => {
           // listen for testing
+          await matchMaker.setup(presence, driver);
           await server.listen(TEST_PORT);
         });
 

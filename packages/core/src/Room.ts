@@ -526,7 +526,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
   public disconnect(closeCode: number = Protocol.WS_CLOSE_CONSENTED): Promise<any> {
     // skip if already disposing
     if (this._internalState === RoomInternalState.DISPOSING) {
-      return Promise.reject(`disconnect() ignored: room (${this.roomId}) is already disposing.`);
+      return Promise.resolve(`disconnect() ignored: room (${this.roomId}) is already disposing.`);
 
     } else if (this._internalState === RoomInternalState.CREATING) {
       throw new Error("cannot disconnect during onCreate()");
