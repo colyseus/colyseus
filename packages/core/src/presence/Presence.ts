@@ -17,6 +17,7 @@ export interface Presence {
      * @param callback - Callback to trigger on subscribing.
      */
     subscribe(topic: string, callback: Function);
+
     /**
      * Unsubscribe from given topic.
      *

@@ -51,7 +51,7 @@ export class RedisDriver implements MatchMakerDriver {
 
   public async cleanup(processId: string) {
     const cachedRooms = await this.find({ processId });
-    logger.debug("removing stale rooms by processId:", processId, `(${cachedRooms.length} rooms found)`);
+    logger.debug("> Removing stale rooms by processId:", processId, `(${cachedRooms.length} rooms found)`);
 
     const itemsPerCommand = 500;
 

@@ -76,6 +76,7 @@ export async function setup(
     onReady = new Deferred();
   }
 
+  isGracefullyShuttingDown = false;
   state = MatchMakerState.INITIALIZING;
 
   presence = _presence || new LocalPresence();
@@ -90,8 +91,6 @@ export async function setup(
 
   // ensure processId is set
   if (!processId) { processId = generateId(); }
-
-  isGracefullyShuttingDown = false;
 
   /**
    * Define default `assignRoomToProcessId` method.
@@ -132,31 +131,7 @@ export async function accept() {
   /**
    * Check for leftover/invalid processId's on startup
    */
-  const previousStats = await stats.fetchAll();
-  if (previousStats.length > 0) {
-    logger.debug(`${previousStats.length} previous processId(s) found, health-checking...`);
-    await Promise.all(previousStats.map(async (stat) => {
-      try {
-        await requestFromIPC<RoomListingData>(
-          presence,
-          getProcessChannel(stat.processId),
-          'healthcheck',
-          [],
-          REMOTE_ROOM_SHORT_TIMEOUT,
-        );
-        // process succeeded to respond - nothing to do
-      } catch (e) {
-        // process failed to respond - remove it from stats
-        logger.debug(`process ${stat.processId} failed to respond. excluding from stats`);
-        const isProcessExcluded = await stats.excludeProcess(stat.processId);
-
-        // clean-up possibly stale room ids
-        if (isProcessExcluded && !isDevMode) {
-          await removeRoomsByProcessId(stat.processId);
-        }
-      }
-    }));
-  }
+  await healthCheckAllProcesses();
 
   state = MatchMakerState.READY;
 
@@ -327,6 +302,18 @@ export async function remoteRoomCall<R= any>(
       return await requestFromIPC<R>(presence, getRoomChannel(roomId), method, args, rejectionTimeout);
 
     } catch (e) {
+
+      //
+      // the room cache from an unavailable process might've been used here.
+      // perform a health-check on the process before proceeding.
+      // (this is a broken state when a process wasn't gracefully shut down)
+      //
+      if (method === '_reserveSeat' && e.message === "ipc_timeout") {
+        throw e;
+      }
+
+      // TODO: for 1.0, consider always throwing previous error directly.
+
       const request = `${method}${args && ' with args ' + JSON.stringify(args) || ''}`;
       throw new ServerError(
         ErrorCode.MATCHMAKE_UNHANDLED,
@@ -613,13 +600,27 @@ export async function reserveSeatFor(room: RoomListingData, options: ClientOptio
   let successfulSeatReservation: boolean;
 
   try {
-    successfulSeatReservation = await remoteRoomCall(room.roomId, '_reserveSeat', [sessionId, options, authData]);
+    successfulSeatReservation = await remoteRoomCall(
+      room.roomId,
+      '_reserveSeat',
+      [sessionId, options, authData],
+      REMOTE_ROOM_SHORT_TIMEOUT,
+    );
 
   } catch (e) {
-    // throwing here generally means a room cache from an unavailable process is
-    // being used (room from a process not gracefully shut down)
     debugMatchMaking(e);
-    throw e;
+
+    //
+    // the room cache from an unavailable process might've been used here.
+    // (this is a broken state when a process wasn't gracefully shut down)
+    // perform a health-check on the process before proceeding.
+    //
+    if (e.message === "ipc_timeout" && !(await healthCheckProcessId(room.processId))) {
+      throw new SeatReservationError(`process ${room.processId} is not available.`);
+
+    } else {
+      successfulSeatReservation = false;
+    }
   }
 
   if (!successfulSeatReservation) {
@@ -647,6 +648,72 @@ export async function cleanupStaleRooms(roomName: string) {
   await presence.del(getHandlerConcurrencyKey(roomName));
 }
 
+/**
+ * Perform health check on all processes
+ */
+export async function healthCheckAllProcesses() {
+  const allStats = await stats.fetchAll();
+  if (allStats.length > 0) {
+    await Promise.all(allStats.map((stat) => healthCheckProcessId(stat.processId)));
+  }
+}
+
+/**
+ * Perform health check on a remote process
+ * @param processId
+ */
+const _healthCheckByProcessId: { [processId: string]: Promise<any> } = {};
+export function healthCheckProcessId(processId: string) {
+  //
+  // re-use the same promise if health-check is already in progress
+  // (may occur when _reserveSeat() fails multiple times for the same 'processId')
+  //
+  if (_healthCheckByProcessId[processId] !== undefined) {
+    return _healthCheckByProcessId[processId];
+  }
+
+  _healthCheckByProcessId[processId] = new Promise<boolean>(async (resolve, reject) => {
+    logger.debug(`> Performing health-check against processId: '${processId}'...`);
+
+    try {
+      const requestTime = Date.now();
+
+      await requestFromIPC<RoomListingData>(
+        presence,
+        getProcessChannel(processId),
+        'healthcheck',
+        [],
+        REMOTE_ROOM_SHORT_TIMEOUT,
+      );
+
+      logger.debug(`✅ Process '${processId}' successfully responded (${Date.now() - requestTime}ms)`);
+
+      // succeeded to respond
+      resolve(true)
+
+    } catch (e) {
+      // process failed to respond - remove it from stats
+      logger.debug(`❌ Process '${processId}' failed to respond. Cleaning it up.`);
+      const isProcessExcluded = await stats.excludeProcess(processId);
+
+      // clean-up possibly stale room ids
+      if (isProcessExcluded && !isDevMode) {
+        await removeRoomsByProcessId(processId);
+      }
+
+      resolve(false);
+    } finally {
+      delete _healthCheckByProcessId[processId];
+    }
+  });
+
+  return _healthCheckByProcessId[processId];
+}
+
+/**
+ * Remove cached rooms by processId
+ * @param processId
+ */
 async function removeRoomsByProcessId(processId: string) {
   //
   // clean-up possibly stale room ids
@@ -663,7 +730,7 @@ async function removeRoomsByProcessId(processId: string) {
     //  some users may still be using older versions of the driver.
     //
     const cachedRooms = await driver.find({ processId }, { _id: 1 });
-    logger.debug("removing stale rooms by processId:", processId, `(${cachedRooms.length} rooms found)`);
+    logger.debug("> Removing stale rooms by processId:", processId, `(${cachedRooms.length} rooms found)`);
     cachedRooms.forEach((room) => room.remove());
   }
 }

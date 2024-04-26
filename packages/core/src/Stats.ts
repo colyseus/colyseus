@@ -30,13 +30,13 @@ let lastPersisted = 0;
 let persistTimeout = undefined;
 const persistInterval = 1000;
 
-export function persist() {
+export function persist(forceNow: boolean = false) {
   /**
    * Avoid persisting too often.
    */
   const now = Date.now();
 
-  if (now - lastPersisted > persistInterval) {
+  if (forceNow || (now - lastPersisted > persistInterval)) {
     lastPersisted = now;
     return presence.hset(getRoomCountKey(), processId, `${local.roomCount},${local.ccu}`);
 

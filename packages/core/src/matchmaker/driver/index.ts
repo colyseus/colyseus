@@ -34,7 +34,7 @@ export class LocalDriver implements MatchMakerDriver {
 
   public cleanup(processId: string) {
     const cachedRooms = this.find({ processId });
-    logger.debug("removing stale rooms by processId:", processId, `(${cachedRooms.length} rooms found)`);
+    logger.debug("> Removing stale rooms by processId:", processId, `(${cachedRooms.length} rooms found)`);
 
     cachedRooms.forEach((room) => room.remove());
     return Promise.resolve();

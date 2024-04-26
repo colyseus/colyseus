@@ -1,5 +1,5 @@
 import assert from "assert";
-import { matchMaker, MatchMakerDriver, Room } from "@colyseus/core";
+import { generateId, IRoomListingData, matchMaker, MatchMakerDriver, Room, RoomListingData } from "@colyseus/core";
 import { DummyRoom, Room2Clients, createDummyClient, timeout, ReconnectRoom, Room3Clients, DRIVERS, ReconnectTokenRoom } from "./utils";
 
 const DEFAULT_SEAT_RESERVATION_TIME = Number(process.env.COLYSEUS_SEAT_RESERVATION_TIME);
@@ -531,6 +531,77 @@ describe("MatchMaker", () => {
             assert.strictEqual(true,rooms[i].locked);
           }
         });
+      });
+
+      describe("cleaning up stale rooms and processId's", async () => {
+        async function createDummyRoomCache(data: Partial<IRoomListingData>) {
+          const cache = driver.createInstance(data);
+          await cache.save();
+          return cache;
+        }
+
+        it("should clean up stale processId's", async () => {
+          //
+          // create fake processId and room caches
+          //
+          const fakeProcessIds = ["dummy1", "dummy2", "dummy3", matchMaker.processId];
+          for (const fakeProcessId of fakeProcessIds) {
+            matchMaker.presence.hset('roomcount', fakeProcessId, "10,10");
+
+            for (let i = 0; i < 10; i++) {
+              await createDummyRoomCache({
+                processId: fakeProcessId,
+                roomId: generateId(),
+                name: "one",
+                locked: false,
+                clients: 1,
+                maxClients: 2,
+              });
+            }
+          }
+
+          const allStats = await matchMaker.stats.fetchAll();
+          assert.strictEqual(4, allStats.length);
+
+          assert.strictEqual(40, (await driver.find({})).length);
+
+          const allChecksPromise = matchMaker.healthCheckAllProcesses();
+
+          assert.ok(matchMaker.healthCheckProcessId("dummy1") == matchMaker.healthCheckProcessId("dummy1"), "should return the ongoing promise");
+          assert.ok(matchMaker.healthCheckProcessId("dummy2") == matchMaker.healthCheckProcessId("dummy2"), "should return the ongoing promise");
+          assert.ok(matchMaker.healthCheckProcessId("dummy3") == matchMaker.healthCheckProcessId("dummy3"), "should return the ongoing promise");
+
+          await allChecksPromise;
+
+          assert.strictEqual(10, (await driver.find({})).length);
+
+        });
+
+        it("auto-heal when trying to reserve seat on stale processId", async () => {
+          assert.strictEqual(0, (await driver.find({})).length);
+
+          matchMaker.defineRoomType("one", class extends Room { });
+          matchMaker.presence.hset('roomcount', "dummy1", "1,1");
+          await createDummyRoomCache({
+            processId: "dummy1",
+            roomId: 'BadRoomId',
+            name: "one",
+            locked: false,
+            clients: 1,
+            maxClients: 4,
+          });
+
+          assert.strictEqual(1, (await driver.find({})).length);
+
+          let room: matchMaker.SeatReservation;
+          await assert.doesNotReject(async () => {
+            room = await matchMaker.joinOrCreate("one");
+          });
+
+          assert.strictEqual(room.room.processId, matchMaker.processId);
+          assert.strictEqual(1, (await driver.find({})).length);
+        });
+
       });
 
     });
