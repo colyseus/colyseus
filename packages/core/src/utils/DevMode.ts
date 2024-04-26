@@ -41,9 +41,11 @@ export async function reloadFromCache() {
     recreatedRoom.onRestoreRoom?.(roomHistory["cache"]);
 
     // Reserve seats for clients from cached history
-    for (const previousSessionId of roomHistory.clients) {
-      await remoteRoomCall(recreatedRoomListing.roomId, '_reserveSeat',
-        [previousSessionId, {}, 20, false, true]); // reserve seat for 20 seconds
+    if (roomHistory.clients) {
+      for (const previousSessionId of roomHistory.clients) {
+        // reserve seat for 20 seconds
+        await remoteRoomCall(recreatedRoomListing.roomId, '_reserveSeat', [previousSessionId, {}, 20, false, true]);
+      }
     }
   }
 
