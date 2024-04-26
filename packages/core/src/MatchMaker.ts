@@ -654,7 +654,11 @@ export async function cleanupStaleRooms(roomName: string) {
 export async function healthCheckAllProcesses() {
   const allStats = await stats.fetchAll();
   if (allStats.length > 0) {
-    await Promise.all(allStats.map((stat) => healthCheckProcessId(stat.processId)));
+    await Promise.all(
+      allStats
+        .filter(stat => stat.processId !== processId) // skip current process
+        .map(stat => healthCheckProcessId(stat.processId))
+    );
   }
 }
 
