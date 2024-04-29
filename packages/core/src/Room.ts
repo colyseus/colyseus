@@ -119,7 +119,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
   protected _reconnections: { [reconnectionToken: string]: [string, Deferred] } = {};
   private _reconnectingSessionId = new Map<string, string>();
 
-  private onMessageHandlers: {[id: string]: (client: Client, message: any) => void} = {};
+  private onMessageHandlers: { [id: string]: (client: Client, message: any) => void } = {};
 
   private _serializer: Serializer<State> = noneSerializer;
   private _afterNextPatchQueue: Array<[string | Client, IArguments]> = [];
@@ -435,29 +435,32 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
   }
 
   public send(client: Client, type: string | number, message: any, options?: ISendOptions): void;
-  public send(client: Client, message: Schema, options?: ISendOptions): void;
   public send(client: Client, messageOrType: any, messageOrOptions?: any | ISendOptions, options?: ISendOptions): void {
     logger.warn('DEPRECATION WARNING: use client.send(...) instead of this.send(client, ...)');
     client.send(messageOrType, messageOrOptions, options);
   }
 
-  public broadcast(type: string | number, message?: any, options?: IBroadcastOptions);
-  public broadcast<T extends Schema>(message: T, options?: IBroadcastOptions);
-  public broadcast(
-    typeOrSchema: string | number | Schema,
-    messageOrOptions?: any | IBroadcastOptions,
-    options?: IBroadcastOptions,
-  ) {
-    const isSchema = (typeof(typeOrSchema) === 'object');
-    const opts: IBroadcastOptions = ((isSchema) ? messageOrOptions : options);
-
-    if (opts && opts.afterNextPatch) {
-      delete opts.afterNextPatch;
+  public broadcast(type: string | number, message?: any, options?: IBroadcastOptions) {
+    if (options && options.afterNextPatch) {
+      delete options.afterNextPatch;
       this._afterNextPatchQueue.push(['broadcast', arguments]);
       return;
     }
 
-    this.broadcastMessageType(typeOrSchema as string, messageOrOptions, opts);
+    this.broadcastMessageType(type, message, options);
+  }
+
+  /**
+   * Broadcast bytes (UInt8Arrays) to a particular room
+   */
+  public broadcastBytes(type: string | number, message: Uint8Array, options: IBroadcastOptions) {
+    if (options && options.afterNextPatch) {
+      delete options.afterNextPatch;
+      this._afterNextPatchQueue.push(['broadcastBytes', arguments]);
+      return;
+    }
+
+    this.broadcastMessageType(type as string, message, options);
   }
 
   /**
@@ -750,9 +753,13 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
     }, timeoutInSeconds * 1000);
   }
 
-  private broadcastMessageType(type: string, message?: any, options: IBroadcastOptions = {}) {
+  private broadcastMessageType(type: number | string, message?: any | Uint8Array, options: IBroadcastOptions = {}) {
     debugMessage("broadcast: %O", message);
-    const encodedMessage = getMessageBytes.raw(Protocol.ROOM_DATA, type, message);
+
+    const encodedMessage = (message instanceof Uint8Array)
+      ? getMessageBytes.raw(Protocol.ROOM_DATA_BYTES, type, undefined, message)
+      : getMessageBytes.raw(Protocol.ROOM_DATA, type, message)
+
     const except = (typeof (options.except) !== "undefined")
       ? Array.isArray(options.except)
         ? options.except
