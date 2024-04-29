@@ -33,6 +33,7 @@ export type SimulationCallback = (deltaTime: number) => void;
 
 export interface IBroadcastOptions extends ISendOptions {
   except?: Client | Client[];
+  asBytes?: boolean;
 }
 
 export enum RoomInternalState {
@@ -51,7 +52,7 @@ type ExtractAuthData<T> = T extends ClientArray<infer _, infer U> ? U : never;
  * - Rooms are created on demand during matchmaking by default
  * - Room classes must be exposed using `.define()`
  */
-export abstract class Room<State extends object= any, Metadata= any> {
+export abstract class Room<State extends object = any, Metadata = any> {
 
   /**
    * This property will change on these situations:
@@ -121,7 +122,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
   protected _reconnections: { [reconnectionToken: string]: [string, Deferred] } = {};
   private _reconnectingSessionId = new Map<string, string>();
 
-  private onMessageHandlers: {[id: string]: (client: Client, message: any) => void} = {};
+  private onMessageHandlers: { [id: string]: (client: Client, message: any) => void } = {};
 
   private _serializer: Serializer<State> = noneSerializer;
   private _afterNextPatchQueue: Array<[string | Client, IArguments]> = [];
@@ -461,7 +462,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
     messageOrOptions?: any | IBroadcastOptions,
     options?: IBroadcastOptions,
   ) {
-    const isSchema = (typeof(typeOrSchema) === 'object');
+    const isSchema = (typeof (typeOrSchema) === 'object');
     const opts: IBroadcastOptions = ((isSchema) ? messageOrOptions : options);
 
     if (opts && opts.afterNextPatch) {
@@ -477,6 +478,23 @@ export abstract class Room<State extends object= any, Metadata= any> {
 
       this.broadcastMessageType(typeOrSchema as string, messageOrOptions, opts);
     }
+  }
+
+  /**
+   * Broadcast bytes (UInt8Arrays) to a particular room
+   */
+  public broadcastBytes(type: string | number, message?: any, options?: IBroadcastOptions) {
+    const opts: IBroadcastOptions = options ?? {};
+    if (opts && opts.afterNextPatch) {
+      delete opts.afterNextPatch;
+      this._afterNextPatchQueue.push(['broadcastBytes', arguments]);
+      return;
+    }
+    if (opts && !opts.asBytes) {
+      opts.asBytes = true;
+    }
+
+    this.broadcastMessageType(type as string, message, opts);
   }
 
   /**
@@ -786,7 +804,13 @@ export abstract class Room<State extends object= any, Metadata= any> {
 
   private broadcastMessageType(type: string, message?: any, options: IBroadcastOptions = {}) {
     debugMessage("broadcast: %O", message);
-    const encodedMessage = getMessageBytes.raw(Protocol.ROOM_DATA, type, message);
+    const { asBytes = false } = options;
+    const encodedMessage = getMessageBytes.raw(
+      asBytes ? Protocol.ROOM_DATA_BYTES : Protocol.ROOM_DATA,
+      type,
+      asBytes ? undefined : message,
+      asBytes ? message : undefined
+    );
     const except = (typeof (options.except) !== "undefined")
       ? Array.isArray(options.except)
         ? options.except
