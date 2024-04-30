@@ -6,15 +6,6 @@ import cors from "cors";
 import express from "express";
 import dotenv from "dotenv";
 import osUtils from "node-os-utils";
-import { logger, Server, ServerOptions, Transport, matchMaker } from '@colyseus/core';
-import { WebSocketTransport } from '@colyseus/ws-transport';
-
-// try to import uWebSockets-express compatibility layer.
-let uWebSocketsExpressCompatibility: any = undefined;
-try { uWebSocketsExpressCompatibility = require('uwebsockets-express').default; } catch (e) {}
-
-let BunWebSockets: any = undefined;
-try { BunWebSockets = require('@colyseus/bun-websockets'); } catch (e) {}
 
 function getNodeEnv() {
   return process.env.NODE_ENV || "development";
@@ -39,11 +30,11 @@ function loadEnvFile(envFileOptions: string[], log: 'none' | 'success' | 'both' 
         dotenv.config({ path: envPath });
 
         if (log !== "none") {
-            logger.info(`✅ ${path.basename(envPath)} loaded.`);
+            console.info(`✅ ${path.basename(envPath)} loaded.`);
         }
 
     } else if (log === "both") {
-        logger.info(`ℹ️  optional .env file not found: ${envFileOptions.join(", ")}`);
+        console.info(`ℹ️  optional .env file not found: ${envFileOptions.join(", ")}`);
     }
 }
 
@@ -58,6 +49,16 @@ loadEnvFile([`.env.${getNodeEnv()}`, `.env`], 'both');
 if (process.env.REGION !== undefined) {
   loadEnvFile([`.env.${getRegion()}.${getNodeEnv()}`], 'success');
 }
+
+import { logger, Server, ServerOptions, Transport, matchMaker } from '@colyseus/core';
+import { WebSocketTransport } from '@colyseus/ws-transport';
+
+// try to import uWebSockets-express compatibility layer.
+let uWebSocketsExpressCompatibility: any = undefined;
+try { uWebSocketsExpressCompatibility = require('uwebsockets-express').default; } catch (e) { }
+
+let BunWebSockets: any = undefined;
+try { BunWebSockets = require('@colyseus/bun-websockets'); } catch (e) { }
 
 export interface ConfigOptions {
     options?: ServerOptions,
