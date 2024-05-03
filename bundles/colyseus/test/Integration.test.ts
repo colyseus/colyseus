@@ -123,6 +123,27 @@ describe("Integration", () => {
               await connection.leave();
             });
 
+            it("concurrent sync onJoin(), maxClients = 2", async () => {
+              const onJoinHit = new Deferred<string>();
+              matchMaker.defineRoomType("room2_async", class _ extends Room {
+                maxClients = 2;
+                async onJoin() {
+                  onJoinHit.resolve();
+                  await new Promise(resolve => setTimeout(resolve, 100));
+                }
+              });
+
+              const room = await matchMaker.createRoom("room2_async", {});
+
+              client.joinById(room.roomId);
+              await onJoinHit;
+
+              await client.joinById(room.roomId);
+
+              // disconnect room
+              await matchMaker.getRoomById(room.roomId).disconnect();
+            });
+
             it("async onJoin support", async () => {
               let onJoinCalled = false;
 

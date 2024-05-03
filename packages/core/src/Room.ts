@@ -626,6 +626,15 @@ export abstract class Room<State extends object= any, Metadata= any> {
 
         this.clients.push(client);
 
+        //
+        // Flag sessionId as non-enumarable so hasReachedMaxClients() doesn't count it
+        // (https://github.com/colyseus/colyseus/issues/726)
+        //
+        Object.defineProperty(this.reservedSeats, sessionId, {
+          value: this.reservedSeats[sessionId],
+          enumerable: false,
+        });
+
         if (this.onJoin) {
           await this.onJoin(client, joinOptions, client.auth);
         }
