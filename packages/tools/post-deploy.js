@@ -7,11 +7,11 @@ const path = require('path');
 const opts = { env: process.env.NODE_ENV || "production" };
 const maxCPU = os.cpus().length;
 
-// allow deploying from other path as root.
-if (process.env.npm_config_local_prefix) {
-  process.chdir(process.env.npm_config_local_prefix);
-  pm2.cwd = process.env.npm_config_local_prefix;
-}
+// // allow deploying from other path as root.
+// if (process.env.npm_config_local_prefix) {
+//   process.chdir(process.env.npm_config_local_prefix);
+//   pm2.cwd = process.env.npm_config_local_prefix;
+// }
 
 const CONFIG_FILE = [
   'ecosystem.config.cjs',
