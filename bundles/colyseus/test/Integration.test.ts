@@ -139,6 +139,7 @@ describe("Integration", () => {
               await onJoinHit;
 
               await client.joinById(room.roomId);
+              assert.strictEqual(2, matchMaker.getRoomById(room.roomId).clients.length);
 
               // disconnect room
               await matchMaker.getRoomById(room.roomId).disconnect();
