@@ -62,7 +62,6 @@ export class Query<T> implements QueryHelpers<T> {
           return false; 
         }
       }
-
       return true;
     }));
     return resolve(result);
