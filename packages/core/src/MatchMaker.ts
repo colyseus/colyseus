@@ -336,7 +336,6 @@ export function defineRoomType<T extends Type<Room>>(
   klass: T,
   defaultOptions?: Parameters<NonNullable<InstanceType<T>['onCreate']>>[0],
 ) {
-
   const registeredHandler = new RegisteredHandler(klass, defaultOptions);
 
   handlers[roomName] = registeredHandler;

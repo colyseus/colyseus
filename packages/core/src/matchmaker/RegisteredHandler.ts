@@ -55,6 +55,7 @@ export class RegisteredHandler extends EventEmitter {
     });
     this.on('dispose', (room) => updateLobby(room, false));
     this.on('visibility-change', (room, isVisible) => updateLobby(room, isVisible));
+
     return this;
   }
 
