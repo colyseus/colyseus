@@ -72,7 +72,7 @@ export interface MatchMakerDriver {
    *
    * @returns `RoomListingData` - An object contaning filtered room metadata.
    */
-  findOne(conditions: Partial<IRoomListingData>): QueryHelpers<RoomListingData>;
+  findOne(conditions: Partial<IRoomListingData>, filterMethod?: FilterCallback): QueryHelpers<RoomListingData>;
 
   /**
    * Empty the room cache.
@@ -84,3 +84,7 @@ export interface MatchMakerDriver {
    */
   shutdown(): void;
 }
+
+// Ohki - Code review question: What is the correct location for shared types? 
+export type FilterCallback = (clientOptions?: any, roomOptions?: any) => boolean | null;
+
