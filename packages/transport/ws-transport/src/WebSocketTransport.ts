@@ -27,6 +27,10 @@ export class WebSocketTransport extends Transport {
   constructor(options: TransportOptions = {}) {
     super();
 
+    if (options.maxPayload === undefined) {
+      options.maxPayload = 4 * 1024; // 4Kb
+    }
+
     // disable per-message deflate by default
     if (options.perMessageDeflate === undefined) {
       options.perMessageDeflate = false;

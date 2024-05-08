@@ -39,7 +39,7 @@ export class uWebSocketsTransport extends Transport {
         }
 
         if (!options.maxPayloadLength) {
-            options.maxPayloadLength = 1024 * 1024;
+            options.maxPayloadLength = 4 * 1024;
         }
 
         // https://github.com/colyseus/colyseus/issues/458
