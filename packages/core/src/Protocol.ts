@@ -37,6 +37,8 @@ export enum ErrorCode {
 
   AUTH_FAILED = 4215,
   APPLICATION_ERROR = 4216,
+
+  INVALID_PAYLOAD = 4217,
 }
 
 // Inter-process communication protocol

@@ -945,6 +945,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
         debugMessage("received: '%s' -> %j", messageType, message);
       } catch (e) {
         debugAndPrintError(e);
+        client.leave(Protocol.WS_CLOSE_WITH_ERROR);
         return;
       }
 
@@ -955,7 +956,17 @@ export abstract class Room<State extends object= any, Metadata= any> {
         (this.onMessageHandlers['*'] as any)(client, messageType, message);
 
       } else {
-        debugAndPrintError(`onMessage for "${messageType}" not registered.`);
+        const errorMessage = `onMessage for "${messageType}" not registered.`;
+        debugAndPrintError(errorMessage);
+
+        if (isDevMode) {
+          // send error code to client in development mode
+          client.error(ErrorCode.INVALID_PAYLOAD, errorMessage);
+
+        } else {
+          // immediately close the connection in production
+          client.leave(Protocol.WS_CLOSE_WITH_ERROR, errorMessage);
+        }
       }
 
     } else if (code === Protocol.ROOM_DATA_BYTES) {
@@ -973,7 +984,17 @@ export abstract class Room<State extends object= any, Metadata= any> {
         (this.onMessageHandlers['*'] as any)(client, messageType, message);
 
       } else {
-        debugAndPrintError(`onMessage for "${messageType}" not registered.`);
+        const errorMessage = `onMessage for "${messageType}" not registered.`;
+        debugAndPrintError(errorMessage);
+
+        if (isDevMode) {
+          // send error code to client in development mode
+          client.error(ErrorCode.INVALID_PAYLOAD, errorMessage);
+
+        } else {
+          // immediately close the connection in production
+          client.leave(Protocol.WS_CLOSE_WITH_ERROR, errorMessage);
+        }
       }
 
     } else if (code === Protocol.JOIN_ROOM && client.state === ClientState.JOINING) {

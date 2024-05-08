@@ -116,6 +116,16 @@ importers:
       '@colyseus/ws-transport':
         specifier: workspace:^
         version: link:../../packages/transport/ws-transport
+    devDependencies:
+      '@colyseus/schema':
+        specifier: ^2.0.0
+        version: 2.0.25
+      '@types/ws':
+        specifier: ^7.4.4
+        version: 7.4.7
+      ws:
+        specifier: ^7.4.5
+        version: 7.5.9
 
   packages/auth:
     dependencies:
@@ -2194,7 +2204,6 @@ packages:
     resolution: {integrity: sha512-JQbbmxZTZehdc2iszGKs5oC3NFnjeay7mtAWrdt7qNtAVK0g19muApzAy4bm9byz79xa2ZnO/BOBC2R8RC5Lww==}
     dependencies:
       '@types/node': 16.18.68
-    dev: false
 
   /@types/yargs-parser@21.0.3:
     resolution: {integrity: sha512-I4q9QU9MQv4oEOz4tAHJtNz1cwuLxn2F3xcc2iV5WdqLPpUnj30aUuxt1mAxYTG+oe8CZMV/+6rU4S4gRDzqtQ==}
@@ -8495,7 +8504,6 @@ packages:
         optional: true
       utf-8-validate:
         optional: true
-    dev: false
 
   /ws@8.15.1:
     resolution: {integrity: sha512-W5OZiCjXEmk0yZ66ZN82beM5Sz7l7coYxpRkzS+p9PP+ToQry8szKh+61eNktr7EA9DOwvFGhfC605jDHbP6QQ==}

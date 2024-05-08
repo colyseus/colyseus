@@ -37,5 +37,10 @@
     "@colyseus/redis-presence": "workspace:^",
     "@colyseus/ws-transport": "workspace:^"
   },
+  "devDependencies": {
+    "@types/ws": "^7.4.4",
+    "@colyseus/schema": "^2.0.0",
+    "ws": "^7.4.5"
+  },
   "gitHead": "25ba61e283429bb4fa02db0454f804ea218259eb"
 }
