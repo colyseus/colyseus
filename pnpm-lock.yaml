@@ -120,6 +120,9 @@ importers:
       '@colyseus/schema':
         specifier: ^2.0.0
         version: 2.0.25
+      '@colyseus/uwebsockets-transport':
+        specifier: workspace:^
+        version: link:../../packages/transport/uwebsockets-transport
       '@types/ws':
         specifier: ^7.4.4
         version: 7.4.7
@@ -362,8 +365,8 @@ importers:
         specifier: '>=1.0.0'
         version: 2.0.25
       uWebSockets.js:
-        specifier: github:uNetworking/uWebSockets.js#v20.24.0
-        version: github.com/uNetworking/uWebSockets.js/6545da07696855e77de1480d5b55bb661746ddd3
+        specifier: github:uNetworking/uWebSockets.js#v20.43.0
+        version: github.com/uNetworking/uWebSockets.js/1977b5039938ad863d42fc4958d48c17e5a1fa06
 
   packages/transport/ws-transport:
     dependencies:
@@ -8629,8 +8632,8 @@ packages:
     engines: {node: '>=10'}
     dev: true
 
-  github.com/uNetworking/uWebSockets.js/6545da07696855e77de1480d5b55bb661746ddd3:
-    resolution: {tarball: https://codeload.github.com/uNetworking/uWebSockets.js/tar.gz/6545da07696855e77de1480d5b55bb661746ddd3}
+  github.com/uNetworking/uWebSockets.js/1977b5039938ad863d42fc4958d48c17e5a1fa06:
+    resolution: {tarball: https://codeload.github.com/uNetworking/uWebSockets.js/tar.gz/1977b5039938ad863d42fc4958d48c17e5a1fa06}
     name: uWebSockets.js
-    version: 20.24.0
+    version: 20.43.0
     dev: false

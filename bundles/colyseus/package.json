@@ -38,6 +38,7 @@
     "@colyseus/ws-transport": "workspace:^"
   },
   "devDependencies": {
+    "@colyseus/uwebsockets-transport": "workspace:^",
     "@types/ws": "^7.4.4",
     "@colyseus/schema": "^2.0.0",
     "ws": "^7.4.5"

@@ -30,16 +30,20 @@ export class uWebSocketsTransport extends Transport {
             ? uWebSockets.SSLApp(appOptions)
             : uWebSockets.App(appOptions);
 
-        if (!options.maxBackpressure) {
+        if (options.maxBackpressure === undefined) {
             options.maxBackpressure = 1024 * 1024;
         }
 
-        if (!options.compression) {
+        if (options.compression === undefined) {
             options.compression = uWebSockets.DISABLED;
         }
 
-        if (!options.maxPayloadLength) {
+        if (options.maxPayloadLength === undefined) {
             options.maxPayloadLength = 4 * 1024;
+        }
+
+        if (options.sendPingsAutomatically === undefined) {
+            options.sendPingsAutomatically = true;
         }
 
         // https://github.com/colyseus/colyseus/issues/458
