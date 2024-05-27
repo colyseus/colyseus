@@ -73,7 +73,7 @@ Options:
     [--project]: specify a tsconfig.json file path
     [--reestablishAllDelay]: delay for closing and re-establishing all connections (in milliseconds)
     [--retryFailed]: delay to retry failed connections (in milliseconds)
-    [--output]: specify an output file (default to loadtest.log)
+    [--output]: specify an output file for output logs
 
 Example:
     colyseus-loadtest example/bot.ts --endpoint ws://localhost:2567 --room state_handler`);
@@ -92,7 +92,7 @@ Example:
         logLevel: argv.logLevel?.toLowerCase() || "all", // TODO: not being used atm
         reestablishAllDelay: argv.reestablishAllDelay || 0,
         retryFailed: argv.retryFailed || 0,
-        output: path.resolve(argv.output || "loadtest.log"),
+        output: argv.output && path.resolve(argv.output),
     }
 
     if (!main) {
