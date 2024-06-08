@@ -20,7 +20,7 @@ export class LocalPresence implements Presence {
     public keys: {[name: string]: string | number} = {};
 
     protected subscriptions: {[id: string]: Callback[]} = {};
-    private timeouts: {[name: string]: NodeJS.Timer} = {};
+    private timeouts: {[name: string]: NodeJS.Timeout} = {};
 
     constructor() {
       //

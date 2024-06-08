@@ -4,7 +4,7 @@ import express from "express";
 import { Server, RelayRoom, LobbyRoom } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import { monitor } from "@colyseus/monitor";
-import { JsonWebToken } from "@colyseus/auth";
+// import { JWT } from "@colyseus/auth";
 
 // import { MongooseDriver  } from "@colyseus/mongoose-driver";
 // import { uWebSocketsTransport } from "@colyseus/uwebsockets-transport";
@@ -41,8 +41,6 @@ app.use(express.json());
 app.get("/hello", (req, res) => {
   res.json({ hello: "world!" });
 });
-
-gameServer.define(MyRoom).useAuthToken();
 
 gameServer.define("my_room", MyRoom);
 gameServer.define("lobby", LobbyRoom);

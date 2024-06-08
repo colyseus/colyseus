@@ -5,5 +5,5 @@ export interface Serializer<T> {
   reset(data: any): void;
   getFullState(client?: Client): any;
   applyPatches(clients: Client[], state: T): boolean;
-  handshake?(): number[];
+  handshake?(): number[] | Buffer;
 }

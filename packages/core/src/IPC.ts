@@ -11,7 +11,7 @@ export async function requestFromIPC<T>(
   rejectionTimeout: number = REMOTE_ROOM_SHORT_TIMEOUT,
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    let unsubscribeTimeout: NodeJS.Timer;
+    let unsubscribeTimeout: NodeJS.Timeout;
 
     const requestId = generateId();
     const channel = `ipc:${requestId}`;

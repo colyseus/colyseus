@@ -7,7 +7,7 @@ import { ServerWebSocket, WebSocketHandler } from "bun";
 import type http from 'http';
 import bunExpress from "bun-serve-express";
 
-import { DummyServer, matchMaker, Transport, debugAndPrintError, spliceOne, ServerError, getBearerToken } from '@colyseus/core';
+import { HttpServerMock, matchMaker, Transport, debugAndPrintError, spliceOne, ServerError, getBearerToken } from '@colyseus/core';
 import { WebSocketClient, WebSocketWrapper } from './WebSocketClient';
 import type { Application, Request, Response } from "express";
 
@@ -64,7 +64,8 @@ export class BunWebSockets extends Transport {
 
     // Adding a mock object for Transport.server
     if (!this.server) {
-      this.server = new DummyServer();
+      // @ts-ignore
+      this.server = new HttpServerMock();
     }
   }
 

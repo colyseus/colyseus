@@ -18,7 +18,7 @@ export interface TransportOptions extends ServerOptions {
 export class WebSocketTransport extends Transport {
   protected wss: WebSocket.Server;
 
-  protected pingInterval: NodeJS.Timer;
+  protected pingInterval: NodeJS.Timeout;
   protected pingIntervalMS: number;
   protected pingMaxRetries: number;
 

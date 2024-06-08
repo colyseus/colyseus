@@ -1,6 +1,5 @@
 import { pack } from 'msgpackr';
-import { encode, Schema } from '@colyseus/schema';
-import { logger } from './Logger';
+import { encode, Iterator } from '@colyseus/schema';
 
 // Colyseus protocol codes range between 0~100
 export enum Protocol {
@@ -11,7 +10,7 @@ export enum Protocol {
   ROOM_DATA = 13,
   ROOM_STATE = 14,
   ROOM_STATE_PATCH = 15,
-  ROOM_DATA_SCHEMA = 16, // used to send schema instances via room.send()
+  // ROOM_DATA_SCHEMA = 16, // DEPRECATED: used to send schema instances via room.send()
   ROOM_DATA_BYTES = 17,
 
   // WebSocket close codes (https://github.com/Luka967/websocket-close-codes)
@@ -49,11 +48,11 @@ export enum IpcProtocol {
 }
 
 export const getMessageBytes = {
-  [Protocol.JOIN_ROOM]: (reconnectionToken: string, serializerId: string, handshake?: number[]) => {
+  [Protocol.JOIN_ROOM]: (reconnectionToken: string, serializerId: string, handshake?: number[] | Buffer) => {
     let offset = 0;
 
-    const reconnectionTokenLength = utf8Length(reconnectionToken);
-    const serializerIdLength = utf8Length(serializerId);
+    const reconnectionTokenLength = Buffer.byteLength(reconnectionToken, "utf8");
+    const serializerIdLength = Buffer.byteLength(serializerId, "utf8");
     const handshakeLength = (handshake) ? handshake.length : 0;
 
     const buff = Buffer.allocUnsafe(1 + reconnectionTokenLength + serializerIdLength + handshakeLength);
@@ -75,10 +74,11 @@ export const getMessageBytes = {
   },
 
   [Protocol.ERROR]: (code: number, message: string = '') => {
+    const it: Iterator = { offset: 0 };
     const bytes = [Protocol.ERROR];
 
-    encode.number(bytes, code);
-    encode.string(bytes, message);
+    encode.number(bytes, code, it);
+    encode.string(bytes, message, it);
 
     return bytes;
   },
@@ -87,29 +87,15 @@ export const getMessageBytes = {
     return [Protocol.ROOM_STATE, ...bytes];
   },
 
-  [Protocol.ROOM_DATA_SCHEMA]: (message: Schema) => {
-    const typeid = (message.constructor as typeof Schema)._typeid;
-
-    if (typeid === undefined) {
-      logger.warn('Starting at colyseus >= 0.13 You must provide a type and message when calling `this.broadcast()` or `client.send()`. Please see: https://docs.colyseus.io/migrating/0.13/');
-      throw new Error(`an instance of Schema was expected, but ${JSON.stringify(message)} has been provided.`);
-    }
-
-    return [Protocol.ROOM_DATA_SCHEMA, typeid, ...message.encodeAll()];
-  },
-
   raw: (code: Protocol, type: string | number, message?: any, rawMessage?: ArrayLike<number> | Buffer) => {
+    const it: Iterator = { offset: 1 };
     const initialBytes: number[] = [code];
-    const messageType = typeof (type);
 
-    if (messageType === 'string') {
-      encode.string(initialBytes, type);
-
-    } else if (messageType === 'number') {
-      encode.number(initialBytes, type);
+    if (typeof (type) === 'string') {
+      encode.string(initialBytes, type as string, it);
 
     } else {
-      throw new Error(`Protocol.ROOM_DATA: message type not supported "${type.toString()}"`);
+      encode.number(initialBytes, type, it);
     }
 
     let arr: Uint8Array;
@@ -135,7 +121,7 @@ export const getMessageBytes = {
 };
 
 export function utf8Write(buff: Buffer, offset: number, str: string = '') {
-  buff[offset++] = utf8Length(str) - 1;
+  buff[offset++] = Buffer.byteLength(str, "utf8") - 1;
 
   let c = 0;
   for (let i = 0, l = str.length; i < l; i++) {
@@ -158,24 +144,4 @@ export function utf8Write(buff: Buffer, offset: number, str: string = '') {
       buff[offset++] = 0x80 | (c & 0x3f);
     }
   }
-}
-
-// Faster for short strings than Buffer.byteLength
-export function utf8Length(str: string = '') {
-  let c = 0;
-  let length = 0;
-  for (let i = 0, l = str.length; i < l; i++) {
-    c = str.charCodeAt(i);
-    if (c < 0x80) {
-      length += 1;
-    } else if (c < 0x800) {
-      length += 2;
-    } else if (c < 0xd800 || c >= 0xe000) {
-      length += 3;
-    } else {
-      i++;
-      length += 4;
-    }
-  }
-  return length + 1;
 }

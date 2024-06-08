@@ -1,12 +1,7 @@
-import { Context, defineTypes, MapSchema, Schema } from '@colyseus/schema';
+import { defineTypes, MapSchema, Schema } from '@colyseus/schema';
 
 import { Room } from '../Room';
 import { Client } from '../Transport';
-
-/**
- * Create another context to avoid these types from being in the user's global `Context`
- */
-const context = new Context();
 
 class Player extends Schema { // tslint:disable-line
   public connected: boolean;
@@ -17,14 +12,14 @@ defineTypes(Player, {
   connected: 'boolean',
   name: 'string',
   sessionId: 'string',
-}, { context });
+});
 
 class State extends Schema { // tslint:disable-line
   public players = new MapSchema<Player>();
 }
 defineTypes(State, {
   players: { map: Player },
-}, { context });
+});
 
 /**
  * client.joinOrCreate("relayroom", {

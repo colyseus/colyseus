@@ -1,13 +1,13 @@
 import WebSocket from 'ws';
 
 import { Protocol, Client, ClientState, ISendOptions, getMessageBytes, logger, debugMessage } from '@colyseus/core';
-import { Schema } from '@colyseus/schema';
 
 const SEND_OPTS = { binary: true };
 
 export class WebSocketClient implements Client {
   public sessionId: string;
   public state: ClientState = ClientState.JOINING;
+
   public _enqueuedMessages: any[] = [];
   public _afterNextPatchQueue;
   public _reconnectionToken: string;
@@ -32,9 +32,7 @@ export class WebSocketClient implements Client {
     debugMessage("send(to %s): '%s' -> %j", this.sessionId, messageOrType, messageOrOptions);
 
     this.enqueueRaw(
-      (messageOrType instanceof Schema)
-        ? getMessageBytes[Protocol.ROOM_DATA_SCHEMA](messageOrType)
-        : getMessageBytes.raw(Protocol.ROOM_DATA, messageOrType, messageOrOptions),
+      getMessageBytes.raw(Protocol.ROOM_DATA, messageOrType, messageOrOptions),
       options,
     );
   }

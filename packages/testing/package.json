@@ -23,7 +23,7 @@
   },
   "homepage": "https://colyseus.io/",
   "engines": {
-    "node": ">= 14.x"
+    "node": ">= 18.x"
   },
   "dependencies": {
     "@colyseus/tools": "workspace:^",

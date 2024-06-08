@@ -1,96 +1,107 @@
-/* tslint:disable:no-string-literal */
-
-import { Client } from '..';
 import { Serializer } from './Serializer';
 
-import { dumpChanges, hasFilter, Reflection, Schema } from '@colyseus/schema';
+import { Encoder, dumpChanges, Reflection, Schema, $changes, Iterator, StateView } from '@colyseus/schema';
 import { debugPatch } from '../Debug';
 import { Protocol } from '../Protocol';
-import { ClientState } from '../Transport';
+import { Client } from '../Transport';
+
+const STATE_PATCH_BUFFER = Buffer.from([Protocol.ROOM_STATE_PATCH]);
+const SHARED_VIEW = {};
 
 export class SchemaSerializer<T> implements Serializer<T> {
   public id = 'schema';
 
-  private state: T & Schema;
-  private useFilters: boolean = false;
+  private encoder: Encoder;
+  private hasFilters: boolean = false;
 
-  private handshakeCache: number[];
+  private handshakeCache: Buffer;
+
+  private fullEncodeCache: Buffer;
+  private sharedOffsetCache: Iterator = { offset: 0 };
+
+  private views: WeakMap<StateView | typeof SHARED_VIEW, Buffer> = new WeakMap();
 
   public reset(newState: T & Schema) {
-    this.state = newState;
-    this.useFilters = hasFilter(newState.constructor as typeof Schema);
+    this.encoder = new Encoder(newState);
+    this.hasFilters = this.encoder.context.hasFilters;
+    if (this.hasFilters) {
+      this.views = new WeakMap();
+    }
   }
 
   public getFullState(client?: Client) {
-    const fullEncodedState = this.state.encodeAll(this.useFilters);
+    // TODO: avoid re-encoding all if no change was detected between calls
+    this.sharedOffsetCache = { offset: 0 };
+    this.fullEncodeCache = this.encoder.encodeAll(this.sharedOffsetCache);
 
-    if (client && this.useFilters) {
-      return this.state.applyFilters(client, true);
+    if (this.hasFilters && client?.view) {
+      return this.encoder.encodeAllView(client.view, this.sharedOffsetCache.offset, { ...this.sharedOffsetCache });
 
     } else {
-      return fullEncodedState;
+      return this.fullEncodeCache;
     }
   }
 
   public applyPatches(clients: Client[]) {
-    const hasChanges = this.state['$changes'].changes.size > 0;
+    if (this.encoder.state[$changes].changes.size === 0) {
+      return false;
+    }
 
-    if (hasChanges) {
-      let numClients = clients.length;
+    let numClients = clients.length;
 
-      // dump changes for patch debugging
-      if (debugPatch.enabled) {
-        (debugPatch as any).dumpChanges = dumpChanges(this.state);
+    // dump changes for patch debugging
+    if (debugPatch.enabled) {
+      (debugPatch as any).dumpChanges = dumpChanges(this.encoder.state);
+    }
+
+    // get patch bytes
+    const it: Iterator = { offset: 0 };
+    const encodedChanges = this.encoder.encode(it);
+
+    if (!this.hasFilters) {
+      // encode changes once, for all clients
+      const sharedChanges = Buffer.concat([STATE_PATCH_BUFFER, encodedChanges]);
+
+      while (numClients--) {
+        clients[numClients].raw(sharedChanges);
       }
 
-      // get patch bytes
-      const patches = this.state.encode(false, [], this.useFilters);
+    } else {
+      // cache shared offset
+      const sharedOffset = it.offset;
 
-      if (!this.useFilters) {
-        // encode changes once, for all clients
-        patches.unshift(Protocol.ROOM_STATE_PATCH);
+      // encode state multiple times, for each client
+      while (numClients--) {
+        const client = clients[numClients];
+        const view = client.view || SHARED_VIEW;
 
-        while (numClients--) {
-          const client = clients[numClients];
-
-          //
-          // FIXME: avoid this check.
-          //
-          if (client.state === ClientState.JOINED) {
-            client.raw(patches);
-          }
+        let encodedView = this.views.get(view);
+        if (encodedView === undefined) {
+          // TODO: refactor - avoid checking for SHARED_VIEW twice
+          encodedView = (view === SHARED_VIEW)
+            ? Buffer.concat([STATE_PATCH_BUFFER, encodedChanges])
+            : this.encoder.encodeView(client.view, sharedOffset, it);
+          this.views.set(view, encodedView);
         }
 
-      } else {
-
-        // encode state multiple times, for each client
-        while (numClients--) {
-          const client = clients[numClients];
-
-          //
-          // FIXME: avoid this check.
-          //
-          if (client.state === ClientState.JOINED) {
-            const filteredPatches = this.state.applyFilters(client);
-            client.raw([Protocol.ROOM_STATE_PATCH, ...filteredPatches]);
-          }
-        }
-
-        this.state.discardAllChanges();
-      }
-
-      // debug patches
-      if (debugPatch.enabled) {
-        debugPatch(
-          '%d bytes sent to %d clients, %j',
-          patches.length,
-          clients.length,
-          (debugPatch as any).dumpChanges,
-        );
+        client.raw(Buffer.concat([STATE_PATCH_BUFFER, encodedView]));
       }
     }
 
-    return hasChanges;
+    // discard changes after sending
+    this.encoder.discardChanges();
+
+    // debug patches
+    if (debugPatch.enabled) {
+      debugPatch(
+        '%d bytes sent to %d clients, %j',
+        encodedChanges.length,
+        clients.length,
+        (debugPatch as any).dumpChanges,
+      );
+    }
+
+    return true;
   }
 
   public handshake() {
@@ -98,7 +109,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
      * Cache handshake to avoid encoding it for each client joining
      */
     if (!this.handshakeCache) {
-      this.handshakeCache = (this.state && Reflection.encode(this.state));
+      this.handshakeCache = (this.encoder.state && Reflection.encode(this.encoder.state));
     }
 
     return this.handshakeCache;

@@ -3,7 +3,7 @@ import { addExtension } from 'msgpackr';
 
 import { debugAndPrintError } from '../Debug';
 import { EventEmitter } from "events";
-import { ServerOpts, Socket } from "net";
+import { ServerOpts, Socket, Server } from "net";
 import { Schema } from "@colyseus/schema";
 
 // remote room call timeouts
@@ -113,14 +113,7 @@ export function merge(a: any, ...objs: any[]): any {
   return a;
 }
 
-export declare interface DummyServer {
-  constructor(options?: ServerOpts, connectionListener?: (socket: Socket) => void);
-
-  listen(port?: number, hostname?: string, backlog?: number, listeningListener?: () => void): this;
-  close(callback?: (err?: Error) => void): this;
-}
-
-export class DummyServer extends EventEmitter {}
+export class HttpServerMock extends EventEmitter {}
 
 // Add msgpackr extension to avoid circular references when encoding
 // https://github.com/kriszyp/msgpackr#custom-extensions

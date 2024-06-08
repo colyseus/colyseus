@@ -1,8 +1,7 @@
 import http, { IncomingMessage } from 'http';
-import WebSocket from 'ws'; // TODO: move this to Transport
 
 import { unpack } from 'msgpackr';
-import { decode, Iterator, Schema } from '@colyseus/schema';
+import { decode, Iterator, Schema, $changes } from '@colyseus/schema';
 
 import Clock from '@gamestdio/timer';
 import { EventEmitter } from 'events';
@@ -41,9 +40,6 @@ export enum RoomInternalState {
   DISPOSING = 2,
 }
 
-type ExtractUserData<T> = T extends ClientArray<infer U> ? U : never;
-type ExtractAuthData<T> = T extends ClientArray<infer _, infer U> ? U : never;
-
 /**
  * A Room class is meant to implement a game session, and/or serve as the communication channel
  * between a group of clients.
@@ -51,7 +47,7 @@ type ExtractAuthData<T> = T extends ClientArray<infer _, infer U> ? U : never;
  * - Rooms are created on demand during matchmaking by default
  * - Room classes must be exposed using `.define()`
  */
-export abstract class Room<State extends object= any, Metadata= any> {
+export abstract class Room<State extends object= any, Metadata= any, UserData = any, AuthData = any> {
 
   /**
    * This property will change on these situations:
@@ -71,7 +67,8 @@ export abstract class Room<State extends object= any, Metadata= any> {
   public listing: RoomListingData<Metadata>;
 
   /**
-   * A ClockTimer instance, used for timing events.
+   * Timing events tied to the room instance.
+   * Intervals and timeouts are cleared when the room is disposed.
    */
   public clock: Clock = new Clock();
 
@@ -108,7 +105,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
    *
    * @see {@link https://docs.colyseus.io/colyseus/server/room/#client|Client instance}
    */
-  public clients: ClientArray = new ClientArray();
+  public clients: ClientArray<UserData, AuthData> = new ClientArray();
 
   /** @internal */
   public _events = new EventEmitter();
@@ -116,7 +113,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
   // seat reservation & reconnection
   protected seatReservationTime: number = DEFAULT_SEAT_RESERVATION_TIME;
   protected reservedSeats: { [sessionId: string]: [any, any] } = {};
-  protected reservedSeatTimeouts: { [sessionId: string]: NodeJS.Timer } = {};
+  protected reservedSeatTimeouts: { [sessionId: string]: NodeJS.Timeout } = {};
 
   protected _reconnections: { [reconnectionToken: string]: [string, Deferred] } = {};
   private _reconnectingSessionId = new Map<string, string>();
@@ -126,8 +123,8 @@ export abstract class Room<State extends object= any, Metadata= any> {
   private _serializer: Serializer<State> = noneSerializer;
   private _afterNextPatchQueue: Array<[string | Client, IArguments]> = [];
 
-  private _simulationInterval: NodeJS.Timer;
-  private _patchInterval: NodeJS.Timer;
+  private _simulationInterval: NodeJS.Timeout;
+  private _patchInterval: NodeJS.Timeout;
 
   private _internalState: RoomInternalState = RoomInternalState.CREATING;
   private _locked: boolean = false;
@@ -136,12 +133,9 @@ export abstract class Room<State extends object= any, Metadata= any> {
 
   // this timeout prevents rooms that are created by one process, but no client
   // ever had success joining into it on the specified interval.
-  private _autoDisposeTimeout: NodeJS.Timer;
+  private _autoDisposeTimeout: NodeJS.Timeout;
 
-  // TODO: remove "presence" from constructor on 0.16.0
-  constructor(presence?: Presence) {
-    this.presence = presence;
-
+  constructor() {
     this._events.once('dispose', async () => {
       try {
         await this._dispose();
@@ -216,15 +210,8 @@ export abstract class Room<State extends object= any, Metadata= any> {
   // Optional abstract methods
   public onBeforePatch?(state: State): void | Promise<any>;
   public onCreate?(options: any): void | Promise<any>;
-  public onJoin?(
-    client: Client<ExtractUserData<typeof this['clients']>, ExtractAuthData<typeof this['clients']>>,
-    options?: any,
-    auth?: ExtractAuthData<typeof this['clients']>,
-  ): void | Promise<any>;
-  public onLeave?(
-    client: Client<ExtractUserData<typeof this['clients']>, ExtractAuthData<typeof this['clients']>>,
-    consented?: boolean,
-  ): void | Promise<any>;
+  public onJoin?(client: Client<UserData, AuthData>, options?: any, auth?: AuthData): void | Promise<any>;
+  public onLeave?(client: Client<UserData, AuthData>, consented?: boolean): void | Promise<any>;
   public onDispose?(): void | Promise<any>;
 
   // TODO: flag as @deprecated on v0.16
@@ -233,11 +220,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
    * onAuth at the instance level will be deprecated in the future.
    * Please use "static onAuth(token, req) instead
    */
-  public onAuth(
-    client: Client<ExtractUserData<typeof this['clients']>, ExtractAuthData<typeof this['clients']>>,
-    options: any,
-    request?: http.IncomingMessage
-  ): any | Promise<any> {
+  public onAuth(client: Client<UserData, AuthData>, options: any, request?: http.IncomingMessage): any | Promise<any> {
     return true;
   }
 
@@ -361,7 +344,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
   public setState(newState: State) {
     this.clock.start();
 
-    if ('_definition' in newState) {
+    if (newState[$changes] !== undefined) {
       this.setSerializer(new SchemaSerializer());
     }
 
@@ -470,13 +453,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
       return;
     }
 
-    if (isSchema) {
-      this.broadcastMessageSchema(typeOrSchema as Schema, opts);
-
-    } else {
-
-      this.broadcastMessageType(typeOrSchema as string, messageOrOptions, opts);
-    }
+    this.broadcastMessageType(typeOrSchema as string, messageOrOptions, opts);
   }
 
   /**
@@ -503,14 +480,8 @@ export abstract class Room<State extends object= any, Metadata= any> {
     return hasChanges;
   }
 
-  public onMessage<T = any>(
-    messageType: '*',
-    callback: (client: Client<ExtractUserData<typeof this['clients']>, ExtractAuthData<typeof this['clients']>>, type: string | number, message: T) => void
-  );
-  public onMessage<T = any>(
-    messageType: string | number,
-    callback: (client: Client<ExtractUserData<typeof this['clients']>, ExtractAuthData<typeof this['clients']>>, message: T) => void
-  );
+  public onMessage<T = any>(messageType: '*', callback: (client: Client<UserData, AuthData>, type: string | number, message: T) => void);
+  public onMessage<T = any>(messageType: string | number, callback: (client: Client<UserData, AuthData>, message: T) => void);
   public onMessage<T = any>(messageType: '*' | string | number, callback: (...args: any[]) => void) {
     this.onMessageHandlers[messageType] = callback;
     // returns a method to unbind the callback
@@ -620,7 +591,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
         //
         // On async onAuth, client may have been disconnected.
         //
-        if (client.readyState !== WebSocket.OPEN) {
+        if (client.state === ClientState.LEAVING) {
           throw new ServerError(Protocol.WS_CLOSE_GOING_AWAY, 'already disconnected');
         }
 
@@ -646,6 +617,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
         delete this.reservedSeats[sessionId];
 
         // client left during `onJoin`, call _onLeave immediately.
+        // @ts-ignore
         if (client.state === ClientState.LEAVING) {
           await this._onLeave(client, Protocol.WS_CLOSE_GOING_AWAY);
         }
@@ -772,25 +744,6 @@ export abstract class Room<State extends object= any, Metadata= any> {
       this._autoDisposeTimeout = undefined;
       this._disposeIfEmpty();
     }, timeoutInSeconds * 1000);
-  }
-
-  private broadcastMessageSchema<T extends Schema>(message: T, options: IBroadcastOptions = {}) {
-    debugMessage("broadcast: %O", message);
-    const encodedMessage = getMessageBytes[Protocol.ROOM_DATA_SCHEMA](message);
-    const except = (typeof (options.except) !== "undefined")
-      ? Array.isArray(options.except)
-        ? options.except
-        : [options.except]
-      : undefined;
-
-    let numClients = this.clients.length;
-    while (numClients--) {
-      const client = this.clients[numClients];
-
-      if (!except || !except.includes(client)) {
-        client.enqueueRaw(encodedMessage);
-      }
-    }
   }
 
   private broadcastMessageType(type: string, message?: any, options: IBroadcastOptions = {}) {

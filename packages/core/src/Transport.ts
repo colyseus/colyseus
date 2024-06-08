@@ -2,12 +2,12 @@ import * as http from 'http';
 import * as https from 'https';
 import * as net from 'net';
 
-import { Schema } from '@colyseus/schema';
+import { Schema, StateView } from '@colyseus/schema';
 import { EventEmitter } from 'events';
-import { DummyServer, spliceOne } from './utils/Utils';
+import { spliceOne } from './utils/Utils';
 
 export abstract class Transport {
-    public server?: net.Server | http.Server | https.Server | DummyServer;
+    public server?: net.Server | http.Server | https.Server;
 
     public abstract listen(port?: number, hostname?: string, backlog?: number, listeningListener?: Function): this;
     public abstract shutdown(): void;
@@ -30,18 +30,28 @@ export enum ClientState { JOINING, JOINED, RECONNECTED, LEAVING }
  *  encouraged to use along with Colyseus.
  */
 export interface Client<UserData=any, AuthData=any> {
-  readyState: number;
+  readyState: number; // TODO: remove readyState on version 1.0.0. Use only "state" instead.
+  ref: EventEmitter;
 
+  /**
+   * @deprecated use `sessionId` instead.
+   */
   id: string;
+
   /**
    * Unique id per session.
    */
   sessionId: string; // TODO: remove sessionId on version 1.0.0
+
+  /**
+   * Connection state
+   */
   state: ClientState;
 
-  ref: EventEmitter;
-
-  upgradeReq?: http.IncomingMessage; // cross-compatibility for ws (v3.x+) and uws
+  /**
+   * Optional: when using `@view()` decorator in your state properties, this will be the view instance for this client.
+   */
+  view?: StateView;
 
   /**
    * User-defined data can be attached to the Client instance through this variable.
@@ -54,7 +64,6 @@ export interface Client<UserData=any, AuthData=any> {
    * auth data provided by your `onAuth`
    */
   auth?: AuthData;
-  pingCount?: number; // ping / pong
 
   _reconnectionToken: string;
   _enqueuedMessages?: any[];

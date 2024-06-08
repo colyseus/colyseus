@@ -12,9 +12,9 @@
   },
   "devDependencies": {
     "@colyseus/monitor": "^0.15.0",
-    "@colyseus/uwebsockets-transport": "^0.15.0",
-    "@colyseus/ws-transport": "^0.15.0",
-    "@colyseus/redis-driver": "^0.15.0",
-    "@colyseus/redis-presence": "^0.15.0"
+    "@colyseus/uwebsockets-transport": "workspace:^",
+    "@colyseus/ws-transport": "workspace:^",
+    "@colyseus/redis-driver": "workspace:^",
+    "@colyseus/redis-presence": "workspace:^"
   }
 }
