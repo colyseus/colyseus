@@ -495,7 +495,16 @@ export abstract class Room<State extends object= any, Metadata= any> {
       return false;
     }
 
-    const hasChanges = this._serializer.applyPatches(this.clients, this.state);
+    let hasChanges = false;
+    try {
+      hasChanges = this._serializer.applyPatches(this.clients, this.state);
+    } catch (e) {
+      debugAndPrintError(e);
+      // corrupt state, cannot recover and will impact all clients.
+      // this room needs to shut down.
+      this._events.emit('dispose');
+      return;
+    }
 
     // broadcast messages enqueued for "after patch"
     this._dequeueAfterPatchMessages();
@@ -813,7 +822,14 @@ export abstract class Room<State extends object= any, Metadata= any> {
   }
 
   private sendFullState(client: Client): void {
-    client.enqueueRaw(getMessageBytes[Protocol.ROOM_STATE](this._serializer.getFullState(client)));
+    try {
+      client.enqueueRaw(getMessageBytes[Protocol.ROOM_STATE](this._serializer.getFullState(client)));
+    } catch (e) {
+      debugAndPrintError(e);
+      // corrupt state, cannot recover and will impact all clients.
+      // this room needs to shut down.
+      this._events.emit('dispose');
+    }
   }
 
   private _dequeueAfterPatchMessages() {
