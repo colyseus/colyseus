@@ -812,7 +812,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
     }
   }
 
-  private sendFullState(client: Client): void {
+  protected sendFullState(client: Client): void {
     client.enqueueRaw(getMessageBytes[Protocol.ROOM_STATE](this._serializer.getFullState(client)));
   }
 
