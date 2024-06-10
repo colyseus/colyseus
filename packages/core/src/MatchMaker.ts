@@ -45,6 +45,16 @@ export let presence: Presence;
 export let driver: MatchMakerDriver;
 export let selectProcessIdToCreateRoom: SelectProcessIdCallback;
 
+/**
+ * Whether health checks are enabled or not. (default: true)
+ *
+ * Health checks are automatically performed on theses scenarios:
+ * - At startup, to check for leftover/invalid processId's
+ * - When a remote room creation request times out
+ * - When a remote seat reservation request times out
+ */
+export let enableHealthChecks: boolean = true;
+
 export let isGracefullyShuttingDown: boolean; // TODO: remove me on 1.0, use 'state' instead
 export let onReady: Deferred = new Deferred(); // onReady needs to be immediately available to @colyseus/auth integration.
 
@@ -131,7 +141,9 @@ export async function accept() {
   /**
    * Check for leftover/invalid processId's on startup
    */
-  await healthCheckAllProcesses();
+  if (enableHealthChecks) {
+    await healthCheckAllProcesses();
+  }
 
   state = MatchMakerState.READY;
 
@@ -427,7 +439,9 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
         // when a process disconnects ungracefully, it may leave its previous processId under "roomcount"
         // if the process is still alive, it will re-add itself shortly after the load-balancer selects it again.
         //
-        await stats.excludeProcess(selectedProcessId);
+        if (enableHealthChecks) {
+          await stats.excludeProcess(selectedProcessId);
+        }
 
         // if other process failed to respond, create the room on this process
         room = await handleCreateRoom(roomName, clientOptions);
@@ -615,7 +629,13 @@ export async function reserveSeatFor(room: RoomListingData, options: ClientOptio
     // (this is a broken state when a process wasn't gracefully shut down)
     // perform a health-check on the process before proceeding.
     //
-    if (e.message === "ipc_timeout" && !(await healthCheckProcessId(room.processId))) {
+    if (
+      e.message === "ipc_timeout" &&
+      !(
+        enableHealthChecks &&
+        await healthCheckProcessId(room.processId)
+      )
+    ) {
       throw new SeatReservationError(`process ${room.processId} is not available.`);
 
     } else {
