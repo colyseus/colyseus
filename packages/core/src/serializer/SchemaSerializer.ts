@@ -21,21 +21,32 @@ export class SchemaSerializer<T> implements Serializer<T> {
 
   private views: WeakMap<StateView | typeof SHARED_VIEW, Buffer> = new WeakMap();
 
+  // flag to avoid re-encoding full state if no changes were made
+  private needFullEncode: boolean = true;
+
   public reset(newState: T & Schema) {
     this.encoder = new Encoder(newState);
     this.hasFilters = this.encoder.context.hasFilters;
+
     if (this.hasFilters) {
       this.views = new WeakMap();
     }
   }
 
   public getFullState(client?: Client) {
-    // TODO: avoid re-encoding all if no change was detected between calls
-    this.sharedOffsetCache = { offset: 0 };
-    this.fullEncodeCache = this.encoder.encodeAll(this.sharedOffsetCache);
+    if (this.needFullEncode) {
+      this.sharedOffsetCache = { offset: 0 };
+      this.fullEncodeCache = this.encoder.encodeAll(this.sharedOffsetCache);
+      this.needFullEncode = false;
+    }
 
     if (this.hasFilters && client?.view) {
-      return this.encoder.encodeAllView(client.view, this.sharedOffsetCache.offset, { ...this.sharedOffsetCache });
+      return this.encoder.encodeAllView(
+        client.view,
+        this.sharedOffsetCache.offset,
+        { ...this.sharedOffsetCache },
+        this.fullEncodeCache
+      );
 
     } else {
       return this.fullEncodeCache;
@@ -43,7 +54,12 @@ export class SchemaSerializer<T> implements Serializer<T> {
   }
 
   public applyPatches(clients: Client[]) {
-    if (this.encoder.state[$changes].changes.size === 0) {
+    this.needFullEncode = (this.encoder.$root.changes.size > 0);
+
+    if (
+      !this.needFullEncode &&
+      (!this.hasFilters || this.encoder.$root.filteredChanges.size === 0)
+    ) {
       return false;
     }
 
@@ -77,7 +93,6 @@ export class SchemaSerializer<T> implements Serializer<T> {
 
         let encodedView = this.views.get(view);
         if (encodedView === undefined) {
-          // TODO: refactor - avoid checking for SHARED_VIEW twice
           encodedView = (view === SHARED_VIEW)
             ? Buffer.concat([STATE_PATCH_BUFFER, encodedChanges])
             : this.encoder.encodeView(client.view, sharedOffset, it);
