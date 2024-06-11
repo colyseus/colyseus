@@ -16,13 +16,21 @@ export class SchemaSerializer<T> implements Serializer<T> {
 
   private handshakeCache: number[];
 
+  private needFullEncode = true;
+  private fullEncodedState: number[];
+
   public reset(newState: T & Schema) {
     this.state = newState;
     this.useFilters = hasFilter(newState.constructor as typeof Schema);
   }
 
   public getFullState(client?: Client) {
-    const fullEncodedState = this.state.encodeAll(this.useFilters);
+    const fullEncodedState = (this.needFullEncode)
+      ? this.state.encodeAll(this.useFilters)
+      : this.fullEncodedState;
+
+    this.fullEncodedState = fullEncodedState;
+    this.needFullEncode = false;
 
     if (client && this.useFilters) {
       return this.state.applyFilters(client, true);
@@ -36,6 +44,8 @@ export class SchemaSerializer<T> implements Serializer<T> {
     const hasChanges = this.state['$changes'].changes.size > 0;
 
     if (hasChanges) {
+      this.needFullEncode = true;
+
       let numClients = clients.length;
 
       // dump changes for patch debugging
