@@ -346,6 +346,9 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
 
     if (newState[$changes] !== undefined) {
       this.setSerializer(new SchemaSerializer());
+
+    } else if ($changes === undefined) {
+      throw new Error("@colyseus/schema v2 compatibility missing (reach out if you need it)");
     }
 
     this._serializer.reset(newState);

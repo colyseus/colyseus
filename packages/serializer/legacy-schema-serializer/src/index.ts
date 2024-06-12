@@ -15,8 +15,10 @@ export class SchemaSerializer<T> implements Serializer<T> {
     this.useFilters = hasFilter(newState.constructor as typeof Schema);
   }
 
+  // @ts-ignore
   public getFullState(client?: Client) {
     const fullEncodedState = this.state.encodeAll(this.useFilters);
+    fullEncodedState.unshift(Protocol.ROOM_STATE);
 
     if (client && this.useFilters) {
       return this.state.applyFilters(client, true);
@@ -87,6 +89,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
     return hasChanges;
   }
 
+  // @ts-ignore
   public handshake() {
     /**
      * Cache handshake to avoid encoding it for each client joining
