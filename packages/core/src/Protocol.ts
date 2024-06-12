@@ -1,4 +1,4 @@
-import { pack } from 'msgpackr';
+import { pack, Packr } from 'msgpackr';
 import { encode, Iterator } from '@colyseus/schema';
 
 // Colyseus protocol codes range between 0~100
@@ -47,101 +47,89 @@ export enum IpcProtocol {
   TIMEOUT = 2,
 }
 
+const sendBuffer = Buffer.allocUnsafe(8192);
+const packr = new Packr();
+// @ts-ignore
+packr.useBuffer(sendBuffer);
+
 export const getMessageBytes = {
-  [Protocol.JOIN_ROOM]: (reconnectionToken: string, serializerId: string, handshake?: number[] | Buffer) => {
-    let offset = 0;
+  [Protocol.JOIN_ROOM]: (reconnectionToken: string, serializerId: string, handshake?: Buffer) => {
+    const it: Iterator = { offset: 1 };
+    sendBuffer[0] = Protocol.JOIN_ROOM;
 
-    const reconnectionTokenLength = Buffer.byteLength(reconnectionToken, "utf8");
-    const serializerIdLength = Buffer.byteLength(serializerId, "utf8");
-    const handshakeLength = (handshake) ? handshake.length : 0;
+    utf8Write(sendBuffer, it, reconnectionToken);
+    utf8Write(sendBuffer, it, serializerId);
 
-    const buff = Buffer.allocUnsafe(1 + reconnectionTokenLength + serializerIdLength + handshakeLength);
-    buff.writeUInt8(Protocol.JOIN_ROOM, offset++);
-
-    utf8Write(buff, offset, reconnectionToken);
-    offset += reconnectionTokenLength;
-
-    utf8Write(buff, offset, serializerId);
-    offset += serializerIdLength;
-
-    if (handshake) {
-      for (let i = 0, l = handshake.length; i < l; i++) {
-        buff.writeUInt8(handshake[i], offset++);
-      }
-    }
-
-    return buff;
+    return Buffer.concat([sendBuffer.subarray(0, it.offset), handshake]);
   },
 
   [Protocol.ERROR]: (code: number, message: string = '') => {
-    const it: Iterator = { offset: 0 };
-    const bytes = [Protocol.ERROR];
+    const it: Iterator = { offset: 1 };
+    sendBuffer[0] = Protocol.ERROR;
 
-    encode.number(bytes, code, it);
-    encode.string(bytes, message, it);
+    encode.number(sendBuffer, code, it);
+    encode.string(sendBuffer, message, it);
 
-    return bytes;
+    return sendBuffer.subarray(0, it.offset);
   },
 
   [Protocol.ROOM_STATE]: (bytes: number[]) => {
     return [Protocol.ROOM_STATE, ...bytes];
   },
 
-  raw: (code: Protocol, type: string | number, message?: any, rawMessage?: ArrayLike<number> | Buffer) => {
+  raw: (code: Protocol, type: string | number, message?: any, rawMessage?: Uint8Array | Buffer) => {
     const it: Iterator = { offset: 1 };
-    const initialBytes: number[] = [code];
+    sendBuffer[0] = code;
 
     if (typeof (type) === 'string') {
-      encode.string(initialBytes, type as string, it);
+      encode.string(sendBuffer, type as string, it);
 
     } else {
-      encode.number(initialBytes, type, it);
+      encode.number(sendBuffer, type, it);
     }
-
-    let arr: Uint8Array;
 
     if (message !== undefined) {
-      const encoded = pack(message);
-      arr = new Uint8Array(initialBytes.length + encoded.byteLength);
-      arr.set(new Uint8Array(initialBytes), 0);
-      arr.set(new Uint8Array(encoded), initialBytes.length);
+      // @ts-ignore
+      return pack(message, 2048 + it.offset); // PR to fix TypeScript types https://github.com/kriszyp/msgpackr/pull/137
+                        // 2048 = RESERVE_START_SPACE
 
     } else if (rawMessage !== undefined) {
-      arr = new Uint8Array(initialBytes.length + ((rawMessage as Buffer).byteLength || rawMessage.length));
-      arr.set(new Uint8Array(initialBytes), 0);
-      arr.set(new Uint8Array(rawMessage), initialBytes.length);
+      return Buffer.concat([sendBuffer.subarray(0, it.offset), rawMessage]);
 
     } else {
-      arr = new Uint8Array(initialBytes);
+      return sendBuffer.subarray(0, it.offset);
     }
-
-    return arr;
   },
 
 };
 
-export function utf8Write(buff: Buffer, offset: number, str: string = '') {
-  buff[offset++] = Buffer.byteLength(str, "utf8") - 1;
+export function utf8Write(buff: Buffer, it: Iterator, str: string = '') {
+  const byteLength = Buffer.byteLength(str, "utf8");
+  console.log("utf8Write", { byteLength, str });
+
+  buff[it.offset++] = byteLength;
 
   let c = 0;
   for (let i = 0, l = str.length; i < l; i++) {
     c = str.charCodeAt(i);
     if (c < 0x80) {
-      buff[offset++] = c;
+      buff[it.offset++] = c;
     } else if (c < 0x800) {
-      buff[offset++] = 0xc0 | (c >> 6);
-      buff[offset++] = 0x80 | (c & 0x3f);
+      buff[it.offset++] = 0xc0 | (c >> 6);
+      buff[it.offset++] = 0x80 | (c & 0x3f);
     } else if (c < 0xd800 || c >= 0xe000) {
-      buff[offset++] = 0xe0 | (c >> 12);
-      buff[offset++] = 0x80 | (c >> 6) & 0x3f;
-      buff[offset++] = 0x80 | (c & 0x3f);
+      buff[it.offset++] = 0xe0 | (c >> 12);
+      buff[it.offset++] = 0x80 | (c >> 6) & 0x3f;
+      buff[it.offset++] = 0x80 | (c & 0x3f);
     } else {
       i++;
       c = 0x10000 + (((c & 0x3ff) << 10) | (str.charCodeAt(i) & 0x3ff));
-      buff[offset++] = 0xf0 | (c >> 18);
-      buff[offset++] = 0x80 | (c >> 12) & 0x3f;
-      buff[offset++] = 0x80 | (c >> 6) & 0x3f;
-      buff[offset++] = 0x80 | (c & 0x3f);
+      buff[it.offset++] = 0xf0 | (c >> 18);
+      buff[it.offset++] = 0x80 | (c >> 12) & 0x3f;
+      buff[it.offset++] = 0x80 | (c >> 6) & 0x3f;
+      buff[it.offset++] = 0x80 | (c & 0x3f);
     }
   }
+
+  it.offset += byteLength;
 }

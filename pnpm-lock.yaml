@@ -168,7 +168,7 @@ importers:
         version: link:../greeting-banner
       '@colyseus/schema':
         specifier: ^3.0.0-alpha.3
-        version: 3.0.0-alpha.3
+        version: 3.0.0-alpha.5
       '@gamestdio/timer':
         specifier: ^1.3.0
         version: 1.4.2
@@ -721,8 +721,8 @@ packages:
     resolution: {integrity: sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==}
     dev: true
 
-  /@colyseus/core@0.15.40:
-    resolution: {integrity: sha512-qCuNID5cpVlAvKpmUhbU1Z3QQFC8EGiNBLMIv/HvL6UWneEO/VcB/+FZ9nCCDahWfD2gNd5urQojsKTsewTU9w==}
+  /@colyseus/core@0.15.41:
+    resolution: {integrity: sha512-tWkQr06PivnRSdsk9JPVDEYySjZ2+VwY8xH783qDcVkKJreq8e7f9iOBxO6Uiz+5UPJfIdHrr3O5tDsBkOZl6g==}
     engines: {node: '>= 14.x'}
     dependencies:
       '@colyseus/greeting-banner': 2.0.2
@@ -756,21 +756,16 @@ packages:
     resolution: {integrity: sha512-Y5a3E4pjJK8tLPY4f0ur+/xeGBqysxKgMlumSR6JWXwX0SVIdk4o7IqFlKau8BkB6OVOwAP5SoPFSWO6/a2NwQ==}
     hasBin: true
 
-  /@colyseus/schema@3.0.0-alpha.1:
-    resolution: {integrity: sha512-viIEoDJbhck8JouCJ8JGDwQ6ZXBc3R3X/PAqnNVTgKv7EX5Nc7G5kF88uSLEMl9qFWRvy4B7OxbqPqXhXVZsDQ==}
+  /@colyseus/schema@3.0.0-alpha.5:
+    resolution: {integrity: sha512-o7L/DCz4CpYW0ufbTxc+kf6YImWKPPPAM/SUWGdhGgEI6BMYYuxrlm6db6UUklC5ztbdVVNTHvnT1V0G5mEr3A==}
     hasBin: true
-
-  /@colyseus/schema@3.0.0-alpha.3:
-    resolution: {integrity: sha512-55U1Ye45Tq4fsDIHBW/OLwqt+M5Ap1cEoI7BuGKCXo5zamW1W8SG4lK9jv64vs0HGwwUZCclCjw9TrG98nWPww==}
-    hasBin: true
-    dev: false
 
   /@colyseus/ws-transport@0.15.2(@colyseus/schema@2.0.32):
     resolution: {integrity: sha512-v83omTcAmU+vm3uqaaPFDXHxs4tYXUgJwR4IviZF0UMCm3OIQ85end+vsHaKGQf+wSfincCKGkA1etwxqlWTLQ==}
     peerDependencies:
       '@colyseus/schema': '>=1.0.0'
     dependencies:
-      '@colyseus/core': 0.15.40
+      '@colyseus/core': 0.15.41
       '@colyseus/schema': 2.0.32
       '@types/ws': 7.4.7
       ws: 7.5.9
@@ -2669,7 +2664,7 @@ packages:
     hasBin: true
     dependencies:
       caniuse-lite: 1.0.30001632
-      electron-to-chromium: 1.4.798
+      electron-to-chromium: 1.4.799
       node-releases: 2.0.14
       update-browserslist-db: 1.0.16(browserslist@4.23.1)
     dev: true
@@ -3041,7 +3036,7 @@ packages:
     resolution: {integrity: sha512-3u5iztPwbxtXXaEkZM9ioc3eYkzNTfOeSGlwrG8Iuk2p5Uazrkplvy+qrsvVN3hu009gyt0OdXHgmz1sIQV1NQ==}
     engines: {node: '>= 12.x'}
     dependencies:
-      '@colyseus/schema': 3.0.0-alpha.1
+      '@colyseus/schema': 3.0.0-alpha.5
       httpie: 2.0.0-next.13
       msgpackr: 1.10.2
       tslib: 2.6.3
@@ -3550,8 +3545,8 @@ packages:
       jake: 10.9.1
     dev: true
 
-  /electron-to-chromium@1.4.798:
-    resolution: {integrity: sha512-by9J2CiM9KPGj9qfp5U4FcPSbXJG7FNzqnYaY4WLzX+v2PHieVGmnsA4dxfpGE3QEC7JofpPZmn7Vn1B9NR2+Q==}
+  /electron-to-chromium@1.4.799:
+    resolution: {integrity: sha512-3D3DwWkRTzrdEpntY0hMLYwj7SeBk1138CkPE8sBDSj3WzrzOiG2rHm3luw8jucpf+WiyLBCZyU9lMHyQI9M9Q==}
     dev: true
 
   /elliptic@6.5.5:
@@ -4170,8 +4165,8 @@ packages:
       signal-exit: 3.0.7
     dev: true
 
-  /foreground-child@3.1.1:
-    resolution: {integrity: sha512-TMKDUnIte6bfb5nWv7V/caI169OHgvwjb7V4WkeUvbQQdjr5rWKqHFiKWb/fcOwB+CzBT+qbWjvj+DVwRskpIg==}
+  /foreground-child@3.2.0:
+    resolution: {integrity: sha512-CrWQNaEl1/6WeZoarcM9LHupTo3RpZO2Pdk1vktwzPiQTsJnAKJmm3TACKeG5UZbWDfaH2AbvYxzP96y0MT7fA==}
     engines: {node: '>=14'}
     dependencies:
       cross-spawn: 7.0.3
@@ -4394,7 +4389,7 @@ packages:
     engines: {node: '>=16 || 14 >=14.18'}
     hasBin: true
     dependencies:
-      foreground-child: 3.1.1
+      foreground-child: 3.2.0
       jackspeak: 3.4.0
       minimatch: 9.0.4
       minipass: 7.1.2
