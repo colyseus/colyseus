@@ -40,7 +40,7 @@ export class uWebSocketClient implements Client {
     this.readyState = ReadyState.OPEN;
   }
 
-  public sendBytes(type: any, bytes?: any | ISendOptions, options?: ISendOptions) {
+  public sendBytes(type: string | number, bytes: Buffer | Uint8Array, options?: ISendOptions) {
     debugMessage("send bytes(to %s): '%s' -> %j", this.sessionId, type, bytes);
 
     this.enqueueRaw(

@@ -28,7 +28,7 @@ export class WebSocketClient implements Client {
     this.sessionId = id;
   }
 
-  public sendBytes(type: string | number, bytes: number[] | Uint8Array, options?: ISendOptions) {
+  public sendBytes(type: string | number, bytes: Buffer | Uint8Array, options?: ISendOptions) {
     debugMessage("send bytes(to %s): '%s' -> %j", this.sessionId, type, bytes);
 
     this.enqueueRaw(
