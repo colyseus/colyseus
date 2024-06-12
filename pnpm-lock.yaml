@@ -239,8 +239,8 @@ importers:
         specifier: ^0.1.81
         version: 0.1.81
       colyseus.js:
-        specifier: ^0.15.18
-        version: 0.15.18
+        specifier: ^0.16.0-preview.0
+        version: 0.16.0-preview.0
       minimist:
         specifier: ^1.2.5
         version: 1.2.8
@@ -297,8 +297,8 @@ importers:
         specifier: workspace:^
         version: link:../tools
       colyseus.js:
-        specifier: ^0.15.18
-        version: 0.15.18
+        specifier: ^0.16.0-preview.0
+        version: 0.16.0-preview.0
       httpie:
         specifier: ^2.0.0-next.13
         version: 2.0.0-next.13
@@ -343,9 +343,6 @@ importers:
       '@colyseus/core':
         specifier: workspace:^
         version: link:../../core
-      '@colyseus/schema':
-        specifier: '>=1.0.0'
-        version: 2.0.32
       bun-serve-express:
         specifier: ^1.0.2
         version: 1.0.4(express@4.19.2)
@@ -364,9 +361,6 @@ importers:
       '@colyseus/core':
         specifier: workspace:^
         version: link:../../core
-      '@colyseus/schema':
-        specifier: '>=1.0.0'
-        version: 2.0.32
       uWebSockets.js:
         specifier: github:uNetworking/uWebSockets.js#v20.43.0
         version: github.com/uNetworking/uWebSockets.js/1977b5039938ad863d42fc4958d48c17e5a1fa06
@@ -376,9 +370,6 @@ importers:
       '@colyseus/core':
         specifier: workspace:^
         version: link:../../core
-      '@colyseus/schema':
-        specifier: '>=1.0.0'
-        version: 2.0.32
       '@types/ws':
         specifier: ^7.4.4
         version: 7.4.7
@@ -768,7 +759,6 @@ packages:
   /@colyseus/schema@3.0.0-alpha.1:
     resolution: {integrity: sha512-viIEoDJbhck8JouCJ8JGDwQ6ZXBc3R3X/PAqnNVTgKv7EX5Nc7G5kF88uSLEMl9qFWRvy4B7OxbqPqXhXVZsDQ==}
     hasBin: true
-    dev: true
 
   /@colyseus/schema@3.0.0-alpha.3:
     resolution: {integrity: sha512-55U1Ye45Tq4fsDIHBW/OLwqt+M5Ap1cEoI7BuGKCXo5zamW1W8SG4lK9jv64vs0HGwwUZCclCjw9TrG98nWPww==}
@@ -3047,19 +3037,6 @@ packages:
       wcwidth: 1.0.1
     dev: true
 
-  /colyseus.js@0.15.18:
-    resolution: {integrity: sha512-/yLsqN0d0D1N2dhTlJkP80Z/YtKZU6MEaevu0q02V0qppQ/I53zzVqnDnaGAE1R/6NLB1I2Ry5+0l/tevnKDrw==}
-    engines: {node: '>= 12.x'}
-    dependencies:
-      '@colyseus/schema': 2.0.32
-      httpie: 2.0.0-next.13
-      tslib: 2.6.3
-      ws: 8.17.0
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
-    dev: false
-
   /colyseus.js@0.16.0-preview.0:
     resolution: {integrity: sha512-3u5iztPwbxtXXaEkZM9ioc3eYkzNTfOeSGlwrG8Iuk2p5Uazrkplvy+qrsvVN3hu009gyt0OdXHgmz1sIQV1NQ==}
     engines: {node: '>= 12.x'}
@@ -3072,7 +3049,6 @@ packages:
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
-    dev: true
 
   /combined-stream@1.0.8:
     resolution: {integrity: sha512-FQN4MRfuJeHf7cBbBMJFXhKSDq+2kAArBlmRBvcvFE5BB1HZKXtSFASDhdlz9zOYwxh8lDdnvmMOe/+5cdoEdg==}

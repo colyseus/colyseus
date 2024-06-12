@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/bun-websockets",
-  "version": "0.16.0-preview.0",
+  "version": "0.16.0-preview.1",
   "input": "./src/index.ts",
   "main": "./build/index.js",
   "module": "./build/index.mjs",
@@ -11,9 +11,6 @@
     "express": "^4.17.1"
   },
   "devDependencies": {
-  },
-  "peerDependencies": {
-    "@colyseus/schema": ">=1.0.0"
   },
   "author": "Endel Dreyer",
   "license": "MIT",
