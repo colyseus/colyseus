@@ -1,11 +1,10 @@
 import { Serializer } from './Serializer';
 
-import { Encoder, dumpChanges, Reflection, Schema, $changes, Iterator, StateView } from '@colyseus/schema';
+import { Encoder, dumpChanges, Reflection, Schema, Iterator, StateView } from '@colyseus/schema';
 import { debugPatch } from '../Debug';
 import { Protocol } from '../Protocol';
-import { Client } from '../Transport';
+import { Client, ClientState } from '../Transport';
 
-const STATE_PATCH_BUFFER = Buffer.from([Protocol.ROOM_STATE_PATCH]);
 const SHARED_VIEW = {};
 
 export class SchemaSerializer<T> implements Serializer<T> {
@@ -57,16 +56,19 @@ export class SchemaSerializer<T> implements Serializer<T> {
   }
 
   public applyPatches(clients: Client[]) {
+    let numClients = clients.length;
     this.needFullEncode = (this.encoder.root.changes.size > 0);
 
     if (
-      !this.needFullEncode &&
-      (!this.hasFilters || this.encoder.root.filteredChanges.size === 0)
+      numClients == 0 ||
+      (
+        !this.needFullEncode &&
+        (!this.hasFilters || this.encoder.root.filteredChanges.size === 0)
+      )
     ) {
       return false;
     }
 
-    let numClients = clients.length;
 
     // dump changes for patch debugging
     if (debugPatch.enabled) {
@@ -74,15 +76,24 @@ export class SchemaSerializer<T> implements Serializer<T> {
     }
 
     // get patch bytes
-    const it: Iterator = { offset: 0 };
+    const it: Iterator = { offset: 1 };
+    this.encoder.sharedBuffer[0] = Protocol.ROOM_STATE_PATCH;
+
+    // encode changes once, for all clients
     const encodedChanges = this.encoder.encode(it);
 
     if (!this.hasFilters) {
-      // encode changes once, for all clients
-      const sharedChanges = Buffer.concat([STATE_PATCH_BUFFER, encodedChanges]);
-
       while (numClients--) {
-        clients[numClients].raw(sharedChanges);
+        const client = clients[numClients];
+
+        //
+        // FIXME: avoid this check for each client
+        //
+        if (client.state !== ClientState.JOINED) {
+          continue;
+        }
+
+        client.raw(encodedChanges);
       }
 
     } else {
@@ -92,17 +103,26 @@ export class SchemaSerializer<T> implements Serializer<T> {
       // encode state multiple times, for each client
       while (numClients--) {
         const client = clients[numClients];
+
+        //
+        // FIXME: avoid this check for each client
+        //
+        if (client.state !== ClientState.JOINED) {
+          continue;
+        }
+
         const view = client.view || SHARED_VIEW;
 
         let encodedView = this.views.get(view);
+
         if (encodedView === undefined) {
           encodedView = (view === SHARED_VIEW)
-            ? Buffer.concat([STATE_PATCH_BUFFER, encodedChanges])
+            ? encodedChanges
             : this.encoder.encodeView(client.view, sharedOffset, it);
           this.views.set(view, encodedView);
         }
 
-        client.raw(Buffer.concat([STATE_PATCH_BUFFER, encodedView]));
+        client.raw(encodedView);
       }
     }
 

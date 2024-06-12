@@ -57,8 +57,11 @@ export const getMessageBytes = {
     const it: Iterator = { offset: 1 };
     sendBuffer[0] = Protocol.JOIN_ROOM;
 
-    utf8Write(sendBuffer, it, reconnectionToken);
-    utf8Write(sendBuffer, it, serializerId);
+    sendBuffer[it.offset++] = Buffer.byteLength(reconnectionToken, "utf8");
+    encode.utf8Write(sendBuffer, it, reconnectionToken);
+
+    sendBuffer[it.offset++] = Buffer.byteLength(serializerId, "utf8");
+    encode.utf8Write(sendBuffer, it, serializerId);
 
     return Buffer.concat([sendBuffer.subarray(0, it.offset), handshake]);
   },
@@ -103,33 +106,3 @@ export const getMessageBytes = {
 
 };
 
-export function utf8Write(buff: Buffer, it: Iterator, str: string = '') {
-  const byteLength = Buffer.byteLength(str, "utf8");
-  console.log("utf8Write", { byteLength, str });
-
-  buff[it.offset++] = byteLength;
-
-  let c = 0;
-  for (let i = 0, l = str.length; i < l; i++) {
-    c = str.charCodeAt(i);
-    if (c < 0x80) {
-      buff[it.offset++] = c;
-    } else if (c < 0x800) {
-      buff[it.offset++] = 0xc0 | (c >> 6);
-      buff[it.offset++] = 0x80 | (c & 0x3f);
-    } else if (c < 0xd800 || c >= 0xe000) {
-      buff[it.offset++] = 0xe0 | (c >> 12);
-      buff[it.offset++] = 0x80 | (c >> 6) & 0x3f;
-      buff[it.offset++] = 0x80 | (c & 0x3f);
-    } else {
-      i++;
-      c = 0x10000 + (((c & 0x3ff) << 10) | (str.charCodeAt(i) & 0x3ff));
-      buff[it.offset++] = 0xf0 | (c >> 18);
-      buff[it.offset++] = 0x80 | (c >> 12) & 0x3f;
-      buff[it.offset++] = 0x80 | (c >> 6) & 0x3f;
-      buff[it.offset++] = 0x80 | (c & 0x3f);
-    }
-  }
-
-  it.offset += byteLength;
-}

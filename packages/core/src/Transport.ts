@@ -90,7 +90,7 @@ export interface Client<UserData=any, AuthData=any> {
    * @param bytes Raw byte array payload
    * @param options
    */
-  sendBytes(type: string | number, bytes: number[] | Uint8Array, options?: ISendOptions): void;
+  sendBytes(type: string | number, bytes: Buffer | Uint8Array, options?: ISendOptions): void;
 
   /**
    * Disconnect this client from the room.

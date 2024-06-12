@@ -93,6 +93,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
    * The state instance you provided to `setState()`.
    */
   public state: State;
+
   /**
    * The presence instance. Check Presence API for more details.
    *
@@ -348,7 +349,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
       this.setSerializer(new SchemaSerializer());
 
     } else if ($changes === undefined) {
-      throw new Error("@colyseus/schema v2 compatibility missing (reach out if you need it)");
+      throw new Error("@colyseus/schema v2 compatibility currently missing (reach out if you need it)");
     }
 
     this._serializer.reset(newState);
