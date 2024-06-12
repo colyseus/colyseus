@@ -58,10 +58,10 @@ export const getMessageBytes = {
     sendBuffer[0] = Protocol.JOIN_ROOM;
 
     sendBuffer[it.offset++] = Buffer.byteLength(reconnectionToken, "utf8");
-    encode.utf8Write(sendBuffer, it, reconnectionToken);
+    encode.utf8Write(sendBuffer, reconnectionToken, it);
 
     sendBuffer[it.offset++] = Buffer.byteLength(serializerId, "utf8");
-    encode.utf8Write(sendBuffer, it, serializerId);
+    encode.utf8Write(sendBuffer, serializerId, it);
 
     return Buffer.concat([sendBuffer.subarray(0, it.offset), handshake]);
   },
