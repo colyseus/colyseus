@@ -54,11 +54,11 @@ export class SchemaSerializer<T> implements Serializer<T> {
   }
 
   public applyPatches(clients: Client[]) {
-    this.needFullEncode = (this.encoder.$root.changes.size > 0);
+    this.needFullEncode = (this.encoder.root.changes.size > 0);
 
     if (
       !this.needFullEncode &&
-      (!this.hasFilters || this.encoder.$root.filteredChanges.size === 0)
+      (!this.hasFilters || this.encoder.root.filteredChanges.size === 0)
     ) {
       return false;
     }

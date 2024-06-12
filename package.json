@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/monorepo",
-  "version": "0.15.0",
+  "version": "0.16.0-preview.0",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@8.15.1",
@@ -30,7 +30,7 @@
     "assert": "^2.0.0",
     "benchmark": "^2.1.1",
     "c8": "^7.7.2",
-    "colyseus.js": "0.15.18",
+    "colyseus.js": "0.16.0-preview.0",
     "cors": "^2.8.5",
     "esbuild": "^0.14.43",
     "express": "^4.16.2",
