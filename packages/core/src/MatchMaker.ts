@@ -53,7 +53,10 @@ export let selectProcessIdToCreateRoom: SelectProcessIdCallback;
  * - When a remote room creation request times out
  * - When a remote seat reservation request times out
  */
-export let enableHealthChecks: boolean = true;
+let _enableHealthChecks: boolean = true;
+export function enableHealthChecks(enable: boolean) {
+  _enableHealthChecks = enable;
+}
 
 export let isGracefullyShuttingDown: boolean; // TODO: remove me on 1.0, use 'state' instead
 export let onReady: Deferred = new Deferred(); // onReady needs to be immediately available to @colyseus/auth integration.
@@ -141,7 +144,7 @@ export async function accept() {
   /**
    * Check for leftover/invalid processId's on startup
    */
-  if (enableHealthChecks) {
+  if (_enableHealthChecks) {
     await healthCheckAllProcesses();
   }
 
@@ -439,7 +442,7 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
         // when a process disconnects ungracefully, it may leave its previous processId under "roomcount"
         // if the process is still alive, it will re-add itself shortly after the load-balancer selects it again.
         //
-        if (enableHealthChecks) {
+        if (_enableHealthChecks) {
           await stats.excludeProcess(selectedProcessId);
         }
 
@@ -632,7 +635,7 @@ export async function reserveSeatFor(room: RoomListingData, options: ClientOptio
     if (
       e.message === "ipc_timeout" &&
       !(
-        enableHealthChecks &&
+        _enableHealthChecks &&
         await healthCheckProcessId(room.processId)
       )
     ) {
