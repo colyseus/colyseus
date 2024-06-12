@@ -462,6 +462,10 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
     room.roomId = generateId();
   }
 
+  if (room.state) {
+    room.setState(room.state);
+  }
+
   room.roomName = roomName;
   room.presence = presence;
 
