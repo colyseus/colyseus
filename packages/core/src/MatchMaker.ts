@@ -53,9 +53,9 @@ export let selectProcessIdToCreateRoom: SelectProcessIdCallback;
  * - When a remote room creation request times out
  * - When a remote seat reservation request times out
  */
-let _enableHealthChecks: boolean = true;
-export function enableHealthChecks(enable: boolean) {
-  _enableHealthChecks = enable;
+let enableHealthChecks: boolean = true;
+export function setHealthChecksEnabled(value: boolean) {
+  enableHealthChecks = value;
 }
 
 export let isGracefullyShuttingDown: boolean; // TODO: remove me on 1.0, use 'state' instead
@@ -144,7 +144,7 @@ export async function accept() {
   /**
    * Check for leftover/invalid processId's on startup
    */
-  if (_enableHealthChecks) {
+  if (enableHealthChecks) {
     await healthCheckAllProcesses();
   }
 
@@ -442,7 +442,7 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
         // when a process disconnects ungracefully, it may leave its previous processId under "roomcount"
         // if the process is still alive, it will re-add itself shortly after the load-balancer selects it again.
         //
-        if (_enableHealthChecks) {
+        if (enableHealthChecks) {
           await stats.excludeProcess(selectedProcessId);
         }
 
@@ -635,7 +635,7 @@ export async function reserveSeatFor(room: RoomListingData, options: ClientOptio
     if (
       e.message === "ipc_timeout" &&
       !(
-        _enableHealthChecks &&
+        enableHealthChecks &&
         await healthCheckProcessId(room.processId)
       )
     ) {
