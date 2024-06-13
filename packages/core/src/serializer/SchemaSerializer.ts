@@ -15,16 +15,19 @@ export class SchemaSerializer<T> implements Serializer<T> {
 
   private handshakeCache: Buffer;
 
+  // flag to avoid re-encoding full state if no changes were made
+  private needFullEncode: boolean = true;
+
+  // TODO: make this optional. allocating a new buffer for each room may not be always necessary.
   private fullEncodeCache: Buffer;
   private sharedOffsetCache: Iterator = { offset: 0 };
 
   private views: WeakMap<StateView | typeof SHARED_VIEW, Buffer> = new WeakMap();
 
-  // flag to avoid re-encoding full state if no changes were made
-  private needFullEncode: boolean = true;
-
   public reset(newState: T & Schema) {
     this.encoder = new Encoder(newState);
+    this.fullEncodeCache = Buffer.allocUnsafe(Encoder.BUFFER_SIZE);
+
     this.hasFilters = this.encoder.context.hasFilters;
 
     if (this.hasFilters) {
@@ -147,6 +150,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
      * Cache handshake to avoid encoding it for each client joining
      */
     if (!this.handshakeCache) {
+      // TODO: re-use handshake buffer for all rooms
       this.handshakeCache = (this.encoder.state && Reflection.encode(this.encoder.state));
     }
 
