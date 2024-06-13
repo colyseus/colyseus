@@ -5,7 +5,7 @@
 import { ServerWebSocket } from "bun";
 import EventEmitter from 'events';
 
-import { Protocol, Client, ClientState, ISendOptions, getMessageBytes, logger, debugMessage } from '@colyseus/core';
+import { Protocol, Client, ClientPrivate, ClientState, ISendOptions, getMessageBytes, logger, debugMessage } from '@colyseus/core';
 
 export class WebSocketWrapper extends EventEmitter {
   constructor(public ws: ServerWebSocket<any>) {
@@ -13,13 +13,15 @@ export class WebSocketWrapper extends EventEmitter {
   }
 }
 
-export class WebSocketClient implements Client {
+export class WebSocketClient implements Client, ClientPrivate {
   public sessionId: string;
   public state: ClientState = ClientState.JOINING;
+  public reconnectionToken: string;
 
   public _enqueuedMessages: any[] = [];
   public _afterNextPatchQueue;
   public _reconnectionToken: string;
+  public _joinedAt: number;
 
   constructor(
     public id: string,

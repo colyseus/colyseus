@@ -1,7 +1,7 @@
 import EventEmitter from 'events';
 import uWebSockets from 'uWebSockets.js';
 
-import { getMessageBytes, Protocol, Client, ClientState, ISendOptions, logger, debugMessage } from '@colyseus/core';
+import { getMessageBytes, Protocol, Client, ClientPrivate, ClientState, ISendOptions, logger, debugMessage } from '@colyseus/core';
 
 export class uWebSocketWrapper extends EventEmitter {
   constructor(public ws: uWebSockets.WebSocket<any>) {
@@ -16,14 +16,16 @@ export enum ReadyState {
   CLOSED = 3,
 }
 
-export class uWebSocketClient implements Client {
+export class uWebSocketClient implements Client, ClientPrivate {
   public sessionId: string;
   public state: ClientState = ClientState.JOINING;
   public readyState: number = ReadyState.OPEN;
+  public reconnectionToken: string;
 
   public _enqueuedMessages: any[] = [];
   public _afterNextPatchQueue;
   public _reconnectionToken: string;
+  public _joinedAt: number;
 
   constructor(
     public id: string,

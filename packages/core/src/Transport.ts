@@ -30,7 +30,6 @@ export enum ClientState { JOINING, JOINED, RECONNECTED, LEAVING }
  *  encouraged to use along with Colyseus.
  */
 export interface Client<UserData=any, AuthData=any> {
-  readyState: number; // TODO: remove readyState on version 1.0.0. Use only "state" instead.
   ref: EventEmitter;
 
   /**
@@ -65,9 +64,14 @@ export interface Client<UserData=any, AuthData=any> {
    */
   auth?: AuthData;
 
-  _reconnectionToken: string;
-  _enqueuedMessages?: any[];
-  _afterNextPatchQueue: Array<[string | Client, IArguments]>;
+  /**
+   * Reconnection token used to re-join the room after onLeave + allowReconnection().
+   *
+   * IMPORTANT:
+   *    This is not the full reconnection token the client provides for the server.
+   *    The format provided by .reconnect() from the client-side must follow: "${roomId}:${reconnectionToken}"
+   */
+  reconnectionToken: string;
 
   raw(data: ArrayLike<number>, options?: ISendOptions, cb?: (err?: Error) => void): void;
   enqueueRaw(data: ArrayLike<number>, options?: ISendOptions): void;
@@ -113,6 +117,20 @@ export interface Client<UserData=any, AuthData=any> {
    * @param message
    */
   error(code: number, message?: string): void;
+}
+
+/**
+ * Private properties of the Client instance.
+ * Only accessible internally by the framework, should not be encouraged/auto-completed for the user.
+ *
+ * TODO: refactor this.
+ * @private
+ */
+export interface ClientPrivate {
+  readyState: number; // TODO: remove readyState on version 1.0.0. Use only "state" instead.
+  _enqueuedMessages?: any[];
+  _afterNextPatchQueue: Array<[string | Client, IArguments]>;
+  _joinedAt: number; // "elapsedTime" when the client joined the room.
 }
 
 export class ClientArray<UserData = any, AuthData = any> extends Array<Client<UserData, AuthData>> {

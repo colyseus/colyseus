@@ -20,7 +20,7 @@ import { isDevMode } from './utils/DevMode';
 import { debugAndPrintError, debugMessage } from './Debug';
 import { ServerError } from './errors/ServerError';
 import { RoomListingData } from './matchmaker/driver';
-import { Client, ClientArray, ClientState, ISendOptions } from './Transport';
+import { Client, ClientArray, ClientPrivate, ClientState, ISendOptions } from './Transport';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
@@ -524,7 +524,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
     if (numClients > 0) {
       // clients may have `async onLeave`, room will be disposed after they're fulfilled
       while (numClients--) {
-        this._forciblyCloseClient(this.clients[numClients], closeCode);
+        this._forciblyCloseClient(this.clients[numClients] as Client & ClientPrivate, closeCode);
       }
 
     } else {
@@ -535,11 +535,11 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
     return delayedDisconnection;
   }
 
-  public async ['_onJoin'](client: Client, req?: http.IncomingMessage) {
+  public async ['_onJoin'](client: Client & ClientPrivate, req?: http.IncomingMessage) {
     const sessionId = client.sessionId;
 
     // generate unique private reconnection token
-    client._reconnectionToken = generateId();
+    client.reconnectionToken = generateId();
 
     if (this.reservedSeatTimeouts[sessionId]) {
       clearTimeout(this.reservedSeatTimeouts[sessionId]);
@@ -656,7 +656,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
 
       // confirm room id that matches the room name requested to join
       client.raw(getMessageBytes[Protocol.JOIN_ROOM](
-        client._reconnectionToken,
+        client.reconnectionToken,
         this._serializer.id,
         this._serializer.handshake && this._serializer.handshake(),
       ));
@@ -680,7 +680,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
     // (having `_enqueuedMessages !== undefined` means that the client has never
     // been at "ClientState.JOINED" state)
     //
-    if (previousClient._enqueuedMessages !== undefined) {
+    if ((previousClient as unknown as ClientPrivate)._enqueuedMessages !== undefined) {
       return;
     }
 
@@ -699,12 +699,12 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
     }
 
     const sessionId = previousClient.sessionId;
-    const reconnectionToken = previousClient._reconnectionToken;
+    const reconnectionToken = previousClient.reconnectionToken;
 
     this._reserveSeat(sessionId, true, previousClient.auth, seconds, true);
 
     // keep reconnection reference in case the user reconnects into this room.
-    const reconnection = new Deferred<Client>();
+    const reconnection = new Deferred<Client & ClientPrivate>();
     this._reconnections[reconnectionToken] = [sessionId, reconnection];
 
     if (seconds !== Infinity) {
@@ -877,7 +877,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
     return await (userReturnData || Promise.resolve());
   }
 
-  private _onMessage(client: Client, bytes: number[]) {
+  private _onMessage(client: Client & ClientPrivate, bytes: number[]) {
     // skip if client is on LEAVING state.
     if (client.state === ClientState.LEAVING) { return; }
 
@@ -957,6 +957,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
     } else if (code === Protocol.JOIN_ROOM && client.state === ClientState.JOINING) {
       // join room has been acknowledged by the client
       client.state = ClientState.JOINED;
+      client._joinedAt = this.clock.elapsedTime;
 
       // send current state when new client joins the room
       if (this.state) {
@@ -975,7 +976,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
 
   }
 
-  private _forciblyCloseClient(client: Client, closeCode: number) {
+  private _forciblyCloseClient(client: Client & ClientPrivate, closeCode: number) {
     // stop receiving messages from this client
     client.ref.removeAllListeners('message');
 

@@ -16,7 +16,7 @@ export { updateLobby, subscribeLobby } from './matchmaker/Lobby';
 export * from './matchmaker/driver';
 
 // Transport
-export { type Client, ClientState, ClientArray, Transport, type ISendOptions } from './Transport';
+export { type Client, type ClientPrivate, ClientState, ClientArray, Transport, type ISendOptions } from './Transport';
 
 // Presence
 export { type Presence } from './presence/Presence';

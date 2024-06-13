@@ -277,7 +277,7 @@ describe("MatchMaker", () => {
           assert.strictEqual(1, rooms.length);
           assert.strictEqual(1, rooms[0].clients, "should keep seat reservation after disconnection");
 
-          await matchMaker.reconnect(room.roomId, { reconnectionToken: client1._reconnectionToken });
+          await matchMaker.reconnect(room.roomId, { reconnectionToken: client1.reconnectionToken });
           await createDummyClient(reservedSeat1).confirmJoinRoom(room);
 
           rooms = await matchMaker.query({});
@@ -332,7 +332,7 @@ describe("MatchMaker", () => {
           assert.strictEqual(1, room.clients.length);
 
           await assert.rejects(async () => await matchMaker.reconnect(room.roomId, {
-            reconnectionToken: client1._reconnectionToken
+            reconnectionToken: client1.reconnectionToken
           }), /expired/);
         });
 
@@ -352,7 +352,7 @@ describe("MatchMaker", () => {
           assert.strictEqual(1, rooms.length);
           assert.strictEqual(1, rooms[0].clients, "should keep seat reservation after disconnection");
 
-          await matchMaker.reconnect(room.roomId, { reconnectionToken: client1._reconnectionToken });
+          await matchMaker.reconnect(room.roomId, { reconnectionToken: client1.reconnectionToken });
           const reconnectingClient = createDummyClient(reservedSeat1);
           await reconnectingClient.confirmJoinRoom(room);
 
@@ -389,7 +389,7 @@ describe("MatchMaker", () => {
 
           assert.strictEqual(1, room.clients.length);
 
-          await assert.rejects(async() => await matchMaker.reconnect(room.roomId, { reconnectionToken: client1._reconnectionToken }), /expired/);
+          await assert.rejects(async() => await matchMaker.reconnect(room.roomId, { reconnectionToken: client1.reconnectionToken }), /expired/);
         });
 
       });
