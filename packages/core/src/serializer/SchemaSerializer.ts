@@ -38,9 +38,8 @@ export class SchemaSerializer<T> implements Serializer<T> {
   public getFullState(client?: Client) {
     if (this.needFullEncode) {
       // cache ROOM_STATE byte as part of the encoded buffer
-      this.encoder.sharedBuffer[0] = Protocol.ROOM_STATE;
-
       this.sharedOffsetCache = { offset: 1 };
+      this.fullEncodeCache[0] = Protocol.ROOM_STATE;
       this.fullEncodeCache = this.encoder.encodeAll(this.sharedOffsetCache, this.fullEncodeCache);
       this.needFullEncode = false;
     }
