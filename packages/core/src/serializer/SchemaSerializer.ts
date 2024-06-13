@@ -19,6 +19,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
   private needFullEncode: boolean = true;
 
   // TODO: make this optional. allocating a new buffer for each room may not be always necessary.
+  private fullEncodeBuffer: Buffer = Buffer.allocUnsafe(Encoder.BUFFER_SIZE);
   private fullEncodeCache: Buffer;
   private sharedOffsetCache: Iterator = { offset: 0 };
 
@@ -26,9 +27,10 @@ export class SchemaSerializer<T> implements Serializer<T> {
 
   public reset(newState: T & Schema) {
     this.encoder = new Encoder(newState);
-    this.fullEncodeCache = Buffer.allocUnsafe(Encoder.BUFFER_SIZE);
-
     this.hasFilters = this.encoder.context.hasFilters;
+
+    // cache ROOM_STATE byte as part of the encoded buffer
+    this.fullEncodeBuffer[0] = Protocol.ROOM_STATE;
 
     if (this.hasFilters) {
       this.views = new WeakMap();
@@ -37,10 +39,8 @@ export class SchemaSerializer<T> implements Serializer<T> {
 
   public getFullState(client?: Client) {
     if (this.needFullEncode) {
-      // cache ROOM_STATE byte as part of the encoded buffer
       this.sharedOffsetCache = { offset: 1 };
-      this.fullEncodeCache[0] = Protocol.ROOM_STATE;
-      this.fullEncodeCache = this.encoder.encodeAll(this.sharedOffsetCache, this.fullEncodeCache);
+      this.fullEncodeCache = this.encoder.encodeAll(this.sharedOffsetCache, this.fullEncodeBuffer);
       this.needFullEncode = false;
     }
 
