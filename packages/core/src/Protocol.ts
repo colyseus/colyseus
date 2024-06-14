@@ -65,8 +65,6 @@ export const getMessageBytes = {
 
     handshake.copy(sendBuffer, it.offset, 0, handshake.byteLength);
     return sendBuffer.subarray(0, it.offset + handshake.byteLength);
-
-    // return Buffer.concat([sendBuffer.subarray(0, it.offset), handshake]);
   },
 
   [Protocol.ERROR]: (code: number, message: string = '') => {
@@ -95,17 +93,17 @@ export const getMessageBytes = {
     }
 
     if (message !== undefined) {
+      // pack message into sendBuffer
       // @ts-ignore
-      return pack(message, 2048 + it.offset); // PR to fix TypeScript types https://github.com/kriszyp/msgpackr/pull/137
-                        // 2048 = RESERVE_START_SPACE
+      const msgpackedLength = pack(message, 2048 + it.offset).byteLength; // PR to fix TypeScript types https://github.com/kriszyp/msgpackr/pull/137
+                                         // 2048 = RESERVE_START_SPACE
+      return sendBuffer.subarray(0, it.offset + msgpackedLength);
 
     } else if (rawMessage !== undefined) {
 
       // copy raw message into sendBuffer
       sendBuffer.set(rawMessage, it.offset);
       return sendBuffer.subarray(0, it.offset + rawMessage.byteLength);
-
-      // return Buffer.concat([sendBuffer.subarray(0, it.offset), rawMessage]);
 
     } else {
       return sendBuffer.subarray(0, it.offset);
