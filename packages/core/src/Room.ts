@@ -877,27 +877,27 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
     return await (userReturnData || Promise.resolve());
   }
 
-  private _onMessage(client: Client & ClientPrivate, bytes: number[]) {
+  private _onMessage(client: Client & ClientPrivate, buffer: Buffer) {
     // skip if client is on LEAVING state.
     if (client.state === ClientState.LEAVING) { return; }
 
-    const it: Iterator = { offset: 0 };
-    const code = decode.uint8(bytes, it);
+    const it: Iterator = { offset: 1 };
+    const code = buffer[0];
 
-    if (!bytes) {
-      debugAndPrintError(`${this.roomName} (${this.roomId}), couldn't decode message: ${bytes}`);
+    if (!buffer) {
+      debugAndPrintError(`${this.roomName} (${this.roomId}), couldn't decode message: ${buffer}`);
       return;
     }
 
     if (code === Protocol.ROOM_DATA) {
-      const messageType = (decode.stringCheck(bytes, it))
-        ? decode.string(bytes, it)
-        : decode.number(bytes, it);
+      const messageType = (decode.stringCheck(buffer, it))
+        ? decode.string(buffer, it)
+        : decode.number(buffer, it);
 
       let message;
       try {
-        message = (bytes.length > it.offset)
-          ? unpack(new Uint8Array(bytes.slice(it.offset, bytes.length)))
+        message = (buffer.byteLength > it.offset)
+          ? unpack(buffer.subarray(it.offset, buffer.byteLength))
           : undefined;
         debugMessage("received: '%s' -> %j", messageType, message);
       } catch (e) {
@@ -927,11 +927,11 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
       }
 
     } else if (code === Protocol.ROOM_DATA_BYTES) {
-      const messageType = (decode.stringCheck(bytes, it))
-        ? decode.string(bytes, it)
-        : decode.number(bytes, it);
+      const messageType = (decode.stringCheck(buffer, it))
+        ? decode.string(buffer, it)
+        : decode.number(buffer, it);
 
-      const message = bytes.slice(it.offset, bytes.length);
+      const message = buffer.subarray(it.offset, buffer.byteLength);
       debugMessage("received: '%s' -> %j", messageType, message);
 
       if (this.onMessageHandlers[messageType]) {

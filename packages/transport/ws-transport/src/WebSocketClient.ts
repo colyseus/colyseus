@@ -42,6 +42,7 @@ export class WebSocketClient implements Client, ClientPrivate {
   public enqueueRaw(data: Uint8Array | Buffer, options?: ISendOptions) {
     // use room's afterNextPatch queue
     if (options?.afterNextPatch) {
+      // TODO: need to copy buffer here as well.
       this._afterNextPatchQueue.push([this, arguments]);
       return;
     }
