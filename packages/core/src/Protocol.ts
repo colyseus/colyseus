@@ -1,4 +1,4 @@
-import { pack, Packr, RESERVE_START_SPACE } from '@colyseus/msgpackr';
+import { pack, Packr } from '@colyseus/msgpackr';
 import { encode, Iterator } from '@colyseus/schema';
 
 // Colyseus protocol codes range between 0~100
@@ -95,8 +95,9 @@ export const getMessageBytes = {
 
     if (message !== undefined) {
       // pack message into the same sendBuffer
-      packr.offset = packr.position = 0;
-      const endOfBufferOffset = packr.pack(message, RESERVE_START_SPACE + it.offset).byteLength;
+      packr.position = 0; // force to encode from the beginning
+      const endOfBufferOffset = packr.pack(message, 2048 + it.offset).byteLength;
+                                                 // 2048 = RESERVE_START_SPACE
       return sendBuffer.subarray(0, endOfBufferOffset);
 
     } else if (rawMessage !== undefined) {
