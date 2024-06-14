@@ -94,7 +94,7 @@ importers:
         version: 5.20.1(typescript@5.4.5)
       tsx:
         specifier: ^4.1.2
-        version: 4.15.3
+        version: 4.15.4
       typescript:
         specifier: ^5.1.6
         version: 5.4.5
@@ -166,18 +166,18 @@ importers:
       '@colyseus/greeting-banner':
         specifier: ^2.0.0
         version: link:../greeting-banner
+      '@colyseus/msgpackr':
+        specifier: ^1.10.3
+        version: 1.10.3
       '@colyseus/schema':
         specifier: ^3.0.0-alpha.3
-        version: 3.0.0-alpha.7
+        version: 3.0.0-alpha.8
       '@gamestdio/timer':
         specifier: ^1.3.0
         version: 1.4.2
       debug:
         specifier: ^4.3.4
         version: 4.3.5
-      msgpackr:
-        specifier: ^1.9.1
-        version: 1.10.2
       nanoid:
         specifier: ^2.0.0
         version: 2.1.11
@@ -752,12 +752,18 @@ packages:
       - supports-color
     dev: true
 
+  /@colyseus/msgpackr@1.10.3:
+    resolution: {integrity: sha512-xG46HkMobd2jV7bV91xXOm30L7TXo251GriFHfcTsG6vFfZY109LiN+9pwCkOa3U5LCELBhP8EOmRw1I65zf6g==}
+    optionalDependencies:
+      msgpackr-extract: 3.0.3
+    dev: false
+
   /@colyseus/schema@2.0.32:
     resolution: {integrity: sha512-Y5a3E4pjJK8tLPY4f0ur+/xeGBqysxKgMlumSR6JWXwX0SVIdk4o7IqFlKau8BkB6OVOwAP5SoPFSWO6/a2NwQ==}
     hasBin: true
 
-  /@colyseus/schema@3.0.0-alpha.7:
-    resolution: {integrity: sha512-siMaTDIgk34hC4mFavX/3WqJWXPvkjN17FkUZ7yb41vpCYvFtGlcXuKgg8oKWhqqhzCZdiQV1Rsheqz9CR7GDA==}
+  /@colyseus/schema@3.0.0-alpha.8:
+    resolution: {integrity: sha512-Bnqy6mPj6mZJyvxhidn3T9UmV0Em1IGuYdNgxSbTsu0n7RHazJK74i81cwJrSJVZAF2TTszlR8ZnO9g94B0gXA==}
     hasBin: true
 
   /@colyseus/ws-transport@0.15.2(@colyseus/schema@2.0.32):
@@ -2663,8 +2669,8 @@ packages:
     engines: {node: ^6 || ^7 || ^8 || ^9 || ^10 || ^11 || ^12 || >=13.7}
     hasBin: true
     dependencies:
-      caniuse-lite: 1.0.30001632
-      electron-to-chromium: 1.4.801
+      caniuse-lite: 1.0.30001634
+      electron-to-chromium: 1.4.802
       node-releases: 2.0.14
       update-browserslist-db: 1.0.16(browserslist@4.23.1)
     dev: true
@@ -2841,8 +2847,8 @@ packages:
     engines: {node: '>=10'}
     dev: true
 
-  /caniuse-lite@1.0.30001632:
-    resolution: {integrity: sha512-udx3o7yHJfUxMLkGohMlVHCvFvWmirKh9JAH/d7WOLPetlH+LTL5cocMZ0t7oZx/mdlOWXti97xLZWc8uURRHg==}
+  /caniuse-lite@1.0.30001634:
+    resolution: {integrity: sha512-fbBYXQ9q3+yp1q1gBk86tOFs4pyn/yxFm5ZNP18OXJDfA3txImOY9PhfxVggZ4vRHDqoU8NrKU81eN0OtzOgRA==}
     dev: true
 
   /chalk@2.4.2:
@@ -3036,7 +3042,7 @@ packages:
     resolution: {integrity: sha512-3u5iztPwbxtXXaEkZM9ioc3eYkzNTfOeSGlwrG8Iuk2p5Uazrkplvy+qrsvVN3hu009gyt0OdXHgmz1sIQV1NQ==}
     engines: {node: '>= 12.x'}
     dependencies:
-      '@colyseus/schema': 3.0.0-alpha.7
+      '@colyseus/schema': 3.0.0-alpha.8
       httpie: 2.0.0-next.13
       msgpackr: 1.10.2
       tslib: 2.6.3
@@ -3545,8 +3551,8 @@ packages:
       jake: 10.9.1
     dev: true
 
-  /electron-to-chromium@1.4.801:
-    resolution: {integrity: sha512-PnlUz15ii38MZMD2/CEsAzyee8tv9vFntX5nhtd2/4tv4HqY7C5q2faUAjmkXS/UFpVooJ/5H6kayRKYWoGMXQ==}
+  /electron-to-chromium@1.4.802:
+    resolution: {integrity: sha512-TnTMUATbgNdPXVSHsxvNVSG0uEd6cSZsANjm8c9HbvflZVVn1yTRcmVXYT1Ma95/ssB/Dcd30AHweH2TE+dNpA==}
     dev: true
 
   /elliptic@6.5.5:
@@ -8191,8 +8197,8 @@ packages:
       typescript: 5.4.5
     dev: true
 
-  /tsx@4.15.3:
-    resolution: {integrity: sha512-wLzUMy3xSUpGZQqDprd0U25hpLRJMH8RzONVsqJLwgmE65ZKsxfbs5xVG+sF08wHNyBILmqo5C2775DXYMbRog==}
+  /tsx@4.15.4:
+    resolution: {integrity: sha512-d++FLCwJLrXaBFtRcqdPBzu6FiVOJ2j+UsvUZPtoTrnYtCGU5CEW7iHXtNZfA2fcRTvJFWPqA6SWBuB0GSva9w==}
     engines: {node: '>=18.0.0'}
     hasBin: true
     dependencies:

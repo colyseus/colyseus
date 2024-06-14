@@ -2,7 +2,7 @@ import WebSocket from "ws";
 import { Deferred, Room, Server, matchMaker, Protocol  } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import Benchmark from "benchmark";
-import { pack } from "msgpackr";
+import { pack } from "@colyseus/msgpackr";
 
 const numClients = 30;
 const suite = new Benchmark.Suite();

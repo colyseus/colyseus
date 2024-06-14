@@ -1,6 +1,6 @@
 import http, { IncomingMessage } from 'http';
 
-import { unpack } from 'msgpackr';
+import { unpack } from '@colyseus/msgpackr';
 import { decode, Iterator, Schema, $changes } from '@colyseus/schema';
 
 import Clock from '@gamestdio/timer';

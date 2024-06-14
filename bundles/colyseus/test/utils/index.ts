@@ -1,7 +1,7 @@
 import WebSocket from "ws";
 import { EventEmitter } from "events";
 
-import { pack, unpack } from "msgpackr";
+import { pack, unpack } from "@colyseus/msgpackr";
 
 import { Server, ServerOptions, Room, matchMaker, LocalDriver, ClientState, LocalPresence, Protocol, Presence, Client, Deferred, ISendOptions, getMessageBytes } from "@colyseus/core";
 import { RedisPresence } from "@colyseus/redis-presence";

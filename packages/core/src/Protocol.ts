@@ -1,4 +1,4 @@
-import { pack, Packr } from 'msgpackr';
+import { pack, Packr, RESERVE_START_SPACE } from '@colyseus/msgpackr';
 import { encode, Iterator } from '@colyseus/schema';
 
 // Colyseus protocol codes range between 0~100
@@ -48,8 +48,8 @@ export enum IpcProtocol {
 }
 
 const sendBuffer = Buffer.allocUnsafe(8192);
+
 const packr = new Packr();
-// @ts-ignore
 packr.useBuffer(sendBuffer);
 
 export const getMessageBytes = {
@@ -82,6 +82,7 @@ export const getMessageBytes = {
   },
 
   raw: (code: Protocol, type: string | number, message?: any, rawMessage?: Uint8Array | Buffer) => {
+
     const it: Iterator = { offset: 1 };
     sendBuffer[0] = code;
 
@@ -93,11 +94,10 @@ export const getMessageBytes = {
     }
 
     if (message !== undefined) {
-      // pack message into sendBuffer
-      // @ts-ignore
-      const msgpackedLength = pack(message, 2048 + it.offset).byteLength; // PR to fix TypeScript types https://github.com/kriszyp/msgpackr/pull/137
-                                         // 2048 = RESERVE_START_SPACE
-      return sendBuffer.subarray(0, it.offset + msgpackedLength);
+      // pack message into the same sendBuffer
+      packr.offset = packr.position = 0;
+      const endOfBufferOffset = packr.pack(message, RESERVE_START_SPACE + it.offset).byteLength;
+      return sendBuffer.subarray(0, endOfBufferOffset);
 
     } else if (rawMessage !== undefined) {
 
