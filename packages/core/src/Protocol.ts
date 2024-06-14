@@ -63,7 +63,10 @@ export const getMessageBytes = {
     sendBuffer[it.offset++] = Buffer.byteLength(serializerId, "utf8");
     encode.utf8Write(sendBuffer, serializerId, it);
 
-    return Buffer.concat([sendBuffer.subarray(0, it.offset), handshake]);
+    handshake.copy(sendBuffer, it.offset, 0, handshake.byteLength);
+    return sendBuffer.subarray(0, it.offset + handshake.byteLength);
+
+    // return Buffer.concat([sendBuffer.subarray(0, it.offset), handshake]);
   },
 
   [Protocol.ERROR]: (code: number, message: string = '') => {
@@ -97,7 +100,12 @@ export const getMessageBytes = {
                         // 2048 = RESERVE_START_SPACE
 
     } else if (rawMessage !== undefined) {
-      return Buffer.concat([sendBuffer.subarray(0, it.offset), rawMessage]);
+
+      // copy raw message into sendBuffer
+      sendBuffer.set(rawMessage, it.offset);
+      return sendBuffer.subarray(0, it.offset + rawMessage.byteLength);
+
+      // return Buffer.concat([sendBuffer.subarray(0, it.offset), rawMessage]);
 
     } else {
       return sendBuffer.subarray(0, it.offset);

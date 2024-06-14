@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/ws-transport",
-  "version": "0.16.0-preview.3",
+  "version": "0.16.0-preview.4",
   "input": "./src/index.ts",
   "main": "./build/index.js",
   "module": "./build/index.mjs",

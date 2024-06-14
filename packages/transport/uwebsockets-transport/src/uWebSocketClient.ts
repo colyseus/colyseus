@@ -60,7 +60,7 @@ export class uWebSocketClient implements Client, ClientPrivate {
     );
   }
 
-  public enqueueRaw(data: ArrayLike<number>, options?: ISendOptions) {
+  public enqueueRaw(data: Uint8Array | Buffer, options?: ISendOptions) {
     // use room's afterNextPatch queue
     if (options?.afterNextPatch) {
       this._afterNextPatchQueue.push([this, arguments]);
@@ -71,20 +71,21 @@ export class uWebSocketClient implements Client, ClientPrivate {
       // sending messages during `onJoin`.
       // - the client-side cannot register "onMessage" callbacks at this point.
       // - enqueue the messages to be send after JOIN_ROOM message has been sent
-      this._enqueuedMessages.push(data);
+      // - create a new buffer for enqueued messages, as the underlying buffer might be modified
+      this._enqueuedMessages.push(Buffer.from(data));
       return;
     }
 
     this.raw(data, options);
   }
 
-  public raw(data: ArrayLike<number>, options?: ISendOptions, cb?: (err?: Error) => void) {
+  public raw(data: Uint8Array | Buffer, options?: ISendOptions, cb?: (err?: Error) => void) {
     // skip if client not open
     if (this.readyState !== ReadyState.OPEN) {
       return;
     }
 
-    this._ref.ws.send(new Uint8Array(data), true, false);
+    this._ref.ws.send(data, true, false);
   }
 
   public error(code: number, message: string = '', cb?: (err?: Error) => void) {

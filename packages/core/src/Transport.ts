@@ -73,8 +73,8 @@ export interface Client<UserData=any, AuthData=any> {
    */
   reconnectionToken: string;
 
-  raw(data: ArrayLike<number>, options?: ISendOptions, cb?: (err?: Error) => void): void;
-  enqueueRaw(data: ArrayLike<number>, options?: ISendOptions): void;
+  raw(data: Uint8Array | Buffer, options?: ISendOptions, cb?: (err?: Error) => void): void;
+  enqueueRaw(data: Uint8Array | Buffer, options?: ISendOptions): void;
 
   /**
    * Send a type of message to the client. Messages are encoded with MsgPack and can hold any

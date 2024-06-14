@@ -45,6 +45,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
       if (!this.useFilters) {
         // encode changes once, for all clients
         patches.unshift(Protocol.ROOM_STATE_PATCH);
+        const buf = Buffer.from(patches);
 
         while (numClients--) {
           const client = clients[numClients];
@@ -53,7 +54,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
           // FIXME: avoid this check.
           //
           if (client.state === ClientState.JOINED) {
-            client.raw(patches);
+            client.raw(buf);
           }
         }
 
@@ -68,7 +69,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
           //
           if (client.state === ClientState.JOINED) {
             const filteredPatches = this.state.applyFilters(client);
-            client.raw([Protocol.ROOM_STATE_PATCH, ...filteredPatches]);
+            client.raw(Buffer.from([Protocol.ROOM_STATE_PATCH, ...filteredPatches]));
           }
         }
 

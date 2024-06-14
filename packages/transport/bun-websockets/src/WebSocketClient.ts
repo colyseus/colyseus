@@ -48,7 +48,7 @@ export class WebSocketClient implements Client, ClientPrivate {
     );
   }
 
-  public enqueueRaw(data: ArrayLike<number>, options?: ISendOptions) {
+  public enqueueRaw(data: Uint8Array | Buffer, options?: ISendOptions) {
     // use room's afterNextPatch queue
     if (options?.afterNextPatch) {
       this._afterNextPatchQueue.push([this, arguments]);
@@ -59,14 +59,15 @@ export class WebSocketClient implements Client, ClientPrivate {
       // sending messages during `onJoin`.
       // - the client-side cannot register "onMessage" callbacks at this point.
       // - enqueue the messages to be send after JOIN_ROOM message has been sent
-      this._enqueuedMessages.push(data);
+      // - create a new buffer for enqueued messages, as the underlying buffer might be modified
+      this._enqueuedMessages.push(Buffer.from(data));
       return;
     }
 
     this.raw(data, options);
   }
 
-  public raw(data: ArrayLike<number>, options?: ISendOptions, cb?: (err?: Error) => void) {
+  public raw(data: Uint8Array | Buffer, options?: ISendOptions, cb?: (err?: Error) => void) {
     // skip if client not open
 
     // WebSocket is globally available on Bun runtime
@@ -76,7 +77,7 @@ export class WebSocketClient implements Client, ClientPrivate {
     }
 
     // FIXME: can we avoid creating a new buffer here?
-    this.ref.ws.sendBinary(Buffer.from(data as unknown as ArrayBufferLike));
+    this.ref.ws.sendBinary(data);
   }
 
   public error(code: number, message: string = '', cb?: (err?: Error) => void) {
