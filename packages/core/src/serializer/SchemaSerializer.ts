@@ -23,7 +23,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
   private fullEncodeCache: Buffer;
   private sharedOffsetCache: Iterator = { offset: 0 };
 
-  private views: WeakMap<StateView | typeof SHARED_VIEW, Buffer> = new WeakMap();
+  private views: Map<StateView | typeof SHARED_VIEW, Buffer>;
 
   public reset(newState: T & Schema) {
     this.encoder = new Encoder(newState);
@@ -33,7 +33,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
     this.fullEncodeBuffer[0] = Protocol.ROOM_STATE;
 
     if (this.hasFilters) {
-      this.views = new WeakMap();
+      this.views = new Map();
     }
   }
 
@@ -117,6 +117,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
 
         let encodedView = this.views.get(view);
 
+        // allow to pass the same encoded view for multiple clients
         if (encodedView === undefined) {
           encodedView = (view === SHARED_VIEW)
             ? encodedChanges
@@ -126,6 +127,9 @@ export class SchemaSerializer<T> implements Serializer<T> {
 
         client.raw(encodedView);
       }
+
+      // clear views
+      this.views.clear();
     }
 
     // discard changes after sending
