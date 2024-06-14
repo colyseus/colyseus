@@ -1,5 +1,5 @@
 import nanoid from 'nanoid';
-import { addExtension } from 'msgpackr';
+import { addExtension } from '@colyseus/msgpackr';
 
 import { debugAndPrintError } from '../Debug';
 import { EventEmitter } from "events";
