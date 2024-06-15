@@ -49,7 +49,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
         client.view,
         this.sharedOffsetCache.offset,
         { ...this.sharedOffsetCache },
-        this.fullEncodeCache
+        this.fullEncodeBuffer
       );
 
     } else {
