@@ -137,6 +137,7 @@ export class Server {
     this.transport = transport;
 
     if (this.transport.server) {
+      // @ts-ignore
       this.transport.server.once('listening', () => this.registerProcessForDiscovery());
       this.attachMatchMakingRoutes(this.transport.server as http.Server);
     }
@@ -167,6 +168,7 @@ export class Server {
     }
 
     return new Promise<void>((resolve, reject) => {
+      // @ts-ignore
       this.transport.server?.on('error', (err) => reject(err));
       this.transport.listen(port, hostname, backlog, (err) => {
         if (listeningListener) {
