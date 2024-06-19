@@ -38,7 +38,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
   }
 
   public getFullState(client?: Client) {
-    if (this.needFullEncode) {
+    if (this.needFullEncode || this.encoder.root.changes.size > 0) {
       this.sharedOffsetCache = { offset: 1 };
       this.fullEncodeCache = this.encoder.encodeAll(this.sharedOffsetCache, this.fullEncodeBuffer);
       this.needFullEncode = false;
@@ -68,6 +68,10 @@ export class SchemaSerializer<T> implements Serializer<T> {
         (!this.hasFilters || this.encoder.root.filteredChanges.size === 0)
       )
     ) {
+      // skip patching state if:
+      // - no clients are connected
+      // - no changes were made
+      // - no "filtered changes" were made when using filters
       return false;
     }
 
