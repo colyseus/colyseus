@@ -851,6 +851,16 @@ function onVisibilityChange(room: Room, isInvisible: boolean): void {
 async function disposeRoom(roomName: string, room: Room) {
   debugMatchMaking('disposing \'%s\' (%s) on processId \'%s\' (graceful shutdown: %s)', roomName, room.roomId, processId, isGracefullyShuttingDown);
 
+  //
+  // FIXME: this call should not be necessary.
+  //
+  // there's an unidentified edge case using LocalDriver where Room._dispose()
+  // doesn't seem to be called [?], but "disposeRoom" is, leaving the matchmaker
+  // in a broken state. (repeated ipc_timeout's for seat reservation on
+  // non-existing rooms)
+  //
+  room.listing.remove();
+
   // decrease amount of rooms this process is handling
   if (!isGracefullyShuttingDown) {
     stats.local.roomCount--;

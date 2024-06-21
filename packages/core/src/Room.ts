@@ -142,14 +142,10 @@ export abstract class Room<State extends object= any, Metadata= any> {
   constructor(presence?: Presence) {
     this.presence = presence;
 
-    this._events.once('dispose', async () => {
-      try {
-        await this._dispose();
-
-      } catch (e) {
-        debugAndPrintError(`onDispose error: ${(e && e.message || e || 'promise rejected')}`);
-      }
-      this._events.emit('disconnect');
+    this._events.once('dispose', () => {
+      this._dispose()
+        .catch((e) => debugAndPrintError(`onDispose error: ${(e && e.message || e || 'promise rejected')}`))
+        .finally(() => this._events.emit('disconnect'));
     });
 
     this.setPatchRate(this.patchRate);
@@ -891,7 +887,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
   private async _dispose(): Promise<any> {
     this._internalState = RoomInternalState.DISPOSING;
 
-    await this.listing.remove();
+    this.listing.remove();
 
     let userReturnData;
     if (this.onDispose) {

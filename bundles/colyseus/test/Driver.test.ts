@@ -57,6 +57,23 @@ describe("Driver implementations", () => {
         assert.strictEqual(false, lastEntryCached.locked);
       });
 
+      it("remove", async () => {
+        const cache1 = await createAndSave({ roomId: generateId(), name: "one", locked: true, clients: 4, maxClients: 4 });
+        const cache2 = await createAndSave({ roomId: generateId(), name: "one", locked: false, clients: 2, maxClients: 4 });
+        const cache3 = await createAndSave({ roomId: generateId(), name: "one", locked: false, clients: 2, maxClients: 4 });
+
+        await cache1.save();
+        await cache2.save();
+        await cache3.save();
+
+        await cache1.remove();
+        await cache2.remove();
+        await cache3.remove();
+
+        const entries = await driver.find({});
+        assert.strictEqual(0, entries.length)
+      });
+
       describe("cleanup", () => {
         it("should remove 400 'stale' entries by processId", async () => {
           const p1 = generateId();
