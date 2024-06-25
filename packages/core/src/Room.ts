@@ -115,7 +115,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
 
   // seat reservation & reconnection
   protected seatReservationTime: number = DEFAULT_SEAT_RESERVATION_TIME;
-  protected reservedSeats: { [sessionId: string]: [any, any] } = {};
+  protected reservedSeats: { [sessionId: string]: [any, any, boolean?, boolean?] } = {};
   protected reservedSeatTimeouts: { [sessionId: string]: NodeJS.Timer } = {};
 
   protected _reconnections: { [reconnectionToken: string]: [string, Deferred] } = {};
@@ -285,31 +285,32 @@ export abstract class Room<State extends object= any, Metadata= any> {
   }
 
   public hasReservedSeat(sessionId: string, reconnectionToken?: string): boolean {
-    if (reconnectionToken) {
-      const reconnection = this._reconnections[reconnectionToken];
+    const reservedSeat = this.reservedSeats[sessionId];
+
+    // seat reservation not found / expired
+    if (reservedSeat === undefined) {
+      return false;
+    }
+
+    if (reservedSeat[3]) {
+      // reconnection
       return (
-        reconnection &&
-        reconnection[0] === sessionId &&
-        this.reservedSeats[sessionId] !== undefined &&
+        reconnectionToken &&
+        this._reconnections[reconnectionToken]?.[0] === sessionId &&
         this._reconnectingSessionId.has(sessionId)
       );
 
     } else {
-      return (
-        this.reservedSeats[sessionId] !== undefined &&
-        (
-          !this._reconnectingSessionId.has(sessionId) || // prevent possible "reconnect" requests without a reconnection token
-          (this._reconnectingSessionId.get(sessionId) === sessionId) // devMode reconnection
-        )
-      );
+      // seat reservation not consumed
+      return reservedSeat[2] === false;
     }
   }
 
   public checkReconnectionToken(reconnectionToken: string) {
-    const reconnection = this._reconnections[reconnectionToken];
-    const sessionId = (reconnection && reconnection[0]);
+    const sessionId = this._reconnections[reconnectionToken]?.[0];
+    const reservedSeat = this.reservedSeats[sessionId];
 
-    if (this.hasReservedSeat(sessionId)) {
+    if (reservedSeat && reservedSeat[3]) {
       this._reconnectingSessionId.set(sessionId, reconnectionToken);
       return sessionId;
 
@@ -574,7 +575,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
     }
 
     // get seat reservation options and clear it
-    const [joinOptions, authData] = this.reservedSeats[sessionId];
+    const [joinOptions, authData, isConsumed, isWaitingReconnection] = this.reservedSeats[sessionId];
 
     //
     // TODO: remove this check on 1.0.0
@@ -583,10 +584,10 @@ export abstract class Room<State extends object= any, Metadata= any> {
     // - if async onAuth() is in use, the seat reservation is removed after onAuth() is fulfilled.
     // - mark reservation as "consumed"
     //
-    if (this.reservedSeats[sessionId].length > 2) {
+    if (isConsumed) {
       throw new ServerError(ErrorCode.MATCHMAKE_EXPIRED, "already consumed");
     }
-    this.reservedSeats[sessionId].push(true);
+    this.reservedSeats[sessionId][2] = true; // flag seat reservation as "consumed"
 
     // share "after next patch queue" reference with every client.
     client._afterNextPatchQueue = this._afterNextPatchQueue;
@@ -595,10 +596,17 @@ export abstract class Room<State extends object= any, Metadata= any> {
     client.ref['onleave'] = (_) => client.state = ClientState.LEAVING;
     client.ref.once('close', client.ref['onleave']);
 
-    const previousReconnectionToken = this._reconnectingSessionId.get(sessionId);
-    if (previousReconnectionToken) {
-      this.clients.push(client);
-      this._reconnections[previousReconnectionToken]?.[1].resolve(client);
+    if (isWaitingReconnection) {
+      const previousReconnectionToken = this._reconnectingSessionId.get(sessionId);
+      if (previousReconnectionToken) {
+        this.clients.push(client);
+        this._reconnections[previousReconnectionToken]?.[1].resolve(client);
+      } else {
+        const errorMessage = (process.env.NODE_ENV === 'production')
+          ? "already consumed" // trick possible fraudsters...
+          : "bad reconnection token" // ...or developers
+        throw new ServerError(ErrorCode.MATCHMAKE_EXPIRED, errorMessage);
+      }
 
     } else {
       try {
@@ -845,7 +853,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
       return false;
     }
 
-    this.reservedSeats[sessionId] = [joinOptions, authData];
+    this.reservedSeats[sessionId] = [joinOptions, authData, false, allowReconnection];
 
     if (!allowReconnection) {
       await this._incrementClientCount();
