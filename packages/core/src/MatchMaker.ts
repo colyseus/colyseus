@@ -530,7 +530,18 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
   return room.listing;
 }
 
+/**
+ * Get room data by roomId.
+ * This method does not return the actual room instance, use `getLocalRoomById` for that.
+ */
 export function getRoomById(roomId: string) {
+  return driver.findOne({ roomId });
+}
+
+/**
+ * Get local room instance by roomId. (Can return "undefined" if the room is not available on this process)
+ */
+export function getLocalRoomById(roomId: string) {
   return rooms[roomId];
 }
 
