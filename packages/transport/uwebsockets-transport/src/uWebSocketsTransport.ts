@@ -235,7 +235,7 @@ export class uWebSocketsTransport extends Transport {
             res.onAborted(() => onAborted(res));
 
             // do not accept matchmaking requests if already shutting down
-            if (matchMaker.isGracefullyShuttingDown) {
+            if (matchMaker.state === matchMaker.MatchMakerState.SHUTTING_DOWN) {
               return res.close();
             }
 

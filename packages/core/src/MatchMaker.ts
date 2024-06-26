@@ -45,7 +45,6 @@ export let presence: Presence;
 export let driver: MatchMakerDriver;
 export let selectProcessIdToCreateRoom: SelectProcessIdCallback;
 
-export let isGracefullyShuttingDown: boolean; // TODO: remove me on 1.0, use 'state' instead
 export let onReady: Deferred = new Deferred(); // onReady needs to be immediately available to @colyseus/auth integration.
 
 export enum MatchMakerState {
@@ -76,7 +75,6 @@ export async function setup(
     onReady = new Deferred();
   }
 
-  isGracefullyShuttingDown = false;
   state = MatchMakerState.INITIALIZING;
 
   presence = _presence || new LocalPresence();
@@ -559,11 +557,10 @@ export function disconnectAll(closeCode?: number) {
 }
 
 export async function gracefullyShutdown(): Promise<any> {
-  if (isGracefullyShuttingDown) {
+  if (state === MatchMakerState.SHUTTING_DOWN) {
     return Promise.reject('already_shutting_down');
   }
 
-  isGracefullyShuttingDown = true;
   state = MatchMakerState.SHUTTING_DOWN;
 
   onReady = undefined;
@@ -830,10 +827,10 @@ function onVisibilityChange(room: Room, isInvisible: boolean): void {
 }
 
 async function disposeRoom(roomName: string, room: Room) {
-  debugMatchMaking('disposing \'%s\' (%s) on processId \'%s\' (graceful shutdown: %s)', roomName, room.roomId, processId, isGracefullyShuttingDown);
+  debugMatchMaking('disposing \'%s\' (%s) on processId \'%s\' (graceful shutdown: %s)', roomName, room.roomId, processId, state === MatchMakerState.SHUTTING_DOWN);
 
   // decrease amount of rooms this process is handling
-  if (!isGracefullyShuttingDown) {
+  if (state !== MatchMakerState.SHUTTING_DOWN) {
     stats.local.roomCount--;
     stats.persist();
 

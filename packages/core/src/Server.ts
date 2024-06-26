@@ -236,7 +236,7 @@ export class Server {
   }
 
   public async gracefullyShutdown(exit: boolean = true, err?: Error) {
-    if (matchMaker.isGracefullyShuttingDown) {
+    if (matchMaker.state === matchMaker.MatchMakerState.SHUTTING_DOWN) {
       return;
     }
 
@@ -325,7 +325,7 @@ export class Server {
 
   protected async handleMatchMakeRequest(req: IncomingMessage, res: ServerResponse) {
     // do not accept matchmaking requests if already shutting down
-    if (matchMaker.isGracefullyShuttingDown) {
+    if (matchMaker.state === matchMaker.MatchMakerState.SHUTTING_DOWN) {
       res.writeHead(503, {});
       res.end();
       return;

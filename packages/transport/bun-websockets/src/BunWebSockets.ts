@@ -176,7 +176,7 @@ export class BunWebSockets extends Transport {
 
         case 'POST': {
           // do not accept matchmaking requests if already shutting down
-          if (matchMaker.isGracefullyShuttingDown) {
+          if (matchMaker.state === matchMaker.MatchMakerState.SHUTTING_DOWN) {
             throw new ServerError(503, "server is shutting down");
           }
 
