@@ -122,7 +122,7 @@ export class BunWebSockets extends Transport {
     const processAndRoomId = parsedURL.pathname.match(/\/[a-zA-Z0-9_\-]+\/([a-zA-Z0-9_\-]+)$/);
     const roomId = processAndRoomId && processAndRoomId[1];
 
-    const room = matchMaker.getRoomById(roomId);
+    const room = matchMaker.getLocalRoomById(roomId);
     const client = new WebSocketClient(sessionId, wrapper);
 
     //

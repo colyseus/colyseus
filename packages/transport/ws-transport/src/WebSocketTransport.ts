@@ -120,7 +120,7 @@ export class WebSocketTransport extends Transport {
     const processAndRoomId = parsedURL.pathname.match(/\/[a-zA-Z0-9_\-]+\/([a-zA-Z0-9_\-]+)$/);
     const roomId = processAndRoomId && processAndRoomId[1];
 
-    const room = matchMaker.getRoomById(roomId);
+    const room = matchMaker.getLocalRoomById(roomId);
 
     // set client id
     rawClient.pingCount = 0;

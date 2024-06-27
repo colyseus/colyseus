@@ -63,7 +63,7 @@ export class ColyseusTestServer {
   }
 
   getRoomById<State extends object= any, Metadata = any>(roomId: string) {
-    return matchMaker.getRoomById(roomId) as Room<State, Metadata>;
+    return matchMaker.getLocalRoomById(roomId) as Room<State, Metadata>;
   }
 
   async cleanup() {

@@ -2,7 +2,7 @@ import debug from "debug";
 import { logger } from "../Logger";
 import { debugAndPrintError } from "../Debug";
 
-import { getRoomById, handleCreateRoom, presence, remoteRoomCall } from "../MatchMaker";
+import { getLocalRoomById, handleCreateRoom, presence, remoteRoomCall } from "../MatchMaker";
 import type { Room } from "../Room";
 
 export const debugDevMode = debug('colyseus:devmode');
@@ -22,7 +22,7 @@ export async function reloadFromCache() {
     debugDevMode("restoring room %s (%s)", roomHistory.roomName, roomId);
 
     const recreatedRoomListing = await handleCreateRoom(roomHistory.roomName, roomHistory.clientOptions, roomId);
-    const recreatedRoom = getRoomById(recreatedRoomListing.roomId);
+    const recreatedRoom = getLocalRoomById(recreatedRoomListing.roomId);
     logger.debug(`🔄 room '${roomId}' has been restored.`);
 
     // Set previous state

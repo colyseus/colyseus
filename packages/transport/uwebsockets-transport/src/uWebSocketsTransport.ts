@@ -163,7 +163,7 @@ export class uWebSocketsTransport extends Transport {
         const processAndRoomId = url.match(/\/[a-zA-Z0-9_\-]+\/([a-zA-Z0-9_\-]+)$/);
         const roomId = processAndRoomId && processAndRoomId[1];
 
-        const room = matchMaker.getRoomById(roomId);
+        const room = matchMaker.getLocalRoomById(roomId);
         const client = new uWebSocketClient(sessionId, wrapper);
 
         //
