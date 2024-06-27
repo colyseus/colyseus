@@ -63,8 +63,12 @@ export const getMessageBytes = {
     sendBuffer[it.offset++] = Buffer.byteLength(serializerId, "utf8");
     encode.utf8Write(sendBuffer, serializerId, it);
 
-    handshake.copy(sendBuffer, it.offset, 0, handshake.byteLength);
-    return sendBuffer.subarray(0, it.offset + handshake.byteLength);
+    let handshakeLength = handshake?.byteLength || 0;
+    if (handshakeLength > 0) {
+      handshake.copy(sendBuffer, it.offset, 0, handshakeLength);
+    }
+
+    return sendBuffer.subarray(0, it.offset + handshakeLength);
   },
 
   [Protocol.ERROR]: (code: number, message: string = '') => {
