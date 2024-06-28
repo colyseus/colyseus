@@ -22,7 +22,7 @@ server.define("room", MyRoom);
 server.listen(9999, undefined, undefined, async () => {
   const roomCreated = await matchMaker.createRoom("room", {});
 
-  const room = matchMaker.getRoomById(roomCreated.roomId);
+  const room = matchMaker.getLocalRoomById(roomCreated.roomId);
 
   const future = new Deferred();
 

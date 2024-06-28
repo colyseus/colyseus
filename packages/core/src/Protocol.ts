@@ -86,7 +86,6 @@ export const getMessageBytes = {
   },
 
   raw: (code: Protocol, type: string | number, message?: any, rawMessage?: Uint8Array | Buffer) => {
-
     const it: Iterator = { offset: 1 };
     sendBuffer[0] = code;
 
@@ -98,8 +97,20 @@ export const getMessageBytes = {
     }
 
     if (message !== undefined) {
+      // force to encode from offset
+      packr.position = 0;
+
+      //
+      // TODO: remove this after issue is fixed https://github.com/kriszyp/msgpackr/issues/139
+      //
+      // - This check is only required when running integration tests.
+      //   (colyseus.js' usage of msgpackr/buffer is conflicting)
+      //
+      if (process.env.NODE_ENV !== "production") {
+        packr.useBuffer(sendBuffer);
+      }
+
       // pack message into the same sendBuffer
-      packr.position = 0; // force to encode from the beginning
       const endOfBufferOffset = packr.pack(message, 2048 + it.offset).byteLength;
                                                  // 2048 = RESERVE_START_SPACE
       return sendBuffer.subarray(0, endOfBufferOffset);

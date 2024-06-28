@@ -82,7 +82,7 @@ describe("Integration", () => {
               assert.strictEqual(true, onCreateCalled);
 
               // assert 'presence' implementation
-              const room = matchMaker.getRoomById(connection.id);
+              const room = matchMaker.getLocalRoomById(connection.id);
               assert.strictEqual(presence, room.presence);
 
               await connection.leave();
@@ -141,10 +141,10 @@ describe("Integration", () => {
               await onJoinHit;
 
               await client.joinById(room.roomId);
-              assert.strictEqual(2, matchMaker.getRoomById(room.roomId).clients.length);
+              assert.strictEqual(2, matchMaker.getLocalRoomById(room.roomId).clients.length);
 
               // disconnect room
-              await matchMaker.getRoomById(room.roomId).disconnect();
+              await matchMaker.getLocalRoomById(room.roomId).disconnect();
             });
 
             it("async onJoin support", async () => {
@@ -187,7 +187,7 @@ describe("Integration", () => {
               const activeConnection = await client.joinOrCreate("onjoin");
 
               const seatReservation = await matchMaker.joinOrCreate('onjoin', {});
-              const room = matchMaker.getRoomById(seatReservation.room.roomId);
+              const room = matchMaker.getLocalRoomById(seatReservation.room.roomId);
 
               const lostConnection = new WebSocket(`${TEST_ENDPOINT}/${seatReservation.room.processId}/${seatReservation.room.roomId}?sessionId=${seatReservation.sessionId}`);
 
@@ -297,7 +297,7 @@ describe("Integration", () => {
               client.joinOrCreate('async_onauth_maxclients', {}),
             ]);
 
-            const room = matchMaker.getRoomById(roomId);
+            const room = matchMaker.getLocalRoomById(roomId);
 
             assert.strictEqual(2, room.clients.length);
             assert.strictEqual(2, roomsCreated);
@@ -372,7 +372,7 @@ describe("Integration", () => {
             await connection.leave();
 
             await timeout(50);
-            assert.ok(!matchMaker.getRoomById(connection.id))
+            assert.ok(!matchMaker.getLocalRoomById(connection.id))
             assert.ok(onDisposeCalled);
           });
 
@@ -392,7 +392,7 @@ describe("Integration", () => {
             await connection.leave();
 
             await timeout(150);
-            assert.ok(!matchMaker.getRoomById(connection.id))
+            assert.ok(!matchMaker.getLocalRoomById(connection.id))
             assert.ok(onDisposeCalled);
           });
 
@@ -783,7 +783,7 @@ describe("Integration", () => {
             it("should lock room automatically when maxClients is reached", async () => {
               const conn1 = await client.joinOrCreate('room2');
 
-              const room = matchMaker.getRoomById(conn1.id);
+              const room = matchMaker.getLocalRoomById(conn1.id);
               assert.strictEqual(false, room.locked);
 
               const conn2 = await client.joinOrCreate('room2');
@@ -804,7 +804,7 @@ describe("Integration", () => {
               const conn1 = await client.joinOrCreate('room2');
               const conn2 = await client.joinOrCreate('room2');
 
-              const room = matchMaker.getRoomById(conn1.id);
+              const room = matchMaker.getLocalRoomById(conn1.id);
               assert.strictEqual(2, room.clients.length);
               assert.strictEqual(true, room.locked);
 
@@ -824,7 +824,7 @@ describe("Integration", () => {
               const conn1 = await client.joinOrCreate('room_explicit_lock');
               const conn2 = await client.joinOrCreate('room_explicit_lock');
 
-              const room = matchMaker.getRoomById(conn1.id);
+              const room = matchMaker.getLocalRoomById(conn1.id);
               assert.strictEqual(2, room.clients.length);
               assert.strictEqual(true, room.locked);
 
@@ -865,13 +865,13 @@ describe("Integration", () => {
 
               await Promise.all(promises);
 
-              const room = matchMaker.getRoomById(roomId);
+              const room = matchMaker.getLocalRoomById(roomId);
               assert.strictEqual(room.roomId, roomId);
 
               await room.disconnect();
               await timeout(10);
 
-              assert.ok(!matchMaker.getRoomById(roomId));
+              assert.ok(!matchMaker.getLocalRoomById(roomId));
             });
 
             it("second .disconnect() call should return a resolved promise", async () => {
@@ -891,7 +891,7 @@ describe("Integration", () => {
 
               await Promise.all(promises);
 
-              const room = matchMaker.getRoomById(roomId);
+              const room = matchMaker.getLocalRoomById(roomId);
               assert.strictEqual(room.roomId, roomId);
 
               room.disconnect();
@@ -1017,11 +1017,11 @@ describe("Integration", () => {
               // force websocket client to be unresponsive
               (roomClient.connection.transport as any).ws._socket.removeAllListeners();
 
-              assert.ok(matchMaker.getRoomById(roomClient.roomId));
+              assert.ok(matchMaker.getLocalRoomById(roomClient.roomId));
 
               await timeout(700);
 
-              assert.strictEqual(undefined, matchMaker.getRoomById(roomClient.roomId));
+              assert.strictEqual(undefined, matchMaker.getLocalRoomById(roomClient.roomId));
             });
 
             it("should remove the room if seat reservation is never fulfiled", async () => {
@@ -1032,11 +1032,11 @@ describe("Integration", () => {
               const seatReservation = await (client as any).createMatchMakeRequest('joinOrCreate', "dummy", {});
               await client['createMatchMakeRequest']('joinOrCreate', "dummy", {});
 
-              assert.ok(matchMaker.getRoomById(seatReservation.room.roomId));
+              assert.ok(matchMaker.getLocalRoomById(seatReservation.room.roomId));
 
               await timeout(500);
 
-              assert.ok(!matchMaker.getRoomById(seatReservation.room.roomId));
+              assert.ok(!matchMaker.getLocalRoomById(seatReservation.room.roomId));
 
               stub.restore();
             });

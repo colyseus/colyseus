@@ -62,7 +62,7 @@ describe("MatchMaker", () => {
       describe("exposed methods", () => {
         it("joinOrCreate() should create a new room", async () => {
           const reservedSeat = await matchMaker.joinOrCreate("dummy");
-          const room = matchMaker.getRoomById(reservedSeat.room.roomId)
+          const room = matchMaker.getLocalRoomById(reservedSeat.room.roomId)
           assert.ok(room.hasReservedSeat(reservedSeat.sessionId));
           assert.ok(room instanceof Room);
           assert.ok(room instanceof DummyRoom);
@@ -71,7 +71,7 @@ describe("MatchMaker", () => {
         it("joinOrCreate() should not find private rooms", async () => {
           const reservedSeat = await matchMaker.joinOrCreate("dummy");
 
-          const room = matchMaker.getRoomById(reservedSeat.room.roomId)
+          const room = matchMaker.getLocalRoomById(reservedSeat.room.roomId)
           await room.setPrivate();
 
           const reservedSeat2 = await matchMaker.joinOrCreate("dummy");
@@ -81,7 +81,7 @@ describe("MatchMaker", () => {
         it("joinOrCreate() should not find locked rooms", async () => {
           const reservedSeat = await matchMaker.joinOrCreate("dummy");
 
-          const room = matchMaker.getRoomById(reservedSeat.room.roomId)
+          const room = matchMaker.getLocalRoomById(reservedSeat.room.roomId)
           await room.lock();
 
           const reservedSeat2 = await matchMaker.joinOrCreate("dummy");
@@ -96,7 +96,7 @@ describe("MatchMaker", () => {
           const reservedSeat1 = await matchMaker.joinOrCreate("dummy");
 
           const reservedSeat2 = await matchMaker.join("dummy");
-          const room = matchMaker.getRoomById(reservedSeat2.room.roomId);
+          const room = matchMaker.getLocalRoomById(reservedSeat2.room.roomId);
 
           assert.strictEqual(reservedSeat1.room.roomId, reservedSeat2.room.roomId);
           assert.ok(room.hasReservedSeat(reservedSeat2.sessionId));
@@ -105,7 +105,7 @@ describe("MatchMaker", () => {
         it("create() should create a new room", async () => {
           const reservedSeat1 = await matchMaker.joinOrCreate("dummy");
           const reservedSeat2 = await matchMaker.create("dummy");
-          const room = matchMaker.getRoomById(reservedSeat2.room.roomId);
+          const room = matchMaker.getLocalRoomById(reservedSeat2.room.roomId);
 
           assert.notStrictEqual(reservedSeat1.room.roomId, reservedSeat2.room.roomId);
           assert.ok(reservedSeat2.room.roomId);
@@ -115,7 +115,7 @@ describe("MatchMaker", () => {
         it("joinById() should allow to join a room by id", async () => {
           const reservedSeat1 = await matchMaker.create("room2");
           const reservedSeat2 = await matchMaker.joinById(reservedSeat1.room.roomId);
-          const room = matchMaker.getRoomById(reservedSeat2.room.roomId);
+          const room = matchMaker.getLocalRoomById(reservedSeat2.room.roomId);
 
           assert.strictEqual(reservedSeat1.room.roomId, reservedSeat2.room.roomId);
           assert.ok(room.hasReservedSeat(reservedSeat2.sessionId));
@@ -129,7 +129,7 @@ describe("MatchMaker", () => {
 
         it("joinById() should allow to join a private room", async () => {
           const reservedSeat1 = await matchMaker.create("room2");
-          const room = matchMaker.getRoomById(reservedSeat1.room.roomId);
+          const room = matchMaker.getLocalRoomById(reservedSeat1.room.roomId);
           await room.setPrivate();
 
           const reservedSeat2 = await matchMaker.joinById(reservedSeat1.room.roomId)
@@ -265,7 +265,7 @@ describe("MatchMaker", () => {
           const reservedSeat1 = await matchMaker.joinOrCreate("reconnect");
 
           const client1 = createDummyClient(reservedSeat1);
-          const room = matchMaker.getRoomById(reservedSeat1.room.roomId);
+          const room = matchMaker.getLocalRoomById(reservedSeat1.room.roomId);
           await client1.confirmJoinRoom(room);
 
           assert.strictEqual(1, room.clients.length);
@@ -292,7 +292,7 @@ describe("MatchMaker", () => {
         it("room should be disposed on reconnection timeout", async () => {
           const reservedSeat1 = await matchMaker.joinOrCreate("reconnect");
           const client1 = createDummyClient(reservedSeat1);
-          const room = matchMaker.getRoomById(reservedSeat1.room.roomId);
+          const room = matchMaker.getLocalRoomById(reservedSeat1.room.roomId);
           await client1.confirmJoinRoom(room);
 
           const reservedSeat2 = await matchMaker.joinOrCreate("reconnect");
@@ -317,7 +317,7 @@ describe("MatchMaker", () => {
           const reservedSeat2 = await matchMaker.joinOrCreate("reconnect");
 
           const client1 = createDummyClient(reservedSeat1);
-          const room = matchMaker.getRoomById(reservedSeat1.room.roomId);
+          const room = matchMaker.getLocalRoomById(reservedSeat1.room.roomId);
           await client1.confirmJoinRoom(room);
 
           /**
@@ -340,7 +340,7 @@ describe("MatchMaker", () => {
           const reservedSeat1 = await matchMaker.joinOrCreate("reconnect_token");
 
           const client1 = createDummyClient(reservedSeat1);
-          const room = matchMaker.getRoomById(reservedSeat1.room.roomId) as ReconnectTokenRoom;
+          const room = matchMaker.getLocalRoomById(reservedSeat1.room.roomId) as ReconnectTokenRoom;
           await client1.confirmJoinRoom(room);
 
           assert.strictEqual(1, room.clients.length);
@@ -370,7 +370,7 @@ describe("MatchMaker", () => {
           const reservedSeat2 = await matchMaker.joinOrCreate("reconnect_token");
 
           const client1 = createDummyClient(reservedSeat1);
-          const room = matchMaker.getRoomById(reservedSeat1.room.roomId) as ReconnectTokenRoom;
+          const room = matchMaker.getLocalRoomById(reservedSeat1.room.roomId) as ReconnectTokenRoom;
           await client1.confirmJoinRoom(room);
 
           /**
@@ -398,7 +398,7 @@ describe("MatchMaker", () => {
       it("when `maxClients` is reached, the room should be locked", async () => {
         // first client joins
         const reservedSeat1 = await matchMaker.joinOrCreate("room3");
-        const room = matchMaker.getRoomById(reservedSeat1.room.roomId);
+        const room = matchMaker.getLocalRoomById(reservedSeat1.room.roomId);
         assert.strictEqual(false, room.locked);
 
         // more 2 clients join
@@ -414,7 +414,7 @@ describe("MatchMaker", () => {
 
       it("seat reservation should expire", async () => {
         const reservedSeat1 = await matchMaker.joinOrCreate("room3");
-        const room = matchMaker.getRoomById(reservedSeat1.room.roomId);
+        const room = matchMaker.getLocalRoomById(reservedSeat1.room.roomId);
         assert.strictEqual(false, room.locked);
 
         // more 2 clients join
@@ -509,7 +509,7 @@ describe("MatchMaker", () => {
             promises.push(new Promise<void>(async (resolve, reject) => {
               try {
                 const reservedSeat = await matchMaker.joinOrCreate("room2");
-                const room = matchMaker.getRoomById(reservedSeat.room.roomId);
+                const room = matchMaker.getLocalRoomById(reservedSeat.room.roomId);
                 await createDummyClient(reservedSeat).confirmJoinRoom(room);
                 resolve();
 

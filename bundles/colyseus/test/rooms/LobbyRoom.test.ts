@@ -6,7 +6,7 @@ const TEST_PORT = 8567;
 
 async function createLobbyRoom () {
   const room = await matchMaker.createRoom("lobby", {});
-  return matchMaker.getRoomById(room.roomId) as LobbyRoom;
+  return matchMaker.getLocalRoomById(room.roomId) as LobbyRoom;
 }
 
 describe("LobbyRoom", () => {

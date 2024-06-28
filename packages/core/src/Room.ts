@@ -1,7 +1,7 @@
 import http, { IncomingMessage } from 'http';
 
 import { unpack } from '@colyseus/msgpackr';
-import { decode, Iterator, Schema, $changes } from '@colyseus/schema';
+import { decode, Iterator, $changes } from '@colyseus/schema';
 
 import Clock from '@gamestdio/timer';
 import { EventEmitter } from 'events';

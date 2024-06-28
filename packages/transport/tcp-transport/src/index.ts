@@ -73,7 +73,7 @@ export class TCPTransport extends Transport {
       // forward as 'message' all 'data' messages
       client.on('data', (data) => client.emit('message', data));
 
-      const room = matchMaker.getRoomById(roomId);
+      const room = matchMaker.getLocalRoomById(roomId);
       try {
         if (!room || !room.hasReservedSeat(sessionId)) {
           throw new Error('seat reservation expired.');

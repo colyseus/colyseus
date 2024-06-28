@@ -1,13 +1,13 @@
 {
   "name": "@colyseus/legacy-schema-serializer",
-  "version": "0.16.0",
+  "version": "0.16.1",
   "input": "./src/index.ts",
   "main": "./build/index.js",
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
   "dependencies": {
     "@colyseus/core": "workspace:^",
-    "@colyseus/schema": "^2.0.0"
+    "@colyseus/schema": "*"
   },
   "author": "Endel Dreyer",
   "license": "MIT",
