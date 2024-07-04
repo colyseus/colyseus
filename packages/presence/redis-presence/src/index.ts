@@ -159,6 +159,30 @@ export class RedisPresence implements Presence {
         return await this.pub.decr(key);
     }
 
+    public async llen(key: string): Promise<number> {
+      return await this.pub.llen(key);
+    }
+
+    public async rpush(key: string, value: string): Promise<number> {
+      return await this.pub.rpush(key, value);
+    }
+
+    public async lpush(key: string, value: string): Promise<number> {
+      return await this.pub.lpush(key, value);
+    }
+
+    public async rpop(key: string): Promise<string> {
+      return await this.pub.rpop(key);
+    }
+
+    public async lpop(key: string): Promise<string> {
+      return await this.pub.lpop(key);
+    }
+
+    public async brpop(...args: [...keys: string[], timeoutInSeconds: number]): Promise<[string, string] | null> {
+      return await this.pub.brpop.apply(this.pub, args);
+    }
+
     public shutdown() {
         this.sub.quit();
         this.pub.quit();

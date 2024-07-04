@@ -13,7 +13,7 @@ export { matchMaker };
 export { updateLobby, subscribeLobby } from './matchmaker/Lobby';
 
 // Driver
-export * from './matchmaker/driver';
+export * from './matchmaker/driver/local/LocalDriver';
 
 // Transport
 export { type Client, type ClientPrivate, ClientState, ClientArray, Transport, type ISendOptions } from './Transport';

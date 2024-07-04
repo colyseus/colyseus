@@ -1,5 +1,5 @@
 import assert from "assert";
-import { RedisDriver } from "../src/index";
+import { RedisDriver } from "../src/RedisDriver";
 
 describe("RedisDriver", () => {
   let driver: RedisDriver;

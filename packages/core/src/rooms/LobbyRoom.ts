@@ -1,6 +1,6 @@
 
 import * as matchMaker from '../MatchMaker';
-import { RoomListingData } from '../matchmaker/driver';
+import { IRoomCache } from '../matchmaker/driver/local/LocalDriver';
 import { subscribeLobby } from '../matchmaker/Lobby';
 import { Room } from '../Room';
 import { Client } from '../Transport';
@@ -21,7 +21,7 @@ export interface LobbyOptions {
 }
 
 export class LobbyRoom extends Room { // tslint:disable-line
-  public rooms: RoomListingData[] = [];
+  public rooms: IRoomCache[] = [];
   public unsubscribeLobby: () => void;
 
   public clientOptions: { [sessionId: string]: LobbyOptions } = {};
@@ -109,7 +109,7 @@ export class LobbyRoom extends Room { // tslint:disable-line
       : this.rooms;
   }
 
-  protected filterItemForClient(room: RoomListingData, filter?: LobbyOptions['filter']) {
+  protected filterItemForClient(room: IRoomCache, filter?: LobbyOptions['filter']) {
     if (!filter) {
       return true;
     }

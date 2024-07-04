@@ -204,6 +204,86 @@ export class LocalPresence implements Presence {
         return Promise.resolve(this.keys[key] as number);
     }
 
+    public llen(key: string): number {
+      return (this.data[key] && this.data[key].length) || 0;
+    }
+
+    public rpush(key: string, ...values: string[]): number {
+      if (!this.data[key]) { this.data[key] = []; }
+
+      let lastLength: number = 0;
+
+      values.forEach(value => {
+        lastLength = this.data[key].push(value);
+      });
+
+      return lastLength;
+    }
+
+    public lpush(key: string, ...values: string[]): number {
+      if (!this.data[key]) { this.data[key] = []; }
+
+      let lastLength: number = 0;
+
+      values.forEach(value => {
+        lastLength = this.data[key].unshift(value);
+      });
+
+      return lastLength;
+    }
+
+
+    public lpop(key: string): string {
+      return Array.isArray(this.data[key]) && this.data[key].shift();
+    }
+
+    public rpop(key: string): string {
+      return this.data[key].pop();
+    }
+
+    public brpop(...args: [...keys: string[], timeoutInSeconds: number]): Promise<[string, string] | null> {
+      const keys = args.slice(0, -2) as string[];
+      const timeoutInSeconds = args[args.length - 1] as number;
+
+      const getFirstPopulated = (): [string, string] | null => {
+        const keyWithValue = keys.find(key => this.data[key] && this.data[key].length > 0);
+        if (keyWithValue) {
+          return [keyWithValue, this.data[keyWithValue].pop()];
+        } else {
+          return null;
+        }
+      }
+
+      const firstPopulated = getFirstPopulated();
+
+      if (firstPopulated) {
+        // return first populated key + item
+        return Promise.resolve(firstPopulated);
+
+      } else {
+        // 8 retries per second
+        const maxRetries = timeoutInSeconds * 8;
+
+        let tries = 0;
+        return new Promise((resolve) => {
+          const interval = setInterval(() => {
+            tries++;
+
+            const firstPopulated = getFirstPopulated();
+            if (firstPopulated) {
+              clearInterval(interval);
+              return resolve(firstPopulated);
+
+            } else if (tries >= maxRetries) {
+              clearInterval(interval);
+              return resolve(undefined);
+            }
+
+          }, (timeoutInSeconds * 1000) / maxRetries);
+        });
+      }
+    }
+
     public shutdown() {
       if (isDevMode) {
         const cache = JSON.stringify({

@@ -81,12 +81,14 @@ export interface Presence {
      * @param value - Message body/object.
      */
     sadd(key: string, value: any);
+
     /**
      * Returns all the members of the set value stored at key.
      *
      * @param key - Name/Identifier of the set.
      */
     smembers(key: string): Promise<string[]>;
+
     /**
      * Returns if member is a member of the set stored at key.
      *
@@ -95,6 +97,7 @@ export interface Presence {
      * @returns `1` if the element is a member of the set else `0`.
      */
     sismember(key: string, field: string);
+
     /**
      * Remove the specified members from the set stored at key. Specified members that are not a
      * member of this set are ignored. If key does not exist, it is treated as an empty set
@@ -104,12 +107,14 @@ export interface Presence {
      * @param value - Key value within the set.
      */
     srem(key: string, value: any);
+
     /**
      * Returns the set cardinality (number of elements) of the set stored at key.
      *
      * @param key -  Name/Identifier of the set.
      */
     scard(key: string);
+
     /**
      * Returns the members of the set resulting from the intersection of all the given sets.
      *
@@ -163,6 +168,14 @@ export interface Presence {
      * that can not be represented as integer. This operation is limited to 64-bit signed integers.
      */
     decr(key: string): Promise<number>;
+
+    // LISTS
+    llen(key: string): number | Promise<number>;
+    rpush(key: string, ...values: string[]): number | Promise<number>;
+    lpush(key: string, ...values: string[]): number | Promise<number>;
+    rpop(key: string): string | Promise<string>;
+    lpop(key: string): string | Promise<string>;
+    brpop(...args: [...keys: string[], timeoutInSeconds: number]): Promise<[string, string]>;
 
     shutdown(): void;
 }

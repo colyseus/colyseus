@@ -13,7 +13,7 @@ import { getBearerToken, registerGracefulShutdown } from './utils/Utils';
 import { registerNode, unregisterNode} from './discovery';
 
 import { LocalPresence } from './presence/LocalPresence';
-import { LocalDriver } from './matchmaker/driver';
+import { LocalDriver } from './matchmaker/driver/local/LocalDriver';
 
 import { Transport } from './Transport';
 import { logger, setLogger } from './Logger';

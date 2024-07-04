@@ -2,7 +2,7 @@ import { ErrorCode, Protocol } from './Protocol';
 
 import { requestFromIPC, subscribeIPC } from './IPC';
 
-import { Deferred, generateId, merge, REMOTE_ROOM_SHORT_TIMEOUT, retry } from './utils/Utils';
+import { Deferred, generateId, MAX_CONCURRENT_JOIN_WAIT_TIME, merge, REMOTE_ROOM_SHORT_TIMEOUT, retry } from './utils/Utils';
 import { isDevMode, cacheRoomHistory, getPreviousProcessId, getRoomRestoreListKey, reloadFromCache } from './utils/DevMode';
 
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
@@ -15,7 +15,7 @@ import { debugAndPrintError, debugMatchMaking } from './Debug';
 import { SeatReservationError } from './errors/SeatReservationError';
 import { ServerError } from './errors/ServerError';
 
-import { IRoomListingData, RoomListingData, LocalDriver, MatchMakerDriver } from './matchmaker/driver';
+import { IRoomCache, LocalDriver, MatchMakerDriver, SortOptions } from './matchmaker/driver/local/LocalDriver';
 import controller from './matchmaker/controller';
 import * as stats from "./Stats";
 
@@ -23,6 +23,7 @@ import { logger } from './Logger';
 import { Client } from './Transport';
 import { Type } from './utils/types';
 import { getHostname } from "./discovery";
+import { getLockId } from './matchmaker/driver/api';
 
 export { controller, stats, type MatchMakerDriver };
 
@@ -32,7 +33,7 @@ export type SelectProcessIdCallback = (roomName: string, clientOptions: ClientOp
 
 export interface SeatReservation {
   sessionId: string;
-  room: RoomListingData;
+  room: IRoomCache;
   devMode?: boolean;
 }
 
@@ -146,17 +147,18 @@ export async function accept() {
 export async function joinOrCreate(roomName: string, clientOptions: ClientOptions = {}, authOptions?: AuthOptions) {
   return await retry<Promise<SeatReservation>>(async () => {
     const authData = await callOnAuth(roomName, authOptions);
-    let room = await findOneRoomAvailable(roomName, clientOptions);
+
+    const room = await findOneRoomAvailable(
+      roomName,
+      clientOptions,
+      () => createRoom(roomName, clientOptions)
+    );
 
     //
     // TODO [?]
     //    should we expose the "creator" auth data of the room during `onCreate()`?
     //    it would be useful, though it could be accessed via `onJoin()` for now.
     //
-
-    if (!room) {
-      room = await createRoom(roomName, clientOptions);
-    }
 
     return await reserveSeatFor(room, clientOptions, authData);
   }, 5, [SeatReservationError]);
@@ -227,7 +229,7 @@ export async function reconnect(roomId: string, clientOptions: ClientOptions = {
  * @param clientOptions - Options for the client seat reservation (for `onJoin`/`onAuth`)
  * @param authOptions - Optional authentication token
  *
- * @returns Promise<SeatReservation> - A promise which contains `sessionId` and `RoomListingData`.
+ * @returns Promise<SeatReservation> - A promise which contains `sessionId` and `IRoomCache`.
  */
 export async function joinById(roomId: string, clientOptions: ClientOptions = {}, authOptions?: AuthOptions) {
   const room = await driver.findOne({ roomId });
@@ -247,8 +249,8 @@ export async function joinById(roomId: string, clientOptions: ClientOptions = {}
 /**
  * Perform a query for all cached rooms
  */
-export async function query(conditions: Partial<IRoomListingData> = {}) {
-  return await driver.find(conditions);
+export async function query(conditions: Partial<IRoomCache> = {}, sortOptions?: SortOptions) {
+  return await driver.query(conditions, sortOptions);
 }
 
 /**
@@ -257,24 +259,34 @@ export async function query(conditions: Partial<IRoomListingData> = {}) {
  * @param roomName - The Id of the specific room.
  * @param clientOptions - Options for the client seat reservation (for `onJoin`/`onAuth`).
  *
- * @returns Promise<RoomListingData> - A promise contaning an object which includes room metadata and configurations.
+ * @returns Promise<IRoomCache> - A promise contaning an object which includes room metadata and configurations.
  */
-export async function findOneRoomAvailable(roomName: string, clientOptions: ClientOptions): Promise<RoomListingData> {
-  return await awaitRoomAvailable(roomName, async () => {
-    const handler = getHandler(roomName);
+export async function findOneRoomAvailable(
+  roomName: string,
+  clientOptions: ClientOptions,
+  fallbackCreateRoom?: () => Promise<IRoomCache>,
+): Promise<IRoomCache> {
+  const handler = getHandler(roomName);
+  const filterOptions = handler.getFilterOptions(clientOptions);
+  const concurrencyKey = getLockId(filterOptions);
+  const mayCreateRoom = (fallbackCreateRoom !== undefined);
 
-    const roomQuery = driver.findOne({
-      locked: false,
-      name: roomName,
-      private: false,
-      ...handler.getFilterOptions(clientOptions),
-    });
+  return await concurrentLock(handler, concurrencyKey, mayCreateRoom, async (roomId?: string) => {
+    let room: IRoomCache = (roomId)
+        ? await driver.findOne({ roomId })
+        : await driver.findOne({
+            locked: false,
+            name: roomName,
+            private: false,
+            ...filterOptions,
+          }, handler.sortOptions);
 
-    if (handler.sortOptions) {
-      roomQuery.sort(handler.sortOptions);
+    if (!room && fallbackCreateRoom) {
+      room = await fallbackCreateRoom();
+      presence.lpush(`l:${handler.name}:${concurrencyKey}`, room.roomId);
     }
 
-    return await roomQuery;
+    return room;
   });
 }
 
@@ -331,7 +343,7 @@ export function defineRoomType<T extends Type<Room>>(
   klass: T,
   defaultOptions?: Parameters<NonNullable<InstanceType<T>['onCreate']>>[0],
 ) {
-  const registeredHandler = new RegisteredHandler(klass, defaultOptions);
+  const registeredHandler = new RegisteredHandler(roomName, klass, defaultOptions);
 
   handlers[roomName] = registeredHandler;
 
@@ -344,19 +356,11 @@ export function defineRoomType<T extends Type<Room>>(
     }
   }
 
-  if (!isDevMode) {
-    cleanupStaleRooms(roomName);
-  }
-
   return registeredHandler;
 }
 
 export function removeRoomType(roomName: string) {
   delete handlers[roomName];
-
-  if (!isDevMode) {
-    cleanupStaleRooms(roomName);
-  }
 }
 
 // TODO: legacy; remove me on 1.0
@@ -386,9 +390,9 @@ export function getRoomClass(roomName: string): Type<Room> {
  * @param roomName - The identifier you defined on `gameServer.define()`
  * @param clientOptions - Options for `onCreate`
  *
- * @returns Promise<RoomListingData> - A promise contaning an object which includes room metadata and configurations.
+ * @returns Promise<IRoomCache> - A promise contaning an object which includes room metadata and configurations.
  */
-export async function createRoom(roomName: string, clientOptions: ClientOptions): Promise<RoomListingData> {
+export async function createRoom(roomName: string, clientOptions: ClientOptions): Promise<IRoomCache> {
   //
   // - select a process to create the room
   // - use local processId if MatchMaker is not ready yet
@@ -397,7 +401,7 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
     ? await selectProcessIdToCreateRoom(roomName, clientOptions)
     : processId;
 
-  let room: RoomListingData;
+  let room: IRoomCache;
   if (selectedProcessId === undefined) {
     throw new ServerError(ErrorCode.MATCHMAKE_UNHANDLED, `no processId available to create room ${roomName}`);
 
@@ -408,7 +412,7 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
   } else {
     // ask other process to create the room!
     try {
-      room = await requestFromIPC<RoomListingData>(
+      room = await requestFromIPC<IRoomCache>(
         presence,
         getProcessChannel(selectedProcessId),
         undefined,
@@ -448,7 +452,7 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
   return room;
 }
 
-export async function handleCreateRoom(roomName: string, clientOptions: ClientOptions, restoringRoomId?: string): Promise<RoomListingData> {
+export async function handleCreateRoom(roomName: string, clientOptions: ClientOptions, restoringRoomId?: string): Promise<IRoomCache> {
   const handler = getHandler(roomName);
   const room = new handler.klass();
 
@@ -601,7 +605,7 @@ export async function gracefullyShutdown(): Promise<any> {
 /**
  * Reserve a seat for a client in a room
  */
-export async function reserveSeatFor(room: RoomListingData, options: ClientOptions, authData?: any) {
+export async function reserveSeatFor(room: IRoomCache, options: ClientOptions, authData?: any) {
   const sessionId: string = generateId();
 
   debugMatchMaking(
@@ -655,11 +659,6 @@ function callOnAuth(roomName: string, authOptions?: AuthOptions) {
     : undefined;
 }
 
-export async function cleanupStaleRooms(roomName: string) {
-  // remove connecting counts
-  await presence.del(getHandlerConcurrencyKey(roomName));
-}
-
 /**
  * Perform health check on all processes
  */
@@ -694,7 +693,7 @@ export function healthCheckProcessId(processId: string) {
     try {
       const requestTime = Date.now();
 
-      await requestFromIPC<RoomListingData>(
+      await requestFromIPC<IRoomCache>(
         presence,
         getProcessChannel(processId),
         'healthcheck',
@@ -735,20 +734,7 @@ async function removeRoomsByProcessId(processId: string) {
   // clean-up possibly stale room ids
   // (ungraceful shutdowns using Redis can result on stale room ids still on memory.)
   //
-  if (typeof(driver.cleanup) === "function") {
-    await driver.cleanup(processId);
-
-  } else {
-    //
-    // TODO: remove this block on 1.0.
-    //
-    //  driver.cleanup() has been added mid-way through 0.15
-    //  some users may still be using older versions of the driver.
-    //
-    const cachedRooms = await driver.find({ processId }, { _id: 1 });
-    logger.debug("> Removing stale rooms by processId:", processId, `(${cachedRooms.length} rooms found)`);
-    cachedRooms.forEach((room) => room.remove());
-  }
+  await driver.cleanup(processId);
 }
 
 async function createRoomReferences(room: Room, init: boolean = false): Promise<boolean> {
@@ -770,38 +756,44 @@ async function createRoomReferences(room: Room, init: boolean = false): Promise<
   return true;
 }
 
-async function awaitRoomAvailable(roomToJoin: string, callback: Function): Promise<RoomListingData> {
+async function concurrentLock(
+  handler: RegisteredHandler,
+  concurrencyKey: string,
+  mayCreateRoom: boolean,
+  callback: (roomId?: string) => Promise<IRoomCache>
+): Promise<IRoomCache> {
   return new Promise(async (resolve, reject) => {
-    const concurrencyKey = getHandlerConcurrencyKey(roomToJoin);
-    const concurrency = await presence.incr(concurrencyKey) - 1;
+    const hkey = getConcurrencyHashKey(handler.name);
+    const concurrency = await presence.hincrby(hkey, concurrencyKey, 1) - 1;
 
-    //
-    // avoid having too long timeout if 10+ clients ask to join at the same time
-    //
-    // TODO: we need a better solution here. either a lock or queue system should be implemented instead.
-    // https://github.com/colyseus/colyseus/issues/466
-    //
-    const concurrencyTimeout = Math.min(concurrency * 100, 500);
-
-    if (concurrency > 0) {
-      debugMatchMaking(
-        'receiving %d concurrent requests for joining \'%s\' (waiting %d ms)',
-        concurrency, roomToJoin, concurrencyTimeout,
-      );
-    }
-
-    setTimeout(async () => {
+    const fulfill = async (roomId?: string) => {
       try {
-        const result = await callback();
-        resolve(result);
+        resolve(await callback(roomId));
 
       } catch (e) {
         reject(e);
 
       } finally {
-        await presence.decr(concurrencyKey);
+        await presence.hincrby(hkey, concurrencyKey, -1);
       }
-    }, concurrencyTimeout);
+    };
+
+    if (concurrency > 0) {
+      debugMatchMaking(
+        'receiving %d concurrent requests for joining \'%s\' (%s)',
+        concurrency, handler.name, concurrencyKey
+      );
+
+      const [_, roomId] = await presence.brpop(
+        `l:${handler.name}:${concurrencyKey}`,
+        MAX_CONCURRENT_JOIN_WAIT_TIME
+      );
+
+      return await fulfill(roomId);
+
+    } else {
+      return await fulfill();
+    }
   });
 }
 
@@ -854,9 +846,6 @@ async function disposeRoom(roomName: string, room: Room) {
   // emit disposal on registered session handler
   handlers[roomName].emit('dispose', room);
 
-  // remove concurrency key
-  presence.del(getHandlerConcurrencyKey(roomName));
-
   // unsubscribe from remote connections
   presence.unsubscribe(getRoomChannel(room.roomId));
 
@@ -871,8 +860,9 @@ function getRoomChannel(roomId: string) {
   return `$${roomId}`;
 }
 
-function getHandlerConcurrencyKey(name: string) {
-  return `c:${name}`;
+function getConcurrencyHashKey(roomName: string) {
+  // concurrency hash
+  return `ch:${roomName}`;
 }
 
 function getProcessChannel(id: string = processId) {

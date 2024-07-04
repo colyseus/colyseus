@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/tools",
-  "version": "0.16.0-preview.0",
+  "version": "0.16.0-alpha.0",
   "description": "Colyseus Tools for Production",
   "input": "./src/index.ts",
   "main": "./build/index.js",

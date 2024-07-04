@@ -19,7 +19,7 @@ import { isDevMode } from './utils/DevMode';
 
 import { debugAndPrintError, debugMessage } from './Debug';
 import { ServerError } from './errors/ServerError';
-import { RoomListingData } from './matchmaker/driver';
+import { RoomCache } from './matchmaker/driver/local/LocalDriver';
 import { Client, ClientArray, ClientPrivate, ClientState, ISendOptions } from './Transport';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
@@ -64,7 +64,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
     return this.listing.metadata;
   }
 
-  public listing: RoomListingData<Metadata>;
+  public listing: RoomCache<Metadata>;
 
   /**
    * Timing events tied to the room instance.

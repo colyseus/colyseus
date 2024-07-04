@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/monorepo",
-  "version": "0.16.0-preview.0",
+  "version": "0.16.0-alpha.0",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@8.15.1",

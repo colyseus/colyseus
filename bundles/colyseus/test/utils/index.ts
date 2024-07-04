@@ -18,14 +18,14 @@ Server.prototype['getDefaultTransport'] = function (options: ServerOptions) {
   });
 }
 
-export const DRIVERS = [ LocalDriver, ];
+// export const DRIVERS = [ LocalDriver, ];
 export const PRESENCE_IMPLEMENTATIONS = [ LocalPresence, ];
 
-// export const DRIVERS = [
-//   // LocalDriver,
-//   RedisDriver,
-//   // MongooseDriver,
-// ];
+export const DRIVERS = [
+  LocalDriver,
+  RedisDriver,
+  // MongooseDriver,
+];
 
 // export const PRESENCE_IMPLEMENTATIONS = [
 //   // LocalPresence,
@@ -45,7 +45,7 @@ export class WebSocketClient implements Client {
   messages: any[] = [];
   _enqueuedMessages: any[] = [];
   _afterNextPatchQueue;
-  _reconnectionToken;
+  reconnectionToken;
 
   errors: any[] = [];
 

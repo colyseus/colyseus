@@ -1,7 +1,7 @@
-import { spliceOne } from '../../utils/Utils';
-import { RoomListingData } from './interfaces';
+import { spliceOne } from '../../../utils/Utils';
+import { RoomCache, IRoomCache } from '../api';
 
-export class RoomCache implements RoomListingData {
+export class RoomData implements RoomCache {
   public clients: number = 0;
   public locked: boolean = false;
   public private: boolean = false;
@@ -16,7 +16,7 @@ export class RoomCache implements RoomListingData {
 
   private $rooms: RoomCache[];
 
-  constructor(initialValues: any, rooms: RoomCache[]) {
+  constructor(initialValues: any, rooms: IRoomCache[]) {
     this.createdAt = new Date();
 
     for (const field in initialValues) {

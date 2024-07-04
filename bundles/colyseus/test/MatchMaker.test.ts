@@ -1,5 +1,5 @@
 import assert from "assert";
-import { generateId, IRoomListingData, matchMaker, MatchMakerDriver, Room, RoomListingData } from "@colyseus/core";
+import { generateId, IIRoomCache, matchMaker, MatchMakerDriver, Room, IRoomCache } from "@colyseus/core";
 import { DummyRoom, Room2Clients, createDummyClient, timeout, ReconnectRoom, Room3Clients, DRIVERS, ReconnectTokenRoom } from "./utils";
 
 const DEFAULT_SEAT_RESERVATION_TIME = Number(process.env.COLYSEUS_SEAT_RESERVATION_TIME);
@@ -534,7 +534,7 @@ describe("MatchMaker", () => {
       });
 
       describe("cleaning up stale rooms and processId's", async () => {
-        async function createDummyRoomCache(data: Partial<IRoomListingData>) {
+        async function createDummyRoomCache(data: Partial<IIRoomCache>) {
           const cache = driver.createInstance(data);
           await cache.save();
           return cache;
@@ -563,7 +563,7 @@ describe("MatchMaker", () => {
           const allStats = await matchMaker.stats.fetchAll();
           assert.strictEqual(4, allStats.length);
 
-          assert.strictEqual(40, (await driver.find({})).length);
+          assert.strictEqual(40, (await driver.query({})).length);
 
           const allChecksPromise = matchMaker.healthCheckAllProcesses();
 
@@ -573,12 +573,12 @@ describe("MatchMaker", () => {
 
           await allChecksPromise;
 
-          assert.strictEqual(10, (await driver.find({})).length);
+          assert.strictEqual(10, (await driver.query({})).length);
 
         });
 
         it("auto-heal when trying to reserve seat on stale processId", async () => {
-          assert.strictEqual(0, (await driver.find({})).length);
+          assert.strictEqual(0, (await driver.query({})).length);
 
           matchMaker.defineRoomType("one", class extends Room { });
           matchMaker.presence.hset('roomcount', "dummy1", "1,1");
@@ -591,7 +591,7 @@ describe("MatchMaker", () => {
             maxClients: 4,
           });
 
-          assert.strictEqual(1, (await driver.find({})).length);
+          assert.strictEqual(1, (await driver.query({})).length);
 
           let room: matchMaker.SeatReservation;
           await assert.doesNotReject(async () => {
@@ -599,7 +599,7 @@ describe("MatchMaker", () => {
           });
 
           assert.strictEqual(room.room.processId, matchMaker.processId);
-          assert.strictEqual(1, (await driver.find({})).length);
+          assert.strictEqual(1, (await driver.query({})).length);
         });
 
       });
