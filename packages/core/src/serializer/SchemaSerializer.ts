@@ -10,20 +10,20 @@ const SHARED_VIEW = {};
 export class SchemaSerializer<T> implements Serializer<T> {
   public id = 'schema';
 
-  private encoder: Encoder;
-  private hasFilters: boolean = false;
+  protected encoder: Encoder;
+  protected hasFilters: boolean = false;
 
-  private handshakeCache: Buffer;
+  protected handshakeCache: Buffer;
 
   // flag to avoid re-encoding full state if no changes were made
-  private needFullEncode: boolean = true;
+  protected needFullEncode: boolean = true;
 
   // TODO: make this optional. allocating a new buffer for each room may not be always necessary.
-  private fullEncodeBuffer: Buffer = Buffer.allocUnsafe(Encoder.BUFFER_SIZE);
-  private fullEncodeCache: Buffer;
-  private sharedOffsetCache: Iterator = { offset: 0 };
+  protected fullEncodeBuffer: Buffer = Buffer.allocUnsafe(Encoder.BUFFER_SIZE);
+  protected fullEncodeCache: Buffer;
+  protected sharedOffsetCache: Iterator = { offset: 0 };
 
-  private views: Map<StateView | typeof SHARED_VIEW, Buffer>;
+  protected views: Map<StateView | typeof SHARED_VIEW, Buffer>;
 
   public reset(newState: T & Schema) {
     this.encoder = new Encoder(newState);
