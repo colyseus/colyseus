@@ -168,6 +168,15 @@ export class LocalPresence implements Presence {
         return value;
     }
 
+    public hincrbyex(key: string, field: string, incrBy: number, expireInSeconds: number) {
+        if (!this.hash[key]) { this.hash[key] = {}; }
+        let value = Number(this.hash[key][field] || '0');
+        value += incrBy;
+        this.hash[key][field] = value.toString();
+        this.setex(key, field, expireInSeconds);
+        return value;
+    }
+
     public async hget(key: string, field: string) {
         return this.hash[key] && this.hash[key][field];
     }

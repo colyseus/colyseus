@@ -135,6 +135,12 @@ export interface Presence {
     hincrby(key: string, field: string, value: number): number | Promise<number>;
 
     /**
+     * WARNING: DO NOT USE THIS METHOD. It is meant for internal use only.
+     * @private
+     */
+    hincrbyex(key: string, field: string, value: number, expireInSeconds: number): number | Promise<number>;
+
+    /**
      * Returns the value associated with field in the hash stored at key.
      */
     hget(key: string, field: string): Promise<string>;
@@ -169,12 +175,34 @@ export interface Presence {
      */
     decr(key: string): Promise<number>;
 
-    // LISTS
+    /**
+     * Returns the length of the list stored at key.
+     */
     llen(key: string): number | Promise<number>;
+
+    /**
+     * Adds the string value to the end of the list stored at key. If key does not exist, it is created as empty list before performing the push operation.
+     */
     rpush(key: string, ...values: string[]): number | Promise<number>;
+
+    /**
+     * Adds the string value to the begginning of the list stored at key. If key does not exist, it is created as empty list before performing the push operation.
+     */
     lpush(key: string, ...values: string[]): number | Promise<number>;
+
+    /**
+     * Removes and returns the last element of the list stored at key.
+     */
     rpop(key: string): string | Promise<string>;
+
+    /**
+     * Removes and returns the first element of the list stored at key.
+     */
     lpop(key: string): string | Promise<string>;
+
+    /**
+     * Removes and returns the last element of the list stored at key. If the list is empty, the execution is halted until an element is available or the timeout is reached.
+     */
     brpop(...args: [...keys: string[], timeoutInSeconds: number]): Promise<[string, string]>;
 
     shutdown(): void;

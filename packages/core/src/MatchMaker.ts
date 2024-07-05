@@ -774,7 +774,12 @@ async function concurrentJoinOrCreateRoomLock(
 ): Promise<IRoomCache> {
   return new Promise(async (resolve, reject) => {
     const hkey = getConcurrencyHashKey(handler.name);
-    const concurrency = await presence.hincrby(hkey, concurrencyKey, 1) - 1;
+    const concurrency = await presence.hincrbyex(
+      hkey,
+      concurrencyKey,
+      1, // increment by 1
+      MAX_CONCURRENT_CREATE_ROOM_WAIT_TIME * 2 // expire in 2x the time of MAX_CONCURRENT_CREATE_ROOM_WAIT_TIME
+    ) - 1; // do not consider the current request
 
     const fulfill = async (roomId?: string) => {
       try {
@@ -790,13 +795,14 @@ async function concurrentJoinOrCreateRoomLock(
 
     if (concurrency > 0) {
       debugMatchMaking(
-        'receiving %d concurrent requests for creating \'%s\' (%s)',
+        'receiving %d concurrent joinOrCreate for \'%s\' (%s)',
         concurrency, handler.name, concurrencyKey
       );
 
       const result = await presence.brpop(
         `l:${handler.name}:${concurrencyKey}`,
-        MAX_CONCURRENT_CREATE_ROOM_WAIT_TIME
+        MAX_CONCURRENT_CREATE_ROOM_WAIT_TIME +
+          (Math.min(concurrency, 3) * 200) // add extra milliseconds for each concurrent request
       );
 
       return await fulfill(result && result[1]);

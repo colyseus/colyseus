@@ -135,6 +135,17 @@ export class RedisPresence implements Presence {
         });
     }
 
+    public async hincrbyex(key: string, field: string, value: number, expireInSeconds: number) {
+        return new Promise<number>((resolve, reject) => {
+          this.pub.multi()
+            .hincrby(key, field, value)
+            .expire(key, expireInSeconds, (err, result) => {
+              if (err) return reject(err);
+              resolve(result);
+            });
+        });
+    }
+
     public async hget(key: string, field: string) {
         return await this.pub.hget(key, field);
     }
