@@ -59,6 +59,14 @@ export interface Presence {
     setex(key: string, value: string, seconds: number);
 
     /**
+     * Expire the key in seconds.
+     *
+     * @param key - Identifier.
+     * @param seconds - Seconds to expire the key.
+     */
+    expire(key: string, seconds: number);
+
+    /**
      * Get the value of key.
      *
      * @param key - Identifier.

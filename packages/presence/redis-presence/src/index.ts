@@ -81,6 +81,11 @@ export class RedisPresence implements Presence {
         this.pub.setex(key, seconds, value, resolve));
     }
 
+    public async expire(key: string, seconds: number) {
+      return new Promise((resolve) =>
+        this.pub.expire(key, seconds, resolve));
+    }
+
     public async get(key: string) {
         return new Promise((resolve, reject) => {
             this.pub.get(key, (err, data) => {
@@ -139,9 +144,10 @@ export class RedisPresence implements Presence {
         return new Promise<number>((resolve, reject) => {
           this.pub.multi()
             .hincrby(key, field, value)
-            .expire(key, expireInSeconds, (err, result) => {
+            .expire(key, expireInSeconds)
+            .exec((err, results) => {
               if (err) return reject(err);
-              resolve(result);
+              resolve(results[0][1] as number);
             });
         });
     }

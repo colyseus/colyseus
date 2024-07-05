@@ -84,12 +84,15 @@ export class LocalPresence implements Presence {
     }
 
     public setex(key: string, value: string, seconds: number) {
+        this.keys[key] = value;
+        this.expire(key, seconds);
+    }
+
+    public expire(key: string, seconds: number) {
         // ensure previous timeout is clear before setting another one.
         if (this.timeouts[key]) {
             clearTimeout(this.timeouts[key]);
         }
-
-        this.keys[key] = value;
         this.timeouts[key] = setTimeout(() => {
             delete this.keys[key];
             delete this.timeouts[key];
