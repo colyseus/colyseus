@@ -158,9 +158,9 @@ export async function joinOrCreate(roomName: string, clientOptions: ClientOption
       // Prevent multiple rooms of same filter from being created concurrently
       //
       await concurrentJoinOrCreateRoomLock(handler, concurrencyKey, async (roomId?: string) => {
-        if (roomId) {
-          room = await driver.findOne({ roomId })
-        }
+        room = (roomId)
+          ? await driver.findOne({ roomId })
+          : await findOneRoomAvailable(roomName, clientOptions);
 
         if (!room) {
           //
@@ -173,7 +173,7 @@ export async function joinOrCreate(roomName: string, clientOptions: ClientOption
         }
 
         return room;
-      })
+      });
     }
 
     return await reserveSeatFor(room, clientOptions, authData);
