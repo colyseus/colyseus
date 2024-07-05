@@ -807,7 +807,7 @@ async function concurrentJoinOrCreateRoomLock(
       const result = await presence.brpop(
         `l:${handler.name}:${concurrencyKey}`,
         MAX_CONCURRENT_CREATE_ROOM_WAIT_TIME +
-          (Math.min(concurrency, 3) * 200) // add extra milliseconds for each concurrent request
+          (Math.min(concurrency, 3) * 0.2) // add extra milliseconds for each concurrent request
       );
 
       return await fulfill(result && result[1]);
