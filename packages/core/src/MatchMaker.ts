@@ -2,7 +2,7 @@ import { ErrorCode, Protocol } from './Protocol';
 
 import { requestFromIPC, subscribeIPC } from './IPC';
 
-import { Deferred, generateId, MAX_CONCURRENT_JOIN_WAIT_TIME, merge, REMOTE_ROOM_SHORT_TIMEOUT, retry } from './utils/Utils';
+import { Deferred, generateId, merge, retry, MAX_CONCURRENT_CREATE_ROOM_WAIT_TIME, REMOTE_ROOM_SHORT_TIMEOUT } from './utils/Utils';
 import { isDevMode, cacheRoomHistory, getPreviousProcessId, getRoomRestoreListKey, reloadFromCache } from './utils/DevMode';
 
 import { RegisteredHandler } from './matchmaker/RegisteredHandler';
@@ -147,18 +147,34 @@ export async function accept() {
 export async function joinOrCreate(roomName: string, clientOptions: ClientOptions = {}, authOptions?: AuthOptions) {
   return await retry<Promise<SeatReservation>>(async () => {
     const authData = await callOnAuth(roomName, authOptions);
+    let room: IRoomCache = await findOneRoomAvailable(roomName, clientOptions);
 
-    const room = await findOneRoomAvailable(
-      roomName,
-      clientOptions,
-      () => createRoom(roomName, clientOptions)
-    );
+    if (!room) {
+      const handler = getHandler(roomName);
+      const filterOptions = handler.getFilterOptions(clientOptions);
+      const concurrencyKey = getLockId(filterOptions);
 
-    //
-    // TODO [?]
-    //    should we expose the "creator" auth data of the room during `onCreate()`?
-    //    it would be useful, though it could be accessed via `onJoin()` for now.
-    //
+      //
+      // Prevent multiple rooms of same filter from being created concurrently
+      //
+      await concurrentJoinOrCreateRoomLock(handler, concurrencyKey, async (roomId?: string) => {
+        if (roomId) {
+          room = await driver.findOne({ roomId })
+        }
+
+        if (!room) {
+          //
+          // TODO [?]
+          //    should we expose the "creator" auth data of the room during `onCreate()`?
+          //    it would be useful, though it could be accessed via `onJoin()` for now.
+          //
+          room = await createRoom(roomName, clientOptions);
+          presence.lpush(`l:${handler.name}:${concurrencyKey}`, room.roomId);
+        }
+
+        return room;
+      })
+    }
 
     return await reserveSeatFor(room, clientOptions, authData);
   }, 5, [SeatReservationError]);
@@ -257,37 +273,29 @@ export async function query(conditions: Partial<IRoomCache> = {}, sortOptions?: 
  * Find for a public and unlocked room available.
  *
  * @param roomName - The Id of the specific room.
- * @param clientOptions - Options for the client seat reservation (for `onJoin`/`onAuth`).
+ * @param filterOptions - Filter options.
+ * @param sortOptions - Sorting options.
  *
  * @returns Promise<IRoomCache> - A promise contaning an object which includes room metadata and configurations.
  */
 export async function findOneRoomAvailable(
   roomName: string,
-  clientOptions: ClientOptions,
-  fallbackCreateRoom?: () => Promise<IRoomCache>,
-): Promise<IRoomCache> {
+  filterOptions: ClientOptions,
+  additionalSortOptions?: SortOptions,
+) {
   const handler = getHandler(roomName);
-  const filterOptions = handler.getFilterOptions(clientOptions);
-  const concurrencyKey = getLockId(filterOptions);
-  const mayCreateRoom = (fallbackCreateRoom !== undefined);
+  const sortOptions = Object.assign({}, handler.sortOptions ?? {});
 
-  return await concurrentLock(handler, concurrencyKey, mayCreateRoom, async (roomId?: string) => {
-    let room: IRoomCache = (roomId)
-        ? await driver.findOne({ roomId })
-        : await driver.findOne({
-            locked: false,
-            name: roomName,
-            private: false,
-            ...filterOptions,
-          }, handler.sortOptions);
+  if (additionalSortOptions) {
+    Object.assign(sortOptions, additionalSortOptions);
+  }
 
-    if (!room && fallbackCreateRoom) {
-      room = await fallbackCreateRoom();
-      presence.lpush(`l:${handler.name}:${concurrencyKey}`, room.roomId);
-    }
-
-    return room;
-  });
+  return await driver.findOne({
+    locked: false,
+    name: roomName,
+    private: false,
+    ...handler.getFilterOptions(filterOptions),
+  }, sortOptions);
 }
 
 /**
@@ -756,10 +764,12 @@ async function createRoomReferences(room: Room, init: boolean = false): Promise<
   return true;
 }
 
-async function concurrentLock(
+/**
+ * Used only during `joinOrCreate` to handle concurrent requests for creating a room.
+ */
+async function concurrentJoinOrCreateRoomLock(
   handler: RegisteredHandler,
   concurrencyKey: string,
-  mayCreateRoom: boolean,
   callback: (roomId?: string) => Promise<IRoomCache>
 ): Promise<IRoomCache> {
   return new Promise(async (resolve, reject) => {
@@ -780,16 +790,16 @@ async function concurrentLock(
 
     if (concurrency > 0) {
       debugMatchMaking(
-        'receiving %d concurrent requests for joining \'%s\' (%s)',
+        'receiving %d concurrent requests for creating \'%s\' (%s)',
         concurrency, handler.name, concurrencyKey
       );
 
-      const [_, roomId] = await presence.brpop(
+      const result = await presence.brpop(
         `l:${handler.name}:${concurrencyKey}`,
-        MAX_CONCURRENT_JOIN_WAIT_TIME
+        MAX_CONCURRENT_CREATE_ROOM_WAIT_TIME
       );
 
-      return await fulfill(roomId);
+      return await fulfill(result && result[1]);
 
     } else {
       return await fulfill();
