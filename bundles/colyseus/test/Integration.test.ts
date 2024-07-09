@@ -581,16 +581,16 @@ describe("Integration", () => {
 
           });
 
-          describe("setPatchRate()", () => {
+          describe("patchRate", () => {
             class PatchState extends Schema {
               @type("number") number: number = 0;
             }
 
             it("should receive patch at every patch rate", async () => {
               matchMaker.defineRoomType('patchinterval', class _ extends Room {
+                state = new PatchState();
+                patchRate = 20;
                 onCreate(options: any) {
-                  this.setState(new PatchState());
-                  this.setPatchRate(20);
                   this.setSimulationInterval(() => this.state.number++);
                 }
               });
@@ -610,9 +610,9 @@ describe("Integration", () => {
 
             it("should not receive any patch if patchRate is nullified", async () => {
               matchMaker.defineRoomType('patchinterval', class _ extends Room {
+                patchRate = null;
                 onCreate(options: any) {
                   this.setState(new PatchState());
-                  this.setPatchRate(null);
                   this.setSimulationInterval(() => this.state.number++);
                 }
               });

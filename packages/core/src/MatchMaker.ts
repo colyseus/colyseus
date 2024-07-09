@@ -477,9 +477,14 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
     room.roomId = generateId();
   }
 
-  if (room.state) {
-    room.setState(room.state);
-  }
+  //
+  // Initialize .state (if set).
+  //
+  // Define getters and setters for:
+  //   - autoDispose
+  //   - patchRate
+  //
+  room['__init']();
 
   room.roomName = roomName;
   room.presence = presence;

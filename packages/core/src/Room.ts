@@ -74,7 +74,6 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
 
   #_roomId: string;
   #_roomName: string;
-  #_autoDispose: boolean = true;
 
   /**
    * Maximum number of clients allowed to connect into the room. When room reaches this limit,
@@ -89,6 +88,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
    * @default true
    */
   public autoDispose: boolean = true;
+  #_autoDispose: boolean;
 
   /**
    * Frequency to send the room state to connected clients, in milliseconds.
@@ -96,6 +96,8 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
    * @default 50ms (20fps)
    */
   public patchRate: number = DEFAULT_PATCH_RATE;
+  #_patchRate: number;
+  #_patchInterval: NodeJS.Timeout;
 
   /**
    * The state instance you provided to `setState()`.
@@ -154,7 +156,6 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
   private _afterNextPatchQueue: Array<[string | Client, IArguments]> = [];
 
   private _simulationInterval: NodeJS.Timeout;
-  private _patchInterval: NodeJS.Timeout;
 
   private _internalState: RoomInternalState = RoomInternalState.CREATING;
   private _locked: boolean = false;
@@ -175,10 +176,15 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
       }
       this._events.emit('disconnect');
     });
+  }
 
-    this.setPatchRate(this.patchRate);
+  protected __init() {
+    if (this.state) {
+      this.setState(this.state);
+    }
 
     this.#_autoDispose = this.autoDispose;
+    this.#_patchRate = this.patchRate;
 
     Object.defineProperties(this, {
       autoDispose: {
@@ -194,7 +200,26 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
           }
         },
       },
-    })
+
+      patchRate: {
+        enumerable: true,
+        get: () => this.#_patchRate,
+        set: (milliseconds: number) => {
+          this.#_patchRate = milliseconds;
+          // clear previous interval in case called setPatchRate more than once
+          if (this.#_patchInterval) {
+            clearInterval(this.#_patchInterval);
+            this.#_patchInterval = undefined;
+          }
+          if (milliseconds !== null && milliseconds !== 0) {
+            this.#_patchInterval = setInterval(() => this.broadcastPatch(), milliseconds);
+          }
+        },
+      },
+    });
+
+    // set patch interval, now with the setter
+    this.patchRate = this.#_patchRate;
 
     // set default _autoDisposeTimeout
     this.resetAutoDisposeTimeout(this.seatReservationTime);
@@ -226,6 +251,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
    * @returns roomId string
    */
   public get roomId() { return this.#_roomId; }
+
   /**
    * Setting the roomId, is restricted in room lifetime except upon room creation.
    *
@@ -360,18 +386,11 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
     }
   }
 
+  /**
+   * @deprecated Use `.patchRate=` instead.
+   */
   public setPatchRate(milliseconds: number | null): void {
     this.patchRate = milliseconds;
-
-    // clear previous interval in case called setPatchRate more than once
-    if (this._patchInterval) {
-      clearInterval(this._patchInterval);
-      this._patchInterval = undefined;
-    }
-
-    if (milliseconds !== null && milliseconds !== 0) {
-      this._patchInterval = setInterval(() => this.broadcastPatch(), milliseconds);
-    }
   }
 
   public setState(newState: State) {
@@ -905,9 +924,9 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
       userReturnData = this.onDispose();
     }
 
-    if (this._patchInterval) {
-      clearInterval(this._patchInterval);
-      this._patchInterval = undefined;
+    if (this.#_patchInterval) {
+      clearInterval(this.#_patchInterval);
+      this.#_patchInterval = undefined;
     }
 
     if (this._simulationInterval) {
