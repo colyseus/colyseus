@@ -78,14 +78,14 @@ export function spliceOne(arr: any[], index: number): boolean {
   return true;
 }
 
-export class Deferred<T= any> {
+export class Deferred<T = any> {
   public promise: Promise<T>;
 
   public resolve: Function;
   public reject: Function;
 
-  constructor() {
-    this.promise = new Promise<T>((resolve, reject) => {
+  constructor(promise?: Promise<T>) {
+    this.promise = promise ?? new Promise<T>((resolve, reject) => {
       this.resolve = resolve;
       this.reject = reject;
     });
@@ -97,6 +97,14 @@ export class Deferred<T= any> {
 
   public catch(func: (value: any) => any) {
     return this.promise.catch(func);
+  }
+
+  static reject (reason?: any) {
+    return new Deferred(Promise.reject(reason));
+  }
+
+  static resolve<T = any>(value?: T) {
+    return new Deferred<T>(Promise.resolve(value));
   }
 
 }

@@ -716,7 +716,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
     // been at "ClientState.JOINED" state)
     //
     if ((previousClient as unknown as ClientPrivate)._enqueuedMessages !== undefined) {
-      return;
+      return Deferred.reject('client not joined');
     }
 
     if (seconds === undefined) { // TODO: remove this check
@@ -730,7 +730,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
 
     if (this._internalState === RoomInternalState.DISPOSING) {
       this._disposeIfEmpty(); // gracefully shutting down
-      throw new Error('disconnecting');
+      return Deferred.reject('disconnecting');
     }
 
     const sessionId = previousClient.sessionId;
