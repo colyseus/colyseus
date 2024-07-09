@@ -119,7 +119,28 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
   protected _reconnections: { [reconnectionToken: string]: [string, Deferred] } = {};
   private _reconnectingSessionId = new Map<string, string>();
 
-  private onMessageHandlers: { [id: string]: (client: Client, message: any) => void } = {};
+  private onMessageHandlers: {
+    [id: string]: {
+      callback: (...args: any[]) => void,
+      validate?: (data: unknown) => any,
+    }
+  } = {
+      '__no_message_handler': {
+        callback: (client: Client, messageType: string, _: unknown) => {
+          const errorMessage = `onMessage for "${messageType}" not registered.`;
+          debugAndPrintError(errorMessage);
+
+          if (isDevMode) {
+            // send error code to client in development mode
+            client.error(ErrorCode.INVALID_PAYLOAD, errorMessage);
+
+          } else {
+            // immediately close the connection in production
+            client.leave(Protocol.WS_CLOSE_WITH_ERROR, errorMessage);
+          }
+        }
+      }
+    };
 
   private _serializer: Serializer<State> = noneSerializer;
   private _afterNextPatchQueue: Array<[string | Client, IArguments]> = [];
@@ -487,10 +508,21 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
     return hasChanges;
   }
 
-  public onMessage<T = any>(messageType: '*', callback: (client: Client<UserData, AuthData>, type: string | number, message: T) => void);
-  public onMessage<T = any>(messageType: string | number, callback: (client: Client<UserData, AuthData>, message: T) => void);
-  public onMessage<T = any>(messageType: '*' | string | number, callback: (...args: any[]) => void) {
-    this.onMessageHandlers[messageType] = callback;
+  public onMessage<T = any>(
+    messageType: '*',
+    callback: (client: Client<UserData, AuthData>, type: string | number, message: T) => void
+  );
+  public onMessage<T = any>(
+    messageType: string | number,
+    callback: (client: Client<UserData, AuthData>, message: T) => void,
+    validate?: (message: unknown) => T,
+  );
+  public onMessage<T = any>(
+    messageType: '*' | string | number,
+    callback: (...args: any[]) => void,
+    validate?: (message: unknown) => T,
+  ) {
+    this.onMessageHandlers[messageType] = { callback, validate };
     // returns a method to unbind the callback
     return () => delete this.onMessageHandlers[messageType];
   }
@@ -900,6 +932,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
       const messageType = (decode.stringCheck(buffer, it))
         ? decode.string(buffer, it)
         : decode.number(buffer, it);
+      const messageTypeHandler = this.onMessageHandlers[messageType];
 
       let message;
       try {
@@ -907,58 +940,44 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
           ? unpack(buffer.subarray(it.offset, buffer.byteLength))
           : undefined;
         debugMessage("received: '%s' -> %j", messageType, message);
+
+        // custom message validation
+        if (messageTypeHandler?.validate !== undefined) {
+          message = messageTypeHandler.validate(message);
+        }
+
       } catch (e) {
         debugAndPrintError(e);
         client.leave(Protocol.WS_CLOSE_WITH_ERROR);
         return;
       }
 
-      if (this.onMessageHandlers[messageType]) {
-        this.onMessageHandlers[messageType](client, message);
-
-      } else if (this.onMessageHandlers['*']) {
-        (this.onMessageHandlers['*'] as any)(client, messageType, message);
+      if (messageTypeHandler) {
+        messageTypeHandler.callback(client, message);
 
       } else {
-        const errorMessage = `onMessage for "${messageType}" not registered.`;
-        debugAndPrintError(errorMessage);
-
-        if (isDevMode) {
-          // send error code to client in development mode
-          client.error(ErrorCode.INVALID_PAYLOAD, errorMessage);
-
-        } else {
-          // immediately close the connection in production
-          client.leave(Protocol.WS_CLOSE_WITH_ERROR, errorMessage);
-        }
+        (this.onMessageHandlers['*'] || this.onMessageHandlers['__no_message_handler']).callback(client, messageType, message);
       }
 
     } else if (code === Protocol.ROOM_DATA_BYTES) {
       const messageType = (decode.stringCheck(buffer, it))
         ? decode.string(buffer, it)
         : decode.number(buffer, it);
+      const messageTypeHandler = this.onMessageHandlers[messageType];
 
-      const message = buffer.subarray(it.offset, buffer.byteLength);
+      let message = buffer.subarray(it.offset, buffer.byteLength);
       debugMessage("received: '%s' -> %j", messageType, message);
 
-      if (this.onMessageHandlers[messageType]) {
-        this.onMessageHandlers[messageType](client, message);
+      // custom message validation
+      if (messageTypeHandler?.validate !== undefined) {
+        message = messageTypeHandler.validate(message);
+      }
 
-      } else if (this.onMessageHandlers['*']) {
-        (this.onMessageHandlers['*'] as any)(client, messageType, message);
+      if (messageTypeHandler) {
+        messageTypeHandler.callback(client, message);
 
       } else {
-        const errorMessage = `onMessage for "${messageType}" not registered.`;
-        debugAndPrintError(errorMessage);
-
-        if (isDevMode) {
-          // send error code to client in development mode
-          client.error(ErrorCode.INVALID_PAYLOAD, errorMessage);
-
-        } else {
-          // immediately close the connection in production
-          client.leave(Protocol.WS_CLOSE_WITH_ERROR, errorMessage);
-        }
+        (this.onMessageHandlers['*'] || this.onMessageHandlers['__no_message_handler']).callback(client, messageType, message);
       }
 
     } else if (code === Protocol.JOIN_ROOM && client.state === ClientState.JOINING) {

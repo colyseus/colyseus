@@ -381,11 +381,11 @@ importers:
         specifier: workspace:^
         version: link:../../core
       '@types/ws':
-        specifier: ^7.4.4
-        version: 7.4.7
+        specifier: ^8.5.0
+        version: 8.5.10
       ws:
-        specifier: ^7.4.5
-        version: 7.5.10
+        specifier: ^8.18.0
+        version: 8.18.0
 
 packages:
 
@@ -2220,6 +2220,13 @@ packages:
     resolution: {integrity: sha512-JQbbmxZTZehdc2iszGKs5oC3NFnjeay7mtAWrdt7qNtAVK0g19muApzAy4bm9byz79xa2ZnO/BOBC2R8RC5Lww==}
     dependencies:
       '@types/node': 20.14.10
+    dev: true
+
+  /@types/ws@8.5.10:
+    resolution: {integrity: sha512-vmQSUcfalpIq0R9q7uTo2lXs6eGIpt9wtnLdMv9LVpIjCA/+ufZRozlVoVelIYixx1ugCBKDhn89vnsEGOCx9A==}
+    dependencies:
+      '@types/node': 20.14.10
+    dev: false
 
   /@types/yargs-parser@21.0.3:
     resolution: {integrity: sha512-I4q9QU9MQv4oEOz4tAHJtNz1cwuLxn2F3xcc2iV5WdqLPpUnj30aUuxt1mAxYTG+oe8CZMV/+6rU4S4gRDzqtQ==}
@@ -6385,7 +6392,7 @@ packages:
       array-differ: 3.0.0
       array-union: 2.1.0
       arrify: 2.0.1
-      minimatch: 3.1.2
+      minimatch: 3.0.5
     dev: true
 
   /mute-stream@0.0.8:
@@ -8753,7 +8760,7 @@ packages:
       require-directory: 2.1.1
       string-width: 4.2.3
       y18n: 5.0.8
-      yargs-parser: 20.2.9
+      yargs-parser: 20.2.4
     dev: true
 
   /yargs@17.7.2:

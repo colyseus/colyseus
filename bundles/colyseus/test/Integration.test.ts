@@ -511,7 +511,7 @@ describe("Integration", () => {
             });
 
             it("should support sending and receiving raw bytes", async () => {
-              const pingBytes = [1, 2, 3, 4, 5];
+              const pingBytes = new Uint8Array([1, 2, 3, 4, 5]);
 
               matchMaker.defineRoomType('onmessage_bytes', class _ extends Room {
                 onCreate() {
@@ -531,8 +531,54 @@ describe("Integration", () => {
               await timeout(20);
               await connection.leave();
 
-              assert.deepStrictEqual(pingBytes, Array.from(new Uint8Array(receivedBytes)));
-            })
+              assert.deepStrictEqual(Array.from(pingBytes), Array.from(new Uint8Array(receivedBytes)));
+            });
+
+            it("should validate input message", async () => {
+              matchMaker.defineRoomType('onmessage_validation', class _ extends Room {
+                onCreate() {
+                  this.onMessage("input_xy", (client, payload) => {
+                    client.send("input_xy", payload);
+                  }, (payload: any) => {
+                    return { x: payload.x, y: payload.y };
+                  });
+                }
+              });
+
+              const conn = await client.joinOrCreate('onmessage_validation');
+
+              let receivedMessage: any;
+              conn.onMessage("input_xy", (message) => receivedMessage = message);
+              conn.send("input_xy", { x: 1, y: 2, z: 3 });
+              await timeout(20);
+
+              assert.deepStrictEqual(receivedMessage, { x: 1, y: 2 });
+            });
+
+            it("should disconnect if input validation throws", async () => {
+              matchMaker.defineRoomType('onmessage_validation', class _ extends Room {
+                onCreate() {
+                  this.onMessage("input_xy", (_1, _2) => {
+                    // do nothing
+                  }, (_) => {
+                    throw new Error("what");
+                  });
+                }
+              });
+
+              const conn = await client.joinOrCreate('onmessage_validation');
+
+              let onLeaveCode: number;
+              conn.onLeave((code) => {
+                onLeaveCode = code;
+              });
+
+              conn.send("input_xy", { x: 1, y: 2, z: 3 });
+              await timeout(20);
+
+              assert.strictEqual(onLeaveCode, Protocol.WS_CLOSE_WITH_ERROR);
+            });
+
           });
 
           describe("setPatchRate()", () => {
@@ -631,7 +677,7 @@ describe("Integration", () => {
                 onCreate() {
                   this.onMessage("*", (client, type, message) => {
                     this.broadcast(type, message, { except: client });
-                  })
+                  });
                 }
               });
 

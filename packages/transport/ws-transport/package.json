@@ -7,8 +7,8 @@
   "typings": "./build/index.d.ts",
   "dependencies": {
     "@colyseus/core": "workspace:^",
-    "@types/ws": "^7.4.4",
-    "ws": "^7.4.5"
+    "@types/ws": "^8.5.0",
+    "ws": "^8.18.0"
   },
   "author": "Endel Dreyer",
   "license": "MIT",
