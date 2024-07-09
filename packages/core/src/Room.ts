@@ -82,6 +82,14 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
    * the room will be unlocked as soon as a client disconnects from it.
    */
   public maxClients: number = Infinity;
+
+  /**
+   * Automatically dispose the room when last client disconnects.
+   *
+   * @default true
+   */
+  public autoDispose: boolean = true;
+
   /**
    * Frequency to send the room state to connected clients, in milliseconds.
    *
@@ -169,24 +177,27 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
     });
 
     this.setPatchRate(this.patchRate);
+
+    this.#_autoDispose = this.autoDispose;
+
+    Object.defineProperties(this, {
+      autoDispose: {
+        enumerable: true,
+        get: () => this.#_autoDispose,
+        set: (value: boolean) => {
+          if (
+            value !== this.#_autoDispose &&
+            this._internalState !== RoomInternalState.DISPOSING
+          ) {
+            this.#_autoDispose = value;
+            this.resetAutoDisposeTimeout();
+          }
+        },
+      },
+    })
+
     // set default _autoDisposeTimeout
     this.resetAutoDisposeTimeout(this.seatReservationTime);
-  }
-
-  /**
-   * Automatically dispose the room when last client disconnects.
-   *
-   * @default true
-   */
-  public get autoDispose() { return this.#_autoDispose; }
-  public set autoDispose(value: boolean) {
-    if (
-      value !== this.#_autoDispose &&
-      this._internalState !== RoomInternalState.DISPOSING
-    ) {
-      this.#_autoDispose = value;
-      this.resetAutoDisposeTimeout();
-    }
   }
 
   /**
