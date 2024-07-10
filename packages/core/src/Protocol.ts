@@ -47,38 +47,39 @@ export enum IpcProtocol {
   TIMEOUT = 2,
 }
 
-const sendBuffer = Buffer.allocUnsafe(8192);
 
 const packr = new Packr();
-packr.useBuffer(sendBuffer);
+
+// msgpackr workaround: initialize buffer
+packr.encode(undefined);
 
 export const getMessageBytes = {
   [Protocol.JOIN_ROOM]: (reconnectionToken: string, serializerId: string, handshake?: Buffer) => {
     const it: Iterator = { offset: 1 };
-    sendBuffer[0] = Protocol.JOIN_ROOM;
+    packr.buffer[0] = Protocol.JOIN_ROOM;
 
-    sendBuffer[it.offset++] = Buffer.byteLength(reconnectionToken, "utf8");
-    encode.utf8Write(sendBuffer, reconnectionToken, it);
+    packr.buffer[it.offset++] = Buffer.byteLength(reconnectionToken, "utf8");
+    encode.utf8Write(packr.buffer, reconnectionToken, it);
 
-    sendBuffer[it.offset++] = Buffer.byteLength(serializerId, "utf8");
-    encode.utf8Write(sendBuffer, serializerId, it);
+    packr.buffer[it.offset++] = Buffer.byteLength(serializerId, "utf8");
+    encode.utf8Write(packr.buffer, serializerId, it);
 
     let handshakeLength = handshake?.byteLength || 0;
     if (handshakeLength > 0) {
-      handshake.copy(sendBuffer, it.offset, 0, handshakeLength);
+      handshake.copy(packr.buffer, it.offset, 0, handshakeLength);
     }
 
-    return sendBuffer.subarray(0, it.offset + handshakeLength);
+    return packr.buffer.subarray(0, it.offset + handshakeLength);
   },
 
   [Protocol.ERROR]: (code: number, message: string = '') => {
     const it: Iterator = { offset: 1 };
-    sendBuffer[0] = Protocol.ERROR;
+    packr.buffer[0] = Protocol.ERROR;
 
-    encode.number(sendBuffer, code, it);
-    encode.string(sendBuffer, message, it);
+    encode.number(packr.buffer, code, it);
+    encode.string(packr.buffer, message, it);
 
-    return sendBuffer.subarray(0, it.offset);
+    return packr.buffer.subarray(0, it.offset);
   },
 
   [Protocol.ROOM_STATE]: (bytes: number[]) => {
@@ -87,13 +88,13 @@ export const getMessageBytes = {
 
   raw: (code: Protocol, type: string | number, message?: any, rawMessage?: Uint8Array | Buffer) => {
     const it: Iterator = { offset: 1 };
-    sendBuffer[0] = code;
+    packr.buffer[0] = code;
 
     if (typeof (type) === 'string') {
-      encode.string(sendBuffer, type as string, it);
+      encode.string(packr.buffer, type as string, it);
 
     } else {
-      encode.number(sendBuffer, type, it);
+      encode.number(packr.buffer, type, it);
     }
 
     if (message !== undefined) {
@@ -107,22 +108,22 @@ export const getMessageBytes = {
       //   (colyseus.js' usage of msgpackr/buffer is conflicting)
       //
       if (process.env.NODE_ENV !== "production") {
-        packr.useBuffer(sendBuffer);
+        packr.useBuffer(packr.buffer);
       }
 
-      // pack message into the same sendBuffer
+      // pack message into the same packr.buffer
       const endOfBufferOffset = packr.pack(message, 2048 + it.offset).byteLength;
                                                  // 2048 = RESERVE_START_SPACE
-      return sendBuffer.subarray(0, endOfBufferOffset);
+      return packr.buffer.subarray(0, endOfBufferOffset);
 
     } else if (rawMessage !== undefined) {
 
-      // copy raw message into sendBuffer
-      sendBuffer.set(rawMessage, it.offset);
-      return sendBuffer.subarray(0, it.offset + rawMessage.byteLength);
+      // copy raw message into packr.buffer
+      packr.buffer.set(rawMessage, it.offset);
+      return packr.buffer.subarray(0, it.offset + rawMessage.byteLength);
 
     } else {
-      return sendBuffer.subarray(0, it.offset);
+      return packr.buffer.subarray(0, it.offset);
     }
   },
 
