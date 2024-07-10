@@ -52,7 +52,7 @@ importers:
         version: 7.14.0
       colyseus.js:
         specifier: ^0.16.0-preview.0
-        version: 0.16.0-preview.11
+        version: 0.16.0-preview.13
       cors:
         specifier: ^2.8.5
         version: 2.8.5
@@ -165,7 +165,7 @@ importers:
         version: link:../greeting-banner
       '@colyseus/msgpackr':
         specifier: ^1.10.3
-        version: 1.10.4
+        version: 1.10.5
       '@colyseus/schema':
         specifier: ^3.0.0-alpha.3
         version: 3.0.0-alpha.18
@@ -250,7 +250,7 @@ importers:
         version: 0.1.81
       colyseus.js:
         specifier: ^0.16.0-preview.0
-        version: 0.16.0-preview.11
+        version: 0.16.0-preview.13
       minimist:
         specifier: ^1.2.5
         version: 1.2.8
@@ -308,7 +308,7 @@ importers:
         version: link:../tools
       colyseus.js:
         specifier: ^0.16.0-preview.0
-        version: 0.16.0-preview.11
+        version: 0.16.0-preview.13
       httpie:
         specifier: ^2.0.0-next.13
         version: 2.0.0-next.13
@@ -449,7 +449,7 @@ packages:
     dependencies:
       '@babel/compat-data': 7.24.7
       '@babel/helper-validator-option': 7.24.7
-      browserslist: 4.23.1
+      browserslist: 4.23.2
       lru-cache: 5.1.1
       semver: 6.3.1
     dev: true
@@ -741,8 +741,8 @@ packages:
       - supports-color
     dev: true
 
-  /@colyseus/msgpackr@1.10.4:
-    resolution: {integrity: sha512-fqnZ6R91U8BnmXq7OuXNmtFe6JE/iYG3GskiPZjWw7uiE8IJJjLcIfm9h9JkVonHrwMoYCNDYYno/W3MTIz0mg==}
+  /@colyseus/msgpackr@1.10.5:
+    resolution: {integrity: sha512-ZSWPpEEnSe/oMzifiLKkNdE5UR0B8STagWR1JcKV5qw6ISM/z8d7ArZgGstqBrrZAXAOIZDpvOyrTloiR9zRlg==}
     optionalDependencies:
       msgpackr-extract: 3.0.3
 
@@ -1248,7 +1248,7 @@ packages:
     engines: {node: '>=6.0.0'}
     dependencies:
       '@jridgewell/set-array': 1.2.1
-      '@jridgewell/sourcemap-codec': 1.4.15
+      '@jridgewell/sourcemap-codec': 1.5.0
       '@jridgewell/trace-mapping': 0.3.25
     dev: true
 
@@ -1262,15 +1262,15 @@ packages:
     engines: {node: '>=6.0.0'}
     dev: true
 
-  /@jridgewell/sourcemap-codec@1.4.15:
-    resolution: {integrity: sha512-eF2rxCRulEKXHTRiDrDy6erMYWqNw4LPdQ8UQA4huuxaQsVeRPFl2oM8oDGxMFhJUWZf9McpLtJasDDZb/Bpeg==}
+  /@jridgewell/sourcemap-codec@1.5.0:
+    resolution: {integrity: sha512-gv3ZRaISU3fjPAgNsriBRqGWQL6quFx04YMPW/zD8XMLsU32mhCCbfbO6KZFLjvYpCZ8zyDEgqsgf+PwPaM7GQ==}
     dev: true
 
   /@jridgewell/trace-mapping@0.3.25:
     resolution: {integrity: sha512-vNk6aEwybGtawWmy/PzwnGDOjCkLWSD2wqvjGGAgOAwCGWySYXfYoxt00IJkTF+8Lb57DwOb3Aa0o9CApepiYQ==}
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
-      '@jridgewell/sourcemap-codec': 1.4.15
+      '@jridgewell/sourcemap-codec': 1.5.0
     dev: true
 
   /@lerna/child-process@7.4.2:
@@ -2648,15 +2648,15 @@ packages:
     resolution: {integrity: sha512-qhAVI1+Av2X7qelOfAIYwXONood6XlZE/fXaBSmW/T5SzLAmCgzi+eiWE7fUvbHaeNBQH13UftjpXxsfLkMpgw==}
     dev: true
 
-  /browserslist@4.23.1:
-    resolution: {integrity: sha512-TUfofFo/KsK/bWZ9TWQ5O26tsWW4Uhmt8IYklbnUa70udB6P2wA7w7o4PY4muaEPBQaAX+CEnmmIA41NVHtPVw==}
+  /browserslist@4.23.2:
+    resolution: {integrity: sha512-qkqSyistMYdxAcw+CzbZwlBy8AGmS/eEWs+sEV5TnLRGDOL+C5M2EnH6tlZyg0YoAxGJAFKh61En9BR941GnHA==}
     engines: {node: ^6 || ^7 || ^8 || ^9 || ^10 || ^11 || ^12 || >=13.7}
     hasBin: true
     dependencies:
       caniuse-lite: 1.0.30001640
-      electron-to-chromium: 1.4.820
+      electron-to-chromium: 1.4.821
       node-releases: 2.0.14
-      update-browserslist-db: 1.1.0(browserslist@4.23.1)
+      update-browserslist-db: 1.1.0(browserslist@4.23.2)
     dev: true
 
   /bs-logger@0.2.6:
@@ -3022,11 +3022,11 @@ packages:
       wcwidth: 1.0.1
     dev: true
 
-  /colyseus.js@0.16.0-preview.11:
-    resolution: {integrity: sha512-enNu1Lqk1/6iQ9uuTRgAgfo5vK1VYTOZrGg/T6KhPM52pyONneqK+GkHW/RETUv9Q6Jcfe9UQIbMAgG6eYuaPw==}
+  /colyseus.js@0.16.0-preview.13:
+    resolution: {integrity: sha512-58GB+mCkDXJd4EUeantaBgJMazQtgOg53Fiep76alKNs7EVFNfmNpbQXiDp8PRoQbZHzzIT7E0ICf8Lyj0DPHQ==}
     engines: {node: '>= 12.x'}
     dependencies:
-      '@colyseus/msgpackr': 1.10.4
+      '@colyseus/msgpackr': 1.10.5
       '@colyseus/schema': 3.0.0-alpha.18
       httpie: 2.0.0-next.13
       tslib: 2.6.3
@@ -3503,8 +3503,8 @@ packages:
       jake: 10.9.1
     dev: true
 
-  /electron-to-chromium@1.4.820:
-    resolution: {integrity: sha512-kK/4O/YunacfboFEk/BDf7VO1HoPmDudLTJAU9NmXIOSjsV7qVIX3OrI4REZo0VmdqhcpUcncQc6N8Q3aEXlHg==}
+  /electron-to-chromium@1.4.821:
+    resolution: {integrity: sha512-BgKQiKiU0VwOH5U2sTKiKkvYzl3Tyodr7fgVGr8/vtPXO+nAG3FE4QMlagZiIZWmvjKsYsv2YpeE3M1lhuYO5A==}
     dev: true
 
   /elliptic@6.5.5:
@@ -5900,9 +5900,8 @@ packages:
       is-unicode-supported: 0.1.0
     dev: true
 
-  /lru-cache@10.4.2:
-    resolution: {integrity: sha512-voV4dDrdVZVNz84n39LFKDaRzfwhdzJ7akpyXfTMxCgRUp07U3lcJUXRlhTKP17rgt09sUzLi5iCitpEAr+6ug==}
-    engines: {node: 14 || 16 || 18 || 20 || >=22}
+  /lru-cache@10.4.3:
+    resolution: {integrity: sha512-JNAzZcXrCt42VGLuYz0zfAzDfAvJWW6AfYlDBQyDV5DClI2m5sAmK+OIO7s59XfsRsWHp02jAJrRadPRGTt6SQ==}
     dev: true
 
   /lru-cache@5.1.1:
@@ -6392,7 +6391,7 @@ packages:
       array-differ: 3.0.0
       array-union: 2.1.0
       arrify: 2.0.1
-      minimatch: 3.0.5
+      minimatch: 3.1.2
     dev: true
 
   /mute-stream@0.0.8:
@@ -7020,7 +7019,7 @@ packages:
     resolution: {integrity: sha512-Xa4Nw17FS9ApQFJ9umLiJS4orGjm7ZzwUrwamcGQuHSzDyth9boKDaycYdDcZDuqYATXw4HFXgaqWTctW/v1HA==}
     engines: {node: '>=16 || 14 >=14.18'}
     dependencies:
-      lru-cache: 10.4.2
+      lru-cache: 10.4.3
       minipass: 7.1.2
     dev: true
 
@@ -8388,13 +8387,13 @@ packages:
     engines: {node: '>=4'}
     dev: true
 
-  /update-browserslist-db@1.1.0(browserslist@4.23.1):
+  /update-browserslist-db@1.1.0(browserslist@4.23.2):
     resolution: {integrity: sha512-EdRAaAyk2cUE1wOf2DkEhzxqOQvFOoRJFNS6NeyJ01Gp2beMRpBAINjM2iDXE3KCuKhwnvHIQCJm6ThL2Z+HzQ==}
     hasBin: true
     peerDependencies:
       browserslist: '>= 4.21.0'
     dependencies:
-      browserslist: 4.23.1
+      browserslist: 4.23.2
       escalade: 3.1.2
       picocolors: 1.0.1
     dev: true
@@ -8760,7 +8759,7 @@ packages:
       require-directory: 2.1.1
       string-width: 4.2.3
       y18n: 5.0.8
-      yargs-parser: 20.2.4
+      yargs-parser: 20.2.9
     dev: true
 
   /yargs@17.7.2:

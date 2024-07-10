@@ -223,7 +223,6 @@ describe("MatchMaker Stats", () => {
       client.joinOrCreate(ROOM_NAME).catch((e) => { })
 
       await onReadyToTest;
-      // await timeout(300);
 
       assert.strictEqual(1, matchMaker.stats.local.roomCount);
       assert.strictEqual(0, matchMaker.stats.local.ccu);
@@ -232,6 +231,7 @@ describe("MatchMaker Stats", () => {
       clients.map((client) => client.leave());
 
       await onRoomDisposed;
+      await timeout(300);
 
       assert.strictEqual(0, matchMaker.stats.local.roomCount);
       assert.strictEqual(0, matchMaker.stats.local.ccu);

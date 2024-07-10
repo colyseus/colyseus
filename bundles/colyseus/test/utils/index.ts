@@ -23,7 +23,7 @@ export const PRESENCE_IMPLEMENTATIONS = [ LocalPresence, ];
 
 export const DRIVERS = [
   LocalDriver,
-  RedisDriver,
+  // RedisDriver,
   // MongooseDriver,
 ];
 

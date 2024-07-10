@@ -75,7 +75,7 @@ describe("Server", () => {
           onCreate() {
             this.onMessage("request", (client) => {
               receivedOnServerAt = Date.now();
-              client.send('response', '');
+              client.send('response');
             });
           }
         });
@@ -89,7 +89,7 @@ describe("Server", () => {
         });
 
         startedAt = Date.now();
-        connection.send("request", '');
+        connection.send("request");
 
         await running;
 

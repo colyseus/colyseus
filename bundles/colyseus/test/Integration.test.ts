@@ -82,7 +82,7 @@ describe("Integration", () => {
               assert.strictEqual(true, onCreateCalled);
 
               // assert 'presence' implementation
-              const room = matchMaker.getLocalRoomById(connection.id);
+              const room = matchMaker.getLocalRoomById(connection.roomId);
               assert.strictEqual(presence, room.presence);
 
               await connection.leave();
@@ -372,7 +372,7 @@ describe("Integration", () => {
             await connection.leave();
 
             await timeout(50);
-            assert.ok(!matchMaker.getLocalRoomById(connection.id))
+            assert.ok(!matchMaker.getLocalRoomById(connection.roomId))
             assert.ok(onDisposeCalled);
           });
 
@@ -392,7 +392,7 @@ describe("Integration", () => {
             await connection.leave();
 
             await timeout(150);
-            assert.ok(!matchMaker.getLocalRoomById(connection.id))
+            assert.ok(!matchMaker.getLocalRoomById(connection.roomId))
             assert.ok(onDisposeCalled);
           });
 
@@ -829,7 +829,7 @@ describe("Integration", () => {
             it("should lock room automatically when maxClients is reached", async () => {
               const conn1 = await client.joinOrCreate('room2');
 
-              const room = matchMaker.getLocalRoomById(conn1.id);
+              const room = matchMaker.getLocalRoomById(conn1.roomId);
               assert.strictEqual(false, room.locked);
 
               const conn2 = await client.joinOrCreate('room2');
@@ -850,7 +850,7 @@ describe("Integration", () => {
               const conn1 = await client.joinOrCreate('room2');
               const conn2 = await client.joinOrCreate('room2');
 
-              const room = matchMaker.getLocalRoomById(conn1.id);
+              const room = matchMaker.getLocalRoomById(conn1.roomId);
               assert.strictEqual(2, room.clients.length);
               assert.strictEqual(true, room.locked);
 
@@ -870,7 +870,7 @@ describe("Integration", () => {
               const conn1 = await client.joinOrCreate('room_explicit_lock');
               const conn2 = await client.joinOrCreate('room_explicit_lock');
 
-              const room = matchMaker.getLocalRoomById(conn1.id);
+              const room = matchMaker.getLocalRoomById(conn1.roomId);
               assert.strictEqual(2, room.clients.length);
               assert.strictEqual(true, room.locked);
 
@@ -962,7 +962,7 @@ describe("Integration", () => {
               const conn2 = await client.joinOrCreate('disconnect');
               conn2.onLeave(() => disconnected++);
 
-              assert.strictEqual(conn1.id, conn2.id, "should've joined the same room");
+              assert.strictEqual(conn1.roomId, conn2.roomId, "should've joined the same room");
 
               await timeout(150);
               assert.strictEqual(2, disconnected, "both clients should've been disconnected");
@@ -1036,7 +1036,7 @@ describe("Integration", () => {
               const room = rooms[0];
 
               assert.strictEqual(3, connections.length);
-              assert.deepStrictEqual([room.roomId, room.roomId, room.roomId], connections.map(conn => conn.id));
+              assert.deepStrictEqual([room.roomId, room.roomId, room.roomId], connections.map(conn => conn.roomId));
 
               assert.strictEqual(1, rooms.length);
               assert.strictEqual(room.roomId, rooms[0].roomId);
@@ -1045,7 +1045,7 @@ describe("Integration", () => {
             it("consumeSeatReservation()", async () => {
               const seatReservation = await matchMaker.create("dummy", {});
               const conn = await client.consumeSeatReservation(seatReservation);
-              assert.strictEqual(conn.id, seatReservation.room.roomId);
+              assert.strictEqual(conn.roomId, seatReservation.room.roomId);
               conn.leave();
             })
           });
@@ -1241,7 +1241,6 @@ describe("Integration", () => {
                 onLeaveCalled = Date.now();
                 // if left early - allow reconnection should be no-op
                 await this.allowReconnection(client, 1);
-                onLeaveFinished.resolve(true);
               }
               onDispose() { onRoomDisposed.resolve(true); }
             });
@@ -1254,14 +1253,11 @@ describe("Integration", () => {
               onJoinStart.then(() => lostConnection.close());
             });
 
-            // wait until join completely finished.
-            await onLeaveFinished;
+            await onRoomDisposed;
 
             assert.strictEqual(true, onJoinCompleted > 0);
             assert.strictEqual(true, onLeaveCalled > 0);
             assert.strictEqual(true, onLeaveCalled >= onJoinCompleted);
-
-            await onRoomDisposed;
 
             assert.strictEqual(0, matchMaker.stats.local.roomCount);
             assert.strictEqual(0, matchMaker.stats.local.ccu);

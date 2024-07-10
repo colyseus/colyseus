@@ -30,20 +30,23 @@ describe("Room", () => {
       }
 
       const room1 = new MyRoom1();
+      room1['__init']();
       assert.strictEqual(false, room1.autoDispose);
-      assert.strictEqual(true, room1['_autoDisposeTimeout']['_destroyed']);
+      assert.strictEqual(undefined, room1['_autoDisposeTimeout']);
 
       class MyRoom2 extends Room {
         autoDispose = true;
       }
 
       const room2 = new MyRoom2();
+      room2['__init']();
       assert.strictEqual(true, room2.autoDispose);
       assert.strictEqual(false, room2['_autoDisposeTimeout']['_destroyed']);
     });
 
     it("autoDispose setter should reset the autoDispose timeout", () => {
       const room = new MyRoom();
+      room['__init']();
 
       // @ts-ignore
       const resetAutoDisposeTimeoutSpy = sinon.spy(room, 'resetAutoDisposeTimeout');
