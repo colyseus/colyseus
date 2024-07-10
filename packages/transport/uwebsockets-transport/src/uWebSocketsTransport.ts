@@ -144,8 +144,11 @@ export class uWebSocketsTransport extends Transport {
         }
 
         const originalRawSend = this._originalRawSend;
-        uWebSocketClient.prototype.raw = milliseconds <= Number.EPSILON ? originalRawSend : function () {
-            setTimeout(() => originalRawSend.apply(this, arguments), milliseconds);
+        uWebSocketClient.prototype.raw = milliseconds <= Number.EPSILON ? originalRawSend : function (...args: any[]) {
+            // copy buffer
+            let [buf, ...rest] = args;
+            buf = Array.from(buf);
+            setTimeout(() => originalRawSend.apply(this, [buf, ...rest]), milliseconds);
         };
     }
 

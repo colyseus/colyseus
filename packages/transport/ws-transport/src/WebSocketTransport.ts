@@ -22,7 +22,7 @@ export class WebSocketTransport extends Transport {
   protected pingIntervalMS: number;
   protected pingMaxRetries: number;
 
-  private _originalSend: typeof WebSocket.prototype.send | null = null;
+  private _originalSend: typeof WebSocketClient.prototype.raw | null = null;
 
   constructor(options: TransportOptions = {}) {
     super();
@@ -78,13 +78,16 @@ export class WebSocketTransport extends Transport {
 
   public simulateLatency(milliseconds: number) {
     if (this._originalSend == null) {
-      this._originalSend = WebSocket.prototype.send;
+      this._originalSend = WebSocketClient.prototype.raw;
     }
 
     const originalSend = this._originalSend;
 
-    WebSocket.prototype.send = milliseconds <= Number.EPSILON ? originalSend : function (...args: any[]) {
-      setTimeout(() => originalSend.apply(this, args), milliseconds);
+    WebSocketClient.prototype.raw = milliseconds <= Number.EPSILON ? originalSend : function (...args: any[]) {
+      // copy buffer
+      let [buf, ...rest] = args;
+      buf = Array.from(buf);
+      setTimeout(() => originalSend.apply(this, [buf, ...rest]), milliseconds);
     };
   }
 
