@@ -1050,7 +1050,20 @@ export abstract class Room<State extends object= any, Metadata= any> {
       }
     }
 
-    if (client.state !== ClientState.RECONNECTED) {
+    // check for manual "reconnection" flow
+    if (this._reconnections[client._reconnectionToken]) {
+      this._reconnections[client._reconnectionToken][1].catch(async () => {
+        // TODO: DRY - this code is duplicated below
+        // try to dispose immediately if client reconnection isn't set up.
+        const willDispose = await this._decrementClientCount();
+
+        // trigger 'leave' only if seat reservation has been fully consumed
+        if (this.reservedSeats[client.sessionId] === undefined) {
+          this._events.emit('leave', client, willDispose);
+        }
+      });
+
+    } else if (client.state !== ClientState.RECONNECTED) {
       // try to dispose immediately if client reconnection isn't set up.
       const willDispose = await this._decrementClientCount();
 

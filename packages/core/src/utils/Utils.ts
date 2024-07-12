@@ -1,3 +1,4 @@
+
 import nanoid from 'nanoid';
 import { addExtension } from 'msgpackr';
 
@@ -80,6 +81,7 @@ export function spliceOne(arr: any[], index: number): boolean {
 
 export class Deferred<T= any> {
   public promise: Promise<T>;
+  protected chain: Promise<T>;
 
   public resolve: Function;
   public reject: Function;
@@ -89,14 +91,17 @@ export class Deferred<T= any> {
       this.resolve = resolve;
       this.reject = reject;
     });
+    this.chain = this.promise;
   }
 
   public then(func: (value: T) => any) {
-    return this.promise.then.apply(this.promise, arguments);
+    this.chain = this.chain.then.apply(this.chain, arguments);
+    return this.chain;
   }
 
   public catch(func: (value: any) => any) {
-    return this.promise.catch(func);
+    this.chain = this.chain.catch(func);
+    return this.chain;
   }
 
 }

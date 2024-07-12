@@ -1,5 +1,5 @@
-import assert from "assert";
-import { Client, ClientState, Deferred, LocalDriver, LocalPresence, MatchMakerDriver, Presence, Room, Server, Transport, matchMaker } from "@colyseus/core";
+import assert, { fail } from "assert";
+import { Client, ClientState, Deferred, Delayed, LocalDriver, LocalPresence, MatchMakerDriver, Presence, Room, Server, Transport, matchMaker } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import * as Colyseus from "colyseus.js";
 import { timeout } from "./utils";
@@ -278,6 +278,85 @@ describe("MatchMaker Stats", () => {
     assert.strictEqual(0, rooms.length);
     assert.strictEqual(0, matchMaker.stats.local.roomCount);
     assert.strictEqual(0, matchMaker.stats.local.ccu);
+  });
+
+  it("should maintain stats on manual reconnection", async () => {
+    let onRoomDisposed: Deferred;
+    matchMaker.defineRoomType('allow_reconnection', class _ extends Room {
+      onCreate() {
+        onRoomDisposed = new Deferred();
+      }
+
+      onJoin(client, options) {
+        client.userData = options;
+      }
+
+      onLeave(client, consented) {
+        if (consented) { return; }
+
+        const reconnection = this.allowReconnection(client, "manual");
+        const delayed = this.clock.setTimeout(() => {
+          if (client.userData.fail) {
+            reconnection.reject();
+          } else {
+            // wait for reconnection to succeed.
+          }
+        }, 10);
+        reconnection.then(() => {
+          delayed.clear();
+        }).catch(() => {
+          delayed.clear();
+        });
+      }
+      onDispose() {
+        onRoomDisposed.resolve();
+      }
+    });
+
+    const roomConnection = await client.joinOrCreate('allow_reconnection');
+
+    assert.strictEqual(1, matchMaker.stats.local.roomCount);
+    assert.strictEqual(1, matchMaker.stats.local.ccu);
+
+    // forcibly close connection
+    roomConnection.connection.transport.close();
+
+    // wait to setup reconnection
+    await timeout(10);
+
+    const roomReconnection = await client.reconnect(roomConnection.reconnectionToken);
+    assert.strictEqual(1, matchMaker.stats.local.roomCount);
+    assert.strictEqual(1, matchMaker.stats.local.ccu);
+    await roomReconnection.leave();
+
+    await onRoomDisposed;
+
+    let rooms = await matchMaker.query({});
+    assert.strictEqual(0, rooms.length);
+    assert.strictEqual(0, matchMaker.stats.local.roomCount);
+    assert.strictEqual(0, matchMaker.stats.local.ccu);
+
+    const roomConnection2 = await client.joinOrCreate('allow_reconnection', { fail: true });
+
+    assert.strictEqual(1, matchMaker.stats.local.roomCount);
+    assert.strictEqual(1, matchMaker.stats.local.ccu);
+
+    // forcibly close connection
+    roomConnection2.connection.transport.close();
+
+    // wait for reconnection to timeout
+    await timeout(50);
+
+    assert.rejects(async () =>
+      await client.reconnect(roomConnection2.reconnectionToken));
+
+    await onRoomDisposed;
+
+    rooms = await matchMaker.query({});
+    assert.strictEqual(0, rooms.length);
+    assert.strictEqual(0, matchMaker.stats.local.roomCount);
+    assert.strictEqual(0, matchMaker.stats.local.ccu);
+
   });
 
 });
