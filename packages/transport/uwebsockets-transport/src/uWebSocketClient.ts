@@ -90,7 +90,8 @@ export class uWebSocketClient implements Client, ClientPrivate {
 
   public error(code: number, message: string = '', cb?: (err?: Error) => void) {
     this.raw(getMessageBytes[Protocol.ERROR](code, message));
-    cb(); // call imediatelly (just to keep same API as "ws" transport)
+    // respond with callback after the message has been sent
+    setTimeout(cb, 0);
   }
 
   public leave(code?: number, data?: string) {
