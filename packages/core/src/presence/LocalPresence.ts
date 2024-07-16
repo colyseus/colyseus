@@ -75,8 +75,8 @@ export class LocalPresence implements Presence {
         return this;
     }
 
-    public async exists(roomId: string): Promise<boolean> {
-        return this.channels.listenerCount(roomId) > 0;
+    public async exists(key: string): Promise<boolean> {
+        return this.channels.listenerCount(key) > 0;
     }
 
     public set(key: string, value: string) {
