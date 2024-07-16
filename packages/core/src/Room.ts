@@ -600,7 +600,12 @@ export abstract class Room<State extends object= any, Metadata= any> {
       const previousReconnectionToken = this._reconnectingSessionId.get(sessionId);
       if (previousReconnectionToken) {
         this.clients.push(client);
-        this._reconnections[previousReconnectionToken]?.[1].resolve(client);
+        //
+        // await for reconnection:
+        // (end user may customize the reconnection token at this step)
+        //
+        await this._reconnections[previousReconnectionToken]?.[1].resolve(client);
+
       } else {
         const errorMessage = (process.env.NODE_ENV === 'production')
           ? "already consumed" // trick possible fraudsters...
