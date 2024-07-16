@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/core",
-  "version": "0.16.0-preview.27",
+  "version": "0.16.0-preview.28",
   "description": "Multiplayer Framework for Node.js.",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -35,7 +35,7 @@
   },
   "dependencies": {
     "@colyseus/greeting-banner": "^2.0.0",
-    "@colyseus/schema": "^3.0.0-preview.3",
+    "@colyseus/schema": "^3.0.0-alpha.3",
     "@gamestdio/timer": "^1.3.0",
     "debug": "^4.3.4",
     "@colyseus/msgpackr": "^1.10.3",
