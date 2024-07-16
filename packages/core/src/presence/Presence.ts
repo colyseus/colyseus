@@ -37,9 +37,9 @@ export interface Presence {
     /**
      * Returns if key exists.
      *
-     * @param roomId
+     * @param key
      */
-    exists(roomId: string): Promise<boolean>;
+    exists(key: string): Promise<boolean>;
 
     /**
      * Set key to hold the string value.

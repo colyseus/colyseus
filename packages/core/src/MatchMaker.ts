@@ -46,6 +46,19 @@ export let presence: Presence;
 export let driver: MatchMakerDriver;
 export let selectProcessIdToCreateRoom: SelectProcessIdCallback;
 
+/**
+ * Whether health checks are enabled or not. (default: true)
+ *
+ * Health checks are automatically performed on theses scenarios:
+ * - At startup, to check for leftover/invalid processId's
+ * - When a remote room creation request times out
+ * - When a remote seat reservation request times out
+ */
+let enableHealthChecks: boolean = true;
+export function setHealthChecksEnabled(value: boolean) {
+  enableHealthChecks = value;
+}
+
 export let onReady: Deferred = new Deferred(); // onReady needs to be immediately available to @colyseus/auth integration.
 
 export enum MatchMakerState {
@@ -130,7 +143,9 @@ export async function accept() {
   /**
    * Check for leftover/invalid processId's on startup
    */
-  await healthCheckAllProcesses();
+  if (enableHealthChecks) {
+    await healthCheckAllProcesses();
+  }
 
   state = MatchMakerState.READY;
 
@@ -442,7 +457,9 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
         // when a process disconnects ungracefully, it may leave its previous processId under "roomcount"
         // if the process is still alive, it will re-add itself shortly after the load-balancer selects it again.
         //
-        await stats.excludeProcess(selectedProcessId);
+        if (enableHealthChecks) {
+          await stats.excludeProcess(selectedProcessId);
+        }
 
         // if other process failed to respond, create the room on this process
         room = await handleCreateRoom(roomName, clientOptions);
@@ -649,7 +666,13 @@ export async function reserveSeatFor(room: IRoomCache, options: ClientOptions, a
     // (this is a broken state when a process wasn't gracefully shut down)
     // perform a health-check on the process before proceeding.
     //
-    if (e.message === "ipc_timeout" && !(await healthCheckProcessId(room.processId))) {
+    if (
+      e.message === "ipc_timeout" &&
+      !(
+        enableHealthChecks &&
+        await healthCheckProcessId(room.processId)
+      )
+    ) {
       throw new SeatReservationError(`process ${room.processId} is not available.`);
 
     } else {
@@ -857,6 +880,16 @@ function onVisibilityChange(room: Room, isInvisible: boolean): void {
 
 async function disposeRoom(roomName: string, room: Room) {
   debugMatchMaking('disposing \'%s\' (%s) on processId \'%s\' (graceful shutdown: %s)', roomName, room.roomId, processId, state === MatchMakerState.SHUTTING_DOWN);
+
+  //
+  // FIXME: this call should not be necessary.
+  //
+  // there's an unidentified edge case using LocalDriver where Room._dispose()
+  // doesn't seem to be called [?], but "disposeRoom" is, leaving the matchmaker
+  // in a broken state. (repeated ipc_timeout's for seat reservation on
+  // non-existing rooms)
+  //
+  room.listing.remove();
 
   // decrease amount of rooms this process is handling
   if (state !== MatchMakerState.SHUTTING_DOWN) {

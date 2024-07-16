@@ -117,6 +117,7 @@ export class uWebSocketsTransport extends Transport {
         const callback = (listeningSocket: any) => {
           this._listeningSocket = listeningSocket;
           listeningListener?.();
+          // @ts-ignore
           this.server.emit("listening"); // Mocking Transport.server behaviour, https://github.com/colyseus/colyseus/issues/458
         };
 
@@ -134,6 +135,7 @@ export class uWebSocketsTransport extends Transport {
     public shutdown() {
         if (this._listeningSocket) {
           uWebSockets.us_listen_socket_close(this._listeningSocket);
+          // @ts-ignore
           this.server.emit("close"); // Mocking Transport.server behaviour, https://github.com/colyseus/colyseus/issues/458
         }
     }

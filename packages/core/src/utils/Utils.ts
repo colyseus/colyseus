@@ -1,3 +1,4 @@
+
 import nanoid from 'nanoid';
 import { addExtension } from '@colyseus/msgpackr';
 
