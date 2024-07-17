@@ -1,18 +1,19 @@
 // import WebSocket from 'ws';
 
-import { Protocol, Client, ClientState, ISendOptions, getMessageBytes, logger, debugMessage } from '@colyseus/core';
+import { Protocol, Client, ClientState, ISendOptions, getMessageBytes, logger, debugMessage, ClientPrivate } from '@colyseus/core';
 import { WebTransportSession } from '@fails-components/webtransport';
 import { EventEmitter } from 'stream';
 
-export class H3Client implements Client {
+export class H3Client implements Client, ClientPrivate {
   public id: string;
   public ref: EventEmitter = new EventEmitter();
 
   public sessionId: string;
   public state: ClientState = ClientState.JOINING;
+  public reconnectionToken: string;
   public _enqueuedMessages: any[] = [];
   public _afterNextPatchQueue;
-  public _reconnectionToken: string;
+  public _joinedAt;
 
   // TODO: remove readyState
   public readyState: number;
@@ -68,7 +69,7 @@ export class H3Client implements Client {
 
   }
 
-  public sendBytes(type: string | number, bytes: number[] | Uint8Array, options?: ISendOptions) {
+  public sendBytes(type: string | number, bytes: Uint8Array | Buffer, options?: ISendOptions) {
     debugMessage("send bytes(to %s): '%s' -> %j", this.sessionId, type, bytes);
 
     this.enqueueRaw(
@@ -77,7 +78,7 @@ export class H3Client implements Client {
     );
   }
 
-  public sendDatagram(bytes: number[] | Uint8Array) {
+  public sendDatagram(bytes: Uint8Array | Buffer) {
     if (!this._datagramWriter) {
       this._datagramWriter = this._wtSession.datagrams.writable.getWriter();
       this._datagramWriter.closed

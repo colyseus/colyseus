@@ -163,7 +163,7 @@ export class H3Transport extends Transport {
 
     this.options.app.post(`/${matchMaker.controller.matchmakeRoute}/:method/:roomName`, async (req, res) => {
       // do not accept matchmaking requests if already shutting down
-      if (matchMaker.isGracefullyShuttingDown) {
+      if (matchMaker.state === matchMaker.MatchMakerState.SHUTTING_DOWN) {
         res.writeHead(503, {});
         res.end();
         return;
@@ -235,7 +235,7 @@ export class H3Transport extends Transport {
     h3Client.sessionId = sessionId;
     h3Client.readyState = 1;
 
-    const room = matchMaker.getRoomById(roomId);
+    const room = matchMaker.getLocalRoomById(roomId);
 
     //
     // TODO: DRY code below with all transports
