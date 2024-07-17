@@ -5,15 +5,15 @@
   "author": "Endel Dreyer",
   "license": "MIT",
   "scripts": {
-    "start": "ts-node-dev --respawn --transpile-only src/Server.ts"
+    "example-h3": "tsx src/ServerH3.ts"
   },
   "dependencies": {
     "@colyseus/core": "workspace:^"
   },
   "devDependencies": {
-    "@colyseus/monitor": "^0.15.0",
     "@colyseus/uwebsockets-transport": "workspace:^",
     "@colyseus/ws-transport": "workspace:^",
+    "@colyseus/h3-transport": "workspace:^",
     "@colyseus/redis-driver": "workspace:^",
     "@colyseus/redis-presence": "workspace:^"
   }

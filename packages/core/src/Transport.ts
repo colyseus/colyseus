@@ -7,6 +7,7 @@ import { EventEmitter } from 'events';
 import { spliceOne } from './utils/Utils';
 
 export abstract class Transport {
+    public protocol?: string;
     public server?: net.Server | http.Server | https.Server;
 
     public abstract listen(port?: number, hostname?: string, backlog?: number, listeningListener?: Function): this;

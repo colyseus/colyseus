@@ -363,6 +363,12 @@ export class Server {
             clientOptions,
             { token: getBearerToken(req.headers['authorization']), request: req },
           );
+
+          // specify protocol, if available.
+          if (this.transport.protocol !== undefined) {
+            response.protocol = this.transport.protocol;
+          }
+
           res.write(JSON.stringify(response));
 
         } catch (e) {

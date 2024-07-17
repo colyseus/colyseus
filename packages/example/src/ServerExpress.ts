@@ -54,7 +54,7 @@ gameServer.define("relay", RelayRoom)
   .on("dispose", (room) => console.log("room disposed!", room.roomId));
 
 app.use(express.static(__dirname));
-app.use("/monitor", monitor());
+// app.use("/monitor", monitor());
 
 gameServer.onShutdown(() => {
   console.log("CUSTOM SHUTDOWN ROUTINE: STARTED");
