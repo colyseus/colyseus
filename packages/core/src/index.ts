@@ -31,6 +31,9 @@ export { Clock, Delayed };
 export { generateId, Deferred, HttpServerMock, spliceOne, getBearerToken } from './utils/Utils.js';
 export { isDevMode } from './utils/DevMode.js';
 
+// IPC
+export { subscribeIPC, requestFromIPC } from './IPC.js';
+
 // Debug
 export {
   debugMatchMaking,

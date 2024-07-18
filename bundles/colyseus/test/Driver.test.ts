@@ -70,7 +70,7 @@ describe("Driver implementations", () => {
         await cache2.remove();
         await cache3.remove();
 
-        const entries = await driver.find({});
+        const entries = await driver.query({});
         assert.strictEqual(0, entries.length)
       });
 
