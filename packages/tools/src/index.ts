@@ -53,12 +53,9 @@ export default function (options: ConfigOptions) {
  * @param port Port number to bind Colyseus + Express
  */
 export async function listen(
-    options: ConfigOptions,
+    options: ConfigOptions | Server,
     port: number = Number(process.env.PORT || 2567),
 ) {
-    const serverOptions = options.options || {};
-    options.displayLogs = options.displayLogs ?? true;
-
     // Force 2567 port on Colyseus Cloud
     if (process.env.COLYSEUS_CLOUD !== undefined) {
         port = 2567;
@@ -71,54 +68,20 @@ export async function listen(
     const processNumber = Number(process.env.NODE_APP_INSTANCE || "0");
     port += processNumber;
 
-    // automatically configure for production under Colyseus Cloud
-    if (process.env.COLYSEUS_CLOUD !== undefined) {
-        // special configuration is required when using multiple processes
-        const useRedisConfig = (os.cpus().length > 1) || (process.env.REDIS_URI !== undefined);
+    let gameServer: Server;
+    let displayLogs = true;
 
-        if (!serverOptions.driver && useRedisConfig) {
-            let RedisDriver: any = undefined;
-            try {
-                RedisDriver = require('@colyseus/redis-driver').RedisDriver;
-                serverOptions.driver = new RedisDriver(process.env.REDIS_URI);
-            } catch (e) {
-                logger.warn("");
-                logger.warn("❌ could not initialize RedisDriver.");
-                logger.warn("👉 npm install --save @colyseus/redis-driver");
-                logger.warn("");
-            }
-        }
+    if (options instanceof Server) {
+        gameServer = options;
 
-        if (!serverOptions.presence && useRedisConfig) {
-            let RedisPresence: any = undefined;
-            try {
-                RedisPresence = require('@colyseus/redis-presence').RedisPresence;
-                serverOptions.presence = new RedisPresence(process.env.REDIS_URI);
-            } catch (e) {
-                logger.warn("");
-                logger.warn("❌ could not initialize RedisPresence.");
-                logger.warn("👉 npm install --save @colyseus/redis-presence");
-                logger.warn("");
-            }
-        }
+    } else {
+        gameServer = await buildServerFromOptions(options, port);
+        displayLogs = options.displayLogs;
 
-        if (useRedisConfig) {
-            // force "publicAddress" when more than 1 process is available
-            serverOptions.publicAddress = process.env.SUBDOMAIN + "." + process.env.SERVER_NAME;
-
-            // nginx is responsible for forwarding /{port}/ to this process
-            serverOptions.publicAddress += "/" + port;
-        }
+        await options.initializeGameServer?.(gameServer);
+        await matchMaker.onReady;
+        await options.beforeListen?.();
     }
-
-    const transport = await getTransport(options);
-    const gameServer = new Server({
-        ...serverOptions,
-        transport,
-    });
-    await options.initializeGameServer?.(gameServer);
-    await matchMaker.onReady;
-    await options.beforeListen?.();
 
     if (process.env.COLYSEUS_CLOUD !== undefined) {
         // listening on socket
@@ -135,12 +98,63 @@ export async function listen(
         process.send('ready');
     }
 
-    if (options.displayLogs) {
+    if (displayLogs) {
         logger.info(`⚔️  Listening on http://localhost:${port}`);
     }
+
     return gameServer;
 }
 
+async function buildServerFromOptions(options: ConfigOptions, port: number) {
+  const serverOptions = options.options || {};
+  options.displayLogs = options.displayLogs ?? true;
+
+  // automatically configure for production under Colyseus Cloud
+  if (process.env.COLYSEUS_CLOUD !== undefined) {
+    // special configuration is required when using multiple processes
+    const useRedisConfig = (os.cpus().length > 1) || (process.env.REDIS_URI !== undefined);
+
+    if (!serverOptions.driver && useRedisConfig) {
+      let RedisDriver: any = undefined;
+      try {
+        RedisDriver = require('@colyseus/redis-driver').RedisDriver;
+        serverOptions.driver = new RedisDriver(process.env.REDIS_URI);
+      } catch (e) {
+        logger.warn("");
+        logger.warn("❌ could not initialize RedisDriver.");
+        logger.warn("👉 npm install --save @colyseus/redis-driver");
+        logger.warn("");
+      }
+    }
+
+    if (!serverOptions.presence && useRedisConfig) {
+      let RedisPresence: any = undefined;
+      try {
+        RedisPresence = require('@colyseus/redis-presence').RedisPresence;
+        serverOptions.presence = new RedisPresence(process.env.REDIS_URI);
+      } catch (e) {
+        logger.warn("");
+        logger.warn("❌ could not initialize RedisPresence.");
+        logger.warn("👉 npm install --save @colyseus/redis-presence");
+        logger.warn("");
+      }
+    }
+
+    if (useRedisConfig) {
+      // force "publicAddress" when more than 1 process is available
+      serverOptions.publicAddress = process.env.SUBDOMAIN + "." + process.env.SERVER_NAME;
+
+      // nginx is responsible for forwarding /{port}/ to this process
+      serverOptions.publicAddress += "/" + port;
+    }
+  }
+
+  const transport = await getTransport(options);
+  return new Server({
+    ...serverOptions,
+    transport,
+  });
+}
 
 export async function getTransport(options: ConfigOptions) {
     let transport: Transport;
