@@ -103,7 +103,7 @@ export class H3Client implements Client, ClientPrivate {
         return;
       }
 
-      this.ref.emit('message', Array.from(read.value));
+      this.ref.emit('message', read.value);
     }
   }
 
@@ -121,7 +121,7 @@ export class H3Client implements Client, ClientPrivate {
         return;
       }
 
-      this.ref.emit('message', Array.from(read.value));
+      this.ref.emit('message', read.value);
     }
   }
 
