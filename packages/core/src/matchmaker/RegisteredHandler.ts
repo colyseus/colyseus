@@ -1,14 +1,11 @@
 import { IncomingMessage } from 'http';
 import { EventEmitter } from 'events';
-import { logger } from '../Logger';
-import { RoomCache, SortOptions } from './driver/api';
+import { logger } from '../Logger.js';
+import { RoomCache, SortOptions } from './driver/api.js';
 
-import { Room } from './../Room';
-import { updateLobby } from './Lobby';
-import { Type } from '../utils/types';
-
-let ColyseusAuth: any = undefined;
-try { ColyseusAuth = require('@colyseus/auth'); } catch (e) {}
+import { Room } from './../Room.js';
+import { updateLobby } from './Lobby.js';
+import { Type } from '../utils/types.js';
 
 export const INVALID_OPTION_KEYS: Array<keyof RoomCache> = [
   'clients',

@@ -1,7 +1,7 @@
-import * as matchMaker from '../MatchMaker';
+import * as matchMaker from '../MatchMaker.js';
 
-import type { Room } from '../Room';
-import { IRoomCache } from './driver/api';
+import type { Room } from '../Room.js';
+import { IRoomCache } from './driver/api.js';
 
 const LOBBY_CHANNEL = '$lobby';
 

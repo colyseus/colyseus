@@ -1,9 +1,9 @@
 
-import * as matchMaker from '../MatchMaker';
-import { IRoomCache } from '../matchmaker/driver/local/LocalDriver';
-import { subscribeLobby } from '../matchmaker/Lobby';
-import { Room } from '../Room';
-import { Client } from '../Transport';
+import * as matchMaker from '../MatchMaker.js';
+import { IRoomCache } from '../matchmaker/driver/local/LocalDriver.js';
+import { subscribeLobby } from '../matchmaker/Lobby.js';
+import { Room } from '../Room.js';
+import { Client } from '../Transport.js';
 
 // TODO: use Schema state & filters on version 1.0.0
 

@@ -5,22 +5,22 @@ import { decode, Iterator, $changes } from '@colyseus/schema';
 
 import Clock from '@gamestdio/timer';
 import { EventEmitter } from 'events';
-import { logger } from './Logger';
+import { logger } from './Logger.js';
 
-import { Presence } from './presence/Presence';
+import { Presence } from './presence/Presence.js';
 
-import { NoneSerializer } from './serializer/NoneSerializer';
-import { SchemaSerializer } from './serializer/SchemaSerializer';
-import { Serializer } from './serializer/Serializer';
+import { NoneSerializer } from './serializer/NoneSerializer.js';
+import { SchemaSerializer } from './serializer/SchemaSerializer.js';
+import { Serializer } from './serializer/Serializer.js';
 
-import { ErrorCode, getMessageBytes, Protocol } from './Protocol';
-import { Deferred, generateId } from './utils/Utils';
-import { isDevMode } from './utils/DevMode';
+import { ErrorCode, getMessageBytes, Protocol } from './Protocol.js';
+import { Deferred, generateId } from './utils/Utils.js';
+import { isDevMode } from './utils/DevMode.js';
 
-import { debugAndPrintError, debugMessage } from './Debug';
-import { ServerError } from './errors/ServerError';
-import { RoomCache } from './matchmaker/driver/local/LocalDriver';
-import { Client, ClientArray, ClientPrivate, ClientState, ISendOptions } from './Transport';
+import { debugAndPrintError, debugMessage } from './Debug.js';
+import { ServerError } from './errors/ServerError.js';
+import { RoomCache } from './matchmaker/driver/local/LocalDriver.js';
+import { Client, ClientArray, ClientPrivate, ClientState, ISendOptions } from './Transport.js';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)

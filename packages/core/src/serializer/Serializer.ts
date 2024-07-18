@@ -1,4 +1,4 @@
-import { Client } from '..';
+import { Client } from '../Transport.js';
 
 export interface Serializer<T> {
   id: string;

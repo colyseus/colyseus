@@ -1,7 +1,7 @@
 import { defineTypes, MapSchema, Schema } from '@colyseus/schema';
 
-import { Room } from '../Room';
-import { Client } from '../Transport';
+import { Room } from '../Room.js';
+import { Client } from '../Transport.js';
 
 class Player extends Schema { // tslint:disable-line
   public connected: boolean;

@@ -1,10 +1,16 @@
 {
   "name": "@colyseus/uwebsockets-transport",
-  "version": "0.16.0-preview.8",
+  "version": "0.16.0-preview.12",
   "input": "./src/index.ts",
   "main": "./build/index.js",
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./build/index.mjs",
+      "require": "./build/index.js"
+    }
+  },
   "dependencies": {
     "@colyseus/core": "workspace:^",
     "uWebSockets.js": "github:uNetworking/uWebSockets.js#v20.43.0",

@@ -1,11 +1,11 @@
-import fs from "fs";
-import path from "path";
+import fs from 'fs';
+import path from 'path';
 
 import { EventEmitter } from 'events';
-import { spliceOne } from '../utils/Utils';
-import { Presence } from './Presence';
+import { spliceOne } from '../utils/Utils.js';
+import { Presence } from './Presence.js';
 
-import { isDevMode } from '../utils/DevMode';
+import { isDevMode } from '../utils/DevMode.js';
 
 type Callback = (...args: any[]) => void;
 

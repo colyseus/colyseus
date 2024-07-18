@@ -1,7 +1,7 @@
-import { debugAndPrintError } from './Debug';
-import { Presence } from './presence/Presence';
-import { IpcProtocol } from './Protocol';
-import { generateId, REMOTE_ROOM_SHORT_TIMEOUT } from './utils/Utils';
+import { debugAndPrintError } from './Debug.js';
+import { Presence } from './presence/Presence.js';
+import { IpcProtocol } from './Protocol.js';
+import { generateId, REMOTE_ROOM_SHORT_TIMEOUT } from './utils/Utils.js';
 
 export async function requestFromIPC<T>(
   presence: Presence,

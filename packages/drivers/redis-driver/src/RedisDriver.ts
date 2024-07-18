@@ -7,8 +7,8 @@ import {
   logger,
 } from '@colyseus/core';
 
-import { Query } from './Query';
-import { RoomData } from './RoomData';
+import { Query } from './Query.js';
+import { RoomData } from './RoomData.js';
 
 const ROOMCACHES_KEY = 'roomcaches';
 

@@ -1,11 +1,11 @@
-import { logger } from "../../../Logger";
-import { IRoomCache, SortOptions, RoomCache, MatchMakerDriver } from "../api";
+import { logger } from '../../../Logger.js';
+import { IRoomCache, SortOptions, RoomCache, MatchMakerDriver } from '../api.js';
 
 // re-export
 export type { IRoomCache, SortOptions, RoomCache, MatchMakerDriver };
 
-import { Query } from './Query';
-import { RoomData } from './RoomData';
+import { Query } from './Query.js';
+import { RoomData } from './RoomData.js';
 
 export class LocalDriver implements MatchMakerDriver {
   public rooms: IRoomCache[] = [];

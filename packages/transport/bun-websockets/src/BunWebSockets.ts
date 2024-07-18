@@ -2,14 +2,14 @@
 
 // "bun-types" is currently conflicting with "ws" types.
 // @ts-ignore
-import { ServerWebSocket, WebSocketHandler } from "bun";
+import { ServerWebSocket, WebSocketHandler } from 'bun';
 
 import type http from 'http';
-import bunExpress from "bun-serve-express";
+import bunExpress from 'bun-serve-express';
+import type { Application, Request, Response } from "express";
 
 import { HttpServerMock, matchMaker, Transport, debugAndPrintError, spliceOne, ServerError, getBearerToken } from '@colyseus/core';
-import { WebSocketClient, WebSocketWrapper } from './WebSocketClient';
-import type { Application, Request, Response } from "express";
+import { WebSocketClient, WebSocketWrapper } from './WebSocketClient.js';
 
 export type TransportOptions = Partial<Omit<WebSocketHandler, "message" | "open" | "drain" | "close" | "ping" | "pong">>;
 
@@ -43,7 +43,6 @@ export class BunWebSockets extends Transport {
         },
 
         message(ws, message) {
-          // this.clientWrappers.get(ws)?.emit('message', Buffer.from(message.slice(0)));
           self.clientWrappers.get(ws)?.emit('message', message);
         },
 

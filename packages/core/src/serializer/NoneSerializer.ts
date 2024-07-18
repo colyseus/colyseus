@@ -1,5 +1,5 @@
-import { Client } from '../Transport';
-import { Serializer } from './Serializer';
+import { Client } from '../Transport.js';
+import { Serializer } from './Serializer.js';
 
 export class NoneSerializer<T= any> implements Serializer<T> {
   public id: string = 'none';

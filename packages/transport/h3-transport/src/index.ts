@@ -1,3 +1,3 @@
-export { H3Client } from "./H3Client";
-export { H3Transport, TransportOptions } from "./H3Transport";
-export { generateWebTransportCertificate } from './utils/mkcert';
+export { H3Client } from './H3Client.js';
+export { H3Transport, type TransportOptions } from './H3Transport.js';
+export { generateWebTransportCertificate } from './utils/mkcert.js';

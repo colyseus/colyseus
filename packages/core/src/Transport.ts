@@ -4,7 +4,7 @@ import * as net from 'net';
 
 import { Schema, StateView } from '@colyseus/schema';
 import { EventEmitter } from 'events';
-import { spliceOne } from './utils/Utils';
+import { spliceOne } from './utils/Utils.js';
 
 export abstract class Transport {
     public protocol?: string;

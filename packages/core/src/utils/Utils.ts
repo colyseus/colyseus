@@ -1,10 +1,10 @@
-
 import nanoid from 'nanoid';
 import { addExtension } from '@colyseus/msgpackr';
 
-import { debugAndPrintError } from '../Debug';
 import { EventEmitter } from "events";
 import { Schema } from "@colyseus/schema";
+
+import { debugAndPrintError } from '../Debug.js';
 
 // remote room call timeouts
 export const REMOTE_ROOM_SHORT_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_SHORT_TIMEOUT || 2000);

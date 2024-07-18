@@ -1,5 +1,5 @@
-import { spliceOne } from '../../../utils/Utils';
-import { RoomCache, IRoomCache } from '../api';
+import { spliceOne } from '../../../utils/Utils.js';
+import { RoomCache, IRoomCache } from '../api.js';
 
 export class RoomData implements RoomCache {
   public clients: number = 0;

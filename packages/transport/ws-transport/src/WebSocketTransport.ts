@@ -3,7 +3,7 @@ import { URL } from 'url';
 import WebSocket, { ServerOptions } from 'ws';
 
 import { matchMaker, Protocol, Transport, debugAndPrintError, debugConnection } from '@colyseus/core';
-import { WebSocketClient } from './WebSocketClient';
+import { WebSocketClient } from './WebSocketClient.js';
 
 function noop() {/* tslint:disable:no-empty */ }
 function heartbeat() { this.pingCount = 0; }

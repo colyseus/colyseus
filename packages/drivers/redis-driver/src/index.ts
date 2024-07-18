@@ -1,1 +1,1 @@
-export { RedisDriver } from "./RedisDriver";
+export { RedisDriver } from './RedisDriver.js';

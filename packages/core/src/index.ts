@@ -1,35 +1,35 @@
 import Clock, { Delayed } from '@gamestdio/timer';
 
 // Core classes
-export { Server, type ServerOptions } from './Server';
-export { Room, RoomInternalState } from './Room';
-export { Protocol, ErrorCode, getMessageBytes } from './Protocol';
-export { RegisteredHandler } from './matchmaker/RegisteredHandler';
-export { ServerError } from './errors/ServerError';
+export { Server, type ServerOptions } from './Server.js';
+export { Room, RoomInternalState } from './Room.js';
+export { Protocol, ErrorCode, getMessageBytes } from './Protocol.js';
+export { RegisteredHandler } from './matchmaker/RegisteredHandler.js';
+export { ServerError } from './errors/ServerError.js';
 
 // MatchMaker
-import * as matchMaker from './MatchMaker';
+import * as matchMaker from './MatchMaker.js';
 export { matchMaker };
-export { updateLobby, subscribeLobby } from './matchmaker/Lobby';
+export { updateLobby, subscribeLobby } from './matchmaker/Lobby.js';
 
 // Driver
-export * from './matchmaker/driver/local/LocalDriver';
+export * from './matchmaker/driver/local/LocalDriver.js';
 
 // Transport
-export { type Client, type ClientPrivate, ClientState, ClientArray, Transport, type ISendOptions } from './Transport';
+export { type Client, type ClientPrivate, ClientState, ClientArray, Transport, type ISendOptions } from './Transport.js';
 
 // Presence
-export { type Presence } from './presence/Presence';
-export { LocalPresence } from './presence/LocalPresence';
+export { type Presence } from './presence/Presence.js';
+export { LocalPresence } from './presence/LocalPresence.js';
 
 // Serializers
-export { type Serializer } from './serializer/Serializer';
-export { SchemaSerializer } from './serializer/SchemaSerializer';
+export { type Serializer } from './serializer/Serializer.js';
+export { SchemaSerializer } from './serializer/SchemaSerializer.js';
 
 // Utilities
 export { Clock, Delayed };
-export { generateId, Deferred, HttpServerMock, spliceOne, getBearerToken } from './utils/Utils';
-export { isDevMode } from './utils/DevMode';
+export { generateId, Deferred, HttpServerMock, spliceOne, getBearerToken } from './utils/Utils.js';
+export { isDevMode } from './utils/DevMode.js';
 
 // Debug
 export {
@@ -44,8 +44,8 @@ export {
 } from './Debug';
 
 // Default rooms
-export { LobbyRoom } from './rooms/LobbyRoom';
-export { RelayRoom } from './rooms/RelayRoom';
+export { LobbyRoom } from './rooms/LobbyRoom.js';
+export { RelayRoom } from './rooms/RelayRoom.js';
 
 // Abstract logging support
-export { logger } from './Logger'
+export { logger } from './Logger.js';

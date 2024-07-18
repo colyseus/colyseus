@@ -6,6 +6,12 @@
   "main": "./build/index.js",
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./build/index.mjs",
+      "require": "./build/index.js"
+    }
+  },
   "scripts": {
     "test": "TS_NODE_PROJECT=../../tsconfig/tsconfig.test.json c8 mocha --require tsx test/**.test.ts test/**/**.test.ts --exit --timeout 15000"
   },

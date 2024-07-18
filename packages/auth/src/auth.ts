@@ -4,7 +4,7 @@ import express, { Router } from 'express';
 import { existsSync } from 'fs';
 import { generateId, logger, matchMaker } from '@colyseus/core';
 import { Request } from 'express-jwt';
-import { OAuthProviderCallback, oAuthProviderCallback, oauth } from './oauth';
+import { OAuthProviderCallback, oAuthProviderCallback, oauth } from './oauth.js';
 import { JWT, JwtPayload } from './JWT';
 import { Hash } from './Hash';
 

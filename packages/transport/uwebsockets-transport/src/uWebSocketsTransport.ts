@@ -1,9 +1,10 @@
 import http from 'http';
 import querystring from 'querystring';
 import uWebSockets from 'uWebSockets.js';
+import expressify, { Application } from "uwebsockets-express";
 
 import { HttpServerMock, ErrorCode, matchMaker, getBearerToken, Transport, debugAndPrintError, spliceOne } from '@colyseus/core';
-import { uWebSocketClient, uWebSocketWrapper } from './uWebSocketClient';
+import { uWebSocketClient, uWebSocketWrapper } from './uWebSocketClient.js';
 
 export type TransportOptions = Omit<uWebSockets.WebSocketBehavior<any>, "upgrade" | "open" | "pong" | "close" | "message">;
 
@@ -16,6 +17,7 @@ type RawWebSocketClient = uWebSockets.WebSocket<any> & {
 
 export class uWebSocketsTransport extends Transport {
     public app: uWebSockets.TemplatedApp;
+    public expressApp: Application;
 
     protected clients: RawWebSocketClient[] = [];
     protected clientWrappers = new WeakMap<RawWebSocketClient, uWebSocketWrapper>();
@@ -29,6 +31,8 @@ export class uWebSocketsTransport extends Transport {
         this.app = (appOptions.cert_file_name && appOptions.key_file_name)
             ? uWebSockets.SSLApp(appOptions)
             : uWebSockets.App(appOptions);
+
+        this.expressApp = expressify(this.app);
 
         if (options.maxBackpressure === undefined) {
             options.maxBackpressure = 1024 * 1024;
@@ -104,8 +108,8 @@ export class uWebSocketsTransport extends Transport {
             },
 
             message: (ws: RawWebSocketClient, message: ArrayBuffer, isBinary: boolean) => {
-                // emit 'close' on wrapper
-                this.clientWrappers.get(ws)?.emit('message', Buffer.from(message.slice(0)));
+                // emit 'message' on wrapper
+                this.clientWrappers.get(ws)?.emit('message', Buffer.from(message));
             },
 
         });

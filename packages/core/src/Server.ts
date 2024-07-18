@@ -1,23 +1,23 @@
 import http, { IncomingMessage, ServerResponse } from 'http';
 import greeting from "@colyseus/greeting-banner";
 
-import { debugAndPrintError, debugMatchMaking } from './Debug';
-import * as matchMaker from './MatchMaker';
-import { RegisteredHandler } from './matchmaker/RegisteredHandler';
-import { Presence } from './presence/Presence';
+import { debugAndPrintError, debugMatchMaking } from './Debug.js';
+import * as matchMaker from './MatchMaker.js';
+import { RegisteredHandler } from './matchmaker/RegisteredHandler.js';
+import { Presence } from './presence/Presence.js';
 
-import { Room } from './Room';
-import { Type } from './utils/types';
-import { getBearerToken, registerGracefulShutdown } from './utils/Utils';
+import { Room } from './Room.js';
+import { Type } from './utils/types.js';
+import { getBearerToken, registerGracefulShutdown } from './utils/Utils.js';
 
-import { registerNode, unregisterNode} from './discovery';
+import { registerNode, unregisterNode} from './discovery/index.js';
 
-import { LocalPresence } from './presence/LocalPresence';
-import { LocalDriver } from './matchmaker/driver/local/LocalDriver';
+import { LocalPresence } from './presence/LocalPresence.js';
+import { LocalDriver } from './matchmaker/driver/local/LocalDriver.js';
 
-import { Transport } from './Transport';
-import { logger, setLogger } from './Logger';
-import { setDevMode, isDevMode } from './utils/DevMode';
+import { Transport } from './Transport.js';
+import { logger, setLogger } from './Logger.js';
+import { setDevMode, isDevMode } from './utils/DevMode.js';
 
 export type ServerOptions = {
   publicAddress?: string,

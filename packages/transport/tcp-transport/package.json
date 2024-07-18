@@ -1,11 +1,17 @@
 {
   "private": true,
   "name": "@colyseus/tcp-transport",
-  "version": "0.16.0-preview.0",
+  "version": "0.16.0-preview.2",
   "input": "./src/index.ts",
   "main": "./build/index.js",
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./build/index.mjs",
+      "require": "./build/index.js"
+    }
+  },
   "dependencies": {
     "@colyseus/core": "workspace:^"
   },

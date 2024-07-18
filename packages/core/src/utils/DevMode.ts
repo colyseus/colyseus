@@ -1,9 +1,9 @@
-import debug from "debug";
-import { logger } from "../Logger";
-import { debugAndPrintError } from "../Debug";
+import debug from 'debug';
+import { logger } from '../Logger.js';
+import { debugAndPrintError } from '../Debug.js';
 
-import { getLocalRoomById, handleCreateRoom, presence, remoteRoomCall } from "../MatchMaker";
-import type { Room } from "../Room";
+import { getLocalRoomById, handleCreateRoom, presence, remoteRoomCall } from '../MatchMaker.js';
+import type { Room } from '../Room.js';
 
 export const debugDevMode = debug('colyseus:devmode');
 

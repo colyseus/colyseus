@@ -1,18 +1,18 @@
-import "./loadenv";
-import os from "os";
-import http from "http";
-import cors from "cors";
-import express from "express";
-import osUtils from "node-os-utils";
+import './loadenv.js';
+import os from 'os';
+import http from 'http';
+import cors from 'cors';
+import express from 'express';
+import osUtils from 'node-os-utils';
 import { logger, Server, ServerOptions, Transport, matchMaker } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 
-// try to import uWebSockets-express compatibility layer.
-let uWebSocketsExpressCompatibility: any = undefined;
-try { uWebSocketsExpressCompatibility = require('uwebsockets-express').default; } catch (e) { }
-
 let BunWebSockets: any = undefined;
-try { BunWebSockets = require('@colyseus/bun-websockets'); } catch (e) { }
+
+// @ts-ignore
+import('@colyseus/bun-websockets')
+  .then((module) => BunWebSockets = module)
+  .catch(() => { });
 
 export interface ConfigOptions {
     options?: ServerOptions,
@@ -167,32 +167,6 @@ export async function getTransport(options: ConfigOptions) {
     //
     if (transport['expressApp']) {
       app = transport['expressApp'];
-    }
-
-    if (options.initializeExpress) {
-        // uWebSockets.js + Express compatibility layer.
-        // @ts-ignore
-        if (transport['app']) {
-            if (typeof (uWebSocketsExpressCompatibility) === "function") {
-                if (options.displayLogs){
-                  logger.info("✅ uWebSockets.js + Express compatibility enabled");
-                }
-
-                // @ts-ignore
-                server = undefined;
-                // @ts-ignore
-                app = uWebSocketsExpressCompatibility(transport['app']);
-
-            } else {
-                if (options.displayLogs) {
-                    logger.warn("");
-                    logger.warn("❌ uWebSockets.js + Express compatibility mode couldn't be loaded, run the following command to fix:");
-                    logger.warn("👉 npm install --save uwebsockets-express");
-                    logger.warn("");
-                }
-                app = undefined;
-            }
-        }
     }
 
     if (app) {

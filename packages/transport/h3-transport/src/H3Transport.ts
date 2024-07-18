@@ -1,12 +1,12 @@
 import http from 'http';
 import https from 'https';
-import { Http3Server } from "@fails-components/webtransport";
+import { Http3Server } from '@fails-components/webtransport';
 import { URL } from 'url';
-import { decode, Iterator } from "@colyseus/schema";
+import { decode, Iterator } from '@colyseus/schema';
 
 import { matchMaker, Protocol, Transport, debugAndPrintError, spliceOne, getBearerToken } from '@colyseus/core';
-import { H3Client } from './H3Client';
-import { generateWebTransportCertificate } from './utils/mkcert';
+import { H3Client } from './H3Client.js';
+import { generateWebTransportCertificate } from './utils/mkcert.js';
 
 export type CertLike = string;
 

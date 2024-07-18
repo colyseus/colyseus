@@ -1,29 +1,29 @@
-import { ErrorCode, Protocol } from './Protocol';
+import { ErrorCode, Protocol } from './Protocol.js';
 
-import { requestFromIPC, subscribeIPC } from './IPC';
+import { requestFromIPC, subscribeIPC } from './IPC.js';
 
-import { Deferred, generateId, merge, retry, MAX_CONCURRENT_CREATE_ROOM_WAIT_TIME, REMOTE_ROOM_SHORT_TIMEOUT } from './utils/Utils';
-import { isDevMode, cacheRoomHistory, getPreviousProcessId, getRoomRestoreListKey, reloadFromCache } from './utils/DevMode';
+import { Deferred, generateId, merge, retry, MAX_CONCURRENT_CREATE_ROOM_WAIT_TIME, REMOTE_ROOM_SHORT_TIMEOUT } from './utils/Utils.js';
+import { isDevMode, cacheRoomHistory, getPreviousProcessId, getRoomRestoreListKey, reloadFromCache } from './utils/DevMode.js';
 
-import { RegisteredHandler } from './matchmaker/RegisteredHandler';
-import { Room, RoomInternalState } from './Room';
+import { RegisteredHandler } from './matchmaker/RegisteredHandler.js';
+import { Room, RoomInternalState } from './Room.js';
 
-import { LocalPresence } from './presence/LocalPresence';
-import { Presence } from './presence/Presence';
+import { LocalPresence } from './presence/LocalPresence.js';
+import { Presence } from './presence/Presence.js';
 
-import { debugAndPrintError, debugMatchMaking } from './Debug';
-import { SeatReservationError } from './errors/SeatReservationError';
-import { ServerError } from './errors/ServerError';
+import { debugAndPrintError, debugMatchMaking } from './Debug.js';
+import { SeatReservationError } from './errors/SeatReservationError.js';
+import { ServerError } from './errors/ServerError.js';
 
-import { IRoomCache, LocalDriver, MatchMakerDriver, SortOptions } from './matchmaker/driver/local/LocalDriver';
-import controller from './matchmaker/controller';
-import * as stats from "./Stats";
+import { IRoomCache, LocalDriver, MatchMakerDriver, SortOptions } from './matchmaker/driver/local/LocalDriver.js';
+import controller from './matchmaker/controller.js';
+import * as stats from './Stats.js';
 
-import { logger } from './Logger';
-import { Client } from './Transport';
-import { Type } from './utils/types';
-import { getHostname } from "./discovery";
-import { getLockId } from './matchmaker/driver/api';
+import { logger } from './Logger.js';
+import { Client } from './Transport.js';
+import { Type } from './utils/types.js';
+import { getHostname } from './discovery/index.js';
+import { getLockId } from './matchmaker/driver/api.js';
 
 export { controller, stats, type MatchMakerDriver };
 

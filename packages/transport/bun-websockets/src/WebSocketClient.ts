@@ -2,7 +2,7 @@
 
 // "bun-types" is currently conflicting with "ws" types.
 // @ts-ignore
-import { ServerWebSocket } from "bun";
+import type { ServerWebSocket } from 'bun';
 import EventEmitter from 'events';
 
 import { Protocol, Client, ClientPrivate, ClientState, ISendOptions, getMessageBytes, logger, debugMessage } from '@colyseus/core';

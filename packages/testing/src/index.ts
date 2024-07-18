@@ -1,8 +1,8 @@
-import "./Room.ext";
+import './Room.ext.js';
 
 import { Server } from "@colyseus/core";
 import { ConfigOptions, listen } from "@colyseus/tools";
-import { ColyseusTestServer } from "./TestServer";
+import { ColyseusTestServer } from './TestServer.js';
 
 const DEFAULT_TEST_PORT = 2568;
 

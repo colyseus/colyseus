@@ -1,11 +1,17 @@
 {
   "name": "@colyseus/core",
-  "version": "0.16.0-preview.28",
+  "version": "0.16.0-preview.30",
   "description": "Multiplayer Framework for Node.js.",
   "input": "./src/index.ts",
   "main": "./build/index.js",
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./build/index.mjs",
+      "require": "./build/index.js"
+    }
+  },
   "scripts": {
     "tslint": "tslint --project . --config ../../tslint.json"
   },
