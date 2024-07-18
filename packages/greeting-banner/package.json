@@ -1,7 +1,7 @@
 {
   "name": "@colyseus/greeting-banner",
   "version": "2.0.3",
-  "description": "Greeting banner for Colyseus/Arena services",
+  "description": "Colyseus greeting banner",
   "input": "./src/index.ts",
   "main": "./build/index.js",
   "module": "./build/index.mjs",
@@ -17,9 +17,7 @@
     "url": "git+ssh://git@github.com/colyseus/colyseus.git"
   },
   "keywords": [
-    "colyseus",
-    "arena",
-    "multiplayer"
+    "colyseus"
   ],
   "author": "Endel Dreyer",
   "license": "MIT",
