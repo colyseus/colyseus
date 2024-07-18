@@ -18,7 +18,7 @@ app.get("/hello", (req, res) => {
   res.json({ hello: "world!" });
 });
 
-const transport = new H3Transport({ localProxy: "localhost:8000", server, app });
+const transport = new H3Transport({ server, app });
 const gameServer = new Server({ transport, });
 
 gameServer.define("my_room", MyRoom);

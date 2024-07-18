@@ -14,7 +14,7 @@
   "dependencies": {
     "@colyseus/core": "workspace:^",
     "uWebSockets.js": "github:uNetworking/uWebSockets.js#v20.43.0",
-    "uwebsockets-express": "^1.3.6"
+    "uwebsockets-express": "^1.3.8"
   },
   "author": "Endel Dreyer",
   "license": "MIT",

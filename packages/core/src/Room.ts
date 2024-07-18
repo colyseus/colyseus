@@ -3,7 +3,7 @@ import http, { IncomingMessage } from 'http';
 import { unpack } from '@colyseus/msgpackr';
 import { decode, Iterator, $changes } from '@colyseus/schema';
 
-import Clock from '@gamestdio/timer';
+import Clock from '@colyseus/timer';
 import { EventEmitter } from 'events';
 import { logger } from './Logger.js';
 

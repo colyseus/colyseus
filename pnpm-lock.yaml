@@ -169,9 +169,9 @@ importers:
       '@colyseus/schema':
         specifier: ^3.0.0-alpha.3
         version: 3.0.0-alpha.19
-      '@gamestdio/timer':
-        specifier: ^1.3.0
-        version: 1.4.2
+      '@colyseus/timer':
+        specifier: ^1.0.0
+        version: 1.0.0
       debug:
         specifier: ^4.3.4
         version: 4.3.5(supports-color@8.1.1)
@@ -393,8 +393,8 @@ importers:
         specifier: github:uNetworking/uWebSockets.js#v20.43.0
         version: github.com/uNetworking/uWebSockets.js/1977b5039938ad863d42fc4958d48c17e5a1fa06
       uwebsockets-express:
-        specifier: ^1.3.6
-        version: 1.3.6
+        specifier: ^1.3.8
+        version: 1.3.10
 
   packages/transport/ws-transport:
     dependencies:
@@ -752,6 +752,10 @@ packages:
     resolution: {integrity: sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==}
     dev: true
 
+  /@colyseus/clock@1.0.0:
+    resolution: {integrity: sha512-x1un5rFEgilVAA6ukSG8GFgtpX/hsmL5BtrPdxLx0dbPU7zwpTVXez2qoGza7YYS5QTvVD45gbHyX/KaaEWSZQ==}
+    dev: false
+
   /@colyseus/msgpackr@1.10.5:
     resolution: {integrity: sha512-ZSWPpEEnSe/oMzifiLKkNdE5UR0B8STagWR1JcKV5qw6ISM/z8d7ArZgGstqBrrZAXAOIZDpvOyrTloiR9zRlg==}
     optionalDependencies:
@@ -765,6 +769,12 @@ packages:
   /@colyseus/schema@3.0.0-alpha.19:
     resolution: {integrity: sha512-bs99kqqm6rmHJKqBKQAyM+fRweCCIph2w+3WUG4zVOPbbHlHupqdqgkoGNSVR8B4KrlSsk8RmAbrn0rexmakWw==}
     hasBin: true
+
+  /@colyseus/timer@1.0.0:
+    resolution: {integrity: sha512-ugyBP4kgM1Ep6ryS0KVueMrgKnOsOH4nvGAWxmu8x1HlRvc6rDuliwPit/VTfcS383nEyYz1QDGgwNKMST7imA==}
+    dependencies:
+      '@colyseus/clock': 1.0.0
+    dev: false
 
   /@esbuild/aix-ppc64@0.21.5:
     resolution: {integrity: sha512-1SDgH6ZSPTlggy1yI6+Dbkiz8xzpHJEVAlF/AM1tHPLsf5STom9rwtjE4hKAF20FfXXNTFqEYXyJNWh1GiZedQ==}
@@ -1213,16 +1223,6 @@ packages:
       debug: 4.3.5(supports-color@8.1.1)
     transitivePeerDependencies:
       - supports-color
-    dev: false
-
-  /@gamestdio/clock@1.1.9:
-    resolution: {integrity: sha512-O+PG3aRRytgX2BhAPMIhbM2ftq1Q8G4xUrYjEWYM6EmpoKn8oY4lXENGhpgfww6mQxHPbjfWyIAR6Xj3y1+avw==}
-    dev: false
-
-  /@gamestdio/timer@1.4.2:
-    resolution: {integrity: sha512-WNciVCKSJzY56CM95TCVf+dtWShWNFUdziY1Qc+2gaqNCRbC3Egqzq9zumGRrV92Ym9GL6znkqTzF2AoAdydNw==}
-    dependencies:
-      '@gamestdio/clock': 1.1.9
     dev: false
 
   /@gar/promisify@1.1.3:
@@ -8578,12 +8578,21 @@ packages:
     hasBin: true
     dev: true
 
+  /uwebsockets-express@1.3.10:
+    resolution: {integrity: sha512-I0yU9YIIS0PatBoafU0AaZSwRajVMOsXU7CdiwGFA3D9CXd0mSlDxBu++A55oR1KUqNTJlqm/uiFtB45uOSsYQ==}
+    dependencies:
+      http-status-codes: 2.3.0
+      mime: 2.6.0
+      path-to-regexp: 0.1.8
+    dev: false
+
   /uwebsockets-express@1.3.6:
     resolution: {integrity: sha512-e/6CzXahHPgxczezBCPyF/NyoKgxuIacuaT4hwu5qN1N9lReArTfsdJAXkmXDYQuM1jG4c9KlB/u5UObZf1TAA==}
     dependencies:
       http-status-codes: 2.3.0
       mime: 2.6.0
       path-to-regexp: 0.1.8
+    dev: true
 
   /v8-compile-cache@2.3.0:
     resolution: {integrity: sha512-l8lCEmLcLYZh4nbunNZvQCJc5pv7+RCwa8q/LdUx8u7lsWvPDKmpodJAJNwkAhJC//dFY48KuIEmjtd4RViDrA==}

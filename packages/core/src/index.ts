@@ -1,4 +1,4 @@
-import Clock, { Delayed } from '@gamestdio/timer';
+import Clock, { Delayed } from '@colyseus/timer';
 
 // Core classes
 export { Server, type ServerOptions } from './Server.js';

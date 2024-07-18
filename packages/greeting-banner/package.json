@@ -1,11 +1,17 @@
 {
   "name": "@colyseus/greeting-banner",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "description": "Greeting banner for Colyseus/Arena services",
   "input": "./src/index.ts",
   "main": "./build/index.js",
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./build/index.mjs",
+      "require": "./build/index.js"
+    }
+  },
   "repository": {
     "type": "git",
     "url": "git+ssh://git@github.com/colyseus/colyseus.git"

@@ -2,7 +2,7 @@
 
 import { Protocol, Client, ClientState, ISendOptions, getMessageBytes, logger, debugMessage, ClientPrivate } from '@colyseus/core';
 import { WebTransportSession } from '@fails-components/webtransport';
-import { EventEmitter } from 'stream';
+import { EventEmitter } from 'events';
 
 export class H3Client implements Client, ClientPrivate {
   public id: string;
