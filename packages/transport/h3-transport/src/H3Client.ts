@@ -1,5 +1,6 @@
 // import WebSocket from 'ws';
 
+import type { ReadableStreamDefaultReader, WritableStreamDefaultWriter } from 'stream/web';
 import { Protocol, Client, ClientState, ISendOptions, getMessageBytes, logger, debugMessage, ClientPrivate } from '@colyseus/core';
 import { WebTransportSession } from '@fails-components/webtransport';
 import { EventEmitter } from 'events';
@@ -18,11 +19,11 @@ export class H3Client implements Client, ClientPrivate {
   // TODO: remove readyState
   public readyState: number;
 
-  private _bidiReader: any;
-  private _bidiWriter: any;
+  private _bidiReader: ReadableStreamDefaultReader<Uint8Array>;
+  private _bidiWriter: WritableStreamDefaultWriter<Uint8Array>;
 
-  private _datagramReader: any;
-  private _datagramWriter: any;
+  private _datagramReader: ReadableStreamDefaultReader<Uint8Array>;
+  private _datagramWriter: WritableStreamDefaultWriter<Uint8Array>;
 
   constructor(
     private _wtSession: WebTransportSession,
@@ -32,7 +33,9 @@ export class H3Client implements Client, ClientPrivate {
     _wtSession.ready.then(() => {
 
       _wtSession.createBidirectionalStream().then((bidi) => {
+        // @ts-ignore
         this._bidiReader = bidi.readable.getReader();
+        // @ts-ignore
         this._bidiWriter = bidi.writable.getWriter();
 
         this._bidiReader.read().then((read: any) => onInitialMessage(read.value));
@@ -52,7 +55,8 @@ export class H3Client implements Client, ClientPrivate {
         this._close();
       });
 
-      // // reading datagrams
+      // reading datagrams
+      // @ts-ignore
       this._datagramReader = _wtSession.datagrams.readable.getReader();
       this._datagramReader.closed.catch((e: any) =>
         console.log("datagram reader closed with error!", e));
@@ -85,7 +89,14 @@ export class H3Client implements Client, ClientPrivate {
         .then(() => console.log("datagram writer closed successfully!"))
         .catch((e: any) => console.log("datagram writer closed with error!", e));
     }
-    this._datagramWriter.write(bytes);
+
+    // include length of message, as the reader may receive multiple messages at once
+    const length = bytes.length;
+    const framed = new Uint8Array(length + 1);
+    framed[0] = length;
+    framed.set(bytes, 1);
+
+    this._datagramWriter.write(framed);
   }
 
   public async readIncoming() {
@@ -134,7 +145,7 @@ export class H3Client implements Client, ClientPrivate {
     );
   }
 
-  public enqueueRaw(data: ArrayLike<number>, options?: ISendOptions) {
+  public enqueueRaw(data: Buffer | Uint8Array, options?: ISendOptions) {
     // use room's afterNextPatch queue
     if (options?.afterNextPatch) {
       this._afterNextPatchQueue.push([this, arguments]);
@@ -152,13 +163,19 @@ export class H3Client implements Client, ClientPrivate {
     this.raw(data, options);
   }
 
-  public raw(data: ArrayLike<number>, options?: ISendOptions, cb?: (err?: Error) => void) {
+  public raw(data: Buffer | Uint8Array, options?: ISendOptions, cb?: (err?: Error) => void) {
     // skip if client not open
     if (this.readyState !== 1) {// OPEN
       return;
     }
 
-    this._bidiWriter.write(new Uint8Array(data).buffer);
+    // include length of message, as the reader may receive multiple messages at once
+    const length = data.length;
+    const framed = new Uint8Array(length + 1);
+    framed[0] = length;
+    framed.set(data, 1);
+
+    this._bidiWriter.write(framed);
   }
 
   public error(code: number, message: string = '', cb?: (err?: Error) => void) {
