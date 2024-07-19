@@ -4,6 +4,7 @@ import type { ReadableStreamDefaultReader, WritableStreamDefaultWriter } from 's
 import { Protocol, Client, ClientState, ISendOptions, getMessageBytes, logger, debugMessage, ClientPrivate } from '@colyseus/core';
 import { WebTransportSession } from '@fails-components/webtransport';
 import { EventEmitter } from 'events';
+import type { Iterator } from '@colyseus/schema';
 
 export class H3Client implements Client, ClientPrivate {
   public id: string;
@@ -92,11 +93,11 @@ export class H3Client implements Client, ClientPrivate {
 
     // include length of message, as the reader may receive multiple messages at once
     const length = bytes.length;
-    const framed = new Uint8Array(length + 1);
-    framed[0] = length;
-    framed.set(bytes, 1);
+    const lengthPrefixed = new Uint8Array(length + 1);
+    lengthPrefixed[0] = length;
+    lengthPrefixed.set(bytes, 1);
 
-    this._datagramWriter.write(framed);
+    this._datagramWriter.write(lengthPrefixed);
   }
 
   public async readIncoming() {
@@ -106,6 +107,23 @@ export class H3Client implements Client, ClientPrivate {
       try {
         read = await this._bidiReader.read();
 
+        //
+        // a single read may contain multiple messages
+        // each message is prefixed with its length
+        //
+
+        const messages = read.value;
+        const it: Iterator = { offset: 0 };
+        do {
+          //
+          // QUESTION: should we buffer the message in case it's not fully read?
+          //
+
+          const length = messages[it.offset++];
+          this.ref.emit('message', messages.subarray(it.offset, it.offset + length));
+          it.offset += length;
+        } while (it.offset < messages.length);
+
       } catch (e) {
         return;
       }
@@ -114,7 +132,6 @@ export class H3Client implements Client, ClientPrivate {
         return;
       }
 
-      this.ref.emit('message', read.value);
     }
   }
 
@@ -124,6 +141,24 @@ export class H3Client implements Client, ClientPrivate {
     while (this.readyState === 1) {
       try {
         read = await this._datagramReader.read();
+
+        //
+        // a single read may contain multiple messages
+        // each message is prefixed with its length
+        //
+
+        const messages = read.value;
+        const it: Iterator = { offset: 0 };
+        do {
+          //
+          // QUESTION: should we buffer the message in case it's not fully read?
+          //
+
+          const length = messages[it.offset++];
+          this.ref.emit('message', messages.subarray(it.offset, it.offset + length));
+          it.offset += length;
+        } while (it.offset < messages.length);
+
       } catch (e) {
         return;
       }
@@ -131,8 +166,6 @@ export class H3Client implements Client, ClientPrivate {
       if (read.done) {
         return;
       }
-
-      this.ref.emit('message', read.value);
     }
   }
 
@@ -171,11 +204,11 @@ export class H3Client implements Client, ClientPrivate {
 
     // include length of message, as the reader may receive multiple messages at once
     const length = data.length;
-    const framed = new Uint8Array(length + 1);
-    framed[0] = length;
-    framed.set(data, 1);
+    const lengthPrefixed = new Uint8Array(length + 1);
+    lengthPrefixed[0] = length;
+    lengthPrefixed.set(data, 1);
 
-    this._bidiWriter.write(framed);
+    this._bidiWriter.write(lengthPrefixed);
   }
 
   public error(code: number, message: string = '', cb?: (err?: Error) => void) {
