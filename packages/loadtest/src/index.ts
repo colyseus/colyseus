@@ -465,9 +465,23 @@ Example:
         return room;
     }
 
+    const _originalCreate = Client.prototype.create;
+    Client.prototype.create = async function(this: Client) {
+        const room = await _originalCreate.apply(this, arguments);
+        handleClientJoin(room);
+        return room;
+    }
+    
     const _originalJoin = Client.prototype.join;
     Client.prototype.join = async function(this: Client) {
         const room = await _originalJoin.apply(this, arguments);
+        handleClientJoin(room);
+        return room;
+    }
+
+    const _originalJoinById = Client.prototype.joinById;
+    Client.prototype.joinById = async function(this: Client) {
+        const room = await _originalJoinById.apply(this, arguments);
         handleClientJoin(room);
         return room;
     }
