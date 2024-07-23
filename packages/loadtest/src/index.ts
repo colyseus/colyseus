@@ -247,11 +247,16 @@ Example:
     screen.append(networkingBox);
     screen.render();
 
+    const debug = console.debug;
     const log = console.log;
     const warn = console.warn;
     const info = console.info;
     const error = console.error;
 
+    console.debug = function(...args) {
+        logBox.content = `{grey-fg}${args.map(arg => util.inspect(arg)).join(" ")}{/grey-fg}\n${logBox.content}`;
+        screen.render();
+    };
     console.log = function(...args) {
         logBox.content = args.map(arg => util.inspect(arg)).join(" ") + "\n" + logBox.content;
         screen.render();
