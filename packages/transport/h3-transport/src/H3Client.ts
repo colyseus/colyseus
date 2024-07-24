@@ -4,7 +4,9 @@ import type { ReadableStreamDefaultReader, WritableStreamDefaultWriter } from 's
 import { Protocol, Client, ClientState, ISendOptions, getMessageBytes, logger, debugMessage, ClientPrivate } from '@colyseus/core';
 import { WebTransportSession } from '@fails-components/webtransport';
 import { EventEmitter } from 'events';
-import type { Iterator } from '@colyseus/schema';
+import { type Iterator, decode, encode } from '@colyseus/schema';
+
+const lengthPrefixBuffer = new Uint8Array(9); // 9 bytes is the maximum length of a length prefix
 
 export class H3Client implements Client, ClientPrivate {
   public id: string;
@@ -83,7 +85,7 @@ export class H3Client implements Client, ClientPrivate {
     );
   }
 
-  public sendDatagram(bytes: Uint8Array | Buffer) {
+  public sendDatagram(data: Uint8Array | Buffer) {
     if (!this._datagramWriter) {
       this._datagramWriter = this._wtSession.datagrams.writable.getWriter();
       this._datagramWriter.closed
@@ -92,12 +94,12 @@ export class H3Client implements Client, ClientPrivate {
     }
 
     // include length of message, as the reader may receive multiple messages at once
-    const length = bytes.length;
-    const lengthPrefixed = new Uint8Array(length + 1);
-    lengthPrefixed[0] = length;
-    lengthPrefixed.set(bytes, 1);
+    const prefixLength = encode.number(lengthPrefixBuffer, data.length, { offset: 0 });
+    const dataWithPrefixedLength = new Uint8Array(prefixLength + data.length);
+    dataWithPrefixedLength.set(lengthPrefixBuffer.subarray(0, prefixLength), 0);
+    dataWithPrefixedLength.set(data, prefixLength);
 
-    this._datagramWriter.write(lengthPrefixed);
+    this._datagramWriter.write(dataWithPrefixedLength);
   }
 
   public async readIncoming() {
@@ -119,7 +121,7 @@ export class H3Client implements Client, ClientPrivate {
           // QUESTION: should we buffer the message in case it's not fully read?
           //
 
-          const length = messages[it.offset++];
+          const length = decode.number(messages, it);
           this.ref.emit('message', messages.subarray(it.offset, it.offset + length));
           it.offset += length;
         } while (it.offset < messages.length);
@@ -154,7 +156,7 @@ export class H3Client implements Client, ClientPrivate {
           // QUESTION: should we buffer the message in case it's not fully read?
           //
 
-          const length = messages[it.offset++];
+          const length = decode.number(messages, it);
           this.ref.emit('message', messages.subarray(it.offset, it.offset + length));
           it.offset += length;
         } while (it.offset < messages.length);
@@ -203,12 +205,12 @@ export class H3Client implements Client, ClientPrivate {
     }
 
     // include length of message, as the reader may receive multiple messages at once
-    const length = data.length;
-    const lengthPrefixed = new Uint8Array(length + 1);
-    lengthPrefixed[0] = length;
-    lengthPrefixed.set(data, 1);
+    const prefixLength = encode.number(lengthPrefixBuffer, data.length, { offset: 0 });
+    const dataWithPrefixedLength = new Uint8Array(prefixLength + data.length);
+    dataWithPrefixedLength.set(lengthPrefixBuffer.subarray(0, prefixLength), 0);
+    dataWithPrefixedLength.set(data, prefixLength);
 
-    this._bidiWriter.write(lengthPrefixed);
+    this._bidiWriter.write(dataWithPrefixedLength);
   }
 
   public error(code: number, message: string = '', cb?: (err?: Error) => void) {
@@ -217,7 +219,7 @@ export class H3Client implements Client, ClientPrivate {
 
   public leave(code?: number, data?: string) {
     this.readyState = 2; // CLOSING;
-    this._wtSession.close({ reason: data, closeCode: code });
+    this._wtSession.close({ reason: data || "", closeCode: code });
   }
 
   public close(code?: number, data?: string) {
