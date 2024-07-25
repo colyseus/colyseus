@@ -247,11 +247,16 @@ Example:
     screen.append(networkingBox);
     screen.render();
 
+    const debug = console.debug;
     const log = console.log;
     const warn = console.warn;
     const info = console.info;
     const error = console.error;
 
+    console.debug = function(...args) {
+        logBox.content = `{grey-fg}${args.map(arg => util.inspect(arg)).join(" ")}{/grey-fg}\n${logBox.content}`;
+        screen.render();
+    };
     console.log = function(...args) {
         logBox.content = args.map(arg => util.inspect(arg)).join(" ") + "\n" + logBox.content;
         screen.render();
@@ -460,9 +465,23 @@ Example:
         return room;
     }
 
+    const _originalCreate = Client.prototype.create;
+    Client.prototype.create = async function(this: Client) {
+        const room = await _originalCreate.apply(this, arguments);
+        handleClientJoin(room);
+        return room;
+    }
+    
     const _originalJoin = Client.prototype.join;
     Client.prototype.join = async function(this: Client) {
         const room = await _originalJoin.apply(this, arguments);
+        handleClientJoin(room);
+        return room;
+    }
+
+    const _originalJoinById = Client.prototype.joinById;
+    Client.prototype.joinById = async function(this: Client) {
+        const room = await _originalJoinById.apply(this, arguments);
         handleClientJoin(room);
         return room;
     }
