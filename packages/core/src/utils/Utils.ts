@@ -123,18 +123,3 @@ export function merge(a: any, ...objs: any[]): any {
 }
 
 export class HttpServerMock extends EventEmitter {}
-
-// Add msgpackr extension to avoid circular references when encoding
-// https://github.com/kriszyp/msgpackr#custom-extensions
-addExtension({
-  Class: Schema,
-  type: 0,
-
-  read(datum: any): any {
-    return datum;
-  },
-
-  write(instance: any): any {
-    return instance.toJSON();
-  }
-});
