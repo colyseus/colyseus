@@ -59,6 +59,14 @@ export interface Presence {
     setex(key: string, value: string, seconds: number);
 
     /**
+     * Expire the key in seconds.
+     *
+     * @param key - Identifier.
+     * @param seconds - Seconds to expire the key.
+     */
+    expire(key: string, seconds: number);
+
+    /**
      * Get the value of key.
      *
      * @param key - Identifier.
@@ -81,12 +89,14 @@ export interface Presence {
      * @param value - Message body/object.
      */
     sadd(key: string, value: any);
+
     /**
      * Returns all the members of the set value stored at key.
      *
      * @param key - Name/Identifier of the set.
      */
     smembers(key: string): Promise<string[]>;
+
     /**
      * Returns if member is a member of the set stored at key.
      *
@@ -95,6 +105,7 @@ export interface Presence {
      * @returns `1` if the element is a member of the set else `0`.
      */
     sismember(key: string, field: string);
+
     /**
      * Remove the specified members from the set stored at key. Specified members that are not a
      * member of this set are ignored. If key does not exist, it is treated as an empty set
@@ -104,12 +115,14 @@ export interface Presence {
      * @param value - Key value within the set.
      */
     srem(key: string, value: any);
+
     /**
      * Returns the set cardinality (number of elements) of the set stored at key.
      *
      * @param key -  Name/Identifier of the set.
      */
     scard(key: string);
+
     /**
      * Returns the members of the set resulting from the intersection of all the given sets.
      *
@@ -128,6 +141,12 @@ export interface Presence {
      * holding a hash is created. If field does not exist the value is set to 0 before the operation is performed.
      */
     hincrby(key: string, field: string, value: number): number | Promise<number>;
+
+    /**
+     * WARNING: DO NOT USE THIS METHOD. It is meant for internal use only.
+     * @private
+     */
+    hincrbyex(key: string, field: string, value: number, expireInSeconds: number): number | Promise<number>;
 
     /**
      * Returns the value associated with field in the hash stored at key.
@@ -163,6 +182,36 @@ export interface Presence {
      * that can not be represented as integer. This operation is limited to 64-bit signed integers.
      */
     decr(key: string): Promise<number>;
+
+    /**
+     * Returns the length of the list stored at key.
+     */
+    llen(key: string): number | Promise<number>;
+
+    /**
+     * Adds the string value to the end of the list stored at key. If key does not exist, it is created as empty list before performing the push operation.
+     */
+    rpush(key: string, ...values: string[]): number | Promise<number>;
+
+    /**
+     * Adds the string value to the begginning of the list stored at key. If key does not exist, it is created as empty list before performing the push operation.
+     */
+    lpush(key: string, ...values: string[]): number | Promise<number>;
+
+    /**
+     * Removes and returns the last element of the list stored at key.
+     */
+    rpop(key: string): string | Promise<string>;
+
+    /**
+     * Removes and returns the first element of the list stored at key.
+     */
+    lpop(key: string): string | Promise<string>;
+
+    /**
+     * Removes and returns the last element of the list stored at key. If the list is empty, the execution is halted until an element is available or the timeout is reached.
+     */
+    brpop(...args: [...keys: string[], timeoutInSeconds: number]): Promise<[string, string]>;
 
     shutdown(): void;
 }

@@ -1,6 +1,6 @@
-import fs from "fs";
-import path from "path";
-import dotenv from "dotenv";
+import fs from 'fs';
+import path from 'path';
+import dotenv from 'dotenv';
 
 function getNodeEnv() {
   return process.env.NODE_ENV || "development";

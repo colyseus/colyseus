@@ -1,9 +1,9 @@
 
-import * as matchMaker from '../MatchMaker';
-import { RoomListingData } from '../matchmaker/driver';
-import { subscribeLobby } from '../matchmaker/Lobby';
-import { Room } from '../Room';
-import { Client } from '../Transport';
+import * as matchMaker from '../MatchMaker.js';
+import { IRoomCache } from '../matchmaker/driver/local/LocalDriver.js';
+import { subscribeLobby } from '../matchmaker/Lobby.js';
+import { Room } from '../Room.js';
+import { Client } from '../Transport.js';
 
 // TODO: use Schema state & filters on version 1.0.0
 
@@ -21,7 +21,7 @@ export interface LobbyOptions {
 }
 
 export class LobbyRoom extends Room { // tslint:disable-line
-  public rooms: RoomListingData[] = [];
+  public rooms: IRoomCache[] = [];
   public unsubscribeLobby: () => void;
 
   public clientOptions: { [sessionId: string]: LobbyOptions } = {};
@@ -109,7 +109,7 @@ export class LobbyRoom extends Room { // tslint:disable-line
       : this.rooms;
   }
 
-  protected filterItemForClient(room: RoomListingData, filter?: LobbyOptions['filter']) {
+  protected filterItemForClient(room: IRoomCache, filter?: LobbyOptions['filter']) {
     if (!filter) {
       return true;
     }

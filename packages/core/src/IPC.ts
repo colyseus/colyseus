@@ -1,7 +1,7 @@
-import { debugAndPrintError } from './Debug';
-import { Presence } from './presence/Presence';
-import { IpcProtocol } from './Protocol';
-import { generateId, REMOTE_ROOM_SHORT_TIMEOUT } from './utils/Utils';
+import { debugAndPrintError } from './Debug.js';
+import { Presence } from './presence/Presence.js';
+import { IpcProtocol } from './Protocol.js';
+import { generateId, REMOTE_ROOM_SHORT_TIMEOUT } from './utils/Utils.js';
 
 export async function requestFromIPC<T>(
   presence: Presence,
@@ -11,7 +11,7 @@ export async function requestFromIPC<T>(
   rejectionTimeout: number = REMOTE_ROOM_SHORT_TIMEOUT,
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    let unsubscribeTimeout: NodeJS.Timer;
+    let unsubscribeTimeout: NodeJS.Timeout;
 
     const requestId = generateId();
     const channel = `ipc:${requestId}`;

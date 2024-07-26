@@ -1,11 +1,17 @@
 {
   "name": "@colyseus/tools",
-  "version": "0.15.39",
-  "description": "Colyseus Tools for Production",
+  "version": "0.16.0-preview.3",
+  "description": "Simplify the development and production settings for your Colyseus project.",
   "input": "./src/index.ts",
   "main": "./build/index.js",
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./build/index.mjs",
+      "require": "./build/index.js"
+    }
+  },
   "scripts": {
     "start": "ts-node-dev example/app.ts"
   },

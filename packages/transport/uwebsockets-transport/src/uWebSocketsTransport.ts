@@ -1,9 +1,10 @@
 import http from 'http';
 import querystring from 'querystring';
 import uWebSockets from 'uWebSockets.js';
+import expressify, { Application } from "uwebsockets-express";
 
-import { DummyServer, ErrorCode, matchMaker, getBearerToken, Transport, debugAndPrintError, spliceOne } from '@colyseus/core';
-import { uWebSocketClient, uWebSocketWrapper } from './uWebSocketClient';
+import { HttpServerMock, ErrorCode, matchMaker, getBearerToken, Transport, debugAndPrintError, spliceOne } from '@colyseus/core';
+import { uWebSocketClient, uWebSocketWrapper } from './uWebSocketClient.js';
 
 export type TransportOptions = Omit<uWebSockets.WebSocketBehavior<any>, "upgrade" | "open" | "pong" | "close" | "message">;
 
@@ -16,6 +17,7 @@ type RawWebSocketClient = uWebSockets.WebSocket<any> & {
 
 export class uWebSocketsTransport extends Transport {
     public app: uWebSockets.TemplatedApp;
+    public expressApp: Application;
 
     protected clients: RawWebSocketClient[] = [];
     protected clientWrappers = new WeakMap<RawWebSocketClient, uWebSocketWrapper>();
@@ -29,6 +31,8 @@ export class uWebSocketsTransport extends Transport {
         this.app = (appOptions.cert_file_name && appOptions.key_file_name)
             ? uWebSockets.SSLApp(appOptions)
             : uWebSockets.App(appOptions);
+
+        this.expressApp = expressify(this.app);
 
         if (options.maxBackpressure === undefined) {
             options.maxBackpressure = 1024 * 1024;
@@ -49,7 +53,8 @@ export class uWebSocketsTransport extends Transport {
         // https://github.com/colyseus/colyseus/issues/458
         // Adding a mock object for Transport.server
         if(!this.server) {
-          this.server = new DummyServer();
+          // @ts-ignore
+          this.server = new HttpServerMock();
         }
 
         this.app.ws('/*', {
@@ -103,8 +108,8 @@ export class uWebSocketsTransport extends Transport {
             },
 
             message: (ws: RawWebSocketClient, message: ArrayBuffer, isBinary: boolean) => {
-                // emit 'close' on wrapper
-                this.clientWrappers.get(ws)?.emit('message', Buffer.from(message.slice(0)));
+                // emit 'message' on wrapper
+                this.clientWrappers.get(ws)?.emit('message', Buffer.from(message));
             },
 
         });
@@ -145,8 +150,11 @@ export class uWebSocketsTransport extends Transport {
         }
 
         const originalRawSend = this._originalRawSend;
-        uWebSocketClient.prototype.raw = milliseconds <= Number.EPSILON ? originalRawSend : function () {
-            setTimeout(() => originalRawSend.apply(this, arguments), milliseconds);
+        uWebSocketClient.prototype.raw = milliseconds <= Number.EPSILON ? originalRawSend : function (...args: any[]) {
+            // copy buffer
+            let [buf, ...rest] = args;
+            buf = Array.from(buf);
+            setTimeout(() => originalRawSend.apply(this, [buf, ...rest]), milliseconds);
         };
     }
 
@@ -164,7 +172,7 @@ export class uWebSocketsTransport extends Transport {
         const processAndRoomId = url.match(/\/[a-zA-Z0-9_\-]+\/([a-zA-Z0-9_\-]+)$/);
         const roomId = processAndRoomId && processAndRoomId[1];
 
-        const room = matchMaker.getRoomById(roomId);
+        const room = matchMaker.getLocalRoomById(roomId);
         const client = new uWebSocketClient(sessionId, wrapper);
 
         //
@@ -236,7 +244,7 @@ export class uWebSocketsTransport extends Transport {
             res.onAborted(() => onAborted(res));
 
             // do not accept matchmaking requests if already shutting down
-            if (matchMaker.isGracefullyShuttingDown) {
+            if (matchMaker.state === matchMaker.MatchMakerState.SHUTTING_DOWN) {
               return res.close();
             }
 

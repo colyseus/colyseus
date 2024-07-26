@@ -1,4 +1,4 @@
-import { Room, Client, ClientArray } from "colyseus";
+import { Room, Client, ClientArray } from "@colyseus/core";
 import { Schema, type, MapSchema } from "@colyseus/schema";
 import { IncomingMessage } from "http";
 
@@ -23,11 +23,25 @@ export class MyRoom extends Room<MyRoomState> {
     this.state.mapWidth = 800;
     this.state.mapHeight = 600;
 
-    this.onMessage('input', (client, input) => {
-      // handle player input
-      const player = this.state.players.get(client.sessionId);
-      player.x += 1; //dummy mutation
+    this.onMessage("*", (client, type, message) => {
+      console.log("received", { type, message });
+      // client.send(type, message);
     });
+
+    this.onMessage("move", (client, message) => {
+      const player = this.state.players.get(client.sessionId);
+      player.x = message.x;
+      player.y = message.y;
+    })
+
+    this.setSimulationInterval(() => this.update());
+  }
+
+  update() {
+    // this.state.players.forEach((player, key) => {
+    //   player.x += 1;
+    //   player.y += 1;
+    // });
   }
 
   onJoin(client: Client, options: any) {
@@ -40,9 +54,19 @@ export class MyRoom extends Room<MyRoomState> {
     this.state.players.set(client.sessionId, player);
   }
 
-  onLeave(client: Client, consented: boolean) {
-    console.log(client.sessionId, "left!");
-    this.state.players.delete(client.sessionId);
+  async onLeave(client: Client, consented: boolean) {
+    try {
+      if (consented) { throw new Error("consented leave"); }
+
+      console.log(client.sessionId, "waiting for reconnection...");
+      await this.allowReconnection(client, 10);
+
+      console.log(client.sessionId, "reconnected!");
+
+    } catch (e) {
+      this.state.players.delete(client.sessionId);
+      console.log(client.sessionId, "left!");
+    }
   }
 
   onCacheRoom() {

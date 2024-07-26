@@ -2,7 +2,7 @@ import WebSocket from "ws";
 import { Deferred, Room, Server, matchMaker, Protocol  } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import Benchmark from "benchmark";
-import { pack } from "msgpackr";
+import { pack } from "@colyseus/msgpackr";
 
 const numClients = 30;
 const suite = new Benchmark.Suite();
@@ -22,7 +22,7 @@ server.define("room", MyRoom);
 server.listen(9999, undefined, undefined, async () => {
   const roomCreated = await matchMaker.createRoom("room", {});
 
-  const room = matchMaker.getRoomById(roomCreated.roomId);
+  const room = matchMaker.getLocalRoomById(roomCreated.roomId);
 
   const future = new Deferred();
 

@@ -122,7 +122,7 @@ describe("LobbyRoom: Integration", () => {
 
         it("should update rooms field when room marked as private", async () => {
           const serverLobby = await matchMaker.createRoom('lobby', {});
-          const serverLobbyRoom = await matchMaker.getRoomById(serverLobby.roomId) as LobbyRoom;
+          const serverLobbyRoom = await matchMaker.getLocalRoomById(serverLobby.roomId) as LobbyRoom;
           const lobby = await client.join("lobby");
 
           let allRooms: Colyseus.RoomAvailable[] = [];

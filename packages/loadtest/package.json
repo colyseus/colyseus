@@ -1,19 +1,18 @@
 {
   "name": "@colyseus/loadtest",
-  "version": "0.15.6",
+  "version": "0.16.0-preview.4",
   "description": "Utility tool for load testing Colyseus.",
   "type": "module",
-  "exports": {
-    ".": {
-      "types": "./build/index.d.ts",
-      "require": "./build/index.js",
-      "import": "./build/index.mjs"
-    }
-  },
   "input": "./src/index.ts",
   "main": "./build/index.js",
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./build/index.mjs",
+      "require": "./build/index.js"
+    }
+  },
   "bin": {
     "colyseus-loadtest": "./bin.js"
   },
@@ -42,7 +41,7 @@
   },
   "dependencies": {
     "blessed": "^0.1.81",
-    "colyseus.js": "^0.15.18",
+    "colyseus.js": "^0.16.0-preview.0",
     "minimist": "^1.2.5",
     "typescript": ">=4.3.5",
     "ws": "^7.4.5"

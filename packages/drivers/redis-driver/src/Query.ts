@@ -1,6 +1,6 @@
-import { QueryHelpers, SortOptions } from '@colyseus/core';
+import { SortOptions } from '@colyseus/core';
 
-export class Query<T> implements QueryHelpers<T> {
+export class Query<T> {
   private readonly rooms: Promise<T[]>;
   private conditions: any;
   protected order: Map<string, 1 | -1> = new Map();

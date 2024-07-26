@@ -1,8 +1,7 @@
 import EventEmitter from 'events';
 import uWebSockets from 'uWebSockets.js';
 
-import { getMessageBytes, Protocol, Client, ClientState, ISendOptions, logger, debugMessage } from '@colyseus/core';
-import { Schema } from '@colyseus/schema';
+import { getMessageBytes, Protocol, Client, ClientPrivate, ClientState, ISendOptions, logger, debugMessage } from '@colyseus/core';
 
 export class uWebSocketWrapper extends EventEmitter {
   constructor(public ws: uWebSockets.WebSocket<any>) {
@@ -17,13 +16,16 @@ export enum ReadyState {
   CLOSED = 3,
 }
 
-export class uWebSocketClient implements Client {
+export class uWebSocketClient implements Client, ClientPrivate {
   public sessionId: string;
   public state: ClientState = ClientState.JOINING;
   public readyState: number = ReadyState.OPEN;
+  public reconnectionToken: string;
+
   public _enqueuedMessages: any[] = [];
   public _afterNextPatchQueue;
   public _reconnectionToken: string;
+  public _joinedAt: number;
 
   constructor(
     public id: string,
@@ -40,7 +42,7 @@ export class uWebSocketClient implements Client {
     this.readyState = ReadyState.OPEN;
   }
 
-  public sendBytes(type: any, bytes?: any | ISendOptions, options?: ISendOptions) {
+  public sendBytes(type: string | number, bytes: Buffer | Uint8Array, options?: ISendOptions) {
     debugMessage("send bytes(to %s): '%s' -> %j", this.sessionId, type, bytes);
 
     this.enqueueRaw(
@@ -53,17 +55,15 @@ export class uWebSocketClient implements Client {
     debugMessage("send(to %s): '%s' -> %O", this.sessionId, messageOrType, messageOrOptions);
 
     this.enqueueRaw(
-      (messageOrType instanceof Schema)
-        ? getMessageBytes[Protocol.ROOM_DATA_SCHEMA](messageOrType)
-        : getMessageBytes.raw(Protocol.ROOM_DATA, messageOrType, messageOrOptions),
+      getMessageBytes.raw(Protocol.ROOM_DATA, messageOrType, messageOrOptions),
       options,
     );
   }
 
-  public enqueueRaw(data: ArrayLike<number>, options?: ISendOptions) {
+  public enqueueRaw(data: Uint8Array | Buffer, options?: ISendOptions) {
     // use room's afterNextPatch queue
     if (options?.afterNextPatch) {
-      this._afterNextPatchQueue.push([this, arguments]);
+      this._afterNextPatchQueue.push([this, [Buffer.from(data)]]);
       return;
     }
 
@@ -71,25 +71,27 @@ export class uWebSocketClient implements Client {
       // sending messages during `onJoin`.
       // - the client-side cannot register "onMessage" callbacks at this point.
       // - enqueue the messages to be send after JOIN_ROOM message has been sent
-      this._enqueuedMessages.push(data);
+      // - create a new buffer for enqueued messages, as the underlying buffer might be modified
+      this._enqueuedMessages.push(Buffer.from(data));
       return;
     }
 
     this.raw(data, options);
   }
 
-  public raw(data: ArrayLike<number>, options?: ISendOptions, cb?: (err?: Error) => void) {
+  public raw(data: Uint8Array | Buffer, options?: ISendOptions, cb?: (err?: Error) => void) {
     // skip if client not open
     if (this.readyState !== ReadyState.OPEN) {
       return;
     }
 
-    this._ref.ws.send(new Uint8Array(data), true, false);
+    this._ref.ws.send(data, true, false);
   }
 
   public error(code: number, message: string = '', cb?: (err?: Error) => void) {
     this.raw(getMessageBytes[Protocol.ERROR](code, message));
-    cb(); // call imediatelly (just to keep same API as "ws" transport)
+    // respond with callback after the message has been sent
+    setTimeout(cb, 0);
   }
 
   public leave(code?: number, data?: string) {

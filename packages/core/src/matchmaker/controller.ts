@@ -3,10 +3,10 @@
  * (for interoperability between different http frameworks, e.g. express, uWebSockets.js, etc)
  */
 
-import { IncomingMessage } from "http";
-import { ErrorCode } from "../Protocol";
-import { ServerError } from "../errors/ServerError";
-import * as matchMaker from "../MatchMaker";
+import { IncomingMessage } from 'http';
+import { ErrorCode } from '../Protocol.js';
+import { ServerError } from '../errors/ServerError.js';
+import * as matchMaker from '../MatchMaker.js';
 
 export default {
   DEFAULT_CORS_HEADERS: {

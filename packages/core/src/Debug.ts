@@ -1,6 +1,6 @@
 import debug from 'debug';
-import { logger } from './Logger';
-import { ServerError } from './errors/ServerError';
+import { logger } from './Logger.js';
+import { ServerError } from './errors/ServerError.js';
 
 export const debugConnection = debug('colyseus:connection');
 export const debugDriver = debug('colyseus:driver');

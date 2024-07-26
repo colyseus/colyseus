@@ -1,14 +1,14 @@
-
 import nanoid from 'nanoid';
-import { addExtension } from 'msgpackr';
+import { addExtension } from '@colyseus/msgpackr';
 
-import { debugAndPrintError } from '../Debug';
 import { EventEmitter } from "events";
-import { ServerOpts, Socket } from "net";
 import { Schema } from "@colyseus/schema";
+
+import { debugAndPrintError } from '../Debug.js';
 
 // remote room call timeouts
 export const REMOTE_ROOM_SHORT_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_SHORT_TIMEOUT || 2000);
+export const MAX_CONCURRENT_CREATE_ROOM_WAIT_TIME = Number(process.env.COLYSEUS_MAX_CONCURRENT_CREATE_ROOM_WAIT_TIME || 0.5);
 
 export function generateId(length: number = 9) {
   return nanoid(length);
@@ -79,14 +79,14 @@ export function spliceOne(arr: any[], index: number): boolean {
   return true;
 }
 
-export class Deferred<T= any> {
+export class Deferred<T = any> {
   public promise: Promise<T>;
 
   public resolve: Function;
   public reject: Function;
 
-  constructor() {
-    this.promise = new Promise<T>((resolve, reject) => {
+  constructor(promise?: Promise<T>) {
+    this.promise = promise ?? new Promise<T>((resolve, reject) => {
       this.resolve = resolve;
       this.reject = reject;
     });
@@ -98,6 +98,14 @@ export class Deferred<T= any> {
 
   public catch(func: (value: any) => any) {
     return this.promise.catch(func);
+  }
+
+  static reject (reason?: any) {
+    return new Deferred(Promise.reject(reason));
+  }
+
+  static resolve<T = any>(value?: T) {
+    return new Deferred<T>(Promise.resolve(value));
   }
 
 }
@@ -114,26 +122,4 @@ export function merge(a: any, ...objs: any[]): any {
   return a;
 }
 
-export declare interface DummyServer {
-  constructor(options?: ServerOpts, connectionListener?: (socket: Socket) => void);
-
-  listen(port?: number, hostname?: string, backlog?: number, listeningListener?: () => void): this;
-  close(callback?: (err?: Error) => void): this;
-}
-
-export class DummyServer extends EventEmitter {}
-
-// Add msgpackr extension to avoid circular references when encoding
-// https://github.com/kriszyp/msgpackr#custom-extensions
-addExtension({
-  Class: Schema,
-  type: 0,
-
-  read(datum: any): any {
-    return datum;
-  },
-
-  write(instance: any): any {
-    return instance.toJSON();
-  }
-});
+export class HttpServerMock extends EventEmitter {}

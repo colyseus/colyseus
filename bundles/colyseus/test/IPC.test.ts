@@ -1,7 +1,7 @@
 import assert from "assert";
 
 import { PRESENCE_IMPLEMENTATIONS } from "./utils";
-import { subscribeIPC, requestFromIPC } from "@colyseus/core/build/IPC";
+import { subscribeIPC, requestFromIPC } from "@colyseus/core";
 import { ServerError } from "@colyseus/core";
 
 describe("Inter-process Communication", () => {

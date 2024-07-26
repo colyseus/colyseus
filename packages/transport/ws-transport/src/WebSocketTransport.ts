@@ -1,9 +1,9 @@
 import http from 'http';
 import { URL } from 'url';
-import WebSocket, { ServerOptions } from 'ws';
+import WebSocket, { WebSocketServer, ServerOptions } from 'ws';
 
 import { matchMaker, Protocol, Transport, debugAndPrintError, debugConnection } from '@colyseus/core';
-import { WebSocketClient } from './WebSocketClient';
+import { WebSocketClient } from './WebSocketClient.js';
 
 function noop() {/* tslint:disable:no-empty */ }
 function heartbeat() { this.pingCount = 0; }
@@ -16,13 +16,13 @@ export interface TransportOptions extends ServerOptions {
 }
 
 export class WebSocketTransport extends Transport {
-  protected wss: WebSocket.Server;
+  protected wss: WebSocketServer;
 
-  protected pingInterval: NodeJS.Timer;
+  protected pingInterval: NodeJS.Timeout;
   protected pingIntervalMS: number;
   protected pingMaxRetries: number;
 
-  private _originalSend: typeof WebSocket.prototype.send | null = null;
+  private _originalSend: typeof WebSocketClient.prototype.raw | null = null;
 
   constructor(options: TransportOptions = {}) {
     super();
@@ -49,7 +49,7 @@ export class WebSocketTransport extends Transport {
       options.server = http.createServer();
     }
 
-    this.wss = new WebSocket.Server(options);
+    this.wss = new WebSocketServer(options);
     this.wss.on('connection', this.onConnection);
 
     // this is required to allow the ECONNRESET error to trigger on the `server` instance.
@@ -78,13 +78,16 @@ export class WebSocketTransport extends Transport {
 
   public simulateLatency(milliseconds: number) {
     if (this._originalSend == null) {
-      this._originalSend = WebSocket.prototype.send;
+      this._originalSend = WebSocketClient.prototype.raw;
     }
 
     const originalSend = this._originalSend;
 
-    WebSocket.prototype.send = milliseconds <= Number.EPSILON ? originalSend : function (...args: any[]) {
-      setTimeout(() => originalSend.apply(this, args), milliseconds);
+    WebSocketClient.prototype.raw = milliseconds <= Number.EPSILON ? originalSend : function (...args: any[]) {
+      // copy buffer
+      let [buf, ...rest] = args;
+      buf = Array.from(buf);
+      setTimeout(() => originalSend.apply(this, [buf, ...rest]), milliseconds);
     };
   }
 
@@ -120,7 +123,7 @@ export class WebSocketTransport extends Transport {
     const processAndRoomId = parsedURL.pathname.match(/\/[a-zA-Z0-9_\-]+\/([a-zA-Z0-9_\-]+)$/);
     const roomId = processAndRoomId && processAndRoomId[1];
 
-    const room = matchMaker.getRoomById(roomId);
+    const room = matchMaker.getLocalRoomById(roomId);
 
     // set client id
     rawClient.pingCount = 0;
