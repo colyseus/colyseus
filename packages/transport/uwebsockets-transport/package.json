@@ -1,13 +1,13 @@
 {
   "name": "@colyseus/uwebsockets-transport",
-  "version": "0.15.7",
+  "version": "0.15.8",
   "input": "./src/index.ts",
   "main": "./build/index.js",
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
   "dependencies": {
     "@colyseus/core": "workspace:^",
-    "uWebSockets.js": "github:uNetworking/uWebSockets.js#v20.43.0"
+    "uWebSockets.js": "github:uNetworking/uWebSockets.js#v20.44.0"
   },
   "peerDependencies": {
     "@colyseus/schema": ">=1.0.0"
