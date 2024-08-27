@@ -1,13 +1,13 @@
 {
   "name": "@colyseus/tools",
-  "version": "0.15.39",
+  "version": "0.15.41",
   "description": "Colyseus Tools for Production",
   "input": "./src/index.ts",
   "main": "./build/index.js",
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
   "scripts": {
-    "start": "ts-node-dev example/app.ts"
+    "start": "tsx example/app.ts"
   },
   "bin": {
     "colyseus-system-boot": "system-boot.js",
@@ -37,7 +37,8 @@
   "devDependencies": {
     "@types/cors": "^2.8.10",
     "@types/dotenv": "^8.2.0",
-    "uwebsockets-express": "^1.1.10"
+    "uwebsockets-express": "^1.1.10",
+    "@colyseus/uwebsockets-transport": "workspace:^"
   },
   "dependencies": {
     "@colyseus/core": "workspace:^",

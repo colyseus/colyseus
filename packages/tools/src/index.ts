@@ -1,5 +1,7 @@
 import "./loadenv";
 import os from "os";
+import fs from "fs";
+import net from "net";
 import http from "http";
 import cors from "cors";
 import express from "express";
@@ -71,8 +73,16 @@ export async function listen(
     const processNumber = Number(process.env.NODE_APP_INSTANCE || "0");
     port += processNumber;
 
+    let portOrSocket: any = port;
+
     // automatically configure for production under Colyseus Cloud
     if (process.env.COLYSEUS_CLOUD !== undefined) {
+        portOrSocket = `/run/colyseus/${port}.sock`;
+
+        // check if .sock file is active
+        // (fixes "ADDRINUSE" issue when restarting the server)
+        await checkInactiveSocketFile(portOrSocket);
+
         // special configuration is required when using multiple processes
         const useRedisConfig = (os.cpus().length > 1) || (process.env.REDIS_URI !== undefined);
 
@@ -120,15 +130,8 @@ export async function listen(
     await matchMaker.onReady;
     await options.beforeListen?.();
 
-    if (process.env.COLYSEUS_CLOUD !== undefined) {
-        // listening on socket
-        // @ts-ignore
-        await gameServer.listen(`/run/colyseus/${port}.sock`);
-
-    } else {
-        // listening on port
-        await gameServer.listen(port);
-    }
+    // listening on port or socket
+    await gameServer.listen(portOrSocket);
 
     // notify process manager (production)
     if (typeof(process.send) === "function") {
@@ -244,4 +247,22 @@ export async function getTransport(options: ConfigOptions) {
     }
 
     return transport;
+}
+
+/**
+ * Check if a socket file is active and remove it if it's not.
+ */
+function checkInactiveSocketFile(sockFilePath: string) {
+  return new Promise((resolve, reject) => {
+    const client = net.createConnection({ path: sockFilePath })
+      .on('connect', () => {
+        // socket file is active, close the connection
+        client.end();
+        throw new Error(`EADDRINUSE: Already listening on '${sockFilePath}'`);
+      })
+      .on('error', () => {
+        // socket file is inactive, remove it
+        fs.unlink(sockFilePath, () => resolve(true));
+      });
+  });
 }

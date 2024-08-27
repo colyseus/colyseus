@@ -322,6 +322,9 @@ importers:
         specifier: ^1.3.7
         version: 1.3.7
     devDependencies:
+      '@colyseus/uwebsockets-transport':
+        specifier: workspace:^
+        version: link:../transport/uwebsockets-transport
       '@types/cors':
         specifier: ^2.8.10
         version: 2.8.17
