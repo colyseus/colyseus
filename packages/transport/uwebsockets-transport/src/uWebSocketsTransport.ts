@@ -182,7 +182,7 @@ export class uWebSocketsTransport extends Transport {
             debugAndPrintError(e);
 
             // send error code to client then terminate
-            client.error(e.code, e.message, () => rawClient.close());
+            client.error(e.code, e.message, () => client.leave());
         }
     }
 
