@@ -1194,8 +1194,11 @@ describe("Integration", () => {
               async onLeave(client) {
                 onLeaveCalled = Date.now();
                 // if left early - allow reconnection should be no-op
-                await this.allowReconnection(client, 1);
-                onLeaveFinished.resolve(true);
+                try {
+                  await this.allowReconnection(client, 1);
+                } catch (e) {
+                  onLeaveFinished.resolve(true);
+                }
               }
               onDispose() { onRoomDisposed.resolve(true); }
             });

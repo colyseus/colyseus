@@ -708,13 +708,13 @@ export abstract class Room<State extends object= any, Metadata= any> {
    */
   public allowReconnection(previousClient: Client, seconds: number | "manual"): Deferred<Client> {
     //
-    // skip reconnection if client has never fully JOINED.
+    // Return rejected promise if client has never fully JOINED.
     //
-    // (having `_enqueuedMessages !== undefined` means that the client has never
-    // been at "ClientState.JOINED" state)
+    // (having `_enqueuedMessages !== undefined` means that the client has never been at "ClientState.JOINED" state)
     //
     if (previousClient._enqueuedMessages !== undefined) {
-      return;
+      // @ts-ignore
+      return Promise.reject("not joined");
     }
 
     if (seconds === undefined) { // TODO: remove this check
