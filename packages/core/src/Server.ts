@@ -248,11 +248,11 @@ export class Server {
     });
 
     try {
+      await this.onShutdownCallback();
       await matchMaker.gracefullyShutdown();
       this.transport.shutdown();
       this.presence.shutdown();
       this.driver.shutdown();
-      await this.onShutdownCallback();
 
     } catch (e) {
       debugAndPrintError(`error during shutdown: ${e}`);
