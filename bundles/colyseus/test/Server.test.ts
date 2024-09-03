@@ -5,6 +5,7 @@ import * as Colyseus from "colyseus.js";
 import { Deferred, Room, Server, matchMaker } from "@colyseus/core";
 import { DummyRoom } from "./utils";
 import { URL } from "url";
+import { Schema, type } from "@colyseus/schema";
 
 const TEST_PORT = 8567;
 const TEST_ENDPOINT = `ws://localhost:${TEST_PORT}`;
@@ -59,6 +60,38 @@ describe("Server", () => {
     });
 
     describe("server.simulateLatency", () => {
+      it("should synchronize state with delay", async () => {
+        class Item extends Schema {
+          @type("string") name: string;
+        }
+
+        class MyState extends Schema {
+          @type("string") message: string = "Hello world!";
+          @type({ map: Item }) items = new Map<string, Item>();
+        }
+
+        matchMaker.defineRoomType('latency_state', class _ extends Room {
+          onCreate() {
+            this.setState(new MyState());
+            this.state.items.set("zero", new Item().assign({ name: "zero" }));
+          }
+          onJoin() {
+            this.state.items.set("one", new Item().assign({ name: "one" }));
+          }
+        });
+
+        server.simulateLatency(50);
+
+        const connection = await client.joinOrCreate('latency_state');
+
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        assert.deepStrictEqual(connection.state.toJSON(), {
+          message: 'Hello world!',
+          items: { zero: { name: 'zero' }, one: { name: 'one' } }
+        })
+      });
+
       it("clients should receive messages at least after X ms of latency", async () => {
         const LATENCY = 300;
         const HALF_LATENCY = LATENCY / 2; // that's how simulateLatency works

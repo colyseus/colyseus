@@ -59,12 +59,11 @@ export class SchemaSerializer<T> implements Serializer<T> {
 
   public applyPatches(clients: Client[]) {
     let numClients = clients.length;
-    this.needFullEncode = (this.encoder.root.changes.size > 0);
 
     if (
       numClients == 0 ||
       (
-        !this.needFullEncode &&
+        this.encoder.root.changes.size === 0 &&
         (!this.hasFilters || this.encoder.root.filteredChanges.size === 0)
       )
     ) {
@@ -75,6 +74,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
       return false;
     }
 
+    this.needFullEncode = true;
 
     // dump changes for patch debugging
     if (debugPatch.enabled) {

@@ -117,6 +117,9 @@ importers:
         specifier: workspace:^
         version: link:../../packages/transport/ws-transport
     devDependencies:
+      '@colyseus/schema':
+        specifier: ^3.0.0-alpha.0
+        version: 3.0.0-alpha.19
       '@colyseus/uwebsockets-transport':
         specifier: workspace:^
         version: link:../../packages/transport/uwebsockets-transport
@@ -167,7 +170,7 @@ importers:
         specifier: ^1.10.3
         version: 1.10.5
       '@colyseus/schema':
-        specifier: ^3.0.0-alpha.3
+        specifier: ^3.0.0-alpha.0
         version: 3.0.0-alpha.19
       '@colyseus/timer':
         specifier: ^1.0.0
