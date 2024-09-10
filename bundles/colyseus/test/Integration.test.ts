@@ -2,7 +2,7 @@ import assert from "assert";
 import crypto from "crypto";
 import sinon, { match } from "sinon";
 import * as Colyseus from "colyseus.js";
-import { Schema, type, Context } from "@colyseus/schema";
+import { Schema, type, Context, MapSchema } from "@colyseus/schema";
 
 import { matchMaker, Room, Client, Server, ErrorCode, MatchMakerDriver, Presence, Deferred, Transport, ClientArray } from "@colyseus/core";
 import { DummyRoom, DRIVERS, timeout, Room3Clients, PRESENCE_IMPLEMENTATIONS, Room2Clients, Room2ClientsExplicitLock } from "./utils";
@@ -1068,7 +1068,48 @@ describe("Integration", () => {
               const rooms = await client.getAvailableRooms("incorrectRoomName");
               assert.strictEqual(0, rooms.length);
             });
-          })
+          });
+
+          describe("onLeave with exceptions", () => {
+            it("should trigger onLeave if onJoin fails", async () => {
+              class Player extends Schema {
+                @type("string") name: string;
+              }
+              class MyState extends Schema {
+                @type({ map: Player }) players: MapSchema<Player> = new MapSchema<Player>();
+              }
+
+              let room: Room<MyState>;
+              matchMaker.defineRoomType("onJoinFail", class _ extends Room<MyState> {
+                onCreate() {
+                  room = this;
+                  this.autoDispose = false;
+                  this.setState(new MyState());
+                }
+                onJoin(client) {
+                  this.state.players.set(client.sessionId, new Player().assign({ name: "Player" + this.clients.length + 1 }));
+                  throw new Error("onJoin failed");
+                }
+                onLeave(client, _) {
+                  this.state.players.delete(client.sessionId);
+                }
+              });
+
+              try {
+                const _ = await client.joinOrCreate("onJoinFail");
+              } catch (e) {}
+              try {
+                const _ = await client.joinOrCreate("onJoinFail");
+              } catch (e) {}
+
+              assert.strictEqual(room.state.players.size, 0);
+              assert.deepStrictEqual({ roomCount: 1, ccu: 0 }, matchMaker.stats.local);
+
+              await room.disconnect();
+            });
+
+          });
+
         });
 
         describe("Error handling", () => {
@@ -1224,14 +1265,14 @@ describe("Integration", () => {
             assert.strictEqual(0, matchMaker.stats.local.ccu);
           });
 
-          it("should not call onLeave if onJoin throws error, even if player disconnects", async () => {
+          it("should call onLeave if onJoin fails, even if client disconnect before fully joining", async () => {
             let onLeaveCalled = 0;
             let onJoinCompleted = 0;
 
-            let joinStart = new Deferred();
-            let onRoomDisposed = new Deferred();
+            const joinStart = new Deferred();
+            const onRoomDisposed = new Deferred();
 
-            matchMaker.defineRoomType('async_onjoin2', class _ extends Room {
+            matchMaker.defineRoomType('async_onjoin', class _ extends Room {
               async onAuth() { return true; }
               async onJoin() {
                 joinStart.resolve(true);
@@ -1242,20 +1283,25 @@ describe("Integration", () => {
               onLeave() {
                 onLeaveCalled = Date.now();
               }
-              onDispose() { onRoomDisposed.resolve(true); }
+              onDispose() {
+                onRoomDisposed.resolve(true);
+              }
             });
 
-            // Quickly close WebSocket connetion before onAuth completes
-            const seatReservation = await matchMaker.joinOrCreate('async_onjoin2', {});
+            const seatReservation = await matchMaker.joinOrCreate('async_onjoin');
             const lostConnection = new WebSocket(`${TEST_ENDPOINT}/${seatReservation.room.processId}/${seatReservation.room.roomId}?sessionId=${seatReservation.sessionId}`);
             lostConnection.on("open", () => {
               // disconnect only after join starts.
-              joinStart.then(() => lostConnection.close());
+              joinStart.then(() => {
+                lostConnection.close();
+              });
             });
 
-            await new Promise((res, rej) => setTimeout(res, 500));
-            assert.strictEqual(0, onLeaveCalled);
+            await new Promise<void>((resolve) => lostConnection.on('close', resolve));
+            await timeout(100);
+
             assert.strictEqual(true, onJoinCompleted > 0);
+            assert.strictEqual(true, onLeaveCalled >= onJoinCompleted);
 
             await onRoomDisposed;
 

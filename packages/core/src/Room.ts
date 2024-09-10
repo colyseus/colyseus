@@ -144,7 +144,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
 
     this._events.once('dispose', () => {
       this._dispose()
-        .catch((e) => debugAndPrintError(`onDispose error: ${(e && e.message || e || 'promise rejected')}`))
+        .catch((e) => debugAndPrintError(`onDispose error: ${(e && e.stack || e.message || e || 'promise rejected')}`))
         .finally(() => this._events.emit('disconnect'));
     });
 
@@ -648,24 +648,23 @@ export abstract class Room<State extends object= any, Metadata= any> {
           await this.onJoin(client, joinOptions, client.auth);
         }
 
-        // emit 'join' to room handler
-        this._events.emit('join', client);
-
-        // remove seat reservation
-        delete this.reservedSeats[sessionId];
-
         // client left during `onJoin`, call _onLeave immediately.
         if (client.state === ClientState.LEAVING) {
-          await this._onLeave(client, Protocol.WS_CLOSE_GOING_AWAY);
+          throw new Error("early_leave");
+
+        } else {
+          // remove seat reservation
+          delete this.reservedSeats[sessionId];
+
+          // emit 'join' to room handler
+          this._events.emit('join', client);
         }
 
       } catch (e) {
-        this.clients.delete(client);
+        await this._onLeave(client, Protocol.WS_CLOSE_GOING_AWAY);
 
         // remove seat reservation
         delete this.reservedSeats[sessionId];
-
-        this._decrementClientCount();
 
         // make sure an error code is provided.
         if (!e.code) {
@@ -1039,19 +1038,20 @@ export abstract class Room<State extends object= any, Metadata= any> {
   }
 
   private async _onLeave(client: Client, code?: number): Promise<any> {
-    const success = this.clients.delete(client);
-
     // call 'onLeave' method only if the client has been successfully accepted.
-    if (success) {
-      client.state = ClientState.LEAVING;
+    client.state = ClientState.LEAVING;
 
-      if (this.onLeave) {
-        try {
-          await this.onLeave(client, (code === Protocol.WS_CLOSE_CONSENTED));
+    if (!this.clients.delete(client)) {
+      // skip if client already left the room
+      return;
+    }
 
-        } catch (e) {
-          debugAndPrintError(`onLeave error: ${(e && e.message || e || 'promise rejected')}`);
-        }
+    if (this.onLeave) {
+      try {
+        await this.onLeave(client, (code === Protocol.WS_CLOSE_CONSENTED));
+
+      } catch (e) {
+        debugAndPrintError(`onLeave error: ${(e && e.message || e || 'promise rejected')}`);
       }
     }
 
@@ -1068,6 +1068,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
         }
       });
 
+      // @ts-ignore (client.state may be modified at onLeave())
     } else if (client.state !== ClientState.RECONNECTED) {
       // try to dispose immediately if client reconnection isn't set up.
       const willDispose = await this._decrementClientCount();
