@@ -10,6 +10,17 @@ export let local: Stats = {
   ccu: 0,
 };
 
+//
+// Attach local metrics to PM2 (if available)
+//
+// @ts-ignore
+import('@pm2/io')
+  .then((io) => {
+    io.default.metric({ id: 'app/stats/ccu', name: 'ccu', value: () => local.ccu });
+    io.default.metric({ id: 'app/stats/roomcount', name: 'roomcount', value: () => local.roomCount });
+  })
+  .catch(() => { });
+
 export async function fetchAll() {
   // TODO: cache this value to avoid querying too often
   const allStats: Array<Stats & { processId: string }> = [];

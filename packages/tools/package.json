@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/tools",
-  "version": "0.15.41",
+  "version": "0.15.42",
   "description": "Colyseus Tools for Production",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -11,7 +11,8 @@
   },
   "bin": {
     "colyseus-system-boot": "system-boot.js",
-    "colyseus-post-deploy": "post-deploy.js"
+    "colyseus-post-deploy": "post-deploy.js",
+    "colyseus-report-stats": "report-stats.js"
   },
   "repository": {
     "type": "git",

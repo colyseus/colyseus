@@ -1038,6 +1038,8 @@ export abstract class Room<State extends object= any, Metadata= any> {
   }
 
   private async _onLeave(client: Client, code?: number): Promise<any> {
+    console.log("_onLeave", client.sessionId);
+
     // call 'onLeave' method only if the client has been successfully accepted.
     client.state = ClientState.LEAVING;
 

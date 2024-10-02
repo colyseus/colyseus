@@ -27,9 +27,14 @@ if (!CONFIG_FILE) {
 pm2.list(function(err, apps) {
   bailOnErr(err);
 
+  // TODO: flush previous logs (?)
+  // pm2.flush();
+
   if (apps.length === 0) {
+    //
     // first deploy
-    pm2.start(CONFIG_FILE, {...opts}, onAppRunning);
+    //
+    pm2.start(CONFIG_FILE, { ...opts }, () => onAppRunning());
 
   } else {
 
@@ -37,51 +42,84 @@ pm2.list(function(err, apps) {
     // detect if cwd has changed, and restart PM2 if it has
     //
     if (apps[0].pm2_env.pm_cwd !== pm2.cwd) {
-
       //
       // remove all and start again with new cwd
       //
-      pm2.delete('all', function(err) {
-
-        // kill & start again
-        pm2.kill(function() {
-          pm2.start(CONFIG_FILE, { ...opts }, onAppRunning);
-        });
-
-      });
+      restartAll();
 
     } else {
       //
       // reload existing apps
       //
-      pm2.reload(CONFIG_FILE, {...opts}, function(err, apps) {
-        bailOnErr(err);
-
-        const name = apps[0].name;
-
-        // scale app to use all CPUs available
-        if (apps.length !== maxCPU) {
-          pm2.scale(name, maxCPU, onAppRunning);
-
-        } else {
-          onAppRunning();
-        }
-      });
+      reloadAll();
     }
-
   }
 });
 
-function onAppRunning() {
+function onAppRunning(reloadedAppIds) {
+  // reset reloaded app stats
+  if (reloadedAppIds) {
+    resetAppStats(reloadedAppIds);
+  }
   updateColyseusBootService();
   updateAndReloadNginx();
 }
+
+function restartAll () {
+  pm2.delete('all', function (err) {
+    // kill & start again
+    pm2.kill(function () {
+      pm2.start(CONFIG_FILE, { ...opts }, () => onAppRunning());
+    });
+  });
+}
+
+function reloadAll(retry = 0) {
+  pm2.reload(CONFIG_FILE, { ...opts }, function (err, apps) {
+    if (err) {
+      //
+      // Retry in case of "Reload in progress" error.
+      //
+      if (err.message === 'Reload in progress' && retry < 5) {
+        console.warn(err.message, ", retrying...");
+        setTimeout(() => reloadAll(retry + 1), 1000);
+
+      } else {
+        bailOnErr(err);
+      }
+
+      return;
+    }
+
+    const name = apps[0].name;
+    const reloadedAppIds = apps.map(app => app.pm_id);
+
+    // scale app to use all CPUs available
+    if (apps.length !== maxCPU) {
+      pm2.scale(name, maxCPU, () => onAppRunning(reloadedAppIds));
+
+    } else {
+      onAppRunning(reloadedAppIds);
+    }
+  });
+}
+
+function resetAppStats (reloadedAppIds) {
+  reloadedAppIds.forEach((pm_id) => {
+    pm2.reset(pm_id, (err, _) => {
+      if (err) {
+        console.error(err);
+      } else {
+        console.log(`metrics re-set for app_id: ${pm_id}`);
+      }
+    });
+  });
+};
 
 function updateColyseusBootService() {
   //
   // Update colyseus-boot.service to use the correct paths for the application
   //
-
   const COLYSEUS_CLOUD_BOOT_SERVICE = '/etc/systemd/system/colyseus-boot.service';
 
   // ignore if no boot service found
