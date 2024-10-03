@@ -203,7 +203,7 @@ export async function getTransport(options: ConfigOptions) {
       app.use(cors({ origin: true, credentials: true, }));
 
       // Enable JSON parsing.
-      app.use(express.json());
+      app.use(express.json(options.options.jsonOptions));
 
       if (options.initializeExpress) {
           await options.initializeExpress(app);

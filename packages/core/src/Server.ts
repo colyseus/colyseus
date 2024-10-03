@@ -19,6 +19,8 @@ import { Transport } from './Transport';
 import { logger, setLogger } from './Logger';
 import { setDevMode, isDevMode } from './utils/DevMode';
 
+import { OptionsJson } from "body-parser";
+
 export type ServerOptions = {
   publicAddress?: string,
   presence?: Presence,
@@ -51,6 +53,11 @@ export type ServerOptions = {
    * Default: true
    */
   greet?: boolean,
+
+  /**
+   * Options for the JSON body parsing.
+   */
+  jsonOptions?: OptionsJson,
 
   /**
    * Options below are now part of WebSocketTransport (@colyseus/ws-transport)
