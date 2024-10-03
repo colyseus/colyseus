@@ -205,7 +205,13 @@ export async function getTransport(options: ConfigOptions) {
       app.use(cors({ origin: true, credentials: true, }));
 
       // Enable JSON parsing.
-      app.use(express.json(serverOptions.jsonOptions));
+      let jsonOptions = serverOptions.jsonOptions || {};
+
+      if (jsonOptions.limit === undefined) {
+          jsonOptions.limit = '5kb';
+      }
+      
+      app.use(express.json(jsonOptions));
 
       if (options.initializeExpress) {
           await options.initializeExpress(app);
