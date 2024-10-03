@@ -199,11 +199,13 @@ export async function getTransport(options: ConfigOptions) {
     }
 
     if (app) {
+      const serverOptions = options.options || {};
+
       // Enable CORS
       app.use(cors({ origin: true, credentials: true, }));
 
       // Enable JSON parsing.
-      app.use(express.json(options.options.jsonOptions));
+      app.use(express.json(serverOptions.jsonOptions));
 
       if (options.initializeExpress) {
           await options.initializeExpress(app);
