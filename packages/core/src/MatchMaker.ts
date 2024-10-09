@@ -280,12 +280,15 @@ export async function findOneRoomAvailable(roomName: string, clientOptions: Clie
   return await awaitRoomAvailable(roomName, async () => {
     const handler = getHandler(roomName);
 
+    // Ohki - Code Review Question: Cleanest way to pass filterCallback to Query?
+    // As a new parameter, it allows it to be optional. 
+    // I did not want to alter the IRoomListingData interface, but including it in the partial interface also makes sense. 
     const roomQuery = driver.findOne({
       locked: false,
       name: roomName,
       private: false,
       ...handler.getFilterOptions(clientOptions),
-    });
+    }, handler.filterCallback);
 
     if (handler.sortOptions) {
       roomQuery.sort(handler.sortOptions);

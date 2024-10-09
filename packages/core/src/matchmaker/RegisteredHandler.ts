@@ -1,7 +1,7 @@
 import { IncomingMessage } from 'http';
 import { EventEmitter } from 'events';
 import { logger } from '../Logger';
-import { RoomListingData, SortOptions } from './driver/interfaces';
+import { FilterCallback, RoomListingData, SortOptions } from './driver/interfaces';
 
 import { Room } from './../Room';
 import { updateLobby } from './Lobby';
@@ -29,6 +29,7 @@ export class RegisteredHandler extends EventEmitter {
 
   public filterOptions: string[] = [];
   public sortOptions?: SortOptions;
+  public filterCallback: FilterCallback;
 
   constructor(klass: Type<Room>, options: any) {
     super();
@@ -65,6 +66,11 @@ export class RegisteredHandler extends EventEmitter {
 
   public sortBy(options: SortOptions) {
     this.sortOptions = options;
+    return this;
+  }
+
+  public filterMethod(filterCallback: FilterCallback) {
+    this.filterCallback = filterCallback ? filterCallback : null;
     return this;
   }
 
