@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const fs = require('fs');
+const net = require('net');
 const pm2 = require('pm2');
 
 const COLYSEUS_CLOUD_URL = `${process.env.ENDPOINT}/vultr/stats`;
@@ -55,7 +56,7 @@ pm2.Client.executeRemote('getMonitorData', {}, async function(err, list) {
   const aggregate = { ccu: 0, roomcount: 0, };
   const apps = {};
 
-  list.forEach(item => {
+  await Promise.all(list.map(async (item) => {
     const env = item.pm2_env;
     const app_id = env.pm_id;
     const uptime = new Date(env.pm_uptime); // uptime in milliseconds
@@ -88,6 +89,9 @@ pm2.Client.executeRemote('getMonitorData', {}, async function(err, list) {
       custom_monitor[key] = Number(axm_monitor[originalKey].value);
     }
 
+    // check if process .sock file is active
+    const socket_is_active = await checkSocketIsActive(`/run/colyseus/${(2567 + env.NODE_APP_INSTANCE)}.sock`);
+
     apps[app_id] = {
       pid: item.pid,
       uptime,
@@ -98,8 +102,9 @@ pm2.Client.executeRemote('getMonitorData', {}, async function(err, list) {
       ...custom_monitor,
       version,
       node_version,
-    }
-  });
+      socket_is_active,
+    };
+  }));
 
   const fetchipv4 = await fetch("http://169.254.169.254/v1.json");
   const ip = (await fetchipv4.json()).interfaces[0].ipv4.address;
@@ -145,3 +150,15 @@ pm2.Client.executeRemote('getMonitorData', {}, async function(err, list) {
     process.exit();
   }
 });
+
+function checkSocketIsActive(sockFilePath) {
+  return new Promise((resolve, _) => {
+    const client = net.createConnection({ path: sockFilePath, timeout: 5000 })
+      .on('connect', () => {
+        client.end(); // close the connection
+        resolve(true);
+      })
+      .on('error', () => resolve(false))
+      .on('timeout', () => resolve(false));
+  });
+}
