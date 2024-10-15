@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/tools",
-  "version": "0.15.43",
+  "version": "0.15.44",
   "description": "Colyseus Tools for Production",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -44,6 +44,7 @@
   "dependencies": {
     "@colyseus/core": "workspace:^",
     "@colyseus/ws-transport": "workspace:^",
+    "@pm2/io": "^6.0.1",
     "node-os-utils": "^1.3.7",
     "cors": "^2.8.5",
     "dotenv": "^8.2.0",
