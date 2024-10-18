@@ -18,7 +18,7 @@ import { ErrorCode, getMessageBytes, Protocol } from './Protocol';
 import { Deferred, generateId } from './utils/Utils';
 import { isDevMode } from './utils/DevMode';
 
-import { debugAndPrintError, debugMessage } from './Debug';
+import { debugAndPrintError, debugMatchMaking, debugMessage } from './Debug';
 import { ServerError } from './errors/ServerError';
 import { RoomListingData } from './matchmaker/driver';
 import { Client, ClientArray, ClientState, ISendOptions } from './Transport';
@@ -588,6 +588,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
       throw new ServerError(ErrorCode.MATCHMAKE_EXPIRED, "already consumed");
     }
     this.reservedSeats[sessionId][2] = true; // flag seat reservation as "consumed"
+    debugMatchMaking('consuming seat reservation, sessionId: \'%s\'', client.sessionId);
 
     // share "after next patch queue" reference with every client.
     client._afterNextPatchQueue = this._afterNextPatchQueue;
@@ -1038,7 +1039,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
   }
 
   private async _onLeave(client: Client, code?: number): Promise<any> {
-    console.log("_onLeave", client.sessionId);
+    debugMatchMaking('onLeave, sessionId: \'%s\'', client.sessionId);
 
     // call 'onLeave' method only if the client has been successfully accepted.
     client.state = ClientState.LEAVING;

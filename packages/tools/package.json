@@ -34,7 +34,7 @@
     "LICENSE",
     "README.md"
   ],
-  "homepage": "https:/colyseus.io",
+  "homepage": "https://colyseus.io",
   "devDependencies": {
     "@types/cors": "^2.8.10",
     "@types/dotenv": "^8.2.0",

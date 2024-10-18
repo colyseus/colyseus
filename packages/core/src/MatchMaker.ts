@@ -146,6 +146,14 @@ export async function accept() {
    */
   if (enableHealthChecks) {
     await healthCheckAllProcesses();
+
+    /*
+     * persist processId every 1 minute
+     *
+     * FIXME: this is a workaround in case this `processId` gets excluded
+     * (`stats.excludeProcess()`) by mistake due to health-check failure
+     */
+    stats.setAutoPersistInterval();
   }
 
   state = MatchMakerState.READY;
@@ -585,6 +593,11 @@ export async function gracefullyShutdown(): Promise<any> {
 
   if (isDevMode) {
     await cacheRoomHistory(rooms);
+  }
+
+  // clear auto-persisting stats interval
+  if (enableHealthChecks) {
+    stats.clearAutoPersistInterval();
   }
 
   // remove processId from room count key

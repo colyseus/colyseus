@@ -25,6 +25,7 @@ export async function fetchAll() {
   // TODO: cache this value to avoid querying too often
   const allStats: Array<Stats & { processId: string }> = [];
   const allProcesses = await presence.hgetall(getRoomCountKey());
+
   for (let remoteProcessId in allProcesses) {
     if (remoteProcessId === processId) {
       allStats.push({ processId, roomCount: local.roomCount, ccu: local.ccu, });
@@ -34,6 +35,7 @@ export async function fetchAll() {
       allStats.push({ processId: remoteProcessId, roomCount, ccu });
     }
   }
+
   return allStats;
 }
 
@@ -43,7 +45,7 @@ const persistInterval = 1000;
 
 export function persist(forceNow: boolean = false) {
   /**
-   * Avoid persisting too often.
+   * Avoid persisting more than once per second.
    */
   const now = Date.now();
 
@@ -75,6 +77,27 @@ export function excludeProcess(_processId: string) {
 export async function getGlobalCCU() {
   const allStats = await fetchAll();
   return allStats.reduce((prev, next) => prev + next.ccu, 0);
+}
+
+/**
+ * Auto-persist every minute.
+ */
+let autoPersistInterval = undefined;
+
+export function setAutoPersistInterval() {
+  const interval = 60 * 1000;// 1 minute
+
+  autoPersistInterval = setInterval(() => {
+    const now = Date.now();
+
+    if (now - lastPersisted > interval) {
+      persist();
+    }
+  }, interval);
+}
+
+export function clearAutoPersistInterval() {
+  clearInterval(autoPersistInterval);
 }
 
 function getRoomCountKey() {
