@@ -295,7 +295,9 @@ Example:
         await logWriter.write(`Finished. Summary:
     Successful connections: ${totalStats.connected}
     Failed connections: ${totalStats.failed}
-    Total errors: ${totalStats.errors}`, true /* closing */)
+    Total errors: ${totalStats.errors}
+    Logs:
+    ${logBox.content}`, true /* closing */)
 
         process.exit(hasError ? 1 : 0);
     }
@@ -471,7 +473,7 @@ Example:
         handleClientJoin(room);
         return room;
     }
-    
+
     const _originalJoin = Client.prototype.join;
     Client.prototype.join = async function(this: Client) {
         const room = await _originalJoin.apply(this, arguments);
