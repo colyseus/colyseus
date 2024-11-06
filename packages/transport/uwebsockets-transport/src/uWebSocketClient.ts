@@ -92,7 +92,7 @@ export class uWebSocketClient implements Client {
 
     // delay callback execution - uWS doesn't acknowledge when the message was sent
     // (same API as "ws" transport)
-    setTimeout(() => cb, 1);
+    setTimeout(cb, 1);
   }
 
   public leave(code?: number, data?: string) {
