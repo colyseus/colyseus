@@ -213,8 +213,10 @@ export class uWebSocketsTransport extends Transport {
             // skip if aborted
             if (res.aborted) { return; }
 
-            res.writeStatus("406 Not Acceptable");
-            res.end(JSON.stringify(error));
+            res.cork(() => {
+              res.writeStatus("406 Not Acceptable");
+              res.end(JSON.stringify(error));
+            });
         }
 
         const onAborted = (res: uWebSockets.HttpResponse) => {
@@ -270,8 +272,10 @@ export class uWebSocketsTransport extends Transport {
                     );
 
                     if (!res.aborted) {
-                      res.writeStatus("200 OK");
-                      res.end(JSON.stringify(response));
+                      res.cork(() => {
+                        res.writeStatus("200 OK");
+                        res.end(JSON.stringify(response));
+                      });
                     }
 
                 } catch (e) {
@@ -303,8 +307,10 @@ export class uWebSocketsTransport extends Transport {
             try {
                 const response = await matchMaker.controller.getAvailableRooms(roomName || '')
                 if (!res.aborted) {
-                  res.writeStatus("200 OK");
-                  res.end(JSON.stringify(response));
+                  res.cork(() => {
+                    res.writeStatus("200 OK");
+                    res.end(JSON.stringify(response));
+                  });
                 }
 
             } catch (e) {

@@ -89,7 +89,10 @@ export class uWebSocketClient implements Client {
 
   public error(code: number, message: string = '', cb?: (err?: Error) => void) {
     this.raw(getMessageBytes[Protocol.ERROR](code, message));
-    cb(); // call imediatelly (just to keep same API as "ws" transport)
+
+    // delay callback execution - uWS doesn't acknowledge when the message was sent
+    // (same API as "ws" transport)
+    setTimeout(() => cb, 1);
   }
 
   public leave(code?: number, data?: string) {
