@@ -78,7 +78,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
   #_roomId: string;
   #_roomName: string;
   #_autoDispose: boolean = true;
-  #_onLeaveCount: number = 0; // number of onLeave calls in progress
+  #_onLeaveConcurrent: number = 0; // number of onLeave calls in progress
 
   /**
    * Maximum number of clients allowed to connect into the room. When room reaches this limit,
@@ -897,7 +897,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
 
   private _disposeIfEmpty() {
     const willDispose = (
-      this.#_onLeaveCount === 0 && // no "onLeave" calls in progress
+      this.#_onLeaveConcurrent === 0 && // no "onLeave" calls in progress
       this.#_autoDispose &&
       this._autoDisposeTimeout === undefined &&
       this.clients.length === 0 &&
@@ -1065,14 +1065,14 @@ export abstract class Room<State extends object= any, Metadata= any> {
 
     if (this.onLeave) {
       try {
-        this.#_onLeaveCount++;
+        this.#_onLeaveConcurrent++;
         await this.onLeave(client, (code === Protocol.WS_CLOSE_CONSENTED));
 
       } catch (e) {
         debugAndPrintError(`onLeave error: ${(e && e.message || e || 'promise rejected')}`);
 
       } finally {
-        this.#_onLeaveCount--;
+        this.#_onLeaveConcurrent--;
       }
     }
 
