@@ -23,6 +23,7 @@ export type Options = {
     retryFailed: number,
     output: string,
     requestJoinOptions?: RequestJoinOperations,
+    clientId: number,
 };
 
 export type MainCallback = (options: Options) => Promise<void>;
@@ -93,6 +94,7 @@ Example:
         reestablishAllDelay: argv.reestablishAllDelay || 0,
         retryFailed: argv.retryFailed || 0,
         output: argv.output && path.resolve(argv.output),
+        clientId: 0,
     }
 
     if (!main) {
@@ -295,7 +297,9 @@ Example:
         await logWriter.write(`Finished. Summary:
     Successful connections: ${totalStats.connected}
     Failed connections: ${totalStats.failed}
-    Total errors: ${totalStats.errors}`, true /* closing */)
+    Total errors: ${totalStats.errors}
+    Logs:
+    ${logBox.content}`, true /* closing */)
 
         process.exit(hasError ? 1 : 0);
     }
@@ -395,7 +399,7 @@ Example:
 
     async function connect(main: MainCallback, i: number) {
         try {
-            await main(options);
+            await main({ ...options, clientId: i });
         } catch (e) {
             handleError(e);
         }
@@ -471,7 +475,7 @@ Example:
         handleClientJoin(room);
         return room;
     }
-    
+
     const _originalJoin = Client.prototype.join;
     Client.prototype.join = async function(this: Client) {
         const room = await _originalJoin.apply(this, arguments);
