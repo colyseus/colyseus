@@ -34,6 +34,11 @@ async function getAppConfig(ecosystemFilePath) {
     app.wait_ready = true;
     app.watch = false;
 
+    // default: merge logs into a single file
+    if (app.merge_logs === undefined) {
+      app.merge_logs = true;
+    }
+
     // default: wait for 15 seconds before forcibly killing
     if (!app.kill_timeout) {
       app.kill_timeout = 15 * 1000;
