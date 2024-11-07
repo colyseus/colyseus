@@ -23,6 +23,7 @@ export type Options = {
     retryFailed: number,
     output: string,
     requestJoinOptions?: RequestJoinOperations,
+    clientId: number,
 };
 
 export type MainCallback = (options: Options) => Promise<void>;
@@ -93,6 +94,7 @@ Example:
         reestablishAllDelay: argv.reestablishAllDelay || 0,
         retryFailed: argv.retryFailed || 0,
         output: argv.output && path.resolve(argv.output),
+        clientId: 0,
     }
 
     if (!main) {
@@ -397,7 +399,7 @@ Example:
 
     async function connect(main: MainCallback, i: number) {
         try {
-            await main(options);
+            await main({ ...options, clientId: i });
         } catch (e) {
             handleError(e);
         }
