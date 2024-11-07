@@ -248,11 +248,15 @@ export class Server {
     });
 
     try {
+      // custom "before shutdown" method
       await this.onBeforeShutdownCallback();
+
       await matchMaker.gracefullyShutdown();
       this.transport.shutdown();
       this.presence.shutdown();
       this.driver.shutdown();
+
+      // custom "after shutdown" method
       await this.onShutdownCallback();
 
     } catch (e) {

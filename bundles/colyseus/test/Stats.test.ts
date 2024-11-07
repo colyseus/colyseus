@@ -42,8 +42,8 @@ describe("MatchMaker Stats", () => {
   });
 
   after(async () => {
-    await driver.clear();
     await server.gracefullyShutdown(false)
+    await driver.clear();
   });
 
   describe("disposing the room", () => {
@@ -79,20 +79,20 @@ describe("MatchMaker Stats", () => {
       const onRoomDisposed = new Deferred();
 
       let room: Room;
-      let numClientsJoined = 0;
+      let numClientsJoining = 0;
       matchMaker.defineRoomType('disconnect_joining', class _ extends Room {
         onCreate() {
           room = this;
         }
         async onJoin(client) {
-          numClientsJoined++;
-          if (numClientsJoined === 3) {
+          numClientsJoining++;
+          if (numClientsJoining === 3) {
             // all clients are still waiting to join
             onReadyToTest.resolve();
           }
           // let the FIRST connection to finish joining...
           // all the others are going to be disconnected
-          if (numClientsJoined > 1) {
+          if (numClientsJoining > 1) {
             await timeout(300);
           }
         }
@@ -110,7 +110,7 @@ describe("MatchMaker Stats", () => {
 
       await onReadyToTest;
 
-      assert.strictEqual(3, numClientsJoined, "3 clients should be joining");
+      assert.strictEqual(3, numClientsJoining, "3 clients should be joining");
 
       assert.strictEqual(1, matchMaker.stats.local.roomCount);
       assert.strictEqual(1, matchMaker.stats.local.ccu); // 1
@@ -119,7 +119,7 @@ describe("MatchMaker Stats", () => {
       await onRoomDisposed;
 
       assert.strictEqual(0, matchMaker.stats.local.roomCount);
-      assert.strictEqual(1, matchMaker.stats.local.ccu);
+      assert.strictEqual(0, matchMaker.stats.local.ccu);
 
       // onJoin promise finished...
       await timeout(500);

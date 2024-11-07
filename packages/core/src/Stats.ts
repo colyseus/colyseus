@@ -1,4 +1,4 @@
-import { presence, processId } from "./MatchMaker";
+import { MatchMakerState, presence, processId, state } from "./MatchMaker";
 
 export type Stats = {
   roomCount: number;
@@ -44,6 +44,11 @@ let persistTimeout = undefined;
 const persistInterval = 1000;
 
 export function persist(forceNow: boolean = false) {
+  // skip if shutting down
+  if (state === MatchMakerState.SHUTTING_DOWN) {
+    return;
+  }
+
   /**
    * Avoid persisting more than once per second.
    */

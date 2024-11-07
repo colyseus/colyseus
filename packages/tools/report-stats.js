@@ -53,6 +53,20 @@ async function fetchRetry(url, options, retries = 3) {
 };
 
 pm2.Client.executeRemote('getMonitorData', {}, async function(err, list) {
+  if (err) { return console.error(err); }
+
+  //
+  // Filter out:
+  // - @colyseus/tools module (PM2 agent)
+  // - "stopped" processes (gracefully shut down)
+  //
+  list = list.filter((item) => {
+    return (
+      item.name !== '@colyseus/tools' &&
+      item.pm2_env.status !== 'stopped'
+    );
+  });
+
   const aggregate = { ccu: 0, roomcount: 0, };
   const apps = {};
 

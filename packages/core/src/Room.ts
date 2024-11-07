@@ -78,6 +78,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
   #_roomId: string;
   #_roomName: string;
   #_autoDispose: boolean = true;
+  #_onLeaveCount: number = 0; // number of onLeave calls in progress
 
   /**
    * Maximum number of clients allowed to connect into the room. When room reaches this limit,
@@ -239,6 +240,18 @@ export abstract class Room<State extends object= any, Metadata= any> {
 
   static async onAuth(token: string, req: IncomingMessage): Promise<unknown> {
     return true;
+  }
+
+  /**
+   * This method is called during graceful shutdown of the server process
+   * You may override this method to dispose the room in your own way.
+   */
+  public onBeforeShutdown(): Promise<any> {
+    return this.disconnect(
+      (isDevMode)
+        ? Protocol.WS_CLOSE_DEVMODE_RESTART
+        : Protocol.WS_CLOSE_CONSENTED
+    );
   }
 
   /**
@@ -539,7 +552,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
 
     // reject pending reconnections
     for (const [_, reconnection] of Object.values(this._reconnections)) {
-      reconnection.reject();
+      reconnection.reject(new Error("disconnecting"));
     }
 
     let numClients = this.clients.length;
@@ -714,7 +727,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
     //
     if (previousClient._enqueuedMessages !== undefined) {
       // @ts-ignore
-      return Promise.reject("not joined");
+      return Promise.reject(new Error("not joined"));
     }
 
     if (seconds === undefined) { // TODO: remove this check
@@ -727,8 +740,8 @@ export abstract class Room<State extends object= any, Metadata= any> {
     }
 
     if (this._internalState === RoomInternalState.DISPOSING) {
-      this._disposeIfEmpty(); // gracefully shutting down
-      throw new Error('disconnecting');
+      // @ts-ignore
+      return Promise.reject(new Error("disposing"));
     }
 
     const sessionId = previousClient.sessionId;
@@ -884,6 +897,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
 
   private _disposeIfEmpty() {
     const willDispose = (
+      this.#_onLeaveCount === 0 && // no "onLeave" calls in progress
       this.#_autoDispose &&
       this._autoDisposeTimeout === undefined &&
       this.clients.length === 0 &&
@@ -1051,10 +1065,14 @@ export abstract class Room<State extends object= any, Metadata= any> {
 
     if (this.onLeave) {
       try {
+        this.#_onLeaveCount++;
         await this.onLeave(client, (code === Protocol.WS_CLOSE_CONSENTED));
 
       } catch (e) {
         debugAndPrintError(`onLeave error: ${(e && e.message || e || 'promise rejected')}`);
+
+      } finally {
+        this.#_onLeaveCount--;
       }
     }
 

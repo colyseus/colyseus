@@ -52,5 +52,13 @@
   },
   "publishConfig": {
     "access": "public"
-  }
+  },
+  "apps": [
+    {
+      "merge_logs": true,
+      "max_memory_restart": "256M",
+      "script": "./pm2/post-deploy-agent.js",
+      "instance_var": "INSTANCE_ID"
+    }
+  ]
 }

@@ -61,8 +61,8 @@ describe("Integration", () => {
         });
 
         after(async () => {
+          await server.gracefullyShutdown(false);
           await driver.clear();
-          await server.gracefullyShutdown(false)
         });
 
         describe("Room lifecycle", () => {
@@ -1390,6 +1390,76 @@ describe("Integration", () => {
             assert.strictEqual(0, rooms.length);
             assert.strictEqual(0, matchMaker.stats.local.roomCount);
             assert.strictEqual(0, matchMaker.stats.local.ccu);
+          });
+
+          it("should reject reconnection when using .disconnect()", async () => {
+            let room: Room;
+            let failureError = "";
+            let onLeaveCalled = false;
+            let onRoomDisposed = false;
+
+            matchMaker.defineRoomType('allow_reconnection', class _ extends Room {
+              onCreate() { room = this; }
+              async onLeave(client, consented) {
+                onLeaveCalled = true;
+                try {
+                  await this.allowReconnection(client, 0.1);
+                } catch (e) {
+                  failureError = e.message;
+                }
+              }
+              onDispose() { onRoomDisposed = true; }
+            });
+
+            const roomConnection = await client.joinOrCreate('allow_reconnection');
+
+            // forcibly close connection
+            roomConnection.connection.transport.close();
+
+            // wait for reconnection to timeout
+            await timeout(10);
+            assert.strictEqual(true, onLeaveCalled);
+
+            await room.disconnect();
+
+            assert.strictEqual(true, onRoomDisposed);
+            assert.strictEqual("disconnecting", failureError);
+          });
+
+          it("should reject reconnection when already disposing", async () => {
+            let room: Room;
+            let failureError = "";
+            let onLeaveCalled = false;
+            let onRoomDisposed = false;
+
+            matchMaker.defineRoomType('allow_reconnection', class _ extends Room {
+              onCreate() { room = this; }
+              async onLeave(client, consented) {
+                onLeaveCalled = true;
+                await new Promise((resolve) => setTimeout(resolve, 100));
+                try {
+                  await this.allowReconnection(client, 0.1);
+                } catch (e) {
+                  failureError = e.message;
+                }
+              }
+              onDispose() { onRoomDisposed = true; }
+            });
+
+            const roomConnection = await client.joinOrCreate('allow_reconnection');
+
+            // forcibly close connection
+            roomConnection.connection.transport.close();
+
+            // wait for reconnection to timeout
+            await timeout(10);
+            assert.strictEqual(true, onLeaveCalled);
+
+            await room.disconnect();
+            await timeout(100);
+
+            assert.strictEqual(true, onRoomDisposed);
+            assert.strictEqual("disposing", failureError);
           });
 
         });
