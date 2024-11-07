@@ -114,6 +114,25 @@ export function merge(a: any, ...objs: any[]): any {
   return a;
 }
 
+export function wrapTryCatch(
+  method: Function,
+  onError: (e: Error, methodName: string, args: any[]) => void,
+  methodName: string,
+  rethrow: boolean = false
+) {
+  return (...args: any[]) => {
+    try {
+      return method(...args);
+
+    } catch (e) {
+      onError(e, methodName, args);
+
+      // some internal methods should rethrow the error (onJoin, onLeave, onCreate)
+      if (rethrow) { throw e; }
+    }
+  };
+}
+
 export declare interface DummyServer {
   constructor(options?: ServerOpts, connectionListener?: (socket: Socket) => void);
 
