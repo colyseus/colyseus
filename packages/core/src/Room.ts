@@ -398,7 +398,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
 
     if (onTickCallback) {
       if (this.onUncaughtException !== undefined) {
-        onTickCallback = wrapTryCatch(onTickCallback, this.onUncaughtException.bind(this), 'onSimulationInterval');
+        onTickCallback = wrapTryCatch(onTickCallback, this.onUncaughtException.bind(this), 'setSimulationInterval');
       }
 
       this._simulationInterval = setInterval(() => {

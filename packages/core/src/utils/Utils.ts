@@ -130,11 +130,8 @@ export function wrapTryCatch(
         });
       }
       return result;
-
     } catch (e) {
       onError(e, methodName, args);
-
-      // some internal methods should rethrow the error (onJoin, onLeave, onCreate)
       if (rethrow) { throw e; }
     }
   };
