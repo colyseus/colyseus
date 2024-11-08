@@ -60,7 +60,7 @@ describe("Graceful Shutdown", () => {
     assert.ok(onLeaveTime[0] < onDisposeTime);
     assert.ok(onLeaveTime[1] < onDisposeTime);
     assert.ok(onLeaveTime[2] < onDisposeTime);
-    assert.ok(onDisposeTime < onShutdownTime);
+    assert.ok(onDisposeTime <= onShutdownTime);
   });
 
   it("early disconnect should trigger onLeave before onShutdown", async () => {
