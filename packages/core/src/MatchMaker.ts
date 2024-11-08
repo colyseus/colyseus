@@ -813,7 +813,7 @@ async function removeRoomsByProcessId(processId: string) {
     //  some users may still be using older versions of the driver.
     //
     const cachedRooms = await driver.find({ processId }, { _id: 1 });
-    logger.debug("> Removing stale rooms by processId:", processId, `(${cachedRooms.length} rooms found)`);
+    debugMatchMaking("removing stale rooms by processId %s (%s rooms found)", processId, cachedRooms.length);
     cachedRooms.forEach((room) => room.remove());
   }
 }

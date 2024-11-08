@@ -5,6 +5,7 @@ import {
   MatchMakerDriver,
   QueryHelpers,
   RoomListingData,
+  debugMatchMaking,
   logger,
 } from '@colyseus/core';
 
@@ -51,7 +52,7 @@ export class RedisDriver implements MatchMakerDriver {
 
   public async cleanup(processId: string) {
     const cachedRooms = await this.find({ processId });
-    logger.debug("> Removing stale rooms by processId:", processId, `(${cachedRooms.length} rooms found)`);
+    debugMatchMaking("removing stale rooms by processId %s (%s rooms found)", processId, cachedRooms.length);
 
     const itemsPerCommand = 500;
 

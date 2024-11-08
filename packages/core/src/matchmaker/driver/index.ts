@@ -1,3 +1,4 @@
+import { debugMatchMaking } from "../../Debug";
 import { logger } from "../../Logger";
 import { IRoomListingData, SortOptions, RoomListingData, QueryHelpers, MatchMakerDriver } from "./interfaces";
 
@@ -34,7 +35,7 @@ export class LocalDriver implements MatchMakerDriver {
 
   public cleanup(processId: string) {
     const cachedRooms = this.find({ processId });
-    logger.debug("> Removing stale rooms by processId:", processId, `(${cachedRooms.length} rooms found)`);
+    debugMatchMaking("removing stale rooms by processId %s (%s rooms found)", processId, cachedRooms.length);
 
     cachedRooms.forEach((room) => room.remove());
     return Promise.resolve();
