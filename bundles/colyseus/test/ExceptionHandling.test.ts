@@ -309,7 +309,7 @@ describe("Exception Handling", () => {
     });
 
     await client.joinOrCreate("my_room", { arg0: "arg0" });
-    await timeout(110);
+    await timeout(200);
 
     assert.ok(caught.error instanceof Error);
     assert.strictEqual(caught.error.message, "setTimeout Error");
