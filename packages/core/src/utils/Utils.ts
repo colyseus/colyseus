@@ -122,7 +122,14 @@ export function wrapTryCatch(
 ) {
   return (...args: any[]) => {
     try {
-      return method(...args);
+      const result = method(...args);
+      if (typeof (result?.catch) === "function") {
+        return result.catch((e: Error) => {
+          onError(e, methodName, args);
+          if (rethrow) { throw e; }
+        });
+      }
+      return result;
 
     } catch (e) {
       onError(e, methodName, args);

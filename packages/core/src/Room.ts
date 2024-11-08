@@ -577,13 +577,7 @@ export abstract class Room<State extends object= any, Metadata= any> {
   );
   public onMessage(messageType: '*' | string | number, callback: (...args: any[]) => void) {
     this.onMessageHandlers[messageType] = (this.onUncaughtException !== undefined)
-      ? (...args: any[]) => {
-        try {
-          callback(...args);
-        } catch (e) {
-          this.onUncaughtException(e, `onMessage`, args);
-        }
-      }
+      ? wrapTryCatch(callback, this.onUncaughtException.bind(this), "onMessage")
       : callback;
 
     // returns a method to unbind the callback
