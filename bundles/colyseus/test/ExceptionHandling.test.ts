@@ -461,4 +461,28 @@ describe("Exception Handling", () => {
     assert.deepStrictEqual(caught.args, onMessageArgs);
   });
 
+  it("setSimulationInterval: error should be caught", async () => {
+    let caught: any = [];
+
+    matchMaker.defineRoomType("my_room", class extends Room {
+      onCreate() {
+        this.setSimulationInterval(() => {
+          throw new Error("setSimulationInterval Error");
+        });
+      }
+      onUncaughtException(error: any, methodName: any, args: any): void {
+        caught.push({ error, methodName, args });
+      }
+    });
+
+    const conn = await client.joinOrCreate("my_room", { arg0: "arg0" });
+    await timeout(200);
+    await conn.leave();
+
+    assert.ok(caught[0].error instanceof Error);
+    assert.strictEqual(caught[0].error.message, "setSimulationInterval Error");
+    assert.strictEqual(caught[0].methodName, "setSimulationInterval");
+    assert.strictEqual(typeof(caught[0].args[0]), "number");
+  });
+
 });
