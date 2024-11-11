@@ -15,13 +15,14 @@ import { SchemaSerializer } from './serializer/SchemaSerializer';
 import { Serializer } from './serializer/Serializer';
 
 import { ErrorCode, getMessageBytes, Protocol } from './Protocol';
-import { Deferred, generateId } from './utils/Utils';
+import { Deferred, generateId, wrapTryCatch } from './utils/Utils';
 import { isDevMode } from './utils/DevMode';
 
 import { debugAndPrintError, debugMatchMaking, debugMessage } from './Debug';
 import { ServerError } from './errors/ServerError';
 import { RoomListingData } from './matchmaker/driver';
 import { Client, ClientArray, ClientState, ISendOptions } from './Transport';
+import { OnAuthException, OnCreateException, OnDisposeException, OnJoinException, OnLeaveException, OnMessageException, RoomException, SimulationIntervalException, TimedEventException } from './errors/RoomExceptions';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
@@ -41,8 +42,8 @@ export enum RoomInternalState {
   DISPOSING = 2,
 }
 
-type ExtractUserData<T> = T extends ClientArray<infer U> ? U : never;
-type ExtractAuthData<T> = T extends ClientArray<infer _, infer U> ? U : never;
+export type ExtractUserData<T> = T extends ClientArray<infer U> ? U : never;
+export type ExtractAuthData<T> = T extends ClientArray<infer _, infer U> ? U : never;
 
 /**
  * A Room class is meant to implement a game session, and/or serve as the communication channel
@@ -149,6 +150,13 @@ export abstract class Room<State extends object= any, Metadata= any> {
         .finally(() => this._events.emit('disconnect'));
     });
 
+    /**
+     * If `onUncaughtException` is defined, it will automatically catch exceptions
+     */
+    if (this.onUncaughtException !== undefined) {
+      this.#registerUncaughtExceptionHandlers();
+    }
+
     this.setPatchRate(this.patchRate);
     // set default _autoDisposeTimeout
     this.resetAutoDisposeTimeout(this.seatReservationTime);
@@ -223,6 +231,20 @@ export abstract class Room<State extends object= any, Metadata= any> {
     consented?: boolean,
   ): void | Promise<any>;
   public onDispose?(): void | Promise<any>;
+
+  /**
+   * Define a custom exception handler.
+   * If defined, all lifecycle hooks will be wrapped by try/catch, and the exception will be forwarded to this method.
+   *
+   * These methods will be wrapped by try/catch:
+   * - `onMessage`
+   * - `onAuth` / `onJoin` / `onLeave` / `onCreate` / `onDispose`
+   * - `clock.setTimeout` / `clock.setInterval`
+   * - `setSimulationInterval`
+   *
+   * (Experimental: this feature is subject to change in the future - we're currently getting feedback to improve it)
+   */
+  public onUncaughtException?(error: RoomException<this>, methodName: 'onCreate' | 'onAuth' | 'onJoin' | 'onLeave' | 'onDispose' | 'onMessage' | 'setSimulationInterval' | 'setInterval' | 'setTimeout'): void;
 
   // TODO: flag as @deprecated on v0.16
   // TOOD: remove instance level `onAuth` on 1.0
@@ -347,6 +369,10 @@ export abstract class Room<State extends object= any, Metadata= any> {
     if (this._simulationInterval) { clearInterval(this._simulationInterval); }
 
     if (onTickCallback) {
+      if (this.onUncaughtException !== undefined) {
+        onTickCallback = wrapTryCatch(onTickCallback, this.onUncaughtException.bind(this), SimulationIntervalException, 'setSimulationInterval');
+      }
+
       this._simulationInterval = setInterval(() => {
         this.clock.tick();
         onTickCallback(this.clock.deltaTime);
@@ -521,8 +547,11 @@ export abstract class Room<State extends object= any, Metadata= any> {
     messageType: string | number,
     callback: (client: Client<ExtractUserData<typeof this['clients']>, ExtractAuthData<typeof this['clients']>>, message: T) => void
   );
-  public onMessage<T = any>(messageType: '*' | string | number, callback: (...args: any[]) => void) {
-    this.onMessageHandlers[messageType] = callback;
+  public onMessage(messageType: '*' | string | number, callback: (...args: any[]) => void) {
+    this.onMessageHandlers[messageType] = (this.onUncaughtException !== undefined)
+      ? wrapTryCatch(callback, this.onUncaughtException.bind(this), OnMessageException, 'onMessage', false, messageType)
+      : callback;
+
     // returns a method to unbind the callback
     return () => delete this.onMessageHandlers[messageType];
   }
@@ -1136,6 +1165,39 @@ export abstract class Room<State extends object= any, Metadata= any> {
     }
 
     return willDispose;
+  }
+
+  #registerUncaughtExceptionHandlers() {
+    const onUncaughtException = this.onUncaughtException.bind(this);
+    const originalSetTimeout = this.clock.setTimeout;
+    this.clock.setTimeout = (cb, timeout, ...args) => {
+      return originalSetTimeout.call(this.clock, wrapTryCatch(cb, onUncaughtException, TimedEventException, 'setTimeout'), timeout, ...args);
+    };
+
+    const originalSetInterval = this.clock.setInterval;
+    this.clock.setInterval = (cb, timeout, ...args) => {
+      return originalSetInterval.call(this.clock, wrapTryCatch(cb, onUncaughtException, TimedEventException, 'setInterval'), timeout, ...args);
+    };
+
+    if (this.onCreate !== undefined) {
+      this.onCreate = wrapTryCatch(this.onCreate.bind(this), onUncaughtException, OnCreateException, 'onCreate', true);
+    }
+
+    if (this.onAuth !== undefined) {
+      this.onAuth = wrapTryCatch(this.onAuth.bind(this), onUncaughtException, OnAuthException, 'onAuth', true);
+    }
+
+    if (this.onJoin !== undefined) {
+      this.onJoin = wrapTryCatch(this.onJoin.bind(this), onUncaughtException, OnJoinException, 'onJoin', true);
+    }
+
+    if (this.onLeave !== undefined) {
+      this.onLeave = wrapTryCatch(this.onLeave.bind(this), onUncaughtException, OnLeaveException, 'onLeave', true);
+    }
+
+    if (this.onDispose !== undefined) {
+      this.onDispose = wrapTryCatch(this.onDispose.bind(this), onUncaughtException, OnDisposeException, 'onDispose');
+    }
   }
 
 }

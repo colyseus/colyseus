@@ -6,6 +6,8 @@ import { debugAndPrintError } from '../Debug';
 import { EventEmitter } from "events";
 import { ServerOpts, Socket } from "net";
 import { Schema } from "@colyseus/schema";
+import { RoomException } from '../errors/RoomExceptions';
+import { Type } from './types';
 
 // remote room call timeouts
 export const REMOTE_ROOM_SHORT_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_SHORT_TIMEOUT || 2000);
@@ -112,6 +114,31 @@ export function merge(a: any, ...objs: any[]): any {
     }
   }
   return a;
+}
+
+export function wrapTryCatch(
+  method: Function,
+  onError: (error: RoomException, methodName: string) => void,
+  exceptionClass: Type<RoomException>,
+  methodName: string,
+  rethrow: boolean = false,
+  ...additionalErrorArgs: any[]
+) {
+  return (...args: any[]) => {
+    try {
+      const result = method(...args);
+      if (typeof (result?.catch) === "function") {
+        return result.catch((e: Error) => {
+          onError(new exceptionClass(e, e.message, ...args, ...additionalErrorArgs), methodName);
+          if (rethrow) { throw e; }
+        });
+      }
+      return result;
+    } catch (e) {
+      onError(new exceptionClass(e, e.message, ...args, ...additionalErrorArgs), methodName);
+      if (rethrow) { throw e; }
+    }
+  };
 }
 
 export declare interface DummyServer {

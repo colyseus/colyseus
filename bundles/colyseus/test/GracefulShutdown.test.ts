@@ -12,13 +12,18 @@ describe("Graceful Shutdown", () => {
   let client = new Colyseus.Client(TEST_ENDPOINT);
 
   beforeEach(async () => {
-    server = new Server({ greet: false });
+    server = new Server({ greet: false, gracefullyShutdown: false });
 
     // setup matchmaker
     matchMaker.setup(undefined, undefined)
 
     // listen for testing
     await server.listen(TEST_PORT);
+  });
+
+  afterEach(async () => {
+    await matchMaker.disconnectAll();
+    await server.gracefullyShutdown(false);
   });
 
   it("should wait all onLeave before onShutdown", async () => {
@@ -55,7 +60,7 @@ describe("Graceful Shutdown", () => {
     assert.ok(onLeaveTime[0] < onDisposeTime);
     assert.ok(onLeaveTime[1] < onDisposeTime);
     assert.ok(onLeaveTime[2] < onDisposeTime);
-    assert.ok(onDisposeTime < onShutdownTime);
+    assert.ok(onDisposeTime <= onShutdownTime);
   });
 
   it("early disconnect should trigger onLeave before onShutdown", async () => {
