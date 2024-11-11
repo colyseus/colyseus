@@ -7,6 +7,18 @@ export { Protocol, ErrorCode, getMessageBytes } from './Protocol';
 export { RegisteredHandler } from './matchmaker/RegisteredHandler';
 export { ServerError } from './errors/ServerError';
 
+export {
+  RoomException,
+  OnCreateException,
+  OnAuthException,
+  OnJoinException,
+  OnLeaveException,
+  OnDisposeException,
+  OnMessageException,
+  SimulationIntervalException,
+  TimedEventException,
+} from './errors/RoomExceptions';
+
 // MatchMaker
 import * as matchMaker from './MatchMaker';
 export { matchMaker };

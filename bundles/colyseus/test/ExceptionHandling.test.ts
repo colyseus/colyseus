@@ -1,7 +1,7 @@
 import assert, { match } from "assert";
 
 import * as Colyseus from "colyseus.js";
-import { Room, Server, matchMaker } from "@colyseus/core";
+import { OnAuthException, OnCreateException, OnDisposeException, OnJoinException, OnLeaveException, OnMessageException, Room, Server, SimulationIntervalException, TimedEventException, matchMaker } from "@colyseus/core";
 import { timeout } from "./utils";
 
 const TEST_PORT = 8570;
@@ -27,16 +27,15 @@ describe("Exception Handling", () => {
   });
 
   it("onCreate: error should be caught, should not join", async () => {
-    let caught = { error: undefined, methodName: undefined, args: undefined };
+    let caught = { error: undefined, methodName: undefined };
 
     matchMaker.defineRoomType("my_room", class extends Room {
       onCreate(options: any) {
         throw Error("onCreate Error");
       }
-      onUncaughtException(error: any, methodName: any, args: any): void {
+      onUncaughtException(error: Error, methodName: string): void {
         caught.error = error;
         caught.methodName = methodName;
-        caught.args = args;
       }
     });
 
@@ -45,24 +44,23 @@ describe("Exception Handling", () => {
       assert.fail("should not join");
     } catch (e) { }
 
-    assert.ok(caught.error instanceof Error);
+    assert.ok(caught.error instanceof OnCreateException);
     assert.strictEqual(caught.error.message, "onCreate Error");
     assert.strictEqual(caught.methodName, "onCreate");
-    assert.deepStrictEqual(caught.args, [{ arg0: "arg0" }]);
+    assert.deepStrictEqual(caught.error.options, { arg0: "arg0" });
   });
 
   it("async onCreate: error should be caught, should not join", async () => {
-    let caught = { error: undefined, methodName: undefined, args: undefined };
+    let caught = { error: undefined, methodName: undefined };
 
     matchMaker.defineRoomType("my_room", class extends Room {
       async onCreate(options: any) {
         await timeout(50);
         throw Error("async onCreate Error");
       }
-      onUncaughtException(error: any, methodName: any, args: any): void {
+      onUncaughtException(error: Error, methodName: string): void {
         caught.error = error;
         caught.methodName = methodName;
-        caught.args = args;
       }
     });
 
@@ -71,14 +69,14 @@ describe("Exception Handling", () => {
       assert.fail("should not join");
     } catch (e) {}
 
-    assert.ok(caught.error instanceof Error);
+    assert.ok(caught.error instanceof OnCreateException);
     assert.strictEqual(caught.error.message, "async onCreate Error");
     assert.strictEqual(caught.methodName, "onCreate");
-    assert.deepStrictEqual(caught.args, [{ arg0: "arg0" }]);
+    assert.deepStrictEqual(caught.error.options, { arg0: "arg0" });
   });
 
   it("onAuth: error should be caught, should not join", async () => {
-    let caught = { error: undefined, methodName: undefined, args: undefined };
+    let caught = { error: undefined, methodName: undefined };
     let onAuthClient: any = undefined;
 
     matchMaker.defineRoomType("my_room", class extends Room {
@@ -86,10 +84,9 @@ describe("Exception Handling", () => {
         onAuthClient = client;
         throw Error("onAuth Error");
       }
-      onUncaughtException(error: any, methodName: any, args: any): void {
+      onUncaughtException(error: Error, methodName: string): void {
         caught.error = error;
         caught.methodName = methodName;
-        caught.args = args;
       }
     });
 
@@ -98,14 +95,14 @@ describe("Exception Handling", () => {
       assert.fail("should not join");
     } catch (e) { }
 
-    assert.ok(caught.error instanceof Error);
+    assert.ok(caught.error instanceof OnAuthException);
     assert.strictEqual(caught.error.message, "onAuth Error");
     assert.strictEqual(caught.methodName, "onAuth");
-    assert.strictEqual(caught.args[0], onAuthClient);
+    assert.strictEqual(caught.error.client, onAuthClient);
   });
 
   it("async onAuth: error should be caught, should not join", async () => {
-    let caught = { error: undefined, methodName: undefined, args: undefined };
+    let caught = { error: undefined, methodName: undefined };
     let onAuthClient: any = undefined;
 
     matchMaker.defineRoomType("my_room", class extends Room {
@@ -114,10 +111,9 @@ describe("Exception Handling", () => {
         await timeout(50);
         throw Error("async onAuth Error");
       }
-      onUncaughtException(error: any, methodName: any, args: any): void {
+      onUncaughtException(error: Error, methodName: string): void {
         caught.error = error;
         caught.methodName = methodName;
-        caught.args = args;
       }
     });
 
@@ -126,14 +122,14 @@ describe("Exception Handling", () => {
       assert.fail("should not join");
     } catch (e) { }
 
-    assert.ok(caught.error instanceof Error);
+    assert.ok(caught.error instanceof OnAuthException);
     assert.strictEqual(caught.error.message, "async onAuth Error");
     assert.strictEqual(caught.methodName, "onAuth");
-    assert.strictEqual(caught.args[0], onAuthClient);
+    assert.strictEqual(caught.error.client, onAuthClient);
   });
 
   it("onJoin: error should be caught, should not join", async () => {
-    let caught = { error: undefined, methodName: undefined, args: undefined };
+    let caught = { error: undefined, methodName: undefined };
     let onJoinClient: any = undefined;
 
     matchMaker.defineRoomType("my_room", class extends Room {
@@ -141,10 +137,9 @@ describe("Exception Handling", () => {
         onJoinClient = client;
         throw Error("onJoin Error");
       }
-      onUncaughtException(error: any, methodName: any, args: any): void {
+      onUncaughtException(error: Error, methodName: string): void {
         caught.error = error;
         caught.methodName = methodName;
-        caught.args = args;
       }
     });
 
@@ -153,14 +148,14 @@ describe("Exception Handling", () => {
       assert.fail("should not join");
     } catch (e) { }
 
-    assert.ok(caught.error instanceof Error);
+    assert.ok(caught.error instanceof OnJoinException);
     assert.strictEqual(caught.error.message, "onJoin Error");
     assert.strictEqual(caught.methodName, "onJoin");
-    assert.strictEqual(caught.args[0], onJoinClient);
+    assert.strictEqual(caught.error.client, onJoinClient);
   });
 
   it("async onJoin: error should be caught, should not join", async () => {
-    let caught = { error: undefined, methodName: undefined, args: undefined };
+    let caught = { error: undefined, methodName: undefined };
     let onJoinClient: any = undefined;
 
     matchMaker.defineRoomType("my_room", class extends Room {
@@ -169,10 +164,9 @@ describe("Exception Handling", () => {
         await timeout(50);
         throw Error("async onJoin Error");
       }
-      onUncaughtException(error: any, methodName: any, args: any): void {
+      onUncaughtException(error: Error, methodName: string): void {
         caught.error = error;
         caught.methodName = methodName;
-        caught.args = args;
       }
     });
 
@@ -181,14 +175,14 @@ describe("Exception Handling", () => {
       assert.fail("should not join");
     } catch (e) { }
 
-    assert.ok(caught.error instanceof Error);
+    assert.ok(caught.error instanceof OnJoinException);
     assert.strictEqual(caught.error.message, "async onJoin Error");
     assert.strictEqual(caught.methodName, "onJoin");
-    assert.strictEqual(caught.args[0], onJoinClient);
+    assert.strictEqual(caught.error.client, onJoinClient);
   });
 
   it("onLeave: error should be caught", async () => {
-    let caught = { error: undefined, methodName: undefined, args: undefined };
+    let caught = { error: undefined, methodName: undefined };
     let onLeaveClient: any = undefined;
 
     matchMaker.defineRoomType("my_room", class extends Room {
@@ -196,10 +190,9 @@ describe("Exception Handling", () => {
         onLeaveClient = client;
         throw Error("onLeave Error");
       }
-      onUncaughtException(error: any, methodName: any, args: any): void {
+      onUncaughtException(error: Error, methodName: string): void {
         caught.error = error;
         caught.methodName = methodName;
-        caught.args = args;
       }
     });
 
@@ -207,14 +200,14 @@ describe("Exception Handling", () => {
     await timeout(50);
     await conn.leave();
 
-    assert.ok(caught.error instanceof Error);
+    assert.ok(caught.error instanceof OnLeaveException);
     assert.strictEqual(caught.error.message, "onLeave Error");
     assert.strictEqual(caught.methodName, "onLeave");
-    assert.strictEqual(caught.args[0], onLeaveClient);
+    assert.strictEqual(caught.error.client, onLeaveClient);
   });
 
   it("async onLeave: error should be caught", async () => {
-    let caught = { error: undefined, methodName: undefined, args: undefined };
+    let caught = { error: undefined, methodName: undefined };
     let onLeaveClient: any = undefined;
 
     matchMaker.defineRoomType("my_room", class extends Room {
@@ -223,10 +216,9 @@ describe("Exception Handling", () => {
         await timeout(50);
         throw Error("async onLeave Error");
       }
-      onUncaughtException(error: any, methodName: any, args: any): void {
+      onUncaughtException(error: Error, methodName: string): void {
         caught.error = error;
         caught.methodName = methodName;
-        caught.args = args;
       }
     });
 
@@ -234,47 +226,44 @@ describe("Exception Handling", () => {
     await timeout(50);
     await conn.leave();
 
-    assert.ok(caught.error instanceof Error);
+    assert.ok(caught.error instanceof OnLeaveException);
     assert.strictEqual(caught.error.message, "async onLeave Error");
     assert.strictEqual(caught.methodName, "onLeave");
-    assert.strictEqual(caught.args[0], onLeaveClient);
+    assert.strictEqual(caught.error.client, onLeaveClient);
   });
 
   it("onDispose: error should be caught", async () => {
-    let caught = { error: undefined, methodName: undefined, args: undefined };
+    let caught = { error: undefined, methodName: undefined };
 
     matchMaker.defineRoomType("my_room", class extends Room {
       onDispose() {
         throw Error("onDispose Error");
       }
-      onUncaughtException(error: any, methodName: any, args: any): void {
+      onUncaughtException(error: Error, methodName: string): void {
         caught.error = error;
         caught.methodName = methodName;
-        caught.args = args;
       }
     });
 
     const conn = await client.joinOrCreate("my_room", { arg0: "arg0" });
     await conn.leave();
 
-    assert.ok(caught.error instanceof Error);
+    assert.ok(caught.error instanceof OnDisposeException);
     assert.strictEqual(caught.error.message, "onDispose Error");
     assert.strictEqual(caught.methodName, "onDispose");
-    assert.deepStrictEqual(caught.args, []);
   });
 
   it("async onDispose: error should be caught", async () => {
-    let caught = { error: undefined, methodName: undefined, args: undefined };
+    let caught = { error: undefined, methodName: undefined };
 
     matchMaker.defineRoomType("my_room", class extends Room {
       async onDispose() {
         await timeout(50);
         throw Error("async onDispose Error");
       }
-      onUncaughtException(error: any, methodName: any, args: any): void {
+      onUncaughtException(error: Error, methodName: string): void {
         caught.error = error;
         caught.methodName = methodName;
-        caught.args = args;
       }
     });
 
@@ -283,14 +272,13 @@ describe("Exception Handling", () => {
 
     await timeout(100);
 
-    assert.ok(caught.error instanceof Error);
+    assert.ok(caught.error instanceof OnDisposeException);
     assert.strictEqual(caught.error.message, "async onDispose Error");
     assert.strictEqual(caught.methodName, "onDispose");
-    assert.deepStrictEqual(caught.args, []);
   });
 
   it("setTimeout should be caught", async () => {
-    let caught = { error: undefined, methodName: undefined, args: undefined };
+    let caught = { error: undefined, methodName: undefined };
 
     matchMaker.defineRoomType("my_room", class extends Room {
       onCreate(options: any) {
@@ -301,24 +289,22 @@ describe("Exception Handling", () => {
           throw new Error("setTimeout Error");
         }, 100, "arg0");
       }
-      onUncaughtException(error: any, methodName: any, args: any): void {
+      onUncaughtException(error: Error, methodName: string): void {
         caught.error = error;
         caught.methodName = methodName;
-        caught.args = args;
       }
     });
 
     await client.joinOrCreate("my_room", { arg0: "arg0" });
     await timeout(200);
 
-    assert.ok(caught.error instanceof Error);
+    assert.ok(caught.error instanceof TimedEventException);
     assert.strictEqual(caught.error.message, "setTimeout Error");
     assert.strictEqual(caught.methodName, "setTimeout");
-    assert.deepStrictEqual(caught.args, ["arg0"]);
   });
 
   it("async setTimeout should be caught", async () => {
-    let caught = { error: undefined, methodName: undefined, args: undefined };
+    let caught = { error: undefined, methodName: undefined };
 
     matchMaker.defineRoomType("my_room", class extends Room {
       onCreate(options: any) {
@@ -330,24 +316,22 @@ describe("Exception Handling", () => {
           throw new Error("async setTimeout Error");
         }, 100, "arg0");
       }
-      onUncaughtException(error: any, methodName: any, args: any): void {
+      onUncaughtException(error: Error, methodName: string): void {
         caught.error = error;
         caught.methodName = methodName;
-        caught.args = args;
       }
     });
 
     await client.joinOrCreate("my_room", { arg0: "arg0" });
     await timeout(200);
 
-    assert.ok(caught.error instanceof Error);
+    assert.ok(caught.error instanceof TimedEventException);
     assert.strictEqual(caught.error.message, "async setTimeout Error");
     assert.strictEqual(caught.methodName, "setTimeout");
-    assert.deepStrictEqual(caught.args, ["arg0"]);
   });
 
   it("setInterval should be caught", async () => {
-    let caught = { error: undefined, methodName: undefined, args: undefined };
+    let caught = { error: undefined, methodName: undefined };
 
     matchMaker.defineRoomType("my_room", class extends Room {
       onCreate(options: any) {
@@ -358,24 +342,22 @@ describe("Exception Handling", () => {
           throw new Error("setTimeout Error");
         }, 100, "arg0");
       }
-      onUncaughtException(error: any, methodName: any, args: any): void {
+      onUncaughtException(error: Error, methodName: string): void {
         caught.error = error;
         caught.methodName = methodName;
-        caught.args = args;
       }
     });
 
     await client.joinOrCreate("my_room", { arg0: "arg0" });
     await timeout(110);
 
-    assert.ok(caught.error instanceof Error);
+    assert.ok(caught.error instanceof TimedEventException);
     assert.strictEqual(caught.error.message, "setTimeout Error");
     assert.strictEqual(caught.methodName, "setInterval");
-    assert.deepStrictEqual(caught.args, ["arg0"]);
   });
 
   it("async setInterval should be caught", async () => {
-    let caught = { error: undefined, methodName: undefined, args: undefined };
+    let caught = { error: undefined, methodName: undefined };
 
     matchMaker.defineRoomType("my_room", class extends Room {
       onCreate(options: any) {
@@ -387,24 +369,22 @@ describe("Exception Handling", () => {
           throw new Error("async setTimeout Error");
         }, 100, "arg0");
       }
-      onUncaughtException(error: any, methodName: any, args: any): void {
+      onUncaughtException(error: Error, methodName: string): void {
         caught.error = error;
         caught.methodName = methodName;
-        caught.args = args;
       }
     });
 
     await client.joinOrCreate("my_room", { arg0: "arg0" });
     await timeout(200);
 
-    assert.ok(caught.error instanceof Error);
+    assert.ok(caught.error instanceof TimedEventException);
     assert.strictEqual(caught.error.message, "async setTimeout Error");
     assert.strictEqual(caught.methodName, "setInterval");
-    assert.deepStrictEqual(caught.args, ["arg0"]);
   });
 
   it("onMessage: error should be caught", async () => {
-    let caught = { error: undefined, methodName: undefined, args: undefined };
+    let caught = { error: undefined, methodName: undefined };
     let onMessageArgs: any = undefined;
 
     matchMaker.defineRoomType("my_room", class extends Room {
@@ -414,10 +394,9 @@ describe("Exception Handling", () => {
           throw new Error("onMessage Error");
         });
       }
-      onUncaughtException(error: any, methodName: any, args: any): void {
+      onUncaughtException(error: Error, methodName: string): void {
         caught.error = error;
         caught.methodName = methodName;
-        caught.args = args;
       }
     });
 
@@ -425,14 +404,15 @@ describe("Exception Handling", () => {
     await conn.send("foo", "bar");
     await conn.leave();
 
-    assert.ok(caught.error instanceof Error);
+    assert.ok(caught.error instanceof OnMessageException);
     assert.strictEqual(caught.error.message, "onMessage Error");
     assert.strictEqual(caught.methodName, "onMessage");
-    assert.deepStrictEqual(caught.args, onMessageArgs);
+    assert.deepStrictEqual(caught.error.client, onMessageArgs[0]);
+    assert.deepStrictEqual(caught.error.payload, onMessageArgs[1]);
   });
 
   it("async onMessage: error should be caught", async () => {
-    let caught = { error: undefined, methodName: undefined, args: undefined };
+    let caught = { error: undefined, methodName: undefined };
     let onMessageArgs: any = undefined;
 
     matchMaker.defineRoomType("my_room", class extends Room {
@@ -443,10 +423,9 @@ describe("Exception Handling", () => {
           throw new Error("async onMessage Error");
         });
       }
-      onUncaughtException(error: any, methodName: any, args: any): void {
+      onUncaughtException(error: Error, methodName: string): void {
         caught.error = error;
         caught.methodName = methodName;
-        caught.args = args;
       }
     });
 
@@ -455,10 +434,11 @@ describe("Exception Handling", () => {
     await timeout(50);
     await conn.leave();
 
-    assert.ok(caught.error instanceof Error);
+    assert.ok(caught.error instanceof OnMessageException);
     assert.strictEqual(caught.error.message, "async onMessage Error");
     assert.strictEqual(caught.methodName, "onMessage");
-    assert.deepStrictEqual(caught.args, onMessageArgs);
+    assert.deepStrictEqual(caught.error.client, onMessageArgs[0]);
+    assert.deepStrictEqual(caught.error.payload, onMessageArgs[1]);
   });
 
   it("setSimulationInterval: error should be caught", async () => {
@@ -470,8 +450,8 @@ describe("Exception Handling", () => {
           throw new Error("setSimulationInterval Error");
         });
       }
-      onUncaughtException(error: any, methodName: any, args: any): void {
-        caught.push({ error, methodName, args });
+      onUncaughtException(error: Error, methodName: string): void {
+        caught.push({ error, methodName });
       }
     });
 
@@ -479,10 +459,9 @@ describe("Exception Handling", () => {
     await timeout(200);
     await conn.leave();
 
-    assert.ok(caught[0].error instanceof Error);
+    assert.ok(caught[0].error instanceof SimulationIntervalException);
     assert.strictEqual(caught[0].error.message, "setSimulationInterval Error");
     assert.strictEqual(caught[0].methodName, "setSimulationInterval");
-    assert.strictEqual(typeof(caught[0].args[0]), "number");
   });
 
 });
