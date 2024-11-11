@@ -121,20 +121,21 @@ export function wrapTryCatch(
   onError: (error: RoomException, methodName: string) => void,
   exceptionClass: Type<RoomException>,
   methodName: string,
-  rethrow: boolean = false
+  rethrow: boolean = false,
+  ...additionalErrorArgs: any[]
 ) {
   return (...args: any[]) => {
     try {
       const result = method(...args);
       if (typeof (result?.catch) === "function") {
         return result.catch((e: Error) => {
-          onError(new exceptionClass(e, e.message, ...args), methodName);
+          onError(new exceptionClass(e, e.message, ...args, ...additionalErrorArgs), methodName);
           if (rethrow) { throw e; }
         });
       }
       return result;
     } catch (e) {
-      onError(new exceptionClass(e, e.message, ...args), methodName);
+      onError(new exceptionClass(e, e.message, ...args, ...additionalErrorArgs), methodName);
       if (rethrow) { throw e; }
     }
   };

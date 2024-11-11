@@ -372,7 +372,7 @@ describe("Exception Handling", () => {
           throw new Error("async setTimeout Error");
         }, 100, "arg0");
       }
-      onUncaughtException(error: Error, methodName: string): void {
+      onUncaughtException(error, methodName): void {
         caught.error = error;
         caught.methodName = methodName;
       }
@@ -412,6 +412,7 @@ describe("Exception Handling", () => {
     assert.strictEqual(caught.error.message, "onMessage Error");
     assert.strictEqual(caught.methodName, "onMessage");
     assert.deepStrictEqual(caught.error.client, onMessageArgs[0]);
+    assert.deepStrictEqual(caught.error.type, "foo");
     assert.deepStrictEqual(caught.error.payload, onMessageArgs[1]);
   });
 
@@ -442,6 +443,7 @@ describe("Exception Handling", () => {
     assert.strictEqual(caught.error.message, "async onMessage Error");
     assert.strictEqual(caught.methodName, "onMessage");
     assert.deepStrictEqual(caught.error.client, onMessageArgs[0]);
+    assert.deepStrictEqual(caught.error.type, "foo");
     assert.deepStrictEqual(caught.error.payload, onMessageArgs[1]);
   });
 

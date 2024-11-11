@@ -74,7 +74,8 @@ export class OnMessageException<R extends Room = Room, MessagePayload = any> ext
     cause: Error,
     message: string,
     public client: Client<ExtractUserData<R['clients']>, ExtractAuthData<R['clients']>>,
-    public payload: MessagePayload
+    public payload: MessagePayload,
+    public type: string,
   ) {
     super(message, { cause });
     this.name = 'OnMessageException';
