@@ -92,11 +92,14 @@ export class SimulationIntervalException extends Error {
 }
 
 export class TimedEventException extends Error {
+  public args: any[];
   constructor(
     cause: Error,
     message: string,
+    ...args: any[]
   ) {
     super(message, { cause });
     this.name = 'TimedEventException';
+    this.args = args;
   }
 }

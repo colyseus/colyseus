@@ -301,6 +301,7 @@ describe("Exception Handling", () => {
     assert.ok(caught.error instanceof TimedEventException);
     assert.strictEqual(caught.error.message, "setTimeout Error");
     assert.strictEqual(caught.methodName, "setTimeout");
+    assert.deepStrictEqual(caught.error.args, [ "arg0" ]);
   });
 
   it("async setTimeout should be caught", async () => {
@@ -328,6 +329,7 @@ describe("Exception Handling", () => {
     assert.ok(caught.error instanceof TimedEventException);
     assert.strictEqual(caught.error.message, "async setTimeout Error");
     assert.strictEqual(caught.methodName, "setTimeout");
+    assert.deepStrictEqual(caught.error.args, [ "arg0" ]);
   });
 
   it("setInterval should be caught", async () => {
@@ -354,6 +356,7 @@ describe("Exception Handling", () => {
     assert.ok(caught.error instanceof TimedEventException);
     assert.strictEqual(caught.error.message, "setTimeout Error");
     assert.strictEqual(caught.methodName, "setInterval");
+    assert.deepStrictEqual(caught.error.args, [ "arg0" ]);
   });
 
   it("async setInterval should be caught", async () => {
@@ -381,6 +384,7 @@ describe("Exception Handling", () => {
     assert.ok(caught.error instanceof TimedEventException);
     assert.strictEqual(caught.error.message, "async setTimeout Error");
     assert.strictEqual(caught.methodName, "setInterval");
+    assert.deepStrictEqual(caught.error.args, [ "arg0" ]);
   });
 
   it("onMessage: error should be caught", async () => {
