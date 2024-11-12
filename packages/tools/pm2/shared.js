@@ -24,7 +24,8 @@ async function getAppConfig(ecosystemFilePath) {
    */
   if (config.apps && config.apps.length >= 0) {
     const app = config.apps[0];
-    app.name = "colyseus-app";
+
+    // app.name = "colyseus-app";
     app.namespace = NAMESPACE;
     app.exec_mode = "fork";
 
