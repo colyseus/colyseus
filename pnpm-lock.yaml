@@ -375,7 +375,7 @@ importers:
   packages/transport/uwebsockets-transport:
     dependencies:
       '@colyseus/core':
-        specifier: workspace:^
+        specifier: 0.15.x
         version: link:../../core
       '@colyseus/schema':
         specifier: '>=1.0.0'
