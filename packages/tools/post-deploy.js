@@ -6,27 +6,32 @@ const shared = require('./pm2/shared');
 
 const opts = { env: process.env.NODE_ENV || "production", };
 
-const CONFIG_FILE = pm2.cwd + "/" + [
+const CONFIG_FILE = [
   'ecosystem.config.cjs',
   'ecosystem.config.js',
   'pm2.config.cjs',
   'pm2.config.js',
 ].find((filename) => fs.existsSync(path.resolve(pm2.cwd, filename)));
 
-let config = undefined;
-
+/**
+ * TODO: if not provided, auto-detect entry-point & dynamically generate ecosystem config
+ */
 if (!CONFIG_FILE) {
   throw new Error('missing ecosystem config file. make sure to provide one with a valid "script" entrypoint file path.');
 }
+
+const CONFIG_FILE_PATH = `${pm2.cwd}/${CONFIG_FILE}`;
+
+let config = undefined;
 
 /**
  * Try to handle post-deploy via PM2 module first (pm2 install @colyseus/tools)
  * If not available, fallback to legacy post-deploy script.
  */
-pm2.trigger('@colyseus/tools', 'post-deploy', `${pm2.cwd}:${CONFIG_FILE}`, async function (err, result) {
+pm2.trigger('@colyseus/tools', 'post-deploy', `${pm2.cwd}:${CONFIG_FILE_PATH}`, async function (err, result) {
   if (err) {
     console.log("Proceeding with legacy post-deploy script...");
-    config = await shared.getAppConfig(CONFIG_FILE);
+    config = await shared.getAppConfig(CONFIG_FILE_PATH);
     postDeploy();
 
   } else {
