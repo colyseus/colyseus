@@ -133,7 +133,7 @@ function postDeploy(cwd, reply) {
      * - Stop old processes
      * - Spawn/reactivate the rest of the processes (shared.MAX_ACTIVE_PROCESSES)
      */
-    const onFirstAppsStart = (initialApps, err, result) => {
+    const onFirstAppsStart = async (initialApps, err, result) => {
       /**
        * release post-deploy action while proceeding with graceful restart of other processes
        */
@@ -148,6 +148,11 @@ function postDeploy(cwd, reply) {
        * - The old ones processes will go down asynchronously (or will be restarted)
        */
       writeNginxConfig(initialApps);
+
+      //
+      // Wait 1.5 seconds to ensure NGINX is updated & reloaded
+      //
+      await new Promise(resolve => setTimeout(resolve, 1500));
 
       //
       // Asynchronously stop/restart apps with active connections
