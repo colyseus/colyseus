@@ -40,14 +40,15 @@ async function getAppConfig(ecosystemFilePath) {
       app.merge_logs = true;
     }
 
-    // default: wait for 15 seconds before forcibly killing
+    // default: wait for 30 minutes before forcibly killing
+    // (prevent forcibly killing while rooms are still active)
     if (!app.kill_timeout) {
-      app.kill_timeout = 15 * 1000;
+      app.kill_timeout = 30 * 60 * 1000;
     }
 
     // default: retry kill after 1 second
     if (!app.kill_retry_time) {
-      app.kill_retry_time = 1000;
+      app.kill_retry_time = 5000;
     }
   }
 
