@@ -22,8 +22,6 @@ if (!CONFIG_FILE) {
 
 const CONFIG_FILE_PATH = `${pm2.cwd}/${CONFIG_FILE}`;
 
-let config = undefined;
-
 /**
  * Try to handle post-deploy via PM2 module first (pm2 install @colyseus/tools)
  * If not available, fallback to legacy post-deploy script.
@@ -31,7 +29,6 @@ let config = undefined;
 pm2.trigger('@colyseus/tools', 'post-deploy', `${pm2.cwd}:${CONFIG_FILE_PATH}`, async function (err, result) {
   if (err) {
     console.log("Proceeding with legacy post-deploy script...");
-    config = await shared.getAppConfig(CONFIG_FILE_PATH);
     postDeploy();
 
   } else {
@@ -53,7 +50,7 @@ async function postDeploy() {
       //
       // first deploy
       //
-      pm2.start(config, { ...opts }, () => onAppRunning());
+      pm2.start(CONFIG_FILE_PATH, { ...opts }, () => onAppRunning());
 
     } else {
 
@@ -88,13 +85,13 @@ function restartAll () {
   pm2.delete('all', function (err) {
     // kill & start again
     pm2.kill(function () {
-      pm2.start(config, { ...opts }, () => onAppRunning());
+      pm2.start(CONFIG_FILE_PATH, { ...opts }, () => onAppRunning());
     });
   });
 }
 
 function reloadAll(retry = 0) {
-  pm2.reload(config, { ...opts }, function (err, apps) {
+  pm2.reload(CONFIG_FILE_PATH, { ...opts }, function (err, apps) {
     if (err) {
       //
       // Retry in case of "Reload in progress" error.
