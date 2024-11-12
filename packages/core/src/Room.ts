@@ -267,9 +267,11 @@ export abstract class Room<State extends object= any, Metadata= any> {
   /**
    * This method is called during graceful shutdown of the server process
    * You may override this method to dispose the room in your own way.
+   *
+   * Once process reaches room count of 0, the room process will be terminated.
    */
-  public onBeforeShutdown(): Promise<any> {
-    return this.disconnect(
+  public onBeforeShutdown() {
+    this.disconnect(
       (isDevMode)
         ? Protocol.WS_CLOSE_DEVMODE_RESTART
         : Protocol.WS_CLOSE_CONSENTED
