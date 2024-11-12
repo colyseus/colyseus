@@ -6,11 +6,11 @@
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
   "dependencies": {
-    "@colyseus/core": "workspace:^",
     "@types/ws": "^7.4.4",
     "ws": "^8.18.0"
   },
   "peerDependencies": {
+    "@colyseus/core": "0.15.x",
     "@colyseus/schema": ">=1.0.0"
   },
   "author": "Endel Dreyer",

@@ -133,7 +133,7 @@ importers:
   packages/auth:
     dependencies:
       '@colyseus/core':
-        specifier: workspace:^
+        specifier: 0.15.x
         version: link:../core
       '@types/jsonwebtoken':
         specifier: ^9.0.5
@@ -151,8 +151,8 @@ importers:
         specifier: ^1.17.3
         version: 1.18.0
       grant:
-        specifier: ^5.4.22
-        version: 5.4.22
+        specifier: ^5.4.23
+        version: 5.4.23
       jsonwebtoken:
         specifier: ^9.0.0
         version: 9.0.2
@@ -317,10 +317,10 @@ importers:
   packages/tools:
     dependencies:
       '@colyseus/core':
-        specifier: workspace:^
+        specifier: 0.15.x
         version: link:../core
       '@colyseus/ws-transport':
-        specifier: workspace:^
+        specifier: 0.15.x
         version: link:../transport/ws-transport
       '@pm2/io':
         specifier: ^6.0.1
@@ -387,7 +387,7 @@ importers:
   packages/transport/ws-transport:
     dependencies:
       '@colyseus/core':
-        specifier: workspace:^
+        specifier: 0.15.x
         version: link:../../core
       '@colyseus/schema':
         specifier: '>=1.0.0'
@@ -396,8 +396,8 @@ importers:
         specifier: ^7.4.4
         version: 7.4.7
       ws:
-        specifier: ^7.4.5
-        version: 7.5.9
+        specifier: ^8.18.0
+        version: 8.18.0
 
 packages:
 
@@ -3224,13 +3224,6 @@ packages:
     dev: false
     optional: true
 
-  /cookie@0.5.0:
-    resolution: {integrity: sha512-YZ3GUyn/o8gfKJlnlX7g7xq4gyO6OSuhGPKaaGssGB2qgDUS0gPgtTvoyZLTt9Ab6dC4hfc9dV5arkvc/OCmrw==}
-    engines: {node: '>= 0.6'}
-    requiresBuild: true
-    dev: false
-    optional: true
-
   /cookie@0.6.0:
     resolution: {integrity: sha512-U71cyTamuh1CRNCfpGY6to28lxvNwPG4Guz/EVjgf3Jmzv0vlDp1atT9eS5dDjMYHucpHbWns6Lwf3BKz6svdw==}
     engines: {node: '>= 0.6'}
@@ -3572,8 +3565,8 @@ packages:
     resolution: {integrity: sha512-TnTMUATbgNdPXVSHsxvNVSG0uEd6cSZsANjm8c9HbvflZVVn1yTRcmVXYT1Ma95/ssB/Dcd30AHweH2TE+dNpA==}
     dev: true
 
-  /elliptic@6.5.5:
-    resolution: {integrity: sha512-7EjbcmUm17NQFu4Pmgmq2olYMj8nwMnpcddByChSUjArp8F5DQWcIcpriwO4ZToLNAJig0yiyjswfyGNje/ixw==}
+  /elliptic@6.6.0:
+    resolution: {integrity: sha512-dpwoQcLc/2WLQvJvLRHKZ+f9FgOdjnq11rurqwekGQygGPsYSK29OMMD2WalatiqQ+XGFDglTNixpPfI+lpaAA==}
     requiresBuild: true
     dependencies:
       bn.js: 4.12.0
@@ -4506,17 +4499,17 @@ packages:
   /graceful-fs@4.2.11:
     resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
 
-  /grant@5.4.22:
-    resolution: {integrity: sha512-DEi+/JjXT84mmFYhSmv+SX14v+3Z7vuCIYAMwtdPCTXHMSLhWqSYqWAMXDUQZuV7yaJv2d84AYnkCFNooLKBsA==}
+  /grant@5.4.23:
+    resolution: {integrity: sha512-lEMfgem990lWTU+j9jbOKmIsvvetVlwGzsWjoCgKz9zKcP7edI6mjyUA5QUSn7aeBYONTE3WnfhBhvONQGP1Hg==}
     engines: {node: '>=12.0.0'}
     dependencies:
-      qs: 6.12.1
-      request-compose: 2.1.6
+      qs: 6.13.0
+      request-compose: 2.1.7
       request-oauth: 1.0.1
     optionalDependencies:
-      cookie: 0.5.0
+      cookie: 0.6.0
       cookie-signature: 1.2.1
-      jwk-to-pem: 2.0.5
+      jwk-to-pem: 2.0.6
       jws: 4.0.0
     dev: false
 
@@ -5645,12 +5638,12 @@ packages:
     dev: false
     optional: true
 
-  /jwk-to-pem@2.0.5:
-    resolution: {integrity: sha512-L90jwellhO8jRKYwbssU9ifaMVqajzj3fpRjDKcsDzrslU9syRbFqfkXtT4B89HYAap+xsxNcxgBSB09ig+a7A==}
+  /jwk-to-pem@2.0.6:
+    resolution: {integrity: sha512-zPC/5vjyR08TpknpTGW6Z3V3lDf9dU92oHbf0jJlG8tGOzslF9xk2UiO/seSx2llCUrNAe+AvmuGTICSXiYU7A==}
     requiresBuild: true
     dependencies:
       asn1.js: 5.4.1
-      elliptic: 6.5.5
+      elliptic: 6.6.0
       safe-buffer: 5.2.1
     dev: false
     optional: true
@@ -7417,6 +7410,14 @@ packages:
     engines: {node: '>=0.6'}
     dependencies:
       side-channel: 1.0.6
+    dev: true
+
+  /qs@6.13.0:
+    resolution: {integrity: sha512-+38qI9SOr8tfZ4QmJNplMUxqjbe7LKvvZgWdExBOmd+egZTtjLB67Gu0HRX3u/XOq7UU2Nx6nsjvS16Z9uwfpg==}
+    engines: {node: '>=0.6'}
+    dependencies:
+      side-channel: 1.0.6
+    dev: false
 
   /queue-microtask@1.2.3:
     resolution: {integrity: sha512-NuaNSa6flKT5JaSYQzJok04JzTL1CA6aGhv5rfLW3PgqA+M2ChpZQnAC8h8i4ZFkBS8X5RqkDBHA7r4hej3K9A==}
@@ -7587,8 +7588,8 @@ packages:
     resolution: {integrity: sha512-TuAasHQNamyyJ2hb97IuBEif4qBHGjPHBS64sZwytpLEqtBQ1gPJTnOaQ6qmpET16cK14kkjbazl6+p0RRv0yw==}
     dev: false
 
-  /request-compose@2.1.6:
-    resolution: {integrity: sha512-S07L+2VbJB32WddD/o/PnYGKym63zLVbymygVWXvt8L79VAngcjAxhHaGuFOICLxEV90EasEPzqPKKHPspXP8w==}
+  /request-compose@2.1.7:
+    resolution: {integrity: sha512-27amNkWTK4Qq25XEwdmrhb4VLMiQzRSKuDfsy1o1griykcyXk5MxMHmJG+OKTRdO9PgsO7Kkn7GrEkq0UAIIMQ==}
     engines: {node: '>=12.0.0'}
     dev: false
 
@@ -7597,7 +7598,7 @@ packages:
     engines: {node: '>=8.0.0'}
     dependencies:
       oauth-sign: 0.9.0
-      qs: 6.12.1
+      qs: 6.13.0
       uuid: 8.3.2
     dev: false
 
@@ -8789,6 +8790,19 @@ packages:
         optional: true
       utf-8-validate:
         optional: true
+
+  /ws@8.18.0:
+    resolution: {integrity: sha512-8VbfWfHLbbwu3+N6OKsOMpBdT4kXPDDB9cJk2bJ6mh9ucxdlnNvH1e+roYkKmN9Nxw2yjz7VzeO9oOz2zJ04Pw==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+    dev: false
 
   /xtend@4.0.2:
     resolution: {integrity: sha512-LKYU1iAXJXUgAXn9URjiu+MWhyUXHsvfp7mcuYm9dSUKK0/CjtrUwFAxD82/mCWbtLsGjFIad0wIsod4zrTAEQ==}

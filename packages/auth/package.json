@@ -42,7 +42,7 @@
     "grant": "^5.4.23"
   },
   "peerDependencies": {
-    "@colyseus/core": "workspace:^",
+    "@colyseus/core": "0.15.x",
     "express": "^4.17.1"
   },
   "devDependencies": {
