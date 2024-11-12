@@ -1,15 +1,15 @@
 {
   "name": "@colyseus/uwebsockets-transport",
-  "version": "0.15.11",
+  "version": "0.15.12",
   "input": "./src/index.ts",
   "main": "./build/index.js",
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
   "dependencies": {
-    "@colyseus/core": "workspace:^",
     "uWebSockets.js": "github:uNetworking/uWebSockets.js#v20.44.0"
   },
   "peerDependencies": {
+    "@colyseus/core": "0.15.x",
     "@colyseus/schema": ">=1.0.0"
   },
   "author": "Endel Dreyer",
