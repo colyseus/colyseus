@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/tools",
-  "version": "0.15.45",
+  "version": "0.15.46",
   "description": "Colyseus Tools for Production",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -29,6 +29,7 @@
     "url": "https://github.com/colyseus/colyseus/issues"
   },
   "files": [
+    "pm2",
     "html",
     "build",
     "LICENSE",
