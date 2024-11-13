@@ -79,21 +79,19 @@ function postDeploy(cwd, reply) {
       });
     }
 
-    console.log("apps[0].pm2_env.pm_cwd =>", apps[0].pm2_env.pm_cwd);
-    console.log("cwd =>", cwd);
-
     //
     // detect if cwd has changed, and restart PM2 if it has
     //
     if (apps[0].pm2_env.pm_cwd !== cwd) {
-      console.log("cwd has changed. restarting PM2...");
+      console.log("App Root Directory changed. Restarting may take a bit longer...");
 
       //
       // remove all and start again with new cwd
       //
-      return pm2.delete(shared.NAMESPACE, function(err) {
+      return pm2.delete('all', function (err) {
+        logIfError(err);
+
         // start again
-        // (TODO: make sure CWD is actually changed after this...)
         pm2.start(config, { ...opts }, (err, result) => {
           reply({ success: !err, message: err?.message });
           updateAndSave(err, result);
