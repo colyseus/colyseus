@@ -170,8 +170,8 @@ importers:
         specifier: ^1.10.3
         version: 1.10.5
       '@colyseus/schema':
-        specifier: ^3.0.0-alpha.0
-        version: 3.0.0-alpha.19
+        specifier: ^3.0.0-alpha.37
+        version: 3.0.0-alpha.37
       '@colyseus/timer':
         specifier: ^1.0.0
         version: 1.0.0
@@ -758,6 +758,10 @@ packages:
 
   /@colyseus/schema@3.0.0-alpha.19:
     resolution: {integrity: sha512-bs99kqqm6rmHJKqBKQAyM+fRweCCIph2w+3WUG4zVOPbbHlHupqdqgkoGNSVR8B4KrlSsk8RmAbrn0rexmakWw==}
+    hasBin: true
+
+  /@colyseus/schema@3.0.0-alpha.37:
+    resolution: {integrity: sha512-JsHP3upznmDPX/TZMpItmqGaxgkosB3YWIiG/KyFaHPsPgATPI7IngDnEisLcWUL46SF3lL7qVr6B+cQ/43I/w==}
     hasBin: true
 
   /@colyseus/timer@1.0.0:
@@ -3281,7 +3285,7 @@ packages:
     engines: {node: '>= 12.x'}
     dependencies:
       '@colyseus/msgpackr': 1.10.5
-      '@colyseus/schema': 3.0.0-alpha.19
+      '@colyseus/schema': 3.0.0-alpha.37
       httpie: 2.0.0-next.13
       tslib: 2.6.3
       ws: 8.18.0

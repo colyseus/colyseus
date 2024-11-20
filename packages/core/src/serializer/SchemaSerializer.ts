@@ -7,10 +7,10 @@ import { Client, ClientState } from '../Transport.js';
 
 const SHARED_VIEW = {};
 
-export class SchemaSerializer<T> implements Serializer<T> {
+export class SchemaSerializer<T extends Schema> implements Serializer<T> {
   public id = 'schema';
 
-  protected encoder: Encoder;
+  protected encoder: Encoder<T>;
   protected hasFilters: boolean = false;
 
   protected handshakeCache: Buffer;
@@ -38,7 +38,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
   }
 
   public getFullState(client?: Client) {
-    if (this.needFullEncode || this.encoder.root.changes.size > 0) {
+    if (this.needFullEncode || this.encoder.root.changes.length > 0) {
       this.sharedOffsetCache = { offset: 1 };
       this.fullEncodeCache = this.encoder.encodeAll(this.sharedOffsetCache, this.fullEncodeBuffer);
       this.needFullEncode = false;
@@ -60,13 +60,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
   public applyPatches(clients: Client[]) {
     let numClients = clients.length;
 
-    if (
-      numClients == 0 ||
-      (
-        this.encoder.root.changes.size === 0 &&
-        (!this.hasFilters || this.encoder.root.filteredChanges.size === 0)
-      )
-    ) {
+    if (numClients == 0 || !this.encoder.hasChanges) {
       // skip patching state if:
       // - no clients are connected
       // - no changes were made
@@ -157,8 +151,10 @@ export class SchemaSerializer<T> implements Serializer<T> {
      * Cache handshake to avoid encoding it for each client joining
      */
     if (!this.handshakeCache) {
-      // TODO: re-use handshake buffer for all rooms
-      this.handshakeCache = (this.encoder.state && Reflection.encode(this.encoder.state));
+      //
+      // TODO: re-use handshake buffer for all rooms of same type (?)
+      //
+      this.handshakeCache = (this.encoder.state && Reflection.encode(this.encoder.context));
     }
 
     return this.handshakeCache;
