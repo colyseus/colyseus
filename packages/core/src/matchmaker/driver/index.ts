@@ -1,9 +1,9 @@
 import { debugMatchMaking } from "../../Debug";
 import { logger } from "../../Logger";
-import { IRoomListingData, SortOptions, RoomListingData, QueryHelpers, MatchMakerDriver } from "./interfaces";
+import { FilterCallback, IRoomListingData, SortOptions, RoomListingData, QueryHelpers, MatchMakerDriver } from "./interfaces";
 
 // re-export
-export type { IRoomListingData, SortOptions, RoomListingData, QueryHelpers, MatchMakerDriver };
+export type { FilterCallback, IRoomListingData, SortOptions, RoomListingData, QueryHelpers, MatchMakerDriver };
 
 import { Query } from './Query';
 import { RoomCache } from './RoomData';
@@ -41,8 +41,9 @@ export class LocalDriver implements MatchMakerDriver {
     return Promise.resolve();
   }
 
-  public findOne(conditions: Partial<IRoomListingData>) {
-    return new Query<RoomListingData>(this.rooms, conditions) as any as QueryHelpers<RoomListingData>;
+  // Ohki - Code Review Question: I mentioned in MatchMakter.ts, this could be an optional property or an update to IRoomListingData.
+  public findOne(conditions: Partial<IRoomListingData>, filterMethod?: FilterCallback) {
+    return new Query<RoomListingData>(this.rooms, conditions, filterMethod) as any as QueryHelpers<RoomListingData>;
   }
 
   public clear() {
