@@ -1,6 +1,6 @@
 {
   "name": "colyseus",
-  "version": "0.15.17",
+  "version": "0.15.56",
   "description": "Multiplayer Framework for Node.js",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -40,8 +40,10 @@
   "devDependencies": {
     "@colyseus/uwebsockets-transport": "workspace:^",
     "@types/ws": "^7.4.4",
-    "@colyseus/schema": "^2.0.0",
     "ws": "^7.4.5"
+  },
+  "peerDependencies": {
+    "@colyseus/schema": "^2.0.0"
   },
   "gitHead": "25ba61e283429bb4fa02db0454f804ea218259eb"
 }

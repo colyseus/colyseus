@@ -664,10 +664,16 @@ export abstract class Room<State extends object= any, Metadata= any> {
           client.auth = authData;
 
         } else if (this.onAuth !== Room.prototype.onAuth) {
-          client.auth = await this.onAuth(client, joinOptions, req);
+          try {
+            client.auth = await this.onAuth(client, joinOptions, req);
 
-          if (!client.auth) {
-            throw new ServerError(ErrorCode.AUTH_FAILED, 'onAuth failed');
+            if (!client.auth) {
+              throw new ServerError(ErrorCode.AUTH_FAILED, 'onAuth failed');
+            }
+
+          } catch (e) {
+            await this._decrementClientCount();
+            throw e;
           }
         }
 
