@@ -672,6 +672,8 @@ export abstract class Room<State extends object= any, Metadata= any> {
             }
 
           } catch (e) {
+            // remove seat reservation
+            delete this.reservedSeats[sessionId];
             await this._decrementClientCount();
             throw e;
           }
