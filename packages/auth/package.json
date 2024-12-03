@@ -41,12 +41,13 @@
     "express-session": "^1.17.3",
     "grant": "^5.4.23"
   },
+  "devDependencies": {
+    "@colyseus/core": "workspace:^",
+    "httpie": "^2.0.0-next.13"
+  },
   "peerDependencies": {
     "@colyseus/core": "0.15.x",
     "express": "^4.17.1"
-  },
-  "devDependencies": {
-    "httpie": "^2.0.0-next.13"
   },
   "publishConfig": {
     "access": "public"

@@ -11,6 +11,7 @@
     "express": "^4.17.1"
   },
   "devDependencies": {
+    "@colyseus/core": "workspace:^"
   },
   "peerDependencies": {
     "@colyseus/schema": ">=1.0.0"

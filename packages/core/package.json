@@ -34,7 +34,8 @@
     "node": ">= 14.x"
   },
   "dependencies": {
-    "@colyseus/greeting-banner": "^2.0.0",
+    "@colyseus/greeting-banner": "workspace:^",
+    "@colyseus/schema": "^2.0.0",
     "@gamestdio/timer": "^1.3.0",
     "debug": "^4.3.4",
     "msgpackr": "^1.9.1",

@@ -36,18 +36,20 @@
     "README.md"
   ],
   "homepage": "https://colyseus.io",
-  "devDependencies": {
-    "@types/cors": "^2.8.10",
-    "@types/dotenv": "^8.2.0",
-    "uwebsockets-express": "^1.1.10",
-    "@colyseus/uwebsockets-transport": "workspace:^"
-  },
   "dependencies": {
     "@pm2/io": "^6.0.1",
     "node-os-utils": "^1.3.7",
     "cors": "^2.8.5",
     "dotenv": "^8.2.0",
     "express": "^4.16.2"
+  },
+  "devDependencies": {
+    "@colyseus/core": "workspace:^",
+    "@colyseus/ws-transport": "workspace:^",
+    "@colyseus/uwebsockets-transport": "workspace:^",
+    "@types/cors": "^2.8.10",
+    "@types/dotenv": "^8.2.0",
+    "uwebsockets-express": "^1.1.10"
   },
   "peerDependencies": {
     "@colyseus/core": "0.15.x",

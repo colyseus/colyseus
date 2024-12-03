@@ -28,7 +28,7 @@
   },
   "homepage": "https://colyseus.io/",
   "engines": {
-    "node": ">= 14.x"
+    "node": ">= 20.x"
   },
   "dependencies": {
     "@colyseus/auth": "workspace:^",
@@ -38,9 +38,10 @@
     "@colyseus/ws-transport": "workspace:^"
   },
   "devDependencies": {
+    "@colyseus/schema": "^2.0.0",
     "@colyseus/uwebsockets-transport": "workspace:^",
     "@types/ws": "^7.4.4",
-    "ws": "^7.4.5"
+    "ws": "^8.18.0"
   },
   "peerDependencies": {
     "@colyseus/schema": "^2.0.0"
