@@ -20,7 +20,7 @@ import controller from './matchmaker/controller.js';
 import * as stats from './Stats.js';
 
 import { logger } from './Logger.js';
-import { Client } from './Transport.js';
+import { AuthContext, Client } from './Transport.js';
 import { Type } from './utils/types.js';
 import { getHostname } from './discovery/index.js';
 import { getLockId } from './matchmaker/driver/api.js';
@@ -28,7 +28,6 @@ import { getLockId } from './matchmaker/driver/api.js';
 export { controller, stats, type MatchMakerDriver };
 
 export type ClientOptions = any;
-export type AuthOptions = { token?: string, request?: any };
 export type SelectProcessIdCallback = (roomName: string, clientOptions: ClientOptions) => Promise<string>;
 
 export interface SeatReservation {
@@ -159,9 +158,9 @@ export async function accept() {
 /**
  * Join or create into a room and return seat reservation
  */
-export async function joinOrCreate(roomName: string, clientOptions: ClientOptions = {}, authOptions?: AuthOptions) {
+export async function joinOrCreate(roomName: string, clientOptions: ClientOptions = {}, authContext?: AuthContext) {
   return await retry<Promise<SeatReservation>>(async () => {
-    const authData = await callOnAuth(roomName, authOptions);
+    const authData = await callOnAuth(roomName, clientOptions, authContext);
     let room: IRoomCache = await findOneRoomAvailable(roomName, clientOptions);
 
     if (!room) {
@@ -203,8 +202,8 @@ export async function joinOrCreate(roomName: string, clientOptions: ClientOption
 /**
  * Create a room and return seat reservation
  */
-export async function create(roomName: string, clientOptions: ClientOptions = {}, authOptions?: AuthOptions) {
-  const authData = await callOnAuth(roomName, authOptions);
+export async function create(roomName: string, clientOptions: ClientOptions = {}, authContext?: AuthContext) {
+  const authData = await callOnAuth(roomName, clientOptions, authContext);
   const room = await createRoom(roomName, clientOptions);
   return reserveSeatFor(room, clientOptions, authData);
 }
@@ -212,7 +211,7 @@ export async function create(roomName: string, clientOptions: ClientOptions = {}
 /**
  * Join a room and return seat reservation
  */
-export async function join(roomName: string, clientOptions: ClientOptions = {}, authOptions?: AuthOptions) {
+export async function join(roomName: string, clientOptions: ClientOptions = {}, authOptions?: AuthContext) {
   return await retry<Promise<SeatReservation>>(async () => {
     const authData = await callOnAuth(roomName, authOptions);
     const room = await findOneRoomAvailable(roomName, clientOptions);
@@ -267,7 +266,7 @@ export async function reconnect(roomId: string, clientOptions: ClientOptions = {
  *
  * @returns Promise<SeatReservation> - A promise which contains `sessionId` and `IRoomCache`.
  */
-export async function joinById(roomId: string, clientOptions: ClientOptions = {}, authOptions?: AuthOptions) {
+export async function joinById(roomId: string, clientOptions: ClientOptions = {}, authOptions?: AuthContext) {
   const room = await driver.findOne({ roomId });
 
   if (!room) {
@@ -693,10 +692,10 @@ export async function reserveSeatFor(room: IRoomCache, options: ClientOptions, a
   return response;
 }
 
-function callOnAuth(roomName: string, authOptions?: AuthOptions) {
+function callOnAuth(roomName: string, clientOptions?: ClientOptions, authContext?: AuthContext) {
   const roomClass = getRoomClass(roomName);
   return (roomClass && roomClass['onAuth'] && roomClass['onAuth'] !== Room['onAuth'])
-    ? roomClass['onAuth'](authOptions.token, authOptions.request)
+    ? roomClass['onAuth'](authContext.token, clientOptions, authContext)
     : undefined;
 }
 

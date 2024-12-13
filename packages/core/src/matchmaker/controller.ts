@@ -7,6 +7,7 @@ import { IncomingMessage } from 'http';
 import { ErrorCode } from '../Protocol.js';
 import { ServerError } from '../errors/ServerError.js';
 import * as matchMaker from '../MatchMaker.js';
+import type { AuthContext } from '../Transport.js';
 
 export default {
   DEFAULT_CORS_HEADERS: {
@@ -61,7 +62,7 @@ export default {
     method: string,
     roomName: string,
     clientOptions: matchMaker.ClientOptions = {},
-    authOptions?: matchMaker.AuthOptions,
+    authOptions?: AuthContext,
   ) {
     if (this.exposedMethods.indexOf(method) === -1) {
       throw new ServerError(ErrorCode.MATCHMAKE_NO_HANDLER, `invalid method "${method}"`);

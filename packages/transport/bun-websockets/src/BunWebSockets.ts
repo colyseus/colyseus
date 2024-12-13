@@ -205,7 +205,11 @@ export class BunWebSockets extends Transport {
             method,
             roomName,
             clientOptions,
-            { token: getBearerToken(req.headers['authorization']), request: req },
+            {
+              token: getBearerToken(req.headers['authorization']),
+              headers: req.headers,
+              ip: req.headers['x-real-ip'] ?? req.ips,
+            },
           ));
           break;
         }

@@ -7,11 +7,12 @@ import { decode, Iterator } from '@colyseus/schema';
 import { matchMaker, Protocol, Transport, debugAndPrintError, spliceOne, getBearerToken } from '@colyseus/core';
 import { H3Client } from './H3Client.js';
 import { generateWebTransportCertificate } from './utils/mkcert.js';
+import type { Application, Request, Response } from 'express';
 
 export type CertLike = string;
 
 export interface TransportOptions {
-  app: any, // express app
+  app: Application, // express app
 
   cert?: CertLike,
   key?: CertLike,
@@ -161,7 +162,7 @@ export class H3Transport extends Transport {
       }
     });
 
-    this.options.app.post(`/${matchMaker.controller.matchmakeRoute}/:method/:roomName`, async (req, res) => {
+    this.options.app.post(`/${matchMaker.controller.matchmakeRoute}/:method/:roomName`, async (req: Request, res: Response) => {
       // do not accept matchmaking requests if already shutting down
       if (matchMaker.state === matchMaker.MatchMakerState.SHUTTING_DOWN) {
         res.writeHead(503, {});
@@ -188,7 +189,11 @@ export class H3Transport extends Transport {
           method,
           roomName,
           clientOptions,
-          { token: getBearerToken(req.headers['authorization']), request: req },
+          {
+            token: getBearerToken(req.headers['authorization']),
+            headers: req.headers,
+            ip: req.headers['x-real-ip'] ?? req.ips
+          },
         );
 
         // specify protocol, if available.

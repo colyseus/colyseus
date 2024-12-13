@@ -16,6 +16,12 @@ export abstract class Transport {
     public abstract simulateLatency(milliseconds: number): void;
 }
 
+export type AuthContext = {
+  token?: string,
+  headers: http.IncomingHttpHeaders,
+  ip: string | string[];
+};
+
 export interface ISendOptions {
   afterNextPatch?: boolean;
 }

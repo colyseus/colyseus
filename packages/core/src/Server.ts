@@ -361,7 +361,11 @@ export class Server {
             method,
             roomName,
             clientOptions,
-            { token: getBearerToken(req.headers['authorization']), request: req },
+            {
+              token: getBearerToken(req.headers['authorization']),
+              headers: req.headers,
+              ip: req.headers['x-real-ip'] ?? req.headers['x-forwarded-for'] ?? req.socket.remoteAddress,
+            },
           );
 
           // specify protocol, if available.

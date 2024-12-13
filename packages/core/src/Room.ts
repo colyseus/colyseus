@@ -1,5 +1,3 @@
-import http, { IncomingMessage } from 'http';
-
 import { unpack } from '@colyseus/msgpackr';
 import { decode, Iterator, $changes } from '@colyseus/schema';
 
@@ -20,7 +18,7 @@ import { isDevMode } from './utils/DevMode.js';
 import { debugAndPrintError, debugMessage } from './Debug.js';
 import { ServerError } from './errors/ServerError.js';
 import { RoomCache } from './matchmaker/driver/local/LocalDriver.js';
-import { Client, ClientArray, ClientPrivate, ClientState, ISendOptions } from './Transport.js';
+import { AuthContext, Client, ClientArray, ClientPrivate, ClientState, ISendOptions } from './Transport.js';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
@@ -174,6 +172,10 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
     });
   }
 
+  /**
+   * This method is called by the MatchMaker before onCreate()
+   * @internal
+   */
   protected __init() {
     if (this.state) {
       this.setState(this.state);
@@ -269,17 +271,19 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
   public onLeave?(client: Client<UserData, AuthData>, consented?: boolean): void | Promise<any>;
   public onDispose?(): void | Promise<any>;
 
-  // TODO: flag as @deprecated on v0.16
-  // TOOD: remove instance level `onAuth` on 1.0
-  /**
-   * onAuth at the instance level will be deprecated in the future.
-   * Please use "static onAuth(token, req) instead
-   */
-  public onAuth(client: Client<UserData, AuthData>, options: any, request?: http.IncomingMessage): any | Promise<any> {
+  public onAuth(
+    client: Client<UserData, AuthData>,
+    options: any,
+    context: AuthContext
+  ): any | Promise<any> {
     return true;
   }
 
-  static async onAuth(token: string, req: IncomingMessage): Promise<unknown> {
+  static async onAuth(
+    token: string,
+    options: any,
+    context: AuthContext
+  ): Promise<unknown> {
     return true;
   }
 
@@ -597,7 +601,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
     return delayedDisconnection;
   }
 
-  public async ['_onJoin'](client: Client & ClientPrivate, req?: http.IncomingMessage) {
+  public async ['_onJoin'](client: Client & ClientPrivate, authContext: AuthContext) {
     const sessionId = client.sessionId;
 
     // generate unique private reconnection token
@@ -659,7 +663,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
           client.auth = authData;
 
         } else if (this.onAuth !== Room.prototype.onAuth) {
-          client.auth = await this.onAuth(client, joinOptions, req);
+          client.auth = await this.onAuth(client, joinOptions, authContext);
 
           if (!client.auth) {
             throw new ServerError(ErrorCode.AUTH_FAILED, 'onAuth failed');

@@ -1,4 +1,4 @@
-import http from 'http';
+import http, { IncomingHttpHeaders } from 'http';
 import querystring from 'querystring';
 import uWebSockets from 'uWebSockets.js';
 import expressify, { Application } from "uwebsockets-express";
@@ -254,10 +254,9 @@ export class uWebSocketsTransport extends Transport {
             const url = req.getUrl();
             const matchedParams = url.match(allowedRoomNameChars);
             const matchmakeIndex = matchedParams.indexOf(matchmakeRoute);
-            const authToken = getBearerToken(req.getHeader('authorization'));
 
             // cache all headers
-            const headers = {};
+            const headers: IncomingHttpHeaders = {};
             req.forEach((key, value) => headers[key] = value);
 
             // read json body
@@ -274,7 +273,11 @@ export class uWebSocketsTransport extends Transport {
                       method,
                       roomName,
                       clientOptions,
-                      { token: authToken, request: { headers } }
+                      {
+                        token: getBearerToken(req.getHeader('authorization')),
+                        headers,
+                        ip: headers['x-real-ip'] ?? Buffer.from(res.getRemoteAddressAsText()).toString()
+                      }
                     );
 
                     if (!res.aborted) {
