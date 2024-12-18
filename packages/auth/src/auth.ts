@@ -60,6 +60,11 @@ const RESET_PASSWORD_TOKEN_EXPIRATION_MINUTES = 30;
 
 export const auth = {
   /**
+   * Backend URL (used for OAuth callbacks and email confirmation links)
+   */
+  backend_url: "",
+
+  /**
    * OAuth utilities
    */
   oauth: oauth,
@@ -126,6 +131,17 @@ Please give feedback and report any issues you may find at https://github.com/co
 `);
 
     const router = express.Router();
+
+    //
+    // Auto-detect backend URL from the first request, if not defined.
+    // (We do only once to reduce chances of 'Host' header injection vulnerability)
+    //
+    router.use(function (req, res) {
+      if (!auth.backend_url) {
+        auth.backend_url = req.protocol + '://' + req.get('host');
+      }
+      router.stack.shift(); // remove this middleware
+    });
 
     // set register/login callbacks
     Object.keys(settings).forEach(key => {
@@ -243,8 +259,7 @@ Please give feedback and report any issues you may find at https://github.com/co
 
         // Call `onSendEmailConfirmation` callback, if defined.
         if (typeof (auth.settings.onSendEmailConfirmation) === "function") {
-          const fullUrl = req.protocol + '://' + req.get('host');
-          const confirmEmailLink = fullUrl + auth.prefix + "/confirm-email?token=" + token;
+          const confirmEmailLink = `${auth.backend_url}${auth.prefix}/confirm-email?token=${token}`;
           const html = (await fs.readFile(path.join(htmlTemplatePath, "address-confirmation-email.html"), "utf-8"))
             .replace("[LINK]", confirmEmailLink);
 
@@ -318,9 +333,7 @@ Please give feedback and report any issues you may find at https://github.com/co
         }
 
         const token = await JWT.sign({ email }, { expiresIn: RESET_PASSWORD_TOKEN_EXPIRATION_MINUTES + "m" });
-
-        const fullUrl = req.protocol + '://' + req.get('host');
-        const passwordResetLink = fullUrl + auth.prefix + "/reset-password?token=" + token;
+        const passwordResetLink = `${auth.backend_url}${auth.prefix}/reset-password?token=${token}`;
         const html = (await fs.readFile(path.join(htmlTemplatePath, "reset-password-email.html"), "utf-8"))
           .replace("[LINK]", passwordResetLink);
 
