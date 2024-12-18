@@ -5,8 +5,8 @@ import { existsSync } from 'fs';
 import { generateId, logger, matchMaker } from '@colyseus/core';
 import { Request } from 'express-jwt';
 import { OAuthProviderCallback, oAuthProviderCallback, oauth } from './oauth.js';
-import { JWT, JwtPayload } from './JWT';
-import { Hash } from './Hash';
+import { JWT, JwtPayload } from './JWT.js';
+import { Hash } from './Hash.js';
 
 export type MayHaveUpgradeToken = { upgradingToken?: JwtPayload };
 
@@ -136,9 +136,12 @@ Please give feedback and report any issues you may find at https://github.com/co
     // Auto-detect backend URL from the first request, if not defined.
     // (We do only once to reduce chances of 'Host' header injection vulnerability)
     //
-    router.use(function (req, res) {
+    router.use(function (req, _) {
       if (!auth.backend_url) {
         auth.backend_url = req.protocol + '://' + req.get('host');
+      }
+      if (!oauth.defaults.origin) {
+        oauth.defaults.origin = auth.backend_url;
       }
       router.stack.shift(); // remove this middleware
     });

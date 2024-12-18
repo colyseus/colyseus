@@ -3,7 +3,7 @@ import path from 'path';
 import express, { Router } from 'express';
 import grant, { GrantProvider, GrantConfig, GrantSession } from 'grant';
 import session from 'express-session';
-import { matchMaker, logger } from '@colyseus/core';
+import { matchMaker } from '@colyseus/core';
 import { MayHaveUpgradeToken, auth } from './auth.js';
 
 // @ts-ignore
@@ -118,15 +118,15 @@ export const oauth = {
       const config: GrantConfig = Object.assign({ defaults: this.defaults }, this.providers);
       config.defaults.prefix = oauth.prefix;
 
-      // if origin is not set, guess it from environment
-      if (!this.defaults.origin) {
-        const isProduction = (process.env.NODE_ENV && process.env.NODE_ENV !== "development" || process.env.COLYSEUS_CLOUD)
-        const hostname = (process.env.SUBDOMAIN && process.env.SERVER_NAME)
-          ? `${process.env.SUBDOMAIN}.${process.env.SERVER_NAME}`
-          : `localhost:${process.env.PORT || "2567"}`;
-        this.defaults.origin = `${(isProduction) ? "https" : "http"}://${hostname}`;
-        logger.info(`OAuth: 'auth.oauth.defaults.origin' not set. Guessing it from environment: '${this.defaults.origin}'`);
-      }
+      // // if origin is not set, guess it from environment
+      // if (!this.defaults.origin) {
+      //   const isProduction = (process.env.NODE_ENV && process.env.NODE_ENV !== "development" || process.env.COLYSEUS_CLOUD)
+      //   const hostname = (process.env.SUBDOMAIN && process.env.SERVER_NAME)
+      //     ? `${process.env.SUBDOMAIN}.${process.env.SERVER_NAME}`
+      //     : `localhost:${process.env.PORT || "2567"}`;
+      //   this.defaults.origin = `${(isProduction) ? "https" : "http"}://${hostname}`;
+      //   logger.info(`OAuth: 'auth.oauth.defaults.origin' not set. Guessing it from environment: '${this.defaults.origin}'`);
+      // }
 
       router.use(sessionMiddleware);
 

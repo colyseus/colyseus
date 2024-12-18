@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/auth",
-  "version": "0.16.0-preview.1",
+  "version": "0.16.0-preview.3",
   "description": "Authentication Utilities for Colyseus",
   "input": "./src/index.ts",
   "main": "./build/index.js",
