@@ -16,7 +16,7 @@ export { updateLobby, subscribeLobby } from './matchmaker/Lobby.js';
 export * from './matchmaker/driver/local/LocalDriver.js';
 
 // Transport
-export { type Client, type ClientPrivate, ClientState, ClientArray, Transport, type ISendOptions } from './Transport.js';
+export { type Client, type ClientPrivate, type AuthContext, ClientState, ClientArray, Transport, type ISendOptions } from './Transport.js';
 
 // Presence
 export { type Presence } from './presence/Presence.js';

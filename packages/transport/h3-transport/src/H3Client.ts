@@ -34,7 +34,6 @@ export class H3Client implements Client, ClientPrivate {
   ) {
 
     _wtSession.ready.then(() => {
-
       _wtSession.createBidirectionalStream().then((bidi) => {
         // @ts-ignore
         this._bidiReader = bidi.readable.getReader();

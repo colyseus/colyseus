@@ -3,7 +3,7 @@ import querystring from 'querystring';
 import uWebSockets from 'uWebSockets.js';
 import expressify, { Application } from "uwebsockets-express";
 
-import { HttpServerMock, ErrorCode, matchMaker, getBearerToken, Transport, debugAndPrintError, spliceOne } from '@colyseus/core';
+import { AuthContext, HttpServerMock, ErrorCode, matchMaker, getBearerToken, Transport, debugAndPrintError, spliceOne } from '@colyseus/core';
 import { uWebSocketClient, uWebSocketWrapper } from './uWebSocketClient.js';
 
 export type TransportOptions = Omit<uWebSockets.WebSocketBehavior<any>, "upgrade" | "open" | "pong" | "close" | "message">;
@@ -11,8 +11,7 @@ export type TransportOptions = Omit<uWebSockets.WebSocketBehavior<any>, "upgrade
 type RawWebSocketClient = uWebSockets.WebSocket<any> & {
   url: string,
   query: string,
-  headers: {[key: string]: string},
-  connection: { remoteAddress: string },
+  context: AuthContext,
 };
 
 export class uWebSocketsTransport extends Transport {
@@ -71,11 +70,10 @@ export class uWebSocketsTransport extends Transport {
                     {
                         url: req.getUrl(),
                         query: req.getQuery(),
-
-                        // compatibility with @colyseus/ws-transport
-                        headers,
-                        connection: {
-                          remoteAddress: Buffer.from(res.getRemoteAddressAsText()).toString()
+                        context: {
+                          token: getBearerToken(req.getHeader('authorization')),
+                          headers,
+                          ip: Buffer.from(res.getRemoteAddressAsText()).toString(),
                         }
                     },
                     req.getHeader('sec-websocket-key'),
@@ -184,7 +182,7 @@ export class uWebSocketsTransport extends Transport {
                 throw new Error('seat reservation expired.');
             }
 
-            await room._onJoin(client, rawClient as unknown as http.IncomingMessage);
+            await room._onJoin(client, rawClient.context);
 
         } catch (e) {
             debugAndPrintError(e);

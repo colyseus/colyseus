@@ -272,7 +272,12 @@ export class H3Transport extends Transport {
         const { done, value } = await sessionReader.read();
         if (done) { break; }
 
-        // create client instance
+        //
+        // TODO: get headers from session reader (?)
+        // https://github.com/fails-components/webtransport/issues/279#issuecomment-2036857175
+        //
+
+        //  create client instance
         const client = new H3Client(value, (message) => this.onConnection(client, message));
         client.ref.on('open', () => this.clients.push(client));
         client.ref.on("close", () => spliceOne(this.clients, this.clients.indexOf(client)));

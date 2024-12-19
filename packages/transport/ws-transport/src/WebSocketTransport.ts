@@ -2,7 +2,7 @@ import http from 'http';
 import { URL } from 'url';
 import WebSocket, { WebSocketServer, ServerOptions } from 'ws';
 
-import { matchMaker, Protocol, Transport, debugAndPrintError, debugConnection } from '@colyseus/core';
+import { matchMaker, Protocol, Transport, debugAndPrintError, debugConnection, getBearerToken } from '@colyseus/core';
 import { WebSocketClient } from './WebSocketClient.js';
 
 function noop() {/* tslint:disable:no-empty */ }
@@ -110,14 +110,13 @@ export class WebSocketTransport extends Transport {
     }, pingInterval);
   }
 
-  protected async onConnection(rawClient: RawWebSocketClient, req?: http.IncomingMessage & any) {
+  protected async onConnection(rawClient: RawWebSocketClient, req: http.IncomingMessage) {
     // prevent server crashes if a single client had unexpected error
     rawClient.on('error', (err) => debugAndPrintError(err.message + '\n' + err.stack));
     rawClient.on('pong', heartbeat);
 
     // compatibility with ws / uws
-    const upgradeReq = req || (rawClient as any).upgradeReq;
-    const parsedURL = new URL(`ws://server/${upgradeReq.url}`);
+    const parsedURL = new URL(`ws://server/${req.url}`);
 
     const sessionId = parsedURL.searchParams.get("sessionId");
     const processAndRoomId = parsedURL.pathname.match(/\/[a-zA-Z0-9_\-]+\/([a-zA-Z0-9_\-]+)$/);
@@ -139,7 +138,11 @@ export class WebSocketTransport extends Transport {
         throw new Error('seat reservation expired.');
       }
 
-      await room._onJoin(client, upgradeReq);
+      await room._onJoin(client, {
+        headers: req.headers,
+        token: getBearerToken(req.headers.authorization),
+        ip: req.headers['x-real-ip'] ?? req.headers['x-forwarded-for'] ?? req.socket.remoteAddress,
+      });
 
     } catch (e) {
       debugAndPrintError(e);

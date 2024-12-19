@@ -15,9 +15,7 @@ export type TransportOptions = Partial<Omit<WebSocketHandler, "message" | "open"
 
 interface WebSocketData {
   url: URL;
-  // query: string,
-  // headers: { [key: string]: string },
-  // connection: { remoteAddress: string },
+  headers: any;
 }
 
 export class BunWebSockets extends Transport {
@@ -135,7 +133,11 @@ export class BunWebSockets extends Transport {
         throw new Error('seat reservation expired.');
       }
 
-      await room._onJoin(client, rawClient as unknown as http.IncomingMessage);
+      await room._onJoin(client, {
+        token: getBearerToken(rawClient.data.headers['authorization']),
+        headers: rawClient.data.headers,
+        ip: rawClient.data.headers['x-real-ip'] ?? rawClient.remoteAddress,
+      });
 
     } catch (e) {
       debugAndPrintError(e);
