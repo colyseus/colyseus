@@ -63,6 +63,7 @@ async function main() {
         skipLibCheck: true,
         module: ts.ModuleKind.CommonJS,
         target: ts.ScriptTarget.ES2015,
+        lib: ["lib.es2022.d.ts"],
         outDir: outdir,
         downlevelIteration: true, // (redis-driver)
         esModuleInterop: true,

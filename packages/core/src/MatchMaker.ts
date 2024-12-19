@@ -1,3 +1,4 @@
+import { EventEmitter } from 'events';
 import { ErrorCode, Protocol } from './Protocol.js';
 
 import { requestFromIPC, subscribeIPC } from './IPC.js';
@@ -38,6 +39,7 @@ export interface SeatReservation {
 
 const handlers: {[id: string]: RegisteredHandler} = {};
 const rooms: {[roomId: string]: Room} = {};
+const events = new EventEmitter();
 
 export let publicAddress: string;
 export let processId: string;
@@ -144,6 +146,14 @@ export async function accept() {
    */
   if (enableHealthChecks) {
     await healthCheckAllProcesses();
+
+    /*
+     * persist processId every 1 minute
+     *
+     * FIXME: this is a workaround in case this `processId` gets excluded
+     * (`stats.excludeProcess()`) by mistake due to health-check failure
+     */
+    stats.setAutoPersistInterval();
   }
 
   state = MatchMakerState.READY;
@@ -557,11 +567,23 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
     room._events.removeAllListeners('unlock');
     room._events.removeAllListeners('visibility-change');
     room._events.removeAllListeners('dispose');
+
+    //
+    // emit "no active rooms" event when there are no more rooms in this process
+    // (used during graceful shutdown)
+    //
+    if (stats.local.roomCount <= 0) {
+      events.emit('no-active-rooms');
+    }
   });
 
   // room always start unlocked
   await createRoomReferences(room, true);
-  await room.listing.save();
+
+  // persist room data only if match-making is enabled
+  if (state !== MatchMakerState.SHUTTING_DOWN) {
+    await room.listing.save();
+  }
 
   handler.emit('create', room);
 
@@ -594,15 +616,46 @@ export function disconnectAll(closeCode?: number) {
       continue;
     }
 
-    const room = rooms[roomId];
-
-    // prevent touching stats when process is shutting down
-    room._events.removeAllListeners("leave");
-
-    promises.push(room.disconnect(closeCode));
+    promises.push(rooms[roomId].disconnect(closeCode));
   }
 
   return promises;
+}
+
+async function lockAndDisposeAll(): Promise<any> {
+  // remove processId from room count key
+  // (stops accepting new rooms on this process)
+  await stats.excludeProcess(processId);
+
+  // clear auto-persisting stats interval
+  if (enableHealthChecks) {
+    stats.clearAutoPersistInterval();
+  }
+
+  const noActiveRooms = new Deferred();
+  if (stats.local.roomCount <= 0) {
+    // no active rooms to dispose
+    noActiveRooms.resolve();
+
+  } else {
+    // wait for all rooms to be disposed
+    // TODO: set generous timeout in case
+    events.once('no-active-rooms', () => noActiveRooms.resolve());
+  }
+
+  // - lock all local rooms to prevent new joins
+  // - trigger `onBeforeShutdown()` on each room
+  for (const roomId in rooms) {
+    if (!rooms.hasOwnProperty(roomId)) {
+      continue;
+    }
+
+    const room = rooms[roomId];
+    room.lock();
+    room.onBeforeShutdown();
+  }
+
+  await noActiveRooms;
 }
 
 export async function gracefullyShutdown(): Promise<any> {
@@ -610,25 +663,28 @@ export async function gracefullyShutdown(): Promise<any> {
     return Promise.reject('already_shutting_down');
   }
 
+  debugMatchMaking(`${processId} is shutting down!`);
+
   state = MatchMakerState.SHUTTING_DOWN;
 
   onReady = undefined;
 
-  debugMatchMaking(`${processId} is shutting down!`);
+  // - lock existing rooms
+  // - stop accepting new rooms on this process
+  // - wait for all rooms to be disposed
+  await lockAndDisposeAll();
 
   if (isDevMode) {
     await cacheRoomHistory(rooms);
   }
 
-  // remove processId from room count key
-  await stats.excludeProcess(processId);
-
-  // remove cached rooms of this process
+  // make sure rooms are removed from cache
   await removeRoomsByProcessId(processId);
 
   // unsubscribe from process id channel
   presence.unsubscribe(getProcessChannel());
 
+  // make sure all rooms are disposed
   return Promise.all(disconnectAll(
     (isDevMode)
       ? Protocol.WS_CLOSE_DEVMODE_RESTART
@@ -889,10 +945,10 @@ async function disposeRoom(roomName: string, room: Room) {
   // non-existing rooms)
   //
   room.listing.remove();
+  stats.local.roomCount--;
 
   // decrease amount of rooms this process is handling
   if (state !== MatchMakerState.SHUTTING_DOWN) {
-    stats.local.roomCount--;
     stats.persist();
 
     // remove from devMode restore list

@@ -11,14 +11,15 @@ import { NoneSerializer } from './serializer/NoneSerializer.js';
 import { SchemaSerializer } from './serializer/SchemaSerializer.js';
 import { Serializer } from './serializer/Serializer.js';
 
-import { ErrorCode, getMessageBytes, Protocol } from './Protocol.js';
-import { Deferred, generateId } from './utils/Utils.js';
+import { ErrorCode, getMessageBytes, Protocol } from './Protocol';
+import { Deferred, generateId, wrapTryCatch } from './utils/Utils.js';
 import { isDevMode } from './utils/DevMode.js';
 
-import { debugAndPrintError, debugMessage } from './Debug.js';
+import { debugAndPrintError, debugMatchMaking, debugMessage } from './Debug.js';
+import { RoomCache } from './matchmaker/driver/api.js';
 import { ServerError } from './errors/ServerError.js';
-import { RoomCache } from './matchmaker/driver/local/LocalDriver.js';
-import { AuthContext, Client, ClientArray, ClientPrivate, ClientState, ISendOptions } from './Transport.js';
+import { AuthContext, Client, ClientPrivate, ClientArray, ClientState, ISendOptions } from './Transport';
+import { OnAuthException, OnCreateException, OnDisposeException, OnJoinException, OnLeaveException, OnMessageException, RoomException, SimulationIntervalException, TimedEventException } from './errors/RoomExceptions.js';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
@@ -37,6 +38,9 @@ export enum RoomInternalState {
   CREATED = 1,
   DISPOSING = 2,
 }
+
+export type ExtractUserData<T> = T extends ClientArray<infer U> ? U : never;
+export type ExtractAuthData<T> = T extends ClientArray<infer _, infer U> ? U : never;
 
 /**
  * A Room class is meant to implement a game session, and/or serve as the communication channel
@@ -72,6 +76,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
 
   #_roomId: string;
   #_roomName: string;
+  #_onLeaveConcurrent: number = 0; // number of onLeave calls in progress
 
   /**
    * Maximum number of clients allowed to connect into the room. When room reaches this limit,
@@ -167,9 +172,16 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
   constructor() {
     this._events.once('dispose', () => {
       this._dispose()
-        .catch((e) => debugAndPrintError(`onDispose error: ${(e && e.message || e || 'promise rejected')}`))
+        .catch((e) => debugAndPrintError(`onDispose error: ${(e && e.stack || e.message || e || 'promise rejected')}`))
         .finally(() => this._events.emit('disconnect'));
     });
+
+    /**
+     * If `onUncaughtException` is defined, it will automatically catch exceptions
+     */
+    if (this.onUncaughtException !== undefined) {
+      this.#registerUncaughtExceptionHandlers();
+    }
   }
 
   /**
@@ -271,6 +283,20 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
   public onLeave?(client: Client<UserData, AuthData>, consented?: boolean): void | Promise<any>;
   public onDispose?(): void | Promise<any>;
 
+  /**
+   * Define a custom exception handler.
+   * If defined, all lifecycle hooks will be wrapped by try/catch, and the exception will be forwarded to this method.
+   *
+   * These methods will be wrapped by try/catch:
+   * - `onMessage`
+   * - `onAuth` / `onJoin` / `onLeave` / `onCreate` / `onDispose`
+   * - `clock.setTimeout` / `clock.setInterval`
+   * - `setSimulationInterval`
+   *
+   * (Experimental: this feature is subject to change in the future - we're currently getting feedback to improve it)
+   */
+  public onUncaughtException?(error: RoomException<this>, methodName: 'onCreate' | 'onAuth' | 'onJoin' | 'onLeave' | 'onDispose' | 'onMessage' | 'setSimulationInterval' | 'setInterval' | 'setTimeout'): void;
+
   public onAuth(
     client: Client<UserData, AuthData>,
     options: any,
@@ -285,6 +311,20 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
     context: AuthContext
   ): Promise<unknown> {
     return true;
+  }
+
+  /**
+   * This method is called during graceful shutdown of the server process
+   * You may override this method to dispose the room in your own way.
+   *
+   * Once process reaches room count of 0, the room process will be terminated.
+   */
+  public onBeforeShutdown() {
+    this.disconnect(
+      (isDevMode)
+        ? Protocol.WS_CLOSE_DEVMODE_RESTART
+        : Protocol.WS_CLOSE_CONSENTED
+    );
   }
 
   /**
@@ -380,6 +420,10 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
     if (this._simulationInterval) { clearInterval(this._simulationInterval); }
 
     if (onTickCallback) {
+      if (this.onUncaughtException !== undefined) {
+        onTickCallback = wrapTryCatch(onTickCallback, this.onUncaughtException.bind(this), SimulationIntervalException, 'setSimulationInterval');
+      }
+
       this._simulationInterval = setInterval(() => {
         this.clock.tick();
         onTickCallback(this.clock.deltaTime);
@@ -553,7 +597,11 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
     callback: (...args: any[]) => void,
     validate?: (message: unknown) => T,
   ) {
-    this.onMessageHandlers[messageType] = { callback, validate };
+    this.onMessageHandlers[messageType] = (this.onUncaughtException !== undefined)
+      ? { validate, callback: wrapTryCatch(callback, this.onUncaughtException.bind(this), OnMessageException, 'onMessage', false, messageType) }
+      : { validate, callback };
+
+
     // returns a method to unbind the callback
     return () => delete this.onMessageHandlers[messageType];
   }
@@ -583,7 +631,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
 
     // reject pending reconnections
     for (const [_, reconnection] of Object.values(this._reconnections)) {
-      reconnection.reject();
+      reconnection.reject(new Error("disconnecting"));
     }
 
     let numClients = this.clients.length;
@@ -632,6 +680,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
       throw new ServerError(ErrorCode.MATCHMAKE_EXPIRED, "already consumed");
     }
     this.reservedSeats[sessionId][2] = true; // flag seat reservation as "consumed"
+    debugMatchMaking('consuming seat reservation, sessionId: \'%s\'', client.sessionId);
 
     // share "after next patch queue" reference with every client.
     client._afterNextPatchQueue = this._afterNextPatchQueue;
@@ -663,10 +712,18 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
           client.auth = authData;
 
         } else if (this.onAuth !== Room.prototype.onAuth) {
-          client.auth = await this.onAuth(client, joinOptions, authContext);
+          try {
+            client.auth = await this.onAuth(client, joinOptions, authContext);
 
-          if (!client.auth) {
-            throw new ServerError(ErrorCode.AUTH_FAILED, 'onAuth failed');
+            if (!client.auth) {
+              throw new ServerError(ErrorCode.AUTH_FAILED, 'onAuth failed');
+            }
+
+          } catch (e) {
+            // remove seat reservation
+            delete this.reservedSeats[sessionId];
+            await this._decrementClientCount();
+            throw e;
           }
         }
 
@@ -692,25 +749,23 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
           await this.onJoin(client, joinOptions, client.auth);
         }
 
-        // emit 'join' to room handler
-        this._events.emit('join', client);
-
-        // remove seat reservation
-        delete this.reservedSeats[sessionId];
-
-        // client left during `onJoin`, call _onLeave immediately.
-        // @ts-ignore
+        // @ts-ignore: client left during `onJoin`, call _onLeave immediately.
         if (client.state === ClientState.LEAVING) {
-          await this._onLeave(client, Protocol.WS_CLOSE_GOING_AWAY);
+          throw new Error("early_leave");
+
+        } else {
+          // remove seat reservation
+          delete this.reservedSeats[sessionId];
+
+          // emit 'join' to room handler
+          this._events.emit('join', client);
         }
 
       } catch (e) {
-        this.clients.delete(client);
+        await this._onLeave(client, Protocol.WS_CLOSE_GOING_AWAY);
 
         // remove seat reservation
         delete this.reservedSeats[sessionId];
-
-        this._decrementClientCount();
 
         // make sure an error code is provided.
         if (!e.code) {
@@ -753,13 +808,13 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
    */
   public allowReconnection(previousClient: Client, seconds: number | "manual"): Deferred<Client> {
     //
-    // skip reconnection if client has never fully JOINED.
+    // Return rejected promise if client has never fully JOINED.
     //
-    // (having `_enqueuedMessages !== undefined` means that the client has never
-    // been at "ClientState.JOINED" state)
+    // (having `_enqueuedMessages !== undefined` means that the client has never been at "ClientState.JOINED" state)
     //
     if ((previousClient as unknown as ClientPrivate)._enqueuedMessages !== undefined) {
-      return Deferred.reject('client not joined');
+      // @ts-ignore
+      return Promise.reject(new Error("not joined"));
     }
 
     if (seconds === undefined) { // TODO: remove this check
@@ -772,8 +827,8 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
     }
 
     if (this._internalState === RoomInternalState.DISPOSING) {
-      this._disposeIfEmpty(); // gracefully shutting down
-      return Deferred.reject('disconnecting');
+      // @ts-ignore
+      return Promise.reject(new Error("disposing"));
     }
 
     const sessionId = previousClient.sessionId;
@@ -914,6 +969,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
 
   protected _disposeIfEmpty() {
     const willDispose = (
+      this.#_onLeaveConcurrent === 0 && // no "onLeave" calls in progress
       this.#_autoDispose &&
       this._autoDisposeTimeout === undefined &&
       this.clients.length === 0 &&
@@ -1057,19 +1113,26 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
   }
 
   protected async _onLeave(client: Client, code?: number): Promise<any> {
-    const success = this.clients.delete(client);
+    debugMatchMaking('onLeave, sessionId: \'%s\'', client.sessionId);
 
     // call 'onLeave' method only if the client has been successfully accepted.
-    if (success) {
-      client.state = ClientState.LEAVING;
+    client.state = ClientState.LEAVING;
 
-      if (this.onLeave) {
-        try {
-          await this.onLeave(client, (code === Protocol.WS_CLOSE_CONSENTED));
+    if (!this.clients.delete(client)) {
+      // skip if client already left the room
+      return;
+    }
 
-        } catch (e) {
-          debugAndPrintError(`onLeave error: ${(e && e.message || e || 'promise rejected')}`);
-        }
+    if (this.onLeave) {
+      try {
+        this.#_onLeaveConcurrent++;
+        await this.onLeave(client, (code === Protocol.WS_CLOSE_CONSENTED));
+
+      } catch (e) {
+        debugAndPrintError(`onLeave error: ${(e && e.message || e || 'promise rejected')}`);
+
+      } finally {
+        this.#_onLeaveConcurrent--;
       }
     }
 
@@ -1079,6 +1142,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
         await this._onAfterLeave(client);
       });
 
+      // @ts-ignore (client.state may be modified at onLeave())
     } else if (client.state !== ClientState.RECONNECTED) {
       await this._onAfterLeave(client);
     }
@@ -1092,6 +1156,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
     if (this.reservedSeats[client.sessionId] === undefined) {
       this._events.emit('leave', client, willDispose);
     }
+
   }
 
   protected async _incrementClientCount() {
@@ -1129,6 +1194,39 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
     }
 
     return willDispose;
+  }
+
+  #registerUncaughtExceptionHandlers() {
+    const onUncaughtException = this.onUncaughtException.bind(this);
+    const originalSetTimeout = this.clock.setTimeout;
+    this.clock.setTimeout = (cb, timeout, ...args) => {
+      return originalSetTimeout.call(this.clock, wrapTryCatch(cb, onUncaughtException, TimedEventException, 'setTimeout'), timeout, ...args);
+    };
+
+    const originalSetInterval = this.clock.setInterval;
+    this.clock.setInterval = (cb, timeout, ...args) => {
+      return originalSetInterval.call(this.clock, wrapTryCatch(cb, onUncaughtException, TimedEventException, 'setInterval'), timeout, ...args);
+    };
+
+    if (this.onCreate !== undefined) {
+      this.onCreate = wrapTryCatch(this.onCreate.bind(this), onUncaughtException, OnCreateException, 'onCreate', true);
+    }
+
+    if (this.onAuth !== undefined) {
+      this.onAuth = wrapTryCatch(this.onAuth.bind(this), onUncaughtException, OnAuthException, 'onAuth', true);
+    }
+
+    if (this.onJoin !== undefined) {
+      this.onJoin = wrapTryCatch(this.onJoin.bind(this), onUncaughtException, OnJoinException, 'onJoin', true);
+    }
+
+    if (this.onLeave !== undefined) {
+      this.onLeave = wrapTryCatch(this.onLeave.bind(this), onUncaughtException, OnLeaveException, 'onLeave', true);
+    }
+
+    if (this.onDispose !== undefined) {
+      this.onDispose = wrapTryCatch(this.onDispose.bind(this), onUncaughtException, OnDisposeException, 'onDispose');
+    }
   }
 
 }

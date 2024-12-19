@@ -4,6 +4,7 @@ import {
   IRoomCache,
   MatchMakerDriver,
   SortOptions,
+  debugMatchMaking,
   logger,
 } from '@colyseus/core';
 
@@ -31,11 +32,11 @@ export class RedisDriver implements MatchMakerDriver {
 
   public async query(conditions: Partial<IRoomCache>, sortOptions?: SortOptions) {
     const rooms = await this.getRooms();
-
-    rooms.filter((room) => {
+    return rooms.filter((room) => {
       if (!room.roomId) {
         return false;
       }
+
       for (const field in conditions) {
         if (
           conditions.hasOwnProperty(field) &&
@@ -46,13 +47,11 @@ export class RedisDriver implements MatchMakerDriver {
       }
       return true;
     });
-
-    return rooms;
   }
 
   public async cleanup(processId: string) {
     const cachedRooms = await this.query({ processId });
-    logger.debug("> Removing stale rooms by processId:", processId, `(${cachedRooms.length} rooms found)`);
+    debugMatchMaking("removing stale rooms by processId %s (%s rooms found)", processId, cachedRooms.length);
 
     const itemsPerCommand = 500;
 

@@ -13,11 +13,12 @@
     }
   },
   "scripts": {
-    "start": "ts-node-dev example/app.ts"
+    "start": "tsx example/app.ts"
   },
   "bin": {
     "colyseus-system-boot": "system-boot.js",
-    "colyseus-post-deploy": "post-deploy.js"
+    "colyseus-post-deploy": "post-deploy.js",
+    "colyseus-report-stats": "report-stats.js"
   },
   "repository": {
     "type": "git",
@@ -34,26 +35,41 @@
     "url": "https://github.com/colyseus/colyseus/issues"
   },
   "files": [
+    "pm2",
     "html",
     "build",
     "LICENSE",
     "README.md"
   ],
-  "homepage": "https:/colyseus.io",
-  "devDependencies": {
-    "@types/cors": "^2.8.10",
-    "@types/dotenv": "^8.2.0",
-    "uwebsockets-express": "^1.1.10"
-  },
+  "homepage": "https://colyseus.io",
   "dependencies": {
-    "@colyseus/core": "workspace:^",
-    "@colyseus/ws-transport": "workspace:^",
+    "@pm2/io": "^6.0.1",
     "node-os-utils": "^1.3.7",
     "cors": "^2.8.5",
     "dotenv": "^8.2.0",
     "express": "^4.16.2"
   },
+  "devDependencies": {
+    "@colyseus/core": "workspace:^",
+    "@colyseus/ws-transport": "workspace:^",
+    "@colyseus/uwebsockets-transport": "workspace:^",
+    "@types/cors": "^2.8.10",
+    "@types/dotenv": "^8.2.0",
+    "uwebsockets-express": "^1.1.10"
+  },
+  "peerDependencies": {
+    "@colyseus/core": "0.15.x",
+    "@colyseus/ws-transport": "0.15.x"
+  },
   "publishConfig": {
     "access": "public"
-  }
+  },
+  "apps": [
+    {
+      "merge_logs": true,
+      "max_memory_restart": "256M",
+      "script": "./pm2/post-deploy-agent.js",
+      "instance_var": "INSTANCE_ID"
+    }
+  ]
 }

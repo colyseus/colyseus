@@ -42,8 +42,8 @@ describe("MatchMaker Stats", () => {
   });
 
   after(async () => {
-    await driver.clear();
     await server.gracefullyShutdown(false)
+    await driver.clear();
   });
 
   describe("disposing the room", () => {
@@ -67,7 +67,7 @@ describe("MatchMaker Stats", () => {
       assert.ok(room);
 
       await room.disconnect();
-      await timeout(10);
+      await timeout(20);
 
       assert.strictEqual(0, matchMaker.stats.local.roomCount);
       assert.strictEqual(0, matchMaker.stats.local.ccu);
@@ -75,22 +75,32 @@ describe("MatchMaker Stats", () => {
     });
 
     it("using .disconnect() while clients are joining", async () => {
-      let room: Room;
-      const clients: Client[] = [];
       const onReadyToTest = new Deferred();
+      const onRoomDisposed = new Deferred();
+
+      let room: Room;
+      let numClientsJoining = 0;
       matchMaker.defineRoomType('disconnect_joining', class _ extends Room {
         onCreate() {
           room = this;
         }
         async onJoin(client) {
-          clients.push(client);
-          if (clients.length === 3) {
+          numClientsJoining++;
+          if (numClientsJoining === 3) {
+            // all clients are still waiting to join
             onReadyToTest.resolve();
           }
-          await timeout(400);
+          // let the FIRST connection to finish joining...
+          // all the others are going to be disconnected
+          if (numClientsJoining > 1) {
+            await timeout(300);
+          }
         }
         async onLeave() {
           await timeout(5);
+        }
+        onDispose() {
+          onRoomDisposed.resolve();
         }
       });
 
@@ -100,14 +110,19 @@ describe("MatchMaker Stats", () => {
 
       await onReadyToTest;
 
-      assert.strictEqual(3, clients.length, "3 clients should be joining");
+      assert.strictEqual(3, numClientsJoining, "3 clients should be joining");
 
       assert.strictEqual(1, matchMaker.stats.local.roomCount);
-      assert.strictEqual(0, matchMaker.stats.local.ccu);
+      assert.strictEqual(1, matchMaker.stats.local.ccu); // 1
 
       await room.disconnect();
-      await timeout(100);
+      await onRoomDisposed;
 
+      assert.strictEqual(0, matchMaker.stats.local.roomCount);
+      assert.strictEqual(0, matchMaker.stats.local.ccu);
+
+      // onJoin promise finished...
+      await timeout(500);
       assert.strictEqual(0, matchMaker.stats.local.roomCount);
       assert.strictEqual(0, matchMaker.stats.local.ccu);
     });
@@ -151,6 +166,57 @@ describe("MatchMaker Stats", () => {
       assert.strictEqual(0, matchMaker.stats.local.ccu);
     });
 
+    it("triggering error during 'onAuth'", async () => {
+      const ROOM_NAME = 'error_onleave';
+
+      const onRoomDisposed = new Deferred();
+      let onAuthCalled = 0;
+      let onJoinCalled = 0;
+      let onLeaveCalled = 0;
+      let room: Room;
+      matchMaker.defineRoomType(ROOM_NAME, class _ extends Room {
+        onCreate() {
+          this.autoDispose = false;
+          room = this;
+        }
+        async onAuth () {
+          onAuthCalled++;
+          throw new Error("onAuth error");
+        }
+        async onJoin(client) {
+          onJoinCalled++;
+          throw new Error("onJoin error");
+        }
+        async onLeave(client, consented) {
+          onLeaveCalled++;
+          throw new Error("onLeave error");
+        }
+        onDispose() {
+          onRoomDisposed.resolve();
+        }
+      });
+
+      const clientConnections: Promise<any>[] = [];
+      clientConnections.push(client.joinOrCreate(ROOM_NAME));
+      clientConnections.push(client.joinOrCreate(ROOM_NAME));
+      clientConnections.push(client.joinOrCreate(ROOM_NAME));
+
+      // wait for successful join
+      await Promise.allSettled(clientConnections);
+
+      assert.strictEqual(1, matchMaker.stats.local.roomCount);
+      assert.strictEqual(0, matchMaker.stats.local.ccu);
+
+      assert.strictEqual(3, onAuthCalled);
+      assert.strictEqual(0, onJoinCalled);
+      assert.strictEqual(0, onLeaveCalled);
+
+      room.disconnect();
+      await onRoomDisposed;
+
+      assert.strictEqual(0, matchMaker.stats.local.roomCount);
+      assert.strictEqual(0, matchMaker.stats.local.ccu);
+    });
 
     it("triggering error during 'onLeave'", async () => {
       const ROOM_NAME = 'error_onleave';

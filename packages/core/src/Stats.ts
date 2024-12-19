@@ -1,4 +1,4 @@
-import { presence, processId } from './MatchMaker.js';
+import { MatchMakerState, presence, processId, state } from './MatchMaker.js';
 
 export type Stats = {
   roomCount: number;
@@ -10,10 +10,22 @@ export let local: Stats = {
   ccu: 0,
 };
 
+//
+// Attach local metrics to PM2 (if available)
+//
+// @ts-ignore
+import('@pm2/io')
+  .then((io) => {
+    io.default.metric({ id: 'app/stats/ccu', name: 'ccu', value: () => local.ccu });
+    io.default.metric({ id: 'app/stats/roomcount', name: 'roomcount', value: () => local.roomCount });
+  })
+  .catch(() => { });
+
 export async function fetchAll() {
   // TODO: cache this value to avoid querying too often
   const allStats: Array<Stats & { processId: string }> = [];
   const allProcesses = await presence.hgetall(getRoomCountKey());
+
   for (let remoteProcessId in allProcesses) {
     if (remoteProcessId === processId) {
       allStats.push({ processId, roomCount: local.roomCount, ccu: local.ccu, });
@@ -23,6 +35,7 @@ export async function fetchAll() {
       allStats.push({ processId: remoteProcessId, roomCount, ccu });
     }
   }
+
   return allStats;
 }
 
@@ -31,8 +44,13 @@ let persistTimeout = undefined;
 const persistInterval = 1000;
 
 export function persist(forceNow: boolean = false) {
+  // skip if shutting down
+  if (state === MatchMakerState.SHUTTING_DOWN) {
+    return;
+  }
+
   /**
-   * Avoid persisting too often.
+   * Avoid persisting more than once per second.
    */
   const now = Date.now();
 
@@ -64,6 +82,27 @@ export function excludeProcess(_processId: string) {
 export async function getGlobalCCU() {
   const allStats = await fetchAll();
   return allStats.reduce((prev, next) => prev + next.ccu, 0);
+}
+
+/**
+ * Auto-persist every minute.
+ */
+let autoPersistInterval = undefined;
+
+export function setAutoPersistInterval() {
+  const interval = 60 * 1000;// 1 minute
+
+  autoPersistInterval = setInterval(() => {
+    const now = Date.now();
+
+    if (now - lastPersisted > interval) {
+      persist();
+    }
+  }, interval);
+}
+
+export function clearAutoPersistInterval() {
+  clearInterval(autoPersistInterval);
 }
 
 function getRoomCountKey() {

@@ -15,17 +15,17 @@ export default Arena({
     }),
 
     initializeExpress: (app) => {
-        console.log("custom: initializeExpress()");
+        // console.log("custom: initializeExpress()");
         app.get("/", (req, res) => res.end("Hello world!"));
     },
 
     initializeGameServer: (gameServer) => {
-        console.log("custom: initializeGameServer()");
+        // console.log("custom: initializeGameServer()");
         // gameServer.define("something", );
     },
 
     beforeListen: () => {
-        console.log("custom: beforeListen()");
+        // console.log("custom: beforeListen()");
     }
 
 });

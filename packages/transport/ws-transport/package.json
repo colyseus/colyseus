@@ -12,9 +12,14 @@
     }
   },
   "dependencies": {
-    "@colyseus/core": "workspace:^",
-    "@types/ws": "^8.5.0",
+    "@types/ws": "^7.4.4",
     "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@colyseus/core": "workspace:^"
+  },
+  "peerDependencies": {
+    "@colyseus/core": "0.15.x"
   },
   "author": "Endel Dreyer",
   "license": "MIT",

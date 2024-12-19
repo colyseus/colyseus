@@ -6,7 +6,7 @@
     "target": "es2015",
 
     "moduleResolution": "node",
-    "lib": ["es6"],
+    "lib": ["ES2022"],
     "declarationDir": "../build",
     "declaration": true,
     "forceConsistentCasingInFileNames": true,

@@ -1,7 +1,7 @@
 {
   "name": "@colyseus/greeting-banner",
   "version": "2.0.3",
-  "description": "Colyseus greeting banner",
+  "description": "Greeting banner for Colyseus & Cloud",
   "input": "./src/index.ts",
   "main": "./build/index.js",
   "module": "./build/index.mjs",
@@ -25,7 +25,7 @@
     "url": "https://github.com/colyseus/colyseus/issues"
   },
   "files": [ "build" ],
-  "homepage": "https://www.colyseus.io/arena",
+  "homepage": "https://colyseus.io",
   "dependencies": {},
   "publishConfig": {
     "access": "public"

@@ -1,6 +1,6 @@
 import http from 'http';
 import { URL } from 'url';
-import WebSocket, { WebSocketServer, ServerOptions } from 'ws';
+import WebSocket, { ServerOptions } from 'ws';
 
 import { matchMaker, Protocol, Transport, debugAndPrintError, debugConnection, getBearerToken } from '@colyseus/core';
 import { WebSocketClient } from './WebSocketClient.js';
@@ -16,7 +16,7 @@ export interface TransportOptions extends ServerOptions {
 }
 
 export class WebSocketTransport extends Transport {
-  protected wss: WebSocketServer;
+  protected wss: WebSocket.Server;
 
   protected pingInterval: NodeJS.Timeout;
   protected pingIntervalMS: number;
@@ -49,7 +49,7 @@ export class WebSocketTransport extends Transport {
       options.server = http.createServer();
     }
 
-    this.wss = new WebSocketServer(options);
+    this.wss = new WebSocket.Server(options);
     this.wss.on('connection', this.onConnection);
 
     // this is required to allow the ECONNRESET error to trigger on the `server` instance.

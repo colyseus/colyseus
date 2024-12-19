@@ -248,10 +248,15 @@ export class Server {
     });
 
     try {
+      // custom "before shutdown" method
+      await this.onBeforeShutdownCallback();
+
       await matchMaker.gracefullyShutdown();
       this.transport.shutdown();
       this.presence.shutdown();
       this.driver.shutdown();
+
+      // custom "after shutdown" method
       await this.onShutdownCallback();
 
     } catch (e) {
@@ -301,11 +306,18 @@ export class Server {
     this.onShutdownCallback = callback;
   }
 
+  public onBeforeShutdown(callback: () => void | Promise<any>) {
+    this.onBeforeShutdownCallback = callback;
+  }
+
   protected getDefaultTransport(_: any): Transport {
     throw new Error("Please provide a 'transport' layer. Default transport not set.");
   }
 
   protected onShutdownCallback: () => void | Promise<any> =
+    () => Promise.resolve()
+
+  protected onBeforeShutdownCallback: () => void | Promise<any> =
     () => Promise.resolve()
 
   protected attachMatchMakingRoutes(server: http.Server) {

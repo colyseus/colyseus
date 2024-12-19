@@ -196,7 +196,7 @@ Please give feedback and report any issues you may find at https://github.com/co
         const email = req.body.email;
         if (!isValidEmail(email)) { throw new Error("email_malformed"); }
 
-        const user = await auth.settings.onFindUserByEmail(email);
+        const user = Object.assign({}, await auth.settings.onFindUserByEmail(email));
         if (user && user.password === await Hash.make(req.body.password)) {
           delete user.password; // remove password from JWT payload
           res.json({ user, token: await auth.settings.onGenerateToken(user) });
@@ -255,7 +255,7 @@ Please give feedback and report any issues you may find at https://github.com/co
         // Register
         await auth.settings.onRegisterWithEmailAndPassword(email, await Hash.make(password), options);
 
-        const user = await auth.settings.onFindUserByEmail(email);
+        const user = Object.assign({}, await auth.settings.onFindUserByEmail(email));
         delete user.password; // remove password from JWT payload
 
         const token = await auth.settings.onGenerateToken(user);

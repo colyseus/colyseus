@@ -40,12 +40,14 @@
     "node": ">= 18.x"
   },
   "dependencies": {
-    "@colyseus/greeting-banner": "^2.0.0",
-    "@colyseus/schema": "^3.0.0-alpha.37",
+    "@colyseus/greeting-banner": "workspace:^",
     "@colyseus/timer": "^1.0.0",
-    "debug": "^4.3.4",
     "@colyseus/msgpackr": "^1.10.3",
+    "debug": "^4.3.4",
     "nanoid": "^2.0.0"
+  },
+  "peerDependencies": {
+    "@colyseus/schema": "^3.0.0-alpha.37"
   },
   "publishConfig": {
     "access": "public"
