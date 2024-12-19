@@ -1,7 +1,7 @@
-import * as matchMaker from '../MatchMaker';
+import * as matchMaker from '../MatchMaker.js';
 
-import type { Room } from '../Room';
-import { IRoomListingData } from './driver/interfaces';
+import type { Room } from '../Room.js';
+import { IRoomCache } from './driver/api.js';
 
 const LOBBY_CHANNEL = '$lobby';
 
@@ -28,7 +28,7 @@ export function updateLobby(room: Room, removed: boolean = false) {
   }
 }
 
-export async function subscribeLobby(callback: (roomId: string, roomListing: IRoomListingData) => void) {
+export async function subscribeLobby(callback: (roomId: string, roomListing: IRoomCache) => void) {
   const cb = async (message) => {
     const [roomId, isRemove] = message.split(',');
 

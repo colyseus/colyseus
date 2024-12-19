@@ -1,11 +1,11 @@
-import fs from "fs";
-import path from "path";
+import fs from 'fs';
+import path from 'path';
 
 import { EventEmitter } from 'events';
-import { spliceOne } from '../utils/Utils';
-import { Presence } from './Presence';
+import { spliceOne } from '../utils/Utils.js';
+import { Presence } from './Presence.js';
 
-import { isDevMode } from '../utils/DevMode';
+import { isDevMode } from '../utils/DevMode.js';
 
 type Callback = (...args: any[]) => void;
 
@@ -20,7 +20,7 @@ export class LocalPresence implements Presence {
     public keys: {[name: string]: string | number} = {};
 
     protected subscriptions: {[id: string]: Callback[]} = {};
-    private timeouts: {[name: string]: NodeJS.Timer} = {};
+    private timeouts: {[name: string]: NodeJS.Timeout} = {};
 
     constructor() {
       //
@@ -84,12 +84,15 @@ export class LocalPresence implements Presence {
     }
 
     public setex(key: string, value: string, seconds: number) {
+        this.keys[key] = value;
+        this.expire(key, seconds);
+    }
+
+    public expire(key: string, seconds: number) {
         // ensure previous timeout is clear before setting another one.
         if (this.timeouts[key]) {
             clearTimeout(this.timeouts[key]);
         }
-
-        this.keys[key] = value;
         this.timeouts[key] = setTimeout(() => {
             delete this.keys[key];
             delete this.timeouts[key];
@@ -168,6 +171,15 @@ export class LocalPresence implements Presence {
         return value;
     }
 
+    public hincrbyex(key: string, field: string, incrBy: number, expireInSeconds: number) {
+        if (!this.hash[key]) { this.hash[key] = {}; }
+        let value = Number(this.hash[key][field] || '0');
+        value += incrBy;
+        this.hash[key][field] = value.toString();
+        this.setex(key, field, expireInSeconds);
+        return value;
+    }
+
     public async hget(key: string, field: string) {
         return this.hash[key] && this.hash[key][field];
     }
@@ -202,6 +214,86 @@ export class LocalPresence implements Presence {
         }
         (this.keys[key] as number)--;
         return Promise.resolve(this.keys[key] as number);
+    }
+
+    public llen(key: string): number {
+      return (this.data[key] && this.data[key].length) || 0;
+    }
+
+    public rpush(key: string, ...values: string[]): number {
+      if (!this.data[key]) { this.data[key] = []; }
+
+      let lastLength: number = 0;
+
+      values.forEach(value => {
+        lastLength = this.data[key].push(value);
+      });
+
+      return lastLength;
+    }
+
+    public lpush(key: string, ...values: string[]): number {
+      if (!this.data[key]) { this.data[key] = []; }
+
+      let lastLength: number = 0;
+
+      values.forEach(value => {
+        lastLength = this.data[key].unshift(value);
+      });
+
+      return lastLength;
+    }
+
+
+    public lpop(key: string): string {
+      return Array.isArray(this.data[key]) && this.data[key].shift();
+    }
+
+    public rpop(key: string): string {
+      return this.data[key].pop();
+    }
+
+    public brpop(...args: [...keys: string[], timeoutInSeconds: number]): Promise<[string, string] | null> {
+      const keys = args.slice(0, -2) as string[];
+      const timeoutInSeconds = args[args.length - 1] as number;
+
+      const getFirstPopulated = (): [string, string] | null => {
+        const keyWithValue = keys.find(key => this.data[key] && this.data[key].length > 0);
+        if (keyWithValue) {
+          return [keyWithValue, this.data[keyWithValue].pop()];
+        } else {
+          return null;
+        }
+      }
+
+      const firstPopulated = getFirstPopulated();
+
+      if (firstPopulated) {
+        // return first populated key + item
+        return Promise.resolve(firstPopulated);
+
+      } else {
+        // 8 retries per second
+        const maxRetries = timeoutInSeconds * 8;
+
+        let tries = 0;
+        return new Promise((resolve) => {
+          const interval = setInterval(() => {
+            tries++;
+
+            const firstPopulated = getFirstPopulated();
+            if (firstPopulated) {
+              clearInterval(interval);
+              return resolve(firstPopulated);
+
+            } else if (tries >= maxRetries) {
+              clearInterval(interval);
+              return resolve(undefined);
+            }
+
+          }, (timeoutInSeconds * 1000) / maxRetries);
+        });
+      }
     }
 
     public shutdown() {

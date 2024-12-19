@@ -1,10 +1,16 @@
 {
   "name": "@colyseus/ws-transport",
-  "version": "0.15.3",
+  "version": "0.16.0-preview.7",
   "input": "./src/index.ts",
   "main": "./build/index.js",
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./build/index.mjs",
+      "require": "./build/index.js"
+    }
+  },
   "dependencies": {
     "@types/ws": "^7.4.4",
     "ws": "^8.18.0"
@@ -13,8 +19,7 @@
     "@colyseus/core": "workspace:^"
   },
   "peerDependencies": {
-    "@colyseus/core": "0.15.x",
-    "@colyseus/schema": ">=1.0.0"
+    "@colyseus/core": "0.15.x"
   },
   "author": "Endel Dreyer",
   "license": "MIT",

@@ -4,7 +4,7 @@ import express from "express";
 import { Server, RelayRoom, LobbyRoom } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import { monitor } from "@colyseus/monitor";
-import { JsonWebToken } from "@colyseus/auth";
+// import { JWT } from "@colyseus/auth";
 
 // import { MongooseDriver  } from "@colyseus/mongoose-driver";
 // import { uWebSocketsTransport } from "@colyseus/uwebsockets-transport";
@@ -42,8 +42,6 @@ app.get("/hello", (req, res) => {
   res.json({ hello: "world!" });
 });
 
-gameServer.define(MyRoom).useAuthToken();
-
 gameServer.define("my_room", MyRoom);
 gameServer.define("lobby", LobbyRoom);
 
@@ -56,7 +54,7 @@ gameServer.define("relay", RelayRoom)
   .on("dispose", (room) => console.log("room disposed!", room.roomId));
 
 app.use(express.static(__dirname));
-app.use("/monitor", monitor());
+// app.use("/monitor", monitor());
 
 gameServer.onShutdown(() => {
   console.log("CUSTOM SHUTDOWN ROUTINE: STARTED");

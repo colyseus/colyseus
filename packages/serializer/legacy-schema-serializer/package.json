@@ -1,0 +1,34 @@
+{
+  "name": "@colyseus/legacy-schema-serializer",
+  "version": "0.16.3",
+  "input": "./src/index.ts",
+  "main": "./build/index.js",
+  "module": "./build/index.mjs",
+  "typings": "./build/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./build/index.mjs",
+      "require": "./build/index.js"
+    }
+  },
+  "dependencies": {
+    "@colyseus/core": "workspace:^",
+    "@colyseus/schema": "*"
+  },
+  "author": "Endel Dreyer",
+  "license": "MIT",
+  "files": [
+    "build",
+    "LICENSE",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/colyseus/colyseus.git"
+  },
+  "homepage": "https://colyseus.io/",
+  "publishConfig": {
+    "access": "public"
+  },
+  "gitHead": "320a0325f01eff3cd7afa8fb2efa80077ebdbf4a"
+}

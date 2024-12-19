@@ -63,7 +63,7 @@ describe("MatchMaker Stats", () => {
 
       await Promise.all(promises);
 
-      const room = matchMaker.getRoomById(roomId);
+      const room = matchMaker.getLocalRoomById(roomId);
       assert.ok(room);
 
       await room.disconnect();
@@ -71,7 +71,7 @@ describe("MatchMaker Stats", () => {
 
       assert.strictEqual(0, matchMaker.stats.local.roomCount);
       assert.strictEqual(0, matchMaker.stats.local.ccu);
-      assert.ok(!matchMaker.getRoomById(roomId));
+      assert.ok(!matchMaker.getLocalRoomById(roomId));
     });
 
     it("using .disconnect() while clients are joining", async () => {
@@ -289,7 +289,6 @@ describe("MatchMaker Stats", () => {
       client.joinOrCreate(ROOM_NAME).catch((e) => { })
 
       await onReadyToTest;
-      // await timeout(300);
 
       assert.strictEqual(1, matchMaker.stats.local.roomCount);
       assert.strictEqual(0, matchMaker.stats.local.ccu);
@@ -298,6 +297,7 @@ describe("MatchMaker Stats", () => {
       clients.map((client) => client.leave());
 
       await onRoomDisposed;
+      await timeout(300);
 
       assert.strictEqual(0, matchMaker.stats.local.roomCount);
       assert.strictEqual(0, matchMaker.stats.local.ccu);

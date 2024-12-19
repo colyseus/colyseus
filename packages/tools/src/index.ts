@@ -1,20 +1,20 @@
-import "./loadenv";
-import os from "os";
+import './loadenv.js';
+import os from 'os';
 import fs from "fs";
 import net from "net";
-import http from "http";
-import cors from "cors";
-import express from "express";
-import osUtils from "node-os-utils";
+import http from 'http';
+import cors from 'cors';
+import express from 'express';
+import osUtils from 'node-os-utils';
 import { logger, Server, ServerOptions, Transport, matchMaker } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 
-// try to import uWebSockets-express compatibility layer.
-let uWebSocketsExpressCompatibility: any = undefined;
-try { uWebSocketsExpressCompatibility = require('uwebsockets-express').default; } catch (e) { }
-
 let BunWebSockets: any = undefined;
-try { BunWebSockets = require('@colyseus/bun-websockets'); } catch (e) { }
+
+// @ts-ignore
+import('@colyseus/bun-websockets')
+  .then((module) => BunWebSockets = module)
+  .catch(() => { });
 
 export interface ConfigOptions {
     options?: ServerOptions,
@@ -55,12 +55,9 @@ export default function (options: ConfigOptions) {
  * @param port Port number to bind Colyseus + Express
  */
 export async function listen(
-    options: ConfigOptions,
+    options: ConfigOptions | Server,
     port: number = Number(process.env.PORT || 2567),
 ) {
-    const serverOptions = options.options || {};
-    options.displayLogs = options.displayLogs ?? true;
-
     // Force 2567 port on Colyseus Cloud
     if (process.env.COLYSEUS_CLOUD !== undefined) {
         port = 2567;
@@ -73,77 +70,99 @@ export async function listen(
     const processNumber = Number(process.env.NODE_APP_INSTANCE || "0");
     port += processNumber;
 
-    let portOrSocket: any = port;
+    let gameServer: Server;
+    let displayLogs = true;
 
-    // automatically configure for production under Colyseus Cloud
+    if (options instanceof Server) {
+        gameServer = options;
+
+    } else {
+        gameServer = await buildServerFromOptions(options, port);
+        displayLogs = options.displayLogs;
+
+        await options.initializeGameServer?.(gameServer);
+        await matchMaker.onReady;
+        await options.beforeListen?.();
+    }
+
     if (process.env.COLYSEUS_CLOUD !== undefined) {
-        portOrSocket = `/run/colyseus/${port}.sock`;
+        // listening on socket
+        const socketPath: any = `/run/colyseus/${port}.sock`;
 
         // check if .sock file is active
         // (fixes "ADDRINUSE" issue when restarting the server)
-        await checkInactiveSocketFile(portOrSocket);
+        await checkInactiveSocketFile(socketPath);
 
-        // special configuration is required when using multiple processes
-        const useRedisConfig = (os.cpus().length > 1) || (process.env.REDIS_URI !== undefined);
+        await gameServer.listen(socketPath);
 
-        if (!serverOptions.driver && useRedisConfig) {
-            let RedisDriver: any = undefined;
-            try {
-                RedisDriver = require('@colyseus/redis-driver').RedisDriver;
-                serverOptions.driver = new RedisDriver(process.env.REDIS_URI);
-            } catch (e) {
-                logger.warn("");
-                logger.warn("❌ could not initialize RedisDriver.");
-                logger.warn("👉 npm install --save @colyseus/redis-driver");
-                logger.warn("");
-            }
-        }
-
-        if (!serverOptions.presence && useRedisConfig) {
-            let RedisPresence: any = undefined;
-            try {
-                RedisPresence = require('@colyseus/redis-presence').RedisPresence;
-                serverOptions.presence = new RedisPresence(process.env.REDIS_URI);
-            } catch (e) {
-                logger.warn("");
-                logger.warn("❌ could not initialize RedisPresence.");
-                logger.warn("👉 npm install --save @colyseus/redis-presence");
-                logger.warn("");
-            }
-        }
-
-        if (useRedisConfig) {
-            // force "publicAddress" when more than 1 process is available
-            serverOptions.publicAddress = process.env.SUBDOMAIN + "." + process.env.SERVER_NAME;
-
-            // nginx is responsible for forwarding /{port}/ to this process
-            serverOptions.publicAddress += "/" + port;
-        }
+    } else {
+        // listening on port
+        await gameServer.listen(port);
     }
-
-    const transport = await getTransport(options);
-    const gameServer = new Server({
-        ...serverOptions,
-        transport,
-    });
-    await options.initializeGameServer?.(gameServer);
-    await matchMaker.onReady;
-    await options.beforeListen?.();
-
-    // listening on port or socket
-    await gameServer.listen(portOrSocket);
 
     // notify process manager (production)
     if (typeof(process.send) === "function") {
         process.send('ready');
     }
 
-    if (options.displayLogs) {
+    if (displayLogs) {
         logger.info(`⚔️  Listening on http://localhost:${port}`);
     }
+
     return gameServer;
 }
 
+async function buildServerFromOptions(options: ConfigOptions, port: number) {
+  const serverOptions = options.options || {};
+  options.displayLogs = options.displayLogs ?? true;
+
+  // automatically configure for production under Colyseus Cloud
+  if (process.env.COLYSEUS_CLOUD !== undefined) {
+
+    // special configuration is required when using multiple processes
+    const useRedisConfig = (os.cpus().length > 1) || (process.env.REDIS_URI !== undefined);
+
+    if (!serverOptions.driver && useRedisConfig) {
+      let RedisDriver: any = undefined;
+      try {
+        RedisDriver = require('@colyseus/redis-driver').RedisDriver;
+        serverOptions.driver = new RedisDriver(process.env.REDIS_URI);
+      } catch (e) {
+        logger.warn("");
+        logger.warn("❌ could not initialize RedisDriver.");
+        logger.warn("👉 npm install --save @colyseus/redis-driver");
+        logger.warn("");
+      }
+    }
+
+    if (!serverOptions.presence && useRedisConfig) {
+      let RedisPresence: any = undefined;
+      try {
+        RedisPresence = require('@colyseus/redis-presence').RedisPresence;
+        serverOptions.presence = new RedisPresence(process.env.REDIS_URI);
+      } catch (e) {
+        logger.warn("");
+        logger.warn("❌ could not initialize RedisPresence.");
+        logger.warn("👉 npm install --save @colyseus/redis-presence");
+        logger.warn("");
+      }
+    }
+
+    if (useRedisConfig) {
+      // force "publicAddress" when more than 1 process is available
+      serverOptions.publicAddress = process.env.SUBDOMAIN + "." + process.env.SERVER_NAME;
+
+      // nginx is responsible for forwarding /{port}/ to this process
+      serverOptions.publicAddress += "/" + port;
+    }
+  }
+
+  const transport = await getTransport(options);
+  return new Server({
+    ...serverOptions,
+    transport,
+  });
+}
 
 export async function getTransport(options: ConfigOptions) {
     let transport: Transport;
@@ -162,7 +181,7 @@ export async function getTransport(options: ConfigOptions) {
     let app: express.Express | undefined = express();
     let server = http.createServer(app);
 
-    transport = await options.initializeTransport({ server });
+    transport = await options.initializeTransport({ server, app });
 
     //
     // TODO: refactor me!
@@ -170,32 +189,6 @@ export async function getTransport(options: ConfigOptions) {
     //
     if (transport['expressApp']) {
       app = transport['expressApp'];
-    }
-
-    if (options.initializeExpress) {
-        // uWebSockets.js + Express compatibility layer.
-        // @ts-ignore
-        if (transport['app']) {
-            if (typeof (uWebSocketsExpressCompatibility) === "function") {
-                if (options.displayLogs){
-                  logger.info("✅ uWebSockets.js + Express compatibility enabled");
-                }
-
-                // @ts-ignore
-                server = undefined;
-                // @ts-ignore
-                app = uWebSocketsExpressCompatibility(transport['app']);
-
-            } else {
-                if (options.displayLogs) {
-                    logger.warn("");
-                    logger.warn("❌ uWebSockets.js + Express compatibility mode couldn't be loaded, run the following command to fix:");
-                    logger.warn("👉 npm install --save uwebsockets-express");
-                    logger.warn("");
-                }
-                app = undefined;
-            }
-        }
     }
 
     if (app) {

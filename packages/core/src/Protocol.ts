@@ -1,6 +1,5 @@
-import { pack } from 'msgpackr';
-import { encode, Schema } from '@colyseus/schema';
-import { logger } from './Logger';
+import { pack, Packr } from '@colyseus/msgpackr';
+import { encode, Iterator } from '@colyseus/schema';
 
 // Colyseus protocol codes range between 0~100
 export enum Protocol {
@@ -11,7 +10,7 @@ export enum Protocol {
   ROOM_DATA = 13,
   ROOM_STATE = 14,
   ROOM_STATE_PATCH = 15,
-  ROOM_DATA_SCHEMA = 16, // used to send schema instances via room.send()
+  // ROOM_DATA_SCHEMA = 16, // DEPRECATED: used to send schema instances via room.send()
   ROOM_DATA_BYTES = 17,
 
   // WebSocket close codes (https://github.com/Luka967/websocket-close-codes)
@@ -48,134 +47,85 @@ export enum IpcProtocol {
   TIMEOUT = 2,
 }
 
+
+const packr = new Packr();
+
+// msgpackr workaround: initialize buffer
+packr.encode(undefined);
+
 export const getMessageBytes = {
-  [Protocol.JOIN_ROOM]: (reconnectionToken: string, serializerId: string, handshake?: number[]) => {
-    let offset = 0;
+  [Protocol.JOIN_ROOM]: (reconnectionToken: string, serializerId: string, handshake?: Buffer) => {
+    const it: Iterator = { offset: 1 };
+    packr.buffer[0] = Protocol.JOIN_ROOM;
 
-    const reconnectionTokenLength = utf8Length(reconnectionToken);
-    const serializerIdLength = utf8Length(serializerId);
-    const handshakeLength = (handshake) ? handshake.length : 0;
+    packr.buffer[it.offset++] = Buffer.byteLength(reconnectionToken, "utf8");
+    encode.utf8Write(packr.buffer, reconnectionToken, it);
 
-    const buff = Buffer.allocUnsafe(1 + reconnectionTokenLength + serializerIdLength + handshakeLength);
-    buff.writeUInt8(Protocol.JOIN_ROOM, offset++);
+    packr.buffer[it.offset++] = Buffer.byteLength(serializerId, "utf8");
+    encode.utf8Write(packr.buffer, serializerId, it);
 
-    utf8Write(buff, offset, reconnectionToken);
-    offset += reconnectionTokenLength;
-
-    utf8Write(buff, offset, serializerId);
-    offset += serializerIdLength;
-
-    if (handshake) {
-      for (let i = 0, l = handshake.length; i < l; i++) {
-        buff.writeUInt8(handshake[i], offset++);
-      }
+    let handshakeLength = handshake?.byteLength || 0;
+    if (handshakeLength > 0) {
+      handshake.copy(packr.buffer, it.offset, 0, handshakeLength);
     }
 
-    return buff;
+    return packr.buffer.subarray(0, it.offset + handshakeLength);
   },
 
   [Protocol.ERROR]: (code: number, message: string = '') => {
-    const bytes = [Protocol.ERROR];
+    const it: Iterator = { offset: 1 };
+    packr.buffer[0] = Protocol.ERROR;
 
-    encode.number(bytes, code);
-    encode.string(bytes, message);
+    encode.number(packr.buffer, code, it);
+    encode.string(packr.buffer, message, it);
 
-    return bytes;
+    return packr.buffer.subarray(0, it.offset);
   },
 
   [Protocol.ROOM_STATE]: (bytes: number[]) => {
     return [Protocol.ROOM_STATE, ...bytes];
   },
 
-  [Protocol.ROOM_DATA_SCHEMA]: (message: Schema) => {
-    const typeid = (message.constructor as typeof Schema)._typeid;
+  raw: (code: Protocol, type: string | number, message?: any, rawMessage?: Uint8Array | Buffer) => {
+    const it: Iterator = { offset: 1 };
+    packr.buffer[0] = code;
 
-    if (typeid === undefined) {
-      logger.warn('Starting at colyseus >= 0.13 You must provide a type and message when calling `this.broadcast()` or `client.send()`. Please see: https://docs.colyseus.io/migrating/0.13/');
-      throw new Error(`an instance of Schema was expected, but ${JSON.stringify(message)} has been provided.`);
-    }
-
-    return [Protocol.ROOM_DATA_SCHEMA, typeid, ...message.encodeAll()];
-  },
-
-  raw: (code: Protocol, type: string | number, message?: any, rawMessage?: ArrayLike<number> | Buffer) => {
-    const initialBytes: number[] = [code];
-    const messageType = typeof (type);
-
-    if (messageType === 'string') {
-      encode.string(initialBytes, type);
-
-    } else if (messageType === 'number') {
-      encode.number(initialBytes, type);
+    if (typeof (type) === 'string') {
+      encode.string(packr.buffer, type as string, it);
 
     } else {
-      throw new Error(`Protocol.ROOM_DATA: message type not supported "${type.toString()}"`);
+      encode.number(packr.buffer, type, it);
     }
-
-    let arr: Uint8Array;
 
     if (message !== undefined) {
-      const encoded = pack(message);
-      arr = new Uint8Array(initialBytes.length + encoded.byteLength);
-      arr.set(new Uint8Array(initialBytes), 0);
-      arr.set(new Uint8Array(encoded), initialBytes.length);
+      // force to encode from offset
+      packr.position = 0;
+
+      //
+      // TODO: remove this after issue is fixed https://github.com/kriszyp/msgpackr/issues/139
+      //
+      // - This check is only required when running integration tests.
+      //   (colyseus.js' usage of msgpackr/buffer is conflicting)
+      //
+      if (process.env.NODE_ENV !== "production") {
+        packr.useBuffer(packr.buffer);
+      }
+
+      // pack message into the same packr.buffer
+      const endOfBufferOffset = packr.pack(message, 2048 + it.offset).byteLength;
+                                                 // 2048 = RESERVE_START_SPACE
+      return packr.buffer.subarray(0, endOfBufferOffset);
 
     } else if (rawMessage !== undefined) {
-      arr = new Uint8Array(initialBytes.length + ((rawMessage as Buffer).byteLength || rawMessage.length));
-      arr.set(new Uint8Array(initialBytes), 0);
-      arr.set(new Uint8Array(rawMessage), initialBytes.length);
+
+      // copy raw message into packr.buffer
+      packr.buffer.set(rawMessage, it.offset);
+      return packr.buffer.subarray(0, it.offset + rawMessage.byteLength);
 
     } else {
-      arr = new Uint8Array(initialBytes);
+      return packr.buffer.subarray(0, it.offset);
     }
-
-    return arr;
   },
 
 };
 
-export function utf8Write(buff: Buffer, offset: number, str: string = '') {
-  buff[offset++] = utf8Length(str) - 1;
-
-  let c = 0;
-  for (let i = 0, l = str.length; i < l; i++) {
-    c = str.charCodeAt(i);
-    if (c < 0x80) {
-      buff[offset++] = c;
-    } else if (c < 0x800) {
-      buff[offset++] = 0xc0 | (c >> 6);
-      buff[offset++] = 0x80 | (c & 0x3f);
-    } else if (c < 0xd800 || c >= 0xe000) {
-      buff[offset++] = 0xe0 | (c >> 12);
-      buff[offset++] = 0x80 | (c >> 6) & 0x3f;
-      buff[offset++] = 0x80 | (c & 0x3f);
-    } else {
-      i++;
-      c = 0x10000 + (((c & 0x3ff) << 10) | (str.charCodeAt(i) & 0x3ff));
-      buff[offset++] = 0xf0 | (c >> 18);
-      buff[offset++] = 0x80 | (c >> 12) & 0x3f;
-      buff[offset++] = 0x80 | (c >> 6) & 0x3f;
-      buff[offset++] = 0x80 | (c & 0x3f);
-    }
-  }
-}
-
-// Faster for short strings than Buffer.byteLength
-export function utf8Length(str: string = '') {
-  let c = 0;
-  let length = 0;
-  for (let i = 0, l = str.length; i < l; i++) {
-    c = str.charCodeAt(i);
-    if (c < 0x80) {
-      length += 1;
-    } else if (c < 0x800) {
-      length += 2;
-    } else if (c < 0xd800 || c >= 0xe000) {
-      length += 3;
-    } else {
-      i++;
-      length += 4;
-    }
-  }
-  return length + 1;
-}
