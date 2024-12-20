@@ -138,11 +138,8 @@ importers:
       connect-redis:
         specifier: ^7.1.0
         version: 7.1.1(express-session@1.18.1)
-      express:
-        specifier: ^4.17.1
-        version: 4.21.2
       express-jwt:
-        specifier: ^8.4.1
+        specifier: ^8.5.1
         version: 8.5.1
       express-session:
         specifier: ^1.17.3
@@ -173,14 +170,18 @@ importers:
         specifier: ^3.0.0-alpha.37
         version: 3.0.0-alpha.39
       '@colyseus/timer':
-        specifier: ^1.0.0
-        version: 1.0.0
+        specifier: ^1.0.1
+        version: 1.0.1
       debug:
         specifier: ^4.3.4
         version: 4.4.0(supports-color@8.1.1)
       nanoid:
         specifier: ^2.0.0
         version: 2.1.11
+    devDependencies:
+      '@types/nanoid':
+        specifier: ^2.0.0
+        version: 2.1.0
 
   packages/drivers/mikro-orm-driver:
     dependencies:
@@ -321,9 +322,6 @@ importers:
       express:
         specifier: ^4.16.2
         version: 4.21.2
-      node-os-utils:
-        specifier: ^1.3.7
-        version: 1.3.7
     devDependencies:
       '@colyseus/core':
         specifier: workspace:^
@@ -585,8 +583,8 @@ packages:
     resolution: {integrity: sha512-YHcmqU7gO+MMncnN6gjUPK8YBk0v6InM26z0f8f0JK5vNQkJiRa1jFa5JWDF1jPLvx1CFJOFjexnAwzj2qChpw==}
     hasBin: true
 
-  '@colyseus/timer@1.0.0':
-    resolution: {integrity: sha512-ugyBP4kgM1Ep6ryS0KVueMrgKnOsOH4nvGAWxmu8x1HlRvc6rDuliwPit/VTfcS383nEyYz1QDGgwNKMST7imA==}
+  '@colyseus/timer@1.0.1':
+    resolution: {integrity: sha512-zsbmytTaSfqOYlnw0PXQCgwumXjn8eM/HMyMTVGjXlczsJ8DFl5OHaWAsJz7kIn92NTAONoIwLTwyVRvpJCVzA==}
 
   '@esbuild/aix-ppc64@0.23.1':
     resolution: {integrity: sha512-6VhYk1diRqrhBAqpJEdjASR/+WVRtfjpqKuNw11cLiaWpAT/Uu+nokB+UJnevzy/P9C/ty6AOe0dwueMrGh/iQ==}
@@ -1280,6 +1278,9 @@ packages:
 
   '@types/ms@0.7.34':
     resolution: {integrity: sha512-nG96G3Wp6acyAgJqGasjODb+acrI7KltPiRxzHPXnP3NgI28bpQDRv53olbqGXbfcgF5aiiHmO3xpwEpS5Ld9g==}
+
+  '@types/nanoid@2.1.0':
+    resolution: {integrity: sha512-xdkn/oRTA0GSNPLIKZgHWqDTWZsVrieKomxJBOQUK9YDD+zfSgmwD5t4WJYra5S7XyhTw7tfvwznW+pFexaepQ==}
 
   '@types/node@20.17.10':
     resolution: {integrity: sha512-/jrvh5h6NXhEauFFexRin69nA0uHJ5gwk4iDivp/DeoEua3uwCUto6PC86IpRITBOs4+6i2I56K5x5b6WYGXHA==}
@@ -3473,9 +3474,6 @@ packages:
   node-machine-id@1.1.12:
     resolution: {integrity: sha512-QNABxbrPa3qEIfrE6GOJ7BYIuignnJw7iQ2YPbc3Nla1HzRJjXzZOiikfF8m7eAMfichLt3M4VgLOetqgDmgGQ==}
 
-  node-os-utils@1.3.7:
-    resolution: {integrity: sha512-fvnX9tZbR7WfCG5BAy3yO/nCLyjVWD6MghEq0z5FDfN+ZXpLWNITBdbifxQkQ25ebr16G0N7eRWJisOcMEHG3Q==}
-
   node-releases@2.0.19:
     resolution: {integrity: sha512-xxOWJsBKtzAq7DY0J+DTzuz58K8e7sJbdgwkbMWQe8UYB6ekmsQ45q0M/tJDsGaZmbC+l7n57UV8Hl5tHxO9uw==}
 
@@ -4952,7 +4950,7 @@ snapshots:
 
   '@colyseus/schema@3.0.0-alpha.39': {}
 
-  '@colyseus/timer@1.0.0':
+  '@colyseus/timer@1.0.1':
     dependencies:
       '@colyseus/clock': 1.0.0
 
@@ -5816,6 +5814,10 @@ snapshots:
   '@types/mocha@10.0.10': {}
 
   '@types/ms@0.7.34': {}
+
+  '@types/nanoid@2.1.0':
+    dependencies:
+      '@types/node': 20.17.10
 
   '@types/node@20.17.10':
     dependencies:
@@ -8523,8 +8525,6 @@ snapshots:
   node-int64@0.4.0: {}
 
   node-machine-id@1.1.12: {}
-
-  node-os-utils@1.3.7: {}
 
   node-releases@2.0.19: {}
 

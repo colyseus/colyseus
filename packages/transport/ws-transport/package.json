@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/ws-transport",
-  "version": "0.16.0-preview.7",
+  "version": "0.16.0-preview.10",
   "input": "./src/index.ts",
   "main": "./build/index.js",
   "module": "./build/index.mjs",
@@ -18,8 +18,8 @@
   "devDependencies": {
     "@colyseus/core": "workspace:^"
   },
-  "peerDependencies": {
-    "@colyseus/core": "0.15.x"
+  "peerDependencies_TODO": {
+    "@colyseus/core": "0.16.x"
   },
   "author": "Endel Dreyer",
   "license": "MIT",
