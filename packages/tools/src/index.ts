@@ -5,7 +5,6 @@ import net from "net";
 import http from 'http';
 import cors from 'cors';
 import express from 'express';
-import osUtils from 'node-os-utils';
 import { logger, Server, ServerOptions, Transport, matchMaker } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 
@@ -205,33 +204,6 @@ export async function getTransport(options: ConfigOptions) {
       // health check for load balancers
       app.get("/__healthcheck", (req, res) => {
         res.status(200).end();
-      });
-
-      app.get("/__cloudstats", async (req, res) => {
-          if (
-              process.env.CLOUD_SECRET &&
-              req.headers.authorization !== process.env.CLOUD_SECRET
-          ) {
-              res.status(401).end();
-              return;
-          }
-
-          // count rooms per process
-          const rooms = (await matchMaker.stats.fetchAll()).reduce((prev, curr) => {
-            return prev + curr.roomCount;
-          }, 0);
-
-          const ccu = await matchMaker.stats.getGlobalCCU();
-          const mem = await osUtils.mem.used();
-          const cpu = (await osUtils.cpu.usage()) / 100;
-
-          res.json({
-              version: 1,
-              mem: (mem.usedMemMb / mem.totalMemMb),
-              cpu,
-              ccu,
-              rooms,
-          });
       });
 
       if (options.displayLogs) {
