@@ -15,6 +15,7 @@ describe("Room", () => {
 
     it("setState() should select correct serializer", () => {
       const room = new MyRoom()
+      room['__init']();
       room.onCreate();
 
       assert.ok(room['_serializer'] instanceof SchemaSerializer);

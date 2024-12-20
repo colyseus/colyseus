@@ -108,6 +108,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
    * The state instance you provided to `setState()`.
    */
   public state: State;
+  #_state: State;
 
   /**
    * The presence instance. Check Presence API for more details.
@@ -191,15 +192,28 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
    * @internal
    */
   protected __init() {
-    if (this.state) {
-      this.setState(this.state);
-    }
-
+    this.#_state = this.state;
     this.#_autoDispose = this.autoDispose;
     this.#_patchRate = this.patchRate;
     this.#_maxClients = this.maxClients;
 
     Object.defineProperties(this, {
+      state: {
+        enumerable: true,
+        get: () => this.#_state,
+        set: (newState: State) => {
+          if (newState[$changes] !== undefined) {
+            this.setSerializer(new SchemaSerializer());
+          } else if ('_definition' in newState) {
+            throw new Error("@colyseus/schema v2 compatibility currently missing (reach out if you need it)");
+          } else if ($changes === undefined) {
+            throw new Error("Multiple @colyseus/schema versions detected. Please make sure you don't have multiple versions of @colyseus/schema installed.");
+          }
+          this._serializer.reset(newState);
+          this.#_state = newState;
+        },
+      },
+
       maxClients: {
         enumerable: true,
         get: () => this.#_maxClients,
@@ -263,8 +277,15 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
     // set patch interval, now with the setter
     this.patchRate = this.#_patchRate;
 
+    // set state, now with the setter
+    if (this.#_state) {
+      this.state = this.#_state;
+    }
+
     // set default _autoDisposeTimeout
     this.resetAutoDisposeTimeout(this.seatReservationTime);
+
+    this.clock.start();
   }
 
   /**
@@ -470,18 +491,10 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
     this.patchRate = milliseconds;
   }
 
+  /**
+   * @deprecated Use `.state =` instead.
+   */
   public setState(newState: State) {
-    this.clock.start();
-
-    if (newState[$changes] !== undefined) {
-      this.setSerializer(new SchemaSerializer());
-
-    } else if ($changes === undefined) {
-      throw new Error("@colyseus/schema v2 compatibility currently missing (reach out if you need it)");
-    }
-
-    this._serializer.reset(newState);
-
     this.state = newState;
   }
 
