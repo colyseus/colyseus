@@ -5,7 +5,6 @@ import {
   MatchMakerDriver,
   SortOptions,
   debugMatchMaking,
-  logger,
 } from '@colyseus/core';
 
 import { Query } from './Query.js';
