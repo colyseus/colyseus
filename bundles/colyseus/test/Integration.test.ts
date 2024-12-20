@@ -1061,7 +1061,13 @@ describe("Integration", () => {
 
               const roomClient = await client.joinOrCreate("dummy");
 
+              //
               // force websocket client to be unresponsive
+              //
+              // FIXME:
+              //    since Node.js v22, it's not possible to force a client to be unresponsive.
+              //    the built-in WebSocket implementation is being used instead of ws@8
+              //
               (roomClient.connection.transport as any).ws._socket.removeAllListeners();
 
               assert.ok(matchMaker.getLocalRoomById(roomClient.roomId));
