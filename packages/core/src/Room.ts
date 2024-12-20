@@ -59,7 +59,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
    * @readonly
    */
   public get locked() {
-    return this._locked;
+    return this.#_locked;
   }
 
   public get metadata() {
@@ -84,6 +84,8 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
    * the room will be unlocked as soon as a client disconnects from it.
    */
   public maxClients: number = Infinity;
+  #_maxClientsReached: boolean = false;
+  #_maxClients: number;
 
   /**
    * Automatically dispose the room when last client disconnects.
@@ -161,9 +163,9 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
   private _simulationInterval: NodeJS.Timeout;
 
   private _internalState: RoomInternalState = RoomInternalState.CREATING;
-  private _locked: boolean = false;
+
   private _lockedExplicitly: boolean = false;
-  private _maxClientsReached: boolean = false;
+  #_locked: boolean = false;
 
   // this timeout prevents rooms that are created by one process, but no client
   // ever had success joining into it on the specified interval.
@@ -195,8 +197,38 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
 
     this.#_autoDispose = this.autoDispose;
     this.#_patchRate = this.patchRate;
+    this.#_maxClients = this.maxClients;
 
     Object.defineProperties(this, {
+      maxClients: {
+        enumerable: true,
+        get: () => this.#_maxClients,
+        set: (value: number) => {
+          this.#_maxClients = value;
+
+          if (this._internalState === RoomInternalState.CREATED) {
+            const hasReachedMaxClients = this.hasReachedMaxClients();
+
+            // unlock room if maxClients has been increased
+            if (!this._lockedExplicitly && this.#_maxClientsReached && !hasReachedMaxClients) {
+              this.#_maxClientsReached = false;
+              this.#_locked = false;
+              this.listing.locked = false;
+            }
+
+            // lock room if maxClients has been decreased
+            if (hasReachedMaxClients) {
+              this.#_maxClientsReached = true;
+              this.#_locked = true;
+              this.listing.locked = true;
+            }
+
+            this.listing.maxClients = value;
+            this.listing.save();
+          }
+        },
+      },
+
       autoDispose: {
         enumerable: true,
         get: () => this.#_autoDispose,
@@ -498,12 +530,12 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
     this._lockedExplicitly = (arguments[0] === undefined);
 
     // skip if already locked.
-    if (this._locked) { return; }
+    if (this.#_locked) { return; }
 
-    this._locked = true;
+    this.#_locked = true;
 
     await this.listing.updateOne({
-      $set: { locked: this._locked },
+      $set: { locked: this.#_locked },
     });
 
     this._events.emit('lock');
@@ -519,12 +551,12 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
     }
 
     // skip if already locked
-    if (!this._locked) { return; }
+    if (!this.#_locked) { return; }
 
-    this._locked = false;
+    this.#_locked = false;
 
     await this.listing.updateOne({
-      $set: { locked: this._locked },
+      $set: { locked: this.#_locked },
     });
 
     this._events.emit('unlock');
@@ -1161,14 +1193,14 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
 
   protected async _incrementClientCount() {
     // lock automatically when maxClients is reached
-    if (!this._locked && this.hasReachedMaxClients()) {
-      this._maxClientsReached = true;
+    if (!this.#_locked && this.hasReachedMaxClients()) {
+      this.#_maxClientsReached = true;
       this.lock.call(this, true);
     }
 
     await this.listing.updateOne({
       $inc: { clients: 1 },
-      $set: { locked: this._locked },
+      $set: { locked: this.#_locked },
     });
   }
 
@@ -1181,15 +1213,15 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
 
     // unlock if room is available for new connections
     if (!willDispose) {
-      if (this._maxClientsReached && !this._lockedExplicitly) {
-        this._maxClientsReached = false;
+      if (this.#_maxClientsReached && !this._lockedExplicitly) {
+        this.#_maxClientsReached = false;
         this.unlock.call(this, true);
       }
 
       // update room listing cache
       await this.listing.updateOne({
         $inc: { clients: -1 },
-        $set: { locked: this._locked },
+        $set: { locked: this.#_locked },
       });
     }
 

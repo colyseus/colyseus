@@ -394,7 +394,6 @@ describe("MatchMaker", () => {
 
       });
 
-      // define the same tests using multiple drivers
       it("when `maxClients` is reached, the room should be locked", async () => {
         // first client joins
         const reservedSeat1 = await matchMaker.joinOrCreate("room3");
@@ -410,6 +409,39 @@ describe("MatchMaker", () => {
         assert.strictEqual(3, roomsBeforeExpiration[0].clients);
         assert.strictEqual(true, room.locked);
         assert.strictEqual(true, roomsBeforeExpiration[0].locked);
+      });
+
+      it("maxClients: updating after room creation should change locked status", async () => {
+        matchMaker.defineRoomType("maxClients", class extends Room {
+          maxClients = 2;
+        });
+
+        const reservedSeat1 = await matchMaker.joinOrCreate("maxClients");
+        const room = matchMaker.getLocalRoomById(reservedSeat1.room.roomId);
+        assert.strictEqual(false, room.locked);
+
+        // join another, room should be locked
+        await matchMaker.joinOrCreate("maxClients");
+
+        let rooms = await matchMaker.query({});
+        assert.strictEqual(1, rooms.length);
+        assert.strictEqual(2, rooms[0].clients);
+        assert.strictEqual(true, room.locked);
+        assert.strictEqual(true, rooms[0].locked);
+
+        // change maxClients, room should be unlocked
+        room.maxClients = 3;
+
+        rooms = await matchMaker.query({});
+        assert.strictEqual(false, room.locked);
+        assert.strictEqual(false, rooms[0].locked);
+
+        // change maxClients, room should be locked again
+        room.maxClients = 2;
+
+        rooms = await matchMaker.query({});
+        assert.strictEqual(true, room.locked);
+        assert.strictEqual(true, rooms[0].locked);
       });
 
       it("seat reservation should expire", async () => {
