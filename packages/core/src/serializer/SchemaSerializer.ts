@@ -154,7 +154,7 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
       //
       // TODO: re-use handshake buffer for all rooms of same type (?)
       //
-      this.handshakeCache = (this.encoder.state && Reflection.encode(this.encoder.context));
+      this.handshakeCache = (this.encoder.state && Reflection.encode(this.encoder));
     }
 
     return this.handshakeCache;

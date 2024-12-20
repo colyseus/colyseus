@@ -115,7 +115,7 @@ importers:
         version: link:../../packages/presence/redis-presence
       '@colyseus/schema':
         specifier: ^3.0.0-alpha.0
-        version: 3.0.0-alpha.38
+        version: 3.0.0-alpha.39
       '@colyseus/ws-transport':
         specifier: workspace:^
         version: link:../../packages/transport/ws-transport
@@ -171,7 +171,7 @@ importers:
         version: 1.10.5
       '@colyseus/schema':
         specifier: ^3.0.0-alpha.37
-        version: 3.0.0-alpha.38
+        version: 3.0.0-alpha.39
       '@colyseus/timer':
         specifier: ^1.0.0
         version: 1.0.0
@@ -198,7 +198,7 @@ importers:
         version: link:../../core
       mongoose:
         specifier: ^8.4.4
-        version: 8.9.1(socks@2.8.3)
+        version: 8.9.2(socks@2.8.3)
 
   packages/drivers/redis-driver:
     dependencies:
@@ -207,7 +207,7 @@ importers:
         version: link:../../core
       ioredis:
         specifier: ^5.3.2
-        version: 5.4.1
+        version: 5.4.2
 
   packages/example:
     dependencies:
@@ -262,7 +262,7 @@ importers:
         version: link:../../core
       ioredis:
         specifier: ^5.3.2
-        version: 5.4.1
+        version: 5.4.2
 
   packages/serializer/fossil-delta-serializer:
     dependencies:
@@ -363,7 +363,7 @@ importers:
         version: link:../../core
       '@colyseus/schema':
         specifier: ^3.0.0-alpha.0
-        version: 3.0.0-alpha.38
+        version: 3.0.0-alpha.39
       '@fails-components/webtransport':
         specifier: ^1.1.4
         version: 1.1.4
@@ -581,8 +581,8 @@ packages:
     resolution: {integrity: sha512-v/rHN155kFLwCPPBi+HQlbYBqh6tH3IhSVARrkAd/PLylysugbXLm2fLpX4NlEcnCakMuenXSIbhMDPXc7/jUg==}
     hasBin: true
 
-  '@colyseus/schema@3.0.0-alpha.38':
-    resolution: {integrity: sha512-P1mOyFRt/bH9cXdhTdl9lbxyDEMO2QV5PmxKGsFvU4wJQLdgH5YDupORW1eYwrSWlhNIbKg+AYsot6eqD2yprw==}
+  '@colyseus/schema@3.0.0-alpha.39':
+    resolution: {integrity: sha512-YHcmqU7gO+MMncnN6gjUPK8YBk0v6InM26z0f8f0JK5vNQkJiRa1jFa5JWDF1jPLvx1CFJOFjexnAwzj2qChpw==}
     hasBin: true
 
   '@colyseus/timer@1.0.0':
@@ -2077,8 +2077,8 @@ packages:
     engines: {node: '>=0.10.0'}
     hasBin: true
 
-  electron-to-chromium@1.5.74:
-    resolution: {integrity: sha512-ck3//9RC+6oss/1Bh9tiAVFy5vfSKbRHAFh7Z3/eTRkEqJeWgymloShB17Vg3Z4nmDNp35vAd1BZ6CMW4Wt6Iw==}
+  electron-to-chromium@1.5.75:
+    resolution: {integrity: sha512-Lf3++DumRE/QmweGjU+ZcKqQ+3bKkU/qjaKYhIJKEOhgIO9Xs6IiAQFkfFoj+RhgDk4LUeNsLo6plExHqSyu6Q==}
 
   elliptic@6.6.1:
     resolution: {integrity: sha512-RaddvvMatK2LJHqFJ+YA4WysVN5Ita9E35botqIYspQ4TkRAlCicdzKOjlyv/1Za5RyTNn7di//eEV0uTAfe3g==}
@@ -2627,8 +2627,8 @@ packages:
     resolution: {integrity: sha512-M1WuAmb7pn9zdFRtQYk26ZBoY043Sse0wVDdk4Bppr+JOXyQYybdtvK+l9wUibhtjdjvtoiNy8tk+EgsYIUqKg==}
     engines: {node: '>=12.0.0'}
 
-  ioredis@5.4.1:
-    resolution: {integrity: sha512-2YZsvl7jopIa1gaePkeMtd9rAcSjOOjPtpcLlOeusyO+XH2SK5ZcT+UCrElPP+WVIInh2TzeI4XW9ENaSLVVHA==}
+  ioredis@5.4.2:
+    resolution: {integrity: sha512-0SZXGNGZ+WzISQ67QDyZ2x0+wVxjjUndtD8oSeik/4ajifeiRufed8fCb8QW8VMyi4MXcS+UO1k/0NGhvq1PAg==}
     engines: {node: '>=12.22.0'}
 
   ip-address@9.0.5:
@@ -3360,8 +3360,8 @@ packages:
       socks:
         optional: true
 
-  mongoose@8.9.1:
-    resolution: {integrity: sha512-whM6lWMdeKlUm4d2LSLS/q6cWtTp13lUrL5hy2YTsQdTSN+dsAu8HLdLUQOEgtBE59qp4IqLrjSXCSETbxhkQQ==}
+  mongoose@8.9.2:
+    resolution: {integrity: sha512-mLWynmZS1v8HTeMxyLhskQncS1SkrjW1eLNuFDYGQMQ/5QrFrxTLNwWXeCRZeKT2lXyaxW8bnJC9AKPT9jYMkw==}
     engines: {node: '>=16.20.1'}
 
   mpath@0.9.0:
@@ -3993,8 +3993,9 @@ packages:
     resolution: {integrity: sha512-/NtpHNDN7jWhAaQ9BvBUYZ6YTXsRBgfqWFWP7BZBaoMJO/I3G5OFzvTuWNlZC3aPjins1F+TNrLKsGbH4rfsRQ==}
     engines: {node: '>=10'}
 
-  resolve@1.22.9:
-    resolution: {integrity: sha512-QxrmX1DzraFIi9PxdG5VkRfRwIgjwyud+z/iBwfRRrVmHc+P9Q7u2lSSpQ6bjr2gy5lrqIiU9vb6iAeGf2400A==}
+  resolve@1.22.10:
+    resolution: {integrity: sha512-NPRy+/ncIMeDlTAsuqwKIiferiawhefFJtkNSW0qZJEqMEb+qBt/77B/jGeeek+F0uOeN05CDa6HXbbIgtVX4w==}
+    engines: {node: '>= 0.4'}
     hasBin: true
 
   restore-cursor@3.1.0:
@@ -4949,7 +4950,7 @@ snapshots:
 
   '@colyseus/schema@2.0.36': {}
 
-  '@colyseus/schema@3.0.0-alpha.38': {}
+  '@colyseus/schema@3.0.0-alpha.39': {}
 
   '@colyseus/timer@1.0.0':
     dependencies:
@@ -6135,7 +6136,7 @@ snapshots:
   browserslist@4.24.3:
     dependencies:
       caniuse-lite: 1.0.30001690
-      electron-to-chromium: 1.5.74
+      electron-to-chromium: 1.5.75
       node-releases: 2.0.19
       update-browserslist-db: 1.1.1(browserslist@4.24.3)
 
@@ -6393,7 +6394,7 @@ snapshots:
   colyseus.js@0.16.0-preview.24:
     dependencies:
       '@colyseus/msgpackr': 1.10.5
-      '@colyseus/schema': 3.0.0-alpha.38
+      '@colyseus/schema': 3.0.0-alpha.39
       httpie: 2.0.0-next.13
       tslib: 2.8.1
       ws: 8.18.0
@@ -6667,7 +6668,7 @@ snapshots:
     dependencies:
       jake: 10.9.2
 
-  electron-to-chromium@1.5.74: {}
+  electron-to-chromium@1.5.75: {}
 
   elliptic@6.6.1:
     dependencies:
@@ -7359,7 +7360,7 @@ snapshots:
       through: 2.3.8
       wrap-ansi: 6.2.0
 
-  ioredis@5.4.1:
+  ioredis@5.4.2:
     dependencies:
       '@ioredis/commands': 1.2.0
       cluster-key-slot: 1.1.2
@@ -7696,7 +7697,7 @@ snapshots:
       jest-pnp-resolver: 1.2.3(jest-resolve@28.1.3)
       jest-util: 28.1.3
       jest-validate: 28.1.3
-      resolve: 1.22.9
+      resolve: 1.22.10
       resolve.exports: 1.1.1
       slash: 3.0.0
 
@@ -8392,7 +8393,7 @@ snapshots:
     optionalDependencies:
       socks: 2.8.3
 
-  mongoose@8.9.1(socks@2.8.3):
+  mongoose@8.9.2(socks@2.8.3):
     dependencies:
       bson: 6.10.1
       kareem: 2.6.3
@@ -8534,7 +8535,7 @@ snapshots:
   normalize-package-data@2.5.0:
     dependencies:
       hosted-git-info: 2.8.9
-      resolve: 1.22.9
+      resolve: 1.22.10
       semver: 5.7.2
       validate-npm-package-license: 3.0.4
 
@@ -9084,9 +9085,9 @@ snapshots:
 
   require-in-the-middle@5.2.0:
     dependencies:
-      debug: 4.4.0(supports-color@8.1.1)
+      debug: 4.3.7
       module-details-from-path: 1.0.3
-      resolve: 1.22.9
+      resolve: 1.22.10
     transitivePeerDependencies:
       - supports-color
 
@@ -9104,7 +9105,7 @@ snapshots:
 
   resolve.exports@1.1.1: {}
 
-  resolve@1.22.9:
+  resolve@1.22.10:
     dependencies:
       is-core-module: 2.16.0
       path-parse: 1.0.7
@@ -9554,7 +9555,7 @@ snapshots:
       js-yaml: 3.14.1
       minimatch: 3.1.2
       mkdirp: 0.5.6
-      resolve: 1.22.9
+      resolve: 1.22.10
       semver: 5.7.2
       tslib: 1.14.1
       tsutils: 2.29.0(typescript@5.7.2)
