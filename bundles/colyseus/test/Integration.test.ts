@@ -2,9 +2,9 @@ import assert from "assert";
 import crypto from "crypto";
 import sinon, { match } from "sinon";
 import * as Colyseus from "colyseus.js";
-import { Schema, type, Context, MapSchema } from "@colyseus/schema";
+import { Schema, type, MapSchema } from "@colyseus/schema";
 
-import { matchMaker, Room, Client, Server, ErrorCode, MatchMakerDriver, Presence, Deferred, Transport, ClientArray } from "@colyseus/core";
+import { matchMaker, Room, Client, Server, ErrorCode, MatchMakerDriver, Presence, Deferred, Transport, AuthContext } from "@colyseus/core";
 import { DummyRoom, DRIVERS, timeout, Room3Clients, PRESENCE_IMPLEMENTATIONS, Room2Clients, Room2ClientsExplicitLock } from "./utils";
 import { ServerError, Protocol } from "@colyseus/core";
 
@@ -82,7 +82,7 @@ describe("Integration", () => {
               assert.strictEqual(true, onCreateCalled);
 
               // assert 'presence' implementation
-              const room = matchMaker.getRoomById(connection.id);
+              const room = matchMaker.getLocalRoomById(connection.roomId);
               assert.strictEqual(presence, room.presence);
 
               await connection.leave();
@@ -141,10 +141,10 @@ describe("Integration", () => {
               await onJoinHit;
 
               await client.joinById(room.roomId);
-              assert.strictEqual(2, matchMaker.getRoomById(room.roomId).clients.length);
+              assert.strictEqual(2, matchMaker.getLocalRoomById(room.roomId).clients.length);
 
               // disconnect room
-              await matchMaker.getRoomById(room.roomId).disconnect();
+              await matchMaker.getLocalRoomById(room.roomId).disconnect();
             });
 
             it("async onJoin support", async () => {
@@ -187,7 +187,7 @@ describe("Integration", () => {
               const activeConnection = await client.joinOrCreate("onjoin");
 
               const seatReservation = await matchMaker.joinOrCreate('onjoin', {});
-              const room = matchMaker.getRoomById(seatReservation.room.roomId);
+              const room = matchMaker.getLocalRoomById(seatReservation.room.roomId);
 
               const lostConnection = new WebSocket(`${TEST_ENDPOINT}/${seatReservation.room.processId}/${seatReservation.room.roomId}?sessionId=${seatReservation.sessionId}`);
 
@@ -209,7 +209,7 @@ describe("Integration", () => {
               matchMaker.defineRoomType('onjoin_ack_twice', class _ extends Room {});
 
               const room = await client.joinOrCreate('onjoin_ack_twice');
-              room.connection.send([Protocol.JOIN_ROOM]);
+              room.connection.send(Buffer.from([Protocol.JOIN_ROOM]));
 
               await timeout(50);
               assert.ok(true);
@@ -228,8 +228,8 @@ describe("Integration", () => {
 
           it("onAuth() getting IP address", async() => {
             matchMaker.defineRoomType('onauth_ip_address', class _ extends Room {
-              async onAuth(client: Client, options: any, request: any) {
-                const ipAddress = request.connection.remoteAddress;
+              async onAuth(client: Client, options: any, context: AuthContext) {
+                const ipAddress = context.ip;
                 client.send("ip", ipAddress);
                 return true;
               }
@@ -297,7 +297,7 @@ describe("Integration", () => {
               client.joinOrCreate('async_onauth_maxclients', {}),
             ]);
 
-            const room = matchMaker.getRoomById(roomId);
+            const room = matchMaker.getLocalRoomById(roomId);
 
             assert.strictEqual(2, room.clients.length);
             assert.strictEqual(2, roomsCreated);
@@ -372,7 +372,7 @@ describe("Integration", () => {
             await connection.leave();
 
             await timeout(50);
-            assert.ok(!matchMaker.getRoomById(connection.id))
+            assert.ok(!matchMaker.getLocalRoomById(connection.roomId))
             assert.ok(onDisposeCalled);
           });
 
@@ -392,7 +392,7 @@ describe("Integration", () => {
             await connection.leave();
 
             await timeout(150);
-            assert.ok(!matchMaker.getRoomById(connection.id))
+            assert.ok(!matchMaker.getLocalRoomById(connection.roomId))
             assert.ok(onDisposeCalled);
           });
 
@@ -511,7 +511,7 @@ describe("Integration", () => {
             });
 
             it("should support sending and receiving raw bytes", async () => {
-              const pingBytes = [1, 2, 3, 4, 5];
+              const pingBytes = new Uint8Array([1, 2, 3, 4, 5]);
 
               matchMaker.defineRoomType('onmessage_bytes', class _ extends Room {
                 onCreate() {
@@ -531,20 +531,66 @@ describe("Integration", () => {
               await timeout(20);
               await connection.leave();
 
-              assert.deepStrictEqual(pingBytes, Array.from(new Uint8Array(receivedBytes)));
-            })
+              assert.deepStrictEqual(Array.from(pingBytes), Array.from(new Uint8Array(receivedBytes)));
+            });
+
+            it("should validate input message", async () => {
+              matchMaker.defineRoomType('onmessage_validation', class _ extends Room {
+                onCreate() {
+                  this.onMessage("input_xy", (client, payload) => {
+                    client.send("input_xy", payload);
+                  }, (payload: any) => {
+                    return { x: payload.x, y: payload.y };
+                  });
+                }
+              });
+
+              const conn = await client.joinOrCreate('onmessage_validation');
+
+              let receivedMessage: any;
+              conn.onMessage("input_xy", (message) => receivedMessage = message);
+              conn.send("input_xy", { x: 1, y: 2, z: 3 });
+              await timeout(20);
+
+              assert.deepStrictEqual(receivedMessage, { x: 1, y: 2 });
+            });
+
+            it("should disconnect if input validation throws", async () => {
+              matchMaker.defineRoomType('onmessage_validation', class _ extends Room {
+                onCreate() {
+                  this.onMessage("input_xy", (_1, _2) => {
+                    // do nothing
+                  }, (_) => {
+                    throw new Error("what");
+                  });
+                }
+              });
+
+              const conn = await client.joinOrCreate('onmessage_validation');
+
+              let onLeaveCode: number;
+              conn.onLeave((code) => {
+                onLeaveCode = code;
+              });
+
+              conn.send("input_xy", { x: 1, y: 2, z: 3 });
+              await timeout(20);
+
+              assert.strictEqual(onLeaveCode, Protocol.WS_CLOSE_WITH_ERROR);
+            });
+
           });
 
-          describe("setPatchRate()", () => {
+          describe("patchRate", () => {
             class PatchState extends Schema {
               @type("number") number: number = 0;
             }
 
             it("should receive patch at every patch rate", async () => {
               matchMaker.defineRoomType('patchinterval', class _ extends Room {
+                state = new PatchState();
+                patchRate = 20;
                 onCreate(options: any) {
-                  this.setState(new PatchState());
-                  this.setPatchRate(20);
                   this.setSimulationInterval(() => this.state.number++);
                 }
               });
@@ -564,9 +610,9 @@ describe("Integration", () => {
 
             it("should not receive any patch if patchRate is nullified", async () => {
               matchMaker.defineRoomType('patchinterval', class _ extends Room {
+                patchRate = null;
                 onCreate(options: any) {
                   this.setState(new PatchState());
-                  this.setPatchRate(null);
                   this.setSimulationInterval(() => this.state.number++);
                 }
               });
@@ -631,7 +677,7 @@ describe("Integration", () => {
                 onCreate() {
                   this.onMessage("*", (client, type, message) => {
                     this.broadcast(type, message, { except: client });
-                  })
+                  });
                 }
               });
 
@@ -783,7 +829,7 @@ describe("Integration", () => {
             it("should lock room automatically when maxClients is reached", async () => {
               const conn1 = await client.joinOrCreate('room2');
 
-              const room = matchMaker.getRoomById(conn1.id);
+              const room = matchMaker.getLocalRoomById(conn1.roomId);
               assert.strictEqual(false, room.locked);
 
               const conn2 = await client.joinOrCreate('room2');
@@ -804,7 +850,7 @@ describe("Integration", () => {
               const conn1 = await client.joinOrCreate('room2');
               const conn2 = await client.joinOrCreate('room2');
 
-              const room = matchMaker.getRoomById(conn1.id);
+              const room = matchMaker.getLocalRoomById(conn1.roomId);
               assert.strictEqual(2, room.clients.length);
               assert.strictEqual(true, room.locked);
 
@@ -824,7 +870,7 @@ describe("Integration", () => {
               const conn1 = await client.joinOrCreate('room_explicit_lock');
               const conn2 = await client.joinOrCreate('room_explicit_lock');
 
-              const room = matchMaker.getRoomById(conn1.id);
+              const room = matchMaker.getLocalRoomById(conn1.roomId);
               assert.strictEqual(2, room.clients.length);
               assert.strictEqual(true, room.locked);
 
@@ -865,13 +911,13 @@ describe("Integration", () => {
 
               await Promise.all(promises);
 
-              const room = matchMaker.getRoomById(roomId);
+              const room = matchMaker.getLocalRoomById(roomId);
               assert.strictEqual(room.roomId, roomId);
 
               await room.disconnect();
               await timeout(10);
 
-              assert.ok(!matchMaker.getRoomById(roomId));
+              assert.ok(!matchMaker.getLocalRoomById(roomId));
             });
 
             it("second .disconnect() call should return a resolved promise", async () => {
@@ -891,7 +937,7 @@ describe("Integration", () => {
 
               await Promise.all(promises);
 
-              const room = matchMaker.getRoomById(roomId);
+              const room = matchMaker.getLocalRoomById(roomId);
               assert.strictEqual(room.roomId, roomId);
 
               room.disconnect();
@@ -916,7 +962,7 @@ describe("Integration", () => {
               const conn2 = await client.joinOrCreate('disconnect');
               conn2.onLeave(() => disconnected++);
 
-              assert.strictEqual(conn1.id, conn2.id, "should've joined the same room");
+              assert.strictEqual(conn1.roomId, conn2.roomId, "should've joined the same room");
 
               await timeout(150);
               assert.strictEqual(2, disconnected, "both clients should've been disconnected");
@@ -990,7 +1036,7 @@ describe("Integration", () => {
               const room = rooms[0];
 
               assert.strictEqual(3, connections.length);
-              assert.deepStrictEqual([room.roomId, room.roomId, room.roomId], connections.map(conn => conn.id));
+              assert.deepStrictEqual([room.roomId, room.roomId, room.roomId], connections.map(conn => conn.roomId));
 
               assert.strictEqual(1, rooms.length);
               assert.strictEqual(room.roomId, rooms[0].roomId);
@@ -999,7 +1045,7 @@ describe("Integration", () => {
             it("consumeSeatReservation()", async () => {
               const seatReservation = await matchMaker.create("dummy", {});
               const conn = await client.consumeSeatReservation(seatReservation);
-              assert.strictEqual(conn.id, seatReservation.room.roomId);
+              assert.strictEqual(conn.roomId, seatReservation.room.roomId);
               conn.leave();
             })
           });
@@ -1015,29 +1061,34 @@ describe("Integration", () => {
 
               const roomClient = await client.joinOrCreate("dummy");
 
+              //
               // force websocket client to be unresponsive
+              //
+              // FIXME:
+              //    since Node.js v22, it's not possible to force a client to be unresponsive.
+              //    the built-in WebSocket implementation is being used instead of ws@8
+              //
               (roomClient.connection.transport as any).ws._socket.removeAllListeners();
 
-              assert.ok(matchMaker.getRoomById(roomClient.roomId));
+              assert.ok(matchMaker.getLocalRoomById(roomClient.roomId));
 
               await timeout(700);
 
-              assert.strictEqual(undefined, matchMaker.getRoomById(roomClient.roomId));
+              assert.strictEqual(undefined, matchMaker.getLocalRoomById(roomClient.roomId));
             });
 
             it("should remove the room if seat reservation is never fulfiled", async () => {
-              const stub = sinon.stub(client, 'consumeSeatReservation').callsFake(function(response) {
-                return response;
-              });
+              // @ts-ignore
+              const stub = sinon.stub(client, 'consumeSeatReservation').callsFake((response) => response);
 
               const seatReservation = await (client as any).createMatchMakeRequest('joinOrCreate', "dummy", {});
               await client['createMatchMakeRequest']('joinOrCreate', "dummy", {});
 
-              assert.ok(matchMaker.getRoomById(seatReservation.room.roomId));
+              assert.ok(matchMaker.getLocalRoomById(seatReservation.room.roomId));
 
               await timeout(500);
 
-              assert.ok(!matchMaker.getRoomById(seatReservation.room.roomId));
+              assert.ok(!matchMaker.getLocalRoomById(seatReservation.room.roomId));
 
               stub.restore();
             });
@@ -1239,8 +1290,7 @@ describe("Integration", () => {
                 try {
                   await this.allowReconnection(client, 1);
                 } catch (e) {
-                  onLeaveFinished.resolve(true);
-                }
+                  }
               }
               onDispose() { onRoomDisposed.resolve(true); }
             });
@@ -1253,14 +1303,11 @@ describe("Integration", () => {
               onJoinStart.then(() => lostConnection.close());
             });
 
-            // wait until join completely finished.
-            await onLeaveFinished;
+            await onRoomDisposed;
 
             assert.strictEqual(true, onJoinCompleted > 0);
             assert.strictEqual(true, onLeaveCalled > 0);
             assert.strictEqual(true, onLeaveCalled >= onJoinCompleted);
-
-            await onRoomDisposed;
 
             assert.strictEqual(0, matchMaker.stats.local.roomCount);
             assert.strictEqual(0, matchMaker.stats.local.ccu);
@@ -1501,7 +1548,7 @@ describe("Integration", () => {
             // no onMessage registered
             matchMaker.defineRoomType('invalid_messages', class _ extends Room {});
             const conn1 = await client.joinOrCreate("invalid_messages");
-            conn1.connection.send([Protocol.ROOM_DATA, ...crypto.randomBytes(256)]);
+            conn1.connection.send(Buffer.from([Protocol.ROOM_DATA, ...crypto.randomBytes(256)]));
             await timeout(50);
             assert.strictEqual(false, conn1.connection.isOpen);
 
@@ -1512,7 +1559,7 @@ describe("Integration", () => {
               }
             });
             const conn2 = await client.joinOrCreate("invalid_messages");
-            conn2.connection.send([Protocol.ROOM_DATA, ...crypto.randomBytes(256)]);
+            conn2.connection.send(Buffer.from([Protocol.ROOM_DATA, ...crypto.randomBytes(256)]));
             await timeout(50);
             assert.strictEqual(false, conn2.connection.isOpen);
 
@@ -1523,7 +1570,7 @@ describe("Integration", () => {
               }
             });
             const conn3 = await client.joinOrCreate("invalid_messages");
-            conn3.connection.send([Protocol.ROOM_DATA, ...crypto.randomBytes(256)]);
+            conn3.connection.send(Buffer.from([Protocol.ROOM_DATA, ...crypto.randomBytes(256)]));
             await timeout(50);
             assert.strictEqual(false, conn3.connection.isOpen);
           });
@@ -1532,7 +1579,7 @@ describe("Integration", () => {
             // no onMessage registered
             matchMaker.defineRoomType('invalid_messages', class _ extends Room {});
             const conn1 = await client.joinOrCreate("invalid_messages");
-            conn1.connection.send([Protocol.ROOM_DATA_BYTES, ...crypto.randomBytes(256)]);
+            conn1.connection.send(Buffer.from([Protocol.ROOM_DATA_BYTES, ...crypto.randomBytes(256)]));
             await timeout(50);
             assert.strictEqual(false, conn1.connection.isOpen);
 
@@ -1543,7 +1590,7 @@ describe("Integration", () => {
               }
             });
             const conn2 = await client.joinOrCreate("invalid_messages");
-            conn2.connection.send([Protocol.ROOM_DATA_BYTES, ...crypto.randomBytes(256)]);
+            conn2.connection.send(Buffer.from([Protocol.ROOM_DATA_BYTES, ...crypto.randomBytes(256)]));
             await timeout(50);
             assert.strictEqual(false, conn2.connection.isOpen);
 
@@ -1558,7 +1605,7 @@ describe("Integration", () => {
             });
             const conn3 = await client.joinOrCreate("invalid_messages");
             const bytes = crypto.randomBytes(256);
-            conn3.connection.send([Protocol.ROOM_DATA_BYTES, ...bytes]);
+            conn3.connection.send(Buffer.from([Protocol.ROOM_DATA_BYTES, ...bytes]));
             const [_, message] = await onMessageReceived;
             assert.ok(Array.from(bytes).toString().includes(Array.from(message).toString()));
             assert.strictEqual(true, conn3.connection.isOpen);

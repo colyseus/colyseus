@@ -2,18 +2,25 @@ import * as http from 'http';
 import * as https from 'https';
 import * as net from 'net';
 
-import { Schema } from '@colyseus/schema';
+import { Schema, StateView } from '@colyseus/schema';
 import { EventEmitter } from 'events';
-import { DummyServer, spliceOne } from './utils/Utils';
+import { spliceOne } from './utils/Utils.js';
 
 export abstract class Transport {
-    public server?: net.Server | http.Server | https.Server | DummyServer;
+    public protocol?: string;
+    public server?: net.Server | http.Server | https.Server;
 
     public abstract listen(port?: number, hostname?: string, backlog?: number, listeningListener?: Function): this;
     public abstract shutdown(): void;
 
     public abstract simulateLatency(milliseconds: number): void;
 }
+
+export type AuthContext = {
+  token?: string,
+  headers: http.IncomingHttpHeaders,
+  ip: string | string[];
+};
 
 export interface ISendOptions {
   afterNextPatch?: boolean;
@@ -30,18 +37,27 @@ export enum ClientState { JOINING, JOINED, RECONNECTED, LEAVING }
  *  encouraged to use along with Colyseus.
  */
 export interface Client<UserData=any, AuthData=any> {
-  readyState: number;
+  ref: EventEmitter;
 
+  /**
+   * @deprecated use `sessionId` instead.
+   */
   id: string;
+
   /**
    * Unique id per session.
    */
   sessionId: string; // TODO: remove sessionId on version 1.0.0
+
+  /**
+   * Connection state
+   */
   state: ClientState;
 
-  ref: EventEmitter;
-
-  upgradeReq?: http.IncomingMessage; // cross-compatibility for ws (v3.x+) and uws
+  /**
+   * Optional: when using `@view()` decorator in your state properties, this will be the view instance for this client.
+   */
+  view?: StateView;
 
   /**
    * User-defined data can be attached to the Client instance through this variable.
@@ -54,14 +70,18 @@ export interface Client<UserData=any, AuthData=any> {
    * auth data provided by your `onAuth`
    */
   auth?: AuthData;
-  pingCount?: number; // ping / pong
 
-  _reconnectionToken: string;
-  _enqueuedMessages?: any[];
-  _afterNextPatchQueue: Array<[string | Client, IArguments]>;
+  /**
+   * Reconnection token used to re-join the room after onLeave + allowReconnection().
+   *
+   * IMPORTANT:
+   *    This is not the full reconnection token the client provides for the server.
+   *    The format provided by .reconnect() from the client-side must follow: "${roomId}:${reconnectionToken}"
+   */
+  reconnectionToken: string;
 
-  raw(data: ArrayLike<number>, options?: ISendOptions, cb?: (err?: Error) => void): void;
-  enqueueRaw(data: ArrayLike<number>, options?: ISendOptions): void;
+  raw(data: Uint8Array | Buffer, options?: ISendOptions, cb?: (err?: Error) => void): void;
+  enqueueRaw(data: Uint8Array | Buffer, options?: ISendOptions): void;
 
   /**
    * Send a type of message to the client. Messages are encoded with MsgPack and can hold any
@@ -81,7 +101,7 @@ export interface Client<UserData=any, AuthData=any> {
    * @param bytes Raw byte array payload
    * @param options
    */
-  sendBytes(type: string | number, bytes: number[] | Uint8Array, options?: ISendOptions): void;
+  sendBytes(type: string | number, bytes: Buffer | Uint8Array, options?: ISendOptions): void;
 
   /**
    * Disconnect this client from the room.
@@ -104,6 +124,20 @@ export interface Client<UserData=any, AuthData=any> {
    * @param message
    */
   error(code: number, message?: string): void;
+}
+
+/**
+ * Private properties of the Client instance.
+ * Only accessible internally by the framework, should not be encouraged/auto-completed for the user.
+ *
+ * TODO: refactor this.
+ * @private
+ */
+export interface ClientPrivate {
+  readyState: number; // TODO: remove readyState on version 1.0.0. Use only "state" instead.
+  _enqueuedMessages?: any[];
+  _afterNextPatchQueue: Array<[string | Client, IArguments]>;
+  _joinedAt: number; // "elapsedTime" when the client joined the room.
 }
 
 export class ClientArray<UserData = any, AuthData = any> extends Array<Client<UserData, AuthData>> {

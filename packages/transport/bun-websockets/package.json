@@ -1,20 +1,23 @@
 {
   "name": "@colyseus/bun-websockets",
-  "version": "0.15.3",
+  "version": "0.16.0-preview.8",
   "input": "./src/index.ts",
   "main": "./build/index.js",
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./build/index.mjs",
+      "require": "./build/index.js"
+    }
+  },
   "dependencies": {
     "@colyseus/core": "workspace:^",
-    "bun-serve-express": "^1.0.2",
+    "bun-serve-express": "^1.0.5",
     "express": "^4.17.1"
   },
   "devDependencies": {
     "@colyseus/core": "workspace:^"
-  },
-  "peerDependencies": {
-    "@colyseus/schema": ">=1.0.0"
   },
   "author": "Endel Dreyer",
   "license": "MIT",

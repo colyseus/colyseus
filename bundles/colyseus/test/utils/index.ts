@@ -1,7 +1,7 @@
 import WebSocket from "ws";
 import { EventEmitter } from "events";
 
-import { pack, unpack } from "msgpackr";
+import { pack, unpack } from "@colyseus/msgpackr";
 
 import { Server, ServerOptions, Room, matchMaker, LocalDriver, ClientState, LocalPresence, Protocol, Presence, Client, Deferred, ISendOptions, getMessageBytes } from "@colyseus/core";
 import { RedisPresence } from "@colyseus/redis-presence";
@@ -18,14 +18,14 @@ Server.prototype['getDefaultTransport'] = function (options: ServerOptions) {
   });
 }
 
-export const DRIVERS = [ LocalDriver, ];
+// export const DRIVERS = [ LocalDriver, ];
 export const PRESENCE_IMPLEMENTATIONS = [ LocalPresence, ];
 
-// export const DRIVERS = [
-//   // LocalDriver,
-//   RedisDriver,
-//   // MongooseDriver,
-// ];
+export const DRIVERS = [
+  LocalDriver,
+  // RedisDriver,
+  // MongooseDriver,
+];
 
 // export const PRESENCE_IMPLEMENTATIONS = [
 //   // LocalPresence,
@@ -45,7 +45,7 @@ export class WebSocketClient implements Client {
   messages: any[] = [];
   _enqueuedMessages: any[] = [];
   _afterNextPatchQueue;
-  _reconnectionToken;
+  reconnectionToken;
 
   errors: any[] = [];
 

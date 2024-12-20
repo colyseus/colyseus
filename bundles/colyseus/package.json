@@ -1,6 +1,6 @@
 {
   "name": "colyseus",
-  "version": "0.15.57",
+  "version": "0.16.0-preview.1",
   "description": "Multiplayer Framework for Node.js",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -38,13 +38,12 @@
     "@colyseus/ws-transport": "workspace:^"
   },
   "devDependencies": {
-    "@colyseus/schema": "^2.0.0",
     "@colyseus/uwebsockets-transport": "workspace:^",
     "@types/ws": "^7.4.4",
     "ws": "^8.18.0"
   },
   "peerDependencies": {
-    "@colyseus/schema": "^2.0.0"
+    "@colyseus/schema": "^3.0.0-alpha.0"
   },
   "gitHead": "25ba61e283429bb4fa02db0454f804ea218259eb"
 }

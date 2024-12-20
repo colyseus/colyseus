@@ -1,11 +1,17 @@
 {
   "name": "@colyseus/auth",
-  "version": "0.15.12",
+  "version": "0.16.0-preview.5",
   "description": "Authentication Utilities for Colyseus",
   "input": "./src/index.ts",
   "main": "./build/index.js",
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./build/index.mjs",
+      "require": "./build/index.js"
+    }
+  },
   "scripts": {
     "test": "TS_NODE_PROJECT=../../tsconfig/tsconfig.test.json c8 mocha --require tsx test/**.test.ts test/**/**.test.ts --exit --timeout 15000"
   },
@@ -31,12 +37,12 @@
   },
   "homepage": "https://colyseus.io/",
   "engines": {
-    "node": ">= 14.x"
+    "node": ">= 18.x"
   },
   "dependencies": {
     "@types/jsonwebtoken": "^9.0.5",
     "connect-redis": "^7.1.0",
-    "express-jwt": "^8.4.1",
+    "express-jwt": "^8.5.1",
     "jsonwebtoken": "^9.0.0",
     "express-session": "^1.17.3",
     "grant": "^5.4.23"
@@ -45,14 +51,11 @@
     "@colyseus/core": "workspace:^",
     "httpie": "^2.0.0-next.13"
   },
-  "peerDependencies": {
-    "@colyseus/core": "0.15.x",
+  "peerDependencies_TODO": {
+    "@colyseus/core": "0.16.x",
     "express": "^4.17.1"
   },
   "publishConfig": {
     "access": "public"
-  },
-  "optionalDependencies": {
-
   }
 }

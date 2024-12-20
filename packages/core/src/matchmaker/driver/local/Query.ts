@@ -1,6 +1,6 @@
-import { QueryHelpers, SortOptions } from './interfaces';
+import { SortOptions } from '../api.js';
 
-export class Query<T> implements QueryHelpers<T> {
+export class Query<T> {
   private $rooms: T[];
   private conditions: any;
 
@@ -27,6 +27,21 @@ export class Query<T> implements QueryHelpers<T> {
         }
       }
     });
+  }
+
+  public filter(conditions: any) {
+    return this.$rooms.filter(((room) => {
+      for (const field in conditions) {
+        if (
+          conditions.hasOwnProperty(field) &&
+          room[field] !== conditions[field]
+        ) {
+          return false;
+        }
+      }
+      return true;
+    }));
+
   }
 
   public then(resolve, reject) {

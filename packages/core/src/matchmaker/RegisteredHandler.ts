@@ -1,16 +1,13 @@
 import { IncomingMessage } from 'http';
 import { EventEmitter } from 'events';
-import { logger } from '../Logger';
-import { RoomListingData, SortOptions } from './driver/interfaces';
+import { logger } from '../Logger.js';
+import { RoomCache, SortOptions } from './driver/api.js';
 
-import { Room } from './../Room';
-import { updateLobby } from './Lobby';
-import { Type } from '../utils/types';
+import { Room } from './../Room.js';
+import { updateLobby } from './Lobby.js';
+import { Type } from '../utils/types.js';
 
-let ColyseusAuth: any = undefined;
-try { ColyseusAuth = require('@colyseus/auth'); } catch (e) {}
-
-export const INVALID_OPTION_KEYS: Array<keyof RoomListingData> = [
+export const INVALID_OPTION_KEYS: Array<keyof RoomCache> = [
   'clients',
   'locked',
   'private',
@@ -24,22 +21,20 @@ export const INVALID_OPTION_KEYS: Array<keyof RoomListingData> = [
 export type ValidateAuthTokenCallback = (token: string, request?: IncomingMessage) => Promise<any>;
 
 export class RegisteredHandler extends EventEmitter {
-  public klass: Type<Room>;
-  public options: any;
-
   public filterOptions: string[] = [];
   public sortOptions?: SortOptions;
 
-  constructor(klass: Type<Room>, options: any) {
+  constructor(
+    public name: string,
+    public klass: Type<Room>,
+    public options: any
+  ) {
     super();
 
     if (typeof(klass) !== 'function') {
       logger.debug('You are likely not importing your room class correctly.');
       throw new Error(`class is expected but ${typeof(klass)} was provided.`);
     }
-
-    this.klass = klass;
-    this.options = options;
   }
 
   public enableRealtimeListing() {

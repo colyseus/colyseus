@@ -2,22 +2,20 @@
 
 // "bun-types" is currently conflicting with "ws" types.
 // @ts-ignore
-import { ServerWebSocket, WebSocketHandler } from "bun";
+import { ServerWebSocket, WebSocketHandler } from 'bun';
 
 import type http from 'http';
-import bunExpress from "bun-serve-express";
-
-import { DummyServer, matchMaker, Transport, debugAndPrintError, spliceOne, ServerError, getBearerToken } from '@colyseus/core';
-import { WebSocketClient, WebSocketWrapper } from './WebSocketClient';
+import bunExpress from 'bun-serve-express';
 import type { Application, Request, Response } from "express";
+
+import { HttpServerMock, matchMaker, Transport, debugAndPrintError, spliceOne, ServerError, getBearerToken } from '@colyseus/core';
+import { WebSocketClient, WebSocketWrapper } from './WebSocketClient.js';
 
 export type TransportOptions = Partial<Omit<WebSocketHandler, "message" | "open" | "drain" | "close" | "ping" | "pong">>;
 
 interface WebSocketData {
   url: URL;
-  // query: string,
-  // headers: { [key: string]: string },
-  // connection: { remoteAddress: string },
+  headers: any;
 }
 
 export class BunWebSockets extends Transport {
@@ -43,7 +41,6 @@ export class BunWebSockets extends Transport {
         },
 
         message(ws, message) {
-          // this.clientWrappers.get(ws)?.emit('message', Buffer.from(message.slice(0)));
           self.clientWrappers.get(ws)?.emit('message', message);
         },
 
@@ -64,7 +61,8 @@ export class BunWebSockets extends Transport {
 
     // Adding a mock object for Transport.server
     if (!this.server) {
-      this.server = new DummyServer();
+      // @ts-ignore
+      this.server = new HttpServerMock();
     }
   }
 
@@ -104,8 +102,10 @@ export class BunWebSockets extends Transport {
     }
 
     const originalRawSend = this._originalRawSend;
-    WebSocketClient.prototype.raw = milliseconds <= Number.EPSILON ? originalRawSend : function () {
-      setTimeout(() => originalRawSend.apply(this, arguments), milliseconds);
+    WebSocketClient.prototype.raw = milliseconds <= Number.EPSILON ? originalRawSend : function (...args: any[]) {
+      let [buf, ...rest] = args;
+      buf = Array.from(buf);
+      setTimeout(() => originalRawSend.apply(this, [buf, ...rest]), milliseconds);
     };
   }
 
@@ -121,7 +121,7 @@ export class BunWebSockets extends Transport {
     const processAndRoomId = parsedURL.pathname.match(/\/[a-zA-Z0-9_\-]+\/([a-zA-Z0-9_\-]+)$/);
     const roomId = processAndRoomId && processAndRoomId[1];
 
-    const room = matchMaker.getRoomById(roomId);
+    const room = matchMaker.getLocalRoomById(roomId);
     const client = new WebSocketClient(sessionId, wrapper);
 
     //
@@ -133,7 +133,11 @@ export class BunWebSockets extends Transport {
         throw new Error('seat reservation expired.');
       }
 
-      await room._onJoin(client, rawClient as unknown as http.IncomingMessage);
+      await room._onJoin(client, {
+        token: getBearerToken(rawClient.data.headers['authorization']),
+        headers: rawClient.data.headers,
+        ip: rawClient.data.headers['x-real-ip'] ?? rawClient.remoteAddress,
+      });
 
     } catch (e) {
       debugAndPrintError(e);
@@ -177,7 +181,7 @@ export class BunWebSockets extends Transport {
 
         case 'POST': {
           // do not accept matchmaking requests if already shutting down
-          if (matchMaker.isGracefullyShuttingDown) {
+          if (matchMaker.state === matchMaker.MatchMakerState.SHUTTING_DOWN) {
             throw new ServerError(503, "server is shutting down");
           }
 
@@ -203,7 +207,11 @@ export class BunWebSockets extends Transport {
             method,
             roomName,
             clientOptions,
-            { token: getBearerToken(req.headers['authorization']), request: req },
+            {
+              token: getBearerToken(req.headers['authorization']),
+              headers: req.headers,
+              ip: req.headers['x-real-ip'] ?? req.ips,
+            },
           ));
           break;
         }

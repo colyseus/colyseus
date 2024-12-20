@@ -2,8 +2,8 @@ import http from 'http';
 import { URL } from 'url';
 import WebSocket, { ServerOptions } from 'ws';
 
-import { matchMaker, Protocol, Transport, debugAndPrintError, debugConnection } from '@colyseus/core';
-import { WebSocketClient } from './WebSocketClient';
+import { matchMaker, Protocol, Transport, debugAndPrintError, debugConnection, getBearerToken } from '@colyseus/core';
+import { WebSocketClient } from './WebSocketClient.js';
 
 function noop() {/* tslint:disable:no-empty */ }
 function heartbeat() { this.pingCount = 0; }
@@ -18,11 +18,11 @@ export interface TransportOptions extends ServerOptions {
 export class WebSocketTransport extends Transport {
   protected wss: WebSocket.Server;
 
-  protected pingInterval: NodeJS.Timer;
+  protected pingInterval: NodeJS.Timeout;
   protected pingIntervalMS: number;
   protected pingMaxRetries: number;
 
-  private _originalSend: typeof WebSocket.prototype.send | null = null;
+  private _originalSend: typeof WebSocketClient.prototype.raw | null = null;
 
   constructor(options: TransportOptions = {}) {
     super();
@@ -78,13 +78,16 @@ export class WebSocketTransport extends Transport {
 
   public simulateLatency(milliseconds: number) {
     if (this._originalSend == null) {
-      this._originalSend = WebSocket.prototype.send;
+      this._originalSend = WebSocketClient.prototype.raw;
     }
 
     const originalSend = this._originalSend;
 
-    WebSocket.prototype.send = milliseconds <= Number.EPSILON ? originalSend : function (...args: any[]) {
-      setTimeout(() => originalSend.apply(this, args), milliseconds);
+    WebSocketClient.prototype.raw = milliseconds <= Number.EPSILON ? originalSend : function (...args: any[]) {
+      // copy buffer
+      let [buf, ...rest] = args;
+      buf = Array.from(buf);
+      setTimeout(() => originalSend.apply(this, [buf, ...rest]), milliseconds);
     };
   }
 
@@ -107,20 +110,19 @@ export class WebSocketTransport extends Transport {
     }, pingInterval);
   }
 
-  protected async onConnection(rawClient: RawWebSocketClient, req?: http.IncomingMessage & any) {
+  protected async onConnection(rawClient: RawWebSocketClient, req: http.IncomingMessage) {
     // prevent server crashes if a single client had unexpected error
     rawClient.on('error', (err) => debugAndPrintError(err.message + '\n' + err.stack));
     rawClient.on('pong', heartbeat);
 
     // compatibility with ws / uws
-    const upgradeReq = req || (rawClient as any).upgradeReq;
-    const parsedURL = new URL(`ws://server/${upgradeReq.url}`);
+    const parsedURL = new URL(`ws://server/${req.url}`);
 
     const sessionId = parsedURL.searchParams.get("sessionId");
     const processAndRoomId = parsedURL.pathname.match(/\/[a-zA-Z0-9_\-]+\/([a-zA-Z0-9_\-]+)$/);
     const roomId = processAndRoomId && processAndRoomId[1];
 
-    const room = matchMaker.getRoomById(roomId);
+    const room = matchMaker.getLocalRoomById(roomId);
 
     // set client id
     rawClient.pingCount = 0;
@@ -136,7 +138,11 @@ export class WebSocketTransport extends Transport {
         throw new Error('seat reservation expired.');
       }
 
-      await room._onJoin(client, upgradeReq);
+      await room._onJoin(client, {
+        headers: req.headers,
+        token: getBearerToken(req.headers.authorization),
+        ip: req.headers['x-real-ip'] ?? req.headers['x-forwarded-for'] ?? req.socket.remoteAddress,
+      });
 
     } catch (e) {
       debugAndPrintError(e);

@@ -1,4 +1,4 @@
-import { MatchMakerState, presence, processId, state } from "./MatchMaker";
+import { MatchMakerState, presence, processId, state } from './MatchMaker.js';
 
 export type Stats = {
   roomCount: number;

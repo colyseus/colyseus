@@ -1,0 +1,36 @@
+{
+  "name": "@colyseus/h3-transport",
+  "version": "0.16.0-preview.5",
+  "input": "./src/index.ts",
+  "main": "./build/index.js",
+  "module": "./build/index.mjs",
+  "typings": "./build/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./build/index.mjs",
+      "require": "./build/index.js"
+    }
+  },
+  "dependencies": {
+    "@colyseus/core": "workspace:^",
+    "@colyseus/schema": "^3.0.0-alpha.0",
+    "@fails-components/webtransport": "^1.1.4",
+    "@fails-components/webtransport-transport-http3-quiche": "^1.1.4",
+    "node-forge": "^1.3.1"
+  },
+  "author": "Endel Dreyer",
+  "license": "MIT",
+  "files": [
+    "build",
+    "LICENSE",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/colyseus/colyseus.git"
+  },
+  "homepage": "https://colyseus.io/",
+  "publishConfig": {
+    "access": "public"
+  }
+}

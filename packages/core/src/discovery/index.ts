@@ -1,4 +1,4 @@
-import { Presence } from '../presence/Presence';
+import { Presence } from '../presence/Presence.js';
 
 const NODES_SET = 'colyseus:nodes';
 const DISCOVERY_CHANNEL = 'colyseus:nodes:discovery';
