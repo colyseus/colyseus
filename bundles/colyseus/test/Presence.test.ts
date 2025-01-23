@@ -123,6 +123,15 @@ describe("Presence", () => {
         assert.ok(true);
       });
 
+      it("unsubscribe from non-existing callback", async () => {
+        let callCount = 0;
+        presence.subscribe("topic", (_) => callCount++);
+        presence.unsubscribe("topic", function() {});
+        presence.publish("topic", "hello world!");
+        await timeout(10);
+        assert.strictEqual(1, callCount);
+      });
+
       it("exists", async () => {
         await presence.subscribe("exists1", () => {});
         assert.equal(true, await presence.exists("exists1"));
