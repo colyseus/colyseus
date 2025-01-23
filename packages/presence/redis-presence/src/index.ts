@@ -1,5 +1,5 @@
 import Redis, { Cluster, ClusterNode, ClusterOptions, RedisOptions } from 'ioredis';
-import { Presence } from '@colyseus/core';
+import { Presence, spliceOne } from '@colyseus/core';
 
 type Callback = (...args: any[]) => void;
 
@@ -45,7 +45,7 @@ export class RedisPresence implements Presence {
 
         if (callback) {
           const index = topicCallbacks.indexOf(callback);
-          topicCallbacks.splice(index, 1);
+          spliceOne(topicCallbacks, index);
 
         } else {
           this.subscriptions[topic] = [];
