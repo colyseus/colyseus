@@ -7,8 +7,8 @@ export default ((process.env.COLYSEUS_CLOUD)
 \____/\____/_/\__, /____/\___/\__,_/____/   \____/_/\____/\__,_/\__,_/
              /____/
 
+❓ Don't hesitate to contact support@colyseus.io if you have any issues.
 🚀 Thank you for using Colyseus Cloud
-❓ If you need help please reach out on support@colyseus.io
 `
 
   : String.raw`
@@ -19,9 +19,10 @@ export default ((process.env.COLYSEUS_CLOUD)
     \____/\___/|_|\__, |___/\___|\__,_|___/
                   |___/
 
-Multiplayer Framework for Node.js · Open-source
+     · Multiplayer Framework for Node.js ·
 
-💖 Sponsor Colyseus on GitHub → https://github.com/sponsors/endel
-🌟 Give it a star on GitHub → https://github.com/colyseus/colyseus
+💖 Consider becoming a Sponsor on GitHub → https://github.com/sponsors/endel
+🌟 Give us a star on GitHub → https://github.com/colyseus/colyseus
 ☁️  Deploy and scale your project on Colyseus Cloud → https://cloud.colyseus.io
+
 `);
