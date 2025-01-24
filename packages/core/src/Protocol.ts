@@ -65,6 +65,15 @@ export const getMessageBytes = {
     encode.utf8Write(packr.buffer, serializerId, it);
 
     let handshakeLength = handshake?.byteLength || 0;
+
+    // check if buffer needs to be resized
+    // (TODO: refactor me!)
+    if (handshakeLength > packr.buffer.byteLength - it.offset) {
+      const newBuffer = Buffer.allocUnsafe(it.offset + handshakeLength);
+      (packr.buffer as Buffer).copy(newBuffer);
+      packr.useBuffer(newBuffer);
+    }
+
     if (handshakeLength > 0) {
       handshake.copy(packr.buffer, it.offset, 0, handshakeLength);
     }
