@@ -143,8 +143,8 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
   } = {
       '__no_message_handler': {
         callback: (client: Client, messageType: string, _: unknown) => {
-          const errorMessage = `onMessage for "${messageType}" not registered.`;
-          debugAndPrintError(errorMessage);
+          const errorMessage = `room onMessage for "${messageType}" not registered.`;
+          debugAndPrintError(`${errorMessage} (roomId: ${this.roomId})`);
 
           if (isDevMode) {
             // send error code to client in development mode
@@ -175,7 +175,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
   constructor() {
     this._events.once('dispose', () => {
       this._dispose()
-        .catch((e) => debugAndPrintError(`onDispose error: ${(e && e.stack || e.message || e || 'promise rejected')}`))
+        .catch((e) => debugAndPrintError(`onDispose error: ${(e && e.stack || e.message || e || 'promise rejected')} (roomId: ${this.roomId})`))
         .finally(() => this._events.emit('disconnect'));
     });
 
@@ -725,7 +725,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
       throw new ServerError(ErrorCode.MATCHMAKE_EXPIRED, "already consumed");
     }
     this.reservedSeats[sessionId][2] = true; // flag seat reservation as "consumed"
-    debugMatchMaking('consuming seat reservation, sessionId: \'%s\'', client.sessionId);
+    debugMatchMaking('consuming seat reservation, sessionId: \'%s\' (roomId: %s)', client.sessionId, this.roomId);
 
     // share "after next patch queue" reference with every client.
     client._afterNextPatchQueue = this._afterNextPatchQueue;
@@ -929,7 +929,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
   }
 
   private broadcastMessageType(type: number | string, message?: any | Uint8Array, options: IBroadcastOptions = {}) {
-    debugMessage("broadcast: %O", message);
+    debugMessage("broadcast: %O (roomId: %s)", message, this.roomId);
 
     const encodedMessage = (message instanceof Uint8Array)
       ? getMessageBytes.raw(Protocol.ROOM_DATA_BYTES, type, undefined, message)
@@ -1068,7 +1068,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
     const code = buffer[0];
 
     if (!buffer) {
-      debugAndPrintError(`${this.roomName} (${this.roomId}), couldn't decode message: ${buffer}`);
+      debugAndPrintError(`${this.roomName} (roomId: ${this.roomId}), couldn't decode message: ${buffer}`);
       return;
     }
 
@@ -1083,7 +1083,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
         message = (buffer.byteLength > it.offset)
           ? unpack(buffer.subarray(it.offset, buffer.byteLength))
           : undefined;
-        debugMessage("received: '%s' -> %j", messageType, message);
+        debugMessage("received: '%s' -> %j (roomId: %s)", messageType, message, this.roomId);
 
         // custom message validation
         if (messageTypeHandler?.validate !== undefined) {
@@ -1110,7 +1110,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
       const messageTypeHandler = this.onMessageHandlers[messageType];
 
       let message = buffer.subarray(it.offset, buffer.byteLength);
-      debugMessage("received: '%s' -> %j", messageType, message);
+      debugMessage("received: '%s' -> %j (roomId: %s)", messageType, message, this.roomId);
 
       // custom message validation
       if (messageTypeHandler?.validate !== undefined) {
@@ -1158,7 +1158,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
   }
 
   protected async _onLeave(client: Client, code?: number): Promise<any> {
-    debugMatchMaking('onLeave, sessionId: \'%s\'', client.sessionId);
+    debugMatchMaking('onLeave, sessionId: \'%s\' (close code: %d, roomId: %s)', client.sessionId, code, this.roomId);
 
     // call 'onLeave' method only if the client has been successfully accepted.
     client.state = ClientState.LEAVING;
@@ -1174,7 +1174,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
         await this.onLeave(client, (code === Protocol.WS_CLOSE_CONSENTED));
 
       } catch (e) {
-        debugAndPrintError(`onLeave error: ${(e && e.message || e || 'promise rejected')}`);
+        debugAndPrintError(`onLeave error: ${(e && e.message || e || 'promise rejected')} (roomId: ${this.roomId})`);
 
       } finally {
         this.#_onLeaveConcurrent--;
