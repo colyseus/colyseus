@@ -213,21 +213,6 @@ export class H3Transport extends Transport {
 
       res.end();
     });
-
-    this.options.app.get(`/${matchMaker.controller.matchmakeRoute}/:roomName`, async (req, res) => {
-      const matchedParams = req.url.match(matchMaker.controller.allowedRoomNameChars);
-      const roomName = matchedParams.length > 1 ? matchedParams[matchedParams.length - 1] : "";
-
-      const headers = Object.assign(
-        {},
-        matchMaker.controller.DEFAULT_CORS_HEADERS,
-        matchMaker.controller.getCorsHeaders.call(undefined, req)
-      );
-      headers['Content-Type'] = 'application/json';
-      res.writeHead(200, headers);
-      res.write(JSON.stringify(await matchMaker.controller.getAvailableRooms(roomName)));
-      res.end();
-    });
   }
 
   protected async onConnection(h3Client: H3Client, data: ArrayBufferLike, req?: http.IncomingMessage & any) {

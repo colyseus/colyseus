@@ -395,12 +395,7 @@ export class Server {
       });
 
     } else if (req.method === 'GET') {
-      const matchedParams = req.url.match(matchMaker.controller.allowedRoomNameChars);
-      const roomName = matchedParams.length > 1 ? matchedParams[matchedParams.length - 1] : "";
-
-      headers['Content-Type'] = 'application/json';
-      res.writeHead(200, headers);
-      res.write(JSON.stringify(await matchMaker.controller.getAvailableRooms(roomName)));
+      res.writeHead(404, headers);
       res.end();
     }
 

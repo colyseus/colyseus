@@ -1095,33 +1095,6 @@ describe("Integration", () => {
 
           })
 
-          describe("Matchmaker queries", () => {
-            beforeEach(async () => {
-              matchMaker.defineRoomType('allroomstest', class _ extends Room {});
-              matchMaker.defineRoomType('allroomstest2', class _ extends Room {});
-              await matchMaker.create("allroomstest");
-              await matchMaker.create("allroomstest2");
-            })
-
-            // make sure rooms are disposed after each test.
-            afterEach(async () => await matchMaker.disconnectAll());
-
-            it("client.getAvailableRooms() should receive all rooms when roomName is undefined", async () => {
-              const rooms = await client.getAvailableRooms(undefined);
-              assert.strictEqual(2, rooms.length);
-            });
-
-            it("client.getAvailableRooms() should receive the room when roomName is given", async () => {
-              const rooms = await client.getAvailableRooms("allroomstest");
-              assert.strictEqual("allroomstest", rooms[0]["name"]);
-            });
-
-            it("client.getAvailableRooms() should receive empty list if no room exists for the given roomName", async () => {
-              const rooms = await client.getAvailableRooms("incorrectRoomName");
-              assert.strictEqual(0, rooms.length);
-            });
-          });
-
           describe("onLeave with exceptions", () => {
             it("should trigger onLeave if onJoin fails", async () => {
               class Player extends Schema {

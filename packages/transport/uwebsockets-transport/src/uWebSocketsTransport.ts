@@ -297,39 +297,6 @@ export class uWebSocketsTransport extends Transport {
 
             });
         });
-
-        // this.app.any("/*", (res, req) => {
-        //     res.onAborted(() => onAborted(req));
-        //     res.writeStatus("200 OK");
-        // });
-
-        this.app.get("/matchmake/*", async (res, req) => {
-            res.onAborted(() => onAborted(res));
-
-            writeHeaders(req, res);
-            res.writeHeader('Content-Type', 'application/json');
-
-            const url = req.getUrl();
-            const matchedParams = url.match(allowedRoomNameChars);
-            const roomName = matchedParams.length > 1 ? matchedParams[matchedParams.length - 1] : "";
-
-            try {
-                const response = await matchMaker.controller.getAvailableRooms(roomName || '')
-                if (!res.aborted) {
-                  res.cork(() => {
-                    res.writeStatus("200 OK");
-                    res.end(JSON.stringify(response));
-                  });
-                }
-
-            } catch (e) {
-                debugAndPrintError(e);
-                writeError(res, {
-                    code: e.code || ErrorCode.MATCHMAKE_UNHANDLED,
-                    error: e.message
-                });
-            }
-        });
     }
 
     /* Helper function for reading a posted JSON body */

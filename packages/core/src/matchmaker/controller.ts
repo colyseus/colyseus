@@ -44,20 +44,6 @@ export default {
     };
   },
 
-  getAvailableRooms(roomName: string) {
-    /**
-     * list public & unlocked rooms
-     */
-    const conditions: any = {
-      locked: false,
-      private: false,
-    };
-    if (roomName) {
-      conditions["name"] = roomName;
-    }
-    return matchMaker.query(conditions);
-  },
-
   async invokeMethod(
     method: string,
     roomName: string,

@@ -151,7 +151,6 @@ describe("LobbyRoom: Integration", () => {
 
           assert.equal(serverLobbyRoom.rooms.length, 2);
           assert.equal(allRooms.length, 2);
-          assert.equal((await client.getAvailableRooms('dummy_1')).length, 2);
 
           await matchMaker.remoteRoomCall(dummyRoomId, 'setPrivate');
 
@@ -159,7 +158,6 @@ describe("LobbyRoom: Integration", () => {
 
           assert.equal(serverLobbyRoom.rooms.length, 1);
           assert.equal(allRooms.length, 1);
-          assert.equal((await client.getAvailableRooms('dummy_1')).length, 1);
 
           await matchMaker.remoteRoomCall(dummyRoomId, 'setPrivate', [false]);
 
@@ -167,7 +165,6 @@ describe("LobbyRoom: Integration", () => {
 
           assert.equal(serverLobbyRoom.rooms.length, 2);
           assert.equal(allRooms.length, 2);
-          assert.equal((await client.getAvailableRooms('dummy_1')).length, 2);
 
           await lobby.leave();
         });

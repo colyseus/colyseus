@@ -169,13 +169,8 @@ export class BunWebSockets extends Transport {
         }
 
         case 'GET': {
-          const matchedParams = req.path.match(matchMaker.controller.allowedRoomNameChars);
-          const roomName = (matchedParams && matchedParams.length > 1)
-            ? matchedParams[matchedParams.length - 1]
-            : "";
-
           writeHeaders(req, res);
-          res.json(await matchMaker.controller.getAvailableRooms(roomName || ''));
+          res.status(404).end();
           break;
         }
 
