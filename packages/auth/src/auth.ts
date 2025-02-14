@@ -335,7 +335,7 @@ Please give feedback and report any issues you may find at https://github.com/co
           throw new Error("email_not_found");
         }
 
-        const token = await JWT.sign({ email }, { expiresIn: RESET_PASSWORD_TOKEN_EXPIRATION_MINUTES + "m" });
+        const token = await JWT.sign({ email }, { expiresIn: `${RESET_PASSWORD_TOKEN_EXPIRATION_MINUTES}m` });
         const passwordResetLink = `${auth.backend_url}${auth.prefix}/reset-password?token=${token}`;
         const html = (await fs.readFile(path.join(htmlTemplatePath, "reset-password-email.html"), "utf-8"))
           .replace("[LINK]", passwordResetLink);
