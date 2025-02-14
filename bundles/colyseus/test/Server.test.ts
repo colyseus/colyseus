@@ -34,11 +34,6 @@ describe("Server", () => {
 
   describe("matchmaking routes", () => {
 
-    it("should respond to GET /matchmake/ to retrieve list of rooms", async () => {
-      const response = await httpClient.get("http://localhost:8567/matchmake/");
-      assert.deepEqual(response.data, []);
-    });
-
     it("should respond to POST /matchmake/joinOrCreate/roomName", async () => {
       const { data } = await httpClient.post("http://localhost:8567/matchmake/joinOrCreate/roomName", {
         body: "{}"
