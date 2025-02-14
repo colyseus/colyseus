@@ -101,12 +101,12 @@ describe("Presence", () => {
         assert.deepEqual([1, 2, 3, 4], messages);
 
         // leave all subscriptions...
-        assert.ok(presence['subscriptions']['topic-collide1']);
-        assert.ok(presence['subscriptions']['topic-collide2']);
+        assert.ok(presence['channels'].listenerCount("topic-collide1") > 0);
+        assert.ok(presence['channels'].listenerCount("topic-collide2") > 0);
         await presence.unsubscribe("topic-collide1", callback1);
         await presence.unsubscribe("topic-collide2", callback3);
-        assert.equal(undefined, presence['subscriptions']['topic-collide1']);
-        assert.equal(undefined, presence['subscriptions']['topic-collide2']);
+        assert.strictEqual(0, presence['channels'].listenerCount("topic-collide1"));
+        assert.strictEqual(0, presence['channels'].listenerCount("topic-collide2"));
 
         messages = [];
         await presence.publish("topic-collide1", 1000);
@@ -125,17 +125,45 @@ describe("Presence", () => {
 
       it("unsubscribe from non-existing callback", async () => {
         let callCount = 0;
-        presence.subscribe("topic", (_) => callCount++);
-        presence.unsubscribe("topic", function() {});
-        presence.publish("topic", "hello world!");
+        await presence.subscribe("topic", (_) => { callCount++; });
+        await presence.unsubscribe("topic", function() {});
+        await presence.publish("topic", "hello world!");
         await timeout(10);
         assert.strictEqual(1, callCount);
       });
 
+      it("unsubscribe while triggering", async () => {
+        const topic = "unsubscribe-ongoing";
+
+        let calls = [];
+
+        const one = (_) => calls.push("one");
+        const two = (_) => calls.push("two");
+        const three = (_) => calls.push("three");
+        const four = (_) => calls.push("four");
+
+        await presence.subscribe(topic, one);
+        await presence.subscribe(topic, two);
+        await presence.subscribe(topic, async () => {
+          await presence.unsubscribe(topic, four);
+
+        });
+        await presence.subscribe(topic, three);
+        await presence.subscribe(topic, four);
+
+        await presence.publish(topic, {});
+        await timeout(10);
+
+        assert.deepStrictEqual(["one", "two", "three", "four"], calls);
+      });
+
       it("exists", async () => {
-        await presence.subscribe("exists1", () => {});
+        await presence.set("exists1", "hello world");
         assert.equal(true, await presence.exists("exists1"));
         assert.equal(false, await presence.exists("exists2"));
+
+        await presence.del("exists1");
+        assert.equal(false, await presence.exists("exists1"));
       });
 
       it("set", async () => {

@@ -1,5 +1,6 @@
 import Redis, { Cluster, ClusterNode, ClusterOptions, RedisOptions } from 'ioredis';
 import { Presence, spliceOne } from '@colyseus/core';
+import EventEmitter from 'events';
 
 type Callback = (...args: any[]) => void;
 
@@ -7,7 +8,8 @@ export class RedisPresence implements Presence {
     protected sub: Redis | Cluster;
     protected pub: Redis | Cluster;
 
-    protected subscriptions: { [channel: string]: Callback[] } = {};
+    protected channels = new EventEmitter();
+    // protected subscriptions: { [channel: string]: Callback[] } = {};
 
     constructor(options?: number | string | RedisOptions | ClusterNode[], clusterOptions?: ClusterOptions) {
         if (Array.isArray(options)) {
@@ -24,11 +26,7 @@ export class RedisPresence implements Presence {
     }
 
     public async subscribe(topic: string, callback: Callback) {
-        if (!this.subscriptions[topic]) {
-          this.subscriptions[topic] = [];
-        }
-
-        this.subscriptions[topic].push(callback);
+        this.channels.addListener(topic, callback);
 
         if (this.sub.listeners('message').length === 0) {
           this.sub.on('message', this.handleSubscription);
@@ -40,19 +38,14 @@ export class RedisPresence implements Presence {
     }
 
     public async unsubscribe(topic: string, callback?: Callback) {
-        const topicCallbacks = this.subscriptions[topic];
-        if (!topicCallbacks) { return; }
-
         if (callback) {
-          const index = topicCallbacks.indexOf(callback);
-          spliceOne(topicCallbacks, index);
+          this.channels.removeListener(topic, callback);
 
         } else {
-          this.subscriptions[topic] = [];
+          this.channels.removeAllListeners(topic);
         }
 
-        if (this.subscriptions[topic].length === 0) {
-          delete this.subscriptions[topic];
+        if (this.channels.listenerCount(topic) === 0) {
           await this.sub.unsubscribe(topic);
         }
 
@@ -67,8 +60,8 @@ export class RedisPresence implements Presence {
         await this.pub.publish(topic, JSON.stringify(data));
     }
 
-    public async exists(roomId: string): Promise<boolean> {
-        return (await (this.pub as any).pubsub("channels", roomId)).length > 0;
+    public async exists(key: string): Promise<boolean> {
+        return (await this.pub.exists(key)) === 1;
     }
 
     public async set(key: string, value: string) {
@@ -206,11 +199,7 @@ export class RedisPresence implements Presence {
     }
 
     protected handleSubscription = (channel, message) => {
-        if (this.subscriptions[channel]) {
-          for (let i = 0, l = this.subscriptions[channel].length; i < l; i++) {
-            this.subscriptions[channel][i](JSON.parse(message));
-          }
-        }
+        this.channels.emit(channel, JSON.parse(message));
     }
 
 }

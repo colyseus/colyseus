@@ -19,7 +19,6 @@ export class LocalPresence implements Presence {
 
     public keys: {[name: string]: string | number} = {};
 
-    protected subscriptions: {[id: string]: Callback[]} = {};
     private timeouts: {[name: string]: NodeJS.Timeout} = {};
 
     constructor() {
@@ -39,32 +38,16 @@ export class LocalPresence implements Presence {
     }
 
     public subscribe(topic: string, callback: (...args: any[]) => void) {
-        if (!this.subscriptions[topic]) { this.subscriptions[topic] = []; }
-        this.subscriptions[topic].push(callback);
         this.channels.on(topic, callback);
         return this;
     }
 
     public unsubscribe(topic: string, callback?: Callback) {
-        const topicCallbacks = this.subscriptions[topic];
-        if (!topicCallbacks) { return; }
-
         if (callback)  {
-            const idx = topicCallbacks.indexOf(callback);
-            if (idx !== -1) {
-                topicCallbacks.splice(idx, 1);
-                this.channels.removeListener(topic, callback);
-            }
-
-            if (topicCallbacks.length === 0) {
-                delete this.subscriptions[topic];
-            }
+            this.channels.removeListener(topic, callback);
 
         } else {
-          topicCallbacks.forEach((cb) =>
-            this.channels.removeListener(topic, cb));
-
-          delete this.subscriptions[topic];
+            this.channels.removeAllListeners(topic);
         }
 
         return this;
@@ -76,7 +59,11 @@ export class LocalPresence implements Presence {
     }
 
     public async exists(key: string): Promise<boolean> {
-        return this.channels.listenerCount(key) > 0;
+        return (
+          this.keys[key] !== undefined ||
+          this.data[key] !== undefined ||
+          this.hash[key] !== undefined
+        );
     }
 
     public set(key: string, value: string) {
