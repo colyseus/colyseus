@@ -1378,6 +1378,39 @@ describe("Integration", () => {
             await reconnectedRoom.leave();
           });
 
+          it("reconnected client should received messages from previous and new 'client' instance", async () => {
+            const reconnectionTokens = [];
+
+            matchMaker.defineRoomType('allow_reconnection', class _ extends Room {
+              async onLeave(client: Client, consented) {
+                try {
+                  if (consented) { throw new Error("consented!"); }
+
+                  // reconnectionToken before reconnecting
+                  reconnectionTokens.push(client.reconnectionToken);
+
+                  await this.allowReconnection(client, 0.5);
+
+                  // reconnectionToken should be updated with new connection
+                  reconnectionTokens.push(client.reconnectionToken);
+                } catch (e) {}
+              }
+            });
+
+            const roomConnection = await client.joinOrCreate('allow_reconnection');
+
+            // forcibly close connection
+            roomConnection.connection.transport.close();
+
+            // wait for reconnection to timeout
+            await timeout(50);
+            const reconnectedRoom = await client.reconnect(roomConnection.reconnectionToken);
+
+            assert.notStrictEqual(reconnectionTokens[0], reconnectionTokens[1]);
+
+            await reconnectedRoom.leave();
+          });
+
           it("should dispose room on allowReconnection timeout", async () => {
             const onRoomDisposed = new Deferred();
             matchMaker.defineRoomType('allow_reconnection', class _ extends Room {

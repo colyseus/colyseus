@@ -902,8 +902,11 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
       then((newClient) => {
         newClient.auth = previousClient.auth;
         newClient.userData = previousClient.userData;
-        previousClient.ref = newClient.ref; // swap "ref" for convenience
+
+        // for convenience: populate previous client reference with new client
         previousClient.state = ClientState.RECONNECTED;
+        previousClient.ref = newClient.ref;
+        previousClient.reconnectionToken = newClient.reconnectionToken;
         clearTimeout(this.reservedSeatTimeouts[sessionId]);
         cleanup();
       }).
