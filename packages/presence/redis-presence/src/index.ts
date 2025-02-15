@@ -1,5 +1,5 @@
 import Redis, { Cluster, ClusterNode, ClusterOptions, RedisOptions } from 'ioredis';
-import { Presence, spliceOne } from '@colyseus/core';
+import { Presence } from '@colyseus/core';
 import EventEmitter from 'events';
 
 type Callback = (...args: any[]) => void;
@@ -9,7 +9,6 @@ export class RedisPresence implements Presence {
     protected pub: Redis | Cluster;
 
     protected channels = new EventEmitter();
-    // protected subscriptions: { [channel: string]: Callback[] } = {};
 
     constructor(options?: number | string | RedisOptions | ClusterNode[], clusterOptions?: ClusterOptions) {
         if (Array.isArray(options)) {
