@@ -37,7 +37,7 @@ export { LocalPresence } from './presence/LocalPresence.js';
 // Serializers
 export { type Serializer } from './serializer/Serializer.js';
 export { SchemaSerializer } from './serializer/SchemaSerializer.js';
-export { SchemaSerializerDebug } from './serializer/SchemaSerializerDebug.js';
+// export { SchemaSerializerDebug } from './serializer/SchemaSerializerDebug.js';
 
 // Utilities
 export { Clock, Delayed };

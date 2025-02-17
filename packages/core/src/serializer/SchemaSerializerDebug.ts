@@ -12,6 +12,7 @@ import { Client, ClientState  } from "../Transport.js";
 import { Protocol} from '../Protocol.js';
 import { debugPatch } from '../Debug.js';
 
+/*
 const SHARED_VIEW = {};
 
 export class SchemaSerializerDebug<T> extends SchemaSerializer<T> {
@@ -143,3 +144,5 @@ export class SchemaSerializerDebug<T> extends SchemaSerializer<T> {
     return buf;
   }
 }
+
+*/
