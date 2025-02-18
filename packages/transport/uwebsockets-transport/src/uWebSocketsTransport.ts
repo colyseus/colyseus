@@ -259,6 +259,8 @@ export class uWebSocketsTransport extends Transport {
             const headers: IncomingHttpHeaders = {};
             req.forEach((key, value) => headers[key] = value);
 
+            const token = getBearerToken(headers['authorization']);
+
             // read json body
             this.readJson(res, async (clientOptions) => {
                 try {
@@ -274,7 +276,7 @@ export class uWebSocketsTransport extends Transport {
                       roomName,
                       clientOptions,
                       {
-                        token: getBearerToken(req.getHeader('authorization')),
+                        token,
                         headers,
                         ip: headers['x-real-ip'] ?? Buffer.from(res.getRemoteAddressAsText()).toString()
                       }
