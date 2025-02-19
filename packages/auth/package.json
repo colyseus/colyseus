@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/auth",
-  "version": "0.16.0",
+  "version": "0.16.1",
   "description": "Authentication Utilities for Colyseus",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -51,7 +51,7 @@
     "@colyseus/core": "workspace:^",
     "httpie": "^2.0.0-next.13"
   },
-  "peerDependencies_TODO": {
+  "peerDependencies": {
     "@colyseus/core": "0.16.x",
     "express": "^4.17.1"
   },
