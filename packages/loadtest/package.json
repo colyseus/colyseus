@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/loadtest",
-  "version": "0.16.0",
+  "version": "0.16.1",
   "description": "Utility tool for load testing Colyseus.",
   "type": "module",
   "exports": {
@@ -42,7 +42,7 @@
   },
   "dependencies": {
     "blessed": "^0.1.81",
-    "colyseus.js": "^0.16.0-preview.0",
+    "colyseus.js": "^0.16.0",
     "minimist": "^1.2.5",
     "typescript": ">=4.3.5",
     "ws": "^7.4.5"

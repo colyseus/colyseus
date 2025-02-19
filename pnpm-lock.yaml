@@ -51,8 +51,8 @@ importers:
         specifier: ^7.7.2
         version: 7.14.0
       colyseus.js:
-        specifier: ^0.16.0-preview.0
-        version: 0.16.0-preview.25
+        specifier: ^0.16.2
+        version: 0.16.2
       cors:
         specifier: ^2.8.5
         version: 2.8.5
@@ -138,6 +138,9 @@ importers:
       connect-redis:
         specifier: ^7.1.0
         version: 7.1.1(express-session@1.18.1)
+      express:
+        specifier: ^4.17.1
+        version: 4.21.2
       express-jwt:
         specifier: ^8.5.1
         version: 8.5.1
@@ -746,7 +749,6 @@ packages:
   /@colyseus/schema@3.0.1:
     resolution: {integrity: sha512-Ifq7RQmpcGauALcFXb4SJ90WtAIMrN30f7haoqpq8kKyPrS0ZpJz41w8f/MhNiEyTgZeE+C30l+N9IyX5Z7xXw==}
     hasBin: true
-    dev: false
 
   /@colyseus/timer@1.0.1:
     resolution: {integrity: sha512-zsbmytTaSfqOYlnw0PXQCgwumXjn8eM/HMyMTVGjXlczsJ8DFl5OHaWAsJz7kIn92NTAONoIwLTwyVRvpJCVzA==}
@@ -3108,6 +3110,20 @@ packages:
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
+
+  /colyseus.js@0.16.2:
+    resolution: {integrity: sha512-1ayBxpZTd9jEQnJabKLdSZmiTN0Xleun7knhOrnlD0PrXF0y2SOegpQZ/1oW0f2Z3XV+mwe7xOJTp2kNr9I7QA==}
+    engines: {node: '>= 12.x'}
+    dependencies:
+      '@colyseus/msgpackr': 1.10.5
+      '@colyseus/schema': 3.0.1
+      httpie: 2.0.0-next.13
+      tslib: 2.8.1
+      ws: 8.18.0
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+    dev: true
 
   /combined-stream@1.0.8:
     resolution: {integrity: sha512-FQN4MRfuJeHf7cBbBMJFXhKSDq+2kAArBlmRBvcvFE5BB1HZKXtSFASDhdlz9zOYwxh8lDdnvmMOe/+5cdoEdg==}
@@ -7350,7 +7366,7 @@ packages:
     resolution: {integrity: sha512-efCx3b+0Z69/LGJmm9Yvi4cqEdxnoGnxYxGxBghkkTTFeXRtTCmmhO0AnAfHz59k957uTSuy8WaHqOs8wbYUWg==}
     engines: {node: '>=6'}
     dependencies:
-      debug: 4.3.7
+      debug: 4.4.0(supports-color@8.1.1)
       module-details-from-path: 1.0.3
       resolve: 1.22.10
     transitivePeerDependencies:

@@ -38,7 +38,7 @@
     "@colyseus/core": "workspace:^",
     "@colyseus/tools": "workspace:^",
     "@colyseus/ws-transport": "workspace:^",
-    "colyseus.js": "^0.16.0-preview.0"
+    "colyseus.js": "^0.16.0"
   },
   "peerDependencies_TODO": {
     "@colyseus/tools": "0.16.x",
