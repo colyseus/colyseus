@@ -223,7 +223,7 @@ export async function create(roomName: string, clientOptions: ClientOptions = {}
  */
 export async function join(roomName: string, clientOptions: ClientOptions = {}, authOptions?: AuthContext) {
   return await retry<Promise<SeatReservation>>(async () => {
-    const authData = await callOnAuth(roomName, authOptions);
+    const authData = await callOnAuth(roomName, clientOptions, authOptions);
     const room = await findOneRoomAvailable(roomName, clientOptions);
 
     if (!room) {
@@ -286,7 +286,7 @@ export async function joinById(roomId: string, clientOptions: ClientOptions = {}
     throw new ServerError(ErrorCode.MATCHMAKE_INVALID_ROOM_ID, `room "${roomId}" is locked`);
   }
 
-  const authData = await callOnAuth(room.name, authOptions);
+  const authData = await callOnAuth(room.name, clientOptions, authOptions);
 
   return reserveSeatFor(room, clientOptions, authData);
 }
