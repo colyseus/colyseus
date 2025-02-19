@@ -440,7 +440,21 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
 
   let room: IRoomCache;
   if (selectedProcessId === undefined) {
-    throw new ServerError(ErrorCode.MATCHMAKE_UNHANDLED, `no processId available to create room ${roomName}`);
+
+    if (isDevMode && processId === undefined) {
+      //
+      // WORKAROUND: wait for processId to be available
+      // TODO: Remove this check on 1.0
+      //
+      // - This is a workaround when using matchMaker.createRoom() before the processId is available.
+      // - We need to use top-level await to retrieve processId
+      //
+      await onReady;
+      return createRoom(roomName, clientOptions);
+
+    } else {
+      throw new ServerError(ErrorCode.MATCHMAKE_UNHANDLED, `no processId available to create room ${roomName}`);
+    }
 
   } else if (selectedProcessId === processId) {
     // create the room on this process!
