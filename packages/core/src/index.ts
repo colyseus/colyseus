@@ -8,7 +8,7 @@ export { RegisteredHandler } from './matchmaker/RegisteredHandler.js';
 export { ServerError } from './errors/ServerError.js';
 
 export {
-  RoomException,
+  type RoomException,
   OnCreateException,
   OnAuthException,
   OnJoinException,
