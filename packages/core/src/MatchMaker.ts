@@ -221,9 +221,9 @@ export async function create(roomName: string, clientOptions: ClientOptions = {}
 /**
  * Join a room and return seat reservation
  */
-export async function join(roomName: string, clientOptions: ClientOptions = {}, authOptions?: AuthContext) {
+export async function join(roomName: string, clientOptions: ClientOptions = {}, authContext?: AuthContext) {
   return await retry<Promise<SeatReservation>>(async () => {
-    const authData = await callOnAuth(roomName, clientOptions, authOptions);
+    const authData = await callOnAuth(roomName, clientOptions, authContext);
     const room = await findOneRoomAvailable(roomName, clientOptions);
 
     if (!room) {
@@ -272,11 +272,11 @@ export async function reconnect(roomId: string, clientOptions: ClientOptions = {
  *
  * @param roomId - The Id of the specific room instance.
  * @param clientOptions - Options for the client seat reservation (for `onJoin`/`onAuth`)
- * @param authOptions - Optional authentication token
+ * @param authContext - Optional authentication token
  *
  * @returns Promise<SeatReservation> - A promise which contains `sessionId` and `IRoomCache`.
  */
-export async function joinById(roomId: string, clientOptions: ClientOptions = {}, authOptions?: AuthContext) {
+export async function joinById(roomId: string, clientOptions: ClientOptions = {}, authContext?: AuthContext) {
   const room = await driver.findOne({ roomId });
 
   if (!room) {
@@ -286,7 +286,7 @@ export async function joinById(roomId: string, clientOptions: ClientOptions = {}
     throw new ServerError(ErrorCode.MATCHMAKE_INVALID_ROOM_ID, `room "${roomId}" is locked`);
   }
 
-  const authData = await callOnAuth(room.name, clientOptions, authOptions);
+  const authData = await callOnAuth(room.name, clientOptions, authContext);
 
   return reserveSeatFor(room, clientOptions, authData);
 }
