@@ -67,11 +67,8 @@ export const getMessageBytes = {
     let handshakeLength = handshake?.byteLength || 0;
 
     // check if buffer needs to be resized
-    // (TODO: refactor me!)
     if (handshakeLength > packr.buffer.byteLength - it.offset) {
-      const newBuffer = Buffer.allocUnsafe(it.offset + handshakeLength);
-      (packr.buffer as Buffer).copy(newBuffer);
-      packr.useBuffer(newBuffer);
+      packr.useBuffer(Buffer.alloc(it.offset + handshakeLength, packr.buffer));
     }
 
     if (handshakeLength > 0) {
@@ -127,8 +124,15 @@ export const getMessageBytes = {
 
     } else if (rawMessage !== undefined) {
 
+      // check if buffer needs to be resized
+      // TODO: can we avoid this?
+      if (rawMessage.length + it.offset > packr.buffer.byteLength) {
+        packr.useBuffer(Buffer.alloc(it.offset + rawMessage.length, packr.buffer));
+      }
+
       // copy raw message into packr.buffer
       packr.buffer.set(rawMessage, it.offset);
+
       return packr.buffer.subarray(0, it.offset + rawMessage.byteLength);
 
     } else {

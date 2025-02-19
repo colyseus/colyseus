@@ -16,6 +16,8 @@ import WebSocket from "ws";
 const TEST_PORT = 8567;
 const TEST_ENDPOINT = `ws://localhost:${TEST_PORT}`;
 
+const MAX_PAYLOAD = 1024 * 16;
+
 describe("Integration", () => {
   for (let i = 0; i < PRESENCE_IMPLEMENTATIONS.length; i++) {
     for (let j = 0; j < DRIVERS.length; j++) {
@@ -33,7 +35,7 @@ describe("Integration", () => {
           transport = new WebSocketTransport({
             pingInterval: 100,
             pingMaxRetries: 3,
-            maxPayload: 512,
+            maxPayload: MAX_PAYLOAD
           });
 
           server = new Server({
@@ -532,6 +534,34 @@ describe("Integration", () => {
               await connection.leave();
 
               assert.deepStrictEqual(Array.from(pingBytes), Array.from(new Uint8Array(receivedBytes)));
+            });
+
+            it("should support sending and receiving raw bytes with big payload", async () => {
+              const bigBlob = new Blob([crypto.randomBytes(1024 * 9)], { type: "audio/webm" });
+              const bigPayload = await bigBlob.bytes();
+
+              let serverReceivedPayload: any;
+              matchMaker.defineRoomType('onmessage_bytes', class _ extends Room {
+                onCreate() {
+                  this.onMessage("big-payload", (client, payload) => {
+                    serverReceivedPayload = payload;
+                    client.sendBytes("big-payload", payload);
+                  });
+                }
+              });
+
+              const connection = await client.joinOrCreate('onmessage_bytes');
+
+              let receivedBytes: Buffer;
+              connection.onMessage("big-payload", (pongBytes) => { receivedBytes = pongBytes; });
+
+              connection.sendBytes("big-payload", bigPayload);
+
+              await timeout(20);
+              await connection.leave();
+
+              assert.deepStrictEqual(bigPayload, receivedBytes);
+              assert.deepStrictEqual(new Uint8Array(serverReceivedPayload), receivedBytes);
             });
 
             it("should validate input message", async () => {
@@ -1519,11 +1549,11 @@ describe("Integration", () => {
         });
 
         describe("invalid messages", () => {
-          it("exceeding maxPayload (512) should close the connection", async () => {
+          it("exceeding maxPayload should close the connection", async () => {
             // no onMessage registered
             matchMaker.defineRoomType('invalid_messages', class _ extends Room {});
             const conn1 = await client.joinOrCreate("invalid_messages");
-            conn1.sendBytes("invalid", crypto.randomBytes(2048));
+            conn1.sendBytes("invalid", crypto.randomBytes(MAX_PAYLOAD + 1));
             await timeout(50);
             assert.strictEqual(false, conn1.connection.isOpen);
 
@@ -1534,7 +1564,7 @@ describe("Integration", () => {
               }
             });
             const conn2 = await client.joinOrCreate("invalid_messages");
-            conn2.sendBytes("invalid", crypto.randomBytes(2048));
+            conn2.sendBytes("invalid", crypto.randomBytes(MAX_PAYLOAD + 1));
             await timeout(50);
             assert.strictEqual(false, conn1.connection.isOpen);
 
@@ -1545,7 +1575,7 @@ describe("Integration", () => {
               }
             });
             const conn3 = await client.joinOrCreate("invalid_messages");
-            conn3.sendBytes("invalid", crypto.randomBytes(2048));
+            conn3.sendBytes("invalid", crypto.randomBytes(MAX_PAYLOAD + 1));
             await timeout(50);
             assert.strictEqual(false, conn1.connection.isOpen);
           });
