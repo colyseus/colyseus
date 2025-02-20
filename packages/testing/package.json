@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/testing",
-  "version": "0.16.0",
+  "version": "0.16.1",
   "description": "Testing tools for Colyseus",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -40,10 +40,10 @@
     "@colyseus/ws-transport": "workspace:^",
     "colyseus.js": "^0.16.0"
   },
-  "peerDependencies_TODO": {
+  "peerDependencies": {
     "@colyseus/tools": "0.16.x",
     "@colyseus/core": "0.16.x",
-    "colyseus.js": "^0.16.x"
+    "colyseus.js": "0.16.x"
   },
   "publishConfig": {
     "access": "public"

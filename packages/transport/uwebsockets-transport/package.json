@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/uwebsockets-transport",
-  "version": "0.16.2",
+  "version": "0.16.3",
   "input": "./src/index.ts",
   "main": "./build/index.js",
   "module": "./build/index.mjs",
@@ -18,7 +18,7 @@
   "devDependencies": {
     "@colyseus/core": "workspace:^"
   },
-  "peerDependencies_TODO": {
+  "peerDependencies": {
     "@colyseus/core": "0.16.x"
   },
   "author": "Endel Dreyer",

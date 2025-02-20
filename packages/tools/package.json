@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/tools",
-  "version": "0.16.0",
+  "version": "0.16.1",
   "description": "Simplify the development and production settings for your Colyseus project.",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -56,7 +56,7 @@
     "@types/dotenv": "^8.2.0",
     "uwebsockets-express": "^1.1.10"
   },
-  "peerDependencies_TODO": {
+  "peerDependencies": {
     "@colyseus/core": "0.16.x",
     "@colyseus/ws-transport": "0.16.x"
   },
