@@ -136,7 +136,7 @@ Please give feedback and report any issues you may find at https://github.com/co
     // Auto-detect backend URL from the first request, if not defined.
     // (We do only once to reduce chances of 'Host' header injection vulnerability)
     //
-    router.use(function (req, _) {
+    router.use(function (req, _, next) {
       if (!auth.backend_url) {
         auth.backend_url = req.protocol + '://' + req.get('host');
       }
@@ -144,6 +144,7 @@ Please give feedback and report any issues you may find at https://github.com/co
         oauth.defaults.origin = auth.backend_url;
       }
       router.stack.shift(); // remove this middleware
+      next();
     });
 
     // set register/login callbacks
