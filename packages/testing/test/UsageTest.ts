@@ -31,9 +31,9 @@ describe("@colyseus/testing", () => {
 
   it("basic usage", async () => {
     const client = await colyseus.sdk.joinOrCreate("room_with_state", {});
-    const room = colyseus.getRoomById(client.id);
+    const room = colyseus.getRoomById(client.roomId);
 
-    assert.strictEqual(client.id, room.roomId);
+    assert.strictEqual(client.roomId, room.roomId);
   });
 
   it("colyseus.createRoom() + connectTo()", async () => {
@@ -63,7 +63,7 @@ describe("@colyseus/testing", () => {
 
   it("room.waitForNextMessage()", async () => {
     const client = await colyseus.sdk.joinOrCreate("room_without_state");
-    const room = colyseus.getRoomById(client.id);
+    const room = colyseus.getRoomById(client.roomId);
 
     let received: boolean = false;
     // client.onMessage("one-pong", (message) => {
@@ -85,7 +85,7 @@ describe("@colyseus/testing", () => {
     const client1 = await colyseus.sdk.joinOrCreate<State>("room_with_state");
     const client2 = await colyseus.sdk.joinOrCreate<State>("room_with_state");
 
-    const room = colyseus.getRoomById<State>(client1.id);
+    const room = colyseus.getRoomById<State>(client1.roomId);
     assert.strictEqual(0, room.state.players.get(client1.sessionId).score);
 
     client1.send("mutate");
@@ -121,7 +121,7 @@ describe("@colyseus/testing", () => {
 
   it("should wait for a particular message to arrive in the server", async () => {
     const client1 = await colyseus.sdk.joinOrCreate("room_without_state");
-    const room = colyseus.getRoomById(client1.id);
+    const room = colyseus.getRoomById(client1.roomId);
 
     client1.send("one-ping", "data");
 
