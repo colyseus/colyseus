@@ -26,7 +26,7 @@ export interface ISendOptions {
   afterNextPatch?: boolean;
 }
 
-export enum ClientState { JOINING, JOINED, RECONNECTED, LEAVING }
+export enum ClientState { JOINING, JOINED, RECONNECTED, LEAVING, CLOSED }
 
 /**
  * The client instance from the server-side is responsible for the transport layer between the server and the client.
