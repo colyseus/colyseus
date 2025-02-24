@@ -51,9 +51,24 @@ let onHashPassword: HashPasswordCallback = async (password: string) => Hash.make
 /**
  * Detect HTML template path (for password reset form)
  */
+const getDirname = () => {
+  try {
+    return typeof __dirname !== 'undefined' ? __dirname : null;
+  } catch {
+    try {
+      import.meta.url;
+      import { fileURLToPath } from 'url';
+      import { dirname } from 'path';
+      return dirname(fileURLToPath(import.meta.url));
+    } catch {
+      return process.cwd();
+    }
+  }
+};
+
 const htmlTemplatePath = [
   path.join(process.cwd(), "html"),
-  path.join(__dirname, "..", "html"),
+  path.join(getDirname(), "..", "html"),
 ].find((filePath) => existsSync(filePath));
 
 const RESET_PASSWORD_TOKEN_EXPIRATION_MINUTES = 30;
