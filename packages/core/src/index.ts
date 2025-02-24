@@ -57,7 +57,7 @@ export {
   debugDriver,
   debugPresence,
   debugAndPrintError,
-} from './Debug';
+} from './Debug.js';
 
 // Default rooms
 export { LobbyRoom } from './rooms/LobbyRoom.js';

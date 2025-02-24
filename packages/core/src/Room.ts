@@ -11,14 +11,14 @@ import { NoneSerializer } from './serializer/NoneSerializer.js';
 import { SchemaSerializer } from './serializer/SchemaSerializer.js';
 import { Serializer } from './serializer/Serializer.js';
 
-import { ErrorCode, getMessageBytes, Protocol } from './Protocol';
+import { ErrorCode, getMessageBytes, Protocol } from './Protocol.js';
 import { Deferred, generateId, wrapTryCatch } from './utils/Utils.js';
 import { isDevMode } from './utils/DevMode.js';
 
 import { debugAndPrintError, debugMatchMaking, debugMessage } from './Debug.js';
 import { RoomCache } from './matchmaker/driver/api.js';
 import { ServerError } from './errors/ServerError.js';
-import { AuthContext, Client, ClientPrivate, ClientArray, ClientState, ISendOptions } from './Transport';
+import { AuthContext, Client, ClientPrivate, ClientArray, ClientState, ISendOptions } from './Transport.js';
 import { OnAuthException, OnCreateException, OnDisposeException, OnJoinException, OnLeaveException, OnMessageException, RoomException, SimulationIntervalException, TimedEventException } from './errors/RoomExceptions.js';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
