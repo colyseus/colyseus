@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/greeting-banner",
-  "version": "2.0.5",
+  "version": "2.0.6",
   "description": "Greeting banner for Colyseus & Cloud",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -8,6 +8,7 @@
   "typings": "./build/index.d.ts",
   "exports": {
     ".": {
+      "types": "./build/index.d.ts",
       "import": "./build/index.mjs",
       "require": "./build/index.js"
     }
