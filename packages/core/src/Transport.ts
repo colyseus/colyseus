@@ -20,6 +20,9 @@ export type AuthContext = {
   token?: string,
   headers: http.IncomingHttpHeaders,
   ip: string | string[];
+  // FIXME: each transport may have its own specific properties.
+  // "req" only applies to WebSocketTransport.
+  req?: http.IncomingMessage;
 };
 
 export interface ISendOptions {

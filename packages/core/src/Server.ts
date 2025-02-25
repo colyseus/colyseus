@@ -377,6 +377,7 @@ export class Server {
               token: getBearerToken(req.headers['authorization']),
               headers: req.headers,
               ip: req.headers['x-real-ip'] ?? req.headers['x-forwarded-for'] ?? req.socket.remoteAddress,
+              req,
             },
           );
 
