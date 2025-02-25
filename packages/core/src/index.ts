@@ -17,7 +17,7 @@ export {
   OnMessageException,
   SimulationIntervalException,
   TimedEventException,
-} from './errors/RoomExceptions';
+} from './errors/RoomExceptions.js';
 
 // MatchMaker
 import * as matchMaker from './MatchMaker.js';
