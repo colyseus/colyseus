@@ -38,7 +38,7 @@
     "@colyseus/redis-presence": "workspace:^",
     "@colyseus/ws-transport": "workspace:^",
     "@colyseus/uwebsockets-transport": "workspace:^",
-    "@types/ws": "^7.4.4",
+    "@types/ws": "^8.5.14",
     "ws": "^8.18.0"
   },
   "peerDependencies": {

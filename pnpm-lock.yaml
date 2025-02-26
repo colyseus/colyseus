@@ -101,6 +101,10 @@ importers:
 
   bundles/colyseus:
     dependencies:
+      '@colyseus/schema':
+        specifier: ^3.0.0
+        version: 3.0.1
+    devDependencies:
       '@colyseus/auth':
         specifier: workspace:^
         version: link:../../packages/auth
@@ -113,19 +117,15 @@ importers:
       '@colyseus/redis-presence':
         specifier: workspace:^
         version: link:../../packages/presence/redis-presence
-      '@colyseus/schema':
-        specifier: ^3.0.0
-        version: 3.0.1
-      '@colyseus/ws-transport':
-        specifier: workspace:^
-        version: link:../../packages/transport/ws-transport
-    devDependencies:
       '@colyseus/uwebsockets-transport':
         specifier: workspace:^
         version: link:../../packages/transport/uwebsockets-transport
+      '@colyseus/ws-transport':
+        specifier: workspace:^
+        version: link:../../packages/transport/ws-transport
       '@types/ws':
-        specifier: ^7.4.4
-        version: 7.4.7
+        specifier: ^8.5.14
+        version: 8.5.14
       ws:
         specifier: ^8.18.0
         version: 8.18.0
@@ -243,8 +243,8 @@ importers:
         specifier: ^0.1.81
         version: 0.1.81
       colyseus.js:
-        specifier: ^0.16.0-preview.0
-        version: 0.16.0-preview.25
+        specifier: ^0.16.0
+        version: 0.16.2
       minimist:
         specifier: ^1.2.5
         version: 1.2.8
@@ -308,8 +308,8 @@ importers:
         specifier: workspace:^
         version: link:../transport/ws-transport
       colyseus.js:
-        specifier: ^0.16.0-preview.0
-        version: 0.16.0-preview.25
+        specifier: ^0.16.0
+        version: 0.16.2
 
   packages/tools:
     dependencies:
@@ -397,8 +397,8 @@ importers:
   packages/transport/ws-transport:
     dependencies:
       '@types/ws':
-        specifier: ^7.4.4
-        version: 7.4.7
+        specifier: ^8.5.14
+        version: 8.5.14
       ws:
         specifier: ^8.18.0
         version: 8.18.0
@@ -741,10 +741,6 @@ packages:
     resolution: {integrity: sha512-v/rHN155kFLwCPPBi+HQlbYBqh6tH3IhSVARrkAd/PLylysugbXLm2fLpX4NlEcnCakMuenXSIbhMDPXc7/jUg==}
     hasBin: true
     dev: false
-
-  /@colyseus/schema@3.0.0-alpha.49:
-    resolution: {integrity: sha512-8thP5TbVWJ0efxL41iBSuocwMp5jZioF0wp8D+88/FBdKmtsU1CGLDgRq0Bz0BX7WPbiLARBdfr4l3+HrhdPtA==}
-    hasBin: true
 
   /@colyseus/schema@3.0.1:
     resolution: {integrity: sha512-Ifq7RQmpcGauALcFXb4SJ90WtAIMrN30f7haoqpq8kKyPrS0ZpJz41w8f/MhNiEyTgZeE+C30l+N9IyX5Z7xXw==}
@@ -2258,8 +2254,8 @@ packages:
       '@types/webidl-conversions': 7.0.3
     dev: false
 
-  /@types/ws@7.4.7:
-    resolution: {integrity: sha512-JQbbmxZTZehdc2iszGKs5oC3NFnjeay7mtAWrdt7qNtAVK0g19muApzAy4bm9byz79xa2ZnO/BOBC2R8RC5Lww==}
+  /@types/ws@8.5.14:
+    resolution: {integrity: sha512-bd/YFLW+URhBzMXurx7lWByOu+xzU9+kb3RboOteXYDfW+tr+JZa99OyNmPINEGB/ahzKrEuc8rcv4gnpJmxTw==}
     dependencies:
       '@types/node': 20.17.19
 
@@ -3098,19 +3094,6 @@ packages:
       wcwidth: 1.0.1
     dev: true
 
-  /colyseus.js@0.16.0-preview.25:
-    resolution: {integrity: sha512-guOTadjhiKQHM1Xx4+oFO1x6qlPWlrIwuSgo9t6FGkMkNB6/z66xT1uYuRE2VSIdSfw/K5cNyEOFih7MsbWS/A==}
-    engines: {node: '>= 12.x'}
-    dependencies:
-      '@colyseus/msgpackr': 1.10.5
-      '@colyseus/schema': 3.0.0-alpha.49
-      httpie: 2.0.0-next.13
-      tslib: 2.8.1
-      ws: 8.18.0
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
-
   /colyseus.js@0.16.2:
     resolution: {integrity: sha512-1ayBxpZTd9jEQnJabKLdSZmiTN0Xleun7knhOrnlD0PrXF0y2SOegpQZ/1oW0f2Z3XV+mwe7xOJTp2kNr9I7QA==}
     engines: {node: '>= 12.x'}
@@ -3123,7 +3106,6 @@ packages:
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
-    dev: true
 
   /combined-stream@1.0.8:
     resolution: {integrity: sha512-FQN4MRfuJeHf7cBbBMJFXhKSDq+2kAArBlmRBvcvFE5BB1HZKXtSFASDhdlz9zOYwxh8lDdnvmMOe/+5cdoEdg==}
