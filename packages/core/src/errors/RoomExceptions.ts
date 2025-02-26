@@ -1,5 +1,5 @@
-import type { Client } from '../Transport';
-import type { ExtractAuthData, ExtractUserData, Room } from '../Room';
+import type { Client } from '../Transport.js';
+import type { ExtractAuthData, ExtractUserData, Room } from '../Room.js';
 
 export type RoomException<R extends Room = Room> =
   OnCreateException<R> |
