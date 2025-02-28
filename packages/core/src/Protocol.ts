@@ -48,7 +48,9 @@ export enum IpcProtocol {
 }
 
 
-const packr = new Packr();
+const packr = new Packr({
+  useRecords: false, // increased compatibility with decoders other than "msgpackr"
+});
 
 // msgpackr workaround: initialize buffer
 packr.encode(undefined);
