@@ -762,11 +762,15 @@ export async function reserveSeatFor(room: IRoomCache, options: ClientOptions, a
   return response;
 }
 
-function callOnAuth(roomName: string, clientOptions?: ClientOptions, authContext?: AuthContext) {
+async function callOnAuth(roomName: string, clientOptions?: ClientOptions, authContext?: AuthContext) {
   const roomClass = getRoomClass(roomName);
-  return (roomClass && roomClass['onAuth'] && roomClass['onAuth'] !== Room['onAuth'])
-    ? roomClass['onAuth'](authContext.token, clientOptions, authContext)
-    : undefined;
+  if (roomClass && roomClass['onAuth'] && roomClass['onAuth'] !== Room['onAuth']) {
+    const result = await roomClass['onAuth'](authContext.token, clientOptions, authContext)
+    if (!result) {
+      throw new ServerError(ErrorCode.AUTH_FAILED, 'onAuth failed');
+    }
+    return result;
+  }
 }
 
 /**

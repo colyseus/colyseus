@@ -1199,9 +1199,25 @@ describe("Integration", () => {
               }
             });
 
-            it("ErrorCode.AUTH_FAILED", async () => {
+            it("ErrorCode.AUTH_FAILED: instance onAuth", async () => {
               matchMaker.defineRoomType('onAuthFail', class _ extends Room {
                 async onAuth(client: Client, options: any) {
+                  return false;
+                }
+              });
+
+              try {
+                await client.joinOrCreate('onAuthFail')
+                assert.fail("joinOrCreate should have failed.");
+
+              } catch (e) {
+                assert.strictEqual(ErrorCode.AUTH_FAILED, e.code)
+              }
+            });
+
+            it("ErrorCode.AUTH_FAILED: static onAuth", async () => {
+              matchMaker.defineRoomType('onAuthFail', class _ extends Room {
+                static async onAuth(token: string) {
                   return false;
                 }
               });
