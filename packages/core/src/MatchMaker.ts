@@ -710,7 +710,7 @@ export async function gracefullyShutdown(): Promise<any> {
  * Reserve a seat for a client in a room
  */
 export async function reserveSeatFor(room: IRoomCache, options: ClientOptions, authData?: any) {
-  const sessionId: string = generateId();
+  const sessionId: string = authData?.sessionId || generateId();
 
   debugMatchMaking(
     'reserving seat. sessionId: \'%s\', roomId: \'%s\', processId: \'%s\'',
