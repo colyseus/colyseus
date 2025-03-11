@@ -33,7 +33,7 @@ pm2.trigger('@colyseus/tools', 'post-deploy', `${pm2.cwd}:${CONFIG_FILE_PATH}`, 
 
   } else {
     if (result[0].data?.return?.success === false) {
-      console.error(result[0].data?.return?.message);
+      console.error(result[0].data?.return?.message || "Post-deploy failed. Check application logs for more details.");
       process.exit(1);
     } else {
       console.log("Post-deploy success.");
