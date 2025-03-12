@@ -1,5 +1,5 @@
 import { unpack } from '@colyseus/msgpackr';
-import { decode, Iterator, $changes } from '@colyseus/schema';
+import { decode, type Iterator, $changes } from '@colyseus/schema';
 
 import Clock from '@colyseus/timer';
 import { EventEmitter } from 'events';
@@ -202,7 +202,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
         enumerable: true,
         get: () => this.#_state,
         set: (newState: State) => {
-          if (newState[$changes] !== undefined) {
+          if (newState?.constructor[Symbol.metadata] !== undefined || newState[$changes] !== undefined) {
             this.setSerializer(new SchemaSerializer());
           } else if ('_definition' in newState) {
             throw new Error("@colyseus/schema v2 compatibility currently missing (reach out if you need it)");
