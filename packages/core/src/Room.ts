@@ -902,6 +902,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
       then((newClient) => {
         newClient.auth = previousClient.auth;
         newClient.userData = previousClient.userData;
+        newClient.view = previousClient.view;
 
         // for convenience: populate previous client reference with new client
         previousClient.state = ClientState.RECONNECTED;

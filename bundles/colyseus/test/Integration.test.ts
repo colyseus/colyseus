@@ -2,7 +2,7 @@ import assert from "assert";
 import crypto from "crypto";
 import sinon, { match } from "sinon";
 import * as Colyseus from "colyseus.js";
-import { Schema, type, MapSchema } from "@colyseus/schema";
+import { Schema, type, MapSchema, ArraySchema, view, StateView } from "@colyseus/schema";
 
 import { matchMaker, Room, Client, Server, ErrorCode, MatchMakerDriver, Presence, Deferred, Transport, AuthContext } from "@colyseus/core";
 import { DummyRoom, DRIVERS, timeout, Room3Clients, PRESENCE_IMPLEMENTATIONS, Room2Clients, Room2ClientsExplicitLock } from "./utils";
@@ -1560,6 +1560,65 @@ describe("Integration", () => {
 
             assert.strictEqual(true, onRoomDisposed);
             assert.strictEqual("disposing", failureError);
+          });
+
+          it("reconnection with StateView should recreate the StateView", async () => {
+            class Item extends Schema {
+              @type("string") name: string;
+            }
+            class Entity extends Schema {
+              @type([Item]) items = new ArraySchema<Item>();
+            }
+            class State extends Schema {
+              @view() @type({ map: Entity }) entities = new MapSchema<Entity>();
+            }
+
+            const onRoomDisposed = new Deferred();
+            matchMaker.defineRoomType('reconnect_with_stateview', class _ extends Room {
+              state = new State();
+              async onJoin(client: Client) {
+                const entity = new Entity().assign({
+                  items: [
+                    new Item().assign({ name: "item1" }),
+                    new Item().assign({ name: "item2" }),
+                  ]
+                });
+
+                this.state.entities.set(client.sessionId, entity);
+
+                client.view = new StateView();
+                client.view.add(entity);
+              }
+              async onLeave(client, consented) {
+                try {
+                  if (consented) { throw new Error("consented!"); }
+                  await this.allowReconnection(client, 0.5);
+                } catch (e) {}
+              }
+              onDispose() { onRoomDisposed.resolve(); }
+            });
+
+            const roomConnection = await client.joinOrCreate<State>('reconnect_with_stateview');
+
+            // wait for state to sync
+            await timeout(80);
+
+            assert.strictEqual(1, roomConnection.state.entities.size);
+            assert.strictEqual(2, roomConnection.state.entities.get(roomConnection.sessionId).items.length);
+
+            // forcibly close connection
+            roomConnection.connection.transport.close();
+            await timeout(50);
+
+            const reconnectedRoom = await client.reconnect<State>(roomConnection.reconnectionToken);
+
+            // wait for state to sync
+            await timeout(80);
+
+            assert.strictEqual(1, reconnectedRoom.state.entities.size);
+            assert.strictEqual(2, reconnectedRoom.state.entities.get(reconnectedRoom.sessionId).items.length);
+
+            await reconnectedRoom.leave();
           });
 
         });
