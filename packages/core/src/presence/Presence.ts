@@ -211,7 +211,7 @@ export interface Presence {
     /**
      * Removes and returns the last element of the list stored at key. If the list is empty, the execution is halted until an element is available or the timeout is reached.
      */
-    brpop(...args: [...keys: string[], timeoutInSeconds: number]): Promise<[string, string]>;
+    brpop(...args: [...keys: string[], timeoutInSeconds: number]): Promise<[string, string] | null>;
 
     shutdown(): void;
 }
