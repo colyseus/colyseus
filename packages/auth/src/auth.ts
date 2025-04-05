@@ -309,7 +309,7 @@ Please give feedback and report any issues you may find at https://github.com/co
 
         res.json({
           user,
-          token: await onGenerateToken(user)
+          token: await auth.settings.onGenerateToken(user)
         });
       } catch(e) {
         res.status(401).json({ error: e.message });
