@@ -283,6 +283,10 @@ export class LocalPresence implements Presence {
       }
     }
 
+    public setMaxListeners(number: number) {
+      this.channels.setMaxListeners(number);
+    }
+
     public shutdown() {
       if (isDevMode) {
         const cache = JSON.stringify({

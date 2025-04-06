@@ -213,5 +213,7 @@ export interface Presence {
      */
     brpop(...args: [...keys: string[], timeoutInSeconds: number]): Promise<[string, string] | null>;
 
+    setMaxListeners(number: number): void;
+
     shutdown(): void;
 }
