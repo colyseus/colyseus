@@ -197,6 +197,10 @@ export class RedisPresence implements Presence {
         this.pub.quit();
     }
 
+    public setMaxListeners(number: number) {
+      this.channels.setMaxListeners(number);
+    }
+
     protected handleSubscription = (channel, message) => {
         this.channels.emit(channel, JSON.parse(message));
     }
