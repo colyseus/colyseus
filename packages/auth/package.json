@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/auth",
-  "version": "0.16.4",
+  "version": "0.16.5",
   "description": "Authentication Utilities for Colyseus",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -54,7 +54,7 @@
   },
   "peerDependencies": {
     "@colyseus/core": "0.16.x",
-    "express": "^4.17.1"
+    "express": ">=4.16.0"
   },
   "publishConfig": {
     "access": "public"

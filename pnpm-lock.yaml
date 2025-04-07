@@ -60,7 +60,7 @@ importers:
         specifier: ^0.23.0
         version: 0.23.1
       express:
-        specifier: ^4.16.2
+        specifier: '>=4.16.0'
         version: 4.21.2
       fast-glob:
         specifier: ^3.2.11
@@ -139,7 +139,7 @@ importers:
         specifier: ^7.1.0
         version: 7.1.1(express-session@1.18.1)
       express:
-        specifier: ^4.17.1
+        specifier: '>=4.16.0'
         version: 4.21.2
       express-jwt:
         specifier: ^8.5.1
@@ -323,7 +323,7 @@ importers:
         specifier: ^8.2.0
         version: 8.6.0
       express:
-        specifier: ^4.16.2
+        specifier: '>=4.16.0'
         version: 4.21.2
     devDependencies:
       '@colyseus/core':
@@ -354,7 +354,7 @@ importers:
         specifier: ^1.0.5
         version: 1.0.5(express@4.21.2)
       express:
-        specifier: ^4.17.1
+        specifier: '>=4.16.0'
         version: 4.21.2
 
   packages/transport/h3-transport:

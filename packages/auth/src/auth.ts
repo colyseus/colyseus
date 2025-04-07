@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import express, { Router } from 'express';
 import { existsSync } from 'fs';
-import { generateId, logger, matchMaker } from '@colyseus/core';
+import { debugAndPrintError, generateId, logger, matchMaker } from '@colyseus/core';
 import { Request } from 'express-jwt';
 import { OAuthProviderCallback, oAuthProviderCallback, oauth } from './oauth.js';
 import { JWT, JwtPayload } from './JWT.js';
@@ -317,6 +317,7 @@ Please give feedback and report any issues you may find at https://github.com/co
           token: await onGenerateToken(user)
         });
       } catch(e) {
+        debugAndPrintError(e);
         res.status(401).json({ error: e.message });
       }
     });
@@ -349,6 +350,7 @@ Please give feedback and report any issues you may find at https://github.com/co
         res.json(result);
 
       } catch (e) {
+        debugAndPrintError(e);
         res.status(401).json({ error: e.message });
       }
     });
