@@ -77,7 +77,7 @@ export const getMessageBytes = {
       handshake.copy(packr.buffer, it.offset, 0, handshakeLength);
     }
 
-    return packr.buffer.subarray(0, it.offset + handshakeLength);
+    return Buffer.from(packr.buffer.subarray(0, it.offset + handshakeLength));
   },
 
   [Protocol.ERROR]: (code: number, message: string = '') => {
@@ -87,7 +87,7 @@ export const getMessageBytes = {
     encode.number(packr.buffer, code, it);
     encode.string(packr.buffer, message, it);
 
-    return packr.buffer.subarray(0, it.offset);
+    return Buffer.from(packr.buffer.subarray(0, it.offset));
   },
 
   [Protocol.ROOM_STATE]: (bytes: number[]) => {
@@ -122,7 +122,7 @@ export const getMessageBytes = {
       // pack message into the same packr.buffer
       const endOfBufferOffset = packr.pack(message, 2048 + it.offset).byteLength;
                                                  // 2048 = RESERVE_START_SPACE
-      return packr.buffer.subarray(0, endOfBufferOffset);
+      return Buffer.from(packr.buffer.subarray(0, endOfBufferOffset));
 
     } else if (rawMessage !== undefined) {
 
@@ -135,10 +135,10 @@ export const getMessageBytes = {
       // copy raw message into packr.buffer
       packr.buffer.set(rawMessage, it.offset);
 
-      return packr.buffer.subarray(0, it.offset + rawMessage.byteLength);
+      return Buffer.from(packr.buffer.subarray(0, it.offset + rawMessage.byteLength));
 
     } else {
-      return packr.buffer.subarray(0, it.offset);
+      return Buffer.from(packr.buffer.subarray(0, it.offset));
     }
   },
 

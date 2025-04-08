@@ -1723,6 +1723,34 @@ describe("Integration", () => {
           });
         })
 
+        describe("Send buffer", () => {
+          it("should not overwrite the send buffer when using .send() before .onJoin()", async () => {
+            matchMaker.defineRoomType('send_buffer', class _ extends Room {
+              onJoin(client, _, __) {
+                client.send('u+', { id: client.sessionId });
+                this.broadcast('P', this.clients.length);
+              }
+            });
+
+            const values: number[] = [];
+
+            const conn1 = await client.joinOrCreate('send_buffer');
+            conn1.onMessage('*', () => {});
+            conn1.onMessage('P', (value) =>
+              values.push(value));
+
+            const conn2 = await client.joinOrCreate('send_buffer');
+            conn2.onMessage('*', () => {});
+
+            await timeout(100);
+
+            await conn2.leave();
+            await conn1.leave();
+
+            assert.deepStrictEqual([1, 2], values);
+          });
+        });
+
       });
 
     }
