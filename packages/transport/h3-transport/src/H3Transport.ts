@@ -190,7 +190,7 @@ export class H3Transport extends Transport {
           roomName,
           clientOptions,
           {
-            token: getBearerToken(req.headers['authorization']),
+            token: (req.query['_authToken'] as string) ?? getBearerToken(req.headers['authorization']),
             headers: req.headers,
             ip: req.headers['x-real-ip'] ?? req.ips
           },

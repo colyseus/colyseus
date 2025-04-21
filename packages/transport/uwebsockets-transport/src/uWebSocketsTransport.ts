@@ -259,7 +259,7 @@ export class uWebSocketsTransport extends Transport {
             const headers: IncomingHttpHeaders = {};
             req.forEach((key, value) => headers[key] = value);
 
-            const token = getBearerToken(headers['authorization']);
+            const token = req.getParameter("_authToken") ?? getBearerToken(headers['authorization']);
 
             // read json body
             this.readJson(res, async (clientOptions) => {
