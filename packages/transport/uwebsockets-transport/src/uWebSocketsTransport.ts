@@ -1,5 +1,5 @@
 import http, { IncomingHttpHeaders } from 'http';
-import querystring from 'querystring';
+import querystring, { ParsedUrlQuery } from 'querystring';
 import uWebSockets from 'uWebSockets.js';
 import expressify, { Application } from "uwebsockets-express";
 
@@ -10,7 +10,7 @@ export type TransportOptions = Omit<uWebSockets.WebSocketBehavior<any>, "upgrade
 
 type RawWebSocketClient = uWebSockets.WebSocket<any> & {
   url: string,
-  query: string,
+  searchParams: ParsedUrlQuery,
   context: AuthContext,
 };
 
@@ -64,14 +64,16 @@ export class uWebSocketsTransport extends Transport {
                 const headers: {[id: string]: string} = {};
                 req.forEach((key, value) => headers[key] = value);
 
+                const searchParams = querystring.parse(req.getQuery());
+
                 /* This immediately calls open handler, you must not use res after this call */
                 /* Spell these correctly */
                 res.upgrade(
                     {
                         url: req.getUrl(),
-                        query: req.getQuery(),
+                        searchParams,
                         context: {
-                          token: getBearerToken(req.getHeader('authorization')),
+                          token: searchParams._authToken ?? getBearerToken(req.getHeader('authorization')),
                           headers,
                           ip: Buffer.from(res.getRemoteAddressAsText()).toString(),
                         }
@@ -162,9 +164,8 @@ export class uWebSocketsTransport extends Transport {
         this.clients.push(rawClient);
         this.clientWrappers.set(rawClient, wrapper);
 
-        const query = rawClient.query;
         const url = rawClient.url;
-        const searchParams = querystring.parse(query);
+        const searchParams = rawClient.searchParams;
 
         const sessionId = searchParams.sessionId as string;
         const processAndRoomId = url.match(/\/[a-zA-Z0-9_\-]+\/([a-zA-Z0-9_\-]+)$/);
@@ -259,7 +260,7 @@ export class uWebSocketsTransport extends Transport {
             const headers: IncomingHttpHeaders = {};
             req.forEach((key, value) => headers[key] = value);
 
-            const token = req.getParameter("_authToken") ?? getBearerToken(headers['authorization']);
+            const token = getBearerToken(headers['authorization']);
 
             // read json body
             this.readJson(res, async (clientOptions) => {
