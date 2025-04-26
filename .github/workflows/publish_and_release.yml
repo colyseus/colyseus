@@ -34,7 +34,7 @@ jobs:
     - id: check
       uses: EndBug/version-check@v2
       with:
-        file-name: bundle/colyseus/package.json
+        file-name: bundles/colyseus/package.json
         diff-search: true
 
     - name: Publish package on NPM 📦
