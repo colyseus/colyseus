@@ -33,6 +33,7 @@ export { type Client, type ClientPrivate, type AuthContext, ClientState, ClientA
 // Presence
 export { type Presence } from './presence/Presence.js';
 export { LocalPresence } from './presence/LocalPresence.js';
+export { ScopedPresence } from './presence/ScopedPresence.js';
 
 // Serializers
 export { type Serializer } from './serializer/Serializer.js';
