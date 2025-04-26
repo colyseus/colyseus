@@ -1,6 +1,6 @@
 {
   "name": "colyseus",
-  "version": "0.16.3",
+  "version": "0.16.4",
   "description": "Multiplayer Framework for Node.js",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -45,6 +45,7 @@
     "@colyseus/redis-presence": "workspace:^",
     "@colyseus/ws-transport": "workspace:^",
     "@colyseus/uwebsockets-transport": "workspace:^",
+    "@colyseus/schema": "^3.0.0",
     "@types/ws": "^8.5.14",
     "ws": "^8.18.0"
   },

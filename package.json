@@ -3,7 +3,7 @@
   "version": "0.16.0",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@8.15.1",
+  "packageManager": "pnpm@10.9.0",
   "scripts": {
     "build": "tsx build.ts",
     "clean": "lerna clean",

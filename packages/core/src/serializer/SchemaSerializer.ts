@@ -61,6 +61,31 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
     let numClients = clients.length;
 
     if (numClients == 0 || !this.encoder.hasChanges) {
+
+      // check if views have changes (manual add() or remove() items)
+      if (this.hasFilters) {
+        //
+        // FIXME: refactor this to avoid duplicating code.
+        //
+        // it's probably better to have 2 different 'applyPatches' methods.
+        // (one for handling state with filters, and another for handling state without filters)
+        //
+        const clientsWithViewChange = clients.filter((client) => {
+          return client.state === ClientState.JOINED && client.view?.changes.size > 0
+        });
+
+        if (clientsWithViewChange.length > 0) {
+          const it: Iterator = { offset: 1 };
+
+          const sharedOffset = it.offset;
+          this.encoder.sharedBuffer[0] = Protocol.ROOM_STATE_PATCH;
+
+          clientsWithViewChange.forEach((client) => {
+            client.raw(this.encoder.encodeView(client.view, sharedOffset, it));
+          });
+        }
+      }
+
       // skip patching state if:
       // - no clients are connected
       // - no changes were made
