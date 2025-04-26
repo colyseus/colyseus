@@ -1,4 +1,5 @@
-name: test-suite
+name: Tests
+
 on:
   pull_request:
   push:
@@ -16,30 +17,29 @@ jobs:
       uses: supercharge/redis-github-action@1.2.0
       with:
         redis-version: 6
-    - name: Checkout repository
-      uses: actions/checkout@master
-    - name: Set up Node.js
-      uses: actions/setup-node@master
+
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - uses: pnpm/action-setup@v4
+      name: Install pnpm
       with:
-        node-version: 20.9.0
-    - uses: pnpm/action-setup@v2
+        version: '10.9.0'
+        run_install: false
+
+    - name: Install Node.js
+      uses: actions/setup-node@v4
       with:
-        version: 9
+        node-version: 20
+        cache: 'pnpm'
+
     - name: Install dependencies
       run: pnpm install
+
     - name: Build project
       run: pnpm build
+
     - name: Test
       run: pnpm test
-
-    # - name: Publish if version has been updated
-    #   uses: endel/npm-publish-action@master
-    #   with:
-    #     tag_name: "%s"
-    #     tag_message: "v%s"
-    #     commit_pattern: "^bump (\\S+)"
-    #   env:
-    #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    #     NPM_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
 
 
