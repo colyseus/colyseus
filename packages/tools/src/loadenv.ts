@@ -2,8 +2,13 @@ import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
 
+function getEnvFromArgv() {
+  const envIndex = process.argv.indexOf("--env");
+  return (envIndex !== -1) ? process.argv[envIndex + 1] : undefined;
+}
+
 function getNodeEnv() {
-  return process.env.NODE_ENV || "development";
+  return process.env.NODE_ENV || getEnvFromArgv() || "development";
 }
 
 function getRegion() {
