@@ -2,6 +2,9 @@ export interface SortOptions {
   [fieldName: string]: 1 | -1 | 'asc' | 'desc' | 'ascending' | 'descending';
 }
 
+export type IRoomCacheSortByKeys = 'clients' | 'maxClients';
+export type IRoomCacheFilterByKeys = 'clients' | 'maxClients' | 'processId';
+
 export function getLockId(filterOptions: any) {
   return Object.keys(filterOptions).map((key) => `${key}:${filterOptions[key]}`).join("-");
 }

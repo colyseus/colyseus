@@ -1,13 +1,12 @@
-import { IncomingMessage } from 'http';
 import { EventEmitter } from 'events';
 import { logger } from '../Logger.js';
-import { RoomCache, SortOptions } from './driver/api.js';
+import { SortOptions, IRoomCache, IRoomCacheSortByKeys, IRoomCacheFilterByKeys } from './driver/api.js';
 
-import { Room } from './../Room.js';
+import { OnCreateOptions, Room } from './../Room.js';
 import { updateLobby } from './Lobby.js';
 import { Type } from '../utils/types.js';
 
-export const INVALID_OPTION_KEYS: Array<keyof RoomCache> = [
+export const INVALID_OPTION_KEYS: Array<keyof IRoomCache> = [
   'clients',
   'locked',
   'private',
@@ -18,15 +17,20 @@ export const INVALID_OPTION_KEYS: Array<keyof RoomCache> = [
   'roomId',
 ];
 
-export type ValidateAuthTokenCallback = (token: string, request?: IncomingMessage) => Promise<any>;
+/**
+ * If `OnCreateOptions<RoomType>` returns an `any` type, we want to fallback to the FallbackKeys.
+ */
+type OnCreateOptionsWithFallback<RoomType extends Type<Room>, FallbackKeys extends string> = unknown extends OnCreateOptions<RoomType>
+  ? FallbackKeys
+  : keyof OnCreateOptions<RoomType> | FallbackKeys;
 
-export class RegisteredHandler extends EventEmitter {
-  public filterOptions: string[] = [];
+export class RegisteredHandler<RoomType extends Type<Room> = any> extends EventEmitter {
+  public filterOptions: Array<keyof OnCreateOptions<RoomType> | IRoomCacheFilterByKeys> = [];
   public sortOptions?: SortOptions;
 
   constructor(
     public name: string,
-    public klass: Type<Room>,
+    public klass: RoomType,
     public options: any
   ) {
     super();
@@ -53,13 +57,17 @@ export class RegisteredHandler extends EventEmitter {
     return this;
   }
 
-  public filterBy(options: string[]) {
+  public filterBy<T extends OnCreateOptionsWithFallback<RoomType, IRoomCacheFilterByKeys>>(
+    options: T[]
+  ) {
     this.filterOptions = options;
     return this;
   }
 
-  public sortBy(options: SortOptions) {
-    this.sortOptions = options;
+  public sortBy<T extends OnCreateOptionsWithFallback<RoomType, IRoomCacheSortByKeys>>(
+    options: { [K in T]: SortOptions[string] }
+  ): this {
+    this.sortOptions = options as unknown as SortOptions;
     return this;
   }
 
@@ -68,10 +76,10 @@ export class RegisteredHandler extends EventEmitter {
       const field = arr[i];
       if (options.hasOwnProperty(field)) {
         if (INVALID_OPTION_KEYS.indexOf(field as any) !== -1) {
-          logger.warn(`option "${field}" has internal usage and is going to be ignored.`);
+          logger.warn(`option "${String(field)}" has internal usage and is going to be ignored.`);
 
         } else {
-          prev[field] = options[field];
+          prev[String(field)] = options[field];
         }
       }
       return prev;
