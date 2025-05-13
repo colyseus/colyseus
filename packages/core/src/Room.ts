@@ -16,6 +16,7 @@ import { ErrorCode, getMessageBytes, Protocol } from './Protocol.ts';
 import { Deferred, generateId, wrapTryCatch } from './utils/Utils.ts';
 import { createNanoEvents } from './utils/nanoevents.ts';
 import { isDevMode } from './utils/DevMode.ts';
+import type { Type } from './utils/types.ts';
 
 import { debugAndPrintError, debugMatchMaking, debugMessage } from './Debug.ts';
 import { ServerError } from './errors/ServerError.ts';
@@ -42,6 +43,8 @@ export const RoomInternalState = {
   DISPOSING: 2,
 } as const;
 export type RoomInternalState = (typeof RoomInternalState)[keyof typeof RoomInternalState];
+
+export type OnCreateOptions<T extends Type<Room>> = Parameters<NonNullable<InstanceType<T>['onCreate']>>[0];
 
 /**
  * A Room class is meant to implement a game session, and/or serve as the communication channel

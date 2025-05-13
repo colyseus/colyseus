@@ -25,7 +25,7 @@ describe("MatchMaker", () => {
 
         matchMaker
           .defineRoomType("room2_filtered", Room2Clients)
-          .filterBy(['mode']);
+          .filterBy(['mode'])
 
         matchMaker
           .defineRoomType("room3_sorted_desc", Room3Clients)

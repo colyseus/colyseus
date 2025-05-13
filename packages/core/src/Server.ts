@@ -4,12 +4,11 @@ import { debugAndPrintError } from './Debug.ts';
 import * as matchMaker from './MatchMaker.ts';
 import { RegisteredHandler } from './matchmaker/RegisteredHandler.ts';
 
-import type { Presence } from './presence/Presence.ts';
 import type { Type } from './utils/types.ts';
-
-import { Room } from './Room.ts';
+import { type OnCreateOptions, Room } from './Room.ts';
 import { registerGracefulShutdown } from './utils/Utils.ts';
 
+import type { Presence } from "./presence/Presence.ts";
 import { LocalPresence } from './presence/LocalPresence.ts';
 import { LocalDriver } from './matchmaker/driver/local/LocalDriver.ts';
 
@@ -172,17 +171,17 @@ export class Server<
    */
   public define<T extends Type<Room>>(
     roomClass: T,
-    defaultOptions?: Parameters<NonNullable<InstanceType<T>['onCreate']>>[0],
+    defaultOptions?: OnCreateOptions<T>,
   ): RegisteredHandler
   public define<T extends Type<Room>>(
     name: string,
     roomClass: T,
-    defaultOptions?: Parameters<NonNullable<InstanceType<T>['onCreate']>>[0],
+    defaultOptions?: OnCreateOptions<T>,
   ): RegisteredHandler
   public define<T extends Type<Room>>(
     nameOrHandler: string | T,
-    handlerOrOptions: T | Parameters<NonNullable<InstanceType<T>['onCreate']>>[0],
-    defaultOptions?: Parameters<NonNullable<InstanceType<T>['onCreate']>>[0],
+    handlerOrOptions: T | OnCreateOptions<T>,
+    defaultOptions?: OnCreateOptions<T>,
   ): RegisteredHandler {
     const name = (typeof(nameOrHandler) === "string")
       ? nameOrHandler

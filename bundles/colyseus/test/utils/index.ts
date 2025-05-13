@@ -166,7 +166,7 @@ export class DummyRoom extends Room {
 export class Room2Clients extends Room {
   maxClients = 2;
 
-  onCreate(options: any) {
+  onCreate(options: { mode: string, roomId?: string }) {
     if (options.roomId) { this.roomId = options.roomId; }
     this.onMessage("*", (_, type, message) => {
       this.broadcast(type, message);
