@@ -134,19 +134,19 @@ export interface Presence {
      * Sets field in the hash stored at key to value. If key does not exist, a new key holding a hash is created.
      * If field already exists in the hash, it is overwritten.
      */
-    hset(key: string, field: string, value: string);
+    hset(key: string, field: string, value: string): Promise<void>;
 
     /**
      * Increments the number stored at field in the hash stored at key by increment. If key does not exist, a new key
      * holding a hash is created. If field does not exist the value is set to 0 before the operation is performed.
      */
-    hincrby(key: string, field: string, value: number): number | Promise<number>;
+    hincrby(key: string, field: string, value: number): Promise<number>;
 
     /**
      * WARNING: DO NOT USE THIS METHOD. It is meant for internal use only.
      * @private
      */
-    hincrbyex(key: string, field: string, value: number, expireInSeconds: number): number | Promise<number>;
+    hincrbyex(key: string, field: string, value: number, expireInSeconds: number): Promise<number>;
 
     /**
      * Returns the value associated with field in the hash stored at key.
@@ -162,7 +162,7 @@ export interface Presence {
      * Removes the specified fields from the hash stored at key. Specified fields that do not exist within
      * this hash are ignored. If key does not exist, it is treated as an empty hash and this command returns 0.
      */
-    hdel(key: string, field: string): boolean | Promise<boolean>;
+    hdel(key: string, field: string): Promise<boolean>;
 
     /**
      * Returns the number of fields contained in the hash stored at key
