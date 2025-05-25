@@ -148,6 +148,7 @@ export class LocalPresence implements Presence {
     public hset(key: string, field: string, value: string) {
         if (!this.hash[key]) { this.hash[key] = {}; }
         this.hash[key][field] = value;
+        return Promise.resolve();
     }
 
     public hincrby(key: string, field: string, incrBy: number) {
@@ -155,7 +156,7 @@ export class LocalPresence implements Presence {
         let value = Number(this.hash[key][field] || '0');
         value += incrBy;
         this.hash[key][field] = value.toString();
-        return value;
+        return Promise.resolve(value);
     }
 
     public hincrbyex(key: string, field: string, incrBy: number, expireInSeconds: number) {
@@ -164,7 +165,7 @@ export class LocalPresence implements Presence {
         value += incrBy;
         this.hash[key][field] = value.toString();
         this.setex(key, field, expireInSeconds);
-        return value;
+        return Promise.resolve(value);
     }
 
     public async hget(key: string, field: string) {
@@ -180,7 +181,7 @@ export class LocalPresence implements Presence {
         if (success) {
             delete this.hash[key][field];
         }
-        return success;
+        return Promise.resolve(success);
     }
 
     public async hlen(key: string) {
