@@ -134,7 +134,7 @@ export interface Presence {
      * Sets field in the hash stored at key to value. If key does not exist, a new key holding a hash is created.
      * If field already exists in the hash, it is overwritten.
      */
-    hset(key: string, field: string, value: string): Promise<void>;
+    hset(key: string, field: string, value: string): Promise<boolean>;
 
     /**
      * Increments the number stored at field in the hash stored at key by increment. If key does not exist, a new key
@@ -186,27 +186,27 @@ export interface Presence {
     /**
      * Returns the length of the list stored at key.
      */
-    llen(key: string): number | Promise<number>;
+    llen(key: string): Promise<number>;
 
     /**
      * Adds the string value to the end of the list stored at key. If key does not exist, it is created as empty list before performing the push operation.
      */
-    rpush(key: string, ...values: string[]): number | Promise<number>;
+    rpush(key: string, ...values: string[]): Promise<number>;
 
     /**
      * Adds the string value to the begginning of the list stored at key. If key does not exist, it is created as empty list before performing the push operation.
      */
-    lpush(key: string, ...values: string[]): number | Promise<number>;
+    lpush(key: string, ...values: string[]): Promise<number>;
 
     /**
      * Removes and returns the last element of the list stored at key.
      */
-    rpop(key: string): string | Promise<string>;
+    rpop(key: string): Promise<string | null>;
 
     /**
      * Removes and returns the first element of the list stored at key.
      */
-    lpop(key: string): string | Promise<string>;
+    lpop(key: string): Promise<string | null>;
 
     /**
      * Removes and returns the last element of the list stored at key. If the list is empty, the execution is halted until an element is available or the timeout is reached.

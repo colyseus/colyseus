@@ -148,7 +148,7 @@ export class LocalPresence implements Presence {
     public hset(key: string, field: string, value: string) {
         if (!this.hash[key]) { this.hash[key] = {}; }
         this.hash[key][field] = value;
-        return Promise.resolve();
+        return Promise.resolve(true);
     }
 
     public hincrby(key: string, field: string, incrBy: number) {
@@ -204,11 +204,11 @@ export class LocalPresence implements Presence {
         return Promise.resolve(this.keys[key] as number);
     }
 
-    public llen(key: string): number {
-      return (this.data[key] && this.data[key].length) || 0;
+    public llen(key: string) {
+      return Promise.resolve((this.data[key] && this.data[key].length) || 0);
     }
 
-    public rpush(key: string, ...values: string[]): number {
+    public rpush(key: string, ...values: string[]): Promise<number> {
       if (!this.data[key]) { this.data[key] = []; }
 
       let lastLength: number = 0;
@@ -217,10 +217,10 @@ export class LocalPresence implements Presence {
         lastLength = this.data[key].push(value);
       });
 
-      return lastLength;
+      return Promise.resolve(lastLength);
     }
 
-    public lpush(key: string, ...values: string[]): number {
+    public lpush(key: string, ...values: string[]): Promise<number> {
       if (!this.data[key]) { this.data[key] = []; }
 
       let lastLength: number = 0;
@@ -229,16 +229,17 @@ export class LocalPresence implements Presence {
         lastLength = this.data[key].unshift(value);
       });
 
-      return lastLength;
+      return Promise.resolve(lastLength);
     }
 
-
-    public lpop(key: string): string {
-      return Array.isArray(this.data[key]) && this.data[key].shift();
+    public lpop(key: string): Promise<string> {
+      return Promise.resolve(Array.isArray(this.data[key])
+        ? this.data[key].shift()
+        : null);
     }
 
-    public rpop(key: string): string {
-      return this.data[key].pop();
+    public rpop(key: string): Promise<string | null> {
+      return Promise.resolve(this.data[key].pop());
     }
 
     public brpop(...args: [...keys: string[], timeoutInSeconds: number]): Promise<[string, string] | null> {

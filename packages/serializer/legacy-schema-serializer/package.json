@@ -1,4 +1,5 @@
 {
+  "private": true,
   "name": "@colyseus/legacy-schema-serializer",
   "version": "0.16.4",
   "input": "./src/index.ts",

@@ -120,7 +120,7 @@ export class RedisPresence implements Presence {
     }
 
     public async hset(key: string, field: string, value: string) {
-        return await this.pub.hset(key, field, value);
+        return (await this.pub.hset(key, field, value)) > 0;
     }
 
     public async hincrby(key: string, field: string, value: number) {
@@ -180,11 +180,11 @@ export class RedisPresence implements Presence {
       return await this.pub.lpush(key, value);
     }
 
-    public async rpop(key: string): Promise<string> {
+    public async rpop(key: string): Promise<string | null> {
       return await this.pub.rpop(key);
     }
 
-    public async lpop(key: string): Promise<string> {
+    public async lpop(key: string): Promise<string | null> {
       return await this.pub.lpop(key);
     }
 
