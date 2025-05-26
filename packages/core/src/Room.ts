@@ -14,6 +14,7 @@ import { Serializer } from './serializer/Serializer.js';
 import { ErrorCode, getMessageBytes, Protocol } from './Protocol.js';
 import { Deferred, generateId, wrapTryCatch } from './utils/Utils.js';
 import { isDevMode } from './utils/DevMode.js';
+import { Type } from './utils/types.js';
 
 import { debugAndPrintError, debugMatchMaking, debugMessage } from './Debug.js';
 import { RoomCache } from './matchmaker/driver/api.js';
@@ -41,6 +42,8 @@ export enum RoomInternalState {
 
 export type ExtractUserData<T> = T extends ClientArray<infer U> ? U : never;
 export type ExtractAuthData<T> = T extends ClientArray<infer _, infer U> ? U : never;
+
+export type OnCreateOptions<T extends Type<Room>> = Parameters<NonNullable<InstanceType<T>['onCreate']>>[0];
 
 /**
  * A Room class is meant to implement a game session, and/or serve as the communication channel
