@@ -6,6 +6,7 @@ import { EventEmitter } from 'events';
 import { logger } from './Logger.js';
 
 import { Presence } from './presence/Presence.js';
+import { ScopedPresence } from './presence/ScopedPresence.js';
 
 import { NoneSerializer } from './serializer/NoneSerializer.js';
 import { SchemaSerializer } from './serializer/SchemaSerializer.js';
@@ -1055,6 +1056,11 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
     if (this._autoDisposeTimeout) {
       clearInterval(this._autoDisposeTimeout);
       this._autoDisposeTimeout = undefined;
+    }
+
+    // Dispose scoped presence subscriptions if using ScopedPresence
+    if (this.presence instanceof ScopedPresence) {
+      await (this.presence as ScopedPresence).dispose();
     }
 
     // clear all timeouts/intervals + force to stop ticking
