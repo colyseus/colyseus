@@ -1,6 +1,5 @@
-import { Room, Client, ClientArray } from "@colyseus/core";
+import { Room, Client } from "@colyseus/core";
 import { Schema, type, MapSchema } from "@colyseus/schema";
-import { IncomingMessage } from "http";
 
 export class Player extends Schema {
   @type("number") x: number;
@@ -13,12 +12,28 @@ export class MyRoomState extends Schema {
   @type({ map: Player }) players = new MapSchema<Player>();
 }
 
-export class MyRoom extends Room<MyRoomState> {
-  players: { [sessionId: string]: any } = {};
+type MyClient = Client<any, any, {
+  move: { x: string, y: string };
+}>
+
+export class MyRoom extends Room {
+  state = new MyRoomState()
+
+  messages = {
+    move: (client: Client, message: { x: number, y: number }) => {
+      const player = this.state.players.get(client.sessionId);
+      player.x = message.x;
+      player.y = message.y;
+    },
+
+    nopayload: (client: Client) => {},
+  };
+
+  clientMessages: {
+    move: { x: string, y: string };
+  };
 
   onCreate(options: any) {
-    this.setState(new MyRoomState());
-
     // map dimensions
     this.state.mapWidth = 800;
     this.state.mapHeight = 600;
@@ -37,13 +52,6 @@ export class MyRoom extends Room<MyRoomState> {
     this.setSimulationInterval(() => this.update());
   }
 
-  update() {
-    // this.state.players.forEach((player, key) => {
-    //   player.x += 1;
-    //   player.y += 1;
-    // });
-  }
-
   onJoin(client: Client, options: any) {
     console.log(client.sessionId, "joined! options =>", options);
 
@@ -52,6 +60,14 @@ export class MyRoom extends Room<MyRoomState> {
     player.y = Math.random() * this.state.mapHeight;
 
     this.state.players.set(client.sessionId, player);
+  }
+
+
+  update() {
+    // this.state.players.forEach((player, key) => {
+    //   player.x += 1;
+    //   player.y += 1;
+    // });
   }
 
   async onLeave(client: Client, consented: boolean) {

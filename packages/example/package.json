@@ -16,6 +16,7 @@
     "@colyseus/ws-transport": "workspace:^",
     "@colyseus/h3-transport": "workspace:^",
     "@colyseus/redis-driver": "workspace:^",
-    "@colyseus/redis-presence": "workspace:^"
+    "@colyseus/redis-presence": "workspace:^",
+    "@colyseus/schema": "^3.0.0"
   }
 }

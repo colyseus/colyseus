@@ -1,7 +1,7 @@
 import nanoid from 'nanoid';
 
 import { EventEmitter } from "events";
-import { RoomException } from '../errors/RoomExceptions.js';
+import { RoomException, type RoomMethodName } from '../errors/RoomExceptions.js';
 import { Type } from './types.js';
 
 import { debugAndPrintError } from '../Debug.js';
@@ -93,7 +93,7 @@ export class Deferred<T = any> {
   }
 
   public then(func: (value: T) => any) {
-    return this.promise.then.apply(this.promise, arguments);
+    return this.promise.then(func)
   }
 
   public catch(func: (value: any) => any) {
@@ -124,9 +124,9 @@ export function merge(a: any, ...objs: any[]): any {
 
 export function wrapTryCatch(
   method: Function,
-  onError: (error: RoomException, methodName: string) => void,
+  onError: (error: RoomException, methodName: RoomMethodName) => void,
   exceptionClass: Type<RoomException>,
-  methodName: string,
+  methodName: RoomMethodName,
   rethrow: boolean = false,
   ...additionalErrorArgs: any[]
 ) {
@@ -140,7 +140,7 @@ export function wrapTryCatch(
         });
       }
       return result;
-    } catch (e) {
+    } catch (e: any) {
       onError(new exceptionClass(e, e.message, ...args, ...additionalErrorArgs), methodName);
       if (rethrow) { throw e; }
     }

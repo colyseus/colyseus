@@ -9,6 +9,7 @@ export { ServerError } from './errors/ServerError.js';
 
 export {
   type RoomException,
+  type RoomMethodName,
   OnCreateException,
   OnAuthException,
   OnJoinException,

@@ -3,7 +3,7 @@
     "rootDir": "..",
 
     "module": "commonjs",
-    "target": "es2015",
+    "target": "es2020",
 
     "moduleResolution": "node",
     "lib": ["ES2022"],
@@ -14,7 +14,11 @@
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "experimentalDecorators": true,
+
+    "strict": true,
+    "strictNullChecks": false,
     "noImplicitAny": false,
+
     "inlineSources": true,
     "sourceMap": true,
     "useDefineForClassFields": false,

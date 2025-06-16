@@ -69,7 +69,10 @@ export type ServerOptions = {
   server?: http.Server,
 };
 
-export class Server {
+export class Server<
+  RoomTypes extends Record<string, Type<Room>> = any
+> {
+  public '~rooms': RoomTypes;
   public transport: Transport;
 
   protected presence: Presence;

@@ -13,13 +13,16 @@ import { Serializer } from './serializer/Serializer.js';
 
 import { ErrorCode, getMessageBytes, Protocol } from './Protocol.js';
 import { Deferred, generateId, wrapTryCatch } from './utils/Utils.js';
+import { createNanoEvents } from './utils/nanoevents.js';
 import { isDevMode } from './utils/DevMode.js';
 
 import { debugAndPrintError, debugMatchMaking, debugMessage } from './Debug.js';
 import { RoomCache } from './matchmaker/driver/api.js';
 import { ServerError } from './errors/ServerError.js';
 import { AuthContext, Client, ClientPrivate, ClientArray, ClientState, ISendOptions } from './Transport.js';
-import { OnAuthException, OnCreateException, OnDisposeException, OnJoinException, OnLeaveException, OnMessageException, RoomException, SimulationIntervalException, TimedEventException } from './errors/RoomExceptions.js';
+import { type RoomMethodName, OnAuthException, OnCreateException, OnDisposeException, OnJoinException, OnLeaveException, OnMessageException, RoomException, SimulationIntervalException, TimedEventException } from './errors/RoomExceptions.js';
+
+import { standardValidate, StandardSchemaV1 } from './utils/StandardSchema.js';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
@@ -39,9 +42,6 @@ export enum RoomInternalState {
   DISPOSING = 2,
 }
 
-export type ExtractUserData<T> = T extends ClientArray<infer U> ? U : never;
-export type ExtractAuthData<T> = T extends ClientArray<infer _, infer U> ? U : never;
-
 /**
  * A Room class is meant to implement a game session, and/or serve as the communication channel
  * between a group of clients.
@@ -49,8 +49,7 @@ export type ExtractAuthData<T> = T extends ClientArray<infer _, infer U> ? U : n
  * - Rooms are created on demand during matchmaking by default
  * - Room classes must be exposed using `.define()`
  */
-export abstract class Room<State extends object= any, Metadata= any, UserData = any, AuthData = any> {
-
+export abstract class Room<ClientType extends Client = Client, Metadata = any, State extends object = any> {
   /**
    * This property will change on these situations:
    * - The maximum number of allowed clients has been reached (`maxClients`)
@@ -122,7 +121,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
    *
    * @see {@link https://docs.colyseus.io/colyseus/server/room/#client|Client instance}
    */
-  public clients: ClientArray<UserData, AuthData> = new ClientArray();
+  public clients: ClientArray<ClientType> = new ClientArray();
 
   /** @internal */
   public _events = new EventEmitter();
@@ -135,31 +134,29 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
   protected _reconnections: { [reconnectionToken: string]: [string, Deferred] } = {};
   private _reconnectingSessionId = new Map<string, string>();
 
-  private onMessageHandlers: {
-    [id: string]: {
-      callback: (...args: any[]) => void,
-      validate?: (data: unknown) => any,
-    }
-  } = {
-      '__no_message_handler': {
-        callback: (client: Client, messageType: string, _: unknown) => {
-          const errorMessage = `room onMessage for "${messageType}" not registered.`;
-          debugAndPrintError(`${errorMessage} (roomId: ${this.roomId})`);
+  public messages: Record<string, (client: ClientType, message: any) => void> = {};
 
-          if (isDevMode) {
-            // send error code to client in development mode
-            client.error(ErrorCode.INVALID_PAYLOAD, errorMessage);
+  private onMessageEvents = createNanoEvents();
+  private onMessageValidators: {[message: string]: StandardSchemaV1} = {};
 
-          } else {
-            // immediately close the connection in production
-            client.leave(Protocol.WS_CLOSE_WITH_ERROR, errorMessage);
-          }
-        }
+  protected onMessageFallbacks = {
+    '__no_message_handler': (client: ClientType, messageType: string, _: unknown) => {
+      const errorMessage = `room onMessage for "${messageType}" not registered.`;
+      debugAndPrintError(`${errorMessage} (roomId: ${this.roomId})`);
+
+      if (isDevMode) {
+        // send error code to client in development mode
+        client.error(ErrorCode.INVALID_PAYLOAD, errorMessage);
+
+      } else {
+        // immediately close the connection in production
+        client.leave(Protocol.WS_CLOSE_WITH_ERROR, errorMessage);
       }
-    };
+    }
+  };
 
   private _serializer: Serializer<State> = noneSerializer;
-  private _afterNextPatchQueue: Array<[string | Client, IArguments]> = [];
+  private _afterNextPatchQueue: Array<[string | ClientType, IArguments]> = [];
 
   private _simulationInterval: NodeJS.Timeout;
 
@@ -332,8 +329,8 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
   // Optional abstract methods
   public onBeforePatch?(state: State): void | Promise<any>;
   public onCreate?(options: any): void | Promise<any>;
-  public onJoin?(client: Client<UserData, AuthData>, options?: any, auth?: AuthData): void | Promise<any>;
-  public onLeave?(client: Client<UserData, AuthData>, consented?: boolean): void | Promise<any>;
+  public onJoin?(client: Client, options?: any): void | Promise<any>;
+  public onLeave?(client: Client, consented?: boolean): void | Promise<any>;
   public onDispose?(): void | Promise<any>;
 
   /**
@@ -348,10 +345,10 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
    *
    * (Experimental: this feature is subject to change in the future - we're currently getting feedback to improve it)
    */
-  public onUncaughtException?(error: RoomException<this>, methodName: 'onCreate' | 'onAuth' | 'onJoin' | 'onLeave' | 'onDispose' | 'onMessage' | 'setSimulationInterval' | 'setInterval' | 'setTimeout'): void;
+  public onUncaughtException?(error: RoomException<this>, methodName: RoomMethodName): void;
 
   public onAuth(
-    client: Client<UserData, AuthData>,
+    client: ClientType,
     options: any,
     context: AuthContext
   ): any | Promise<any> {
@@ -628,27 +625,56 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
     return hasChanges;
   }
 
-  public onMessage<T = any>(
+  public onMessage<T = any, C extends Client = ClientType>(
     messageType: '*',
-    callback: (client: Client<UserData, AuthData>, type: string | number, message: T) => void
+    callback: (client: C, type: string | number, message: T) => void
   );
-  public onMessage<T = any>(
+  public onMessage<T = any, C extends Client = ClientType>(
     messageType: string | number,
-    callback: (client: Client<UserData, AuthData>, message: T) => void,
-    validate?: (message: unknown) => T,
+    callback: (client: C, message: T) => void,
+  );
+  public onMessage<T = any, C extends Client = ClientType>(
+    messageType: string | number,
+    validationSchema: StandardSchemaV1<T>,
+    callback: (client: C, message: T) => void,
   );
   public onMessage<T = any>(
-    messageType: '*' | string | number,
-    callback: (...args: any[]) => void,
-    validate?: (message: unknown) => T,
+    _messageType: '*' | string | number,
+    _validationSchema: StandardSchemaV1<T> | ((...args: any[]) => void),
+    _callback?: (...args: any[]) => void,
   ) {
-    this.onMessageHandlers[messageType] = (this.onUncaughtException !== undefined)
-      ? { validate, callback: wrapTryCatch(callback, this.onUncaughtException.bind(this), OnMessageException, 'onMessage', false, messageType) }
-      : { validate, callback };
+    const messageType = _messageType.toString();
 
+    const validationSchema = (typeof _callback === 'function')
+      ? _validationSchema as StandardSchemaV1<T>
+      : undefined;
+
+    const callback = (validationSchema === undefined)
+      ? _validationSchema as (...args: any[]) => void
+      : _callback;
+
+    const removeListener = this.onMessageEvents.on(messageType, (this.onUncaughtException !== undefined)
+      ? wrapTryCatch(callback, this.onUncaughtException.bind(this), OnMessageException, 'onMessage', false, _messageType)
+      : callback);
+
+    if (validationSchema !== undefined) {
+      this.onMessageValidators[messageType] = validationSchema;
+    }
 
     // returns a method to unbind the callback
-    return () => delete this.onMessageHandlers[messageType];
+    return () => {
+      removeListener();
+      if (this.onMessageEvents.events[messageType].length === 0) {
+        delete this.onMessageValidators[messageType];
+      }
+    };
+  }
+
+  public onMessageBytes<T = any, C extends Client = ClientType>(
+    messageType: string | number,
+    callback: (client: C, message: T) => void,
+  ) {
+    this.onMessage(`_$b${messageType}`, callback);
   }
 
   /**
@@ -683,7 +709,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
     if (numClients > 0) {
       // clients may have `async onLeave`, room will be disposed after they're fulfilled
       while (numClients--) {
-        this._forciblyCloseClient(this.clients[numClients] as Client & ClientPrivate, closeCode);
+        this._forciblyCloseClient(this.clients[numClients] as ClientType & ClientPrivate, closeCode);
       }
 
     } else {
@@ -694,7 +720,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
     return delayedDisconnection;
   }
 
-  public async ['_onJoin'](client: Client & ClientPrivate, authContext: AuthContext) {
+  public async ['_onJoin'](client: ClientType & ClientPrivate, authContext: AuthContext) {
     const sessionId = client.sessionId;
 
     // generate unique private reconnection token
@@ -791,7 +817,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
         });
 
         if (this.onJoin) {
-          await this.onJoin(client, joinOptions, client.auth);
+          await this.onJoin(client, joinOptions);
         }
 
         // @ts-ignore: client left during `onJoin`, call _onLeave immediately.
@@ -806,7 +832,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
           this._events.emit('join', client);
         }
 
-      } catch (e) {
+      } catch (e: any) {
         await this._onLeave(client, Protocol.WS_CLOSE_GOING_AWAY);
 
         // remove seat reservation
@@ -967,10 +993,10 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
         const [target, args] = this._afterNextPatchQueue[i];
 
         if (target === "broadcast") {
-          this.broadcast.apply(this, args);
+          this.broadcast.apply(this, args as any);
 
         } else {
-          (target as Client).raw.apply(target, args);
+          (target as Client).raw.apply(target, args as any);
         }
       }
 
@@ -1064,7 +1090,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
     return await (userReturnData || Promise.resolve());
   }
 
-  protected _onMessage(client: Client & ClientPrivate, buffer: Buffer) {
+  protected _onMessage(client: ClientType & ClientPrivate, buffer: Buffer) {
     // skip if client is on LEAVING state.
     if (client.state === ClientState.LEAVING) { return; }
 
@@ -1080,7 +1106,6 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
       const messageType = (decode.stringCheck(buffer, it))
         ? decode.string(buffer, it)
         : decode.number(buffer, it);
-      const messageTypeHandler = this.onMessageHandlers[messageType];
 
       let message;
       try {
@@ -1090,42 +1115,42 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
         debugMessage("received: '%s' -> %j (roomId: %s)", messageType, message, this.roomId);
 
         // custom message validation
-        if (messageTypeHandler?.validate !== undefined) {
-          message = messageTypeHandler.validate(message);
+        if (this.onMessageValidators[messageType]) {
+          message = standardValidate(this.onMessageValidators[messageType], message);
         }
 
-      } catch (e) {
+      } catch (e: any) {
         debugAndPrintError(e);
         client.leave(Protocol.WS_CLOSE_WITH_ERROR);
         return;
       }
 
-      if (messageTypeHandler) {
-        messageTypeHandler.callback(client, message);
+      if (this.onMessageEvents.events[messageType]) {
+        this.onMessageEvents.emit(messageType, client, message);
+
+      } else if (this.onMessageEvents.events['*']) {
+        this.onMessageEvents.emit('*', client, messageType, message);
 
       } else {
-        (this.onMessageHandlers['*'] || this.onMessageHandlers['__no_message_handler']).callback(client, messageType, message);
+        this.onMessageFallbacks['__no_message_handler'](client, messageType, message);
       }
 
     } else if (code === Protocol.ROOM_DATA_BYTES) {
       const messageType = (decode.stringCheck(buffer, it))
         ? decode.string(buffer, it)
         : decode.number(buffer, it);
-      const messageTypeHandler = this.onMessageHandlers[messageType];
 
       let message = buffer.subarray(it.offset, buffer.byteLength);
       debugMessage("received: '%s' -> %j (roomId: %s)", messageType, message, this.roomId);
 
-      // custom message validation
-      if (messageTypeHandler?.validate !== undefined) {
-        message = messageTypeHandler.validate(message);
-      }
+      if (this.onMessageEvents.events[`_$b${messageType}`]) {
+        this.onMessageEvents.emit(`_$b${messageType}`, client, message);
 
-      if (messageTypeHandler) {
-        messageTypeHandler.callback(client, message);
+      } else if (this.onMessageEvents.events['*']) {
+        this.onMessageEvents.emit('*', client, messageType, message);
 
       } else {
-        (this.onMessageHandlers['*'] || this.onMessageHandlers['__no_message_handler']).callback(client, messageType, message);
+        this.onMessageFallbacks['__no_message_handler'](client, messageType, message);
       }
 
     } else if (code === Protocol.JOIN_ROOM && client.state === ClientState.JOINING) {
@@ -1150,7 +1175,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
 
   }
 
-  protected _forciblyCloseClient(client: Client & ClientPrivate, closeCode: number) {
+  protected _forciblyCloseClient(client: ClientType & ClientPrivate, closeCode: number) {
     // stop receiving messages from this client
     client.ref.removeAllListeners('message');
 
@@ -1161,7 +1186,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
     this._onLeave(client, closeCode).then(() => client.leave(closeCode));
   }
 
-  protected async _onLeave(client: Client, code?: number): Promise<any> {
+  protected async _onLeave(client: ClientType, code?: number): Promise<any> {
     debugMatchMaking('onLeave, sessionId: \'%s\' (close code: %d, roomId: %s)', client.sessionId, code, this.roomId);
 
     // call 'onLeave' method only if the client has been successfully accepted.
@@ -1177,7 +1202,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
         this.#_onLeaveConcurrent++;
         await this.onLeave(client, (code === Protocol.WS_CLOSE_CONSENTED));
 
-      } catch (e) {
+      } catch (e: any) {
         debugAndPrintError(`onLeave error: ${(e && e.message || e || 'promise rejected')} (roomId: ${this.roomId})`);
 
       } finally {
@@ -1212,6 +1237,8 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
     // lock automatically when maxClients is reached
     if (!this.#_locked && this.hasReachedMaxClients()) {
       this.#_maxClientsReached = true;
+
+      // @ts-ignore
       this.lock.call(this, true);
     }
 
@@ -1232,6 +1259,8 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
     if (!willDispose) {
       if (this.#_maxClientsReached && !this._lockedExplicitly) {
         this.#_maxClientsReached = false;
+
+        // @ts-ignore
         this.unlock.call(this, true);
       }
 

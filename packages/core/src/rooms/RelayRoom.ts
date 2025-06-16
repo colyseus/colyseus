@@ -3,7 +3,7 @@ import { defineTypes, MapSchema, Schema } from '@colyseus/schema';
 import { Room } from '../Room.js';
 import { Client } from '../Transport.js';
 
-class Player extends Schema { // tslint:disable-line
+class Player extends Schema {
   public connected: boolean;
   public name: string;
   public sessionId: string;
@@ -14,7 +14,7 @@ defineTypes(Player, {
   sessionId: 'string',
 });
 
-class State extends Schema { // tslint:disable-line
+class State extends Schema {
   public players = new MapSchema<Player>();
 }
 defineTypes(State, {
@@ -28,7 +28,8 @@ defineTypes(State, {
  * });
  */
 
-export class RelayRoom extends Room<State> { // tslint:disable-line
+export class RelayRoom extends Room {
+  public state = new State();
   public allowReconnectionTime: number = 0;
 
   public onCreate(options: Partial<{
@@ -36,8 +37,6 @@ export class RelayRoom extends Room<State> { // tslint:disable-line
     allowReconnectionTime: number,
     metadata: any,
   }>) {
-    this.setState(new State());
-
     if (options.maxClients) {
       this.maxClients = options.maxClients;
     }
@@ -50,7 +49,7 @@ export class RelayRoom extends Room<State> { // tslint:disable-line
       this.setMetadata(options.metadata);
     }
 
-    this.onMessage('*', (client: Client, type: string, message: any) => {
+    this.onMessage('*', (client: Client, type: string | number, message: any) => {
       this.broadcast(type, [client.sessionId, message], { except: client });
     });
   }

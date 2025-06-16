@@ -45,7 +45,7 @@
     "ts-jest": "^28.0.3",
     "tslint": "^5.11.0",
     "tsx": "^4.1.2",
-    "typescript": "^5.5.3"
+    "typescript": "^5.8.3"
   },
   "nyc": {
     "extension": [

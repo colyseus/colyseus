@@ -12,6 +12,7 @@ import { WebSocketTransport } from "@colyseus/ws-transport";
 // import { uWebSocketsTransport } from "@colyseus/uwebsockets-transport";
 
 import WebSocket from "ws";
+import { z } from "zod";
 
 const TEST_PORT = 8567;
 const TEST_ENDPOINT = `ws://localhost:${TEST_PORT}`;
@@ -565,12 +566,15 @@ describe("Integration", () => {
             });
 
             it("should validate input message", async () => {
+              const validationSchema = z.object({
+                x: z.number(),
+                y: z.number(),
+              });
+
               matchMaker.defineRoomType('onmessage_validation', class _ extends Room {
                 onCreate() {
-                  this.onMessage("input_xy", (client, payload) => {
+                  this.onMessage("input_xy", validationSchema, (client, payload) => {
                     client.send("input_xy", payload);
-                  }, (payload: any) => {
-                    return { x: payload.x, y: payload.y };
                   });
                 }
               });

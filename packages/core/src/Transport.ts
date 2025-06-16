@@ -39,7 +39,7 @@ export enum ClientState { JOINING, JOINED, RECONNECTED, LEAVING, CLOSED }
  * - This is the raw WebSocket connection coming from the `ws` package. There are more methods available which aren't
  *  encouraged to use along with Colyseus.
  */
-export interface Client<UserData=any, AuthData=any> {
+export interface Client<UserData = any, AuthData = any, MessageTypes = any> { // Record<string | number, any>
   ref: EventEmitter;
 
   /**
@@ -83,6 +83,7 @@ export interface Client<UserData=any, AuthData=any> {
    */
   reconnectionToken: string;
 
+  // TODO: move these to ClientPrivate
   raw(data: Uint8Array | Buffer, options?: ISendOptions, cb?: (err?: Error) => void): void;
   enqueueRaw(data: Uint8Array | Buffer, options?: ISendOptions): void;
 
@@ -94,8 +95,8 @@ export interface Client<UserData=any, AuthData=any> {
    * @param message Message payload. (automatically encoded with msgpack.)
    * @param options
    */
+  send<T extends keyof MessageTypes>(type: T, message?: MessageTypes[T], options?: ISendOptions): void;
   send(type: string | number, message?: any, options?: ISendOptions): void;
-  send(message: Schema, options?: ISendOptions): void;
 
   /**
    * Send raw bytes to this specific client.
@@ -104,6 +105,7 @@ export interface Client<UserData=any, AuthData=any> {
    * @param bytes Raw byte array payload
    * @param options
    */
+  sendBytes<T extends keyof MessageTypes>(type: T, bytes: Buffer | Uint8Array, options?: ISendOptions): void;
   sendBytes(type: string | number, bytes: Buffer | Uint8Array, options?: ISendOptions): void;
 
   /**
@@ -143,12 +145,12 @@ export interface ClientPrivate {
   _joinedAt: number; // "elapsedTime" when the client joined the room.
 }
 
-export class ClientArray<UserData = any, AuthData = any> extends Array<Client<UserData, AuthData>> {
-  public getById(sessionId: string): Client<UserData, AuthData> | undefined {
+export class ClientArray<C extends Client = Client> extends Array<C> {
+  public getById(sessionId: string): C | undefined {
     return this.find((client) => client.sessionId === sessionId);
   }
 
-  public delete(client: Client<UserData, AuthData>): boolean {
+  public delete(client: C): boolean {
     return spliceOne(this, this.indexOf(client));
   }
 }

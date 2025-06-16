@@ -83,7 +83,7 @@ export class WebSocketClient implements Client, ClientPrivate {
     logger.warn('DEPRECATION WARNING: use client.leave() instead of client.close()');
     try {
       throw new Error();
-    } catch (e) {
+    } catch (e: any) {
       logger.info(e.stack);
     }
     this.leave(code, data);

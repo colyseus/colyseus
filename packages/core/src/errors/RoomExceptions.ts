@@ -1,5 +1,15 @@
 import type { Client } from '../Transport.js';
-import type { ExtractAuthData, ExtractUserData, Room } from '../Room.js';
+import type { Room } from '../Room.js';
+
+export type RoomMethodName = 'onCreate'
+  | 'onAuth'
+  | 'onJoin'
+  | 'onLeave'
+  | 'onDispose'
+  | 'onMessage'
+  | 'setSimulationInterval'
+  | 'setInterval'
+  | 'setTimeout';
 
 export type RoomException<R extends Room = Room> =
   OnCreateException<R> |
@@ -73,7 +83,7 @@ export class OnMessageException<R extends Room = Room, MessagePayload = any> ext
   constructor(
     cause: Error,
     message: string,
-    public client: Client<ExtractUserData<R['clients']>, ExtractAuthData<R['clients']>>,
+    public client: Client,
     public payload: MessagePayload,
     public type: string,
   ) {

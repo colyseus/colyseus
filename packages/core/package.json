@@ -44,6 +44,7 @@
     "@colyseus/greeting-banner": "workspace:^",
     "@colyseus/timer": "^1.0.1",
     "@colyseus/msgpackr": "^1.11.2",
+    "@standard-schema/spec": "^1.0.0",
     "debug": "^4.3.4",
     "nanoid": "^2.0.0"
   },
