@@ -8,18 +8,9 @@ import express from 'express';
 import { logger, Server, ServerOptions, Transport, matchMaker } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 
-import { type BunWebSockets as TBunWebSockets } from '@colyseus/bun-websockets';
-import { type RedisDriver as TRedisDriver } from '@colyseus/redis-driver';
-import { type RedisPresence as TRedisPresence } from '@colyseus/redis-presence';
-
-let BunWebSockets: typeof TBunWebSockets = undefined;
-import('@colyseus/bun-websockets').then((module) => BunWebSockets = module.BunWebSockets).catch(() => { });
-
-let RedisDriver: typeof TRedisDriver;
-import('@colyseus/redis-driver').then((module) => RedisDriver = module.RedisDriver).catch(() => { });
-
-let RedisPresence: typeof TRedisPresence;
-import('@colyseus/redis-presence').then((module) => RedisPresence = module.RedisPresence).catch(() => { });
+const BunWebSockets = import('@colyseus/bun-websockets'); BunWebSockets.catch(() => {});
+const RedisDriver = import('@colyseus/redis-driver'); RedisDriver.catch(() => {});
+const RedisPresence = import('@colyseus/redis-presence'); RedisPresence.catch(() => {});
 
 export interface ConfigOptions {
     options?: ServerOptions,
@@ -129,7 +120,8 @@ async function buildServerFromOptions(options: ConfigOptions, port: number) {
 
     if (!serverOptions.driver && useRedisConfig) {
       try {
-        serverOptions.driver = new RedisDriver(process.env.REDIS_URI);
+        const module = await RedisDriver;
+        serverOptions.driver = new module.RedisDriver(process.env.REDIS_URI);
       } catch (e) {
         console.error(e);
         logger.warn("");
@@ -141,7 +133,8 @@ async function buildServerFromOptions(options: ConfigOptions, port: number) {
 
     if (!serverOptions.presence && useRedisConfig) {
       try {
-        serverOptions.presence = new RedisPresence(process.env.REDIS_URI);
+        const module = await RedisPresence;
+        serverOptions.presence = new module.RedisPresence(process.env.REDIS_URI);
       } catch (e) {
         console.error(e);
         logger.warn("");
@@ -171,9 +164,17 @@ export async function getTransport(options: ConfigOptions) {
     let transport: Transport;
 
     if (!options.initializeTransport) {
-        if (BunWebSockets !== undefined) {
+        // @ts-ignore
+        if (typeof Bun !== "undefined") {
           // @colyseus/bun-websockets
-          options.initializeTransport = (options: any) => new BunWebSockets(options);
+          BunWebSockets.catch(() => {
+            logger.warn("");
+            logger.warn("❌ could not initialize BunWebSockets.");
+            logger.warn("👉 npm install --save @colyseus/bun-websockets");
+            logger.warn("");
+          })
+          const module = await BunWebSockets;
+          options.initializeTransport = (options: any) => new module.BunWebSockets(options);
 
         } else {
           // use WebSocketTransport by default
