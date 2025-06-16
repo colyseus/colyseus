@@ -8,12 +8,18 @@ import express from 'express';
 import { logger, Server, ServerOptions, Transport, matchMaker } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 
-let BunWebSockets: any = undefined;
+import { type BunWebSockets as TBunWebSockets } from '@colyseus/bun-websockets';
+import { type RedisDriver as TRedisDriver } from '@colyseus/redis-driver';
+import { type RedisPresence as TRedisPresence } from '@colyseus/redis-presence';
 
-// @ts-ignore
-import('@colyseus/bun-websockets')
-  .then((module) => BunWebSockets = module)
-  .catch(() => { });
+let BunWebSockets: typeof TBunWebSockets = undefined;
+import('@colyseus/bun-websockets').then((module) => BunWebSockets = module.BunWebSockets).catch(() => { });
+
+let RedisDriver: typeof TRedisDriver;
+import('@colyseus/redis-driver').then((module) => RedisDriver = module.RedisDriver).catch(() => { });
+
+let RedisPresence: typeof TRedisPresence;
+import('@colyseus/redis-presence').then((module) => RedisPresence = module.RedisPresence).catch(() => { });
 
 export interface ConfigOptions {
     options?: ServerOptions,
@@ -122,11 +128,10 @@ async function buildServerFromOptions(options: ConfigOptions, port: number) {
     const useRedisConfig = (os.cpus().length > 1) || (process.env.REDIS_URI !== undefined);
 
     if (!serverOptions.driver && useRedisConfig) {
-      let RedisDriver: any = undefined;
       try {
-        RedisDriver = require('@colyseus/redis-driver').RedisDriver;
         serverOptions.driver = new RedisDriver(process.env.REDIS_URI);
       } catch (e) {
+        console.error(e);
         logger.warn("");
         logger.warn("❌ could not initialize RedisDriver.");
         logger.warn("👉 npm install --save @colyseus/redis-driver");
@@ -135,11 +140,10 @@ async function buildServerFromOptions(options: ConfigOptions, port: number) {
     }
 
     if (!serverOptions.presence && useRedisConfig) {
-      let RedisPresence: any = undefined;
       try {
-        RedisPresence = require('@colyseus/redis-presence').RedisPresence;
         serverOptions.presence = new RedisPresence(process.env.REDIS_URI);
       } catch (e) {
+        console.error(e);
         logger.warn("");
         logger.warn("❌ could not initialize RedisPresence.");
         logger.warn("👉 npm install --save @colyseus/redis-presence");
@@ -169,7 +173,7 @@ export async function getTransport(options: ConfigOptions) {
     if (!options.initializeTransport) {
         if (BunWebSockets !== undefined) {
           // @colyseus/bun-websockets
-          options.initializeTransport = (options: any) => new BunWebSockets.BunWebSockets(options);
+          options.initializeTransport = (options: any) => new BunWebSockets(options);
 
         } else {
           // use WebSocketTransport by default

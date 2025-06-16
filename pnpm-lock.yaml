@@ -325,9 +325,18 @@ importers:
         specifier: '>=4.16.0'
         version: 5.1.0
     devDependencies:
+      '@colyseus/bun-websockets':
+        specifier: workspace:^
+        version: link:../transport/bun-websockets
       '@colyseus/core':
         specifier: workspace:^
         version: link:../core
+      '@colyseus/redis-driver':
+        specifier: workspace:^
+        version: link:../drivers/redis-driver
+      '@colyseus/redis-presence':
+        specifier: workspace:^
+        version: link:../presence/redis-presence
       '@colyseus/uwebsockets-transport':
         specifier: workspace:^
         version: link:../transport/uwebsockets-transport
