@@ -4,7 +4,6 @@
 // @ts-ignore
 import { ServerWebSocket, WebSocketHandler } from 'bun';
 
-import type http from 'http';
 import bunExpress from 'bun-serve-express';
 import type { Application, Request, Response } from "express";
 
@@ -72,7 +71,7 @@ export class BunWebSockets extends Transport {
     this.expressApp.use(`/${matchMaker.controller.matchmakeRoute}`, async (req, res) => {
       try {
         await this.handleMatchMakeRequest(req, res);
-      } catch (e) {
+      } catch (e: any) {
         res.status(500).json({
           code: e.code,
           error: e.message
@@ -105,6 +104,7 @@ export class BunWebSockets extends Transport {
     WebSocketClient.prototype.raw = milliseconds <= Number.EPSILON ? originalRawSend : function (...args: any[]) {
       let [buf, ...rest] = args;
       buf = Buffer.from(buf);
+      // @ts-ignore
       setTimeout(() => originalRawSend.apply(this, [buf, ...rest]), milliseconds);
     };
   }
@@ -139,7 +139,7 @@ export class BunWebSockets extends Transport {
         ip: rawClient.data.headers['x-real-ip'] ?? rawClient.remoteAddress,
       });
 
-    } catch (e) {
+    } catch (e: any) {
       debugAndPrintError(e);
 
       // send error code to client then terminate
@@ -214,7 +214,7 @@ export class BunWebSockets extends Transport {
         default: throw new ServerError(500, "invalid request method");
       }
 
-    } catch (e) {
+    } catch (e: any) {
       writeHeaders(req, res);
       res.status(500)
         .json({ code: e.code, error: e.message });

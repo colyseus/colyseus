@@ -40,6 +40,8 @@ export enum ClientState { JOINING, JOINED, RECONNECTED, LEAVING, CLOSED }
  *  encouraged to use along with Colyseus.
  */
 export interface Client<UserData = any, AuthData = any, MessageTypes = any> { // Record<string | number, any>
+  '~messages': MessageTypes;
+
   ref: EventEmitter;
 
   /**

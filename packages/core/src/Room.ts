@@ -49,7 +49,13 @@ export enum RoomInternalState {
  * - Rooms are created on demand during matchmaking by default
  * - Room classes must be exposed using `.define()`
  */
-export abstract class Room<ClientType extends Client = Client, Metadata = any, State extends object = any> {
+export abstract class Room<
+  ClientType extends Client = Client,
+  Metadata = any,
+  State extends object = any
+> {
+  public '~client': ClientType;
+
   /**
    * This property will change on these situations:
    * - The maximum number of allowed clients has been reached (`maxClients`)
@@ -345,7 +351,7 @@ export abstract class Room<ClientType extends Client = Client, Metadata = any, S
    *
    * (Experimental: this feature is subject to change in the future - we're currently getting feedback to improve it)
    */
-  public onUncaughtException?(error: RoomException<this>, methodName: RoomMethodName): void;
+  public onUncaughtException?(error: RoomException, methodName: RoomMethodName): void;
 
   public onAuth(
     client: ClientType,

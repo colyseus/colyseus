@@ -79,16 +79,20 @@ export class OnDisposeException extends Error {
   }
 }
 
-export class OnMessageException<R extends Room = Room, MessagePayload = any> extends Error {
+export class OnMessageException<R extends Room, MessageType extends keyof R['messages'] = keyof R['messages']> extends Error {
   constructor(
     cause: Error,
     message: string,
-    public client: Client,
-    public payload: MessagePayload,
-    public type: string,
+    public client: R['~client'],
+    public payload: Parameters<R['messages'][MessageType]>[1],
+    public type: MessageType,
   ) {
     super(message, { cause });
     this.name = 'OnMessageException';
+  }
+
+  public isType<T extends keyof R['messages']>(type: T): this is OnMessageException<R, T> {
+    return (this.type as string) === type;
   }
 }
 

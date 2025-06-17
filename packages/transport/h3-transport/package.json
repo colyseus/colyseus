@@ -14,8 +14,8 @@
   },
   "dependencies": {
     "@colyseus/core": "workspace:^",
-    "@fails-components/webtransport": "^1.1.4",
-    "@fails-components/webtransport-transport-http3-quiche": "^1.1.4",
+    "@fails-components/webtransport": "^1.3.1",
+    "@fails-components/webtransport-transport-http3-quiche": "^1.3.1",
     "node-forge": "^1.3.1"
   },
   "peerDependencies": {

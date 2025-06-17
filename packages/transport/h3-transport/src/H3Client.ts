@@ -9,6 +9,8 @@ import { type Iterator, decode, encode } from '@colyseus/schema';
 const lengthPrefixBuffer = new Uint8Array(9); // 9 bytes is the maximum length of a length prefix
 
 export class H3Client implements Client, ClientPrivate {
+  '~messages': any;
+
   public id: string;
   public ref: EventEmitter = new EventEmitter();
 
@@ -86,7 +88,7 @@ export class H3Client implements Client, ClientPrivate {
 
   public sendDatagram(data: Uint8Array | Buffer) {
     if (!this._datagramWriter) {
-      this._datagramWriter = this._wtSession.datagrams.writable.getWriter();
+      this._datagramWriter = this._wtSession.datagrams.
       this._datagramWriter.closed
         .then(() => console.log("datagram writer closed successfully!"))
         .catch((e: any) => console.log("datagram writer closed with error!", e));
@@ -225,7 +227,7 @@ export class H3Client implements Client, ClientPrivate {
     logger.warn('DEPRECATION WARNING: use client.leave() instead of client.close()');
     try {
       throw new Error();
-    } catch (e) {
+    } catch (e: any) {
       logger.info(e.stack);
     }
     this.leave(code, data);

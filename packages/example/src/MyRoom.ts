@@ -16,7 +16,7 @@ type MyClient = Client<any, any, {
   move: { x: string, y: string };
 }>
 
-export class MyRoom extends Room {
+export class MyRoom extends Room<MyClient> {
   state = new MyRoomState()
 
   messages = {
@@ -27,10 +27,6 @@ export class MyRoom extends Room {
     },
 
     nopayload: (client: Client) => {},
-  };
-
-  clientMessages: {
-    move: { x: string, y: string };
   };
 
   onCreate(options: any) {

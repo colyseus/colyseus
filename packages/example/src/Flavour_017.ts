@@ -1,7 +1,7 @@
 /**
  * Barebones server without express.
  */
-import { AuthContext, Room, Server } from "@colyseus/core";
+import { Room, Server } from "@colyseus/core";
 import { MyRoom } from "./MyRoom";
 import { Type } from "@colyseus/core/build/utils/types";
 
@@ -26,7 +26,10 @@ class Client<T extends Server> {
 }
 
 class RoomConnection<T extends typeof Room> {
-  onMessage(message: keyof T['prototype']['messages'], handler: (payload: Parameters<T['prototype']['messages'][typeof message]>[1]) => void) {
+  onMessage<M extends keyof T['prototype']['~client']['~messages']>(
+    message: M,
+    handler: (payload: T['prototype']['~client']['~messages'][M]) => void
+  ) {
   }
 
   send<M extends keyof T['prototype']['messages']>(
@@ -36,11 +39,12 @@ class RoomConnection<T extends typeof Room> {
   }
 }
 
-const my_room = new MyRoom();
-
 const gs = defineServer({ room: MyRoom });
 const client = new Client<typeof gs>()
 const room = await client.joinOrCreate("room");
+room.onMessage("move", (payload) => {
+  payload.x
+})
 room.send("move", { x: 1, y: 1 });
 room.send("nopayload")
 

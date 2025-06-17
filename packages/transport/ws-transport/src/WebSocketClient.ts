@@ -5,6 +5,8 @@ import { Protocol, Client, ClientPrivate, ClientState, ISendOptions, getMessageB
 const SEND_OPTS = { binary: true };
 
 export class WebSocketClient implements Client, ClientPrivate {
+  '~messages': any;
+
   public sessionId: string;
   public state: ClientState = ClientState.JOINING;
   public reconnectionToken: string;

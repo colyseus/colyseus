@@ -14,6 +14,8 @@ export class WebSocketWrapper extends EventEmitter {
 }
 
 export class WebSocketClient implements Client, ClientPrivate {
+  '~messages': any;
+
   public sessionId: string;
   public state: ClientState = ClientState.JOINING;
   public reconnectionToken: string;
