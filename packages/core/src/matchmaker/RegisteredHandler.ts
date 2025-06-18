@@ -20,13 +20,16 @@ export const INVALID_OPTION_KEYS: Array<keyof RoomCache> = [
 
 export type ValidateAuthTokenCallback = (token: string, request?: IncomingMessage) => Promise<any>;
 
-export class RegisteredHandler extends EventEmitter {
+export class RegisteredHandler<R extends Type<Room> = any> extends EventEmitter {
+  '~room': R;
+
+  public name: string;
   public filterOptions: string[] = [];
   public sortOptions?: SortOptions;
 
   constructor(
-    public name: string,
-    public klass: Type<Room>,
+    // public name: N,
+    public klass: R,
     public options: any
   ) {
     super();

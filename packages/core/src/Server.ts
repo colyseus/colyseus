@@ -70,7 +70,7 @@ export type ServerOptions = {
 };
 
 export class Server<
-  RoomTypes extends Record<string, Type<Room>> = any
+  RoomTypes extends Record<string, RegisteredHandler> = any
 > {
   public '~rooms': RoomTypes;
   public transport: Transport;

@@ -348,7 +348,7 @@ export async function remoteRoomCall<R= any>(
     try {
       return await requestFromIPC<R>(presence, getRoomChannel(roomId), method, args, rejectionTimeout);
 
-    } catch (e) {
+    } catch (e: any) {
 
       //
       // the room cache from an unavailable process might've been used here.
@@ -396,14 +396,12 @@ export function defineRoomType<T extends Type<Room>>(
   return registeredHandler;
 }
 
-export function removeRoomType(roomName: string) {
-  delete handlers[roomName];
+export function addRoomType(handler: RegisteredHandler) {
+  handlers[handler.name] = handler;
 }
 
-// TODO: legacy; remove me on 1.0
-export function hasHandler(roomName: string) {
-  logger.warn("hasHandler() is deprecated. Use getHandler() instead.");
-  return handlers[roomName] !== undefined;
+export function removeRoomType(roomName: string) {
+  delete handlers[roomName];
 }
 
 export function getHandler(roomName: string) {
