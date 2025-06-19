@@ -119,7 +119,9 @@ describe("Client", function () {
     describe("full-stack type safety using server", () => {
         test("client", async () => {
             const client = new ColyseusSDK<typeof gameServer>();
-            const room = await client.joinOrCreate("my_room");
+            const room = await client.joinOrCreate("my_room", {
+                name: "Jake Badlands"
+            });
 
             const $ = getStateCallbacks(room);
 

@@ -38,8 +38,8 @@ class MyRoom extends Room {
         },
     }
 
-    onJoin(client: Client, options?: any): void | Promise<any> {
-        client.send("winner", );
+    onJoin(client: Client, options?: { name: string }): void | Promise<any> {
+        client.send("winner", "one");
     }
 
 }

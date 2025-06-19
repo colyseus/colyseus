@@ -109,22 +109,38 @@ export class ColyseusSDK<ServerType extends Server = any> {
     }
 
 
-    public async joinOrCreate<R extends keyof ServerType['~rooms']>(roomName: R, options?: JoinOptions, rootSchema?: SchemaConstructor<ServerType>): Promise<Room<ServerType['~rooms'][typeof roomName]['~room']>>
+    public async joinOrCreate<R extends keyof ServerType['~rooms']>(
+        roomName: R,
+        options?: Parameters<ServerType['~rooms'][typeof roomName]['~room']['prototype']['onJoin']>[1],
+        rootSchema?: SchemaConstructor<ServerType>
+    ): Promise<Room<ServerType['~rooms'][typeof roomName]['~room']>>
     public async joinOrCreate<T>(roomName: string, options: JoinOptions = {}, rootSchema?: SchemaConstructor<T>) {
         return await this.createMatchMakeRequest<T>('joinOrCreate', roomName, options, rootSchema);
     }
 
-    public async create<R extends keyof ServerType['~rooms']>(roomName: R, options?: JoinOptions, rootSchema?: SchemaConstructor<ServerType>): Promise<Room<ServerType['~rooms'][typeof roomName]['~room']>>
+    public async create<R extends keyof ServerType['~rooms']>(
+        roomName: R,
+        options?: Parameters<ServerType['~rooms'][typeof roomName]['~room']['prototype']['onJoin']>[1],
+        rootSchema?: SchemaConstructor<ServerType>
+    ): Promise<Room<ServerType['~rooms'][typeof roomName]['~room']>>
     public async create<T>(roomName: string, options: JoinOptions = {}, rootSchema?: SchemaConstructor<T>) {
         return await this.createMatchMakeRequest<T>('create', roomName, options, rootSchema);
     }
 
-    public async join<R extends keyof ServerType['~rooms']>(roomName: R, options?: JoinOptions, rootSchema?: SchemaConstructor<ServerType>): Promise<Room<ServerType['~rooms'][typeof roomName]['~room']>>
+    public async join<R extends keyof ServerType['~rooms']>(
+        roomName: R,
+        options?: Parameters<ServerType['~rooms'][typeof roomName]['~room']['prototype']['onJoin']>[1],
+        rootSchema?: SchemaConstructor<ServerType>
+    ): Promise<Room<ServerType['~rooms'][typeof roomName]['~room']>>
     public async join<T>(roomName: string, options: JoinOptions = {}, rootSchema?: SchemaConstructor<T>) {
         return await this.createMatchMakeRequest<T>('join', roomName, options, rootSchema);
     }
 
-    public async joinById<R extends keyof ServerType['~rooms']>(roomName: R, options: JoinOptions, rootSchema?: SchemaConstructor<ServerType>): Promise<Room<ServerType['~rooms'][typeof roomName]['~room']>>
+    public async joinById<R extends keyof ServerType['~rooms']>(
+        roomName: R,
+        options?: Parameters<ServerType['~rooms'][typeof roomName]['~room']['prototype']['onJoin']>[1],
+        rootSchema?: SchemaConstructor<ServerType>
+    ): Promise<Room<ServerType['~rooms'][typeof roomName]['~room']>>
     public async joinById<T>(roomId: string, options: JoinOptions = {}, rootSchema?: SchemaConstructor<T>) {
         return await this.createMatchMakeRequest<T>('joinById', roomId, options, rootSchema);
     }
