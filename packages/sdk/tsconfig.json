@@ -1,0 +1,15 @@
+{
+    "extends": "./tsconfig/tsconfig.all.json",
+    "compilerOptions": {
+        "target": "es6",
+        "outDir": "lib",
+        "declaration": true,
+        "downlevelIteration": true, /*only for tests*/
+        "allowSyntheticDefaultImports": true,
+        "noImplicitAny": false,
+        "esModuleInterop": true,
+        "experimentalDecorators": true,
+        "inlineSources": true,
+        "skipLibCheck": true
+    }
+}

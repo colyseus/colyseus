@@ -7,7 +7,7 @@ import { RegisteredHandler } from './matchmaker/RegisteredHandler.js';
 import { Presence } from './presence/Presence.js';
 
 import { Room } from './Room.js';
-import { Type } from './utils/types.js';
+import type { Type } from './utils/types.js';
 import { getBearerToken, registerGracefulShutdown } from './utils/Utils.js';
 
 import { registerNode, unregisterNode} from './discovery/index.js';
@@ -72,7 +72,8 @@ export type ServerOptions = {
 export class Server<
   RoomTypes extends Record<string, RegisteredHandler> = any
 > {
-  public '~rooms': RoomTypes;
+  '~rooms': RoomTypes;
+
   public transport: Transport;
 
   protected presence: Presence;
@@ -294,7 +295,7 @@ export class Server<
     const originalOnMessage = this._originalRoomOnMessage;
 
     /* tslint:disable:no-string-literal */
-    Room.prototype['_onMessage'] = milliseconds <= Number.EPSILON ? originalOnMessage : function (client, buffer) {
+    Room.prototype['_onMessage'] = milliseconds <= Number.EPSILON ? originalOnMessage : (client, buffer) => {
       // uWebSockets.js: duplicate buffer because it is cleared at native layer before the timeout.
       const cachedBuffer = Buffer.from(buffer);
       setTimeout(() => originalOnMessage.call(this, client, cachedBuffer), halfwayMS);
@@ -391,7 +392,7 @@ export class Server<
 
           res.write(JSON.stringify(response));
 
-        } catch (e) {
+        } catch (e: any) {
           res.write(JSON.stringify({ code: e.code, error: e.message, }));
         }
 
@@ -404,6 +405,22 @@ export class Server<
     }
 
   }
+}
 
+export function defineServer<T extends Record<string, RegisteredHandler>>(roomHandlers: T): Server<T> {
+  const gameServer = new Server<T>();
 
+  for (const [name, handler] of Object.entries(roomHandlers)) {
+    handler.name = name;
+    matchMaker.addRoomType(handler);
+  }
+
+  return gameServer;
+}
+
+export function defineRoom<T extends Type<Room>>(
+  roomKlass: T,
+  defaultOptions?: Parameters<NonNullable<InstanceType<T>['onCreate']>>[0],
+): RegisteredHandler<T> {
+  return new RegisteredHandler(roomKlass, defaultOptions);
 }

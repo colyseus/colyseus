@@ -2,7 +2,7 @@ import * as http from 'http';
 import * as https from 'https';
 import * as net from 'net';
 
-import { Schema, StateView } from '@colyseus/schema';
+import { StateView } from '@colyseus/schema';
 import { EventEmitter } from 'events';
 import { spliceOne } from './utils/Utils.js';
 
@@ -31,6 +31,12 @@ export interface ISendOptions {
 
 export enum ClientState { JOINING, JOINED, RECONNECTED, LEAVING, CLOSED }
 
+export interface DefineClient<T extends {
+  userData?: any,
+  auth?: any,
+  messages: Record<string | number, any>
+}> extends Client<T['userData'], T['auth'], T['messages']> { }
+
 /**
  * The client instance from the server-side is responsible for the transport layer between the server and the client.
  * It should not be confused with the Client from the client-side SDK, as they have completely different purposes!
@@ -39,7 +45,7 @@ export enum ClientState { JOINING, JOINED, RECONNECTED, LEAVING, CLOSED }
  * - This is the raw WebSocket connection coming from the `ws` package. There are more methods available which aren't
  *  encouraged to use along with Colyseus.
  */
-export interface Client<UserData = any, AuthData = any, MessageTypes = any> { // Record<string | number, any>
+export interface Client<UserData = any, AuthData = any, MessageTypes extends Record<string | number, any> = any> { // Record<string | number, any>
   '~messages': MessageTypes;
 
   ref: EventEmitter;

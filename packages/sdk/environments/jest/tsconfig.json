@@ -1,0 +1,20 @@
+{
+    "compilerOptions": {
+        "target": "es6",
+        "outDir": "lib",
+        "module": "commonjs",
+        "moduleResolution": "node",
+        "lib": [ "dom", "es6" ],
+        "declaration": true,
+        "downlevelIteration": true,
+        "allowSyntheticDefaultImports": true,
+        "noImplicitAny": false,
+        "esModuleInterop": true,
+        "experimentalDecorators": true,
+        "inlineSources": true,
+        "sourceMap": true
+    },
+    "include": [
+        "src/**/*.ts",
+    ]
+}

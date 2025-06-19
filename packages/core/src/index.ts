@@ -1,7 +1,7 @@
 import Clock, { Delayed } from '@colyseus/timer';
 
 // Core classes
-export { Server, type ServerOptions } from './Server.js';
+export { Server, type ServerOptions, defineRoom, defineServer } from './Server.js';
 export { Room, RoomInternalState } from './Room.js';
 export { Protocol, ErrorCode, getMessageBytes } from './Protocol.js';
 export { RegisteredHandler } from './matchmaker/RegisteredHandler.js';
@@ -29,7 +29,7 @@ export { updateLobby, subscribeLobby } from './matchmaker/Lobby.js';
 export * from './matchmaker/driver/local/LocalDriver.js';
 
 // Transport
-export { type Client, type ClientPrivate, type AuthContext, ClientState, ClientArray, Transport, type ISendOptions } from './Transport.js';
+export { type Client, type DefineClient, type ClientPrivate, type AuthContext, ClientState, ClientArray, Transport, type ISendOptions } from './Transport.js';
 
 // Presence
 export { type Presence } from './presence/Presence.js';

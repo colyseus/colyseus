@@ -22,7 +22,7 @@ import * as stats from './Stats.js';
 
 import { logger } from './Logger.js';
 import { AuthContext, Client } from './Transport.js';
-import { Type } from './utils/types.js';
+import type { Type } from './utils/types.js';
 import { getHostname } from './discovery/index.js';
 import { getLockId } from './matchmaker/driver/api.js';
 
@@ -137,6 +137,7 @@ export async function accept() {
 
     } else {
       // handle room creation
+      // @ts-ignore
       return handleCreateRoom.apply(undefined, args);
     }
   });
@@ -380,7 +381,8 @@ export function defineRoomType<T extends Type<Room>>(
   klass: T,
   defaultOptions?: Parameters<NonNullable<InstanceType<T>['onCreate']>>[0],
 ) {
-  const registeredHandler = new RegisteredHandler(roomName, klass, defaultOptions);
+  const registeredHandler = new RegisteredHandler(klass, defaultOptions);
+  registeredHandler.name = roomName;
 
   handlers[roomName] = registeredHandler;
 
@@ -469,7 +471,7 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
         REMOTE_ROOM_SHORT_TIMEOUT,
       );
 
-    } catch (e) {
+    } catch (e: any) {
       if (e.message === "ipc_timeout") {
         debugAndPrintError(`${e.message}: create room request timed out for ${roomName} on processId ${selectedProcessId}.`);
 
@@ -545,7 +547,7 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
     try {
       await room.onCreate(merge({}, clientOptions, handler.options));
 
-    } catch (e) {
+    } catch (e: any) {
       debugAndPrintError(e);
       throw new ServerError(
         e.code || ErrorCode.MATCHMAKE_UNHANDLED,
@@ -566,12 +568,12 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
   stats.local.roomCount++;
   stats.persist();
 
-  room._events.on('lock', lockRoom.bind(this, room));
-  room._events.on('unlock', unlockRoom.bind(this, room));
-  room._events.on('join', onClientJoinRoom.bind(this, room));
-  room._events.on('leave', onClientLeaveRoom.bind(this, room));
-  room._events.on('visibility-change', onVisibilityChange.bind(this, room));
-  room._events.once('dispose', disposeRoom.bind(this, roomName, room));
+  room._events.on('lock', lockRoom.bind(undefined, room));
+  room._events.on('unlock', unlockRoom.bind(undefined, room));
+  room._events.on('join', onClientJoinRoom.bind(undefined, room));
+  room._events.on('leave', onClientLeaveRoom.bind(undefined, room));
+  room._events.on('visibility-change', onVisibilityChange.bind(undefined, room));
+  room._events.once('dispose', disposeRoom.bind(undefined, roomName, room));
 
   // when disconnect()'ing, keep only join/leave events for stat counting
   room._events.once('disconnect', () => {
@@ -725,7 +727,7 @@ export async function reserveSeatFor(room: IRoomCache, options: ClientOptions, a
       REMOTE_ROOM_SHORT_TIMEOUT,
     );
 
-  } catch (e) {
+  } catch (e: any) {
     debugMatchMaking(e);
 
     //

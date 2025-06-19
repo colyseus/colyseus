@@ -1,0 +1,31 @@
+{
+    "compilationOptions": {
+        "preferredConfigPath": "./tsconfig.json"
+    },
+
+    "entries": [
+        {
+            "filePath": "./src/index.ts",
+            "outFile": "./dist/colyseus.d.ts",
+
+            "failOnClass": false,
+            "noCheck": false,
+
+            "libraries": {
+                "inlinedLibraries": [
+                    "@colyseus/schema"
+                ]
+            },
+
+            "output": {
+                "inlineDeclareGlobals": false,
+                "sortNodes": false,
+
+                "umdModuleName": "Colyseus",
+                "inlineDeclareExternals": false,
+                "noBanner": false,
+                "respectPreserveConstEnum": false
+            }
+        }
+    ]
+}

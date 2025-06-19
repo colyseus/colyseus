@@ -69,7 +69,7 @@ export async function subscribeIPC(
     try {
       response = replyCallback(method, args);
 
-    } catch (e) {
+    } catch (e: any) {
       debugAndPrintError(e);
       const error = (typeof(e.code) !== "undefined")
         ? { code: e.code, message: e.message }

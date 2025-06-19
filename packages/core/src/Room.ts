@@ -1,7 +1,7 @@
 import { unpack } from '@colyseus/msgpackr';
 import { decode, type Iterator, $changes } from '@colyseus/schema';
-
 import Clock from '@colyseus/timer';
+
 import { EventEmitter } from 'events';
 import { logger } from './Logger.js';
 
@@ -50,11 +50,10 @@ export enum RoomInternalState {
  * - Room classes must be exposed using `.define()`
  */
 export abstract class Room<
-  ClientType extends Client = Client,
   Metadata = any,
   State extends object = any
 > {
-  public '~client': ClientType;
+  '~client': Parameters<this['onJoin']>[0];
 
   /**
    * This property will change on these situations:
@@ -127,7 +126,7 @@ export abstract class Room<
    *
    * @see {@link https://docs.colyseus.io/colyseus/server/room/#client|Client instance}
    */
-  public clients: ClientArray<ClientType> = new ClientArray();
+  public clients: ClientArray<this['~client']> = new ClientArray();
 
   /** @internal */
   public _events = new EventEmitter();
@@ -140,13 +139,13 @@ export abstract class Room<
   protected _reconnections: { [reconnectionToken: string]: [string, Deferred] } = {};
   private _reconnectingSessionId = new Map<string, string>();
 
-  public messages: Record<string, (client: ClientType, message: any) => void> = {};
+  public messages: Record<string, (client: this['~client'], message: any) => void> = {};
 
   private onMessageEvents = createNanoEvents();
   private onMessageValidators: {[message: string]: StandardSchemaV1} = {};
 
   protected onMessageFallbacks = {
-    '__no_message_handler': (client: ClientType, messageType: string, _: unknown) => {
+    '__no_message_handler': (client: this['~client'], messageType: string, _: unknown) => {
       const errorMessage = `room onMessage for "${messageType}" not registered.`;
       debugAndPrintError(`${errorMessage} (roomId: ${this.roomId})`);
 
@@ -162,7 +161,7 @@ export abstract class Room<
   };
 
   private _serializer: Serializer<State> = noneSerializer;
-  private _afterNextPatchQueue: Array<[string | ClientType, IArguments]> = [];
+  private _afterNextPatchQueue: Array<[string | this['~client'], IArguments]> = [];
 
   private _simulationInterval: NodeJS.Timeout;
 
@@ -354,7 +353,7 @@ export abstract class Room<
   public onUncaughtException?(error: RoomException, methodName: RoomMethodName): void;
 
   public onAuth(
-    client: ClientType,
+    client: Client,
     options: any,
     context: AuthContext
   ): any | Promise<any> {
@@ -631,15 +630,15 @@ export abstract class Room<
     return hasChanges;
   }
 
-  public onMessage<T = any, C extends Client = ClientType>(
+  public onMessage<T = any, C extends Client = this['~client']>(
     messageType: '*',
     callback: (client: C, type: string | number, message: T) => void
   );
-  public onMessage<T = any, C extends Client = ClientType>(
+  public onMessage<T = any, C extends Client = this['~client']>(
     messageType: string | number,
     callback: (client: C, message: T) => void,
   );
-  public onMessage<T = any, C extends Client = ClientType>(
+  public onMessage<T = any, C extends Client = this['~client']>(
     messageType: string | number,
     validationSchema: StandardSchemaV1<T>,
     callback: (client: C, message: T) => void,
@@ -676,7 +675,7 @@ export abstract class Room<
     };
   }
 
-  public onMessageBytes<T = any, C extends Client = ClientType>(
+  public onMessageBytes<T = any, C extends Client = this['~client']>(
     messageType: string | number,
     callback: (client: C, message: T) => void,
   ) {
@@ -715,7 +714,7 @@ export abstract class Room<
     if (numClients > 0) {
       // clients may have `async onLeave`, room will be disposed after they're fulfilled
       while (numClients--) {
-        this._forciblyCloseClient(this.clients[numClients] as ClientType & ClientPrivate, closeCode);
+        this._forciblyCloseClient(this.clients[numClients] as this['~client'] & ClientPrivate, closeCode);
       }
 
     } else {
@@ -726,7 +725,7 @@ export abstract class Room<
     return delayedDisconnection;
   }
 
-  public async ['_onJoin'](client: ClientType & ClientPrivate, authContext: AuthContext) {
+  public async ['_onJoin'](client: this['~client'] & ClientPrivate, authContext: AuthContext) {
     const sessionId = client.sessionId;
 
     // generate unique private reconnection token
@@ -1096,7 +1095,7 @@ export abstract class Room<
     return await (userReturnData || Promise.resolve());
   }
 
-  protected _onMessage(client: ClientType & ClientPrivate, buffer: Buffer) {
+  protected _onMessage(client: this['~client'] & ClientPrivate, buffer: Buffer) {
     // skip if client is on LEAVING state.
     if (client.state === ClientState.LEAVING) { return; }
 
@@ -1181,7 +1180,7 @@ export abstract class Room<
 
   }
 
-  protected _forciblyCloseClient(client: ClientType & ClientPrivate, closeCode: number) {
+  protected _forciblyCloseClient(client: this['~client'] & ClientPrivate, closeCode: number) {
     // stop receiving messages from this client
     client.ref.removeAllListeners('message');
 
@@ -1192,7 +1191,7 @@ export abstract class Room<
     this._onLeave(client, closeCode).then(() => client.leave(closeCode));
   }
 
-  protected async _onLeave(client: ClientType, code?: number): Promise<any> {
+  protected async _onLeave(client: this['~client'], code?: number): Promise<any> {
     debugMatchMaking('onLeave, sessionId: \'%s\' (close code: %d, roomId: %s)', client.sessionId, code, this.roomId);
 
     // call 'onLeave' method only if the client has been successfully accepted.

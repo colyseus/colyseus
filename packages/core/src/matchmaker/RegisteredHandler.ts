@@ -1,5 +1,6 @@
 import { IncomingMessage } from 'http';
 import { EventEmitter } from 'events';
+
 import { logger } from '../Logger.js';
 import { RoomCache, SortOptions } from './driver/api.js';
 
@@ -20,8 +21,10 @@ export const INVALID_OPTION_KEYS: Array<keyof RoomCache> = [
 
 export type ValidateAuthTokenCallback = (token: string, request?: IncomingMessage) => Promise<any>;
 
-export class RegisteredHandler<R extends Type<Room> = any> extends EventEmitter {
-  '~room': R;
+export class RegisteredHandler<
+  RoomType extends Type<Room> = any
+> extends EventEmitter {
+  '~room': RoomType;
 
   public name: string;
   public filterOptions: string[] = [];
@@ -29,7 +32,7 @@ export class RegisteredHandler<R extends Type<Room> = any> extends EventEmitter 
 
   constructor(
     // public name: N,
-    public klass: R,
+    public klass: RoomType,
     public options: any
   ) {
     super();

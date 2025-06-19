@@ -1,0 +1,100 @@
+{
+  "name": "@colyseus/sdk",
+  "version": "0.17.0",
+  "description": "Colyseus Multiplayer SDK for JavaScript/TypeScript",
+  "author": "Endel Dreyer",
+  "license": "MIT",
+  "scripts": {
+    "test": "vitest --dir test --reporter verbose",
+    "build": "rollup -c rollup.config.mjs",
+    "build-dist-dts": "dts-bundle-generator --config dts-generator.json",
+    "build-ci": "tsc && npm run build && npm run build-dist-dts && npm run build-zip-dist",
+    "build-zip-dist": "zip --junk-paths colyseus-sdk dist/colyseus*",
+    "build-all": "tsc && npm run build && npm run build-dist-dts && npm run copy-cocos-creator-files && npm run copy-construct3-files",
+    "copy-construct3-files": "cp dist/colyseus.js ../colyseus-construct3/plugin/colyseus.js",
+    "copy-cocos-creator-files": "cp dist/colyseus-cocos-creator.js cocos-creator-3-extension/colyseus-sdk/runtime/colyseus.js && cp dist/colyseus.d.ts cocos-creator-3-extension/colyseus-sdk/runtime",
+    "watch": "tsc -w",
+    "tslint": "tslint --project .",
+    "prepublishOnly": "tsc && npm run build"
+  },
+  "funding": "https://github.com/sponsors/endel",
+  "files": [
+    "dist",
+    "build",
+    "lib",
+    "LICENSE",
+    "README.md"
+  ],
+  "browser": "dist/colyseus.js",
+  "main": "build/cjs/index.js",
+  "module": "build/esm/index.mjs",
+  "typings": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "browser": "./build/cjs/index.js",
+      "import": "./build/esm/index.mjs",
+      "require": "./build/cjs/index.js",
+      "types": "./lib/index.d.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "decentralandLibrary": {
+    "main": "./dist/colyseus.js",
+    "typings": "./dist/colyseus.d.ts"
+  },
+  "keywords": [
+    "colyseus",
+    "multiplayer",
+    "netcode",
+    "realtime",
+    "networking",
+    "websockets"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/colyseus/colyseus.js.git"
+  },
+  "engines": {
+    "node": ">= 12.x"
+  },
+  "dependencies": {
+    "@colyseus/msgpackr": "^1.11.2",
+    "@colyseus/schema": "^3.0.0",
+    "@colyseus/httpie": "^2.0.0",
+    "tslib": "^2.1.0",
+    "ws": "^8.13.0"
+  },
+  "devDependencies": {
+    "@colyseus/core": "workspace:^",
+    "@rollup/plugin-alias": "^5.1.1",
+    "@rollup/plugin-commonjs": "^28.0.3",
+    "@rollup/plugin-node-resolve": "^16.0.1",
+    "@rollup/plugin-replace": "^6.0.2",
+    "@rollup/plugin-typescript": "^12.1.2",
+    "@types/chai": "^3.4.34",
+    "@types/mocha": "^2.2.44",
+    "@types/node": "^22.13.13",
+    "benchmark": "^2.1.4",
+    "chai": "^3.5.0",
+    "dts-bundle-generator": "^9.5.1",
+    "install": "^0.12.2",
+    "mocha": "^5.1.1",
+    "nanoid": "^2.0.1",
+    "node-localstorage": "^1.3.1",
+    "npm": "^6.9.0",
+    "rollup": "^4.37.0",
+    "ts-loader": "^6.2.1",
+    "ts-node": "^6.0.3",
+    "tslint": "^5.9.1",
+    "typescript": "^5.3.3",
+    "vitest": "^2.1.1"
+  },
+  "peerDependencies": {
+    "@colyseus/core": "0.17.x"
+  },
+  "peerDependenciesMeta": {
+    "@colyseus/core": {
+      "optional": true
+    }
+  }
+}
