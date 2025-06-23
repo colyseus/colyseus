@@ -7,7 +7,7 @@ import { Deferred, generateId, merge, retry, MAX_CONCURRENT_CREATE_ROOM_WAIT_TIM
 import { isDevMode, cacheRoomHistory, getPreviousProcessId, getRoomRestoreListKey, reloadFromCache } from './utils/DevMode.js';
 
 import { RegisteredHandler } from './matchmaker/RegisteredHandler.js';
-import { Room, RoomInternalState } from './Room.js';
+import { OnCreateOptions, Room, RoomInternalState } from './Room.js';
 
 import { LocalPresence } from './presence/LocalPresence.js';
 import { Presence } from './presence/Presence.js';
@@ -378,7 +378,7 @@ export async function remoteRoomCall<R= any>(
 export function defineRoomType<T extends Type<Room>>(
   roomName: string,
   klass: T,
-  defaultOptions?: Parameters<NonNullable<InstanceType<T>['onCreate']>>[0],
+  defaultOptions?: OnCreateOptions<T>,
 ) {
   const registeredHandler = new RegisteredHandler(roomName, klass, defaultOptions);
 
