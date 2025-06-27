@@ -305,7 +305,7 @@ export class uWebSocketsTransport extends Transport {
     /* Helper function for reading a posted JSON body */
     /* Extracted from https://github.com/uNetworking/uWebSockets.js/blob/master/examples/JsonPost.js */
     private readJson(res: uWebSockets.HttpResponse, cb: (json: any) => void) {
-        let buffer: any;
+        let buffer: Buffer;
         /* Register data cb */
         res.onData((ab, isLast) => {
             let chunk = Buffer.from(ab);

@@ -12,7 +12,7 @@ type Callback = (...args: any[]) => void;
 const DEVMODE_CACHE_FILE_PATH = path.resolve(".devmode.json");
 
 export class LocalPresence implements Presence {
-    public channels = new EventEmitter();
+    public subscriptions = new EventEmitter();
 
     public data: {[roomName: string]: string[]} = {};
     public hash: {[roomName: string]: {[key: string]: string}} = {};
@@ -38,24 +38,44 @@ export class LocalPresence implements Presence {
     }
 
     public subscribe(topic: string, callback: (...args: any[]) => void) {
-        this.channels.on(topic, callback);
+        this.subscriptions.on(topic, callback);
         return this;
     }
 
     public unsubscribe(topic: string, callback?: Callback) {
         if (callback)  {
-            this.channels.removeListener(topic, callback);
+            this.subscriptions.removeListener(topic, callback);
 
         } else {
-            this.channels.removeAllListeners(topic);
+            this.subscriptions.removeAllListeners(topic);
         }
 
         return this;
     }
 
     public publish(topic: string, data: any) {
-        this.channels.emit(topic, data);
+        this.subscriptions.emit(topic, data);
         return this;
+    }
+
+    public async channels (pattern?: string) {
+      let eventNames = this.subscriptions.eventNames() as string[];
+      if (pattern) {
+        //
+        // This is a limited glob pattern to regexp implementation.
+        // If needed, we can use a full implementation like picomatch: https://github.com/micromatch/picomatch/
+        //
+        const regexp = new RegExp(
+          pattern.
+            replaceAll(".", "\\.").
+            replaceAll("$", "\\$").
+            replaceAll("*", ".*").
+            replaceAll("?", "."),
+          "gi"
+        );
+        eventNames = eventNames.filter((eventName) => regexp.test(eventName));
+      }
+      return eventNames;
     }
 
     public async exists(key: string): Promise<boolean> {
@@ -286,7 +306,7 @@ export class LocalPresence implements Presence {
     }
 
     public setMaxListeners(number: number) {
-      this.channels.setMaxListeners(number);
+      this.subscriptions.setMaxListeners(number);
     }
 
     public shutdown() {

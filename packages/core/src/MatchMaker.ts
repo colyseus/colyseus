@@ -778,10 +778,18 @@ async function callOnAuth(roomName: string, clientOptions?: ClientOptions, authC
  */
 export async function healthCheckAllProcesses() {
   const allStats = await stats.fetchAll();
+
+  const activeProcessChannels = (typeof(presence.channels) === "function") // TODO: remove this check on 0.17
+    ? (await presence.channels("p:*")).map(c => c.substring(2))
+    : [];
+
   if (allStats.length > 0) {
     await Promise.all(
       allStats
-        .filter(stat => stat.processId !== processId) // skip current process
+        .filter(stat => (
+          stat.processId !== processId && // skip current process
+          !activeProcessChannels.includes(stat.processId) // skip if channel is still listening
+        ))
         .map(stat => healthCheckProcessId(stat.processId))
     );
   }

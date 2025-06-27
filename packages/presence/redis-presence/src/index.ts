@@ -8,7 +8,7 @@ export class RedisPresence implements Presence {
     protected sub: Redis | Cluster;
     protected pub: Redis | Cluster;
 
-    protected channels = new EventEmitter();
+    protected subscriptions = new EventEmitter();
 
     constructor(options?: number | string | RedisOptions | ClusterNode[], clusterOptions?: ClusterOptions) {
         if (Array.isArray(options)) {
@@ -25,7 +25,7 @@ export class RedisPresence implements Presence {
     }
 
     public async subscribe(topic: string, callback: Callback) {
-        this.channels.addListener(topic, callback);
+        this.subscriptions.addListener(topic, callback);
 
         if (this.sub.listeners('message').length === 0) {
           this.sub.on('message', this.handleSubscription);
@@ -38,13 +38,13 @@ export class RedisPresence implements Presence {
 
     public async unsubscribe(topic: string, callback?: Callback) {
         if (callback) {
-          this.channels.removeListener(topic, callback);
+          this.subscriptions.removeListener(topic, callback);
 
         } else {
-          this.channels.removeAllListeners(topic);
+          this.subscriptions.removeAllListeners(topic);
         }
 
-        if (this.channels.listenerCount(topic) === 0) {
+        if (this.subscriptions.listenerCount(topic) === 0) {
           await this.sub.unsubscribe(topic);
         }
 
@@ -57,6 +57,10 @@ export class RedisPresence implements Presence {
         }
 
         await this.pub.publish(topic, JSON.stringify(data));
+    }
+
+    public channels(pattern: string = '*') {
+      return this.pub.pubsub("CHANNELS", pattern) as Promise<string[]>;
     }
 
     public async exists(key: string): Promise<boolean> {
@@ -198,11 +202,11 @@ export class RedisPresence implements Presence {
     }
 
     public setMaxListeners(number: number) {
-      this.channels.setMaxListeners(number);
+      this.subscriptions.setMaxListeners(number);
     }
 
     protected handleSubscription = (channel, message) => {
-        this.channels.emit(channel, JSON.parse(message));
+        this.subscriptions.emit(channel, JSON.parse(message));
     }
 
 }

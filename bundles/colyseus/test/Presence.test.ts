@@ -101,12 +101,12 @@ describe("Presence", () => {
         assert.deepEqual([1, 2, 3, 4], messages);
 
         // leave all subscriptions...
-        assert.ok(presence['channels'].listenerCount("topic-collide1") > 0);
-        assert.ok(presence['channels'].listenerCount("topic-collide2") > 0);
+        assert.ok(presence['subscriptions'].listenerCount("topic-collide1") > 0);
+        assert.ok(presence['subscriptions'].listenerCount("topic-collide2") > 0);
         await presence.unsubscribe("topic-collide1", callback1);
         await presence.unsubscribe("topic-collide2", callback3);
-        assert.strictEqual(0, presence['channels'].listenerCount("topic-collide1"));
-        assert.strictEqual(0, presence['channels'].listenerCount("topic-collide2"));
+        assert.strictEqual(0, presence['subscriptions'].listenerCount("topic-collide1"));
+        assert.strictEqual(0, presence['subscriptions'].listenerCount("topic-collide2"));
 
         messages = [];
         await presence.publish("topic-collide1", 1000);
@@ -300,6 +300,26 @@ describe("Presence", () => {
         assert.strictEqual(3, hincrby);
 
         assert.strictEqual('3', await presence.hget("hincrby", "one"));
+      });
+
+      it("channels", async () => {
+        await presence.subscribe("p:one", () => {});
+        await presence.subscribe("$one", () => {});
+        await presence.subscribe("p:two", () => {});
+        await presence.subscribe("$two", () => {});
+        await presence.subscribe("one.two", () => {});
+
+        const channels = await presence.channels();
+        assert.deepStrictEqual(["p:one", "$one", "p:two", "$two", "one.two"].sort(), channels.sort());
+
+        const pChannels = await presence.channels("p:*");
+        assert.deepStrictEqual(["p:one", "p:two"], pChannels.sort());
+
+        const $Channels = await presence.channels("$*");
+        assert.deepStrictEqual(["$one", "$two"], $Channels.sort());
+
+        const dotChannels = await presence.channels("*.*");
+        assert.deepStrictEqual(["one.two"], dotChannels.sort());
       });
 
     });

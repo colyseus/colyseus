@@ -27,6 +27,12 @@ export interface Presence {
     unsubscribe(topic: string, callback?: Function);
 
     /**
+     * Lists the currently active channels / subscriptions
+     * @param pattern
+     */
+    channels(pattern?: string): Promise<string[]>;
+
+    /**
      * Posts a message to given topic.
      *
      * @param topic - Topic name.
