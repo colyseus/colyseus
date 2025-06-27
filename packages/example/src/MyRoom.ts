@@ -12,11 +12,7 @@ export class MyRoomState extends Schema {
   @type({ map: Player }) players = new MapSchema<Player>();
 }
 
-type MyClient = Client<any, any, {
-  move: { x: string, y: string };
-}>
-
-export class MyRoom extends Room<MyClient> {
+export class MyRoom extends Room {
   state = new MyRoomState()
 
   messages = {

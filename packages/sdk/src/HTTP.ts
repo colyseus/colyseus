@@ -3,10 +3,10 @@ import { AbortError, ServerError } from "./errors/Errors";
 import * as httpie from "@colyseus/httpie";
 
 export class HTTP {
-    public authToken: string;
+    public authToken: string | undefined;
 
     constructor(
-        protected client: Client,
+        protected sdk: ColyseusSDK,
         public headers: { [id: string]: string } = {},
     ) {}
 
@@ -27,7 +27,7 @@ export class HTTP {
     }
 
     protected request(method: "get" | "post" | "put" | "del", path: string, options: Partial<httpie.Options> = {}): Promise<httpie.Response> {
-        return httpie[method](this.client['getHttpEndpoint'](path), this.getOptions(options)).catch((e: any) => {
+        return httpie[method](this.sdk['getHttpEndpoint'](path), this.getOptions(options)).catch((e: any) => {
             if (e.aborted) {
                 throw new AbortError("Request aborted");
             }

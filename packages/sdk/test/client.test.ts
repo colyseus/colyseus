@@ -138,7 +138,6 @@ describe("Client", function () {
             room.onMessage("not_defined", (payload) => {
                 console.log(payload);
             });
-
         });
     });
 

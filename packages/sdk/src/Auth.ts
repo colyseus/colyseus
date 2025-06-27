@@ -25,8 +25,7 @@ export class Auth {
     };
 
     #_initialized = false;
-    #_initializationPromise: Promise<void>;
-    #_signInWindow = undefined;
+    #_signInWindow: WindowProxy | null = null;
     #_events = createNanoEvents();
 
     constructor(protected http: HTTP) {
@@ -37,24 +36,19 @@ export class Auth {
         this.http.authToken = token;
     }
 
-    public get token(): string {
+    public get token(): string | undefined {
         return this.http.authToken;
     }
 
     public onChange(callback: (response: AuthData) => void) {
         const unbindChange = this.#_events.on("change", callback);
         if (!this.#_initialized) {
-            this.#_initializationPromise = new Promise<void>((resolve, reject) => {
-                this.getUserData().then((userData) => {
-                    this.emitChange({ ...userData, token: this.token });
+            this.getUserData().then((userData) => {
+                this.emitChange({ ...userData, token: this.token });
 
-                }).catch((e) => {
-                    // user is not logged in, or service is down
-                    this.emitChange({ user: null, token: undefined });
-
-                }).finally(() => {
-                    resolve();
-                });
+            }).catch((e) => {
+                // user is not logged in, or service is down
+                this.emitChange({ user: null, token: undefined });
             });
         }
         this.#_initialized = true;
@@ -115,7 +109,7 @@ export class Auth {
 
             // Capitalize first letter of providerName
             const title = `Login with ${(providerName[0].toUpperCase() + providerName.substring(1))}`;
-            const url = this.http['client']['getHttpEndpoint'](`${(settings.prefix || `${this.settings.path}/provider`)}/${providerName}${upgradingToken}`);
+            const url = this.http['sdk']['getHttpEndpoint'](`${(settings.prefix || `${this.settings.path}/provider`)}/${providerName}${upgradingToken}`);
 
             const left = (screen.width / 2) - (w / 2);
             const top = (screen.height / 2) - (h / 2);
@@ -130,8 +124,8 @@ export class Auth {
                 if (event.data.user === undefined && event.data.token === undefined) { return; }
 
                 clearInterval(rejectionChecker);
-                this.#_signInWindow.close();
-                this.#_signInWindow = undefined;
+                this.#_signInWindow?.close();
+                this.#_signInWindow = null;
 
                 window.removeEventListener("message", onMessage);
 
@@ -146,7 +140,7 @@ export class Auth {
 
             const rejectionChecker = setInterval(() => {
                 if (!this.#_signInWindow || this.#_signInWindow.closed) {
-                    this.#_signInWindow = undefined;
+                    this.#_signInWindow = null;
                     reject("cancelled");
                     window.removeEventListener("message", onMessage);
                 }
@@ -157,6 +151,7 @@ export class Auth {
     }
 
     public async signOut() {
+        // @ts-ignore
         this.emitChange({ user: null, token: null });
     }
 
