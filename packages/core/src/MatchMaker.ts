@@ -11,6 +11,7 @@ import { Room, RoomInternalState } from './Room.js';
 
 import { LocalPresence } from './presence/LocalPresence.js';
 import { Presence } from './presence/Presence.js';
+import { ScopedPresence } from './presence/ScopedPresence.js';
 
 import { debugAndPrintError, debugMatchMaking } from './Debug.js';
 import { SeatReservationError } from './errors/SeatReservationError.js';
@@ -527,7 +528,8 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
   room['__init']();
 
   room.roomName = roomName;
-  room.presence = presence;
+  // Create a scoped presence instance for this room
+  room.presence = new ScopedPresence(presence);
 
   const additionalListingData: any = handler.getFilterOptions(clientOptions);
 
