@@ -18,11 +18,11 @@ export abstract class Transport {
 
 export type AuthContext = {
   token?: string,
-  headers: http.IncomingHttpHeaders,
+  headers: Headers,
   ip: string | string[];
   // FIXME: each transport may have its own specific properties.
   // "req" only applies to WebSocketTransport.
-  req?: http.IncomingMessage;
+  req?: any;
 };
 
 export interface ISendOptions {

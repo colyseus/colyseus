@@ -1,5 +1,6 @@
 import http, { IncomingMessage, ServerResponse } from 'http';
 import greeting from "@colyseus/greeting-banner";
+import { Router } from 'better-call';
 
 import { debugAndPrintError, debugMatchMaking } from './Debug.js';
 import * as matchMaker from './MatchMaker.js';
@@ -8,9 +9,7 @@ import { Presence } from './presence/Presence.js';
 
 import { Room } from './Room.js';
 import type { Type } from './utils/types.js';
-import { getBearerToken, registerGracefulShutdown } from './utils/Utils.js';
-
-import { registerNode, unregisterNode} from './discovery/index.js';
+import { registerGracefulShutdown } from './utils/Utils.js';
 
 import { LocalPresence } from './presence/LocalPresence.js';
 import { LocalDriver } from './matchmaker/driver/local/LocalDriver.js';
@@ -18,6 +17,7 @@ import { LocalDriver } from './matchmaker/driver/local/LocalDriver.js';
 import { Transport } from './Transport.js';
 import { logger, setLogger } from './Logger.js';
 import { setDevMode, isDevMode } from './utils/DevMode.js';
+import { toNodeHandler } from './router/index.js';
 
 export type ServerOptions = {
   publicAddress?: string,
@@ -51,30 +51,17 @@ export type ServerOptions = {
    * Default: true
    */
   greet?: boolean,
-
-  /**
-   * Options below are now part of WebSocketTransport (@colyseus/ws-transport)
-   * TODO: remove me on 0.15.0
-   */
-  /** @deprecated */
-  pingInterval?: number,
-
-  /** @deprecated */
-  pingMaxRetries?: number,
-
-  /** @deprecated */
-  verifyClient?: any,
-
-  /** @deprecated */
-  server?: http.Server,
 };
 
 export class Server<
-  RoomTypes extends Record<string, RegisteredHandler> = any
+  RoomTypes extends Record<string, RegisteredHandler> = any,
+  Routes extends Router = any
 > {
   '~rooms': RoomTypes;
+  '~routes': Routes;
 
   public transport: Transport;
+  public router: Routes;
 
   protected presence: Presence;
   protected driver: matchMaker.MatchMakerDriver;
@@ -86,7 +73,10 @@ export class Server<
   private _originalRoomOnMessage: typeof Room.prototype._onMessage | null = null;
 
   constructor(options: ServerOptions = {}) {
-    const { gracefullyShutdown = true, greet = true } = options;
+    const {
+      gracefullyShutdown = true,
+      greet = true
+    } = options;
 
     setDevMode(options.devMode === true);
 
@@ -113,38 +103,8 @@ export class Server<
   }
 
   public attach(options: ServerOptions) {
-    /**
-     * Display deprecation warnings for moved Transport options.
-     * TODO: Remove me on 0.15
-     */
-    if (
-      options.pingInterval !== undefined ||
-      options.pingMaxRetries !== undefined ||
-      options.server !== undefined ||
-      options.verifyClient !== undefined
-    ) {
-      logger.warn("DEPRECATION WARNING: 'pingInterval', 'pingMaxRetries', 'server', and 'verifyClient' Server options will be permanently moved to WebSocketTransport on v0.15");
-      logger.warn(`new Server({
-  transport: new WebSocketTransport({
-    pingInterval: ...,
-    pingMaxRetries: ...,
-    server: ...,
-    verifyClient: ...
-  })
-})`);
-      logger.warn("👉 Documentation: https://docs.colyseus.io/server/transport/")
-    }
-
-    const transport = options.transport || this.getDefaultTransport(options);
+    this.transport = options.transport || this.getDefaultTransport(options);
     delete options.transport;
-
-    this.transport = transport;
-
-    if (this.transport.server) {
-      // @ts-ignore
-      this.transport.server.once('listening', () => this.registerProcessForDiscovery());
-      this.attachMatchMakingRoutes(this.transport.server as http.Server);
-    }
   }
 
   /**
@@ -172,9 +132,13 @@ export class Server<
     }
 
     return new Promise<void>((resolve, reject) => {
-      // @ts-ignore
-      this.transport.server?.on('error', (err) => reject(err));
       this.transport.listen(port, hostname, backlog, (err) => {
+        const server = this.transport.server;
+        if (server && this.router) {
+          server.on('error', (err) => reject(err));
+          server.on('request', toNodeHandler(this.router.handler));
+        }
+
         if (listeningListener) {
           listeningListener(err);
         }
@@ -186,14 +150,6 @@ export class Server<
           resolve();
         }
       });
-    });
-  }
-
-  public async registerProcessForDiscovery() {
-    // register node for proxy/service discovery
-    await registerNode(this.presence, {
-      port: this.port,
-      processId: matchMaker.processId,
     });
   }
 
@@ -245,11 +201,6 @@ export class Server<
     if (matchMaker.state === matchMaker.MatchMakerState.SHUTTING_DOWN) {
       return;
     }
-
-    await unregisterNode(this.presence, {
-      port: this.port,
-      processId: matchMaker.processId,
-    });
 
     try {
       // custom "before shutdown" method
@@ -323,92 +274,18 @@ export class Server<
 
   protected onBeforeShutdownCallback: () => void | Promise<any> =
     () => Promise.resolve()
-
-  protected attachMatchMakingRoutes(server: http.Server) {
-    const listeners = server.listeners('request').slice(0);
-    server.removeAllListeners('request');
-
-    server.on('request', (req, res) => {
-      if (req.url.indexOf(`/${matchMaker.controller.matchmakeRoute}`) !== -1) {
-        debugMatchMaking('received matchmake request: %s', req.url);
-        this.handleMatchMakeRequest(req, res);
-
-      } else {
-        for (let i = 0, l = listeners.length; i < l; i++) {
-          listeners[i].call(server, req, res);
-        }
-      }
-    });
-  }
-
-  protected async handleMatchMakeRequest(req: IncomingMessage, res: ServerResponse) {
-    // do not accept matchmaking requests if already shutting down
-    if (matchMaker.state === matchMaker.MatchMakerState.SHUTTING_DOWN) {
-      res.writeHead(503, {});
-      res.end();
-      return;
-    }
-
-    const headers = Object.assign(
-      {},
-      matchMaker.controller.DEFAULT_CORS_HEADERS,
-      matchMaker.controller.getCorsHeaders.call(undefined, req)
-    );
-
-    if (req.method === 'OPTIONS') {
-      res.writeHead(204, headers);
-      res.end();
-
-    } else if (req.method === 'POST') {
-      const matchedParams = req.url.match(matchMaker.controller.allowedRoomNameChars);
-      const matchmakeIndex = matchedParams.indexOf(matchMaker.controller.matchmakeRoute);
-      const method = matchedParams[matchmakeIndex + 1];
-      const roomName = matchedParams[matchmakeIndex + 2] || '';
-
-      const data = [];
-      req.on('data', (chunk) => data.push(chunk));
-      req.on('end', async () => {
-        headers['Content-Type'] = 'application/json';
-        res.writeHead(200, headers);
-
-        try {
-          const clientOptions = JSON.parse(Buffer.concat(data).toString());
-          const response = await matchMaker.controller.invokeMethod(
-            method,
-            roomName,
-            clientOptions,
-            {
-              token: getBearerToken(req.headers['authorization']),
-              headers: req.headers,
-              ip: req.headers['x-real-ip'] ?? req.headers['x-forwarded-for'] ?? req.socket.remoteAddress,
-              req,
-            },
-          );
-
-          // specify protocol, if available.
-          if (this.transport.protocol !== undefined) {
-            response.protocol = this.transport.protocol;
-          }
-
-          res.write(JSON.stringify(response));
-
-        } catch (e: any) {
-          res.write(JSON.stringify({ code: e.code, error: e.message, }));
-        }
-
-        res.end();
-      });
-
-    } else if (req.method === 'GET') {
-      res.writeHead(404, headers);
-      res.end();
-    }
-
-  }
 }
 
-export function defineServer<T extends Record<string, RegisteredHandler>>(roomHandlers: T): Server<T> {
-  const gameServer = new Server<T>();
+export function defineServer<
+  T extends Record<string, RegisteredHandler>,
+  R extends Router
+>(
+  roomHandlers: T,
+  router: R,
+): Server<T, R> {
+  const gameServer = new Server<T, R>();
+
+  gameServer.router = router;
 
   for (const [name, handler] of Object.entries(roomHandlers)) {
     handler.name = name;

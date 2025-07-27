@@ -2,11 +2,11 @@ import http from 'http';
 import { URL } from 'url';
 import WebSocket, { type ServerOptions, WebSocketServer } from 'ws';
 
-import { matchMaker, Protocol, Transport, debugAndPrintError, debugConnection, getBearerToken } from '@colyseus/core';
+import { matchMaker, Protocol, Transport, toNodeHandler, debugAndPrintError, debugConnection, getBearerToken } from '@colyseus/core';
 import { WebSocketClient } from './WebSocketClient.js';
 
 function noop() {/* tslint:disable:no-empty */ }
-function heartbeat() { this.pingCount = 0; }
+function heartbeat(this: any) { this.pingCount = 0; }
 
 type RawWebSocketClient = WebSocket & { pingCount: number };
 
@@ -87,6 +87,7 @@ export class WebSocketTransport extends Transport {
       // copy buffer
       let [buf, ...rest] = args;
       buf = Array.from(buf);
+      // @ts-ignore
       setTimeout(() => originalSend.apply(this, [buf, ...rest]), milliseconds);
     };
   }
@@ -144,7 +145,7 @@ export class WebSocketTransport extends Transport {
         ip: req.headers['x-real-ip'] ?? req.headers['x-forwarded-for'] ?? req.socket.remoteAddress,
       });
 
-    } catch (e) {
+    } catch (e: any) {
       debugAndPrintError(e);
 
       // send error code to client then terminate

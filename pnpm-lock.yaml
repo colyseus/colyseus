@@ -180,6 +180,9 @@ importers:
       '@standard-schema/spec':
         specifier: ^1.0.0
         version: 1.0.0
+      better-call:
+        specifier: ^1.0.9
+        version: 1.0.9
       debug:
         specifier: ^4.3.4
         version: 4.4.1(supports-color@8.1.1)

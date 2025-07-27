@@ -64,5 +64,8 @@ export {
 export { LobbyRoom } from './rooms/LobbyRoom.js';
 export { RelayRoom } from './rooms/RelayRoom.js';
 
+// Router / Endpoints
+export { createEndpoint, createInternalContext, createMiddleware, createRouter, toNodeHandler } from './router/index.js';
+
 // Abstract logging support
 export { logger } from './Logger.js';

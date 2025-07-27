@@ -83,14 +83,14 @@ export async function cacheRoomHistory(rooms: { [roomId: string]: Room }) {
         // Rewrite updated room history
         logger.debug(`💾 caching room '${room.roomId}' (clients: ${room.clients.length}, state size: ${(roomHistory["state"] || []).length} bytes)`);
 
-      } catch (e) {
+      } catch (e: any) {
         debugAndPrintError(`❌ couldn't cache room '${room.roomId}', due to:\n${e.stack}`);
       }
     }
   }
 }
 
-export async function getPreviousProcessId(hostname) {
+export async function getPreviousProcessId(hostname: string = '') {
   return await presence.hget(getProcessRestoreKey(), hostname);
 }
 

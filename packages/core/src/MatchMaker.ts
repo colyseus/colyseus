@@ -23,7 +23,6 @@ import * as stats from './Stats.js';
 import { logger } from './Logger.js';
 import { AuthContext, Client } from './Transport.js';
 import type { Type } from './utils/types.js';
-import { getHostname } from './discovery/index.js';
 import { getLockId } from './matchmaker/driver/api.js';
 
 export { controller, stats, type MatchMakerDriver };
@@ -100,7 +99,7 @@ export async function setup(
   stats.reset(false);
 
   // devMode: try to retrieve previous processId
-  if (isDevMode) { processId = await getPreviousProcessId(await getHostname()); }
+  if (isDevMode) { processId = await getPreviousProcessId(); }
 
   // ensure processId is set
   if (!processId) { processId = generateId(); }

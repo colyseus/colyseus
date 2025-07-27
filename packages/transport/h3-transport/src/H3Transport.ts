@@ -27,8 +27,7 @@ export class H3Transport extends Transport {
   public protocol: string = "h3";
   public clients: H3Client[] = [];
 
-  // protected http: http.Server;
-  protected https: https.Server;
+  public server: https.Server;
   protected h3Server: Http3Server;
 
   private options: TransportOptions;
@@ -88,8 +87,8 @@ export class H3Transport extends Transport {
         });
       }
 
-      this.https = https.createServer({ cert, key }, this.options.app);
-      this.https.listen(port, hostname, backlog, listeningListener);
+      this.server = https.createServer({ cert, key }, this.options.app);
+      this.server.listen(port, hostname, backlog, listeningListener);
 
       this.h3Server = new Http3Server({
         host: hostname,
@@ -131,7 +130,7 @@ export class H3Transport extends Transport {
   public shutdown() {
     this.isListening = false;
     // this.http.close();
-    this.https.close();
+    this.server.close();
     this.h3Server.stopServer();
   }
 
@@ -148,20 +147,6 @@ export class H3Transport extends Transport {
   }
 
   protected registerMatchMakeRoutes(fingerprint?: number[]) {
-    this.options.app.use((req, res, next) => {
-      if (req.method === 'OPTIONS') {
-        const headers = Object.assign(
-          {},
-          matchMaker.controller.DEFAULT_CORS_HEADERS,
-          matchMaker.controller.getCorsHeaders.call(undefined, req)
-        );
-        res.writeHead(204, headers);
-        res.end();
-      } else {
-        next();
-      }
-    });
-
     this.options.app.post(`/${matchMaker.controller.matchmakeRoute}/:method/:roomName`, async (req: Request, res: Response) => {
       // do not accept matchmaking requests if already shutting down
       if (matchMaker.state === matchMaker.MatchMakerState.SHUTTING_DOWN) {

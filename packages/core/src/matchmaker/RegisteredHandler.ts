@@ -5,6 +5,8 @@ import { logger } from '../Logger.js';
 import { RoomCache, SortOptions } from './driver/api.js';
 
 import { Room } from './../Room.js';
+import { Client } from '../Transport.js';
+
 import { updateLobby } from './Lobby.js';
 import { Type } from '../utils/types.js';
 
@@ -21,9 +23,19 @@ export const INVALID_OPTION_KEYS: Array<keyof RoomCache> = [
 
 export type ValidateAuthTokenCallback = (token: string, request?: IncomingMessage) => Promise<any>;
 
+export interface RegisteredHandlerEvents<RoomType extends Type<Room> = any> {
+  create: [room: InstanceType<RoomType>];
+  lock: [room: InstanceType<RoomType>];
+  unlock: [room: InstanceType<RoomType>];
+  join: [room: InstanceType<RoomType>, client: Client];
+  leave: [room: InstanceType<RoomType>, client: Client, willDispose: boolean];
+  dispose: [room: InstanceType<RoomType>];
+  'visibility-change': [room: InstanceType<RoomType>, isVisible: boolean];
+}
+
 export class RegisteredHandler<
   RoomType extends Type<Room> = any
-> extends EventEmitter {
+> extends EventEmitter<RegisteredHandlerEvents<RoomType>> {
   '~room': RoomType;
 
   public name: string;

@@ -3,7 +3,6 @@
  * (for interoperability between different http frameworks, e.g. express, uWebSockets.js, etc)
  */
 
-import { IncomingMessage } from 'http';
 import { ErrorCode } from '../Protocol.js';
 import { ServerError } from '../errors/ServerError.js';
 import * as matchMaker from '../MatchMaker.js';
@@ -37,10 +36,9 @@ export default {
    *    }
    *    ```
    */
-  getCorsHeaders(req: IncomingMessage): { [header: string]: string } {
-    const origin = (req.headers && req.headers['origin']) || (req as any).getHeader && (req as any).getHeader('origin');
+  getCorsHeaders(headers: Headers): { [header: string]: string } {
     return {
-      ['Access-Control-Allow-Origin']: origin || "*",
+      ['Access-Control-Allow-Origin']: headers.get("origin") || "*",
     };
   },
 
@@ -57,7 +55,7 @@ export default {
     try {
       return await matchMaker[method](roomName, clientOptions, authOptions);
 
-    } catch (e) {
+    } catch (e: any) {
       throw new ServerError(e.code || ErrorCode.MATCHMAKE_UNHANDLED, e.message);
     }
   }

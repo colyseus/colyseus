@@ -1,6 +1,6 @@
 import http, { IncomingHttpHeaders } from 'http';
 import querystring, { ParsedUrlQuery } from 'querystring';
-import uWebSockets from 'uWebSockets.js';
+import uWebSockets, { WebSocket } from 'uWebSockets.js';
 import expressify, { Application } from "uwebsockets-express";
 
 import { AuthContext, HttpServerMock, ErrorCode, matchMaker, getBearerToken, Transport, debugAndPrintError, spliceOne } from '@colyseus/core';
@@ -16,7 +16,6 @@ type RawWebSocketClient = uWebSockets.WebSocket<any> & {
 
 export class uWebSocketsTransport extends Transport {
     public app: uWebSockets.TemplatedApp;
-    public expressApp: Application;
 
     protected clients: RawWebSocketClient[] = [];
     protected clientWrappers = new WeakMap<RawWebSocketClient, uWebSocketWrapper>();
@@ -30,8 +29,6 @@ export class uWebSocketsTransport extends Transport {
         this.app = (appOptions.cert_file_name && appOptions.key_file_name)
             ? uWebSockets.SSLApp(appOptions)
             : uWebSockets.App(appOptions);
-
-        this.expressApp = expressify(this.app);
 
         if (options.maxBackpressure === undefined) {
             options.maxBackpressure = 1024 * 1024;
@@ -85,31 +82,31 @@ export class uWebSocketsTransport extends Transport {
                 );
             },
 
-            open: async (ws: RawWebSocketClient) => {
+            open: async (ws: WebSocket<any>) => {
                 // ws.pingCount = 0;
-                await this.onConnection(ws);
+                await this.onConnection(ws as RawWebSocketClient);
             },
 
             // pong: (ws: RawWebSocketClient) => {
             //     ws.pingCount = 0;
             // },
 
-            close: (ws: RawWebSocketClient, code: number, message: ArrayBuffer) => {
+            close: (ws: WebSocket<any>, code: number, message: ArrayBuffer) => {
                 // remove from client list
-                spliceOne(this.clients, this.clients.indexOf(ws));
+                spliceOne(this.clients, this.clients.indexOf(ws as RawWebSocketClient));
 
-                const clientWrapper = this.clientWrappers.get(ws);
+                const clientWrapper = this.clientWrappers.get(ws as RawWebSocketClient);
                 if (clientWrapper) {
-                  this.clientWrappers.delete(ws);
+                  this.clientWrappers.delete(ws as RawWebSocketClient);
 
                   // emit 'close' on wrapper
                   clientWrapper.emit('close', code);
                 }
             },
 
-            message: (ws: RawWebSocketClient, message: ArrayBuffer, isBinary: boolean) => {
+            message: (ws: WebSocket<any>, message: ArrayBuffer, isBinary: boolean) => {
                 // emit 'message' on wrapper
-                this.clientWrappers.get(ws)?.emit('message', Buffer.from(message));
+                this.clientWrappers.get(ws as RawWebSocketClient)?.emit('message', Buffer.from(message));
             },
 
         });
@@ -154,6 +151,7 @@ export class uWebSocketsTransport extends Transport {
             // copy buffer
             let [buf, ...rest] = args;
             buf = Buffer.from(buf);
+            // @ts-ignore
             setTimeout(() => originalRawSend.apply(this, [buf, ...rest]), milliseconds);
         };
     }
@@ -185,7 +183,7 @@ export class uWebSocketsTransport extends Transport {
 
             await room._onJoin(client, rawClient.context);
 
-        } catch (e) {
+        } catch (e: any) {
             debugAndPrintError(e);
 
             // send error code to client then terminate
