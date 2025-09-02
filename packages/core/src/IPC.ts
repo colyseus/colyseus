@@ -89,3 +89,36 @@ export async function subscribeIPC(
       });
   });
 }
+
+/**
+ * Wait for a room creation notification via presence publish/subscribe
+ */
+export function subscribeWithTimeout(
+  presence: Presence,
+  channel: string,
+  timeout: number,
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let timeoutHandle: NodeJS.Timeout;
+    let resolved = false;
+
+    const unsubscribe = () => {
+      presence.unsubscribe(channel);
+      clearTimeout(timeoutHandle);
+    };
+
+    presence.subscribe(channel, (roomId: string) => {
+      if (resolved) return;
+      resolved = true;
+      unsubscribe();
+      resolve(roomId);
+    });
+
+    timeoutHandle = setTimeout(() => {
+      if (resolved) return;
+      resolved = true;
+      unsubscribe();
+      reject(new Error("timeout"));
+    }, timeout);
+  });
+}

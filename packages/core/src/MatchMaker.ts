@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events';
 import { ErrorCode, Protocol } from './Protocol.js';
 
-import { requestFromIPC, subscribeIPC } from './IPC.js';
+import { requestFromIPC, subscribeIPC, subscribeWithTimeout } from './IPC.js';
 
 import { Deferred, generateId, merge, retry, MAX_CONCURRENT_CREATE_ROOM_WAIT_TIME, REMOTE_ROOM_SHORT_TIMEOUT } from './utils/Utils.js';
 import { isDevMode, cacheRoomHistory, getPreviousProcessId, getRoomRestoreListKey, reloadFromCache } from './utils/DevMode.js';
@@ -130,7 +130,7 @@ export async function accept() {
    * - handle remote process healthcheck
    * - handle remote room creation
    */
-  await subscribeIPC(presence, processId, getProcessChannel(), (method, args) => {
+  await subscribeIPC(presence, getProcessChannel(), (method, args) => {
     if (method === 'healthcheck') {
       // health check for this processId
       return true;
@@ -186,7 +186,8 @@ export async function joinOrCreate(roomName: string, clientOptions: ClientOption
           room = await driver.findOne({ roomId })
         }
 
-        if (!room) {
+        // If the room is not found or is already locked, try to find a new one
+        if (!room || room.locked) {
           room = await findOneRoomAvailable(roomName, clientOptions);
         }
 
@@ -197,8 +198,9 @@ export async function joinOrCreate(roomName: string, clientOptions: ClientOption
           //    it would be useful, though it could be accessed via `onJoin()` for now.
           //
           room = await createRoom(roomName, clientOptions);
-          presence.lpush(`l:${handler.name}:${concurrencyKey}`, room.roomId);
-          presence.expire(`l:${handler.name}:${concurrencyKey}`, MAX_CONCURRENT_CREATE_ROOM_WAIT_TIME * 2);
+
+          // Notify waiting concurrent requests about the new room
+          presence.publish(`concurrent:${handler.name}:${concurrencyKey}`, room.roomId);
         }
 
         return room;
@@ -865,7 +867,6 @@ async function createRoomReferences(room: Room, init: boolean = false): Promise<
   if (init) {
     await subscribeIPC(
       presence,
-      processId,
       getRoomChannel(room.roomId),
       (method, args) => {
         return (!args && typeof (room[method]) !== 'function')
@@ -903,7 +904,7 @@ async function concurrentJoinOrCreateRoomLock(
         reject(e);
 
       } finally {
-        await presence.hincrby(hkey, concurrencyKey, -1);
+        await presence.hincrbyex(hkey, concurrencyKey, -1, MAX_CONCURRENT_CREATE_ROOM_WAIT_TIME * 2);
       }
     };
 
@@ -913,17 +914,21 @@ async function concurrentJoinOrCreateRoomLock(
         concurrency, handler.name, concurrencyKey
       );
 
-      const result = await presence.brpop(
-        `l:${handler.name}:${concurrencyKey}`,
-        MAX_CONCURRENT_CREATE_ROOM_WAIT_TIME +
-          (Math.min(concurrency, 3) * 0.2) // add extra milliseconds for each concurrent request
-      );
+      try {
+        const roomId = await subscribeWithTimeout(
+          presence,
+          `concurrent:${handler.name}:${concurrencyKey}`,
+          (MAX_CONCURRENT_CREATE_ROOM_WAIT_TIME +
+            (Math.min(concurrency, 3) * 0.2)) * 1000 // convert to milliseconds
+        );
 
-      return await fulfill(result && result[1]);
-
-    } else {
-      return await fulfill();
+        return await fulfill(roomId);
+      } catch (error) {
+        // Ignore ipc_timeout error
+      }
     }
+
+    return await fulfill();
   });
 }
 

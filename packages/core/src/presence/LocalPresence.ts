@@ -39,7 +39,7 @@ export class LocalPresence implements Presence {
 
     public subscribe(topic: string, callback: (...args: any[]) => void) {
         this.subscriptions.on(topic, callback);
-        return this;
+        return Promise.resolve(this);
     }
 
     public unsubscribe(topic: string, callback?: Callback) {
@@ -184,12 +184,26 @@ export class LocalPresence implements Presence {
         let value = Number(this.hash[key][field] || '0');
         value += incrBy;
         this.hash[key][field] = value.toString();
-        this.setex(key, field, expireInSeconds);
+
+        //
+        // FIXME: delete only hash[key][field]
+        // (we can't use "HEXPIRE" in Redis because it's only available since Redis version 7.4.0+)
+        //
+        if (this.timeouts[key]) {
+          clearTimeout(this.timeouts[key]);
+        }
+        this.timeouts[key] = setTimeout(() => {
+            delete this.hash[key];
+            delete this.timeouts[key];
+        }, expireInSeconds * 1000);
+
         return Promise.resolve(value);
     }
 
     public async hget(key: string, field: string) {
-        return this.hash[key] && this.hash[key][field];
+        return (typeof(this.hash[key]) === 'object')
+          ? this.hash[key][field] ?? null
+          : null;
     }
 
     public async hgetall(key: string) {
@@ -263,7 +277,7 @@ export class LocalPresence implements Presence {
     }
 
     public brpop(...args: [...keys: string[], timeoutInSeconds: number]): Promise<[string, string] | null> {
-      const keys = args.slice(0, -2) as string[];
+      const keys = args.slice(0, -1) as string[];
       const timeoutInSeconds = args[args.length - 1] as number;
 
       const getFirstPopulated = (): [string, string] | null => {
@@ -297,7 +311,7 @@ export class LocalPresence implements Presence {
 
             } else if (tries >= maxRetries) {
               clearInterval(interval);
-              return resolve(undefined);
+              return resolve(null);
             }
 
           }, (timeoutInSeconds * 1000) / maxRetries);

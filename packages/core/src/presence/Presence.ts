@@ -16,7 +16,7 @@ export interface Presence {
      * @param topic - Topic name.
      * @param callback - Callback to trigger on subscribing.
      */
-    subscribe(topic: string, callback: Function);
+    subscribe(topic: string, callback: Function): Promise<this>;
 
     /**
      * Unsubscribe from given topic.
@@ -157,7 +157,7 @@ export interface Presence {
     /**
      * Returns the value associated with field in the hash stored at key.
      */
-    hget(key: string, field: string): Promise<string>;
+    hget(key: string, field: string): Promise<string | null>;
 
     /**
      * Returns all fields and values of the hash stored at key.

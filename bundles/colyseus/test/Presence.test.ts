@@ -322,6 +322,50 @@ describe("Presence", () => {
         assert.deepStrictEqual(["one.two"], dotChannels.sort());
       });
 
+      describe("brpop", () => {
+        it("brpop should return existing item", async () => {
+          await presence.lpush("brpop", "one", "two", "three");
+          const result = await presence.brpop("brpop", 1);
+          assert.deepStrictEqual(["brpop", "one"], result);
+        });
+
+        it("brpop should return new item", async () => {
+          let result: string[] = undefined;
+          presence.brpop("brpop", 1).then((r) => {
+            result = r;
+          }).catch((e) => {
+            result = null;
+          });
+
+          await presence.lpush("brpop", "one", "two", "three");
+
+          await timeout(200);
+          assert.deepStrictEqual(["brpop", "one"], result);
+        });
+
+        it("brpop should return null if no item is available", async () => {
+          const result = await presence.brpop("none", 0.1);
+          assert.deepStrictEqual(null, result);
+        });
+
+      });
+
+      describe("hincrbyex", () => {
+        it("hincrbyex should increment the value", async () => {
+          const value1 = await presence.hincrbyex("hincrbyex", "one", 1, 1);
+          assert.strictEqual(1, value1);
+          assert.strictEqual("1", await presence.hget("hincrbyex", "one"));
+        });
+
+        it("hincrbyex should expire the key after the given time", async () => {
+          await presence.hincrbyex("hincrbyex", "expired", 1, 1);
+          assert.strictEqual("1", await presence.hget("hincrbyex", "expired"));
+          await timeout(1200);
+          assert.strictEqual(null, await presence.hget("hincrbyex", "expired"));
+        });
+
+      });
+
     });
 
   }
