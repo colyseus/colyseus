@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/core",
-  "version": "0.16.20",
+  "version": "0.16.21",
   "description": "Multiplayer Framework for Node.js.",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -51,7 +51,8 @@
     "@types/nanoid": "^2.0.0"
   },
   "peerDependencies": {
-    "@colyseus/schema": "^3.0.0"
+    "@colyseus/schema": "^3.0.0",
+    "@pm2/io": "^6.1.0"
   },
   "publishConfig": {
     "access": "public"
