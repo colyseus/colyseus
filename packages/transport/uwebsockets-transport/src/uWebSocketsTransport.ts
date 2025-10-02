@@ -75,7 +75,7 @@ export class uWebSocketsTransport extends Transport {
                         context: {
                           token: searchParams._authToken ?? getBearerToken(req.getHeader('authorization')),
                           headers,
-                          ip: Buffer.from(res.getRemoteAddressAsText()).toString(),
+                          ip: headers['x-real-ip'] ?? headers['x-forwarded-for'] ?? Buffer.from(res.getRemoteAddressAsText()).toString(),
                         }
                     },
                     req.getHeader('sec-websocket-key'),
@@ -279,7 +279,7 @@ export class uWebSocketsTransport extends Transport {
                       {
                         token,
                         headers,
-                        ip: headers['x-real-ip'] ?? Buffer.from(res.getRemoteAddressAsText()).toString()
+                        ip: headers['x-real-ip'] ?? headers['x-forwarded-for'] ?? Buffer.from(res.getRemoteAddressAsText()).toString()
                       }
                     );
 

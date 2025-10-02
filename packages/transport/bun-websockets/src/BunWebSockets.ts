@@ -136,7 +136,7 @@ export class BunWebSockets extends Transport {
       await room._onJoin(client, {
         token: parsedURL.searchParams.get("_authToken") ?? getBearerToken(rawClient.data.headers['authorization']),
         headers: rawClient.data.headers,
-        ip: rawClient.data.headers['x-real-ip'] ?? rawClient.remoteAddress,
+        ip: rawClient.data.headers['x-real-ip'] ?? rawClient.data.headers['x-forwarded-for'] ?? rawClient.remoteAddress,
       });
 
     } catch (e) {
@@ -205,7 +205,7 @@ export class BunWebSockets extends Transport {
             {
               token: getBearerToken(req.headers['authorization']),
               headers: req.headers,
-              ip: req.headers['x-real-ip'] ?? req.ips,
+              ip: req.headers['x-real-ip'] ?? req.headers['x-forwarded-for'] ?? req.ips,
             },
           ));
           break;
