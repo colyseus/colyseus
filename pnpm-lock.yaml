@@ -188,15 +188,6 @@ importers:
         specifier: ^2.0.0
         version: 2.1.0
 
-  packages/drivers/mikro-orm-driver:
-    dependencies:
-      '@colyseus/core':
-        specifier: workspace:^
-        version: link:../../core
-      '@mikro-orm/core':
-        specifier: ^4.5.4
-        version: 4.5.10
-
   packages/drivers/mongoose-driver:
     dependencies:
       '@colyseus/core':
@@ -205,6 +196,18 @@ importers:
       mongoose:
         specifier: ^8.4.4
         version: 8.14.0(socks@2.8.4)
+
+  packages/drivers/postgres-driver:
+    dependencies:
+      '@colyseus/core':
+        specifier: workspace:^
+        version: link:../../core
+      zod:
+        specifier: ^4.0.14
+        version: 4.1.11
+      zodgres:
+        specifier: ^0.4.6
+        version: 0.4.6(@electric-sql/pglite-socket@0.0.12(@electric-sql/pglite@0.3.10))(@electric-sql/pglite@0.3.10)
 
   packages/drivers/redis-driver:
     dependencies:
@@ -595,6 +598,15 @@ packages:
 
   '@colyseus/timer@1.0.1':
     resolution: {integrity: sha512-zsbmytTaSfqOYlnw0PXQCgwumXjn8eM/HMyMTVGjXlczsJ8DFl5OHaWAsJz7kIn92NTAONoIwLTwyVRvpJCVzA==}
+
+  '@electric-sql/pglite-socket@0.0.12':
+    resolution: {integrity: sha512-/MtRHp+57lNNIjzMbV99Lpcki2PpbOC5ivA3ttVCK03dtQAAJcaoDiFVvLEroaMjVBydiGojOWdZtiNLJzkGiQ==}
+    hasBin: true
+    peerDependencies:
+      '@electric-sql/pglite': 0.3.7
+
+  '@electric-sql/pglite@0.3.10':
+    resolution: {integrity: sha512-1XtXXprd848aR4hvjNqBc3Gc86zNGmd60x+MgOUShbHYxt+J76N8A81DqTEl275T8xBD0vdTgqR/dJ4yJyz0NQ==}
 
   '@esbuild/aix-ppc64@0.23.1':
     resolution: {integrity: sha512-6VhYk1diRqrhBAqpJEdjASR/+WVRtfjpqKuNw11cLiaWpAT/Uu+nokB+UJnevzy/P9C/ty6AOe0dwueMrGh/iQ==}
@@ -1035,33 +1047,6 @@ packages:
     resolution: {integrity: sha512-fxfJvl3VgFd7eBfVMRX6Yal9omDLs2mcGKkNYeCEyt4Uwlz1B5tPAXyk/sNMfkKV2Aat/mlK5tnY13vUrMKkyA==}
     engines: {node: ^14.15.0 || >=16.0.0}
     deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
-
-  '@mikro-orm/core@4.5.10':
-    resolution: {integrity: sha512-vnSSFGSR/JoGINJlci5fafGSqvLgHx+3Nt3XjnCTNLOjQ0WL7LsdUVwM9FE/W5FipcJRaQfWmY/iLXBqnaarGQ==}
-    engines: {node: '>= 10.13.0'}
-    peerDependencies:
-      '@mikro-orm/entity-generator': ^4.0.0
-      '@mikro-orm/mariadb': ^4.0.0
-      '@mikro-orm/migrations': ^4.0.0
-      '@mikro-orm/mongodb': ^4.0.0
-      '@mikro-orm/mysql': ^4.0.0
-      '@mikro-orm/postgresql': ^4.0.0
-      '@mikro-orm/sqlite': ^4.0.0
-    peerDependenciesMeta:
-      '@mikro-orm/entity-generator':
-        optional: true
-      '@mikro-orm/mariadb':
-        optional: true
-      '@mikro-orm/migrations':
-        optional: true
-      '@mikro-orm/mongodb':
-        optional: true
-      '@mikro-orm/mysql':
-        optional: true
-      '@mikro-orm/postgresql':
-        optional: true
-      '@mikro-orm/sqlite':
-        optional: true
 
   '@mongodb-js/saslprep@1.2.2':
     resolution: {integrity: sha512-EB0O3SCSNRUFk66iRCpI+cXzIjdswfCs7F6nOC3RAGJ7xr5YhaicvsRwJ9eyzYvYRlCSDUO/c7g4yNulxKC1WA==}
@@ -1538,10 +1523,6 @@ packages:
     engines: {node: '>=4'}
     hasBin: true
 
-  ansi-colors@4.1.1:
-    resolution: {integrity: sha512-JoX0apGbHaUJBNl6yF+p6JAFYZ666/hhCGKN5t9QFjbJQKUU/g8MNbFDbvfrgKXvI1QpZplPOnwIo99lX/AAmA==}
-    engines: {node: '>=6'}
-
   ansi-colors@4.1.3:
     resolution: {integrity: sha512-/6w/C21Pm1A7aZitlI5Ni/2J6FFQN8i1Cvz3kHABAAbw93v/NlvKdVOqz7CCWz/3iv/JplRSEEZ83XION15ovw==}
     engines: {node: '>=6'}
@@ -1628,10 +1609,6 @@ packages:
 
   asynckit@0.4.0:
     resolution: {integrity: sha512-Oei9OH4tRh0YqU3GxhX79dM/mwVgvbZJaSNaRk+bshkj0S5cfHcgYakreBjrHwatXKbz+IoIdYLxrKim2MjW0Q==}
-
-  at-least-node@1.0.0:
-    resolution: {integrity: sha512-+q/t7Ekv1EDY2l6Gda6LLiX14rU9TV20Wa3ofeQmwPFZbOMo9DXrLbOjFaaclkXKWidIaopwAObQDqwWtGUjqg==}
-    engines: {node: '>= 4.0.0'}
 
   available-typed-arrays@1.0.7:
     resolution: {integrity: sha512-wvUjBtSGN7+7SjNpq/9M2Tg350UZD3q62IFZLbRAR1bSMlCo1ZaeW+BJ+D090e4hIIZLBcTDWe4Mh4jvUDajzQ==}
@@ -1888,10 +1865,6 @@ packages:
 
   clone@1.0.4:
     resolution: {integrity: sha512-JQHZ2QMW6l3aH/j6xCqQThY/9OH4D/9ls34cgkUBiEeocRTU04tHfKPBsUK1PqZCUQM7GiA0IIXJSuXHI64Kbg==}
-    engines: {node: '>=0.8'}
-
-  clone@2.1.2:
-    resolution: {integrity: sha512-3Pe/CF1Nn94hyhIYpjtiLhdCoEoz0DqQ+988E9gmeEdQZlojxnOb74wctFyuwWQHzqyf9X7C7MG8juUpqBJT8w==}
     engines: {node: '>=0.8'}
 
   cluster-key-slot@1.1.2:
@@ -2219,10 +2192,6 @@ packages:
     resolution: {integrity: sha512-HTlk5nmhkm8F6JcdXvHIzaorzCoziNQT9mGxLPVXW8wJF1TiGSL60ZGB4gHWabHOaMmWmhvk2/lPHfnBiT78AQ==}
     engines: {node: '>=12'}
 
-  dotenv@8.2.0:
-    resolution: {integrity: sha512-8sJ78ElpbDJBHNeBzUbUVLsqKdccaa/BXF1uPTw3GrvQTBgrQrtObr2mUrE38vzYd8cEv+m/JBfDLioYcfXoaw==}
-    engines: {node: '>=8'}
-
   dunder-proto@1.0.1:
     resolution: {integrity: sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==}
     engines: {node: '>= 0.4'}
@@ -2337,10 +2306,6 @@ packages:
   escape-string-regexp@4.0.0:
     resolution: {integrity: sha512-TtpcNJ3XAzx3Gq8sWRzJaVajRs0uVxA2YAkdb1jm2YkPz4G6egUFAyA3n5vtEIZefPk5Wa4UXbKuS5fKkJWdgA==}
     engines: {node: '>=10'}
-
-  escaya@0.0.61:
-    resolution: {integrity: sha512-WLLmvdG72Z0pCq8XUBd03GEJlAiMceXFanjdQeEzeSiuV1ZgrJqbkU7ZEe/hu0OsBlg5wLlySEeOvfzcGoO8mg==}
-    engines: {node: '>=6.0.0'}
 
   esprima@4.0.1:
     resolution: {integrity: sha512-eGuFFw7Upda+g4p+QHvnW0RyTX/SVeJBDM/gCtMARO0cLuT2HcEKnTPvhjV6aGeqrCB/sbNop0Kszm0jsaWU4A==}
@@ -2508,10 +2473,6 @@ packages:
     resolution: {integrity: sha512-Z4XaCL6dUDHfP/jT25jJKMmtxvuwbkrD1vNSMFlo9lNLY2c5FHYSQgHPRZUjAB26TpDEoW9HCOgplrdbaPV/ew==}
     engines: {node: '>=14.14'}
 
-  fs-extra@9.1.0:
-    resolution: {integrity: sha512-hcg3ZmepS30/7BSFqRvoo3DOMQu7IjqxO5nCDt+zM9XWjb33Wg7ziNT+Qvqbuc3+gWpzO02JubVyk2G4Zvo1OQ==}
-    engines: {node: '>=10'}
-
   fs-minipass@2.1.0:
     resolution: {integrity: sha512-V/JgOLFCS+R6Vcq0slCuaeWEdNC3ouDlJMNIsacH2VtALiu9mV4LPrHc5cDl8k5aw6J8jwgWWpiTo5RYhmIzvg==}
     engines: {node: '>= 8'}
@@ -2630,10 +2591,6 @@ packages:
   globals@11.12.0:
     resolution: {integrity: sha512-WOBp/EEGUiIsJSp7wcv/y6MO+lV9UoncWqxuFfm8eBwzWNgyfBd6Gz+IeKQ9jCmyhoH99g15M3T+QaVHFjizVA==}
     engines: {node: '>=4'}
-
-  globby@11.0.3:
-    resolution: {integrity: sha512-ffdmosjA807y7+lA1NM0jELARVmYul/715xiILEjo3hBLPTcirgQNnXECn5g3mtR8TOLCVbkfua1Hpen25/Xcg==}
-    engines: {node: '>=10'}
 
   globby@11.1.0:
     resolution: {integrity: sha512-jhIXaOzy1sb8IyocaruWSn1TjmnBVs8Ayhcy83rmxNJ8q2uWKCAj3CnJY+KpGSXCueAPc0i05kVvVKtP1t9S3g==}
@@ -4012,6 +3969,10 @@ packages:
     resolution: {integrity: sha512-/+5VFTchJDoVj3bhoqi6UeymcD00DAwb1nJwamzPvHEszJ4FpF6SNNbUbOS8yI56qHzdV8eK0qEfOSiodkTdxg==}
     engines: {node: '>= 0.4'}
 
+  postgres@3.4.7:
+    resolution: {integrity: sha512-Jtc2612XINuBjIl/QTWsV5UvE8UHuNblcO3vVADSrKsrc6RqGX6lOW1cEo3CM2v0XG4Nat8nI+YM7/f26VxXLw==}
+    engines: {node: '>=12'}
+
   prebuild-install@7.1.3:
     resolution: {integrity: sha512-8Mf2cbV7x1cXPUILADGI3wuhfqWvtiLA1iclTDbFRZkgRQS0NqsPZphna9V+HyTEadheuPmjaJMsbzKQFOzLug==}
     engines: {node: '>=10'}
@@ -4174,9 +4135,6 @@ packages:
   redis-parser@3.0.0:
     resolution: {integrity: sha512-DJnGAeenTdpMEH6uAJRK/uiyEIH9WVsUmoLwzudwGJUwZPp80PDBWPHXSAGNPwNvIXAbe7MSUB1zQFugFml66A==}
     engines: {node: '>=4'}
-
-  reflect-metadata@0.1.13:
-    resolution: {integrity: sha512-Ts1Y/anZELhSsjMcU605fU9RE4Oi3p5ORujwbIKXfWa+0Zxs510Qrmrce5/Jowq3cHSZSJqBjypxmHarc+vEWg==}
 
   regenerator-runtime@0.14.1:
     resolution: {integrity: sha512-dYnhHh0nJoMfnkZs6GmmhFknAGRrLznOu5nc9ML+EJxGvrx6H7teuevqVqCuPcPK//3eDrrjQhehXVx9cnkGdw==}
@@ -4995,6 +4953,15 @@ packages:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
     engines: {node: '>=10'}
 
+  zod@4.1.11:
+    resolution: {integrity: sha512-WPsqwxITS2tzx1bzhIKsEs19ABD5vmCVa4xBo2tq/SrV4RNZtfws1EnCWQXM6yh8bD08a1idvkB5MZSBiZsjwg==}
+
+  zodgres@0.4.6:
+    resolution: {integrity: sha512-NwPbHw1CMUqNGil3STrZZo7eUY/vDYukyXhZpolN+v141frZnW646K7A5ImsL41ZVa9e/BF3FycYKIAqs/Bk1Q==}
+    peerDependencies:
+      '@electric-sql/pglite': ^0.3.6
+      '@electric-sql/pglite-socket': ^0.0.12
+
 snapshots:
 
   '@ampproject/remapping@2.3.0':
@@ -5199,6 +5166,12 @@ snapshots:
   '@colyseus/timer@1.0.1':
     dependencies:
       '@colyseus/clock': 1.0.0
+
+  '@electric-sql/pglite-socket@0.0.12(@electric-sql/pglite@0.3.10)':
+    dependencies:
+      '@electric-sql/pglite': 0.3.10
+
+  '@electric-sql/pglite@0.3.10': {}
 
   '@esbuild/aix-ppc64@0.23.1':
     optional: true
@@ -5687,17 +5660,6 @@ snapshots:
   '@lerna/validation-error@6.4.1':
     dependencies:
       npmlog: 6.0.2
-
-  '@mikro-orm/core@4.5.10':
-    dependencies:
-      ansi-colors: 4.1.1
-      clone: 2.1.2
-      dotenv: 8.2.0
-      escaya: 0.0.61
-      fs-extra: 9.1.0
-      globby: 11.0.3
-      reflect-metadata: 0.1.13
-      strip-json-comments: 3.1.1
 
   '@mongodb-js/saslprep@1.2.2':
     dependencies:
@@ -6252,8 +6214,6 @@ snapshots:
     transitivePeerDependencies:
       - encoding
 
-  ansi-colors@4.1.1: {}
-
   ansi-colors@4.1.3: {}
 
   ansi-escapes@4.3.2:
@@ -6329,8 +6289,6 @@ snapshots:
   async@3.2.6: {}
 
   asynckit@0.4.0: {}
-
-  at-least-node@1.0.0: {}
 
   available-typed-arrays@1.0.7:
     dependencies:
@@ -6687,8 +6645,6 @@ snapshots:
 
   clone@1.0.4: {}
 
-  clone@2.1.2: {}
-
   cluster-key-slot@1.1.2: {}
 
   cmake-js@7.3.1:
@@ -6986,8 +6942,6 @@ snapshots:
 
   dotenv@16.3.2: {}
 
-  dotenv@8.2.0: {}
-
   dunder-proto@1.0.1:
     dependencies:
       call-bind-apply-helpers: 1.0.2
@@ -7133,8 +7087,6 @@ snapshots:
   escape-string-regexp@2.0.0: {}
 
   escape-string-regexp@4.0.0: {}
-
-  escaya@0.0.61: {}
 
   esprima@4.0.1: {}
 
@@ -7395,13 +7347,6 @@ snapshots:
       jsonfile: 6.1.0
       universalify: 2.0.1
 
-  fs-extra@9.1.0:
-    dependencies:
-      at-least-node: 1.0.0
-      graceful-fs: 4.2.11
-      jsonfile: 6.1.0
-      universalify: 2.0.1
-
   fs-minipass@2.1.0:
     dependencies:
       minipass: 3.3.6
@@ -7547,15 +7492,6 @@ snapshots:
       path-scurry: 1.11.1
 
   globals@11.12.0: {}
-
-  globby@11.0.3:
-    dependencies:
-      array-union: 2.1.0
-      dir-glob: 3.0.1
-      fast-glob: 3.3.3
-      ignore: 5.3.2
-      merge2: 1.4.1
-      slash: 3.0.0
 
   globby@11.1.0:
     dependencies:
@@ -9338,6 +9274,8 @@ snapshots:
 
   possible-typed-array-names@1.1.0: {}
 
+  postgres@3.4.7: {}
+
   prebuild-install@7.1.3:
     dependencies:
       detect-libc: 2.0.4
@@ -9524,8 +9462,6 @@ snapshots:
   redis-parser@3.0.0:
     dependencies:
       redis-errors: 1.2.0
-
-  reflect-metadata@0.1.13: {}
 
   regenerator-runtime@0.14.1: {}
 
@@ -10396,3 +10332,12 @@ snapshots:
   ylru@1.4.0: {}
 
   yocto-queue@0.1.0: {}
+
+  zod@4.1.11: {}
+
+  zodgres@0.4.6(@electric-sql/pglite-socket@0.0.12(@electric-sql/pglite@0.3.10))(@electric-sql/pglite@0.3.10):
+    dependencies:
+      '@electric-sql/pglite': 0.3.10
+      '@electric-sql/pglite-socket': 0.0.12(@electric-sql/pglite@0.3.10)
+      postgres: 3.4.7
+      zod: 4.1.11
