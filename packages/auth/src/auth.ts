@@ -8,6 +8,7 @@ import { Request } from 'express-jwt';
 import { OAuthProviderCallback, oAuthProviderCallback, oauth } from './oauth.js';
 import { JWT, JwtPayload } from './JWT.js';
 import { Hash } from './Hash.js';
+import { authenticateGameCenter } from './GameCenter.js';
 
 export type MayHaveUpgradeToken = { upgradingToken?: JwtPayload };
 
@@ -25,6 +26,17 @@ export type ParseTokenCallback = (token: JwtPayload) => Promise<unknown> | unkno
 export type GenerateTokenCallback = (userdata: unknown) => Promise<unknown>;
 export type HashPasswordCallback = (password: string) => Promise<string>;
 
+export type GameCenterAuthData = {
+  playerId: string;
+  bundleId: string;
+  timestamp: number;
+  salt: string;
+  signature: string;
+  publicKeyUrl: string;
+};
+
+export type GameCenterAuthCallback = (authData: GameCenterAuthData & MayHaveUpgradeToken) => Promise<unknown>;
+
 export interface AuthSettings {
   onFindUserByEmail: FindUserByEmailCallback,
   onRegisterWithEmailAndPassword: RegisterWithEmailAndPasswordCallback,
@@ -37,6 +49,7 @@ export interface AuthSettings {
   onResetPassword?: ResetPasswordCallback,
 
   onOAuthProviderCallback?: OAuthProviderCallback,
+  onGameCenterAuth?: GameCenterAuthCallback,
   onParseToken?: ParseTokenCallback,
   onGenerateToken?: GenerateTokenCallback,
   onHashPassword?: HashPasswordCallback,
@@ -305,7 +318,7 @@ Please give feedback and report any issues you may find at https://github.com/co
      */
     router.post("/anonymous", express.json(), async (req, res) => {
       try {
-        const options = req.body.options;
+        const options = req.body?.options;
 
         // register anonymous user, if callback is defined.
         const user = (auth.settings.onRegisterAnonymously)
@@ -317,6 +330,43 @@ Please give feedback and report any issues you may find at https://github.com/co
           token: await auth.settings.onGenerateToken(user)
         });
       } catch(e) {
+        debugAndPrintError(e);
+        res.status(401).json({ error: e.message });
+      }
+    });
+
+    /**
+     * Game Center authentication
+     */
+    router.post("/gamecenter", express.json(), async (req, res) => {
+      try {
+        const { playerId, bundleId, timestamp, salt, signature, publicKeyUrl } = req.body;
+
+        // Verify Game Center credentials with Apple
+        await authenticateGameCenter({ playerId, bundleId, timestamp, salt, signature, publicKeyUrl });
+
+        // Build options for callback
+        const options: GameCenterAuthData & MayHaveUpgradeToken = {
+          playerId, bundleId, timestamp, salt, signature, publicKeyUrl
+        };
+
+        // Check for token upgrade
+        if (req.headers.authorization) {
+          const authHeader = req.headers.authorization;
+          const authToken = (authHeader.startsWith("Bearer ") && authHeader.substring(7, authHeader.length)) || undefined;
+          options.upgradingToken = await JWT.verify(authToken);
+        }
+
+        // Use callback if provided, otherwise create default user
+        const user = (auth.settings.onGameCenterAuth)
+          ? await auth.settings.onGameCenterAuth(options)
+          : { playerId, bundleId, platform: 'gamecenter', verified: true };
+
+        res.json({
+          user,
+          token: await auth.settings.onGenerateToken(user)
+        });
+      } catch (e) {
         debugAndPrintError(e);
         res.status(401).json({ error: e.message });
       }
