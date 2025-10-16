@@ -7,7 +7,7 @@ const pm2 = require('pm2');
 const COLYSEUS_CLOUD_URL = `${process.env.ENDPOINT}/vultr/stats`;
 
 const FAILED_ATTEMPS_FILE = "/var/tmp/pm2-stats-attempts.txt";
-const FETCH_TIMEOUT = 7000;
+const FETCH_TIMEOUT = 30000;
 
 async function retryFailedAttempts() {
   /**

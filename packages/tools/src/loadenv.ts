@@ -19,8 +19,12 @@ function getRegion() {
 function loadEnvFile(envFileOptions: string[], log: 'none' | 'success' | 'both'  = 'none') {
     const envPaths = [];
     envFileOptions.forEach((envFilename) => {
-      envPaths.push(path.resolve(path.dirname(require?.main?.filename || process.cwd()), "..", envFilename));
-      envPaths.push(path.resolve(process.cwd(), envFilename));
+      if (envFilename.startsWith("/")) {
+        envPaths.push(envFilename);
+      } else {
+        envPaths.push(path.resolve(path.dirname(require?.main?.filename || process.cwd()), "..", envFilename));
+        envPaths.push(path.resolve(process.cwd(), envFilename));
+      }
     });
 
     // return the first .env path found
@@ -38,9 +42,21 @@ function loadEnvFile(envFileOptions: string[], log: 'none' | 'success' | 'both' 
     }
 }
 
+// reload /etc/environment, if exists
+if (fs.existsSync("/etc/environment")) {
+  dotenv.config({ path: "/etc/environment", override: true })
+}
+
 // load .env.cloud defined on admin panel
 if (process.env.COLYSEUS_CLOUD !== undefined) {
-    loadEnvFile([`.env.cloud`]);
+    const cloudEnvFileNames = [".env.cloud"];
+
+    // prepend .env.cloud file from APP_ROOT_PATH
+    if (process.env.APP_ROOT_PATH) {
+      cloudEnvFileNames.unshift(`${process.env.APP_ROOT_PATH}${(process.env.APP_ROOT_PATH.endsWith("/") ? "" : "/")}.env.cloud`);
+    }
+
+    loadEnvFile(cloudEnvFileNames);
 }
 
 // (overrides previous env configs)

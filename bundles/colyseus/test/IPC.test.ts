@@ -11,7 +11,7 @@ describe("Inter-process Communication", () => {
     describe(`Using presence: ${presence.constructor.name}`, () => {
 
       it("#subscribeIPC / #publishIPC", async () => {
-        await subscribeIPC(presence, "process-one", "channel", (method, args) => {
+        await subscribeIPC(presence, "channel", (method, args) => {
           assert.equal("methodName", method);
           assert.deepEqual(["one", 2, { boolean: true }], args);
           return new Promise((resolve) => {
@@ -29,7 +29,7 @@ describe("Inter-process Communication", () => {
       it("#publishIPC should allow 'undefined' methodName", async () => {
         const channel = 'test-channel';
 
-        subscribeIPC(presence, "public-ipc-test", channel, (method, args) => {
+        subscribeIPC(presence, channel, (method, args) => {
           assert.equal(undefined, method);
           assert.deepEqual([true], args);
           return "hello!"
@@ -53,7 +53,7 @@ describe("Inter-process Communication", () => {
       it("should reject with error message", async () => {
         const channel = 'error-channel';
 
-        subscribeIPC(presence, "anything", channel, (method, args) => {
+        subscribeIPC(presence, channel, (method, args) => {
           throw new Error("error message");
         });
 
@@ -70,7 +70,7 @@ describe("Inter-process Communication", () => {
       it("should reject with plain error string", async () => {
         const channel = 'error-channel';
 
-        subscribeIPC(presence, "anything", channel, (method, args) => {
+        subscribeIPC(presence, channel, (method, args) => {
           throw "error message";
         });
 
@@ -87,7 +87,7 @@ describe("Inter-process Communication", () => {
       it("ServerError: should reject containing error code", async () => {
         const channel = 'error-code';
 
-        subscribeIPC(presence, "anything", channel, (method, args) => {
+        subscribeIPC(presence, channel, (method, args) => {
           throw new ServerError(1000, "error message");
         });
 

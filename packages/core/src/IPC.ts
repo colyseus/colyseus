@@ -10,7 +10,7 @@ export async function requestFromIPC<T>(
   args: any[],
   rejectionTimeout: number = REMOTE_ROOM_SHORT_TIMEOUT,
 ): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
+  return new Promise<T>(async (resolve, reject) => {
     let unsubscribeTimeout: NodeJS.Timeout;
 
     const requestId = generateId();
@@ -21,7 +21,7 @@ export async function requestFromIPC<T>(
       clearTimeout(unsubscribeTimeout);
     };
 
-    presence.subscribe(channel, (message) => {
+    await presence.subscribe(channel, (message: [IpcProtocol, any]) => {
       const [code, data] = message;
       if (code === IpcProtocol.SUCCESS) {
         resolve(data);
@@ -53,7 +53,6 @@ export async function requestFromIPC<T>(
 
 export async function subscribeIPC(
   presence: Presence,
-  processId: string,
   channel: string,
   replyCallback: (method: string, args: any[]) => any,
 ) {
@@ -88,5 +87,38 @@ export async function subscribeIPC(
         const err = e && e.message || e;
         reply(IpcProtocol.ERROR, err);
       });
+  });
+}
+
+/**
+ * Wait for a room creation notification via presence publish/subscribe
+ */
+export function subscribeWithTimeout(
+  presence: Presence,
+  channel: string,
+  timeout: number,
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let timeoutHandle: NodeJS.Timeout;
+    let resolved = false;
+
+    const unsubscribe = () => {
+      presence.unsubscribe(channel);
+      clearTimeout(timeoutHandle);
+    };
+
+    presence.subscribe(channel, (roomId: string) => {
+      if (resolved) return;
+      resolved = true;
+      unsubscribe();
+      resolve(roomId);
+    });
+
+    timeoutHandle = setTimeout(() => {
+      if (resolved) return;
+      resolved = true;
+      unsubscribe();
+      reject(new Error("timeout"));
+    }, timeout);
   });
 }

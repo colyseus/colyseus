@@ -1,20 +1,22 @@
 {
   "private": true,
-  "name": "@colyseus/mikro-orm-driver",
-  "version": "0.15.0",
+  "name": "@colyseus/postgres-driver",
+  "version": "0.16.0",
   "input": "./src/index.ts",
   "main": "./build/index.js",
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
   "exports": {
     ".": {
+      "types": "./build/index.d.ts",
       "import": "./build/index.mjs",
       "require": "./build/index.js"
     }
   },
   "dependencies": {
     "@colyseus/core": "workspace:^",
-    "@mikro-orm/core": "^4.5.4"
+    "zodgres": "^0.4.6",
+    "zod": "^4.0.14"
   },
   "author": "Endel Dreyer",
   "license": "MIT",
@@ -22,8 +24,8 @@
     "colyseus",
     "matchmaking",
     "driver",
-    "mongoose",
-    "mongodb"
+    "postgres",
+    "sql"
   ],
   "files": [
     "build",

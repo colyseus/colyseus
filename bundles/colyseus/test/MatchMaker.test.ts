@@ -1,4 +1,4 @@
-import assert from "assert";
+import assert, { match } from "assert";
 import { generateId, matchMaker, MatchMakerDriver, Room, IRoomCache } from "@colyseus/core";
 import { DummyRoom, Room2Clients, createDummyClient, timeout, ReconnectRoom, Room3Clients, DRIVERS, ReconnectTokenRoom } from "./utils";
 
@@ -561,6 +561,30 @@ describe("MatchMaker", () => {
           for (let i = 0; i < Math.floor(numConnections / 2); i++) {
             assert.strictEqual(2, rooms[i].clients);
             assert.strictEqual(true,rooms[i].locked);
+          }
+        });
+
+        it("should join or create concurrently", async () => {
+          matchMaker.defineRoomType("concurrent", class extends Room {
+            maxClients = 2;
+          }).filterBy(['code']);
+
+          const codes = ["000", "111", "222"];
+          const promises = [];
+          for (let i = 0; i < 2; i++) {
+            codes.forEach((code) => {
+              promises.push(matchMaker.joinOrCreate("concurrent", { code }));
+            })
+          }
+          await Promise.all(promises);
+
+          const rooms = await matchMaker.query({});
+          assert.strictEqual(rooms.length, 3);
+          assert.deepStrictEqual(rooms.map((r) => r.clients).sort(), [2, 2, 2]);
+
+          // disconnect room
+          for (const room of rooms) {
+            await matchMaker.getLocalRoomById(room.roomId).disconnect();
           }
         });
       });

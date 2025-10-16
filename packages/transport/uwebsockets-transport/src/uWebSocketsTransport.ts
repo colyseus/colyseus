@@ -72,7 +72,7 @@ export class uWebSocketsTransport extends Transport {
                         context: {
                           token: searchParams._authToken ?? getBearerToken(req.getHeader('authorization')),
                           headers,
-                          ip: Buffer.from(res.getRemoteAddressAsText()).toString(),
+                          ip: headers['x-real-ip'] ?? headers['x-forwarded-for'] ?? Buffer.from(res.getRemoteAddressAsText()).toString(),
                         }
                     },
                     req.getHeader('sec-websocket-key'),
@@ -277,7 +277,7 @@ export class uWebSocketsTransport extends Transport {
                       {
                         token,
                         headers,
-                        ip: headers['x-real-ip'] ?? Buffer.from(res.getRemoteAddressAsText()).toString()
+                        ip: headers['x-real-ip'] ?? headers['x-forwarded-for'] ?? Buffer.from(res.getRemoteAddressAsText()).toString()
                       }
                     );
 
@@ -303,7 +303,7 @@ export class uWebSocketsTransport extends Transport {
     /* Helper function for reading a posted JSON body */
     /* Extracted from https://github.com/uNetworking/uWebSockets.js/blob/master/examples/JsonPost.js */
     private readJson(res: uWebSockets.HttpResponse, cb: (json: any) => void) {
-        let buffer: any;
+        let buffer: Buffer;
         /* Register data cb */
         res.onData((ab, isLast) => {
             let chunk = Buffer.from(ab);

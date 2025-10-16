@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/tools",
-  "version": "0.16.9",
+  "version": "0.16.14",
   "description": "Simplify the development and production settings for your Colyseus project.",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -46,12 +46,15 @@
   "dependencies": {
     "@pm2/io": "^6.0.1",
     "cors": "^2.8.5",
-    "dotenv": "^8.2.0",
+    "dotenv": ">=14.1.0",
     "express": ">=4.16.0"
   },
   "devDependencies": {
+    "@colyseus/bun-websockets": "workspace:^",
     "@colyseus/core": "workspace:^",
     "@colyseus/ws-transport": "workspace:^",
+    "@colyseus/redis-driver": "workspace:^",
+    "@colyseus/redis-presence": "workspace:^",
     "@colyseus/uwebsockets-transport": "workspace:^",
     "@types/cors": "^2.8.10",
     "@types/dotenv": "^8.2.0",

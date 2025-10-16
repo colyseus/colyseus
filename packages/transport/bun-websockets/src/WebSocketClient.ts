@@ -83,7 +83,12 @@ export class WebSocketClient implements Client, ClientPrivate {
   }
 
   public error(code: number, message: string = '', cb?: (err?: Error) => void) {
-    this.raw(getMessageBytes[Protocol.ERROR](code, message), undefined, cb);
+    this.raw(getMessageBytes[Protocol.ERROR](code, message));
+
+    if (cb) {
+      // (same API as "ws" transport)
+      setTimeout(cb, 1);
+    }
   }
 
   get readyState() {

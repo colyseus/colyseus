@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/uwebsockets-transport",
-  "version": "0.16.9",
+  "version": "0.16.10",
   "input": "./src/index.ts",
   "main": "./build/index.js",
   "module": "./build/index.mjs",
