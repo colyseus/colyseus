@@ -38,12 +38,7 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
   }
 
   public getFullState(client?: Client) {
-    if (
-      this.needFullEncode ||
-      this.encoder.root.changes.length > 0 || // TODO: remove this check on 0.17
-      // @ts-ignore
-      this.encoder.root.changes.next !== undefined // @colyseus/schema 3.0.42+
-    ) {
+    if (this.needFullEncode || this.encoder.root.changes.next !== undefined) {
       this.sharedOffsetCache = { offset: 1 };
       this.fullEncodeCache = this.encoder.encodeAll(this.sharedOffsetCache, this.fullEncodeBuffer);
       this.needFullEncode = false;

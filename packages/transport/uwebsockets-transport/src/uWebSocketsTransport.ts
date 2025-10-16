@@ -1,4 +1,4 @@
-import http, { IncomingHttpHeaders } from 'http';
+import { IncomingHttpHeaders } from 'http';
 import querystring, { ParsedUrlQuery } from 'querystring';
 import uWebSockets, { WebSocket } from 'uWebSockets.js';
 import expressify, { Application } from "uwebsockets-express";
@@ -204,6 +204,7 @@ export class uWebSocketsTransport extends Transport {
             const headers = Object.assign(
                 {},
                 matchMaker.controller.DEFAULT_CORS_HEADERS,
+                // @ts-ignore
                 matchMaker.controller.getCorsHeaders.call(undefined, req)
             );
 
@@ -276,7 +277,7 @@ export class uWebSocketsTransport extends Transport {
                       clientOptions,
                       {
                         token,
-                        headers,
+                        headers: new Headers(headers),
                         ip: headers['x-real-ip'] ?? headers['x-forwarded-for'] ?? Buffer.from(res.getRemoteAddressAsText()).toString()
                       }
                     );
@@ -288,7 +289,7 @@ export class uWebSocketsTransport extends Transport {
                       });
                     }
 
-                } catch (e) {
+                } catch (e: any) {
                     debugAndPrintError(e);
                     writeError(res, {
                         code: e.code || ErrorCode.MATCHMAKE_UNHANDLED,

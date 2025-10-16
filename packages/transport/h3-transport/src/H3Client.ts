@@ -6,7 +6,7 @@ import { WebTransportSession } from '@fails-components/webtransport';
 import { EventEmitter } from 'events';
 import { type Iterator, decode, encode } from '@colyseus/schema';
 
-const lengthPrefixBuffer = new Uint8Array(9); // 9 bytes is the maximum length of a length prefix
+const lengthPrefixBuffer = Buffer.alloc(9); // 9 bytes is the maximum length of a length prefix
 
 export class H3Client implements Client, ClientPrivate {
   '~messages': any;
@@ -24,6 +24,8 @@ export class H3Client implements Client, ClientPrivate {
   // TODO: remove readyState
   public readyState: number;
 
+  private _wtSession: WebTransportSession;
+
   private _bidiReader: ReadableStreamDefaultReader<Uint8Array>;
   private _bidiWriter: WritableStreamDefaultWriter<Uint8Array>;
 
@@ -31,9 +33,10 @@ export class H3Client implements Client, ClientPrivate {
   private _datagramWriter: WritableStreamDefaultWriter<Uint8Array>;
 
   constructor(
-    private _wtSession: WebTransportSession,
+    _wtSession: WebTransportSession,
     onInitialMessage: (message: any) => void
   ) {
+    this._wtSession = _wtSession;
 
     _wtSession.ready.then(() => {
       _wtSession.createBidirectionalStream().then((bidi) => {
@@ -88,7 +91,9 @@ export class H3Client implements Client, ClientPrivate {
 
   public sendDatagram(data: Uint8Array | Buffer) {
     if (!this._datagramWriter) {
-      this._datagramWriter = this._wtSession.datagrams.
+      // @ts-ignore
+      this._datagramWriter = this._wtSession.datagrams.writable.getWriter();
+
       this._datagramWriter.closed
         .then(() => console.log("datagram writer closed successfully!"))
         .catch((e: any) => console.log("datagram writer closed with error!", e));

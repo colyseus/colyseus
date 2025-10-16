@@ -3,7 +3,7 @@ import { Client } from "colyseus.js";
 import * as httpie from "httpie";
 
 export class ColyseusTestServer {
-  // matchmaking methods
+  public server: Server;
   public sdk: {
     joinOrCreate: Client['joinOrCreate'],
     join: Client['join'],
@@ -26,7 +26,9 @@ export class ColyseusTestServer {
     put: typeof httpie.put,
   };
 
-  constructor(public server: Server) {
+  constructor(server: Server) {
+    this.server = server;
+
     const hostname = "127.0.0.1";
     const port = server['port'];
     const client = new Client(`ws://${hostname}:${port}`);
@@ -41,9 +43,7 @@ export class ColyseusTestServer {
     };
 
     this.sdk = {
-      joinOrCreate: function() {
-        return client.joinOrCreate.apply(client, arguments);
-      },
+      joinOrCreate: client.joinOrCreate.bind(client),
       join: client.join.bind(client),
       create: client.create.bind(client),
       joinById: client.joinById.bind(client),
@@ -53,17 +53,17 @@ export class ColyseusTestServer {
     };
   }
 
-  async createRoom<State extends object = any, Metadata = any>(roomName: string, clientOptions: any = {}) {
+  async createRoom<State extends object = any>(roomName: string, clientOptions: any = {}) {
     const room = await matchMaker.createRoom(roomName, clientOptions);
-    return this.getRoomById<State, Metadata>(room.roomId);
+    return this.getRoomById<State>(room.roomId);
   }
 
   connectTo<T extends object=any>(room: Room<T>, clientOptions: any = {}) {
     return this.sdk.joinById<T>(room.roomId, clientOptions);
   }
 
-  getRoomById<State extends object= any, Metadata = any>(roomId: string) {
-    return matchMaker.getLocalRoomById(roomId) as Room<State, Metadata>;
+  getRoomById<State extends object= any>(roomId: string) {
+    return matchMaker.getLocalRoomById(roomId) as Room<State>;
   }
 
   async cleanup() {

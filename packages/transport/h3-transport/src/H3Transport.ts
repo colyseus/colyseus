@@ -96,6 +96,7 @@ export class H3Transport extends Transport {
         secret: this.options.secret || "mysecret",
         cert: cert,
         privKey: key,
+        defaultDatagramsReadableMode: 'bytes'
       });
       this.h3Server.startServer();
 
@@ -163,6 +164,7 @@ export class H3Transport extends Transport {
       const headers = Object.assign(
         {},
         matchMaker.controller.DEFAULT_CORS_HEADERS,
+        // @ts-ignore
         matchMaker.controller.getCorsHeaders.call(undefined, req)
       );
       headers['Content-Type'] = 'application/json';
@@ -176,7 +178,7 @@ export class H3Transport extends Transport {
           clientOptions,
           {
             token: (req.query['_authToken'] as string) ?? getBearerToken(req.headers['authorization']),
-            headers: req.headers,
+            headers: new Headers(req.headers),
             ip: req.headers['x-real-ip'] ?? req.ips
           },
         );
@@ -193,6 +195,7 @@ export class H3Transport extends Transport {
         res.write(JSON.stringify(response));
 
       } catch (e) {
+        // @ts-ignore
         res.write(JSON.stringify({ code: e.code, error: e.message, }));
       }
 
@@ -223,10 +226,11 @@ export class H3Transport extends Transport {
 
       await room._onJoin(h3Client, req);
 
-    } catch (e) {
+    } catch (e: any) {
       debugAndPrintError(e);
 
       // send error code to client then terminate
+      // @ts-ignore
       h3Client.error(e.code, e.message, () =>
         h3Client.close(Protocol.WS_CLOSE_WITH_ERROR));
     }

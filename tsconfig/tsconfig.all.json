@@ -24,5 +24,7 @@
     "useDefineForClassFields": false,
 
     "skipLibCheck": true,
+    // "rewriteRelativeImportExtensions": true,
+    "erasableSyntaxOnly": true // compatibility with node --experimental-strip-types
   }
 }

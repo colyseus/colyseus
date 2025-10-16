@@ -1,8 +1,7 @@
-import http, { IncomingMessage, ServerResponse } from 'http';
 import greeting from "@colyseus/greeting-banner";
 import { Router } from 'better-call';
 
-import { debugAndPrintError, debugMatchMaking } from './Debug.js';
+import { debugAndPrintError } from './Debug.js';
 import * as matchMaker from './MatchMaker.js';
 import { RegisteredHandler } from './matchmaker/RegisteredHandler.js';
 import { Presence } from './presence/Presence.js';

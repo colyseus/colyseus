@@ -4,7 +4,7 @@
 // @ts-ignore
 import { ServerWebSocket, WebSocketHandler } from 'bun';
 
-import bunExpress from 'bun-serve-express';
+// import bunExpress from 'bun-serve-express';
 import type { Application, Request, Response } from "express";
 
 import { HttpServerMock, matchMaker, Transport, debugAndPrintError, spliceOne, ServerError, getBearerToken } from '@colyseus/core';
@@ -25,38 +25,41 @@ export class BunWebSockets extends Transport {
 
   private _listening: any;
   private _originalRawSend: typeof WebSocketClient.prototype.raw | null = null;
+  private options: TransportOptions = {};
 
-  constructor(private options: TransportOptions = {}) {
+  constructor(options: TransportOptions = {}) {
     super();
 
     const self = this;
 
-    this.expressApp = bunExpress({
-      websocket: {
-        ...this.options,
+    this.options = options;
 
-        async open(ws) {
-          await self.onConnection(ws);
-        },
+    // this.expressApp = bunExpress({
+    //   websocket: {
+    //     ...this.options,
 
-        message(ws, message) {
-          self.clientWrappers.get(ws)?.emit('message', message);
-        },
+    //     async open(ws) {
+    //       await self.onConnection(ws);
+    //     },
 
-        close(ws, code, reason) {
-          // remove from client list
-          spliceOne(self.clients, self.clients.indexOf(ws));
+    //     message(ws, message) {
+    //       self.clientWrappers.get(ws)?.emit('message', message);
+    //     },
 
-          const clientWrapper = self.clientWrappers.get(ws);
-          if (clientWrapper) {
-            self.clientWrappers.delete(ws);
+    //     close(ws, code, reason) {
+    //       // remove from client list
+    //       spliceOne(self.clients, self.clients.indexOf(ws));
 
-            // emit 'close' on wrapper
-            clientWrapper.emit('close', code);
-          }
-        },
-      }
-    });
+    //       const clientWrapper = self.clientWrappers.get(ws);
+    //       if (clientWrapper) {
+    //         self.clientWrappers.delete(ws);
+
+    //         // emit 'close' on wrapper
+    //         clientWrapper.emit('close', code);
+    //       }
+    //     },
+    //   }
+    // });
 
     // Adding a mock object for Transport.server
     if (!this.server) {
@@ -70,7 +73,8 @@ export class BunWebSockets extends Transport {
 
     this.expressApp.use(`/${matchMaker.controller.matchmakeRoute}`, async (req, res) => {
       try {
-        await this.handleMatchMakeRequest(req, res);
+        // TODO: use shared handler here
+        // await this.handleMatchMakeRequest(req, res);
       } catch (e: any) {
         res.status(500).json({
           code: e.code,
@@ -144,80 +148,6 @@ export class BunWebSockets extends Transport {
 
       // send error code to client then terminate
       client.error(e.code, e.message, () => rawClient.close());
-    }
-  }
-
-  protected async handleMatchMakeRequest(req: Request, res: Response) {
-    const writeHeaders = (req: Request, res: Response) => {
-      if (res.destroyed) return;
-
-      res.set(Object.assign(
-        {},
-        matchMaker.controller.DEFAULT_CORS_HEADERS,
-        matchMaker.controller.getCorsHeaders.call(undefined, req)
-      ));
-
-      return true;
-    };
-
-    try {
-      switch (req.method) {
-        case 'OPTIONS': {
-          writeHeaders(req, res);
-          res.status(200).end();
-          break;
-        }
-
-        case 'GET': {
-          writeHeaders(req, res);
-          res.status(404).end();
-          break;
-        }
-
-        case 'POST': {
-          // do not accept matchmaking requests if already shutting down
-          if (matchMaker.state === matchMaker.MatchMakerState.SHUTTING_DOWN) {
-            throw new ServerError(503, "server is shutting down");
-          }
-
-          const matchedParams = req.path.match(matchMaker.controller.allowedRoomNameChars);
-          const matchmakeIndex = matchedParams.indexOf(matchMaker.controller.matchmakeRoute);
-          let clientOptions = req.body; // Bun.readableStreamToJSON(req.body);
-
-          if (clientOptions == null) {
-            throw new ServerError(500, "invalid JSON input");
-          }
-
-          if (typeof clientOptions === 'string' && clientOptions.length > 2) {
-            clientOptions = JSON.parse(clientOptions);
-          } else if (typeof clientOptions !== 'object') {
-            clientOptions = {};
-          }
-
-          const method = matchedParams[matchmakeIndex + 1];
-          const roomName = matchedParams[matchmakeIndex + 2] || '';
-
-          writeHeaders(req, res);
-          res.json(await matchMaker.controller.invokeMethod(
-            method,
-            roomName,
-            clientOptions,
-            {
-              token: getBearerToken(req.headers['authorization']),
-              headers: req.headers,
-              ip: req.headers['x-real-ip'] ?? req.headers['x-forwarded-for'] ?? req.ips,
-            },
-          ));
-          break;
-        }
-
-        default: throw new ServerError(500, "invalid request method");
-      }
-
-    } catch (e: any) {
-      writeHeaders(req, res);
-      res.status(500)
-        .json({ code: e.code, error: e.message });
     }
   }
 

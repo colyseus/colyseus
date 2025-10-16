@@ -14,7 +14,8 @@
     }
   },
   "scripts": {
-    "test": "TS_NODE_PROJECT=../../tsconfig/tsconfig.test.json COLYSEUS_SEAT_RESERVATION_TIME=0.3 COLYSEUS_PRESENCE_SHORT_TIMEOUT=300 c8 mocha --require tsx test/**.test.ts test/**/**.test.ts --exit --timeout 15000"
+    "test_old": "TS_NODE_PROJECT=../../tsconfig/tsconfig.test.json COLYSEUS_SEAT_RESERVATION_TIME=0.3 COLYSEUS_PRESENCE_SHORT_TIMEOUT=300 c8 mocha --require tsx test/**.test.ts test/**/**.test.ts --exit --timeout 15000",
+    "test": "COLYSEUS_SEAT_RESERVATION_TIME=0.3 COLYSEUS_PRESENCE_SHORT_TIMEOUT=300 node --experimental-strip-types test/**.test.ts test/**/**.test.ts --exit --timeout 15000"
   },
   "author": "Endel Dreyer",
   "license": "MIT",

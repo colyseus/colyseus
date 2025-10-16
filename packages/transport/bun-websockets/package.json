@@ -13,12 +13,11 @@
     }
   },
   "dependencies": {
-    "@colyseus/core": "workspace:^",
-    "bun-serve-express": "^1.0.5",
-    "express": ">=4.16.0"
+    "@colyseus/core": "workspace:^"
   },
   "devDependencies": {
-    "@colyseus/core": "workspace:^"
+    "@colyseus/core": "workspace:^",
+    "bun-types": "^1.2.0"
   },
   "author": "Endel Dreyer",
   "license": "MIT",

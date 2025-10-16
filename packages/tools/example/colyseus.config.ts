@@ -1,8 +1,8 @@
 import { uWebSocketsTransport } from "@colyseus/uwebsockets-transport";
 
-import Arena from "../src";
+import config from "../src";
 
-export default Arena({
+export default config({
     getId: () => "My App 1.0.0",
 
     /**
