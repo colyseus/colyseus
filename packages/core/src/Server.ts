@@ -1,13 +1,13 @@
 import greeting from "@colyseus/greeting-banner";
-import { Router } from 'better-call';
 
 import { debugAndPrintError } from './Debug.js';
 import * as matchMaker from './MatchMaker.js';
 import { RegisteredHandler } from './matchmaker/RegisteredHandler.js';
-import { Presence } from './presence/Presence.js';
+
+import type { Presence } from './presence/Presence.js';
+import type { Type } from './utils/types.js';
 
 import { Room } from './Room.js';
-import type { Type } from './utils/types.js';
 import { registerGracefulShutdown } from './utils/Utils.js';
 
 import { LocalPresence } from './presence/LocalPresence.js';
@@ -16,7 +16,8 @@ import { LocalDriver } from './matchmaker/driver/local/LocalDriver.js';
 import { Transport } from './Transport.js';
 import { logger, setLogger } from './Logger.js';
 import { setDevMode, isDevMode } from './utils/DevMode.js';
-import { toNodeHandler } from './router/index.js';
+import { toNodeHandler, createRouter, type Router } from './router/index.js';
+import { getDefaultRouter } from "./matchmaker/routes.js";
 
 export type ServerOptions = {
   publicAddress?: string,
@@ -133,7 +134,13 @@ export class Server<
     return new Promise<void>((resolve, reject) => {
       this.transport.listen(port, hostname, backlog, (err) => {
         const server = this.transport.server;
-        if (server && this.router) {
+
+        // default router is used if no router is provided
+        if (!this.router) {
+          this.router = getDefaultRouter() as unknown as Routes;
+        }
+
+        if (server) {
           server.on('error', (err) => reject(err));
           server.on('request', toNodeHandler(this.router.handler));
         }

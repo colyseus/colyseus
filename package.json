@@ -24,7 +24,7 @@
     "@types/ioredis": "^4.27.3",
     "@types/koa": "^2.0.49",
     "@types/mocha": "^10.0.1",
-    "@types/node": "^20.14.2",
+    "@types/node": "^22.13.14",
     "@types/sinon": "^10.0.2",
     "all-contributors-cli": "^6.20.0",
     "assert": "^2.0.0",

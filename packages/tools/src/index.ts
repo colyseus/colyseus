@@ -5,7 +5,7 @@ import net from "net";
 import http from 'http';
 import cors from 'cors';
 import express from 'express';
-import { logger, Server, ServerOptions, Transport, matchMaker } from '@colyseus/core';
+import { logger, Server, type ServerOptions, Transport, matchMaker } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 
 const BunWebSockets = import('@colyseus/bun-websockets'); BunWebSockets.catch(() => {});

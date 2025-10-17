@@ -1,5 +1,5 @@
 import { createEndpoint, createRouter, defineRoom, defineServer } from "@colyseus/core";
-import { MyRoom } from "./MyRoom";
+import { MyRoom } from "./MyRoom.ts";
 
 const listThings = createEndpoint("/things", { method: "GET" }, async (ctx) => {
   return { things: [1, 2, 3, 4, 5, 6] };

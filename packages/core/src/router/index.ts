@@ -3,6 +3,7 @@ export {
 } from "better-call/node";
 
 export {
+  type Router,
   createEndpoint,
   createRouter,
   createMiddleware,

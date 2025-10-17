@@ -517,7 +517,7 @@ describe("Integration", () => {
 
               matchMaker.defineRoomType('onmessage_bytes', class _ extends Room {
                 onCreate() {
-                  this.onMessage("bytes", (client, payload) => {
+                  this.onMessageBytes("bytes", (client, payload) => {
                     client.sendBytes("bytes", payload);
                   });
                 }
@@ -543,7 +543,7 @@ describe("Integration", () => {
               let serverReceivedPayload: any;
               matchMaker.defineRoomType('onmessage_bytes', class _ extends Room {
                 onCreate() {
-                  this.onMessage("big-payload", (client, payload) => {
+                  this.onMessageBytes("big-payload", (client, payload) => {
                     serverReceivedPayload = payload;
                     client.sendBytes("big-payload", payload);
                   });

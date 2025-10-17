@@ -1,7 +1,7 @@
 import nanoid from 'nanoid';
 
 import { EventEmitter } from "events";
-import { RoomException, type RoomMethodName } from '../errors/RoomExceptions.js';
+import { type RoomException, type RoomMethodName } from '../errors/RoomExceptions.js';
 import type { Type } from './types.js';
 
 import { debugAndPrintError } from '../Debug.js';

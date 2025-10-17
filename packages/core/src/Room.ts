@@ -140,7 +140,7 @@ export abstract class Room<
   protected _reconnections: { [reconnectionToken: string]: [string, Deferred] } = {};
   private _reconnectingSessionId = new Map<string, string>();
 
-  public messages: Record<string, (client: this['~client'], message: any) => void> = {};
+  public messages?: Record<string, (client: this['~client'], message: any) => void>;
 
   private onMessageEvents = createNanoEvents();
   private onMessageValidators: {[message: string]: StandardSchemaV1} = {};
@@ -283,6 +283,13 @@ export abstract class Room<
     // set state, now with the setter
     if (this.#_state) {
       this.state = this.#_state;
+    }
+
+    // Bind messages to the room
+    if (this.messages !== undefined) {
+      Object.entries(this.messages).forEach(([messageType, callback]) => {
+        this.onMessage(messageType, callback);
+      });
     }
 
     // set default _autoDisposeTimeout
@@ -1121,7 +1128,7 @@ export abstract class Room<
         debugMessage("received: '%s' -> %j (roomId: %s)", messageType, message, this.roomId);
 
         // custom message validation
-        if (this.onMessageValidators[messageType]) {
+        if (this.onMessageValidators[messageType] !== undefined) {
           message = standardValidate(this.onMessageValidators[messageType], message);
         }
 
