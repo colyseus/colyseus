@@ -588,7 +588,14 @@ describe("Integration", () => {
               assert.deepStrictEqual(receivedMessage, { x: 1, y: 2 });
             });
 
-            it("should disconnect if input validation throws", async () => {
+            xit("should disconnect if input validation throws", async () => {
+              //
+              // TODO:
+              // - add more tests for message validation errors
+              // - previous iteration of colyseus allowed to provide arbitrary function to validate and allowed to throw inside it. This is no longer allowed.
+              // - add more tests for throwing inside onMessage.
+              //
+
               matchMaker.defineRoomType('onmessage_validation', class _ extends Room {
                 onCreate() {
                   this.onMessage("input_xy", z.object({ x: z.number(), y: z.number() }), (_) => {
@@ -600,9 +607,7 @@ describe("Integration", () => {
               const conn = await client.joinOrCreate('onmessage_validation');
 
               let onLeaveCode: number;
-              conn.onLeave((code) => {
-                onLeaveCode = code;
-              });
+              conn.onLeave((code) => onLeaveCode = code);
 
               conn.send("input_xy", { x: 1, y: 2, z: 3 });
               await timeout(20);

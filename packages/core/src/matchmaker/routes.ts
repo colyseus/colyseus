@@ -48,7 +48,7 @@ export const postMatchmakeMethod = createEndpoint("/matchmake/:method/:roomName"
     return response;
 
   } catch (e: any) {
-    throw ctx.error(500, { code: e.code, error: e.message, });
+    throw ctx.error(e.code, { code: e.code, error: e.message, });
   }
 
 });

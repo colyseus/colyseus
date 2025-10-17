@@ -1,5 +1,5 @@
 import assert, { fail } from "assert";
-import { type Client, type ClientState, type Presence, type Transport, type MatchMakerDriver, Deferred, LocalDriver, LocalPresence, Room, Server, matchMaker } from "@colyseus/core";
+import { type Client, type Presence, type Transport, type MatchMakerDriver, ClientState, Deferred, LocalDriver, LocalPresence, Room, Server, matchMaker } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import * as Colyseus from "colyseus.js";
 import { timeout } from "./utils/index.ts";

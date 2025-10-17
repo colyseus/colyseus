@@ -252,7 +252,7 @@ export class Server<
     const originalOnMessage = this._originalRoomOnMessage;
 
     /* tslint:disable:no-string-literal */
-    Room.prototype['_onMessage'] = milliseconds <= Number.EPSILON ? originalOnMessage : (client, buffer) => {
+    Room.prototype['_onMessage'] = milliseconds <= Number.EPSILON ? originalOnMessage : function (this: Room, client, buffer) {
       // uWebSockets.js: duplicate buffer because it is cleared at native layer before the timeout.
       const cachedBuffer = Buffer.from(buffer);
       setTimeout(() => originalOnMessage.call(this, client, cachedBuffer), halfwayMS);

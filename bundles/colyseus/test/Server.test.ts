@@ -79,7 +79,7 @@ describe("Server", () => {
 
         server.simulateLatency(50);
 
-        const connection = await client.joinOrCreate('latency_state');
+        const connection = await client.joinOrCreate<MyState>('latency_state');
 
         await new Promise((resolve) => setTimeout(resolve, 100));
 
@@ -234,8 +234,8 @@ describe("Server", () => {
     it("should allow to customize getCorsHeaders()", async () => {
       let refererHeader: string;
 
-      matchMaker.controller.getCorsHeaders = function (req) {
-        const referer = new URL(req.headers.referer);
+      matchMaker.controller.getCorsHeaders = function (headers: Headers) {
+        const referer = new URL(headers.get('referer'));
 
         if (referer.hostname !== "safedomain.com") {
           refererHeader = "safedomain.com";

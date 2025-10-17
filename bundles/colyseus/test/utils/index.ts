@@ -6,9 +6,9 @@ import { pack, unpack } from "@colyseus/msgpackr";
 import {
   type Client,
   type ServerOptions,
-  type ClientState,
   type ISendOptions,
   type ClientPrivate,
+  ClientState,
   Server,
   Room,
   matchMaker,

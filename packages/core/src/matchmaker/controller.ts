@@ -26,8 +26,8 @@ export default {
    * You can manually change the default corsHeaders by overwriting the `getCorsHeaders()` method:
    *    ```
    *    import { matchMaker } from "@colyseus/core";
-   *    matchMaker.controller.getCorsHeaders = function(req) {
-   *      if (req.headers.referer !== "xxx") {
+   *    matchMaker.controller.getCorsHeaders = function(headers) {
+   *      if (headers.get('referer') !== "xxx") {
    *      }
    *
    *      return {

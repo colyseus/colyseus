@@ -29,15 +29,14 @@ export const Protocol = {
 export type Protocol = typeof Protocol[keyof typeof Protocol];
 
 export const ErrorCode = {
-  // MatchMaking Error Codes
-  MATCHMAKE_NO_HANDLER: 4210,
-  MATCHMAKE_INVALID_CRITERIA: 4211,
-  MATCHMAKE_INVALID_ROOM_ID: 4212,
-  MATCHMAKE_UNHANDLED: 4213, // generic exception during onCreate/onJoin
-  MATCHMAKE_EXPIRED: 4214, // generic exception during onCreate/onJoin
-
-  AUTH_FAILED: 4215,
-  APPLICATION_ERROR: 4216,
+  // HTTP MatchMaking Error Codes
+  MATCHMAKE_NO_HANDLER: 510,
+  MATCHMAKE_INVALID_CRITERIA: 511,
+  MATCHMAKE_INVALID_ROOM_ID: 512,
+  MATCHMAKE_UNHANDLED: 513, // generic exception during onCreate/onJoin
+  MATCHMAKE_EXPIRED: 514, // generic exception during onCreate/onJoin
+  AUTH_FAILED: 515,
+  APPLICATION_ERROR: 516,
 
   INVALID_PAYLOAD: 4217,
 } as const;
