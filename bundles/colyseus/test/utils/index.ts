@@ -3,16 +3,28 @@ import { EventEmitter } from "events";
 
 import { pack, unpack } from "@colyseus/msgpackr";
 
-import { Server, ServerOptions, Room, matchMaker, LocalDriver, ClientState, LocalPresence, Protocol, Presence, Client, Deferred, ISendOptions, getMessageBytes, ClientPrivate } from "@colyseus/core";
+import {
+  type Client,
+  type ServerOptions,
+  type ClientState,
+  type ISendOptions,
+  type ClientPrivate,
+  Server,
+  Room,
+  matchMaker,
+  LocalDriver,
+  LocalPresence,
+  Deferred,
+} from "@colyseus/core";
+
 import { RedisPresence } from "@colyseus/redis-presence";
 import { RedisDriver } from "@colyseus/redis-driver";
 
 // import { MongooseDriver } from "@colyseus/mongoose-driver";
 
-import { WebSocketTransport, TransportOptions } from '@colyseus/ws-transport';
+import { WebSocketTransport } from '@colyseus/ws-transport';
 Server.prototype['getDefaultTransport'] = function (options: ServerOptions) {
   return new WebSocketTransport({
-    server: options.server,
     pingInterval: 150,
     pingMaxRetries: 1,
   });
@@ -37,6 +49,8 @@ export class RawClient extends EventEmitter {
 }
 
 export class WebSocketClient implements Client, ClientPrivate {
+  '~messages': any;
+
   id: string;
   sessionId: string;
   ref: RawClient;
@@ -86,7 +100,7 @@ export class WebSocketClient implements Client, ClientPrivate {
   }
 
   async confirmJoinRoom(room: Room) {
-    await room._onJoin(this, { headers: {}, ip: "127.0.0.1" });
+    await room._onJoin(this, { headers: new Headers(), ip: "127.0.0.1" });
 
     //
     // this simulates when the client-side has sent the `Protocol.JOIN_ROOM` message
@@ -129,7 +143,7 @@ export function createEmptyClient() {
 
 export function createDummyClient (seatReservation: matchMaker.SeatReservation, options: any = {}) {
   let client = new WebSocketClient(seatReservation.sessionId);
-  (<any>client).options = options;
+  (client as any).options = options;
   return client;
 }
 

@@ -27,7 +27,7 @@ export class H3Transport extends Transport {
   public protocol: string = "h3";
   public clients: H3Client[] = [];
 
-  public server: https.Server;
+  // public server: https.Server;
   protected h3Server: Http3Server;
 
   private options: TransportOptions;

@@ -2,6 +2,7 @@
   "name": "colyseus",
   "version": "0.16.5",
   "description": "Multiplayer Framework for Node.js",
+  "type": "module",
   "input": "./src/index.ts",
   "main": "./build/index.js",
   "module": "./build/index.mjs",
@@ -15,7 +16,7 @@
   },
   "scripts": {
     "test_old": "TS_NODE_PROJECT=../../tsconfig/tsconfig.test.json COLYSEUS_SEAT_RESERVATION_TIME=0.3 COLYSEUS_PRESENCE_SHORT_TIMEOUT=300 c8 mocha --require tsx test/**.test.ts test/**/**.test.ts --exit --timeout 15000",
-    "test": "COLYSEUS_SEAT_RESERVATION_TIME=0.3 COLYSEUS_PRESENCE_SHORT_TIMEOUT=300 node --experimental-strip-types test/**.test.ts test/**/**.test.ts --exit --timeout 15000"
+    "test": "COLYSEUS_SEAT_RESERVATION_TIME=0.3 COLYSEUS_PRESENCE_SHORT_TIMEOUT=300 npx mocha test/**.test.ts test/**/**.test.ts --exit --timeout 15000"
   },
   "author": "Endel Dreyer",
   "license": "MIT",
@@ -46,6 +47,7 @@
     "@colyseus/redis-presence": "workspace:^",
     "@colyseus/ws-transport": "workspace:^",
     "@colyseus/uwebsockets-transport": "workspace:^",
+    "@colyseus/msgpackr": "*",
     "@colyseus/schema": "^3.0.0",
     "@types/ws": "^8.5.14",
     "zod": "^3.25.64",

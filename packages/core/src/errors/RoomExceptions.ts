@@ -22,50 +22,66 @@ export type RoomException<R extends Room = Room> =
   TimedEventException;
 
 export class OnCreateException<R extends Room = Room> extends Error {
+  options: Parameters<R['onCreate']>[0];
   constructor(
     cause: Error,
     message: string,
-    public options: Parameters<R['onCreate']>[0],
+    options:  Parameters<R['onCreate']>[0],
   ) {
     super(message, { cause });
     this.name = 'OnCreateException';
+    this.options = options;
   }
 }
 
 export class OnAuthException<R extends Room = Room> extends Error {
+  client: Parameters<R['onAuth']>[0];
+  options: Parameters<R['onAuth']>[1];
   constructor(
     cause: Error,
     message: string,
-    public client: Parameters<R['onAuth']>[0],
-    public options: Parameters<R['onAuth']>[1],
+    client: Parameters<R['onAuth']>[0],
+    options: Parameters<R['onAuth']>[1],
   ) {
     super(message, { cause });
     this.name = 'OnAuthException';
+    this.client = client;
+    this.options = options;
   }
 }
 
 export class OnJoinException<R extends Room = Room> extends Error {
+  client: Parameters<R['onJoin']>[0];
+  options: Parameters<R['onJoin']>[1];
+  auth: Parameters<R['onJoin']>[2];
   constructor(
     cause: Error,
     message: string,
-    public client: Parameters<R['onJoin']>[0],
-    public options: Parameters<R['onJoin']>[1],
-    public auth: Parameters<R['onJoin']>[2],
+    client: Parameters<R['onJoin']>[0],
+    options: Parameters<R['onJoin']>[1],
+    auth: Parameters<R['onJoin']>[2],
   ) {
     super(message, { cause });
     this.name = 'OnJoinException';
+    this.client = client;
+    this.options = options;
+    this.auth = auth;
   }
 }
 
 export class OnLeaveException<R extends Room = Room> extends Error {
+  client: Parameters<R['onLeave']>[0];
+  consented: Parameters<R['onLeave']>[1];
   constructor(
     cause: Error,
     message: string,
-    public client: Parameters<R['onLeave']>[0],
-    public consented: Parameters<R['onLeave']>[1],
+    client: Parameters<R['onLeave']>[0],
+    consented: Parameters<R['onLeave']>[1],
   ) {
     super(message, { cause });
     this.name = 'OnLeaveException';
+    this.client = client;
+    this.consented = consented;
   }
 }
 
@@ -80,15 +96,21 @@ export class OnDisposeException extends Error {
 }
 
 export class OnMessageException<R extends Room, MessageType extends keyof R['messages'] = keyof R['messages']> extends Error {
+  client: R['~client'];
+  payload: Parameters<R['messages'][MessageType]>[1];
+  type: MessageType;
   constructor(
     cause: Error,
     message: string,
-    public client: R['~client'],
-    public payload: Parameters<R['messages'][MessageType]>[1],
-    public type: MessageType,
+    client: R['~client'],
+    payload: Parameters<R['messages'][MessageType]>[1],
+    type: MessageType,
   ) {
     super(message, { cause });
     this.name = 'OnMessageException';
+    this.client = client;
+    this.payload = payload;
+    this.type = type;
   }
 
   public isType<T extends keyof R['messages']>(type: T): this is OnMessageException<R, T> {

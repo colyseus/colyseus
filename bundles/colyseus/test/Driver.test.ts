@@ -1,7 +1,7 @@
 import assert from "assert";
-import { generateId, IRoomCache, MatchMakerDriver } from "../src";
+import { generateId, type IRoomCache, type MatchMakerDriver } from "../src/index.ts";
 
-import { DRIVERS } from "./utils";
+import { DRIVERS } from "./utils/index.ts";
 
 describe("Driver implementations", () => {
   for (let i = 0; i < DRIVERS.length; i++) {

@@ -3,26 +3,26 @@ import { decode, type Iterator, $changes } from '@colyseus/schema';
 import Clock from '@colyseus/timer';
 
 import { EventEmitter } from 'events';
-import { logger } from './Logger.js';
+import { logger } from './Logger.ts';
 
-import { Presence } from './presence/Presence.js';
+import type { Presence } from './presence/Presence.ts';
+import type { Serializer } from './serializer/Serializer.ts';
+import type { RoomCache } from './matchmaker/driver/api.ts';
 
-import { NoneSerializer } from './serializer/NoneSerializer.js';
-import { SchemaSerializer } from './serializer/SchemaSerializer.js';
-import { Serializer } from './serializer/Serializer.js';
+import { NoneSerializer } from './serializer/NoneSerializer.ts';
+import { SchemaSerializer } from './serializer/SchemaSerializer.ts';
 
-import { ErrorCode, getMessageBytes, Protocol } from './Protocol.js';
-import { Deferred, generateId, wrapTryCatch } from './utils/Utils.js';
-import { createNanoEvents } from './utils/nanoevents.js';
-import { isDevMode } from './utils/DevMode.js';
+import { ErrorCode, getMessageBytes, Protocol } from './Protocol.ts';
+import { Deferred, generateId, wrapTryCatch } from './utils/Utils.ts';
+import { createNanoEvents } from './utils/nanoevents.ts';
+import { isDevMode } from './utils/DevMode.ts';
 
-import { debugAndPrintError, debugMatchMaking, debugMessage } from './Debug.js';
-import { RoomCache } from './matchmaker/driver/api.js';
-import { ServerError } from './errors/ServerError.js';
-import { AuthContext, Client, ClientPrivate, ClientArray, ClientState, ISendOptions } from './Transport.js';
-import { type RoomMethodName, OnAuthException, OnCreateException, OnDisposeException, OnJoinException, OnLeaveException, OnMessageException, RoomException, SimulationIntervalException, TimedEventException } from './errors/RoomExceptions.js';
+import { debugAndPrintError, debugMatchMaking, debugMessage } from './Debug.ts';
+import { ServerError } from './errors/ServerError.ts';
+import { ClientState, type AuthContext, type Client, type ClientPrivate, ClientArray, type ISendOptions } from './Transport.ts';
+import { type RoomMethodName, OnAuthException, OnCreateException, OnDisposeException, OnJoinException, OnLeaveException, OnMessageException, type RoomException, SimulationIntervalException, TimedEventException } from './errors/RoomExceptions.ts';
 
-import { standardValidate, StandardSchemaV1 } from './utils/StandardSchema.js';
+import { standardValidate, type StandardSchemaV1 } from './utils/StandardSchema.ts';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
@@ -36,11 +36,12 @@ export interface IBroadcastOptions extends ISendOptions {
   except?: Client | Client[];
 }
 
-export enum RoomInternalState {
-  CREATING = 0,
-  CREATED = 1,
-  DISPOSING = 2,
-}
+export const RoomInternalState = {
+  CREATING: 0,
+  CREATED: 1,
+  DISPOSING: 2,
+} as const;
+export type RoomInternalState = (typeof RoomInternalState)[keyof typeof RoomInternalState];
 
 /**
  * A Room class is meant to implement a game session, and/or serve as the communication channel

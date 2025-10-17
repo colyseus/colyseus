@@ -1,6 +1,6 @@
 import assert from "assert";
-import { Deferred, LocalPresence, matchMaker, MatchMakerDriver, Presence, Room, Server } from "../../src";
-import { DRIVERS } from "../utils";
+import { Deferred, LocalPresence, matchMaker, type MatchMakerDriver, type Presence, Room, Server } from "../../src/index.ts";
+import { DRIVERS } from "../utils/index.ts";
 
 import { uWebSocketsTransport } from "@colyseus/uwebsockets-transport";
 

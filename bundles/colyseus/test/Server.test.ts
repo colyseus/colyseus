@@ -3,9 +3,9 @@ import assert from "assert";
 
 import * as Colyseus from "colyseus.js";
 import { Deferred, Room, Server, matchMaker } from "@colyseus/core";
-import { DummyRoom } from "./utils";
+import { DummyRoom } from "./utils/index.ts";
 import { URL } from "url";
-import { Schema, type } from "@colyseus/schema";
+import { Schema, type, schema, type SchemaType } from "@colyseus/schema";
 
 const TEST_PORT = 8567;
 const TEST_ENDPOINT = `ws://localhost:${TEST_PORT}`;
@@ -56,18 +56,20 @@ describe("Server", () => {
 
     describe("server.simulateLatency", () => {
       it("should synchronize state with delay", async () => {
-        class Item extends Schema {
-          @type("string") name: string;
-        }
+        const Item = schema({
+          name: "string",
+        });
+        type Item = SchemaType<typeof Item>;
 
-        class MyState extends Schema {
-          @type("string") message: string = "Hello world!";
-          @type({ map: Item }) items = new Map<string, Item>();
-        }
+        const MyState = schema({
+          message: { type: "string", default: "Hello world!" },
+          items: { map: Item },
+        });
+        type MyState = SchemaType<typeof MyState>;
 
         matchMaker.defineRoomType('latency_state', class _ extends Room {
+          state = new MyState();
           onCreate() {
-            this.setState(new MyState());
             this.state.items.set("zero", new Item().assign({ name: "zero" }));
           }
           onJoin() {

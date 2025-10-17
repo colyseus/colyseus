@@ -1,8 +1,8 @@
-import assert, { match } from "assert";
+import assert from "assert";
 
 import * as Colyseus from "colyseus.js";
 import { OnAuthException, OnCreateException, OnDisposeException, OnJoinException, OnLeaveException, OnMessageException, Room, Server, SimulationIntervalException, TimedEventException, matchMaker } from "@colyseus/core";
-import { timeout } from "./utils";
+import { timeout } from "./utils/index.ts";
 
 const TEST_PORT = 8570;
 const TEST_ENDPOINT = `ws://localhost:${TEST_PORT}`;

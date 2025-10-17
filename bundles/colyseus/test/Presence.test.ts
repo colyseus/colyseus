@@ -1,6 +1,6 @@
 import assert from "assert";
-import { LocalPresence, Presence, RedisPresence } from "../src";
-import { timeout } from "./utils";
+import { LocalPresence, type Presence, RedisPresence } from "../src/index.ts";
+import { timeout } from "./utils/index.ts";
 
 const PRESENCE_IMPLEMENTATIONS = [LocalPresence, RedisPresence];
 

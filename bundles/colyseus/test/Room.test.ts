@@ -1,7 +1,6 @@
 import assert from "assert";
-import { Client, Room, SchemaSerializer } from "@colyseus/core";
+import { Room, SchemaSerializer } from "@colyseus/core";
 import { Schema } from "@colyseus/schema";
-import { WebSocketClient } from "./utils";
 import sinon from "sinon";
 
 describe("Room", () => {

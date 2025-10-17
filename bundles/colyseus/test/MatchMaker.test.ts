@@ -1,6 +1,6 @@
 import assert, { match } from "assert";
-import { generateId, matchMaker, MatchMakerDriver, Room, IRoomCache } from "@colyseus/core";
-import { DummyRoom, Room2Clients, createDummyClient, timeout, ReconnectRoom, Room3Clients, DRIVERS, ReconnectTokenRoom } from "./utils";
+import { generateId, matchMaker, Room, type MatchMakerDriver, type IRoomCache } from "@colyseus/core";
+import { DummyRoom, Room2Clients, createDummyClient, timeout, ReconnectRoom, Room3Clients, DRIVERS, ReconnectTokenRoom } from "./utils/index.ts";
 
 const DEFAULT_SEAT_RESERVATION_TIME = Number(process.env.COLYSEUS_SEAT_RESERVATION_TIME);
 

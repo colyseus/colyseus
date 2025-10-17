@@ -1,8 +1,8 @@
 {
     "compilerOptions": {
         "outDir": "lib",
-        "module": "commonjs",
-        "lib": ["es5"],
+        "module": "NodeNext",
+        "moduleResolution": "NodeNext",
         "target": "ESNext",
         "declaration": true,
         "esModuleInterop": true,
@@ -11,6 +11,9 @@
         "noImplicitAny": false,
         "sourceMap": false,
         "skipLibCheck": true,
+        "noEmit": true,
+        "allowImportingTsExtensions": true,
+        "erasableSyntaxOnly": true,
     },
     "include": [
       "**/*.ts",

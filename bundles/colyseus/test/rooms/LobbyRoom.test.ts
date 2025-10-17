@@ -1,6 +1,6 @@
 import assert from "assert";
-import { matchMaker, LobbyRoom, Presence, MatchMakerDriver, Server } from "../../src";
-import { PRESENCE_IMPLEMENTATIONS, DRIVERS, DummyRoom, timeout } from "../utils";
+import { matchMaker, LobbyRoom, type Presence, type MatchMakerDriver, Server } from "../../src/index.ts";
+import { PRESENCE_IMPLEMENTATIONS, DRIVERS, DummyRoom, timeout } from "../utils/index.ts";
 
 const TEST_PORT = 8567;
 

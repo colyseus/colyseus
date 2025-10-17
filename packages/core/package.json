@@ -38,14 +38,14 @@
   },
   "homepage": "https://colyseus.io/",
   "engines": {
-    "node": ">= 18.x"
+    "node": ">= 22.x"
   },
   "dependencies": {
     "@colyseus/greeting-banner": "workspace:^",
-    "@colyseus/timer": "^1.0.1",
+    "@colyseus/timer": "^1.0.3",
     "@colyseus/msgpackr": "^1.11.2",
     "@standard-schema/spec": "^1.0.0",
-    "better-call": "^1.0.9",
+    "better-call": "^1.0.24",
     "debug": "^4.3.4",
     "nanoid": "^2.0.0"
   },

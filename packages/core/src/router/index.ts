@@ -1,6 +1,6 @@
 export {
-  toNodeHandler,
-} from "better-call/dist/node";
+  toNodeHandler
+} from "better-call/node";
 
 export {
   createEndpoint,

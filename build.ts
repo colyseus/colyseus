@@ -61,13 +61,16 @@ async function main() {
         emitDeclarationOnly: true,
         resolveJsonModule: true,
         skipLibCheck: true,
-        module: ts.ModuleKind.CommonJS,
-        target: ts.ScriptTarget.ES2015,
-        lib: ["lib.es2022.d.ts"],
+        // module: ts.ModuleKind.CommonJS,
+        module: ts.ModuleKind.NodeNext,
+        moduleResolution: ts.ModuleResolutionKind.NodeNext,
+        target: ts.ScriptTarget.ESNext,
+        lib: ["lib.esnext.d.ts"],
         outDir: outdir,
         downlevelIteration: true, // (redis-driver)
         esModuleInterop: true,
         experimentalDecorators: true,
+        allowImportingTsExtensions: true,
       });
       const emitResult = program.emit();
 
@@ -108,7 +111,7 @@ async function main() {
         name: 'add-mjs',
         setup(build) {
           build.onResolve({ filter: /.*/ }, (args) => {
-            if (args.importer) return { path: args.path.replace(/^\.(.*)\.js$/, '.$1.mjs'), external: true }
+            if (args.importer) return { path: args.path.replace(/^\.(.*)\.[jt]s$/, '.$1.mjs'), external: true }
           })
         },
       },

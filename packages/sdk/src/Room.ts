@@ -148,10 +148,10 @@ export class Room<
         this.packr.buffer[0] = Protocol.ROOM_DATA;
 
         if (typeof(messageType) === "string") {
-            encode.string(this.packr.buffer, messageType, it);
+            encode.string(this.packr.buffer as Buffer, messageType, it);
 
         } else {
-            encode.number(this.packr.buffer, messageType, it);
+            encode.number(this.packr.buffer as Buffer, messageType, it);
         }
 
         // force packr to use beginning of the buffer
@@ -169,10 +169,10 @@ export class Room<
         this.packr.buffer[0] = Protocol.ROOM_DATA;
 
         if (typeof(type) === "string") {
-            encode.string(this.packr.buffer, type, it);
+            encode.string(this.packr.buffer as Buffer, type, it);
 
         } else {
-            encode.number(this.packr.buffer, type, it);
+            encode.number(this.packr.buffer as Buffer, type, it);
         }
 
         // force packr to use beginning of the buffer
@@ -190,10 +190,10 @@ export class Room<
         this.packr.buffer[0] = Protocol.ROOM_DATA_BYTES;
 
         if (typeof(type) === "string") {
-            encode.string(this.packr.buffer, type, it);
+            encode.string(this.packr.buffer as Buffer, type, it);
 
         } else {
-            encode.number(this.packr.buffer, type, it);
+            encode.number(this.packr.buffer as Buffer, type, it);
         }
 
         // check if buffer needs to be resized
@@ -232,8 +232,8 @@ export class Room<
         const code = buffer[0];
 
         if (code === Protocol.JOIN_ROOM) {
-            const reconnectionToken = decode.utf8Read(buffer, it, buffer[it.offset++]);
-            this.serializerId = decode.utf8Read(buffer, it, buffer[it.offset++]);
+            const reconnectionToken = decode.utf8Read(buffer as Buffer, it, buffer[it.offset++]);
+            this.serializerId = decode.utf8Read(buffer as Buffer, it, buffer[it.offset++]);
 
             // Instantiate serializer if not locally available.
             if (!this.serializer) {
@@ -255,8 +255,8 @@ export class Room<
             this.connection.send(this.packr.buffer.subarray(0, 1));
 
         } else if (code === Protocol.ERROR) {
-            const code = decode.number(buffer, it);
-            const message = decode.string(buffer, it);
+            const code = decode.number(buffer as Buffer, it);
+            const message = decode.string(buffer as Buffer, it);
 
             this.onError.invoke(code, message);
 
@@ -272,20 +272,20 @@ export class Room<
             this.onStateChange.invoke(this.serializer.getState());
 
         } else if (code === Protocol.ROOM_DATA) {
-            const type = (decode.stringCheck(buffer, it))
-                ? decode.string(buffer, it)
-                : decode.number(buffer, it);
+            const type = (decode.stringCheck(buffer as Buffer, it))
+                ? decode.string(buffer as Buffer, it)
+                : decode.number(buffer as Buffer, it);
 
             const message = (buffer.byteLength > it.offset)
-                ? unpack(buffer, { start: it.offset })
+                ? unpack(buffer as Buffer, { start: it.offset })
                 : undefined;
 
             this.dispatchMessage(type, message);
 
         } else if (code === Protocol.ROOM_DATA_BYTES) {
-            const type = (decode.stringCheck(buffer, it))
-                ? decode.string(buffer, it)
-                : decode.number(buffer, it);
+            const type = (decode.stringCheck(buffer as Buffer, it))
+                ? decode.string(buffer as Buffer, it)
+                : decode.number(buffer as Buffer, it);
 
             this.dispatchMessage(type, buffer.subarray(it.offset));
         }

@@ -38,7 +38,7 @@
   },
   "homepage": "https://colyseus.io/",
   "engines": {
-    "node": ">= 18.x"
+    "node": ">= 22.x"
   },
   "dependencies": {
     "@types/jsonwebtoken": "^9.0.5",

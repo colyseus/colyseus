@@ -1,15 +1,14 @@
 import assert from "assert";
 import crypto from "crypto";
-import sinon, { match } from "sinon";
-import * as Colyseus from "colyseus.js";
-import { Schema, type, MapSchema, ArraySchema, view, StateView } from "@colyseus/schema";
+import sinon from "sinon";
+import { Client as SDKClient, Room as SDKRoom } from "colyseus.js";
+import { Schema, type, MapSchema, ArraySchema, view, StateView, schema, type SchemaType } from "@colyseus/schema";
 
-import { matchMaker, Room, Client, Server, ErrorCode, MatchMakerDriver, Presence, Deferred, Transport, AuthContext } from "@colyseus/core";
-import { DummyRoom, DRIVERS, timeout, Room3Clients, PRESENCE_IMPLEMENTATIONS, Room2Clients, Room2ClientsExplicitLock } from "./utils";
+import { type Client, type AuthContext, type MatchMakerDriver, type Presence, matchMaker, Room, Server, ErrorCode,  Deferred, Transport } from "@colyseus/core";
+import { DummyRoom, DRIVERS, timeout, Room3Clients, PRESENCE_IMPLEMENTATIONS, Room2Clients, Room2ClientsExplicitLock } from "./utils/index.ts";
 import { ServerError, Protocol } from "@colyseus/core";
 
 import { WebSocketTransport } from "@colyseus/ws-transport";
-// import { uWebSocketsTransport } from "@colyseus/uwebsockets-transport";
 
 import WebSocket from "ws";
 import { z } from "zod";
@@ -28,7 +27,7 @@ describe("Integration", () => {
         let presence: Presence;
         let transport: Transport;
 
-        const client = new Colyseus.Client(TEST_ENDPOINT);
+        const client = new SDKClient(TEST_ENDPOINT);
 
         before(async () => {
           driver = new DRIVERS[j]();
@@ -437,7 +436,7 @@ describe("Integration", () => {
             });
 
             it("should support number key as message type", async () => {
-              enum MessageTypes { REQUEST, RESPONSE }
+              const MessageTypes = { REQUEST: 0, RESPONSE: 1 };
 
               const messageToSend = {
                 string: "hello",
@@ -538,7 +537,7 @@ describe("Integration", () => {
             });
 
             it("should support sending and receiving raw bytes with big payload", async () => {
-              const bigBlob = new Blob([crypto.randomBytes(1024 * 9)], { type: "audio/webm" });
+              const bigBlob = new Blob([crypto.randomBytes(1024 * 9) as any], { type: "audio/webm" });
               const bigPayload = await bigBlob.bytes();
 
               let serverReceivedPayload: any;
@@ -592,9 +591,7 @@ describe("Integration", () => {
             it("should disconnect if input validation throws", async () => {
               matchMaker.defineRoomType('onmessage_validation', class _ extends Room {
                 onCreate() {
-                  this.onMessage("input_xy", (_1, _2) => {
-                    // do nothing
-                  }, (_) => {
+                  this.onMessage("input_xy", z.object({ x: z.number(), y: z.number() }), (_) => {
                     throw new Error("what");
                   });
                 }
@@ -616,9 +613,10 @@ describe("Integration", () => {
           });
 
           describe("patchRate", () => {
-            class PatchState extends Schema {
-              @type("number") number: number = 0;
-            }
+            const PatchState = schema({
+              number: { type: "number", default: 0 },
+            });
+            type PatchState = SchemaType<typeof PatchState>;
 
             it("should receive patch at every patch rate", async () => {
               matchMaker.defineRoomType('patchinterval', class _ extends Room {
@@ -645,8 +643,8 @@ describe("Integration", () => {
             it("should not receive any patch if patchRate is nullified", async () => {
               matchMaker.defineRoomType('patchinterval', class _ extends Room {
                 patchRate = null;
+                state = new PatchState();
                 onCreate(options: any) {
-                  this.setState(new PatchState());
                   this.setSimulationInterval(() => this.state.number++);
                 }
               });
@@ -774,9 +772,10 @@ describe("Integration", () => {
             });
 
             it("should broadcast after patch", async () => {
-              class DummyState extends Schema {
-                @type("number") number: number = 0;
-              }
+              const DummyState = schema({
+                number: { type: "number", default: 0 },
+              });
+              type DummyState = SchemaType<typeof DummyState>;
 
               matchMaker.defineRoomType('broadcast_afterpatch', class _ extends Room {
                 onCreate() {
@@ -816,9 +815,10 @@ describe("Integration", () => {
           describe("send()", () => {
 
             it("should send after patch", async () => {
-              class DummyState extends Schema {
-                @type("number") number: number = 0;
-              }
+              const DummyState = schema({
+                number: { type: "number", default: 0 },
+              });
+              type DummyState = SchemaType<typeof DummyState>;
 
               matchMaker.defineRoomType('send_afterpatch', class _ extends Room {
                 onCreate() {
@@ -1043,7 +1043,7 @@ describe("Integration", () => {
                 }
               });
 
-              let connections: Colyseus.Room[] = [];
+              let connections: SDKRoom[] = [];
 
               const promises = [
                 client.joinOrCreate("single3").then(conn => connections.push(conn)),
@@ -1131,15 +1131,18 @@ describe("Integration", () => {
 
           describe("onLeave with exceptions", () => {
             it("should trigger onLeave if onJoin fails", async () => {
-              class Player extends Schema {
-                @type("string") name: string;
-              }
-              class MyState extends Schema {
-                @type({ map: Player }) players: MapSchema<Player> = new MapSchema<Player>();
-              }
+              const Player = schema({
+                name: { type: "string" },
+              });
+              type Player = SchemaType<typeof Player>;
 
-              let room: Room<MyState>;
-              matchMaker.defineRoomType("onJoinFail", class _ extends Room<MyState> {
+              const MyState = schema({
+                players: { map: Player },
+              });
+              type MyState = SchemaType<typeof MyState>;
+
+              let room: Room<typeof MyState>;
+              matchMaker.defineRoomType("onJoinFail", class _ extends Room<typeof MyState> {
                 onCreate() {
                   room = this;
                   this.autoDispose = false;
@@ -1388,8 +1391,7 @@ describe("Integration", () => {
           it("reconnected client should received messages from previous and new 'client' instance", async () => {
             const onRoomDisposed = new Deferred();
             matchMaker.defineRoomType('allow_reconnection', class _ extends Room {
-              async onJoin() {}
-              async onLeave(client, consented) {
+              async onLeave(client: Client, consented: boolean) {
                 try {
                   if (consented) { throw new Error("consented!"); }
 
@@ -1567,15 +1569,20 @@ describe("Integration", () => {
           });
 
           it("reconnection with StateView should recreate the StateView", async () => {
-            class Item extends Schema {
-              @type("string") name: string;
-            }
-            class Entity extends Schema {
-              @type([Item]) items = new ArraySchema<Item>();
-            }
-            class State extends Schema {
-              @view() @type({ map: Entity }) entities = new MapSchema<Entity>();
-            }
+            const Item = schema({
+              name: { type: "string" },
+            });
+            type Item = SchemaType<typeof Item>;
+
+            const Entity = schema({
+              items: { array: Item },
+            });
+            type Entity = SchemaType<typeof Entity>;
+
+            const State = schema({
+              entities: { map: Entity, view: true },
+            });
+            type State = SchemaType<typeof State>;
 
             const onRoomDisposed = new Deferred();
             matchMaker.defineRoomType('reconnect_with_stateview', class _ extends Room {
@@ -1729,8 +1736,8 @@ describe("Integration", () => {
 
         describe("Send buffer", () => {
           it("should not overwrite the send buffer when using .send() before .onJoin()", async () => {
-            matchMaker.defineRoomType('send_buffer', class _ extends Room {
-              onJoin(client, _, __) {
+            matchMaker.defineRoomType('send_buffer', class extends Room {
+              onJoin(client: any, _: any) {
                 client.send('u+', { id: client.sessionId });
                 this.broadcast('P', this.clients.length);
               }

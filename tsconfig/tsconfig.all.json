@@ -2,11 +2,11 @@
   "compilerOptions": {
     "rootDir": "..",
 
-    "module": "commonjs",
-    "target": "es2020",
+    "target": "ESNext",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
 
-    "moduleResolution": "node",
-    "lib": ["ES2022"],
+    "lib": ["ESNext"],
     "declarationDir": "../build",
     "declaration": true,
     "forceConsistentCasingInFileNames": true,
@@ -24,7 +24,11 @@
     "useDefineForClassFields": false,
 
     "skipLibCheck": true,
-    // "rewriteRelativeImportExtensions": true,
-    "erasableSyntaxOnly": true // compatibility with node --experimental-strip-types
+
+    // compatibility with node --experimental-strip-types
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "rewriteRelativeImportExtensions": true,
   }
 }

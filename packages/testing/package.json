@@ -30,7 +30,7 @@
   },
   "homepage": "https://colyseus.io/",
   "engines": {
-    "node": ">= 18.x"
+    "node": ">= 22.x"
   },
   "dependencies": {
     "httpie": "^2.0.0-next.13"

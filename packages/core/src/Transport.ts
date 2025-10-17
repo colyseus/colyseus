@@ -29,7 +29,8 @@ export interface ISendOptions {
   afterNextPatch?: boolean;
 }
 
-export enum ClientState { JOINING, JOINED, RECONNECTED, LEAVING, CLOSED }
+export const ClientState = { JOINING: 0, JOINED: 1, RECONNECTED: 2, LEAVING: 3, CLOSED: 4 } as const;
+export type ClientState = (typeof ClientState)[keyof typeof ClientState];
 
 export interface DefineClient<T extends {
   userData?: any,

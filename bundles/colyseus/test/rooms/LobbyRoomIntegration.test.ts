@@ -1,7 +1,7 @@
 import assert from "assert";
 import * as Colyseus from "colyseus.js";
-import { matchMaker, Server, LobbyRoom } from "../../src";
-import { DummyRoom, DRIVERS, timeout, PRESENCE_IMPLEMENTATIONS } from "./../utils";
+import { matchMaker, Server, LobbyRoom } from "../../src/index.ts";
+import { DummyRoom, DRIVERS, timeout, PRESENCE_IMPLEMENTATIONS } from "./../utils/index.ts";
 
 describe("LobbyRoom: Integration", () => {
   for (let i = 0; i < PRESENCE_IMPLEMENTATIONS.length; i++) {

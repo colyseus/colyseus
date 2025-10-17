@@ -107,6 +107,9 @@ importers:
       '@colyseus/core':
         specifier: workspace:^
         version: link:../../packages/core
+      '@colyseus/msgpackr':
+        specifier: '*'
+        version: 1.11.2
       '@colyseus/redis-driver':
         specifier: workspace:^
         version: link:../../packages/drivers/redis-driver
@@ -175,7 +178,7 @@ importers:
         specifier: ^3.0.0
         version: 3.0.64
       '@colyseus/timer':
-        specifier: ^1.0.1
+        specifier: ^1.0.3
         version: 1.0.3
       '@pm2/io':
         specifier: ^6.1.0
@@ -184,7 +187,7 @@ importers:
         specifier: ^1.0.0
         version: 1.0.0
       better-call:
-        specifier: ^1.0.9
+        specifier: ^1.0.24
         version: 1.0.24
       debug:
         specifier: ^4.3.4

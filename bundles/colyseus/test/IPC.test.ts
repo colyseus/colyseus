@@ -1,6 +1,6 @@
 import assert from "assert";
 
-import { PRESENCE_IMPLEMENTATIONS } from "./utils";
+import { PRESENCE_IMPLEMENTATIONS } from "./utils/index.ts";
 import { subscribeIPC, requestFromIPC } from "@colyseus/core";
 import { ServerError } from "@colyseus/core";
 

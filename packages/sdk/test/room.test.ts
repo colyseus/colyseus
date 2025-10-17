@@ -1,12 +1,7 @@
 import './util';
-import { describe, beforeEach, test } from "vitest";
+import { describe, test } from "vitest";
 import { assert } from "chai";
-import { Room } from "../src";
-
-import { Schema, type } from "@colyseus/schema";
-
-// import * as fossilDelta from "fossil-delta";
-// import { FossilDeltaSerializer } from '../src/serializer/FossilDeltaSerializer';
+import { Room } from "../src/index.ts";
 
 describe("Room", function() {
   let room: Room = null;
