@@ -1,4 +1,4 @@
-import { SortOptions } from '../api.js';
+import type { SortOptions } from '../api.ts';
 
 export class Query<T> {
   private $rooms: T[];

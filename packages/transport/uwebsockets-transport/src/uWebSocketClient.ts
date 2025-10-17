@@ -1,23 +1,29 @@
 import EventEmitter from 'events';
 import uWebSockets from 'uWebSockets.js';
 
-import { getMessageBytes, Protocol, Client, ClientPrivate, ClientState, ISendOptions, logger, debugMessage } from '@colyseus/core';
+import { getMessageBytes, Protocol, type Client, type ClientPrivate, ClientState, type ISendOptions, logger, debugMessage } from '@colyseus/core';
 
 export class uWebSocketWrapper extends EventEmitter {
-  constructor(public ws: uWebSockets.WebSocket<any>) {
+  public ws: uWebSockets.WebSocket<any>;
+  constructor(ws: uWebSockets.WebSocket<any>) {
     super();
+    this.ws = ws;
   }
 }
 
-export enum ReadyState {
-  CONNECTING = 0,
-  OPEN = 1,
-  CLOSING = 2,
-  CLOSED = 3,
-}
+export const ReadyState = {
+  CONNECTING: 0,
+  OPEN: 1,
+  CLOSING: 2,
+  CLOSED: 3,
+} as const;
+export type ReadyState = (typeof ReadyState)[keyof typeof ReadyState];
 
 export class uWebSocketClient implements Client, ClientPrivate {
   '~messages': any;
+
+  public id: string;
+  public _ref: uWebSocketWrapper;
 
   public sessionId: string;
   public state: ClientState = ClientState.JOINING;
@@ -29,12 +35,9 @@ export class uWebSocketClient implements Client, ClientPrivate {
   public _reconnectionToken: string;
   public _joinedAt: number;
 
-  constructor(
-    public id: string,
-    public _ref: uWebSocketWrapper,
-  ) {
-    this.sessionId = id;
-
+  constructor(id: string, _ref: uWebSocketWrapper) {
+    this.id = this.sessionId = id;
+    this._ref = _ref;
     _ref.on('close', () => this.readyState = ReadyState.CLOSED);
   }
 

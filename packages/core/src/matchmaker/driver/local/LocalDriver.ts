@@ -1,11 +1,11 @@
-import { debugMatchMaking } from '../../../Debug.js';
-import { IRoomCache, SortOptions, RoomCache, MatchMakerDriver } from '../api.js';
+import { debugMatchMaking } from '../../../Debug.ts';
+import type { IRoomCache, SortOptions, RoomCache, MatchMakerDriver } from '../api.ts';
 
 // re-export
 export type { IRoomCache, SortOptions, RoomCache, MatchMakerDriver };
 
-import { Query } from './Query.js';
-import { RoomData } from './RoomData.js';
+import { Query } from './Query.ts';
+import { RoomData } from './RoomData.ts';
 
 export class LocalDriver implements MatchMakerDriver {
   public rooms: IRoomCache[] = [];

@@ -2,10 +2,10 @@ import fs from 'fs';
 import path from 'path';
 
 import { EventEmitter } from 'events';
-import { spliceOne } from '../utils/Utils.js';
-import { Presence } from './Presence.js';
+import { spliceOne } from '../utils/Utils.ts';
+import type { Presence } from './Presence.ts';
 
-import { isDevMode } from '../utils/DevMode.js';
+import { isDevMode } from '../utils/DevMode.ts';
 
 type Callback = (...args: any[]) => void;
 

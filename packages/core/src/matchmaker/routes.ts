@@ -1,6 +1,6 @@
 import { createEndpoint, createRouter } from "better-call";
-import * as matchMaker from "../MatchMaker.js";
-import { getBearerToken } from "../utils/Utils.js";
+import * as matchMaker from "../MatchMaker.ts";
+import { getBearerToken } from "../utils/Utils.ts";
 
 export const postMatchmakeMethod = createEndpoint("/matchmake/:method/:roomName", { method: "POST" }, async (ctx) => {
   // do not accept matchmaking requests if already shutting down

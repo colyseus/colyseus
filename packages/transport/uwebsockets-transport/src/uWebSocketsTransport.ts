@@ -1,10 +1,10 @@
-import { IncomingHttpHeaders } from 'http';
-import querystring, { ParsedUrlQuery } from 'querystring';
-import uWebSockets, { WebSocket } from 'uWebSockets.js';
+import type { IncomingHttpHeaders } from 'http';
+import querystring, { type ParsedUrlQuery } from 'querystring';
+import uWebSockets, { type WebSocket } from 'uWebSockets.js';
 import expressify, { Application } from "uwebsockets-express";
 
-import { AuthContext, HttpServerMock, ErrorCode, matchMaker, getBearerToken, Transport, debugAndPrintError, spliceOne } from '@colyseus/core';
-import { uWebSocketClient, uWebSocketWrapper } from './uWebSocketClient.js';
+import { type AuthContext, Transport, HttpServerMock, ErrorCode, matchMaker, getBearerToken, debugAndPrintError, spliceOne } from '@colyseus/core';
+import { uWebSocketClient, uWebSocketWrapper } from './uWebSocketClient.ts';
 
 export type TransportOptions = Omit<uWebSockets.WebSocketBehavior<any>, "upgrade" | "open" | "pong" | "close" | "message">;
 

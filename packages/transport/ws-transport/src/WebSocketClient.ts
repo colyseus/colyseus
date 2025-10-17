@@ -1,11 +1,17 @@
 import WebSocket from 'ws';
 
-import { Protocol, Client, ClientPrivate, ClientState, ISendOptions, getMessageBytes, logger, debugMessage, } from '@colyseus/core';
+import {
+  Protocol, ClientState, getMessageBytes, logger, debugMessage,
+  type Client, type ClientPrivate, type ISendOptions,
+} from '@colyseus/core';
 
 const SEND_OPTS = { binary: true };
 
 export class WebSocketClient implements Client, ClientPrivate {
   '~messages': any;
+
+  public id: string;
+  public ref: WebSocket;
 
   public sessionId: string;
   public state: ClientState = ClientState.JOINING;
@@ -16,11 +22,9 @@ export class WebSocketClient implements Client, ClientPrivate {
   public _reconnectionToken: string;
   public _joinedAt;
 
-  constructor(
-    public id: string,
-    public ref: WebSocket,
-  ) {
-    this.sessionId = id;
+  constructor(id: string, ref: WebSocket) {
+    this.sessionId = this.id = id;
+    this.ref = ref;
   }
 
   public sendBytes(type: string | number, bytes: Buffer | Uint8Array, options?: ISendOptions) {

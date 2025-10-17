@@ -5,9 +5,9 @@ import express, { Router } from 'express';
 import { existsSync } from 'fs';
 import { debugAndPrintError, generateId, logger, matchMaker } from '@colyseus/core';
 import { Request } from 'express-jwt';
-import { OAuthProviderCallback, oAuthProviderCallback, oauth } from './oauth.js';
-import { JWT, JwtPayload } from './JWT.js';
-import { Hash } from './Hash.js';
+import { OAuthProviderCallback, oAuthProviderCallback, oauth } from './oauth.ts';
+import { JWT, JwtPayload } from './JWT.ts';
+import { Hash } from './Hash.ts';
 
 export type MayHaveUpgradeToken = { upgradingToken?: JwtPayload };
 

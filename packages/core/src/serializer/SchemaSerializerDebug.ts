@@ -7,10 +7,10 @@
 
 import fs from 'fs';
 import { Schema, dumpChanges, Iterator } from '@colyseus/schema';
-import { SchemaSerializer } from './SchemaSerializer.js';
-import { Client, ClientState  } from "../Transport.js";
-import { Protocol} from '../Protocol.js';
-import { debugPatch } from '../Debug.js';
+import { SchemaSerializer } from './SchemaSerializer.ts';
+import { Client, ClientState  } from "../Transport.ts";
+import { Protocol} from '../Protocol.ts';
+import { debugPatch } from '../Debug.ts';
 
 /*
 const SHARED_VIEW = {};

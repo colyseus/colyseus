@@ -1,11 +1,11 @@
 import Clock, { Delayed } from '@colyseus/timer';
 
 // Core classes
-export { Server, type ServerOptions, defineRoom, defineServer } from './Server.js';
-export { Room, RoomInternalState } from './Room.js';
-export { Protocol, ErrorCode, getMessageBytes } from './Protocol.js';
-export { RegisteredHandler } from './matchmaker/RegisteredHandler.js';
-export { ServerError } from './errors/ServerError.js';
+export { Server, type ServerOptions, defineRoom, defineServer } from './Server.ts';
+export { Room, RoomInternalState } from './Room.ts';
+export { Protocol, ErrorCode, getMessageBytes } from './Protocol.ts';
+export { RegisteredHandler } from './matchmaker/RegisteredHandler.ts';
+export { ServerError } from './errors/ServerError.ts';
 
 export {
   type RoomException,
@@ -18,35 +18,35 @@ export {
   OnMessageException,
   SimulationIntervalException,
   TimedEventException,
-} from './errors/RoomExceptions.js';
+} from './errors/RoomExceptions.ts';
 
 // MatchMaker
-import * as matchMaker from './MatchMaker.js';
+import * as matchMaker from './MatchMaker.ts';
 export { matchMaker };
-export { updateLobby, subscribeLobby } from './matchmaker/Lobby.js';
+export { updateLobby, subscribeLobby } from './matchmaker/Lobby.ts';
 
 // Driver
-export * from './matchmaker/driver/local/LocalDriver.js';
+export * from './matchmaker/driver/local/LocalDriver.ts';
 
 // Transport
-export { type Client, type DefineClient, type ClientPrivate, type AuthContext, ClientState, ClientArray, Transport, type ISendOptions } from './Transport.js';
+export { type Client, type DefineClient, type ClientPrivate, type AuthContext, ClientState, ClientArray, Transport, type ISendOptions } from './Transport.ts';
 
 // Presence
-export { type Presence } from './presence/Presence.js';
-export { LocalPresence } from './presence/LocalPresence.js';
+export { type Presence } from './presence/Presence.ts';
+export { LocalPresence } from './presence/LocalPresence.ts';
 
 // Serializers
-export { type Serializer } from './serializer/Serializer.js';
-export { SchemaSerializer } from './serializer/SchemaSerializer.js';
-// export { SchemaSerializerDebug } from './serializer/SchemaSerializerDebug.js';
+export { type Serializer } from './serializer/Serializer.ts';
+export { SchemaSerializer } from './serializer/SchemaSerializer.ts';
+// export { SchemaSerializerDebug } from './serializer/SchemaSerializerDebug.ts';
 
 // Utilities
 export { Clock, Delayed };
-export { generateId, Deferred, HttpServerMock, spliceOne, getBearerToken } from './utils/Utils.js';
-export { isDevMode } from './utils/DevMode.js';
+export { generateId, Deferred, HttpServerMock, spliceOne, getBearerToken } from './utils/Utils.ts';
+export { isDevMode } from './utils/DevMode.ts';
 
 // IPC
-export { subscribeIPC, requestFromIPC } from './IPC.js';
+export { subscribeIPC, requestFromIPC } from './IPC.ts';
 
 // Debug
 export {
@@ -58,14 +58,14 @@ export {
   debugDriver,
   debugPresence,
   debugAndPrintError,
-} from './Debug.js';
+} from './Debug.ts';
 
 // Default rooms
-export { LobbyRoom } from './rooms/LobbyRoom.js';
-export { RelayRoom } from './rooms/RelayRoom.js';
+export { LobbyRoom } from './rooms/LobbyRoom.ts';
+export { RelayRoom } from './rooms/RelayRoom.ts';
 
 // Router / Endpoints
-export { createEndpoint, createInternalContext, createMiddleware, createRouter, toNodeHandler } from './router/index.js';
+export { createEndpoint, createInternalContext, createMiddleware, createRouter, toNodeHandler } from './router/index.ts';
 
 // Abstract logging support
-export { logger } from './Logger.js';
+export { logger } from './Logger.ts';

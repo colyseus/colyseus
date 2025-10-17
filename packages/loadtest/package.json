@@ -6,13 +6,18 @@
   "exports": {
     ".": {
       "types": "./build/index.d.ts",
-      "require": "./build/index.js",
-      "import": "./build/index.mjs"
+      "import": "./src/index.ts",
+      "require": "./build/index.js"
+    },
+    "./*": {
+      "types": "./build/*.d.ts",
+      "import": "./src/*.ts",
+      "require": "./build/*.js"
     }
   },
   "input": "./src/index.ts",
   "main": "./build/index.js",
-  "module": "./build/index.mjs",
+  "module": "./src/index.ts",
   "typings": "./build/index.d.ts",
   "bin": {
     "colyseus-loadtest": "./bin.js"

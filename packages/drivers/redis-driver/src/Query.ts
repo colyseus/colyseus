@@ -1,4 +1,4 @@
-import { SortOptions } from '@colyseus/core';
+import type { SortOptions } from '@colyseus/core';
 
 export class Query<T> {
   private readonly rooms: Promise<T[]>;

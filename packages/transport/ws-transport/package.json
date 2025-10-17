@@ -1,15 +1,21 @@
 {
   "name": "@colyseus/ws-transport",
   "version": "0.16.5",
+  "type": "module",
   "input": "./src/index.ts",
   "main": "./build/index.js",
-  "module": "./build/index.mjs",
+  "module": "./src/index.ts",
   "typings": "./build/index.d.ts",
   "exports": {
     ".": {
       "types": "./build/index.d.ts",
-      "import": "./build/index.mjs",
+      "import": "./src/index.ts",
       "require": "./build/index.js"
+    },
+    "./*": {
+      "types": "./build/*.d.ts",
+      "import": "./src/*.ts",
+      "require": "./build/*.js"
     }
   },
   "dependencies": {

@@ -1,23 +1,23 @@
 import greeting from "@colyseus/greeting-banner";
 
-import { debugAndPrintError } from './Debug.js';
-import * as matchMaker from './MatchMaker.js';
-import { RegisteredHandler } from './matchmaker/RegisteredHandler.js';
+import { debugAndPrintError } from './Debug.ts';
+import * as matchMaker from './MatchMaker.ts';
+import { RegisteredHandler } from './matchmaker/RegisteredHandler.ts';
 
-import type { Presence } from './presence/Presence.js';
-import type { Type } from './utils/types.js';
+import type { Presence } from './presence/Presence.ts';
+import type { Type } from './utils/types.ts';
 
-import { Room } from './Room.js';
-import { registerGracefulShutdown } from './utils/Utils.js';
+import { Room } from './Room.ts';
+import { registerGracefulShutdown } from './utils/Utils.ts';
 
-import { LocalPresence } from './presence/LocalPresence.js';
-import { LocalDriver } from './matchmaker/driver/local/LocalDriver.js';
+import { LocalPresence } from './presence/LocalPresence.ts';
+import { LocalDriver } from './matchmaker/driver/local/LocalDriver.ts';
 
-import { Transport } from './Transport.js';
-import { logger, setLogger } from './Logger.js';
-import { setDevMode, isDevMode } from './utils/DevMode.js';
-import { toNodeHandler, createRouter, type Router } from './router/index.js';
-import { getDefaultRouter } from "./matchmaker/routes.js";
+import { Transport } from './Transport.ts';
+import { logger, setLogger } from './Logger.ts';
+import { setDevMode, isDevMode } from './utils/DevMode.ts';
+import { toNodeHandler, createRouter, type Router } from './router/index.ts';
+import { getDefaultRouter } from "./matchmaker/routes.ts";
 
 export type ServerOptions = {
   publicAddress?: string,

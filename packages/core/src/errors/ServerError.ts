@@ -1,4 +1,4 @@
-import { ErrorCode } from '../Protocol.js';
+import { ErrorCode } from '../Protocol.ts';
 
 export class ServerError extends Error {
   public code: number;

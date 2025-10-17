@@ -5,8 +5,8 @@ import { URL } from 'url';
 import { decode, Iterator } from '@colyseus/schema';
 
 import { matchMaker, Protocol, Transport, debugAndPrintError, spliceOne, getBearerToken } from '@colyseus/core';
-import { H3Client } from './H3Client.js';
-import { generateWebTransportCertificate } from './utils/mkcert.js';
+import { H3Client } from './H3Client.ts';
+import { generateWebTransportCertificate } from './utils/mkcert.ts';
 import type { Application, Request, Response } from 'express';
 
 export type CertLike = string;

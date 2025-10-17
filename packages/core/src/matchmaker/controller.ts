@@ -3,10 +3,10 @@
  * (for interoperability between different http frameworks, e.g. express, uWebSockets.js, etc)
  */
 
-import { ErrorCode } from '../Protocol.js';
-import { ServerError } from '../errors/ServerError.js';
-import * as matchMaker from '../MatchMaker.js';
-import type { AuthContext } from '../Transport.js';
+import { ErrorCode } from '../Protocol.ts';
+import { ServerError } from '../errors/ServerError.ts';
+import * as matchMaker from '../MatchMaker.ts';
+import type { AuthContext } from '../Transport.ts';
 
 export default {
   DEFAULT_CORS_HEADERS: {

@@ -1,9 +1,9 @@
-import { Serializer } from './Serializer.js';
+import type { Serializer } from './Serializer.ts';
+import { type Client, ClientState } from '../Transport.ts';
 
-import { Encoder, dumpChanges, Reflection, Schema, Iterator, StateView } from '@colyseus/schema';
-import { debugPatch } from '../Debug.js';
-import { Protocol } from '../Protocol.js';
-import { Client, ClientState } from '../Transport.js';
+import { type Iterator, Encoder, dumpChanges, Reflection, Schema, StateView } from '@colyseus/schema';
+import { debugPatch } from '../Debug.ts';
+import { Protocol } from '../Protocol.ts';
 
 const SHARED_VIEW = {};
 

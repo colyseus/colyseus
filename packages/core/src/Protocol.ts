@@ -1,5 +1,5 @@
 import { pack, Packr } from '@colyseus/msgpackr';
-import { encode, Iterator } from '@colyseus/schema';
+import { encode, type Iterator } from '@colyseus/schema';
 
 // Colyseus protocol codes range between 0~100
 export const Protocol = {

@@ -1,14 +1,12 @@
 import { IncomingMessage } from 'http';
 import { EventEmitter } from 'events';
+import { logger } from '../Logger.ts';
+import { Room } from './../Room.ts';
+import { updateLobby } from './Lobby.ts';
 
-import { logger } from '../Logger.js';
-import { RoomCache, SortOptions } from './driver/api.js';
-
-import { Room } from './../Room.js';
-import { Client } from '../Transport.js';
-
-import { updateLobby } from './Lobby.js';
-import { Type } from '../utils/types.js';
+import type { RoomCache, SortOptions } from './driver/api.ts';
+import type { Client } from '../Transport.ts';
+import type { Type } from '../utils/types.ts';
 
 export const INVALID_OPTION_KEYS: Array<keyof RoomCache> = [
   'clients',
@@ -38,16 +36,18 @@ export class RegisteredHandler<
 > extends EventEmitter<RegisteredHandlerEvents<RoomType>> {
   '~room': RoomType;
 
+  public klass: RoomType;
+  public options: any;
+
   public name: string;
   public filterOptions: string[] = [];
   public sortOptions?: SortOptions;
 
-  constructor(
-    // public name: N,
-    public klass: RoomType,
-    public options: any
-  ) {
+  constructor(klass: RoomType, options?: any) {
     super();
+
+    this.klass = klass;
+    this.options = options;
 
     if (typeof(klass) !== 'function') {
       logger.debug('You are likely not importing your room class correctly.');

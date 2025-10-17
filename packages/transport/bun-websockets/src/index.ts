@@ -1,2 +1,2 @@
-export { WebSocketClient } from './WebSocketClient.js';
-export { BunWebSockets, type TransportOptions } from './BunWebSockets.js';
+export { WebSocketClient } from './WebSocketClient.ts';
+export { BunWebSockets, type TransportOptions } from './BunWebSockets.ts';

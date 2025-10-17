@@ -1,29 +1,29 @@
 import { EventEmitter } from 'events';
-import { ErrorCode, Protocol } from './Protocol.js';
+import { ErrorCode, Protocol } from './Protocol.ts';
 
-import { requestFromIPC, subscribeIPC, subscribeWithTimeout } from './IPC.js';
+import { requestFromIPC, subscribeIPC, subscribeWithTimeout } from './IPC.ts';
 
-import { Deferred, generateId, merge, retry, MAX_CONCURRENT_CREATE_ROOM_WAIT_TIME, REMOTE_ROOM_SHORT_TIMEOUT } from './utils/Utils.js';
-import { isDevMode, cacheRoomHistory, getPreviousProcessId, getRoomRestoreListKey, reloadFromCache } from './utils/DevMode.js';
+import { Deferred, generateId, merge, retry, MAX_CONCURRENT_CREATE_ROOM_WAIT_TIME, REMOTE_ROOM_SHORT_TIMEOUT } from './utils/Utils.ts';
+import { isDevMode, cacheRoomHistory, getPreviousProcessId, getRoomRestoreListKey, reloadFromCache } from './utils/DevMode.ts';
 
-import { RegisteredHandler } from './matchmaker/RegisteredHandler.js';
-import { Room, RoomInternalState } from './Room.js';
+import { RegisteredHandler } from './matchmaker/RegisteredHandler.ts';
+import { Room, RoomInternalState } from './Room.ts';
 
-import { LocalPresence } from './presence/LocalPresence.js';
-import { Presence } from './presence/Presence.js';
+import { LocalPresence } from './presence/LocalPresence.ts';
+import type { Presence } from './presence/Presence.ts';
 
-import { debugAndPrintError, debugMatchMaking } from './Debug.js';
-import { SeatReservationError } from './errors/SeatReservationError.js';
-import { ServerError } from './errors/ServerError.js';
+import { debugAndPrintError, debugMatchMaking } from './Debug.ts';
+import { SeatReservationError } from './errors/SeatReservationError.ts';
+import { ServerError } from './errors/ServerError.ts';
 
-import { IRoomCache, LocalDriver, MatchMakerDriver, SortOptions } from './matchmaker/driver/local/LocalDriver.js';
-import controller from './matchmaker/controller.js';
-import * as stats from './Stats.js';
+import { type IRoomCache, type MatchMakerDriver, type SortOptions, LocalDriver } from './matchmaker/driver/local/LocalDriver.ts';
+import controller from './matchmaker/controller.ts';
+import * as stats from './Stats.ts';
 
-import { logger } from './Logger.js';
-import { AuthContext, Client } from './Transport.js';
-import type { Type } from './utils/types.js';
-import { getLockId } from './matchmaker/driver/api.js';
+import { logger } from './Logger.ts';
+import type { AuthContext, Client } from './Transport.ts';
+import type { Type } from './utils/types.ts';
+import { getLockId } from './matchmaker/driver/api.ts';
 
 export { controller, stats, type MatchMakerDriver };
 
@@ -61,11 +61,12 @@ export function setHealthChecksEnabled(value: boolean) {
 
 export let onReady: Deferred = new Deferred(); // onReady needs to be immediately available to @colyseus/auth integration.
 
-export enum MatchMakerState {
-  INITIALIZING,
-  READY,
-  SHUTTING_DOWN
-}
+export const MatchMakerState = {
+  INITIALIZING: 0,
+  READY: 1,
+  SHUTTING_DOWN: 2,
+} as const;
+export type MatchMakerState = (typeof MatchMakerState)[keyof typeof MatchMakerState];
 
 /**
  * Internal MatchMaker state

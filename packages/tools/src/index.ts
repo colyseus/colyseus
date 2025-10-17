@@ -1,4 +1,4 @@
-import './loadenv.js';
+import './loadenv.ts';
 import os from 'os';
 import fs from "fs";
 import net from "net";

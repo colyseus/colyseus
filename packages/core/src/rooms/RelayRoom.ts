@@ -1,7 +1,7 @@
 import { defineTypes, MapSchema, Schema } from '@colyseus/schema';
 
-import { Room } from '../Room.js';
-import { Client } from '../Transport.js';
+import { Room } from '../Room.ts';
+import type { Client } from '../Transport.ts';
 
 class Player extends Schema {
   public connected: boolean;

@@ -1,2 +1,2 @@
-export { uWebSocketClient } from './uWebSocketClient.js';
-export { uWebSocketsTransport, type TransportOptions } from './uWebSocketsTransport.js'
+export { uWebSocketClient } from './uWebSocketClient.ts';
+export { uWebSocketsTransport, type TransportOptions } from './uWebSocketsTransport.ts'

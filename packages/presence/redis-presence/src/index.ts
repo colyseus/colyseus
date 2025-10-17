@@ -1,5 +1,5 @@
-import Redis, { Cluster, ClusterNode, ClusterOptions, RedisOptions } from 'ioredis';
-import { Presence } from '@colyseus/core';
+import Redis, { Cluster, type ClusterNode, type ClusterOptions, type RedisOptions } from 'ioredis';
+import type { Presence } from '@colyseus/core';
 import EventEmitter from 'events';
 
 type Callback = (...args: any[]) => void;

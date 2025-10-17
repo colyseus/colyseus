@@ -1,14 +1,19 @@
-import Redis, { Cluster, ClusterNode, ClusterOptions, RedisOptions } from 'ioredis';
+import Redis, {
+  Cluster,
+  type ClusterNode,
+  type ClusterOptions,
+  type RedisOptions
+} from 'ioredis';
 
 import {
-  IRoomCache,
-  MatchMakerDriver,
-  SortOptions,
+  type IRoomCache,
+  type MatchMakerDriver,
+  type SortOptions,
   debugMatchMaking,
 } from '@colyseus/core';
 
-import { Query } from './Query.js';
-import { RoomData } from './RoomData.js';
+import { Query } from './Query.ts';
+import { RoomData } from './RoomData.ts';
 
 const ROOMCACHES_KEY = 'roomcaches';
 

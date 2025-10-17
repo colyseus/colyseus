@@ -1,1 +1,1 @@
-export { PostgresDriver } from './PostgresDriver.js';
+export { PostgresDriver } from './PostgresDriver.ts';
