@@ -1,10 +1,11 @@
 import { Request } from 'express-jwt';
 
 import { JWT, JwtPayload, Jwt } from './JWT.js';
-import { auth, AuthSettings, RegisterWithEmailAndPasswordCallback, FindUserByEmailCallback, ParseTokenCallback, GenerateTokenCallback, HashPasswordCallback,} from './auth.js';
+import { auth, AuthSettings, RegisterWithEmailAndPasswordCallback, FindUserByEmailCallback, ParseTokenCallback, GenerateTokenCallback, HashPasswordCallback, GameCenterAuthData, GameCenterAuthCallback } from './auth.js';
 
 import { OAuthProviderCallback } from './oauth.js';
 import { Hash } from './Hash.js';
+import { authenticateGameCenter, GameCenterCredentials } from './GameCenter.js';
 
 export type {
   Request, JwtPayload, Jwt,
@@ -17,6 +18,9 @@ export type {
   HashPasswordCallback,
 
   OAuthProviderCallback,
+  GameCenterAuthData,
+  GameCenterAuthCallback,
+  GameCenterCredentials,
 };
 
-export { Hash, JWT, auth, };
+export { Hash, JWT, auth, authenticateGameCenter };
