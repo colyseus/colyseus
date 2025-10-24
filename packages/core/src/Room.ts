@@ -937,23 +937,23 @@ export abstract class Room<
       this._reconnectingSessionId.delete(sessionId);
     };
 
-    reconnection.
-      then((newClient) => {
-        newClient.auth = previousClient.auth;
-        newClient.userData = previousClient.userData;
-        newClient.view = previousClient.view;
+    reconnection.then((newClient) => {
+      newClient.auth = previousClient.auth;
+      newClient.userData = previousClient.userData;
+      newClient.view = previousClient.view;
 
-        // for convenience: populate previous client reference with new client
-        previousClient.state = ClientState.RECONNECTED;
-        previousClient.ref = newClient.ref;
-        previousClient.reconnectionToken = newClient.reconnectionToken;
-        clearTimeout(this.reservedSeatTimeouts[sessionId]);
-        cleanup();
-      }).
-      catch(() => {
-        cleanup();
-        this.resetAutoDisposeTimeout();
-      });
+      // for convenience: populate previous client reference with new client
+      previousClient.state = ClientState.RECONNECTED;
+      previousClient.ref = newClient.ref;
+      previousClient.reconnectionToken = newClient.reconnectionToken;
+      clearTimeout(this.reservedSeatTimeouts[sessionId]);
+
+    }, () => {
+      this.resetAutoDisposeTimeout();
+
+    }).finally(() => {
+      cleanup();
+    });
 
     return reconnection;
   }

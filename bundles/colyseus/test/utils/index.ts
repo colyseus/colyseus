@@ -131,8 +131,8 @@ export class WebSocketClient implements Client, ClientPrivate {
     this.leave(code);
   }
 
-  terminate() {
-    this.ref.emit('close');
+  terminate(code: number = 1000) {
+    this.ref.emit('close', code);
   }
 
 }
@@ -222,7 +222,7 @@ export class ReconnectRoom extends Room {
       await this.allowReconnection(client, 0.2); // 200ms
 
     } catch (e) {
-      // console.log("allowReconnection, error =>", e.message);
+      // Reconnection failed or timed out
     }
   }
 }

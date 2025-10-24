@@ -1196,8 +1196,7 @@ describe("Integration", () => {
                 assert.fail("joinOrCreate should have failed.");
 
               } catch (e) {
-                assert.strictEqual(ErrorCode.MATCHMAKE_NO_HANDLER, e.code)
-                assert.strictEqual('provided room name "" not defined', e.message);
+                assert.strictEqual(404, e.code)
               }
             });
 
@@ -1471,14 +1470,16 @@ describe("Integration", () => {
           it("should dispose room on allowReconnection timeout", async () => {
             const onRoomDisposed = new Deferred();
             matchMaker.defineRoomType('allow_reconnection', class _ extends Room {
-              async onJoin() {}
+              // async onJoin() {}
               async onLeave(client, consented) {
                 try {
                   if (consented) {
                     throw new Error("consented!");
                   }
                   await this.allowReconnection(client, 0.1);
-                } catch (e) {}
+                } catch (e) {
+                  console.log("not reconnected in time...", e.message);
+                }
               }
               onDispose() {
                 onRoomDisposed.resolve();

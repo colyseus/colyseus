@@ -92,8 +92,8 @@ export class Deferred<T = any> {
     });
   }
 
-  public then(func: (value: T) => any) {
-    return this.promise.then(func)
+  public then(onFulfilled?: (value: T) => any, onRejected?: (reason: any) => any) {
+    return this.promise.then(onFulfilled, onRejected);
   }
 
   public catch(func: (value: any) => any) {
