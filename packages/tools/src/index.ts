@@ -5,34 +5,48 @@ import net from "net";
 import http from 'http';
 import cors from 'cors';
 import express from 'express';
-import { logger, Server, type ServerOptions, Transport, matchMaker } from '@colyseus/core';
+import { type ServerOptions, type Router, logger, Server, Transport, matchMaker, RegisteredHandler } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 
 const BunWebSockets = import('@colyseus/bun-websockets'); BunWebSockets.catch(() => {});
 const RedisDriver = import('@colyseus/redis-driver'); RedisDriver.catch(() => {});
 const RedisPresence = import('@colyseus/redis-presence'); RedisPresence.catch(() => {});
 
-export interface ConfigOptions {
+export interface ConfigOptions<
+  RoomTypes extends Record<string, RegisteredHandler> = any,
+  Routes extends Router = any
+> {
     options?: ServerOptions,
     displayLogs?: boolean,
-    getId?: () => string,
+    rooms?: RoomTypes,
+    routes?: Routes,
     initializeTransport?: (options: any) => Transport,
     initializeExpress?: (app: express.Express) => void,
     initializeGameServer?: (app: Server) => void,
     beforeListen?: () => void,
+    /**
+     * @deprecated getId() has no effect anymore.
+     */
+    getId?: () => string,
 }
 
 const ALLOWED_KEYS: { [key in keyof ConfigOptions]: string } = {
   'displayLogs': "boolean",
   'options': "object",
-  'getId': "function",
+  'rooms': "object",
+  'routes': "object",
   'initializeTransport': "function",
   'initializeExpress': "function",
   'initializeGameServer': "function",
-  'beforeListen': "function"
+  'beforeListen': "function",
+  // deprecated options (will be removed in the next major version)
+  'getId': "function",
 };
 
-export default function (options: ConfigOptions) {
+export default function <
+  RoomTypes extends Record<string, RegisteredHandler> = any,
+  Routes extends Router = any
+>(options: ConfigOptions<RoomTypes, Routes>) {
   for (const option in options) {
     if (!ALLOWED_KEYS[option]) {
       throw new Error(`❌ Invalid option '${option}'. Allowed options are: ${Object.keys(ALLOWED_KEYS).join(", ")}`);
@@ -50,8 +64,11 @@ export default function (options: ConfigOptions) {
  * @param options Application options
  * @param port Port number to bind Colyseus + Express
  */
-export async function listen(
-    options: ConfigOptions | Server,
+export async function listen<
+  RoomTypes extends Record<string, RegisteredHandler> = any,
+  Routes extends Router = any
+>(
+    options: ConfigOptions<RoomTypes, Routes> | Server<RoomTypes, Routes>,
     port: number = Number(process.env.PORT || 2567),
 ) {
     // Force 2567 port on Colyseus Cloud
@@ -66,14 +83,14 @@ export async function listen(
     const processNumber = Number(process.env.NODE_APP_INSTANCE || "0");
     port += processNumber;
 
-    let gameServer: Server;
+    let gameServer: Server<RoomTypes, Routes>;
     let displayLogs = true;
 
     if (options instanceof Server) {
         gameServer = options;
 
     } else {
-        gameServer = await buildServerFromOptions(options, port);
+        gameServer = await buildServerFromOptions<RoomTypes, Routes>(options, port);
         displayLogs = options.displayLogs;
 
         await options.initializeGameServer?.(gameServer);
@@ -108,7 +125,10 @@ export async function listen(
     return gameServer;
 }
 
-async function buildServerFromOptions(options: ConfigOptions, port: number) {
+async function buildServerFromOptions<
+  RoomTypes extends Record<string, RegisteredHandler> = any,
+  Routes extends Router = any
+>(options: ConfigOptions<RoomTypes, Routes>, port: number) {
   const serverOptions = options.options || {};
   options.displayLogs = options.displayLogs ?? true;
 
@@ -153,10 +173,9 @@ async function buildServerFromOptions(options: ConfigOptions, port: number) {
     }
   }
 
-  const transport = await getTransport(options);
-  return new Server({
+  return new Server<RoomTypes, Routes>({
     ...serverOptions,
-    transport,
+    transport: await getTransport(options),
   });
 }
 

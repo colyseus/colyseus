@@ -65,7 +65,14 @@ export { LobbyRoom } from './rooms/LobbyRoom.ts';
 export { RelayRoom } from './rooms/RelayRoom.ts';
 
 // Router / Endpoints
-export { createEndpoint, createInternalContext, createMiddleware, createRouter, toNodeHandler } from './router/index.ts';
+export {
+  createEndpoint,
+  createInternalContext,
+  createMiddleware,
+  createRouter,
+  toNodeHandler,
+  type Router,
+} from './router/index.ts';
 
 // Abstract logging support
 export { logger } from './Logger.ts';

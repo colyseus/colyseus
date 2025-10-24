@@ -1,3 +1,8 @@
+## New features to document
+
+[ ] `@colyseus/tools`: New `routes` and `rooms` options
+[ ] `@colyseus/core`: New `defineServer()` option
+
 ## onMessage with raw bytes
 
 onMessage() -> onMessageBytes()
@@ -10,9 +15,11 @@ onMessage() -> onMessageBytes()
 `MATCHMAKE_UNHANDLED`: 4213 => 513
 `MATCHMAKE_EXPIRED`: 4214 => 514
 
-
 ## TODO:
 
+[ ] Full-stack type safety
+[ ] PostgreSQL match-making driver
+[ ] debug:* logs should go to STDOUT (not STDERR)
 [ ] How to use new `messages = {}` for raw binary data? (`.onMessageBytes()` ??)
 [ ] `RoomCache`: remove mongodb-like methods like `.updateOne()`, `save()`, and `remove()`
 [ ] `RoomCache`: improve metadata handling and filters

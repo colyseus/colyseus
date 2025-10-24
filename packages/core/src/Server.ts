@@ -16,7 +16,7 @@ import { LocalDriver } from './matchmaker/driver/local/LocalDriver.ts';
 import { Transport } from './Transport.ts';
 import { logger, setLogger } from './Logger.ts';
 import { setDevMode, isDevMode } from './utils/DevMode.ts';
-import { toNodeHandler, createRouter, type Router } from './router/index.ts';
+import { toNodeHandler, type Router } from './router/index.ts';
 import { getDefaultRouter } from "./matchmaker/routes.ts";
 
 export type ServerOptions = {
@@ -69,8 +69,7 @@ export class Server<
   protected port: number;
   protected greet: boolean;
 
-  //@ts-expect-error
-  private _originalRoomOnMessage: typeof Room.prototype._onMessage | null = null;
+  private _originalRoomOnMessage: typeof Room.prototype['_onMessage'] | null = null;
 
   constructor(options: ServerOptions = {}) {
     const {
@@ -245,13 +244,11 @@ export class Server<
     this.transport.simulateLatency(halfwayMS);
 
     if (this._originalRoomOnMessage == null) {
-      /* tslint:disable:no-string-literal */
       this._originalRoomOnMessage = Room.prototype['_onMessage'];
     }
 
     const originalOnMessage = this._originalRoomOnMessage;
 
-    /* tslint:disable:no-string-literal */
     Room.prototype['_onMessage'] = milliseconds <= Number.EPSILON ? originalOnMessage : function (this: Room, client, buffer) {
       // uWebSockets.js: duplicate buffer because it is cleared at native layer before the timeout.
       const cachedBuffer = Buffer.from(buffer);
