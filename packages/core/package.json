@@ -19,9 +19,6 @@
       "require": "./build/*.js"
     }
   },
-  "scripts": {
-    "tslint": "tslint --project . --config ../../tslint.json"
-  },
   "funding": "https://github.com/sponsors/endel",
   "author": "Endel Dreyer",
   "license": "MIT",

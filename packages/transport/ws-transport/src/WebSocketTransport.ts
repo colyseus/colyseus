@@ -5,7 +5,7 @@ import WebSocket, { type ServerOptions, WebSocketServer } from 'ws';
 import { matchMaker, Protocol, Transport, toNodeHandler, debugAndPrintError, debugConnection, getBearerToken } from '@colyseus/core';
 import { WebSocketClient } from './WebSocketClient.ts';
 
-function noop() {/* tslint:disable:no-empty */ }
+function noop() {}
 function heartbeat(this: any) { this.pingCount = 0; }
 
 type RawWebSocketClient = WebSocket & { pingCount: number };

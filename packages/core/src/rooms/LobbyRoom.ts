@@ -20,7 +20,7 @@ export interface LobbyOptions {
   filter?: FilterInput;
 }
 
-export class LobbyRoom extends Room { // tslint:disable-line
+export class LobbyRoom extends Room {
   public rooms: IRoomCache[] = [];
   public unsubscribeLobby: () => void;
 
