@@ -1,13 +1,22 @@
-import { Serializer } from "./Serializer";
+import type { Serializer } from "./Serializer.ts";
 import { Schema, Decoder, Reflection, Iterator, getDecoderStateCallbacks } from "@colyseus/schema";
-import type { Room } from "../Room";
+import type { Room } from "../Room.ts";
 
 export type SchemaConstructor<T = Schema> = new (...args: any[]) => T;
 
-export function getStateCallbacks<T extends Room>(room: Room) {
+//
+// TODO: use a schema interface, which even having duplicate definitions, it could be used to get the callback proxy.
+//
+// ```ts
+//     export type SchemaCallbackProxy<RoomState> = (<T extends ISchema>(instance: T) => CallbackProxy<T>);
+//     export function getStateCallbacks<T extends ISchema>(room: Room<T>) {
+// ```
+//
+export function getStateCallbacks<T>(room: Room<any, T>) {
     try {
         // SchemaSerializer
-        return getDecoderStateCallbacks((room['serializer'] as unknown as SchemaSerializer<T['state']>).decoder);
+        // @ts-ignore
+        return getDecoderStateCallbacks<T>((room['serializer'] as unknown as SchemaSerializer<T>).decoder);
     } catch (e) {
         // NoneSerializer
         return undefined;

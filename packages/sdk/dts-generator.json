@@ -13,7 +13,9 @@
 
             "libraries": {
                 "inlinedLibraries": [
-                    "@colyseus/schema"
+                    "@colyseus/msgpackr",
+                    "@colyseus/schema",
+                    "@colyseus/httpie"
                 ]
             },
 

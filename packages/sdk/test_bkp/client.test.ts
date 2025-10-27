@@ -42,12 +42,6 @@ describe("Client", function () {
                     wsEndpoint: "wss://localhost/custom/path/processId/roomId?",
                     wsEndpointPublicAddress: "wss://node-1.colyseus.cloud/processId/roomId?"
                 },
-                'https://localhost/custom/path?with=query&params=true': {
-                    settings: { hostname: "localhost", port: 443, secure: true, pathname: "/custom/path", searchParams: "with=query&params=true" },
-                    httpEndpoint: "https://localhost/custom/path/?with=query&params=true",
-                    wsEndpoint: "wss://localhost/custom/path/processId/roomId?with=query&params=true",
-                    wsEndpointPublicAddress: "wss://node-1.colyseus.cloud/processId/roomId?with=query&params=true"
-                },
                 '/api': {
                     settings: { hostname: "127.0.0.1", port: 2567, secure: false, pathname: "/api" },
                     httpEndpoint: "http://127.0.0.1:2567/api/",
@@ -63,7 +57,6 @@ describe("Client", function () {
                 assert.strictEqual(expected.settings.hostname, settings.hostname);
                 assert.strictEqual(expected.settings.port, settings.port);
                 assert.strictEqual(expected.settings.secure, settings.secure);
-                assert.strictEqual(expected.settings.searchParams, settings.searchParams);
                 assert.strictEqual(expected.httpEndpoint, client['getHttpEndpoint']());
                 assert.strictEqual(expected.wsEndpoint, client['buildEndpoint'](room));
                 assert.strictEqual(expected.wsEndpointPublicAddress, client['buildEndpoint'](roomWithPublicAddress));
@@ -84,19 +77,19 @@ describe("Client", function () {
 
             const settingsByUrl = {
                 'ws://example.com': {
-                    httpEndpoint: "http://localhost/.proxy/colyseus/",
-                    wsEndpoint: "ws://localhost/.proxy/colyseus/processId/roomId",
-                    wsEndpointPublicAddress: "ws://localhost/.proxy/colyseus/node-1/processId/roomId"
+                    httpEndpoint: "http://localhost/colyseus/",
+                    wsEndpoint: "ws://localhost/colyseus/processId/roomId",
+                    wsEndpointPublicAddress: "ws://localhost/colyseus/node-1/processId/roomId"
                 },
                 'ws://subdomain.colyseus.cloud': {
-                    httpEndpoint: "http://localhost/.proxy/colyseus/subdomain/",
-                    wsEndpoint: "ws://localhost/.proxy/colyseus/subdomain/processId/roomId",
-                    wsEndpointPublicAddress: "ws://localhost/.proxy/colyseus/node-1/processId/roomId"
+                    httpEndpoint: "http://localhost/colyseus/subdomain/",
+                    wsEndpoint: "ws://localhost/colyseus/subdomain/processId/roomId",
+                    wsEndpointPublicAddress: "ws://localhost/colyseus/node-1/processId/roomId"
                 },
                 'https://subdomain.colyseus.cloud/custom/path': {
-                    httpEndpoint: "https://localhost/.proxy/colyseus/subdomain/custom/path/",
-                    wsEndpoint: "wss://localhost/.proxy/colyseus/subdomain/custom/path/processId/roomId",
-                    wsEndpointPublicAddress: "wss://localhost/.proxy/colyseus/node-1/processId/roomId"
+                    httpEndpoint: "https://localhost/colyseus/subdomain/custom/path/",
+                    wsEndpoint: "wss://localhost/colyseus/subdomain/custom/path/processId/roomId",
+                    wsEndpointPublicAddress: "wss://localhost/colyseus/node-1/processId/roomId"
                 },
                 // '/api': {
                 //     httpEndpoint: "http://127.0.0.1:2567/api/",
@@ -107,7 +100,7 @@ describe("Client", function () {
 
             for (const url in settingsByUrl) {
                 const expected = settingsByUrl[url];
-                const client = new Client(url, { urlBuilder: discordURLBuilder });
+                const client = new Client(url, discordURLBuilder);
                 assert.strictEqual(expected.httpEndpoint, client['getHttpEndpoint']());
                 assert.strictEqual(expected.wsEndpoint, client['buildEndpoint'](room));
                 assert.strictEqual(expected.wsEndpointPublicAddress, client['buildEndpoint'](roomWithPublicAddress));

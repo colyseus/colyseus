@@ -11,13 +11,6 @@ if (!ArrayBuffer.isView) {
     };
 }
 
-// Cocos Creator does not provide "FormData"
-// Define a dummy implementation so it doesn't crash
-if (typeof(FormData) === "undefined") {
-    // @ts-ignore
-    global['FormData'] = class {};
-}
-
 // Define globalThis if not available.
 // https://github.com/colyseus/colyseus.js/issues/86
 if (
@@ -26,4 +19,11 @@ if (
 ) {
     // @ts-ignore
     window['globalThis'] = window;
+}
+
+// Cocos Creator does not provide "FormData"
+// Define a dummy implementation so it doesn't crash
+if (typeof(FormData) === "undefined") {
+    // @ts-ignore
+    globalThis['FormData'] = class {};
 }

@@ -1,12 +1,12 @@
-import { ServerError } from './errors/Errors';
-import { Room } from './Room';
-import { SchemaConstructor } from './serializer/SchemaSerializer';
-import { HTTP } from "./HTTP";
-import { Auth } from './Auth';
-import { SeatReservation } from './Protocol';
-import { discordURLBuilder } from './3rd_party/discord';
+import { ServerError } from './errors/Errors.ts';
+import { Room } from './Room.ts';
+import { SchemaConstructor } from './serializer/SchemaSerializer.ts';
+import { HTTP } from "./HTTP.ts";
+import { Auth } from './Auth.ts';
+import { SeatReservation } from './Protocol.ts';
+import { discordURLBuilder } from './3rd_party/discord.ts';
 
-import type { Server } from "@colyseus/core";
+import type { Server } from '@colyseus/core';
 
 export type JoinOptions = any;
 
@@ -114,7 +114,7 @@ export class ColyseusSDK<ServerType extends Server = any> {
         options?: Parameters<ServerType['~rooms'][typeof roomName]['~room']['prototype']['onJoin']>[1],
         rootSchema?: SchemaConstructor<ServerType>
     ): Promise<Room<ServerType['~rooms'][typeof roomName]['~room']>>
-    public async joinOrCreate<T>(roomName: string, options: JoinOptions = {}, rootSchema?: SchemaConstructor<T>) {
+    public async joinOrCreate<T = any>(roomName: string, options: JoinOptions = {}, rootSchema?: SchemaConstructor<T>) {
         return await this.createMatchMakeRequest<T>('joinOrCreate', roomName, options, rootSchema);
     }
 
@@ -123,7 +123,7 @@ export class ColyseusSDK<ServerType extends Server = any> {
         options?: Parameters<ServerType['~rooms'][typeof roomName]['~room']['prototype']['onJoin']>[1],
         rootSchema?: SchemaConstructor<ServerType>
     ): Promise<Room<ServerType['~rooms'][typeof roomName]['~room']>>
-    public async create<T>(roomName: string, options: JoinOptions = {}, rootSchema?: SchemaConstructor<T>) {
+    public async create<T = any>(roomName: string, options: JoinOptions = {}, rootSchema?: SchemaConstructor<T>) {
         return await this.createMatchMakeRequest<T>('create', roomName, options, rootSchema);
     }
 
@@ -132,7 +132,7 @@ export class ColyseusSDK<ServerType extends Server = any> {
         options?: Parameters<ServerType['~rooms'][typeof roomName]['~room']['prototype']['onJoin']>[1],
         rootSchema?: SchemaConstructor<ServerType>
     ): Promise<Room<ServerType['~rooms'][typeof roomName]['~room']>>
-    public async join<T>(roomName: string, options: JoinOptions = {}, rootSchema?: SchemaConstructor<T>) {
+    public async join<T = any>(roomName: string, options: JoinOptions = {}, rootSchema?: SchemaConstructor<T>) {
         return await this.createMatchMakeRequest<T>('join', roomName, options, rootSchema);
     }
 
@@ -141,7 +141,7 @@ export class ColyseusSDK<ServerType extends Server = any> {
         options?: Parameters<ServerType['~rooms'][typeof roomName]['~room']['prototype']['onJoin']>[1],
         rootSchema?: SchemaConstructor<ServerType>
     ): Promise<Room<ServerType['~rooms'][typeof roomName]['~room']>>
-    public async joinById<T>(roomId: string, options: JoinOptions = {}, rootSchema?: SchemaConstructor<T>) {
+    public async joinById<T = any>(roomId: string, options: JoinOptions = {}, rootSchema?: SchemaConstructor<T>) {
         return await this.createMatchMakeRequest<T>('joinById', roomId, options, rootSchema);
     }
 
@@ -153,7 +153,7 @@ export class ColyseusSDK<ServerType extends Server = any> {
      * @returns Promise<Room>
      */
     public async reconnect<R extends keyof ServerType['~rooms']>(reconnectionToken: string, roomName?: R): Promise<Room<ServerType['~rooms'][typeof roomName]['~room']>>
-    public async reconnect<T>(reconnectionToken: string, rootSchema?: SchemaConstructor<T>) {
+    public async reconnect<T = any>(reconnectionToken: string, rootSchema?: SchemaConstructor<T>) {
         if (typeof (reconnectionToken) === "string" && typeof (rootSchema) === "string") {
             throw new Error("DEPRECATED: .reconnect() now only accepts 'reconnectionToken' as argument.\nYou can get this token from previously connected `room.reconnectionToken`");
         }

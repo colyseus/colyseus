@@ -1,5 +1,5 @@
 import NodeWebSocket from "ws";
-import { ITransport, ITransportEventMap } from "./ITransport";
+import type { ITransport, ITransportEventMap } from "./ITransport.ts";
 
 const WebSocket = globalThis.WebSocket || NodeWebSocket;
 
@@ -13,7 +13,7 @@ export class WebSocketTransport implements ITransport {
         this.ws.send(data);
     }
 
-    public sendUnreliable(data: ArrayBuffer | Array<number>): void {
+    public sendUnreliable(data: Uint8Array): void {
         console.warn("colyseus.js: The WebSocket transport does not support unreliable messages");
     }
 

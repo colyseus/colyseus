@@ -31,7 +31,7 @@ export class EventEmitter<CallbackSignature extends (...args: any[]) => any> {
 }
 
 export function createSignal<CallbackSignature extends (...args: any[]) => void | Promise<any>>()
-  : 
+  :
    {
     once: (cb: CallbackSignature) => void;
     remove: (cb: CallbackSignature) => void,

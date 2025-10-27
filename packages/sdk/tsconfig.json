@@ -1,6 +1,11 @@
 {
     "extends": "./tsconfig/tsconfig.all.json",
     "compilerOptions": {
+        "module": "NodeNext",
+        "moduleResolution": "NodeNext",
+        "allowImportingTsExtensions": true,
+        "emitDeclarationOnly": true,
+
         "target": "es6",
         "outDir": "lib",
         "declaration": true,

@@ -1,5 +1,5 @@
-import { ITransport, ITransportEventMap } from "./ITransport";
-import { encode, decode, Iterator } from '@colyseus/schema';
+import type { ITransport, ITransportEventMap } from "./ITransport.ts";
+import { encode, decode, type Iterator } from '@colyseus/schema';
 
 export class H3TransportTransport implements ITransport {
     wt: WebTransport;
@@ -74,7 +74,7 @@ export class H3TransportTransport implements ITransport {
     }
 
     public send(data: Buffer | Uint8Array): void {
-        const prefixLength = encode.number(this.lengthPrefixBuffer, data.length, { offset: 0 });
+        const prefixLength = encode.number(this.lengthPrefixBuffer as any, data.length, { offset: 0 });
         const dataWithPrefixedLength = new Uint8Array(prefixLength + data.length);
         dataWithPrefixedLength.set(this.lengthPrefixBuffer.subarray(0, prefixLength), 0);
         dataWithPrefixedLength.set(data, prefixLength);
@@ -82,7 +82,7 @@ export class H3TransportTransport implements ITransport {
     }
 
     public sendUnreliable(data: Buffer | Uint8Array): void {
-        const prefixLength = encode.number(this.lengthPrefixBuffer, data.length, { offset: 0 });
+        const prefixLength = encode.number(this.lengthPrefixBuffer as any, data.length, { offset: 0 });
         const dataWithPrefixedLength = new Uint8Array(prefixLength + data.length);
         dataWithPrefixedLength.set(this.lengthPrefixBuffer.subarray(0, prefixLength), 0);
         dataWithPrefixedLength.set(data, prefixLength);
@@ -116,7 +116,7 @@ export class H3TransportTransport implements ITransport {
                     // QUESTION: should we buffer the message in case it's not fully read?
                     //
 
-                    const length = decode.number(messages, it);
+                    const length = decode.number(messages as any, it);
                     this.events.onmessage({ data: messages.subarray(it.offset, it.offset + length) });
                     it.offset += length;
                 } while (it.offset < messages.length);
@@ -153,7 +153,7 @@ export class H3TransportTransport implements ITransport {
                     // QUESTION: should we buffer the message in case it's not fully read?
                     //
 
-                    const length = decode.number(messages, it);
+                    const length = decode.number(messages as any, it);
                     this.events.onmessage({ data: messages.subarray(it.offset, it.offset + length) });
                     it.offset += length;
                 } while (it.offset < messages.length);

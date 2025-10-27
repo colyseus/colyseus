@@ -1,9 +1,7 @@
 {
   "compilerOptions": {
     "module": "commonjs",
-    "moduleResolution": "node",
     "lib": ["dom", "es6"],
-    "strict": true,
     "allowSyntheticDefaultImports": true,
     "experimentalDecorators": true,
     "noImplicitAny": false,

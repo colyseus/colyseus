@@ -1,6 +1,6 @@
-import { H3TransportTransport } from "./transport/H3Transport";
-import { ITransport, ITransportEventMap } from "./transport/ITransport";
-import { WebSocketTransport } from "./transport/WebSocketTransport";
+import type { ITransport, ITransportEventMap } from "./transport/ITransport.ts";
+import { H3TransportTransport } from "./transport/H3Transport.ts";
+import { WebSocketTransport } from "./transport/WebSocketTransport.ts";
 
 export class Connection implements ITransport {
     transport: ITransport;
