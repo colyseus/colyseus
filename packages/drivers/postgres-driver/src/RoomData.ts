@@ -1,7 +1,7 @@
-import { RoomCache, logger } from '@colyseus/core';
+import { type IRoomCache, logger } from '@colyseus/core';
 import { Collection } from 'zodgres';
 
-export class RoomData<T extends Collection> implements RoomCache {
+export class RoomData<T extends Collection = any> implements IRoomCache {
   public clients: number = 0;
   public locked: boolean = false;
   public private: boolean = false;
@@ -94,10 +94,10 @@ export class RoomData<T extends Collection> implements RoomCache {
   }
 
   private async hset(key: string, field: string, value: string) {
-    return await this.#client.hset(key, field, value);
+    // return await this.#client.hset(key, field, value);
   }
 
   private async hdel(key: string, field: string) {
-    return await this.#client.hdel(key, field);
+    // return await this.#client.hdel(key, field);
   }
 }

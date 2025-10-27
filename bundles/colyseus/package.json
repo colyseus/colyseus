@@ -46,6 +46,8 @@
     "@colyseus/redis-presence": "workspace:^",
     "@colyseus/ws-transport": "workspace:^",
     "@colyseus/uwebsockets-transport": "workspace:^",
+    "@colyseus/postgres-driver": "workspace:^",
+    "@colyseus/tools": "workspace:^",
     "@colyseus/msgpackr": "*",
     "@colyseus/schema": "^3.0.0",
     "@types/ws": "^8.5.14",

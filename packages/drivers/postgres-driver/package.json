@@ -1,5 +1,4 @@
 {
-  "private": true,
   "name": "@colyseus/postgres-driver",
   "version": "0.16.0",
   "type": "module",

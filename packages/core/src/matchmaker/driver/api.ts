@@ -6,7 +6,7 @@ export function getLockId(filterOptions: any) {
   return Object.keys(filterOptions).map((key) => `${key}:${filterOptions[key]}`).join("-");
 }
 
-export interface IRoomCache {
+export interface IRoomCache<Metadata = any> {
   /**
    * Unique identifier for the room.
    */
@@ -56,7 +56,7 @@ export interface IRoomCache {
   /**
    * Metadata associated with the room.
    */
-  metadata: any;
+  metadata: Metadata;
 
   /**
    * Additional custom properties
@@ -64,6 +64,7 @@ export interface IRoomCache {
   [property: string]: any;
 }
 
+/**
 export interface RoomCache<Metadata= any> extends IRoomCache {
   metadata: Metadata;
 
@@ -71,6 +72,7 @@ export interface RoomCache<Metadata= any> extends IRoomCache {
   save();
   remove();
 }
+ */
 
 export interface MatchMakerDriver {
   /**
@@ -80,7 +82,7 @@ export interface MatchMakerDriver {
    *
    * @returns RoomData - New room cache.
    */
-  createInstance(initialValues: Partial<IRoomCache>): RoomCache;
+  createInstance(initialValues: Partial<IRoomCache>): IRoomCache;
 
   /**
    * Check if a room exists in room cache.
@@ -113,7 +115,7 @@ export interface MatchMakerDriver {
    *
    * @returns `IRoomCache` - An object contaning filtered room metadata.
    */
-  findOne(conditions: Partial<IRoomCache>, sortOptions?: SortOptions): Promise<RoomCache>;
+  findOne(conditions: Partial<IRoomCache>, sortOptions?: SortOptions): Promise<IRoomCache>;
 
   /**
    * Empty the room cache.
@@ -124,14 +126,4 @@ export interface MatchMakerDriver {
    * Dispose the connection of the room cache medium.
    */
   shutdown(): void;
-
-  // /**
-  //  *
-  //  */
-  // lock(): void;
-
-  // /**
-  //  *
-  //  */
-  // releaseLock(): void;
 }

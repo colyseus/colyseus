@@ -1,7 +1,14 @@
 import assert from "assert";
-import { generateId, type IRoomCache, type MatchMakerDriver } from "../src/index.ts";
+import { generateId, LocalDriver, RedisDriver, type IRoomCache, type MatchMakerDriver } from "../src/index.ts";
+import { PostgresDriver } from "@colyseus/postgres-driver";
 
-import { DRIVERS } from "./utils/index.ts";
+// import { DRIVERS } from "./utils/index.ts";
+
+export const DRIVERS = [
+  LocalDriver,
+  RedisDriver,
+  PostgresDriver,
+];
 
 describe("Driver implementations", () => {
   for (let i = 0; i < DRIVERS.length; i++) {

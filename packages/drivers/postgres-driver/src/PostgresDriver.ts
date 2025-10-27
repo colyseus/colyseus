@@ -2,13 +2,13 @@ import { Collection, connect, Database, z } from 'zodgres';
 import * as zod from 'zod';
 
 import {
-  IRoomCache,
-  MatchMakerDriver,
-  SortOptions,
+  type IRoomCache,
+  type MatchMakerDriver,
+  type SortOptions,
   debugMatchMaking,
 } from '@colyseus/core';
 
-import { RoomData } from './RoomData';
+import { RoomData } from './RoomData.ts';
 
 export class PostgresDriver<T extends zod.core.$ZodLooseShape> implements MatchMakerDriver {
   private readonly _db: Database;

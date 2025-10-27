@@ -7,7 +7,7 @@ import { logger } from './Logger.ts';
 
 import type { Presence } from './presence/Presence.ts';
 import type { Serializer } from './serializer/Serializer.ts';
-import type { RoomCache } from './matchmaker/driver/api.ts';
+import type { IRoomCache } from './matchmaker/driver/api.ts';
 
 import { NoneSerializer } from './serializer/NoneSerializer.ts';
 import { SchemaSerializer } from './serializer/SchemaSerializer.ts';
@@ -71,7 +71,7 @@ export abstract class Room<
     return this.listing.metadata;
   }
 
-  public listing: RoomCache<Metadata>;
+  public listing: IRoomCache<Metadata>;
 
   /**
    * Timing events tied to the room instance.

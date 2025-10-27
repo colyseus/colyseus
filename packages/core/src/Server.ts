@@ -16,7 +16,7 @@ import { LocalDriver } from './matchmaker/driver/local/LocalDriver.ts';
 import { Transport } from './Transport.ts';
 import { logger, setLogger } from './Logger.ts';
 import { setDevMode, isDevMode } from './utils/DevMode.ts';
-import { bindRouterToServer, createRouter, toNodeHandler, type Router } from './router/index.ts';
+import { bindRouterToServer, type Router } from './router/index.ts';
 import { getDefaultRouter } from "./matchmaker/routes.ts";
 
 export type ServerOptions = {
