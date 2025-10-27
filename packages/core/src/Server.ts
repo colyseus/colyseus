@@ -16,7 +16,7 @@ import { LocalDriver } from './matchmaker/driver/local/LocalDriver.ts';
 import { Transport } from './Transport.ts';
 import { logger, setLogger } from './Logger.ts';
 import { setDevMode, isDevMode } from './utils/DevMode.ts';
-import { toNodeHandler, type Router } from './router/index.ts';
+import { bindRouterToServer, createRouter, toNodeHandler, type Router } from './router/index.ts';
 import { getDefaultRouter } from "./matchmaker/routes.ts";
 
 export type ServerOptions = {
@@ -137,11 +137,16 @@ export class Server<
         // default router is used if no router is provided
         if (!this.router) {
           this.router = getDefaultRouter() as unknown as Routes;
+
+        } else {
+          // make sure default routes are included
+          // https://github.com/Bekacru/better-call/pull/67
+          this.router = this.router.extend({ ...getDefaultRouter().endpoints }) as unknown as Routes;
         }
 
         if (server) {
           server.on('error', (err) => reject(err));
-          server.on('request', toNodeHandler(this.router.handler));
+          bindRouterToServer(server, this.router);
         }
 
         if (listeningListener) {

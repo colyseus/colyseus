@@ -22,7 +22,7 @@ function loadEnvFile(envFileOptions: string[], log: 'none' | 'success' | 'both' 
       if (envFilename.startsWith("/")) {
         envPaths.push(envFilename);
       } else {
-        envPaths.push(path.resolve(path.dirname(require?.main?.filename || process.cwd()), "..", envFilename));
+        envPaths.push(path.resolve(path.dirname(typeof(require) !== "undefined" && require?.main?.filename || process.cwd()), "..", envFilename));
         envPaths.push(path.resolve(process.cwd(), envFilename));
       }
     });

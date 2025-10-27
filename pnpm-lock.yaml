@@ -107,6 +107,9 @@ importers:
       '@colyseus/msgpackr':
         specifier: '*'
         version: 1.11.2
+      '@colyseus/postgres-driver':
+        specifier: workspace:^
+        version: link:../../packages/drivers/postgres-driver
       '@colyseus/redis-driver':
         specifier: workspace:^
         version: link:../../packages/drivers/redis-driver
@@ -116,6 +119,9 @@ importers:
       '@colyseus/schema':
         specifier: ^3.0.0
         version: 3.0.64
+      '@colyseus/tools':
+        specifier: workspace:^
+        version: link:../../packages/tools
       '@colyseus/uwebsockets-transport':
         specifier: workspace:^
         version: link:../../packages/transport/uwebsockets-transport
@@ -236,6 +242,9 @@ importers:
       '@colyseus/h3-transport':
         specifier: workspace:^
         version: link:../transport/h3-transport
+      '@colyseus/postgres-driver':
+        specifier: workspace:^
+        version: link:../drivers/postgres-driver
       '@colyseus/redis-driver':
         specifier: workspace:^
         version: link:../drivers/redis-driver
@@ -245,6 +254,12 @@ importers:
       '@colyseus/schema':
         specifier: ^3.0.0
         version: 3.0.64
+      '@colyseus/sdk':
+        specifier: workspace:^
+        version: link:../sdk
+      '@colyseus/tools':
+        specifier: workspace:^
+        version: link:../tools
       '@colyseus/uwebsockets-transport':
         specifier: workspace:^
         version: link:../transport/uwebsockets-transport

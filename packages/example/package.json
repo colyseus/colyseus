@@ -17,6 +17,9 @@
     "@colyseus/h3-transport": "workspace:^",
     "@colyseus/redis-driver": "workspace:^",
     "@colyseus/redis-presence": "workspace:^",
+    "@colyseus/tools": "workspace:^",
+    "@colyseus/postgres-driver": "workspace:^",
+    "@colyseus/sdk": "workspace:^",
     "@colyseus/schema": "^3.0.0"
   }
 }

@@ -1,6 +1,5 @@
 import * as http from 'http';
 import * as https from 'https';
-import * as net from 'net';
 
 import { StateView } from '@colyseus/schema';
 import { EventEmitter } from 'events';
@@ -8,7 +7,7 @@ import { spliceOne } from './utils/Utils.ts';
 
 export abstract class Transport {
     public protocol?: string;
-    public server?: net.Server | http.Server | https.Server;
+    public server?: http.Server | https.Server;
 
     public abstract listen(port?: number, hostname?: string, backlog?: number, listeningListener?: Function): this;
     public abstract shutdown(): void;

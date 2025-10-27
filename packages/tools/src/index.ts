@@ -173,10 +173,16 @@ async function buildServerFromOptions<
     }
   }
 
-  return new Server<RoomTypes, Routes>({
+  const server = new Server<RoomTypes, Routes>({
     ...serverOptions,
     transport: await getTransport(options),
-  });
+  })
+
+  if (options.routes) {
+    server.router = options.routes;
+  }
+
+  return server;
 }
 
 export async function getTransport(options: ConfigOptions) {
