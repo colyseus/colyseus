@@ -5,7 +5,7 @@ import { updateLobby } from './Lobby.ts';
 
 import type { IRoomCache, SortOptions, IRoomCacheFilterByKeys, IRoomCacheSortByKeys } from './driver/api.ts';
 import type { Client } from '../Transport.ts';
-import type { Type } from '../utils/types.ts';
+import type { Type } from "../utils/Utils.ts";
 
 export const INVALID_OPTION_KEYS: Array<keyof IRoomCache> = [
   'clients',

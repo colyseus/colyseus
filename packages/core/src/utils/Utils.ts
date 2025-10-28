@@ -2,9 +2,10 @@ import nanoid from 'nanoid';
 
 import { EventEmitter } from "events";
 import { type RoomException, type RoomMethodName } from '../errors/RoomExceptions.ts';
-import type { Type } from './types.ts';
 
 import { debugAndPrintError } from '../Debug.ts';
+
+export type Type<T> = new (...args: any[]) => T;
 
 // remote room call timeouts
 export const REMOTE_ROOM_SHORT_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_SHORT_TIMEOUT || 2000);

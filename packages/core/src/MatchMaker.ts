@@ -3,7 +3,7 @@ import { ErrorCode, Protocol } from './Protocol.ts';
 
 import { requestFromIPC, subscribeIPC, subscribeWithTimeout } from './IPC.ts';
 
-import { Deferred, generateId, merge, retry, MAX_CONCURRENT_CREATE_ROOM_WAIT_TIME, REMOTE_ROOM_SHORT_TIMEOUT } from './utils/Utils.ts';
+import { type Type, Deferred, generateId, merge, retry, MAX_CONCURRENT_CREATE_ROOM_WAIT_TIME, REMOTE_ROOM_SHORT_TIMEOUT } from './utils/Utils.ts';
 import { isDevMode, cacheRoomHistory, getPreviousProcessId, getRoomRestoreListKey, reloadFromCache } from './utils/DevMode.ts';
 
 import { RegisteredHandler } from './matchmaker/RegisteredHandler.ts';
@@ -22,7 +22,6 @@ import * as stats from './Stats.ts';
 
 import { logger } from './Logger.ts';
 import type { AuthContext, Client } from './Transport.ts';
-import type { Type } from './utils/types.ts';
 import { getLockId } from './matchmaker/driver/api.ts';
 
 export { controller, stats, type MatchMakerDriver };

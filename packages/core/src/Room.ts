@@ -13,10 +13,9 @@ import { NoneSerializer } from './serializer/NoneSerializer.ts';
 import { SchemaSerializer } from './serializer/SchemaSerializer.ts';
 
 import { ErrorCode, getMessageBytes, Protocol } from './Protocol.ts';
-import { Deferred, generateId, wrapTryCatch } from './utils/Utils.ts';
+import { type Type, Deferred, generateId, wrapTryCatch } from './utils/Utils.ts';
 import { createNanoEvents } from './utils/nanoevents.ts';
 import { isDevMode } from './utils/DevMode.ts';
-import type { Type } from './utils/types.ts';
 
 import { debugAndPrintError, debugMatchMaking, debugMessage } from './Debug.ts';
 import { ServerError } from './errors/ServerError.ts';

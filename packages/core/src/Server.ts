@@ -4,9 +4,8 @@ import { debugAndPrintError } from './Debug.ts';
 import * as matchMaker from './MatchMaker.ts';
 import { RegisteredHandler } from './matchmaker/RegisteredHandler.ts';
 
-import type { Type } from './utils/types.ts';
 import { type OnCreateOptions, Room } from './Room.ts';
-import { registerGracefulShutdown } from './utils/Utils.ts';
+import { registerGracefulShutdown, type Type } from './utils/Utils.ts';
 
 import type { Presence } from "./presence/Presence.ts";
 import { LocalPresence } from './presence/LocalPresence.ts';
