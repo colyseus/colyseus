@@ -1,5 +1,5 @@
 import assert from "assert";
-import { generateId, initializeRoomCache, LocalDriver, RedisDriver, type IRoomCache, type MatchMakerDriver } from "../src/index.ts";
+import { generateId, initializeRoomCache, LocalDriver, matchMaker, RedisDriver, type IRoomCache, type MatchMakerDriver } from "../src/index.ts";
 import { PostgresDriver } from "@colyseus/drizzle-driver";
 
 // import { DRIVERS } from "./utils/index.ts";
@@ -21,6 +21,14 @@ describe("Driver implementations", () => {
         // boot the driver if it has a boot method
         if (driver.boot) { await driver.boot(); }
       });
+
+      // Make sure to clear driver's data after all tests run
+      after(async () => {
+        driver = new DRIVERS[i]();
+        await driver.boot();
+        await driver.clear()
+        await driver.shutdown();
+      })
 
       beforeEach(async () => {
         driver = new DRIVERS[i]();

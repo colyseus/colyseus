@@ -251,6 +251,8 @@ export class PostgresDriver implements MatchMakerDriver {
     if (this.sql) {
       await this.sql.end();
     }
+
+
   }
 
   //

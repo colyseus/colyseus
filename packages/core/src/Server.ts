@@ -214,10 +214,12 @@ export class Server<
       // custom "before shutdown" method
       await this.onBeforeShutdownCallback();
 
+      // this is going to lock all rooms and wait for them to be disposed
       await matchMaker.gracefullyShutdown();
+
       this.transport.shutdown();
       this.presence.shutdown();
-      this.driver.shutdown();
+      await this.driver.shutdown();
 
       // custom "after shutdown" method
       await this.onShutdownCallback();
