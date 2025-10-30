@@ -1,4 +1,4 @@
-import type { Router, HasRequiredKeys, Prettify, UnionToIntersection, Endpoint, HTTPMethod } from "better-call";
+import type { Router, HasRequiredKeys, Prettify, UnionToIntersection, Endpoint, HTTPMethod } from "@colyseus/better-call";
 
 type HasRequired<
 	T extends {

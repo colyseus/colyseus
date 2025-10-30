@@ -1,4 +1,4 @@
-import { createEndpoint, createRouter } from "better-call";
+import { createEndpoint, createRouter } from "@colyseus/better-call";
 import * as matchMaker from "../MatchMaker.ts";
 import { getBearerToken } from "../utils/Utils.ts";
 

@@ -171,6 +171,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@colyseus/better-call':
+        specifier: ^1.0.25
+        version: 1.0.25
       '@colyseus/greeting-banner':
         specifier: workspace:^
         version: link:../greeting-banner
@@ -189,9 +192,6 @@ importers:
       '@standard-schema/spec':
         specifier: ^1.0.0
         version: 1.0.0
-      better-call:
-        specifier: ^1.0.24
-        version: 1.0.24
       debug:
         specifier: ^4.3.4
         version: 4.4.3(supports-color@8.1.1)
@@ -255,12 +255,15 @@ importers:
         specifier: workspace:^
         version: link:../core
     devDependencies:
+      '@colyseus/drizzle-driver':
+        specifier: workspace:^
+        version: link:../drivers/drizzle-driver
       '@colyseus/h3-transport':
         specifier: workspace:^
         version: link:../transport/h3-transport
-      '@colyseus/postgres-driver':
-        specifier: workspace:^
-        version: link:../drivers/postgres-driver
+      '@colyseus/playground':
+        specifier: ^0.16.0
+        version: 0.16.4(@colyseus/auth@0.16.6(@colyseus/core@packages+core)(express@5.1.0))(@colyseus/core@packages+core)(express@5.1.0)
       '@colyseus/redis-driver':
         specifier: workspace:^
         version: link:../drivers/redis-driver
@@ -724,6 +727,16 @@ packages:
   '@better-fetch/fetch@1.1.18':
     resolution: {integrity: sha512-rEFOE1MYIsBmoMJtQbl32PGHHXuG2hDxvEd7rUHE0vCBoFQVSDqaVs9hkZEtHCxRoY+CljXKFCOuJ8uxqw1LcA==}
 
+  '@colyseus/auth@0.16.6':
+    resolution: {integrity: sha512-gfxnTOhfmd1O2OnCOw2S8hFyGNWib2MJzD3EIU0Q43eby2VXoKtGpE3llu2cqgmgJ1ShV79jk2RnPt5LEo89hw==}
+    engines: {node: '>= 18.x'}
+    peerDependencies:
+      '@colyseus/core': 0.16.x
+      express: '>=4.16.0'
+
+  '@colyseus/better-call@1.0.25':
+    resolution: {integrity: sha512-qZhhtfvcCoR/fVI6aTTPfevYp+yCCcgKZXRkDOvJZh8Hesgo4re/gGNjKQEktf/ToAa486CBLPCxbGh373aS8A==}
+
   '@colyseus/clock@1.0.0':
     resolution: {integrity: sha512-x1un5rFEgilVAA6ukSG8GFgtpX/hsmL5BtrPdxLx0dbPU7zwpTVXez2qoGza7YYS5QTvVD45gbHyX/KaaEWSZQ==}
 
@@ -733,6 +746,13 @@ packages:
 
   '@colyseus/msgpackr@1.11.2':
     resolution: {integrity: sha512-MuwPFhizFKC3zmGfy0fpo+kcnZdNdnQHFVjw81v4WXHCelDeCX8yNRVtuEm8kGlHqq7qiASLC0pu0RPqYOhxXg==}
+
+  '@colyseus/playground@0.16.4':
+    resolution: {integrity: sha512-+pgsHgYQL9hMCHanZIJ6D9EHefg6d+BiomOhg4ZgcXEhcYii1VgdQlQs3tUevy4b6SBSUsLgq/0PiiDf/NVzFw==}
+    peerDependencies:
+      '@colyseus/auth': 0.16.x
+      '@colyseus/core': 0.16.x
+      express: '>=4.16.0'
 
   '@colyseus/schema@3.0.64':
     resolution: {integrity: sha512-qWrmWqYZ0uhUuQe5oPn1ztZzdObNQlxAOsvWn7j0PFoKxinAPkAqrIRhpa0sFcfB6M/BLe1v5eVMtqVr/A1Y7Q==}
@@ -6556,6 +6576,26 @@ snapshots:
 
   '@better-fetch/fetch@1.1.18': {}
 
+  '@colyseus/auth@0.16.6(@colyseus/core@packages+core)(express@5.1.0)':
+    dependencies:
+      '@colyseus/core': link:packages/core
+      '@types/jsonwebtoken': 9.0.10
+      connect-redis: 7.1.1(express-session@1.18.2)
+      express: 5.1.0
+      express-jwt: 8.5.1
+      express-session: 1.18.2
+      grant: 5.4.24
+      jsonwebtoken: 9.0.2
+    transitivePeerDependencies:
+      - supports-color
+
+  '@colyseus/better-call@1.0.25':
+    dependencies:
+      '@better-auth/utils': 0.3.0
+      '@better-fetch/fetch': 1.1.18
+      rou3: 0.5.1
+      set-cookie-parser: 2.7.1
+
   '@colyseus/clock@1.0.0': {}
 
   '@colyseus/httpie@2.0.1': {}
@@ -6563,6 +6603,12 @@ snapshots:
   '@colyseus/msgpackr@1.11.2':
     optionalDependencies:
       msgpackr-extract: 3.0.3
+
+  '@colyseus/playground@0.16.4(@colyseus/auth@0.16.6(@colyseus/core@packages+core)(express@5.1.0))(@colyseus/core@packages+core)(express@5.1.0)':
+    dependencies:
+      '@colyseus/auth': 0.16.6(@colyseus/core@packages+core)(express@5.1.0)
+      '@colyseus/core': link:packages/core
+      express: 5.1.0
 
   '@colyseus/schema@3.0.64': {}
 

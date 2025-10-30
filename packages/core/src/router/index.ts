@@ -1,12 +1,12 @@
 import type { Server } from "http";
-import { type Router, createRouter } from "better-call";
-import { toNodeHandler } from "better-call/node";
+import { type Router, createRouter } from "@colyseus/better-call";
+import { toNodeHandler } from "@colyseus/better-call/node";
 
 export {
   createEndpoint,
   createMiddleware,
   createInternalContext,
-} from "better-call";
+} from "@colyseus/better-call";
 
 export { type Router, toNodeHandler, createRouter };
 
