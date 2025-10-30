@@ -1,7 +1,7 @@
-import { type RoomCache, logger } from '@colyseus/core';
+import { type IRoomCache, logger } from '@colyseus/core';
 import Redis, { type Cluster } from 'ioredis';
 
-export class RoomData implements RoomCache {
+export class RoomData implements IRoomCache {
   public clients: number = 0;
   public locked: boolean = false;
   public private: boolean = false;
@@ -15,7 +15,6 @@ export class RoomData implements RoomCache {
   public unlisted: boolean = false;
 
   #client: Redis | Cluster;
-  #removed: boolean = false;
 
   constructor(
     initialValues: any,
@@ -45,59 +44,5 @@ export class RoomData implements RoomCache {
       processId: this.processId,
       roomId: this.roomId,
     };
-  }
-
-  public async save() {
-    // skip if already removed.
-    if (this.#removed) { return; }
-
-    if (this.roomId) {
-      // FIXME: workaround so JSON.stringify() stringifies all dynamic fields.
-      const toJSON = this.toJSON;
-      this.toJSON = undefined;
-
-      const roomcache = JSON.stringify(this);
-      this.toJSON = toJSON;
-
-      await this.hset('roomcaches', this.roomId, roomcache);
-
-    } else {
-      logger.warn("RedisDriver: can't .save() without a `roomId`")
-    }
-  }
-
-  public updateOne(operations: any) {
-    if (operations.$set) {
-      for (const field in operations.$set) {
-        if (operations.$set.hasOwnProperty(field)) {
-          this[field] = operations.$set[field];
-        }
-      }
-    }
-
-    if (operations.$inc) {
-      for (const field in operations.$inc) {
-        if (operations.$inc.hasOwnProperty(field)) {
-          this[field] += operations.$inc[field];
-        }
-      }
-    }
-
-    return this.save();
-  }
-
-  public remove() {
-    if (this.roomId) {
-      this.#removed = true;
-      return this.hdel('roomcaches', this.roomId);
-    }
-  }
-
-  private async hset(key: string, field: string, value: string) {
-    return await this.#client.hset(key, field, value);
-  }
-
-  private async hdel(key: string, field: string) {
-    return await this.#client.hdel(key, field);
   }
 }

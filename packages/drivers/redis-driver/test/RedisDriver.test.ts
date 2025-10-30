@@ -16,9 +16,9 @@ describe("RedisDriver", () => {
   });
 
   it("should allow concurrent queries to multiple room names", async () => {
-    for (let i=0; i<10; i++) { await driver.createInstance({ name: "one", roomId: "x" + i, clients: i, maxClients: 10, }).save(); }
-    for (let i=0; i<10; i++) { await driver.createInstance({ name: "two", roomId: "y" + i, clients: i, maxClients: 10, }).save(); }
-    for (let i=0; i<10; i++) { await driver.createInstance({ name: "three", roomId: "z" + i, clients: i, maxClients: 10, }).save(); }
+    for (let i=0; i<10; i++) { await driver.persist(driver.createInstance({ name: "one", roomId: "x" + i, clients: i, maxClients: 10, })); }
+    for (let i=0; i<10; i++) { await driver.persist(driver.createInstance({ name: "two", roomId: "y" + i, clients: i, maxClients: 10, })); }
+    for (let i=0; i<10; i++) { await driver.persist(driver.createInstance({ name: "three", roomId: "z" + i, clients: i, maxClients: 10, })); }
 
     const req1 = driver.findOne({ name: "one" });
     const concurrent = driver['_concurrentRoomCacheRequest'];

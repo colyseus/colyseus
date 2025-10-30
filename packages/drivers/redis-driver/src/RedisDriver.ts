@@ -10,10 +10,10 @@ import {
   type MatchMakerDriver,
   type SortOptions,
   debugMatchMaking,
+  initializeRoomCache,
 } from '@colyseus/core';
 
 import { Query } from './Query.ts';
-import { RoomData } from './RoomData.ts';
 
 const ROOMCACHES_KEY = 'roomcaches';
 
@@ -24,10 +24,6 @@ export class RedisDriver implements MatchMakerDriver {
     this._client = (Array.isArray(options))
       ? new Cluster(options, clusterOptions)
       : new Redis(options as RedisOptions);
-  }
-
-  public createInstance(initialValues: Partial<IRoomCache> = {}) {
-    return new RoomData(initialValues, this._client);
   }
 
   public async has(roomId: string) {
@@ -65,7 +61,7 @@ export class RedisDriver implements MatchMakerDriver {
     }
   }
 
-  public findOne(conditions: Partial<IRoomCache>, sortOptions?: SortOptions): Promise<RoomData> {
+  public findOne(conditions: Partial<IRoomCache>, sortOptions?: SortOptions): Promise<IRoomCache> {
     if (typeof conditions.roomId !== 'undefined') {
       // get room by roomId
 
@@ -78,7 +74,7 @@ export class RedisDriver implements MatchMakerDriver {
       return new Promise<IRoomCache>((resolve, reject) => {
         this._client.hget(ROOMCACHES_KEY, conditions.roomId).then((roomcache) => {
           if (roomcache) {
-            resolve(new RoomData(JSON.parse(roomcache), this._client));
+            resolve(initializeRoomCache(JSON.parse(roomcache)));
           } else {
             resolve(undefined);
           }
@@ -87,19 +83,19 @@ export class RedisDriver implements MatchMakerDriver {
 
     } else {
       // filter list by other conditions
-      const query = new Query<RoomData>(this.getRooms(conditions['name']), conditions);
+      const query = new Query<IRoomCache>(this.getRooms(conditions['name']), conditions);
 
       if (sortOptions) {
         query.sort(sortOptions);
       }
 
-      return query as any as Promise<RoomData>;
+      return query as any as Promise<IRoomCache>;
     }
   }
 
   // gets recent room caches w/o making multiple simultaneous reads to REDIS
   private _concurrentRoomCacheRequest?: Promise<Record<string, string>>;
-  private _roomCacheRequestByName: {[roomName: string]: Promise<RoomData[]>} = {};
+  private _roomCacheRequestByName: {[roomName: string]: Promise<IRoomCache[]>} = {};
   private getRooms(roomName?: string) {
     // if there's a shared request, return it
     if (this._roomCacheRequestByName[roomName] !== undefined) {
@@ -114,7 +110,7 @@ export class RedisDriver implements MatchMakerDriver {
       this._concurrentRoomCacheRequest = undefined;
       delete this._roomCacheRequestByName[roomName];
 
-      let roomcaches = Object.entries(result ?? []);
+      let roomcaches = Object.entries(result ?? {});
 
       //
       // micro optimization:
@@ -122,16 +118,66 @@ export class RedisDriver implements MatchMakerDriver {
       //
       if (roomName !== undefined) {
         const roomNameField = `"name":"${roomName}"`;
-        roomcaches = roomcaches.filter(([, roomcache]) => roomcache.includes(roomNameField));
+        roomcaches = roomcaches.filter(([, roomcache]) => (roomcache as string).includes(roomNameField));
       }
 
       return roomcaches.map(
-        // TODO: probably no need to instantiate RoomData here.
-        ([, roomcache]) => new RoomData(JSON.parse(roomcache), this._client)
+        ([, roomcache]) => initializeRoomCache(JSON.parse(roomcache as string))
       );
     });
 
     return this._roomCacheRequestByName[roomName];
+  }
+
+  public async update(room: IRoomCache, operations: Partial<{ $set: Partial<IRoomCache>, $inc: Partial<IRoomCache> }>) {
+    if (operations.$set) {
+      for (const field in operations.$set) {
+        if (operations.$set.hasOwnProperty(field)) {
+          room[field] = operations.$set[field];
+        }
+      }
+    }
+
+    if (operations.$inc) {
+      for (const field in operations.$inc) {
+        if (operations.$inc.hasOwnProperty(field)) {
+          room[field] += operations.$inc[field];
+        }
+      }
+    }
+
+    // Save to Redis
+    // FIXME: workaround so JSON.stringify() stringifies all dynamic fields.
+    const toJSON = (room as any).toJSON;
+    (room as any).toJSON = undefined;
+
+    const roomcache = JSON.stringify(room);
+    (room as any).toJSON = toJSON;
+
+    await this._client.hset(ROOMCACHES_KEY, room.roomId, roomcache);
+    return true;
+  }
+
+  public async persist(room: IRoomCache) {
+    if (!room.roomId) {
+      debugMatchMaking("RedisDriver: can't .persist() without a `roomId`");
+      return false;
+    }
+
+    // FIXME: workaround so JSON.stringify() stringifies all dynamic fields.
+    const toJSON = (room as any).toJSON;
+    (room as any).toJSON = undefined;
+
+    const roomcache = JSON.stringify(room);
+    (room as any).toJSON = toJSON;
+
+    await this._client.hset(ROOMCACHES_KEY, room.roomId, roomcache);
+    return true;
+  }
+
+  public async remove(roomId: string) {
+    const result = await this._client.hdel(ROOMCACHES_KEY, roomId);
+    return result > 0;
   }
 
   public async shutdown() {

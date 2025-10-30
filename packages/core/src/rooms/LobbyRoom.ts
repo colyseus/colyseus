@@ -27,6 +27,8 @@ export class LobbyRoom extends Room {
   public clientOptions: { [sessionId: string]: LobbyOptions } = {};
 
   public async onCreate(options: any) {
+    // this.setMetadata({});
+
     // prevent LobbyRoom to notify itself
     this.listing.unlisted = true;
 

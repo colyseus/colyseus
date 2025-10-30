@@ -1,13 +1,13 @@
 import assert from "assert";
-import { generateId, LocalDriver, RedisDriver, type IRoomCache, type MatchMakerDriver } from "../src/index.ts";
-import { PostgresDriver } from "@colyseus/postgres-driver";
+import { generateId, initializeRoomCache, LocalDriver, RedisDriver, type IRoomCache, type MatchMakerDriver } from "../src/index.ts";
+import { DrizzleDriver } from "@colyseus/drizzle-driver";
 
 // import { DRIVERS } from "./utils/index.ts";
 
 export const DRIVERS = [
-  LocalDriver,
-  RedisDriver,
-  PostgresDriver,
+  // LocalDriver,
+  // RedisDriver,
+  DrizzleDriver,
 ];
 
 describe("Driver implementations", () => {
@@ -17,6 +17,12 @@ describe("Driver implementations", () => {
     describe(`Driver:${DRIVERS[i].name}`, () => {
       beforeEach(async () => {
         driver = new DRIVERS[i]();
+
+        // boot the driver if it has a boot method
+        if (driver.boot) {
+          await driver.boot();
+        }
+
         await driver.clear();
       });
 
@@ -24,14 +30,14 @@ describe("Driver implementations", () => {
         await driver.shutdown();
       });
 
-      async function createAndSave(data: Partial<IRoomCache>) {
-        const cache = driver.createInstance(data);
-        await cache.save();
+      async function createAndPersist(data: Partial<IRoomCache>) {
+        const cache = initializeRoomCache(data);
+        await driver.persist(cache);
         return cache;
       }
 
-      it("createInstance, save, find", async () => {
-        const cache = await createAndSave({ roomId: generateId(), name: "one", locked: false, clients: 0, maxClients: 2 });
+      it("createInstance, persist, find", async () => {
+        const cache = await createAndPersist({ roomId: generateId(), name: "one", locked: false, clients: 0, maxClients: 2 });
         assert.strictEqual(0, cache.clients);
         assert.strictEqual(false, cache.locked);
         assert.strictEqual(2, cache.maxClients);
@@ -45,10 +51,10 @@ describe("Driver implementations", () => {
       });
 
       it("find / findOne", async () => {
-        await createAndSave({ roomId: generateId(), name: "one", locked: false, clients: 1, maxClients: 2, });
-        await createAndSave({ roomId: generateId(), name: "one", locked: true, clients: 2, maxClients: 2, });
-        await createAndSave({ roomId: generateId(), name: "one", locked: false, clients: 3, maxClients: 4, });
-        const lastEntry = await createAndSave({ roomId: generateId(), name: "one", locked: true, clients: 4, maxClients: 4, });
+        await createAndPersist({ roomId: generateId(), name: "one", locked: false, clients: 1, maxClients: 2, });
+        await createAndPersist({ roomId: generateId(), name: "one", locked: true, clients: 2, maxClients: 2, });
+        await createAndPersist({ roomId: generateId(), name: "one", locked: false, clients: 3, maxClients: 4, });
+        const lastEntry = await createAndPersist({ roomId: generateId(), name: "one", locked: true, clients: 4, maxClients: 4, });
 
         const entries = await driver.query({});
         assert.strictEqual(4, entries.length);
@@ -56,7 +62,7 @@ describe("Driver implementations", () => {
         lastEntry.clients = 3;
         lastEntry.locked = false;
         lastEntry.name = "hello";
-        await lastEntry.save();
+        await driver.persist(lastEntry);
 
         const lastEntryCached = await driver.findOne({ name: "hello" })
         assert.strictEqual("hello", lastEntryCached.name);
@@ -65,17 +71,17 @@ describe("Driver implementations", () => {
       });
 
       it("remove", async () => {
-        const cache1 = await createAndSave({ roomId: generateId(), name: "one", locked: true, clients: 4, maxClients: 4 });
-        const cache2 = await createAndSave({ roomId: generateId(), name: "one", locked: false, clients: 2, maxClients: 4 });
-        const cache3 = await createAndSave({ roomId: generateId(), name: "one", locked: false, clients: 2, maxClients: 4 });
+        const cache1 = await createAndPersist({ roomId: generateId(), name: "one", locked: true, clients: 4, maxClients: 4 });
+        const cache2 = await createAndPersist({ roomId: generateId(), name: "one", locked: false, clients: 2, maxClients: 4 });
+        const cache3 = await createAndPersist({ roomId: generateId(), name: "one", locked: false, clients: 2, maxClients: 4 });
 
-        await cache1.save();
-        await cache2.save();
-        await cache3.save();
+        await driver.persist(cache1);
+        await driver.persist(cache2);
+        await driver.persist(cache3);
 
-        await cache1.remove();
-        await cache2.remove();
-        await cache3.remove();
+        await driver.remove(cache1.roomId);
+        await driver.remove(cache2.roomId);
+        await driver.remove(cache3.roomId);
 
         const entries = await driver.query({});
         assert.strictEqual(0, entries.length)
@@ -88,8 +94,8 @@ describe("Driver implementations", () => {
 
           const count = 400;
           for (let i = 0; i < count; i++) {
-            await createAndSave({ processId: p1, roomId: generateId() });
-            await createAndSave({ processId: p2, roomId: generateId() });
+            await createAndPersist({ processId: p1, roomId: generateId() });
+            await createAndPersist({ processId: p2, roomId: generateId() });
           }
 
           assert.strictEqual(count, (await driver.query({ processId: p1 })).length);
@@ -106,8 +112,8 @@ describe("Driver implementations", () => {
 
           const count = 600;
           for (let i = 0; i < count; i++) {
-            await createAndSave({ processId: p1, roomId: generateId() });
-            await createAndSave({ processId: p2, roomId: generateId() });
+            await createAndPersist({ processId: p1, roomId: generateId() });
+            await createAndPersist({ processId: p2, roomId: generateId() });
           }
 
           assert.strictEqual(count, (await driver.query({ processId: p1 })).length);

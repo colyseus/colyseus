@@ -22,7 +22,7 @@ import * as stats from './Stats.ts';
 
 import { logger } from './Logger.ts';
 import type { AuthContext, Client } from './Transport.ts';
-import { getLockId } from './matchmaker/driver/api.ts';
+import { getLockId, initializeRoomCache } from './matchmaker/driver/api.ts';
 
 export { controller, stats, type MatchMakerDriver };
 
@@ -129,14 +129,13 @@ export async function accept() {
    * - handle remote process healthcheck
    * - handle remote room creation
    */
-  await subscribeIPC(presence, getProcessChannel(), (method, args) => {
+  await subscribeIPC(presence, getProcessChannel(), (method: string, args: any) => {
     if (method === 'healthcheck') {
       // health check for this processId
       return true;
 
     } else {
       // handle room creation
-      // @ts-ignore
       return handleCreateRoom.apply(undefined, args);
     }
   });
@@ -537,8 +536,8 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
     additionalListingData.publicAddress = publicAddress;
   }
 
-  // create a RoomCache reference.
-  room.listing = driver.createInstance({
+  // initialize a RoomCache instance
+  room.listing = initializeRoomCache({
     name: roomName,
     processId,
     ...additionalListingData
@@ -597,7 +596,7 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
 
   // persist room data only if match-making is enabled
   if (state !== MatchMakerState.SHUTTING_DOWN) {
-    await room.listing.save();
+    await driver.persist(room.listing);
   }
 
   handler.emit('create', room);
@@ -974,7 +973,7 @@ async function disposeRoom(roomName: string, room: Room) {
   // in a broken state. (repeated ipc_timeout's for seat reservation on
   // non-existing rooms)
   //
-  room.listing.remove();
+  driver.remove(room.listing.roomId);
   stats.local.roomCount--;
 
   // decrease amount of rooms this process is handling

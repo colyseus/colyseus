@@ -9,11 +9,45 @@ export function getLockId(filterOptions: any) {
   return Object.keys(filterOptions).map((key) => `${key}:${filterOptions[key]}`).join("-");
 }
 
+/**
+ * Initialize a room cache which contains CRUD operations for room listings.
+ *
+ * @internal
+ * @param initialValues - Predefined room properties.
+ * @returns RoomData - New room cache.
+ */
+export function initializeRoomCache(initialValues: Partial<IRoomCache> = {}): IRoomCache {
+  return {
+    clients: 0,
+    maxClients: Infinity,
+    locked: false,
+    private: false,
+    metadata: undefined,
+    // name: '',
+    // publicAddress: '',
+    // processId: '',
+    // roomId: '',
+    createdAt: (initialValues && initialValues.createdAt) ? new Date(initialValues.createdAt) : new Date(),
+    unlisted: false,
+    ...initialValues,
+  } as IRoomCache;
+}
+
 export interface IRoomCache<Metadata = any> {
+  /**
+   * Room name.
+   */
+  name: string;
+
   /**
    * Unique identifier for the room.
    */
   roomId: string;
+
+  /**
+   * Process id where the room is running.
+   */
+  processId: string;
 
   /**
    * Number of clients connected to this room.
@@ -28,18 +62,13 @@ export interface IRoomCache<Metadata = any> {
   /**
    * Indicates if the room is locked (i.e. join requests are rejected).
    */
-  locked: boolean;
+  locked?: boolean;
 
   /**
    * Indicates if the room is private
    * Private rooms can't be joined via `join()` or `joinOrCreate()`.
    */
-  private: boolean;
-
-  /**
-   * Room name.
-   */
-  name: string;
+  private?: boolean;
 
   /**
    * Public address of the server.
@@ -47,19 +76,19 @@ export interface IRoomCache<Metadata = any> {
   publicAddress?: string;
 
   /**
-   * Process id where the room is running.
-   */
-  processId: string;
-
-  /**
    * Do not show this room in lobby listing.
    */
-  unlisted: boolean;
+  unlisted?: boolean;
 
   /**
    * Metadata associated with the room.
    */
-  metadata: Metadata;
+  metadata?: Metadata;
+
+  /**
+   * When the room was created.
+   */
+  createdAt?: Date;
 
   /**
    * Additional custom properties
@@ -67,26 +96,7 @@ export interface IRoomCache<Metadata = any> {
   [property: string]: any;
 }
 
-/**
-export interface RoomCache<Metadata= any> extends IRoomCache {
-  metadata: Metadata;
-
-  updateOne(operations: any);
-  save();
-  remove();
-}
- */
-
 export interface MatchMakerDriver {
-  /**
-   * Initialize a room cache which contains CRUD operations for room listings.
-   *
-   * @param initialValues - Predefined room properties.
-   *
-   * @returns RoomData - New room cache.
-   */
-  createInstance(initialValues: Partial<IRoomCache>): IRoomCache;
-
   /**
    * Check if a room exists in room cache.
    *
@@ -121,9 +131,40 @@ export interface MatchMakerDriver {
   findOne(conditions: Partial<IRoomCache>, sortOptions?: SortOptions): Promise<IRoomCache>;
 
   /**
+   * Remove a room from room cache.
+   *
+   * @param roomId - The room id.
+   */
+  remove(roomId: string): Promise<boolean> | boolean;
+
+  /**
+   * Update a room in room cache.
+   *
+   * @param IRoomCache - The room to update.
+   * @param operations - The operations to update the room.
+   */
+  update(
+    room: IRoomCache,
+    operations: Partial<{ $set: Partial<IRoomCache>, $inc: Partial<IRoomCache> }>
+  ): Promise<boolean> | boolean;
+
+  /**
+   * Persist a room in room cache.
+   *
+   * @param room - The room to persist.
+   * @param fields - The fields to persist.
+   */
+  persist(room: IRoomCache): Promise<boolean> | boolean;
+
+  /**
    * Empty the room cache.
    */
   clear(): void;
+
+  /**
+   * Boot the room cache medium (if available).
+   */
+  boot?(): Promise<void>;
 
   /**
    * Dispose the connection of the room cache medium.

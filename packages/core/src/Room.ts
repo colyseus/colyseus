@@ -23,6 +23,7 @@ import { ClientState, type AuthContext, type Client, type ClientPrivate, ClientA
 import { type RoomMethodName, OnAuthException, OnCreateException, OnDisposeException, OnJoinException, OnLeaveException, OnMessageException, type RoomException, SimulationIntervalException, TimedEventException } from './errors/RoomExceptions.ts';
 
 import { standardValidate, type StandardSchemaV1 } from './utils/StandardSchema.ts';
+import { matchMaker } from '@colyseus/core';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
@@ -69,6 +70,9 @@ export abstract class Room<
     return this.#_locked;
   }
 
+  /**
+   * @readonly
+   */
   public get metadata() {
     return this.listing.metadata;
   }
@@ -243,7 +247,7 @@ export abstract class Room<
             }
 
             this.listing.maxClients = value;
-            this.listing.save();
+            matchMaker.driver.persist(this.listing);
           }
         },
       },
@@ -531,7 +535,7 @@ export abstract class Room<
     }
 
     if (this._internalState === RoomInternalState.CREATED) {
-      await this.listing.save();
+      await matchMaker.driver.persist(this.listing);
     }
   }
 
@@ -541,7 +545,7 @@ export abstract class Room<
     this.listing.private = bool;
 
     if (this._internalState === RoomInternalState.CREATED) {
-      await this.listing.save();
+      await matchMaker.driver.persist(this.listing);
     }
 
     this._events.emit('visibility-change', bool);
@@ -559,7 +563,7 @@ export abstract class Room<
 
     this.#_locked = true;
 
-    await this.listing.updateOne({
+    await matchMaker.driver.update(this.listing, {
       $set: { locked: this.#_locked },
     });
 
@@ -580,7 +584,7 @@ export abstract class Room<
 
     this.#_locked = false;
 
-    await this.listing.updateOne({
+    await matchMaker.driver.update(this.listing, {
       $set: { locked: this.#_locked },
     });
 
@@ -708,7 +712,7 @@ export abstract class Room<
     }
 
     this._internalState = RoomInternalState.DISPOSING;
-    this.listing.remove();
+    matchMaker.driver.remove(this.listing.roomId);
 
     this.#_autoDispose = true;
 
@@ -1076,7 +1080,7 @@ export abstract class Room<
   protected async _dispose(): Promise<any> {
     this._internalState = RoomInternalState.DISPOSING;
 
-    this.listing.remove();
+    matchMaker.driver.remove(this.listing.roomId);
 
     let userReturnData;
     if (this.onDispose) {
@@ -1257,7 +1261,7 @@ export abstract class Room<
       this.lock.call(this, true);
     }
 
-    await this.listing.updateOne({
+    await matchMaker.driver.update(this.listing, {
       $inc: { clients: 1 },
       $set: { locked: this.#_locked },
     });
@@ -1280,7 +1284,7 @@ export abstract class Room<
       }
 
       // update room listing cache
-      await this.listing.updateOne({
+      await matchMaker.driver.update(this.listing, {
         $inc: { clients: -1 },
         $set: { locked: this.#_locked },
       });
