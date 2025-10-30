@@ -5,7 +5,7 @@ import net from "net";
 import http from 'http';
 import cors from 'cors';
 import express from 'express';
-import { type ServerOptions, type Router, logger, Server, Transport, matchMaker, RegisteredHandler } from '@colyseus/core';
+import { type ServerOptions, type Router, logger, Server, Transport, matchMaker, RegisteredHandler, defineServer } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 
 const BunWebSockets = import('@colyseus/bun-websockets'); BunWebSockets.catch(() => {});
@@ -83,17 +83,17 @@ export async function listen<
     const processNumber = Number(process.env.NODE_APP_INSTANCE || "0");
     port += processNumber;
 
-    let gameServer: Server<RoomTypes, Routes>;
+    let server: Server<RoomTypes, Routes>;
     let displayLogs = true;
 
     if (options instanceof Server) {
-        gameServer = options;
+        server = options;
 
     } else {
-        gameServer = await buildServerFromOptions<RoomTypes, Routes>(options, port);
+        server = await buildServerFromOptions<RoomTypes, Routes>(options, port);
         displayLogs = options.displayLogs;
 
-        await options.initializeGameServer?.(gameServer);
+        await options.initializeGameServer?.(server);
         await matchMaker.onReady;
         await options.beforeListen?.();
     }
@@ -106,11 +106,11 @@ export async function listen<
         // (fixes "ADDRINUSE" issue when restarting the server)
         await checkInactiveSocketFile(socketPath);
 
-        await gameServer.listen(socketPath);
+        await server.listen(socketPath);
 
     } else {
         // listening on port
-        await gameServer.listen(port);
+        await server.listen(port);
     }
 
     // notify process manager (production)
@@ -122,7 +122,7 @@ export async function listen<
         logger.info(`⚔️  Listening on http://localhost:${port}`);
     }
 
-    return gameServer;
+    return server;
 }
 
 async function buildServerFromOptions<
@@ -173,16 +173,10 @@ async function buildServerFromOptions<
     }
   }
 
-  const server = new Server<RoomTypes, Routes>({
+  return defineServer<RoomTypes, Routes>(options.rooms || {} as RoomTypes, options.routes, {
     ...serverOptions,
     transport: await getTransport(options),
-  })
-
-  if (options.routes) {
-    server.router = options.routes;
-  }
-
-  return server;
+  });
 }
 
 export async function getTransport(options: ConfigOptions) {

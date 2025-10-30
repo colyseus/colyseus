@@ -18,8 +18,9 @@
     "@colyseus/redis-driver": "workspace:^",
     "@colyseus/redis-presence": "workspace:^",
     "@colyseus/tools": "workspace:^",
-    "@colyseus/postgres-driver": "workspace:^",
+    "@colyseus/drizzle-driver": "workspace:^",
     "@colyseus/sdk": "workspace:^",
-    "@colyseus/schema": "^3.0.0"
+    "@colyseus/schema": "^3.0.0",
+    "@colyseus/playground": "^0.16.0"
   }
 }

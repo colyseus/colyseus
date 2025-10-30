@@ -60,14 +60,17 @@ export class LocalDriver implements MatchMakerDriver {
     return true;
   }
 
-  public persist(room: IRoomCache) {
-    if (this.rooms.indexOf(room) !== -1) {
-      // already in the list
-      return true;
-    }
+  public persist(room: IRoomCache, create: boolean = false) {
+    // if (this.rooms.indexOf(room) !== -1) {
+    //   // already in the list
+    //   return true;
+    // }
+
+    if (!create) { return false; }
 
     // add to the list
     this.rooms.push(room);
+
     return true;
   }
 

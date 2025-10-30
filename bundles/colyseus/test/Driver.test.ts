@@ -1,13 +1,13 @@
 import assert from "assert";
 import { generateId, initializeRoomCache, LocalDriver, RedisDriver, type IRoomCache, type MatchMakerDriver } from "../src/index.ts";
-import { DrizzleDriver } from "@colyseus/drizzle-driver";
+import { PostgresDriver } from "@colyseus/drizzle-driver";
 
 // import { DRIVERS } from "./utils/index.ts";
 
 export const DRIVERS = [
   // LocalDriver,
   // RedisDriver,
-  DrizzleDriver,
+  PostgresDriver,
 ];
 
 describe("Driver implementations", () => {
@@ -15,14 +15,15 @@ describe("Driver implementations", () => {
     let driver: MatchMakerDriver;
 
     describe(`Driver:${DRIVERS[i].name}`, () => {
-      beforeEach(async () => {
+      before(async () => {
         driver = new DRIVERS[i]();
 
         // boot the driver if it has a boot method
-        if (driver.boot) {
-          await driver.boot();
-        }
+        if (driver.boot) { await driver.boot(); }
+      });
 
+      beforeEach(async () => {
+        driver = new DRIVERS[i]();
         await driver.clear();
       });
 
@@ -32,7 +33,7 @@ describe("Driver implementations", () => {
 
       async function createAndPersist(data: Partial<IRoomCache>) {
         const cache = initializeRoomCache(data);
-        await driver.persist(cache);
+        await driver.persist(cache, true);
         return cache;
       }
 

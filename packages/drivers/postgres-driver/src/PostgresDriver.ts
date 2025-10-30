@@ -181,16 +181,23 @@ export class PostgresDriver<T extends zod.core.$ZodLooseShape> implements MatchM
     return true;
   }
 
-  public async persist(room: IRoomCache) {
+  public async persist(room: IRoomCache, create: boolean = false) {
     if (!room.roomId) {
       debugMatchMaking("PostgresDriver: can't .persist() without a `roomId`");
       return false;
     }
 
-    // Check if room exists
-    const exists = await this.has(room.roomId);
+    if (create) {
+      // Create new record
+      const insertFields: Partial<IRoomCache> = {};
+      const fields = Object.keys(room) as (keyof IRoomCache)[];
 
-    if (exists) {
+      for (const field of fields) {
+        insertFields[field] = room[field];
+      }
+
+      await this.collection.create(insertFields as any);
+    } else {
       // Update existing record
       const updateFields: Partial<IRoomCache> = {};
       const fields = Object.keys(room) as (keyof IRoomCache)[];
@@ -202,16 +209,6 @@ export class PostgresDriver<T extends zod.core.$ZodLooseShape> implements MatchM
 
       // @ts-ignore - zodgres update method with template string
       await (this.collection.update(updateFields as any)`roomId = ${room.roomId}`);
-    } else {
-      // Create new record
-      const insertFields: Partial<IRoomCache> = {};
-      const fields = Object.keys(room) as (keyof IRoomCache)[];
-
-      for (const field of fields) {
-        insertFields[field] = room[field];
-      }
-
-      await this.collection.create(insertFields as any);
     }
 
     return true;

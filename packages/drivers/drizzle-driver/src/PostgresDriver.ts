@@ -1,6 +1,6 @@
 import postgres from 'postgres';
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
-import { pgTable, text, integer, boolean, timestamp, jsonb } from 'drizzle-orm/pg-core';
+import { pgTable, text, integer, boolean, timestamp, jsonb, getTableConfig } from 'drizzle-orm/pg-core';
 import { eq, and } from 'drizzle-orm';
 
 import {
@@ -11,105 +11,71 @@ import {
   initializeRoomCache,
 } from '@colyseus/core';
 
+import { sanitizeRoomData, generateCreateTableSQL } from './utils.ts';
+
 // Define the roomcaches table schema using Drizzle
 export const roomcaches = pgTable('roomcaches', {
-  roomId: text('roomId').primaryKey(),
-  clients: integer('clients').notNull(),
-  locked: boolean('locked'),
-  private: boolean('private'),
-  maxClients: integer('maxClients').notNull(),
-  metadata: jsonb('metadata'),
-  name: text('name').notNull(),
-  publicAddress: text('publicAddress'),
-  processId: text('processId').notNull(),
-  createdAt: timestamp('createdAt'),
-  unlisted: boolean('unlisted'),
+  roomId: text().primaryKey(),
+  clients: integer().notNull(),
+  locked: boolean(),
+  private: boolean(),
+  maxClients: integer().notNull(),
+  metadata: jsonb(),
+  name: text(), // Nullable to support partial initialization
+  publicAddress: text(),
+  processId: text(), // Nullable to support partial initialization
+  createdAt: timestamp(),
+  unlisted: boolean(),
 });
 
 export type RoomCache = typeof roomcaches.$inferSelect;
 
-// Helper function to sanitize room data before persisting
-function sanitizeRoomData(room: Partial<IRoomCache>): any {
-  const sanitized: any = { ...room };
-
-  // Convert Infinity to a large number for database storage
-  if (sanitized.maxClients === Infinity) {
-    sanitized.maxClients = 2147483647; // Max integer value in PostgreSQL
-  }
-
-  // Provide default values for required fields if they're missing
-  if (!sanitized.name) {
-    sanitized.name = '';
-  }
-  if (!sanitized.processId) {
-    sanitized.processId = '';
-  }
-
-  // Remove methods that shouldn't be persisted
-  delete sanitized.toJSON;
-
-  return sanitized;
-}
-
-export class DrizzleDriver implements MatchMakerDriver {
+export class PostgresDriver implements MatchMakerDriver {
   private sql: ReturnType<typeof postgres>;
   private db: PostgresJsDatabase;
-  private readonly connectionUrl: string;
   private schema: typeof roomcaches;
 
   constructor(options?: {
     db?: PostgresJsDatabase;
     schema?: typeof roomcaches;
   }) {
-    // Use provided schema or default
+    // Allow user to provide their own roomcaches schema
     this.schema = options?.schema || roomcaches;
 
-    // Use provided db instance if available
     if (options?.db) {
       this.db = options.db;
       this.sql = null as any; // User is managing their own connection
-      this.connectionUrl = '';
+
     } else {
-      // Create db from DATABASE_URL environment variable
-      this.connectionUrl = process.env.DATABASE_URL ?? 'postgresql://postgres:postgres@localhost:5432/postgres';
-      this.sql = postgres(this.connectionUrl);
+      this.sql = postgres(process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/postgres');
       this.db = drizzle(this.sql);
     }
   }
 
   public async boot() {
-    // In test/development mode, drop the table first to ensure fresh schema
-    // This prevents migration errors when schema changes between runs
-    if (process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development') {
-      try {
-        await this.sql`DROP TABLE IF EXISTS roomcaches CASCADE`;
-        debugMatchMaking("Dropped roomcaches table for fresh schema");
-      } catch (error) {
-        // Ignore errors - table might not exist
-        debugMatchMaking("Could not drop roomcaches table before boot:", error);
-      }
-    }
+    const tableConfig = getTableConfig(this.schema);
+    const tableName = tableConfig.name;
 
-    // Create table (always, since we drop in test mode)
+    // Create table if it doesn't exist
     try {
-      await this.sql`
-        CREATE TABLE IF NOT EXISTS roomcaches (
-          "roomId" TEXT PRIMARY KEY,
-          clients INTEGER NOT NULL,
-          locked BOOLEAN,
-          private BOOLEAN,
-          "maxClients" INTEGER NOT NULL,
-          metadata JSONB,
-          name TEXT NOT NULL,
-          "publicAddress" TEXT,
-          "processId" TEXT NOT NULL,
-          "createdAt" TIMESTAMP,
-          unlisted BOOLEAN
+      // Check if table exists
+      const tableExists = await this.sql`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables
+          WHERE table_schema = 'public'
+          AND table_name = ${tableName}
         )
       `;
-      debugMatchMaking("Created roomcaches table");
+
+      const exists = tableExists[0]?.exists;
+
+      if (!exists) {
+        await this.sql.unsafe(generateCreateTableSQL(tableConfig));
+        debugMatchMaking(`DrizzleDriver: created ${tableName} table`);
+      }
+
     } catch (error) {
-      debugMatchMaking("Error creating roomcaches table:", error);
+      debugMatchMaking(`DrizzleDriver: error creating ${tableName} table:`, error);
       throw error;
     }
   }
@@ -146,9 +112,8 @@ export class DrizzleDriver implements MatchMakerDriver {
     const result = await this.db
       .delete(this.schema)
       .where(eq(this.schema.processId, processId))
-      .returning();
-    const deletedCount = result.length;
-    debugMatchMaking("removing stale rooms by processId %s (%s rooms found)", processId, deletedCount);
+      .execute();
+    debugMatchMaking(`DrizzleDriver: removing stale rooms by processId ${processId} (${result.count} rooms found)`);
   }
 
   public async findOne(conditions: Partial<IRoomCache>, sortOptions?: SortOptions): Promise<IRoomCache> {
@@ -237,7 +202,7 @@ export class DrizzleDriver implements MatchMakerDriver {
     }
 
     // Update in database
-    const updateFields: any = sanitizeRoomData(room);
+    const updateFields = sanitizeRoomData(room);
     delete updateFields.roomId; // Don't update the primary key
 
     await this.db
@@ -248,16 +213,18 @@ export class DrizzleDriver implements MatchMakerDriver {
     return true;
   }
 
-  public async persist(room: IRoomCache) {
+  public async persist(room: IRoomCache, create: boolean = false) {
     if (!room.roomId) {
-      debugMatchMaking("PostgresDriver: can't .persist() without a `roomId`");
+      debugMatchMaking("DrizzleDriver: can't .persist() without a `roomId`");
       return false;
     }
 
-    // Check if room exists
-    const exists = await this.has(room.roomId);
+    if (create) {
+      // Create new record
+      const insertFields: any = sanitizeRoomData(room);
+      await this.db.insert(this.schema).values(insertFields);
 
-    if (exists) {
+    } else {
       // Update existing record
       const updateFields: any = sanitizeRoomData(room);
       delete updateFields.roomId; // Don't update the primary key
@@ -266,11 +233,6 @@ export class DrizzleDriver implements MatchMakerDriver {
         .update(this.schema)
         .set(updateFields)
         .where(eq(this.schema.roomId, room.roomId));
-    } else {
-      // Create new record
-      const insertFields: any = sanitizeRoomData(room);
-
-      await this.db.insert(this.schema).values(insertFields);
     }
 
     return true;
@@ -296,25 +258,13 @@ export class DrizzleDriver implements MatchMakerDriver {
   // not used during runtime.
   //
   public async clear() {
-    // Drop the table completely to ensure schema is fresh
-    await this.sql`DROP TABLE IF EXISTS roomcaches CASCADE`;
+    const tableConfig = getTableConfig(this.schema);
 
-    // Recreate the table
-    await this.sql`
-      CREATE TABLE IF NOT EXISTS roomcaches (
-        "roomId" TEXT PRIMARY KEY,
-        clients INTEGER NOT NULL,
-        locked BOOLEAN,
-        private BOOLEAN,
-        "maxClients" INTEGER NOT NULL,
-        metadata JSONB,
-        name TEXT NOT NULL,
-        "publicAddress" TEXT,
-        "processId" TEXT NOT NULL,
-        "createdAt" TIMESTAMP,
-        unlisted BOOLEAN
-      )
-    `;
+    // Drop the table completely to ensure schema is fresh
+    await this.sql`DROP TABLE IF EXISTS ${this.sql(tableConfig.name)} CASCADE`;
+
+    // Recreate the table using schema definition
+    await this.sql.unsafe(generateCreateTableSQL(tableConfig));
   }
 
 }

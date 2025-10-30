@@ -1,19 +1,19 @@
 import { Room, type Client } from "@colyseus/core";
-import { Schema, type, MapSchema } from "@colyseus/schema";
+import { schema } from "@colyseus/schema";
 
-export class Player extends Schema {
-  @type("number") x: number;
-  @type("number") y: number;
-}
+export const Player = schema({
+  x: "number",
+  y: "number",
+});
 
-export class MyRoomState extends Schema {
-  @type("number") mapWidth: number;
-  @type("number") mapHeight: number;
-  @type({ map: Player }) players = new MapSchema<Player>();
-}
+export const MyRoomState = schema({
+  mapWidth: "number",
+  mapHeight: "number",
+  players: { map: Player },
+});
 
 export class MyRoom extends Room {
-  state = new MyRoomState()
+  state = new MyRoomState();
 
   messages = {
     move: (client: Client, message: { x: number, y: number }) => {

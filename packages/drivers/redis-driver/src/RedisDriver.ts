@@ -146,32 +146,17 @@ export class RedisDriver implements MatchMakerDriver {
       }
     }
 
-    // Save to Redis
-    // FIXME: workaround so JSON.stringify() stringifies all dynamic fields.
-    const toJSON = (room as any).toJSON;
-    (room as any).toJSON = undefined;
-
-    const roomcache = JSON.stringify(room);
-    (room as any).toJSON = toJSON;
-
-    await this._client.hset(ROOMCACHES_KEY, room.roomId, roomcache);
+    await this._client.hset(ROOMCACHES_KEY, room.roomId, JSON.stringify(room));
     return true;
   }
 
-  public async persist(room: IRoomCache) {
+  public async persist(room: IRoomCache, _: boolean = false) {
     if (!room.roomId) {
       debugMatchMaking("RedisDriver: can't .persist() without a `roomId`");
       return false;
     }
 
-    // FIXME: workaround so JSON.stringify() stringifies all dynamic fields.
-    const toJSON = (room as any).toJSON;
-    (room as any).toJSON = undefined;
-
-    const roomcache = JSON.stringify(room);
-    (room as any).toJSON = toJSON;
-
-    await this._client.hset(ROOMCACHES_KEY, room.roomId, roomcache);
+    await this._client.hset(ROOMCACHES_KEY, room.roomId, JSON.stringify(room));
     return true;
   }
 

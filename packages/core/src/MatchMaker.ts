@@ -406,6 +406,10 @@ export function removeRoomType(roomName: string) {
   delete handlers[roomName];
 }
 
+export function getAllHandlers() {
+  return handlers;
+}
+
 export function getHandler(roomName: string) {
   const handler = handlers[roomName];
 
@@ -596,7 +600,7 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
 
   // persist room data only if match-making is enabled
   if (state !== MatchMakerState.SHUTTING_DOWN) {
-    await driver.persist(room.listing);
+    await driver.persist(room.listing, true);
   }
 
   handler.emit('create', room);

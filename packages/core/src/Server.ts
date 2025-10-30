@@ -288,12 +288,16 @@ export function defineServer<
 >(
   roomHandlers: T,
   router: R,
+  serverOptions?: ServerOptions
 ): Server<T, R> {
-  const gameServer = new Server<T, R>();
+  const gameServer = new Server<T, R>(serverOptions);
 
   gameServer.router = router;
 
+  console.log("Define server!", roomHandlers)
+
   for (const [name, handler] of Object.entries(roomHandlers)) {
+    console.log("addRoomType:", name, handler)
     handler.name = name;
     matchMaker.addRoomType(handler);
   }

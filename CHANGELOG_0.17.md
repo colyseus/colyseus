@@ -9,17 +9,19 @@ onMessage() -> onMessageBytes()
 
 ## HTTP Error Codes on Matchmaking Routes
 
-`MATCHMAKE_NO_HANDLER`: 4210 => 510
-`MATCHMAKE_INVALID_CRITERIA`: 4211 => 511
-`MATCHMAKE_INVALID_ROOM_ID`: 4212 => 512
-`MATCHMAKE_UNHANDLED`: 4213 => 513
-`MATCHMAKE_EXPIRED`: 4214 => 514
+`MATCHMAKE_NO_HANDLER`: 4210 => 530
+`MATCHMAKE_INVALID_CRITERIA`: 4211 => 531
+`MATCHMAKE_INVALID_ROOM_ID`: 4212 => 532
+`MATCHMAKE_UNHANDLED`: 4213 => 533
+`MATCHMAKE_EXPIRED`: 4214 => 534
 
 ## TODO:
 
+[ ] Support Express v5
 [ ] Full-stack type safety
 [ ] PostgreSQL match-making driver
 [ ] debug:* logs should go to STDOUT (not STDERR)
 [ ] How to use new `messages = {}` for raw binary data? (`.onMessageBytes()` ??)
-[ ] `RoomCache`: remove mongodb-like methods like `.updateOne()`, `save()`, and `remove()`
+[x] `RoomCache`: remove mongodb-like methods like `.updateOne()`, `save()`, and `remove()`
 [ ] `RoomCache`: improve metadata handling and filters
+[ ] Add Unity-like schema callbacks for TypeScript

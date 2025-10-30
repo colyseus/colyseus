@@ -152,9 +152,9 @@ export interface MatchMakerDriver {
    * Persist a room in room cache.
    *
    * @param room - The room to persist.
-   * @param fields - The fields to persist.
+   * @param create - If true, create a new record. If false (default), update existing record.
    */
-  persist(room: IRoomCache): Promise<boolean> | boolean;
+  persist(room: IRoomCache, create?: boolean): Promise<boolean> | boolean;
 
   /**
    * Empty the room cache.

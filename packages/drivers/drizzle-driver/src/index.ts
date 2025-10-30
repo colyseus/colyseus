@@ -1,1 +1,1 @@
-export { DrizzleDriver, roomcaches } from './DrizzleDriver.ts';
+export { PostgresDriver, roomcaches } from './PostgresDriver.ts';
