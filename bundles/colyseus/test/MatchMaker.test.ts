@@ -16,6 +16,9 @@ describe("MatchMaker", () => {
         driver = new DRIVERS[i]();
         matchMaker.setup(undefined, driver);
 
+        // boot the driver if implemented
+        if (driver.boot) { await driver.boot(); }
+
         matchMaker.defineRoomType("empty", DummyRoom);
         matchMaker.defineRoomType("dummy", DummyRoom);
         matchMaker.defineRoomType("room2", Room2Clients);
@@ -431,6 +434,7 @@ describe("MatchMaker", () => {
 
         // change maxClients, room should be unlocked
         room.maxClients = 3;
+        await timeout(20); // wait for async persist to complete
 
         rooms = await matchMaker.query({});
         assert.strictEqual(false, room.locked);
@@ -438,6 +442,7 @@ describe("MatchMaker", () => {
 
         // change maxClients, room should be locked again
         room.maxClients = 2;
+        await timeout(20); // wait for async persist to complete
 
         rooms = await matchMaker.query({});
         assert.strictEqual(true, room.locked);
@@ -567,6 +572,8 @@ describe("MatchMaker", () => {
         it("should join or create concurrently", async () => {
           matchMaker.defineRoomType("concurrent", class extends Room {
             maxClients = 2;
+            // TODO: confirm if the API will stay like this...
+            onCreate(_: { cod: string }) {}
           }).filterBy(['code']);
 
           const codes = ["000", "111", "222"];

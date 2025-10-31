@@ -1,24 +1,22 @@
 import assert from "assert";
-import { RedisDriver } from "../src/RedisDriver";
+import { RedisDriver } from "@colyseus/redis-driver";
+import { initializeRoomCache } from "@colyseus/core";
 
 describe("RedisDriver", () => {
   let driver: RedisDriver;
 
-  // @ts-expect-error
-  beforeAll(async () => {
+  before(async () => {
     driver = new RedisDriver();
   });
 
-  // @ts-expect-error
-  afterAll(async () => {
+  after(async () => {
     await driver.shutdown();
-    process.exit(); // TODO: remove this
   });
 
   it("should allow concurrent queries to multiple room names", async () => {
-    for (let i=0; i<10; i++) { await driver.persist(driver.createInstance({ name: "one", roomId: "x" + i, clients: i, maxClients: 10, })); }
-    for (let i=0; i<10; i++) { await driver.persist(driver.createInstance({ name: "two", roomId: "y" + i, clients: i, maxClients: 10, })); }
-    for (let i=0; i<10; i++) { await driver.persist(driver.createInstance({ name: "three", roomId: "z" + i, clients: i, maxClients: 10, })); }
+    for (let i=0; i<10; i++) { await driver.persist(initializeRoomCache({ name: "one", roomId: "x" + i, clients: i, maxClients: 10, })); }
+    for (let i=0; i<10; i++) { await driver.persist(initializeRoomCache({ name: "two", roomId: "y" + i, clients: i, maxClients: 10, })); }
+    for (let i=0; i<10; i++) { await driver.persist(initializeRoomCache({ name: "three", roomId: "z" + i, clients: i, maxClients: 10, })); }
 
     const req1 = driver.findOne({ name: "one" });
     const concurrent = driver['_concurrentRoomCacheRequest'];

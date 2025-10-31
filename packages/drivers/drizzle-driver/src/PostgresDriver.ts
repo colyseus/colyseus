@@ -1,7 +1,7 @@
 import postgres from 'postgres';
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { pgTable, text, integer, boolean, timestamp, jsonb, getTableConfig } from 'drizzle-orm/pg-core';
-import { eq, and, asc, desc } from 'drizzle-orm';
+import { eq, and, asc, desc, sql } from 'drizzle-orm';
 
 import {
   type IRoomCache,
@@ -9,12 +9,13 @@ import {
   type SortOptions,
   debugMatchMaking,
   initializeRoomCache,
+  isDevMode,
 } from '@colyseus/core';
 
 import { sanitizeRoomData, generateCreateTableSQL, buildWhereClause, buildOrderBy } from './utils.ts';
 
 // Define the roomcaches table schema using Drizzle
-export const roomcaches = pgTable('roomcaches', {
+export const roomcaches = pgTable('roomcaches_v1', {
   roomId: text().primaryKey(),
   clients: integer().notNull(),
   locked: boolean(),
@@ -48,7 +49,8 @@ export class PostgresDriver implements MatchMakerDriver {
 
     } else {
       this.sql = postgres(process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/postgres');
-      this.db = drizzle(this.sql);
+      this.db = drizzle(this.sql, { logger: isDevMode });
+      // this.db = drizzle(this.sql, { logger: true });
     }
   }
 
@@ -147,10 +149,12 @@ export class PostgresDriver implements MatchMakerDriver {
   }
 
   public async update(room: IRoomCache, operations: Partial<{ $set: Partial<IRoomCache>, $inc: Partial<IRoomCache> }>) {
+    const setFields: any = {};
+
     if (operations.$set) {
       for (const field in operations.$set) {
         if (operations.$set.hasOwnProperty(field)) {
-          room[field] = operations.$set[field];
+          setFields[field] = operations.$set[field];
         }
       }
     }
@@ -158,19 +162,19 @@ export class PostgresDriver implements MatchMakerDriver {
     if (operations.$inc) {
       for (const field in operations.$inc) {
         if (operations.$inc.hasOwnProperty(field)) {
-          room[field] += operations.$inc[field];
+          const value = operations.$inc[field];
+          setFields[field] = (value >= 0)
+            ? sql`${this.schema[field]} + ${value}::integer`
+            : sql`${this.schema[field]} - ${Math.abs(value)}::integer`;
         }
       }
     }
 
-    // Update in database
-    const updateFields = sanitizeRoomData(room);
-    delete updateFields.roomId; // Don't update the primary key
-
     await this.db
       .update(this.schema)
-      .set(updateFields)
-      .where(eq(this.schema.roomId, room.roomId));
+      .set(setFields)
+      .where(eq(this.schema.roomId, room.roomId))
+      .execute();
 
     return true;
   }
@@ -190,11 +194,7 @@ export class PostgresDriver implements MatchMakerDriver {
       // Update existing record
       const updateFields: any = sanitizeRoomData(room);
       delete updateFields.roomId; // Don't update the primary key
-
-      await this.db
-        .update(this.schema)
-        .set(updateFields)
-        .where(eq(this.schema.roomId, room.roomId));
+      await this.update(room, { $set: updateFields });
     }
 
     return true;
