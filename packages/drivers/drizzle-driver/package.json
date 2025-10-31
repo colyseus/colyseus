@@ -26,6 +26,10 @@
   "devDependencies": {
     "drizzle-kit": "^0.30.6"
   },
+  "peerDependencies": {
+    "drizzle-orm": "^0.38.4",
+    "drizzle-kit": "^0.30.6"
+  },
   "author": "Endel Dreyer",
   "license": "MIT",
   "keywords": [

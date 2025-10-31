@@ -1,5 +1,6 @@
-import type { IRoomCache } from "@colyseus/core";
-import { getTableConfig, type PgTable } from 'drizzle-orm/pg-core';
+import type { IRoomCache, SortOptions } from "@colyseus/core";
+import { getTableConfig, type PgTableWithColumns } from 'drizzle-orm/pg-core';
+import { eq, asc, desc, type SQL } from 'drizzle-orm';
 
 const POSTGRES_MAX_INTEGER = 2147483647;  // Max integer value in PostgreSQL
 
@@ -13,6 +14,19 @@ export function sanitizeRoomData(room: Partial<IRoomCache>): IRoomCache {
   }
 
   return sanitized;
+}
+
+// Build WHERE clause conditions for Drizzle ORM
+export function buildWhereClause(schema: PgTableWithColumns<any>, conditions: Partial<IRoomCache>): SQL[] {
+  return Object.entries(conditions).map(([fieldName, value]) => eq(schema[fieldName], value));
+}
+
+// Build ORDER BY clauses for Drizzle ORM
+export function buildOrderBy(schema: PgTableWithColumns<any>, sortOptions?: SortOptions): SQL[] {
+  return Object.entries(sortOptions ?? {}).map(([fieldName, direction]) => {
+    const isDescending = (direction === -1 || direction === 'desc' || direction === 'descending');
+    return isDescending ? desc(schema[fieldName]) : asc(schema[fieldName]);
+  });
 }
 
 // Generate CREATE TABLE SQL string from Drizzle schema

@@ -23,6 +23,8 @@ import { RedisDriver } from "@colyseus/redis-driver";
 // import { MongooseDriver } from "@colyseus/mongoose-driver";
 
 import { WebSocketTransport } from '@colyseus/ws-transport';
+import { PostgresDriver } from "@colyseus/drizzle-driver";
+
 Server.prototype['getDefaultTransport'] = function (options: ServerOptions) {
   return new WebSocketTransport({
     pingInterval: 150,
@@ -34,8 +36,9 @@ Server.prototype['getDefaultTransport'] = function (options: ServerOptions) {
 export const PRESENCE_IMPLEMENTATIONS = [ LocalPresence, ];
 
 export const DRIVERS = [
-  LocalDriver,
+  // LocalDriver,
   // RedisDriver,
+  PostgresDriver,
   // MongooseDriver,
 ];
 

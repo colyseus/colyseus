@@ -1,7 +1,7 @@
 import postgres from 'postgres';
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { pgTable, text, integer, boolean, timestamp, jsonb, getTableConfig } from 'drizzle-orm/pg-core';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, asc, desc } from 'drizzle-orm';
 
 import {
   type IRoomCache,
@@ -11,7 +11,7 @@ import {
   initializeRoomCache,
 } from '@colyseus/core';
 
-import { sanitizeRoomData, generateCreateTableSQL } from './utils.ts';
+import { sanitizeRoomData, generateCreateTableSQL, buildWhereClause, buildOrderBy } from './utils.ts';
 
 // Define the roomcaches table schema using Drizzle
 export const roomcaches = pgTable('roomcaches', {
@@ -53,6 +53,10 @@ export class PostgresDriver implements MatchMakerDriver {
   }
 
   public async boot() {
+    if (!this.sql) {
+      throw new Error('PostgresDriver: Cannot call boot() when using external database instance. Please manage schema initialization externally.');
+    }
+
     const tableConfig = getTableConfig(this.schema);
     const tableName = tableConfig.name;
 
@@ -90,22 +94,7 @@ export class PostgresDriver implements MatchMakerDriver {
   }
 
   public async query(conditions: Partial<IRoomCache>, sortOptions?: SortOptions) {
-    const rooms = await this.getRooms();
-    return rooms.filter((room) => {
-      if (!room.roomId) {
-        return false;
-      }
-
-      for (const field in conditions) {
-        if (
-          conditions.hasOwnProperty(field) &&
-          room[field] !== conditions[field]
-        ) {
-          return false;
-        }
-      }
-      return true;
-    });
+    return await this.getRooms(conditions, sortOptions);
   }
 
   public async cleanup(processId: string) {
@@ -118,70 +107,43 @@ export class PostgresDriver implements MatchMakerDriver {
 
   public async findOne(conditions: Partial<IRoomCache>, sortOptions?: SortOptions): Promise<IRoomCache> {
     if (typeof conditions.roomId !== 'undefined') {
-      // get room by roomId
-
-      //
-      // TODO: refactor driver APIs.
-      // the API here is legacy from MongooseDriver which made sense on versions <= 0.14.0
-      //
-
-      const result = await this.db
+      return (await this.db
         .select()
         .from(this.schema)
         .where(eq(this.schema.roomId, conditions.roomId))
-        .limit(1);
-
-      if (result.length > 0) {
-        return initializeRoomCache(result[0] as any);
-      }
+        .limit(1))[0] as IRoomCache;
 
     } else {
       // filter list by other conditions
-      const rooms = await this.getRooms(conditions['name']);
-      const filtered = rooms.filter((room) => {
-        for (const field in conditions) {
-          if (conditions.hasOwnProperty(field) && room[field] !== conditions[field]) {
-            return false;
-          }
-        }
-        return true;
-      });
-
-      return filtered[0];
+      return (await this.getRooms(conditions, sortOptions, 1))[0] as IRoomCache;
     }
   }
 
-  private _concurrentRoomCacheRequest?: Promise<IRoomCache[]>;
-  private _roomCacheRequestByName: { [roomName: string]: Promise<IRoomCache[]> } = {};
-  private getRooms(roomName?: string) {
+  private _concurrentQueries: { [key: string]: Promise<IRoomCache[]> } = {};
+  private getRooms(conditions: Partial<IRoomCache>, sortOptions?: SortOptions, limit?: number) {
+    const key = JSON.stringify({ c: conditions, s: sortOptions });
+
     // if there's a shared request, return it
-    if (this._roomCacheRequestByName[roomName] !== undefined) {
-      return this._roomCacheRequestByName[roomName];
+    if (this._concurrentQueries[key] !== undefined) {
+      return this._concurrentQueries[key];
     }
 
-    const roomCacheRequest = this._concurrentRoomCacheRequest || (async () => {
-      const result = await this.db.select().from(this.schema);
-      return result.map((room) => initializeRoomCache(room as any));
-    })();
+    let query = this.db
+      .select()
+      .from(this.schema)
+      .where(and(...buildWhereClause(this.schema, conditions)))
+      .$dynamic();
 
-    this._concurrentRoomCacheRequest = roomCacheRequest;
+    const orderBy = buildOrderBy(this.schema, sortOptions);
+    if (orderBy.length > 0) { query = query.orderBy(...orderBy); }
+    if (limit !== undefined) { query = query.limit(limit); }
 
-    this._roomCacheRequestByName[roomName] = roomCacheRequest.then((rooms) => {
-      // clear shared promises so we can read it again
-      this._concurrentRoomCacheRequest = undefined;
-      delete this._roomCacheRequestByName[roomName];
-
-      //
-      // filter rooms by name if specified
-      //
-      if (roomName !== undefined) {
-        return rooms.filter((room) => room.name === roomName);
-      }
-
-      return rooms;
+    this._concurrentQueries[key] = query.then((result) => {
+      delete this._concurrentQueries[key];
+      return result.map((room) => room as IRoomCache);
     });
 
-    return this._roomCacheRequestByName[roomName];
+    return this._concurrentQueries[key];
   }
 
   public async update(room: IRoomCache, operations: Partial<{ $set: Partial<IRoomCache>, $inc: Partial<IRoomCache> }>) {
@@ -250,9 +212,8 @@ export class PostgresDriver implements MatchMakerDriver {
     // Only close the connection if we created it ourselves
     if (this.sql) {
       await this.sql.end();
+      this.sql = undefined;
     }
-
-
   }
 
   //
@@ -260,6 +221,9 @@ export class PostgresDriver implements MatchMakerDriver {
   // not used during runtime.
   //
   public async clear() {
+    // skip if already shut down.
+    if (!this.sql) { return; }
+
     const tableConfig = getTableConfig(this.schema);
 
     // Drop the table completely to ensure schema is fresh

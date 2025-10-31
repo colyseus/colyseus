@@ -17,11 +17,11 @@ onMessage() -> onMessageBytes()
 
 ## TODO:
 
+[x] debug:* logs should go to STDOUT (not STDERR)
+[x] `RoomCache`: remove mongodb-like methods like `.updateOne()`, `save()`, and `remove()`
+[ ] `RoomCache`: improve metadata handling and filters
 [ ] Support Express v5
 [ ] Full-stack type safety
 [ ] PostgreSQL match-making driver
-[ ] debug:* logs should go to STDOUT (not STDERR)
 [ ] How to use new `messages = {}` for raw binary data? (`.onMessageBytes()` ??)
-[x] `RoomCache`: remove mongodb-like methods like `.updateOne()`, `save()`, and `remove()`
-[ ] `RoomCache`: improve metadata handling and filters
 [ ] Add Unity-like schema callbacks for TypeScript

@@ -1,5 +1,5 @@
 import assert, { match } from "assert";
-import { generateId, matchMaker, Room, type MatchMakerDriver, type IRoomCache } from "@colyseus/core";
+import { generateId, matchMaker, Room, type MatchMakerDriver, type IRoomCache, initializeRoomCache } from "@colyseus/core";
 import { DummyRoom, Room2Clients, createDummyClient, timeout, ReconnectRoom, Room3Clients, DRIVERS, ReconnectTokenRoom } from "./utils/index.ts";
 
 const DEFAULT_SEAT_RESERVATION_TIME = Number(process.env.COLYSEUS_SEAT_RESERVATION_TIME);
@@ -591,8 +591,8 @@ describe("MatchMaker", () => {
 
       describe("cleaning up stale rooms and processId's", async () => {
         async function createDummyRoomCache(data: Partial<IRoomCache>) {
-          const cache = driver.createInstance(data);
-          await cache.save();
+          const cache = initializeRoomCache(data);
+          await driver.persist(cache, true);
           return cache;
         }
 
