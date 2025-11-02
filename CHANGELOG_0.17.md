@@ -1,3 +1,6 @@
+## Bug fixes to document
+[ ] `LobbyRoom` / `enableRealtimeListing()`: fix removing room from lobby listing when room is disposed.
+
 ## New features to document
 
 [ ] `@colyseus/tools`: New `routes` and `rooms` options

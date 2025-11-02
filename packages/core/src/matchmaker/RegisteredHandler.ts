@@ -69,7 +69,7 @@ export class RegisteredHandler<
         updateLobby(room);
       }
     });
-    this.on('dispose', (room) => updateLobby(room, false));
+    this.on('dispose', (room) => updateLobby(room, true));
     this.on('visibility-change', (room, isVisible) => updateLobby(room, isVisible));
 
     return this;

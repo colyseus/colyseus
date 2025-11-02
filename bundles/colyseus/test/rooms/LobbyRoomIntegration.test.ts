@@ -1,6 +1,6 @@
 import assert from "assert";
 import * as Colyseus from "colyseus.js";
-import { matchMaker, Server, LobbyRoom } from "../../src/index.ts";
+import { matchMaker, Server, LobbyRoom, type MatchMakerDriver } from "@colyseus/core";
 import { DummyRoom, DRIVERS, timeout, PRESENCE_IMPLEMENTATIONS } from "./../utils/index.ts";
 
 describe("LobbyRoom: Integration", () => {
@@ -8,7 +8,7 @@ describe("LobbyRoom: Integration", () => {
     const presence = new PRESENCE_IMPLEMENTATIONS[i]();
 
     for (let j = 0; j < DRIVERS.length; j++) {
-      const driver = new DRIVERS[j]();
+      let driver: MatchMakerDriver = new DRIVERS[j]();
 
       describe(`Driver => ${(driver.constructor as any).name}, Presence => ${presence.constructor.name}`, () => {
         const TEST_PORT = 4000 + Math.floor((Math.random() * 1000));
@@ -24,7 +24,6 @@ describe("LobbyRoom: Integration", () => {
 
         before(async () => {
           // listen for testing
-          await matchMaker.setup(presence, driver);
           await server.listen(TEST_PORT);
         });
 
@@ -32,6 +31,7 @@ describe("LobbyRoom: Integration", () => {
           // setup matchmaker
           await matchMaker.setup(presence, driver);
           await matchMaker.accept();
+          await driver.clear();
 
           // define a room
           matchMaker.defineRoomType("lobby", LobbyRoom);
@@ -61,7 +61,7 @@ describe("LobbyRoom: Integration", () => {
           assert.ok(onMessageCalled);
         });
 
-        it("should receive + when rooms are created", async () => {
+        it("should receive '+' message when rooms are created", async () => {
           const lobby = await client.joinOrCreate("lobby");
 
           let onMessageCalled = false;
@@ -92,7 +92,7 @@ describe("LobbyRoom: Integration", () => {
           assert.equal(4, onAddCalled);
         });
 
-        it("should receive - when rooms are removed", async () => {
+        it("should receive '-' message when rooms are removed", async () => {
           const lobby = await client.joinOrCreate("lobby");
 
           let onMessageCalled = false;

@@ -1497,6 +1497,7 @@ describe("Integration", () => {
             // wait for reconnection to timeout
             await timeout(150);
             await onRoomDisposed;
+            await timeout(10);
 
             const rooms = await matchMaker.query({});
             assert.strictEqual(0, rooms.length);

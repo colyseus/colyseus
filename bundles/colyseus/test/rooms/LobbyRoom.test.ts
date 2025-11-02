@@ -39,6 +39,8 @@ describe("LobbyRoom", () => {
           matchMaker.defineRoomType("dummy_1", DummyRoom).enableRealtimeListing();
           matchMaker.defineRoomType("dummy_2", DummyRoom).enableRealtimeListing();
 
+          await driver.clear();
+
           // listen for testing
           await server.listen(TEST_PORT);
         });
@@ -69,6 +71,26 @@ describe("LobbyRoom", () => {
           // wait a bit until LobbyRoom received the update
           await timeout(50);
           assert.strictEqual(1, lobby.rooms.length);
+        });
+
+        it("should properly remove disposed room from lobby", async () => {
+          const lobby = await createLobbyRoom();
+          assert.strictEqual(0, lobby.rooms.length);
+
+          // Create a room with realtime listing enabled
+          const roomData = await matchMaker.createRoom("dummy_1", {});
+
+          // Wait for the room to appear in lobby
+          await timeout(50);
+          assert.strictEqual(1, lobby.rooms.length);
+          assert.strictEqual(roomData.roomId, lobby.rooms[0].roomId);
+
+          // Dispose the room
+          await matchMaker.remoteRoomCall(roomData.roomId, "disconnect");
+
+          // Wait for the lobby to process the removal
+          await timeout(50);
+          assert.strictEqual(0, lobby.rooms.length, "Room should be removed from lobby list after disposal");
         });
 
       });
