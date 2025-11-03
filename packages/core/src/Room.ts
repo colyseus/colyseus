@@ -1080,7 +1080,10 @@ export abstract class Room<
   protected async _dispose(): Promise<any> {
     this._internalState = RoomInternalState.DISPOSING;
 
-    matchMaker.driver.remove(this.listing.roomId);
+    // If the room is still CREATING, the roomId is not yet set.
+    if (this.listing.roomId !== undefined) {
+      await matchMaker.driver.remove(this.listing.roomId);
+    }
 
     let userReturnData;
     if (this.onDispose) {
