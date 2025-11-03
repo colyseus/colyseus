@@ -48,6 +48,7 @@
     "@colyseus/uwebsockets-transport": "workspace:^",
     "@colyseus/drizzle-driver": "workspace:^",
     "@colyseus/tools": "workspace:^",
+    "@colyseus/sdk": "workspace:^",
     "@colyseus/msgpackr": "*",
     "@colyseus/schema": "^3.0.0",
     "@types/ws": "^8.5.14",

@@ -158,6 +158,7 @@ export interface MatchMakerDriver {
 
   /**
    * Empty the room cache.
+   * Used for testing purposes only.
    */
   clear(): void;
 

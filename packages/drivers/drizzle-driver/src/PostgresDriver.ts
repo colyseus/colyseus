@@ -1,6 +1,6 @@
 import postgres from 'postgres';
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
-import { pgTable, text, integer, boolean, timestamp, jsonb, getTableConfig } from 'drizzle-orm/pg-core';
+import { pgTable, text, integer, boolean, timestamp, jsonb, getTableConfig, varchar } from 'drizzle-orm/pg-core';
 import { eq, and, asc, desc, sql } from 'drizzle-orm';
 
 import {
@@ -8,7 +8,6 @@ import {
   type MatchMakerDriver,
   type SortOptions,
   debugMatchMaking,
-  initializeRoomCache,
   isDevMode,
 } from '@colyseus/core';
 
@@ -16,15 +15,15 @@ import { sanitizeRoomData, generateCreateTableSQL, buildWhereClause, buildOrderB
 
 // Define the roomcaches table schema using Drizzle
 export const roomcaches = pgTable('roomcaches_v1', {
-  roomId: text().primaryKey(),
+  roomId: varchar({ length: 9 }).primaryKey(),
   clients: integer().notNull(),
   locked: boolean(),
   private: boolean(),
   maxClients: integer().notNull(),
   metadata: jsonb(),
-  name: text(), // Nullable to support partial initialization
+  name: text(),
   publicAddress: text(),
-  processId: text(), // Nullable to support partial initialization
+  processId: text(),
   createdAt: timestamp(),
   unlisted: boolean(),
 });
@@ -49,8 +48,7 @@ export class PostgresDriver implements MatchMakerDriver {
 
     } else {
       this.sql = postgres(process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/postgres');
-      this.db = drizzle(this.sql, { logger: isDevMode });
-      // this.db = drizzle(this.sql, { logger: true });
+      this.db = drizzle(this.sql, {/* logger: true */});
     }
   }
 
@@ -153,7 +151,7 @@ export class PostgresDriver implements MatchMakerDriver {
 
     if (operations.$set) {
       for (const field in operations.$set) {
-        if (operations.$set.hasOwnProperty(field)) {
+        if (operations.$set.hasOwnProperty(field) && operations.$set[field] !== undefined) {
           setFields[field] = operations.$set[field];
         }
       }
@@ -163,11 +161,18 @@ export class PostgresDriver implements MatchMakerDriver {
       for (const field in operations.$inc) {
         if (operations.$inc.hasOwnProperty(field)) {
           const value = operations.$inc[field];
-          setFields[field] = (value >= 0)
-            ? sql`${this.schema[field]} + ${value}::integer`
-            : sql`${this.schema[field]} - ${Math.abs(value)}::integer`;
+          if (value !== undefined) {
+            setFields[field] = (value >= 0)
+              ? sql`${this.schema[field]} + ${value}::integer`
+              : sql`${this.schema[field]} - ${Math.abs(value)}::integer`;
+          }
         }
       }
+    }
+
+    // Skip update if there are no fields to update
+    if (Object.keys(setFields).length === 0) {
+      return true;
     }
 
     await this.db
@@ -180,11 +185,6 @@ export class PostgresDriver implements MatchMakerDriver {
   }
 
   public async persist(room: IRoomCache, create: boolean = false) {
-    if (!room.roomId) {
-      debugMatchMaking("DrizzleDriver: can't .persist() without a `roomId`");
-      return false;
-    }
-
     if (create) {
       // Create new record
       const insertFields: any = sanitizeRoomData(room);
@@ -225,9 +225,10 @@ export class PostgresDriver implements MatchMakerDriver {
     if (!this.sql) { return; }
 
     const tableConfig = getTableConfig(this.schema);
+    const tableName = tableConfig.name;
 
     // Drop the table completely to ensure schema is fresh
-    await this.sql`DROP TABLE IF EXISTS ${this.sql(tableConfig.name)} CASCADE`;
+    await this.sql.unsafe(`DROP TABLE IF EXISTS ${tableName} CASCADE`);
 
     // Recreate the table using schema definition
     await this.sql.unsafe(generateCreateTableSQL(tableConfig));

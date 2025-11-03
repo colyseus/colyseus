@@ -289,7 +289,7 @@ export function defineServer<
   R extends Router
 >(
   roomHandlers: T,
-  router: R,
+  router?: R,
   serverOptions?: ServerOptions
 ): Server<T, R> {
   const gameServer = new Server<T, R>(serverOptions);

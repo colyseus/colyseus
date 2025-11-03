@@ -22,6 +22,7 @@ onMessage() -> onMessageBytes()
 
 [x] debug:* logs should go to STDOUT (not STDERR)
 [x] `RoomCache`: remove mongodb-like methods like `.updateOne()`, `save()`, and `remove()`
+[x] Check why this test outputs `Error: UNDEFINED_VALUE` for `PostgresDriver`: `npm test -- --grep 'should not exceed maxClients'`
 [ ] `RoomCache`: improve metadata handling and filters
 [ ] Support Express v5
 [ ] Full-stack type safety

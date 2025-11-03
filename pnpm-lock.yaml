@@ -119,6 +119,9 @@ importers:
       '@colyseus/schema':
         specifier: ^3.0.0
         version: 3.0.64
+      '@colyseus/sdk':
+        specifier: workspace:^
+        version: link:../../packages/sdk
       '@colyseus/tools':
         specifier: workspace:^
         version: link:../../packages/tools
@@ -227,18 +230,6 @@ importers:
       mongoose:
         specifier: ^8.4.4
         version: 8.19.1(socks@2.8.7)
-
-  packages/drivers/postgres-driver:
-    dependencies:
-      '@colyseus/core':
-        specifier: workspace:^
-        version: link:../../core
-      zod:
-        specifier: ^4.0.14
-        version: 4.1.12
-      zodgres:
-        specifier: ^0.4.6
-        version: 0.4.6(@electric-sql/pglite-socket@0.0.12(@electric-sql/pglite@0.3.11))(@electric-sql/pglite@0.3.11)
 
   packages/drivers/redis-driver:
     dependencies:
@@ -763,12 +754,6 @@ packages:
 
   '@drizzle-team/brocli@0.10.2':
     resolution: {integrity: sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w==}
-
-  '@electric-sql/pglite-socket@0.0.12':
-    resolution: {integrity: sha512-/MtRHp+57lNNIjzMbV99Lpcki2PpbOC5ivA3ttVCK03dtQAAJcaoDiFVvLEroaMjVBydiGojOWdZtiNLJzkGiQ==}
-    hasBin: true
-    peerDependencies:
-      '@electric-sql/pglite': 0.3.7
 
   '@electric-sql/pglite@0.3.11':
     resolution: {integrity: sha512-FJtjnEyez8XgmgyE5Ewmx89TGVN+75ZjykFoExApRIbJBMT4dsbsuZkF/YWLuymGDfGFHDACjvENPMEqg4FoWg==}
@@ -6375,15 +6360,6 @@ packages:
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
-  zod@4.1.12:
-    resolution: {integrity: sha512-JInaHOamG8pt5+Ey8kGmdcAcg3OL9reK8ltczgHTAwNhMys/6ThXHityHxVV2p3fkw/c+MAvBHFVYHFZDmjMCQ==}
-
-  zodgres@0.4.6:
-    resolution: {integrity: sha512-NwPbHw1CMUqNGil3STrZZo7eUY/vDYukyXhZpolN+v141frZnW646K7A5ImsL41ZVa9e/BF3FycYKIAqs/Bk1Q==}
-    peerDependencies:
-      '@electric-sql/pglite': ^0.3.6
-      '@electric-sql/pglite-socket': ^0.0.12
-
 snapshots:
 
   '@babel/code-frame@7.27.1':
@@ -6618,11 +6594,8 @@ snapshots:
 
   '@drizzle-team/brocli@0.10.2': {}
 
-  '@electric-sql/pglite-socket@0.0.12(@electric-sql/pglite@0.3.11)':
-    dependencies:
-      '@electric-sql/pglite': 0.3.11
-
-  '@electric-sql/pglite@0.3.11': {}
+  '@electric-sql/pglite@0.3.11':
+    optional: true
 
   '@esbuild-kit/core-utils@3.3.2':
     dependencies:
@@ -12653,12 +12626,3 @@ snapshots:
   yocto-queue@0.1.0: {}
 
   zod@3.25.76: {}
-
-  zod@4.1.12: {}
-
-  zodgres@0.4.6(@electric-sql/pglite-socket@0.0.12(@electric-sql/pglite@0.3.11))(@electric-sql/pglite@0.3.11):
-    dependencies:
-      '@electric-sql/pglite': 0.3.11
-      '@electric-sql/pglite-socket': 0.0.12(@electric-sql/pglite@0.3.11)
-      postgres: 3.4.7
-      zod: 4.1.12

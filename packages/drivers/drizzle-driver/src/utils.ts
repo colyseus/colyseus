@@ -6,7 +6,20 @@ const POSTGRES_MAX_INTEGER = 2147483647;  // Max integer value in PostgreSQL
 
 // Helper function to sanitize room data before persisting
 export function sanitizeRoomData(room: Partial<IRoomCache>): IRoomCache {
-  const sanitized: any = { ...room };
+  const sanitized: any = {};
+
+  // Filter out undefined values and sanitize the data
+  // Convert undefined to null for nullable database columns
+  for (const key in room) {
+    if (room.hasOwnProperty(key)) {
+      const value = room[key];
+      if (value !== undefined) {
+        sanitized[key] = value;
+      }
+      // Note: We don't set undefined values to null because we want to omit them entirely
+      // so the database can use its default values
+    }
+  }
 
   // Convert "Infinity" to a large number
   if (sanitized.maxClients > POSTGRES_MAX_INTEGER) {
@@ -18,7 +31,9 @@ export function sanitizeRoomData(room: Partial<IRoomCache>): IRoomCache {
 
 // Build WHERE clause conditions for Drizzle ORM
 export function buildWhereClause(schema: PgTableWithColumns<any>, conditions: Partial<IRoomCache>): SQL[] {
-  return Object.entries(conditions).map(([fieldName, value]) => eq(schema[fieldName], value));
+  return Object.entries(conditions)
+    .filter(([_, value]) => value !== undefined)
+    .map(([fieldName, value]) => eq(schema[fieldName], value));
 }
 
 // Build ORDER BY clauses for Drizzle ORM
