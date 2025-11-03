@@ -3,7 +3,7 @@ import nanoid from 'nanoid';
 import { EventEmitter } from "events";
 import { type RoomException, type RoomMethodName } from '../errors/RoomExceptions.ts';
 
-import { debugAndPrintError } from '../Debug.ts';
+import { debugAndPrintError, debugMatchMaking } from '../Debug.ts';
 
 export type Type<T> = new (...args: any[]) => T;
 
@@ -46,12 +46,13 @@ export function retry<T = any>(
   return new Promise<T>((resolve, reject) => {
     cb()
       .then(resolve)
-      .catch((e) => {
+      .catch((e: any) => {
         if (
           errorWhiteList.indexOf(e.constructor) !== -1 &&
           retries++ < maxRetries
         ) {
           setTimeout(() => {
+            debugMatchMaking("retrying due to error (error: %s, retries: %s, maxRetries: %s)", e.message, retries, maxRetries);
             retry<T>(cb, maxRetries, errorWhiteList, retries).
               then(resolve).
               catch((e2) => reject(e2));
