@@ -300,7 +300,6 @@ describe("Integration", () => {
             ]);
 
             const room = matchMaker.getLocalRoomById(roomId);
-
             assert.strictEqual(2, room.clients.length);
             assert.strictEqual(2, roomsCreated);
           });

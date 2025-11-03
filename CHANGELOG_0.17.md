@@ -20,6 +20,7 @@ onMessage() -> onMessageBytes()
 
 ## TODO:
 
+[ ] `RedisDriver`: implement `boot()` to create LUA Script for filtering rooms at the server instead of at the Redis client
 [x] debug:* logs should go to STDOUT (not STDERR)
 [x] `RoomCache`: remove mongodb-like methods like `.updateOne()`, `save()`, and `remove()`
 [x] Check why this test outputs `Error: UNDEFINED_VALUE` for `PostgresDriver`: `npm test -- --grep 'should not exceed maxClients'`
@@ -29,3 +30,4 @@ onMessage() -> onMessageBytes()
 [ ] PostgreSQL match-making driver
 [ ] How to use new `messages = {}` for raw binary data? (`.onMessageBytes()` ??)
 [ ] Add Unity-like schema callbacks for TypeScript
+[ ] Colyseus Cloud: allow `@colyseus/tools` - `listen()` method to accept a raw `server` instance and make it compatible with Colyseus Cloud infrastructure.

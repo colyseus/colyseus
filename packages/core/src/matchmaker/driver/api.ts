@@ -1,3 +1,5 @@
+import type { RegisteredHandler } from "../RegisteredHandler.ts";
+
 export interface SortOptions {
   [fieldName: string]: 1 | -1 | 'asc' | 'desc' | 'ascending' | 'descending';
 }
@@ -157,8 +159,8 @@ export interface MatchMakerDriver {
   persist(room: IRoomCache, create?: boolean): Promise<boolean> | boolean;
 
   /**
-   * Empty the room cache.
-   * Used for testing purposes only.
+   * Empty the room cache. Used for testing purposes only.
+   * @internal Do not call this method yourself.
    */
   clear(): void;
 

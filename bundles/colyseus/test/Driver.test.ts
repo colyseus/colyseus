@@ -1,14 +1,7 @@
 import assert from "assert";
 import { generateId, initializeRoomCache, LocalDriver, matchMaker, RedisDriver, type IRoomCache, type MatchMakerDriver } from "../src/index.ts";
-import { PostgresDriver } from "@colyseus/drizzle-driver";
 
-// import { DRIVERS } from "./utils/index.ts";
-
-export const DRIVERS = [
-  // LocalDriver,
-  // RedisDriver,
-  PostgresDriver,
-];
+import { DRIVERS } from "./utils/index.ts";
 
 describe("Driver implementations", () => {
   for (let i = 0; i < DRIVERS.length; i++) {
@@ -25,7 +18,7 @@ describe("Driver implementations", () => {
       // Make sure to clear driver's data after all tests run
       after(async () => {
         driver = new DRIVERS[i]();
-        await driver.boot();
+        if (driver.boot) { await driver.boot(); }
         await driver.clear()
         await driver.shutdown();
       })
@@ -103,8 +96,8 @@ describe("Driver implementations", () => {
 
           const count = 400;
           for (let i = 0; i < count; i++) {
-            await createAndPersist({ processId: p1, roomId: generateId() });
-            await createAndPersist({ processId: p2, roomId: generateId() });
+            await createAndPersist({ name: "test1", processId: p1, roomId: generateId() });
+            await createAndPersist({ name: "test1", processId: p2, roomId: generateId() });
           }
 
           assert.strictEqual(count, (await driver.query({ processId: p1 })).length);
@@ -121,8 +114,8 @@ describe("Driver implementations", () => {
 
           const count = 600;
           for (let i = 0; i < count; i++) {
-            await createAndPersist({ processId: p1, roomId: generateId() });
-            await createAndPersist({ processId: p2, roomId: generateId() });
+            await createAndPersist({ name: "test1", processId: p1, roomId: generateId() });
+            await createAndPersist({ name: "test1", processId: p2, roomId: generateId() });
           }
 
           assert.strictEqual(count, (await driver.query({ processId: p1 })).length);

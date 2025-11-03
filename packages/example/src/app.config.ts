@@ -1,6 +1,6 @@
 import config, { listen } from "@colyseus/tools";
 import { createEndpoint, createRouter, defineRoom } from "@colyseus/core";
-import { DrizzleDriver } from "@colyseus/drizzle-driver";
+import { PostgresDriver } from "@colyseus/drizzle-driver";
 import { playground } from "@colyseus/playground";
 
 // import { Client } from "@colyseus/sdk";
@@ -13,7 +13,7 @@ const listThings = createEndpoint("/things", { method: "GET" }, async (ctx) => {
 
 const server = config({
   options: {
-    driver: new DrizzleDriver(),
+    driver: new PostgresDriver(),
   },
 
   rooms: {

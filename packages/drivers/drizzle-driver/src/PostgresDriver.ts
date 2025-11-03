@@ -1,30 +1,34 @@
 import postgres from 'postgres';
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
-import { pgTable, text, integer, boolean, timestamp, jsonb, getTableConfig, varchar } from 'drizzle-orm/pg-core';
+import { pgTable, integer, boolean, timestamp, jsonb, getTableConfig, varchar } from 'drizzle-orm/pg-core';
 import { eq, and, asc, desc, sql } from 'drizzle-orm';
 
 import {
   type IRoomCache,
   type MatchMakerDriver,
+  type RegisteredHandler,
   type SortOptions,
   debugMatchMaking,
-  isDevMode,
+  matchMaker,
 } from '@colyseus/core';
 
 import { sanitizeRoomData, generateCreateTableSQL, buildWhereClause, buildOrderBy } from './utils.ts';
 
-// Define the roomcaches table schema using Drizzle
+/**
+ * Define default `roomcaches` table schema using Drizzle
+ * May be overridden by the user by providing a custom schema in the constructor.
+ */
 export const roomcaches = pgTable('roomcaches_v1', {
   roomId: varchar({ length: 9 }).primaryKey(),
+  processId: varchar({ length: 9 }),
+  name: varchar({ length: 64 }).notNull(),
   clients: integer().notNull(),
+  maxClients: integer().notNull(),
   locked: boolean(),
   private: boolean(),
-  maxClients: integer().notNull(),
   metadata: jsonb(),
-  name: text(),
-  publicAddress: text(),
-  processId: text(),
-  createdAt: timestamp(),
+  publicAddress: varchar({ length: 255 }),
+  createdAt: timestamp().notNull().defaultNow(),
   unlisted: boolean(),
 });
 
@@ -48,7 +52,8 @@ export class PostgresDriver implements MatchMakerDriver {
 
     } else {
       this.sql = postgres(process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/postgres');
-      this.db = drizzle(this.sql, {/* logger: true */});
+      this.db = drizzle(this.sql);
+      // this.db = drizzle(this.sql, { logger: true });
     }
   }
 
@@ -98,11 +103,11 @@ export class PostgresDriver implements MatchMakerDriver {
   }
 
   public async cleanup(processId: string) {
-    const result = await this.db
+    const { count } = await this.db
       .delete(this.schema)
       .where(eq(this.schema.processId, processId))
       .execute();
-    debugMatchMaking(`DrizzleDriver: removing stale rooms by processId ${processId} (${result.count} rooms found)`);
+    debugMatchMaking(`DrizzleDriver: removing stale rooms by processId ${processId} (${count} rooms found)`);
   }
 
   public async findOne(conditions: Partial<IRoomCache>, sortOptions?: SortOptions): Promise<IRoomCache> {
@@ -119,31 +124,23 @@ export class PostgresDriver implements MatchMakerDriver {
     }
   }
 
-  private _concurrentQueries: { [key: string]: Promise<IRoomCache[]> } = {};
   private getRooms(conditions: Partial<IRoomCache>, sortOptions?: SortOptions, limit?: number) {
-    const key = JSON.stringify({ c: conditions, s: sortOptions });
-
-    // if there's a shared request, return it
-    if (this._concurrentQueries[key] !== undefined) {
-      return this._concurrentQueries[key];
-    }
+    const registeredHandler = matchMaker.getAllHandlers()[conditions.name];
 
     let query = this.db
       .select()
       .from(this.schema)
-      .where(and(...buildWhereClause(this.schema, conditions)))
+      .where(and(...buildWhereClause(registeredHandler, this.schema, conditions)))
       .$dynamic();
 
-    const orderBy = buildOrderBy(this.schema, sortOptions);
+    // Apply order by if provided
+    const orderBy = buildOrderBy(registeredHandler, this.schema, sortOptions);
     if (orderBy.length > 0) { query = query.orderBy(...orderBy); }
+
+    // Apply limit if provided
     if (limit !== undefined) { query = query.limit(limit); }
 
-    this._concurrentQueries[key] = query.then((result) => {
-      delete this._concurrentQueries[key];
-      return result.map((room) => room as IRoomCache);
-    });
-
-    return this._concurrentQueries[key];
+    return query.then((result) => result.map((room) => room));
   }
 
   public async update(room: IRoomCache, operations: Partial<{ $set: Partial<IRoomCache>, $inc: Partial<IRoomCache> }>) {
@@ -187,12 +184,12 @@ export class PostgresDriver implements MatchMakerDriver {
   public async persist(room: IRoomCache, create: boolean = false) {
     if (create) {
       // Create new record
-      const insertFields: any = sanitizeRoomData(room);
+      const insertFields: any = sanitizeRoomData(this.schema, room);
       await this.db.insert(this.schema).values(insertFields);
 
     } else {
       // Update existing record
-      const updateFields: any = sanitizeRoomData(room);
+      const updateFields: any = sanitizeRoomData(this.schema, room);
       delete updateFields.roomId; // Don't update the primary key
       await this.update(room, { $set: updateFields });
     }
@@ -201,11 +198,11 @@ export class PostgresDriver implements MatchMakerDriver {
   }
 
   public async remove(roomId: string) {
-    const result = await this.db
+    const { count } = await this.db
       .delete(this.schema)
       .where(eq(this.schema.roomId, roomId))
-      .returning();
-    return result.length > 0;
+      .execute();
+    return count > 0;
   }
 
   public async shutdown() {
@@ -216,10 +213,6 @@ export class PostgresDriver implements MatchMakerDriver {
     }
   }
 
-  //
-  // only relevant for the test-suite.
-  // not used during runtime.
-  //
   public async clear() {
     // skip if already shut down.
     if (!this.sql) { return; }

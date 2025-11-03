@@ -53,6 +53,7 @@ describe("MatchMaker", () => {
        * `setup` matchmaker to re-set graceful shutdown status
        */
       beforeEach(async () => {
+        await driver.clear();
         await matchMaker.setup(undefined, driver);
         await matchMaker.accept();
       });
@@ -572,8 +573,7 @@ describe("MatchMaker", () => {
         it("should join or create concurrently", async () => {
           matchMaker.defineRoomType("concurrent", class extends Room {
             maxClients = 2;
-            // TODO: confirm if the API will stay like this...
-            onCreate(_: { cod: string }) {}
+            onCreate(_: { code: string }) {}
           }).filterBy(['code']);
 
           const codes = ["000", "111", "222"];
