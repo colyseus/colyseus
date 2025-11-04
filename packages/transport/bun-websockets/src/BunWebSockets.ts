@@ -137,7 +137,7 @@ export class BunWebSockets extends Transport {
         throw new Error('seat reservation expired.');
       }
 
-      await room._onJoin(client, {
+      await room['_onJoin'](client, {
         token: parsedURL.searchParams.get("_authToken") ?? getBearerToken(rawClient.data.headers['authorization']),
         headers: rawClient.data.headers,
         ip: rawClient.data.headers['x-real-ip'] ?? rawClient.data.headers['x-forwarded-for'] ?? rawClient.remoteAddress,

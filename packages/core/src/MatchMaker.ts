@@ -3,7 +3,7 @@ import { ErrorCode, Protocol } from './Protocol.ts';
 
 import { requestFromIPC, subscribeIPC, subscribeWithTimeout } from './IPC.ts';
 
-import { type Type, Deferred, generateId, merge, retry, MAX_CONCURRENT_CREATE_ROOM_WAIT_TIME, REMOTE_ROOM_SHORT_TIMEOUT } from './utils/Utils.ts';
+import { type Type, Deferred, generateId, merge, retry, MAX_CONCURRENT_CREATE_ROOM_WAIT_TIME, REMOTE_ROOM_SHORT_TIMEOUT, type MethodName, type ExtractMethodOrPropertyType } from './utils/Utils.ts';
 import { isDevMode, cacheRoomHistory, getPreviousProcessId, getRoomRestoreListKey, reloadFromCache } from './utils/DevMode.ts';
 
 import { RegisteredHandler } from './matchmaker/RegisteredHandler.ts';
@@ -337,17 +337,17 @@ export async function findOneRoomAvailable(
  *
  * @returns Promise<any> - Returned value from the called or retrieved method/attribute.
  */
-export async function remoteRoomCall<R= any>(
+export async function remoteRoomCall<TRoom = Room>(
   roomId: string,
-  method: string,
+  method: keyof TRoom,
   args?: any[],
   rejectionTimeout = REMOTE_ROOM_SHORT_TIMEOUT,
-): Promise<R> {
-  const room = rooms[roomId];
+): Promise<ExtractMethodOrPropertyType<TRoom, typeof method>> {
+  const room = rooms[roomId] as TRoom;
 
   if (!room) {
     try {
-      return await requestFromIPC<R>(presence, getRoomChannel(roomId), method, args, rejectionTimeout);
+      return await requestFromIPC(presence, getRoomChannel(roomId), method as string, args, rejectionTimeout);
 
     } catch (e: any) {
 
@@ -362,7 +362,7 @@ export async function remoteRoomCall<R= any>(
 
       // TODO: for 1.0, consider always throwing previous error directly.
 
-      const request = `${method}${args && ' with args ' + JSON.stringify(args) || ''}`;
+      const request = `${String(method)}${args && ' with args ' + JSON.stringify(args) || ''}`;
       throw new ServerError(
         ErrorCode.MATCHMAKE_UNHANDLED,
         `remote room (${roomId}) timed out, requesting "${request}". (${rejectionTimeout}ms exceeded)`,
@@ -371,8 +371,8 @@ export async function remoteRoomCall<R= any>(
 
   } else {
     return (!args && typeof (room[method]) !== 'function')
-        ? room[method]
-        : (await room[method].apply(room, args && JSON.parse(JSON.stringify(args))));
+        ? room[method as string]
+        : (await room[method as string].apply(room, args && JSON.parse(JSON.stringify(args))));
   }
 }
 
@@ -511,7 +511,7 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
 
 export async function handleCreateRoom(roomName: string, clientOptions: ClientOptions, restoringRoomId?: string): Promise<IRoomCache> {
   const handler = getHandler(roomName);
-  const room = new handler.klass();
+  const room: Room = new handler.klass();
 
   // set room public attributes
   if (restoringRoomId && isDevMode) {
@@ -572,19 +572,19 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
   stats.local.roomCount++;
   stats.persist();
 
-  room._events.on('lock', lockRoom.bind(undefined, room));
-  room._events.on('unlock', unlockRoom.bind(undefined, room));
-  room._events.on('join', onClientJoinRoom.bind(undefined, room));
-  room._events.on('leave', onClientLeaveRoom.bind(undefined, room));
-  room._events.on('visibility-change', onVisibilityChange.bind(undefined, room));
-  room._events.once('dispose', disposeRoom.bind(undefined, roomName, room));
+  room['_events'].on('lock', lockRoom.bind(undefined, room));
+  room['_events'].on('unlock', unlockRoom.bind(undefined, room));
+  room['_events'].on('join', onClientJoinRoom.bind(undefined, room));
+  room['_events'].on('leave', onClientLeaveRoom.bind(undefined, room));
+  room['_events'].on('visibility-change', onVisibilityChange.bind(undefined, room));
+  room['_events'].once('dispose', disposeRoom.bind(undefined, roomName, room));
 
   // when disconnect()'ing, keep only join/leave events for stat counting
-  room._events.once('disconnect', () => {
-    room._events.removeAllListeners('lock');
-    room._events.removeAllListeners('unlock');
-    room._events.removeAllListeners('visibility-change');
-    room._events.removeAllListeners('dispose');
+  room['_events'].once('disconnect', () => {
+    room['_events'].removeAllListeners('lock');
+    room['_events'].removeAllListeners('unlock');
+    room['_events'].removeAllListeners('visibility-change');
+    room['_events'].removeAllListeners('dispose');
 
     //
     // emit "no active rooms" event when there are no more rooms in this process
@@ -724,9 +724,9 @@ export async function reserveSeatFor(room: IRoomCache, options: ClientOptions, a
   let successfulSeatReservation: boolean;
 
   try {
-    successfulSeatReservation = await remoteRoomCall(
+    successfulSeatReservation = await remoteRoomCall<Room>(
       room.roomId,
-      '_reserveSeat',
+      '_reserveSeat' as keyof Room,
       [sessionId, options, authData],
       REMOTE_ROOM_SHORT_TIMEOUT,
     );

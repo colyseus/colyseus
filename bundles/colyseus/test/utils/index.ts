@@ -103,7 +103,7 @@ export class WebSocketClient implements Client, ClientPrivate {
   }
 
   async confirmJoinRoom(room: Room) {
-    await room._onJoin(this, { headers: new Headers(), ip: "127.0.0.1" });
+    await room['_onJoin'](this, { headers: new Headers(), ip: "127.0.0.1" });
 
     //
     // this simulates when the client-side has sent the `Protocol.JOIN_ROOM` message

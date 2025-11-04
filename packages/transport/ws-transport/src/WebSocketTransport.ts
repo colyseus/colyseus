@@ -139,7 +139,7 @@ export class WebSocketTransport extends Transport {
         throw new Error('seat reservation expired.');
       }
 
-      await room._onJoin(client, {
+      await room['_onJoin'](client, {
         headers: new Headers(req.headers),
         token: parsedURL.searchParams.get("_authToken") ?? getBearerToken(req.headers.authorization),
         ip: req.headers['x-real-ip'] ?? req.headers['x-forwarded-for'] ?? req.socket.remoteAddress,

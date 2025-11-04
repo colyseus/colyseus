@@ -135,15 +135,14 @@ export abstract class Room<
    */
   public clients: ClientArray<this['~client']> = new ClientArray();
 
-  /** @internal */
-  public _events = new EventEmitter();
+  private _events = new EventEmitter();
 
   // seat reservation & reconnection
-  protected seatReservationTime: number = DEFAULT_SEAT_RESERVATION_TIME;
-  protected reservedSeats: { [sessionId: string]: [any, any, boolean?, boolean?] } = {};
-  protected reservedSeatTimeouts: { [sessionId: string]: NodeJS.Timeout } = {};
+  private seatReservationTime: number = DEFAULT_SEAT_RESERVATION_TIME;
+  private reservedSeats: { [sessionId: string]: [any, any, boolean?, boolean?] } = {};
+  private reservedSeatTimeouts: { [sessionId: string]: NodeJS.Timeout } = {};
 
-  protected _reconnections: { [reconnectionToken: string]: [string, Deferred] } = {};
+  private _reconnections: { [reconnectionToken: string]: [string, Deferred] } = {};
   private _reconnectingSessionId = new Map<string, string>();
 
   public messages?: Record<string, (client: this['~client'], message: any) => void>;
@@ -151,7 +150,7 @@ export abstract class Room<
   private onMessageEvents = createNanoEvents();
   private onMessageValidators: {[message: string]: StandardSchemaV1} = {};
 
-  protected onMessageFallbacks = {
+  private onMessageFallbacks = {
     '__no_message_handler': (client: this['~client'], messageType: string, _: unknown) => {
       const errorMessage = `room onMessage for "${messageType}" not registered.`;
       debugAndPrintError(`${errorMessage} (roomId: ${this.roomId})`);
@@ -183,7 +182,7 @@ export abstract class Room<
 
   constructor() {
     this._events.once('dispose', () => {
-      this._dispose()
+      this.#_dispose()
         .catch((e) => debugAndPrintError(`onDispose error: ${(e && e.stack || e.message || e || 'promise rejected')} (roomId: ${this.roomId})`))
         .finally(() => this._events.emit('disconnect'));
     });
@@ -200,7 +199,7 @@ export abstract class Room<
    * This method is called by the MatchMaker before onCreate()
    * @internal
    */
-  protected __init() {
+  private __init() {
     this.#_state = this.state;
     this.#_autoDispose = this.autoDispose;
     this.#_patchRate = this.patchRate;
@@ -728,7 +727,7 @@ export abstract class Room<
     if (numClients > 0) {
       // clients may have `async onLeave`, room will be disposed after they're fulfilled
       while (numClients--) {
-        this._forciblyCloseClient(this.clients[numClients] as this['~client'] & ClientPrivate, closeCode);
+        this.#_forciblyCloseClient(this.clients[numClients] as this['~client'] & ClientPrivate, closeCode);
       }
 
     } else {
@@ -739,7 +738,7 @@ export abstract class Room<
     return delayedDisconnection;
   }
 
-  public async ['_onJoin'](client: this['~client'] & ClientPrivate, authContext: AuthContext) {
+  private async _onJoin(client: this['~client'] & ClientPrivate, authContext: AuthContext) {
     const sessionId = client.sessionId;
 
     // generate unique private reconnection token
@@ -812,7 +811,7 @@ export abstract class Room<
           } catch (e) {
             // remove seat reservation
             delete this.reservedSeats[sessionId];
-            await this._decrementClientCount();
+            await this.#_decrementClientCount();
             throw e;
           }
         }
@@ -964,7 +963,7 @@ export abstract class Room<
     return reconnection;
   }
 
-  protected resetAutoDisposeTimeout(timeoutInSeconds: number = 1) {
+  private resetAutoDisposeTimeout(timeoutInSeconds: number = 1) {
     clearTimeout(this._autoDisposeTimeout);
 
     if (!this.#_autoDispose) {
@@ -973,7 +972,7 @@ export abstract class Room<
 
     this._autoDisposeTimeout = setTimeout(() => {
       this._autoDisposeTimeout = undefined;
-      this._disposeIfEmpty();
+      this.#_disposeIfEmpty();
     }, timeoutInSeconds * 1000);
   }
 
@@ -1000,11 +999,11 @@ export abstract class Room<
     }
   }
 
-  protected sendFullState(client: Client): void {
+  private sendFullState(client: Client): void {
     client.raw(this._serializer.getFullState(client));
   }
 
-  protected _dequeueAfterPatchMessages() {
+  private _dequeueAfterPatchMessages() {
     const length = this._afterNextPatchQueue.length;
 
     if (length > 0) {
@@ -1025,7 +1024,7 @@ export abstract class Room<
     }
   }
 
-  protected async _reserveSeat(
+  private async _reserveSeat(
     sessionId: string,
     joinOptions: any = true,
     authData: any = undefined,
@@ -1040,12 +1039,12 @@ export abstract class Room<
     this.reservedSeats[sessionId] = [joinOptions, authData, false, allowReconnection];
 
     if (!allowReconnection) {
-      await this._incrementClientCount();
+      await this.#_incrementClientCount();
 
       this.reservedSeatTimeouts[sessionId] = setTimeout(async () => {
         delete this.reservedSeats[sessionId];
         delete this.reservedSeatTimeouts[sessionId];
-        await this._decrementClientCount();
+        await this.#_decrementClientCount();
       }, seconds * 1000);
 
       this.resetAutoDisposeTimeout(seconds);
@@ -1061,7 +1060,7 @@ export abstract class Room<
     return true;
   }
 
-  protected _disposeIfEmpty() {
+  #_disposeIfEmpty() {
     const willDispose = (
       this.#_onLeaveConcurrent === 0 && // no "onLeave" calls in progress
       this.#_autoDispose &&
@@ -1077,7 +1076,7 @@ export abstract class Room<
     return willDispose;
   }
 
-  protected async _dispose(): Promise<any> {
+  async #_dispose(): Promise<any> {
     this._internalState = RoomInternalState.DISPOSING;
 
     // If the room is still CREATING, the roomId is not yet set.
@@ -1112,7 +1111,7 @@ export abstract class Room<
     return await (userReturnData || Promise.resolve());
   }
 
-  protected _onMessage(client: this['~client'] & ClientPrivate, buffer: Buffer) {
+  private _onMessage(client: this['~client'] & ClientPrivate, buffer: Buffer) {
     // skip if client is on LEAVING state.
     if (client.state === ClientState.LEAVING) { return; }
 
@@ -1192,12 +1191,11 @@ export abstract class Room<
       delete client._enqueuedMessages;
 
     } else if (code === Protocol.LEAVE_ROOM) {
-      this._forciblyCloseClient(client, Protocol.WS_CLOSE_CONSENTED);
+      this.#_forciblyCloseClient(client, Protocol.WS_CLOSE_CONSENTED);
     }
-
   }
 
-  protected _forciblyCloseClient(client: this['~client'] & ClientPrivate, closeCode: number) {
+  #_forciblyCloseClient(client: this['~client'] & ClientPrivate, closeCode: number) {
     // stop receiving messages from this client
     client.ref.removeAllListeners('message');
 
@@ -1208,7 +1206,7 @@ export abstract class Room<
     this._onLeave(client, closeCode).then(() => client.leave(closeCode));
   }
 
-  protected async _onLeave(client: this['~client'], code?: number): Promise<any> {
+  private async _onLeave(client: this['~client'], code?: number): Promise<any> {
     debugMatchMaking('onLeave, sessionId: \'%s\' (close code: %d, roomId: %s)', client.sessionId, code, this.roomId);
 
     // call 'onLeave' method only if the client has been successfully accepted.
@@ -1235,18 +1233,18 @@ export abstract class Room<
     // check for manual "reconnection" flow
     if (this._reconnections[client.reconnectionToken]) {
       this._reconnections[client.reconnectionToken][1].catch(async () => {
-        await this._onAfterLeave(client);
+        await this.#_onAfterLeave(client);
       });
 
       // @ts-ignore (client.state may be modified at onLeave())
     } else if (client.state !== ClientState.RECONNECTED) {
-      await this._onAfterLeave(client);
+      await this.#_onAfterLeave(client);
     }
   }
 
-  protected async _onAfterLeave(client: Client) {
+  async #_onAfterLeave(client: Client) {
     // try to dispose immediately if client reconnection isn't set up.
-    const willDispose = await this._decrementClientCount();
+    const willDispose = await this.#_decrementClientCount();
 
     // trigger 'leave' only if seat reservation has been fully consumed
     if (this.reservedSeats[client.sessionId] === undefined) {
@@ -1255,7 +1253,7 @@ export abstract class Room<
 
   }
 
-  protected async _incrementClientCount() {
+  async #_incrementClientCount() {
     // lock automatically when maxClients is reached
     if (!this.#_locked && this.hasReachedMaxClients()) {
       this.#_maxClientsReached = true;
@@ -1270,8 +1268,8 @@ export abstract class Room<
     });
   }
 
-  protected async _decrementClientCount() {
-    const willDispose = this._disposeIfEmpty();
+  async #_decrementClientCount() {
+    const willDispose = this.#_disposeIfEmpty();
 
     if (this._internalState === RoomInternalState.DISPOSING) {
       return true;

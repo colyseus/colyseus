@@ -56,7 +56,7 @@
     "@types/nanoid": "^2.0.0"
   },
   "peerDependencies": {
-    "@colyseus/schema": "^3.0.0",
+    "@colyseus/schema": "^3.0.66",
     "@pm2/io": "^6.1.0"
   },
   "publishConfig": {

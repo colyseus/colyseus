@@ -1,5 +1,6 @@
 ## Bug fixes to document
 [ ] `LobbyRoom` / `enableRealtimeListing()`: fix removing room from lobby listing when room is disposed.
+[ ] Room's protected members are now `private` for better DX. If you are using one of the undocumented protected methods, such as `resetAutoDisposeTimeout`, you can call it via `this['resetAutoDisposeTimeout']()`.
 
 ## New features to document
 
@@ -8,7 +9,7 @@
 
 ## onMessage with raw bytes
 
-onMessage() -> onMessageBytes()
+We have separate methods now for handling `onMessage()` with raw bytes: `onMessageBytes()`
 
 ## HTTP Error Codes on Matchmaking Routes
 

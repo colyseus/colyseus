@@ -184,8 +184,8 @@ importers:
         specifier: ^1.11.2
         version: 1.11.2
       '@colyseus/schema':
-        specifier: ^3.0.0
-        version: 3.0.64
+        specifier: ^3.0.66
+        version: 3.0.66
       '@colyseus/timer':
         specifier: ^1.0.3
         version: 1.0.3
@@ -747,6 +747,10 @@ packages:
 
   '@colyseus/schema@3.0.64':
     resolution: {integrity: sha512-qWrmWqYZ0uhUuQe5oPn1ztZzdObNQlxAOsvWn7j0PFoKxinAPkAqrIRhpa0sFcfB6M/BLe1v5eVMtqVr/A1Y7Q==}
+    hasBin: true
+
+  '@colyseus/schema@3.0.66':
+    resolution: {integrity: sha512-oVmsePgumdtt3U52xOTYG7pDvp/yxYsex6Ke8tz2k1Ddi4OKXyLCN3jU4F7QTu0DuuTbSMIeaQgPKWiw+bBwYQ==}
     hasBin: true
 
   '@colyseus/timer@1.0.3':
@@ -6587,6 +6591,8 @@ snapshots:
       express: 5.1.0
 
   '@colyseus/schema@3.0.64': {}
+
+  '@colyseus/schema@3.0.66': {}
 
   '@colyseus/timer@1.0.3':
     dependencies:

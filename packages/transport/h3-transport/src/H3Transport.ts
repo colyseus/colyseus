@@ -224,7 +224,7 @@ export class H3Transport extends Transport {
         throw new Error('seat reservation expired.');
       }
 
-      await room._onJoin(h3Client, req);
+      await room['_onJoin'](h3Client, req);
 
     } catch (e: any) {
       debugAndPrintError(e);

@@ -6,6 +6,23 @@ import { type RoomException, type RoomMethodName } from '../errors/RoomException
 import { debugAndPrintError, debugMatchMaking } from '../Debug.ts';
 
 export type Type<T> = new (...args: any[]) => T;
+export type MethodName<T> = string & {
+  [K in keyof T]: T[K] extends (...args: any[]) => any ? K : never
+}[keyof T];
+
+/**
+ * Utility type that extracts the return type of a method or the type of a property
+ * from a given class/object type.
+ *
+ * - If the key is a method, returns the awaited return type of that method
+ * - If the key is a property, returns the type of that property
+ */
+export type ExtractMethodOrPropertyType<
+  TClass,
+  TKey extends keyof TClass
+> = TClass[TKey] extends (...args: any[]) => infer R
+  ? Awaited<R>
+  : TClass[TKey];
 
 // remote room call timeouts
 export const REMOTE_ROOM_SHORT_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_SHORT_TIMEOUT || 2000);

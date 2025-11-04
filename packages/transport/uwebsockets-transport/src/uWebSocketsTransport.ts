@@ -181,7 +181,7 @@ export class uWebSocketsTransport extends Transport {
                 throw new Error('seat reservation expired.');
             }
 
-            await room._onJoin(client, rawClient.context);
+            await room['_onJoin'](client, rawClient.context);
 
         } catch (e: any) {
             debugAndPrintError(e);

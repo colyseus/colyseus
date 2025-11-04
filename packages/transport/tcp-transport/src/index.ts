@@ -4,7 +4,7 @@ import {
   generateId,
   matchMaker,
   Protocol,
-  ServerOptions,
+  type ServerOptions,
   Transport,
   debugAndPrintError,
   debugError,
@@ -20,6 +20,7 @@ export class TCPTransport extends Transport {
   constructor(options: ServerOptions = {}) {
     super();
 
+    // @ts-ignore
     this.server = net.createServer();
     this.server.on('connection', this.onConnection);
   }
@@ -79,9 +80,9 @@ export class TCPTransport extends Transport {
           throw new Error('seat reservation expired.');
         }
 
-        await room._onJoin(client);
+        await room['_onJoin'](client, { headers: new Headers(), ip: "127.0.0.1" });
 
-      } catch (e) {
+      } catch (e: any) {
         debugAndPrintError(e);
         // send[Protocol.ERROR](client, (e && e.message) || '');
         client.close(Protocol.WS_CLOSE_WITH_ERROR);
