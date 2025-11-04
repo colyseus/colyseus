@@ -153,7 +153,7 @@ export abstract class Room<
   private onMessageFallbacks = {
     '__no_message_handler': (client: this['~client'], messageType: string, _: unknown) => {
       const errorMessage = `room onMessage for "${messageType}" not registered.`;
-      debugAndPrintError(`${errorMessage} (roomId: ${this.roomId})`);
+      debugMessage(`${errorMessage} (roomId: ${this.roomId})`);
 
       if (isDevMode) {
         // send error code to client in development mode
