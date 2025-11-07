@@ -537,7 +537,7 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
   room.presence = presence;
 
   // initialize a RoomCache instance
-  room.listing = initializeRoomCache({
+  room['_listing'] = initializeRoomCache({
     name: roomName,
     processId,
     ...handler.getMetadataFromOptions(clientOptions)
@@ -545,7 +545,7 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
 
   // assign public host
   if (publicAddress) {
-    room.listing.publicAddress = publicAddress;
+    room['_listing'].publicAddress = publicAddress;
   }
 
   if (room.onCreate) {
@@ -563,8 +563,8 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
 
   room['_internalState'] = RoomInternalState.CREATED;
 
-  room.listing.roomId = room.roomId;
-  room.listing.maxClients = room.maxClients;
+  room['_listing'].roomId = room.roomId;
+  room['_listing'].maxClients = room.maxClients;
 
   // imediatelly ask client to join the room
   debugMatchMaking('spawning \'%s\', roomId: %s, processId: %s', roomName, room.roomId, processId);
@@ -601,12 +601,12 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
 
   // persist room data only if match-making is enabled
   if (state !== MatchMakerState.SHUTTING_DOWN) {
-    await driver.persist(room.listing, true);
+    await driver.persist(room['_listing'], true);
   }
 
   handler.emit('create', room);
 
-  return room.listing;
+  return room['_listing'];
 }
 
 /**
@@ -978,7 +978,7 @@ async function disposeRoom(roomName: string, room: Room) {
   // in a broken state. (repeated ipc_timeout's for seat reservation on
   // non-existing rooms)
   //
-  driver.remove(room.listing.roomId);
+  driver.remove(room['_listing'].roomId);
   stats.local.roomCount--;
 
   // decrease amount of rooms this process is handling

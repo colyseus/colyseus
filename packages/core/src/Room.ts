@@ -74,7 +74,7 @@ export abstract class Room<
    * Get the room's matchmaking metadata.
    */
   public get metadata() {
-    return this.listing.metadata;
+    return this._listing.metadata;
   }
 
   /**
@@ -97,14 +97,14 @@ export abstract class Room<
       throw new ServerError(ErrorCode.APPLICATION_ERROR, "'metadata' can only be manually set during onCreate(). Use setMatchmaking() instead.");
     }
 
-    this.listing.metadata = meta;
+    this._listing.metadata = meta;
   }
 
   /**
    * The room listing cache for matchmaking.
    * @internal
    */
-  public listing: IRoomCache<Metadata>;
+  private _listing: IRoomCache<Metadata>;
 
   /**
    * Timing events tied to the room instance.
@@ -525,33 +525,33 @@ export abstract class Room<
   }
 
   public async setMetadata(meta: Partial<Metadata>, persist: boolean = true) {
-    if (!this.listing.metadata) {
-      this.listing.metadata = meta as Metadata;
+    if (!this._listing.metadata) {
+      this._listing.metadata = meta as Metadata;
 
     } else {
       for (const field in meta) {
         if (!meta.hasOwnProperty(field)) { continue; }
-        this.listing.metadata[field] = meta[field];
+        this._listing.metadata[field] = meta[field];
       }
 
       // `MongooseDriver` workaround: persit metadata mutations
-      if ('markModified' in this.listing) {
-        (this.listing as any).markModified('metadata');
+      if ('markModified' in this._listing) {
+        (this._listing as any).markModified('metadata');
       }
     }
 
     if (persist && this._internalState === RoomInternalState.CREATED) {
-      await matchMaker.driver.persist(this.listing);
+      await matchMaker.driver.persist(this._listing);
     }
   }
 
   public async setPrivate(bool: boolean = true, persist: boolean = true) {
-    if (this.listing.private === bool) return;
+    if (this._listing.private === bool) return;
 
-    this.listing.private = bool;
+    this._listing.private = bool;
 
     if (persist && this._internalState === RoomInternalState.CREATED) {
-      await matchMaker.driver.persist(this.listing);
+      await matchMaker.driver.persist(this._listing);
     }
 
     this._events.emit('visibility-change', bool);
@@ -627,7 +627,7 @@ export abstract class Room<
 
         case 'maxClients': {
           this.#_maxClients = updates.maxClients;
-          this.listing.maxClients = updates.maxClients;
+          this._listing.maxClients = updates.maxClients;
 
           const hasReachedMaxClients = this.hasReachedMaxClients();
 
@@ -635,7 +635,7 @@ export abstract class Room<
           if (!this._lockedExplicitly && this.#_maxClientsReached && !hasReachedMaxClients) {
             this.#_maxClientsReached = false;
             this.#_locked = false;
-            this.listing.locked = false;
+            this._listing.locked = false;
             updates.locked = false;
           }
 
@@ -643,7 +643,7 @@ export abstract class Room<
           if (hasReachedMaxClients) {
             this.#_maxClientsReached = true;
             this.#_locked = true;
-            this.listing.locked = true;
+            this._listing.locked = true;
             updates.locked = true;
           }
 
@@ -657,7 +657,7 @@ export abstract class Room<
 
         default: {
           // Allow any other listing properties to be updated
-          this.listing[key] = updates[key];
+          this._listing[key] = updates[key];
           break;
         }
       }
@@ -665,7 +665,7 @@ export abstract class Room<
 
     // Only persist if room is not CREATING
     if (this._internalState === RoomInternalState.CREATED) {
-      await matchMaker.driver.update(this.listing, { $set: updates });
+      await matchMaker.driver.update(this._listing, { $set: updates });
     }
   }
 
@@ -683,7 +683,7 @@ export abstract class Room<
 
     // Only persist if this is an explicit lock/unlock
     if (this._lockedExplicitly) {
-      await matchMaker.driver.update(this.listing, {
+      await matchMaker.driver.update(this._listing, {
         $set: { locked: this.#_locked },
       });
     }
@@ -707,7 +707,7 @@ export abstract class Room<
 
     // Only persist if this is an explicit lock/unlock
     if (arguments[0] === undefined) {
-      await matchMaker.driver.update(this.listing, {
+      await matchMaker.driver.update(this._listing, {
         $set: { locked: this.#_locked },
       });
     }
@@ -839,7 +839,7 @@ export abstract class Room<
     }
 
     this._internalState = RoomInternalState.DISPOSING;
-    matchMaker.driver.remove(this.listing.roomId);
+    matchMaker.driver.remove(this._listing.roomId);
 
     this.#_autoDispose = true;
 
@@ -1208,8 +1208,8 @@ export abstract class Room<
     this._internalState = RoomInternalState.DISPOSING;
 
     // If the room is still CREATING, the roomId is not yet set.
-    if (this.listing?.roomId !== undefined) {
-      await matchMaker.driver.remove(this.listing.roomId);
+    if (this._listing?.roomId !== undefined) {
+      await matchMaker.driver.remove(this._listing.roomId);
     }
 
     let userReturnData;
@@ -1390,7 +1390,7 @@ export abstract class Room<
       this.lock.call(this, true);
     }
 
-    await matchMaker.driver.update(this.listing, {
+    await matchMaker.driver.update(this._listing, {
       $inc: { clients: 1 },
       $set: { locked: this.#_locked },
     });
@@ -1413,7 +1413,7 @@ export abstract class Room<
       }
 
       // update room listing cache
-      await matchMaker.driver.update(this.listing, {
+      await matchMaker.driver.update(this._listing, {
         $inc: { clients: -1 },
         $set: { locked: this.#_locked },
       });

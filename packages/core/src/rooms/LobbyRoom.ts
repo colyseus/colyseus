@@ -30,7 +30,7 @@ export class LobbyRoom extends Room {
     // this.setMetadata({});
 
     // prevent LobbyRoom to notify itself
-    this.listing.unlisted = true;
+    this['_listing'].unlisted = true;
 
     this.unsubscribeLobby = await subscribeLobby((roomId, data) => {
       const roomIndex = this.rooms.findIndex((room) => room.roomId === roomId);

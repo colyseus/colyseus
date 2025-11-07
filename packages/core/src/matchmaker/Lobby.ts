@@ -6,7 +6,7 @@ import type { IRoomCache } from './driver/api.ts';
 const LOBBY_CHANNEL = '$lobby';
 
 /*
- * TODO: refactor this on v0.16
+ * TODO: refactor this on 1.0
  *
  * Some users might be relying on "1" = "removed" from the lobby due to this workaround: https://github.com/colyseus/colyseus/issues/617
  * Though, for consistency, we should invert as "0" = "invisible" and "1" = "visible".
@@ -16,8 +16,8 @@ const LOBBY_CHANNEL = '$lobby';
  * - update "subscribeLobby" to check "1" as "isVisible" instead of "removed"
  */
 
-export function updateLobby(room: Room, removed: boolean = false) {
-  const listing = room.listing;
+export function updateLobby<T extends Room>(room: T, removed: boolean = false) {
+  const listing = room['_listing'];
 
   if (listing.unlisted) return;
 
