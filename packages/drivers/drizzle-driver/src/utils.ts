@@ -52,13 +52,7 @@ export function buildWhereClause(
   return Object.entries(conditions)
     .filter(([_, value]) => value !== undefined)
     .map(([fieldName, value]) => {
-      // Check if this field exists in the schema first - schema fields take priority
-      const isMetadataField = (
-        schema[fieldName] === undefined &&
-        registeredHandler?.filterOptions?.includes(fieldName as any)
-      );
-
-      if (isMetadataField) {
+      if (schema[fieldName] === undefined) {
         // Use JSONB query for metadata fields: metadata->>'fieldName' = value
         return sql`${schema.metadata}->>${fieldName} = ${value}`;
       } else {
@@ -74,25 +68,32 @@ export function buildOrderBy(
   schema: PgTableWithColumns<any>,
   sortOptions?: SortOptions
 ): SQL[] {
-  return Object.entries(sortOptions ?? {}).map(([fieldName, direction]) => {
+  const orderByClauses: SQL[] = [];
+
+  for (const [fieldName, direction] of Object.entries(sortOptions ?? {})) {
     const isDescending = (direction === -1 || direction === 'desc' || direction === 'descending');
 
-    // Check if this field exists in the schema first - schema fields take priority
-    const isMetadataField = (
-      schema[fieldName] === undefined &&
-      registeredHandler?.sortOptions &&
-      fieldName in registeredHandler.sortOptions
-    );
+    if (schema[fieldName] === undefined) {
+      // Use JSONB query for metadata fields
+      // Check if it's a number type and cast appropriately
+      const numericField = sql`CASE WHEN jsonb_typeof(${schema.metadata}->${fieldName}) = 'number' THEN (${schema.metadata}->>${fieldName})::numeric END`;
+      const textField = sql`${schema.metadata}->>${fieldName}`;
 
-    if (isMetadataField) {
-      // Use JSONB query for metadata fields: metadata->>'fieldName'
-      const metadataField = sql`${schema.metadata}->>${fieldName}`;
-      return isDescending ? desc(metadataField) : asc(metadataField);
+      // Add numeric sort first (NULLs will be grouped), then text sort for non-numeric values
+      if (isDescending) {
+        orderByClauses.push(desc(numericField));
+        orderByClauses.push(desc(textField));
+      } else {
+        orderByClauses.push(asc(numericField));
+        orderByClauses.push(asc(textField));
+      }
     } else {
       // Use standard schema field
-      return isDescending ? desc(schema[fieldName]) : asc(schema[fieldName]);
+      orderByClauses.push(isDescending ? desc(schema[fieldName]) : asc(schema[fieldName]));
     }
-  });
+  }
+
+  return orderByClauses;
 }
 
 // Generate CREATE TABLE SQL string from Drizzle schema

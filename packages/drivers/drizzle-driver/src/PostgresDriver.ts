@@ -7,12 +7,14 @@ import {
   type IRoomCache,
   type MatchMakerDriver,
   type RegisteredHandler,
+  type Room,
   type SortOptions,
   debugMatchMaking,
   matchMaker,
 } from '@colyseus/core';
 
 import { sanitizeRoomData, generateCreateTableSQL, buildWhereClause, buildOrderBy } from './utils.ts';
+import type { ExtractMetadata } from '@colyseus/core/matchmaker/driver/api';
 
 /**
  * Define default `roomcaches` table schema using Drizzle
@@ -98,8 +100,11 @@ export class PostgresDriver implements MatchMakerDriver {
     return result.length > 0;
   }
 
-  public async query(conditions: Partial<IRoomCache>, sortOptions?: SortOptions) {
-    return await this.getRooms(conditions, sortOptions);
+  public async query<T extends Room = any>(
+    conditions: Partial<IRoomCache & ExtractMetadata<T>>,
+    sortOptions?: SortOptions
+  ): Promise<Array<IRoomCache<ExtractMetadata<T>>>> {
+    return await this.getRooms<T>(conditions, sortOptions);
   }
 
   public async cleanup(processId: string) {
@@ -110,21 +115,28 @@ export class PostgresDriver implements MatchMakerDriver {
     debugMatchMaking(`DrizzleDriver: removing stale rooms by processId ${processId} (${count} rooms found)`);
   }
 
-  public async findOne(conditions: Partial<IRoomCache>, sortOptions?: SortOptions): Promise<IRoomCache> {
+  public async findOne<T extends Room = any>(
+    conditions: Partial<IRoomCache & ExtractMetadata<T>>,
+    sortOptions?: SortOptions
+  ) {
     if (typeof conditions.roomId !== 'undefined') {
       return (await this.db
         .select()
         .from(this.schema)
         .where(eq(this.schema.roomId, conditions.roomId))
-        .limit(1))[0] as IRoomCache;
+        .limit(1))[0] as IRoomCache<ExtractMetadata<T>>;
 
     } else {
       // filter list by other conditions
-      return (await this.getRooms(conditions, sortOptions, 1))[0] as IRoomCache;
+      return (await this.getRooms<T>(conditions, sortOptions, 1))[0];
     }
   }
 
-  private getRooms(conditions: Partial<IRoomCache>, sortOptions?: SortOptions, limit?: number) {
+  private getRooms<T extends Room = any>(
+    conditions: Partial<IRoomCache & ExtractMetadata<T>>,
+    sortOptions?: SortOptions,
+    limit?: number
+  ): Promise<Array<IRoomCache<ExtractMetadata<T>>>> {
     const registeredHandler = matchMaker.getAllHandlers()[conditions.name];
 
     let query = this.db
@@ -140,7 +152,7 @@ export class PostgresDriver implements MatchMakerDriver {
     // Apply limit if provided
     if (limit !== undefined) { query = query.limit(limit); }
 
-    return query.then((result) => result.map((room) => room));
+    return query.then((result) => result.map((room) => room as IRoomCache<ExtractMetadata<T>>));
   }
 
   public async update(room: IRoomCache, operations: Partial<{ $set: Partial<IRoomCache>, $inc: Partial<IRoomCache> }>) {

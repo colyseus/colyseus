@@ -26,6 +26,8 @@ export class MyRoom extends Room {
   };
 
   onCreate(options: any) {
+    this.seatReservationTimeout = 30;
+
     // map dimensions
     this.state.mapWidth = 800;
     this.state.mapHeight = 600;

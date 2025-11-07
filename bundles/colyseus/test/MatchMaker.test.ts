@@ -398,56 +398,58 @@ describe("MatchMaker", () => {
 
       });
 
-      it("when `maxClients` is reached, the room should be locked", async () => {
-        // first client joins
-        const reservedSeat1 = await matchMaker.joinOrCreate("room3");
-        const room = matchMaker.getLocalRoomById(reservedSeat1.room.roomId);
-        assert.strictEqual(false, room.locked);
+      describe("maxClients", () => {
+        it("when `maxClients` is reached, the room should be locked", async () => {
+          // first client joins
+          const reservedSeat1 = await matchMaker.joinOrCreate("room3");
+          const room = matchMaker.getLocalRoomById(reservedSeat1.room.roomId);
+          assert.strictEqual(false, room.locked);
 
-        // more 2 clients join
-        await matchMaker.joinOrCreate("room3");
-        await matchMaker.joinOrCreate("room3");
+          // more 2 clients join
+          await matchMaker.joinOrCreate("room3");
+          await matchMaker.joinOrCreate("room3");
 
-        const roomsBeforeExpiration = await matchMaker.query({});
-        assert.strictEqual(1, roomsBeforeExpiration.length);
-        assert.strictEqual(3, roomsBeforeExpiration[0].clients);
-        assert.strictEqual(true, room.locked);
-        assert.strictEqual(true, roomsBeforeExpiration[0].locked);
-      });
-
-      it("maxClients: updating after room creation should change locked status", async () => {
-        matchMaker.defineRoomType("maxClients", class extends Room {
-          maxClients = 2;
+          const roomsBeforeExpiration = await matchMaker.query({});
+          assert.strictEqual(1, roomsBeforeExpiration.length);
+          assert.strictEqual(3, roomsBeforeExpiration[0].clients);
+          assert.strictEqual(true, room.locked);
+          assert.strictEqual(true, roomsBeforeExpiration[0].locked);
         });
 
-        const reservedSeat1 = await matchMaker.joinOrCreate("maxClients");
-        const room = matchMaker.getLocalRoomById(reservedSeat1.room.roomId);
-        assert.strictEqual(false, room.locked);
+        it("maxClients: updating after room creation should change locked status", async () => {
+          matchMaker.defineRoomType("maxClients", class extends Room {
+            maxClients = 2;
+          });
 
-        // join another, room should be locked
-        await matchMaker.joinOrCreate("maxClients");
+          const reservedSeat1 = await matchMaker.joinOrCreate("maxClients");
+          const room = matchMaker.getLocalRoomById(reservedSeat1.room.roomId);
+          assert.strictEqual(false, room.locked);
 
-        let rooms = await matchMaker.query({});
-        assert.strictEqual(1, rooms.length);
-        assert.strictEqual(2, rooms[0].clients);
-        assert.strictEqual(true, room.locked);
-        assert.strictEqual(true, rooms[0].locked);
+          // join another, room should be locked
+          await matchMaker.joinOrCreate("maxClients");
 
-        // change maxClients, room should be unlocked
-        room.maxClients = 3;
-        await timeout(20); // wait for async persist to complete
+          let rooms = await matchMaker.query({});
+          assert.strictEqual(1, rooms.length);
+          assert.strictEqual(2, rooms[0].clients);
+          assert.strictEqual(true, room.locked);
+          assert.strictEqual(true, rooms[0].locked);
 
-        rooms = await matchMaker.query({});
-        assert.strictEqual(false, room.locked);
-        assert.strictEqual(false, rooms[0].locked);
+          // change maxClients, room should be unlocked
+          room.maxClients = 3;
+          await timeout(20); // wait for async persist to complete
 
-        // change maxClients, room should be locked again
-        room.maxClients = 2;
-        await timeout(20); // wait for async persist to complete
+          rooms = await matchMaker.query({});
+          assert.strictEqual(false, room.locked);
+          assert.strictEqual(false, rooms[0].locked);
 
-        rooms = await matchMaker.query({});
-        assert.strictEqual(true, room.locked);
-        assert.strictEqual(true, rooms[0].locked);
+          // change maxClients, room should be locked again
+          room.maxClients = 2;
+          await timeout(20); // wait for async persist to complete
+
+          rooms = await matchMaker.query({});
+          assert.strictEqual(true, room.locked);
+          assert.strictEqual(true, rooms[0].locked);
+        });
       });
 
       it("seat reservation should expire", async () => {
@@ -478,43 +480,45 @@ describe("MatchMaker", () => {
         assert.strictEqual(true, roomsAfterExpiration2[0].locked);
       });
 
-      it("should automatically lock rooms", async () => {
-        const _firstRoom = await matchMaker.joinOrCreate("room3");
-        await matchMaker.joinOrCreate("room3");
-        await matchMaker.joinOrCreate("room3");
+      describe("locking rooms", () => {
+        it("should automatically lock rooms", async () => {
+          const _firstRoom = await matchMaker.joinOrCreate("room3");
+          await matchMaker.joinOrCreate("room3");
+          await matchMaker.joinOrCreate("room3");
 
-        let rooms = await matchMaker.query({});
-        assert.strictEqual(1, rooms.length);
-        assert.strictEqual(3, rooms[0].clients);
-        assert.strictEqual(true, rooms[0].locked);
+          let rooms = await matchMaker.query({});
+          assert.strictEqual(1, rooms.length);
+          assert.strictEqual(3, rooms[0].clients);
+          assert.strictEqual(true, rooms[0].locked);
 
-        const _secondRoom = await matchMaker.joinOrCreate("room3");
-        rooms = await matchMaker.query({});
+          const _secondRoom = await matchMaker.joinOrCreate("room3");
+          rooms = await matchMaker.query({});
 
-        const firstRoom = rooms.find((r) => r.roomId === _firstRoom.room.roomId);
-        const secondRoom = rooms.find((r) => r.roomId === _secondRoom.room.roomId);
-        assert.strictEqual(2, rooms.length);
-        assert.strictEqual(3, firstRoom.clients);
-        assert.strictEqual(1, secondRoom.clients);
-        assert.strictEqual(true, firstRoom.locked);
-        assert.strictEqual(false, secondRoom.locked);
-      });
+          const firstRoom = rooms.find((r) => r.roomId === _firstRoom.room.roomId);
+          const secondRoom = rooms.find((r) => r.roomId === _secondRoom.room.roomId);
+          assert.strictEqual(2, rooms.length);
+          assert.strictEqual(3, firstRoom.clients);
+          assert.strictEqual(1, secondRoom.clients);
+          assert.strictEqual(true, firstRoom.locked);
+          assert.strictEqual(false, secondRoom.locked);
+        });
 
-      it("should allow to manually lock rooms", async () => {
-        const reservedSeat1 = await matchMaker.joinOrCreate("room3");
-        await matchMaker.remoteRoomCall(reservedSeat1.room.roomId, "lock");
+        it("should allow to manually lock rooms", async () => {
+          const reservedSeat1 = await matchMaker.joinOrCreate("room3");
+          await matchMaker.remoteRoomCall(reservedSeat1.room.roomId, "lock");
 
-        const reservedSeat2 = await matchMaker.joinOrCreate("room3");
-        await matchMaker.remoteRoomCall(reservedSeat2.room.roomId, "lock");
+          const reservedSeat2 = await matchMaker.joinOrCreate("room3");
+          await matchMaker.remoteRoomCall(reservedSeat2.room.roomId, "lock");
 
-        const reservedSeat3 = await matchMaker.joinOrCreate("room3");
-        await matchMaker.remoteRoomCall(reservedSeat3.room.roomId, "lock");
+          const reservedSeat3 = await matchMaker.joinOrCreate("room3");
+          await matchMaker.remoteRoomCall(reservedSeat3.room.roomId, "lock");
 
-        let rooms = await matchMaker.query({});
-        assert.strictEqual(3, rooms.length);
-        assert.strictEqual(true, rooms[0].locked);
-        assert.strictEqual(true, rooms[1].locked);
-        assert.strictEqual(true, rooms[2].locked);
+          let rooms = await matchMaker.query({});
+          assert.strictEqual(3, rooms.length);
+          assert.strictEqual(true, rooms[0].locked);
+          assert.strictEqual(true, rooms[1].locked);
+          assert.strictEqual(true, rooms[2].locked);
+        });
       });
 
       it("remote room call should always serialize as JSON", async () => {

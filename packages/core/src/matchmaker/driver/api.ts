@@ -1,12 +1,32 @@
-import type { RegisteredHandler } from "../RegisteredHandler.ts";
+import type { Room } from "@colyseus/core";
+import type { Type } from "../../utils/Utils.ts";
 
+/**
+ * Sort options for room queries.
+ */
 export interface SortOptions {
   [fieldName: string]: 1 | -1 | 'asc' | 'desc' | 'ascending' | 'descending';
 }
 
-export type IRoomCacheSortByKeys = 'clients' | 'maxClients';
+/**
+ * Built-in room cache fields that can be used for sorting.
+ */
+export type IRoomCacheSortByKeys = 'clients' | 'maxClients' | 'createdAt';
+
+/**
+ * Built-in room cache fields that can be used for filtering.
+ */
 export type IRoomCacheFilterByKeys = 'clients' | 'maxClients' | 'processId';
 
+/**
+ * Extract metadata type from Room type
+ */
+export type ExtractMetadata<RoomType extends Room> =
+  RoomType extends Room<infer M> ? M : any;
+
+/**
+ * Generates a unique lock ID based on filter options.
+ */
 export function getLockId(filterOptions: any) {
   return Object.keys(filterOptions).map((key) => `${key}:${filterOptions[key]}`).join("-");
 }
@@ -91,11 +111,6 @@ export interface IRoomCache<Metadata = any> {
    * When the room was created.
    */
   createdAt?: Date;
-
-  /**
-   * Additional custom properties
-   */
-  [property: string]: any;
 }
 
 export interface MatchMakerDriver {
@@ -115,7 +130,10 @@ export interface MatchMakerDriver {
    *
    * @returns Promise<IRoomCache[]> | IRoomCache[] - A promise or an object contaning room metadata list.
    */
-  query(conditions: Partial<IRoomCache>, sortOptions?: SortOptions,): Promise<IRoomCache[]> | IRoomCache[];
+  query<T extends Room = any>(
+    conditions: Partial<IRoomCache & ExtractMetadata<T>>,
+    sortOptions?: SortOptions
+  ): Promise<Array<IRoomCache<ExtractMetadata<T>>>> | Array<IRoomCache<ExtractMetadata<T>>>;
 
   /**
    * Clean up rooms in room cache by process id.
@@ -130,7 +148,10 @@ export interface MatchMakerDriver {
    *
    * @returns `IRoomCache` - An object contaning filtered room metadata.
    */
-  findOne(conditions: Partial<IRoomCache>, sortOptions?: SortOptions): Promise<IRoomCache>;
+  findOne<T extends Room = any>(
+    conditions: Partial<IRoomCache & ExtractMetadata<T>>,
+    sortOptions?: SortOptions
+  ): Promise<IRoomCache<ExtractMetadata<T>>>;
 
   /**
    * Remove a room from room cache.

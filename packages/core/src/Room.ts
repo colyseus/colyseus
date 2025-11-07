@@ -71,10 +71,33 @@ export abstract class Room<
   }
 
   /**
-   * @readonly
+   * Get the room's matchmaking metadata.
    */
   public get metadata() {
     return this.listing.metadata;
+  }
+
+  /**
+   * Set the room's matchmaking metadata.
+   *
+   * **Note**: This setter does NOT automatically persist. Use `setMatchmaking()` for automatic persistence.
+   *
+   * @example
+   * ```typescript
+   * class MyRoom extends Room<{ difficulty: string; rating: number }> {
+   *   async onCreate() {
+   *     this.metadata = { difficulty: "hard", rating: 1500 };
+   *   }
+   * }
+   * ```
+   */
+  public set metadata(meta: Metadata) {
+    if (this._internalState !== RoomInternalState.CREATING) {
+      // prevent user from setting metadata after room has been created.
+      throw new ServerError(ErrorCode.APPLICATION_ERROR, "'metadata' can only be manually set during onCreate(). Use setMatchmaking() instead.");
+    }
+
+    this.listing.metadata = meta;
   }
 
   public listing: IRoomCache<Metadata>;
@@ -135,12 +158,20 @@ export abstract class Room<
    */
   public clients: ClientArray<this['~client']> = new ClientArray();
 
+  /**
+   * Set the number of seconds a room can wait for a client to effectively join the room.
+   * You should consider how long your `onAuth()` will have to wait for setting a different seat reservation time.
+   * The default value is 15 seconds. You may set the `COLYSEUS_SEAT_RESERVATION_TIME`
+   * environment variable if you'd like to change the seat reservation time globally.
+   *
+   * @default 15 seconds
+   */
+  public seatReservationTimeout: number = DEFAULT_SEAT_RESERVATION_TIME;
+
   private _events = new EventEmitter();
 
-  // seat reservation & reconnection
-  private seatReservationTime: number = DEFAULT_SEAT_RESERVATION_TIME;
-  private reservedSeats: { [sessionId: string]: [any, any, boolean?, boolean?] } = {};
-  private reservedSeatTimeouts: { [sessionId: string]: NodeJS.Timeout } = {};
+  private _reservedSeats: { [sessionId: string]: [any, any, boolean?, boolean?] } = {};
+  private _reservedSeatTimeouts: { [sessionId: string]: NodeJS.Timeout } = {};
 
   private _reconnections: { [reconnectionToken: string]: [string, Deferred] } = {};
   private _reconnectingSessionId = new Map<string, string>();
@@ -226,28 +257,7 @@ export abstract class Room<
         enumerable: true,
         get: () => this.#_maxClients,
         set: (value: number) => {
-          this.#_maxClients = value;
-
-          if (this._internalState === RoomInternalState.CREATED) {
-            const hasReachedMaxClients = this.hasReachedMaxClients();
-
-            // unlock room if maxClients has been increased
-            if (!this._lockedExplicitly && this.#_maxClientsReached && !hasReachedMaxClients) {
-              this.#_maxClientsReached = false;
-              this.#_locked = false;
-              this.listing.locked = false;
-            }
-
-            // lock room if maxClients has been decreased
-            if (hasReachedMaxClients) {
-              this.#_maxClientsReached = true;
-              this.#_locked = true;
-              this.listing.locked = true;
-            }
-
-            this.listing.maxClients = value;
-            matchMaker.driver.persist(this.listing);
-          }
+          this.setMatchmaking({ maxClients: value });
         },
       },
 
@@ -298,7 +308,7 @@ export abstract class Room<
     }
 
     // set default _autoDisposeTimeout
-    this.resetAutoDisposeTimeout(this.seatReservationTime);
+    this.resetAutoDisposeTimeout(this.seatReservationTimeout);
 
     this.clock.start();
   }
@@ -417,29 +427,22 @@ export abstract class Room<
    */
   public hasReachedMaxClients(): boolean {
     return (
-      (this.clients.length + Object.keys(this.reservedSeats).length) >= this.maxClients ||
+      (this.clients.length + Object.keys(this._reservedSeats).length) >= this.#_maxClients ||
       this._internalState === RoomInternalState.DISPOSING
     );
   }
 
   /**
-   * Set the number of seconds a room can wait for a client to effectively join the room.
-   * You should consider how long your `onAuth()` will have to wait for setting a different seat reservation time.
-   * The default value is 15 seconds. You may set the `COLYSEUS_SEAT_RESERVATION_TIME`
-   * environment variable if you'd like to change the seat reservation time globally.
-   *
-   * @default 15 seconds
-   *
-   * @param seconds - number of seconds.
-   * @returns The modified Room object.
+   * @deprecated Use `seatReservationTimeout=` instead.
    */
   public setSeatReservationTime(seconds: number) {
-    this.seatReservationTime = seconds;
+    console.warn(`DEPRECATED: .setSeatReservationTime(${seconds}) is deprecated. Assign a .seatReservationTimeout property value instead.`);
+    this.seatReservationTimeout = seconds;
     return this;
   }
 
   public hasReservedSeat(sessionId: string, reconnectionToken?: string): boolean {
-    const reservedSeat = this.reservedSeats[sessionId];
+    const reservedSeat = this._reservedSeats[sessionId];
 
     // seat reservation not found / expired
     if (reservedSeat === undefined) {
@@ -462,7 +465,7 @@ export abstract class Room<
 
   public checkReconnectionToken(reconnectionToken: string) {
     const sessionId = this._reconnections[reconnectionToken]?.[0];
-    const reservedSeat = this.reservedSeats[sessionId];
+    const reservedSeat = this._reservedSeats[sessionId];
 
     if (reservedSeat && reservedSeat[3]) {
       this._reconnectingSessionId.set(sessionId, reconnectionToken);
@@ -517,7 +520,7 @@ export abstract class Room<
     this._serializer = serializer;
   }
 
-  public async setMetadata(meta: Partial<Metadata>) {
+  public async setMetadata(meta: Partial<Metadata>, persist: boolean = true) {
     if (!this.listing.metadata) {
       this.listing.metadata = meta as Metadata;
 
@@ -533,21 +536,133 @@ export abstract class Room<
       }
     }
 
-    if (this._internalState === RoomInternalState.CREATED) {
+    if (persist && this._internalState === RoomInternalState.CREATED) {
       await matchMaker.driver.persist(this.listing);
     }
   }
 
-  public async setPrivate(bool: boolean = true) {
+  public async setPrivate(bool: boolean = true, persist: boolean = true) {
     if (this.listing.private === bool) return;
 
     this.listing.private = bool;
 
-    if (this._internalState === RoomInternalState.CREATED) {
+    if (persist && this._internalState === RoomInternalState.CREATED) {
       await matchMaker.driver.persist(this.listing);
     }
 
     this._events.emit('visibility-change', bool);
+  }
+
+  /**
+   * Update multiple matchmaking/listing properties at once with a single persist operation.
+   * This is the recommended way to update room listing properties.
+   *
+   * @param updates - Object containing the properties to update
+   *
+   * @example
+   * ```typescript
+   * // Update multiple properties at once
+   * await this.setMatchmaking({
+   *   metadata: { difficulty: "hard", rating: 1500 },
+   *   private: true,
+   *   locked: true,
+   *   maxClients: 10
+   * });
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Update only metadata
+   * await this.setMatchmaking({
+   *   metadata: { status: "in_progress" }
+   * });
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Partial metadata update (merges with existing)
+   * await this.setMatchmaking({
+   *   metadata: { ...this.metadata, round: this.metadata.round + 1 }
+   * });
+   * ```
+   */
+  public async setMatchmaking(updates: {
+    metadata?: Metadata;
+    private?: boolean;
+    locked?: boolean;
+    maxClients?: number;
+    unlisted?: boolean;
+    [key: string]: any;
+  }) {
+    for (const key in updates) {
+      if (!updates.hasOwnProperty(key)) { continue; }
+
+      switch (key) {
+        case 'metadata': {
+          this.setMetadata(updates.metadata, false);
+          break;
+        }
+
+        case 'private': {
+          this.setPrivate(updates.private, false);
+          break;
+        }
+
+        case 'locked': {
+          if (updates[key]) {
+            // @ts-ignore
+            this.lock.call(this, true);
+            this._lockedExplicitly = true;
+          } else {
+            // @ts-ignore
+            this.unlock.call(this, true);
+            this._lockedExplicitly = false;
+          }
+          break;
+        }
+
+        case 'maxClients': {
+          this.#_maxClients = updates.maxClients;
+          this.listing.maxClients = updates.maxClients;
+
+          const hasReachedMaxClients = this.hasReachedMaxClients();
+
+          // unlock room if maxClients has been increased
+          if (!this._lockedExplicitly && this.#_maxClientsReached && !hasReachedMaxClients) {
+            this.#_maxClientsReached = false;
+            this.#_locked = false;
+            this.listing.locked = false;
+            updates.locked = false;
+          }
+
+          // lock room if maxClients has been decreased
+          if (hasReachedMaxClients) {
+            this.#_maxClientsReached = true;
+            this.#_locked = true;
+            this.listing.locked = true;
+            updates.locked = true;
+          }
+
+          break;
+        }
+
+        case 'clients': {
+          console.warn("setMatchmaking() does not allow updating 'clients' property.");
+          break;
+        }
+
+        default: {
+          // Allow any other listing properties to be updated
+          this.listing[key] = updates[key];
+          break;
+        }
+      }
+    }
+
+    // Only persist if room is not CREATING
+    if (this._internalState === RoomInternalState.CREATED) {
+      await matchMaker.driver.update(this.listing, { $set: updates });
+    }
   }
 
   /**
@@ -562,9 +677,12 @@ export abstract class Room<
 
     this.#_locked = true;
 
-    await matchMaker.driver.update(this.listing, {
-      $set: { locked: this.#_locked },
-    });
+    // Only persist if this is an explicit lock/unlock
+    if (this._lockedExplicitly) {
+      await matchMaker.driver.update(this.listing, {
+        $set: { locked: this.#_locked },
+      });
+    }
 
     this._events.emit('lock');
   }
@@ -583,13 +701,19 @@ export abstract class Room<
 
     this.#_locked = false;
 
-    await matchMaker.driver.update(this.listing, {
-      $set: { locked: this.#_locked },
-    });
+    // Only persist if this is an explicit lock/unlock
+    if (arguments[0] === undefined) {
+      await matchMaker.driver.update(this.listing, {
+        $set: { locked: this.#_locked },
+      });
+    }
 
     this._events.emit('unlock');
   }
 
+  /**
+   * @deprecated Use `client.send(...)` instead.
+   */
   public send(client: Client, type: string | number, message: any, options?: ISendOptions): void;
   public send(client: Client, messageOrType: any, messageOrOptions?: any | ISendOptions, options?: ISendOptions): void {
     logger.warn('DEPRECATION WARNING: use client.send(...) instead of this.send(client, ...)');
@@ -744,9 +868,9 @@ export abstract class Room<
     // generate unique private reconnection token
     client.reconnectionToken = generateId();
 
-    if (this.reservedSeatTimeouts[sessionId]) {
-      clearTimeout(this.reservedSeatTimeouts[sessionId]);
-      delete this.reservedSeatTimeouts[sessionId];
+    if (this._reservedSeatTimeouts[sessionId]) {
+      clearTimeout(this._reservedSeatTimeouts[sessionId]);
+      delete this._reservedSeatTimeouts[sessionId];
     }
 
     // clear auto-dispose timeout.
@@ -756,7 +880,7 @@ export abstract class Room<
     }
 
     // get seat reservation options and clear it
-    const [joinOptions, authData, isConsumed, isWaitingReconnection] = this.reservedSeats[sessionId];
+    const [joinOptions, authData, isConsumed, isWaitingReconnection] = this._reservedSeats[sessionId];
 
     //
     // TODO: remove this check on 1.0.0
@@ -768,7 +892,7 @@ export abstract class Room<
     if (isConsumed) {
       throw new ServerError(ErrorCode.MATCHMAKE_EXPIRED, "already consumed");
     }
-    this.reservedSeats[sessionId][2] = true; // flag seat reservation as "consumed"
+    this._reservedSeats[sessionId][2] = true; // flag seat reservation as "consumed"
     debugMatchMaking('consuming seat reservation, sessionId: \'%s\' (roomId: %s)', client.sessionId, this.roomId);
 
     // share "after next patch queue" reference with every client.
@@ -810,7 +934,7 @@ export abstract class Room<
 
           } catch (e) {
             // remove seat reservation
-            delete this.reservedSeats[sessionId];
+            delete this._reservedSeats[sessionId];
             await this.#_decrementClientCount();
             throw e;
           }
@@ -829,8 +953,8 @@ export abstract class Room<
         // Flag sessionId as non-enumarable so hasReachedMaxClients() doesn't count it
         // (https://github.com/colyseus/colyseus/issues/726)
         //
-        Object.defineProperty(this.reservedSeats, sessionId, {
-          value: this.reservedSeats[sessionId],
+        Object.defineProperty(this._reservedSeats, sessionId, {
+          value: this._reservedSeats[sessionId],
           enumerable: false,
         });
 
@@ -844,7 +968,7 @@ export abstract class Room<
 
         } else {
           // remove seat reservation
-          delete this.reservedSeats[sessionId];
+          delete this._reservedSeats[sessionId];
 
           // emit 'join' to room handler
           this._events.emit('join', client);
@@ -854,7 +978,7 @@ export abstract class Room<
         await this._onLeave(client, Protocol.WS_CLOSE_GOING_AWAY);
 
         // remove seat reservation
-        delete this.reservedSeats[sessionId];
+        delete this._reservedSeats[sessionId];
 
         // make sure an error code is provided.
         if (!e.code) {
@@ -931,14 +1055,14 @@ export abstract class Room<
 
     if (seconds !== Infinity) {
       // expire seat reservation after timeout
-      this.reservedSeatTimeouts[sessionId] = setTimeout(() =>
+      this._reservedSeatTimeouts[sessionId] = setTimeout(() =>
         reconnection.reject(false), seconds * 1000);
     }
 
     const cleanup = () => {
       delete this._reconnections[reconnectionToken];
-      delete this.reservedSeats[sessionId];
-      delete this.reservedSeatTimeouts[sessionId];
+      delete this._reservedSeats[sessionId];
+      delete this._reservedSeatTimeouts[sessionId];
       this._reconnectingSessionId.delete(sessionId);
     };
 
@@ -951,7 +1075,7 @@ export abstract class Room<
       previousClient.state = ClientState.RECONNECTED;
       previousClient.ref = newClient.ref;
       previousClient.reconnectionToken = newClient.reconnectionToken;
-      clearTimeout(this.reservedSeatTimeouts[sessionId]);
+      clearTimeout(this._reservedSeatTimeouts[sessionId]);
 
     }, () => {
       this.resetAutoDisposeTimeout();
@@ -1028,7 +1152,7 @@ export abstract class Room<
     sessionId: string,
     joinOptions: any = true,
     authData: any = undefined,
-    seconds: number = this.seatReservationTime,
+    seconds: number = this.seatReservationTimeout,
     allowReconnection: boolean = false,
     devModeReconnection?: boolean,
   ) {
@@ -1036,14 +1160,14 @@ export abstract class Room<
       return false;
     }
 
-    this.reservedSeats[sessionId] = [joinOptions, authData, false, allowReconnection];
+    this._reservedSeats[sessionId] = [joinOptions, authData, false, allowReconnection];
 
     if (!allowReconnection) {
       await this.#_incrementClientCount();
 
-      this.reservedSeatTimeouts[sessionId] = setTimeout(async () => {
-        delete this.reservedSeats[sessionId];
-        delete this.reservedSeatTimeouts[sessionId];
+      this._reservedSeatTimeouts[sessionId] = setTimeout(async () => {
+        delete this._reservedSeats[sessionId];
+        delete this._reservedSeatTimeouts[sessionId];
         await this.#_decrementClientCount();
       }, seconds * 1000);
 
@@ -1066,7 +1190,7 @@ export abstract class Room<
       this.#_autoDispose &&
       this._autoDisposeTimeout === undefined &&
       this.clients.length === 0 &&
-      Object.keys(this.reservedSeats).length === 0
+      Object.keys(this._reservedSeats).length === 0
     );
 
     if (willDispose) {
@@ -1080,7 +1204,7 @@ export abstract class Room<
     this._internalState = RoomInternalState.DISPOSING;
 
     // If the room is still CREATING, the roomId is not yet set.
-    if (this.listing.roomId !== undefined) {
+    if (this.listing?.roomId !== undefined) {
       await matchMaker.driver.remove(this.listing.roomId);
     }
 
@@ -1247,7 +1371,7 @@ export abstract class Room<
     const willDispose = await this.#_decrementClientCount();
 
     // trigger 'leave' only if seat reservation has been fully consumed
-    if (this.reservedSeats[client.sessionId] === undefined) {
+    if (this._reservedSeats[client.sessionId] === undefined) {
       this._events.emit('leave', client, willDispose);
     }
 

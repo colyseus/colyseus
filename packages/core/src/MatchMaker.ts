@@ -22,7 +22,7 @@ import * as stats from './Stats.ts';
 
 import { logger } from './Logger.ts';
 import type { AuthContext, Client } from './Transport.ts';
-import { getLockId, initializeRoomCache } from './matchmaker/driver/api.ts';
+import { getLockId, initializeRoomCache, type ExtractMetadata } from './matchmaker/driver/api.ts';
 
 export { controller, stats, type MatchMakerDriver };
 
@@ -295,8 +295,11 @@ export async function joinById(roomId: string, clientOptions: ClientOptions = {}
 /**
  * Perform a query for all cached rooms
  */
-export async function query(conditions: Partial<IRoomCache> = {}, sortOptions?: SortOptions) {
-  return await driver.query(conditions, sortOptions);
+export async function query<T extends Room = any>(
+  conditions: Partial<IRoomCache & ExtractMetadata<T>> = {},
+  sortOptions?: SortOptions,
+) {
+  return await driver.query<T>(conditions, sortOptions);
 }
 
 /**
@@ -533,19 +536,17 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
   room.roomName = roomName;
   room.presence = presence;
 
-  const additionalListingData: any = handler.getFilterOptions(clientOptions);
-
-  // assign public host
-  if (publicAddress) {
-    additionalListingData.publicAddress = publicAddress;
-  }
-
   // initialize a RoomCache instance
   room.listing = initializeRoomCache({
     name: roomName,
     processId,
-    ...additionalListingData
+    ...handler.getMetadataFromOptions(clientOptions)
   });
+
+  // assign public host
+  if (publicAddress) {
+    room.listing.publicAddress = publicAddress;
+  }
 
   if (room.onCreate) {
     try {
