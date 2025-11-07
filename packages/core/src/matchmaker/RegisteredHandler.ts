@@ -3,7 +3,7 @@ import { logger } from '../Logger.ts';
 import { Room } from './../Room.ts';
 import { updateLobby } from './Lobby.ts';
 
-import type { IRoomCache, SortOptions, IRoomCacheFilterByKeys, IRoomCacheSortByKeys } from './driver/api.ts';
+import type { IRoomCache, SortOptions, IRoomCacheFilterByKeys, IRoomCacheSortByKeys, ExtractMetadata } from './driver/api.ts';
 import type { Client } from '../Transport.ts';
 import type { Type } from "../utils/Utils.ts";
 
@@ -21,7 +21,7 @@ export const INVALID_OPTION_KEYS: Array<keyof IRoomCache> = [
 /**
  * Type for filterBy that supports both onCreate options and metadata fields
  */
-type FilterByKeys<RoomType extends Type<Room>> =
+type FilterByKeys<RoomType extends Room> =
   | IRoomCacheFilterByKeys
   | (ExtractMetadata<RoomType> extends object
       ? keyof ExtractMetadata<RoomType> & string
@@ -30,7 +30,7 @@ type FilterByKeys<RoomType extends Type<Room>> =
 /**
  * Type for sortBy that supports room cache fields and metadata fields
  */
-type SortByKeys<RoomType extends Type<Room>> =
+type SortByKeys<RoomType extends Room> =
   | IRoomCacheSortByKeys
   | (ExtractMetadata<RoomType> extends object
       ? keyof ExtractMetadata<RoomType> & string
@@ -55,7 +55,7 @@ export class RegisteredHandler<
   public options: any;
 
   public name: string;
-  public filterOptions: Array<FilterByKeys<RoomType>> = [];
+  public filterOptions: Array<FilterByKeys<InstanceType<RoomType>>> = [];
   public sortOptions?: SortOptions;
 
   constructor(klass: RoomType, options?: any) {
@@ -102,7 +102,7 @@ export class RegisteredHandler<
    * // Mix both
    * .filterBy(['mode', 'difficulty', 'maxClients'])
    */
-  public filterBy<T extends FilterByKeys<RoomType>>(
+  public filterBy<T extends FilterByKeys<InstanceType<RoomType>>>(
     options: T[]
   ) {
     this.filterOptions = options;
@@ -125,7 +125,7 @@ export class RegisteredHandler<
    * // Multiple sort criteria
    * .sortBy({ 'metadata.skillLevel': 1, clients: -1 })
    */
-  public sortBy<T extends SortByKeys<RoomType>>(
+  public sortBy<T extends SortByKeys<InstanceType<RoomType>>>(
     options: { [K in T]: SortOptions[string] }
   ): this {
     this.sortOptions = options as unknown as SortOptions;
