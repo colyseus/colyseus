@@ -76,6 +76,7 @@ export function buildOrderBy(
     if (schema[fieldName] === undefined) {
       // Use JSONB query for metadata fields
       // Check if it's a number type and cast appropriately
+      // TODO: detect which type is before building the SQL
       const numericField = sql`CASE WHEN jsonb_typeof(${schema.metadata}->${fieldName}) = 'number' THEN (${schema.metadata}->>${fieldName})::numeric END`;
       const textField = sql`${schema.metadata}->>${fieldName}`;
 
