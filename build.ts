@@ -57,6 +57,7 @@ async function main() {
     const emitTSDeclaration = () => {
       console.log("Generating .d.ts files for...", pkgJSON.name);
       const program = ts.createProgram(entrypoints, {
+        rootDir: basePath,
         declaration: true,
         emitDeclarationOnly: true,
         resolveJsonModule: true,

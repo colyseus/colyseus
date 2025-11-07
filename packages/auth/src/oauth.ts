@@ -1,10 +1,10 @@
 import fs from 'fs';
 import path from 'path';
 import express, { Router } from 'express';
-import grant, { GrantProvider, GrantConfig, GrantSession } from 'grant';
+import grant, { type GrantProvider, type GrantConfig, type GrantSession } from 'grant';
 import session from 'express-session';
 import { matchMaker } from '@colyseus/core';
-import { MayHaveUpgradeToken, auth } from './auth.ts';
+import { type MayHaveUpgradeToken, auth } from './auth.ts';
 
 // @ts-ignore
 import RedisStore from "connect-redis";
