@@ -100,6 +100,10 @@ export abstract class Room<
     this.listing.metadata = meta;
   }
 
+  /**
+   * The room listing cache for matchmaking.
+   * @internal
+   */
   public listing: IRoomCache<Metadata>;
 
   /**
