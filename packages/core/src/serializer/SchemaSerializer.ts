@@ -60,7 +60,13 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
   public applyPatches(clients: Client[]) {
     let numClients = clients.length;
 
-    if (numClients == 0 || !this.encoder.hasChanges) {
+    if (numClients === 0) {
+      // skip patching and clear changes
+      this.encoder.discardChanges();
+      return false;
+    }
+
+    if (!this.encoder.hasChanges) {
 
       // check if views have changes (manual add() or remove() items)
       if (this.hasFilters) {
