@@ -83,10 +83,6 @@ describe("Integration", () => {
               const connection = await client.joinOrCreate('oncreate', { string: "hello", number: 1 });
               assert.strictEqual(true, onCreateCalled);
 
-              // assert 'presence' implementation
-              const room = matchMaker.getLocalRoomById(connection.roomId);
-              assert.strictEqual(presence, room.presence);
-
               await connection.leave();
             });
 
@@ -1174,6 +1170,41 @@ describe("Integration", () => {
               await room.disconnect();
             });
 
+          });
+
+          describe("Scoped Presence", () => {
+            it("should unsubscribe from all topics when room is disposed", async () => {
+              matchMaker.defineRoomType('scoped_presence', class _ extends Room {
+                async onCreate(options) {
+                  // Subscribe to multiple topics through the scoped presence
+                  await this.presence.subscribe("topic1", (data) => {});
+                  await this.presence.subscribe("topic2", (data) => {});
+                  await this.presence.subscribe("topic3", (data) => {});
+                }
+              });
+
+              // Create and join the room
+              const connection = await client.joinOrCreate('scoped_presence');
+
+              // Give time for subscriptions to be set up
+              await timeout(50);
+
+              // Verify subscriptions exist on the underlying presence
+              const channels = await presence.channels("*")
+              assert.ok(channels.includes("topic1"));
+              assert.ok(channels.includes("topic2"));
+              assert.ok(channels.includes("topic3"));
+
+              // Disconnect and dispose the room
+              await connection.leave();
+              await timeout(100);
+
+              // Verify all subscriptions were cleaned up
+              const channelsAfter = await presence.channels("*");
+              assert.ok(!channelsAfter.includes("topic1"));
+              assert.ok(!channelsAfter.includes("topic2"));
+              assert.ok(!channelsAfter.includes("topic3"));
+            });
           });
 
         });

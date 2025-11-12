@@ -1,3 +1,5 @@
+import type { Room } from "../Room.ts";
+
 /**
  * When you need to scale your server on multiple processes and/or machines, you'd need to provide
  * the Presence option to the Server. The purpose of Presence is to allow communicating and
@@ -222,4 +224,40 @@ export interface Presence {
     setMaxListeners(number: number): void;
 
     shutdown(): void;
+}
+
+export function createScopedPresence(room: Room, presence: Presence): Presence {
+  // Keep a local copy of all subscriptions made through this scoped presence
+  const subscriptions: Array<{ topic: string; callback: Function }> = [];
+
+  // Create a copy of the presence object
+  const scopedPresence = Object.create(presence) as Presence;
+
+  // Override subscribe method to track subscriptions
+  scopedPresence.subscribe = async function (topic: string, callback: Function): Promise<Presence> {
+    subscriptions.push({ topic, callback });
+    await presence.subscribe(topic, callback);
+    return scopedPresence;
+  };
+
+  // Override unsubscribe method to remove from tracking
+  scopedPresence.unsubscribe = function (topic: string, callback?: Function) {
+    const index = subscriptions.findIndex(
+      (sub) => sub.topic === topic && (!callback || sub.callback === callback)
+    );
+    if (index !== -1) {
+      subscriptions.splice(index, 1);
+    }
+    presence.unsubscribe(topic, callback);
+  };
+
+  // Clean up all subscriptions when the room is disposed
+  room['_events'].on('dispose', () => {
+    for (const { topic, callback } of subscriptions) {
+      presence.unsubscribe(topic, callback);
+    }
+    subscriptions.length = 0;
+  });
+
+  return scopedPresence;
 }

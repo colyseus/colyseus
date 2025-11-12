@@ -71,7 +71,7 @@ export class LocalPresence implements Presence {
             replaceAll("$", "\\$").
             replaceAll("*", ".*").
             replaceAll("?", "."),
-          "gi"
+          "i"
         );
         eventNames = eventNames.filter((eventName) => regexp.test(eventName));
       }

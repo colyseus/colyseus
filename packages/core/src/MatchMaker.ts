@@ -10,7 +10,7 @@ import { RegisteredHandler } from './matchmaker/RegisteredHandler.ts';
 import { type OnCreateOptions, Room, RoomInternalState } from './Room.ts';
 
 import { LocalPresence } from './presence/LocalPresence.ts';
-import type { Presence } from './presence/Presence.ts';
+import { createScopedPresence, type Presence } from './presence/Presence.ts';
 
 import { debugAndPrintError, debugMatchMaking } from './Debug.ts';
 import { SeatReservationError } from './errors/SeatReservationError.ts';
@@ -534,7 +534,7 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
   room['__init']();
 
   room.roomName = roomName;
-  room.presence = presence;
+  room.presence = createScopedPresence(room, presence);
 
   // initialize a RoomCache instance
   room['_listing'] = initializeRoomCache({

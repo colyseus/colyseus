@@ -32,9 +32,6 @@ Server.prototype['getDefaultTransport'] = function (options: ServerOptions) {
   });
 }
 
-// export const DRIVERS = [ LocalDriver, ];
-export const PRESENCE_IMPLEMENTATIONS = [ LocalPresence, ];
-
 export const DRIVERS = [
   // LocalDriver,
   // RedisDriver,
@@ -42,10 +39,10 @@ export const DRIVERS = [
   // MongooseDriver,
 ];
 
-// export const PRESENCE_IMPLEMENTATIONS = [
-//   // LocalPresence,
-//   RedisPresence
-// ];
+export const PRESENCE_IMPLEMENTATIONS = [
+  LocalPresence,
+  // RedisPresence
+];
 
 export class RawClient extends EventEmitter {
   readyState: number = WebSocket.OPEN;
