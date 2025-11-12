@@ -3,6 +3,7 @@
 [ ] Room's protected members are now `private` for better DX. If you are using one of the undocumented protected methods, such as `resetAutoDisposeTimeout`, you can call it via `this['resetAutoDisposeTimeout']()`.
 [ ] The `.setSeatReservationTime()` method has been moved to `.seatReservationTimeout=` property.
 [ ] `Room<State>` is now `Room<Metadata>`
+[ ] Room's presence pub/sub now can unsubscribe themselves upon room disposal
 
 ## New features to document
 
