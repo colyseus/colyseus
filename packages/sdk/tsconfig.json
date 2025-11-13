@@ -1,9 +1,8 @@
 {
     "extends": "./tsconfig/tsconfig.all.json",
     "compilerOptions": {
-        "module": "NodeNext",
-        "moduleResolution": "NodeNext",
-        "allowImportingTsExtensions": true,
+        "module": "ESNext",
+        "moduleResolution": "bundler",
         "emitDeclarationOnly": true,
 
         "target": "es6",
@@ -15,6 +14,18 @@
         "esModuleInterop": true,
         "experimentalDecorators": true,
         "inlineSources": true,
-        "skipLibCheck": true
-    }
+        "skipLibCheck": true,
+        "composite": false
+    },
+    "include": [
+        "src/**/*.ts",
+        "typings/cocos-creator.d.ts"
+    ],
+    "exclude": [
+        "node_modules",
+        "build",
+        "dist",
+        "lib",
+        "test"
+    ]
 }

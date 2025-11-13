@@ -58,7 +58,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git://github.com/colyseus/colyseus.js.git"
+    "url": "git://github.com/colyseus/colyseus.git"
   },
   "engines": {
     "node": ">= 12.x"

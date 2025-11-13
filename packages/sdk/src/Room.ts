@@ -81,19 +81,27 @@ export class Room<
         room.connection = connection;
 
         connection.events.onmessage = Room.prototype.onMessageCallback.bind(room);
+
         connection.events.onclose = function (e: CloseEvent) {
+            console.log("CLOSE CODE:", e.code);
             if (!room.hasJoined) {
                 console.warn?.(`Room connection was closed unexpectedly (${e.code}): ${e.reason}`);
                 room.onError.invoke(e.code, e.reason);
                 return;
             }
-            if (e.code === CloseCode.DEVMODE_RESTART && devModeCloseCallback) {
+
+            if (e.code === CloseCode.ABNORMAL_CLOSURE || e.code === CloseCode.GOING_AWAY) {
+                // TODO: retry connection
+
+            } else if (e.code === CloseCode.DEVMODE_RESTART && devModeCloseCallback) {
                 devModeCloseCallback();
+
             } else {
                 room.onLeave.invoke(e.code, e.reason);
                 room.destroy();
             }
         };
+
         connection.events.onerror = function (e: CloseEvent) {
             console.warn?.(`Room, onError (${e.code}): ${e.reason}`);
             room.onError.invoke(e.code, e.reason);

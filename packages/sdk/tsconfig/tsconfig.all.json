@@ -3,6 +3,7 @@
     "module": "commonjs",
     "lib": ["dom", "es6"],
     "allowSyntheticDefaultImports": true,
+    "allowImportingTsExtensions": true,
     "experimentalDecorators": true,
     "noImplicitAny": false,
     "inlineSources": true,

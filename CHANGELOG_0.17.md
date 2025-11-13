@@ -2,8 +2,8 @@
 [ ] `LobbyRoom` / `enableRealtimeListing()`: fix removing room from lobby listing when room is disposed.
 [ ] Room's protected members are now `private` for better DX. If you are using one of the undocumented protected methods, such as `resetAutoDisposeTimeout`, you can call it via `this['resetAutoDisposeTimeout']()`.
 [ ] The `.setSeatReservationTime()` method has been moved to `.seatReservationTimeout=` property.
-[ ] `Room<State>` is now `Room<Metadata>`
-[ ] Room's presence pub/sub now can unsubscribe themselves upon room disposal
+[ ] `Room<State>` is now `Room<Metadata>` (?? - Consider reverting this for fewer breaking changes on 0.17)
+[ ] Room's presence pub/sub now can unsubscribe themselves during `onDispose()`
 
 ## New features to document
 

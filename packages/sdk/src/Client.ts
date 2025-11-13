@@ -309,3 +309,5 @@ export class ColyseusSDK<ServerType extends Server = any> {
             : "";
     }
 }
+
+export const Client = ColyseusSDK;

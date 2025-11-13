@@ -1,4 +1,3 @@
-import type { Client } from '../Transport.ts';
 import type { Room } from '../Room.ts';
 
 export type RoomMethodName = 'onCreate'
