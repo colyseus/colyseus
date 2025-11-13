@@ -69,9 +69,7 @@ describe("Room Reconnection", () => {
 
       const conn = await client.joinOrCreate('auto_reconnect', { string: "hello", number: 1 });
 
-      await timeout(100);
-
-      const ws: WebSocket = (conn.connection.transport as any).ws;
+      await timeout(50);
 
       const room = matchMaker.getRoomById(conn.roomId);
 

@@ -1,18 +1,19 @@
+import { type Room as ServerRoom } from '@colyseus/core';
+import { decode, encode, Iterator } from '@colyseus/schema';
+
+import { Packr, unpack } from '@colyseus/msgpackr';
+
 import { Connection } from './Connection.ts';
 import { Protocol } from './Protocol.ts';
 import { getSerializer, Serializer } from './serializer/Serializer.ts';
-import { type Room as ServerRoom } from '@colyseus/core';
 
 // The unused imports here are important for better `.d.ts` file generation
 // (Later merged with `dts-bundle-generator`)
 import { createNanoEvents } from './core/nanoevents.ts';
 import { createSignal } from './core/signal.ts';
 
-import { decode, encode, Iterator } from '@colyseus/schema';
 import { SchemaConstructor, SchemaSerializer } from './serializer/SchemaSerializer.ts';
 import { CloseCode } from './errors/Errors.ts';
-
-import { Packr, unpack } from '@colyseus/msgpackr';
 
 export interface RoomAvailable<Metadata = any> {
     name: string;

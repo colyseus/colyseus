@@ -1,3 +1,5 @@
+import type { Server } from '@colyseus/core';
+
 import { ServerError } from './errors/Errors.ts';
 import { Room } from './Room.ts';
 import { SchemaConstructor } from './serializer/SchemaSerializer.ts';
@@ -5,8 +7,6 @@ import { HTTP } from "./HTTP.ts";
 import { Auth } from './Auth.ts';
 import { SeatReservation } from './Protocol.ts';
 import { discordURLBuilder } from './3rd_party/discord.ts';
-
-import type { Server } from '@colyseus/core';
 
 export type JoinOptions = any;
 

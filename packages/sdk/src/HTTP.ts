@@ -1,6 +1,7 @@
-import { ColyseusSDK } from "./Client";
-import { AbortError, ServerError } from "./errors/Errors";
 import * as httpie from "@colyseus/httpie";
+
+import { ColyseusSDK } from "./Client.ts";
+import { AbortError, ServerError } from "./errors/Errors.ts";
 
 export class HTTP {
     public authToken: string | undefined;

@@ -271,15 +271,15 @@ export const createClient = <R extends Router | Router["endpoints"]>(baseOptions
       // "options.body" will not work as intended
       //
       let body = (baseOptions.body)
-        ? { ...baseOptions.body, ...(options[0]?.body || {}) }
+        ? { ...baseOptions.body, ...(options[0]?.body as object || {}) }
         : options[0]?.body;
 
       const query = (baseOptions.query)
-        ? { ...baseOptions.query, ...(options[0]?.query || {}) }
+        ? { ...baseOptions.query, ...(options[0]?.query as object || {}) }
         : options[0]?.query;
 
       const params = (baseOptions.params)
-        ? { ...baseOptions.params, ...(options[0]?.params || {}) }
+        ? { ...baseOptions.params, ...(options[0]?.params as object || {}) }
         : options[0]?.params;
 
       const headers = new Headers(

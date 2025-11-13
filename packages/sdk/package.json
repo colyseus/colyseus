@@ -97,10 +97,10 @@
   },
   "peerDependencies": {
     "@colyseus/core": "0.17.x",
-    "better-call": "^1.0.9"
+    "@colyseus/better-call": "^1.0.9"
   },
   "peerDependenciesMeta": {
     "@colyseus/core": { "optional": true },
-    "better-call": { "optional": true }
+    "@colyseus/better-call": { "optional": true }
   }
 }

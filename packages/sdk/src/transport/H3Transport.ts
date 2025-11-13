@@ -1,5 +1,5 @@
-import type { ITransport, ITransportEventMap } from "./ITransport.ts";
 import { encode, decode, type Iterator } from '@colyseus/schema';
+import type { ITransport, ITransportEventMap } from "./ITransport.ts";
 
 export class H3TransportTransport implements ITransport {
     wt: WebTransport;

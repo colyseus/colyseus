@@ -1,4 +1,4 @@
-import { RoomAvailable } from "./Room";
+import { RoomAvailable } from "./Room.ts";
 
 export interface SeatReservation {
     room: RoomAvailable;

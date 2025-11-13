@@ -1,5 +1,5 @@
-import type { Serializer } from "./Serializer.ts";
 import { Schema, Decoder, Reflection, Iterator, getDecoderStateCallbacks } from "@colyseus/schema";
+import type { Serializer } from "./Serializer.ts";
 import type { Room } from "../Room.ts";
 
 export type SchemaConstructor<T = Schema> = new (...args: any[]) => T;

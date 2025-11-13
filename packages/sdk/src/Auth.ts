@@ -1,6 +1,6 @@
-import { HTTP } from "./HTTP";
-import { getItem, removeItem, setItem } from "./Storage";
-import { createNanoEvents } from './core/nanoevents';
+import { HTTP } from "./HTTP.ts";
+import { getItem, removeItem, setItem } from "./Storage.ts";
+import { createNanoEvents } from './core/nanoevents.ts';
 
 export interface AuthSettings {
     path: string;

@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "module": "commonjs",
-    "lib": ["dom", "es6"],
+    "lib": ["dom", "ESNext"],
     "allowSyntheticDefaultImports": true,
     "allowImportingTsExtensions": true,
     "experimentalDecorators": true,

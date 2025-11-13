@@ -1,17 +1,17 @@
 import './legacy';
 
-export { ColyseusSDK, Client, JoinOptions, MatchMakeError, type EndpointSettings, type ClientOptions } from './Client';
-export { Protocol, ErrorCode, SeatReservation } from './Protocol';
-export { Room, RoomAvailable } from './Room';
-export { Auth, type AuthSettings, type PopupSettings } from "./Auth";
-export { ServerError } from './errors/Errors';
+export { ColyseusSDK, Client, JoinOptions, MatchMakeError, type EndpointSettings, type ClientOptions } from './Client.ts';
+export { Protocol, ErrorCode, SeatReservation } from './Protocol.ts';
+export { Room, RoomAvailable } from './Room.ts';
+export { Auth, type AuthSettings, type PopupSettings } from "./Auth.ts";
+export { ServerError } from './errors/Errors.ts';
 
 /*
  * Serializers
  */
-import { SchemaSerializer, getStateCallbacks } from "./serializer/SchemaSerializer";
-import { NoneSerializer } from "./serializer/NoneSerializer";
-import { registerSerializer } from './serializer/Serializer';
+import { SchemaSerializer, getStateCallbacks } from "./serializer/SchemaSerializer.ts";
+import { NoneSerializer } from "./serializer/NoneSerializer.ts";
+import { registerSerializer } from './serializer/Serializer.ts';
 
 export { registerSerializer, SchemaSerializer, getStateCallbacks };
 registerSerializer('schema', SchemaSerializer);

@@ -45,6 +45,7 @@
   },
   "dependencies": {
     "@colyseus/greeting-banner": "workspace:^",
+    "@colyseus/clock": "^1.0.1",
     "@colyseus/timer": "^1.0.3",
     "@colyseus/msgpackr": "^1.11.2",
     "@colyseus/better-call": "^1.0.25",
