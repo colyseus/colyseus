@@ -7,7 +7,11 @@ export class WebSocketTransport implements ITransport {
     ws: WebSocket | NodeWebSocket;
     protocols?: string | string[];
 
-    constructor(public events: ITransportEventMap) {}
+    events: ITransportEventMap;
+
+    constructor(events: ITransportEventMap) {
+        this.events = events;
+    }
 
     public send(data: Buffer | Uint8Array): void {
         this.ws.send(data);

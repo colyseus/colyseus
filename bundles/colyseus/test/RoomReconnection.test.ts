@@ -19,6 +19,12 @@ describe("Room Reconnection", () => {
 
   const client = new ColyseusSDK(TEST_ENDPOINT);
 
+  function setupReconnection(conn: SDKRoom) {
+    conn.reconnection.minDelay = 0;
+    conn.reconnection.minUptime = 0;
+    conn.reconnection.backoff = (attempt: number, delay: number) => 0;
+  }
+
   before(async () => {
     driver = new LocalDriver();
     presence = new LocalPresence()
@@ -46,34 +52,42 @@ describe("Room Reconnection", () => {
   describe("Auto-reconnection", () => {
 
     it("should reconnect on abnormal closure", async () => {
-
       matchMaker.defineRoomType('auto_reconnect', class _ extends Room {
-        sessionIds: Map<string, Client> = new Map();
         messages = {
-          dummy(client: Client, message: any) {
-            console.log("dummy", client);
-          }
+          dummy(client: Client, message: any) {}
         }
         onJoin(client: Client, options: any) {
-          console.log("onJoin", client.sessionId);
-          this.sessionIds.set(client.sessionId, client);
           // simulate abnormal closure
           // @ts-ignore
-          setTimeout(() => console.log(client['ref']._socket.destroy()), 1);
+          setTimeout(() => client['ref']._socket.destroy(), 50);
         }
-        onLeave(client: Client, consented: boolean) {
+        async onLeave(client: Client, consented: boolean) {
           console.log("onLeave!", client.sessionId, { consented });
-          this.sessionIds.delete(client.sessionId);
+          try {
+            if (consented) { throw new Error("consented"); }
+            await this.allowReconnection(client, 10)
+          } catch (e) {
+            // Reconnection failed or timed out
+          }
         }
       });
 
       const conn = await client.joinOrCreate('auto_reconnect', { string: "hello", number: 1 });
+      setupReconnection(conn);
+
+      await timeout(50); // wait for the connection to be abnormally closure
+      assert.strictEqual(false, conn.connection.isOpen);
+
+      await timeout(100); // wait for the reconnection to happen
+      assert.strictEqual(true, conn.connection.isOpen);
+
+      const room = matchMaker.getLocalRoomById(conn.roomId);
+      assert.strictEqual(room.roomId, conn.roomId);
+
+      await conn.leave();
 
       await timeout(50);
-
-      const room = matchMaker.getRoomById(conn.roomId);
-
-      // await conn.leave();
+      assert.ok(!matchMaker.getLocalRoomById(conn.roomId));
     });
 
   });

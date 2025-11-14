@@ -4,6 +4,7 @@ import type { ITransport, ITransportEventMap } from "./ITransport.ts";
 export class H3TransportTransport implements ITransport {
     wt: WebTransport;
     isOpen: boolean = false;
+    events: ITransportEventMap;
 
     reader: ReadableStreamDefaultReader;
     writer: WritableStreamDefaultWriter;
@@ -13,7 +14,9 @@ export class H3TransportTransport implements ITransport {
 
     private lengthPrefixBuffer = new Uint8Array(9); // 9 bytes is the maximum length of a length prefix
 
-    constructor(public events: ITransportEventMap) { }
+    constructor(events: ITransportEventMap) {
+        this.events = events;
+    }
 
     public connect(url: string, options: any = {}) {
         const wtOpts: WebTransportOptions = options.fingerprint && ({

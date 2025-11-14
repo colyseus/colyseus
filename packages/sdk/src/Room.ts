@@ -23,6 +23,46 @@ export interface RoomAvailable<Metadata = any> {
     metadata?: Metadata;
 }
 
+export interface ReconnectionOptions {
+    /**
+     * The maximum number of reconnection attempts.
+     */
+    maxRetries: number;
+
+    /**
+     * The minimum delay between reconnection attempts.
+     */
+    minDelay: number;
+
+    /**
+     * The maximum delay between reconnection attempts.
+     */
+    maxDelay: number;
+
+    /**
+     * The minimum uptime of the room before reconnection attempts can be made.
+     */
+    minUptime: number;
+
+    /**
+     * The current number of reconnection attempts.
+     */
+    retryCount: number;
+
+    /**
+     * The initial delay between reconnection attempts.
+     */
+    delay: number;
+
+    /**
+     * The function to calculate the delay between reconnection attempts.
+     * @param attempt - The current attempt number.
+     * @param delay - The initial delay between reconnection attempts.
+     * @returns The delay between reconnection attempts.
+     */
+    backoff: (attempt: number, delay: number) => number;
+}
+
 export class Room<
     RoomType extends typeof ServerRoom = any,
     State = RoomType['prototype']['state'],
@@ -43,7 +83,18 @@ export class Room<
     public serializerId: string;
     public serializer: Serializer<State>;
 
-    protected hasJoined: boolean = false;
+    // reconnection logic
+    public reconnection: ReconnectionOptions = {
+        retryCount: 0,
+        maxRetries: 8,
+        delay: 100,
+        minDelay: 100,
+        maxDelay: 5000,
+        minUptime: 5000,
+        backoff: exponentialBackoff,
+    };
+
+    protected joinedAtTime: number = 0;
 
     // TODO: remove me on 1.0.0
     protected rootSchema: SchemaConstructor<State>;
@@ -71,50 +122,43 @@ export class Room<
         this.onLeave(() => this.removeAllListeners());
     }
 
-    public connect(
-        endpoint: string,
-        devModeCloseCallback?: () => void,
-        room: Room = this, // when reconnecting on devMode, re-use previous room intance for handling events.
-        options?: any,
-        headers?: any,
-    ) {
-        const connection = new Connection(options.protocol);
-        room.connection = connection;
-
-        connection.events.onmessage = Room.prototype.onMessageCallback.bind(room);
-
-        connection.events.onclose = function (e: CloseEvent) {
+    public connect(endpoint: string, options?: any, headers?: any) {
+        this.connection = new Connection(options.protocol);
+        this.connection.events.onmessage = this.onMessageCallback.bind(this);
+        this.connection.events.onclose = (e: CloseEvent) => {
             console.log("CLOSE CODE:", e.code);
-            if (!room.hasJoined) {
+            if (this.joinedAtTime === 0) {
                 console.warn?.(`Room connection was closed unexpectedly (${e.code}): ${e.reason}`);
-                room.onError.invoke(e.code, e.reason);
+                this.onError.invoke(e.code, e.reason);
                 return;
             }
 
-            if (e.code === CloseCode.ABNORMAL_CLOSURE || e.code === CloseCode.GOING_AWAY) {
-                // TODO: retry connection
-
-            } else if (e.code === CloseCode.DEVMODE_RESTART && devModeCloseCallback) {
-                devModeCloseCallback();
+            if (
+                e.code === CloseCode.NO_STATUS_RECEIVED ||
+                e.code === CloseCode.ABNORMAL_CLOSURE ||
+                e.code === CloseCode.GOING_AWAY ||
+                e.code === CloseCode.DEVMODE_RESTART
+            ) {
+                this.handleReconnection();
 
             } else {
-                room.onLeave.invoke(e.code, e.reason);
-                room.destroy();
+                this.onLeave.invoke(e.code, e.reason);
+                this.destroy();
             }
         };
 
-        connection.events.onerror = function (e: CloseEvent) {
+        this.connection.events.onerror = (e: CloseEvent) => {
             console.warn?.(`Room, onError (${e.code}): ${e.reason}`);
-            room.onError.invoke(e.code, e.reason);
+            this.onError.invoke(e.code, e.reason);
         };
 
         // FIXME: refactor this.
         if (options.protocol === "h3") {
             const url = new URL(endpoint);
-            connection.connect(url.origin, options);
+            this.connection.connect(url.origin, options);
 
         } else {
-            connection.connect(endpoint, headers);
+            this.connection.connect(endpoint, headers);
         }
 
     }
@@ -256,7 +300,7 @@ export class Room<
 
             this.reconnectionToken = `${this.roomId}:${reconnectionToken}`;
 
-            this.hasJoined = true;
+            this.joinedAtTime = Date.now();
             this.onJoin.invoke();
 
             // acknowledge successfull JOIN_ROOM
@@ -332,4 +376,42 @@ export class Room<
         }
     }
 
+    private handleReconnection() {
+        if (Date.now() - this.joinedAtTime < this.reconnection.minUptime) {
+            console.info(`[Colyseus reconnection]: ${String.fromCodePoint(0x274C)} Room has not been up for long enough to reconnect. (min uptime: ${this.reconnection.minUptime}ms)`); // ❌
+            return;
+        }
+
+        console.info(`[Colyseus reconnection]: ${String.fromCodePoint(0x1F504)} Re-establishing connection with roomId '${this.roomId}'...`); // 🔄
+
+        this.reconnection.retryCount = 0;
+        this.retryReconnection();
+    }
+
+    private retryReconnection() {
+        this.reconnection.retryCount++;
+
+        const delay = Math.min(this.reconnection.maxDelay, Math.max(this.reconnection.minDelay, this.reconnection.backoff(this.reconnection.retryCount, this.reconnection.delay)));
+
+        console.info(`[Colyseus reconnection]: ${String.fromCodePoint(0x1F504)} will retry in ${delay}ms... (${this.reconnection.retryCount} out of ${this.reconnection.maxRetries})`); // 🔄
+
+        // Wait before attempting reconnection
+        setTimeout(() => {
+            try {
+                this.connection.reconnect(this.reconnectionToken.split(":")[1]);
+                console.info(`[Colyseus reconnection]: ${String.fromCodePoint(0x2705)} attempt ${this.reconnection.retryCount}...`); // ✅
+
+            } catch (e) {
+                if (this.reconnection.retryCount < this.reconnection.maxRetries) {
+                    this.retryReconnection();
+                } else {
+                    console.info(`[Colyseus reconnection]: ${String.fromCodePoint(0x274C)} Failed to reconnect. Is your server running? Please check server logs.`); // ❌
+                }
+            }
+        }, delay);
+    }
+}
+
+const exponentialBackoff = (attempt: number, delay: number) => {
+    return Math.floor(Math.pow(2, attempt) * delay);
 }

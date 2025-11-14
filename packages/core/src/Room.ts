@@ -178,7 +178,6 @@ export abstract class Room<
   private _reservedSeatTimeouts: { [sessionId: string]: NodeJS.Timeout } = {};
 
   private _reconnections: { [reconnectionToken: string]: [string, Deferred] } = {};
-  private _reconnectingSessionId = new Map<string, string>();
 
   public messages?: Record<string, (client: this['~client'], message: any) => void>;
 
@@ -455,11 +454,7 @@ export abstract class Room<
 
     if (reservedSeat[3]) {
       // reconnection
-      return (
-        reconnectionToken &&
-        this._reconnections[reconnectionToken]?.[0] === sessionId &&
-        this._reconnectingSessionId.has(sessionId)
-      );
+      return (reconnectionToken && this._reconnections[reconnectionToken]?.[0] === sessionId);
 
     } else {
       // seat reservation not consumed
@@ -472,7 +467,6 @@ export abstract class Room<
     const reservedSeat = this._reservedSeats[sessionId];
 
     if (reservedSeat && reservedSeat[3]) {
-      this._reconnectingSessionId.set(sessionId, reconnectionToken);
       return sessionId;
 
     } else {
@@ -866,7 +860,7 @@ export abstract class Room<
     return delayedDisconnection;
   }
 
-  private async _onJoin(client: this['~client'] & ClientPrivate, authContext: AuthContext) {
+  private async _onJoin(client: this['~client'] & ClientPrivate, authContext: AuthContext, reconnectionToken?: string) {
     const sessionId = client.sessionId;
 
     // generate unique private reconnection token
@@ -907,14 +901,13 @@ export abstract class Room<
     client.ref.once('close', client.ref['onleave']);
 
     if (isWaitingReconnection) {
-      const previousReconnectionToken = this._reconnectingSessionId.get(sessionId);
-      if (previousReconnectionToken) {
+      if (reconnectionToken && this._reconnections[reconnectionToken]?.[0] === sessionId) {
         this.clients.push(client);
         //
         // await for reconnection:
         // (end user may customize the reconnection token at this step)
         //
-        await this._reconnections[previousReconnectionToken]?.[1].resolve(client);
+        await this._reconnections[reconnectionToken]?.[1].resolve(client);
 
       } else {
         const errorMessage = (process.env.NODE_ENV === 'production')
@@ -1067,7 +1060,6 @@ export abstract class Room<
       delete this._reconnections[reconnectionToken];
       delete this._reservedSeats[sessionId];
       delete this._reservedSeatTimeouts[sessionId];
-      this._reconnectingSessionId.delete(sessionId);
     };
 
     reconnection.then((newClient) => {
@@ -1179,10 +1171,10 @@ export abstract class Room<
     }
 
     //
-    // isDevMode workaround to allow players to reconnect on devMode
+    // TODO: isDevMode workaround to allow players to reconnect on devMode
     //
     if (devModeReconnection) {
-      this._reconnectingSessionId.set(sessionId, sessionId);
+      // this._reconnectingSessionId.set(sessionId, sessionId);
     }
 
     return true;

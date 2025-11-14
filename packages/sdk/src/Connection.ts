@@ -6,6 +6,9 @@ export class Connection implements ITransport {
     transport: ITransport;
     events: ITransportEventMap = {};
 
+    url?: string;
+    options?: any;
+
     constructor(protocol?: string) {
         switch (protocol) {
             case "h3":
@@ -19,7 +22,9 @@ export class Connection implements ITransport {
     }
 
     connect(url: string, options?: any): void {
-        this.transport.connect.call(this.transport, url, options);
+        this.url = url;
+        this.options = options;
+        this.transport.connect(url, options);
     }
 
     send(data: Buffer | Uint8Array): void {
@@ -28,6 +33,10 @@ export class Connection implements ITransport {
 
     sendUnreliable(data: Buffer | Uint8Array): void {
         this.transport.sendUnreliable(data);
+    }
+
+    reconnect(token: string): void {
+        this.connect(`${this.url}&reconnectionToken=${token}`, this.options);
     }
 
     close(code?: number, reason?: string): void {

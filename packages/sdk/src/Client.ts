@@ -166,8 +166,7 @@ export class ColyseusSDK<ServerType extends Server = any> {
 
     public async consumeSeatReservation<T>(
         response: SeatReservation,
-        rootSchema?: SchemaConstructor<T>,
-        reuseRoomInstance?: Room // used in devMode
+        rootSchema?: SchemaConstructor<T>
     ): Promise<Room<any, T>> {
         const room = this.createRoom<T>(response.room.name, rootSchema);
         room.roomId = response.room.roomId;
@@ -180,41 +179,19 @@ export class ColyseusSDK<ServerType extends Server = any> {
             options.reconnectionToken = response.reconnectionToken;
         }
 
-        const targetRoom = reuseRoomInstance || room;
-        room.connect(this.buildEndpoint(response.room, options, response.protocol), response.devMode && (async () => {
-            console.info(`[Colyseus devMode]: ${String.fromCodePoint(0x1F504)} Re-establishing connection with room id '${room.roomId}'...`); // 🔄
-
-            let retryCount = 0;
-            let retryMaxRetries = 8;
-
-            const retryReconnection = async () => {
-                retryCount++;
-
-                try {
-                    await this.consumeSeatReservation(response, rootSchema, targetRoom);
-                    console.info(`[Colyseus devMode]: ${String.fromCodePoint(0x2705)} Successfully re-established connection with room '${room.roomId}'`); // ✅
-
-                } catch (e) {
-                    if (retryCount < retryMaxRetries) {
-                        console.info(`[Colyseus devMode]: ${String.fromCodePoint(0x1F504)} retrying... (${retryCount} out of ${retryMaxRetries})`); // 🔄
-                        setTimeout(retryReconnection, 2000);
-
-                    } else {
-                        console.info(`[Colyseus devMode]: ${String.fromCodePoint(0x274C)} Failed to reconnect. Is your server running? Please check server logs.`); // ❌
-                    }
-                }
-            };
-
-            setTimeout(retryReconnection, 2000);
-        }), targetRoom, response, this.http.headers);
+        room.connect(
+            this.buildEndpoint(response.room, options, response.protocol),
+            response,
+            this.http.headers
+        );
 
         return new Promise((resolve, reject) => {
             const onError = (code, message) => reject(new ServerError(code, message));
-            targetRoom.onError.once(onError);
+            room.onError.once(onError);
 
-            targetRoom['onJoin'].once(() => {
-                targetRoom.onError.remove(onError);
-                resolve(targetRoom);
+            room['onJoin'].once(() => {
+                room.onError.remove(onError);
+                resolve(room);
             });
         });
     }
@@ -224,7 +201,6 @@ export class ColyseusSDK<ServerType extends Server = any> {
         roomName: string,
         options: JoinOptions = {},
         rootSchema?: SchemaConstructor<T>,
-        reuseRoomInstance?: Room,
     ) {
         const response = (
             await this.http.post<SeatReservation>(`matchmake/${method}/${roomName}`, {
@@ -245,7 +221,7 @@ export class ColyseusSDK<ServerType extends Server = any> {
             response.reconnectionToken = options.reconnectionToken;
         }
 
-        return await this.consumeSeatReservation<T>(response, rootSchema, reuseRoomInstance);
+        return await this.consumeSeatReservation<T>(response, rootSchema);
     }
 
     protected createRoom<T>(roomName: string, rootSchema?: SchemaConstructor<T>) {

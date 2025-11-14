@@ -171,17 +171,18 @@ export class uWebSocketsTransport extends Transport {
 
         const room = matchMaker.getLocalRoomById(roomId);
         const client = new uWebSocketClient(sessionId, wrapper);
+        const reconnectionToken = searchParams.reconnectionToken as string;
 
         //
         // TODO: DRY code below with all transports
         //
 
         try {
-            if (!room || !room.hasReservedSeat(sessionId, searchParams.reconnectionToken as string)) {
+            if (!room || !room.hasReservedSeat(sessionId, reconnectionToken)) {
                 throw new Error('seat reservation expired.');
             }
 
-            await room['_onJoin'](client, rawClient.context);
+            await room['_onJoin'](client, rawClient.context, reconnectionToken);
 
         } catch (e: any) {
             debugAndPrintError(e);

@@ -129,13 +129,14 @@ export class WebSocketTransport extends Transport {
     rawClient.pingCount = 0;
 
     const client = new WebSocketClient(sessionId, rawClient);
+    const reconnectionToken = parsedURL.searchParams.get("reconnectionToken");
 
     //
     // TODO: DRY code below with all transports
     //
 
     try {
-      if (!room || !room.hasReservedSeat(sessionId, parsedURL.searchParams.get("reconnectionToken"))) {
+      if (!room || !room.hasReservedSeat(sessionId, reconnectionToken)) {
         throw new Error('seat reservation expired.');
       }
 
@@ -143,7 +144,7 @@ export class WebSocketTransport extends Transport {
         headers: new Headers(req.headers),
         token: parsedURL.searchParams.get("_authToken") ?? getBearerToken(req.headers.authorization),
         ip: req.headers['x-real-ip'] ?? req.headers['x-forwarded-for'] ?? req.socket.remoteAddress,
-      });
+      }, reconnectionToken);
 
     } catch (e: any) {
       debugAndPrintError(e);

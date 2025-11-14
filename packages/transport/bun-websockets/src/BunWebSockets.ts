@@ -127,13 +127,14 @@ export class BunWebSockets extends Transport {
 
     const room = matchMaker.getLocalRoomById(roomId);
     const client = new WebSocketClient(sessionId, wrapper);
+    const reconnectionToken = parsedURL.searchParams.get("reconnectionToken");
 
     //
     // TODO: DRY code below with all transports
     //
 
     try {
-      if (!room || !room.hasReservedSeat(sessionId, parsedURL.searchParams.get("reconnectionToken") as string)) {
+      if (!room || !room.hasReservedSeat(sessionId, reconnectionToken)) {
         throw new Error('seat reservation expired.');
       }
 
@@ -141,7 +142,7 @@ export class BunWebSockets extends Transport {
         token: parsedURL.searchParams.get("_authToken") ?? getBearerToken(rawClient.data.headers['authorization']),
         headers: rawClient.data.headers,
         ip: rawClient.data.headers['x-real-ip'] ?? rawClient.data.headers['x-forwarded-for'] ?? rawClient.remoteAddress,
-      });
+      }, reconnectionToken);
 
     } catch (e: any) {
       debugAndPrintError(e);
