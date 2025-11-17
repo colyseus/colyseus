@@ -61,6 +61,17 @@ export interface ReconnectionOptions {
      * @returns The delay between reconnection attempts.
      */
     backoff: (attempt: number, delay: number) => number;
+
+    /**
+     * The maximum number of enqueued messages to buffer.
+     */
+    maxEnqueuedMessages: number;
+
+    /**
+     * Buffer for messages sent while connection is not open.
+     * These messages will be sent once the connection is re-established.
+     */
+    enqueuedMessages: Array<{ data: Uint8Array }>;
 }
 
 export class Room<
@@ -78,6 +89,10 @@ export class Room<
     public onStateChange = createSignal<(state: State) => void>();
     public onError = createSignal<(code: number, message?: string) => void>();
     public onLeave = createSignal<(code: number, reason?: string) => void>();
+
+    public onReconnect = createSignal<() => void>();
+    public onDrop = createSignal<(code: number, reason?: string) => void>();
+
     protected onJoin = createSignal();
 
     public serializerId: string;
@@ -92,6 +107,8 @@ export class Room<
         maxDelay: 5000,
         minUptime: 5000,
         backoff: exponentialBackoff,
+        maxEnqueuedMessages: 10,
+        enqueuedMessages: [],
     };
 
     protected joinedAtTime: number = 0;
@@ -139,6 +156,7 @@ export class Room<
                 e.code === CloseCode.GOING_AWAY ||
                 e.code === CloseCode.DEVMODE_RESTART
             ) {
+                this.onDrop.invoke(e.code, e.reason);
                 this.handleReconnection();
 
             } else {
@@ -214,10 +232,18 @@ export class Room<
             ? this.packr.pack(payload, 2048 + it.offset) // 2048 = RESERVE_START_SPACE
             : this.packr.buffer.subarray(0, it.offset);
 
-        this.connection.send(data);
+        // If connection is not open, buffer the message
+        if (!this.connection.isOpen) {
+            enqueueMessage(this, new Uint8Array(data));
+        } else {
+            this.connection.send(data);
+        }
     }
 
     public sendUnreliable<T = any>(type: string | number, message?: T): void {
+        // If connection is not open, skip
+        if (!this.connection.isOpen) { return; }
+
         const it: Iterator = { offset: 1 };
         this.packr.buffer[0] = Protocol.ROOM_DATA;
 
@@ -258,7 +284,14 @@ export class Room<
         }
 
         this.packr.buffer.set(bytes, it.offset);
-        this.connection.send(this.packr.buffer.subarray(0, it.offset + bytes.byteLength));
+
+        // If connection is not open, buffer the message
+        if (!this.connection.isOpen) {
+            enqueueMessage(this, this.packr.buffer.subarray(0, it.offset + bytes.byteLength));
+        } else {
+            this.connection.send(this.packr.buffer.subarray(0, it.offset + bytes.byteLength));
+        }
+
     }
 
     public get state (): State {
@@ -306,6 +339,16 @@ export class Room<
             // acknowledge successfull JOIN_ROOM
             this.packr.buffer[0] = Protocol.JOIN_ROOM;
             this.connection.send(this.packr.buffer.subarray(0, 1));
+
+            // Send any enqueued messages that were buffered while disconnected
+            if (this.reconnection.enqueuedMessages.length > 0) {
+                this.onReconnect.invoke();
+                for (const message of this.reconnection.enqueuedMessages) {
+                    this.connection.send(message.data);
+                }
+                // Clear the buffer after sending
+                this.reconnection.enqueuedMessages = [];
+            }
 
         } else if (code === Protocol.ERROR) {
             const code = decode.number(buffer as Buffer, it);
@@ -414,4 +457,11 @@ export class Room<
 
 const exponentialBackoff = (attempt: number, delay: number) => {
     return Math.floor(Math.pow(2, attempt) * delay);
+}
+
+function enqueueMessage(room: Room, message: Uint8Array) {
+    room.reconnection.enqueuedMessages.push({ data: message });
+    if (room.reconnection.enqueuedMessages.length > room.reconnection.maxEnqueuedMessages) {
+        room.reconnection.enqueuedMessages.shift();
+    }
 }

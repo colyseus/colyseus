@@ -4,7 +4,7 @@ export { ColyseusSDK, Client, JoinOptions, MatchMakeError, type EndpointSettings
 export { Protocol, ErrorCode, SeatReservation } from './Protocol.ts';
 export { Room, RoomAvailable } from './Room.ts';
 export { Auth, type AuthSettings, type PopupSettings } from "./Auth.ts";
-export { ServerError } from './errors/Errors.ts';
+export { ServerError, CloseCode } from './errors/Errors.ts';
 
 /*
  * Serializers

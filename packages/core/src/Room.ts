@@ -364,6 +364,9 @@ export abstract class Room<
   public onLeave?(client: Client, consented?: boolean): void | Promise<any>;
   public onDispose?(): void | Promise<any>;
 
+  public onClientDrop?(client: Client, code?: number, reason?: string): void | Promise<any>;
+  public onClientReconnect?(client: Client): void | Promise<any>;
+
   /**
    * Define a custom exception handler.
    * If defined, all lifecycle hooks will be wrapped by try/catch, and the exception will be forwarded to this method.
