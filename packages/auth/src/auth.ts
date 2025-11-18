@@ -283,6 +283,11 @@ Please give feedback and report any issues you may find at https://github.com/co
     });
 
     router.get("/confirm-email", async (req, res) => {
+      if (req.query.success || req.query.error) {
+        const html = await fs.readFile(path.join(htmlTemplatePath, "address-confirmation.html"), "utf-8");
+        return res.end(html);
+      }
+      
       // send "address confirmed" message
       if (typeof (auth.settings.onEmailConfirmed) !== "function") {
         return res.status(404).end('Not found.');
