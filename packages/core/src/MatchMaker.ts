@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { ErrorCode, Protocol } from './Protocol.ts';
+import { CloseCode, ErrorCode, Protocol } from './Protocol.ts';
 
 import { requestFromIPC, subscribeIPC, subscribeWithTimeout } from './IPC.ts';
 
@@ -706,7 +706,7 @@ export async function gracefullyShutdown(): Promise<any> {
   // make sure all rooms are disposed
   return Promise.all(disconnectAll(
     (isDevMode)
-      ? Protocol.WS_CLOSE_DEVMODE_RESTART
+      ? CloseCode.DEVMODE_RESTART
       : undefined
   ));
 }

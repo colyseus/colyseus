@@ -1,7 +1,9 @@
-import { pack, Packr } from '@colyseus/msgpackr';
+import { Packr } from '@colyseus/msgpackr';
 import { encode, type Iterator } from '@colyseus/schema';
 
-// Colyseus protocol codes range between 0~100
+/**
+ * Colyseus protocol codes range between 0~100
+ */
 export const Protocol = {
   // Room-related (10~19)
   JOIN_ROOM: 10,
@@ -12,21 +14,24 @@ export const Protocol = {
   ROOM_STATE_PATCH: 15,
   // ROOM_DATA_SCHEMA: 16, // DEPRECATED: used to send schema instances via room.send()
   ROOM_DATA_BYTES: 17,
-
-  // WebSocket close codes (https://github.com/Luka967/websocket-close-codes)
-  WS_CLOSE_NORMAL: 1000,
-  WS_CLOSE_GOING_AWAY: 1001,
-
-  // WebSocket error codes
-  WS_CLOSE_CONSENTED: 4000,
-  WS_CLOSE_WITH_ERROR: 4002,
-  WS_CLOSE_DEVMODE_RESTART: 4010,
-
-  WS_SERVER_DISCONNECT: 4201,
-  WS_TOO_MANY_CLIENTS: 4202,
 } as const;
-
 export type Protocol = typeof Protocol[keyof typeof Protocol];
+
+/**
+ * WebSocket close codes
+ * (See https://github.com/Luka967/websocket-close-codes)
+ */
+export const CloseCode = {
+  NORMAL_CLOSURE: 1000,
+  GOING_AWAY: 1001,
+  NO_STATUS_RECEIVED: 1005,
+  ABNORMAL_CLOSURE: 1006,
+
+  CONSENTED: 4000,
+  WITH_ERROR: 4002,
+  DEVMODE_RESTART: 4010
+} as const;
+export type CloseCode = typeof CloseCode[keyof typeof CloseCode];
 
 export const ErrorCode = {
   // HTTP MatchMaking Error Codes

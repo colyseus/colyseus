@@ -8,7 +8,8 @@ import {
   Transport,
   debugAndPrintError,
   debugError,
-  logger
+  logger,
+  CloseCode
 } from '@colyseus/core';
 
 /**
@@ -85,7 +86,7 @@ export class TCPTransport extends Transport {
       } catch (e: any) {
         debugAndPrintError(e);
         // send[Protocol.ERROR](client, (e && e.message) || '');
-        client.close(Protocol.WS_CLOSE_WITH_ERROR);
+        client.close(CloseCode.WITH_ERROR);
       }
 
     }

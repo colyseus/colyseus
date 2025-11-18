@@ -66,7 +66,7 @@ export class MyRoom extends Room {
 
   async onLeave(client: Client, consented: boolean) {
     try {
-      if (consented) { throw new Error("consented leave"); }
+      if (code === CloseCode.CONSENTED) { throw new Error("consented leave"); }
 
       console.log(client.sessionId, "waiting for reconnection...");
       await this.allowReconnection(client, 10);

@@ -1,8 +1,8 @@
 // import WebSocket from 'ws';
 
 import type { ReadableStreamDefaultReader, WritableStreamDefaultWriter } from 'stream/web';
-import { Protocol, Client, ClientState, ISendOptions, getMessageBytes, logger, debugMessage, ClientPrivate } from '@colyseus/core';
-import { WebTransportSession } from '@fails-components/webtransport';
+import { Protocol, type Client, ClientState, type ISendOptions, getMessageBytes, logger, debugMessage, type ClientPrivate, CloseCode } from '@colyseus/core';
+import { type WebTransportSession } from '@fails-components/webtransport';
 import { EventEmitter } from 'events';
 import { type Iterator, decode, encode } from '@colyseus/schema';
 
@@ -74,8 +74,8 @@ export class H3Client implements Client, ClientPrivate {
     });
 
     _wtSession.closed
-      .then((e) => this.leave(Protocol.WS_CLOSE_NORMAL, e.reason))
-      .catch((e: any) => this.leave(Protocol.WS_CLOSE_WITH_ERROR, e.reason))
+      .then((e) => this.leave(CloseCode.NORMAL_CLOSURE, e.reason))
+      .catch((e: any) => this.leave(CloseCode.WITH_ERROR, e.reason))
       .finally(() => this._close());
 
   }

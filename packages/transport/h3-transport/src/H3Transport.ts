@@ -4,7 +4,7 @@ import { Http3Server } from '@fails-components/webtransport';
 import { URL } from 'url';
 import { decode, Iterator } from '@colyseus/schema';
 
-import { matchMaker, Protocol, Transport, debugAndPrintError, spliceOne, getBearerToken } from '@colyseus/core';
+import { matchMaker, Protocol, Transport, debugAndPrintError, spliceOne, getBearerToken, CloseCode } from '@colyseus/core';
 import { H3Client } from './H3Client.ts';
 import { generateWebTransportCertificate } from './utils/mkcert.ts';
 import type { Application, Request, Response } from 'express';
@@ -232,7 +232,7 @@ export class H3Transport extends Transport {
       // send error code to client then terminate
       // @ts-ignore
       h3Client.error(e.code, e.message, () =>
-        h3Client.close(Protocol.WS_CLOSE_WITH_ERROR));
+        h3Client.close(CloseCode.WITH_ERROR));
     }
   }
 

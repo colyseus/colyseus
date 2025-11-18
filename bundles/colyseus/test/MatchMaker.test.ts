@@ -282,7 +282,7 @@ describe("MatchMaker", () => {
           assert.strictEqual(1, rooms[0].clients, "should keep seat reservation after disconnection");
 
           await matchMaker.reconnect(room.roomId, { reconnectionToken: client1.reconnectionToken });
-          await createDummyClient(reservedSeat1).confirmJoinRoom(room);
+          await createDummyClient(reservedSeat1).confirmJoinRoom(room, client1.reconnectionToken);
 
           rooms = await matchMaker.query({});
           assert.strictEqual(1, rooms.length);
@@ -358,7 +358,7 @@ describe("MatchMaker", () => {
 
           await matchMaker.reconnect(room.roomId, { reconnectionToken: client1.reconnectionToken });
           const reconnectingClient = createDummyClient(reservedSeat1);
-          await reconnectingClient.confirmJoinRoom(room);
+          await reconnectingClient.confirmJoinRoom(room, client1.reconnectionToken);
 
           rooms = await matchMaker.query({});
           assert.strictEqual(1, rooms.length);

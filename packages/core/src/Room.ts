@@ -12,7 +12,7 @@ import type { IRoomCache } from './matchmaker/driver/api.ts';
 import { NoneSerializer } from './serializer/NoneSerializer.ts';
 import { SchemaSerializer } from './serializer/SchemaSerializer.ts';
 
-import { ErrorCode, getMessageBytes, Protocol } from './Protocol.ts';
+import { CloseCode, ErrorCode, getMessageBytes, Protocol } from './Protocol.ts';
 import { type Type, Deferred, generateId, wrapTryCatch } from './utils/Utils.ts';
 import { createNanoEvents } from './utils/nanoevents.ts';
 import { isDevMode } from './utils/DevMode.ts';
@@ -195,7 +195,7 @@ export abstract class Room<
 
       } else {
         // immediately close the connection in production
-        client.leave(Protocol.WS_CLOSE_WITH_ERROR, errorMessage);
+        client.leave(CloseCode.WITH_ERROR, errorMessage);
       }
     }
   };
@@ -361,11 +361,11 @@ export abstract class Room<
   public onBeforePatch?(state: State): void | Promise<any>;
   public onCreate?(options: any): void | Promise<any>;
   public onJoin?(client: Client, options?: any): void | Promise<any>;
-  public onLeave?(client: Client, consented?: boolean): void | Promise<any>;
+  public onDrop?(client: Client, code?: number): void | Promise<any>;
+  public onReconnect?(client: Client): void | Promise<any>;
+  public onLeave?(client: Client, code?: number): void | Promise<any>;
   public onDispose?(): void | Promise<any>;
 
-  public onClientDrop?(client: Client, code?: number, reason?: string): void | Promise<any>;
-  public onClientReconnect?(client: Client): void | Promise<any>;
 
   /**
    * Define a custom exception handler.
@@ -406,8 +406,8 @@ export abstract class Room<
   public onBeforeShutdown() {
     this.disconnect(
       (isDevMode)
-        ? Protocol.WS_CLOSE_DEVMODE_RESTART
-        : Protocol.WS_CLOSE_CONSENTED
+        ? CloseCode.DEVMODE_RESTART
+        : CloseCode.CONSENTED
     );
   }
 
@@ -826,7 +826,7 @@ export abstract class Room<
    * @param closeCode WebSocket close code (default = 4000, which is a "consented leave")
    * @returns Promise<void>
    */
-  public disconnect(closeCode: number = Protocol.WS_CLOSE_CONSENTED): Promise<any> {
+  public disconnect(closeCode: number = CloseCode.CONSENTED): Promise<any> {
     // skip if already disposing
     if (this._internalState === RoomInternalState.DISPOSING) {
       return Promise.resolve(`disconnect() ignored: room (${this.roomId}) is already disposing.`);
@@ -912,6 +912,10 @@ export abstract class Room<
         //
         await this._reconnections[reconnectionToken]?.[1].resolve(client);
 
+        if (this.onReconnect) {
+          await this.onReconnect(client);
+        }
+
       } else {
         const errorMessage = (process.env.NODE_ENV === 'production')
           ? "already consumed" // trick possible fraudsters...
@@ -944,7 +948,7 @@ export abstract class Room<
         // On async onAuth, client may have been disconnected.
         //
         if (client.state === ClientState.LEAVING) {
-          throw new ServerError(Protocol.WS_CLOSE_GOING_AWAY, 'already disconnected');
+          throw new ServerError(CloseCode.WITH_ERROR, 'already disconnected');
         }
 
         this.clients.push(client);
@@ -975,7 +979,7 @@ export abstract class Room<
         }
 
       } catch (e: any) {
-        await this._onLeave(client, Protocol.WS_CLOSE_GOING_AWAY);
+        await this._onLeave(client, CloseCode.WITH_ERROR);
 
         // remove seat reservation
         delete this._reservedSeats[sessionId];
@@ -1265,7 +1269,7 @@ export abstract class Room<
 
       } catch (e: any) {
         debugAndPrintError(e);
-        client.leave(Protocol.WS_CLOSE_WITH_ERROR);
+        client.leave(CloseCode.WITH_ERROR);
         return;
       }
 
@@ -1314,7 +1318,7 @@ export abstract class Room<
       delete client._enqueuedMessages;
 
     } else if (code === Protocol.LEAVE_ROOM) {
-      this.#_forciblyCloseClient(client, Protocol.WS_CLOSE_CONSENTED);
+      this.#_forciblyCloseClient(client, CloseCode.CONSENTED);
     }
   }
 
@@ -1330,8 +1334,6 @@ export abstract class Room<
   }
 
   private async _onLeave(client: this['~client'], code?: number): Promise<any> {
-    debugMatchMaking('onLeave, sessionId: \'%s\' (close code: %d, roomId: %s)', client.sessionId, code, this.roomId);
-
     // call 'onLeave' method only if the client has been successfully accepted.
     client.state = ClientState.LEAVING;
 
@@ -1340,13 +1342,19 @@ export abstract class Room<
       return;
     }
 
-    if (this.onLeave) {
+    const method = (code === CloseCode.CONSENTED)
+      ? this.onLeave
+      : (this.onDrop || this.onLeave);
+
+    if (method) {
+      debugMatchMaking(`${method.name}, sessionId: \'%s\' (close code: %d, roomId: %s)`, client.sessionId, code, this.roomId);
+
       try {
         this.#_onLeaveConcurrent++;
-        await this.onLeave(client, (code === Protocol.WS_CLOSE_CONSENTED));
+        await method(client, code);
 
       } catch (e: any) {
-        debugAndPrintError(`onLeave error: ${(e && e.message || e || 'promise rejected')} (roomId: ${this.roomId})`);
+        debugAndPrintError(`${method.name} error: ${(e && e.message || e || 'promise rejected')} (roomId: ${this.roomId})`);
 
       } finally {
         this.#_onLeaveConcurrent--;
@@ -1356,16 +1364,20 @@ export abstract class Room<
     // check for manual "reconnection" flow
     if (this._reconnections[client.reconnectionToken]) {
       this._reconnections[client.reconnectionToken][1].catch(async () => {
-        await this.#_onAfterLeave(client);
+        await this.#_onAfterLeave(client, code, method === this.onDrop);
       });
 
       // @ts-ignore (client.state may be modified at onLeave())
     } else if (client.state !== ClientState.RECONNECTED) {
-      await this.#_onAfterLeave(client);
+      await this.#_onAfterLeave(client, code, method === this.onDrop);
     }
   }
 
-  async #_onAfterLeave(client: Client) {
+  async #_onAfterLeave(client: Client, code?: number, isDrop: boolean = false) {
+    if (isDrop && this.onLeave) {
+      await this.onLeave(client, code);
+    }
+
     // try to dispose immediately if client reconnection isn't set up.
     const willDispose = await this.#_decrementClientCount();
 

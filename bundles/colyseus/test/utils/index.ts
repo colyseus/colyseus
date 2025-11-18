@@ -15,6 +15,7 @@ import {
   LocalDriver,
   LocalPresence,
   Deferred,
+  CloseCode,
 } from "@colyseus/core";
 
 import { RedisPresence } from "@colyseus/redis-presence";
@@ -33,9 +34,9 @@ Server.prototype['getDefaultTransport'] = function (options: ServerOptions) {
 }
 
 export const DRIVERS = [
-  // LocalDriver,
+  LocalDriver,
   // RedisDriver,
-  PostgresDriver,
+  // PostgresDriver,
   // MongooseDriver,
 ];
 
@@ -99,8 +100,8 @@ export class WebSocketClient implements Client, ClientPrivate {
     this.messages.push(message);
   }
 
-  async confirmJoinRoom(room: Room) {
-    await room['_onJoin'](this, { headers: new Headers(), ip: "127.0.0.1" });
+  async confirmJoinRoom(room: Room, reconnectionToken?: string) {
+    await room['_onJoin'](this, { headers: new Headers(), ip: "127.0.0.1" }, reconnectionToken);
 
     //
     // this simulates when the client-side has sent the `Protocol.JOIN_ROOM` message
@@ -216,9 +217,9 @@ export class ReconnectRoom extends Room {
   onDispose() { }
   onJoin() { }
 
-  async onLeave(client, consented) {
+  async onLeave(client, code: CloseCode) {
     try {
-      if (consented) throw new Error("consented");
+      if (code === CloseCode.CONSENTED) throw new Error("consented");
       await this.allowReconnection(client, 0.2); // 200ms
 
     } catch (e) {
@@ -241,8 +242,8 @@ export class ReconnectTokenRoom extends Room {
     this.state[client.sessionId] = "CONNECTED";
   }
 
-  async onLeave(client, consented) {
-    if (!consented) {
+  async onLeave(client, code: CloseCode) {
+    if (code !== CloseCode.CONSENTED) {
       const reconnection = this.allowReconnection(client, 10);
       this.token = reconnection;
 

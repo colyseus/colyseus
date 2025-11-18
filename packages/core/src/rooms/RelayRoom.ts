@@ -73,7 +73,7 @@ export class RelayRoom extends Room {
       player.connected = false;
 
       try {
-        if (consented) {
+        if (code === CloseCode.CONSENTED) {
           throw new Error('consented leave');
         }
 

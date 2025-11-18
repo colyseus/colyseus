@@ -52,31 +52,50 @@ describe("Room Reconnection", () => {
   describe("Auto-reconnection", () => {
 
     it("should reconnect on abnormal closure", async () => {
+      let onDropCalled = false;
+      let onReconnectCalled = false;
+      let onLeaveCalled = false;
       matchMaker.defineRoomType('auto_reconnect', class _ extends Room {
         onJoin(client: Client, options: any) {
           // simulate abnormal closure
           // @ts-ignore
           setTimeout(() => client['ref']._socket.destroy(), 50);
         }
-        async onLeave(client: Client, consented: boolean) {
-          console.log("onLeave!", client.sessionId, { consented });
-          try {
-            if (consented) { throw new Error("consented"); }
-            await this.allowReconnection(client, 10)
-          } catch (e) {
-            // Reconnection failed or timed out
-          }
+        async onDrop(client: Client, code: number) {
+          console.log("onDrop", { code });
+          onDropCalled = true;
+          this.allowReconnection(client, 10);
+        }
+        async onReconnect(client: Client) {
+          console.log("onReconnect");
+          onReconnectCalled = true;
+        }
+        async onLeave(client: Client, code: number) {
+          console.log("onLeave", { code });
+          onLeaveCalled = true;
         }
       });
 
       const conn = await client.joinOrCreate('auto_reconnect', { string: "hello", number: 1 });
       setupReconnection(conn);
 
-      await timeout(50); // wait for the connection to be abnormally closure
-      assert.strictEqual(false, conn.connection.isOpen);
+      // wait for the connection to be abnormally closure
+      await new Promise((resolve) => conn.onDrop.once((code, reason) => resolve(true)));
 
-      await timeout(100); // wait for the reconnection to happen
+      // wait a tiny bit for server-side onDrop to be called
+      await timeout(1);
+
+      assert.strictEqual(false, conn.connection.isOpen);
+      assert.strictEqual(onDropCalled, true);
+      assert.strictEqual(onLeaveCalled, false);
+      assert.strictEqual(onReconnectCalled, false);
+
+      // wait for the reconnection to happen
+      await new Promise((resolve) => conn.onReconnect.once(() => resolve(true)));
       assert.strictEqual(true, conn.connection.isOpen);
+      assert.strictEqual(onDropCalled, true);
+      assert.strictEqual(onLeaveCalled, false);
+      assert.strictEqual(onReconnectCalled, true);
 
       const room = matchMaker.getLocalRoomById(conn.roomId);
       assert.strictEqual(room.roomId, conn.roomId);
@@ -84,6 +103,10 @@ describe("Room Reconnection", () => {
       await conn.leave();
 
       await timeout(50);
+      assert.strictEqual(onDropCalled, true);
+      assert.strictEqual(onLeaveCalled, true);
+      assert.strictEqual(onReconnectCalled, true);
+
       assert.ok(!matchMaker.getLocalRoomById(conn.roomId));
     });
 
@@ -91,7 +114,6 @@ describe("Room Reconnection", () => {
       type MessageType = { index: number };
 
       const receivedMessages: Array<MessageType> = [];
-      const socketDestroyed = new Deferred();
       matchMaker.defineRoomType('reconnect_with_enqueued_messages', class _ extends Room {
         messages = {
           test(client: Client, message: MessageType) {
@@ -100,21 +122,14 @@ describe("Room Reconnection", () => {
         }
         onJoin(client: Client, options: any) {
           // simulate abnormal closure
-          setTimeout(() => {
-            // @ts-ignore
-            client['ref']._socket.destroy()
-            socketDestroyed.resolve();
-          }, 50);
+          // @ts-ignore
+          setTimeout(() => client['ref']._socket.destroy(), 50);
         }
-        async onLeave(client: Client, consented: boolean) {
-          console.log("onLeave!", client.sessionId, { consented });
-          try {
-            if (consented) { throw new Error("consented"); }
-            await this.allowReconnection(client, 10)
-          } catch (e) {
-            // Reconnection failed or timed out
-          }
+        onDrop(client: Client, code: number) {
+          this.allowReconnection(client, 10);
         }
+        onReconnect(client: Client) {}
+        onLeave(client: Client, code: number) {}
       });
 
       const conn = await client.joinOrCreate('reconnect_with_enqueued_messages');

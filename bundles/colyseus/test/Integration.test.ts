@@ -4,7 +4,7 @@ import sinon from "sinon";
 import { Client as SDKClient, Room as SDKRoom } from "colyseus.js";
 import { Schema, type, MapSchema, ArraySchema, view, StateView, schema, type SchemaType } from "@colyseus/schema";
 
-import { type Client, type AuthContext, type MatchMakerDriver, type Presence, matchMaker, Room, Server, ErrorCode,  Deferred, Transport } from "@colyseus/core";
+import { type Client, type AuthContext, type MatchMakerDriver, type Presence, matchMaker, Room, Server, ErrorCode,  Deferred, Transport, CloseCode } from "@colyseus/core";
 import { DummyRoom, DRIVERS, timeout, Room3Clients, PRESENCE_IMPLEMENTATIONS, Room2Clients, Room2ClientsExplicitLock } from "./utils/index.ts";
 import { ServerError, Protocol } from "@colyseus/core";
 
@@ -607,7 +607,7 @@ describe("Integration", () => {
               conn.send("input_xy", { x: 1, y: 2, z: 3 });
               await timeout(20);
 
-              assert.strictEqual(onLeaveCode, Protocol.WS_CLOSE_WITH_ERROR);
+              assert.strictEqual(onLeaveCode, CloseCode.WITH_ERROR);
             });
 
           });
@@ -1425,9 +1425,9 @@ describe("Integration", () => {
           it("reconnected client should received messages from previous and new 'client' instance", async () => {
             const onRoomDisposed = new Deferred();
             matchMaker.defineRoomType('allow_reconnection', class _ extends Room {
-              async onLeave(client: Client, consented: boolean) {
+              async onLeave(client: Client, code: number) {
                 try {
-                  if (consented) { throw new Error("consented!"); }
+                  if (code === CloseCode.CONSENTED) { throw new Error("consented!"); }
 
                   await this.allowReconnection(client, 0.5);
 
@@ -1468,9 +1468,9 @@ describe("Integration", () => {
             const reconnectionTokens = [];
 
             matchMaker.defineRoomType('allow_reconnection', class _ extends Room {
-              async onLeave(client: Client, consented) {
+              async onLeave(client: Client, code: CloseCode) {
                 try {
-                  if (consented) { throw new Error("consented!"); }
+                  if (code === CloseCode.CONSENTED) { throw new Error("consented!"); }
 
                   // reconnectionToken before reconnecting
                   reconnectionTokens.push(client.reconnectionToken);
@@ -1501,9 +1501,9 @@ describe("Integration", () => {
             const onRoomDisposed = new Deferred();
             matchMaker.defineRoomType('allow_reconnection', class _ extends Room {
               // async onJoin() {}
-              async onLeave(client, consented) {
+              async onLeave(client, code: CloseCode) {
                 try {
-                  if (consented) {
+                  if (code === CloseCode.CONSENTED) {
                     throw new Error("consented!");
                   }
                   await this.allowReconnection(client, 0.1);
@@ -1543,7 +1543,7 @@ describe("Integration", () => {
 
             matchMaker.defineRoomType('allow_reconnection', class _ extends Room {
               onCreate() { room = this; }
-              async onLeave(client, consented) {
+              async onLeave(client, code: CloseCode) {
                 onLeaveCalled = true;
                 try {
                   await this.allowReconnection(client, 0.1);
@@ -1577,7 +1577,7 @@ describe("Integration", () => {
 
             matchMaker.defineRoomType('allow_reconnection', class _ extends Room {
               onCreate() { room = this; }
-              async onLeave(client, consented) {
+              async onLeave(client, code: CloseCode) {
                 onLeaveCalled = true;
                 await new Promise((resolve) => setTimeout(resolve, 100));
                 try {
@@ -1637,9 +1637,9 @@ describe("Integration", () => {
                 client.view = new StateView();
                 client.view.add(entity);
               }
-              async onLeave(client, consented) {
+              async onLeave(client, code: CloseCode) {
                 try {
-                  if (consented) { throw new Error("consented!"); }
+                  if (code === CloseCode.CONSENTED) { throw new Error("consented!"); }
                   await this.allowReconnection(client, 0.5);
                 } catch (e) {}
               }

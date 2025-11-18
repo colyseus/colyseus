@@ -333,8 +333,13 @@ export class Room<
 
             this.reconnectionToken = `${this.roomId}:${reconnectionToken}`;
 
+            if (this.joinedAtTime === 0) {
+                this.onJoin.invoke();
+            } else {
+                this.onReconnect.invoke();
+            }
+
             this.joinedAtTime = Date.now();
-            this.onJoin.invoke();
 
             // acknowledge successfull JOIN_ROOM
             this.packr.buffer[0] = Protocol.JOIN_ROOM;
@@ -342,7 +347,6 @@ export class Room<
 
             // Send any enqueued messages that were buffered while disconnected
             if (this.reconnection.enqueuedMessages.length > 0) {
-                this.onReconnect.invoke();
                 for (const message of this.reconnection.enqueuedMessages) {
                     this.connection.send(message.data);
                 }

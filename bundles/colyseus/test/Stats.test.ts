@@ -1,5 +1,5 @@
 import assert, { fail } from "assert";
-import { type Client, type Presence, type Transport, type MatchMakerDriver, ClientState, Deferred, LocalDriver, LocalPresence, Room, Server, matchMaker } from "@colyseus/core";
+import { type Client, type Presence, type Transport, type MatchMakerDriver, ClientState, Deferred, LocalDriver, LocalPresence, Room, Server, matchMaker, CloseCode } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import * as Colyseus from "colyseus.js";
 import { timeout } from "./utils/index.ts";
@@ -140,7 +140,7 @@ describe("MatchMaker Stats", () => {
           }
           await timeout(300);
         }
-        async onLeave(client, consented) {}
+        async onLeave(client, code: CloseCode) {}
         onDispose() { onRoomDisposed.resolve(); }
       });
 
@@ -187,7 +187,7 @@ describe("MatchMaker Stats", () => {
           onJoinCalled++;
           throw new Error("onJoin error");
         }
-        async onLeave(client, consented) {
+        async onLeave(client, code: CloseCode) {
           onLeaveCalled++;
           throw new Error("onLeave error");
         }
@@ -232,7 +232,7 @@ describe("MatchMaker Stats", () => {
           }
           await timeout(400);
         }
-        async onLeave(client, consented) {
+        async onLeave(client, code: CloseCode) {
           await timeout(10);
           throw new Error("onLeave error");
         }
@@ -276,7 +276,7 @@ describe("MatchMaker Stats", () => {
           }
           await timeout(400);
         }
-        async onLeave(client, consented) {
+        async onLeave(client, code: CloseCode) {
           await timeout(10);
           throw new Error("onLeave error");
         }
@@ -309,9 +309,9 @@ describe("MatchMaker Stats", () => {
     const onRoomDisposed = new Deferred();
     matchMaker.defineRoomType('allow_reconnection', class _ extends Room {
       async onJoin() { }
-      async onLeave(client, consented) {
+      async onLeave(client, code: CloseCode) {
         try {
-          if (consented) {
+          if (code === CloseCode.CONSENTED) {
             throw new Error("consented!");
           }
           await this.allowReconnection(client, 0.1);
@@ -357,8 +357,8 @@ describe("MatchMaker Stats", () => {
         client.userData = options;
       }
 
-      onLeave(client, consented) {
-        if (consented) { return; }
+      onLeave(client, code: CloseCode) {
+        if (code === CloseCode.CONSENTED) { return; }
 
         const reconnection = this.allowReconnection(client, "manual");
         const delayed = this.clock.setTimeout(() => {

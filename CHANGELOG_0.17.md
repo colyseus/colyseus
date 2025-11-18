@@ -4,6 +4,9 @@
 [ ] The `.setSeatReservationTime()` method has been moved to `.seatReservationTimeout=` property.
 [ ] `Room<State>` is now `Room<Metadata>` (?? - Consider reverting this for fewer breaking changes on 0.17)
 [ ] Room's presence pub/sub now can unsubscribe themselves during `onDispose()`
+[ ] `.allowReconnection()` breaking changes. (https://github.com/colyseus/colyseus/issues/893)
+  [ ] `onLeave(client, code)` - the onLeave now receives close `code` as number instead of `consented` boolean flag.
+[ ] `Protocol.WS_*` close codes have been moved to `CloseCode.*`
 
 ## New features to document
 
