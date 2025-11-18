@@ -44,7 +44,7 @@ export class H3TransportTransport implements ITransport {
                 this.writer = stream.value.writable.getWriter();
 
                 // immediately write room/sessionId for establishing the room connection
-                this.sendSeatReservation(options.room.roomId, options.sessionId, options.reconnectionToken);
+                this.sendSeatReservation(options.room.roomId, options.sessionId, options.reconnectionToken, options.skipHandshake);
 
                 // start reading incoming data
                 this.readIncomingData();
@@ -174,7 +174,7 @@ export class H3TransportTransport implements ITransport {
         }
     }
 
-    protected sendSeatReservation (roomId: string, sessionId: string, reconnectionToken?: string) {
+    protected sendSeatReservation (roomId: string, sessionId: string, reconnectionToken?: string, skipHandshake?: boolean) {
         const it: Iterator = { offset: 0 };
         const bytes: number[] = [];
 
@@ -183,6 +183,10 @@ export class H3TransportTransport implements ITransport {
 
         if (reconnectionToken) {
             encode.string(bytes, reconnectionToken, it);
+        }
+
+        if (skipHandshake) {
+            encode.boolean(bytes, 1, it);
         }
 
         this.writer.write(new Uint8Array(bytes).buffer);

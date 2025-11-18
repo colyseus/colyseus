@@ -209,6 +209,7 @@ export class H3Transport extends Transport {
     const roomId = decode.string(data, it);
     const sessionId = decode.string(data, it);
     const reconnectionToken: string = it.offset < data.byteLength ? decode.string(data, it) : undefined;
+    const skipHandshake = (it.offset < data.byteLength && decode.boolean(data, it));
 
     h3Client.sessionId = sessionId;
     h3Client.readyState = 1;
@@ -224,7 +225,7 @@ export class H3Transport extends Transport {
         throw new Error('seat reservation expired.');
       }
 
-      await room['_onJoin'](h3Client, req, reconnectionToken);
+      await room['_onJoin'](h3Client, req, { reconnectionToken, skipHandshake });
 
     } catch (e: any) {
       debugAndPrintError(e);

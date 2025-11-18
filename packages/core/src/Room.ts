@@ -863,7 +863,11 @@ export abstract class Room<
     return delayedDisconnection;
   }
 
-  private async _onJoin(client: this['~client'] & ClientPrivate, authContext: AuthContext, reconnectionToken?: string) {
+  private async _onJoin(
+    client: this['~client'] & ClientPrivate,
+    authContext: AuthContext,
+    connectionOptions?: { reconnectionToken?: string, skipHandshake?: boolean }
+  ) {
     const sessionId = client.sessionId;
 
     // generate unique private reconnection token
@@ -904,6 +908,7 @@ export abstract class Room<
     client.ref.once('close', client.ref['onleave']);
 
     if (isWaitingReconnection) {
+      const reconnectionToken = connectionOptions?.reconnectionToken;
       if (reconnectionToken && this._reconnections[reconnectionToken]?.[0] === sessionId) {
         this.clients.push(client);
         //
@@ -1008,7 +1013,13 @@ export abstract class Room<
       client.raw(getMessageBytes[Protocol.JOIN_ROOM](
         client.reconnectionToken,
         this._serializer.id,
-        this._serializer.handshake && this._serializer.handshake(),
+        /**
+         * if skipHandshake is true, we don't need to send the handshake
+         * (in case client already has handshake data)
+         */
+        (connectionOptions?.skipHandshake)
+          ? undefined
+          : this._serializer.handshake && this._serializer.handshake(),
       ));
     }
   }
@@ -1351,7 +1362,7 @@ export abstract class Room<
 
       try {
         this.#_onLeaveConcurrent++;
-        await method(client, code);
+        await method.call(this, client, code);
 
       } catch (e: any) {
         debugAndPrintError(`${method.name} error: ${(e && e.message || e || 'promise rejected')} (roomId: ${this.roomId})`);

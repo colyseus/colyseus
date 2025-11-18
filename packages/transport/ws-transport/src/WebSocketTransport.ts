@@ -130,6 +130,7 @@ export class WebSocketTransport extends Transport {
 
     const client = new WebSocketClient(sessionId, rawClient);
     const reconnectionToken = parsedURL.searchParams.get("reconnectionToken");
+    const skipHandshake = (parsedURL.searchParams.has("skipHandshake"));
 
     //
     // TODO: DRY code below with all transports
@@ -144,7 +145,7 @@ export class WebSocketTransport extends Transport {
         headers: new Headers(req.headers),
         token: parsedURL.searchParams.get("_authToken") ?? getBearerToken(req.headers.authorization),
         ip: req.headers['x-real-ip'] ?? req.headers['x-forwarded-for'] ?? req.socket.remoteAddress,
-      }, reconnectionToken);
+      }, { reconnectionToken, skipHandshake });
 
     } catch (e: any) {
       debugAndPrintError(e);

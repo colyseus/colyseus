@@ -35,8 +35,9 @@ export class Connection implements ITransport {
         this.transport.sendUnreliable(data);
     }
 
-    reconnect(token: string): void {
-        this.connect(`${this.url}&reconnectionToken=${token}`, this.options);
+    reconnect(queryParams: { reconnectionToken: string, skipHandshake?: boolean }): void {
+        const queryString = new URLSearchParams(queryParams as unknown as Record<string, string>).toString();
+        this.transport.connect(`${this.url}&${queryString}`, this.options);
     }
 
     close(code?: number, reason?: string): void {

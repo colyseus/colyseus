@@ -7,6 +7,7 @@
 [ ] `.allowReconnection()` breaking changes. (https://github.com/colyseus/colyseus/issues/893)
   [ ] `onLeave(client, code)` - the onLeave now receives close `code` as number instead of `consented` boolean flag.
 [ ] `Protocol.WS_*` close codes have been moved to `CloseCode.*`
+[ ] Skipping handshake when local state is available (when reconnecting or with concrete state provided)
 
 ## New features to document
 
@@ -35,6 +36,7 @@ We have separate methods now for handling `onMessage()` with raw bytes: `onMessa
 [x] `RoomCache`: improve metadata handling and filters
 [ ] `PostgresDriver`: confirm if delay between increment/decrement `clients` is affecting `maxClients` being respected.
 [ ] `RedisDriver`: implement `boot()` to create LUA Script for filtering rooms at the server instead of at the Redis client
+[ ] Drivers: Allow to filter with OR operation (metaField=X or metaField=Y)
 [ ] Support Express v5
 [ ] Full-stack type safety
 [ ] How to use new `messages = {}` for raw binary data? (`.onMessageBytes()` ??)

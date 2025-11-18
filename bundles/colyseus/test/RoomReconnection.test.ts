@@ -1,15 +1,21 @@
 import assert from "assert";
 import crypto from "crypto";
 import sinon from "sinon";
-import { CloseCode, ColyseusSDK, Room as SDKRoom } from "@colyseus/sdk";
+import { CloseCode, ColyseusSDK, getStateCallbacks, Room as SDKRoom } from "@colyseus/sdk";
 import { type Client,  type MatchMakerDriver, type Presence, matchMaker, Room, Server, Transport, LocalDriver, LocalPresence, Deferred } from "@colyseus/core";
 
 import WebSocket from "ws";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import { timeout } from "./utils/index.ts";
+import { schema, type SchemaType } from "@colyseus/schema";
 
 const TEST_PORT = 8567;
 const TEST_ENDPOINT = `ws://localhost:${TEST_PORT}`;
+
+function simulateAbnormalClosure(client: Client) {
+  // @ts-ignore
+  setTimeout(() => client['ref']._socket.destroy(), 50);
+}
 
 describe("Room Reconnection", () => {
   let driver: MatchMakerDriver;
@@ -58,8 +64,7 @@ describe("Room Reconnection", () => {
       matchMaker.defineRoomType('auto_reconnect', class _ extends Room {
         onJoin(client: Client, options: any) {
           // simulate abnormal closure
-          // @ts-ignore
-          setTimeout(() => client['ref']._socket.destroy(), 50);
+          simulateAbnormalClosure(client);
         }
         async onDrop(client: Client, code: number) {
           onDropCalled = true;
@@ -119,14 +124,13 @@ describe("Room Reconnection", () => {
         }
         onJoin(client: Client, options: any) {
           // simulate abnormal closure
-          // @ts-ignore
-          setTimeout(() => client['ref']._socket.destroy(), 50);
+          simulateAbnormalClosure(client);
         }
         onDrop(client: Client, code: number) {
           this.allowReconnection(client, 10);
         }
-        onReconnect(client: Client) {}
-        onLeave(client: Client, code: number) {}
+        onReconnect(client: Client) { }
+        onLeave(client: Client, code: number) { }
       });
 
       const conn = await client.joinOrCreate('reconnect_with_enqueued_messages');
@@ -163,6 +167,155 @@ describe("Room Reconnection", () => {
 
       await timeout(50);
       assert.ok(!matchMaker.getLocalRoomById(conn.roomId));
+    });
+
+    it("state sync: should keep callbacks and not trigger them twice for existing items", async () => {
+      const Item = schema({
+        name: "string",
+      });
+
+      const Player = schema({
+        items: [Item],
+        connected: "boolean",
+      });
+
+      const State = schema({
+        players: { map: Player },
+      });
+      type State = SchemaType<typeof State>;
+
+      matchMaker.defineRoomType('state_sync_existing_items', class _ extends Room {
+        state = new State();
+        onCreate() {
+          for (let i = 0; i < 10; i++) {
+            this.state.players.set(`player${i}`, new Player().assign({ items: [new Item().assign({ name: `item${i}` })] }));
+          }
+        }
+        async onJoin(client: Client, options: any) {
+          this.state.players.set(client.sessionId, new Player().assign({ items: [new Item().assign({ name: `item${client.sessionId}` })] }));
+        }
+        onDrop(client: Client, code: number) {
+          this.allowReconnection(client, 10);
+          this.state.players.get(client.sessionId).connected = false;
+        }
+        onReconnect(client: Client) {
+          this.state.players.get(client.sessionId).connected = true;
+          this.state.players.get(client.sessionId).items.push(new Item().assign({ name: `item${client.sessionId}` }));
+        }
+        onLeave(client: Client, code: CloseCode) {
+          this.state.players.delete(client.sessionId);
+        }
+      });
+
+      const conn = await client.joinOrCreate<State>('state_sync_existing_items');
+      setupReconnection(conn);
+
+      const $ = getStateCallbacks(conn);
+      let onPlayerAddCount = 0;
+      let onItemAddCount = 0;
+      $(conn.state).players.onAdd((player, key) => {
+        onPlayerAddCount++;
+        $(player.items).onAdd((item, key) => { onItemAddCount++; });
+      });
+
+      await new Promise((resolve) => conn.onStateChange.once((state) => resolve(true)));
+
+      assert.strictEqual(onPlayerAddCount, 11);
+      assert.strictEqual(onItemAddCount, 11);
+
+      conn.leave(false);
+      await new Promise((resolve) => conn.onDrop.once((code, reason) => resolve(true)));
+      assert.strictEqual(false, conn.connection.isOpen);
+
+      await new Promise((resolve) => conn.onReconnect.once(() => resolve(true)));
+      assert.strictEqual(true, conn.connection.isOpen);
+
+      await new Promise((resolve) => conn.onStateChange.once((state) => resolve(true)));
+      assert.strictEqual(onPlayerAddCount, 11);
+      assert.strictEqual(onItemAddCount, 12);
+    });
+
+    describe("onLeave should be backwards-compatible", () => {
+      it("should allow to reconnect with onLeave + allowReconnection", async () => {
+        let onLeaveCalled = false;
+        let onReconnectSuccess = false;
+        let onDropCalled = false;
+
+        matchMaker.defineRoomType('backwards_compatible_onleave', class _ extends Room {
+          onJoin(client: Client, options: any) {
+            // simulate abnormal closure
+            simulateAbnormalClosure(client);
+          }
+          async onLeave(client: Client, code: CloseCode) {
+            onLeaveCalled = true;
+            console.log("onLeave", { code });
+            try {
+              if (code === CloseCode.CONSENTED) { throw new Error("consented"); }
+              onDropCalled = true;
+              await this.allowReconnection(client, 10);
+              onReconnectSuccess = true;
+            } catch (e: any) {
+              // Reconnection failed or timed out. This is expected.
+            }
+          }
+        });
+
+        const conn = await client.joinOrCreate('backwards_compatible_onleave');
+        setupReconnection(conn);
+
+        await new Promise((resolve) => conn.onDrop.once((code, reason) => resolve(true)));
+        await timeout(1);
+        assert.strictEqual(false, conn.connection.isOpen);
+        assert.strictEqual(onDropCalled, true);
+        assert.strictEqual(onLeaveCalled, true);
+        assert.strictEqual(onReconnectSuccess, false);
+
+        await new Promise((resolve) => conn.onReconnect.once(() => resolve(true)));
+        assert.strictEqual(true, conn.connection.isOpen);
+        assert.strictEqual(onDropCalled, true);
+        assert.strictEqual(onLeaveCalled, true);
+        assert.strictEqual(onReconnectSuccess, true);
+      });
+
+      it("should NOT allow to reconnect with onLeave + allowReconnection if reconnection got cancelled", async () => {
+        let onLeaveCalled = false;
+        let onReconnectCancelled = false;
+        let onDropCalled = false;
+
+        matchMaker.defineRoomType('backwards_compatible_onleave_reconnection_cancelled', class _ extends Room {
+          async onLeave(client: Client, code: CloseCode) {
+            onLeaveCalled = true;
+            try {
+              if (code === CloseCode.CONSENTED) { throw new Error("consented"); }
+              onDropCalled = true;
+
+              const reconnection = this.allowReconnection(client, "manual");
+              setTimeout(() => {
+                reconnection.reject(new Error("reconnection rejected"));
+              }, 1);
+
+              await reconnection;
+
+            } catch (e: any) {
+              onReconnectCancelled = true;
+            }
+          }
+        });
+
+        const conn = await client.joinOrCreate('backwards_compatible_onleave_reconnection_cancelled');
+        setupReconnection(conn);
+
+        conn.leave(false);
+
+        await new Promise((resolve) => conn.onDrop.once((code, reason) => resolve(true)));
+        await timeout(1);
+        assert.strictEqual(false, conn.connection.isOpen);
+        assert.strictEqual(onDropCalled, true);
+        assert.strictEqual(onLeaveCalled, true);
+
+        await timeout(10);
+        assert.strictEqual(onReconnectCancelled, true);
+      });
     });
 
   });

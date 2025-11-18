@@ -113,9 +113,6 @@ export class Room<
 
     protected joinedAtTime: number = 0;
 
-    // TODO: remove me on 1.0.0
-    protected rootSchema: SchemaConstructor<State>;
-
     protected onMessageHandlers = createNanoEvents();
 
     protected packr: Packr;
@@ -131,7 +128,6 @@ export class Room<
 
         if (rootSchema) {
             this.serializer = new (getSerializer("schema"));
-            this.rootSchema = rootSchema;
             (this.serializer as SchemaSerializer).state = new rootSchema();
         }
 
@@ -143,7 +139,6 @@ export class Room<
         this.connection = new Connection(options.protocol);
         this.connection.events.onmessage = this.onMessageCallback.bind(this);
         this.connection.events.onclose = (e: CloseEvent) => {
-            console.log("CLOSE CODE:", e.code);
             if (this.joinedAtTime === 0) {
                 console.warn?.(`Room connection was closed unexpectedly (${e.code}): ${e.reason}`);
                 this.onError.invoke(e.code, e.reason);
@@ -170,13 +165,19 @@ export class Room<
             this.onError.invoke(e.code, e.reason);
         };
 
-        // FIXME: refactor this.
+        /**
+         * if local serializer has state, it means we don't need to receive the
+         * handshake from the server
+         */
+        const skipHandshake = (this.serializer?.getState() !== undefined);
+
         if (options.protocol === "h3") {
+            // FIXME: refactor this.
             const url = new URL(endpoint);
-            this.connection.connect(url.origin, options);
+            this.connection.connect(url.origin, { ...options, skipHandshake });
 
         } else {
-            this.connection.connect(endpoint, headers);
+            this.connection.connect(`${endpoint}${skipHandshake ? "?skipHandshake=1" : ""}`, headers);
         }
 
     }
@@ -327,18 +328,19 @@ export class Room<
                 this.serializer = new serializer();
             }
 
+            // apply handshake on first join (no need to do this on reconnect)
             if (buffer.byteLength > it.offset && this.serializer.handshake) {
                 this.serializer.handshake(buffer, it);
             }
 
-            this.reconnectionToken = `${this.roomId}:${reconnectionToken}`;
-
             if (this.joinedAtTime === 0) {
                 this.onJoin.invoke();
+
             } else {
                 this.onReconnect.invoke();
             }
 
+            this.reconnectionToken = `${this.roomId}:${reconnectionToken}`;
             this.joinedAtTime = Date.now();
 
             // acknowledge successfull JOIN_ROOM
@@ -445,7 +447,10 @@ export class Room<
         // Wait before attempting reconnection
         setTimeout(() => {
             try {
-                this.connection.reconnect(this.reconnectionToken.split(":")[1]);
+                this.connection.reconnect({
+                    reconnectionToken: this.reconnectionToken.split(":")[1],
+                    skipHandshake: true, // we already applied the handshake on first join
+                });
                 console.info(`[Colyseus reconnection]: ${String.fromCodePoint(0x2705)} attempt ${this.reconnection.retryCount}...`); // ✅
 
             } catch (e) {

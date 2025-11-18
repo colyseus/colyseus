@@ -172,6 +172,7 @@ export class uWebSocketsTransport extends Transport {
         const room = matchMaker.getLocalRoomById(roomId);
         const client = new uWebSocketClient(sessionId, wrapper);
         const reconnectionToken = searchParams.reconnectionToken as string;
+        const skipHandshake = (searchParams.skipHandshake !== undefined);
 
         //
         // TODO: DRY code below with all transports
@@ -182,7 +183,10 @@ export class uWebSocketsTransport extends Transport {
                 throw new Error('seat reservation expired.');
             }
 
-            await room['_onJoin'](client, rawClient.context, reconnectionToken);
+            await room['_onJoin'](client, rawClient.context, {
+              reconnectionToken,
+              skipHandshake
+            });
 
         } catch (e: any) {
             debugAndPrintError(e);

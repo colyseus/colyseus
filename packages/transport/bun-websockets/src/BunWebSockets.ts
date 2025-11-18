@@ -128,6 +128,7 @@ export class BunWebSockets extends Transport {
     const room = matchMaker.getLocalRoomById(roomId);
     const client = new WebSocketClient(sessionId, wrapper);
     const reconnectionToken = parsedURL.searchParams.get("reconnectionToken");
+    const skipHandshake = (parsedURL.searchParams.has("skipHandshake"));
 
     //
     // TODO: DRY code below with all transports
@@ -142,7 +143,10 @@ export class BunWebSockets extends Transport {
         token: parsedURL.searchParams.get("_authToken") ?? getBearerToken(rawClient.data.headers['authorization']),
         headers: rawClient.data.headers,
         ip: rawClient.data.headers['x-real-ip'] ?? rawClient.data.headers['x-forwarded-for'] ?? rawClient.remoteAddress,
-      }, reconnectionToken);
+      }, {
+        reconnectionToken,
+        skipHandshake
+      });
 
     } catch (e: any) {
       debugAndPrintError(e);

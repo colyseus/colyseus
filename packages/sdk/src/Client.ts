@@ -1,4 +1,4 @@
-import type { Server } from '@colyseus/core';
+import type { Server, Room as ServerRoom } from '@colyseus/core';
 
 import { ServerError } from './errors/Errors.ts';
 import { Room } from './Room.ts';
@@ -108,39 +108,94 @@ export class ColyseusSDK<ServerType extends Server = any> {
         }
     }
 
-
+    // Overload: Use room name from ServerType to infer room type
     public async joinOrCreate<R extends keyof ServerType['~rooms']>(
         roomName: R,
         options?: Parameters<ServerType['~rooms'][typeof roomName]['~room']['prototype']['onJoin']>[1],
         rootSchema?: SchemaConstructor<ServerType>
     ): Promise<Room<ServerType['~rooms'][typeof roomName]['~room']>>
+    // Overload: Pass RoomType directly to extract state
+    public async joinOrCreate<RoomType extends typeof ServerRoom>(
+        roomName: string,
+        options?: Parameters<RoomType['prototype']['onJoin']>[1],
+        rootSchema?: SchemaConstructor<RoomType['prototype']['state']>
+    ): Promise<Room<RoomType>>
+    // Overload: Pass State type directly
+    public async joinOrCreate<State = any>(
+        roomName: string,
+        options?: JoinOptions,
+        rootSchema?: SchemaConstructor<State>
+    ): Promise<Room<any, State>>
+    // Implementation
     public async joinOrCreate<T = any>(roomName: string, options: JoinOptions = {}, rootSchema?: SchemaConstructor<T>) {
         return await this.createMatchMakeRequest<T>('joinOrCreate', roomName, options, rootSchema);
     }
 
+    // Overload: Use room name from ServerType to infer room type
     public async create<R extends keyof ServerType['~rooms']>(
         roomName: R,
         options?: Parameters<ServerType['~rooms'][typeof roomName]['~room']['prototype']['onJoin']>[1],
         rootSchema?: SchemaConstructor<ServerType>
     ): Promise<Room<ServerType['~rooms'][typeof roomName]['~room']>>
+    // Overload: Pass RoomType directly to extract state
+    public async create<RoomType extends typeof ServerRoom>(
+        roomName: string,
+        options?: Parameters<RoomType['prototype']['onJoin']>[1],
+        rootSchema?: SchemaConstructor<RoomType['prototype']['state']>
+    ): Promise<Room<RoomType>>
+    // Overload: Pass State type directly
+    public async create<State = any>(
+        roomName: string,
+        options?: JoinOptions,
+        rootSchema?: SchemaConstructor<State>
+    ): Promise<Room<any, State>>
+    // Implementation
     public async create<T = any>(roomName: string, options: JoinOptions = {}, rootSchema?: SchemaConstructor<T>) {
         return await this.createMatchMakeRequest<T>('create', roomName, options, rootSchema);
     }
 
+    // Overload: Use room name from ServerType to infer room type
     public async join<R extends keyof ServerType['~rooms']>(
         roomName: R,
         options?: Parameters<ServerType['~rooms'][typeof roomName]['~room']['prototype']['onJoin']>[1],
         rootSchema?: SchemaConstructor<ServerType>
     ): Promise<Room<ServerType['~rooms'][typeof roomName]['~room']>>
+    // Overload: Pass RoomType directly to extract state
+    public async join<RoomType extends typeof ServerRoom>(
+        roomName: string,
+        options?: Parameters<RoomType['prototype']['onJoin']>[1],
+        rootSchema?: SchemaConstructor<RoomType['prototype']['state']>
+    ): Promise<Room<RoomType>>
+    // Overload: Pass State type directly
+    public async join<State = any>(
+        roomName: string,
+        options?: JoinOptions,
+        rootSchema?: SchemaConstructor<State>
+    ): Promise<Room<any, State>>
+    // Implementation
     public async join<T = any>(roomName: string, options: JoinOptions = {}, rootSchema?: SchemaConstructor<T>) {
         return await this.createMatchMakeRequest<T>('join', roomName, options, rootSchema);
     }
 
+    // Overload: Use room name from ServerType to infer room type
     public async joinById<R extends keyof ServerType['~rooms']>(
         roomName: R,
         options?: Parameters<ServerType['~rooms'][typeof roomName]['~room']['prototype']['onJoin']>[1],
         rootSchema?: SchemaConstructor<ServerType>
     ): Promise<Room<ServerType['~rooms'][typeof roomName]['~room']>>
+    // Overload: Pass RoomType directly to extract state
+    public async joinById<RoomType extends typeof ServerRoom>(
+        roomId: string,
+        options?: Parameters<RoomType['prototype']['onJoin']>[1],
+        rootSchema?: SchemaConstructor<RoomType['prototype']['state']>
+    ): Promise<Room<RoomType>>
+    // Overload: Pass State type directly
+    public async joinById<State = any>(
+        roomId: string,
+        options?: JoinOptions,
+        rootSchema?: SchemaConstructor<State>
+    ): Promise<Room<any, State>>
+    // Implementation
     public async joinById<T = any>(roomId: string, options: JoinOptions = {}, rootSchema?: SchemaConstructor<T>) {
         return await this.createMatchMakeRequest<T>('joinById', roomId, options, rootSchema);
     }
@@ -152,7 +207,19 @@ export class ColyseusSDK<ServerType extends Server = any> {
      * @param rootSchema (optional) Concrete root schema definition
      * @returns Promise<Room>
      */
+    // Overload: Use room name from ServerType to infer room type
     public async reconnect<R extends keyof ServerType['~rooms']>(reconnectionToken: string, roomName?: R): Promise<Room<ServerType['~rooms'][typeof roomName]['~room']>>
+    // Overload: Pass RoomType directly to extract state
+    public async reconnect<RoomType extends typeof ServerRoom>(
+        reconnectionToken: string,
+        rootSchema?: SchemaConstructor<RoomType['prototype']['state']>
+    ): Promise<Room<RoomType>>
+    // Overload: Pass State type directly
+    public async reconnect<State = any>(
+        reconnectionToken: string,
+        rootSchema?: SchemaConstructor<State>
+    ): Promise<Room<any, State>>
+    // Implementation
     public async reconnect<T = any>(reconnectionToken: string, rootSchema?: SchemaConstructor<T>) {
         if (typeof (reconnectionToken) === "string" && typeof (rootSchema) === "string") {
             throw new Error("DEPRECATED: .reconnect() now only accepts 'reconnectionToken' as argument.\nYou can get this token from previously connected `room.reconnectionToken`");
