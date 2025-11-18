@@ -62,16 +62,13 @@ describe("Room Reconnection", () => {
           setTimeout(() => client['ref']._socket.destroy(), 50);
         }
         async onDrop(client: Client, code: number) {
-          console.log("onDrop", { code });
           onDropCalled = true;
           this.allowReconnection(client, 10);
         }
         async onReconnect(client: Client) {
-          console.log("onReconnect");
           onReconnectCalled = true;
         }
         async onLeave(client: Client, code: number) {
-          console.log("onLeave", { code });
           onLeaveCalled = true;
         }
       });
