@@ -22,7 +22,7 @@ describe("RankedQueueRoom", () => {
 
     beforeEach(() => {
       room = new RankedQueueRoom();
-      room.onCreate({});
+      room.onCreate({ matchRoomName: "my_room" });
 
       /**
        * Mock `checkGroupsReady()` method for testing
@@ -285,7 +285,7 @@ describe("RankedQueueRoom", () => {
   describe("Integration Test", () => {
     it("should create a ranked queue room", () => {
       const gameServer = defineServer({
-        ranked: defineRoom(RankedQueueRoom, {matchRoomName: ""}),
+        ranked: defineRoom(RankedQueueRoom, { matchRoomName: "" }),
       })
     });
   });
