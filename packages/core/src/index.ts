@@ -64,6 +64,7 @@ export {
 // Default rooms
 export { LobbyRoom } from './rooms/LobbyRoom.ts';
 export { RelayRoom } from './rooms/RelayRoom.ts';
+export { RankedQueueRoom, type RankedQueueOptions, type MatchGroup, type MatchTeam, type ClientQueueData } from './rooms/RankedQueueRoom.ts';
 
 // Router / Endpoints
 export {

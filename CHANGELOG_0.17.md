@@ -14,6 +14,7 @@
 [ ] `@colyseus/tools`: New `routes` and `rooms` options
 [ ] `@colyseus/core`: New `defineServer()` option
 [ ] Introduced `.setMatchmaking()` for batch modifying the listing entry of the room on the matchmaking driver. Allows to modify `metadata`, `locked`, `maxClients`, etc in a single operation.
+[ ] Document `RankedQueueRoom` and its usage example
 
 ## onMessage with raw bytes
 
