@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.dark .ace_gutter {
+    @apply bg-slate-700;
+}
+
+.dark .ace_gutter-active-line {
+    @apply bg-slate-900;
+}
+
+.dark .ace_marker-layer .ace_active-line {
+    @apply bg-slate-900;
+}
+.dark .ace_scroller {
+    @apply bg-slate-800;
+}

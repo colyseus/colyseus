@@ -1,4 +1,4 @@
-import { Room, type Client } from "@colyseus/core";
+import { CloseCode, Room, type Client } from "@colyseus/core";
 import { schema } from "@colyseus/schema";
 
 export const Player = schema({
@@ -64,7 +64,7 @@ export class MyRoom extends Room {
     // });
   }
 
-  async onLeave(client: Client, consented: boolean) {
+  async onLeave(client: Client, code: number) {
     try {
       if (code === CloseCode.CONSENTED) { throw new Error("consented leave"); }
 

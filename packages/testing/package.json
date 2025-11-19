@@ -45,12 +45,12 @@
     "@colyseus/core": "workspace:^",
     "@colyseus/tools": "workspace:^",
     "@colyseus/ws-transport": "workspace:^",
-    "colyseus.js": "^0.16.0"
+    "@colyseus/sdk": "workspace:^"
   },
   "peerDependencies": {
     "@colyseus/tools": "0.16.x",
     "@colyseus/core": "0.16.x",
-    "colyseus.js": "0.16.x"
+    "@colyseus/sdk": "0.16.x"
   },
   "publishConfig": {
     "access": "public"

@@ -3,8 +3,8 @@
  * Monkey-patches some Room methods to improve the testing experience.
  */
 
-import { Deferred, Room, Client } from "@colyseus/core";
-import { Room as ClientRoom } from "colyseus.js";
+import { Deferred, Room, type Client } from "@colyseus/core";
+import { Room as ClientRoom } from "@colyseus/sdk";
 
 // import timers from "timers/promises";
 
@@ -28,7 +28,7 @@ declare module "@colyseus/core" {
  */
 const _originalOnMessage = Room.prototype['_onMessage'];
 Room.prototype['_onMessage'] = function(this: Room) {
-  _originalOnMessage.apply(this, arguments);
+  _originalOnMessage.apply(this, arguments as any);
   if (this._waitingForMessage) {
     setTimeout(() => this._waitingForMessage[1].resolve(), this._waitingForMessage[0]);
   }
@@ -83,7 +83,7 @@ Room.prototype.waitForNextSimulationTick = async function(this: Room) {
  */
 const _originalBroadcastPatch = Room.prototype['broadcastPatch'];
 Room.prototype['broadcastPatch'] = function(this: Room) {
-  const retVal = _originalBroadcastPatch.apply(this, arguments);
+  const retVal = _originalBroadcastPatch.call(this);
   if (this._waitingForPatch) {
     setTimeout(() => this._waitingForPatch[1].resolve(), this._waitingForPatch[0]);
   }
@@ -98,7 +98,7 @@ Room.prototype.waitForNextPatch = async function (this: Room, additionalDelay: n
 // CLIENT-SIDE EXTENSIONS
 // ----------------------------------------------------------------------------------------
 
-declare module "colyseus.js" {
+declare module "@colyseus/sdk" {
   interface Room {
     waitForMessage(messageType: string, rejectTimeout?: number): Promise<any>;
     waitForNextMessage(additionalDelay?: number): Promise<[string, any]>;

@@ -1,0 +1,46 @@
+name: Publish & Release
+
+permissions:
+  contents: write
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  npm-publish:
+    name: npm-publish
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18.x'
+        registry-url: 'https://registry.npmjs.org'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - id: check
+      uses: EndBug/version-check@v2
+      with:
+        file-name: package.json
+        diff-search: true
+
+    - name: Publish package on NPM 📦
+      if: steps.check.outputs.changed == 'true'
+      run: npm publish
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
+
+    - name: Release
+      if: steps.check.outputs.changed == 'true'
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.check.outputs.version }}
+        prerelease: false
+

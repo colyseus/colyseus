@@ -6,6 +6,7 @@
   "author": "Endel Dreyer",
   "license": "MIT",
   "scripts": {
+    "start": "tsx src/app.config.ts",
     "example-h3": "tsx src/ServerH3.ts"
   },
   "dependencies": {
@@ -20,7 +21,7 @@
     "@colyseus/tools": "workspace:^",
     "@colyseus/drizzle-driver": "workspace:^",
     "@colyseus/sdk": "workspace:^",
-    "@colyseus/schema": "^3.0.0",
-    "@colyseus/playground": "^0.16.0"
+    "@colyseus/playground": "workspace:^",
+    "@colyseus/schema": "^3.0.0"
   }
 }
