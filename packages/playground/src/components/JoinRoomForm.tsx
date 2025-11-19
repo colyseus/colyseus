@@ -32,10 +32,11 @@ export function JoinRoomForm ({
 	const [error, setError] = useState("");
 	const [isButtonEnabled, setButtonEnabled] = useState(true);
 
+	const [isOptionsBlockOpen, setOptionsBlockOpen] = useState(false);
 	const [isAuthBlockOpen, setAuthBlockOpen] = useState(false);
 	const [authToken, setAuthToken] = useState(client.auth.token || "");
 
-	const handleSelectedRoomChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+	const handleSelectedRoomChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
 		if (selectedMethod === "joinById") {
 			setRoomId(e.target.value);
 		} else {
@@ -48,7 +49,7 @@ export function JoinRoomForm ({
 		// setError(error);
 	}
 
-	const handleSelectedMethodChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+	const handleSelectedMethodChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
 		const method = e.target.value as keyof Client;
 		setMethod(method);
 
@@ -70,6 +71,11 @@ export function JoinRoomForm ({
 				setAuthBlockOpen(false);
 			}
 		}
+	};
+
+	const toggleOptionsBlock = function(e: React.MouseEvent) {
+		e.preventDefault();
+		setOptionsBlockOpen(!isOptionsBlockOpen);
 	};
 
 	const toggleAuthBlock = function(e: React.MouseEvent) {
@@ -163,136 +169,214 @@ export function JoinRoomForm ({
 		});
 	});
 
-	return (<>
-		<h2 className="text-xl font-semibold">Join a room</h2>
-
-		<p className="mt-4"><strong>Method</strong></p>
-		<div className="flex mt-2">
-			{Object.keys(matchmakeMethods).map((method) => (
-			<div key={method} className="flex items-center mr-4">
-					<input id={method}
-						type="radio"
-						name="method"
-						value={method}
-						checked={selectedMethod === method}
-						onChange={handleSelectedMethodChange}
-						className="w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 focus:ring-purple-500 focus:ring-2" />
-					<label htmlFor={method} className="ml-2 text-sm font-medium text-gray-900 dark:text-slate-300">{matchmakeMethods[method]}</label>
+	return (
+		<div className="space-y-4">
+			{/* Method Selection */}
+			<div>
+				<label htmlFor="method-select" className="block text-xs font-semibold text-gray-700 dark:text-slate-400 uppercase tracking-wide mb-2">
+					Method
+				</label>
+				<select
+					id="method-select"
+					value={selectedMethod}
+					onChange={handleSelectedMethodChange}
+					className="w-full px-3 py-2.5 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-sm text-gray-900 dark:text-slate-300 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all cursor-pointer"
+				>
+					{Object.keys(matchmakeMethods).map((method) => (
+						<option key={method} value={method}>
+							{matchmakeMethods[method]}
+						</option>
+					))}
+				</select>
 			</div>
-			))}
-		</div>
 
-		{(selectedMethod !== "joinById")
-			? // NOT joinById
-			<>
-				<p className="mt-4"><strong>Available room types:</strong></p>
-				<div className="flex mt-2 flex-wrap">
+			{/* Room Selection */}
+			<div>
+				{selectedMethod !== "joinById" ? (
+					<>
+						<label htmlFor="room-type-select" className="block text-xs font-semibold text-gray-700 dark:text-slate-400 uppercase tracking-wide mb-2">
+							Room Type
+						</label>
+						{roomNames.length === 0 ? (
+							<div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+								<p className="text-sm text-yellow-800 dark:text-yellow-300">
+									No room types defined.{" "}
+									<a
+										href="https://docs.colyseus.io/server/api/#define-roomname-string-room-room-options-any"
+										className="underline hover:no-underline"
+										target="_blank"
+										rel="noopener noreferrer"
+									>
+										See documentation
+									</a>
+								</p>
+							</div>
+						) : (
+							<select
+								id="room-type-select"
+								value={selectedRoomName}
+								onChange={handleSelectedRoomChange}
+								className="w-full px-3 py-2.5 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-sm text-gray-900 dark:text-slate-300 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all cursor-pointer font-mono"
+							>
+								{roomNames.map((roomName) => (
+									<option key={roomName} value={roomName}>
+										{roomName}
+										{roomsByType[roomName] !== undefined ? ` (${roomsByType[roomName]})` : ""}
+									</option>
+								))}
+							</select>
+						)}
+					</>
+				) : (
+					<>
+						<label htmlFor="room-id-select" className="block text-xs font-semibold text-gray-700 dark:text-slate-400 uppercase tracking-wide mb-2">
+							Room ID
+						</label>
+						{Object.keys(roomsById).length === 0 ? (
+							<div className="p-3 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg">
+								<p className="text-sm text-gray-600 dark:text-slate-400 italic">No rooms available.</p>
+							</div>
+						) : (
+							<select
+								id="room-id-select"
+								value={selectedRoomId}
+								onChange={handleSelectedRoomChange}
+								className="w-full px-3 py-2.5 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-sm text-gray-900 dark:text-slate-300 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all cursor-pointer"
+							>
+								{Object.keys(roomsById).map((roomId) => (
+									<option
+										key={roomId}
+										value={roomId}
+										disabled={roomsById[roomId].locked}
+									>
+										{roomsById[roomId].name} - {roomId.substring(0, 8)}... ({roomsById[roomId].locked ? "🔒" : "🔓"} {roomsById[roomId].clients} clients)
+									</option>
+								))}
+							</select>
+						)}
+					</>
+				)}
+			</div>
 
-					{/* No room definitions found */}
-					{(roomNames.length) === 0 &&
-						<p>Your server does not define any room type. See <a href="https://docs.colyseus.io/server/api/#define-roomname-string-room-room-options-any">documentation</a>.</p>}
-
-					{/* List room definitions */}
-					{(roomNames).map((roomName) => (
-						<div key={roomName} className="flex items-center mr-4 mb-2">
-								<input id={"name_" + roomName}
-									name="room_name"
-									type="radio"
-									value={roomName}
-									checked={selectedRoomName === roomName}
-									onChange={handleSelectedRoomChange}
-									className="w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 focus:ring-purple-500 focus:ring-2" />
-								<label htmlFor={"name_" + roomName} className="ml-2 text-sm font-medium text-gray-900 dark:text-slate-300 cursor-pointer">
-									<code className="bg-gray-100 dark:bg-slate-700 p-1">{roomName}</code>
-									{(roomsByType[roomName] !== undefined) &&
-										<span className="group relative ml-1 text-sm text-gray-500 cursor-help">
-											({roomsByType[roomName]})
-											<span className="absolute left-8 w-32 scale-0 rounded bg-gray-800 p-2 text-xs text-white group-hover:scale-100">{roomsByType[roomName] + " active room(s)"}</span>
-										</span>}
-
-								</label>
-						</div>
-					))}
-				</div>
-			</>
-
-		: // joinById
-			<>
-				<p className="mt-4"><strong>Available rooms by ID:</strong></p>
-				<div className="flex mt-2 flex-wrap">
-
-					{/* No room definitions found */}
-					{(Object.keys(roomsById).length) === 0 &&
-						<p><em>No rooms available.</em></p>}
-
-					{/* List room definitions */}
-					{(Object.keys(roomsById)).map((roomId) => (
-						<div key={roomId} className="flex items-center w-full mr-4 mb-2">
-								<input id={"roomid_" + roomId}
-									name="room_id"
-									type="radio"
-									value={roomId}
-									checked={selectedRoomId === roomId}
-									onChange={handleSelectedRoomChange}
-									className="w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 focus:ring-purple-500 focus:ring-2" />
-								<label htmlFor={"roomid_" + roomId} className={"ml-2 cursor-pointer text-sm transition" + ((roomsById[roomId].locked) ? " opacity-60" : "")}>
-									<RoomWithId name={roomsById[roomId].name} roomId={roomId} />
-									<span className="text-gray-500 dark:text-slate-300 text-sm ml-1">
-										({(roomsById[roomId].locked)
-										? <svg className="inline text-xs mr-1" fill="currentColor" xmlns="http://www.w3.org/2000/svg" height="1em" viewBox="0 0 448 512"><path d="M144 144v48H304V144c0-44.2-35.8-80-80-80s-80 35.8-80 80zM80 192V144C80 64.5 144.5 0 224 0s144 64.5 144 144v48h16c35.3 0 64 28.7 64 64V448c0 35.3-28.7 64-64 64H64c-35.3 0-64-28.7-64-64V256c0-35.3 28.7-64 64-64H80z"/></svg>
-										: <svg className="inline text-xs mr-1" fill="currentColor" xmlns="http://www.w3.org/2000/svg" height="1em" viewBox="0 0 576 512"><path d="M352 144c0-44.2 35.8-80 80-80s80 35.8 80 80v48c0 17.7 14.3 32 32 32s32-14.3 32-32V144C576 64.5 511.5 0 432 0S288 64.5 288 144v48H64c-35.3 0-64 28.7-64 64V448c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V256c0-35.3-28.7-64-64-64H352V144z"/></svg> }
-									· {roomsById[roomId].clients} clients)
-									</span>
-								</label>
-						</div>
-					))}
-				</div>
-			</>
-		}
-
-		{/* Do not show "join options" if joining by room ID AND no room is available. */}
-		{(selectedMethod === "joinById" && Object.keys(roomsById).length === 0)
-			? null
-			: <>
-				<p className="mt-4"><strong>Join options</strong></p>
-				<JSONEditor
-					text={optionsText}
-					onChangeText={onChangeOptions}
-					onValidationError={onOptionsValidationError}
-					mode="code"
-					search={false}
-					statusBar={false}
-					navigationBar={false}
-					mainMenuBar={false}
-					className={"mt-2 h-24 overflow-hidden rounded border " + (isButtonEnabled ? "border-gray-300 dark:border-slate-500" : "border-red-300")}
-				/>
-
-				<p className="mt-4 cursor-pointer truncate overflow-hidden text-ellipsis" onClick={toggleAuthBlock}>
-					<span className={`caret inline-block transition-all ${(isAuthBlockOpen) ? "rotate-90" : "rotate-0"}`}>▶</span> <strong>Auth Token </strong><small className="text-xs text-slate-600 dark:text-slate-300">{authToken && `(${authToken.length} chars) "${authToken}"` || "(none)"}</small>
-				</p>
-
-				{(isAuthBlockOpen)
-					? <AuthOptions
-							authToken={authToken}
-							onAuthTokenChange={onAuthTokenChange}
-							authConfig={authConfig}
-							/>
-					: null }
-
-				<div className="flex mt-4">
-					<button
-						className="bg-purple-500 disabled:cursor-not-allowed disabled:opacity-50 enabled:hover:bg-purple-700 text-white font-bold py-2 px-4 rounded transition"
-						onClick={onJoinClick}
-						disabled={!isButtonEnabled}>
-						{matchmakeMethods[selectedMethod]}
-					</button>
-					<div className="ml-1 p-2 inline italic">
-						{isLoading && "Connecting..."}
-						{!isLoading && error &&
-							<span className="text-red-500"><strong>Error:</strong> {error}</span>}
+			{/* Join Options and Actions */}
+			{!(selectedMethod === "joinById" && Object.keys(roomsById).length === 0) && (
+				<>
+					{/* Join Options */}
+					<div className={`border border-gray-200 dark:border-slate-600 rounded-lg overflow-hidden ${isOptionsBlockOpen ? 'bg-gray-50 dark:bg-slate-800' : ''}`}>
+						<button
+							type="button"
+							onClick={toggleOptionsBlock}
+							className={`w-full flex items-center justify-between p-3 ${
+								isOptionsBlockOpen
+									? 'border-b border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-800'
+									: 'hover:bg-gray-50 dark:hover:bg-slate-800'
+							}`}
+						>
+							<div className="flex items-center gap-2">
+								<svg
+									className={`w-3 h-3 transition-transform ${isOptionsBlockOpen ? "rotate-90" : ""}`}
+									fill="currentColor"
+									viewBox="0 0 20 20"
+								>
+									<path
+										fillRule="evenodd"
+										d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+										clipRule="evenodd"
+									/>
+								</svg>
+								<span className="text-xs font-semibold text-gray-700 dark:text-slate-400 uppercase tracking-wide">
+									Options (JSON)
+								</span>
+							</div>
+							<span className="text-xs text-gray-500 dark:text-slate-500 truncate max-w-[150px] font-mono">
+								{optionsText === "{}" ? "(empty)" : optionsText.substring(0, 20) + (optionsText.length > 20 ? "..." : "")}
+							</span>
+						</button>
+						{isOptionsBlockOpen && (
+              <JSONEditor
+                text={optionsText}
+                onChangeText={onChangeOptions}
+                onValidationError={onOptionsValidationError}
+                mode="code"
+                search={false}
+                statusBar={false}
+                navigationBar={false}
+                mainMenuBar={false}
+                className={`rounded-b-lg border-2 border-t-0 overflow-hidden h-24 ${
+                  isButtonEnabled
+                    ? "border-gray-300 dark:border-slate-600"
+                    : "border-red-400 dark:border-red-600"
+                }`}
+              />
+						)}
 					</div>
-				</div>
-			</>}
 
-	</>);
+					{/* Auth Token */}
+					<div className={`border border-gray-200 dark:border-slate-600 rounded-lg overflow-hidden ${isAuthBlockOpen ? 'bg-gray-50 dark:bg-slate-800' : ''}`}>
+						<button
+							type="button"
+							onClick={toggleAuthBlock}
+							className={`w-full flex items-center justify-between p-3 ${
+								isAuthBlockOpen
+									? 'border-b border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-800'
+									: 'hover:bg-gray-50 dark:hover:bg-slate-800'
+							}`}
+						>
+							<div className="flex items-center gap-2">
+								<svg
+									className={`w-3 h-3 transition-transform ${isAuthBlockOpen ? "rotate-90" : ""}`}
+									fill="currentColor"
+									viewBox="0 0 20 20"
+								>
+									<path
+										fillRule="evenodd"
+										d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+										clipRule="evenodd"
+									/>
+								</svg>
+								<span className="text-xs font-semibold text-gray-700 dark:text-slate-400 uppercase tracking-wide">
+									Auth Token
+								</span>
+							</div>
+							<span className="text-xs text-gray-500 dark:text-slate-500 truncate max-w-[150px]">
+								{authToken ? `${authToken.length} chars` : "(none)"}
+							</span>
+						</button>
+						{isAuthBlockOpen && (
+              <AuthOptions
+                authToken={authToken}
+                onAuthTokenChange={onAuthTokenChange}
+                authConfig={authConfig}
+              />
+						)}
+					</div>
+
+					{/* Connect Button */}
+					<div>
+						<button
+							className="w-full bg-purple-600 disabled:cursor-not-allowed disabled:opacity-50 enabled:hover:bg-purple-700 text-white font-semibold py-3 px-4 rounded-lg transition-all shadow-sm enabled:hover:shadow-md"
+							onClick={onJoinClick}
+							disabled={!isButtonEnabled || isLoading}
+						>
+							{isLoading ? (
+								<span className="flex items-center justify-center gap-2">
+									<div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+									Connecting...
+								</span>
+							) : (
+								matchmakeMethods[selectedMethod]
+							)}
+						</button>
+						{!isLoading && error && (
+							<div className="mt-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+								<p className="text-sm text-red-700 dark:text-red-400">
+									<strong>Error:</strong> {error}
+								</p>
+							</div>
+						)}
+					</div>
+				</>
+			)}
+		</div>
+	);
 }

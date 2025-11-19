@@ -13,6 +13,7 @@
     "@colyseus/core": "workspace:^"
   },
   "devDependencies": {
+    "@colyseus/auth": "workspace:^",
     "@colyseus/uwebsockets-transport": "workspace:^",
     "@colyseus/ws-transport": "workspace:^",
     "@colyseus/h3-transport": "workspace:^",

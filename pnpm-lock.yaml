@@ -249,6 +249,9 @@ importers:
         specifier: workspace:^
         version: link:../core
     devDependencies:
+      '@colyseus/auth':
+        specifier: workspace:^
+        version: link:../auth
       '@colyseus/drizzle-driver':
         specifier: workspace:^
         version: link:../drivers/drizzle-driver
@@ -319,6 +322,9 @@ importers:
       '@colyseus/sdk':
         specifier: workspace:^
         version: link:../sdk
+      '@primer/octicons-react':
+        specifier: ^19.21.0
+        version: 19.21.0(react@18.3.1)
       '@types/jest':
         specifier: ^27.5.2
         version: 27.5.2
@@ -2071,6 +2077,12 @@ packages:
   '@pm2/io@6.1.0':
     resolution: {integrity: sha512-IxHuYURa3+FQ6BKePlgChZkqABUKFYH6Bwbw7V/pWU1pP6iR1sCI26l7P9ThUEB385ruZn/tZS3CXDUF5IA1NQ==}
     engines: {node: '>=6.0'}
+
+  '@primer/octicons-react@19.21.0':
+    resolution: {integrity: sha512-KMWYYEIDKNIY0N3fMmNGPWJGHgoJF5NHkJllpOM3upDXuLtAe26Riogp1cfYdhp+sVjGZMt32DxcUhTX7ZhLOQ==}
+    engines: {node: '>=8'}
+    peerDependencies:
+      react: '>=16.3'
 
   '@remix-run/router@1.23.1':
     resolution: {integrity: sha512-vDbaOzF7yT2Qs4vO6XV1MHcJv+3dgR1sT+l3B8xxOVhUC336prMvqrvsLL/9Dnw2xr6Qhz4J0dmS0llNAbnUmQ==}
@@ -8281,6 +8293,10 @@ snapshots:
       tslib: 1.9.3
     transitivePeerDependencies:
       - supports-color
+
+  '@primer/octicons-react@19.21.0(react@18.3.1)':
+    dependencies:
+      react: 18.3.1
 
   '@remix-run/router@1.23.1': {}
 

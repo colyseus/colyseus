@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { type RoomAvailable } from "@colyseus/sdk";
+import { PlugIcon, GlobeIcon, GraphIcon } from "@primer/octicons-react";
 
 import { endpoint, Connection, global } from "../utils/Types";
 import { RealtimeRooms, ServerState } from "./RealtimeRooms";
@@ -69,9 +70,9 @@ export function Playground() {
 	}, []);
 
 	const tabs = [
-		{ id: "rooms" as TabType, label: "Rooms", icon: "🔌" },
-		{ id: "api" as TabType, label: "API Endpoints", icon: "📡" },
-		{ id: "stats" as TabType, label: "Realtime Stats", icon: "📊" },
+		{ id: "rooms" as TabType, label: "Rooms", icon: PlugIcon },
+		{ id: "api" as TabType, label: "API Endpoints", icon: GlobeIcon },
+		{ id: "stats" as TabType, label: "Realtime Stats", icon: GraphIcon },
 	];
 
 	return (
@@ -80,20 +81,23 @@ export function Playground() {
 			<div className="w-64 bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-700 flex flex-col">
 				<div className="flex-1 py-6">
 					<nav className="space-y-1 px-3">
-						{tabs.map((tab) => (
-							<button
-								key={tab.id}
-								onClick={() => setActiveTab(tab.id)}
-								className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
-									activeTab === tab.id
-										? "bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300"
-										: "text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800"
-								}`}
-							>
-								<span className="text-xl mr-3">{tab.icon}</span>
-								<span>{tab.label}</span>
-							</button>
-						))}
+						{tabs.map((tab) => {
+							const Icon = tab.icon;
+							return (
+								<button
+									key={tab.id}
+									onClick={() => setActiveTab(tab.id)}
+									className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
+										activeTab === tab.id
+											? "bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300"
+											: "text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800"
+									}`}
+								>
+									<Icon className="mr-3" size={20} />
+									<span>{tab.label}</span>
+								</button>
+							);
+						})}
 					</nav>
 				</div>
 			</div>

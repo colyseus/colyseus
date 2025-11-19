@@ -4,3 +4,91 @@
   height: 100%;
 }
 
+/* Dark mode styles */
+.dark .jsoneditor {
+  background-color: #1e293b; /* slate-800 */
+  color: #cbd5e1; /* slate-300 */
+}
+
+.dark .jsoneditor-outer {
+  background-color: #1e293b; /* slate-800 */
+}
+
+.dark .jsoneditor-menu {
+  background-color: #0f172a; /* slate-900 */
+  border-bottom-color: #475569; /* slate-600 */
+}
+
+.dark .ace-jsoneditor {
+  background-color: #1e293b !important; /* slate-800 */
+}
+
+.dark .ace-jsoneditor .ace_gutter {
+  background-color: #0f172a; /* slate-900 */
+  color: #64748b; /* slate-500 */
+}
+
+.dark .ace-jsoneditor .ace_gutter-active-line {
+  background-color: #334155; /* slate-700 */
+}
+
+/* String keys and values styling in dark mode */
+.dark .ace-jsoneditor .ace_string {
+  color: #86efac; /* green-300 */
+}
+
+.dark .ace-jsoneditor .ace_variable {
+  color: #93c5fd; /* blue-300 */
+}
+
+.dark .ace-jsoneditor .ace_constant.ace_numeric {
+  color: #fbbf24; /* amber-400 */
+}
+
+.dark .ace-jsoneditor .ace_constant.ace_language {
+  color: #c084fc; /* purple-400 */
+}
+
+.dark .ace-jsoneditor .ace_keyword {
+  color: #f472b6; /* pink-400 */
+}
+
+.dark .ace-jsoneditor .ace_storage {
+  color: #f472b6; /* pink-400 */
+}
+
+.dark .ace-jsoneditor .ace_punctuation {
+  color: #cbd5e1; /* slate-300 */
+}
+
+/* Cursor and selection in dark mode */
+.dark .ace-jsoneditor .ace_cursor {
+  color: #cbd5e1; /* slate-300 */
+}
+
+.dark .ace-jsoneditor .ace_marker-layer .ace_selection {
+  background-color: #475569; /* slate-600 */
+}
+
+.dark .ace-jsoneditor .ace_marker-layer .ace_active-line {
+  background-color: #334155; /* slate-700 */
+}
+
+/* Scrollbar styling for dark mode */
+.dark .ace-jsoneditor .ace_scrollbar::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.dark .ace-jsoneditor .ace_scrollbar::-webkit-scrollbar-track {
+  background: #0f172a; /* slate-900 */
+}
+
+.dark .ace-jsoneditor .ace_scrollbar::-webkit-scrollbar-thumb {
+  background: #475569; /* slate-600 */
+  border-radius: 5px;
+}
+
+.dark .ace-jsoneditor .ace_scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #64748b; /* slate-500 */
+}

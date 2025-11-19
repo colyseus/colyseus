@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { endpoint } from "../utils/Types";
+import { ResizableSidebar } from "../components/ResizableSidebar";
 
 interface APIEndpoint {
 	method: string;
@@ -57,8 +58,10 @@ export function APIEndpoints() {
 
 	return (
 		<div className="h-full flex">
-			{/* Sidebar with endpoints */}
-			<div className="w-80 bg-white dark:bg-slate-700 border-r border-gray-200 dark:border-slate-600 overflow-y-auto">
+			<ResizableSidebar 
+				className="bg-white dark:bg-slate-700 border-r border-gray-200 dark:border-slate-600 overflow-y-auto"
+				storageKey="playground-api-endpoints-sidebar-width"
+			>
 				<div className="p-6">
 					<h2 className="text-xl font-semibold mb-4 dark:text-slate-300">Available Endpoints</h2>
 					
@@ -104,7 +107,7 @@ export function APIEndpoints() {
 						</div>
 					</div>
 				</div>
-			</div>
+			</ResizableSidebar>
 
 			{/* Main content area */}
 			<div className="flex-1 overflow-y-auto">
