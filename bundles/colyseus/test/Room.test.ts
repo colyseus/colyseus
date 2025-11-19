@@ -67,10 +67,9 @@ describe("Room", () => {
     });
 
     //
-    // [Bug]: setting patchRate=0 makes clock intervals stop working
-    // https://github.com/colyseus/colyseus/issues/869
+    // See: https://github.com/colyseus/colyseus/issues/869
     //
-    xit("TODO: setting patchRate to zero shouldn't interfere with clock's setTimeout", async () => {
+    it("setting patchRate to zero shouldn't interfere with clock's setTimeout", async () => {
       const room = new MyRoom();
       room['__init']();
 
@@ -81,6 +80,19 @@ describe("Room", () => {
 
       await new Promise(resolve => setTimeout(resolve, 20));
       assert.strictEqual(1, called);
+    });
+
+    it("setting patchRate to zero shouldn't interfere with clock's setInterval", async () => {
+      const room = new MyRoom();
+      room['__init']();
+
+      let called = 0;
+      room.clock.setInterval(() => called++, 10);
+
+      room.patchRate = 0;
+
+      await new Promise(resolve => setTimeout(resolve, 60));
+      assert.ok(called >= 3, `Expected at least 3 calls, got ${called}`);
     });
 
   });

@@ -290,6 +290,9 @@ export abstract class Room<
           }
           if (milliseconds !== null && milliseconds !== 0) {
             this.#_patchInterval = setInterval(() => this.broadcastPatch(), milliseconds);
+          } else if (!this._simulationInterval) {
+            // When patchRate and no simulation interval are both set to 0, tick the clock to keep timers working
+            this.#_patchInterval = setInterval(() => this.clock.tick(), DEFAULT_SIMULATION_INTERVAL);
           }
         },
       },

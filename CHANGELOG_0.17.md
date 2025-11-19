@@ -8,13 +8,14 @@
   [ ] `onLeave(client, code)` - the onLeave now receives close `code` as number instead of `consented` boolean flag.
 [ ] `Protocol.WS_*` close codes have been moved to `CloseCode.*`
 [ ] Skipping handshake when local state is available (when reconnecting or with concrete state provided)
+[ ] Fixed bug where setting `patchRate=0` would stop `clock` intervals and timeouts from working (https://github.com/colyseus/colyseus/issues/869)
 
 ## New features to document
 
 [ ] `@colyseus/tools`: New `routes` and `rooms` options
 [ ] `@colyseus/core`: New `defineServer()` option
 [ ] Introduced `.setMatchmaking()` for batch modifying the listing entry of the room on the matchmaking driver. Allows to modify `metadata`, `locked`, `maxClients`, etc in a single operation.
-[ ] Document `RankedQueueRoom` and its usage example
+[ ] Document `RankedQueueRoom` and its usage example: https://github.com/endel/colyseus-ranked-matchmaking/?tab=readme-ov-file#ranked-queue-with-colyseus
 
 ## onMessage with raw bytes
 
