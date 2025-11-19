@@ -1,4 +1,6 @@
 import { Client, Room, RoomAvailable } from "colyseus.js";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faRightToBracket, faSpinner } from "@fortawesome/free-solid-svg-icons";
 import { useState } from "react";
 import { global, client, roomsBySessionId, messageTypesByRoom, Connection, matchmakeMethods, getRoomColorClass } from "../utils/Types";
 import { DEVMODE_RESTART, RAW_EVENTS_KEY, onRoomConnected } from "../utils/ColyseusSDKExt";
@@ -170,17 +172,17 @@ export function JoinRoomForm ({
 	});
 
 	return (
-		<div className="space-y-4">
+		<div className="space-y-3">
 			{/* Method Selection */}
 			<div>
-				<label htmlFor="method-select" className="block text-xs font-semibold text-gray-700 dark:text-slate-400 uppercase tracking-wide mb-2">
+				<label htmlFor="method-select" className="block text-xs font-semibold text-gray-700 dark:text-slate-400 uppercase tracking-wide mb-1">
 					Method
 				</label>
 				<select
 					id="method-select"
 					value={selectedMethod}
 					onChange={handleSelectedMethodChange}
-					className="w-full px-3 py-2.5 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-sm text-gray-900 dark:text-slate-300 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all cursor-pointer"
+					className="w-full px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-lg text-sm text-gray-900 dark:text-slate-300 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all cursor-pointer"
 				>
 					{Object.keys(matchmakeMethods).map((method) => (
 						<option key={method} value={method}>
@@ -194,11 +196,11 @@ export function JoinRoomForm ({
 			<div>
 				{selectedMethod !== "joinById" ? (
 					<>
-						<label htmlFor="room-type-select" className="block text-xs font-semibold text-gray-700 dark:text-slate-400 uppercase tracking-wide mb-2">
+						<label htmlFor="room-type-select" className="block text-xs font-semibold text-gray-700 dark:text-slate-400 uppercase tracking-wide mb-1">
 							Room Type
 						</label>
 						{roomNames.length === 0 ? (
-							<div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+							<div className="p-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
 								<p className="text-sm text-yellow-800 dark:text-yellow-300">
 									No room types defined.{" "}
 									<a
@@ -216,7 +218,7 @@ export function JoinRoomForm ({
 								id="room-type-select"
 								value={selectedRoomName}
 								onChange={handleSelectedRoomChange}
-								className="w-full px-3 py-2.5 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-sm text-gray-900 dark:text-slate-300 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all cursor-pointer font-mono"
+								className="w-full px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-lg text-sm text-gray-900 dark:text-slate-300 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all cursor-pointer font-mono"
 							>
 								{roomNames.map((roomName) => (
 									<option key={roomName} value={roomName}>
@@ -229,11 +231,11 @@ export function JoinRoomForm ({
 					</>
 				) : (
 					<>
-						<label htmlFor="room-id-select" className="block text-xs font-semibold text-gray-700 dark:text-slate-400 uppercase tracking-wide mb-2">
+						<label htmlFor="room-id-select" className="block text-xs font-semibold text-gray-700 dark:text-slate-400 uppercase tracking-wide mb-1">
 							Room ID
 						</label>
 						{Object.keys(roomsById).length === 0 ? (
-							<div className="p-3 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg">
+							<div className="p-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg">
 								<p className="text-sm text-gray-600 dark:text-slate-400 italic">No rooms available.</p>
 							</div>
 						) : (
@@ -241,7 +243,7 @@ export function JoinRoomForm ({
 								id="room-id-select"
 								value={selectedRoomId}
 								onChange={handleSelectedRoomChange}
-								className="w-full px-3 py-2.5 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-sm text-gray-900 dark:text-slate-300 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all cursor-pointer"
+								className="w-full px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-lg text-sm text-gray-900 dark:text-slate-300 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all cursor-pointer"
 							>
 								{Object.keys(roomsById).map((roomId) => (
 									<option
@@ -266,7 +268,7 @@ export function JoinRoomForm ({
 						<button
 							type="button"
 							onClick={toggleOptionsBlock}
-							className={`w-full flex items-center justify-between p-3 ${
+							className={`w-full flex items-center justify-between p-2 ${
 								isOptionsBlockOpen
 									? 'border-b border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-800'
 									: 'hover:bg-gray-50 dark:hover:bg-slate-800'
@@ -302,7 +304,7 @@ export function JoinRoomForm ({
                 statusBar={false}
                 navigationBar={false}
                 mainMenuBar={false}
-                className={`rounded-b-lg border-2 border-t-0 overflow-hidden h-24 ${
+                className={`rounded-b-lg border border-t-0 overflow-hidden h-20 ${
                   isButtonEnabled
                     ? "border-gray-300 dark:border-slate-600"
                     : "border-red-400 dark:border-red-600"
@@ -316,7 +318,7 @@ export function JoinRoomForm ({
 						<button
 							type="button"
 							onClick={toggleAuthBlock}
-							className={`w-full flex items-center justify-between p-3 ${
+							className={`w-full flex items-center justify-between p-2 ${
 								isAuthBlockOpen
 									? 'border-b border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-800'
 									: 'hover:bg-gray-50 dark:hover:bg-slate-800'
@@ -354,21 +356,21 @@ export function JoinRoomForm ({
 					{/* Connect Button */}
 					<div>
 						<button
-							className="w-full bg-purple-600 disabled:cursor-not-allowed disabled:opacity-50 enabled:hover:bg-purple-700 text-white font-semibold py-3 px-4 rounded-lg transition-all shadow-sm enabled:hover:shadow-md"
+							className="w-full bg-purple-600 disabled:cursor-not-allowed disabled:opacity-50 enabled:hover:bg-purple-700 text-white font-semibold py-2 px-4 rounded-lg transition-all shadow-sm enabled:hover:shadow-md"
 							onClick={onJoinClick}
 							disabled={!isButtonEnabled || isLoading}
 						>
 							{isLoading ? (
 								<span className="flex items-center justify-center gap-2">
-									<div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
 									Connecting...
+									<div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
 								</span>
-							) : (
-								matchmakeMethods[selectedMethod]
-							)}
+							) : (<>
+                {matchmakeMethods[selectedMethod]} <FontAwesomeIcon icon={faRightToBracket} className="ml-1 inline" />
+              </>)}
 						</button>
 						{!isLoading && error && (
-							<div className="mt-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+							<div className="mt-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
 								<p className="text-sm text-red-700 dark:text-red-400">
 									<strong>Error:</strong> {error}
 								</p>

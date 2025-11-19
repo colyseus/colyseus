@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { type RoomAvailable } from "@colyseus/sdk";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faDoorOpen, faHashtag, faTicket, faUser } from "@fortawesome/free-solid-svg-icons";
 
 import { InspectConnection } from "../components/InspectConnection";
-import { client, Connection, global } from "../utils/Types";
+import { client, Connection, global, roomsBySessionId } from "../utils/Types";
 import { ConnectionList } from "../components/ConnectionList";
 import { JoinRoomForm } from "../components/JoinRoomForm";
 import { StateView } from "../components/StateView";
@@ -36,8 +38,18 @@ export function RealtimeRooms({
 	onConnectionSuccessful,
 	onDisconnection,
 }: RealtimeRoomsProps) {
-	const [connections, setConnections] = useState([] as Connection[]);
+	const [connections, setConnections] = useState(global.connections);
 	const [selectedConnection, setSelectedConnection] = useState(undefined as unknown as Connection);
+
+	// Auto-select a connection if none is selected and connections are available
+	useEffect(() => {
+		if ((!selectedConnection || !selectedConnection.isConnected) && connections.length > 0) {
+			const activeConnection = connections.find(conn => conn.isConnected);
+			if (activeConnection) {
+				setSelectedConnection(activeConnection);
+			}
+		}
+	}, [connections, selectedConnection]);
 
 	const handleConnectionSuccessful = (connection: Connection) => {
 		onConnectionSuccessful(connection);
@@ -104,53 +116,69 @@ export function RealtimeRooms({
 				</div>
 			</ResizableSidebar>
 
-			{/* Main content area */}
-			<div className="flex-1 overflow-y-auto">
-				<div className="p-8 h-full flex flex-col gap-6">
-					<div className="bg-white dark:bg-slate-700 dark:text-slate-300 shadow rounded p-6 flex-1">
-						<h2 className="text-xl font-semibold mb-4">
+		{/* Main content area */}
+		<div className="flex-1 overflow-hidden bg-gray-50 dark:bg-slate-800">
+			<div className="h-full flex flex-col lg:flex-row gap-0">
+				<div className="flex-1 overflow-y-auto border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-slate-600 dark:text-slate-300 p-6">
+					<div className="mb-4">
+						<h2 className="text-xl font-semibold mb-2">
 							Inspect connection
-							{selectedConnection ? (
-								<span>
-									{' '}
-									(
-									<code className="bg-gray-100 dark:bg-slate-800 dark:text-slate-300 text-sm text-gray-700 p-1 rounded">
-										sessionId: {selectedConnection.sessionId}
-									</code>
-									)
-								</span>
-							) : null}
 						</h2>
-						{selectedConnection ? (
-							<InspectConnection
-								key={selectedConnection.sessionId}
-								client={client}
-								connection={selectedConnection}
-							/>
-						) : (
-							<p>
-								<em>(Please select an active client connection)</em>
-							</p>
-						)}
-					</div>
-
-					<div className="bg-white dark:bg-slate-700 dark:text-slate-300 shadow rounded p-6 flex-1">
-						<h2 className="text-xl font-semibold mb-4">State</h2>
-						{selectedConnection ? (
-							<div className="text-sm">
-								<StateView key={selectedConnection.sessionId} connection={selectedConnection} />
+						{selectedConnection && roomsBySessionId[selectedConnection.sessionId] ? (
+							<div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+								<div className="flex items-center gap-2 text-sm font-normal">
+									<FontAwesomeIcon icon={faDoorOpen} className="text-blue-600 dark:text-blue-400 w-3.5" />
+									<span className="text-gray-600 dark:text-slate-400">Room:</span>
+									<code className="bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 px-2 py-1 rounded">
+										{roomsBySessionId[selectedConnection.sessionId].name}
+									</code>
+								</div>
+								<div className="flex items-center gap-2 text-sm font-normal">
+									<FontAwesomeIcon icon={faHashtag} className="text-purple-600 dark:text-purple-400 w-3.5" />
+									<span className="text-gray-600 dark:text-slate-400">Room ID:</span>
+									<code className="bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 px-2 py-1 rounded">
+										{roomsBySessionId[selectedConnection.sessionId].roomId}
+									</code>
+								</div>
+								<div className="flex items-center gap-2 text-sm font-normal">
+									<FontAwesomeIcon icon={faUser} className="text-green-600 dark:text-green-400 w-3.5" />
+									<span className="text-gray-600 dark:text-slate-400">Session ID:</span>
+									<code className="bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 px-2 py-1 rounded">
+										{selectedConnection.sessionId}
+									</code>
+								</div>
 							</div>
-						) : (
-							<p>
-								<em>(Please select an active client connection)</em>
-							</p>
-						)}
+						) : null}
 					</div>
+					{selectedConnection ? (
+						<InspectConnection
+							key={selectedConnection.sessionId}
+							client={client}
+							connection={selectedConnection}
+						/>
+					) : (
+						<p>
+							<em>(Please select an active client connection)</em>
+						</p>
+					)}
+				</div>
+
+				<div className="flex-1 overflow-y-auto dark:text-slate-300 p-6">
+					<h2 className="text-xl font-semibold mb-4">State</h2>
+					{selectedConnection ? (
+						<div className="text-sm">
+							<StateView key={selectedConnection.sessionId} connection={selectedConnection} />
+						</div>
+					) : (
+						<p>
+							<em>(Please select an active client connection)</em>
+						</p>
+					)}
 				</div>
 			</div>
+		</div>
 		</div>
 	);
 }
 
 export { ServerState };
-

@@ -102,27 +102,14 @@ export function AuthOptions({
 
 	return (
 		<div className="">
-			<div className="flex gap-1">
-				<input
-					type="text"
-					name="token"
-					value={authToken}
-					onChange={handleAuthTokenChange}
-					className={"w-full p-1.5 text-sm border-r-0 overflow-hidden rounded-l text-ellipsis border border-gray-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-gray-400"}
-				/>
-				<button disabled={(authToken === "")} className="bg-red-500 disabled:cursor-not-allowed disabled:opacity-50 enabled:hover:bg-red-700 dark:bg-red-600 dark:enabled:hover:bg-red-700 text-white text-sm font-semibold py-1.5 px-3 rounded-r transition" onClick={onLogoutClick}>
-					Clear
-				</button>
-			</div>
-			<div className="flex flex-col mt-1.5 bg-gray-100 dark:bg-slate-800 rounded p-2.5">
-
+			<div className="flex flex-col mt-1.5 rounded p-2.5">
 				{(authConfig.register)
-					? <div>
-							<h2 className="font-semibold text-xs mb-1.5 text-gray-800 dark:text-gray-200">Email / Password</h2>
-							<form className="flex gap-1.5 w-full" onSubmit={signInWithEmailAndPassword}>
+					? <div className="@container">
+							<h2 className="block text-xs font-semibold text-gray-700 dark:text-slate-400 uppercase tracking-wide mb-2">Email / Password</h2>
+							<form className="flex flex-col @sm:flex-row gap-1.5 w-full" onSubmit={signInWithEmailAndPassword}>
 								<input onChange={handleEmailChange} type="text" name="email" placeholder="Email" className="flex-grow p-1.5 text-sm overflow-hidden rounded text-ellipsis border border-gray-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-gray-400" />
 								<input onChange={handlePasswordChange} type="password" name="password" placeholder="Password" className="flex-grow p-1.5 text-sm overflow-hidden rounded text-ellipsis border border-gray-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-gray-400" />
-								<button className="bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50 enabled:hover:bg-blue-700 dark:bg-blue-600 dark:enabled:hover:bg-blue-700 text-white text-sm font-semibold py-1.5 px-3 rounded transition whitespace-nowrap" onClick={signInWithEmailAndPassword} disabled={emailAndPasswordLoading}>Sign-in</button>
+								<button className="w-full @sm:w-auto bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50 enabled:hover:bg-blue-700 dark:bg-blue-600 dark:enabled:hover:bg-blue-700 text-white text-sm font-semibold py-1.5 px-3 rounded transition whitespace-nowrap" onClick={signInWithEmailAndPassword} disabled={emailAndPasswordLoading}>Sign-in</button>
 							</form>
 							{(emailAndPasswordError) && <div className="mt-1.5 bg-red-100 dark:bg-red-900/30 rounded p-1.5 text-red-900 dark:text-red-200 text-xs border border-red-200 dark:border-red-800">{emailAndPasswordError}</div>}
 						</div>
@@ -132,7 +119,7 @@ export function AuthOptions({
 					? <>
 							<hr className="my-2.5 border-gray-300 dark:border-slate-600" />
 							<div>
-								<h2 className="font-semibold text-xs mb-1.5 text-gray-800 dark:text-gray-200">OAuth 2.0 Provider</h2>
+								<h2 className="block text-xs font-semibold text-gray-700 dark:text-slate-400 uppercase tracking-wide mb-2">OAuth 2.0 Provider</h2>
 								<div className="gap-1.5 flex flex-wrap">
 									{authConfig.oauth.map((provider) => (
 										<button
@@ -154,7 +141,7 @@ export function AuthOptions({
 					? <>
 							<hr className="my-2.5 border-gray-300 dark:border-slate-600" />
 							<div>
-								<h2 className="font-semibold text-xs mb-1.5 text-gray-800 dark:text-gray-200">Anonymous</h2>
+								<h2 className="block text-xs font-semibold text-gray-700 dark:text-slate-400 uppercase tracking-wide mb-2">Anonymous</h2>
 								<button
 									onClick={signInAnonymously}
 									className="bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50 enabled:hover:bg-blue-700 dark:bg-blue-600 dark:enabled:hover:bg-blue-700 text-white text-sm font-semibold py-1.5 px-3 rounded transition"
@@ -166,7 +153,20 @@ export function AuthOptions({
 							</div>
 						</>
 					: null}
+			</div>
 
+      <hr className="mb-2.5 border-gray-300 dark:border-slate-600" />
+			<div className="flex p-2 pt-0">
+				<input
+					type="text"
+					name="token"
+					value={authToken}
+					onChange={handleAuthTokenChange}
+					className={"w-full p-1.5 text-sm border-r-0 overflow-hidden rounded-l text-ellipsis border border-gray-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-gray-400"}
+				/>
+				<button disabled={(authToken === "")} className="bg-red-500 disabled:cursor-not-allowed disabled:opacity-50 enabled:hover:bg-red-700 dark:bg-red-600 dark:enabled:hover:bg-red-700 text-white text-sm font-semibold py-1.5 px-3 rounded-r transition" onClick={onLogoutClick}>
+					Clear
+				</button>
 			</div>
 		</div>
 	);

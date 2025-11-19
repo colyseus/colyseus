@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { type RoomAvailable } from "@colyseus/sdk";
-import { PlugIcon, GlobeIcon, GraphIcon } from "@primer/octicons-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faPlug, faGlobe, faChartLine } from "@fortawesome/free-solid-svg-icons";
 
 import { endpoint, Connection, global } from "../utils/Types";
 import { RealtimeRooms, ServerState } from "./RealtimeRooms";
@@ -70,9 +71,9 @@ export function Playground() {
 	}, []);
 
 	const tabs = [
-		{ id: "rooms" as TabType, label: "Rooms", icon: PlugIcon },
-		{ id: "api" as TabType, label: "API Endpoints", icon: GlobeIcon },
-		{ id: "stats" as TabType, label: "Realtime Stats", icon: GraphIcon },
+		{ id: "rooms" as TabType, label: "Rooms", icon: faPlug },
+		{ id: "api" as TabType, label: "API Endpoints", icon: faGlobe },
+		{ id: "stats" as TabType, label: "Realtime Stats", icon: faChartLine },
 	];
 
 	return (
@@ -82,7 +83,6 @@ export function Playground() {
 				<div className="flex-1 py-6">
 					<nav className="space-y-1 px-3">
 						{tabs.map((tab) => {
-							const Icon = tab.icon;
 							return (
 								<button
 									key={tab.id}
@@ -93,7 +93,7 @@ export function Playground() {
 											: "text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800"
 									}`}
 								>
-									<Icon className="mr-3" size={20} />
+									<FontAwesomeIcon icon={tab.icon} className="mr-3" size="lg" />
 									<span>{tab.label}</span>
 								</button>
 							);
