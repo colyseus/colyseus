@@ -12,7 +12,12 @@ import { type AuthConfig } from "../../src-backend";
 
 type TabType = "rooms" | "api" | "stats";
 
-export function Playground() {
+interface PlaygroundProps {
+	isMobileMenuOpen: boolean;
+	setIsMobileMenuOpen: (isOpen: boolean) => void;
+}
+
+export function Playground({ isMobileMenuOpen, setIsMobileMenuOpen }: PlaygroundProps) {
 	const [activeTab, setActiveTab] = useState<TabType>("rooms");
 	const [serverState, setServerState] = useState(ServerState.CONNECTING);
 
@@ -76,17 +81,41 @@ export function Playground() {
 		{ id: "stats" as TabType, label: "Realtime Stats", icon: faChartLine },
 	];
 
+	const handleTabChange = (tabId: TabType) => {
+		setActiveTab(tabId);
+		setIsMobileMenuOpen(false);
+	};
+
 	return (
-		<div className="h-full flex">
+		<div className="h-full flex flex-col md:flex-row">
+			{/* Mobile Overlay */}
+			{isMobileMenuOpen && (
+				<div
+					className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-30"
+					onClick={() => setIsMobileMenuOpen(false)}
+				/>
+			)}
+
 			{/* Left Sidebar Navigation */}
-			<div className="w-64 bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-700 flex flex-col">
+			<div className={`
+				${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
+				md:translate-x-0
+				fixed md:relative
+				z-40
+				w-64
+				bg-white dark:bg-slate-900
+				border-r border-gray-200 dark:border-slate-700
+				flex flex-col
+				h-full
+				transition-transform duration-300 ease-in-out
+			`}>
 				<div className="flex-1 py-6">
 					<nav className="space-y-1 px-3">
 						{tabs.map((tab) => {
 							return (
 								<button
 									key={tab.id}
-									onClick={() => setActiveTab(tab.id)}
+									onClick={() => handleTabChange(tab.id)}
 									className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
 										activeTab === tab.id
 											? "bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300"

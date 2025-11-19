@@ -107,14 +107,14 @@ export function ResizableSidebar({
 
 			{/* Resize handle */}
 			<div
-				className={`w-1 cursor-col-resize transition-colors relative ${
+				className={`w-1 cursor-col-resize transition-colors relative hidden lg:block ${
 					isResizing
 						? 'bg-purple-500'
 						: 'bg-gray-200 dark:bg-slate-600 hover:bg-purple-500/50 dark:hover:bg-purple-400/50 duration-400 transition-colors'
 				}`}
 				onMouseDown={handleMouseDown}
 				onDoubleClick={handleDoubleClick}
-				style={{ userSelect: 'none' }}
+				style={{ userSelect: 'none', height: '100%' }}
 				title="Double-click to restore default width"
 			>
 				{/* Invisible wider hit area for easier grabbing */}

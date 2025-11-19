@@ -55,11 +55,11 @@ export function RealtimeStats() {
 
 	return (
 		<div className="h-full overflow-y-auto">
-			<div className="p-8">
+			<div className="p-4 md:p-8">
 				{/* Header with controls */}
-				<div className="flex justify-between items-center mb-6">
-					<h2 className="text-2xl font-semibold dark:text-slate-300">Realtime Statistics</h2>
-					<div className="flex items-center gap-4">
+				<div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 md:gap-4 mb-4 md:mb-6">
+					<h2 className="text-lg md:text-2xl font-semibold dark:text-slate-300">Realtime Statistics</h2>
+					<div className="flex items-center gap-3 md:gap-4">
 						<label className="flex items-center gap-2 cursor-pointer">
 							<input
 								type="checkbox"
@@ -67,11 +67,11 @@ export function RealtimeStats() {
 								onChange={(e) => setIsLive(e.target.checked)}
 								className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
 							/>
-							<span className="text-sm dark:text-slate-300">Live updates</span>
+							<span className="text-xs md:text-sm dark:text-slate-300 whitespace-nowrap">Live updates</span>
 						</label>
 						<button
 							onClick={fetchStats}
-							className="px-4 py-2 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
+							className="px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
 						>
 							Refresh
 						</button>
@@ -79,25 +79,25 @@ export function RealtimeStats() {
 				</div>
 
 				{error && (
-					<div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-4 mb-6">
-						<p className="text-red-700 dark:text-red-400 font-semibold">Error</p>
-						<p className="text-red-600 dark:text-red-300 text-sm mt-1">{error}</p>
+					<div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-3 md:p-4 mb-4 md:mb-6">
+						<p className="text-red-700 dark:text-red-400 font-semibold text-sm">Error</p>
+						<p className="text-red-600 dark:text-red-300 text-xs md:text-sm mt-1">{error}</p>
 					</div>
 				)}
 
 				{stats && (
 					<>
 						{/* Summary cards */}
-						<div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-							<div className="bg-white dark:bg-slate-700 shadow rounded p-6">
+						<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-6 mb-6 md:mb-8">
+							<div className="bg-white dark:bg-slate-700 shadow rounded p-4 md:p-6">
 								<div className="flex items-center justify-between">
 									<div>
-										<p className="text-sm text-gray-600 dark:text-slate-400">Total Rooms</p>
-										<p className="text-3xl font-bold dark:text-slate-300 mt-1">{totalRooms}</p>
+										<p className="text-xs md:text-sm text-gray-600 dark:text-slate-400">Total Rooms</p>
+										<p className="text-2xl md:text-3xl font-bold dark:text-slate-300 mt-1">{totalRooms}</p>
 									</div>
-									<div className="w-12 h-12 bg-purple-100 dark:bg-purple-900 rounded-full flex items-center justify-center">
+									<div className="w-10 h-10 md:w-12 md:h-12 bg-purple-100 dark:bg-purple-900 rounded-full flex items-center justify-center flex-shrink-0">
 										<svg
-											className="w-6 h-6 text-purple-600 dark:text-purple-400"
+											className="w-5 h-5 md:w-6 md:h-6 text-purple-600 dark:text-purple-400"
 											fill="none"
 											stroke="currentColor"
 											viewBox="0 0 24 24"
@@ -113,15 +113,15 @@ export function RealtimeStats() {
 								</div>
 							</div>
 
-							<div className="bg-white dark:bg-slate-700 shadow rounded p-6">
+							<div className="bg-white dark:bg-slate-700 shadow rounded p-4 md:p-6">
 								<div className="flex items-center justify-between">
 									<div>
-										<p className="text-sm text-gray-600 dark:text-slate-400">Total Clients</p>
-										<p className="text-3xl font-bold dark:text-slate-300 mt-1">{totalClients}</p>
+										<p className="text-xs md:text-sm text-gray-600 dark:text-slate-400">Total Clients</p>
+										<p className="text-2xl md:text-3xl font-bold dark:text-slate-300 mt-1">{totalClients}</p>
 									</div>
-									<div className="w-12 h-12 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center">
+									<div className="w-10 h-10 md:w-12 md:h-12 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center flex-shrink-0">
 										<svg
-											className="w-6 h-6 text-green-600 dark:text-green-400"
+											className="w-5 h-5 md:w-6 md:h-6 text-green-600 dark:text-green-400"
 											fill="none"
 											stroke="currentColor"
 											viewBox="0 0 24 24"
@@ -137,15 +137,15 @@ export function RealtimeStats() {
 								</div>
 							</div>
 
-							<div className="bg-white dark:bg-slate-700 shadow rounded p-6">
+							<div className="bg-white dark:bg-slate-700 shadow rounded p-4 md:p-6 sm:col-span-2 md:col-span-1">
 								<div className="flex items-center justify-between">
 									<div>
-										<p className="text-sm text-gray-600 dark:text-slate-400">Room Types</p>
-										<p className="text-3xl font-bold dark:text-slate-300 mt-1">{stats.rooms.length}</p>
+										<p className="text-xs md:text-sm text-gray-600 dark:text-slate-400">Room Types</p>
+										<p className="text-2xl md:text-3xl font-bold dark:text-slate-300 mt-1">{stats.rooms.length}</p>
 									</div>
-									<div className="w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
+									<div className="w-10 h-10 md:w-12 md:h-12 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center flex-shrink-0">
 										<svg
-											className="w-6 h-6 text-blue-600 dark:text-blue-400"
+											className="w-5 h-5 md:w-6 md:h-6 text-blue-600 dark:text-blue-400"
 											fill="none"
 											stroke="currentColor"
 											viewBox="0 0 24 24"
@@ -163,19 +163,19 @@ export function RealtimeStats() {
 						</div>
 
 						{/* Rooms by type */}
-						<div className="bg-white dark:bg-slate-700 shadow rounded p-6 mb-6">
-							<h3 className="text-lg font-semibold mb-4 dark:text-slate-300">Rooms by Type</h3>
+						<div className="bg-white dark:bg-slate-700 shadow rounded p-4 md:p-6 mb-4 md:mb-6">
+							<h3 className="text-base md:text-lg font-semibold mb-3 md:mb-4 dark:text-slate-300">Rooms by Type</h3>
 							{Object.keys(stats.roomsByType).length === 0 ? (
-								<p className="text-gray-600 dark:text-slate-400 text-sm italic">No rooms available</p>
+								<p className="text-gray-600 dark:text-slate-400 text-xs md:text-sm italic">No rooms available</p>
 							) : (
-								<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+								<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
 									{Object.entries(stats.roomsByType).map(([roomType, count]) => (
 										<div
 											key={roomType}
-											className="bg-gray-50 dark:bg-slate-800 rounded p-4 flex justify-between items-center"
+											className="bg-gray-50 dark:bg-slate-800 rounded p-3 md:p-4 flex justify-between items-center"
 										>
-											<span className="font-medium dark:text-slate-300">{roomType}</span>
-											<span className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+											<span className="font-medium dark:text-slate-300 text-sm md:text-base truncate mr-2">{roomType}</span>
+											<span className="text-xl md:text-2xl font-bold text-purple-600 dark:text-purple-400 flex-shrink-0">
 												{count}
 											</span>
 										</div>
@@ -185,25 +185,25 @@ export function RealtimeStats() {
 						</div>
 
 						{/* Active rooms table */}
-						<div className="bg-white dark:bg-slate-700 shadow rounded p-6">
-							<h3 className="text-lg font-semibold mb-4 dark:text-slate-300">Active Rooms</h3>
+						<div className="bg-white dark:bg-slate-700 shadow rounded p-4 md:p-6">
+							<h3 className="text-base md:text-lg font-semibold mb-3 md:mb-4 dark:text-slate-300">Active Rooms</h3>
 							{totalRooms === 0 ? (
-								<p className="text-gray-600 dark:text-slate-400 text-sm italic">No active rooms</p>
+								<p className="text-gray-600 dark:text-slate-400 text-xs md:text-sm italic">No active rooms</p>
 							) : (
-								<div className="overflow-x-auto">
+								<div className="overflow-x-auto -mx-4 md:mx-0">
 									<table className="min-w-full divide-y divide-gray-200 dark:divide-slate-600">
 										<thead>
 											<tr className="bg-gray-50 dark:bg-slate-800">
-												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+												<th className="px-2 md:px-4 py-2 md:py-3 text-left text-[10px] md:text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
 													Room ID
 												</th>
-												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+												<th className="px-2 md:px-4 py-2 md:py-3 text-left text-[10px] md:text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
 													Room Name
 												</th>
-												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+												<th className="px-2 md:px-4 py-2 md:py-3 text-left text-[10px] md:text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
 													Clients
 												</th>
-												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+												<th className="px-2 md:px-4 py-2 md:py-3 text-left text-[10px] md:text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
 													Status
 												</th>
 											</tr>
@@ -211,18 +211,18 @@ export function RealtimeStats() {
 										<tbody className="bg-white dark:bg-slate-700 divide-y divide-gray-200 dark:divide-slate-600">
 											{Object.entries(stats.roomsById).map(([roomId, room]) => (
 												<tr key={roomId} className="hover:bg-gray-50 dark:hover:bg-slate-750">
-													<td className="px-4 py-3 text-sm font-mono text-gray-900 dark:text-slate-300">
+													<td className="px-2 md:px-4 py-2 md:py-3 text-[10px] md:text-sm font-mono text-gray-900 dark:text-slate-300 max-w-[100px] md:max-w-none truncate">
 														{roomId}
 													</td>
-													<td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300">
+													<td className="px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm text-gray-700 dark:text-slate-300">
 														{room.roomName}
 													</td>
-													<td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300">
+													<td className="px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">
 														{room.clients} / {room.maxClients}
 													</td>
-													<td className="px-4 py-3 text-sm">
+													<td className="px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm">
 														<span
-															className={`inline-block px-2 py-1 text-xs font-semibold rounded ${
+															className={`inline-block px-1.5 md:px-2 py-0.5 md:py-1 text-[10px] md:text-xs font-semibold rounded whitespace-nowrap ${
 																room.locked
 																	? "bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200"
 																	: "bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200"

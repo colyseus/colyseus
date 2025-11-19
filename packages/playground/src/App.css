@@ -16,3 +16,19 @@
 .dark .ace_scroller {
     @apply bg-slate-800;
 }
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+    /* Prevent horizontal scroll on mobile */
+    html, body {
+        overflow-x: hidden;
+        max-width: 100vw;
+    }
+}
+
+/* Improve scrolling on iOS */
+@supports (-webkit-overflow-scrolling: touch) {
+    .overflow-y-auto, .overflow-x-auto {
+        -webkit-overflow-scrolling: touch;
+    }
+}

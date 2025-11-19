@@ -125,18 +125,18 @@ export function InspectConnection({
 	return (
 		<>
 			<div>
-				<div className="grid grid-cols-3 gap-2 my-2 text-sm">
-					<button className="bg-red-500 enabled:hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold px-4 rounded" disabled={allowReconnect} onClick={drop}>
-						<svg className="w-4 mr-1 inline" fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><path d="M342.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L192 210.7 86.6 105.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L146.7 256 41.4 361.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192 301.3 297.4 406.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L237.3 256 342.6 150.6z" /></svg>
-						Drop
+				<div className="grid grid-cols-3 gap-1.5 sm:gap-2 my-2 text-xs sm:text-sm">
+					<button className="bg-red-500 enabled:hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-2 px-2 sm:px-4 rounded" disabled={allowReconnect} onClick={drop}>
+						<svg className="w-3 sm:w-4 mr-0.5 sm:mr-1 inline" fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><path d="M342.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L192 210.7 86.6 105.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L146.7 256 41.4 361.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192 301.3 297.4 406.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L237.3 256 342.6 150.6z" /></svg>
+						<span className="hidden sm:inline">Drop</span>
 					</button>
-					<button className="bg-red-500 enabled:hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold px-4 rounded" disabled={allowReconnect} onClick={leave}>
-						<svg className="w-4 mr-1 inline" fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M502.6 278.6c12.5-12.5 12.5-32.8 0-45.3l-128-128c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L402.7 224 192 224c-17.7 0-32 14.3-32 32s14.3 32 32 32l210.7 0-73.4 73.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0l128-128zM160 96c17.7 0 32-14.3 32-32s-14.3-32-32-32L96 32C43 32 0 75 0 128L0 384c0 53 43 96 96 96l64 0c17.7 0 32-14.3 32-32s-14.3-32-32-32l-64 0c-17.7 0-32-14.3-32-32l0-256c0-17.7 14.3-32 32-32l64 0z" /></svg>
-						Leave
+					<button className="bg-red-500 enabled:hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-2 px-2 sm:px-4 rounded" disabled={allowReconnect} onClick={leave}>
+						<svg className="w-3 sm:w-4 mr-0.5 sm:mr-1 inline" fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M502.6 278.6c12.5-12.5 12.5-32.8 0-45.3l-128-128c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L402.7 224 192 224c-17.7 0-32 14.3-32 32s14.3 32 32 32l210.7 0-73.4 73.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0l128-128zM160 96c17.7 0 32-14.3 32-32s-14.3-32-32-32L96 32C43 32 0 75 0 128L0 384c0 53 43 96 96 96l64 0c17.7 0 32-14.3 32-32s-14.3-32-32-32l-64 0c-17.7 0-32-14.3-32-32l0-256c0-17.7 14.3-32 32-32l64 0z" /></svg>
+						<span className="hidden sm:inline">Leave</span>
 					</button>
-					<button className="bg-green-500 enabled:hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-1 px-4 rounded " disabled={!allowReconnect} onClick={reconnect}>
-						<svg className="w-4 mr-1 inline" fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M352 96l64 0c17.7 0 32 14.3 32 32l0 256c0 17.7-14.3 32-32 32l-64 0c-17.7 0-32 14.3-32 32s14.3 32 32 32l64 0c53 0 96-43 96-96l0-256c0-53-43-96-96-96l-64 0c-17.7 0-32 14.3-32 32s14.3 32 32 32zm-9.4 182.6c12.5-12.5 12.5-32.8 0-45.3l-128-128c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L242.7 224 32 224c-17.7 0-32 14.3-32 32s14.3 32 32 32l210.7 0-73.4 73.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0l128-128z" /></svg>
-						Reconnect
+					<button className="bg-green-500 enabled:hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-2 px-2 sm:px-4 rounded" disabled={!allowReconnect} onClick={reconnect}>
+						<svg className="w-3 sm:w-4 mr-0.5 sm:mr-1 inline" fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M352 96l64 0c17.7 0 32 14.3 32 32l0 256c0 17.7-14.3 32-32 32l-64 0c-17.7 0-32 14.3-32 32s14.3 32 32 32l64 0c53 0 96-43 96-96l0-256c0-53-43-96-96-96l-64 0c-17.7 0-32 14.3-32 32s14.3 32 32 32zm-9.4 182.6c12.5-12.5 12.5-32.8 0-45.3l-128-128c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L242.7 224 32 224c-17.7 0-32 14.3-32 32s14.3 32 32 32l210.7 0-73.4 73.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0l128-128z" /></svg>
+						<span className="hidden sm:inline">Reconnect</span>
 					</button>
 				</div>
 
@@ -144,17 +144,17 @@ export function InspectConnection({
 				{(currentError) &&
 					<div className="bg-red-500 text-white py-2 px-3 rounded text-sm my-2"><strong>Error:</strong> {currentError}</div>}
 
-				<p className="mt-4">
+				<p className="mt-4 text-sm sm:text-base">
 					<strong>Send a message:</strong>
 				</p>
 
 				{(messageTypes.length === 0 && !hasWildcardMessageType)
-					? <p className="mt-2 mb-4 text-gray-500 text-italic">
-							(This room type does not listen to messages. See <a href="https://docs.colyseus.io/server/room/#onmessage-type-callback" target="_blank"><code className="text-sm bg-gray-100 p-1 rounded">.onMessage()</code></a>)
+					? <p className="mt-2 mb-4 text-gray-500 text-italic text-xs sm:text-sm">
+							(This room type does not listen to messages. See <a href="https://docs.colyseus.io/server/room/#onmessage-type-callback" target="_blank"><code className="text-xs bg-gray-100 p-1 rounded">.onMessage()</code></a>)
 						</p>
-					: <div className="flex items-center">
-							<div className="flex mt-2">
-								<select className="border p-2 rounded dark:bg-slate-800 dark:text-slate-300 dark:border-slate-500" value={messageType} onChange={handleMessageTypeChange}>
+					: <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+							<div className="flex">
+								<select className="border p-2 rounded dark:bg-slate-800 dark:text-slate-300 dark:border-slate-500 text-sm w-full sm:w-auto" value={messageType} onChange={handleMessageTypeChange}>
 								<option disabled={true} value="">Message type</option>
 									{(messageTypes).map((type) => (
 										<option key={type} value={type}>{type}</option>
@@ -162,7 +162,7 @@ export function InspectConnection({
 								</select>
 							</div>
 
-							<div className="flex ml-2 mt-2 grow pr-2">
+							<div className="flex flex-1 min-w-0">
 								<JSONEditor
 									text={message}
 									onChangeText={onChangeMessage}
@@ -173,13 +173,13 @@ export function InspectConnection({
 									statusBar={false}
 									navigationBar={false}
 									mainMenuBar={false}
-									className={"h-10 overflow-hidden rounded border " + (isSendMessageEnabled ? "border-gray-300 dark:border-slate-500" : "border-red-300")}
+									className={"h-10 overflow-hidden rounded border w-full " + (isSendMessageEnabled ? "border-gray-300 dark:border-slate-500" : "border-red-300")}
 								/>
 							</div>
 
-							<div className="flex mt-2">
+							<div className="flex">
 								<button
-									className="bg-purple-500 transition disabled:opacity-50 enabled:hover:bg-purple-700 text-white font-bold py-2 px-4 rounded"
+									className="bg-purple-500 transition disabled:opacity-50 enabled:hover:bg-purple-700 text-white font-bold py-2 px-3 sm:px-4 rounded text-sm whitespace-nowrap w-full sm:w-auto"
 									disabled={!isSendMessageEnabled}
 									onClick={sendMessage}>Send message</button>
 							</div>
@@ -187,34 +187,40 @@ export function InspectConnection({
 
 			</div>
 
-			<div className="border-b border-gray-200 dark:border-slate-500">
-				<ul className="flex flex-wrap -mb-px text-sm font-medium text-center text-gray-500">
+		<div className="border-b-2 border-gray-200 dark:border-slate-600">
+			<ul className="flex flex-wrap mt-1.5 -mb-0.5 text-sm font-medium text-center">
 
-					{(Object.keys(tabs) as InspectTab[]).map((tab) => (
-						<li key={tab} className="mr-2">
-							<button
-								onClick={handleSelectTab}
-								value={tab}
-								className={((selectedTab === tab) ? "dark:text-purple-600 text-purple-600 border-purple-600 " : "") + "inline-flex p-4 border-b-2 rounded-t-lg active group dark:text-slate-300"}
-								aria-current="page">
-								{tabs[tab].icon}
-								{tabs[tab].label}
-							</button>
-						</li>
-					))}
+				{(Object.keys(tabs) as InspectTab[]).map((tab) => (
+					<li key={tab} className="mr-1">
+						<button
+							onClick={handleSelectTab}
+							value={tab}
+							className={
+								"inline-flex items-center px-5 py-3 border-b-2 transition-all duration-200 ease-in-out font-semibold " +
+								(selectedTab === tab
+									? "text-purple-600 dark:text-purple-400 border-purple-600 dark:border-purple-400 bg-purple-50 dark:bg-purple-950/30"
+									: "text-gray-500 dark:text-slate-400 border-transparent hover:text-gray-700 dark:hover:text-slate-300 hover:border-gray-300 dark:hover:border-slate-500 hover:bg-gray-50 dark:hover:bg-slate-700/30"
+								)
+							}
+							aria-current={selectedTab === tab ? "page" : undefined}>
+							{tabs[tab].icon}
+							{tabs[tab].label}
+						</button>
+					</li>
+				))}
 
-				</ul>
-			</div>
+			</ul>
+		</div>
 
 			{/* Messages */}
-			<div className="mt-4">
+			<div className="mt-4 overflow-x-auto">
 				{(selectedTab === InspectTab.MESSAGES) &&
 					<table className="table-auto w-full border-collapse text-center text-xs border-t border-l border-r dark:border-slate-500">
 						<thead>
 							<tr className="border-b dark:border-slate-500">
-								<th colSpan={2} className="p-3 border-r dark:border-slate-500">Type</th>
-								<th className="p-3 w-full border-r dark:border-slate-500">Payload</th>
-								<th className="p-3 w-full dark:border-slate-500">Time</th>
+								<th colSpan={2} className="p-2 sm:p-3 border-r dark:border-slate-500">Type</th>
+								<th className="p-2 sm:p-3 w-full border-r dark:border-slate-500">Payload</th>
+								<th className="p-2 sm:p-3 w-full dark:border-slate-500">Time</th>
 							</tr>
 						</thead>
 
@@ -222,12 +228,12 @@ export function InspectConnection({
 
 							{(messages.length === 0) &&
 								<tr className={"p-2 border-b dark:border-slate-500"}>
-									<td colSpan={3} className="p-2">No messages</td>
+									<td colSpan={4} className="p-2">No messages</td>
 								</tr>}
 
 							{(messages).slice(0, MAX_TABLE_ROWS).map((message, i) => (
 								<tr key={i + '-' + message.now} className={"border-b dark:border-slate-500 dark:text-slate-800 " + (message.in ? "bg-red-100 dark:bg-red-300" : "bg-green-100 dark:bg-green-300")}>
-									<td className="p-2">
+									<td className="p-1 sm:p-2">
 										{message.in &&
 											<span className="inline text-red-600 text-base">↓</span>}
 
@@ -235,17 +241,17 @@ export function InspectConnection({
 											<span className="inline text-green-600 text-base">↑</span>}
 									</td>
 
-									<td className="p-2 border-r text-left dark:border-slate-500">
-										<code className="ml-2 bg-gray-100 p-1 rounded dark:bg-slate-800 dark:text-slate-300">"{message.type}"</code>
+									<td className="p-1 sm:p-2 border-r text-left dark:border-slate-500">
+										<code className="ml-1 sm:ml-2 bg-gray-100 p-0.5 sm:p-1 rounded dark:bg-slate-800 dark:text-slate-300 text-[10px] sm:text-xs">"{message.type}"</code>
 									</td>
 
-									<td className="p-2 border-r text-left dark:border-slate-500">
-										<div className="truncate w-80 ">
-											<code>{JSON.stringify(message.message)}</code>
+									<td className="p-1 sm:p-2 border-r text-left dark:border-slate-500">
+										<div className="truncate max-w-[200px] sm:max-w-[300px] md:max-w-[400px]">
+											<code className="text-[10px] sm:text-xs">{JSON.stringify(message.message)}</code>
 										</div>
 									</td>
 
-									<td className="p-2 text-xs">
+									<td className="p-1 sm:p-2 text-[10px] sm:text-xs whitespace-nowrap">
 										<Timestamp date={message.now} />
 									</td>
 								</tr>
@@ -256,19 +262,19 @@ export function InspectConnection({
 
 				{/* Events */}
 				{(selectedTab === InspectTab.RAW) &&
-					<div><table className="table-auto w-full border-collapse text-center text-xs border-t border-l border-r dark:border-slate-500">
+					<div className="overflow-x-auto"><table className="table-auto w-full border-collapse text-center text-xs border-t border-l border-r dark:border-slate-500 min-w-[600px]">
 						<thead>
 							<tr className="border-b">
-								<th colSpan={2} className="p-3 border-r dark:border-slate-500">Event</th>
-								<th className="p-3 w-full border-r dark:border-slate-500">Raw</th>
-								<th className="p-3">Time</th>
+								<th colSpan={2} className="p-2 sm:p-3 border-r dark:border-slate-500">Event</th>
+								<th className="p-2 sm:p-3 w-full border-r dark:border-slate-500">Raw</th>
+								<th className="p-2 sm:p-3">Time</th>
 							</tr>
 						</thead>
 
 						<tbody>
 							{(events.length === 0) &&
 								<tr className={"p-2 border-b dark:border-slate-500"}>
-									<td colSpan={3} className="p-2">No events</td>
+									<td colSpan={4} className="p-2">No events</td>
 								</tr>}
 
 							{(events).slice(0, MAX_TABLE_ROWS).map((event, i) => (
@@ -279,7 +285,7 @@ export function InspectConnection({
 											? "bg-red-100 dark:bg-red-300"
 											: "bg-green-100 dark:bg-green-300"
 								)}>
-									<td className="p-2">
+									<td className="p-1 sm:p-2">
 
 										{(event.eventType === "close" || event.eventType === "error")
 											? <span className="inline text-red-600 text-base">🅧</span>
@@ -289,22 +295,22 @@ export function InspectConnection({
 
 									</td>
 
-									<td className="p-2 border-r text-left dark:border-slate-500">
-										<code className="ml-2 bg-gray-100 p-1 rounded dark:bg-slate-800 dark:text-slate-300">"{event.type}"</code>
+									<td className="p-1 sm:p-2 border-r text-left dark:border-slate-500">
+										<code className="ml-1 sm:ml-2 bg-gray-100 p-0.5 sm:p-1 rounded dark:bg-slate-800 dark:text-slate-300 text-[10px] sm:text-xs">"{event.type}"</code>
 									</td>
 
-									<td className="p-2 border-r text-left dark:border-slate-500">
-										<div className="truncate w-60 overflow-hidden text-ellipsis">
+									<td className="p-1 sm:p-2 border-r text-left dark:border-slate-500">
+										<div className="truncate max-w-[200px] sm:max-w-[250px] md:max-w-[350px] overflow-hidden text-ellipsis">
 											{(Array.isArray(event.message))
-												? <code className="italic">({event.message.length} bytes) {JSON.stringify(event.message)}</code>
+												? <code className="italic text-[10px] sm:text-xs">({event.message.length} bytes) {JSON.stringify(event.message)}</code>
 												: typeof (event.message) === "string"
-													? <code>{event.message}</code>
-													: <code className="italic">{JSON.stringify(event.message)}</code>
+													? <code className="text-[10px] sm:text-xs">{event.message}</code>
+													: <code className="italic text-[10px] sm:text-xs">{JSON.stringify(event.message)}</code>
 											}
 										</div>
 									</td>
 
-									<td className="p-2 text-xs">
+									<td className="p-1 sm:p-2 text-[10px] sm:text-xs whitespace-nowrap">
 										<Timestamp date={event.now} />
 									</td>
 								</tr>

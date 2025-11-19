@@ -87,7 +87,7 @@ export function ConnectionList({
 						onClick={handleLeaveAll}
 						title="Leave all rooms and clear connections"
 					>
-						Clear All <FontAwesomeIcon icon={faTrash} className="ml-1 inline" />
+						Disconnect All <FontAwesomeIcon icon={faTrash} className="ml-1 inline" />
 					</button>
 				)}
 			</div>
