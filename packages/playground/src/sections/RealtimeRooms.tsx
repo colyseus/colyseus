@@ -230,7 +230,7 @@ export function RealtimeRooms({
 								: "max-h-0 opacity-0"
 						}`}
 					>
-						<div className="p-4 bg-gray-50 dark:bg-slate-800">{inspectConnectionContent}</div>
+						<div className="p-4 bg-gray-50 dark:bg-slate-800 dark:text-slate-300">{inspectConnectionContent}</div>
 					</div>
 				</div>
 

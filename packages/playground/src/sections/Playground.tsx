@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { type RoomAvailable } from "@colyseus/sdk";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faPlug, faGlobe, faChartLine } from "@fortawesome/free-solid-svg-icons";
+import { faGlobe, faChartLine, faDoorOpen, faChevronLeft, faChevronRight } from "@fortawesome/free-solid-svg-icons";
 
 import { endpoint, Connection, global } from "../utils/Types";
 import { RealtimeRooms, ServerState } from "./RealtimeRooms";
@@ -20,6 +20,17 @@ interface PlaygroundProps {
 export function Playground({ isMobileMenuOpen, setIsMobileMenuOpen }: PlaygroundProps) {
 	const [activeTab, setActiveTab] = useState<TabType>("rooms");
 	const [serverState, setServerState] = useState(ServerState.CONNECTING);
+
+	// Desktop sidebar collapse state with localStorage persistence
+	const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(() => {
+		const saved = localStorage.getItem('desktopSidebarCollapsed');
+		return saved ? JSON.parse(saved) : false;
+	});
+
+	// Save sidebar collapse state to localStorage
+	useEffect(() => {
+		localStorage.setItem('desktopSidebarCollapsed', JSON.stringify(isDesktopSidebarCollapsed));
+	}, [isDesktopSidebarCollapsed]);
 
 	// remote stats
 	const [roomNames, setRoomNames] = useState([]);
@@ -76,7 +87,7 @@ export function Playground({ isMobileMenuOpen, setIsMobileMenuOpen }: Playground
 	}, []);
 
 	const tabs = [
-		{ id: "rooms" as TabType, label: "Rooms", icon: faPlug },
+		{ id: "rooms" as TabType, label: "Rooms", icon: faDoorOpen },
 		{ id: "api" as TabType, label: "API Endpoints", icon: faGlobe },
 		{ id: "stats" as TabType, label: "Realtime Stats", icon: faChartLine },
 	];
@@ -102,12 +113,12 @@ export function Playground({ isMobileMenuOpen, setIsMobileMenuOpen }: Playground
 				md:translate-x-0
 				fixed md:relative
 				z-40
-				w-64
+				${isDesktopSidebarCollapsed ? 'md:w-16' : 'w-64'}
 				bg-white dark:bg-slate-900
 				border-r border-gray-200 dark:border-slate-700
 				flex flex-col
 				h-full
-				transition-transform duration-300 ease-in-out
+				transition-all duration-300 ease-in-out
 			`}>
 				<div className="flex-1 py-6">
 					<nav className="space-y-1 px-3">
@@ -116,18 +127,30 @@ export function Playground({ isMobileMenuOpen, setIsMobileMenuOpen }: Playground
 								<button
 									key={tab.id}
 									onClick={() => handleTabChange(tab.id)}
-									className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
+									title={isDesktopSidebarCollapsed ? tab.label : undefined}
+									className={`w-full flex items-center ${isDesktopSidebarCollapsed ? 'justify-center px-2' : 'px-4'} py-3 text-sm font-medium rounded-lg transition-all ${
 										activeTab === tab.id
 											? "bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300"
 											: "text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800"
 									}`}
 								>
-									<FontAwesomeIcon icon={tab.icon} className="mr-3" size="lg" />
-									<span>{tab.label}</span>
+									<FontAwesomeIcon icon={tab.icon} className={isDesktopSidebarCollapsed ? '' : 'mr-3'} size="lg" />
+									{!isDesktopSidebarCollapsed && <span>{tab.label}</span>}
 								</button>
 							);
 						})}
 					</nav>
+				</div>
+
+				{/* Desktop Collapse Toggle Button */}
+				<div className="hidden md:block border-t border-gray-200 dark:border-slate-700 p-3">
+					<button
+						onClick={() => setIsDesktopSidebarCollapsed(!isDesktopSidebarCollapsed)}
+						className="w-full flex items-center justify-center px-2 py-2 text-sm font-medium rounded-lg transition-colors text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800"
+						title={isDesktopSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+					>
+						<FontAwesomeIcon icon={isDesktopSidebarCollapsed ? faChevronRight : faChevronLeft} size="lg" />
+					</button>
 				</div>
 			</div>
 
