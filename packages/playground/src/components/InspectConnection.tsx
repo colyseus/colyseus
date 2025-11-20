@@ -144,23 +144,44 @@ export function InspectConnection({
 				{(currentError) &&
 					<div className="bg-red-500 text-white py-2 px-3 rounded text-sm my-2"><strong>Error:</strong> {currentError}</div>}
 
-				<p className="mt-4 text-sm sm:text-base">
-					<strong>Send a message:</strong>
-				</p>
+			<div className="mt-4 mb-6 bg-gradient-to-br from-purple-50 to-blue-50 dark:from-slate-800 dark:to-slate-700 rounded-lg border border-purple-200 dark:border-slate-600 shadow-sm overflow-hidden">
+				<div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm px-4 py-3 border-b border-purple-200 dark:border-slate-600">
+					<div className="flex items-center gap-2">
+						<svg className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600 dark:text-purple-400" fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+							<path d="M498.1 5.6c10.1 7 15.4 19.1 13.5 31.2l-64 416c-1.5 9.7-7.4 18.2-16 23s-18.9 5.4-28 1.6L284 427.7l-68.5 74.1c-8.9 9.7-22.9 12.9-35.2 8.1S160 493.2 160 480V396.4c0-4 1.5-7.8 4.2-10.7L331.8 202.8c5.8-6.3 5.6-16-.4-22s-15.7-6.4-22-.7L106 360.8 17.7 316.6C7.1 311.3 .3 300.7 0 288.9s5.9-22.8 16.1-28.7l448-256c10.7-6.1 23.9-5.5 34 1.4z"/>
+						</svg>
+						<h3 className="text-sm sm:text-base font-semibold text-gray-800 dark:text-slate-200">
+							Send a message
+						</h3>
+					</div>
+				</div>
 
-				{(messageTypes.length === 0 && !hasWildcardMessageType)
-					? <p className="mt-2 mb-4 text-gray-500 text-italic text-xs sm:text-sm">
-							(This room type does not listen to messages. See <a href="https://docs.colyseus.io/server/room/#onmessage-type-callback" target="_blank"><code className="text-xs bg-gray-100 p-1 rounded">.onMessage()</code></a>)
-						</p>
-					: <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-							<div className="flex">
-								<select className="border p-2 rounded dark:bg-slate-800 dark:text-slate-300 dark:border-slate-500 text-sm w-full sm:w-auto" value={messageType} onChange={handleMessageTypeChange}>
-								<option disabled={true} value="">Message type</option>
-									{(messageTypes).map((type) => (
-										<option key={type} value={type}>{type}</option>
-									))}
-								</select>
+				<div className="p-4">
+					{(messageTypes.length === 0 && !hasWildcardMessageType)
+						? <div className="flex items-start gap-3 p-4 bg-gray-50 dark:bg-slate-900/50 rounded-lg border border-gray-200 dark:border-slate-600">
+								<svg className="w-5 h-5 text-gray-400 dark:text-slate-500 flex-shrink-0 mt-0.5" fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+									<path d="M256 512A256 256 0 1 0 256 0a256 256 0 1 0 0 512zM216 336h24V272H216c-13.3 0-24-10.7-24-24s10.7-24 24-24h48c13.3 0 24 10.7 24 24v88h8c13.3 0 24 10.7 24 24s-10.7 24-24 24H216c-13.3 0-24-10.7-24-24s10.7-24 24-24zm40-208a32 32 0 1 1 0 64 32 32 0 1 1 0-64z"/>
+								</svg>
+								<div className="flex-1">
+									<p className="text-sm text-gray-600 dark:text-slate-400 leading-relaxed">
+										This room type does not listen to messages.
+										<br />
+										<span className="text-xs">Learn how to handle messages with <a href="https://docs.colyseus.io/server/room/#onmessage-type-callback" target="_blank" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">.onMessage()</a></span>
+									</p>
+								</div>
 							</div>
+						: <div className="flex flex-col sm:flex-row sm:items-stretch gap-3">
+								<div className="flex sm:w-40">
+									<select
+										className="w-full border-2 border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 p-2.5 rounded-lg text-sm font-medium focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark:focus:ring-purple-400 dark:focus:border-purple-400 transition-all cursor-pointer hover:border-purple-400 dark:hover:border-slate-500"
+										value={messageType}
+										onChange={handleMessageTypeChange}>
+										<option disabled={true} value="">Message type</option>
+										{(messageTypes).map((type) => (
+											<option key={type} value={type}>{type}</option>
+										))}
+									</select>
+								</div>
 
 							<div className="flex flex-1 min-w-0">
 								<JSONEditor
@@ -173,17 +194,25 @@ export function InspectConnection({
 									statusBar={false}
 									navigationBar={false}
 									mainMenuBar={false}
-									className={"h-10 overflow-hidden rounded border w-full " + (isSendMessageEnabled ? "border-gray-300 dark:border-slate-500" : "border-red-300")}
+									className={"h-11 overflow-hidden rounded-lg border-2 w-full transition-all " + (isSendMessageEnabled ? "border-gray-300 dark:border-slate-600 focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-500/20" : "border-red-400 dark:border-red-500 ring-2 ring-red-500/20")}
 								/>
 							</div>
 
-							<div className="flex">
-								<button
-									className="bg-purple-500 transition disabled:opacity-50 enabled:hover:bg-purple-700 text-white font-bold py-2 px-3 sm:px-4 rounded text-sm whitespace-nowrap w-full sm:w-auto"
-									disabled={!isSendMessageEnabled}
-									onClick={sendMessage}>Send message</button>
+								<div className="flex">
+									<button
+										className="w-full sm:w-auto bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-700 hover:to-purple-600 disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed text-white font-semibold py-2.5 px-5 rounded-lg text-sm whitespace-nowrap transition-all duration-200 shadow-md hover:shadow-lg disabled:shadow-none transform hover:scale-[1.02] active:scale-[0.98] disabled:transform-none flex items-center justify-center gap-2"
+										disabled={!isSendMessageEnabled}
+										onClick={sendMessage}>
+										<svg className="w-4 h-4" fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+											<path d="M498.1 5.6c10.1 7 15.4 19.1 13.5 31.2l-64 416c-1.5 9.7-7.4 18.2-16 23s-18.9 5.4-28 1.6L284 427.7l-68.5 74.1c-8.9 9.7-22.9 12.9-35.2 8.1S160 493.2 160 480V396.4c0-4 1.5-7.8 4.2-10.7L331.8 202.8c5.8-6.3 5.6-16-.4-22s-15.7-6.4-22-.7L106 360.8 17.7 316.6C7.1 311.3 .3 300.7 0 288.9s5.9-22.8 16.1-28.7l448-256c10.7-6.1 23.9-5.5 34 1.4z"/>
+										</svg>
+										<span>Send</span>
+									</button>
+								</div>
 							</div>
-						</div> }
+					}
+				</div>
+			</div>
 
 			</div>
 
@@ -212,112 +241,159 @@ export function InspectConnection({
 			</ul>
 		</div>
 
-			{/* Messages */}
-			<div className="mt-4 overflow-x-auto">
-				{(selectedTab === InspectTab.MESSAGES) &&
-					<table className="table-auto w-full border-collapse text-center text-xs border-t border-l border-r dark:border-slate-500">
-						<thead>
-							<tr className="border-b dark:border-slate-500">
-								<th colSpan={2} className="p-2 sm:p-3 border-r dark:border-slate-500">Type</th>
-								<th className="p-2 sm:p-3 w-full border-r dark:border-slate-500">Payload</th>
-								<th className="p-2 sm:p-3 w-full dark:border-slate-500">Time</th>
-							</tr>
-						</thead>
-
-						<tbody>
-
-							{(messages.length === 0) &&
-								<tr className={"p-2 border-b dark:border-slate-500"}>
-									<td colSpan={4} className="p-2">No messages</td>
-								</tr>}
-
-							{(messages).slice(0, MAX_TABLE_ROWS).map((message, i) => (
-								<tr key={i + '-' + message.now} className={"border-b dark:border-slate-500 dark:text-slate-800 " + (message.in ? "bg-red-100 dark:bg-red-300" : "bg-green-100 dark:bg-green-300")}>
-									<td className="p-1 sm:p-2">
-										{message.in &&
-											<span className="inline text-red-600 text-base">↓</span>}
-
-										{message.out &&
-											<span className="inline text-green-600 text-base">↑</span>}
-									</td>
-
-									<td className="p-1 sm:p-2 border-r text-left dark:border-slate-500">
-										<code className="ml-1 sm:ml-2 bg-gray-100 p-0.5 sm:p-1 rounded dark:bg-slate-800 dark:text-slate-300 text-[10px] sm:text-xs">"{message.type}"</code>
-									</td>
-
-									<td className="p-1 sm:p-2 border-r text-left dark:border-slate-500">
-										<div className="truncate max-w-[200px] sm:max-w-[300px] md:max-w-[400px]">
-											<code className="text-[10px] sm:text-xs">{JSON.stringify(message.message)}</code>
+		{/* Messages */}
+		<div className="mt-4">
+			{(selectedTab === InspectTab.MESSAGES) &&
+				<div className="rounded-lg overflow-hidden shadow-md border border-gray-200 dark:border-slate-600">
+					<div className="overflow-x-auto">
+						<table className="table-auto w-full border-collapse text-center text-xs sm:text-sm">
+							<thead>
+								<tr className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-slate-800 dark:to-slate-700">
+									<th colSpan={2} className="p-3 sm:p-4 border-b border-r dark:border-slate-600 font-semibold text-gray-700 dark:text-slate-200">
+										<div className="flex items-center justify-center gap-2">
+											<svg className="w-4 h-4" fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M64 112c-8.8 0-16 7.2-16 16v22.1L220.5 291.7c20.7 17 50.4 17 71.1 0L464 150.1V128c0-8.8-7.2-16-16-16H64zM48 212.2V384c0 8.8 7.2 16 16 16H448c8.8 0 16-7.2 16-16V212.2L322 328.8c-38.4 31.5-93.7 31.5-132 0L48 212.2zM0 128C0 92.7 28.7 64 64 64H448c35.3 0 64 28.7 64 64V384c0 35.3-28.7 64-64 64H64c-35.3 0-64-28.7-64-64V128z" /></svg>
+											<span>Type</span>
 										</div>
-									</td>
-
-									<td className="p-1 sm:p-2 text-[10px] sm:text-xs whitespace-nowrap">
-										<Timestamp date={message.now} />
-									</td>
+									</th>
+									<th className="p-3 sm:p-4 w-full border-b border-r dark:border-slate-600 font-semibold text-gray-700 dark:text-slate-200">Payload</th>
+									<th className="p-3 sm:p-4 border-b dark:border-slate-600 font-semibold text-gray-700 dark:text-slate-200">Time</th>
 								</tr>
-							))}
+							</thead>
 
-						</tbody>
-					</table>}
+							<tbody className="bg-white dark:bg-slate-900">
+								{(messages.length === 0) &&
+									<tr>
+										<td colSpan={4} className="p-8 text-center">
+											<div className="flex flex-col items-center gap-3 text-gray-400 dark:text-slate-500">
+												<svg className="w-12 h-12 opacity-50" fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M64 112c-8.8 0-16 7.2-16 16v22.1L220.5 291.7c20.7 17 50.4 17 71.1 0L464 150.1V128c0-8.8-7.2-16-16-16H64zM48 212.2V384c0 8.8 7.2 16 16 16H448c8.8 0 16-7.2 16-16V212.2L322 328.8c-38.4 31.5-93.7 31.5-132 0L48 212.2zM0 128C0 92.7 28.7 64 64 64H448c35.3 0 64 28.7 64 64V384c0 35.3-28.7 64-64 64H64c-35.3 0-64-28.7-64-64V128z" /></svg>
+												<p className="text-sm font-medium">No messages yet</p>
+												<p className="text-xs">Messages will appear here when sent or received</p>
+											</div>
+										</td>
+									</tr>}
 
-				{/* Events */}
-				{(selectedTab === InspectTab.RAW) &&
-					<div className="overflow-x-auto"><table className="table-auto w-full border-collapse text-center text-xs border-t border-l border-r dark:border-slate-500 min-w-[600px]">
-						<thead>
-							<tr className="border-b">
-								<th colSpan={2} className="p-2 sm:p-3 border-r dark:border-slate-500">Event</th>
-								<th className="p-2 sm:p-3 w-full border-r dark:border-slate-500">Raw</th>
-								<th className="p-2 sm:p-3">Time</th>
-							</tr>
-						</thead>
+								{(messages).slice(0, MAX_TABLE_ROWS).map((message, i) => (
+									<tr
+										key={i + '-' + message.now}
+										className={
+											"border-b dark:border-slate-700 transition-all duration-150 hover:shadow-sm " +
+											(message.in
+												? "bg-gradient-to-r from-red-50 to-pink-50 dark:from-red-950/30 dark:to-pink-950/30 hover:from-red-100 hover:to-pink-100 dark:hover:from-red-950/50 dark:hover:to-pink-950/50"
+												: "bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 hover:from-green-100 hover:to-emerald-100 dark:hover:from-green-950/50 dark:hover:to-emerald-950/50"
+											)
+										}>
+										<td className="p-2 sm:p-3">
+											{message.in &&
+												<div className="inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-red-200 dark:bg-red-900/50">
+													<span className="text-red-700 dark:text-red-300 text-base font-bold">↓</span>
+												</div>}
 
-						<tbody>
-							{(events.length === 0) &&
-								<tr className={"p-2 border-b dark:border-slate-500"}>
-									<td colSpan={4} className="p-2">No events</td>
-								</tr>}
+											{message.out &&
+												<div className="inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-green-200 dark:bg-green-900/50">
+													<span className="text-green-700 dark:text-green-300 text-base font-bold">↑</span>
+												</div>}
+										</td>
 
-							{(events).slice(0, MAX_TABLE_ROWS).map((event, i) => (
-								<tr key={i + '-' + event.now} className={"border-b dark:border-slate-500 dark:text-slate-800 " + (
-									(event.eventType === "close" || event.eventType === "error")
-										? "bg-yellow-100"
-										: (event.eventType === "in")
-											? "bg-red-100 dark:bg-red-300"
-											: "bg-green-100 dark:bg-green-300"
-								)}>
-									<td className="p-1 sm:p-2">
+										<td className="p-2 sm:p-3 border-r text-left dark:border-slate-700">
+											<code className="inline-block bg-white dark:bg-slate-800 px-2 py-1 rounded-md shadow-sm border border-gray-200 dark:border-slate-600 text-purple-600 dark:text-purple-400 font-mono text-[10px] sm:text-xs font-semibold">"{message.type}"</code>
+										</td>
 
-										{(event.eventType === "close" || event.eventType === "error")
-											? <span className="inline text-red-600 text-base">🅧</span>
-											: (event.eventType === "in")
-												? <span className="inline text-red-600 text-base">↓</span>
-												: <span className="inline text-green-600 text-base">↑</span>}
+										<td className="p-2 sm:p-3 border-r text-left dark:border-slate-700">
+											<div className="truncate max-w-[200px] sm:max-w-[300px] md:max-w-[400px]">
+												<code className="text-gray-700 dark:text-slate-300 font-mono text-[10px] sm:text-xs">{JSON.stringify(message.message)}</code>
+											</div>
+										</td>
 
-									</td>
+										<td className="p-2 sm:p-3 text-[10px] sm:text-xs whitespace-nowrap text-gray-600 dark:text-slate-400 font-medium">
+											<Timestamp date={message.now} />
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+				</div>}
 
-									<td className="p-1 sm:p-2 border-r text-left dark:border-slate-500">
-										<code className="ml-1 sm:ml-2 bg-gray-100 p-0.5 sm:p-1 rounded dark:bg-slate-800 dark:text-slate-300 text-[10px] sm:text-xs">"{event.type}"</code>
-									</td>
-
-									<td className="p-1 sm:p-2 border-r text-left dark:border-slate-500">
-										<div className="truncate max-w-[200px] sm:max-w-[250px] md:max-w-[350px] overflow-hidden text-ellipsis">
-											{(Array.isArray(event.message))
-												? <code className="italic text-[10px] sm:text-xs">({event.message.length} bytes) {JSON.stringify(event.message)}</code>
-												: typeof (event.message) === "string"
-													? <code className="text-[10px] sm:text-xs">{event.message}</code>
-													: <code className="italic text-[10px] sm:text-xs">{JSON.stringify(event.message)}</code>
-											}
+			{/* Events */}
+			{(selectedTab === InspectTab.RAW) &&
+				<div className="rounded-lg overflow-hidden shadow-md border border-gray-200 dark:border-slate-600">
+					<div className="overflow-x-auto">
+						<table className="table-auto w-full border-collapse text-center text-xs sm:text-sm min-w-[600px]">
+							<thead>
+								<tr className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-slate-800 dark:to-slate-700">
+									<th colSpan={2} className="p-3 sm:p-4 border-b border-r dark:border-slate-600 font-semibold text-gray-700 dark:text-slate-200">
+										<div className="flex items-center justify-center gap-2">
+											<svg className="w-4 h-4" fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><path d="M308.5 135.3c7.1-6.3 9.9-16.2 6.2-25c-2.3-5.3-4.8-10.5-7.6-15.5L304 89.4c-3-5-6.3-9.9-9.8-14.6c-5.7-7.6-15.7-10.1-24.7-7.1l-28.2 9.3c-10.7-8.8-23-16-36.2-20.9L199 27.1c-1.9-9.3-9.1-16.7-18.5-17.8C173.9 8.4 167.2 8 160.4 8h-.7c-6.8 0-13.5 .4-20.1 1.2c-9.4 1.1-16.6 8.6-18.5 17.8L115 56.1c-13.3 5-25.5 12.1-36.2 20.9L50.5 67.8c-9-3-19-.5-24.7 7.1c-3.5 4.7-6.8 9.6-9.9 14.6l-3 5.3c-2.8 5-5.3 10.2-7.6 15.6c-3.7 8.7-.9 18.6 6.2 25l22.2 19.8C32.6 161.9 32 168.9 32 176s.6 14.1 1.7 20.9L11.5 216.7c-7.1 6.3-9.9 16.2-6.2 25c2.3 5.3 4.8 10.5 7.6 15.6l3 5.2c3 5.1 6.3 9.9 9.9 14.6c5.7 7.6 15.7 10.1 24.7 7.1l28.2-9.3c10.7 8.8 23 16 36.2 20.9l6.1 29.1c1.9 9.3 9.1 16.7 18.5 17.8c6.7 .8 13.5 1.2 20.4 1.2s13.7-.4 20.4-1.2c9.4-1.1 16.6-8.6 18.5-17.8l6.1-29.1c13.3-5 25.5-12.1 36.2-20.9l28.2 9.3c9 3 19 .5 24.7-7.1c3.5-4.7 6.8-9.5 9.8-14.6l3.1-5.4c2.8-5 5.3-10.2 7.6-15.5c3.7-8.7 .9-18.6-6.2-25l-22.2-19.8c1.1-6.8 1.7-13.8 1.7-20.9s-.6-14.1-1.7-20.9l22.2-19.8zM112 176a48 48 0 1 1 96 0 48 48 0 1 1 -96 0zM504.7 500.5c6.3 7.1 16.2 9.9 25 6.2c5.3-2.3 10.5-4.8 15.5-7.6l5.4-3.1c5-3 9.9-6.3 14.6-9.8c7.6-5.7 10.1-15.7 7.1-24.7l-9.3-28.2c8.8-10.7 16-23 20.9-36.2l29.1-6.1c9.3-1.9 16.7-9.1 17.8-18.5c.8-6.7 1.2-13.5 1.2-20.4s-.4-13.7-1.2-20.4c-1.1-9.4-8.6-16.6-17.8-18.5L583.9 307c-5-13.3-12.1-25.5-20.9-36.2l9.3-28.2c3-9 .5-19-7.1-24.7c-4.7-3.5-9.6-6.8-14.6-9.9l-5.3-3c-5-2.8-10.2-5.3-15.6-7.6c-8.7-3.7-18.6-.9-25 6.2l-19.8 22.2c-6.8-1.1-13.8-1.7-20.9-1.7s-14.1 .6-20.9 1.7l-19.8-22.2c-6.3-7.1-16.2-9.9-25-6.2c-5.3 2.3-10.5 4.8-15.6 7.6l-5.2 3c-5.1 3-9.9 6.3-14.6 9.9c-7.6 5.7-10.1 15.7-7.1 24.7l9.3 28.2c-8.8 10.7-16 23-20.9 36.2L315.1 313c-9.3 1.9-16.7 9.1-17.8 18.5c-.8 6.7-1.2 13.5-1.2 20.4s.4 13.7 1.2 20.4c1.1 9.4 8.6 16.6 17.8 18.5l29.1 6.1c5 13.3 12.1 25.5 20.9 36.2l-9.3 28.2c-3 9-.5 19 7.1 24.7c4.7 3.5 9.5 6.8 14.6 9.8l5.4 3.1c5 2.8 10.2 5.3 15.5 7.6c8.7 3.7 18.6 .9 25-6.2l19.8-22.2c6.8 1.1 13.8 1.7 20.9 1.7s14.1-.6 20.9-1.7l19.8 22.2zM464 304a48 48 0 1 1 0 96 48 48 0 1 1 0-96z" /></svg>
+											<span>Event</span>
 										</div>
-									</td>
-
-									<td className="p-1 sm:p-2 text-[10px] sm:text-xs whitespace-nowrap">
-										<Timestamp date={event.now} />
-									</td>
+									</th>
+									<th className="p-3 sm:p-4 w-full border-b border-r dark:border-slate-600 font-semibold text-gray-700 dark:text-slate-200">Raw</th>
+									<th className="p-3 sm:p-4 border-b dark:border-slate-600 font-semibold text-gray-700 dark:text-slate-200">Time</th>
 								</tr>
-							))}
+							</thead>
 
-						</tbody>
-					</table></div>}
+							<tbody className="bg-white dark:bg-slate-900">
+								{(events.length === 0) &&
+									<tr>
+										<td colSpan={4} className="p-8 text-center">
+											<div className="flex flex-col items-center gap-3 text-gray-400 dark:text-slate-500">
+												<svg className="w-12 h-12 opacity-50" fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><path d="M308.5 135.3c7.1-6.3 9.9-16.2 6.2-25c-2.3-5.3-4.8-10.5-7.6-15.5L304 89.4c-3-5-6.3-9.9-9.8-14.6c-5.7-7.6-15.7-10.1-24.7-7.1l-28.2 9.3c-10.7-8.8-23-16-36.2-20.9L199 27.1c-1.9-9.3-9.1-16.7-18.5-17.8C173.9 8.4 167.2 8 160.4 8h-.7c-6.8 0-13.5 .4-20.1 1.2c-9.4 1.1-16.6 8.6-18.5 17.8L115 56.1c-13.3 5-25.5 12.1-36.2 20.9L50.5 67.8c-9-3-19-.5-24.7 7.1c-3.5 4.7-6.8 9.6-9.9 14.6l-3 5.3c-2.8 5-5.3 10.2-7.6 15.6c-3.7 8.7-.9 18.6 6.2 25l22.2 19.8C32.6 161.9 32 168.9 32 176s.6 14.1 1.7 20.9L11.5 216.7c-7.1 6.3-9.9 16.2-6.2 25c2.3 5.3 4.8 10.5 7.6 15.6l3 5.2c3 5.1 6.3 9.9 9.9 14.6c5.7 7.6 15.7 10.1 24.7 7.1l28.2-9.3c10.7 8.8 23 16 36.2 20.9l6.1 29.1c1.9 9.3 9.1 16.7 18.5 17.8c6.7 .8 13.5 1.2 20.4 1.2s13.7-.4 20.4-1.2c9.4-1.1 16.6-8.6 18.5-17.8l6.1-29.1c13.3-5 25.5-12.1 36.2-20.9l28.2 9.3c9 3 19 .5 24.7-7.1c3.5-4.7 6.8-9.5 9.8-14.6l3.1-5.4c2.8-5 5.3-10.2 7.6-15.5c3.7-8.7 .9-18.6-6.2-25l-22.2-19.8c1.1-6.8 1.7-13.8 1.7-20.9s-.6-14.1-1.7-20.9l22.2-19.8zM112 176a48 48 0 1 1 96 0 48 48 0 1 1 -96 0zM504.7 500.5c6.3 7.1 16.2 9.9 25 6.2c5.3-2.3 10.5-4.8 15.5-7.6l5.4-3.1c5-3 9.9-6.3 14.6-9.8c7.6-5.7 10.1-15.7 7.1-24.7l-9.3-28.2c8.8-10.7 16-23 20.9-36.2l29.1-6.1c9.3-1.9 16.7-9.1 17.8-18.5c.8-6.7 1.2-13.5 1.2-20.4s-.4-13.7-1.2-20.4c-1.1-9.4-8.6-16.6-17.8-18.5L583.9 307c-5-13.3-12.1-25.5-20.9-36.2l9.3-28.2c3-9 .5-19-7.1-24.7c-4.7-3.5-9.6-6.8-14.6-9.9l-5.3-3c-5-2.8-10.2-5.3-15.6-7.6c-8.7-3.7-18.6-.9-25 6.2l-19.8 22.2c-6.8-1.1-13.8-1.7-20.9-1.7s-14.1 .6-20.9 1.7l-19.8-22.2c-6.3-7.1-16.2-9.9-25-6.2c-5.3 2.3-10.5 4.8-15.6 7.6l-5.2 3c-5.1 3-9.9 6.3-14.6 9.9c-7.6 5.7-10.1 15.7-7.1 24.7l9.3 28.2c-8.8 10.7-16 23-20.9 36.2L315.1 313c-9.3 1.9-16.7 9.1-17.8 18.5c-.8 6.7-1.2 13.5-1.2 20.4s.4 13.7 1.2 20.4c1.1 9.4 8.6 16.6 17.8 18.5l29.1 6.1c5 13.3 12.1 25.5 20.9 36.2l-9.3 28.2c-3 9-.5 19 7.1 24.7c4.7 3.5 9.5 6.8 14.6 9.8l5.4 3.1c5 2.8 10.2 5.3 15.5 7.6c8.7 3.7 18.6 .9 25-6.2l19.8-22.2c6.8 1.1 13.8 1.7 20.9 1.7s14.1-.6 20.9-1.7l19.8 22.2zM464 304a48 48 0 1 1 0 96 48 48 0 1 1 0-96z" /></svg>
+												<p className="text-sm font-medium">No events yet</p>
+												<p className="text-xs">Raw WebSocket events will appear here</p>
+											</div>
+										</td>
+									</tr>}
+
+								{(events).slice(0, MAX_TABLE_ROWS).map((event, i) => (
+									<tr
+										key={i + '-' + event.now}
+										className={
+											"border-b dark:border-slate-700 transition-all duration-150 hover:shadow-sm " +
+											((event.eventType === "close" || event.eventType === "error")
+												? "bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-950/30 dark:to-orange-950/30 hover:from-yellow-100 hover:to-orange-100 dark:hover:from-yellow-950/50 dark:hover:to-orange-950/50"
+												: (event.eventType === "in")
+													? "bg-gradient-to-r from-red-50 to-pink-50 dark:from-red-950/30 dark:to-pink-950/30 hover:from-red-100 hover:to-pink-100 dark:hover:from-red-950/50 dark:hover:to-pink-950/50"
+													: "bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 hover:from-green-100 hover:to-emerald-100 dark:hover:from-green-950/50 dark:hover:to-emerald-950/50"
+											)
+										}>
+										<td className="p-2 sm:p-3">
+											{(event.eventType === "close" || event.eventType === "error")
+												? <div className="inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-yellow-200 dark:bg-yellow-900/50">
+														<span className="text-yellow-700 dark:text-yellow-300 text-base font-bold">⚠</span>
+													</div>
+												: (event.eventType === "in")
+													? <div className="inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-red-200 dark:bg-red-900/50">
+															<span className="text-red-700 dark:text-red-300 text-base font-bold">↓</span>
+														</div>
+													: <div className="inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-green-200 dark:bg-green-900/50">
+															<span className="text-green-700 dark:text-green-300 text-base font-bold">↑</span>
+														</div>}
+										</td>
+
+										<td className="p-2 sm:p-3 border-r text-left dark:border-slate-700">
+											<code className="inline-block bg-white dark:bg-slate-800 px-2 py-1 rounded-md shadow-sm border border-gray-200 dark:border-slate-600 text-purple-600 dark:text-purple-400 font-mono text-[10px] sm:text-xs font-semibold">"{event.type}"</code>
+										</td>
+
+										<td className="p-2 sm:p-3 border-r text-left dark:border-slate-700">
+											<div className="truncate max-w-[200px] sm:max-w-[250px] md:max-w-[350px] overflow-hidden text-ellipsis">
+												{(Array.isArray(event.message))
+													? <code className="italic text-gray-600 dark:text-slate-400 font-mono text-[10px] sm:text-xs">({event.message.length} bytes) {JSON.stringify(event.message)}</code>
+													: typeof (event.message) === "string"
+														? <code className="text-gray-700 dark:text-slate-300 font-mono text-[10px] sm:text-xs">{event.message}</code>
+														: <code className="italic text-gray-600 dark:text-slate-400 font-mono text-[10px] sm:text-xs">{JSON.stringify(event.message)}</code>
+												}
+											</div>
+										</td>
+
+										<td className="p-2 sm:p-3 text-[10px] sm:text-xs whitespace-nowrap text-gray-600 dark:text-slate-400 font-medium">
+											<Timestamp date={event.now} />
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+				</div>}
 
 
 			</div>

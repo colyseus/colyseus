@@ -46,7 +46,7 @@ export function RealtimeRooms({
 
 	// Auto-select a connection if none is selected and connections are available
 	useEffect(() => {
-		if ((!selectedConnection || !selectedConnection.isConnected) && connections.length > 0) {
+		if (!selectedConnection && connections.length > 0) {
 			const activeConnection = connections.find(conn => conn.isConnected);
 			if (activeConnection) {
 				setSelectedConnection(activeConnection);

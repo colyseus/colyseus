@@ -29,7 +29,7 @@ export function APIEndpoints() {
 		try {
 			const url = `${endpoint}${endpointPath}`;
 			const res = await fetch(url);
-			
+
 			if (!res.ok) {
 				throw new Error(`HTTP ${res.status}: ${res.statusText}`);
 			}
@@ -58,7 +58,7 @@ export function APIEndpoints() {
 
 	return (
 		<div className="h-full flex flex-col md:flex-row">
-			<ResizableSidebar 
+			<ResizableSidebar
 				className="bg-white dark:bg-slate-700 border-r border-gray-200 dark:border-slate-600 overflow-y-auto md:h-full"
 				storageKey="playground-api-endpoints-sidebar-width"
 				defaultWidth={320}
@@ -67,7 +67,7 @@ export function APIEndpoints() {
 			>
 				<div className="p-4 md:p-6">
 					<h2 className="text-lg md:text-xl font-semibold mb-4 dark:text-slate-300">Available Endpoints</h2>
-					
+
 					<div className="space-y-2 mb-6">
 						{endpoints.map((endpoint, idx) => (
 							<button
