@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
-import { endpoint } from "../utils/Types";
+import { endpoint, client } from "../utils/Types";
 import { ResizableSidebar } from "../components/ResizableSidebar";
+import { SDKCodeExamples } from "../components/SDKCodeExamples";
+import { faPlay } from "@fortawesome/free-solid-svg-icons";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 
 interface APIEndpoint {
 	method: string;
@@ -8,34 +11,160 @@ interface APIEndpoint {
 	description: string;
 }
 
-const defaultEndpoints: APIEndpoint[] = [
-	{ method: "GET", path: "/rooms", description: "Get available rooms and statistics" },
-	{ method: "GET", path: "/matchmake/:roomName", description: "Get matchmaking information for a room type" },
-];
+const getMethodColor = (method: string): string => {
+	switch (method.toUpperCase()) {
+		case 'GET':
+			return 'bg-green-500';
+		case 'POST':
+			return 'bg-blue-500';
+		case 'PUT':
+			return 'bg-orange-500';
+		case 'PATCH':
+			return 'bg-purple-500';
+		case 'DELETE':
+			return 'bg-red-500';
+		case 'OPTIONS':
+			return 'bg-gray-500';
+		case 'HEAD':
+			return 'bg-slate-500';
+		default:
+			return 'bg-gray-500';
+	}
+};
 
 export function APIEndpoints() {
-	const [endpoints, setEndpoints] = useState<APIEndpoint[]>(defaultEndpoints);
+	const [endpoints, setEndpoints] = useState<APIEndpoint[]>([]);
 	const [selectedEndpoint, setSelectedEndpoint] = useState<APIEndpoint | null>(null);
 	const [response, setResponse] = useState<any>(null);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [customPath, setCustomPath] = useState("");
 
-	const executeRequest = async (endpointPath: string) => {
+	// Form state
+	const [queryParams, setQueryParams] = useState("");
+	const [headers, setHeaders] = useState("");
+	const [requestBody, setRequestBody] = useState("");
+
+	// Fetch endpoints from OpenAPI specification
+	useEffect(() => {
+		const fetchEndpoints = async () => {
+			try {
+				const res = await fetch(`${endpoint}/openapi`);
+				if (res.ok) {
+					const openapi = await res.json();
+					const parsedEndpoints: APIEndpoint[] = [];
+
+					// Parse OpenAPI paths
+					if (openapi.paths) {
+						for (const [path, methods] of Object.entries(openapi.paths)) {
+							for (const [method, details] of Object.entries(methods as any)) {
+                console.log(method, details);
+								if (typeof details === 'object' && details !== null) {
+									parsedEndpoints.push({
+										method: method.toUpperCase(),
+										path,
+										description: (details as any).summary || (details as any).description || `${method.toUpperCase()} ${path}`,
+									});
+								}
+							}
+						}
+					}
+
+					// Combine with default endpoints
+					setEndpoints(parsedEndpoints);
+				}
+			} catch (e) {
+				// Silently fail and keep default endpoints
+				console.error('Failed to fetch OpenAPI spec:', e);
+			}
+		};
+
+		fetchEndpoints();
+	}, []);
+
+	const executeRequest = async (endpointPath: string, method: string, useFormData = false) => {
 		setLoading(true);
 		setError(null);
 		setResponse(null);
 
 		try {
-			const url = `${endpoint}${endpointPath}`;
-			const res = await fetch(url);
-
-			if (!res.ok) {
-				throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+			// Build query params
+			let queryObj: any = undefined;
+			if (useFormData && queryParams.trim()) {
+				try {
+					queryObj = JSON.parse(queryParams);
+				} catch (e) {
+					// If not valid JSON, try key=value format
+					const params = new URLSearchParams(queryParams);
+					queryObj = Object.fromEntries(params.entries());
+				}
 			}
 
-			const data = await res.json();
-			setResponse(data);
+			// Build headers
+			const customHeaders: { [key: string]: string } = {};
+			if (useFormData && headers.trim()) {
+				try {
+					Object.assign(customHeaders, JSON.parse(headers));
+				} catch (e) {
+					console.warn('Invalid headers JSON:', e);
+				}
+			}
+
+			// Build request body
+			let body: any = undefined;
+			if (useFormData && method !== 'GET' && method !== 'HEAD' && requestBody.trim()) {
+				try {
+					body = JSON.parse(requestBody);
+				} catch (e) {
+					throw new Error('Invalid JSON in request body');
+				}
+			}
+
+			// Build options for HTTP client
+			const options: any = {
+				headers: customHeaders,
+			};
+
+			// Add query params if present
+			if (queryObj) {
+				// Append query params to the path
+				const searchParams = new URLSearchParams();
+				Object.entries(queryObj).forEach(([key, value]) => {
+					searchParams.append(key, String(value));
+				});
+				endpointPath = `${endpointPath}?${searchParams.toString()}`;
+			}
+
+			// Add body if present
+			if (body !== undefined) {
+				options.body = JSON.stringify(body);
+				if (!customHeaders['Content-Type']) {
+					options.headers['Content-Type'] = 'application/json';
+				}
+			}
+
+			// Execute request using client.http
+			let res;
+			const httpMethod = method.toUpperCase();
+
+			switch (httpMethod) {
+				case 'GET':
+					res = await client.http.get(endpointPath, options);
+					break;
+				case 'POST':
+					res = await client.http.post(endpointPath, options);
+					break;
+				case 'PUT':
+					res = await client.http.put(endpointPath, options);
+					break;
+				case 'DELETE':
+					res = await client.http.del(endpointPath, options);
+					break;
+				default:
+					throw new Error(`Unsupported HTTP method: ${method}`);
+			}
+
+			setResponse(res.data);
 		} catch (e: any) {
 			setError(e.message || "Failed to fetch");
 		} finally {
@@ -45,14 +174,15 @@ export function APIEndpoints() {
 
 	const handleEndpointClick = (endpoint: APIEndpoint) => {
 		setSelectedEndpoint(endpoint);
-		executeRequest(endpoint.path);
+		setQueryParams("");
+		setHeaders("");
+		setRequestBody("");
+		executeRequest(endpoint.path, endpoint.method, false);
 	};
 
-	const handleCustomRequest = () => {
-		if (customPath) {
-			const path = customPath.startsWith("/") ? customPath : `/${customPath}`;
-			setSelectedEndpoint({ method: "GET", path, description: "Custom request" });
-			executeRequest(path);
+	const handleRunRequest = () => {
+		if (selectedEndpoint) {
+			executeRequest(selectedEndpoint.path, selectedEndpoint.method, true);
 		}
 	};
 
@@ -79,92 +209,154 @@ export function APIEndpoints() {
 										: "bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-750"
 								}`}
 							>
-								<div className="flex items-center gap-2 mb-1 flex-wrap">
-									<span className="inline-block px-2 py-0.5 text-xs font-semibold bg-green-500 text-white rounded flex-shrink-0">
-										{endpoint.method}
-									</span>
-									<code className="text-xs sm:text-sm dark:text-slate-300 break-all">{endpoint.path}</code>
-								</div>
+							<div className="flex items-center gap-2 mb-1 flex-wrap">
+								<span className={`inline-block px-2 py-0.5 text-xs font-semibold ${getMethodColor(endpoint.method)} text-white rounded flex-shrink-0`}>
+									{endpoint.method}
+								</span>
+								<code className="text-xs sm:text-sm dark:text-slate-300 break-all">{endpoint.path}</code>
+							</div>
 								<p className="text-xs text-gray-600 dark:text-slate-400">{endpoint.description}</p>
 							</button>
 						))}
 					</div>
 
-					<div className="border-t border-gray-200 dark:border-slate-600 pt-4">
-						<h3 className="text-sm font-semibold mb-2 dark:text-slate-300">Custom Request</h3>
-						<div className="flex flex-col sm:flex-row gap-2">
-							<input
-								type="text"
-								placeholder="/your/path"
-								value={customPath}
-								onChange={(e) => setCustomPath(e.target.value)}
-								onKeyDown={(e) => e.key === "Enter" && handleCustomRequest()}
-								className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded dark:bg-slate-800 dark:text-slate-300"
-							/>
-							<button
-								onClick={handleCustomRequest}
-								className="px-4 py-2 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 whitespace-nowrap"
-							>
-								GET
-							</button>
-						</div>
-					</div>
 				</div>
 			</ResizableSidebar>
 
-			{/* Main content area */}
-			<div className="flex-1 overflow-y-auto min-h-0">
-				<div className="p-4 md:p-8">
-					{!selectedEndpoint && (
-						<div className="text-center text-gray-500 dark:text-slate-400 mt-10 md:mt-20">
-							<p className="text-base md:text-lg">Select an endpoint to see the response</p>
-						</div>
-					)}
-
-					{selectedEndpoint && (
-						<>
-							<div className="mb-4 md:mb-6">
-								<h2 className="text-lg md:text-2xl font-semibold dark:text-slate-300 mb-2">
-									{selectedEndpoint.method} {selectedEndpoint.path}
-								</h2>
-								<p className="text-sm md:text-base text-gray-600 dark:text-slate-400">{selectedEndpoint.description}</p>
-								<div className="mt-2">
-									<code className="text-xs md:text-sm bg-gray-100 dark:bg-slate-800 px-2 md:px-3 py-1 rounded dark:text-slate-300 break-all block">
-										{endpoint}
-										{selectedEndpoint.path}
-									</code>
-								</div>
-							</div>
-
-							<div className="bg-white dark:bg-slate-700 shadow rounded p-4 md:p-6">
-								<h3 className="text-base md:text-lg font-semibold mb-3 dark:text-slate-300">Response</h3>
-
-								{loading && (
-									<div className="flex items-center gap-2 text-gray-600 dark:text-slate-400 text-sm">
-										<div className="animate-spin h-4 w-4 border-2 border-purple-600 border-t-transparent rounded-full"></div>
-										<span>Loading...</span>
-									</div>
-								)}
-
-								{error && (
-									<div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-3 md:p-4">
-										<p className="text-red-700 dark:text-red-400 font-semibold text-sm">Error</p>
-										<p className="text-red-600 dark:text-red-300 text-xs md:text-sm mt-1">{error}</p>
-									</div>
-								)}
-
-								{response && (
-									<div className="bg-gray-50 dark:bg-slate-800 rounded p-3 md:p-4 overflow-x-auto">
-										<pre className="text-xs md:text-sm dark:text-slate-300">
-											{JSON.stringify(response, null, 2)}
-										</pre>
-									</div>
-								)}
-							</div>
-						</>
-					)}
+		{/* Main content area */}
+		<div className="flex-1 overflow-hidden bg-gray-50 dark:bg-slate-800">
+			{!selectedEndpoint && (
+				<div className="h-full flex items-center justify-center">
+					<div className="text-center text-gray-500 dark:text-slate-400">
+						<p className="text-base md:text-lg">Select an endpoint to see the response</p>
+					</div>
 				</div>
-			</div>
+			)}
+
+			{selectedEndpoint && (
+				<div className="h-full flex flex-col lg:flex-row gap-0">
+					<div className="flex-1 overflow-y-auto border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-slate-600 dark:text-slate-300 p-4 md:p-6 min-h-0">
+						<div className="mb-4">
+							<h2 className="text-lg md:text-xl font-semibold dark:text-slate-300 mb-2">
+								{selectedEndpoint.method} <code>{selectedEndpoint.path}</code>
+							</h2>
+
+							<p className="text-sm text-gray-600 dark:text-slate-400">{selectedEndpoint.description}</p>
+
+							{/* Request Configuration Form */}
+							<div className="mt-6 border border-gray-200 dark:border-slate-600 rounded-lg p-4 bg-white dark:bg-slate-700/50">
+								<h3 className="text-sm font-semibold mb-3 dark:text-slate-300">Request Configuration</h3>
+
+								{/* Query Parameters */}
+								<div className="mb-4">
+									<label className="block text-xs font-medium mb-1 dark:text-slate-400">
+										Query Parameters
+										<span className="ml-1 text-gray-500 font-normal">(JSON or key=value&key2=value2)</span>
+									</label>
+									<textarea
+										value={queryParams}
+										onChange={(e) => setQueryParams(e.target.value)}
+										placeholder='{"key": "value"} or key=value&key2=value2'
+										className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 dark:text-slate-300 focus:ring-2 focus:ring-purple-500 focus:border-transparent font-mono"
+										rows={2}
+									/>
+								</div>
+
+								{/* Headers
+								<div className="mb-4">
+									<label className="block text-xs font-medium mb-1 dark:text-slate-400">
+										Headers <span className="ml-1 text-gray-500 font-normal">(JSON)</span>
+									</label>
+									<textarea
+										value={headers}
+										onChange={(e) => setHeaders(e.target.value)}
+										placeholder='{"Authorization": "Bearer token", "X-Custom": "value"}'
+										className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 dark:text-slate-300 focus:ring-2 focus:ring-purple-500 focus:border-transparent font-mono"
+										rows={3}
+									/>
+								</div>
+                */}
+
+								{/* Request Body */}
+								{selectedEndpoint.method !== 'GET' && selectedEndpoint.method !== 'HEAD' && (
+									<div className="mb-4">
+										<label className="block text-xs font-medium mb-1 dark:text-slate-400">
+											Request Body <span className="ml-1 text-gray-500 font-normal">(JSON)</span>
+										</label>
+										<textarea
+											value={requestBody}
+											onChange={(e) => setRequestBody(e.target.value)}
+											placeholder='{"key": "value"}'
+											className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 dark:text-slate-300 focus:ring-2 focus:ring-purple-500 focus:border-transparent font-mono"
+											rows={5}
+										/>
+									</div>
+								)}
+
+								{/* Run Button */}
+								<button
+									onClick={handleRunRequest}
+									disabled={loading}
+									className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-semibold py-2 px-4 rounded transition-colors flex items-center justify-center gap-2"
+								>
+									{loading ? (
+										<>
+											<div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+											<span>Running...</span>
+										</>
+									) : (
+										<>
+											<span>Run Request</span>
+											<FontAwesomeIcon icon={faPlay} className="ml-1 inline" />
+										</>
+									)}
+								</button>
+							</div>
+
+						</div>
+
+						<SDKCodeExamples
+							method={selectedEndpoint.method}
+							path={selectedEndpoint.path}
+							serverEndpoint={endpoint}
+						/>
+					</div>
+
+					{/* Response Panel */}
+					<div className="flex-1 overflow-y-auto dark:text-slate-300 p-4 md:p-6 min-h-0 bg-white dark:bg-slate-700">
+						<h2 className="text-lg md:text-xl font-semibold mb-4 dark:text-slate-300">Response</h2>
+
+						{loading && (
+							<div className="flex items-center gap-2 text-gray-600 dark:text-slate-400 text-sm">
+								<div className="animate-spin h-4 w-4 border-2 border-purple-600 border-t-transparent rounded-full"></div>
+								<span>Loading...</span>
+							</div>
+						)}
+
+						{error && (
+							<div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-3 md:p-4">
+								<p className="text-red-700 dark:text-red-400 font-semibold text-sm">Error</p>
+								<p className="text-red-600 dark:text-red-300 text-xs md:text-sm mt-1">{error}</p>
+							</div>
+						)}
+
+						{response && (
+							<div className="bg-gray-50 dark:bg-slate-800 rounded p-3 md:p-4 overflow-x-auto">
+								<pre className="text-xs md:text-sm dark:text-slate-300">
+									{JSON.stringify(response, null, 2)}
+								</pre>
+							</div>
+						)}
+
+						{!loading && !error && !response && (
+							<div className="text-sm text-gray-500 dark:text-slate-400 italic">
+								No response yet
+							</div>
+						)}
+					</div>
+				</div>
+			)}
+		</div>
 		</div>
 	);
 }

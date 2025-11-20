@@ -6,6 +6,9 @@ import { createEndpoint, createRouter, defineRoom, matchMaker } from "@colyseus/
 import { PostgresDriver } from "@colyseus/drizzle-driver";
 import { playground } from "@colyseus/playground";
 import { auth } from "@colyseus/auth";
+import { z } from "zod";
+
+import { generator } from "@colyseus/better-call";
 
 // import { Client } from "@colyseus/sdk";
 // const client = new Client<typeof server>("ws://localhost:2567");
@@ -20,6 +23,118 @@ auth.oauth.addProvider("discord", {
 
 const listThings = createEndpoint("/things", { method: "GET" }, async (ctx) => {
   return { things: [1, 2, 3, 4, 5, 6] };
+});
+
+const getThing = createEndpoint("/things/:id", { method: "GET" }, async (ctx) => {
+  const id = ctx.params.id;
+  return { id, name: `Thing ${id}`, description: "A sample thing", createdAt: new Date().toISOString() };
+});
+
+const createThing = createEndpoint("/things", {
+  method: "POST",
+  body: z.object({
+    name: z.string().min(1, "Name is required"),
+    description: z.string().optional(),
+    tags: z.array(z.string()).optional(),
+  }),
+  query: z.object({
+    name: z.string().min(1, "Name is required").optional(),
+  }),
+}, async (ctx) => {
+  const body = ctx.body;
+  return {
+    id: Math.floor(Math.random() * 1000),
+    ...body,
+    createdAt: new Date().toISOString()
+  };
+});
+
+const updateThing = createEndpoint("/things/:id", {
+  method: "PUT",
+  body: z.object({
+    name: z.string().min(1, "Name is required"),
+    description: z.string(),
+    tags: z.array(z.string()),
+    isActive: z.boolean(),
+  })
+}, async (ctx) => {
+  const id = ctx.params.id;
+  const body = ctx.body;
+  return {
+    id,
+    ...body,
+    updatedAt: new Date().toISOString()
+  };
+});
+
+const patchThing = createEndpoint("/things/:id", {
+  method: "PATCH",
+  body: z.object({
+    name: z.string().min(1).optional(),
+    description: z.string().optional(),
+    tags: z.array(z.string()).optional(),
+    isActive: z.boolean().optional(),
+  })
+}, async (ctx) => {
+  const id = ctx.params.id;
+  const body = ctx.body;
+  return {
+    id,
+    message: "Thing partially updated",
+    updates: body,
+    updatedAt: new Date().toISOString()
+  };
+});
+
+const deleteThing = createEndpoint("/things/:id", { method: "DELETE" }, async (ctx) => {
+  const id = ctx.params.id;
+  return { success: true, id, message: `Thing ${id} deleted` };
+});
+
+const createUser = createEndpoint("/users", {
+  method: "POST",
+  body: z.object({
+    email: z.string().email("Invalid email address"),
+    username: z.string().min(3, "Username must be at least 3 characters"),
+    password: z.string().min(8, "Password must be at least 8 characters"),
+    age: z.number().int().min(13, "Must be at least 13 years old").optional(),
+    preferences: z.object({
+      newsletter: z.boolean(),
+      notifications: z.boolean(),
+    }).optional(),
+  })
+}, async (ctx) => {
+  const body = ctx.body;
+  return {
+    id: Math.floor(Math.random() * 10000),
+    email: body.email,
+    username: body.username,
+    age: body.age,
+    preferences: body.preferences || { newsletter: false, notifications: true },
+    createdAt: new Date().toISOString(),
+  };
+});
+
+const bulkCreateThings = createEndpoint("/things/bulk", {
+  method: "POST",
+  body: z.object({
+    things: z.array(
+      z.object({
+        name: z.string(),
+        description: z.string().optional(),
+      })
+    ).min(1, "At least one thing is required"),
+  })
+}, async (ctx) => {
+  const body = ctx.body;
+  return {
+    created: body.things.map((thing, index) => ({
+      id: index + 1,
+      ...thing,
+      createdAt: new Date().toISOString(),
+    })),
+    count: body.things.length,
+  };
 })
 
 const server = config({
@@ -31,7 +146,16 @@ const server = config({
     my_room: defineRoom(MyRoom),
   },
 
-  routes: createRouter({ listThings }, {
+  routes: createRouter({
+    listThings,
+    getThing,
+    createThing,
+    updateThing,
+    patchThing,
+    deleteThing,
+    createUser,
+    bulkCreateThings
+  }, {
     onError: (err) => {
       console.log(err);
     },
@@ -46,6 +170,16 @@ const server = config({
   initializeExpress: (app) => {
     app.use("/", playground());
     app.get("/express", (_, res) => res.json({ message: "Hello World" }));
+    app.get("/openapi", async (_, res) => res.json(await generator({
+      listThings,
+      getThing,
+      createThing,
+      updateThing,
+      patchThing,
+      deleteThing,
+      createUser,
+      bulkCreateThings
+    })));
     app.use(auth.prefix, auth.routes({}));
   },
 
