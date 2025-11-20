@@ -21,7 +21,16 @@ auth.oauth.addProvider("discord", {
   scope: ["identify", "email"]
 })
 
-const listThings = createEndpoint("/things", { method: "GET" }, async (ctx) => {
+const listThings = createEndpoint("/things", {
+  method: "GET",
+  metadata: {
+    openapi: {
+      description: "List all things",
+      summary: "List all things",
+      tags: ["things"],
+    }
+  }
+}, async (ctx) => {
   return { things: [1, 2, 3, 4, 5, 6] };
 });
 

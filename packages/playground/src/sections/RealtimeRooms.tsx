@@ -287,7 +287,7 @@ export function RealtimeRooms({
 				<div className="flex-1 overflow-hidden bg-gray-50 dark:bg-slate-800">
 					<div className="h-full flex flex-col lg:flex-row gap-0">
 						<div className="flex-1 overflow-y-auto border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-slate-600 dark:text-slate-300 p-4 md:p-6 min-h-0">
-							<h2 className="text-lg md:text-xl font-semibold mb-2">Inspect connection</h2>
+							<h2 className="text-lg md:text-xl font-semibold mb-4">Inspect connection</h2>
 							{inspectConnectionContent}
 						</div>
 

@@ -2,8 +2,11 @@ import { useState, useEffect } from "react";
 import { endpoint, client } from "../utils/Types";
 import { ResizableSidebar } from "../components/ResizableSidebar";
 import { SDKCodeExamples } from "../components/SDKCodeExamples";
+import { useSettings } from "../contexts/SettingsContext";
 import { faPlay } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus, vs } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 interface APIEndpoint {
 	method: string;
@@ -33,12 +36,12 @@ const getMethodColor = (method: string): string => {
 };
 
 export function APIEndpoints() {
+	const { darkMode } = useSettings();
 	const [endpoints, setEndpoints] = useState<APIEndpoint[]>([]);
 	const [selectedEndpoint, setSelectedEndpoint] = useState<APIEndpoint | null>(null);
 	const [response, setResponse] = useState<any>(null);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	const [customPath, setCustomPath] = useState("");
 
 	// Form state
 	const [queryParams, setQueryParams] = useState("");
@@ -391,13 +394,27 @@ export function APIEndpoints() {
 							</div>
 						)}
 
-						{response && (
-							<div className="bg-gray-50 dark:bg-slate-800 rounded p-3 md:p-4 overflow-x-auto">
-								<pre className="text-xs md:text-sm dark:text-slate-300">
-									{JSON.stringify(response, null, 2)}
-								</pre>
-							</div>
-						)}
+					{response && (
+						<div className="bg-gray-50 dark:bg-slate-800 rounded overflow-x-auto">
+							<SyntaxHighlighter
+								language="json"
+								style={darkMode ? vscDarkPlus : vs}
+								customStyle={{
+									margin: 0,
+									padding: '1rem',
+									fontSize: '0.875rem',
+									backgroundColor: 'transparent',
+								}}
+								codeTagProps={{
+									style: {
+										fontSize: '0.875rem',
+									}
+								}}
+							>
+								{JSON.stringify(response, null, 2)}
+							</SyntaxHighlighter>
+						</div>
+					)}
 
 						{!loading && !error && !response && (
 							<div className="text-sm text-gray-500 dark:text-slate-400 italic">

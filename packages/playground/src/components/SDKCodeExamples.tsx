@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus, vs } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { useSettings } from '../contexts/SettingsContext';
 
 interface SDKCodeExamplesProps {
 	method: string;
@@ -9,11 +10,10 @@ interface SDKCodeExamplesProps {
 }
 
 export function SDKCodeExamples({ method, path, serverEndpoint }: SDKCodeExamplesProps) {
+	const { darkMode } = useSettings();
 	const [isExpanded, setIsExpanded] = useState(false);
 	const [activeTab, setActiveTab] = useState('javascript');
-	const [isDarkMode] = useState(() =>
-		window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
-	);
+	const [copied, setCopied] = useState(false);
 
 	const tabs = [
 		{ id: 'javascript', label: 'JavaScript', lang: 'javascript' },
@@ -77,6 +77,17 @@ client.http.${httpMethod}("${path}", function(err, response) {
 		}
 	};
 
+	const copyToClipboard = async () => {
+		const code = getCodeExample(activeTab);
+		try {
+			await navigator.clipboard.writeText(code);
+			setCopied(true);
+			setTimeout(() => setCopied(false), 2000);
+		} catch (err) {
+			console.error('Failed to copy text: ', err);
+		}
+	};
+
 	return (
 		<div className={`border border-gray-200 dark:border-slate-600 rounded-lg overflow-hidden mb-4 md:mb-6 ${isExpanded ? 'bg-gray-50 dark:bg-slate-800' : ''}`}>
 			<button
@@ -129,10 +140,31 @@ client.http.${httpMethod}("${path}", function(err, response) {
 						</ul>
 					</div>
 
-					<div className="rounded overflow-hidden mt-4">
+					<div className="rounded overflow-hidden mt-4 relative">
+						<button
+							onClick={copyToClipboard}
+							className="absolute top-2 right-2 z-10 p-2 rounded bg-gray-700 hover:bg-gray-600 dark:bg-slate-600 dark:hover:bg-slate-500 text-white transition-colors duration-200 flex items-center gap-1.5 text-xs font-medium"
+							title="Copy to clipboard"
+						>
+							{copied ? (
+								<>
+									<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+									</svg>
+									<span>Copied!</span>
+								</>
+							) : (
+								<>
+									<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+									</svg>
+									<span>Copy</span>
+								</>
+							)}
+						</button>
 						<SyntaxHighlighter
 							language={tabs.find(tab => tab.id === activeTab)?.lang || 'javascript'}
-							style={isDarkMode ? vscDarkPlus : vs}
+							style={darkMode ? vscDarkPlus : vs}
 							customStyle={{
 								margin: 0,
 								borderRadius: '0.375rem',
