@@ -1,4 +1,4 @@
-import type { IRoomCache, SortOptions } from '../api.ts';
+import type { IRoomCache, SortOptions } from '../driver.ts';
 
 export class Query<T extends IRoomCache> {
   private $rooms: T[];

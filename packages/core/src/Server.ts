@@ -9,13 +9,13 @@ import { registerGracefulShutdown, type Type } from './utils/Utils.ts';
 
 import type { Presence } from "./presence/Presence.ts";
 import { LocalPresence } from './presence/LocalPresence.ts';
-import { LocalDriver } from './matchmaker/driver/local/LocalDriver.ts';
+import { LocalDriver } from './matchmaker/LocalDriver/LocalDriver.ts';
 
 import { Transport } from './Transport.ts';
 import { logger, setLogger } from './Logger.ts';
 import { setDevMode, isDevMode } from './utils/DevMode.ts';
 import { bindRouterToServer, type Router } from './router/index.ts';
-import { getDefaultRouter } from "./matchmaker/routes.ts";
+import { getDefaultRouter } from "./router/default_routes.ts";
 
 export type ServerOptions = {
   publicAddress?: string,

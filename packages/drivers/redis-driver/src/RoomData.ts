@@ -1,5 +1,5 @@
 import { type IRoomCache, logger } from '@colyseus/core';
-import Redis, { type Cluster } from 'ioredis';
+import { Redis, type Cluster } from 'ioredis';
 
 export class RoomData implements IRoomCache {
   public clients: number = 0;

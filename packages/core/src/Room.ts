@@ -7,7 +7,7 @@ import { logger } from './Logger.ts';
 
 import type { Presence } from './presence/Presence.ts';
 import type { Serializer } from './serializer/Serializer.ts';
-import type { IRoomCache } from './matchmaker/driver/api.ts';
+import type { IRoomCache } from './matchmaker/driver.ts';
 
 import { NoneSerializer } from './serializer/NoneSerializer.ts';
 import { SchemaSerializer } from './serializer/SchemaSerializer.ts';

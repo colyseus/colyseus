@@ -1,5 +1,5 @@
-import { debugMatchMaking } from '../../../Debug.ts';
-import type { IRoomCache, SortOptions, MatchMakerDriver } from '../api.ts';
+import { debugMatchMaking } from '../../Debug.ts';
+import type { IRoomCache, SortOptions, MatchMakerDriver } from '../driver.ts';
 import { Query } from './Query.ts';
 
 // re-export

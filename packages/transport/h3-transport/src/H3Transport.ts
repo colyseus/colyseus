@@ -164,7 +164,6 @@ export class H3Transport extends Transport {
       const headers = Object.assign(
         {},
         matchMaker.controller.DEFAULT_CORS_HEADERS,
-        // @ts-ignore
         matchMaker.controller.getCorsHeaders.call(undefined, req)
       );
       headers['Content-Type'] = 'application/json';

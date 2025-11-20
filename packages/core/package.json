@@ -58,7 +58,8 @@
   },
   "peerDependencies": {
     "@colyseus/schema": "^3.0.66",
-    "@pm2/io": "^6.1.0"
+    "@pm2/io": "^6.1.0",
+    "zod": "^4.1.12"
   },
   "publishConfig": {
     "access": "public"

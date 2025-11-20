@@ -26,8 +26,8 @@ export { matchMaker };
 export { updateLobby, subscribeLobby } from './matchmaker/Lobby.ts';
 
 // Driver
-export * from './matchmaker/driver/local/LocalDriver.ts';
-export { initializeRoomCache } from './matchmaker/driver/api.ts';
+export * from './matchmaker/LocalDriver/LocalDriver.ts';
+export { initializeRoomCache } from './matchmaker/driver.ts';
 
 // Transport
 export { type Client, type DefineClient, type ClientPrivate, type AuthContext, ClientState, ClientArray, Transport, type ISendOptions } from './Transport.ts';

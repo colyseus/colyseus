@@ -1,7 +1,7 @@
 import * as matchMaker from '../MatchMaker.ts';
 
 import type { Room } from '../Room.ts';
-import type { IRoomCache } from './driver/api.ts';
+import type { IRoomCache } from './driver.ts';
 
 const LOBBY_CHANNEL = '$lobby';
 
@@ -29,7 +29,7 @@ export function updateLobby<T extends Room>(room: T, removed: boolean = false) {
 }
 
 export async function subscribeLobby(callback: (roomId: string, roomListing: IRoomCache) => void) {
-  const cb = async (message) => {
+  const cb = async (message: string) => {
     const [roomId, isRemove] = message.split(',');
 
     if (isRemove === '1') {

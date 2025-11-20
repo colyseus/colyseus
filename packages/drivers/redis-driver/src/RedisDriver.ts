@@ -1,4 +1,5 @@
-import Redis, {
+import {
+  Redis,
   Cluster,
   type ClusterNode,
   type ClusterOptions,

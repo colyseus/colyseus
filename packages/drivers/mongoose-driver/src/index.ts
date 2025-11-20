@@ -1,4 +1,4 @@
-import { IRoomCache, MatchMakerDriver, RoomCache, SortOptions, debugDriver } from '@colyseus/core';
+import { type IRoomCache, type MatchMakerDriver, type SortOptions, debugDriver } from '@colyseus/core';
 import mongoose, { Document, Schema } from 'mongoose';
 
 const RoomCacheSchema: Schema = new Schema({
@@ -73,7 +73,7 @@ export class MongooseDriver implements MatchMakerDriver {
       query = query.sort(sortOptions);
     }
 
-    return query as any as Promise<RoomCache>;
+    return query as any as Promise<IRoomCache>;
   }
 
   public async clear() {

@@ -1,5 +1,4 @@
 import type { Room } from "@colyseus/core";
-import type { Type } from "../../utils/Utils.ts";
 
 /**
  * Sort options for room queries.

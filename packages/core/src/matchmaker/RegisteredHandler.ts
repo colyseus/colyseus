@@ -3,7 +3,7 @@ import { logger } from '../Logger.ts';
 import { Room } from './../Room.ts';
 import { updateLobby } from './Lobby.ts';
 
-import type { IRoomCache, SortOptions, IRoomCacheFilterByKeys, IRoomCacheSortByKeys, ExtractMetadata } from './driver/api.ts';
+import type { IRoomCache, SortOptions, IRoomCacheFilterByKeys, IRoomCacheSortByKeys, ExtractMetadata } from './driver.ts';
 import type { Client } from '../Transport.ts';
 import type { Type } from "../utils/Utils.ts";
 

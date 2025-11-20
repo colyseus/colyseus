@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { CloseCode, ErrorCode, Protocol } from './Protocol.ts';
+import { CloseCode, ErrorCode } from './Protocol.ts';
 
 import { requestFromIPC, subscribeIPC, subscribeWithTimeout } from './IPC.ts';
 
@@ -16,13 +16,13 @@ import { debugAndPrintError, debugMatchMaking } from './Debug.ts';
 import { SeatReservationError } from './errors/SeatReservationError.ts';
 import { ServerError } from './errors/ServerError.ts';
 
-import { type IRoomCache, type MatchMakerDriver, type SortOptions, LocalDriver } from './matchmaker/driver/local/LocalDriver.ts';
+import { type IRoomCache, type MatchMakerDriver, type SortOptions, LocalDriver } from './matchmaker/LocalDriver/LocalDriver.ts';
 import controller from './matchmaker/controller.ts';
 import * as stats from './Stats.ts';
 
 import { logger } from './Logger.ts';
 import type { AuthContext, Client } from './Transport.ts';
-import { getLockId, initializeRoomCache, type ExtractMetadata } from './matchmaker/driver/api.ts';
+import { getLockId, initializeRoomCache, type ExtractMetadata } from './matchmaker/driver.ts';
 
 export { controller, stats, type MatchMakerDriver };
 
@@ -783,10 +783,7 @@ async function callOnAuth(roomName: string, clientOptions?: ClientOptions, authC
  */
 export async function healthCheckAllProcesses() {
   const allStats = await stats.fetchAll();
-
-  const activeProcessChannels = (typeof(presence.channels) === "function") // TODO: remove this check on 0.17
-    ? (await presence.channels("p:*")).map(c => c.substring(2))
-    : [];
+  const activeProcessChannels = (await presence.channels("p:*")).map(c => c.substring(2));
 
   if (allStats.length > 0) {
     await Promise.all(
@@ -836,10 +833,10 @@ export function healthCheckProcessId(processId: string) {
     } catch (e) {
       // process failed to respond - remove it from stats
       logger.debug(`❌ Process '${processId}' failed to respond. Cleaning it up.`);
-      const isProcessExcluded = await stats.excludeProcess(processId);
+      await stats.excludeProcess(processId);
 
       // clean-up possibly stale room ids
-      if (isProcessExcluded && !isDevMode) {
+      if (!isDevMode) {
         await removeRoomsByProcessId(processId);
       }
 

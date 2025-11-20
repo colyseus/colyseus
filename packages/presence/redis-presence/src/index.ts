@@ -1,4 +1,4 @@
-import Redis, { Cluster, type ClusterNode, type ClusterOptions, type RedisOptions } from 'ioredis';
+import { Redis, Cluster, type ClusterNode, type ClusterOptions, type RedisOptions } from 'ioredis';
 import type { Presence } from '@colyseus/core';
 import EventEmitter from 'events';
 

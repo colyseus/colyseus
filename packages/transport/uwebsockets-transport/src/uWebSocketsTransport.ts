@@ -209,7 +209,6 @@ export class uWebSocketsTransport extends Transport {
             const headers = Object.assign(
                 {},
                 matchMaker.controller.DEFAULT_CORS_HEADERS,
-                // @ts-ignore
                 matchMaker.controller.getCorsHeaders.call(undefined, req)
             );
 

@@ -1,6 +1,6 @@
 
 import * as matchMaker from '../MatchMaker.ts';
-import type { IRoomCache } from '../matchmaker/driver/local/LocalDriver.ts';
+import type { IRoomCache } from '../matchmaker/LocalDriver/LocalDriver.ts';
 import type { Client } from '../Transport.ts';
 import { subscribeLobby } from '../matchmaker/Lobby.ts';
 import { Room } from '../Room.ts';
