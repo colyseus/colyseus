@@ -204,7 +204,8 @@ export function APIEndpoints() {
 		executeRequest(endpoint.path, endpoint.method, false);
 	};
 
-	const handleRunRequest = () => {
+	const handleRunRequest = (e: React.FormEvent) => {
+		e.preventDefault();
 		if (selectedEndpoint) {
 			executeRequest(selectedEndpoint.path, selectedEndpoint.method, true);
 		}
@@ -260,7 +261,7 @@ export function APIEndpoints() {
 			{selectedEndpoint && (
 				<div className="h-full flex flex-col lg:flex-row gap-0">
 					<div className="flex-1 overflow-y-auto border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-slate-600 dark:text-slate-300 p-4 md:p-6 min-h-0">
-						<div className="mb-4">
+						<form onSubmit={handleRunRequest} className="mb-4">
 							<h2 className="text-lg md:text-xl font-semibold dark:text-slate-300 mb-2 flex flex-wrap items-center gap-2">
 								<span>{selectedEndpoint.method}</span>
 								<code className="flex flex-wrap items-center gap-1">
@@ -281,6 +282,7 @@ export function APIEndpoints() {
 														}))}
 														placeholder={paramName}
 														style={{ width: `${displayLength + 2}ch` }}
+														required={true}
 														className="inline-block px-2 py-0.5 mx-0.5 text-sm border border-purple-400 dark:border-purple-600 rounded bg-purple-50 dark:bg-purple-900/30 dark:text-slate-300 focus:ring-2 focus:ring-purple-500 focus:border-transparent font-mono"
 													/>
 												</span>
@@ -293,7 +295,7 @@ export function APIEndpoints() {
 
 							<p className="text-sm text-gray-600 dark:text-slate-400">{selectedEndpoint.description}</p>
 
-							{/* Request Configuration Form */}
+							{/* Request Configuration */}
 							<div className="mt-6 border border-gray-200 dark:border-slate-600 rounded-lg p-4 bg-white dark:bg-slate-700/50">
 								<h3 className="text-sm font-semibold mb-3 dark:text-slate-300">Request Configuration</h3>
 
@@ -345,7 +347,7 @@ export function APIEndpoints() {
 
 								{/* Run Button */}
 								<button
-									onClick={handleRunRequest}
+									type="submit"
 									disabled={loading}
 									className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-semibold py-2 px-4 rounded transition-colors flex items-center justify-center gap-2"
 								>
@@ -362,8 +364,7 @@ export function APIEndpoints() {
 									)}
 								</button>
 							</div>
-
-						</div>
+						</form>
 
 						<SDKCodeExamples
 							method={selectedEndpoint.method}
