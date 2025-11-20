@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { type RoomAvailable } from "@colyseus/sdk";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faDoorOpen, faHashtag, faTicket, faUser, faChevronDown, faChevronUp } from "@fortawesome/free-solid-svg-icons";
+import { faDoorOpen, faHashtag, faTicket, faUser, faChevronDown, faChevronUp, faInfoCircle } from "@fortawesome/free-solid-svg-icons";
 
 import { InspectConnection } from "../components/InspectConnection";
 import { client, Connection, global, roomsBySessionId } from "../utils/Types";
@@ -114,7 +114,7 @@ export function RealtimeRooms({
 			)}
 
 			<div className="border-t border-gray-200 dark:border-slate-600 mt-4 pt-4">
-				<h3 className="text-xs font-semibold mb-3 dark:text-slate-300 uppercase tracking-wide text-gray-700 dark:text-slate-400">Client connections</h3>
+				<h3 className="text-xs font-semibold mb-3 dark:text-slate-300 uppercase tracking-wide text-gray-700 dark:text-slate-400">Client SDK connections</h3>
 				<ConnectionList
 					connections={connections}
 					selectedConnection={selectedConnection}
@@ -161,9 +161,12 @@ export function RealtimeRooms({
 			/>
 		</>
 	) : (
-		<p className="text-sm dark:text-slate-300">
-			<em>(Please select an active client connection)</em>
-		</p>
+		<div className="flex flex-col items-center justify-center py-12 px-4">
+			<div className="flex items-center gap-3 text-gray-400 dark:text-slate-500 bg-gray-100 dark:bg-slate-700/50 px-6 py-4 rounded-lg border border-gray-200 dark:border-slate-600">
+				<FontAwesomeIcon icon={faInfoCircle} className="text-lg" />
+				<p className="text-sm italic">Please select an active client connection</p>
+			</div>
+		</div>
 	);
 
 	const stateContent = selectedConnection ? (
@@ -171,9 +174,12 @@ export function RealtimeRooms({
 			<StateView key={selectedConnection.sessionId} connection={selectedConnection} />
 		</div>
 	) : (
-		<p className="text-sm dark:text-slate-300">
-			<em>(Please select an active client connection)</em>
-		</p>
+		<div className="flex flex-col items-center justify-center py-12 px-4">
+			<div className="flex items-center gap-3 text-gray-400 dark:text-slate-500 bg-gray-100 dark:bg-slate-700/50 px-6 py-4 rounded-lg border border-gray-200 dark:border-slate-600">
+				<FontAwesomeIcon icon={faInfoCircle} className="text-lg" />
+				<p className="text-sm italic">Please select an active client connection</p>
+			</div>
+		</div>
 	);
 
 	return (
