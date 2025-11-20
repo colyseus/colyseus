@@ -44,6 +44,7 @@ export function APIEndpoints() {
 	const [queryParams, setQueryParams] = useState("");
 	const [headers, setHeaders] = useState("");
 	const [requestBody, setRequestBody] = useState("");
+	const [uriParams, setUriParams] = useState<Record<string, string>>({});
 
 	// Fetch endpoints from OpenAPI specification
 	useEffect(() => {
@@ -82,12 +83,26 @@ export function APIEndpoints() {
 		fetchEndpoints();
 	}, []);
 
+	// Extract URI parameters from path (e.g., /users/:id => ['id'])
+	const extractUriParams = (path: string): string[] => {
+		const matches = path.match(/:[^/]+/g);
+		return matches ? matches.map(m => m.slice(1)) : [];
+	};
+
 	const executeRequest = async (endpointPath: string, method: string, useFormData = false) => {
 		setLoading(true);
 		setError(null);
 		setResponse(null);
 
 		try {
+			// Replace URI parameters
+			let finalPath = endpointPath;
+			if (useFormData) {
+				Object.entries(uriParams).forEach(([key, value]) => {
+					finalPath = finalPath.replace(`:${key}`, encodeURIComponent(value));
+				});
+			}
+
 			// Build query params
 			let queryObj: any = undefined;
 			if (useFormData && queryParams.trim()) {
@@ -132,7 +147,7 @@ export function APIEndpoints() {
 				Object.entries(queryObj).forEach(([key, value]) => {
 					searchParams.append(key, String(value));
 				});
-				endpointPath = `${endpointPath}?${searchParams.toString()}`;
+				finalPath = `${finalPath}?${searchParams.toString()}`;
 			}
 
 			// Add body if present
@@ -149,16 +164,16 @@ export function APIEndpoints() {
 
 			switch (httpMethod) {
 				case 'GET':
-					res = await client.http.get(endpointPath, options);
+					res = await client.http.get(finalPath, options);
 					break;
 				case 'POST':
-					res = await client.http.post(endpointPath, options);
+					res = await client.http.post(finalPath, options);
 					break;
 				case 'PUT':
-					res = await client.http.put(endpointPath, options);
+					res = await client.http.put(finalPath, options);
 					break;
 				case 'DELETE':
-					res = await client.http.del(endpointPath, options);
+					res = await client.http.del(finalPath, options);
 					break;
 				default:
 					throw new Error(`Unsupported HTTP method: ${method}`);
@@ -177,6 +192,15 @@ export function APIEndpoints() {
 		setQueryParams("");
 		setHeaders("");
 		setRequestBody("");
+
+		// Initialize URI params with empty strings
+		const params = extractUriParams(endpoint.path);
+		const initialParams: Record<string, string> = {};
+		params.forEach(param => {
+			initialParams[param] = "";
+		});
+		setUriParams(initialParams);
+
 		executeRequest(endpoint.path, endpoint.method, false);
 	};
 
@@ -237,8 +261,34 @@ export function APIEndpoints() {
 				<div className="h-full flex flex-col lg:flex-row gap-0">
 					<div className="flex-1 overflow-y-auto border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-slate-600 dark:text-slate-300 p-4 md:p-6 min-h-0">
 						<div className="mb-4">
-							<h2 className="text-lg md:text-xl font-semibold dark:text-slate-300 mb-2">
-								{selectedEndpoint.method} <code>{selectedEndpoint.path}</code>
+							<h2 className="text-lg md:text-xl font-semibold dark:text-slate-300 mb-2 flex flex-wrap items-center gap-2">
+								<span>{selectedEndpoint.method}</span>
+								<code className="flex flex-wrap items-center gap-1">
+									{selectedEndpoint.path.split('/').map((segment, idx) => {
+										if (segment.startsWith(':')) {
+											const paramName = segment.slice(1);
+											const value = uriParams[paramName] || '';
+											const displayLength = Math.max(value.length || paramName.length, 3);
+											return (
+												<span key={idx} className="inline-flex items-center">
+													<span>/</span>
+													<input
+														type="text"
+														value={value}
+														onChange={(e) => setUriParams(prev => ({
+															...prev,
+															[paramName]: e.target.value
+														}))}
+														placeholder={paramName}
+														style={{ width: `${displayLength + 2}ch` }}
+														className="inline-block px-2 py-0.5 mx-0.5 text-sm border border-purple-400 dark:border-purple-600 rounded bg-purple-50 dark:bg-purple-900/30 dark:text-slate-300 focus:ring-2 focus:ring-purple-500 focus:border-transparent font-mono"
+													/>
+												</span>
+											);
+										}
+										return <span key={idx}>{idx === 0 ? segment : `/${segment}`}</span>;
+									})}
+								</code>
 							</h2>
 
 							<p className="text-sm text-gray-600 dark:text-slate-400">{selectedEndpoint.description}</p>
