@@ -259,9 +259,9 @@ export function APIEndpoints({ authConfig }: { authConfig?: AuthConfig }) {
 		<div className="flex-1 overflow-hidden bg-gray-50 dark:bg-slate-800">
 			{selectedEndpointIndex === null && (
 				<div className="h-full flex items-center justify-center">
-					<div className="text-center text-gray-500 dark:text-slate-400">
-						<p className="text-base md:text-lg">Select an endpoint to see the response</p>
-					</div>
+				<Callout>
+					Select an endpoint
+				</Callout>
 				</div>
 			)}
 
