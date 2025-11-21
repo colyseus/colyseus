@@ -7,9 +7,23 @@ interface SDKCodeExamplesProps {
 	method: string;
 	path: string;
 	serverEndpoint: string;
+	bodySchema?: any;
+	querySchema?: any;
+	bodyValues?: Record<string, any>;
+	queryValues?: Record<string, any>;
+	uriParams?: Record<string, string>;
 }
 
-export function SDKCodeExamples({ method, path, serverEndpoint }: SDKCodeExamplesProps) {
+export function SDKCodeExamples({ 
+	method, 
+	path, 
+	serverEndpoint, 
+	bodySchema, 
+	querySchema,
+	bodyValues = {},
+	queryValues = {},
+	uriParams = {}
+}: SDKCodeExamplesProps) {
 	const { darkMode } = useSettings();
 	const [isExpanded, setIsExpanded] = useState(false);
 	const [activeTab, setActiveTab] = useState('javascript');
@@ -23,58 +37,289 @@ export function SDKCodeExamples({ method, path, serverEndpoint }: SDKCodeExample
 		{ id: 'curl', label: 'Raw cURL', lang: 'bash' },
 	];
 
+	// Helper to get example values from schema or current values
+	const getExampleValues = (schema: any, currentValues: Record<string, any>) => {
+		if (!schema || !schema.properties) return {};
+		
+		const examples: Record<string, any> = {};
+		Object.entries(schema.properties).forEach(([key, fieldSchema]: [string, any]) => {
+			// Use current value if available
+			if (currentValues[key] !== undefined && currentValues[key] !== null && currentValues[key] !== '') {
+				examples[key] = currentValues[key];
+			} 
+			// Otherwise use example or default from schema
+			else if (fieldSchema.example !== undefined) {
+				examples[key] = fieldSchema.example;
+			} else if (fieldSchema.default !== undefined) {
+				examples[key] = fieldSchema.default;
+			}
+			// Generate placeholder based on type
+			else {
+				const type = fieldSchema.type || 'string';
+				if (type === 'string') examples[key] = fieldSchema.enum?.[0] || '';
+				else if (type === 'number' || type === 'integer') examples[key] = 0;
+				else if (type === 'boolean') examples[key] = false;
+				else if (type === 'array') examples[key] = [];
+				else if (type === 'object') examples[key] = {};
+			}
+		});
+		return examples;
+	};
+
+	// Replace URI params in path
+	const getProcessedPath = () => {
+		let processedPath = path;
+		Object.entries(uriParams).forEach(([key, value]) => {
+			if (value) {
+				processedPath = processedPath.replace(`:${key}`, value);
+			}
+		});
+		return processedPath;
+	};
+
 	const getCodeExample = (lang: string) => {
 		const httpMethod = method.toLowerCase();
+		const processedPath = getProcessedPath();
+		const hasBody = bodySchema && Object.keys(bodySchema.properties || {}).length > 0;
+		const hasQuery = querySchema && Object.keys(querySchema.properties || {}).length > 0;
+		const bodyExample = hasBody ? getExampleValues(bodySchema, bodyValues) : null;
+		const queryExample = hasQuery ? getExampleValues(querySchema, queryValues) : null;
 
 		switch (lang) {
 			case 'javascript':
-				return `import { Client } from "colyseus.js";
+				let jsCode = `import { Client } from "colyseus.js";
 
 const client = new Client("${serverEndpoint}");
+`;
+				
+				if (hasQuery) {
+					jsCode += `
+// Query parameters
+const queryParams = ${JSON.stringify(queryExample, null, 2)};
+`;
+				}
 
-// Call the HTTP endpoint
-const response = await client.http.${httpMethod}("${path}");
+				if (hasBody) {
+					jsCode += `
+// Request body
+const body = ${JSON.stringify(bodyExample, null, 2)};
+`;
+				}
+
+				jsCode += `
+// Call the HTTP endpoint`;
+				
+				if (hasBody && hasQuery) {
+					jsCode += `
+const response = await client.http.${httpMethod}("${processedPath}", {
+  body: body,
+  query: queryParams
+});`;
+				} else if (hasBody) {
+					jsCode += `
+const response = await client.http.${httpMethod}("${processedPath}", {
+  body: body
+});`;
+				} else if (hasQuery) {
+					jsCode += `
+const response = await client.http.${httpMethod}("${processedPath}", {
+  query: queryParams
+});`;
+				} else {
+					jsCode += `
+const response = await client.http.${httpMethod}("${processedPath}");`;
+				}
+
+				jsCode += `
 console.log(response);`;
+				return jsCode;
 
 			case 'unity':
-				return `using Colyseus;
+				let unityCode = `using Colyseus;
+using System.Collections.Generic;
 
 var client = new ColyseusClient("${serverEndpoint}");
+`;
 
-// Call the HTTP endpoint
-var response = await client.Http.${httpMethod.charAt(0).toUpperCase() + httpMethod.slice(1)}("${path}");
+				if (hasQuery) {
+					unityCode += `
+// Query parameters
+var queryParams = new Dictionary<string, object>
+{`;
+					Object.entries(queryExample!).forEach(([key, value], idx, arr) => {
+						unityCode += `
+    { "${key}", ${JSON.stringify(value)} }${idx < arr.length - 1 ? ',' : ''}`;
+					});
+					unityCode += `
+};
+`;
+				}
+
+				if (hasBody) {
+					unityCode += `
+// Request body
+var body = new Dictionary<string, object>
+{`;
+					Object.entries(bodyExample!).forEach(([key, value], idx, arr) => {
+						unityCode += `
+    { "${key}", ${JSON.stringify(value)} }${idx < arr.length - 1 ? ',' : ''}`;
+					});
+					unityCode += `
+};
+`;
+				}
+
+				const unityMethod = httpMethod.charAt(0).toUpperCase() + httpMethod.slice(1);
+				unityCode += `
+// Call the HTTP endpoint`;
+
+				if (hasBody && hasQuery) {
+					unityCode += `
+var response = await client.Http.${unityMethod}("${processedPath}", body, queryParams);`;
+				} else if (hasBody) {
+					unityCode += `
+var response = await client.Http.${unityMethod}("${processedPath}", body);`;
+				} else if (hasQuery) {
+					unityCode += `
+var response = await client.Http.${unityMethod}("${processedPath}", null, queryParams);`;
+				} else {
+					unityCode += `
+var response = await client.Http.${unityMethod}("${processedPath}");`;
+				}
+
+				unityCode += `
 Debug.Log(response);`;
+				return unityCode;
 
 			case 'defold':
-				return `local Colyseus = require "colyseus.sdk"
+				let defoldCode = `local Colyseus = require "colyseus.sdk"
 
 local client = Colyseus.Client("${serverEndpoint}")
+`;
 
--- Call the HTTP endpoint
-client.http:${httpMethod}("${path}", function(err, response)
+				if (hasQuery) {
+					defoldCode += `
+-- Query parameters
+local query_params = ${JSON.stringify(queryExample, null, 2).replace(/"/g, '"').replace(/\n/g, '\n')}
+`;
+				}
+
+				if (hasBody) {
+					defoldCode += `
+-- Request body
+local body = ${JSON.stringify(bodyExample, null, 2).replace(/"/g, '"').replace(/\n/g, '\n')}
+`;
+				}
+
+				defoldCode += `
+-- Call the HTTP endpoint`;
+
+				if (hasBody && hasQuery) {
+					defoldCode += `
+client.http:${httpMethod}("${processedPath}", {
+    body = body,
+    query = query_params
+}, function(err, response)`;
+				} else if (hasBody) {
+					defoldCode += `
+client.http:${httpMethod}("${processedPath}", {
+    body = body
+}, function(err, response)`;
+				} else if (hasQuery) {
+					defoldCode += `
+client.http:${httpMethod}("${processedPath}", {
+    query = query_params
+}, function(err, response)`;
+				} else {
+					defoldCode += `
+client.http:${httpMethod}("${processedPath}", function(err, response)`;
+				}
+
+				defoldCode += `
     if err then
         print("Error:", err)
     else
         print(response)
     end
 end)`;
+				return defoldCode;
 
 			case 'haxe':
-				return `import io.colyseus.Client;
+				let haxeCode = `import io.colyseus.Client;
 
 var client = new Client("${serverEndpoint}");
+`;
 
-// Call the HTTP endpoint
-client.http.${httpMethod}("${path}", function(err, response) {
+				if (hasQuery) {
+					haxeCode += `
+// Query parameters
+var queryParams = ${JSON.stringify(queryExample, null, 2)};
+`;
+				}
+
+				if (hasBody) {
+					haxeCode += `
+// Request body
+var body = ${JSON.stringify(bodyExample, null, 2)};
+`;
+				}
+
+				haxeCode += `
+// Call the HTTP endpoint`;
+
+				if (hasBody && hasQuery) {
+					haxeCode += `
+client.http.${httpMethod}("${processedPath}", {
+    body: body,
+    query: queryParams
+}, function(err, response) {`;
+				} else if (hasBody) {
+					haxeCode += `
+client.http.${httpMethod}("${processedPath}", {
+    body: body
+}, function(err, response) {`;
+				} else if (hasQuery) {
+					haxeCode += `
+client.http.${httpMethod}("${processedPath}", {
+    query: queryParams
+}, function(err, response) {`;
+				} else {
+					haxeCode += `
+client.http.${httpMethod}("${processedPath}", function(err, response) {`;
+				}
+
+				haxeCode += `
     if (err != null) {
         trace("Error: " + err);
     } else {
         trace(response);
     }
 });`;
+				return haxeCode;
 
 			case 'curl':
-				return `curl -X ${method.toUpperCase()} "${serverEndpoint}${path}"`;
+				let curlCmd = `curl -X ${method.toUpperCase()}`;
+				
+				let fullPath = `${serverEndpoint}${processedPath}`;
+				
+				// Add query parameters
+				if (hasQuery) {
+					const queryString = Object.entries(queryExample!)
+						.map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
+						.join('&');
+					fullPath += `?${queryString}`;
+				}
+				
+				curlCmd += ` "${fullPath}"`;
+				
+				// Add body
+				if (hasBody) {
+					curlCmd += ` \\
+  -H "Content-Type: application/json" \\
+  -d '${JSON.stringify(bodyExample, null, 2)}'`;
+				}
+				
+				return curlCmd;
 
 			default:
 				return '';

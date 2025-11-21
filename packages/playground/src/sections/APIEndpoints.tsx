@@ -388,11 +388,16 @@ export function APIEndpoints({ authConfig }: { authConfig?: AuthConfig }) {
 							</div>
 						</form>
 
-						<SDKCodeExamples
-							method={selectedEndpoint.method}
-							path={selectedEndpoint.path}
-							serverEndpoint={endpoint}
-						/>
+					<SDKCodeExamples
+						method={selectedEndpoint.method}
+						path={selectedEndpoint.path}
+						serverEndpoint={endpoint}
+						bodySchema={selectedEndpoint.body}
+						querySchema={selectedEndpoint.query}
+						bodyValues={bodyFields}
+						queryValues={queryFields}
+						uriParams={uriParams}
+					/>
 					</div>
 
 					{/* Response Panel */}

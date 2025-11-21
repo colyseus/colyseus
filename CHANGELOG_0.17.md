@@ -9,6 +9,7 @@
 [ ] `Protocol.WS_*` close codes have been moved to `CloseCode.*`
 [ ] Skipping handshake when local state is available (when reconnecting or with concrete state provided)
 [ ] Fixed bug where setting `patchRate=0` would stop `clock` intervals and timeouts from working (https://github.com/colyseus/colyseus/issues/869)
+[ ] Playground: Automatically-generated postman-like UI
 
 ## New features to document
 

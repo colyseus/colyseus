@@ -32,10 +32,11 @@ function getDefaultValue(schema: any): any {
 }
 
 // Array field component with auto-focus support
-function ArrayField({ fieldKey, itemSchema, arrayValue, onChange }: {
+function ArrayField({ fieldKey, itemSchema, arrayValue, fieldName, onChange }: {
 	fieldKey: string;
 	itemSchema: any;
 	arrayValue: any[];
+	fieldName?: string;
 	onChange: (value: any) => void;
 }) {
 	const [focusIndex, setFocusIndex] = useState<number | null>(null);
@@ -73,7 +74,7 @@ function ArrayField({ fieldKey, itemSchema, arrayValue, onChange }: {
 							onChange(newArray.length > 0 ? newArray : undefined);
 						}}
 						className="px-2 py-2 text-xs border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 transition-colors"
-						title="Remove item"
+						title={`Remove ${fieldName || 'item'}`}
 					>
 						✕
 					</button>
@@ -90,7 +91,7 @@ function ArrayField({ fieldKey, itemSchema, arrayValue, onChange }: {
 				}}
 				className="w-full px-3 py-2 text-xs border border-dashed border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-600 dark:text-slate-400 transition-colors"
 			>
-				+ Add Item
+				+ Add {fieldName || 'item'}
 			</button>
 		</div>
 	);
@@ -103,7 +104,8 @@ function renderField(
 	value: any,
 	onChange: (value: any) => void,
 	isRequired: boolean,
-	autoFocus?: boolean
+	autoFocus?: boolean,
+	fieldName?: string
 ): JSX.Element | null {
 	const type = fieldSchema.type || 'string';
 
@@ -178,52 +180,82 @@ function renderField(
 				itemSchema={itemSchema}
 				arrayValue={arrayValue}
 				onChange={onChange}
+				fieldName={fieldName}
 			/>
 		);
 	}
 
 	// Object field
 	if (type === 'object') {
+		// If object is not required and value is undefined/null, show "Add" button
+		if (!isRequired && (value === undefined || value === null)) {
+			return (
+				<button
+					type="button"
+					onClick={() => {
+						const defaultValue = getDefaultValue(fieldSchema);
+						onChange(defaultValue);
+					}}
+					className="w-full px-3 py-2 text-xs border border-dashed border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-600 dark:text-slate-400 transition-colors"
+				>
+					+ Add {fieldName || 'object'}
+				</button>
+			);
+		}
+
 		const objectValue = value || {};
 		const properties = fieldSchema.properties || {};
 		const requiredFields = fieldSchema.required || [];
 
 		return (
-			<div className="border border-gray-300 dark:border-slate-600 rounded p-3 space-y-3 bg-gray-50 dark:bg-slate-900/50">
-				{Object.entries(properties).map(([propKey, propSchema]: [string, any]) => {
-					const isPropRequired = requiredFields.includes(propKey);
-					const propDescription = (propSchema as any).description;
+			<div className="space-y-2">
+				<div className="border border-gray-300 dark:border-slate-600 rounded p-3 space-y-3 bg-gray-50 dark:bg-slate-900/50">
+					{Object.entries(properties).map(([propKey, propSchema]: [string, any]) => {
+						const isPropRequired = requiredFields.includes(propKey);
+						const propDescription = (propSchema as any).description;
 
-					return (
-						<div key={propKey}>
-							<label className="block text-xs mb-1 dark:text-slate-300">
-								<code className="font-mono">{propKey}</code>
-								{isPropRequired && <span className="text-red-500 ml-1">*</span>}
-								{propDescription && (
-									<span className="text-gray-500 dark:text-slate-400 font-normal ml-2">
-										{propDescription}
-									</span>
+						return (
+							<div key={propKey}>
+								<label className="block text-xs mb-1 dark:text-slate-300">
+									<code className="font-mono">{propKey}</code>
+									{isPropRequired && <span className="text-red-500 ml-1">*</span>}
+									{propDescription && (
+										<span className="text-gray-500 dark:text-slate-400 font-normal ml-2">
+											{propDescription}
+										</span>
+									)}
+								</label>
+								{renderField(
+									`${key}.${propKey}`,
+									propSchema,
+									objectValue[propKey],
+									(newValue) => {
+										const newObject = { ...objectValue };
+										if (newValue === undefined) {
+											delete newObject[propKey];
+										} else {
+											newObject[propKey] = newValue;
+										}
+										onChange(newObject);
+									},
+									isPropRequired,
+									autoFocus,
+									propKey
 								)}
-							</label>
-							{renderField(
-								`${key}.${propKey}`,
-								propSchema,
-								objectValue[propKey],
-								(newValue) => {
-									const newObject = { ...objectValue };
-									if (newValue === undefined) {
-										delete newObject[propKey];
-									} else {
-										newObject[propKey] = newValue;
-									}
-									onChange(newObject);
-								},
-								isPropRequired,
-								autoFocus
-							)}
-						</div>
-					);
-				})}
+							</div>
+						);
+					})}
+				</div>
+				{/* Show remove button for optional objects */}
+				{!isRequired && (
+					<button
+						type="button"
+						onClick={() => onChange(undefined)}
+						className="w-full px-3 py-2 text-xs border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 transition-colors"
+					>
+						Remove {fieldName || 'object'}
+					</button>
+				)}
 			</div>
 		);
 	}
@@ -276,7 +308,9 @@ export function JSONSchemaFields({ schema, values, onChange }: JSONSchemaFieldsP
 							fieldSchema,
 							values[key],
 							(value) => onChange(key, value),
-							isRequired || false
+							isRequired || false,
+							undefined,
+							key
 						)}
 					</div>
 				);
