@@ -168,7 +168,7 @@ export function Playground({ isMobileMenuOpen, setIsMobileMenuOpen }: Playground
 						fetchRoomStats={fetchRoomStats}
 					/>
 				)}
-				{activeTab === "api" && <APIEndpoints />}
+				{activeTab === "api" && <APIEndpoints authConfig={authConfig} />}
 				{activeTab === "stats" && <RealtimeStats />}
 			</div>
 		</div>

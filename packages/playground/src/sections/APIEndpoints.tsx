@@ -9,6 +9,8 @@ import { faPlay } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus, vs } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { AuthTokenSection } from "../components/AuthTokenSection";
+import type { AuthConfig } from "../../src-backend/index";
 
 interface APIEndpoint {
 	method: string;
@@ -39,7 +41,7 @@ const getMethodColor = (method: string): string => {
 	}
 };
 
-export function APIEndpoints() {
+export function APIEndpoints({ authConfig }: { authConfig?: AuthConfig }) {
 	const { darkMode } = useSettings();
 	const [endpoints, setEndpoints] = useState<APIEndpoint[]>([]);
 	const [selectedEndpointIndex, setSelectedEndpointIndex] = useState<number | null>(null);
@@ -52,6 +54,7 @@ export function APIEndpoints() {
 	const [bodyFields, setBodyFields] = useState<Record<string, any>>({});
 	const [headers, setHeaders] = useState("");
 	const [uriParams, setUriParams] = useState<Record<string, string>>({});
+	const [authToken, setAuthToken] = useState(client.auth.token || "");
 
 	// Fetch endpoints from OpenAPI specification
 	useEffect(() => {
@@ -92,6 +95,13 @@ export function APIEndpoints() {
 	const extractUriParams = (path: string): string[] => {
 		const matches = path.match(/:[^/]+/g);
 		return matches ? matches.map(m => m.slice(1)) : [];
+	};
+
+	const onAuthTokenChange = (newToken: string, autoClose: boolean = true) => {
+		if (authToken !== newToken) {
+			client.auth.token = newToken;
+			setAuthToken(client.auth.token);
+		}
 	};
 
 	const executeRequest = async (endpointPath: string, method: string, useFormData = false) => {
@@ -339,6 +349,21 @@ export function APIEndpoints() {
 												}}
 											/>
 										</div>
+									)}
+
+									{/* Auth Token */}
+									{authConfig && (
+										<>
+											{((selectedEndpoint.query && selectedEndpoint.query.properties) ||
+												(selectedEndpoint.body && selectedEndpoint.body.properties)) && (
+												<div className="border-t border-gray-300 dark:border-slate-600"></div>
+											)}
+											<AuthTokenSection
+												authToken={authToken}
+												onAuthTokenChange={onAuthTokenChange}
+												authConfig={authConfig}
+											/>
+										</>
 									)}
 
 									{/* Execute Button */}
