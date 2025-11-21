@@ -51,10 +51,21 @@ export type ServerOptions = {
   greet?: boolean,
 };
 
-export class Server<
+/**
+ * Exposed types for the client-side SDK.
+ */
+export interface SDKTypes<
   RoomTypes extends Record<string, RegisteredHandler> = any,
   Routes extends Router = any
 > {
+  '~rooms': RoomTypes;
+  '~routes': Routes;
+}
+
+export class Server<
+  RoomTypes extends Record<string, RegisteredHandler> = any,
+  Routes extends Router = any
+> implements SDKTypes<RoomTypes, Routes> {
   '~rooms': RoomTypes;
   '~routes': Routes;
 

@@ -1,10 +1,11 @@
 import { CloseCode, Room, type Client } from "@colyseus/core";
-import { schema } from "@colyseus/schema";
+import { schema, type SchemaType } from "@colyseus/schema";
 
 export const Player = schema({
   x: "number",
   y: "number",
 });
+export type Player = SchemaType<typeof Player>;
 
 export const MyRoomState = schema({
   mapWidth: "number",

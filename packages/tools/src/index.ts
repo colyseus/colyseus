@@ -5,7 +5,17 @@ import net from "net";
 import http from 'http';
 import cors from 'cors';
 import express from 'express';
-import { type ServerOptions, type Router, logger, Server, Transport, matchMaker, RegisteredHandler, defineServer } from '@colyseus/core';
+import {
+  type ServerOptions,
+  type SDKTypes,
+  type Router,
+  logger,
+  Server,
+  Transport,
+  matchMaker,
+  RegisteredHandler,
+  defineServer
+} from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 
 const BunWebSockets = import('@colyseus/bun-websockets'); BunWebSockets.catch(() => {});
@@ -15,7 +25,7 @@ const RedisPresence = import('@colyseus/redis-presence'); RedisPresence.catch(()
 export interface ConfigOptions<
   RoomTypes extends Record<string, RegisteredHandler> = any,
   Routes extends Router = any
-> {
+> extends SDKTypes<RoomTypes, Routes> {
     options?: ServerOptions,
     displayLogs?: boolean,
     rooms?: RoomTypes,
@@ -30,7 +40,7 @@ export interface ConfigOptions<
     getId?: () => string,
 }
 
-const ALLOWED_KEYS: { [key in keyof ConfigOptions]: string } = {
+const ALLOWED_KEYS: { [key in keyof Partial<ConfigOptions>]: string } = {
   'displayLogs': "boolean",
   'options': "object",
   'rooms': "object",
@@ -46,7 +56,7 @@ const ALLOWED_KEYS: { [key in keyof ConfigOptions]: string } = {
 export default function <
   RoomTypes extends Record<string, RegisteredHandler> = any,
   Routes extends Router = any
->(options: ConfigOptions<RoomTypes, Routes>) {
+>(options: Omit<ConfigOptions<RoomTypes, Routes>, '~rooms' | '~routes'>) {
   for (const option in options) {
     if (!ALLOWED_KEYS[option]) {
       throw new Error(`❌ Invalid option '${option}'. Allowed options are: ${Object.keys(ALLOWED_KEYS).join(", ")}`);
@@ -55,8 +65,7 @@ export default function <
       throw new Error(`❌ Invalid type for ${option}: please provide a ${ALLOWED_KEYS[option]} value.`);
     }
   }
-
-  return options;
+  return options as ConfigOptions<RoomTypes, Routes>;
 }
 
 /**

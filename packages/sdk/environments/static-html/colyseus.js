@@ -1,1 +1,0 @@
-../../build/colyseus.js

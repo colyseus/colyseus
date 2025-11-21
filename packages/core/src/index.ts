@@ -1,7 +1,7 @@
 import Clock, { Delayed } from '@colyseus/timer';
 
 // Core classes
-export { Server, type ServerOptions, defineRoom, defineServer } from './Server.ts';
+export { Server, type ServerOptions, type SDKTypes, defineRoom, defineServer } from './Server.ts';
 export { Room, RoomInternalState } from './Room.ts';
 export { Protocol, ErrorCode, getMessageBytes, CloseCode } from './Protocol.ts';
 export { RegisteredHandler } from './matchmaker/RegisteredHandler.ts';

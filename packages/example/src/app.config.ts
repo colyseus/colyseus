@@ -151,7 +151,7 @@ const bulkCreateThings = createEndpoint("/things/bulk", {
   };
 })
 
-const server = config({
+export const server = config({
   options: {
     driver: new PostgresDriver(),
   },
