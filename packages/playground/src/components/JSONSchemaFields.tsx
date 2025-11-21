@@ -9,6 +9,28 @@ interface JSONSchemaFieldsProps {
 	onChange: (key: string, value: any) => void;
 }
 
+// Helper function to create default value based on schema
+function getDefaultValue(schema: any): any {
+	const type = schema.type || 'string';
+
+	if (type === 'boolean') return false;
+	if (type === 'number' || type === 'integer') return 0;
+	if (type === 'array') return [];
+	if (type === 'object') {
+		// Create object with default values for required fields
+		const obj: any = {};
+		if (schema.properties) {
+			Object.entries(schema.properties).forEach(([key, propSchema]: [string, any]) => {
+				if (schema.required?.includes(key)) {
+					obj[key] = getDefaultValue(propSchema);
+				}
+			});
+		}
+		return obj;
+	}
+	return '';
+}
+
 // Array field component with auto-focus support
 function ArrayField({ fieldKey, itemSchema, arrayValue, onChange }: {
 	fieldKey: string;
@@ -61,12 +83,7 @@ function ArrayField({ fieldKey, itemSchema, arrayValue, onChange }: {
 				type="button"
 				onClick={() => {
 					const newArray = [...arrayValue];
-					// Add default value based on item type
-					let defaultValue: any;
-					if (itemType === 'boolean') defaultValue = false;
-					else if (itemType === 'number' || itemType === 'integer') defaultValue = 0;
-					else if (itemType === 'array') defaultValue = [];
-					else defaultValue = '';
+					const defaultValue = getDefaultValue(itemSchema);
 					newArray.push(defaultValue);
 					setFocusIndex(newArray.length - 1);
 					onChange(newArray);
@@ -162,6 +179,52 @@ function renderField(
 				arrayValue={arrayValue}
 				onChange={onChange}
 			/>
+		);
+	}
+
+	// Object field
+	if (type === 'object') {
+		const objectValue = value || {};
+		const properties = fieldSchema.properties || {};
+		const requiredFields = fieldSchema.required || [];
+
+		return (
+			<div className="border border-gray-300 dark:border-slate-600 rounded p-3 space-y-3 bg-gray-50 dark:bg-slate-900/50">
+				{Object.entries(properties).map(([propKey, propSchema]: [string, any]) => {
+					const isPropRequired = requiredFields.includes(propKey);
+					const propDescription = (propSchema as any).description;
+
+					return (
+						<div key={propKey}>
+							<label className="block text-xs mb-1 dark:text-slate-300">
+								<code className="font-mono">{propKey}</code>
+								{isPropRequired && <span className="text-red-500 ml-1">*</span>}
+								{propDescription && (
+									<span className="text-gray-500 dark:text-slate-400 font-normal ml-2">
+										{propDescription}
+									</span>
+								)}
+							</label>
+							{renderField(
+								`${key}.${propKey}`,
+								propSchema,
+								objectValue[propKey],
+								(newValue) => {
+									const newObject = { ...objectValue };
+									if (newValue === undefined) {
+										delete newObject[propKey];
+									} else {
+										newObject[propKey] = newValue;
+									}
+									onChange(newObject);
+								},
+								isPropRequired,
+								autoFocus
+							)}
+						</div>
+					);
+				})}
+			</div>
 		);
 	}
 
