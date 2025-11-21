@@ -247,7 +247,7 @@ export function APIEndpoints({ authConfig }: { authConfig?: AuthConfig }) {
 								</span>
 								<code className="text-xs sm:text-sm dark:text-slate-300 break-all">{endpoint.path}</code>
 							</div>
-								<p className="text-xs text-gray-600 dark:text-slate-400">{endpoint.description}</p>
+								<p className="text-xs text-gray-600 dark:text-slate-400 line-clamp-2">{endpoint.description}</p>
 							</button>
 						))}
 					</div>

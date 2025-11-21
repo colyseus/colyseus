@@ -25,7 +25,7 @@ const listThings = createEndpoint("/things", {
   method: "GET",
   metadata: {
     openapi: {
-      description: "List all things",
+      description: "List all things lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet",
       summary: "List all things",
       tags: ["things"],
     }
