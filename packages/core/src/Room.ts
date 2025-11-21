@@ -66,6 +66,7 @@ export abstract class Room<
    *
    * @readonly
    */
+  n
   public get locked() {
     return this.#_locked;
   }
@@ -361,14 +362,51 @@ export abstract class Room<
   }
 
   // Optional abstract methods
-  public onBeforePatch?(state: State): void | Promise<any>;
-  public onCreate?(options: any): void | Promise<any>;
-  public onJoin?(client: Client, options?: any): void | Promise<any>;
-  public onDrop?(client: Client, code?: number): void | Promise<any>;
-  public onReconnect?(client: Client): void | Promise<any>;
-  public onLeave?(client: Client, code?: number): void | Promise<any>;
-  public onDispose?(): void | Promise<any>;
 
+  /**
+   * This method is called before the latest version of the room's state is broadcasted to all clients.
+   */
+  public onBeforePatch?(state: State): void | Promise<any>;
+
+  /**
+   * This method is called when the room is created.
+   * @param options - The options passed to the room when it is created.
+   */
+  public onCreate?(options: any): void | Promise<any>;
+
+  /**
+   * This method is called when a client joins the room.
+   * @param client - The client that joined the room.
+   * @param options - The options passed to the client when it joined the room.
+   */
+  public onJoin?(client: Client, options?: any): void | Promise<any>;
+
+  /**
+   * This method is called when a client leaves the room without consent.
+   * You may allow the client to reconnect by calling `allowReconnection` within this method.
+   *
+   * @param client - The client that was dropped from the room.
+   * @param code - The close code of the leave event.
+   */
+  public onDrop?(client: Client, code?: number): void | Promise<any>;
+
+  /**
+   * This method is called when a client reconnects to the room.
+   * @param client - The client that reconnected to the room.
+   */
+  public onReconnect?(client: Client): void | Promise<any>;
+
+  /**
+   * This method is called when a client effectively leaves the room.
+   * @param client - The client that left the room.
+   * @param code - The close code of the leave event.
+   */
+  public onLeave?(client: Client, code?: number): void | Promise<any>;
+
+  /**
+   * This method is called when the room is disposed.
+   */
+  public onDispose?(): void | Promise<any>;
 
   /**
    * Define a custom exception handler.
@@ -384,6 +422,22 @@ export abstract class Room<
    */
   public onUncaughtException?(error: RoomException, methodName: RoomMethodName): void;
 
+  /**
+   * This method is called before onJoin() - this is where you should authenticate the client
+   * @param client - The client that is authenticating.
+   * @param options - The options passed to the client when it is authenticating.
+   * @param context - The authentication context, including the token and the client's IP address.
+   * @returns The authentication result.
+   *
+   * @example
+   * ```typescript
+   * return {
+   *   userId: 123,
+   *   username: "John Doe",
+   *   email: "john.doe@example.com",
+   * };
+   * ```
+   */
   public onAuth(
     client: Client,
     options: any,
@@ -670,7 +724,7 @@ export abstract class Room<
   }
 
   /**
-   * Locking the room will remove it from the pool of available rooms for new clients to connect to.
+   * Lock the room. This prevents new clients from joining this room.
    */
   public async lock() {
     // rooms locked internally aren't explicit locks.
@@ -692,7 +746,7 @@ export abstract class Room<
   }
 
   /**
-   * Unlocking the room returns it to the pool of available rooms for new clients to connect to.
+   * Unlock the room. This allows new clients to join this room, if maxClients is not reached.
    */
   public async unlock() {
     // only internal usage passes arguments to this function.
@@ -724,6 +778,17 @@ export abstract class Room<
     client.send(messageOrType, messageOrOptions, options);
   }
 
+  /**
+   * Broadcast a message to all connected clients.
+   * @param type - The type of the message.
+   * @param message - The message to broadcast.
+   * @param options - The options for the broadcast.
+   *
+   * @example
+   * ```typescript
+   * this.broadcast('message', { message: 'Hello, world!' });
+   * ```
+   */
   public broadcast(type: string | number, message?: any, options?: IBroadcastOptions) {
     if (options && options.afterNextPatch) {
       delete options.afterNextPatch;
@@ -771,6 +836,30 @@ export abstract class Room<
     return hasChanges;
   }
 
+  /**
+   * Register a message handler for a specific message type.
+   * This method is used to handle messages sent by clients to the room.
+   * @param messageType - The type of the message.
+   * @param callback - The callback to call when the message is received.
+   * @returns A function to unbind the callback.
+   *
+   * @example
+   * ```typescript
+   * this.onMessage('message', (client, message) => {
+   *   console.log(message);
+   * });
+   * ```
+   *
+   * @example
+   * ```typescript
+   * const unbind = this.onMessage('message', (client, message) => {
+   *   console.log(message);
+   * });
+   *
+   * // Unbind the callback when no longer needed
+   * unbind();
+   * ```
+   */
   public onMessage<T = any, C extends Client = this['~client']>(
     messageType: '*',
     callback: (client: C, type: string | number, message: T) => void
@@ -1031,11 +1120,19 @@ export abstract class Room<
    * Allow the specified client to reconnect into the room. Must be used inside `onLeave()` method.
    * If seconds is provided, the reconnection is going to be cancelled after the provided amount of seconds.
    *
-   * @param previousClient - The client which is to be waiting until re-connection happens.
-   * @param seconds - Timeout period on re-connection in seconds.
+   * @param client - The client that is allowed to reconnect into the room.
+   * @param seconds - The time in seconds that the client is allowed to reconnect into the room.
    *
    * @returns Deferred<Client> - The differed is a promise like type.
    *  This type can forcibly reject the promise by calling `.reject()`.
+   *
+   * @example
+   * ```typescript
+   * onDrop(client: Client, code: CloseCode) {
+   *   // Allow the client to reconnect into the room with a 15 seconds timeout.
+   *   this.allowReconnection(client, 15);
+   * }
+   * ```
    */
   public allowReconnection(previousClient: Client, seconds: number | "manual"): Deferred<Client> {
     //
