@@ -52,7 +52,7 @@
     "@colyseus/msgpackr": "*",
     "@colyseus/schema": "^3.0.0",
     "@types/ws": "^8.5.14",
-    "zod": "^3.25.64",
+    "zod": "^4.1.12",
     "ws": "^8.18.0"
   },
   "peerDependencies": {

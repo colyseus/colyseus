@@ -6,7 +6,7 @@ import { createEndpoint, createRouter, defineRoom, matchMaker } from "@colyseus/
 import { PostgresDriver } from "@colyseus/drizzle-driver";
 import { playground } from "@colyseus/playground";
 import { auth } from "@colyseus/auth";
-import { z } from "zod";
+import { z } from "zod/v4";
 
 import { generator } from "@colyseus/better-call";
 
@@ -49,6 +49,11 @@ const createThing = createEndpoint("/things", {
   query: z.object({
     name: z.string().min(1, "Name is required").optional(),
   }),
+  metadata: {
+    openapi: {
+      description: "Create a new thing",
+    }
+  }
 }, async (ctx) => {
   const body = ctx.body;
   return {
@@ -61,10 +66,10 @@ const createThing = createEndpoint("/things", {
 const updateThing = createEndpoint("/things/:id", {
   method: "PUT",
   body: z.object({
-    name: z.string().min(1, "Name is required"),
+    name: z.string(),
     description: z.string(),
     tags: z.array(z.string()),
-    isActive: z.boolean(),
+    isActive: z.boolean().optional(),
   })
 }, async (ctx) => {
   const id = ctx.params.id;
@@ -166,29 +171,19 @@ const server = config({
     bulkCreateThings
   }, {
     onError: (err) => {
-      console.log(err);
+      // console.log(err);
     },
     onRequest: (req) => {
       console.log(req);
     },
     onResponse: (res) => {
-      console.log(res);
+      // console.log(res);
     },
   }),
 
   initializeExpress: (app) => {
     app.use("/", playground());
     app.get("/express", (_, res) => res.json({ message: "Hello World" }));
-    app.get("/openapi", async (_, res) => res.json(await generator({
-      listThings,
-      getThing,
-      createThing,
-      updateThing,
-      patchThing,
-      deleteThing,
-      createUser,
-      bulkCreateThings
-    })));
     app.use(auth.prefix, auth.routes({}));
   },
 

@@ -89,7 +89,7 @@ export function Playground({ isMobileMenuOpen, setIsMobileMenuOpen }: Playground
 	const tabs = [
 		{ id: "rooms" as TabType, label: "Rooms", icon: faDoorOpen },
 		{ id: "api" as TabType, label: "API Endpoints", icon: faGlobe },
-		{ id: "stats" as TabType, label: "Realtime Stats", icon: faChartLine },
+		{ id: "stats" as TabType, label: "Stats", icon: faChartLine },
 	];
 
 	const handleTabChange = (tabId: TabType) => {

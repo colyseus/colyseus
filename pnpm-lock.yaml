@@ -138,8 +138,8 @@ importers:
         specifier: ^8.18.0
         version: 8.18.3
       zod:
-        specifier: ^3.25.64
-        version: 3.25.76
+        specifier: ^4.1.12
+        version: 4.1.12
 
   packages/auth:
     dependencies:
@@ -204,6 +204,9 @@ importers:
       nanoid:
         specifier: ^2.0.0
         version: 2.1.11
+      zod:
+        specifier: ^4.1.12
+        version: 4.1.12
     devDependencies:
       '@types/nanoid':
         specifier: ^2.0.0
@@ -286,8 +289,8 @@ importers:
         specifier: workspace:^
         version: link:../transport/ws-transport
       zod:
-        specifier: ^3.23.8
-        version: 3.25.76
+        specifier: ^4.1.12
+        version: 4.1.12
 
   packages/greeting-banner: {}
 
@@ -7162,8 +7165,8 @@ packages:
     resolution: {integrity: sha512-4LCcse/U2MHZ63HAJVE+v71o7yOdIe4cZ70Wpf8D/IyjDKYQLV5GD46B+hSTjJsvV5PztjvHoU580EftxjDZFQ==}
     engines: {node: '>=12.20'}
 
-  zod@3.25.76:
-    resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
+  zod@4.1.12:
+    resolution: {integrity: sha512-JInaHOamG8pt5+Ey8kGmdcAcg3OL9reK8ltczgHTAwNhMys/6ThXHityHxVV2p3fkw/c+MAvBHFVYHFZDmjMCQ==}
 
 snapshots:
 
@@ -14124,4 +14127,4 @@ snapshots:
 
   yocto-queue@1.2.2: {}
 
-  zod@3.25.76: {}
+  zod@4.1.12: {}

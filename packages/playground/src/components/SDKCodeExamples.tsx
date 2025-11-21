@@ -19,7 +19,8 @@ export function SDKCodeExamples({ method, path, serverEndpoint }: SDKCodeExample
 		{ id: 'javascript', label: 'JavaScript', lang: 'javascript' },
 		{ id: 'unity', label: 'Unity', lang: 'csharp' },
 		{ id: 'defold', label: 'Defold (Lua)', lang: 'lua' },
-		{ id: 'haxe', label: 'Haxe', lang: 'haxe' }
+		{ id: 'haxe', label: 'Haxe', lang: 'haxe' },
+		{ id: 'curl', label: 'Raw cURL', lang: 'bash' },
 	];
 
 	const getCodeExample = (lang: string) => {
@@ -72,6 +73,9 @@ client.http.${httpMethod}("${path}", function(err, response) {
     }
 });`;
 
+			case 'curl':
+				return `curl -X ${method.toUpperCase()} "${serverEndpoint}${path}"`;
+
 			default:
 				return '';
 		}
@@ -119,8 +123,8 @@ client.http.${httpMethod}("${path}", function(err, response) {
 
 			{isExpanded && (
 				<div className="p-4">
-					<div className="border-b-2 border-gray-200 dark:border-slate-600">
-						<ul className="flex flex-wrap mt-1.5 -mb-0.5 text-sm font-medium text-center">
+					<div className="border-b-2 border-gray-200 dark:border-slate-600 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+						<ul className="flex mt-1.5 -mb-0.5 text-sm font-medium text-center whitespace-nowrap">
 							{tabs.map(tab => (
 								<li key={tab.id} className="mr-1">
 									<button

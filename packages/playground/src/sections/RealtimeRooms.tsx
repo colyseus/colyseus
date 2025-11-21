@@ -9,6 +9,7 @@ import { ConnectionList } from "../components/ConnectionList";
 import { JoinRoomForm } from "../components/JoinRoomForm";
 import { StateView } from "../components/StateView";
 import { ResizableSidebar } from "../components/ResizableSidebar";
+import { Callout } from "../components/Callout";
 
 import { type AuthConfig } from "../../src-backend";
 
@@ -162,10 +163,7 @@ export function RealtimeRooms({
 		</>
 	) : (
 		<div className="flex flex-col items-center justify-center py-12 px-4">
-			<div className="flex items-center gap-3 text-gray-400 dark:text-slate-500 bg-gray-100 dark:bg-slate-700/50 px-6 py-4 rounded-lg border border-gray-200 dark:border-slate-600">
-				<FontAwesomeIcon icon={faInfoCircle} className="text-lg" />
-				<p className="text-sm italic">Please select an active client connection</p>
-			</div>
+			<Callout>Please select an active client connection</Callout>
 		</div>
 	);
 
@@ -175,10 +173,7 @@ export function RealtimeRooms({
 		</div>
 	) : (
 		<div className="flex flex-col items-center justify-center py-12 px-4">
-			<div className="flex items-center gap-3 text-gray-400 dark:text-slate-500 bg-gray-100 dark:bg-slate-700/50 px-6 py-4 rounded-lg border border-gray-200 dark:border-slate-600">
-				<FontAwesomeIcon icon={faInfoCircle} className="text-lg" />
-				<p className="text-sm italic">Please select an active client connection</p>
-			</div>
+			<Callout>Please select an active client connection</Callout>
 		</div>
 	);
 
