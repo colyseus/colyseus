@@ -65,7 +65,7 @@
   },
   "dependencies": {
     "@colyseus/msgpackr": "^1.11.2",
-    "@colyseus/schema": "^3.0.0",
+    "@colyseus/schema": "^3.0.69",
     "@colyseus/httpie": "^2.0.0",
     "tslib": "^2.1.0",
     "ws": "^8.13.0"
@@ -92,7 +92,7 @@
     "ts-loader": "^6.2.1",
     "ts-node": "^6.0.3",
     "tslint": "^5.9.1",
-    "typescript": "^5.3.3",
+    "typescript": "^5.9.3",
     "vitest": "^2.1.1"
   },
   "peerDependencies": {

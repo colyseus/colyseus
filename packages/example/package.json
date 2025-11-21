@@ -23,7 +23,7 @@
     "@colyseus/drizzle-driver": "workspace:^",
     "@colyseus/sdk": "workspace:^",
     "@colyseus/playground": "workspace:^",
-    "@colyseus/schema": "*",
+    "@colyseus/schema": "^3.0.69",
     "@colyseus/better-call": "^1.0.25",
     "zod": "^4.1.12"
   }

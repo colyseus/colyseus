@@ -6,7 +6,7 @@ import WebSocket from "ws";
 import timer from "timers/promises"
 import minimist from "minimist";
 
-import { Client, Room } from "colyseus.js";
+import { Client, Room } from "@colyseus/sdk";
 
 export type RequestJoinOperations = {
     requestNumber?: number,
@@ -463,28 +463,28 @@ Example:
     }
 
     const _originalJoinOrCreate = Client.prototype.joinOrCreate;
-    Client.prototype.joinOrCreate = async function(this: Client) {
+    Client.prototype.joinOrCreate = async function(this: typeof Client) {
         const room = await _originalJoinOrCreate.apply(this, arguments);
         handleClientJoin(room);
         return room;
     }
 
     const _originalCreate = Client.prototype.create;
-    Client.prototype.create = async function(this: Client) {
+    Client.prototype.create = async function(this: typeof Client) {
         const room = await _originalCreate.apply(this, arguments);
         handleClientJoin(room);
         return room;
     }
 
     const _originalJoin = Client.prototype.join;
-    Client.prototype.join = async function(this: Client) {
+    Client.prototype.join = async function(this: typeof Client) {
         const room = await _originalJoin.apply(this, arguments);
         handleClientJoin(room);
         return room;
     }
 
     const _originalJoinById = Client.prototype.joinById;
-    Client.prototype.joinById = async function(this: Client) {
+    Client.prototype.joinById = async function(this: typeof Client) {
         const room = await _originalJoinById.apply(this, arguments);
         handleClientJoin(room);
         return room;

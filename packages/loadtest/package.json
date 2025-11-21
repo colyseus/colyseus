@@ -46,10 +46,10 @@
     "url": "https://github.com/colyseus/colyseus/issues"
   },
   "dependencies": {
+    "@colyseus/sdk": "workspace:^",
     "blessed": "^0.1.81",
-    "colyseus.js": "^0.16.0",
     "minimist": "^1.2.5",
-    "typescript": "^5.8.3",
+    "typescript": "^5.9.3",
     "ws": "^7.4.5"
   },
   "devDependencies": {

@@ -5,7 +5,6 @@ export const Player = schema({
   x: "number",
   y: "number",
 });
-export type Player = SchemaType<typeof Player>;
 
 export const MyRoomState = schema({
   mapWidth: "number",

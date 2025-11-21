@@ -11,6 +11,5 @@ async function connect() {
 
   const $ = getStateCallbacks(room);
   $(room.state).players.onAdd((player, sessionId) => {
-
   });
 }
