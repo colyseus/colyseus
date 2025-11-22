@@ -44,11 +44,11 @@
     "node": ">= 22.x"
   },
   "dependencies": {
+    "@colyseus/better-call": "workspace:^",
     "@colyseus/greeting-banner": "workspace:^",
     "@colyseus/clock": "^1.0.1",
     "@colyseus/timer": "^1.0.3",
     "@colyseus/msgpackr": "^1.11.2",
-    "@colyseus/better-call": "^1.0.25",
     "@standard-schema/spec": "^1.0.0",
     "debug": "^4.3.4",
     "nanoid": "^2.0.0"

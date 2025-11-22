@@ -1,7 +1,10 @@
 packages:
-  - 'bundles/*'
-  - 'packages/*'
-  - 'packages/drivers/*'
-  - 'packages/transport/*'
-  - 'packages/presence/*'
-  - 'packages/serializer/*'
+  - bundles/*
+  - packages/*
+  - packages/drivers/*
+  - packages/transport/*
+  - packages/presence/*
+  - packages/serializer/*
+
+onlyBuiltDependencies:
+  - '@biomejs/biome'

@@ -5,7 +5,7 @@
     "allowSyntheticDefaultImports": true,
     "allowImportingTsExtensions": true,
     "experimentalDecorators": true,
-    "noImplicitAny": false,
+    "noImplicitAny": true,
     "inlineSources": true,
     "sourceMap": true
   },

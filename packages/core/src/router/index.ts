@@ -25,7 +25,10 @@ export function bindRouterToServer(server: Server, router: Router) {
   }
 }
 
-export function createRouter<E extends Record<string, Endpoint>, Config extends RouterConfig>(endpoints: E, config?: Config): ReturnType<typeof createBetterCallRouter> {
+export function createRouter<
+  E extends Record<string, Endpoint>,
+  Config extends RouterConfig
+>(endpoints: E, config?: Config) {
   /**
    * TODO: this route should be protected in production
    */

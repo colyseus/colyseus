@@ -1,0 +1,3 @@
+[submodule "packages/better-call"]
+	path = packages/better-call
+	url = https://github.com/colyseus/better-call.git

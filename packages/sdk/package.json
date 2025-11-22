@@ -97,7 +97,7 @@
   },
   "peerDependencies": {
     "@colyseus/core": "0.17.x",
-    "@colyseus/better-call": "^1.0.9"
+    "@colyseus/better-call": "workspace:^"
   },
   "peerDependenciesMeta": {
     "@colyseus/core": { "optional": true },

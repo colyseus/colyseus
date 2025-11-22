@@ -6,7 +6,7 @@
   "packageManager": "pnpm@10.9.0",
   "scripts": {
     "build": "tsx build.ts",
-    "build-all": "pnpm run build && pnpm --filter @colyseus/sdk run build && pnpm --filter @colyseus/playground run build",
+    "build-all": "pnpm run build && pnpm --filter @colyseus/better-call run build && pnpm --filter @colyseus/sdk run build && pnpm --filter @colyseus/playground run build",
     "clean": "lerna clean",
     "test": "lerna run test --stream",
     "example": "lerna run start --scope @colyseus/example --stream",

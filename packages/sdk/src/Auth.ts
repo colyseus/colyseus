@@ -28,8 +28,11 @@ export class Auth {
     #_signInWindow: WindowProxy | null = null;
     #_events = createNanoEvents();
 
-    constructor(protected http: HTTP) {
-        getItem(this.settings.key, (token) => this.token = token);
+    protected http: HTTP<any>;
+
+    constructor(http: HTTP<any>) {
+        this.http = http;
+        getItem(this.settings.key, (token: string) => this.token = token);
     }
 
     public set token(token: string) {
@@ -43,7 +46,7 @@ export class Auth {
     public onChange(callback: (response: AuthData) => void) {
         const unbindChange = this.#_events.on("change", callback);
         if (!this.#_initialized) {
-            this.getUserData().then((userData) => {
+            this.getUserData().then((userData: any) => {
                 this.emitChange({ ...userData, token: this.token });
 
             }).catch((e) => {
@@ -68,7 +71,7 @@ export class Auth {
             body: { email, password, options, },
         })).data;
 
-        this.emitChange(data);
+        this.emitChange(data as any);
 
         return data;
     }
@@ -78,7 +81,7 @@ export class Auth {
             body: { email, password, },
         })).data;
 
-        this.emitChange(data);
+        this.emitChange(data as any);
 
         return data;
     }
@@ -88,7 +91,7 @@ export class Auth {
             body: { options, }
         })).data;
 
-        this.emitChange(data);
+        this.emitChange(data as any);
 
         return data;
     }

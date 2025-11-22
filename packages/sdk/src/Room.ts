@@ -118,7 +118,6 @@ export class Room<
     protected packr: Packr;
 
     constructor(name: string, rootSchema?: SchemaConstructor<State>) {
-        this.roomId = null;
         this.name = name;
 
         this.packr = new Packr();

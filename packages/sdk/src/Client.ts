@@ -3,7 +3,7 @@ import type { SDKTypes, Room as ServerRoom } from '@colyseus/core';
 import { ServerError } from './errors/Errors.ts';
 import { Room } from './Room.ts';
 import { SchemaConstructor } from './serializer/SchemaSerializer.ts';
-import { HTTP } from "./HTTP.ts";
+import { HTTP } from './HTTP.ts';
 import { Auth } from './Auth.ts';
 import { SeatReservation } from './Protocol.ts';
 import { discordURLBuilder } from './3rd_party/discord.ts';
@@ -42,7 +42,7 @@ export interface ClientOptions {
 export class ColyseusSDK<ServerType extends SDKTypes = any> {
     static VERSION = process.env.VERSION;
 
-    public http: HTTP;
+    public http: HTTP<ServerType['~routes']>;
     public auth: Auth;
 
     protected settings: EndpointSettings;
@@ -90,7 +90,9 @@ export class ColyseusSDK<ServerType extends SDKTypes = any> {
             this.settings.pathname = this.settings.pathname.slice(0, -1);
         }
 
-        this.http = new HTTP(this, options?.headers || {});
+        this.http = new HTTP(this, {
+            headers: options?.headers || {},
+        });
         this.auth = new Auth(this.http);
 
         this.urlBuilder = options?.urlBuilder;
@@ -249,7 +251,7 @@ export class ColyseusSDK<ServerType extends SDKTypes = any> {
         room.connect(
             this.buildEndpoint(response.room, options, response.protocol),
             response,
-            this.http.headers
+            this.http.options.headers
         );
 
         return new Promise((resolve, reject) => {
@@ -270,14 +272,14 @@ export class ColyseusSDK<ServerType extends SDKTypes = any> {
         rootSchema?: SchemaConstructor<T>,
     ) {
         const response = (
-            await this.http.post<SeatReservation>(`matchmake/${method}/${roomName}`, {
+            await this.http.post(`/matchmake/${method}/${roomName}`, {
                 headers: {
                     'Accept': 'application/json',
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(options)
+                body: options
             })
-        ).data;
+        ).data as unknown as SeatReservation;
 
         // FIXME: HTTP class is already handling this as ServerError.
         // @ts-ignore

@@ -10,7 +10,10 @@
         "declaration": true,
         "downlevelIteration": true, /*only for tests*/
         "allowSyntheticDefaultImports": true,
+
+        "strictNullChecks": false,
         "noImplicitAny": false,
+
         "esModuleInterop": true,
         "experimentalDecorators": true,
         "inlineSources": true,

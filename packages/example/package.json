@@ -24,7 +24,7 @@
     "@colyseus/sdk": "workspace:^",
     "@colyseus/playground": "workspace:^",
     "@colyseus/schema": "^3.0.69",
-    "@colyseus/better-call": "^1.0.25",
+    "@colyseus/better-call": "workspace:^",
     "zod": "^4.1.12"
   }
 }

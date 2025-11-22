@@ -8,8 +8,6 @@ import { playground } from "@colyseus/playground";
 import { auth } from "@colyseus/auth";
 import { z } from "zod/v4";
 
-import { generator } from "@colyseus/better-call";
-
 // import { Client } from "@colyseus/sdk";
 // const client = new Client<typeof server>("ws://localhost:2567");
 
@@ -108,7 +106,7 @@ const deleteThing = createEndpoint("/things/:id", { method: "DELETE" }, async (c
 const createUser = createEndpoint("/users", {
   method: "POST",
   body: z.object({
-    email: z.string().email("Invalid email address"),
+    email: z.email("Invalid email address"),
     username: z.string().min(3, "Username must be at least 3 characters"),
     password: z.string().min(8, "Password must be at least 8 characters"),
     age: z.number().int().min(13, "Must be at least 13 years old").optional(),
