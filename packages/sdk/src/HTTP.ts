@@ -1,19 +1,22 @@
-/**
- * Type-safe HTTP client for Colyseus routes.
- *
- * NOTE: Full type safety for required properties requires strictNullChecks:true in tsconfig.
- * Without it, TypeScript cannot enforce that {} is invalid when body/query/params are required.
- *
- * What works:
- * - ✓ Validates content of body/query/params objects (e.g., missing required fields)
- * - ✓ Type inference for paths, methods, and return types
- * - ✗ Cannot prevent passing empty {} when body/query/params are required (needs strictNullChecks)
- */
 import type { Router, HasRequiredKeys, Prettify, UnionToIntersection, Endpoint, HTTPMethod } from "@colyseus/better-call";
 import { ColyseusSDK } from "./Client.ts";
 
 // Helper to check if a type is 'any'
 type IsAny<T> = 0 extends 1 & T ? true : false;
+
+// Helper to check if a type resolves to any after indexed access
+// When T is any, T[K] is also any, but IsAny<T[K]> may not detect it due to deferred evaluation
+// We check multiple characteristics of 'any':
+// 1. Direct any check: IsAny<T>
+// 2. Accepts all string keys: string extends keyof T
+// 3. Accepts all number and symbol keys: for complete 'any' detection
+type IsAnyOrAnyIndexed<T> = IsAny<T> extends true
+    ? true
+    : (string extends keyof T
+        ? true
+        : (number extends keyof T
+            ? (symbol extends keyof T ? true : false)
+            : false));
 
 type HasRequired<
     T extends {
@@ -301,21 +304,25 @@ export class HTTP<R extends Router | Router["endpoints"]> {
         K extends keyof OPT = keyof OPT,
         C extends InferContext<OPT[K]> = InferContext<OPT[K]>
     >(
-        path: HasRequired<C> extends true ? K : never,
-        options: WithRequired<FetchRequestOptions<C["body"], C["query"], C["params"]>, keyof RequiredOptionKeys<C>>
+        path: IsAnyOrAnyIndexed<R> extends true ? string : (HasRequired<C> extends true ? K : never),
+        options: IsAnyOrAnyIndexed<R> extends true
+            ? FetchRequestOptions<any, any, any>
+            : WithRequired<FetchRequestOptions<C["body"], C["query"], C["params"]>, keyof RequiredOptionKeys<C>>
     ): Promise<
         FetchResponse<Awaited<ReturnType<OPT[K] extends Endpoint ? OPT[K] : never>>>
     >;
 
-    // Overload for endpoints WITHOUT required fields
+    // Overload for endpoints WITHOUT required fields (permissive when R is 'any')
     get<
         API extends InferredAPI<R> = InferredAPI<R>,
         OPT extends Prettify<UnionToIntersection<MethodOptions<API, "GET">>> = Prettify<UnionToIntersection<MethodOptions<API, "GET">>>,
         K extends keyof OPT = keyof OPT,
         C extends InferContext<OPT[K]> = InferContext<OPT[K]>
     >(
-        path: HasRequired<C> extends false ? K : never,
-        options?: FetchRequestOptions<C["body"], C["query"], C["params"]>
+        path: IsAnyOrAnyIndexed<R> extends true ? string : (HasRequired<C> extends false ? K : never),
+        options?: IsAnyOrAnyIndexed<R> extends true
+            ? FetchRequestOptions<any, any, any>
+            : FetchRequestOptions<C["body"], C["query"], C["params"]>
     ): Promise<
         FetchResponse<Awaited<ReturnType<OPT[K] extends Endpoint ? OPT[K] : never>>>
     >;
@@ -331,21 +338,25 @@ export class HTTP<R extends Router | Router["endpoints"]> {
         K extends keyof OPT = keyof OPT,
         C extends InferContext<OPT[K]> = InferContext<OPT[K]>
     >(
-        path: HasRequired<C> extends true ? K : never,
-        options: WithRequired<FetchRequestOptions<C["body"], C["query"], C["params"]>, keyof RequiredOptionKeys<C>>
+        path: (IsAnyOrAnyIndexed<R> extends true ? string : never) | (IsAny<API> extends true ? string : never) | (HasRequired<C> extends true ? K : never),
+        options: IsAnyOrAnyIndexed<R> extends true ? FetchRequestOptions<any, any, any> : (IsAny<API> extends true
+            ? FetchRequestOptions<any, any, any>
+            : WithRequired<FetchRequestOptions<C["body"], C["query"], C["params"]>, keyof RequiredOptionKeys<C>>)
     ): Promise<
         FetchResponse<Awaited<ReturnType<OPT[K] extends Endpoint ? OPT[K] : never>>>
     >;
 
-    // Overload for endpoints WITHOUT required fields
+    // Overload for endpoints WITHOUT required fields (permissive when R is 'any')
     post<
         API extends InferredAPI<R> = InferredAPI<R>,
         OPT extends Prettify<UnionToIntersection<MethodOptions<API, "POST">>> = Prettify<UnionToIntersection<MethodOptions<API, "POST">>>,
         K extends keyof OPT = keyof OPT,
         C extends InferContext<OPT[K]> = InferContext<OPT[K]>
     >(
-        path: HasRequired<C> extends false ? K : never,
-        options?: FetchRequestOptions<C["body"], C["query"], C["params"]>
+        path: (IsAnyOrAnyIndexed<R> extends true ? string : never) | (IsAny<API> extends true ? string : never) | (HasRequired<C> extends false ? K : never),
+        options?: IsAnyOrAnyIndexed<R> extends true ? FetchRequestOptions<any, any, any> : (IsAny<API> extends true
+            ? FetchRequestOptions<any, any, any>
+            : FetchRequestOptions<C["body"], C["query"], C["params"]>)
     ): Promise<
         FetchResponse<Awaited<ReturnType<OPT[K] extends Endpoint ? OPT[K] : never>>>
     >;
@@ -361,21 +372,25 @@ export class HTTP<R extends Router | Router["endpoints"]> {
         K extends keyof OPT = keyof OPT,
         C extends InferContext<OPT[K]> = InferContext<OPT[K]>
     >(
-        path: HasRequired<C> extends true ? K : never,
-        options: WithRequired<FetchRequestOptions<C["body"], C["query"], C["params"]>, keyof RequiredOptionKeys<C>>
+        path: IsAnyOrAnyIndexed<R> extends true ? string : (HasRequired<C> extends true ? K : never),
+        options: IsAnyOrAnyIndexed<R> extends true
+            ? FetchRequestOptions<any, any, any>
+            : WithRequired<FetchRequestOptions<C["body"], C["query"], C["params"]>, keyof RequiredOptionKeys<C>>
     ): Promise<
         FetchResponse<Awaited<ReturnType<OPT[K] extends Endpoint ? OPT[K] : never>>>
     >;
 
-    // Overload for endpoints WITHOUT required fields
+    // Overload for endpoints WITHOUT required fields (permissive when R is 'any')
     delete<
         API extends InferredAPI<R> = InferredAPI<R>,
         OPT extends Prettify<UnionToIntersection<MethodOptions<API, "DELETE">>> = Prettify<UnionToIntersection<MethodOptions<API, "DELETE">>>,
         K extends keyof OPT = keyof OPT,
         C extends InferContext<OPT[K]> = InferContext<OPT[K]>
     >(
-        path: HasRequired<C> extends false ? K : never,
-        options?: FetchRequestOptions<C["body"], C["query"], C["params"]>
+        path: IsAnyOrAnyIndexed<R> extends true ? string : (HasRequired<C> extends false ? K : never),
+        options?: IsAnyOrAnyIndexed<R> extends true
+            ? FetchRequestOptions<any, any, any>
+            : FetchRequestOptions<C["body"], C["query"], C["params"]>
     ): Promise<
         FetchResponse<Awaited<ReturnType<OPT[K] extends Endpoint ? OPT[K] : never>>>
     >;
@@ -391,21 +406,25 @@ export class HTTP<R extends Router | Router["endpoints"]> {
         K extends keyof OPT = keyof OPT,
         C extends InferContext<OPT[K]> = InferContext<OPT[K]>
     >(
-        path: HasRequired<C> extends true ? K : never,
-        options: WithRequired<FetchRequestOptions<C["body"], C["query"], C["params"]>, keyof RequiredOptionKeys<C>>
+        path: IsAnyOrAnyIndexed<R> extends true ? string : (HasRequired<C> extends true ? K : never),
+        options: IsAnyOrAnyIndexed<R> extends true
+            ? FetchRequestOptions<any, any, any>
+            : WithRequired<FetchRequestOptions<C["body"], C["query"], C["params"]>, keyof RequiredOptionKeys<C>>
     ): Promise<
         FetchResponse<Awaited<ReturnType<OPT[K] extends Endpoint ? OPT[K] : never>>>
     >;
 
-    // Overload for endpoints WITHOUT required fields
+    // Overload for endpoints WITHOUT required fields (permissive when R is 'any')
     patch<
         API extends InferredAPI<R> = InferredAPI<R>,
         OPT extends Prettify<UnionToIntersection<MethodOptions<API, "PATCH">>> = Prettify<UnionToIntersection<MethodOptions<API, "PATCH">>>,
         K extends keyof OPT = keyof OPT,
         C extends InferContext<OPT[K]> = InferContext<OPT[K]>
     >(
-        path: HasRequired<C> extends false ? K : never,
-        options?: FetchRequestOptions<C["body"], C["query"], C["params"]>
+        path: IsAnyOrAnyIndexed<R> extends true ? string : (HasRequired<C> extends false ? K : never),
+        options?: IsAnyOrAnyIndexed<R> extends true
+            ? FetchRequestOptions<any, any, any>
+            : FetchRequestOptions<C["body"], C["query"], C["params"]>
     ): Promise<
         FetchResponse<Awaited<ReturnType<OPT[K] extends Endpoint ? OPT[K] : never>>>
     >;
@@ -421,21 +440,25 @@ export class HTTP<R extends Router | Router["endpoints"]> {
         K extends keyof OPT = keyof OPT,
         C extends InferContext<OPT[K]> = InferContext<OPT[K]>
     >(
-        path: HasRequired<C> extends true ? K : never,
-        options: WithRequired<FetchRequestOptions<C["body"], C["query"], C["params"]>, keyof RequiredOptionKeys<C>>
+        path: IsAnyOrAnyIndexed<R> extends true ? string : (HasRequired<C> extends true ? K : never),
+        options: IsAnyOrAnyIndexed<R> extends true
+            ? FetchRequestOptions<any, any, any>
+            : WithRequired<FetchRequestOptions<C["body"], C["query"], C["params"]>, keyof RequiredOptionKeys<C>>
     ): Promise<
         FetchResponse<Awaited<ReturnType<OPT[K] extends Endpoint ? OPT[K] : never>>>
     >;
 
-    // Overload for endpoints WITHOUT required fields
+    // Overload for endpoints WITHOUT required fields (permissive when R is 'any')
     put<
         API extends InferredAPI<R> = InferredAPI<R>,
         OPT extends Prettify<UnionToIntersection<MethodOptions<API, "PUT">>> = Prettify<UnionToIntersection<MethodOptions<API, "PUT">>>,
         K extends keyof OPT = keyof OPT,
         C extends InferContext<OPT[K]> = InferContext<OPT[K]>
     >(
-        path: HasRequired<C> extends false ? K : never,
-        options?: FetchRequestOptions<C["body"], C["query"], C["params"]>
+        path: IsAnyOrAnyIndexed<R> extends true ? string : (HasRequired<C> extends false ? K : never),
+        options?: IsAnyOrAnyIndexed<R> extends true
+            ? FetchRequestOptions<any, any, any>
+            : FetchRequestOptions<C["body"], C["query"], C["params"]>
     ): Promise<
         FetchResponse<Awaited<ReturnType<OPT[K] extends Endpoint ? OPT[K] : never>>>
     >;

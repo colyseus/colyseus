@@ -272,7 +272,7 @@ export class ColyseusSDK<ServerType extends SDKTypes = any> {
         rootSchema?: SchemaConstructor<T>,
     ) {
         const response = (
-            await this.http.post(`/matchmake/${method}/${roomName}`, {
+            await (this.http as HTTP<any>).post(`/matchmake/${method}/${roomName}`, {
                 headers: {
                     'Accept': 'application/json',
                     'Content-Type': 'application/json'
