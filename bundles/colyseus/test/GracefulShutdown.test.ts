@@ -1,6 +1,6 @@
 import assert from "assert";
 
-import * as Colyseus from "colyseus.js";
+import * as Colyseus from "@colyseus/sdk";
 import { Room, Server, matchMaker } from "@colyseus/core";
 import WebSocket from "ws";
 

@@ -271,19 +271,21 @@ export class ColyseusSDK<ServerType extends SDKTypes = any> {
         options: JoinOptions = {},
         rootSchema?: SchemaConstructor<T>,
     ) {
-        const response = (
-            await (this.http as HTTP<any>).post(`/matchmake/${method}/${roomName}`, {
-                headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json'
-                },
-                body: options
-            })
-        ).data as unknown as SeatReservation;
+        const httpResponse = await (this.http as HTTP<any>).post(`/matchmake/${method}/${roomName}`, {
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            body: options
+        });
 
-        // FIXME: HTTP class is already handling this as ServerError.
-        // @ts-ignore
-        if (response.error) { throw new MatchMakeError(response.error, response.code); }
+        // Handle HTTP error responses
+        if (!httpResponse.ok) {
+            // @ts-ignore
+            throw new MatchMakeError(httpResponse.error.message || httpResponse.error, httpResponse.error.code || httpResponse.status);
+        }
+
+        const response = httpResponse.data as unknown as SeatReservation;
 
         // forward reconnection token during "reconnect" methods.
         if (method === "reconnect") {

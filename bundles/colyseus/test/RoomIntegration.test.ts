@@ -1,4 +1,4 @@
-import { Client as SDKClient } from "colyseus.js";
+import { Client as SDKClient } from "@colyseus/sdk";
 
 import { LocalDriver, matchMaker, Room, Server, LocalPresence } from "@colyseus/core";
 

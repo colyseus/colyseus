@@ -1,6 +1,6 @@
 import assert from "assert";
 
-import * as Colyseus from "colyseus.js";
+import * as Colyseus from "@colyseus/sdk";
 import { OnAuthException, OnCreateException, OnDisposeException, OnJoinException, OnLeaveException, OnMessageException, Room, Server, SimulationIntervalException, TimedEventException, matchMaker } from "@colyseus/core";
 import { timeout } from "./utils/index.ts";
 

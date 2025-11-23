@@ -1,7 +1,7 @@
 import * as httpClient from "httpie";
 import assert from "assert";
 
-import * as Colyseus from "colyseus.js";
+import * as Colyseus from "@colyseus/sdk";
 import { Deferred, Room, Server, matchMaker } from "@colyseus/core";
 import { DummyRoom } from "./utils/index.ts";
 import { URL } from "url";

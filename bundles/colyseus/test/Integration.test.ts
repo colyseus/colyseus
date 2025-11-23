@@ -1,7 +1,7 @@
 import assert from "assert";
 import crypto from "crypto";
 import sinon from "sinon";
-import { Client as SDKClient, Room as SDKRoom } from "colyseus.js";
+import { Client as SDKClient, Room as SDKRoom } from "@colyseus/sdk";
 import { Schema, type, MapSchema, ArraySchema, view, StateView, schema, type SchemaType } from "@colyseus/schema";
 
 import { type Client, type AuthContext, type MatchMakerDriver, type Presence, matchMaker, Room, Server, ErrorCode,  Deferred, Transport, CloseCode } from "@colyseus/core";

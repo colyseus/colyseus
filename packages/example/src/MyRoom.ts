@@ -17,7 +17,7 @@ export class MyRoom extends Room {
 
   messages = {
     move: (client: Client, message: { x: number, y: number }) => {
-      const player = this.state.players.get(client.sessionId);
+      const player = this.state.players.get(client.sessionId)!;
       player.x = message.x;
       player.y = message.y;
     },
@@ -38,7 +38,7 @@ export class MyRoom extends Room {
     });
 
     this.onMessage("move", (client, message) => {
-      const player = this.state.players.get(client.sessionId);
+      const player = this.state.players.get(client.sessionId)!;
       player.x = message.x;
       player.y = message.y;
     })

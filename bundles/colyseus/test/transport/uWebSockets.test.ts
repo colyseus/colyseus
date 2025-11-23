@@ -4,7 +4,7 @@ import { DRIVERS } from "../utils/index.ts";
 
 import { uWebSocketsTransport } from "@colyseus/uwebsockets-transport";
 
-import * as Colyseus from "colyseus.js";
+import * as Colyseus from "@colyseus/sdk";
 import WebSocket from "ws";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 

@@ -89,7 +89,12 @@ sdk.http.put("/things/:id", {
 async function connect() {
   const room = await sdk.joinOrCreate("my_room");
 
+  room.onMessage("something", (payload) => {
+    //
+  });
+
   room.send("move", { x: 100, y: 200 });
+
   // @ts-expect-error - "movee" is not a valid message type
   room.send("movee", { x: 100, y: 200 });
 

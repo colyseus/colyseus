@@ -1,7 +1,7 @@
 import assert, { fail } from "assert";
 import { type Client, type Presence, type Transport, type MatchMakerDriver, ClientState, Deferred, LocalDriver, LocalPresence, Room, Server, matchMaker, CloseCode } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
-import * as Colyseus from "colyseus.js";
+import * as Colyseus from "@colyseus/sdk";
 import { timeout } from "./utils/index.ts";
 
 const TEST_PORT = 8568;

@@ -193,17 +193,6 @@ export function isJSONSerializable(value: any) {
 	);
 }
 
-function getBody(body: any, options?: FetchRequestOptions) {
-    if (!body) { return null; }
-
-    const headers = new Headers(options?.headers);
-    if (isJSONSerializable(body) && !headers.has("content-type")) {
-        return JSON.stringify(body);
-    }
-
-    return body;
-}
-
 const JSON_RE = /^application\/(?:[\w!#$%&*.^`~-]*\+)?json(;.+)?$/i;
 
 export type ResponseType = "json" | "text" | "blob";
@@ -494,8 +483,11 @@ export class HTTP<R extends Router | Router["endpoints"]> {
                 : requestOptions?.headers
         );
 
-        if (isJSONSerializable(body) && !headers.has("content-type")) {
-            headers.set("content-type", "application/json");
+        // Stringify JSON-serializable objects for fetch() body
+        if (isJSONSerializable(body) && typeof body === 'object' && body !== null) {
+            if (!headers.has("content-type")) {
+                headers.set("content-type", "application/json");
+            }
             for (const [key, value] of Object.entries(body)) {
                 if (value instanceof Date) {
                     body[key] = value.toISOString();
@@ -514,8 +506,6 @@ export class HTTP<R extends Router | Router["endpoints"]> {
             body,
             method,
         };
-
-        mergedOptions.body = getBody(body, mergedOptions);
 
         const url = getURLWithQueryParams(this.sdk['getHttpEndpoint'](path.toString()), mergedOptions);
 

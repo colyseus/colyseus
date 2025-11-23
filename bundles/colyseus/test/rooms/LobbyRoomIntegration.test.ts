@@ -1,5 +1,5 @@
 import assert from "assert";
-import * as Colyseus from "colyseus.js";
+import * as Colyseus from "@colyseus/sdk";
 import { matchMaker, Server, LobbyRoom, type MatchMakerDriver } from "@colyseus/core";
 import { DummyRoom, DRIVERS, timeout, PRESENCE_IMPLEMENTATIONS } from "./../utils/index.ts";
 
