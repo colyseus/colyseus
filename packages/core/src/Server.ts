@@ -132,7 +132,6 @@ export class Server {
     }
 
     const transport = options.transport || this.getDefaultTransport(options);
-    delete options.transport;
 
     this.transport = transport;
 
