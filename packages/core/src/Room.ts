@@ -1113,12 +1113,20 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
         : decode.number(buffer, it);
       const messageTypeHandler = this.onMessageHandlers[messageType];
 
-      let message = buffer.subarray(it.offset, buffer.byteLength);
-      debugMessage("received: '%s' -> %j (roomId: %s)", messageType, message, this.roomId);
+      let message
+      try {
+        message = buffer.subarray(it.offset, buffer.byteLength);
+        debugMessage("received: '%s' -> %j (roomId: %s)", messageType, message, this.roomId);
 
-      // custom message validation
-      if (messageTypeHandler?.validate !== undefined) {
-        message = messageTypeHandler.validate(message);
+        // custom message validation
+        if (messageTypeHandler?.validate !== undefined) {
+          message = messageTypeHandler.validate(message);
+        }
+
+      } catch (e) {
+        debugAndPrintError(e);
+        client.leave(Protocol.WS_CLOSE_WITH_ERROR);
+        return;
       }
 
       if (messageTypeHandler) {
