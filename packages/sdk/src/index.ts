@@ -1,8 +1,8 @@
 import './legacy';
 
-export { ColyseusSDK, Client, JoinOptions, MatchMakeError, type EndpointSettings, type ClientOptions } from './Client.ts';
-export { Protocol, ErrorCode, SeatReservation } from './Protocol.ts';
-export { Room, RoomAvailable } from './Room.ts';
+export { ColyseusSDK, Client, MatchMakeError, type JoinOptions, type EndpointSettings, type ClientOptions } from './Client.ts';
+export { Protocol, ErrorCode, type SeatReservation } from './Protocol.ts';
+export { Room, type RoomAvailable } from './Room.ts';
 export { Auth, type AuthSettings, type PopupSettings } from "./Auth.ts";
 export { ServerError, CloseCode } from './errors/Errors.ts';
 

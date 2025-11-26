@@ -242,8 +242,8 @@ importers:
   packages/core:
     dependencies:
       '@colyseus/better-call':
-        specifier: ^1.0.25
-        version: 1.0.25
+        specifier: workspace:^
+        version: link:../better-call
       '@colyseus/clock':
         specifier: ^1.0.1
         version: 1.0.1
@@ -323,8 +323,8 @@ importers:
         specifier: workspace:^
         version: link:../auth
       '@colyseus/better-call':
-        specifier: ^1.0.25
-        version: 1.0.25
+        specifier: workspace:^
+        version: link:../better-call
       '@colyseus/drizzle-driver':
         specifier: workspace:^
         version: link:../drivers/drizzle-driver
@@ -498,8 +498,8 @@ importers:
   packages/sdk:
     dependencies:
       '@colyseus/better-call':
-        specifier: ^1.0.9
-        version: 1.0.25
+        specifier: workspace:^
+        version: link:../better-call
       '@colyseus/httpie':
         specifier: ^2.0.0
         version: 2.0.1
@@ -582,6 +582,9 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+      vite:
+        specifier: ^5.0.11
+        version: 5.4.21(@types/node@22.19.1)
       vitest:
         specifier: ^2.1.1
         version: 2.1.9(@types/node@22.19.1)
@@ -993,9 +996,6 @@ packages:
   '@colors/colors@1.5.0':
     resolution: {integrity: sha512-ooWCrlZP11i8GImSjTHYHLkvFDP48nS4+204nGb1RiX/WXYHmJA2III9/e2DWVabCESdW7hBAEzHRqUn9OUVvQ==}
     engines: {node: '>=0.1.90'}
-
-  '@colyseus/better-call@1.0.25':
-    resolution: {integrity: sha512-qZhhtfvcCoR/fVI6aTTPfevYp+yCCcgKZXRkDOvJZh8Hesgo4re/gGNjKQEktf/ToAa486CBLPCxbGh373aS8A==}
 
   '@colyseus/clock@1.0.1':
     resolution: {integrity: sha512-HLovmkerzZ7aEckKuHFnql+sXCChi37WRc88duWxufiH5wVMNomBjlqQYVxaORgA+4vLIRd0/jabu6DAbkSfaA==}
@@ -8091,13 +8091,6 @@ snapshots:
 
   '@colors/colors@1.5.0':
     optional: true
-
-  '@colyseus/better-call@1.0.25':
-    dependencies:
-      '@better-auth/utils': 0.3.0
-      '@better-fetch/fetch': 1.1.18
-      rou3: 0.5.1
-      set-cookie-parser: 2.7.2
 
   '@colyseus/clock@1.0.1': {}
 

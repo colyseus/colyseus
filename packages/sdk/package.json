@@ -7,6 +7,7 @@
   "type": "module",
   "scripts": {
     "test": "vitest --dir test --reporter verbose",
+    "example": "vite --config example/vite.config.ts",
     "build": "rollup -c rollup.config.mjs",
     "build-dist-dts": "dts-bundle-generator --config dts-generator.json",
     "build-ci": "tsc && npm run build && npm run build-dist-dts && npm run build-zip-dist",
@@ -93,6 +94,7 @@
     "ts-node": "^6.0.3",
     "tslint": "^5.9.1",
     "typescript": "^5.9.3",
+    "vite": "^5.0.11",
     "vitest": "^2.1.1"
   },
   "peerDependencies": {

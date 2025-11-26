@@ -40,7 +40,7 @@ export interface ClientOptions {
 }
 
 export class ColyseusSDK<ServerType extends SDKTypes = any> {
-    static VERSION = process.env.VERSION;
+    static VERSION = "0.17";
 
     public http: HTTP<ServerType['~routes']>;
     public auth: Auth;
@@ -358,3 +358,4 @@ export class ColyseusSDK<ServerType extends SDKTypes = any> {
 }
 
 export const Client = ColyseusSDK;
+export type Client = InstanceType<typeof ColyseusSDK>;

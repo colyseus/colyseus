@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Colyseus SDK Test</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="p-5 bg-gray-100 font-sans">
+    <div class="max-w-6xl mx-auto bg-white p-8 rounded-lg shadow-md">
+      <h1 class="mb-5 text-gray-800 text-2xl font-semibold">Colyseus SDK Test App</h1>
+
+      <div class="mb-8 p-5 bg-gray-50 rounded-md">
+        <h2 class="mb-4 text-gray-600 text-lg font-semibold">Connection Settings</h2>
+        <div class="mb-4">
+          <label for="endpoint" class="block mb-1 font-medium text-gray-600">Server Endpoint:</label>
+          <input type="text" id="endpoint" value="ws://localhost:2567" placeholder="ws://localhost:2567" class="w-full max-w-md p-2.5 border border-gray-300 rounded text-sm" />
+        </div>
+        <div class="mb-4">
+          <label for="roomName" class="block mb-1 font-medium text-gray-600">Room Name:</label>
+          <input type="text" id="roomName" value="my_room" placeholder="my_room" class="w-full max-w-md p-2.5 border border-gray-300 rounded text-sm" />
+        </div>
+        <button id="connectBtn" class="bg-green-500 hover:bg-green-600 text-white border-none cursor-pointer px-5 py-2.5 mr-2.5 mt-2.5 rounded text-sm disabled:bg-gray-300 disabled:cursor-not-allowed">Connect</button>
+        <button id="disconnectBtn" class="bg-red-500 hover:bg-red-700 text-white border-none cursor-pointer px-5 py-2.5 mr-2.5 mt-2.5 rounded text-sm disabled:bg-gray-300 disabled:cursor-not-allowed" disabled>Disconnect</button>
+        <span id="connectionStatus" class="inline-block px-2 py-1 rounded text-xs font-medium ml-2.5 bg-red-500 text-white">Disconnected</span>
+      </div>
+
+      <div class="mb-8 p-5 bg-gray-50 rounded-md">
+        <h2 class="mb-4 text-gray-600 text-lg font-semibold">Room Operations</h2>
+        <button id="joinBtn" class="bg-green-500 hover:bg-green-600 text-white border-none cursor-pointer px-5 py-2.5 mr-2.5 mt-2.5 rounded text-sm disabled:bg-gray-300 disabled:cursor-not-allowed" disabled>Join Room</button>
+        <button id="leaveBtn" class="bg-green-500 hover:bg-green-600 text-white border-none cursor-pointer px-5 py-2.5 mr-2.5 mt-2.5 rounded text-sm disabled:bg-gray-300 disabled:cursor-not-allowed" disabled>Leave Room</button>
+        <button id="sendMessageBtn" class="bg-green-500 hover:bg-green-600 text-white border-none cursor-pointer px-5 py-2.5 mr-2.5 mt-2.5 rounded text-sm disabled:bg-gray-300 disabled:cursor-not-allowed" disabled>Send Message</button>
+        <div class="mb-4 mt-4">
+          <label for="message" class="block mb-1 font-medium text-gray-600">Message:</label>
+          <input type="text" id="message" value="Hello from SDK!" placeholder="Enter message" class="w-full max-w-md p-2.5 border border-gray-300 rounded text-sm" />
+        </div>
+      </div>
+
+      <div class="mb-8 p-5 bg-gray-50 rounded-md">
+        <h2 class="mb-4 text-gray-600 text-lg font-semibold">Log</h2>
+        <button id="clearLogBtn" class="bg-green-500 hover:bg-green-600 text-white border-none cursor-pointer px-5 py-2.5 mr-2.5 mt-2.5 rounded text-sm disabled:bg-gray-300 disabled:cursor-not-allowed">Clear Log</button>
+        <div id="log" class="bg-gray-900 text-gray-300 p-4 rounded text-xs font-mono max-h-96 overflow-y-auto mt-4"></div>
+      </div>
+    </div>
+    <script type="module" src="/main.ts"></script>
+  </body>
+</html>
+

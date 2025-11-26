@@ -84,6 +84,27 @@ let panelsHidden = false;
 // Load preferences on script load
 loadPreferences();
 
+// Function to get border color based on latency simulation value
+function getBorderColor(latencyValue, opacity) {
+    var maxLatency = preferences.maxLatency;
+    var percentage = latencyValue / maxLatency;
+    var r, g, b = 0;
+
+    if (percentage <= 0.5) {
+        // Green to Yellow: (0, 200, 0) -> (200, 200, 0)
+        var segmentPercent = percentage * 2; // 0 to 1 for this segment
+        r = Math.round(segmentPercent * 200);
+        g = 200;
+    } else {
+        // Yellow to Red: (200, 200, 0) -> (200, 0, 0)
+        var segmentPercent = (percentage - 0.5) * 2; // 0 to 1 for this segment
+        r = 200;
+        g = Math.round((1 - segmentPercent) * 200);
+    }
+
+    return 'rgba(' + r + ', ' + g + ', ' + b + ', ' + opacity + ')';
+}
+
 function initialize() {
     if (panelsHidden) return;
 
@@ -91,16 +112,18 @@ function initialize() {
     container.id = 'debug-logo-container';
     container.style.position = 'fixed';
     container.style.zIndex = '1000';
-    container.style.width = '22px';
-    container.style.height = '22px';
+    container.style.width = '21px';
+    container.style.height = '21px';
     container.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+    container.style.border = '3px solid ' + getBorderColor(preferences.latencySimulation.delay, 0.7);
     container.style.borderRadius = '50%';
     container.style.padding = '10px';
+    container.style.boxSizing = 'content-box';
     container.style.display = 'flex';
     container.style.justifyContent = 'center';
     container.style.alignItems = 'center';
     container.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.3)';
-    container.style.transition = 'background-color 0.3s ease';
+    container.style.transition = 'border-color 0.3s ease, background-color 0.3s ease';
     container.style.cursor = 'pointer';
 
     // Apply initial position
@@ -109,14 +132,16 @@ function initialize() {
     // container on hover effect
     container.addEventListener('mouseenter', function() {
         container.style.backgroundColor = 'rgba(0, 0, 0, 0.9)';
+        container.style.borderColor = getBorderColor(preferences.latencySimulation.delay, 0.9);
     });
     container.addEventListener('mouseleave', function() {
         container.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+        container.style.borderColor = getBorderColor(preferences.latencySimulation.delay, 0.7);
     });
 
     var icon = document.createElement('div');
-    icon.style.width = '87%';
-    icon.style.height = '87%';
+    icon.style.width = '100%';
+    icon.style.height = '100%';
     icon.style.display = 'flex';
     icon.style.justifyContent = 'center';
     icon.style.alignItems = 'center';
@@ -132,6 +157,7 @@ function initialize() {
 
     // Apply initial position after menu is created
     applyPanelPosition();
+    applyMonkeyPatches();
 }
 
 // Create menu that opens on logo click
@@ -219,6 +245,7 @@ function createMenu(logoContainer) {
     latencySlider.min = '0';
     latencySlider.max = preferences.maxLatency.toString();
     latencySlider.value = preferences.latencySimulation.delay.toString();
+    latencySlider.style.border = 'none';
     latencySlider.style.width = '100%';
     latencySlider.style.height = '20px';
     latencySlider.style.padding = '0';
@@ -336,6 +363,15 @@ function createMenu(logoContainer) {
     `;
     document.head.appendChild(style);
 
+    // Function to update container border color
+    function updateContainerBackgroundColor() {
+        var container = document.getElementById('debug-logo-container');
+        if (container) {
+            // Update to normal state (hover handlers will update on hover)
+            container.style.borderColor = getBorderColor(preferences.latencySimulation.delay, 0.7);
+        }
+    }
+
     // Update latency value display
     latencySlider.addEventListener('input', function() {
         var value = parseInt(latencySlider.value);
@@ -343,6 +379,7 @@ function createMenu(logoContainer) {
         preferences.latencySimulation.delay = value;
         preferences.latencySimulation.enabled = value > 0;
         updateSliderColor(value);
+        updateContainerBackgroundColor();
         savePreferences();
     });
 
@@ -730,7 +767,7 @@ function openStateInspectorModal(uniquePanelId) {
     }
 
     // Create modal
-    var modal = document.createElement('div');
+    const modal = document.createElement('div');
     modal.id = 'debug-state-inspector-modal';
     modal.style.position = 'fixed';
     modal.style.top = defaultTop;
@@ -753,7 +790,7 @@ function openStateInspectorModal(uniquePanelId) {
     modal.style.flexDirection = 'column';
 
     // Modal header (draggable)
-    var header = document.createElement('div');
+    const header = document.createElement('div');
     header.style.display = 'flex';
     header.style.justifyContent = 'space-between';
     header.style.alignItems = 'center';
@@ -767,7 +804,7 @@ function openStateInspectorModal(uniquePanelId) {
     header.style.position = 'relative';
     header.style.zIndex = '1';
 
-    var title = document.createElement('div');
+    const title = document.createElement('div');
     title.textContent = debugInfo.roomName;
     title.style.margin = '0';
     title.style.fontSize = '11px';
@@ -775,7 +812,7 @@ function openStateInspectorModal(uniquePanelId) {
     title.style.fontFamily = 'monospace';
     title.style.flex = '1';
 
-    var closeButton = document.createElement('button');
+    const closeButton = document.createElement('button');
     closeButton.innerHTML = '×';
     closeButton.style.background = 'none';
     closeButton.style.border = 'none';
@@ -783,6 +820,7 @@ function openStateInspectorModal(uniquePanelId) {
     closeButton.style.fontSize = '18px';
     closeButton.style.cursor = 'pointer';
     closeButton.style.padding = '0';
+    closeButton.style.margin = 'auto';
     closeButton.style.width = '20px';
     closeButton.style.height = '20px';
     closeButton.style.display = 'flex';
@@ -1129,7 +1167,7 @@ function openStateInspectorModal(uniquePanelId) {
     // Update state when it changes
     const originalTriggerChanges = room.serializer.decoder.triggerChanges;
     room.serializer.decoder.triggerChanges = function(changes) {
-        originalTriggerChanges.apply(this, arguments);
+        originalTriggerChanges?.apply(this, arguments);
         throttledUpdateStateDisplay();
         /**
          * TODO: keep track of which refIds have changed and only re-render those
@@ -1968,4 +2006,4 @@ function applyMonkeyPatches() {
     }
 }
 
-applyMonkeyPatches();
+initialize();

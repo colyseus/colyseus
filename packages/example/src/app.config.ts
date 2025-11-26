@@ -1,12 +1,15 @@
 process.env.JWT_SECRET = "test";
 process.env.SESSION_SECRET = "SESSION_SECRET";
 
+import path from "node:path";
+import fs from "node:fs";
+
 import config, { listen } from "@colyseus/tools";
 import { createEndpoint, createRouter, defineRoom, matchMaker } from "@colyseus/core";
 import { PostgresDriver } from "@colyseus/drizzle-driver";
 import { playground } from "@colyseus/playground";
 import { auth } from "@colyseus/auth";
-import { z } from "zod/v4";
+import { z } from "zod";
 
 // import { Client } from "@colyseus/sdk";
 // const client = new Client<typeof server>("ws://localhost:2567");
@@ -18,6 +21,12 @@ auth.oauth.addProvider("discord", {
   secret: "Kjv9bvAa9ZRBe8LBM5ZJ6bJsH0o44HdT",
   scope: ["identify", "email"]
 })
+
+const index = createEndpoint("/", { method: "GET" }, async (ctx) => {
+  return new Response(await fs.promises.readFile(path.join(import.meta.dirname, "index.html"), "utf8"), {
+    headers: { "Content-Type": "text/html", },
+  });
+});
 
 const listThings = createEndpoint("/things", {
   method: "GET",
@@ -159,6 +168,7 @@ export const server = config({
   },
 
   routes: createRouter({
+    index,
     listThings,
     getThing,
     createThing,
@@ -180,7 +190,7 @@ export const server = config({
   }),
 
   initializeExpress: (app) => {
-    app.use("/", playground());
+    app.use("/playground", playground());
     app.get("/express", (_, res) => res.json({ message: "Hello World" }));
     app.use(auth.prefix, auth.routes({}));
   },

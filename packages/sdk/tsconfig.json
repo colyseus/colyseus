@@ -18,7 +18,7 @@
         "experimentalDecorators": true,
         "inlineSources": true,
         "skipLibCheck": true,
-        "composite": false
+        "composite": true
     },
     "include": [
         "src/**/*.ts",
