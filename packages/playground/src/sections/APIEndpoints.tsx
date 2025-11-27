@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { endpoint, client } from "../utils/Types";
 import { ResizableSidebar } from "../components/ResizableSidebar";
 import { SDKCodeExamples } from "../components/SDKCodeExamples";
@@ -56,6 +56,9 @@ export function APIEndpoints({ authConfig }: { authConfig?: AuthConfig }) {
 	const [uriParams, setUriParams] = useState<Record<string, string>>({});
 	const [authToken, setAuthToken] = useState(client.auth.token || "");
 
+	// Ref for auto-focusing first field
+	const formRef = useRef<HTMLFormElement>(null);
+
 	// Fetch endpoints from OpenAPI specification
 	useEffect(() => {
 		const fetchEndpoints = async () => {
@@ -90,6 +93,19 @@ export function APIEndpoints({ authConfig }: { authConfig?: AuthConfig }) {
 
 		fetchEndpoints();
 	}, []);
+
+	// Auto-focus first field when endpoint is selected
+	useEffect(() => {
+		if (selectedEndpointIndex !== null && formRef.current) {
+			// Small delay to ensure DOM is updated
+			setTimeout(() => {
+				const firstInput = formRef.current?.querySelector<HTMLInputElement | HTMLTextAreaElement>('input, textarea');
+				if (firstInput) {
+					firstInput.focus();
+				}
+			}, 100);
+		}
+	}, [selectedEndpointIndex]);
 
 	// Extract URI parameters from path (e.g., /users/:id => ['id'])
 	const extractUriParams = (path: string): string[] => {
@@ -282,7 +298,7 @@ export function APIEndpoints({ authConfig }: { authConfig?: AuthConfig }) {
 				return (
 				<div className="h-full flex flex-col lg:flex-row gap-0">
 					<div className="flex-1 overflow-y-auto border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-slate-600 dark:text-slate-300 p-4 md:p-6 min-h-0">
-						<form onSubmit={handleRunRequest} className="mb-4">
+						<form ref={formRef} onSubmit={handleRunRequest} className="mb-4">
 							<h2 className="text-lg md:text-xl font-semibold dark:text-slate-300 mb-2 flex flex-wrap items-center gap-2">
 								<span>{selectedEndpoint.method}</span>
 								<code className="flex flex-wrap items-center gap-1">

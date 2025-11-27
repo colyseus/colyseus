@@ -13,8 +13,9 @@ const logoIcon = `<svg viewBox="0 0 488.94 541.2" style="width: 100%; height: 10
 </svg>`;
 const envelopeUp = `<svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 16 16" height="16" width="16" xmlns="http://www.w3.org/2000/svg"><path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4.5a.5.5 0 0 1-1 0V5.383l-7 4.2-1.326-.795-5.64 3.47A1 1 0 0 0 2 13h5.5a.5.5 0 0 1 0 1H2a2 2 0 0 1-2-1.99zm1 7.105 4.708-2.897L1 5.383zM1 4v.217l7 4.2 7-4.2V4a1 1 0 0 0-1-1H2a1 1 0 0 0-1 1"></path><path d="M12.5 16a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7m.354-5.354 1.25 1.25a.5.5 0 0 1-.708.708L13 12.207V14a.5.5 0 0 1-1 0v-1.717l-.28.305a.5.5 0 0 1-.737-.676l1.149-1.25a.5.5 0 0 1 .722-.016"></path></svg>`;
 const envelopeDown = `<svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 16 16" height="16" width="16" xmlns="http://www.w3.org/2000/svg"><path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4.5a.5.5 0 0 1-1 0V5.383l-7 4.2-1.326-.795-5.64 3.47A1 1 0 0 0 2 13h5.5a.5.5 0 0 1 0 1H2a2 2 0 0 1-2-1.99zm1 7.105 4.708-2.897L1 5.383zM1 4v.217l7 4.2 7-4.2V4a1 1 0 0 0-1-1H2a1 1 0 0 0-1 1"></path><path d="M12.5 16a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7m.354-1.646a.5.5 0 0 1-.722-.016l-1.149-1.25a.5.5 0 1 1 .737-.676l.28.305V11a.5.5 0 0 1 1 0v1.793l.396-.397a.5.5 0 0 1 .708.708z"></path></svg>`;
-const hamburguerIcon = `<svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 512 512" height="200px" width="200px" xmlns="http://www.w3.org/2000/svg"><path d="M32 96v64h448V96H32zm0 128v64h448v-64H32zm0 128v64h448v-64H32z"></path></svg>`;
-const infoIcon = `<svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 16 16" height="12" width="12" xmlns="http://www.w3.org/2000/svg"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"></path><path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0"></path></svg>`;
+const messageIcon = `<svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 512 512" height="200px" width="200px" xmlns="http://www.w3.org/2000/svg"><path d="M498.1 5.6c10.1 7 15.4 19.1 13.5 31.2l-64 416c-1.5 9.7-7.4 18.2-16 23s-18.9 5.4-28 1.6L284 427.7l-68.5 74.1c-8.9 9.7-22.9 12.9-35.2 8.1S160 493.2 160 480V396.4c0-4 1.5-7.8 4.2-10.7L331.8 202.8c5.8-6.3 5.6-16-.4-22s-15.7-6.4-22-.7L106 360.8 17.7 316.6C7.1 311.3 .3 300.7 0 288.9s5.9-22.8 16.1-28.7l448-256c10.7-6.1 23.9-5.5 34 1.4z"/></svg>`;
+const treeViewIcon = `<svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 256 256" height="200px" width="200px" xmlns="http://www.w3.org/2000/svg"><path d="M160,136v-8H88v64a8,8,0,0,0,8,8h64v-8a16,16,0,0,1,16-16h32a16,16,0,0,1,16,16v32a16,16,0,0,1-16,16H176a16,16,0,0,1-16-16v-8H96a24,24,0,0,1-24-24V80H64A16,16,0,0,1,48,64V32A16,16,0,0,1,64,16H96a16,16,0,0,1,16,16V64A16,16,0,0,1,96,80H88v32h72v-8a16,16,0,0,1,16-16h32a16,16,0,0,1,16,16v32a16,16,0,0,1-16,16H176A16,16,0,0,1,160,136Z"></path></svg>`;
+const infoIcon = `<svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 512 512" height="200px" width="200px" xmlns="http://www.w3.org/2000/svg"><path d="M256 48C141.2 48 48 141.2 48 256s93.2 208 208 208 208-93.2 208-208S370.8 48 256 48zm21 312h-42V235h42v125zm0-166h-42v-42h42v42z"></path></svg>`;
 const settingsIcon = `<svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" height="200px" width="200px" xmlns="http://www.w3.org/2000/svg"><path d="M12.003 21c-.732 .001 -1.465 -.438 -1.678 -1.317a1.724 1.724 0 0 0 -2.573 -1.066c-1.543 .94 -3.31 -.826 -2.37 -2.37a1.724 1.724 0 0 0 -1.065 -2.572c-1.756 -.426 -1.756 -2.924 0 -3.35a1.724 1.724 0 0 0 1.066 -2.573c-.94 -1.543 .826 -3.31 2.37 -2.37c1 .608 2.296 .07 2.572 -1.065c.426 -1.756 2.924 -1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543 -.94 3.31 .826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c.886 .215 1.325 .957 1.318 1.694"></path><path d="M9 12a3 3 0 1 0 6 0a3 3 0 0 0 -6 0"></path><path d="M19.001 19m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path><path d="M19.001 15.5v1.5"></path><path d="M19.001 21v1.5"></path><path d="M22.032 17.25l-1.299 .75"></path><path d="M17.27 20l-1.3 .75"></path><path d="M15.97 17.25l1.3 .75"></path><path d="M20.733 20l1.3 .75"></path></svg>`;
 const eyeSlashIcon = `<svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" height="16" width="16" xmlns="http://www.w3.org/2000/svg"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
 
@@ -700,6 +701,505 @@ function openSettingsModal() {
     });
 }
 
+// Create and open Send Messages modal
+function openSendMessagesModal(uniquePanelId) {
+    var debugInfo = roomDebugInfo.get(uniquePanelId);
+    if (!debugInfo || !debugInfo.room) {
+        console.warn('Room not found for panel:', uniquePanelId);
+        return;
+    }
+
+    var room = debugInfo.room;
+    var messageTypes = debugInfo.messageTypes;
+
+    if (!messageTypes) {
+        console.warn('No message types available for this room');
+        return;
+    }
+
+    // Remove existing modal if present
+    var existingModal = document.getElementById('debug-send-messages-modal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    // Default values for positioning
+    var defaultWidth = 400;
+    var defaultLeft = '50%';
+    var defaultTop = '50%';
+    var defaultTransform = 'translate(-50%, -50%)';
+
+    // Create modal (no overlay, positioned like state inspector)
+    const modal = document.createElement('div');
+    modal.id = 'debug-send-messages-modal';
+    modal.style.position = 'fixed';
+    modal.style.top = defaultTop;
+    modal.style.left = defaultLeft;
+    modal.style.transform = defaultTransform;
+    modal.style.backgroundColor = '#1e1e1e';
+    modal.style.borderRadius = '8px';
+    modal.style.width = defaultWidth + 'px';
+    modal.style.minWidth = '300px';
+    modal.style.maxWidth = '90vw';
+    modal.style.maxHeight = '90vh';
+    modal.style.overflow = 'hidden';
+    modal.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.5)';
+    modal.style.color = '#fff';
+    modal.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+    modal.style.zIndex = '10000';
+    modal.style.display = 'flex';
+    modal.style.flexDirection = 'column';
+
+    // Modal header (draggable)
+    const header = document.createElement('div');
+    header.style.display = 'flex';
+    header.style.justifyContent = 'space-between';
+    header.style.alignItems = 'center';
+    header.style.padding = '8px';
+    header.style.borderBottom = '1px solid rgba(255, 255, 255, 0.15)';
+    header.style.paddingBottom = '4px';
+    header.style.marginBottom = '6px';
+    header.style.cursor = 'move';
+    header.style.userSelect = 'none';
+    header.style.flexShrink = '0';
+    header.style.position = 'relative';
+    header.style.zIndex = '1';
+
+    const title = document.createElement('div');
+    title.textContent = debugInfo.roomName + ' - Send Message';
+    title.style.margin = '0';
+    title.style.fontSize = '11px';
+    title.style.fontWeight = 'bold';
+    title.style.fontFamily = 'monospace';
+    title.style.flex = '1';
+
+    const closeButton = document.createElement('button');
+    closeButton.innerHTML = '×';
+    closeButton.style.background = 'none';
+    closeButton.style.border = 'none';
+    closeButton.style.color = '#fff';
+    closeButton.style.fontSize = '18px';
+    closeButton.style.cursor = 'pointer';
+    closeButton.style.padding = '0';
+    closeButton.style.margin = 'auto';
+    closeButton.style.width = '20px';
+    closeButton.style.height = '20px';
+    closeButton.style.display = 'flex';
+    closeButton.style.alignItems = 'center';
+    closeButton.style.justifyContent = 'center';
+    closeButton.style.borderRadius = '4px';
+    closeButton.style.transition = 'background-color 0.2s';
+    closeButton.style.opacity = '0.6';
+    closeButton.addEventListener('mouseenter', function () {
+        closeButton.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+        closeButton.style.opacity = '1';
+    });
+    closeButton.addEventListener('mouseleave', function () {
+        closeButton.style.backgroundColor = 'transparent';
+        closeButton.style.opacity = '0.6';
+    });
+    closeButton.addEventListener('click', function (e) {
+        e.stopPropagation();
+        modal.remove();
+    });
+
+    header.appendChild(title);
+    header.appendChild(closeButton);
+    modal.appendChild(header);
+
+    // Make modal draggable
+    var isDragging = false;
+    var dragOffsetX = 0;
+    var dragOffsetY = 0;
+
+    header.addEventListener('mousedown', function(e) {
+        isDragging = true;
+        var rect = modal.getBoundingClientRect();
+        dragOffsetX = e.clientX - rect.left;
+        dragOffsetY = e.clientY - rect.top;
+        // Set position to current absolute position before removing transform
+        modal.style.left = rect.left + 'px';
+        modal.style.top = rect.top + 'px';
+        modal.style.transform = 'none';
+        e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', function(e) {
+        if (isDragging) {
+            var newLeft = e.clientX - dragOffsetX;
+            var newTop = e.clientY - dragOffsetY;
+            modal.style.left = newLeft + 'px';
+            modal.style.top = newTop + 'px';
+        }
+    });
+
+    document.addEventListener('mouseup', function() {
+        isDragging = false;
+    });
+
+    // Form content container (scrollable)
+    var formContainer = document.createElement('div');
+    formContainer.style.padding = '8px';
+    formContainer.style.overflowY = 'auto';
+    formContainer.style.backgroundColor = '#1e1e1e';
+
+    // Message Type Selector
+    var typeLabel = document.createElement('label');
+    typeLabel.textContent = 'Message Type';
+    typeLabel.style.display = 'block';
+    typeLabel.style.fontSize = '11px';
+    typeLabel.style.fontWeight = '600';
+    typeLabel.style.marginBottom = '4px';
+    typeLabel.style.color = 'rgba(255, 255, 255, 0.9)';
+
+    var typeSelect = document.createElement('select');
+    typeSelect.style.width = '100%';
+    typeSelect.style.padding = '6px 8px';
+    typeSelect.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+    typeSelect.style.border = '1px solid rgba(255, 255, 255, 0.2)';
+    typeSelect.style.borderRadius = '4px';
+    typeSelect.style.color = '#fff';
+    typeSelect.style.fontSize = '12px';
+    typeSelect.style.cursor = 'pointer';
+    typeSelect.style.outline = 'none';
+    typeSelect.style.marginBottom = '12px';
+
+    // Add default option
+    var defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = 'Select a message type';
+    defaultOption.disabled = true;
+    defaultOption.selected = true;
+    typeSelect.appendChild(defaultOption);
+
+    // Add message types
+    Object.keys(messageTypes).forEach(function(msgType) {
+        var option = document.createElement('option');
+        option.value = msgType;
+        option.textContent = msgType;
+        typeSelect.appendChild(option);
+    });
+
+    // Add wildcard option for custom message types
+    var wildcardOption = document.createElement('option');
+    wildcardOption.value = '*';
+    wildcardOption.textContent = '* (Custom)';
+    typeSelect.appendChild(wildcardOption);
+
+    formContainer.appendChild(typeLabel);
+    formContainer.appendChild(typeSelect);
+
+    // Custom Message Type Input Container (shown when "*" is selected)
+    var customTypeContainer = document.createElement('div');
+    customTypeContainer.style.display = 'none';
+    customTypeContainer.style.marginBottom = '12px';
+
+    var customTypeLabel = document.createElement('label');
+    customTypeLabel.textContent = 'Message Type';
+    customTypeLabel.style.display = 'block';
+    customTypeLabel.style.fontSize = '11px';
+    customTypeLabel.style.fontWeight = '600';
+    customTypeLabel.style.marginBottom = '4px';
+    customTypeLabel.style.color = 'rgba(255, 255, 255, 0.9)';
+
+    var customTypeInput = document.createElement('input');
+    customTypeInput.type = 'text';
+    customTypeInput.placeholder = 'Enter message type name';
+    customTypeInput.style.width = '100%';
+    customTypeInput.style.padding = '6px 8px';
+    customTypeInput.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+    customTypeInput.style.border = '1px solid rgba(255, 255, 255, 0.2)';
+    customTypeInput.style.borderRadius = '4px';
+    customTypeInput.style.color = '#fff';
+    customTypeInput.style.fontSize = '11px';
+    customTypeInput.style.fontFamily = 'monospace';
+    customTypeInput.style.outline = 'none';
+
+    customTypeContainer.appendChild(customTypeLabel);
+    customTypeContainer.appendChild(customTypeInput);
+    formContainer.appendChild(customTypeContainer);
+
+    // Message Payload Input Container
+    var payloadContainer = document.createElement('div');
+    payloadContainer.style.display = 'none';
+    payloadContainer.style.marginBottom = '12px';
+
+    var payloadLabel = document.createElement('label');
+    payloadLabel.textContent = 'Payload';
+    payloadLabel.style.display = 'block';
+    payloadLabel.style.fontSize = '11px';
+    payloadLabel.style.fontWeight = '600';
+    payloadLabel.style.marginBottom = '4px';
+    payloadLabel.style.color = 'rgba(255, 255, 255, 0.9)';
+
+    var payloadFieldsContainer = document.createElement('div');
+    payloadFieldsContainer.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+    payloadFieldsContainer.style.border = '1px solid rgba(255, 255, 255, 0.2)';
+    payloadFieldsContainer.style.borderRadius = '4px';
+    payloadFieldsContainer.style.padding = '8px';
+    payloadFieldsContainer.style.fontFamily = 'monospace';
+    payloadFieldsContainer.style.fontSize = '11px';
+
+    var payloadTextarea = document.createElement('textarea');
+    payloadTextarea.style.width = '100%';
+    payloadTextarea.style.minHeight = '80px';
+    payloadTextarea.style.padding = '6px 8px';
+    payloadTextarea.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+    payloadTextarea.style.border = '1px solid rgba(255, 255, 255, 0.2)';
+    payloadTextarea.style.borderRadius = '4px';
+    payloadTextarea.style.color = '#fff';
+    payloadTextarea.style.fontSize = '11px';
+    payloadTextarea.style.fontFamily = 'monospace';
+    payloadTextarea.style.outline = 'none';
+    payloadTextarea.style.resize = 'vertical';
+    payloadTextarea.placeholder = '{}';
+    payloadTextarea.value = '{}';
+
+    payloadContainer.appendChild(payloadLabel);
+    payloadContainer.appendChild(payloadFieldsContainer);
+    payloadContainer.appendChild(payloadTextarea);
+    formContainer.appendChild(payloadContainer);
+
+    // Error message container
+    var errorContainer = document.createElement('div');
+    errorContainer.style.display = 'none';
+    errorContainer.style.padding = '6px 8px';
+    errorContainer.style.backgroundColor = 'rgba(220, 38, 38, 0.2)';
+    errorContainer.style.border = '1px solid rgba(220, 38, 38, 0.4)';
+    errorContainer.style.borderRadius = '4px';
+    errorContainer.style.marginBottom = '8px';
+    errorContainer.style.fontSize = '11px';
+    errorContainer.style.color = '#fca5a5';
+
+    formContainer.appendChild(errorContainer);
+
+    // Variables to store current message type and its schema
+    var currentFormInputs: any = {};
+    var currentMessageType = '';
+
+    // Update payload fields based on selected message type
+    typeSelect.addEventListener('change', function() {
+        var selectedType = typeSelect.value;
+        currentMessageType = selectedType;
+
+        if (selectedType) {
+            // Show/hide custom type input based on selection
+            if (selectedType === '*') {
+                customTypeContainer.style.display = 'block';
+                customTypeInput.focus();
+            } else {
+                customTypeContainer.style.display = 'none';
+            }
+
+            payloadContainer.style.display = 'block';
+            errorContainer.style.display = 'none';
+            currentFormInputs = {};
+
+            // Clear previous fields
+            payloadFieldsContainer.innerHTML = '';
+
+            var schema = messageTypes[selectedType];
+
+            // If schema exists and has properties, create form inputs
+            if (schema && schema.properties && Object.keys(schema.properties).length > 0) {
+                payloadTextarea.style.display = 'none';
+                payloadFieldsContainer.style.display = 'block';
+
+                // Generate form fields based on schema
+                Object.keys(schema.properties).forEach(function(fieldName) {
+                    var fieldSchema = schema.properties[fieldName];
+                    var fieldContainer = document.createElement('div');
+                    fieldContainer.style.marginBottom = '8px';
+
+                    var fieldLabel = document.createElement('label');
+                    fieldLabel.textContent = fieldName;
+                    if (schema.required && schema.required.includes(fieldName)) {
+                        fieldLabel.textContent += ' *';
+                    }
+                    fieldLabel.style.display = 'block';
+                    fieldLabel.style.fontSize = '10px';
+                    fieldLabel.style.marginBottom = '3px';
+                    fieldLabel.style.color = 'rgba(255, 255, 255, 0.8)';
+
+                    var fieldInput;
+
+                    if (fieldSchema.type === 'boolean') {
+                        fieldInput = document.createElement('input');
+                        fieldInput.type = 'checkbox';
+                        fieldInput.style.width = '16px';
+                        fieldInput.style.height = '16px';
+                        fieldInput.style.cursor = 'pointer';
+                    } else if (fieldSchema.type === 'number' || fieldSchema.type === 'integer') {
+                        fieldInput = document.createElement('input');
+                        fieldInput.type = 'number';
+                        if (fieldSchema.type === 'integer') {
+                            fieldInput.step = '1';
+                        }
+                        fieldInput.style.width = '100%';
+                        fieldInput.style.padding = '4px 6px';
+                        fieldInput.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                        fieldInput.style.border = '1px solid rgba(255, 255, 255, 0.2)';
+                        fieldInput.style.borderRadius = '3px';
+                        fieldInput.style.color = '#fff';
+                        fieldInput.style.fontSize = '11px';
+                        fieldInput.style.outline = 'none';
+                    } else {
+                        fieldInput = document.createElement('input');
+                        fieldInput.type = 'text';
+                        fieldInput.style.width = '100%';
+                        fieldInput.style.padding = '4px 6px';
+                        fieldInput.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                        fieldInput.style.border = '1px solid rgba(255, 255, 255, 0.2)';
+                        fieldInput.style.borderRadius = '3px';
+                        fieldInput.style.color = '#fff';
+                        fieldInput.style.fontSize = '11px';
+                        fieldInput.style.outline = 'none';
+                    }
+
+                    if (fieldSchema.description) {
+                        var fieldDesc = document.createElement('div');
+                        fieldDesc.textContent = fieldSchema.description;
+                        fieldDesc.style.fontSize = '9px';
+                        fieldDesc.style.color = 'rgba(255, 255, 255, 0.5)';
+                        fieldDesc.style.marginTop = '2px';
+                        fieldContainer.appendChild(fieldLabel);
+                        fieldContainer.appendChild(fieldInput);
+                        fieldContainer.appendChild(fieldDesc);
+                    } else {
+                        fieldContainer.appendChild(fieldLabel);
+                        fieldContainer.appendChild(fieldInput);
+                    }
+
+                    payloadFieldsContainer.appendChild(fieldContainer);
+                    currentFormInputs[fieldName] = { input: fieldInput, schema: fieldSchema };
+                });
+            } else {
+                // Use JSON textarea for free-form input (no schema or empty schema)
+                payloadTextarea.style.display = 'block';
+                payloadFieldsContainer.style.display = 'none';
+                payloadTextarea.value = '{}';
+
+                // Update placeholder based on whether schema exists
+                if (!schema) {
+                    payloadTextarea.placeholder = 'Enter JSON payload (no message format defined)\n\nExample:\n{\n  "key": "value"\n}';
+                } else {
+                    payloadTextarea.placeholder = '{}';
+                }
+            }
+        } else {
+            payloadContainer.style.display = 'none';
+        }
+    });
+
+    // Send Button
+    var sendButton = document.createElement('button');
+    sendButton.textContent = 'Send';
+    sendButton.style.width = '100%';
+    sendButton.style.padding = '8px 12px';
+    sendButton.style.backgroundColor = '#8b5cf6';
+    sendButton.style.border = 'none';
+    sendButton.style.borderRadius = '4px';
+    sendButton.style.color = '#fff';
+    sendButton.style.fontSize = '12px';
+    sendButton.style.fontWeight = '600';
+    sendButton.style.cursor = 'pointer';
+    sendButton.style.transition = 'background-color 0.2s';
+
+    var isButtonInSuccessState = false;
+    var hoverColor = '#7c3aed';
+    var normalColor = '#8b5cf6';
+
+    sendButton.addEventListener('mouseenter', function() {
+        if (!isButtonInSuccessState) {
+            sendButton.style.backgroundColor = hoverColor;
+        }
+    });
+    sendButton.addEventListener('mouseleave', function() {
+        if (!isButtonInSuccessState) {
+            sendButton.style.backgroundColor = normalColor;
+        }
+    });
+
+    sendButton.addEventListener('click', function() {
+        errorContainer.style.display = 'none';
+
+        if (!currentMessageType) {
+            errorContainer.textContent = 'Please select a message type';
+            errorContainer.style.display = 'block';
+            return;
+        }
+
+        // Determine actual message type to send
+        var actualMessageType = currentMessageType;
+        if (currentMessageType === '*') {
+            actualMessageType = customTypeInput.value.trim();
+            if (!actualMessageType) {
+                errorContainer.textContent = 'Please enter a message type name';
+                errorContainer.style.display = 'block';
+                return;
+            }
+        }
+
+        try {
+            var payload;
+
+            // Build payload from form inputs or textarea
+            if (Object.keys(currentFormInputs).length > 0) {
+                payload = {};
+                var schema = messageTypes[currentMessageType];
+
+                for (var fieldName in currentFormInputs) {
+                    var fieldData = currentFormInputs[fieldName];
+                    var input = fieldData.input;
+                    var fieldSchema = fieldData.schema;
+                    var value;
+
+                    if (fieldSchema.type === 'boolean') {
+                        value = input.checked;
+                    } else if (fieldSchema.type === 'number' || fieldSchema.type === 'integer') {
+                        value = input.value ? parseFloat(input.value) : undefined;
+                    } else {
+                        value = input.value || undefined;
+                    }
+
+                    // Only include required fields or fields with values
+                    if (value !== undefined || (schema.required && schema.required.includes(fieldName))) {
+                        payload[fieldName] = value;
+                    }
+                }
+            } else {
+                payload = JSON.parse(payloadTextarea.value);
+            }
+
+            // Send the message
+            room.send(actualMessageType, payload);
+
+            // Change button to success state
+            isButtonInSuccessState = true;
+            sendButton.textContent = 'Message sent!';
+            sendButton.style.backgroundColor = '#22c55e';
+            sendButton.style.cursor = 'default';
+
+            // Restore button after 1.5 seconds
+            setTimeout(function() {
+                isButtonInSuccessState = false;
+                sendButton.textContent = 'Send';
+                sendButton.style.backgroundColor = normalColor;
+                sendButton.style.cursor = 'pointer';
+            }, 1500);
+
+        } catch (e) {
+            errorContainer.textContent = 'Error: ' + e.message;
+            errorContainer.style.display = 'block';
+        }
+    });
+
+    formContainer.appendChild(sendButton);
+
+    modal.appendChild(formContainer);
+    document.body.appendChild(modal);
+}
+
 // Create and open State Inspector modal
 function openStateInspectorModal(uniquePanelId) {
     var debugInfo = roomDebugInfo.get(uniquePanelId);
@@ -744,8 +1244,15 @@ function openStateInspectorModal(uniquePanelId) {
             defaultHeight = savedStateInspectorPrefs.height;
         }
         if (savedStateInspectorPrefs.left !== undefined && savedStateInspectorPrefs.top !== undefined) {
-            defaultLeft = savedStateInspectorPrefs.left + 'px';
-            defaultTop = savedStateInspectorPrefs.top + 'px';
+            // Constrain position to window boundaries
+            var maxLeft = window.innerWidth - defaultWidth;
+            var maxTop = window.innerHeight - defaultHeight;
+
+            var constrainedLeft = Math.max(0, Math.min(savedStateInspectorPrefs.left, maxLeft));
+            var constrainedTop = Math.max(0, Math.min(savedStateInspectorPrefs.top, maxTop));
+
+            defaultLeft = constrainedLeft + 'px';
+            defaultTop = constrainedTop + 'px';
             defaultTransform = 'none';
         }
     }
@@ -805,7 +1312,7 @@ function openStateInspectorModal(uniquePanelId) {
     header.style.zIndex = '1';
 
     const title = document.createElement('div');
-    title.textContent = debugInfo.roomName;
+    title.textContent = `${debugInfo.roomName} - State Viewer`;
     title.style.margin = '0';
     title.style.fontSize = '11px';
     title.style.fontWeight = 'bold';
@@ -1499,7 +2006,7 @@ function createDebugPanel(uniquePanelId, debugInfo) {
     title.style.alignItems = 'center';
     title.style.gap = '4px';
     title.style.position = 'relative';
-    title.innerHTML = '<span style="display: inline-flex; align-items: center;"></span><span id="debug-title-text-' + uniquePanelId + '"></span><span id="debug-hamburger-icon-' + uniquePanelId + '" style="display: inline-flex; align-items: center; margin-left: auto; cursor: pointer; opacity: 0.6; transition: opacity 0.2s; margin-right: 4px; width: 16px; height: 16px;">' + hamburguerIcon.replace('height="200px" width="200px"', 'height="16" width="16"') + '</span><span id="debug-info-icon-' + uniquePanelId + '" style="display: inline-flex; align-items: center; cursor: pointer; opacity: 0.6; transition: opacity 0.2s; width: 16px; height: 16px;">' + infoIcon + '</span>';
+    title.innerHTML = '<span style="display: inline-flex; align-items: center;"></span><span id="debug-title-text-' + uniquePanelId + '"></span><span id="debug-message-icon-' + uniquePanelId + '" style="display: none; align-items: center; margin-left: auto; cursor: pointer; opacity: 0.6; transition: opacity 0.2s; margin-right: 4px; width: 16px; height: 16px;">' + messageIcon.replace('height="200px" width="200px"', 'height="16" width="16"') + '</span><span id="debug-hamburger-icon-' + uniquePanelId + '" style="display: inline-flex; align-items: center; cursor: pointer; opacity: 0.6; transition: opacity 0.2s; margin-right: 4px; width: 16px; height: 16px;">' + treeViewIcon.replace('height="200px" width="200px"', 'height="16" width="16"') + '</span><span id="debug-info-icon-' + uniquePanelId + '" style="display: inline-flex; align-items: center; cursor: pointer; opacity: 0.6; transition: opacity 0.2s; width: 16px; height: 16px;">' + infoIcon + '</span>';
 
     // Create tooltip for info icon
     var tooltip = document.createElement('div');
@@ -1555,6 +2062,21 @@ function createDebugPanel(uniquePanelId, debugInfo) {
             hamburgerIconElement.addEventListener('click', function(e) {
                 e.stopPropagation();
                 openStateInspectorModal(uniquePanelId);
+            });
+        }
+
+        // Add click handler for message icon
+        var messageIconElement = document.getElementById('debug-message-icon-' + uniquePanelId);
+        if (messageIconElement) {
+            messageIconElement.addEventListener('mouseenter', function() {
+                messageIconElement.style.opacity = '1';
+            });
+            messageIconElement.addEventListener('mouseleave', function() {
+                messageIconElement.style.opacity = '0.6';
+            });
+            messageIconElement.addEventListener('click', function(e) {
+                e.stopPropagation();
+                openSendMessagesModal(uniquePanelId);
             });
         }
     }, 0);
@@ -1836,10 +2358,22 @@ function applyMonkeyPatches() {
             bytesSentHistory: [],
             bytesReceivedHistory: [],
             // historyTimestamps: [],
-            maxHistoryLength: 60 // Keep last 60 data points (1 minute at 1 second intervals)
+            maxHistoryLength: 60, // Keep last 60 data points (1 minute at 1 second intervals)
+            messageTypes: null // Will store message types from __playground_message_types
         };
 
         roomDebugInfo.set(uniquePanelId, debugInfo);
+
+        // Listen for __playground_message_types message
+        room.onMessage('__playground_message_types', (messageTypes: any) => {
+            debugInfo.messageTypes = messageTypes;
+
+            // Show/hide message icon based on message types availability
+            var messageIconElement = document.getElementById('debug-message-icon-' + uniquePanelId);
+            if (messageIconElement) {
+                messageIconElement.style.display = messageTypes ? 'inline-flex' : 'none';
+            }
+        });
 
         // Helper function to track received message/bytes
         function trackReceivedMessage(data) {
@@ -1859,6 +2393,9 @@ function applyMonkeyPatches() {
                 }
             }
 
+            //
+            // TODO: avoid trackig __playground_message_types messages in the stats
+            //
             debugInfo.messagesReceived++;
             debugInfo.messagesReceivedDelta++;
             debugInfo.bytesReceived += bytes;

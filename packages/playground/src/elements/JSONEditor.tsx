@@ -12,12 +12,14 @@ export function JSONEditor ({
 	text,
 	className,
 	maxLines,
+	autoFocus,
 	...props
 }: JSONEditorOptions & {
 	json?: any,
 	text?: string,
 	maxLines?: number,
-	className?: string
+	className?: string,
+	autoFocus?: boolean,
 }) {
   const containerRef = useRef(null);
   const editorRef = useRef<JSONEditorModule | null>(null);
@@ -49,6 +51,10 @@ export function JSONEditor ({
 			})
 
 			aceEditor.resize();
+
+			if (autoFocus) {
+				aceEditor.focus();
+			}
 		}
 
     return () => {

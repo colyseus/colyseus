@@ -54,6 +54,7 @@ export function InspectConnection({
 	const [message, setMessage] = useState("{}");
 	const [messageValues, setMessageValues] = useState<Record<string, any>>({});
 	const [messageType, setMessageType] = useState(messageTypes[0]);
+	const [customMessageType, setCustomMessageType] = useState("");
 	const [isSendMessageEnabled, setSendMessageEnabled] = useState(true);
 	const [selectedTab, setSelectedTab] = useState(lastTabSelected)
 	const [currentError, setCurrentError] = useState("");
@@ -67,9 +68,11 @@ export function InspectConnection({
 	const allowReconnect = !connection.isConnected;
 
 	const handleMessageTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-		setMessageType(e.target.value);
+		const newMessageType = e.target.value;
+		setMessageType(newMessageType);
 		setMessageValues({});
 		setMessage("{}");
+		setCustomMessageType("");
 	};
 
 	const onChangeMessage = (text: string) =>
@@ -117,14 +120,15 @@ export function InspectConnection({
 	const sendMessage = () => {
 		try {
 			const now = new Date();
+			const actualMessageType = messageType === "*" ? customMessageType : messageType;
 			const hasValidator = messageFormats?.[messageType];
 			const payload = hasValidator ? messageValues : JSON.parse(message || "{}");
 
-			const newMessage = { type: messageType, message: payload, out: true, now, };
+			const newMessage = { type: actualMessageType, message: payload, out: true, now, };
 			setMessages([newMessage, ...messages]);
 			connection.messages.unshift(newMessage);
 
-			room.send(messageType, payload);
+			room.send(actualMessageType, payload);
 
 		} catch (e: any) {
 			displayError(e.message);
@@ -201,16 +205,34 @@ export function InspectConnection({
 										{(messageTypes).map((type) => (
 											<option key={type} value={type}>{type}</option>
 										))}
+										<option key="*" value="*">* (Custom)</option>
 									</select>
 								</div>
 
-								<div className="flex flex-col gap-2">
+								{messageType === "*" && (
+									<div className="flex flex-col gap-2">
+										<label className="block text-xs font-semibold text-gray-700 dark:text-slate-400 uppercase tracking-wide">
+											Custom Message Type
+										</label>
+										<input
+											autoFocus
+											type="text"
+											className="w-full border-2 border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 p-2.5 rounded-lg text-sm font-medium focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark:focus:ring-purple-400 dark:focus:border-purple-400 transition-all hover:border-purple-400 dark:hover:border-slate-500"
+											placeholder="Enter custom message type"
+											value={customMessageType}
+											onChange={(e) => setCustomMessageType(e.target.value)}
+										/>
+									</div>
+								)}
+
+								<div key={messageType} className="flex flex-col gap-2">
 									<label className="block text-xs font-semibold text-gray-700 dark:text-slate-400 uppercase tracking-wide">
 										Message Payload
 									</label>
 									{messageFormats?.[messageType] ? (
 										<div className={"rounded-lg border-2 w-full transition-all p-3 " + (isSendMessageEnabled ? "border-gray-300 dark:border-slate-600" : "border-red-400 dark:border-red-500 ring-2 ring-red-500/20")}>
 											<JSONSchemaFields
+												autoFocus
 												schema={messageFormats[messageType]}
 												values={messageValues}
 												onChange={onSchemaFieldChange}
@@ -218,6 +240,7 @@ export function InspectConnection({
 										</div>
 									) : (
 										<JSONEditor
+											autoFocus={messageType !== "*"}
 											text={message}
 											onChangeText={onChangeMessage}
 											onValidationError={onMessageValidationError}
@@ -235,7 +258,7 @@ export function InspectConnection({
 								<div className="flex">
 									<button
 										className="w-full bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-700 hover:to-purple-600 disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed text-white font-semibold py-2.5 px-5 rounded-lg text-sm whitespace-nowrap transition-all duration-200 shadow-md hover:shadow-lg disabled:shadow-none transform hover:scale-[1.02] active:scale-[0.98] disabled:transform-none flex items-center justify-center gap-2"
-										disabled={!isSendMessageEnabled}
+										disabled={!isSendMessageEnabled || (messageType === "*" && !customMessageType.trim())}
 										onClick={sendMessage}>
 										<svg className="w-4 h-4" fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
 											<path d="M498.1 5.6c10.1 7 15.4 19.1 13.5 31.2l-64 416c-1.5 9.7-7.4 18.2-16 23s-18.9 5.4-28 1.6L284 427.7l-68.5 74.1c-8.9 9.7-22.9 12.9-35.2 8.1S160 493.2 160 480V396.4c0-4 1.5-7.8 4.2-10.7L331.8 202.8c5.8-6.3 5.6-16-.4-22s-15.7-6.4-22-.7L106 360.8 17.7 316.6C7.1 311.3 .3 300.7 0 288.9s5.9-22.8 16.1-28.7l448-256c10.7-6.1 23.9-5.5 34 1.4z"/>

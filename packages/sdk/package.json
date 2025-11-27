@@ -7,7 +7,7 @@
   "type": "module",
   "scripts": {
     "test": "vitest --dir test --reporter verbose",
-    "example": "vite --config example/vite.config.ts",
+    "start": "vite --config example/vite.config.ts",
     "build": "rollup -c rollup.config.mjs",
     "build-dist-dts": "dts-bundle-generator --config dts-generator.json",
     "build-ci": "tsc && npm run build && npm run build-dist-dts && npm run build-zip-dist",

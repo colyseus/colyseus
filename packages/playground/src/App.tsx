@@ -4,7 +4,6 @@ import React, { useEffect, useState } from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import Logo from "./favicon.svg";
 
-import { Home } from './sections/Home';
 import { Playground } from './sections/Playground';
 import { DarkModeToggle } from "./components/DarkModeToggle";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";

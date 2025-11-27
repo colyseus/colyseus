@@ -40,14 +40,17 @@ export class MyRoom extends Room {
     this.state.mapHeight = 600;
 
     this.onMessage("*", (client, type, message) => {
-      console.log("received", { type, message });
-      // client.send(type, message);
+      this.broadcast(type, message);
     });
 
     this.onMessage("move", (client, message) => {
       const player = this.state.players.get(client.sessionId)!;
       player.x = message.x;
       player.y = message.y;
+    })
+
+    this.onMessage("dummy", (client, message) => {
+      this.broadcast("dummy", message);
     })
 
     this.onMessage("move_with_validation", z.object({ x: z.number(), y: z.number() }), (client, message) => {

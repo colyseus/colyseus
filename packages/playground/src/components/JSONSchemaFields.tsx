@@ -7,6 +7,7 @@ interface JSONSchemaFieldsProps {
 	};
 	values: Record<string, any>;
 	onChange: (key: string, value: any) => void;
+	autoFocus?: boolean;
 }
 
 // Helper function to create default value based on schema
@@ -280,14 +281,16 @@ function renderField(
 	);
 }
 
-export function JSONSchemaFields({ schema, values, onChange }: JSONSchemaFieldsProps) {
+export function JSONSchemaFields({ schema, values, onChange, autoFocus }: JSONSchemaFieldsProps) {
 	if (!schema || !schema.properties) {
 		return null;
 	}
 
+	const properties = Object.entries(schema.properties);
+
 	return (
 		<div className="space-y-3">
-			{Object.entries(schema.properties).map(([key, fieldSchema]: [string, any]) => {
+			{properties.map(([key, fieldSchema]: [string, any], index) => {
 				const isRequired = schema.required?.includes(key);
 				const type = fieldSchema.type || 'string';
 				const description = fieldSchema.description;
@@ -309,7 +312,7 @@ export function JSONSchemaFields({ schema, values, onChange }: JSONSchemaFieldsP
 							values[key],
 							(value) => onChange(key, value),
 							isRequired || false,
-							undefined,
+							autoFocus && index === 0,
 							key
 						)}
 					</div>

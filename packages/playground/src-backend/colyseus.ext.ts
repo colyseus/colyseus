@@ -15,7 +15,7 @@ export async function applyMonkeyPatch() {
 
       const messages: any = {};
       Object.keys(this['onMessageEvents'].events).sort().forEach((type) => {
-        if (type.indexOf("__") === 0) { return; }
+        if (type.indexOf("__") === 0 || type === "*") { return; }
 
         const messageValidator = this['onMessageValidators'][type];
         messages[type] = z && messageValidator && z.toJSONSchema(messageValidator) || null;
