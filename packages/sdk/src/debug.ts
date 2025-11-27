@@ -765,6 +765,34 @@ function openSendMessagesModal(uniquePanelId) {
     header.style.position = 'relative';
     header.style.zIndex = '1';
 
+    // Connection status indicator
+    const sendMsgStatusDot = document.createElement('div');
+    sendMsgStatusDot.style.width = '8px';
+    sendMsgStatusDot.style.height = '8px';
+    sendMsgStatusDot.style.borderRadius = '50%';
+    sendMsgStatusDot.style.marginRight = '8px';
+    sendMsgStatusDot.style.flexShrink = '0';
+    sendMsgStatusDot.style.transition = 'background-color 0.3s';
+
+    // Function to update status dot color and button state
+    const updateSendMsgStatusDot = () => {
+        sendMsgStatusDot.style.backgroundColor = room.connection?.isOpen ? '#22c55e' : '#ef4444';
+    };
+    updateSendMsgStatusDot();
+
+    // This will be updated later to include send button reference
+    var updateConnectionStatus = updateSendMsgStatusDot;
+
+    // Monitor connection status changes using onLeave event
+    room.onLeave(updateConnectionStatus);
+
+    // Clean up event listener when modal is closed
+    const originalRemoveSendMsg = modal.remove.bind(modal);
+    modal.remove = function() {
+        room.onLeave.remove(updateConnectionStatus);
+        originalRemoveSendMsg();
+    };
+
     const title = document.createElement('div');
     title.textContent = debugInfo.roomName + ' - Send Message';
     title.style.margin = '0';
@@ -772,6 +800,8 @@ function openSendMessagesModal(uniquePanelId) {
     title.style.fontWeight = 'bold';
     title.style.fontFamily = 'monospace';
     title.style.flex = '1';
+    title.style.display = 'flex';
+    title.style.alignItems = 'center';
 
     const closeButton = document.createElement('button');
     closeButton.innerHTML = '×';
@@ -803,6 +833,7 @@ function openSendMessagesModal(uniquePanelId) {
         modal.remove();
     });
 
+    title.insertBefore(sendMsgStatusDot, title.firstChild);
     header.appendChild(title);
     header.appendChild(closeButton);
     modal.appendChild(header);
@@ -1110,18 +1141,44 @@ function openSendMessagesModal(uniquePanelId) {
     var normalColor = '#8b5cf6';
 
     sendButton.addEventListener('mouseenter', function() {
-        if (!isButtonInSuccessState) {
+        if (!isButtonInSuccessState && !sendButton.disabled) {
             sendButton.style.backgroundColor = hoverColor;
         }
     });
     sendButton.addEventListener('mouseleave', function() {
-        if (!isButtonInSuccessState) {
+        if (!isButtonInSuccessState && !sendButton.disabled) {
             sendButton.style.backgroundColor = normalColor;
         }
     });
 
+    // Update the connection status function to also manage button state
+    updateConnectionStatus = function() {
+        const isConnected = room.connection?.isOpen;
+        sendMsgStatusDot.style.backgroundColor = isConnected ? '#22c55e' : '#ef4444';
+
+        // Update button disabled state
+        sendButton.disabled = !isConnected;
+        if (!isConnected) {
+            sendButton.style.backgroundColor = '#6b7280';
+            sendButton.style.cursor = 'not-allowed';
+            sendButton.style.opacity = '0.5';
+        } else if (!isButtonInSuccessState) {
+            sendButton.style.backgroundColor = normalColor;
+            sendButton.style.cursor = 'pointer';
+            sendButton.style.opacity = '1';
+        }
+    };
+    updateConnectionStatus();
+
     sendButton.addEventListener('click', function() {
         errorContainer.style.display = 'none';
+
+        // Check if room is connected
+        if (!room.connection?.isOpen) {
+            errorContainer.textContent = 'Cannot send message: Room is not connected';
+            errorContainer.style.display = 'block';
+            return;
+        }
 
         if (!currentMessageType) {
             errorContainer.textContent = 'Please select a message type';
@@ -1186,7 +1243,7 @@ function openSendMessagesModal(uniquePanelId) {
                 sendButton.textContent = 'Send';
                 sendButton.style.backgroundColor = normalColor;
                 sendButton.style.cursor = 'pointer';
-            }, 1500);
+            }, 800);
 
         } catch (e) {
             errorContainer.textContent = 'Error: ' + e.message;
@@ -1311,6 +1368,31 @@ function openStateInspectorModal(uniquePanelId) {
     header.style.position = 'relative';
     header.style.zIndex = '1';
 
+    // Connection status indicator
+    const stateViewerStatusDot = document.createElement('div');
+    stateViewerStatusDot.style.width = '8px';
+    stateViewerStatusDot.style.height = '8px';
+    stateViewerStatusDot.style.borderRadius = '50%';
+    stateViewerStatusDot.style.marginRight = '8px';
+    stateViewerStatusDot.style.flexShrink = '0';
+    stateViewerStatusDot.style.transition = 'background-color 0.3s';
+
+    // Function to update status dot color
+    const updateStateViewerStatusDot = () => {
+        stateViewerStatusDot.style.backgroundColor = room.connection?.isOpen ? '#22c55e' : '#ef4444';
+    };
+    updateStateViewerStatusDot();
+
+    // Monitor connection status changes using onLeave event
+    room.onLeave(updateStateViewerStatusDot);
+
+    // Clean up event listener when modal is closed
+    const originalRemoveStateViewer = modal.remove.bind(modal);
+    modal.remove = function() {
+        room.onLeave.remove(updateStateViewerStatusDot);
+        originalRemoveStateViewer();
+    };
+
     const title = document.createElement('div');
     title.textContent = `${debugInfo.roomName} - State Viewer`;
     title.style.margin = '0';
@@ -1318,6 +1400,8 @@ function openStateInspectorModal(uniquePanelId) {
     title.style.fontWeight = 'bold';
     title.style.fontFamily = 'monospace';
     title.style.flex = '1';
+    title.style.display = 'flex';
+    title.style.alignItems = 'center';
 
     const closeButton = document.createElement('button');
     closeButton.innerHTML = '×';
@@ -1349,6 +1433,7 @@ function openStateInspectorModal(uniquePanelId) {
         modal.remove();
     });
 
+    title.insertBefore(stateViewerStatusDot, title.firstChild);
     header.appendChild(title);
     header.appendChild(closeButton);
     modal.appendChild(header);
