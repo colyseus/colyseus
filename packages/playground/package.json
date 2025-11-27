@@ -27,7 +27,8 @@
   "peerDependencies": {
     "@colyseus/auth": "workspace:^",
     "@colyseus/core": "workspace:^",
-    "express": ">=4.16.0"
+    "express": ">=4.16.0",
+    "zod": "^4.1.12"
   },
   "browserslist": {
     "production": [

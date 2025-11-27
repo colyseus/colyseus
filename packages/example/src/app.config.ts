@@ -168,7 +168,7 @@ export const server = config({
   },
 
   routes: createRouter({
-    index,
+    // index,
     listThings,
     getThing,
     createThing,
@@ -190,7 +190,8 @@ export const server = config({
   }),
 
   initializeExpress: (app) => {
-    app.use("/playground", playground());
+    // app.use("/playground", playground());
+    app.use("/", playground());
     app.get("/express", (_, res) => res.json({ message: "Hello World" }));
     app.use(auth.prefix, auth.routes({}));
   },

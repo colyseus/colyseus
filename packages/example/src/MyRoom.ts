@@ -1,5 +1,6 @@
-import { CloseCode, Room, type Client } from "@colyseus/core";
+import { CloseCode, Room, type Client, validate } from "@colyseus/core";
 import { schema, type SchemaType } from "@colyseus/schema";
+import { z } from "zod";
 
 export const Player = schema({
   x: "number",
@@ -16,13 +17,19 @@ export class MyRoom extends Room {
   state = new MyRoomState();
 
   messages = {
-    move: (client: Client, message: { x: number, y: number }) => {
+    move: validate(z.object({
+      x: z.number(),
+      y: z.number(),
+      z: z.number().optional()
+    }), (client, message) => {
       const player = this.state.players.get(client.sessionId)!;
       player.x = message.x;
       player.y = message.y;
-    },
+    }),
 
-    nopayload: (client: Client) => {},
+    nopayload (this: MyRoom, client: Client, message: any) {
+      const player = this.state.players.get(client.sessionId)!;
+    },
   };
 
   onCreate(options: any) {
@@ -43,10 +50,16 @@ export class MyRoom extends Room {
       player.y = message.y;
     })
 
+    this.onMessage("move_with_validation", z.object({ x: z.number(), y: z.number() }), (client, message) => {
+      const player = this.state.players.get(client.sessionId)!;
+      player.x = message.x;
+      player.y = message.y;
+    });
+
     this.setSimulationInterval(() => this.update());
   }
 
-  onJoin(client: Client, options: any) {
+  onJoin(client: Client<{ custom: boolean }, { custom: boolean }>, options: any) {
     console.log(client.sessionId, "joined! options =>", options);
 
     const player = new Player();

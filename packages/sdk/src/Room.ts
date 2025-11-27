@@ -1,4 +1,4 @@
-import { type Room as ServerRoom } from '@colyseus/core';
+import { type Room as ServerRoom, type ExtractMessageType } from '@colyseus/core';
 import { decode, encode, Iterator } from '@colyseus/schema';
 
 import { Packr, unpack } from '@colyseus/msgpackr';
@@ -212,7 +212,7 @@ export class Room<
 
     public send<MessageType extends keyof RoomType['prototype']['messages']>(
         messageType: MessageType,
-        payload?: Parameters<RoomType['prototype']['messages'][MessageType]>[1]
+        payload?: ExtractMessageType<RoomType['prototype']['messages'][MessageType]>
     )
     public send<T = any>(messageType: string | number, payload?: T): void {
         const it: Iterator = { offset: 1 };

@@ -151,8 +151,6 @@ export function JoinRoomForm ({
 			onDisconnection(room.sessionId));
 
 		room.onMessage("__playground_message_types", (types) => {
-			// sort message types for a clear view
-			types.sort();
 			// global message types by room name
 			messageTypesByRoom[room.name] = types;
 

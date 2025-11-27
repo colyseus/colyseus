@@ -1,4 +1,4 @@
-import type { Room } from '../Room.ts';
+import type { ExtractMessageType, Room } from '../Room.ts';
 
 export type RoomMethodName = 'onCreate'
   | 'onAuth'
@@ -96,13 +96,13 @@ export class OnDisposeException extends Error {
 
 export class OnMessageException<R extends Room, MessageType extends keyof R['messages'] = keyof R['messages']> extends Error {
   client: R['~client'];
-  payload: Parameters<R['messages'][MessageType]>[1];
+  payload: ExtractMessageType<R['messages'][MessageType]>;
   type: MessageType;
   constructor(
     cause: Error,
     message: string,
     client: R['~client'],
-    payload: Parameters<R['messages'][MessageType]>[1],
+    payload: ExtractMessageType<R['messages'][MessageType]>,
     type: MessageType,
   ) {
     super(message, { cause });

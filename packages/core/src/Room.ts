@@ -37,6 +37,50 @@ export interface IBroadcastOptions extends ISendOptions {
   except?: Client | Client[];
 }
 
+/**
+ * Message handler with automatic type inference from format schema.
+ * When a format is provided, the message type is automatically inferred from the schema.
+ */
+export type MessageHandlerWithFormat<T extends StandardSchemaV1 = any, This = any> = {
+  format: T;
+  handler: (this: This, client: Client, message: StandardSchemaV1.InferOutput<T>) => void;
+};
+
+type MessageHandler<This = any> =
+  | ((this: This, client: Client, message: any) => void)
+  | MessageHandlerWithFormat<any, This>;
+
+/**
+ * Extract the message payload type from a message handler.
+ * Works with both function handlers and format handlers.
+ */
+export type ExtractMessageType<T> =
+  T extends { format: infer Format extends StandardSchemaV1; handler: any }
+    ? StandardSchemaV1.InferOutput<Format>
+    : T extends (this: any, client: any, message: infer Message) => void
+      ? Message
+      : any;
+
+/**
+ * Helper function to create a validated message handler with automatic type inference.
+ *
+ * @example
+ * ```typescript
+ * messages = {
+ *   move: validate(z.object({ x: z.number(), y: z.number() }), (client, message) => {
+ *     // message.x and message.y are automatically typed as numbers
+ *     console.log(message.x, message.y);
+ *   })
+ * }
+ * ```
+ */
+export function validate<T extends StandardSchemaV1, This = any>(
+  format: T,
+  handler: (this: This, client: Client, message: StandardSchemaV1.InferOutput<T>) => void
+): MessageHandlerWithFormat<T, This> {
+  return { format, handler };
+}
+
 export const RoomInternalState = {
   CREATING: 0,
   CREATED: 1,
@@ -180,7 +224,7 @@ export abstract class Room<
 
   private _reconnections: { [reconnectionToken: string]: [string, Deferred] } = {};
 
-  public messages?: Record<string, (client: this['~client'], message: any) => void>;
+  public messages?: Record<string, MessageHandler<this>>;
 
   private onMessageEvents = createNanoEvents();
   private onMessageValidators: {[message: string]: StandardSchemaV1} = {};
@@ -310,7 +354,13 @@ export abstract class Room<
     // Bind messages to the room
     if (this.messages !== undefined) {
       Object.entries(this.messages).forEach(([messageType, callback]) => {
-        this.onMessage(messageType, callback);
+        if (typeof callback === 'function') {
+          // Direct handler function - bind to room instance
+          this.onMessage(messageType, callback.bind(this));
+        } else {
+          // Object with format and handler - bind handler to room instance
+          this.onMessage(messageType, callback.format, callback.handler.bind(this));
+        }
       });
     }
 

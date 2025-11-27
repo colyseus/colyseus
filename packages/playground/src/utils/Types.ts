@@ -1,4 +1,4 @@
-import { Client, Room } from "colyseus.js";
+import { Client, type Room } from "@colyseus/sdk";
 import { LimitedArray } from "./LimitedArray";
 
 export type Connection = {
@@ -17,7 +17,7 @@ export const client = new Client(baseEndpoint);
 export const global = { connections: [] as Connection[], };
 
 export const roomsBySessionId: { [sessionId: string]: Room } = {};
-export const messageTypesByRoom: { [key: string]: string[] } = {};
+export const messageTypesByRoom: { [key: string]: { [messageType: string]: any } } = {};
 
 let currentColor = -1;
 export const allRoomColors: string[] = [

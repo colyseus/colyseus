@@ -11,7 +11,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 async function main() {
   // Absolute path to package directory
   const basePath = __dirname;
-  const target = "es2020";
 
   // Get all .ts as input files
   const entryPoints = glob.sync(path.resolve(basePath, "src-backend", "**", "**.ts")
@@ -26,8 +25,8 @@ async function main() {
       declaration: true,
       emitDeclarationOnly: true,
       skipLibCheck: true,
-      module: "commonjs",
-      target,
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2020,
       outDir: outdir,
       esModuleInterop: true,
       experimentalDecorators: true,

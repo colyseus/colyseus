@@ -163,30 +163,42 @@ export function APIEndpoints({ authConfig }: { authConfig?: AuthConfig }) {
 				options.body = bodyFields;
 			}
 
-			// Execute request using client.http
-			let res;
-			const httpMethod = method.toUpperCase();
+		// Execute request using client.http
+		let res;
+		const httpMethod = method.toUpperCase();
 
-			switch (httpMethod) {
-				case 'GET':
-					res = await client.http.get(finalPath, options);
-					break;
-				case 'POST':
-					res = await client.http.post(finalPath, options);
-					break;
-				case 'PUT':
-					res = await client.http.put(finalPath, options);
-					break;
-				case 'DELETE':
-					res = await client.http.del(finalPath, options);
-					break;
-				default:
-					throw new Error(`Unsupported HTTP method: ${method}`);
-			}
+		switch (httpMethod) {
+			case 'GET':
+				res = await client.http.get(finalPath, options);
+				break;
+			case 'POST':
+				res = await client.http.post(finalPath, options);
+				break;
+			case 'PUT':
+				res = await client.http.put(finalPath, options);
+				break;
+			case 'DELETE':
+				res = await client.http.delete(finalPath, options);
+				break;
+			case 'PATCH':
+				res = await client.http.patch(finalPath, options);
+				break;
+			default:
+				throw new Error(`Unsupported HTTP method: ${method}`);
+		}
 
+		// Check if response is ok or contains error
+		if (!res.ok) {
+			// HTTP error response
+			const errorMessage = res.error?.message
+				|| (typeof res.error === 'string' ? res.error : JSON.stringify(res.error))
+				|| res.statusText;
+			setError(`${res.status} - ${res.error.code} ${errorMessage}`);
+		} else {
 			setResponse(res.data);
-		} catch (e: any) {
-			setError(e.message || "Failed to fetch");
+		}
+	} catch (e: any) {
+		setError(e.message || "Failed to fetch");
 		} finally {
 			setLoading(false);
 		}

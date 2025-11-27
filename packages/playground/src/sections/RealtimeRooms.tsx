@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { type RoomAvailable } from "@colyseus/sdk";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faDoorOpen, faHashtag, faTicket, faUser, faChevronDown, faChevronUp, faInfoCircle } from "@fortawesome/free-solid-svg-icons";
+import { faDoorOpen, faHashtag, faTicket, faUser, faChevronDown, faChevronUp, faInfoCircle, faSpinner, faExclamationTriangle } from "@fortawesome/free-solid-svg-icons";
 
 import { InspectConnection } from "../components/InspectConnection";
 import { client, Connection, global, roomsBySessionId } from "../utils/Types";
@@ -101,8 +101,18 @@ export function RealtimeRooms({
 	// Reusable content sections
 	const joinRoomContent = (
 		<>
-			{serverState === ServerState.CONNECTING && <p className="text-sm">Connecting to server...</p>}
-			{serverState === ServerState.OFFLINE && <p className="text-sm">Server is offline.</p>}
+			{serverState === ServerState.CONNECTING && (
+				<div className="flex items-center gap-3 p-4 mb-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+					<FontAwesomeIcon icon={faSpinner} className="text-blue-600 dark:text-blue-400 w-4 h-4 animate-spin" />
+					<span className="text-sm font-medium text-blue-700 dark:text-blue-300">Connecting to server...</span>
+				</div>
+			)}
+			{serverState === ServerState.OFFLINE && (
+				<div className="flex items-center gap-3 p-4 mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+					<FontAwesomeIcon icon={faExclamationTriangle} className="text-red-600 dark:text-red-400 w-4 h-4" />
+					<span className="text-sm font-medium text-red-700 dark:text-red-300">Server is offline.</span>
+				</div>
+			)}
 			{serverState === ServerState.CONNECTED && (
 				<JoinRoomForm
 					roomNames={roomNames}
@@ -127,22 +137,22 @@ export function RealtimeRooms({
 	);
 
 	const inspectConnectionHeader = selectedConnection && roomsBySessionId[selectedConnection.sessionId] ? (
-		<div className="text-sm flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-2 sm:gap-x-4 sm:gap-y-2 mb-4">
-			<div className="flex items-center gap-2 text-xs sm:text-sm font-normal">
-				<FontAwesomeIcon icon={faDoorOpen} className="text-blue-600 dark:text-blue-400 w-3.5" />
+		<div className="text-xs flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-2 sm:gap-x-4 sm:gap-y-2 mb-4">
+			<div className="flex items-center gap-1 font-normal">
+				<FontAwesomeIcon icon={faDoorOpen} className="text-blue-600 dark:text-blue-400 w-35" />
 				<span className="text-gray-600 dark:text-slate-400">Room:</span>
 				<code className="bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-300 px-2 py-1 rounded text-xs">
 					{roomsBySessionId[selectedConnection.sessionId].name}
 				</code>
 			</div>
-			<div className="flex items-center gap-2 text-xs sm:text-sm font-normal">
+			<div className="flex items-center gap-1 font-normal">
 				<FontAwesomeIcon icon={faHashtag} className="text-purple-600 dark:text-purple-400 w-3.5" />
 				<span className="text-gray-600 dark:text-slate-400">Room ID:</span>
 				<code className="bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-300 px-2 py-1 rounded text-xs truncate max-w-[150px] sm:max-w-[200px]">
 					{roomsBySessionId[selectedConnection.sessionId].roomId}
 				</code>
 			</div>
-			<div className="flex items-center gap-2 text-xs sm:text-sm font-normal">
+			<div className="flex items-center gap-1 font-normal">
 				<FontAwesomeIcon icon={faUser} className="text-green-600 dark:text-green-400 w-3.5" />
 				<span className="text-gray-600 dark:text-slate-400">Session ID:</span>
 				<code className="bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-300 px-2 py-1 rounded text-xs truncate max-w-[150px] sm:max-w-[200px]">

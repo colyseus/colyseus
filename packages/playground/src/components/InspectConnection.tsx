@@ -1,8 +1,9 @@
-import { Client, Room } from "colyseus.js";
+import type { Client } from "@colyseus/sdk";
 import { useEffect, useState } from "react";
 import { Connection, roomsBySessionId, messageTypesByRoom } from "../utils/Types";
 import { Timestamp } from "../elements/Timestamp";
 
+import { JSONSchemaFields } from "./JSONSchemaFields";
 import { JSONEditor } from "../elements/JSONEditor";
 import * as JSONEditorModule from "jsoneditor";
 
@@ -45,11 +46,13 @@ export function InspectConnection({
 	connection: Connection,
 }) {
 	const room = roomsBySessionId[connection.sessionId];
-	const messageTypes = messageTypesByRoom[room.name];
+	const messageTypes = Object.keys(messageTypesByRoom[room.name] || {});
+	const messageFormats = messageTypesByRoom[room.name];
 	if (!messageTypes) { throw new Error("messageTypes not found for room: " + room.name); }
 
 	// state
 	const [message, setMessage] = useState("{}");
+	const [messageValues, setMessageValues] = useState<Record<string, any>>({});
 	const [messageType, setMessageType] = useState(messageTypes[0]);
 	const [isSendMessageEnabled, setSendMessageEnabled] = useState(true);
 	const [selectedTab, setSelectedTab] = useState(lastTabSelected)
@@ -63,14 +66,28 @@ export function InspectConnection({
 	const hasWildcardMessageType = messageTypes.indexOf("*") >= 0;
 	const allowReconnect = !connection.isConnected;
 
-	const handleMessageTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) =>
+	const handleMessageTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
 		setMessageType(e.target.value);
+		setMessageValues({});
+		setMessage("{}");
+	};
 
 	const onChangeMessage = (text: string) =>
 		setMessage(text);
 
 	const onMessageValidationError = (errors: ReadonlyArray<JSONEditorModule.SchemaValidationError | JSONEditorModule.ParseError>) =>
 		setSendMessageEnabled(errors.length === 0);
+
+	const onSchemaFieldChange = (key: string, value: any) => {
+		const newValues = { ...messageValues };
+		if (value === undefined) {
+			delete newValues[key];
+		} else {
+			newValues[key] = value;
+		}
+		setMessageValues(newValues);
+		setSendMessageEnabled(true);
+	};
 
 	const handleSelectTab = (e: React.MouseEvent<HTMLButtonElement>) => {
 		lastTabSelected = e.currentTarget.value as InspectTab;
@@ -87,7 +104,7 @@ export function InspectConnection({
 		try {
 			// manually reconnect using internal SDK API:
 			const [roomId, reconnectionToken] = room.reconnectionToken.split(":");
-			await client['createMatchMakeRequest']("reconnect", roomId, { reconnectionToken }, undefined, room);
+			await client['createMatchMakeRequest']("reconnect", roomId, { reconnectionToken });
 
 		} catch (e: any) {
 			displayError(e.message);
@@ -100,7 +117,8 @@ export function InspectConnection({
 	const sendMessage = () => {
 		try {
 			const now = new Date();
-			const payload = JSON.parse(message || "{}");
+			const hasValidator = messageFormats?.[messageType];
+			const payload = hasValidator ? messageValues : JSON.parse(message || "{}");
 
 			const newMessage = { type: messageType, message: payload, out: true, now, };
 			setMessages([newMessage, ...messages]);
@@ -170,37 +188,53 @@ export function InspectConnection({
 									</p>
 								</div>
 							</div>
-						: <div className="flex flex-col sm:flex-row sm:items-stretch gap-3">
-								<div className="flex sm:w-40">
+						: <div className="flex flex-col gap-4">
+								<div className="flex flex-col gap-2">
+									<label className="block text-xs font-semibold text-gray-700 dark:text-slate-400 uppercase tracking-wide">
+										Message Type
+									</label>
 									<select
 										className="w-full border-2 border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 p-2.5 rounded-lg text-sm font-medium focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark:focus:ring-purple-400 dark:focus:border-purple-400 transition-all cursor-pointer hover:border-purple-400 dark:hover:border-slate-500"
 										value={messageType}
 										onChange={handleMessageTypeChange}>
-										<option disabled={true} value="">Message type</option>
+										<option disabled={true} value="">Select a message type</option>
 										{(messageTypes).map((type) => (
 											<option key={type} value={type}>{type}</option>
 										))}
 									</select>
 								</div>
 
-							<div className="flex flex-1 min-w-0">
-								<JSONEditor
-									text={message}
-									onChangeText={onChangeMessage}
-									onValidationError={onMessageValidationError}
-									maxLines={2}
-									mode="code"
-									search={false}
-									statusBar={false}
-									navigationBar={false}
-									mainMenuBar={false}
-									className={"h-11 overflow-hidden rounded-lg border-2 w-full transition-all " + (isSendMessageEnabled ? "border-gray-300 dark:border-slate-600 focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-500/20" : "border-red-400 dark:border-red-500 ring-2 ring-red-500/20")}
-								/>
-							</div>
+								<div className="flex flex-col gap-2">
+									<label className="block text-xs font-semibold text-gray-700 dark:text-slate-400 uppercase tracking-wide">
+										Message Payload
+									</label>
+									{messageFormats?.[messageType] ? (
+										<div className={"rounded-lg border-2 w-full transition-all p-3 " + (isSendMessageEnabled ? "border-gray-300 dark:border-slate-600" : "border-red-400 dark:border-red-500 ring-2 ring-red-500/20")}>
+											<JSONSchemaFields
+												schema={messageFormats[messageType]}
+												values={messageValues}
+												onChange={onSchemaFieldChange}
+											/>
+										</div>
+									) : (
+										<JSONEditor
+											text={message}
+											onChangeText={onChangeMessage}
+											onValidationError={onMessageValidationError}
+											maxLines={3}
+											mode="code"
+											search={false}
+											statusBar={false}
+											navigationBar={false}
+											mainMenuBar={false}
+											className={"h-20 overflow-hidden rounded-lg border-2 w-full transition-all " + (isSendMessageEnabled ? "border-gray-300 dark:border-slate-600 focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-500/20" : "border-red-400 dark:border-red-500 ring-2 ring-red-500/20")}
+										/>
+									)}
+								</div>
 
 								<div className="flex">
 									<button
-										className="w-full sm:w-auto bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-700 hover:to-purple-600 disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed text-white font-semibold py-2.5 px-5 rounded-lg text-sm whitespace-nowrap transition-all duration-200 shadow-md hover:shadow-lg disabled:shadow-none transform hover:scale-[1.02] active:scale-[0.98] disabled:transform-none flex items-center justify-center gap-2"
+										className="w-full bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-700 hover:to-purple-600 disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed text-white font-semibold py-2.5 px-5 rounded-lg text-sm whitespace-nowrap transition-all duration-200 shadow-md hover:shadow-lg disabled:shadow-none transform hover:scale-[1.02] active:scale-[0.98] disabled:transform-none flex items-center justify-center gap-2"
 										disabled={!isSendMessageEnabled}
 										onClick={sendMessage}>
 										<svg className="w-4 h-4" fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">

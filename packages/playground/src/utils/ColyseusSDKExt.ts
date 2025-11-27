@@ -1,7 +1,7 @@
 /**
  * Monkey-patch Colyseus SDK to intercept and expose some private events
  */
-import { Room, Protocol } from "colyseus.js";
+import { Room, Protocol } from "@colyseus/sdk";
 
 export const RAW_EVENTS_KEY = '$_raw';
 export const DEVMODE_RESTART = '$_devmode';
@@ -14,10 +14,11 @@ export function onRoomConnected(callback: (room: Room) => void) {
 }
 
 const connect = Room.prototype['connect'];
-Room.prototype['connect'] = function(endpoint: string, devModeCloseCallback: () => void, room: Room) {
+Room.prototype['connect'] = function(endpoint: string, devModeCloseCallback: () => void) {
   // @ts-ignore
   connect.apply(this, arguments);
 
+  const room = this;
   (room as any)[RAW_EVENTS_KEY] = [];
 
   // intercept send events
@@ -68,11 +69,12 @@ Room.prototype['onMessageCallback'] = function(event: MessageEvent) {
   onMessageCallback.call(this, event);
 }
 
+// Dynamically generate protocol codes mapping from Protocol
+const protocolCodes = Object.entries(Protocol).reduce((acc, [key, value]) => {
+  acc[value] = key;
+  return acc;
+}, {} as Record<number, string>);
+
 function getEventType(code: number) {
-  // TODO: fix nomenclature on SDK itself
-  let eventType = Protocol[code]?.replace("ROOM_", "");
-  if (eventType === "DATA") {
-    eventType = "MESSAGE";
-  }
-  return eventType;
+  return protocolCodes[code];
 }
