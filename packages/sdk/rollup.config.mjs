@@ -11,8 +11,8 @@ import schemapkg from "./node_modules/@colyseus/schema/package.json" with { type
 
 const external = Object.keys(pkg.dependencies);
 
-const banner = `// colyseus.js@${pkg.version}`;
-const bannerStatic = `// colyseus.js@${pkg.version} (@colyseus/schema ${schemapkg.version})`;
+const banner = `// Copyright (c) ${new Date().getFullYear()} Endel Dreyer.\n//\n// This software is released under the MIT License.\n// https://opensource.org/license/MIT\n//\n// colyseus.js@${pkg.version}`;
+const bannerStatic = `${banner} - @colyseus/schema ${schemapkg.version}`;
 
 const replacePlugin = replace({
     'process.env.VERSION': JSON.stringify(pkg.version),
@@ -83,7 +83,7 @@ export default [
         output: [
             {
                 preserveModules: false,
-                banner: `// THIS VERSION USES "XMLHttpRequest" INSTEAD OF "fetch" FOR COMPATIBILITY WITH COCOS CREATOR\n${bannerStatic}`,
+                banner: `${bannerStatic}\n// THIS VERSION USES "XMLHttpRequest" INSTEAD OF "fetch" FOR COMPATIBILITY WITH COCOS CREATOR`,
                 dir: 'dist',
                 name: "Colyseus",
                 format: 'umd',
@@ -111,6 +111,25 @@ export default [
             nodeResolve({ browser: true }), // "browser" seems to have no effect here. (why??)
         ],
 
+    },
+
+    // Debug tools - standalone script that patches global Colyseus
+    {
+        input: 'src/debug.ts',
+        external: ['./Client'],
+        output: {
+            file: 'dist/debug.js',
+            format: 'iife',
+            sourcemap: true,
+            banner,
+            globals: (filename) => {
+                return "Colyseus";
+            }
+        },
+        plugins: [
+            replacePlugin,
+            typescript({ tsconfig: './tsconfig/tsconfig.cjs.json' }),
+        ],
     },
 
 ];

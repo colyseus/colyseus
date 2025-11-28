@@ -18,6 +18,7 @@ const treeViewIcon = `<svg stroke="currentColor" fill="currentColor" stroke-widt
 const infoIcon = `<svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 512 512" height="200px" width="200px" xmlns="http://www.w3.org/2000/svg"><path d="M256 48C141.2 48 48 141.2 48 256s93.2 208 208 208 208-93.2 208-208S370.8 48 256 48zm21 312h-42V235h42v125zm0-166h-42v-42h42v42z"></path></svg>`;
 const settingsIcon = `<svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" height="200px" width="200px" xmlns="http://www.w3.org/2000/svg"><path d="M12.003 21c-.732 .001 -1.465 -.438 -1.678 -1.317a1.724 1.724 0 0 0 -2.573 -1.066c-1.543 .94 -3.31 -.826 -2.37 -2.37a1.724 1.724 0 0 0 -1.065 -2.572c-1.756 -.426 -1.756 -2.924 0 -3.35a1.724 1.724 0 0 0 1.066 -2.573c-.94 -1.543 .826 -3.31 2.37 -2.37c1 .608 2.296 .07 2.572 -1.065c.426 -1.756 2.924 -1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543 -.94 3.31 .826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c.886 .215 1.325 .957 1.318 1.694"></path><path d="M9 12a3 3 0 1 0 6 0a3 3 0 0 0 -6 0"></path><path d="M19.001 19m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path><path d="M19.001 15.5v1.5"></path><path d="M19.001 21v1.5"></path><path d="M22.032 17.25l-1.299 .75"></path><path d="M17.27 20l-1.3 .75"></path><path d="M15.97 17.25l1.3 .75"></path><path d="M20.733 20l1.3 .75"></path></svg>`;
 const eyeSlashIcon = `<svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" height="16" width="16" xmlns="http://www.w3.org/2000/svg"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
+const closeIcon = `<svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><path d="M400 145.49 366.51 112 256 222.51 145.49 112 112 145.49 222.51 256 112 366.51 145.49 400 256 289.49 366.51 400 400 366.51 289.49 256 400 145.49z"></path></svg>`;
 
 // Store debug info per room
 const roomDebugInfo = new Map();
@@ -33,7 +34,7 @@ const preferences = {
         delay: 0 // milliseconds
     },
     panelPosition: {
-        position: 'bottom-right' // 'bottom-right', 'bottom-left', 'top-left', 'top-right'
+        position: 'top-right' // 'bottom-right', 'bottom-left', 'top-left', 'top-right'
     }
 };
 
@@ -255,7 +256,7 @@ function createModalHeader(options) {
 
     // Close button
     var closeButton = document.createElement('button');
-    closeButton.innerHTML = '×';
+    closeButton.innerHTML = closeIcon;
     closeButton.style.background = 'none';
     closeButton.style.border = 'none';
     closeButton.style.color = '#fff';
@@ -409,7 +410,6 @@ function initialize() {
 
     // Apply initial position after menu is created
     applyPanelPosition();
-    applyMonkeyPatches();
 }
 
 // Create menu that opens on logo click
@@ -2731,4 +2731,13 @@ function applyMonkeyPatches() {
     }
 }
 
-initialize();
+applyMonkeyPatches();
+
+// Initialize only after DOM is ready
+// (in case script is loaded in HEAD tag)
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initialize);
+} else {
+    // DOM is already ready
+    initialize();
+}
