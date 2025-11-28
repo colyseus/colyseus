@@ -82,8 +82,259 @@ function savePreferences() {
 // Panel visibility state
 let panelsHidden = false;
 
+// Track open modals as an ordered stack (most recent at end)
+let modalStack: any[] = [];
+const BASE_MODAL_ZINDEX = 10000;
+
 // Load preferences on script load
 loadPreferences();
+
+// Function to select a modal (bring to front)
+function selectModal(modal) {
+    if (!modal) return;
+
+    // Remove modal from stack if already present
+    const index = modalStack.indexOf(modal);
+    if (index > -1) {
+        modalStack.splice(index, 1);
+    }
+
+    // Add to end of stack (most recent)
+    modalStack.push(modal);
+
+    // Update z-indexes for all modals based on their position in stack
+    modalStack.forEach((m, i) => {
+        if (document.body.contains(m)) {
+            m.style.zIndex = (BASE_MODAL_ZINDEX + i).toString();
+        }
+    });
+}
+
+// Function to remove modal from stack
+function removeModalFromStack(modal) {
+    const index = modalStack.indexOf(modal);
+    if (index > -1) {
+        modalStack.splice(index, 1);
+    }
+}
+
+// Global ESC key handler - closes most recent modal
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && modalStack.length > 0) {
+        // Get the most recent modal (top of stack)
+        const topModal = modalStack[modalStack.length - 1];
+        if (topModal && document.body.contains(topModal)) {
+            topModal.remove();
+        }
+    }
+});
+
+// Shared modal creation utilities
+function createModalOverlay() {
+    var overlay = document.createElement('div');
+    overlay.style.position = 'fixed';
+    overlay.style.top = '0';
+    overlay.style.left = '0';
+    overlay.style.right = '0';
+    overlay.style.bottom = '0';
+    overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+    overlay.style.zIndex = BASE_MODAL_ZINDEX.toString();
+    overlay.style.display = 'flex';
+    overlay.style.justifyContent = 'center';
+    overlay.style.alignItems = 'center';
+    return overlay;
+}
+
+function createModal(options) {
+    var opts = options || {};
+    var modal = document.createElement('div');
+
+    // Set ID if provided
+    if (opts.id) {
+        modal.id = opts.id;
+    }
+
+    // Base styles
+    modal.style.position = 'fixed';
+    modal.style.backgroundColor = opts.backgroundColor || '#1e1e1e';
+    modal.style.borderRadius = '8px';
+    modal.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.5)';
+    modal.style.color = '#fff';
+    modal.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+    modal.style.zIndex = BASE_MODAL_ZINDEX.toString();
+    modal.style.display = 'flex';
+    modal.style.flexDirection = 'column';
+    modal.style.overflow = 'hidden';
+
+    // Size
+    if (opts.width) modal.style.width = opts.width;
+    if (opts.height) modal.style.height = opts.height;
+    if (opts.minWidth) modal.style.minWidth = opts.minWidth;
+    if (opts.minHeight) modal.style.minHeight = opts.minHeight;
+    if (opts.maxWidth) modal.style.maxWidth = opts.maxWidth;
+    if (opts.maxHeight) modal.style.maxHeight = opts.maxHeight;
+
+    // Position
+    modal.style.top = opts.top || '50%';
+    modal.style.left = opts.left || '50%';
+    modal.style.transform = opts.transform || 'translate(-50%, -50%)';
+
+    // Mark modal as selected when clicked
+    modal.addEventListener('mousedown', function(e) {
+        selectModal(modal);
+    });
+
+    // Mark modal as selected when opened
+    selectModal(modal);
+
+    // Override remove to cleanup modal from stack
+    var originalRemove = modal.remove.bind(modal);
+    modal.remove = function() {
+        // Remove from modal stack
+        removeModalFromStack(modal);
+
+        // Auto-cleanup room onLeave listener
+        if (opts.room && opts.trackOnLeave && opts.onLeaveCallback) {
+            var callbackToRemove = opts.onLeaveCallback.current || opts.onLeaveCallback;
+            opts.room.onLeave.remove(callbackToRemove);
+        }
+
+        if (opts.onRemove) {
+            opts.onRemove();
+        }
+        originalRemove();
+    };
+
+    return modal;
+}
+
+function createModalHeader(options) {
+    var opts = options || {};
+
+    var header = document.createElement('div');
+    header.style.display = 'flex';
+    header.style.justifyContent = 'space-between';
+    header.style.alignItems = 'center';
+    header.style.padding = opts.padding || '8px';
+    header.style.borderBottom = '1px solid rgba(255, 255, 255, 0.15)';
+    header.style.paddingBottom = opts.paddingBottom || '4px';
+    header.style.marginBottom = opts.marginBottom || '6px';
+    header.style.cursor = opts.draggable !== false ? 'move' : 'default';
+    header.style.userSelect = 'none';
+    header.style.flexShrink = '0';
+    header.style.position = 'relative';
+    header.style.zIndex = '1';
+
+    // Title
+    var title = document.createElement('div');
+    title.textContent = opts.title || '';
+    title.style.margin = '0';
+    title.style.fontSize = opts.titleSize || '11px';
+    title.style.fontWeight = 'bold';
+    title.style.fontFamily = opts.titleFont || 'monospace';
+    title.style.flex = '1';
+    title.style.display = 'flex';
+    title.style.alignItems = 'center';
+
+    // Status dot (optional)
+    if (opts.statusDot) {
+        var statusDot = document.createElement('div');
+        statusDot.style.width = '8px';
+        statusDot.style.height = '8px';
+        statusDot.style.borderRadius = '50%';
+        statusDot.style.marginRight = '8px';
+        statusDot.style.flexShrink = '0';
+        statusDot.style.transition = 'background-color 0.3s';
+        statusDot.style.backgroundColor = opts.statusColor || '#22c55e';
+        title.insertBefore(statusDot, title.firstChild);
+
+        if (opts.statusDotRef) {
+            opts.statusDotRef.element = statusDot;
+        }
+    }
+
+    // Close button
+    var closeButton = document.createElement('button');
+    closeButton.innerHTML = '×';
+    closeButton.style.background = 'none';
+    closeButton.style.border = 'none';
+    closeButton.style.color = '#fff';
+    closeButton.style.fontSize = '18px';
+    closeButton.style.cursor = 'pointer';
+    closeButton.style.padding = '0';
+    closeButton.style.margin = 'auto';
+    closeButton.style.width = '20px';
+    closeButton.style.height = '20px';
+    closeButton.style.display = 'flex';
+    closeButton.style.alignItems = 'center';
+    closeButton.style.justifyContent = 'center';
+    closeButton.style.borderRadius = '4px';
+    closeButton.style.transition = 'background-color 0.2s';
+    closeButton.style.opacity = '0.6';
+
+    closeButton.addEventListener('mouseenter', function() {
+        closeButton.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+        closeButton.style.opacity = '1';
+    });
+    closeButton.addEventListener('mouseleave', function() {
+        closeButton.style.backgroundColor = 'transparent';
+        closeButton.style.opacity = '0.6';
+    });
+    closeButton.addEventListener('click', function(e) {
+        e.stopPropagation();
+        if (opts.onClose) {
+            opts.onClose();
+        } else if (opts.modal) {
+            opts.modal.remove();
+        }
+    });
+
+    header.appendChild(title);
+    header.appendChild(closeButton);
+
+    return { header: header, title: title, closeButton: closeButton };
+}
+
+function makeDraggable(modal, dragHandle) {
+    var isDragging = false;
+    var dragOffsetX = 0;
+    var dragOffsetY = 0;
+
+    dragHandle.addEventListener('mousedown', function(e) {
+        isDragging = true;
+        var rect = modal.getBoundingClientRect();
+        dragOffsetX = e.clientX - rect.left;
+        dragOffsetY = e.clientY - rect.top;
+
+        // Set position to current absolute position before removing transform
+        modal.style.left = rect.left + 'px';
+        modal.style.top = rect.top + 'px';
+        modal.style.transform = 'none';
+        e.preventDefault();
+    });
+
+    var onMouseMove = function(e) {
+        if (isDragging) {
+            var newLeft = e.clientX - dragOffsetX;
+            var newTop = e.clientY - dragOffsetY;
+            modal.style.left = newLeft + 'px';
+            modal.style.top = newTop + 'px';
+        }
+    };
+
+    var onMouseUp = function() {
+        isDragging = false;
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+
+    // Return cleanup function
+    return function cleanup() {
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+    };
+}
 
 // Function to get border color based on latency simulation value
 function getBorderColor(latencyValue, opacity) {
@@ -478,23 +729,14 @@ function openSettingsModal() {
         existingModal.remove();
     }
 
-    // Create overlay
-    var overlay = document.createElement('div');
+    // Create overlay using shared utility
+    var overlay = createModalOverlay();
     overlay.id = 'debug-settings-overlay';
-    overlay.style.position = 'fixed';
-    overlay.style.top = '0';
-    overlay.style.left = '0';
-    overlay.style.right = '0';
-    overlay.style.bottom = '0';
-    overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-    overlay.style.zIndex = '10000';
-    overlay.style.display = 'flex';
-    overlay.style.justifyContent = 'center';
-    overlay.style.alignItems = 'center';
 
-    // Create modal
+    // Create modal (non-fixed positioning for overlay)
     var modal = document.createElement('div');
     modal.id = 'debug-settings-modal';
+    modal.style.position = 'relative';  // relative position for centered overlay content
     modal.style.backgroundColor = 'rgba(30, 30, 30, 0.98)';
     modal.style.borderRadius = '8px';
     modal.style.width = '90%';
@@ -693,6 +935,21 @@ function openSettingsModal() {
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
 
+    // Mark as selected modal when opened
+    selectModal(overlay);
+
+    // Update close button to cleanup from modal stack
+    var originalOverlayRemove = overlay.remove.bind(overlay);
+    overlay.remove = function() {
+        removeModalFromStack(overlay);
+        originalOverlayRemove();
+    };
+
+    // Mark modal as selected when clicked
+    modal.addEventListener('mousedown', function(e) {
+        selectModal(overlay);
+    });
+
     // Close on overlay click
     overlay.addEventListener('click', function(e) {
         if (e.target === overlay) {
@@ -723,150 +980,50 @@ function openSendMessagesModal(uniquePanelId) {
         existingModal.remove();
     }
 
-    // Default values for positioning
-    var defaultWidth = 400;
-    var defaultLeft = '50%';
-    var defaultTop = '50%';
-    var defaultTransform = 'translate(-50%, -50%)';
+    // Status dot reference
+    var statusDotRef: any = {};
+    var updateConnectionStatus: any = null;
+    var onLeaveCallbackRef: any = { current: null };
 
-    // Create modal (no overlay, positioned like state inspector)
-    const modal = document.createElement('div');
-    modal.id = 'debug-send-messages-modal';
-    modal.style.position = 'fixed';
-    modal.style.top = defaultTop;
-    modal.style.left = defaultLeft;
-    modal.style.transform = defaultTransform;
-    modal.style.backgroundColor = '#1e1e1e';
-    modal.style.borderRadius = '8px';
-    modal.style.width = defaultWidth + 'px';
-    modal.style.minWidth = '300px';
-    modal.style.maxWidth = '90vw';
-    modal.style.maxHeight = '90vh';
-    modal.style.overflow = 'hidden';
-    modal.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.5)';
-    modal.style.color = '#fff';
-    modal.style.fontFamily = 'system-ui, -apple-system, sans-serif';
-    modal.style.zIndex = '10000';
-    modal.style.display = 'flex';
-    modal.style.flexDirection = 'column';
-
-    // Modal header (draggable)
-    const header = document.createElement('div');
-    header.style.display = 'flex';
-    header.style.justifyContent = 'space-between';
-    header.style.alignItems = 'center';
-    header.style.padding = '8px';
-    header.style.borderBottom = '1px solid rgba(255, 255, 255, 0.15)';
-    header.style.paddingBottom = '4px';
-    header.style.marginBottom = '6px';
-    header.style.cursor = 'move';
-    header.style.userSelect = 'none';
-    header.style.flexShrink = '0';
-    header.style.position = 'relative';
-    header.style.zIndex = '1';
-
-    // Connection status indicator
-    const sendMsgStatusDot = document.createElement('div');
-    sendMsgStatusDot.style.width = '8px';
-    sendMsgStatusDot.style.height = '8px';
-    sendMsgStatusDot.style.borderRadius = '50%';
-    sendMsgStatusDot.style.marginRight = '8px';
-    sendMsgStatusDot.style.flexShrink = '0';
-    sendMsgStatusDot.style.transition = 'background-color 0.3s';
-
-    // Function to update status dot color and button state
+    // Function to update status dot color
     const updateSendMsgStatusDot = () => {
-        sendMsgStatusDot.style.backgroundColor = room.connection?.isOpen ? '#22c55e' : '#ef4444';
-    };
-    updateSendMsgStatusDot();
-
-    // This will be updated later to include send button reference
-    var updateConnectionStatus = updateSendMsgStatusDot;
-
-    // Monitor connection status changes using onLeave event
-    room.onLeave(updateConnectionStatus);
-
-    // Clean up event listener when modal is closed
-    const originalRemoveSendMsg = modal.remove.bind(modal);
-    modal.remove = function() {
-        room.onLeave.remove(updateConnectionStatus);
-        originalRemoveSendMsg();
+        if (statusDotRef.element) {
+            statusDotRef.element.style.backgroundColor = room.connection?.isOpen ? '#22c55e' : '#ef4444';
+        }
     };
 
-    const title = document.createElement('div');
-    title.textContent = debugInfo.roomName + ' - Send Message';
-    title.style.margin = '0';
-    title.style.fontSize = '11px';
-    title.style.fontWeight = 'bold';
-    title.style.fontFamily = 'monospace';
-    title.style.flex = '1';
-    title.style.display = 'flex';
-    title.style.alignItems = 'center';
+    // Initial callback
+    onLeaveCallbackRef.current = updateSendMsgStatusDot;
+    room.onLeave(updateSendMsgStatusDot);
 
-    const closeButton = document.createElement('button');
-    closeButton.innerHTML = '×';
-    closeButton.style.background = 'none';
-    closeButton.style.border = 'none';
-    closeButton.style.color = '#fff';
-    closeButton.style.fontSize = '18px';
-    closeButton.style.cursor = 'pointer';
-    closeButton.style.padding = '0';
-    closeButton.style.margin = 'auto';
-    closeButton.style.width = '20px';
-    closeButton.style.height = '20px';
-    closeButton.style.display = 'flex';
-    closeButton.style.alignItems = 'center';
-    closeButton.style.justifyContent = 'center';
-    closeButton.style.borderRadius = '4px';
-    closeButton.style.transition = 'background-color 0.2s';
-    closeButton.style.opacity = '0.6';
-    closeButton.addEventListener('mouseenter', function () {
-        closeButton.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-        closeButton.style.opacity = '1';
-    });
-    closeButton.addEventListener('mouseleave', function () {
-        closeButton.style.backgroundColor = 'transparent';
-        closeButton.style.opacity = '0.6';
-    });
-    closeButton.addEventListener('click', function (e) {
-        e.stopPropagation();
-        modal.remove();
+    // Create modal using shared utility
+    const modal = createModal({
+        id: 'debug-send-messages-modal',
+        width: '400px',
+        minWidth: '300px',
+        maxWidth: '90vw',
+        maxHeight: '90vh',
+        room: room,
+        trackOnLeave: true,
+        onLeaveCallback: onLeaveCallbackRef
     });
 
-    title.insertBefore(sendMsgStatusDot, title.firstChild);
-    header.appendChild(title);
-    header.appendChild(closeButton);
-    modal.appendChild(header);
+    // Create header using shared utility
+    const headerComponents = createModalHeader({
+        title: debugInfo.roomName + ' - Send Message',
+        modal: modal,
+        statusDot: true,
+        statusColor: room.connection?.isOpen ? '#22c55e' : '#ef4444',
+        statusDotRef: statusDotRef
+    });
+
+    modal.appendChild(headerComponents.header);
 
     // Make modal draggable
-    var isDragging = false;
-    var dragOffsetX = 0;
-    var dragOffsetY = 0;
+    makeDraggable(modal, headerComponents.header);
 
-    header.addEventListener('mousedown', function(e) {
-        isDragging = true;
-        var rect = modal.getBoundingClientRect();
-        dragOffsetX = e.clientX - rect.left;
-        dragOffsetY = e.clientY - rect.top;
-        // Set position to current absolute position before removing transform
-        modal.style.left = rect.left + 'px';
-        modal.style.top = rect.top + 'px';
-        modal.style.transform = 'none';
-        e.preventDefault();
-    });
-
-    document.addEventListener('mousemove', function(e) {
-        if (isDragging) {
-            var newLeft = e.clientX - dragOffsetX;
-            var newTop = e.clientY - dragOffsetY;
-            modal.style.left = newLeft + 'px';
-            modal.style.top = newTop + 'px';
-        }
-    });
-
-    document.addEventListener('mouseup', function() {
-        isDragging = false;
-    });
+    // Update status dot initially
+    updateSendMsgStatusDot();
 
     // Form content container (scrollable)
     var formContainer = document.createElement('div');
@@ -1154,7 +1311,9 @@ function openSendMessagesModal(uniquePanelId) {
     // Update the connection status function to also manage button state
     updateConnectionStatus = function() {
         const isConnected = room.connection?.isOpen;
-        sendMsgStatusDot.style.backgroundColor = isConnected ? '#22c55e' : '#ef4444';
+        if (statusDotRef.element) {
+            statusDotRef.element.style.backgroundColor = isConnected ? '#22c55e' : '#ef4444';
+        }
 
         // Update button disabled state
         sendButton.disabled = !isConnected;
@@ -1168,6 +1327,12 @@ function openSendMessagesModal(uniquePanelId) {
             sendButton.style.opacity = '1';
         }
     };
+
+    // Swap out the onLeave callback to use the combined update function
+    room.onLeave.remove(onLeaveCallbackRef.current);
+    room.onLeave(updateConnectionStatus);
+    onLeaveCallbackRef.current = updateConnectionStatus;
+
     updateConnectionStatus();
 
     sendButton.addEventListener('click', function() {
@@ -1330,113 +1495,51 @@ function openStateInspectorModal(uniquePanelId) {
         }
     }
 
-    // Create modal
-    const modal = document.createElement('div');
-    modal.id = 'debug-state-inspector-modal';
-    modal.style.position = 'fixed';
-    modal.style.top = defaultTop;
-    modal.style.left = defaultLeft;
-    modal.style.transform = defaultTransform;
-    modal.style.backgroundColor = '#1e1e1e';
-    modal.style.borderRadius = '8px';
-    modal.style.width = defaultWidth + 'px';
-    modal.style.height = defaultHeight + 'px';
-    modal.style.minWidth = '300px';
-    modal.style.minHeight = '200px';
-    modal.style.maxWidth = '90vw';
-    modal.style.maxHeight = '90vh';
-    modal.style.overflow = 'hidden';
-    modal.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.5)';
-    modal.style.color = '#fff';
-    modal.style.fontFamily = 'system-ui, -apple-system, sans-serif';
-    modal.style.zIndex = '10000';
-    modal.style.display = 'flex';
-    modal.style.flexDirection = 'column';
-
-    // Modal header (draggable)
-    const header = document.createElement('div');
-    header.style.display = 'flex';
-    header.style.justifyContent = 'space-between';
-    header.style.alignItems = 'center';
-    header.style.padding = '8px';
-    header.style.borderBottom = '1px solid rgba(255, 255, 255, 0.15)';
-    header.style.paddingBottom = '4px';
-    header.style.marginBottom = '6px';
-    header.style.cursor = 'move';
-    header.style.userSelect = 'none';
-    header.style.flexShrink = '0';
-    header.style.position = 'relative';
-    header.style.zIndex = '1';
-
-    // Connection status indicator
-    const stateViewerStatusDot = document.createElement('div');
-    stateViewerStatusDot.style.width = '8px';
-    stateViewerStatusDot.style.height = '8px';
-    stateViewerStatusDot.style.borderRadius = '50%';
-    stateViewerStatusDot.style.marginRight = '8px';
-    stateViewerStatusDot.style.flexShrink = '0';
-    stateViewerStatusDot.style.transition = 'background-color 0.3s';
+    // Status dot reference
+    var statusDotRef: any = {};
 
     // Function to update status dot color
     const updateStateViewerStatusDot = () => {
-        stateViewerStatusDot.style.backgroundColor = room.connection?.isOpen ? '#22c55e' : '#ef4444';
+        if (statusDotRef.element) {
+            statusDotRef.element.style.backgroundColor = room.connection?.isOpen ? '#22c55e' : '#ef4444';
+        }
     };
-    updateStateViewerStatusDot();
 
-    // Monitor connection status changes using onLeave event
+    // Register the onLeave callback
     room.onLeave(updateStateViewerStatusDot);
 
-    // Clean up event listener when modal is closed
-    const originalRemoveStateViewer = modal.remove.bind(modal);
-    modal.remove = function() {
-        room.onLeave.remove(updateStateViewerStatusDot);
-        originalRemoveStateViewer();
-    };
-
-    const title = document.createElement('div');
-    title.textContent = `${debugInfo.roomName} - State Viewer`;
-    title.style.margin = '0';
-    title.style.fontSize = '11px';
-    title.style.fontWeight = 'bold';
-    title.style.fontFamily = 'monospace';
-    title.style.flex = '1';
-    title.style.display = 'flex';
-    title.style.alignItems = 'center';
-
-    const closeButton = document.createElement('button');
-    closeButton.innerHTML = '×';
-    closeButton.style.background = 'none';
-    closeButton.style.border = 'none';
-    closeButton.style.color = '#fff';
-    closeButton.style.fontSize = '18px';
-    closeButton.style.cursor = 'pointer';
-    closeButton.style.padding = '0';
-    closeButton.style.margin = 'auto';
-    closeButton.style.width = '20px';
-    closeButton.style.height = '20px';
-    closeButton.style.display = 'flex';
-    closeButton.style.alignItems = 'center';
-    closeButton.style.justifyContent = 'center';
-    closeButton.style.borderRadius = '4px';
-    closeButton.style.transition = 'background-color 0.2s';
-    closeButton.style.opacity = '0.6';
-    closeButton.addEventListener('mouseenter', function() {
-        closeButton.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-        closeButton.style.opacity = '1';
-    });
-    closeButton.addEventListener('mouseleave', function() {
-        closeButton.style.backgroundColor = 'transparent';
-        closeButton.style.opacity = '0.6';
-    });
-    closeButton.addEventListener('click', function(e) {
-        e.stopPropagation();
-        modal.remove();
+    // Create modal using shared utility with automatic onLeave tracking
+    const modal = createModal({
+        id: 'debug-state-inspector-modal',
+        width: defaultWidth + 'px',
+        height: defaultHeight + 'px',
+        minWidth: '300px',
+        minHeight: '200px',
+        maxWidth: '90vw',
+        maxHeight: '90vh',
+        top: defaultTop,
+        left: defaultLeft,
+        transform: defaultTransform,
+        room: room,
+        trackOnLeave: true,
+        onLeaveCallback: updateStateViewerStatusDot
     });
 
-    title.insertBefore(stateViewerStatusDot, title.firstChild);
-    header.appendChild(title);
-    header.appendChild(closeButton);
+    // Create header using shared utility
+    const headerComponents = createModalHeader({
+        title: `${debugInfo.roomName} - State Viewer`,
+        modal: modal,
+        statusDot: true,
+        statusColor: room.connection?.isOpen ? '#22c55e' : '#ef4444',
+        statusDotRef: statusDotRef
+    });
+    const header = headerComponents.header;
+    const closeButton = headerComponents.closeButton;
+
     modal.appendChild(header);
+
+    // Update status dot initially
+    updateStateViewerStatusDot();
 
     // State content container
     var contentContainer = document.createElement('div');
