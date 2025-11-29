@@ -46,7 +46,7 @@ export type MessageHandlerWithFormat<T extends StandardSchemaV1 = any, This = an
   handler: (this: This, client: Client, message: StandardSchemaV1.InferOutput<T>) => void;
 };
 
-type MessageHandler<This = any> =
+export type MessageHandler<This = any> =
   | ((this: This, client: Client, message: any) => void)
   | MessageHandlerWithFormat<any, This>;
 
@@ -60,6 +60,11 @@ export type ExtractMessageType<T> =
     : T extends (this: any, client: any, message: infer Message) => void
       ? Message
       : any;
+
+/**
+ * A map of message types to message handlers.
+ */
+export type Messages<This extends Room> = Record<string, MessageHandler<This>>;
 
 /**
  * Helper function to create a validated message handler with automatic type inference.
@@ -224,7 +229,7 @@ export abstract class Room<
 
   private _reconnections: { [reconnectionToken: string]: [string, Deferred] } = {};
 
-  public messages?: Record<string, MessageHandler<this>>;
+  public messages?: Messages<this>;
 
   private onMessageEvents = createNanoEvents();
   private onMessageValidators: {[message: string]: StandardSchemaV1} = {};

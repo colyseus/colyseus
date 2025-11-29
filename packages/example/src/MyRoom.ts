@@ -1,4 +1,4 @@
-import { CloseCode, Room, type Client, validate } from "@colyseus/core";
+import { CloseCode, Room, type Client, validate, type Messages } from "@colyseus/core";
 import { schema, type SchemaType } from "@colyseus/schema";
 import { z } from "zod";
 
@@ -13,10 +13,23 @@ export const MyRoomState = schema({
   players: { map: Player },
 });
 
+const thirdPartyMessages: Messages<MyRoom> = {
+  nopayload (client: Client, message: any) {
+    this.broadcast("nopayload", message);
+  },
+
+  with_validation: validate(z.object({
+    name: z.string(),
+  }), function (client, message) {
+    this.broadcast("with_validation", message);
+  }),
+}
+
 export class MyRoom extends Room {
   state = new MyRoomState();
 
   messages = {
+    ...thirdPartyMessages,
     move: validate(z.object({
       x: z.number(),
       y: z.number(),
@@ -27,8 +40,8 @@ export class MyRoom extends Room {
       player.y = message.y;
     }),
 
-    nopayload (this: MyRoom, client: Client, message: any) {
-      const player = this.state.players.get(client.sessionId)!;
+    nopayload_2: (client: Client, message: any) => {
+      this.broadcast("nopayload_2", message);
     },
   };
 
