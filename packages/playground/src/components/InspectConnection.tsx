@@ -46,7 +46,7 @@ export function InspectConnection({
 	connection: Connection,
 }) {
 	const room = roomsBySessionId[connection.sessionId];
-	const messageTypes = Object.keys(messageTypesByRoom[room.name] || {});
+	const messageTypes = [...Object.keys(messageTypesByRoom[room.name] || {}), "*"];
 	const messageFormats = messageTypesByRoom[room.name];
 	if (!messageTypes) { throw new Error("messageTypes not found for room: " + room.name); }
 
@@ -203,9 +203,8 @@ export function InspectConnection({
 										onChange={handleMessageTypeChange}>
 										<option disabled={true} value="">Select a message type</option>
 										{(messageTypes).map((type) => (
-											<option key={type} value={type}>{type}</option>
+											<option key={type} value={type}>{type === "*" ? "* (Custom)" : type}</option>
 										))}
-										<option key="*" value="*">* (Custom)</option>
 									</select>
 								</div>
 
