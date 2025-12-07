@@ -31,11 +31,19 @@ export interface ISendOptions {
 export const ClientState = { JOINING: 0, JOINED: 1, RECONNECTED: 2, LEAVING: 3, CLOSED: 4 } as const;
 export type ClientState = (typeof ClientState)[keyof typeof ClientState];
 
-export interface DefineClient<T extends {
-  userData?: any,
-  auth?: any,
-  messages: Record<string | number, any>
-}> extends Client<T['userData'], T['auth'], T['messages']> { }
+// Helper types to extract properties from the Client type parameter
+type ExtractClientUserData<T> = T extends { userData: infer U } ? U : T;
+type ExtractClientAuth<T> = T extends { auth: infer A } ? A : any;
+type ExtractClientMessages<T> = T extends { messages: infer M } ? M : any;
+
+// Helper type to make message required when the message type demands it
+export type MessageArgs<M, Options> =
+  unknown extends M ? [message?: M, options?: Options] :  // Handle 'any' type (backwards compatibility)
+  [M] extends [never] ? [message?: M, options?: Options] :
+  [M] extends [void] ? [message?: M, options?: Options] :
+  [M] extends [undefined] ? [message?: M, options?: Options] :
+  undefined extends M ? [message?: M, options?: Options] :
+  [message: M, options?: Options];
 
 /**
  * The client instance from the server-side is responsible for the transport layer between the server and the client.
@@ -45,8 +53,8 @@ export interface DefineClient<T extends {
  * - This is the raw WebSocket connection coming from the `ws` package. There are more methods available which aren't
  *  encouraged to use along with Colyseus.
  */
-export interface Client<UserData = any, AuthData = any, MessageTypes extends Record<string | number, any> = any> { // Record<string | number, any>
-  '~messages': MessageTypes;
+export interface Client<T extends { userData?: any, auth?: any, messages?: Record<string | number, any> } = any> {
+  '~messages': ExtractClientMessages<T>;
 
   ref: EventEmitter;
 
@@ -75,12 +83,12 @@ export interface Client<UserData = any, AuthData = any, MessageTypes extends Rec
    * - Can be used to store custom data about the client's connection. userData is not synchronized with the client,
    * and should be used only to keep player-specific with its connection.
    */
-  userData?: UserData;
+  userData?: ExtractClientUserData<T>;
 
   /**
    * auth data provided by your `onAuth`
    */
-  auth?: AuthData;
+  auth?: ExtractClientAuth<T>;
 
   /**
    * Reconnection token used to re-join the room after onLeave + allowReconnection().
@@ -103,8 +111,10 @@ export interface Client<UserData = any, AuthData = any, MessageTypes extends Rec
    * @param message Message payload. (automatically encoded with msgpack.)
    * @param options
    */
-  send<T extends keyof MessageTypes>(type: T, message?: MessageTypes[T], options?: ISendOptions): void;
-  send(type: string | number, message?: any, options?: ISendOptions): void;
+  send<K extends keyof this['~messages']>(
+    type: K,
+    ...args: MessageArgs<this['~messages'][K], ISendOptions>
+  ): void;
 
   /**
    * Send raw bytes to this specific client.
@@ -113,7 +123,6 @@ export interface Client<UserData = any, AuthData = any, MessageTypes extends Rec
    * @param bytes Raw byte array payload
    * @param options
    */
-  sendBytes<T extends keyof MessageTypes>(type: T, bytes: Buffer | Uint8Array, options?: ISendOptions): void;
   sendBytes(type: string | number, bytes: Buffer | Uint8Array, options?: ISendOptions): void;
 
   /**
@@ -149,7 +158,7 @@ export interface Client<UserData = any, AuthData = any, MessageTypes extends Rec
 export interface ClientPrivate {
   readyState: number; // TODO: remove readyState on version 1.0.0. Use only "state" instead.
   _enqueuedMessages?: any[];
-  _afterNextPatchQueue: Array<[string | Client, IArguments]>;
+  _afterNextPatchQueue: Array<[string | number | Client, ArrayLike<any>]>;
   _joinedAt: number; // "elapsedTime" when the client joined the room.
 }
 

@@ -20,8 +20,7 @@ export type IRoomCacheFilterByKeys = 'clients' | 'maxClients' | 'processId';
 /**
  * Extract metadata type from Room type
  */
-export type ExtractMetadata<RoomType extends Room> =
-  RoomType extends Room<infer M> ? M : any;
+export type ExtractMetadata<RoomType extends Room> = RoomType['~metadata'];
 
 /**
  * Generates a unique lock ID based on filter options.

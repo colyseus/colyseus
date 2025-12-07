@@ -5,10 +5,14 @@
         "moduleResolution": "NodeNext",
         "target": "ESNext",
         "declaration": true,
+
+        "strict": true,
+        "strictNullChecks": true,
+        "noImplicitAny": false,
+
         "esModuleInterop": true,
         "experimentalDecorators": true,
         "useDefineForClassFields": false,
-        "noImplicitAny": false,
         "sourceMap": false,
         "skipLibCheck": true,
         "noEmit": true,
@@ -18,5 +22,5 @@
     "include": [
       "**/*.ts",
       "./../src/**/*.ts"
-    ]
+, "../../../packages/core/src/rooms/createRoom.ts"    ]
 }

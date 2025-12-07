@@ -19,7 +19,7 @@ import { isDevMode } from './utils/DevMode.ts';
 
 import { debugAndPrintError, debugMatchMaking, debugMessage } from './Debug.ts';
 import { ServerError } from './errors/ServerError.ts';
-import { ClientState, type AuthContext, type Client, type ClientPrivate, ClientArray, type ISendOptions } from './Transport.ts';
+import { ClientState, type AuthContext, type Client, type ClientPrivate, ClientArray, type ISendOptions, type MessageArgs } from './Transport.ts';
 import { type RoomMethodName, OnAuthException, OnCreateException, OnDisposeException, OnJoinException, OnLeaveException, OnMessageException, type RoomException, SimulationIntervalException, TimedEventException } from './errors/RoomExceptions.ts';
 
 import { standardValidate, type StandardSchemaV1 } from './utils/StandardSchema.ts';
@@ -32,6 +32,17 @@ const noneSerializer = new NoneSerializer();
 export const DEFAULT_SEAT_RESERVATION_TIME = Number(process.env.COLYSEUS_SEAT_RESERVATION_TIME || 15);
 
 export type SimulationCallback = (deltaTime: number) => void;
+
+export interface RoomOptions {
+  state?: object;
+  metadata?: any;
+  client?: Client;
+}
+
+// Helper types to extract individual properties from RoomOptions
+export type ExtractRoomState<T> = T extends { state?: infer S extends object } ? S : any;
+export type ExtractRoomMetadata<T> = T extends { metadata?: infer M } ? M : any;
+export type ExtractRoomClient<T> = T extends { client?: infer C extends Client } ? C : Client;
 
 export interface IBroadcastOptions extends ISendOptions {
   except?: Client | Client[];
@@ -53,6 +64,8 @@ export type MessageHandler<This = any> =
 /**
  * Extract the message payload type from a message handler.
  * Works with both function handlers and format handlers.
+ *
+ * (Imported from @colyseus/sdk, not used in the server-side)
  */
 export type ExtractMessageType<T> =
   T extends { format: infer Format extends StandardSchemaV1; handler: any }
@@ -101,12 +114,22 @@ export type OnCreateOptions<T extends Type<Room>> = Parameters<NonNullable<Insta
  *
  * - Rooms are created on demand during matchmaking by default
  * - Room classes must be exposed using `.define()`
+ *
+ * @example
+ * ```typescript
+ * class MyRoom extends Room<{
+ *   state: MyState,
+ *   metadata: { difficulty: string },
+ *   client: MyClient
+ * }> {
+ *   // ...
+ * }
+ * ```
  */
-export abstract class Room<
-  Metadata = any,
-  State extends object = any
-> {
-  '~client': Parameters<this['onJoin']>[0];
+export class Room<T extends RoomOptions = RoomOptions> {
+  '~client': ExtractRoomClient<T>;
+  '~state': ExtractRoomState<T>;
+  '~metadata': ExtractRoomMetadata<T>;
 
   /**
    * This property will change on these situations:
@@ -123,7 +146,7 @@ export abstract class Room<
   /**
    * Get the room's matchmaking metadata.
    */
-  public get metadata() {
+  public get metadata(): ExtractRoomMetadata<T> {
     return this._listing.metadata;
   }
 
@@ -134,14 +157,14 @@ export abstract class Room<
    *
    * @example
    * ```typescript
-   * class MyRoom extends Room<{ difficulty: string; rating: number }> {
+   * class MyRoom extends Room<{ metadata: { difficulty: string; rating: number } }> {
    *   async onCreate() {
    *     this.metadata = { difficulty: "hard", rating: 1500 };
    *   }
    * }
    * ```
    */
-  public set metadata(meta: Metadata) {
+  public set metadata(meta: ExtractRoomMetadata<T>) {
     if (this._internalState !== RoomInternalState.CREATING) {
       // prevent user from setting metadata after room has been created.
       throw new ServerError(ErrorCode.APPLICATION_ERROR, "'metadata' can only be manually set during onCreate(). Use setMatchmaking() instead.");
@@ -154,7 +177,7 @@ export abstract class Room<
    * The room listing cache for matchmaking.
    * @internal
    */
-  private _listing: IRoomCache<Metadata>;
+  private _listing: IRoomCache<ExtractRoomMetadata<T>>;
 
   /**
    * Timing events tied to the room instance.
@@ -195,8 +218,8 @@ export abstract class Room<
   /**
    * The state instance you provided to `setState()`.
    */
-  public state: State;
-  #_state: State;
+  public state: ExtractRoomState<T>;
+  #_state: ExtractRoomState<T>;
 
   /**
    * The presence instance. Check Presence API for more details.
@@ -210,7 +233,7 @@ export abstract class Room<
    *
    * @see {@link https://docs.colyseus.io/colyseus/server/room/#client|Client instance}
    */
-  public clients: ClientArray<this['~client']> = new ClientArray();
+  public clients: ClientArray<ExtractRoomClient<T>> = new ClientArray();
 
   /**
    * Set the number of seconds a room can wait for a client to effectively join the room.
@@ -229,13 +252,13 @@ export abstract class Room<
 
   private _reconnections: { [reconnectionToken: string]: [string, Deferred] } = {};
 
-  public messages?: Messages<this>;
+  public messages?: Messages<any>;
 
   private onMessageEvents = createNanoEvents();
   private onMessageValidators: {[message: string]: StandardSchemaV1} = {};
 
   private onMessageFallbacks = {
-    '__no_message_handler': (client: this['~client'], messageType: string, _: unknown) => {
+    '__no_message_handler': (client: ExtractRoomClient<T>, messageType: string, _: unknown) => {
       const errorMessage = `room onMessage for "${messageType}" not registered.`;
       debugMessage(`${errorMessage} (roomId: ${this.roomId})`);
 
@@ -250,8 +273,8 @@ export abstract class Room<
     }
   };
 
-  private _serializer: Serializer<State> = noneSerializer;
-  private _afterNextPatchQueue: Array<[string | this['~client'], IArguments]> = [];
+  private _serializer: Serializer<ExtractRoomState<T>> = noneSerializer;
+  private _afterNextPatchQueue: Array<[string | number | ExtractRoomClient<T>, ArrayLike<any>]> = [];
 
   private _simulationInterval: NodeJS.Timeout;
 
@@ -293,7 +316,7 @@ export abstract class Room<
       state: {
         enumerable: true,
         get: () => this.#_state,
-        set: (newState: State) => {
+        set: (newState: ExtractRoomState<T>) => {
           if (newState?.constructor[Symbol.metadata] !== undefined || newState[$changes] !== undefined) {
             this.setSerializer(new SchemaSerializer());
           } else if ('_definition' in newState) {
@@ -421,7 +444,7 @@ export abstract class Room<
   /**
    * This method is called before the latest version of the room's state is broadcasted to all clients.
    */
-  public onBeforePatch?(state: State): void | Promise<any>;
+  public onBeforePatch?(state: ExtractRoomState<T>): void | Promise<any>;
 
   /**
    * This method is called when the room is created.
@@ -434,7 +457,7 @@ export abstract class Room<
    * @param client - The client that joined the room.
    * @param options - The options passed to the client when it joined the room.
    */
-  public onJoin?(client: Client, options?: any): void | Promise<any>;
+  public onJoin?(client: ExtractRoomClient<T>, options?: any): void | Promise<any>;
 
   /**
    * This method is called when a client leaves the room without consent.
@@ -443,20 +466,20 @@ export abstract class Room<
    * @param client - The client that was dropped from the room.
    * @param code - The close code of the leave event.
    */
-  public onDrop?(client: Client, code?: number): void | Promise<any>;
+  public onDrop?(client: ExtractRoomClient<T>, code?: number): void | Promise<any>;
 
   /**
    * This method is called when a client reconnects to the room.
    * @param client - The client that reconnected to the room.
    */
-  public onReconnect?(client: Client): void | Promise<any>;
+  public onReconnect?(client: ExtractRoomClient<T>): void | Promise<any>;
 
   /**
    * This method is called when a client effectively leaves the room.
    * @param client - The client that left the room.
    * @param code - The close code of the leave event.
    */
-  public onLeave?(client: Client, code?: number): void | Promise<any>;
+  public onLeave?(client: ExtractRoomClient<T>, code?: number): void | Promise<any>;
 
   /**
    * This method is called when the room is disposed.
@@ -625,17 +648,17 @@ export abstract class Room<
   /**
    * @deprecated Use `.state =` instead.
    */
-  public setState(newState: State) {
+  public setState(newState: ExtractRoomState<T>) {
     this.state = newState;
   }
 
-  public setSerializer(serializer: Serializer<State>) {
+  public setSerializer(serializer: Serializer<ExtractRoomState<T>>) {
     this._serializer = serializer;
   }
 
-  public async setMetadata(meta: Partial<Metadata>, persist: boolean = true) {
+  public async setMetadata(meta: Partial<ExtractRoomMetadata<T>>, persist: boolean = true) {
     if (!this._listing.metadata) {
-      this._listing.metadata = meta as Metadata;
+      this._listing.metadata = meta as ExtractRoomMetadata<T>;
 
     } else {
       for (const field in meta) {
@@ -700,7 +723,7 @@ export abstract class Room<
    * ```
    */
   public async setMatchmaking(updates: {
-    metadata?: Metadata;
+    metadata?: ExtractRoomMetadata<T>;
     private?: boolean;
     locked?: boolean;
     maxClients?: number;
@@ -844,10 +867,14 @@ export abstract class Room<
    * this.broadcast('message', { message: 'Hello, world!' });
    * ```
    */
-  public broadcast(type: string | number, message?: any, options?: IBroadcastOptions) {
+  public broadcast<K extends keyof ExtractRoomClient<T>['~messages'] & string | number>(
+    type: K,
+    ...args: MessageArgs<ExtractRoomClient<T>['~messages'][K], IBroadcastOptions>
+  ) {
+    const [message, options] = args;
     if (options && options.afterNextPatch) {
       delete options.afterNextPatch;
-      this._afterNextPatchQueue.push(['broadcast', arguments]);
+      this._afterNextPatchQueue.push(['broadcast', [type, ...args]]);
       return;
     }
 
@@ -915,15 +942,18 @@ export abstract class Room<
    * unbind();
    * ```
    */
-  public onMessage<T = any, C extends Client = this['~client']>(
+  public onMessage<T = any, C extends Client = ExtractRoomClient<T>>(
+  // public onMessage<T = any, C extends Client = TClient>(
     messageType: '*',
     callback: (client: C, type: string | number, message: T) => void
   );
-  public onMessage<T = any, C extends Client = this['~client']>(
+  public onMessage<T = any, C extends Client = ExtractRoomClient<T>>(
+  // public onMessage<T = any, C extends Client = TClient>(
     messageType: string | number,
     callback: (client: C, message: T) => void,
   );
-  public onMessage<T = any, C extends Client = this['~client']>(
+  public onMessage<T = any, C extends Client = ExtractRoomClient<T>>(
+  // public onMessage<T = any, C extends Client = TClient>(
     messageType: string | number,
     validationSchema: StandardSchemaV1<T>,
     callback: (client: C, message: T) => void,
@@ -960,7 +990,8 @@ export abstract class Room<
     };
   }
 
-  public onMessageBytes<T = any, C extends Client = this['~client']>(
+  public onMessageBytes<T = any, C extends Client = ExtractRoomClient<T>>(
+  // public onMessageBytes<T = any, C extends Client = TClient>(
     messageType: string | number,
     callback: (client: C, message: T) => void,
   ) {
@@ -999,7 +1030,7 @@ export abstract class Room<
     if (numClients > 0) {
       // clients may have `async onLeave`, room will be disposed after they're fulfilled
       while (numClients--) {
-        this.#_forciblyCloseClient(this.clients[numClients] as this['~client'] & ClientPrivate, closeCode);
+        this.#_forciblyCloseClient(this.clients[numClients] as ExtractRoomClient<T> & ClientPrivate, closeCode);
       }
 
     } else {
@@ -1011,7 +1042,7 @@ export abstract class Room<
   }
 
   private async _onJoin(
-    client: this['~client'] & ClientPrivate,
+    client: ExtractRoomClient<T> & ClientPrivate,
     authContext: AuthContext,
     connectionOptions?: { reconnectionToken?: string, skipHandshake?: boolean }
   ) {
@@ -1404,7 +1435,7 @@ export abstract class Room<
     return await (userReturnData || Promise.resolve());
   }
 
-  private _onMessage(client: this['~client'] & ClientPrivate, buffer: Buffer) {
+  private _onMessage(client: ExtractRoomClient<T> & ClientPrivate, buffer: Buffer) {
     // skip if client is on LEAVING state.
     if (client.state === ClientState.LEAVING) { return; }
 
@@ -1488,7 +1519,7 @@ export abstract class Room<
     }
   }
 
-  #_forciblyCloseClient(client: this['~client'] & ClientPrivate, closeCode: number) {
+  #_forciblyCloseClient(client: ExtractRoomClient<T> & ClientPrivate, closeCode: number) {
     // stop receiving messages from this client
     client.ref.removeAllListeners('message');
 
@@ -1499,7 +1530,7 @@ export abstract class Room<
     this._onLeave(client, closeCode).then(() => client.leave(closeCode));
   }
 
-  private async _onLeave(client: this['~client'], code?: number): Promise<any> {
+  private async _onLeave(client: ExtractRoomClient<T>, code?: number): Promise<any> {
     // call 'onLeave' method only if the client has been successfully accepted.
     client.state = ClientState.LEAVING;
 

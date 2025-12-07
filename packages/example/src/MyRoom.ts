@@ -1,4 +1,4 @@
-import { CloseCode, Room, type Client, validate, type Messages } from "@colyseus/core";
+import { CloseCode, Room, type Client, validate, type Messages, type AuthContext } from "@colyseus/core";
 import { schema, type SchemaType } from "@colyseus/schema";
 import { z } from "zod";
 
@@ -14,18 +14,31 @@ export const MyRoomState = schema({
 });
 
 const thirdPartyMessages: Messages<MyRoom> = {
-  nopayload (client: Client, message: any) {
-    this.broadcast("nopayload", message);
+  nopayload (client: MyClient, message: any) {
+    this.broadcast("wtf", {});
+    client.send("wtf", {});
   },
 
   with_validation: validate(z.object({
     name: z.string(),
-  }), function (client, message) {
-    this.broadcast("with_validation", message);
+  }), function (client: MyClient, message) {
+    // this.broadcast("with_validation", message);
+    client.send("obj_message", { message: "hello" })
   }),
 }
 
-export class MyRoom extends Room {
+type MyClient = Client<{
+  userData: { custom: boolean };
+  auth: { custom: boolean };
+  messages: {
+    nopayload: never;
+    message: any;
+    nopayload_2: any;
+    obj_message: { message: string };
+  };
+}>;
+
+export class MyRoom extends Room<{ client: MyClient }> {
   state = new MyRoomState();
 
   messages = {
@@ -40,8 +53,9 @@ export class MyRoom extends Room {
       player.y = message.y;
     }),
 
-    nopayload_2: (client: Client, message: any) => {
-      this.broadcast("nopayload_2", message);
+    nopayload_2: (client: MyClient, message: any) => {
+      client.send("obj_message", { message: "hello" })
+      this.broadcast("obj_message", { message: "hello" })
     },
   };
 
@@ -53,7 +67,7 @@ export class MyRoom extends Room {
     this.state.mapHeight = 600;
 
     this.onMessage("*", (client, type, message) => {
-      this.broadcast(type, message);
+      this.broadcast(type as any, message);
     });
 
     this.onMessage("move", (client, message) => {
@@ -63,7 +77,7 @@ export class MyRoom extends Room {
     })
 
     this.onMessage("dummy", (client, message) => {
-      this.broadcast("dummy", message);
+      // this.broadcast("dummy", message);
     })
 
     this.onMessage("move_with_validation", z.object({ x: z.number(), y: z.number() }), (client, message) => {
@@ -75,7 +89,8 @@ export class MyRoom extends Room {
     this.setSimulationInterval(() => this.update());
   }
 
-  onJoin(client: Client<{ custom: boolean }, { custom: boolean }>, options: any) {
+  // onJoin(client: Client<{ custom: boolean }, { custom: boolean }>, options: any) {
+  onJoin(client: MyClient, options: any) {
     console.log(client.sessionId, "joined! options =>", options);
 
     const player = new Player();
@@ -93,7 +108,7 @@ export class MyRoom extends Room {
     // });
   }
 
-  async onLeave(client: Client, code: number) {
+  async onLeave(client, code: number) {
     try {
       if (code === CloseCode.CONSENTED) { throw new Error("consented leave"); }
 

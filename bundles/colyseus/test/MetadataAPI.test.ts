@@ -37,7 +37,7 @@ describe("Metadata API", () => {
           region: string;
         }
 
-        class GameRoom extends Room<GameMetadata> {
+        class GameRoom extends Room<{ metadata: GameMetadata }> {
           onCreate(options: any) {
             this.metadata = {
               difficulty: options.difficulty || "medium",
@@ -64,7 +64,7 @@ describe("Metadata API", () => {
         });
 
         it("should update metadata dynamically", async () => {
-          class DynamicRoom extends Room<{ status: string; round: number }> {
+          class DynamicRoom extends Room<{ metadata: { status: string; round: number } }> {
             onCreate() {
               this.metadata = { status: "waiting", round: 1 };
             }
@@ -101,7 +101,7 @@ describe("Metadata API", () => {
           region: string;
         }
 
-        class LobbyRoom extends Room<LobbyMetadata> {
+        class LobbyRoom extends Room<{ metadata: LobbyMetadata }> {
           onCreate(options: any) {
             this.metadata = {
               gameMode: options.gameMode,
@@ -218,7 +218,7 @@ describe("Metadata API", () => {
           region: string;
         }
 
-        class RankedRoom extends Room<RankedMetadata> {
+        class RankedRoom extends Room<{ metadata: RankedMetadata }> {
           onCreate(options: any) {
             this.maxClients = 4; // Increase to 4 for testing
             this.metadata = {
@@ -307,7 +307,7 @@ describe("Metadata API", () => {
           difficulty: string;
         }
 
-        class CustomRoom extends Room<CustomMetadata> {
+        class CustomRoom extends Room<{ metadata: CustomMetadata }> {
           onCreate(options: any) {
             this.maxClients = options.maxClients || 4;
             this.metadata = {
@@ -364,7 +364,7 @@ describe("Metadata API", () => {
           priority: number;
         }
 
-        class ComplexRoom extends Room<ComplexMetadata> {
+        class ComplexRoom extends Room<{ metadata: ComplexMetadata }> {
           onCreate(options: any) {
             this.maxClients = 3;
             this.metadata = {
@@ -399,7 +399,7 @@ describe("Metadata API", () => {
           level: number;
         }
 
-        class QueryRoom extends Room<QueryMetadata> {
+        class QueryRoom extends Room<{ metadata: QueryMetadata }> {
           onCreate(options: any) {
             this.metadata = {
               status: options.status || "waiting",
@@ -426,7 +426,7 @@ describe("Metadata API", () => {
 
           assert.strictEqual(waitingRooms.length, 2);
           waitingRooms.forEach(room => {
-            assert.strictEqual(room.metadata.status, "waiting");
+            assert.strictEqual(room.metadata!.status, "waiting");
           });
         });
 
@@ -443,7 +443,7 @@ describe("Metadata API", () => {
             round: number;
           }
 
-          class BatchRoom extends Room<BatchMetadata> {
+          class BatchRoom extends Room<{ metadata: BatchMetadata }> {
             onCreate() {
               // Initial setup using direct assignment
               this.maxClients = 4;
@@ -490,7 +490,7 @@ describe("Metadata API", () => {
         }
 
         it("should automatically populate metadata from filterBy fields when not explicitly set", async () => {
-          class AutoRoom extends Room<AutoMetadata> {
+          class AutoRoom extends Room<{ metadata: AutoMetadata }> {
             onCreate(options: any) {
               // Intentionally NOT setting this.metadata
               // to test if it gets auto-populated from filterBy fields
@@ -536,7 +536,7 @@ describe("Metadata API", () => {
 
       describe("Backward compatibility", () => {
         it("should still support setMetadata() method", async () => {
-          class LegacyRoom extends Room<{ foo: string }> {
+          class LegacyRoom extends Room<{ metadata: { foo: string } }> {
             onCreate(options: any) {
               this.metadata = { foo: "bar" };
             }

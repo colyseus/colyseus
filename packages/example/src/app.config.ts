@@ -164,7 +164,9 @@ export const server = config({
   },
 
   rooms: {
-    my_room: defineRoom(MyRoom),
+    my_room: defineRoom(MyRoom).
+      filterBy(["progress"]).
+      sortBy({ clients: -1 }),
   },
 
   routes: createRouter({

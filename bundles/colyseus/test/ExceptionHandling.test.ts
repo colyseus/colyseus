@@ -27,7 +27,7 @@ describe("Exception Handling", () => {
   });
 
   it("onCreate: error should be caught, should not join", async () => {
-    let caught = { error: undefined, methodName: undefined };
+    let caught: any = { error: undefined, methodName: undefined };
 
     matchMaker.defineRoomType("my_room", class extends Room {
       onCreate(options: any) {
@@ -51,7 +51,7 @@ describe("Exception Handling", () => {
   });
 
   it("async onCreate: error should be caught, should not join", async () => {
-    let caught = { error: undefined, methodName: undefined };
+    let caught: any = { error: undefined, methodName: undefined };
 
     matchMaker.defineRoomType("my_room", class extends Room {
       async onCreate(options: any) {
@@ -76,7 +76,7 @@ describe("Exception Handling", () => {
   });
 
   it("onAuth: error should be caught, should not join", async () => {
-    let caught = { error: undefined, methodName: undefined };
+    let caught: any = { error: undefined, methodName: undefined };
     let onAuthClient: any = undefined;
 
     matchMaker.defineRoomType("my_room", class extends Room {
@@ -102,7 +102,7 @@ describe("Exception Handling", () => {
   });
 
   it("async onAuth: error should be caught, should not join", async () => {
-    let caught = { error: undefined, methodName: undefined };
+    let caught: any = { error: undefined, methodName: undefined };
     let onAuthClient: any = undefined;
 
     matchMaker.defineRoomType("my_room", class extends Room {
@@ -129,7 +129,7 @@ describe("Exception Handling", () => {
   });
 
   it("onJoin: error should be caught, should not join", async () => {
-    let caught = { error: undefined, methodName: undefined };
+    let caught: any = { error: undefined, methodName: undefined };
     let onJoinClient: any = undefined;
 
     matchMaker.defineRoomType("my_room", class extends Room {
@@ -155,7 +155,7 @@ describe("Exception Handling", () => {
   });
 
   it("async onJoin: error should be caught, should not join", async () => {
-    let caught = { error: undefined, methodName: undefined };
+    let caught: any = { error: undefined, methodName: undefined };
     let onJoinClient: any = undefined;
 
     matchMaker.defineRoomType("my_room", class extends Room {
@@ -182,7 +182,7 @@ describe("Exception Handling", () => {
   });
 
   it("onLeave: error should be caught", async () => {
-    let caught = { error: undefined, methodName: undefined };
+    let caught: any = { error: undefined, methodName: undefined };
     let onLeaveClient: any = undefined;
 
     matchMaker.defineRoomType("my_room", class extends Room {
@@ -207,7 +207,7 @@ describe("Exception Handling", () => {
   });
 
   it("async onLeave: error should be caught", async () => {
-    let caught = { error: undefined, methodName: undefined };
+    let caught: any = { error: undefined, methodName: undefined };
     let onLeaveClient: any = undefined;
 
     matchMaker.defineRoomType("my_room", class extends Room {
@@ -233,7 +233,7 @@ describe("Exception Handling", () => {
   });
 
   it("onDispose: error should be caught", async () => {
-    let caught = { error: undefined, methodName: undefined };
+    let caught: any = { error: undefined, methodName: undefined };
 
     matchMaker.defineRoomType("my_room", class extends Room {
       onDispose() {
@@ -254,7 +254,7 @@ describe("Exception Handling", () => {
   });
 
   it("async onDispose: error should be caught", async () => {
-    let caught = { error: undefined, methodName: undefined };
+    let caught: any = { error: undefined, methodName: undefined };
 
     matchMaker.defineRoomType("my_room", class extends Room {
       async onDispose() {
@@ -278,7 +278,7 @@ describe("Exception Handling", () => {
   });
 
   it("setTimeout should be caught", async () => {
-    let caught = { error: undefined, methodName: undefined };
+    let caught: any = { error: undefined, methodName: undefined };
 
     matchMaker.defineRoomType("my_room", class extends Room {
       onCreate(options: any) {
@@ -305,7 +305,7 @@ describe("Exception Handling", () => {
   });
 
   it("async setTimeout should be caught", async () => {
-    let caught = { error: undefined, methodName: undefined };
+    let caught: any = { error: undefined, methodName: undefined };
 
     matchMaker.defineRoomType("my_room", class extends Room {
       onCreate(options: any) {
@@ -333,7 +333,7 @@ describe("Exception Handling", () => {
   });
 
   it("setInterval should be caught", async () => {
-    let caught = { error: undefined, methodName: undefined };
+    let caught: any = { error: undefined, methodName: undefined };
 
     matchMaker.defineRoomType("my_room", class extends Room {
       onCreate(options: any) {
@@ -360,7 +360,7 @@ describe("Exception Handling", () => {
   });
 
   it("async setInterval should be caught", async () => {
-    let caught = { error: undefined, methodName: undefined };
+    let caught: any = { error: undefined, methodName: undefined };
 
     matchMaker.defineRoomType("my_room", class extends Room {
       onCreate(options: any) {
@@ -388,7 +388,7 @@ describe("Exception Handling", () => {
   });
 
   it("onMessage: error should be caught", async () => {
-    let caught = { error: undefined, methodName: undefined };
+    let caught: any = { error: undefined, methodName: undefined };
     let onMessageArgs: any = undefined;
 
     matchMaker.defineRoomType("my_room", class extends Room {
@@ -417,7 +417,7 @@ describe("Exception Handling", () => {
   });
 
   it("async onMessage: error should be caught", async () => {
-    let caught = { error: undefined, methodName: undefined };
+    let caught: any = { error: undefined, methodName: undefined };
     let onMessageArgs: any = undefined;
 
     matchMaker.defineRoomType("my_room", class extends Room {

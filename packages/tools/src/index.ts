@@ -69,10 +69,31 @@ export default function <
 }
 
 /**
- * Listen on your development environment
+ * Expose server instance and listen on the port specified
  * @param options Application options
  * @param port Port number to bind Colyseus + Express
  */
+export async function listen<
+  RoomTypes extends Record<string, RegisteredHandler> = any,
+  Routes extends Router = any
+>(
+    options: ConfigOptions<RoomTypes, Routes>,
+    port?: number,
+): Promise<Server<RoomTypes, Routes>>;
+
+/**
+ * Expose server instance and listen on the port specified
+ * @param server Server instance
+ * @param port Port number to bind Colyseus + Express
+ */
+export async function listen<
+  RoomTypes extends Record<string, RegisteredHandler> = any,
+  Routes extends Router = any
+>(
+    server: Server<RoomTypes, Routes>,
+    port?: number,
+): Promise<Server<RoomTypes, Routes>>;
+
 export async function listen<
   RoomTypes extends Record<string, RegisteredHandler> = any,
   Routes extends Router = any
@@ -96,6 +117,7 @@ export async function listen<
     let displayLogs = true;
 
     if (options instanceof Server) {
+        // TODO: configure Driver and Presence
         server = options;
 
     } else {

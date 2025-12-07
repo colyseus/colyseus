@@ -49,14 +49,14 @@ export interface RankedQueueOptions {
 
 export interface MatchGroup {
   averageRank: number;
-  clients: Array<Client<ClientQueueData>>,
+  clients: Array<Client<{ userData: ClientQueueData }>>,
   ready?: boolean;
   confirmed?: number;
 }
 
 export interface MatchTeam {
   averageRank: number;
-  clients: Array<Client<ClientQueueData>>,
+  clients: Array<Client<{ userData: ClientQueueData }>>,
   teamId: string | symbol;
 }
 
@@ -247,7 +247,7 @@ export class RankedQueueRoom extends Room {
     this.processGroupsReady();
   }
 
-  redistributeTeams(sortedClients: Client<ClientQueueData>[]) {
+  redistributeTeams(sortedClients: Client<{ userData: ClientQueueData }>[]) {
     const teamsByID: { [teamId: string | symbol]: MatchTeam } = {};
 
     sortedClients.forEach((client) => {
@@ -297,7 +297,7 @@ export class RankedQueueRoom extends Room {
   }
 
   redistributeClients(
-    sortedClients: Client<ClientQueueData>[],
+    sortedClients: Client<{ userData: ClientQueueData }>[],
     currentGroup: MatchGroup = this.createMatchGroup(),
     totalRank: number = 0,
   ) {

@@ -17,7 +17,8 @@
 [ ] `@colyseus/core`: New `defineServer()` option
 [ ] Introduced `.setMatchmaking()` for batch modifying the listing entry of the room on the matchmaking driver. Allows to modify `metadata`, `locked`, `maxClients`, etc in a single operation.
 [ ] Document `RankedQueueRoom` and its usage example: https://github.com/endel/colyseus-ranked-matchmaking/?tab=readme-ov-file#ranked-queue-with-colyseus
-[ ] `@colyseus/sdk/debug` - New embedded realtime debug/inspector for rooms.
+[ ] `@colyseus/sdk/debug` - New embedded realtime debug/inspector for rooms. On Unity available at **Window → Colyseus → Room Inspector**.
+
 
 ## onMessage with raw bytes
 
@@ -38,6 +39,7 @@ We have separate methods now for handling `onMessage()` with raw bytes: `onMessa
 [x] `RoomCache`: remove mongodb-like methods like `.updateOne()`, `save()`, and `remove()`
 [x] Check why this test outputs `Error: UNDEFINED_VALUE` for `PostgresDriver`: `npm test -- --grep 'should not exceed maxClients'`
 [x] `RoomCache`: improve metadata handling and filters
+[ ] Room caching and restoration ("migration") to new server
 [ ] `PostgresDriver`: confirm if delay between increment/decrement `clients` is affecting `maxClients` being respected.
 [ ] `RedisDriver`: implement `boot()` to create LUA Script for filtering rooms at the server instead of at the Redis client
 [ ] Drivers: Allow to filter with OR operation (metaField=X or metaField=Y)
