@@ -130,7 +130,7 @@ export interface Client<T extends { userData?: any, auth?: any, messages?: Recor
    *
    * @param code Custom close code. Default value is 1000.
    * @param data
-   * @see {@link https://docs.colyseus.io/colyseus/server/room/#leavecode-number}
+   * @see [Leave room](https://docs.colyseus.io/room#leave-room)
    */
   leave(code?: number, data?: string): void;
 

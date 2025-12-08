@@ -1,5 +1,5 @@
 import assert from "assert";
-import { createRoom, Room, type Client } from "@colyseus/core";
+import { room, Room, type Client } from "@colyseus/core";
 
 describe("createRoom()", () => {
   type MyClient = Client<{
@@ -15,7 +15,7 @@ describe("createRoom()", () => {
     }
   }
 
-  const MyRoom = createRoom<{ client: MyClient }>({
+  const MyRoom = room<{ client: MyClient }>({
     messages: {
       foo (client, message: { foo: string }) {
       }

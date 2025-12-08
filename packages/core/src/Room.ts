@@ -138,7 +138,6 @@ export class Room<T extends RoomOptions = RoomOptions> {
    *
    * @readonly
    */
-  n
   public get locked() {
     return this.#_locked;
   }
@@ -224,14 +223,14 @@ export class Room<T extends RoomOptions = RoomOptions> {
   /**
    * The presence instance. Check Presence API for more details.
    *
-   * @see {@link https://docs.colyseus.io/colyseus/server/presence/|Presence API}
+   * @see [Presence API](https://docs.colyseus.io/server/presence)
    */
   public presence: Presence;
 
   /**
    * The array of connected clients.
    *
-   * @see {@link https://docs.colyseus.io/colyseus/server/room/#client|Client instance}
+   * @see [Client instance](https://docs.colyseus.io/room#client)
    */
   public clients: ClientArray<ExtractRoomClient<T>> = new ClientArray();
 
@@ -1570,7 +1569,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
     }
   }
 
-  async #_onAfterLeave(client: Client, code?: number, isDrop: boolean = false) {
+  async #_onAfterLeave(client: ExtractRoomClient<T>, code?: number, isDrop: boolean = false) {
     if (isDrop && this.onLeave) {
       await this.onLeave(client, code);
     }
@@ -1659,4 +1658,53 @@ export class Room<T extends RoomOptions = RoomOptions> {
     }
   }
 
+}
+
+/**
+ * (WIP) Alternative, method-based room definition.
+ * We should be able to define
+ */
+
+type RoomLifecycleMethods =
+  | 'messages'
+  | 'onCreate'
+  | 'onJoin'
+  | 'onLeave'
+  | 'onDispose'
+  | 'onCacheRoom'
+  | 'onRestoreRoom'
+  | 'onDrop'
+  | 'onReconnect'
+  | 'onUncaughtException'
+  | 'onAuth'
+  | 'onBeforeShutdown'
+  | 'onBeforePatch';
+
+type DefineRoomOptions<T extends RoomOptions = RoomOptions> =
+  Partial<Pick<Room<T>, RoomLifecycleMethods>> &
+  { state?: ExtractRoomState<T> | (() => ExtractRoomState<T>); } &
+  ThisType<Exclude<Room<T>, RoomLifecycleMethods>> &
+  ThisType<Room<T>>
+;
+
+export function room<T>(options: DefineRoomOptions<T>) {
+  class _ extends Room<T> {
+    messages = options.messages;
+
+    constructor() {
+      super();
+      if (options.state && typeof options.state === 'function') {
+        this.state = options.state();
+      }
+    }
+  }
+
+  // Copy all methods to the prototype
+  for (const key in options) {
+    if (typeof options[key] === 'function') {
+      _.prototype[key] = options[key];
+    }
+  }
+
+  return _ as typeof Room<T>;
 }

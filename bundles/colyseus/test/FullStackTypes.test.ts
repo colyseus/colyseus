@@ -1,14 +1,8 @@
 import assert from "assert";
-import { createRoom, defineRoom, Room, type Client } from "@colyseus/core";
+import { defineRoom, room, Room, type Client } from "@colyseus/core";
 import { schema } from "@colyseus/schema";
 
-/**
- * These tests validate TypeScript type checking for client.send() and this.broadcast()
- * using @ts-expect-error comments. If the types are working correctly, TypeScript
- * will error on the marked lines, and the test file will compile successfully.
- */
-
-describe("FullStack Types", () => {
+describe("Room: Type Inference", () => {
 
   describe("using class-based Rooms (class MyRoom extends Room { ... })", () => {
     // Define a typed client with specific message types
@@ -139,20 +133,15 @@ describe("FullStack Types", () => {
     }
 
     it("type definitions should compile correctly", () => {
-      // This test exists to ensure the TypeScript compilation passes
-      // The actual type checking is done at compile time via @ts-expect-error
-      const typedRoom = new MyRoom();
-      const untypedRoom = new UntypedRoom();
-
-      assert.ok(typedRoom instanceof Room);
-      assert.ok(untypedRoom instanceof Room);
+      assert.ok((new MyRoom()) instanceof Room);
+      assert.ok((new UntypedRoom()) instanceof Room);
     });
   });
 
   /**
    * Test file for createRoom() type inference
    */
-  describe("using createRoom() for object-based Rooms", () => {
+  describe("using room() for object-based Rooms", () => {
     // Define client type with messages, userData, and auth
     type MyClient = Client<{
       userData: { rank: number };
@@ -169,7 +158,7 @@ describe("FullStack Types", () => {
       count: "number",
     });
 
-    const MyRoom = createRoom<{ client: MyClient }>({
+    const MyRoom = room<{ client: MyClient }>({
       state: () => new TestState(),
 
       onCreate() {
