@@ -45,10 +45,10 @@
     "@colyseus/timer": "^1.0.1",
     "@colyseus/msgpackr": "^1.11.2",
     "debug": "^4.3.4",
-    "nanoid": "^2.0.0"
+    "nanoid": "^5.1.6"
   },
   "devDependencies": {
-    "@types/nanoid": "^2.0.0"
+    "@types/nanoid": "^3.0.0"
   },
   "peerDependencies": {
     "@colyseus/schema": "^3.0.0",
