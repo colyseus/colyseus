@@ -10,6 +10,13 @@
 [ ] Skipping handshake when local state is available (when reconnecting or with concrete state provided)
 [ ] Fixed bug where setting `patchRate=0` would stop `clock` intervals and timeouts from working (https://github.com/colyseus/colyseus/issues/869)
 [ ] Playground: Automatically-generated postman-like UI
+[ ] Introduce `maxMessagesPerSecond` for rate-limiting bad actors (forcibly close if client exceeds threshold)
+[ ] New `room.ping(callback)` method.
+
+## Changes on `@colyseus/schema`
+
+[ ] `$refId` is now accessible both on client-side and server-side via `instance[$refId]`
+[ ] Encoder uses and expects `Uint8Array` instead of `Buffer` (compatibility with web browsers)
 
 ## New features to document
 

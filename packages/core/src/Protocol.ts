@@ -14,6 +14,7 @@ export const Protocol = {
   ROOM_STATE_PATCH: 15,
   // ROOM_DATA_SCHEMA: 16, // DEPRECATED: used to send schema instances via room.send()
   ROOM_DATA_BYTES: 17,
+  PING: 18,
 } as const;
 export type Protocol = typeof Protocol[keyof typeof Protocol];
 
@@ -99,6 +100,11 @@ export const getMessageBytes = {
 
   [Protocol.ROOM_STATE]: (bytes: number[]) => {
     return [Protocol.ROOM_STATE, ...bytes];
+  },
+
+  [Protocol.PING]: () => {
+    packr.buffer[0] = Protocol.PING;
+    return Buffer.from(packr.buffer.subarray(0, 1));
   },
 
   raw: (code: Protocol, type: string | number, message?: any, rawMessage?: Uint8Array | Buffer) => {

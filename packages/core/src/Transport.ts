@@ -160,6 +160,12 @@ export interface ClientPrivate {
   _enqueuedMessages?: any[];
   _afterNextPatchQueue: Array<[string | number | Client, ArrayLike<any>]>;
   _joinedAt: number; // "elapsedTime" when the client joined the room.
+
+  /**
+   * Used for rate limiting via maxMessagesPerSecond.
+   */
+  _numMessagesLastSecond?: number;
+  _lastMessageTime?: number;
 }
 
 export class ClientArray<C extends Client = Client> extends Array<C> {

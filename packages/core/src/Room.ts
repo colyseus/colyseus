@@ -215,6 +215,14 @@ export class Room<T extends RoomOptions = RoomOptions> {
   #_patchInterval: NodeJS.Timeout;
 
   /**
+   * Maximum number of messages a client can send to the server per second.
+   * If a client sends more messages than this, it will be disconnected.
+   *
+   * @default 60
+   */
+  public maxMessagesPerSecond: number = 60;
+
+  /**
    * The state instance you provided to `setState()`.
    */
   public state: ExtractRoomState<T>;
@@ -1438,13 +1446,22 @@ export class Room<T extends RoomOptions = RoomOptions> {
     // skip if client is on LEAVING state.
     if (client.state === ClientState.LEAVING) { return; }
 
-    const it: Iterator = { offset: 1 };
-    const code = buffer[0];
-
     if (!buffer) {
       debugAndPrintError(`${this.roomName} (roomId: ${this.roomId}), couldn't decode message: ${buffer}`);
       return;
     }
+
+    // reset message count every second
+    if (this.clock.currentTime - client._lastMessageTime >= 1000) {
+      client._numMessagesLastSecond = 0;
+      client._lastMessageTime = this.clock.currentTime;
+    } else if (++client._numMessagesLastSecond > this.maxMessagesPerSecond) {
+      // drop client if it sends more messages than the maximum allowed per second
+      return this.#_forciblyCloseClient(client, CloseCode.WITH_ERROR);
+    }
+
+    const it: Iterator = { offset: 1 };
+    const code = buffer[0];
 
     if (code === Protocol.ROOM_DATA) {
       const messageType = (decode.stringCheck(buffer, it))
@@ -1512,6 +1529,9 @@ export class Room<T extends RoomOptions = RoomOptions> {
         client._enqueuedMessages.forEach((enqueued) => client.raw(enqueued));
       }
       delete client._enqueuedMessages;
+
+    } else if (code === Protocol.PING) {
+      client.raw(getMessageBytes[Protocol.PING]());
 
     } else if (code === Protocol.LEAVE_ROOM) {
       this.#_forciblyCloseClient(client, CloseCode.CONSENTED);

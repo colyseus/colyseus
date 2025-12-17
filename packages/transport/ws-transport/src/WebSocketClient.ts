@@ -21,6 +21,8 @@ export class WebSocketClient implements Client, ClientPrivate {
   public _afterNextPatchQueue;
   public _reconnectionToken: string;
   public _joinedAt;
+  public _numMessagesLastSecond: number = 0;
+  public _lastMessageTime: number = 0;
 
   constructor(id: string, ref: WebSocket) {
     this.sessionId = this.id = id;

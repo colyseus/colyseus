@@ -14,6 +14,7 @@ import { createSignal } from './core/signal.ts';
 
 import { SchemaConstructor, SchemaSerializer } from './serializer/SchemaSerializer.ts';
 import { CloseCode } from './errors/Errors.ts';
+import { now } from './core/utils.ts';
 
 export interface RoomAvailable<Metadata = any> {
     name: string;
@@ -117,6 +118,9 @@ export class Room<
 
     protected packr: Packr;
 
+    #lastPingTime: number = 0;
+    #pingCallback: (ms: number) => void;
+
     constructor(name: string, rootSchema?: SchemaConstructor<State>) {
         this.name = name;
 
@@ -208,6 +212,13 @@ export class Room<
     public onMessage<T = any>(type: string | number, callback: (payload: T) => void)
     public onMessage(type: '*' | string | number, callback: (...args: any[]) => void) {
         return this.onMessageHandlers.on(this.getMessageHandlerKey(type), callback);
+    }
+
+    public ping(callback: (ms: number) => void) {
+        this.#lastPingTime = now();
+        this.#pingCallback = callback;
+        this.packr.buffer[0] = Protocol.PING;
+        this.connection.send(this.packr.buffer.subarray(0, 1));
     }
 
     public send<MessageType extends keyof RoomType['prototype']['messages']>(
@@ -389,6 +400,9 @@ export class Room<
                 : decode.number(buffer as Buffer, it);
 
             this.dispatchMessage(type, buffer.subarray(it.offset));
+        } else if (code === Protocol.PING) {
+            this.#pingCallback?.(now() - this.#lastPingTime);
+            this.#pingCallback = undefined;
         }
     }
 

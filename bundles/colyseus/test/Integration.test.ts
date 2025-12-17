@@ -1799,6 +1799,97 @@ describe("Integration", () => {
           });
         });
 
+        describe("maxMessagesPerSecond", () => {
+          it("should disconnect client if it sends more messages than the maximum allowed per second", async () => {
+            matchMaker.defineRoomType('max_messages_per_second', class _ extends Room {
+              onCreate() {
+                this.maxMessagesPerSecond = 3;
+                this.onMessage("*", () => {});
+              }
+            });
+
+            const conn = await client.joinOrCreate('max_messages_per_second');
+
+            let onLeaveCode: number | undefined = undefined;
+            conn.onLeave((code) => onLeaveCode = code);
+
+            // send more messages than allowed (maxMessagesPerSecond = 3)
+            conn.send("msg", 1);
+            conn.send("msg", 2);
+            conn.send("msg", 3);
+            conn.send("msg", 4); // this one should trigger the disconnect
+
+            await timeout(50);
+
+            assert.strictEqual(onLeaveCode, CloseCode.WITH_ERROR);
+          });
+
+          it("should allow messages within the limit", async () => {
+            matchMaker.defineRoomType('max_messages_within_limit', class _ extends Room {
+              messagesReceived = 0;
+              onCreate() {
+                this.maxMessagesPerSecond = 5;
+                this.onMessage("*", () => {
+                  this.messagesReceived++;
+                });
+              }
+            });
+
+            const conn = await client.joinOrCreate('max_messages_within_limit');
+
+            let disconnected = false;
+            conn.onLeave(() => disconnected = true);
+
+            // send messages within the limit
+            conn.send("msg", 1);
+            conn.send("msg", 2);
+            conn.send("msg", 3);
+
+            await timeout(50);
+
+            assert.strictEqual(disconnected, false);
+
+            await conn.leave();
+          });
+
+          it("should reset message count after one second", async () => {
+            matchMaker.defineRoomType('max_messages_reset', class _ extends Room {
+              onCreate() {
+                this.maxMessagesPerSecond = 5;
+                this.onMessage("*", () => {});
+              }
+            });
+
+            const conn = await client.joinOrCreate('max_messages_reset');
+
+            let disconnected = false;
+            conn.onLeave(() => disconnected = true);
+
+            // send messages up to the limit
+            for (let i = 0; i < 5; i++) {
+              conn.send("msg", i);
+            }
+
+            await timeout(100);
+            assert.strictEqual(disconnected, false, "should not disconnect when sending exactly the limit");
+
+            // wait for the message count to reset (> 1 second)
+            await timeout(1100);
+
+            console.log("...");
+
+            // send more messages after reset - should be allowed again
+            for (let i = 0; i < 5; i++) {
+              conn.send("msg", i);
+            }
+
+            await timeout(100);
+            assert.strictEqual(disconnected, false, "should not disconnect after counter reset");
+
+            await conn.leave();
+          });
+        });
+
       });
 
     }
