@@ -303,8 +303,6 @@ describe("Room Reconnection", () => {
         });
 
         const conn = await client.joinOrCreate('backwards_compatible_onleave_reconnection_cancelled');
-        setupReconnection(conn);
-
         conn.leave(false);
 
         await new Promise((resolve) => conn.onDrop.once((code, reason) => resolve(true)));
