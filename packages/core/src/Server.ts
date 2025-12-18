@@ -71,6 +71,7 @@ export class Server<
 
   public transport: Transport;
   public router: Routes;
+  public options: ServerOptions;
 
   protected presence: Presence;
   protected driver: matchMaker.MatchMakerDriver;
@@ -90,6 +91,7 @@ export class Server<
 
     this.presence = options.presence || new LocalPresence();
     this.driver = options.driver || new LocalDriver();
+    this.options = options;
     this.greet = greet;
 
     this.attach(options);
@@ -303,16 +305,16 @@ export function defineServer<
   router?: R,
   serverOptions?: ServerOptions
 ): Server<T, R> {
-  const gameServer = new Server<T, R>(serverOptions);
+  const server = new Server<T, R>(serverOptions);
 
-  gameServer.router = router;
+  server.router = router;
 
   for (const [name, handler] of Object.entries(roomHandlers)) {
     handler.name = name;
     matchMaker.addRoomType(handler);
   }
 
-  return gameServer;
+  return server;
 }
 
 export function defineRoom<T extends Type<Room>>(
