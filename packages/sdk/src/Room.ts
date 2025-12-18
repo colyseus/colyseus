@@ -73,6 +73,11 @@ export interface ReconnectionOptions {
      * These messages will be sent once the connection is re-established.
      */
     enqueuedMessages: Array<{ data: Uint8Array }>;
+
+    /**
+     * Whether the room is currently reconnecting.
+     */
+    isReconnecting: boolean;
 }
 
 export class Room<
@@ -110,6 +115,7 @@ export class Room<
         backoff: exponentialBackoff,
         maxEnqueuedMessages: 10,
         enqueuedMessages: [],
+        isReconnecting: false,
     };
 
     protected joinedAtTime: number = 0;
@@ -347,6 +353,8 @@ export class Room<
                 this.onJoin.invoke();
 
             } else {
+                console.info(`[Colyseus reconnection]: ${String.fromCodePoint(0x2705)} reconnection successful!)`); // ✅
+                this.reconnection.isReconnecting = false;
                 this.onReconnect.invoke();
             }
 
@@ -444,9 +452,12 @@ export class Room<
             return;
         }
 
-        console.info(`[Colyseus reconnection]: ${String.fromCodePoint(0x1F504)} Re-establishing connection with roomId '${this.roomId}'...`); // 🔄
+        if (!this.reconnection.isReconnecting) {
+            console.info(`[Colyseus reconnection]: ${String.fromCodePoint(0x1F504)} Re-establishing connection with roomId '${this.roomId}'...`); // 🔄
+            this.reconnection.retryCount = 0;
+            this.reconnection.isReconnecting = true;
+        }
 
-        this.reconnection.retryCount = 0;
         this.retryReconnection();
     }
 
@@ -464,7 +475,6 @@ export class Room<
                     reconnectionToken: this.reconnectionToken.split(":")[1],
                     skipHandshake: true, // we already applied the handshake on first join
                 });
-                console.info(`[Colyseus reconnection]: ${String.fromCodePoint(0x2705)} attempt ${this.reconnection.retryCount}...`); // ✅
 
             } catch (e) {
                 if (this.reconnection.retryCount < this.reconnection.maxRetries) {
