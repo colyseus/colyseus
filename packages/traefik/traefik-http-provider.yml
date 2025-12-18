@@ -1,0 +1,21 @@
+providers:
+  #
+  # Routers and Services are defined dynamically via HTTP
+  # (Colyseus reads from Redis and exposes via /__traefik endpoint)
+  #
+  http:
+    endpoint: "http://127.0.0.1:2567/__traefik"
+    pollInterval: "5s"
+
+api:
+  dashboard: true
+  insecure: true
+
+log:
+  level: DEBUG
+
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"

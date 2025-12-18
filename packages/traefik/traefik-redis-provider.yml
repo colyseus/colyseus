@@ -1,0 +1,22 @@
+providers:
+  #
+  # Routers and Services are defined dynamically via Redis
+  # (Colyseus reads from Redis directly - requires Keyspace Notifications enabled in Redis)
+  #
+  redis:
+    rootKey: "traefik"
+    endpoints:
+      - "127.0.0.1:6379"
+
+api:
+  dashboard: true
+  insecure: true
+
+log:
+  level: DEBUG
+
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"

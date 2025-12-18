@@ -54,7 +54,8 @@
     "nanoid": "^2.0.0"
   },
   "devDependencies": {
-    "@types/nanoid": "^2.0.0"
+    "@types/nanoid": "^2.0.0",
+    "@colyseus/schema": "^3.0.69"
   },
   "peerDependencies": {
     "@colyseus/schema": "^3.0.69",

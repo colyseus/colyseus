@@ -349,7 +349,7 @@ Please give feedback and report any issues you may find at https://github.com/co
         const result = (await auth.settings.onForgotPassword(email, html, passwordResetLink)) ?? true;
         res.json(result);
 
-      } catch (e) {
+      } catch (e: any) {
         debugAndPrintError(e);
         res.status(401).json({ error: e.message });
       }

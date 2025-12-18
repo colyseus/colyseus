@@ -5,11 +5,15 @@ import path from "node:path";
 import fs from "node:fs";
 
 import config, { listen } from "@colyseus/tools";
-import { createEndpoint, createRouter, defineRoom, matchMaker } from "@colyseus/core";
-import { PostgresDriver } from "@colyseus/drizzle-driver";
+import { createEndpoint, createRouter, defineRoom } from "@colyseus/core";
 import { playground } from "@colyseus/playground";
 import { auth } from "@colyseus/auth";
 import { z } from "zod";
+import { exposeServerToTraefik } from "@colyseus/traefik";
+
+import { RedisPresence } from "@colyseus/redis-presence";
+import { RedisDriver } from "@colyseus/redis-driver";
+import { PostgresDriver } from "@colyseus/drizzle-driver";
 
 // import { Client } from "@colyseus/sdk";
 // const client = new Client<typeof server>("ws://localhost:2567");
@@ -158,9 +162,15 @@ const bulkCreateThings = createEndpoint("/things/bulk", {
   };
 })
 
+const port = Number((process.env.PORT || 2567)) + Number(process.env.NODE_APP_INSTANCE || "0");
+
 export const server = config({
   options: {
-    driver: new PostgresDriver(),
+    devMode: true,
+    // driver: new PostgresDriver(),
+    driver: new RedisDriver(),
+    presence: new RedisPresence(),
+    publicAddress: `localhost/${port}`,
   },
 
   rooms: {
@@ -184,7 +194,7 @@ export const server = config({
       // console.log(err);
     },
     onRequest: (req) => {
-      console.log(req);
+      // console.log(req);
     },
     onResponse: (res) => {
       // console.log(res);
@@ -201,6 +211,16 @@ export const server = config({
   beforeListen: async () => {
     // await matchMaker.createRoom("my_room", {});
   }
-})
+});
 
-listen(server);
+async function main () {
+  const gameServer = await listen(server, port);
+
+  exposeServerToTraefik({
+    server: gameServer,
+    mainAddress: "localhost",
+    provider: "redis"
+  });
+}
+
+main();
