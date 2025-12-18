@@ -19,7 +19,7 @@ export default ((process.env.COLYSEUS_CLOUD)
 \____/\___/|_|\__, |___/\___|\__,_|___/    \_/  \___(_)_|/_/
               |___/
 
-     · Multiplayer Framework for Node.js ·
+             · Multiplayer Framework for Node.js ·
 
 💖 Consider becoming a Sponsor on GitHub → https://github.com/sponsors/endel
 🌟 Give us a star on GitHub → https://github.com/colyseus/colyseus
