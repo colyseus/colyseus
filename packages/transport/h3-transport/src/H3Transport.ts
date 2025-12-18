@@ -4,7 +4,7 @@ import { Http3Server } from '@fails-components/webtransport';
 import { URL } from 'url';
 import { decode, Iterator } from '@colyseus/schema';
 
-import { matchMaker, Protocol, Transport, debugAndPrintError, spliceOne, getBearerToken, CloseCode } from '@colyseus/core';
+import { matchMaker, Protocol, Transport, debugAndPrintError, spliceOne, getBearerToken, CloseCode, ServerError, ErrorCode } from '@colyseus/core';
 import { H3Client } from './H3Client.ts';
 import { generateWebTransportCertificate } from './utils/mkcert.ts';
 import type { Application, Request, Response } from 'express';
@@ -221,7 +221,7 @@ export class H3Transport extends Transport {
 
     try {
       if (!room || !room.hasReservedSeat(sessionId, reconnectionToken)) {
-        throw new Error('seat reservation expired.');
+        throw new ServerError(ErrorCode.MATCHMAKE_EXPIRED, 'seat reservation expired.');
       }
 
       await room['_onJoin'](h3Client, req, { reconnectionToken, skipHandshake });

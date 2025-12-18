@@ -3,7 +3,7 @@ import querystring, { type ParsedUrlQuery } from 'querystring';
 import uWebSockets, { type WebSocket } from 'uWebSockets.js';
 import expressify, { Application } from "uwebsockets-express";
 
-import { type AuthContext, Transport, HttpServerMock, ErrorCode, matchMaker, getBearerToken, debugAndPrintError, spliceOne } from '@colyseus/core';
+import { type AuthContext, Transport, HttpServerMock, ErrorCode, matchMaker, getBearerToken, debugAndPrintError, spliceOne, ServerError } from '@colyseus/core';
 import { uWebSocketClient, uWebSocketWrapper } from './uWebSocketClient.ts';
 
 export type TransportOptions = Omit<uWebSockets.WebSocketBehavior<any>, "upgrade" | "open" | "pong" | "close" | "message">;
@@ -180,7 +180,7 @@ export class uWebSocketsTransport extends Transport {
 
         try {
             if (!room || !room.hasReservedSeat(sessionId, reconnectionToken)) {
-                throw new Error('seat reservation expired.');
+                throw new ServerError(ErrorCode.MATCHMAKE_EXPIRED, 'seat reservation expired.');
             }
 
             await room['_onJoin'](client, rawClient.context, {

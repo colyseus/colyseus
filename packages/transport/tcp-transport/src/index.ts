@@ -9,7 +9,9 @@ import {
   debugAndPrintError,
   debugError,
   logger,
-  CloseCode
+  CloseCode,
+  ServerError,
+  ErrorCode
 } from '@colyseus/core';
 
 /**
@@ -78,7 +80,7 @@ export class TCPTransport extends Transport {
       const room = matchMaker.getLocalRoomById(roomId);
       try {
         if (!room || !room.hasReservedSeat(sessionId)) {
-          throw new Error('seat reservation expired.');
+          throw new ServerError(ErrorCode.MATCHMAKE_EXPIRED, 'seat reservation expired.');
         }
 
         await room['_onJoin'](client, { headers: new Headers(), ip: "127.0.0.1" });

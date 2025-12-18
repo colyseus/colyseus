@@ -2,7 +2,7 @@ import http from 'http';
 import { URL } from 'url';
 import WebSocket, { type ServerOptions, WebSocketServer } from 'ws';
 
-import { matchMaker, Protocol, Transport, debugAndPrintError, debugConnection, getBearerToken, CloseCode } from '@colyseus/core';
+import { matchMaker, Protocol, Transport, debugAndPrintError, debugConnection, getBearerToken, CloseCode, ServerError, ErrorCode } from '@colyseus/core';
 import { WebSocketClient } from './WebSocketClient.ts';
 
 function noop() {}
@@ -138,7 +138,7 @@ export class WebSocketTransport extends Transport {
 
     try {
       if (!room || !room.hasReservedSeat(sessionId, reconnectionToken)) {
-        throw new Error('seat reservation expired.');
+        throw new ServerError(ErrorCode.MATCHMAKE_EXPIRED, 'seat reservation expired.');
       }
 
       await room['_onJoin'](client, {

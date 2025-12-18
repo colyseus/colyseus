@@ -7,7 +7,7 @@ import { ServerWebSocket, WebSocketHandler } from 'bun';
 // import bunExpress from 'bun-serve-express';
 import type { Application, Request, Response } from "express";
 
-import { HttpServerMock, matchMaker, Transport, debugAndPrintError, spliceOne, ServerError, getBearerToken } from '@colyseus/core';
+import { HttpServerMock, matchMaker, Transport, debugAndPrintError, spliceOne, ServerError, getBearerToken, ErrorCode } from '@colyseus/core';
 import { WebSocketClient, WebSocketWrapper } from './WebSocketClient.ts';
 
 export type TransportOptions = Partial<Omit<WebSocketHandler, "message" | "open" | "drain" | "close" | "ping" | "pong">>;
@@ -136,7 +136,7 @@ export class BunWebSockets extends Transport {
 
     try {
       if (!room || !room.hasReservedSeat(sessionId, reconnectionToken)) {
-        throw new Error('seat reservation expired.');
+        throw new ServerError(ErrorCode.MATCHMAKE_EXPIRED, 'seat reservation expired.');
       }
 
       await room['_onJoin'](client, {
