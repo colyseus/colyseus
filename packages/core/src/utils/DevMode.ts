@@ -1,7 +1,7 @@
 import debug from 'debug';
+import { Decoder, Encoder, type Schema } from '@colyseus/schema';
 import { logger } from '../Logger.ts';
 import { debugAndPrintError } from '../Debug.ts';
-
 import { getLocalRoomById, handleCreateRoom, presence, remoteRoomCall } from '../MatchMaker.ts';
 import type { Room } from '../Room.ts';
 
@@ -25,16 +25,15 @@ export async function reloadFromCache() {
     const recreatedRoom = getLocalRoomById(recreatedRoomListing.roomId);
     logger.debug(`🔄 room '${roomId}' has been restored.`);
 
-    // Set previous state
+    // Restore previous state
     if (roomHistory.hasOwnProperty("state")) {
-      recreatedRoom.state.decode(roomHistory.state);
-
-      //
-      // WORKAROUND: @colyseus/schema is not capable of encoding a decoded
-      // state. thus, we need a fresh clone immediately after decoding
-      //
-      recreatedRoom.setState(recreatedRoom.state.clone());
-      logger.debug(`📋 room '${roomId}' state =>`, recreatedRoom.state.toJSON());
+      try {
+        const state = JSON.parse(roomHistory.state);
+        logger.debug(`📋 room '${roomId}' state =>`, state);
+        (recreatedRoom.state as Schema).assign(state);
+      } catch (e: any) {
+        debugAndPrintError(`❌ couldn't restore room '${roomId}' state, due to:\n${e.stack}`);
+      }
     }
 
     // call `onRestoreRoom` with custom 'cache'd property.
@@ -68,7 +67,7 @@ export async function cacheRoomHistory(rooms: { [roomId: string]: Room }) {
         debugDevMode("caching room %s (%s)", room.roomName, room.roomId);
 
         if (room.state) {
-          roomHistory["state"] = room.state.encodeAll();
+          roomHistory["state"] = JSON.stringify(room.state);
         }
 
         // cache active clients and reserved seats

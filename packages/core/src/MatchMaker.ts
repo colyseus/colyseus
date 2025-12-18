@@ -671,7 +671,15 @@ async function lockAndDisposeAll(): Promise<any> {
 
     const room = rooms[roomId];
     room.lock();
-    room.onBeforeShutdown();
+
+    if (isDevMode) {
+      // call default implementation of onBeforeShutdown() in dev mode
+      Room.prototype.onBeforeShutdown.call(room);
+
+    } else {
+      // call custom implementation of onBeforeShutdown() in production
+      room.onBeforeShutdown();
+    }
   }
 
   await noActiveRooms;
@@ -688,14 +696,14 @@ export async function gracefullyShutdown(): Promise<any> {
 
   onReady = undefined;
 
+  if (isDevMode) {
+    await cacheRoomHistory(rooms);
+  }
+
   // - lock existing rooms
   // - stop accepting new rooms on this process
   // - wait for all rooms to be disposed
   await lockAndDisposeAll();
-
-  if (isDevMode) {
-    await cacheRoomHistory(rooms);
-  }
 
   // make sure rooms are removed from cache
   await removeRoomsByProcessId(processId);
