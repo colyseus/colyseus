@@ -1,4 +1,4 @@
-import jsonwebtoken, { JwtPayload, Jwt, VerifyOptions } from 'jsonwebtoken';
+import jsonwebtoken, { type JwtPayload, type Jwt, type VerifyOptions } from 'jsonwebtoken';
 import { expressjwt } from 'express-jwt';
 
 export type { VerifyOptions, Jwt, JwtPayload };

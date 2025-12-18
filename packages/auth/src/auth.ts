@@ -4,9 +4,9 @@ import { fileURLToPath } from 'url';
 import express, { Router } from 'express';
 import { existsSync } from 'fs';
 import { debugAndPrintError, generateId, logger, matchMaker } from '@colyseus/core';
-import { Request } from 'express-jwt';
-import { OAuthProviderCallback, oAuthProviderCallback, oauth } from './oauth.ts';
-import { JWT, JwtPayload } from './JWT.ts';
+import { type Request } from 'express-jwt';
+import { type OAuthProviderCallback, oAuthProviderCallback, oauth } from './oauth.ts';
+import { JWT, type JwtPayload } from './JWT.ts';
 import { Hash } from './Hash.ts';
 
 export type MayHaveUpgradeToken = { upgradingToken?: JwtPayload };

@@ -1,9 +1,17 @@
-import { Request } from 'express-jwt';
+import { type Request } from 'express-jwt';
 
-import { JWT, JwtPayload, Jwt } from './JWT.ts';
-import { auth, AuthSettings, RegisterWithEmailAndPasswordCallback, FindUserByEmailCallback, ParseTokenCallback, GenerateTokenCallback, HashPasswordCallback,} from './auth.ts';
+import { JWT, type JwtPayload, type Jwt } from './JWT.ts';
+import {
+  auth,
+  type AuthSettings,
+  type RegisterWithEmailAndPasswordCallback,
+  type FindUserByEmailCallback,
+  type ParseTokenCallback,
+  type GenerateTokenCallback,
+  type HashPasswordCallback
+} from './auth.ts';
 
-import { OAuthProviderCallback } from './oauth.ts';
+import type { OAuthProviderCallback } from './oauth.ts';
 import { Hash } from './Hash.ts';
 
 export type {
