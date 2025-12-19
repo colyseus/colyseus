@@ -1158,7 +1158,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
 
         // @ts-ignore: client left during `onJoin`, call _onLeave immediately.
         if (client.state === ClientState.LEAVING) {
-          throw new Error("early_leave");
+          throw new ServerError(ErrorCode.MATCHMAKE_UNHANDLED, "early_leave");
 
         } else {
           // remove seat reservation
