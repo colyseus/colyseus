@@ -10,7 +10,7 @@ export interface TraefikOptions {
 
   /**
    * The provider to use for the Traefik config.
-   * Defaults to "http".
+   * Defaults to "redis".
    */
   provider?: "http" | "redis";
 
@@ -57,7 +57,7 @@ export async function exposeServerToTraefik(options: TraefikOptions) {
     : server['port'] || process.env.PORT;
 
   // Default to "http" provider if not provided
-  if (!options.provider) { options.provider = "http"; }
+  if (!options.provider) { options.provider = "redis"; }
   if (!options.redisRootKey) { options.redisRootKey = "traefik"; }
   if (!options.healthCheckOptions) {
     options.healthCheckOptions = { path: "/__healthcheck", interval: "10s", timeout: "3s" };
