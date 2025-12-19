@@ -43,7 +43,16 @@ export let publicAddress: string;
 export let processId: string;
 export let presence: Presence;
 export let driver: MatchMakerDriver;
-export let selectProcessIdToCreateRoom: SelectProcessIdCallback;
+
+/**
+ * Function to select the processId to create the room on.
+ * By default, returns the process with least amount of rooms created.
+ * @returns The processId to create the room on.
+ */
+export let selectProcessIdToCreateRoom: SelectProcessIdCallback = async function () {
+  return (await stats.fetchAll())
+    .sort((p1, p2) => p1.roomCount > p2.roomCount ? 1 : -1)[0]?.processId || processId;
+};
 
 /**
  * Whether health checks are enabled or not. (default: true)
@@ -105,13 +114,11 @@ export async function setup(
   if (!processId) { processId = generateId(); }
 
   /**
-   * Define default `assignRoomToProcessId` method.
-   * By default, return the process with least amount of rooms created
+   * Override default `selectProcessIdToCreateRoom` function.
    */
-  selectProcessIdToCreateRoom = _selectProcessIdToCreateRoom || async function () {
-    return (await stats.fetchAll())
-      .sort((p1, p2) => p1.roomCount > p2.roomCount ? 1 : -1)[0]?.processId || processId;
-  };
+  if (_selectProcessIdToCreateRoom) {
+    selectProcessIdToCreateRoom = _selectProcessIdToCreateRoom;
+  }
 
   onReady.resolve();
 }

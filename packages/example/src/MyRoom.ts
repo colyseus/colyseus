@@ -139,7 +139,7 @@ export class MyRoom extends Room<{ client: MyClient }> {
     //
     // Disconnect all clients after 30 seconds
     //
-    this.clock.setTimeout(() => this.disconnect(), 30 * 1000);
+    this.clock.setTimeout(() => this.disconnect(), 5 * 1000);
   }
 
 }

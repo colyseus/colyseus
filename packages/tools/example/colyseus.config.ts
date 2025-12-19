@@ -1,10 +1,8 @@
 import { uWebSocketsTransport } from "@colyseus/uwebsockets-transport";
 
-import config from "../src";
+import config from "../src/index.ts";
 
 export default config({
-    getId: () => "My App 1.0.0",
-
     /**
      * OPTIONAL:
      * - use uWebSockets.js transport

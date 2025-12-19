@@ -166,7 +166,7 @@ const port = Number((process.env.PORT || 2567)) + Number(process.env.NODE_APP_IN
 
 export const server = config({
   options: {
-    devMode: true,
+    // devMode: true,
     // driver: new PostgresDriver(),
     driver: new RedisDriver(),
     presence: new RedisPresence(),

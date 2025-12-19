@@ -14,7 +14,9 @@ import {
   Transport,
   matchMaker,
   RegisteredHandler,
-  defineServer
+  defineServer,
+  LocalDriver,
+  LocalPresence
 } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 
@@ -117,8 +119,25 @@ export async function listen<
     let displayLogs = true;
 
     if (options instanceof Server) {
-        // TODO: configure Driver and Presence
         server = options;
+
+        // automatically configure for production under Colyseus Cloud
+        if (process.env.COLYSEUS_CLOUD !== undefined) {
+            // check if local driver/presence are being used (defaults)
+            const isLocalDriver = matchMaker.driver instanceof LocalDriver;
+            const isLocalPresence = matchMaker.presence instanceof LocalPresence;
+
+            const cloudConfig = await getColyseusCloudConfig(
+                port,
+                isLocalDriver ? undefined : matchMaker.driver,
+                isLocalPresence ? undefined : matchMaker.presence,
+            );
+
+            // re-setup matchMaker with Redis driver/presence
+            if (cloudConfig && (isLocalDriver || isLocalPresence)) {
+                await matchMaker.setup(cloudConfig.presence, cloudConfig.driver, cloudConfig.publicAddress);
+            }
+        }
 
     } else {
         server = await buildServerFromOptions<RoomTypes, Routes>(options, port);
@@ -131,7 +150,8 @@ export async function listen<
 
     if (process.env.COLYSEUS_CLOUD !== undefined) {
         // listening on socket
-        const socketPath: any = `/run/colyseus/${port}.sock`;
+        // const socketPath: any = `/run/colyseus/${port}.sock`;
+        const socketPath: any = `/tmp/${port}.sock`;
 
         // check if .sock file is active
         // (fixes "ADDRINUSE" issue when restarting the server)
@@ -165,42 +185,11 @@ async function buildServerFromOptions<
 
   // automatically configure for production under Colyseus Cloud
   if (process.env.COLYSEUS_CLOUD !== undefined) {
-
-    // special configuration is required when using multiple processes
-    const useRedisConfig = (os.cpus().length > 1) || (process.env.REDIS_URI !== undefined);
-
-    if (!serverOptions.driver && useRedisConfig) {
-      try {
-        const module = await RedisDriver;
-        serverOptions.driver = new module.RedisDriver(process.env.REDIS_URI);
-      } catch (e) {
-        console.error(e);
-        logger.warn("");
-        logger.warn("❌ could not initialize RedisDriver.");
-        logger.warn("👉 npm install --save @colyseus/redis-driver");
-        logger.warn("");
-      }
-    }
-
-    if (!serverOptions.presence && useRedisConfig) {
-      try {
-        const module = await RedisPresence;
-        serverOptions.presence = new module.RedisPresence(process.env.REDIS_URI);
-      } catch (e) {
-        console.error(e);
-        logger.warn("");
-        logger.warn("❌ could not initialize RedisPresence.");
-        logger.warn("👉 npm install --save @colyseus/redis-presence");
-        logger.warn("");
-      }
-    }
-
-    if (useRedisConfig) {
-      // force "publicAddress" when more than 1 process is available
-      serverOptions.publicAddress = process.env.SUBDOMAIN + "." + process.env.SERVER_NAME;
-
-      // nginx is responsible for forwarding /{port}/ to this process
-      serverOptions.publicAddress += "/" + port;
+    const cloudConfig = await getColyseusCloudConfig(port, serverOptions.driver, serverOptions.presence);
+    if (cloudConfig) {
+      serverOptions.driver = cloudConfig.driver;
+      serverOptions.presence = cloudConfig.presence;
+      serverOptions.publicAddress = cloudConfig.publicAddress;
     }
   }
 
@@ -264,6 +253,50 @@ export async function getTransport(options: ConfigOptions) {
     }
 
     return transport;
+}
+
+/**
+ * Configure Redis driver/presence for Colyseus Cloud when needed.
+ * Returns configured driver, presence, and publicAddress.
+ */
+async function getColyseusCloudConfig(port: number, currentDriver?: any, currentPresence?: any) {
+  const useRedisConfig = (os.cpus().length > 1) || (process.env.REDIS_URI !== undefined);
+
+  if (!useRedisConfig) {
+    return null;
+  }
+
+  let driver = currentDriver;
+  let presence = currentPresence;
+  const publicAddress = process.env.SUBDOMAIN + "." + process.env.SERVER_NAME + "/" + port;
+
+  if (!driver) {
+    try {
+      const module = await RedisDriver;
+      driver = new module.RedisDriver(process.env.REDIS_URI);
+    } catch (e) {
+      console.error(e);
+      logger.warn("");
+      logger.warn("❌ could not initialize RedisDriver.");
+      logger.warn("👉 npm install --save @colyseus/redis-driver");
+      logger.warn("");
+    }
+  }
+
+  if (!presence) {
+    try {
+      const module = await RedisPresence;
+      presence = new module.RedisPresence(process.env.REDIS_URI);
+    } catch (e) {
+      console.error(e);
+      logger.warn("");
+      logger.warn("❌ could not initialize RedisPresence.");
+      logger.warn("👉 npm install --save @colyseus/redis-presence");
+      logger.warn("");
+    }
+  }
+
+  return { driver, presence, publicAddress };
 }
 
 /**
