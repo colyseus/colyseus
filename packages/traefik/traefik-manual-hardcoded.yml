@@ -1,0 +1,58 @@
+providers:
+  file:
+    filename: traefik-manual-hardcoded.yml
+    watch: true
+
+api:
+  dashboard: true
+  insecure: true
+
+log:
+  level: DEBUG
+
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+
+http:
+  routers:
+    all:
+      rule: "Host(`backend.yourgamedomain.com`)"
+      service: all-servers
+
+    node-1:
+      rule: "Host(`node-1.yourgamedomain.com`)"
+      service: node-1
+
+    node-2:
+      rule: "Host(`node-2.yourgamedomain.com`)"
+      service: node-2
+
+  services:
+    all-servers:
+      loadBalancer:
+        servers:
+        # node-1
+        - url: "http://localhost:2567/"
+        # node-2
+        - url: "http://localhost:2568/"
+
+    node-1:
+      loadBalancer:
+        # healthCheck:
+        #   path: /__healthcheck
+        #   interval: "10s"
+        #   timeout: "3s"
+        servers:
+        - url: "http://localhost:2567/"
+
+    node-2:
+      loadBalancer:
+        # healthCheck:
+        #   path: /__healthcheck
+        #   interval: "10s"
+        #   timeout: "3s"
+        servers:
+        - url: "http://localhost:2568/"

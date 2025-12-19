@@ -60,7 +60,7 @@ export async function exposeServerToTraefik(options: TraefikOptions) {
   if (!options.provider) { options.provider = "http"; }
   if (!options.redisRootKey) { options.redisRootKey = "traefik"; }
   if (!options.healthCheckOptions) {
-    options.healthCheckOptions = { path: "/__healthcheck", interval: "10s", timeout: "5s" };
+    options.healthCheckOptions = { path: "/__healthcheck", interval: "10s", timeout: "3s" };
   }
 
   // Validate required options
