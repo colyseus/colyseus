@@ -1,4 +1,4 @@
-## Bug fixes / improvemernts to document
+## Bug fixes / improvements to document
 [ ] `LobbyRoom` / `enableRealtimeListing()`: fix removing room from lobby listing when room is disposed.
 [ ] Room's protected members are now `private` for better DX. If you are using one of the undocumented protected methods, such as `resetAutoDisposeTimeout`, you can call it via `this['resetAutoDisposeTimeout']()`.
 [ ] The `.setSeatReservationTime()` method has been moved to `.seatReservationTimeout=` property.
@@ -10,8 +10,9 @@
 [ ] Skipping handshake when local state is available (when reconnecting or with concrete state provided)
 [ ] Fixed bug where setting `patchRate=0` would stop `clock` intervals and timeouts from working (https://github.com/colyseus/colyseus/issues/869)
 [ ] Playground: Automatically-generated postman-like UI
-[ ] Introduce `maxMessagesPerSecond` for rate-limiting bad actors (forcibly close if client exceeds threshold)
+[ ] Introduce `maxMessagesPerSecond` for rate-limiting room messages (forcibly close if client exceeds threshold)
 [ ] New `room.ping(callback)` method.
+[ ] Introduce `ColyseusSDK.selectByLatency(endpoints)` and `sdk.getLatency()`
 
 ## Changes on `@colyseus/schema`
 
@@ -46,6 +47,7 @@ We have separate methods now for handling `onMessage()` with raw bytes: `onMessa
 [x] `RoomCache`: remove mongodb-like methods like `.updateOne()`, `save()`, and `remove()`
 [x] Check why this test outputs `Error: UNDEFINED_VALUE` for `PostgresDriver`: `npm test -- --grep 'should not exceed maxClients'`
 [x] `RoomCache`: improve metadata handling and filters
+[x] Colyseus Cloud: allow `@colyseus/tools` - `listen()` method to accept a raw `server` instance and make it compatible with Colyseus Cloud infrastructure.
 [ ] Room caching and restoration ("migration") to new server
 [ ] `PostgresDriver`: confirm if delay between increment/decrement `clients` is affecting `maxClients` being respected.
 [ ] `RedisDriver`: implement `boot()` to create LUA Script for filtering rooms at the server instead of at the Redis client
@@ -54,4 +56,3 @@ We have separate methods now for handling `onMessage()` with raw bytes: `onMessa
 [ ] Full-stack type safety
 [ ] How to use new `messages = {}` for raw binary data? (`.onMessageBytes()` ??)
 [ ] Add Unity-like schema callbacks for TypeScript
-[ ] Colyseus Cloud: allow `@colyseus/tools` - `listen()` method to accept a raw `server` instance and make it compatible with Colyseus Cloud infrastructure.

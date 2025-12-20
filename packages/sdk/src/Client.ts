@@ -1,11 +1,12 @@
-import type { SDKTypes, Room as ServerRoom } from '@colyseus/core';
+import { type SDKTypes, type Room as ServerRoom } from '@colyseus/core';
 
-import { ServerError } from './errors/Errors.ts';
+import { CloseCode, ServerError } from './errors/Errors.ts';
 import { Room } from './Room.ts';
 import { SchemaConstructor } from './serializer/SchemaSerializer.ts';
 import { HTTP } from './HTTP.ts';
 import { Auth } from './Auth.ts';
-import { SeatReservation } from './Protocol.ts';
+import { Protocol, SeatReservation } from './Protocol.ts';
+import { Connection } from './Connection.ts';
 import { discordURLBuilder } from './3rd_party/discord.ts';
 
 export type JoinOptions = any;
@@ -39,13 +40,31 @@ export interface ClientOptions {
     urlBuilder?: (url: URL) => string;
 }
 
+export interface LatencyOptions {
+    /** "ws" for WebSocket, "h3" for WebTransport (default: "ws") */
+    protocol?: "ws" | "h3";
+    /** Number of pings to send (default: 1). Returns the average latency when > 1. */
+    pingCount?: number;
+}
+
 export class ColyseusSDK<ServerType extends SDKTypes = any> {
     static VERSION = "0.17";
 
+    /**
+     * The HTTP client to make requests to the server.
+     */
     public http: HTTP<ServerType['~routes']>;
+
+    /**
+     * The authentication module to authenticate into requests and rooms.
+     */
     public auth: Auth;
 
-    protected settings: EndpointSettings;
+    /**
+     * The settings used to connect to the server.
+     */
+    public settings: EndpointSettings;
+
     protected urlBuilder: (url: URL) => string;
 
     constructor(
@@ -108,6 +127,35 @@ export class ColyseusSDK<ServerType extends SDKTypes = any> {
             this.urlBuilder = discordURLBuilder;
             console.log("Colyseus SDK: Discord Embedded SDK detected. Using custom URL builder.");
         }
+    }
+
+    /**
+     * Select the endpoint with the lowest latency.
+     * @param endpoints Array of endpoints to select from.
+     * @param options Client options.
+     * @param latencyOptions Latency measurement options (protocol, pingCount).
+     * @returns The client with the lowest latency.
+     */
+    static async selectByLatency<ServerType extends SDKTypes = any>(
+        endpoints: Array<string | EndpointSettings>,
+        options?: ClientOptions,
+        latencyOptions: LatencyOptions = {}
+    ) {
+        const clients = endpoints.map(endpoint => new ColyseusSDK<ServerType>(endpoint, options));
+
+        const latencies = (await Promise.allSettled(clients.map((client, index) => client.getLatency(latencyOptions).then(latency => {
+            const settings = clients[index].settings;
+            console.log(`🛜 Endpoint Latency: ${latency}ms - ${settings.hostname}:${settings.port}${settings.pathname}`);
+            return [index, latency]
+        }))))
+            .filter((result) => result.status === 'fulfilled')
+            .map(result => result.value);
+
+        if (latencies.length === 0) {
+            throw new Error('All endpoints failed to respond');
+        }
+
+        return clients[latencies.sort((a, b) => a[1] - b[1])[0][0]];
     }
 
     // Overload: Use room name from ServerType to infer room type
@@ -262,6 +310,47 @@ export class ColyseusSDK<ServerType extends SDKTypes = any> {
                 room.onError.remove(onError);
                 resolve(room);
             });
+        });
+    }
+
+    /**
+     * Create a new connection with the server, and measure the latency.
+     * @param options Latency measurement options (protocol, pingCount).
+     */
+    public getLatency(options: LatencyOptions = {}): Promise<number> {
+        const protocol = options.protocol ?? "ws";
+        const pingCount = options.pingCount ?? 1;
+
+        return new Promise<number>((resolve, reject) => {
+            const conn = new Connection(protocol);
+            const latencies: number[] = [];
+            let pingStart = 0;
+
+            conn.events.onopen = () => {
+                pingStart = Date.now();
+                conn.send(new Uint8Array([Protocol.PING]));
+            };
+
+            conn.events.onmessage = (_: MessageEvent) => {
+                latencies.push(Date.now() - pingStart);
+
+                if (latencies.length < pingCount) {
+                    // Send another ping
+                    pingStart = Date.now();
+                    conn.send(new Uint8Array([Protocol.PING]));
+                } else {
+                    // Done, calculate average and close
+                    conn.close();
+                    const average = latencies.reduce((sum, l) => sum + l, 0) / latencies.length;
+                    resolve(average);
+                }
+            };
+
+            conn.events.onerror = (event: ErrorEvent) => {
+                reject(new ServerError(CloseCode.ABNORMAL_CLOSURE, `Failed to get latency: ${event.message}`));
+            };
+
+            conn.connect(this.getHttpEndpoint());
         });
     }
 

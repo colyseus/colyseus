@@ -4,7 +4,7 @@ import { Http3Server } from '@fails-components/webtransport';
 import { URL } from 'url';
 import { decode, Iterator } from '@colyseus/schema';
 
-import { matchMaker, Protocol, Transport, debugAndPrintError, spliceOne, getBearerToken, CloseCode, ServerError, ErrorCode } from '@colyseus/core';
+import { matchMaker, Protocol, Transport, debugAndPrintError, spliceOne, getBearerToken, CloseCode, connectClientToRoom } from '@colyseus/core';
 import { H3Client } from './H3Client.ts';
 import { generateWebTransportCertificate } from './utils/mkcert.ts';
 import type { Application, Request, Response } from 'express';
@@ -207,32 +207,32 @@ export class H3Transport extends Transport {
 
     const roomId = decode.string(data, it);
     const sessionId = decode.string(data, it);
+
+    // If sessionId is not provided, allow ping-pong utility.
+    if (!sessionId && !roomId) {
+      h3Client.readyState = 1;
+      // Disconnect automatically after 1 second if no message is received.
+      const timeout = setTimeout(() => h3Client.close(CloseCode.NORMAL_CLOSURE), 1000);
+      h3Client.ref.on('message', (_) => h3Client.send(new Uint8Array([Protocol.PING])));
+      h3Client.ref.on('close', () => clearTimeout(timeout));
+      return;
+    }
+
     const reconnectionToken: string = it.offset < data.byteLength ? decode.string(data, it) : undefined;
     const skipHandshake = (it.offset < data.byteLength && decode.boolean(data, it));
 
     h3Client.sessionId = sessionId;
-    h3Client.readyState = 1;
 
     const room = matchMaker.getLocalRoomById(roomId);
 
-    //
-    // TODO: DRY code below with all transports
-    //
-
     try {
-      if (!room || !room.hasReservedSeat(sessionId, reconnectionToken)) {
-        throw new ServerError(ErrorCode.MATCHMAKE_EXPIRED, 'seat reservation expired.');
-      }
-
-      await room['_onJoin'](h3Client, req, { reconnectionToken, skipHandshake });
+      await connectClientToRoom(room, h3Client, req, { reconnectionToken, skipHandshake });
 
     } catch (e: any) {
       debugAndPrintError(e);
 
       // send error code to client then terminate
-      // @ts-ignore
-      h3Client.error(e.code, e.message, () =>
-        h3Client.close(CloseCode.WITH_ERROR));
+      h3Client.error(e.code, e.message, () => h3Client.close(CloseCode.WITH_ERROR));
     }
   }
 

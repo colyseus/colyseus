@@ -7,7 +7,7 @@ import { ServerWebSocket, WebSocketHandler } from 'bun';
 // import bunExpress from 'bun-serve-express';
 import type { Application, Request, Response } from "express";
 
-import { HttpServerMock, matchMaker, Transport, debugAndPrintError, spliceOne, ServerError, getBearerToken, ErrorCode } from '@colyseus/core';
+import { HttpServerMock, matchMaker, Protocol, Transport, debugAndPrintError, getBearerToken, CloseCode, connectClientToRoom } from '@colyseus/core';
 import { WebSocketClient, WebSocketWrapper } from './WebSocketClient.ts';
 
 export type TransportOptions = Partial<Omit<WebSocketHandler, "message" | "open" | "drain" | "close" | "ping" | "pong">>;
@@ -125,21 +125,22 @@ export class BunWebSockets extends Transport {
     const processAndRoomId = parsedURL.pathname.match(/\/[a-zA-Z0-9_\-]+\/([a-zA-Z0-9_\-]+)$/);
     const roomId = processAndRoomId && processAndRoomId[1];
 
+    // If sessionId is not provided, allow ping-pong utility.
+    if (!sessionId && !roomId) {
+      // Disconnect automatically after 1 second if no message is received.
+      const timeout = setTimeout(() => rawClient.close(CloseCode.NORMAL_CLOSURE), 1000);
+      wrapper.on('message', (_) => rawClient.send(new Uint8Array([Protocol.PING])));
+      wrapper.on('close', () => clearTimeout(timeout));
+      return;
+    }
+
     const room = matchMaker.getLocalRoomById(roomId);
     const client = new WebSocketClient(sessionId, wrapper);
     const reconnectionToken = parsedURL.searchParams.get("reconnectionToken");
     const skipHandshake = (parsedURL.searchParams.has("skipHandshake"));
 
-    //
-    // TODO: DRY code below with all transports
-    //
-
     try {
-      if (!room || !room.hasReservedSeat(sessionId, reconnectionToken)) {
-        throw new ServerError(ErrorCode.MATCHMAKE_EXPIRED, 'seat reservation expired.');
-      }
-
-      await room['_onJoin'](client, {
+      await connectClientToRoom(room, client, {
         token: parsedURL.searchParams.get("_authToken") ?? getBearerToken(rawClient.data.headers['authorization']),
         headers: rawClient.data.headers,
         ip: rawClient.data.headers['x-real-ip'] ?? rawClient.data.headers['x-forwarded-for'] ?? rawClient.remoteAddress,

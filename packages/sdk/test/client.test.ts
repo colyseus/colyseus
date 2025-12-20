@@ -1,9 +1,9 @@
 import './util';
 import { describe, beforeAll, test } from "vitest";
 import { assert } from "chai";
-import { Client } from "../src";
+import { Client } from "../src/Client.ts";
 import { Schema, type } from '@colyseus/schema';
-import { discordURLBuilder } from '../src/3rd_party/discord';
+import { discordURLBuilder } from '../src/3rd_party/discord.ts';
 
 describe("Client", function () {
     let client: Client;

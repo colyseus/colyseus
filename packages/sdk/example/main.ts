@@ -2,7 +2,8 @@ import { Client, Room } from '@colyseus/sdk';
 import "@colyseus/sdk/debug";
 
 // Get DOM elements
-const endpointInput = document.getElementById('endpoint') as HTMLInputElement;
+const endpointsList = document.getElementById('endpointsList') as HTMLDivElement;
+const addEndpointBtn = document.getElementById('addEndpointBtn') as HTMLButtonElement;
 const roomNameInput = document.getElementById('roomName') as HTMLInputElement;
 const messageInput = document.getElementById('message') as HTMLInputElement;
 const connectBtn = document.getElementById('connectBtn') as HTMLButtonElement;
@@ -54,21 +55,74 @@ function updateUIState() {
   }
 }
 
+// Get all endpoint values
+function getEndpoints(): string[] {
+  const inputs = endpointsList.querySelectorAll('.endpoint-input') as NodeListOf<HTMLInputElement>;
+  return Array.from(inputs).map(input => input.value.trim()).filter(v => v.length > 0);
+}
+
+// Add new endpoint input row
+function addEndpointRow(value: string = '') {
+  const row = document.createElement('div');
+  row.className = 'flex items-center gap-2 endpoint-row';
+  row.innerHTML = `
+    <input type="text" value="${value}" placeholder="ws://server:2567" class="endpoint-input flex-1 max-w-md p-2.5 border border-gray-300 rounded text-sm" />
+    <button type="button" class="remove-endpoint-btn bg-red-500 hover:bg-red-600 text-white border-none cursor-pointer px-3 py-1.5 rounded text-sm">Remove</button>
+  `;
+  endpointsList.appendChild(row);
+  updateRemoveButtons();
+}
+
+// Update remove button visibility (hide if only one endpoint)
+function updateRemoveButtons() {
+  const rows = endpointsList.querySelectorAll('.endpoint-row');
+  const removeButtons = endpointsList.querySelectorAll('.remove-endpoint-btn') as NodeListOf<HTMLButtonElement>;
+  removeButtons.forEach(btn => {
+    btn.style.display = rows.length > 1 ? 'block' : 'none';
+  });
+}
+
+// Handle remove endpoint click
+endpointsList.addEventListener('click', (e) => {
+  const target = e.target as HTMLElement;
+  if (target.classList.contains('remove-endpoint-btn')) {
+    const row = target.closest('.endpoint-row');
+    if (row && endpointsList.querySelectorAll('.endpoint-row').length > 1) {
+      row.remove();
+      updateRemoveButtons();
+    }
+  }
+});
+
+// Add endpoint button
+addEndpointBtn.addEventListener('click', () => {
+  addEndpointRow();
+});
+
+// Initialize remove button visibility
+updateRemoveButtons();
+
 // Connect to server
 connectBtn.addEventListener('click', async () => {
   try {
-    const endpoint = endpointInput.value.trim();
-    if (!endpoint) {
-      log('Please enter a server endpoint', 'error');
+    const endpoints = getEndpoints();
+    if (endpoints.length === 0) {
+      log('Please enter at least one server endpoint', 'error');
       return;
     }
 
-    log(`Connecting to ${endpoint}...`, 'info');
     connectionStatus.textContent = 'Connecting...';
     connectionStatus.className = 'inline-block px-2 py-1 rounded text-xs font-medium ml-2.5 bg-orange-500 text-white';
 
-    client = new Client(endpoint);
-    log('Client created successfully', 'success');
+    if (endpoints.length === 1) {
+      log(`Connecting to ${endpoints[0]}...`, 'info');
+      client = new Client(endpoints[0]);
+      log('Client created successfully', 'success');
+    } else {
+      log(`Selecting best server from ${endpoints.length} endpoints by latency...`, 'info');
+      client = await Client.selectByLatency(endpoints);
+      log(`Selected server: ${client['settings'].hostname}:${client.settings.port} (lowest latency)`, 'success');
+    }
 
     updateUIState();
     log('Ready to join rooms', 'success');

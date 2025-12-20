@@ -4,6 +4,9 @@ import * as https from 'https';
 import { StateView } from '@colyseus/schema';
 import { EventEmitter } from 'events';
 import { spliceOne } from './utils/Utils.ts';
+import { ServerError } from './errors/ServerError.ts';
+import { ErrorCode } from './Protocol.ts';
+import type { Room } from './Room.ts';
 
 export abstract class Transport {
     public protocol?: string;
@@ -176,4 +179,29 @@ export class ClientArray<C extends Client = Client> extends Array<C> {
   public delete(client: C): boolean {
     return spliceOne(this, this.indexOf(client));
   }
+}
+
+/**
+ * Shared internal method to connect a Client into a Room.
+ * Validates seat reservation and joins the client to the room.
+ *
+ * @remarks
+ * **⚠️ This is an internal API and not intended for end-user use.**
+ *
+ * @internal
+ */
+export async function connectClientToRoom(
+  room: Room | undefined,
+  client: Client & ClientPrivate,
+  authContext: AuthContext,
+  connectionOptions: {
+    reconnectionToken?: string;
+    skipHandshake?: boolean;
+  },
+): Promise<void> {
+  if (!room || !room.hasReservedSeat(client.sessionId, connectionOptions.reconnectionToken)) {
+    throw new ServerError(ErrorCode.MATCHMAKE_EXPIRED, 'seat reservation expired.');
+  }
+
+  await room['_onJoin'](client, authContext, connectionOptions);
 }

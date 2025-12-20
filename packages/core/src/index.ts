@@ -1,7 +1,7 @@
 import Clock, { Delayed } from '@colyseus/timer';
 
 // Core classes
-export { Server, type ServerOptions, type SDKTypes, defineRoom, defineServer } from './Server.ts';
+export { Server, defineRoom, defineServer, type ServerOptions, type SDKTypes } from './Server.ts';
 export { Room, room, RoomInternalState, validate, type RoomOptions, type MessageHandlerWithFormat, type ExtractMessageType, type Messages, type ExtractRoomState, type ExtractRoomMetadata, type ExtractRoomClient } from './Room.ts';
 export { Protocol, ErrorCode, getMessageBytes, CloseCode } from './Protocol.ts';
 export { RegisteredHandler } from './matchmaker/RegisteredHandler.ts';
@@ -30,7 +30,7 @@ export * from './matchmaker/LocalDriver/LocalDriver.ts';
 export { initializeRoomCache } from './matchmaker/driver.ts';
 
 // Transport
-export { type Client, type ClientPrivate, type AuthContext, ClientState, ClientArray, Transport, type ISendOptions } from './Transport.ts';
+export { type Client, type ClientPrivate, type AuthContext, ClientState, ClientArray, Transport, type ISendOptions, connectClientToRoom } from './Transport.ts';
 
 // Presence
 export { type Presence } from './presence/Presence.ts';

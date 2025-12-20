@@ -2,7 +2,7 @@ import http from 'http';
 import { URL } from 'url';
 import WebSocket, { type ServerOptions, WebSocketServer } from 'ws';
 
-import { matchMaker, Protocol, Transport, debugAndPrintError, debugConnection, getBearerToken, CloseCode, ServerError, ErrorCode } from '@colyseus/core';
+import { matchMaker, Protocol, Transport, debugAndPrintError, debugConnection, getBearerToken, CloseCode, connectClientToRoom } from '@colyseus/core';
 import { WebSocketClient } from './WebSocketClient.ts';
 
 function noop() {}
@@ -115,37 +115,38 @@ export class WebSocketTransport extends Transport {
     // prevent server crashes if a single client had unexpected error
     rawClient.on('error', (err) => debugAndPrintError(err.message + '\n' + err.stack));
     rawClient.on('pong', heartbeat);
+    rawClient.pingCount = 0;
 
-    // compatibility with ws / uws
     const parsedURL = new URL(`ws://server/${req.url}`);
 
     const sessionId = parsedURL.searchParams.get("sessionId");
     const processAndRoomId = parsedURL.pathname.match(/\/[a-zA-Z0-9_\-]+\/([a-zA-Z0-9_\-]+)$/);
     const roomId = processAndRoomId && processAndRoomId[1];
 
-    const room = matchMaker.getLocalRoomById(roomId);
+    // If sessionId is not provided, allow ping-pong utility.
+    if (!sessionId && !roomId) {
+      // Disconnect automatically after 1 second if no message is received.
+      const timeout = setTimeout(() => rawClient.close(CloseCode.NORMAL_CLOSURE), 1000);
+      rawClient.on('message', (_) => rawClient.send(new Uint8Array([Protocol.PING])));
+      rawClient.on('close', () => clearTimeout(timeout));
+      return;
+    }
 
-    // set client id
-    rawClient.pingCount = 0;
+    const room = matchMaker.getLocalRoomById(roomId);
 
     const client = new WebSocketClient(sessionId, rawClient);
     const reconnectionToken = parsedURL.searchParams.get("reconnectionToken");
     const skipHandshake = (parsedURL.searchParams.has("skipHandshake"));
 
-    //
-    // TODO: DRY code below with all transports
-    //
-
     try {
-      if (!room || !room.hasReservedSeat(sessionId, reconnectionToken)) {
-        throw new ServerError(ErrorCode.MATCHMAKE_EXPIRED, 'seat reservation expired.');
-      }
-
-      await room['_onJoin'](client, {
+      await connectClientToRoom(room, client, {
         headers: new Headers(req.headers),
         token: parsedURL.searchParams.get("_authToken") ?? getBearerToken(req.headers.authorization),
         ip: req.headers['x-real-ip'] ?? req.headers['x-forwarded-for'] ?? req.socket.remoteAddress,
-      }, { reconnectionToken, skipHandshake });
+      }, {
+        reconnectionToken,
+        skipHandshake
+      });
 
     } catch (e: any) {
       debugAndPrintError(e);

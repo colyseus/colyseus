@@ -5,16 +5,22 @@
 import type { ServerWebSocket } from 'bun';
 import EventEmitter from 'events';
 
-import { Protocol, Client, ClientPrivate, ClientState, ISendOptions, getMessageBytes, logger, debugMessage } from '@colyseus/core';
+import { Protocol, type Client, type ClientPrivate, ClientState, type ISendOptions, getMessageBytes, logger, debugMessage } from '@colyseus/core';
 
 export class WebSocketWrapper extends EventEmitter {
-  constructor(public ws: ServerWebSocket<any>) {
+  public ws: ServerWebSocket<any>;
+
+  constructor(ws: ServerWebSocket<any>) {
     super();
+    this.ws = ws;
   }
 }
 
 export class WebSocketClient implements Client, ClientPrivate {
   '~messages': any;
+
+  public id: string;
+  public ref: WebSocketWrapper;
 
   public sessionId: string;
   public state: ClientState = ClientState.JOINING;
@@ -25,11 +31,9 @@ export class WebSocketClient implements Client, ClientPrivate {
   public _reconnectionToken: string;
   public _joinedAt: number;
 
-  constructor(
-    public id: string,
-    public ref: WebSocketWrapper,
-  ) {
-    this.sessionId = id;
+  constructor(id: string, ref: WebSocketWrapper,) {
+    this.id = this.sessionId = id;
+    this.ref = ref;
   }
 
   public sendBytes(type: string | number, bytes: Buffer | Uint8Array, options?: ISendOptions) {
@@ -103,7 +107,7 @@ export class WebSocketClient implements Client, ClientPrivate {
     logger.warn('DEPRECATION WARNING: use client.leave() instead of client.close()');
     try {
       throw new Error();
-    } catch (e) {
+    } catch (e: any) {
       logger.info(e.stack);
     }
     this.leave(code, data);

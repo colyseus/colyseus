@@ -168,9 +168,11 @@ export const server = config({
   options: {
     // devMode: true,
     // driver: new PostgresDriver(),
-    driver: new RedisDriver(),
-    presence: new RedisPresence(),
-    publicAddress: `localhost/${port}`,
+
+    // driver: new RedisDriver(),
+    // presence: new RedisPresence(),
+
+    // publicAddress: `localhost/${port}`,
   },
 
   rooms: {
@@ -216,11 +218,11 @@ export const server = config({
 async function main () {
   const gameServer = await listen(server, port);
 
-  exposeServerToTraefik({
-    server: gameServer,
-    mainAddress: "localhost",
-    provider: "redis"
-  });
+  // exposeServerToTraefik({
+  //   server: gameServer,
+  //   mainAddress: "localhost",
+  //   provider: "redis"
+  // });
 }
 
 main();

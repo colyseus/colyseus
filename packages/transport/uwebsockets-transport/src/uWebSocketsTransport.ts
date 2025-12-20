@@ -3,7 +3,7 @@ import querystring, { type ParsedUrlQuery } from 'querystring';
 import uWebSockets, { type WebSocket } from 'uWebSockets.js';
 import expressify, { Application } from "uwebsockets-express";
 
-import { type AuthContext, Transport, HttpServerMock, ErrorCode, matchMaker, getBearerToken, debugAndPrintError, spliceOne, ServerError } from '@colyseus/core';
+import { type AuthContext, Transport, HttpServerMock, ErrorCode, matchMaker, Protocol, getBearerToken, debugAndPrintError, spliceOne, connectClientToRoom } from '@colyseus/core';
 import { uWebSocketClient, uWebSocketWrapper } from './uWebSocketClient.ts';
 
 export type TransportOptions = Omit<uWebSockets.WebSocketBehavior<any>, "upgrade" | "open" | "pong" | "close" | "message">;
@@ -169,21 +169,22 @@ export class uWebSocketsTransport extends Transport {
         const processAndRoomId = url.match(/\/[a-zA-Z0-9_\-]+\/([a-zA-Z0-9_\-]+)$/);
         const roomId = processAndRoomId && processAndRoomId[1];
 
+        // If sessionId is not provided, allow ping-pong utility.
+        if (!sessionId && !roomId) {
+          // Disconnect automatically after 1 second if no message is received.
+          const timeout = setTimeout(() => rawClient.close(), 1000);
+          wrapper.on('message', (_) => rawClient.send(new Uint8Array([Protocol.PING]), true));
+          wrapper.on('close', () => clearTimeout(timeout));
+          return;
+        }
+
         const room = matchMaker.getLocalRoomById(roomId);
         const client = new uWebSocketClient(sessionId, wrapper);
         const reconnectionToken = searchParams.reconnectionToken as string;
         const skipHandshake = (searchParams.skipHandshake !== undefined);
 
-        //
-        // TODO: DRY code below with all transports
-        //
-
         try {
-            if (!room || !room.hasReservedSeat(sessionId, reconnectionToken)) {
-                throw new ServerError(ErrorCode.MATCHMAKE_EXPIRED, 'seat reservation expired.');
-            }
-
-            await room['_onJoin'](client, rawClient.context, {
+            await connectClientToRoom(room, client, rawClient.context, {
               reconnectionToken,
               skipHandshake
             });
