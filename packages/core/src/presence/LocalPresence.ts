@@ -1,15 +1,11 @@
-import fs from 'fs';
-import path from 'path';
 
 import { EventEmitter } from 'events';
 import { spliceOne } from '../utils/Utils.ts';
 import type { Presence } from './Presence.ts';
 
-import { isDevMode } from '../utils/DevMode.ts';
+import { hasDevModeCache, isDevMode, getDevModeCache, writeDevModeCache } from '../utils/DevMode.ts';
 
 type Callback = (...args: any[]) => void;
-
-const DEVMODE_CACHE_FILE_PATH = path.resolve(".devmode.json");
 
 export class LocalPresence implements Presence {
     public subscriptions = new EventEmitter();
@@ -27,13 +23,12 @@ export class LocalPresence implements Presence {
       //
       if (
         isDevMode &&
-        fs.existsSync(DEVMODE_CACHE_FILE_PATH)
+        hasDevModeCache()
       ) {
-        const cache = fs.readFileSync(DEVMODE_CACHE_FILE_PATH).toString('utf-8') || "{}";
-        const parsed = JSON.parse(cache);
-        if (parsed.data) { this.data = parsed.data; }
-        if (parsed.hash) { this.hash = parsed.hash; }
-        if (parsed.keys) { this.keys = parsed.keys; }
+        const cache = getDevModeCache();
+        if (cache.data) { this.data = cache.data; }
+        if (cache.hash) { this.hash = cache.hash; }
+        if (cache.keys) { this.keys = cache.keys; }
       }
     }
 
@@ -325,12 +320,11 @@ export class LocalPresence implements Presence {
 
     public shutdown() {
       if (isDevMode) {
-        const cache = JSON.stringify({
+        writeDevModeCache({
           data: this.data,
           hash: this.hash,
           keys: this.keys
         });
-        fs.writeFileSync(DEVMODE_CACHE_FILE_PATH, cache, { encoding: "utf-8" });
       }
     }
 

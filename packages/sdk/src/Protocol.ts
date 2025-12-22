@@ -1,13 +1,3 @@
-import { RoomAvailable } from "./Room.ts";
-
-export interface SeatReservation {
-    room: RoomAvailable;
-    sessionId: string;
-    reconnectionToken?: string;
-    devMode?: boolean;
-    protocol?: string;
-}
-
 // Use codes between 0~127 for lesser throughput (1 byte)
 export enum Protocol {
     // Room-related (10~19)

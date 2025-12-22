@@ -44,7 +44,7 @@ export class H3TransportTransport implements ITransport {
                 this.writer = stream.value.writable.getWriter();
 
                 // immediately write room/sessionId for establishing the room connection
-                this.sendSeatReservation(options.room.roomId, options.sessionId, options.reconnectionToken, options.skipHandshake);
+                this.sendSeatReservation(options.roomId, options.sessionId, options.reconnectionToken, options.skipHandshake);
 
                 // start reading incoming data
                 this.readIncomingData();

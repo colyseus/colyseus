@@ -1,13 +1,26 @@
-import debug from 'debug';
+import fs from 'fs';
+import path from 'path';
 import { type Schema, MapSchema, ArraySchema, SetSchema, CollectionSchema, $childType } from '@colyseus/schema';
 import { logger } from '../Logger.ts';
-import { debugAndPrintError } from '../Debug.ts';
+import { debugAndPrintError, debugDevMode } from '../Debug.ts';
 import { getLocalRoomById, handleCreateRoom, presence, remoteRoomCall } from '../MatchMaker.ts';
 import type { Room } from '../Room.ts';
 
-export const debugDevMode = debug('colyseus:devmode');
+const DEVMODE_CACHE_FILE_PATH = path.resolve(".devmode.json");
 
 export let isDevMode: boolean = false;
+
+export function hasDevModeCache() {
+  return fs.existsSync(DEVMODE_CACHE_FILE_PATH);
+}
+
+export function getDevModeCache() {
+  return JSON.parse(fs.readFileSync(DEVMODE_CACHE_FILE_PATH, 'utf8')) || {};
+}
+
+export function writeDevModeCache(cache: any) {
+  fs.writeFileSync(DEVMODE_CACHE_FILE_PATH, JSON.stringify(cache, null, 2), 'utf8');
+}
 
 export function setDevMode(bool: boolean) {
   isDevMode = bool;
@@ -30,7 +43,7 @@ export async function reloadFromCache() {
         const rawState = JSON.parse(roomHistory.state);
         logger.debug(`📋 room '${roomId}' state =>`, rawState);
 
-        restoreFromJSON(recreatedRoom.state, rawState);
+        restoreFromJSON(recreatedRoom.state as any, rawState);
       } catch (e: any) {
         debugAndPrintError(`❌ couldn't restore room '${roomId}' state:\n${e.stack}`);
       }
@@ -42,14 +55,14 @@ export async function reloadFromCache() {
         // TODO: need to restore each client's StateView as well
         // reserve seat for 20 seconds
         const { sessionId, reconnectionToken } = clientData;
-        await remoteRoomCall(recreatedRoomListing.roomId, '_reserveSeat', [sessionId, {}, {}, 20, true, reconnectionToken]);
+        await remoteRoomCall(recreatedRoomListing.roomId, '_reserveSeat', [sessionId, {}, {}, 20, false, reconnectionToken]);
       }
     }
 
     // call `onRestoreRoom` with custom 'cache'd property.
     recreatedRoom.onRestoreRoom?.(roomHistory["cache"]);
 
-    logger.debug(`🔄 room '${roomId}' has been restored with ${roomHistory.clients?.length || 0} reserved seats.`);
+    logger.debug(`🔄 room '${roomId}' has been restored with ${roomHistory.clients?.length || 0} reserved seats: ${roomHistory.clients?.map((c: any) => c.sessionId).join(", ")}`);
   }
 
   if (roomHistoryList.length > 0) {
@@ -81,18 +94,24 @@ export async function cacheRoomHistory(rooms: { [roomId: string]: Room }) {
           reconnectionToken: client.reconnectionToken,
         }));
 
+        // collect active client sessionIds to avoid duplicates
+        const activeSessionIds = new Set(activeClients.map((c) => c.sessionId));
+
         // also cache reserved seats (they don't have reconnectionTokens yet)
-        const reservedSeats = Object.keys(room['_reservedSeats']).map((sessionId) => ({
-          sessionId,
-          reconnectionToken: undefined,
-        }));
+        // filter out reserved seats that are already active clients (from devMode reconnection)
+        const reservedSeats = Object.keys(room['_reservedSeats'])
+          .filter((sessionId) => !activeSessionIds.has(sessionId))
+          .map((sessionId) => ({
+            sessionId,
+            reconnectionToken: undefined,
+          }));
 
         roomHistory["clients"] = activeClients.concat(reservedSeats);
 
         await presence.hset(getRoomRestoreListKey(), room.roomId, JSON.stringify(roomHistory));
 
         // Rewrite updated room history
-        logger.debug(`💾 caching room '${room.roomId}' (clients: ${room.clients.length}, state size: ${(roomHistory["state"] || []).length} bytes)`);
+        logger.debug(`💾 caching room '${room.roomId}' (clients: ${room.clients.length}, has state: ${roomHistory["state"] !== undefined ? "yes" : "no"})`);
 
       } catch (e: any) {
         debugAndPrintError(`❌ couldn't cache room '${room.roomId}', due to:\n${e.stack}`);

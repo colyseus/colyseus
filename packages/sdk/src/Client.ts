@@ -1,15 +1,16 @@
-import { type SDKTypes, type Room as ServerRoom } from '@colyseus/core';
+import type { matchMaker, SDKTypes, Room as ServerRoom } from '@colyseus/core';
 
 import { CloseCode, ServerError } from './errors/Errors.ts';
 import { Room } from './Room.ts';
 import { SchemaConstructor } from './serializer/SchemaSerializer.ts';
 import { HTTP } from './HTTP.ts';
 import { Auth } from './Auth.ts';
-import { Protocol, SeatReservation } from './Protocol.ts';
+import { Protocol } from './Protocol.ts';
 import { Connection } from './Connection.ts';
 import { discordURLBuilder } from './3rd_party/discord.ts';
 
 export type JoinOptions = any;
+export type ISeatReservation = matchMaker.ISeatReservation;
 
 export class MatchMakeError extends Error {
     code: number;
@@ -33,11 +34,13 @@ export interface EndpointSettings {
     port?: number,
     pathname?: string,
     searchParams?: string,
+    protocol?: "ws" | "h3";
 }
 
 export interface ClientOptions {
     headers?: { [id: string]: string };
     urlBuilder?: (url: URL) => string;
+    protocol?: "ws" | "h3";
 }
 
 export interface LatencyOptions {
@@ -107,6 +110,11 @@ export class ColyseusSDK<ServerType extends SDKTypes = any> {
         // make sure pathname does not end with "/"
         if (this.settings.pathname.endsWith("/")) {
             this.settings.pathname = this.settings.pathname.slice(0, -1);
+        }
+
+        // specify room connection protocol if provided
+        if (options?.protocol) {
+            this.settings.protocol = options.protocol;
         }
 
         this.http = new HTTP(this, {
@@ -282,11 +290,11 @@ export class ColyseusSDK<ServerType extends SDKTypes = any> {
     }
 
     public async consumeSeatReservation<T>(
-        response: SeatReservation,
+        response: ISeatReservation,
         rootSchema?: SchemaConstructor<T>
     ): Promise<Room<any, T>> {
-        const room = this.createRoom<T>(response.room.name, rootSchema);
-        room.roomId = response.room.roomId;
+        const room = this.createRoom<T>(response.name, rootSchema);
+        room.roomId = response.roomId;
         room.sessionId = response.sessionId;
 
         const options: any = { sessionId: room.sessionId };
@@ -297,7 +305,7 @@ export class ColyseusSDK<ServerType extends SDKTypes = any> {
         }
 
         room.connect(
-            this.buildEndpoint(response.room, options, response.protocol),
+            this.buildEndpoint(response, options),
             response,
             this.http.options.headers
         );
@@ -374,7 +382,7 @@ export class ColyseusSDK<ServerType extends SDKTypes = any> {
             throw new MatchMakeError(httpResponse.error.message || httpResponse.error, httpResponse.error.code || httpResponse.status);
         }
 
-        const response = httpResponse.data as unknown as SeatReservation;
+        const response = httpResponse.data as unknown as ISeatReservation;
 
         // forward reconnection token during "reconnect" methods.
         if (method === "reconnect") {
@@ -388,7 +396,8 @@ export class ColyseusSDK<ServerType extends SDKTypes = any> {
         return new Room<any, T>(roomName, rootSchema);
     }
 
-    protected buildEndpoint(room: any, options: any = {}, protocol: string = "ws") {
+    protected buildEndpoint(seatReservation: ISeatReservation, options: any = {}) {
+        let protocol: string = this.settings.protocol || "ws";
         let searchParams = this.settings.searchParams || "";
 
         // forward authentication token
@@ -412,14 +421,14 @@ export class ColyseusSDK<ServerType extends SDKTypes = any> {
             ? `${protocol}s://`
             : `${protocol}://`;
 
-        if (room.publicAddress) {
-            endpoint += `${room.publicAddress}`;
+        if (seatReservation.publicAddress) {
+            endpoint += `${seatReservation.publicAddress}`;
 
         } else {
             endpoint += `${this.settings.hostname}${this.getEndpointPort()}${this.settings.pathname}`;
         }
 
-        const endpointURL = `${endpoint}/${room.processId}/${room.roomId}?${searchParams}`;
+        const endpointURL = `${endpoint}/${seatReservation.processId}/${seatReservation.roomId}?${searchParams}`;
         return (this.urlBuilder)
             ? this.urlBuilder(new URL(endpointURL))
             : endpointURL;

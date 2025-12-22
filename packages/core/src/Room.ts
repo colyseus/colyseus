@@ -1367,6 +1367,11 @@ export class Room<T extends RoomOptions = RoomOptions> {
       return false;
     }
 
+    debugMatchMaking(
+      'reserving seat. sessionId: \'%s\', roomId: \'%s\', processId: \'%s\'',
+      sessionId, this.roomId, matchMaker.processId,
+    );
+
     this._reservedSeats[sessionId] = [joinOptions, authData, false, allowReconnection];
 
     if (!allowReconnection) {
@@ -1391,6 +1396,21 @@ export class Room<T extends RoomOptions = RoomOptions> {
     }
 
     return true;
+  }
+
+  private async _reserveMultipleSeats(
+    multipleSessionIds: string[],
+    multipleJoinOptions: any = true,
+    multipleAuthData: any = undefined,
+    seconds: number = this.seatReservationTimeout,
+  ) {
+    let promises: Promise<boolean>[] = [];
+
+    for (let i = 0; i < multipleSessionIds.length; i++) {
+      promises.push(this._reserveSeat(multipleSessionIds[i], multipleJoinOptions[i], multipleAuthData[i], seconds));
+    }
+
+    return await Promise.all(promises);
   }
 
   #_disposeIfEmpty() {

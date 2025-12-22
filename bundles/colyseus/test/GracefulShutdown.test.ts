@@ -93,7 +93,7 @@ describe("Graceful Shutdown", () => {
     ]);
 
     // simulate early disconnect
-    const lostConnection = new WebSocket(`${TEST_ENDPOINT}/${seatReservation.room.processId}/${seatReservation.room.roomId}?sessionId=${seatReservation.sessionId}`);
+    const lostConnection = new WebSocket(`${TEST_ENDPOINT}/${seatReservation.processId}/${seatReservation.roomId}?sessionId=${seatReservation.sessionId}`);
     lostConnection.on("open", () => lostConnection.close());
 
     server.onShutdown(() => {

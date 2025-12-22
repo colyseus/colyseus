@@ -354,7 +354,7 @@ export class Room<
                 this.onJoin.invoke();
 
             } else {
-                console.info(`[Colyseus reconnection]: ${String.fromCodePoint(0x2705)} reconnection successful!)`); // ✅
+                console.info(`[Colyseus reconnection]: ${String.fromCodePoint(0x2705)} reconnection successful!`); // ✅
                 this.reconnection.isReconnecting = false;
                 this.onReconnect.invoke();
             }
@@ -448,7 +448,7 @@ export class Room<
 
     private handleReconnection() {
         if (Date.now() - this.joinedAtTime < this.reconnection.minUptime) {
-            console.info(`[Colyseus reconnection]: ${String.fromCodePoint(0x274C)} Room has not been up for long enough to reconnect. (min uptime: ${this.reconnection.minUptime}ms)`); // ❌
+            console.info(`[Colyseus reconnection]: ${String.fromCodePoint(0x274C)} Room has not been up for long enough for automatic reconnection. (min uptime: ${this.reconnection.minUptime}ms)`); // ❌
             return;
         }
 

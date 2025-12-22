@@ -56,7 +56,7 @@ describe("Metadata API", () => {
             region: "eu-west"
           });
 
-          const rooms = await matchMaker.query({ roomId: seat.room.roomId });
+          const rooms = await matchMaker.query({ roomId: seat.roomId });
           assert.strictEqual(rooms.length, 1);
           assert.strictEqual(rooms[0].metadata.difficulty, "hard");
           assert.strictEqual(rooms[0].metadata.rating, 1500);
@@ -80,16 +80,16 @@ describe("Metadata API", () => {
           const seat = await matchMaker.create("dynamic_room");
 
           // Check initial metadata
-          let rooms = await matchMaker.query({ roomId: seat.room.roomId });
+          let rooms = await matchMaker.query({ roomId: seat.roomId });
           assert.strictEqual(rooms[0].metadata.status, "waiting");
           assert.strictEqual(rooms[0].metadata.round, 1);
 
           // Update metadata
-          const room = matchMaker.getLocalRoomById(seat.room.roomId) as DynamicRoom;
+          const room = matchMaker.getLocalRoomById(seat.roomId) as DynamicRoom;
           await room.updateStatus("in_progress");
 
           // Verify update
-          rooms = await matchMaker.query({ roomId: seat.room.roomId });
+          rooms = await matchMaker.query({ roomId: seat.roomId });
           assert.strictEqual(rooms[0].metadata.status, "in_progress");
         });
       });
@@ -147,7 +147,7 @@ describe("Metadata API", () => {
           });
 
           // Should create different rooms due to gameMode difference
-          assert.notStrictEqual(seat1.room.roomId, seat2.room.roomId);
+          assert.notStrictEqual(seat1.roomId, seat2.roomId);
 
           // Joining with same gameMode should join existing room
           const seat3 = await matchMaker.joinOrCreate("lobby", {
@@ -156,7 +156,7 @@ describe("Metadata API", () => {
             region: "us-east"
           });
 
-          assert.strictEqual(seat1.room.roomId, seat3.room.roomId);
+          assert.strictEqual(seat1.roomId, seat3.roomId);
         });
 
         it("should filter by multiple metadata fields", async () => {
@@ -173,7 +173,7 @@ describe("Metadata API", () => {
             region: "eu-west"
           });
 
-          assert.notStrictEqual(seat1.room.roomId, seat2.room.roomId);
+          assert.notStrictEqual(seat1.roomId, seat2.roomId);
 
           // Same all metadata fields - should join existing room
           const seat3 = await matchMaker.joinOrCreate("lobby", {
@@ -182,7 +182,7 @@ describe("Metadata API", () => {
             region: "eu-west"
           });
 
-          assert.strictEqual(seat1.room.roomId, seat3.room.roomId);
+          assert.strictEqual(seat1.roomId, seat3.roomId);
         });
 
         it("should filter by region metadata", async () => {
@@ -199,7 +199,7 @@ describe("Metadata API", () => {
           });
 
           // Different regions should create different rooms
-          assert.notStrictEqual(usEastSeat.room.roomId, euWestSeat.room.roomId);
+          assert.notStrictEqual(usEastSeat.roomId, euWestSeat.roomId);
 
           // Same region should join existing room
           const usEastSeat2 = await matchMaker.joinOrCreate("lobby", {
@@ -208,7 +208,7 @@ describe("Metadata API", () => {
             region: "us-east"
           });
 
-          assert.strictEqual(usEastSeat.room.roomId, usEastSeat2.room.roomId);
+          assert.strictEqual(usEastSeat.roomId, usEastSeat2.roomId);
         });
       });
 
@@ -249,20 +249,24 @@ describe("Metadata API", () => {
 
           // Players should join rooms in skill rating order (ascending)
           const seat1 = await matchMaker.join("ranked", { region: "us" });
-          assert.strictEqual(seat1.room.metadata.skillRating, 800);
+          const room1 = (await matchMaker.query({ roomId: seat1.roomId }))[0];
+          assert.strictEqual(room1.metadata.skillRating, 800);
 
           const seat2 = await matchMaker.join("ranked", { region: "us" });
-          assert.strictEqual(seat2.room.metadata.skillRating, 800); // Same room as seat1
-          assert.strictEqual(seat1.room.roomId, seat2.room.roomId); // Verify same room
+          const room2 = (await matchMaker.query({ roomId: seat2.roomId }))[0];
+          assert.strictEqual(room2.metadata.skillRating, 800); // Same room as seat1
+          assert.strictEqual(seat1.roomId, seat2.roomId); // Verify same room
 
           const seat3 = await matchMaker.join("ranked", { region: "us" });
-          assert.strictEqual(seat3.room.metadata.skillRating, 800); // Still same room
-          assert.strictEqual(seat1.room.roomId, seat3.room.roomId); // Verify same room
+          const room3 = (await matchMaker.query({ roomId: seat3.roomId }))[0];
+          assert.strictEqual(room3.metadata.skillRating, 800); // Still same room
+          assert.strictEqual(seat1.roomId, seat3.roomId); // Verify same room
 
           // Now the 800 room is full (has 4 clients: 1 from create + 3 from join)
           // Next join should go to the 1000 room
           const seat4 = await matchMaker.join("ranked", { region: "us" });
-          assert.strictEqual(seat4.room.metadata.skillRating, 1000); // Next room (first is full)
+          const room4 = (await matchMaker.query({ roomId: seat4.roomId }))[0];
+          assert.strictEqual(room4.metadata.skillRating, 1000); // Next room (first is full)
         });
 
         it("should sort by metadata field in descending order", async () => {
@@ -286,18 +290,22 @@ describe("Metadata API", () => {
 
           // Players should join highest rated room first
           const seat1 = await matchMaker.join("ranked_desc", { region: "eu" });
-          assert.strictEqual(seat1.room.metadata.skillRating, 1500);
+          const room1 = (await matchMaker.query({ roomId: seat1.roomId }))[0];
+          assert.strictEqual(room1.metadata.skillRating, 1500);
 
           const seat2 = await matchMaker.join("ranked_desc", { region: "eu" });
-          assert.strictEqual(seat2.room.metadata.skillRating, 1500); // Same room
+          const room2 = (await matchMaker.query({ roomId: seat2.roomId }))[0];
+          assert.strictEqual(room2.metadata.skillRating, 1500); // Same room
 
           const seat3 = await matchMaker.join("ranked_desc", { region: "eu" });
-          assert.strictEqual(seat3.room.metadata.skillRating, 1500); // Still same room
-          assert.strictEqual(seat1.room.roomId, seat3.room.roomId);
+          const room3 = (await matchMaker.query({ roomId: seat3.roomId }))[0];
+          assert.strictEqual(room3.metadata.skillRating, 1500); // Still same room
+          assert.strictEqual(seat1.roomId, seat3.roomId);
 
           // Now the 1500 room is full, next join should go to the 1000 room
           const seat4 = await matchMaker.join("ranked_desc", { region: "eu" });
-          assert.strictEqual(seat4.room.metadata.skillRating, 1000); // Next room
+          const room4 = (await matchMaker.query({ roomId: seat4.roomId }))[0];
+          assert.strictEqual(room4.metadata.skillRating, 1000); // Next room
         });
       });
 
@@ -336,7 +344,7 @@ describe("Metadata API", () => {
             difficulty: "hard"
           });
 
-          assert.notStrictEqual(seat1.room.roomId, seat2.room.roomId);
+          assert.notStrictEqual(seat1.roomId, seat2.roomId);
 
           // Different metadata - should create new room
           const seat3 = await matchMaker.joinOrCreate("custom", {
@@ -345,7 +353,7 @@ describe("Metadata API", () => {
             difficulty: "hard"
           });
 
-          assert.notStrictEqual(seat1.room.roomId, seat3.room.roomId);
+          assert.notStrictEqual(seat1.roomId, seat3.roomId);
 
           // Same all fields - should join existing room
           const seat4 = await matchMaker.joinOrCreate("custom", {
@@ -354,7 +362,7 @@ describe("Metadata API", () => {
             difficulty: "hard"
           });
 
-          assert.strictEqual(seat1.room.roomId, seat4.room.roomId);
+          assert.strictEqual(seat1.roomId, seat4.roomId);
         });
       });
 
@@ -389,7 +397,8 @@ describe("Metadata API", () => {
 
           // First join should go to highest priority room
           const seat1 = await matchMaker.join("complex");
-          assert.strictEqual(seat1.room.metadata.priority, 2);
+          const room1 = (await matchMaker.query({ roomId: seat1.roomId }))[0];
+          assert.strictEqual(room1.metadata.priority, 2);
         });
       });
 
@@ -462,10 +471,10 @@ describe("Metadata API", () => {
 
           matchMaker.defineRoomType("batch_room", BatchRoom);
           const seat = await matchMaker.create("batch_room");
-          const room = matchMaker.getLocalRoomById(seat.room.roomId) as BatchRoom;
+          const room = matchMaker.getLocalRoomById(seat.roomId) as BatchRoom;
 
           // Verify initial state
-          let rooms = await matchMaker.query({ roomId: seat.room.roomId });
+          let rooms = await matchMaker.query({ roomId: seat.roomId });
           assert.strictEqual(rooms[0].metadata.status, "waiting");
           assert.strictEqual(rooms[0].metadata.round, 0);
           assert.strictEqual(rooms[0].private, false);
@@ -475,7 +484,7 @@ describe("Metadata API", () => {
           await room.startGame();
 
           // Verify all properties updated
-          rooms = await matchMaker.query({ roomId: seat.room.roomId });
+          rooms = await matchMaker.query({ roomId: seat.roomId });
           assert.strictEqual(rooms[0].metadata.status, "in_progress");
           assert.strictEqual(rooms[0].metadata.round, 1);
           assert.strictEqual(rooms[0].private, true);
@@ -506,7 +515,7 @@ describe("Metadata API", () => {
           });
 
           // Query the room to check if metadata was auto-populated
-          const rooms = await matchMaker.query({ roomId: seat.room.roomId });
+          const rooms = await matchMaker.query({ roomId: seat.roomId });
           assert.strictEqual(rooms.length, 1);
 
           // Verify metadata was automatically populated from filterBy fields
@@ -518,17 +527,17 @@ describe("Metadata API", () => {
             gameType: "deathmatch",
             map: "dust2"
           });
-          assert.strictEqual(seat.room.roomId, seat2.room.roomId);
+          assert.strictEqual(seat.roomId, seat2.roomId);
 
           // Different metadata should create a new room
           const seat3 = await matchMaker.joinOrCreate("auto_room", {
             gameType: "capture_flag",
             map: "dust2"
           });
-          assert.notStrictEqual(seat.room.roomId, seat3.room.roomId);
+          assert.notStrictEqual(seat.roomId, seat3.roomId);
 
           // Verify the new room also has auto-populated metadata
-          const rooms2 = await matchMaker.query({ roomId: seat3.room.roomId });
+          const rooms2 = await matchMaker.query({ roomId: seat3.roomId });
           assert.strictEqual(rooms2[0].metadata.gameType, "capture_flag");
           assert.strictEqual(rooms2[0].metadata.map, "dust2");
         });
@@ -545,7 +554,7 @@ describe("Metadata API", () => {
           matchMaker.defineRoomType("legacy", LegacyRoom);
           const seat = await matchMaker.create("legacy");
 
-          const rooms = await matchMaker.query({ roomId: seat.room.roomId });
+          const rooms = await matchMaker.query({ roomId: seat.roomId });
           assert.strictEqual(rooms[0].metadata.foo, "bar");
         });
 
@@ -566,8 +575,8 @@ describe("Metadata API", () => {
           const seat2 = await matchMaker.joinOrCreate("simple", { maxClients: 4 });
           const seat3 = await matchMaker.joinOrCreate("simple", { maxClients: 8 });
 
-          assert.strictEqual(seat1.room.roomId, seat2.room.roomId);
-          assert.notStrictEqual(seat1.room.roomId, seat3.room.roomId);
+          assert.strictEqual(seat1.roomId, seat2.roomId);
+          assert.notStrictEqual(seat1.roomId, seat3.roomId);
         });
 
         it("should explicitly set metadata for a room", async () => {
@@ -578,7 +587,7 @@ describe("Metadata API", () => {
           }).filterBy(['maxClients']);
 
           const reservedSeat = await matchMaker.joinOrCreate("dummy_with_metadata");
-          assert.strictEqual("bar", (await matchMaker.query({ roomId: reservedSeat.room.roomId }))[0].metadata.foo);
+          assert.strictEqual("bar", (await matchMaker.query({ roomId: reservedSeat.roomId }))[0].metadata.foo);
         });
       });
 

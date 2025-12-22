@@ -182,11 +182,6 @@ export class H3Transport extends Transport {
           },
         );
 
-        // specify protocol, if available.
-        if (this.protocol !== undefined) {
-          response.protocol = this.protocol;
-        }
-
         if (fingerprint) {
           response.fingerprint = fingerprint;
         }

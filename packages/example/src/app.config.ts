@@ -211,7 +211,7 @@ export const server = config({
   },
 
   beforeListen: async () => {
-    await matchMaker.createRoom("my_room", {});
+    // await matchMaker.createRoom("my_room", {});
   }
 });
 

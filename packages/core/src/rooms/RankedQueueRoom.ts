@@ -1,4 +1,4 @@
-import { Room, type Client, matchMaker, type IRoomCache, debugMatchMaking, ServerError, ErrorCode, } from "@colyseus/core";
+import { Room, type Client, matchMaker, type IRoomCache, debugMatchMaking, ServerError, ErrorCode, isDevMode, } from "@colyseus/core";
 
 export interface RankedQueueOptions {
   /**
@@ -380,15 +380,20 @@ export class RankedQueueRoom extends Room {
            * Reserve a seat for each client in the group.
            * (If one fails, force all clients to leave, re-queueing is up to the client-side logic)
            */
-          const seatReservations = await Promise.all(group.clients.map(async (client) => {
-            return await matchMaker.reserveSeatFor(room, client.userData.options, client.auth);
-          }));
+          await matchMaker.reserveMultipleSeatsFor(
+            room,
+            group.clients.map((client) => ({
+              sessionId: client.sessionId,
+              options: client.userData.options,
+              auth: client.auth,
+            })),
+          );
 
           /**
            * Send room data for new WebSocket connection!
            */
           group.clients.forEach((client, i) => {
-            client.send("seat", seatReservations[i]);
+            client.send("seat", matchMaker.buildSeatReservation(room, client.sessionId));
           });
 
         } catch (e: any) {

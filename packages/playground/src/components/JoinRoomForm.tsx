@@ -7,7 +7,6 @@ import { DEVMODE_RESTART, RAW_EVENTS_KEY, onRoomConnected } from "../utils/Colys
 import { LimitedArray } from "../utils/LimitedArray";
 import { JSONEditor } from "../elements/JSONEditor";
 import * as JSONEditorModule from "jsoneditor";
-import { RoomWithId } from "../elements/RoomWithId";
 import { AuthTokenSection } from "./AuthTokenSection";
 import type { AuthConfig } from "../../src-backend/index";
 
@@ -76,7 +75,7 @@ export function JoinRoomForm ({
 	};
 
 	const onJoinClick = async () => {
-		const method = selectedMethod as "joinById" | "reconnect" | "joinOrCreate" | "join";
+		const method: keyof Client = selectedMethod as "joinById" | "reconnect" | "joinOrCreate" | "join";
 		const roomName = (method === "joinById") ? selectedRoomId : selectedRoomName;
 
 		setError(""); // clear previous error
@@ -150,6 +149,12 @@ export function JoinRoomForm ({
 		room.onMessage(DEVMODE_RESTART, (data: any[]) =>
 			onDisconnection(room.sessionId));
 
+		// handle auto-reconnection success (via SDK's built-in reconnection)
+		room.onReconnect(() => {
+			connection.isConnected = true;
+			onConnectionSuccessful(connection);
+		});
+
 		room.onMessage("__playground_message_types", (types) => {
 			// global message types by room name
 			messageTypesByRoom[room.name] = types;
@@ -168,7 +173,7 @@ export function JoinRoomForm ({
 				</label>
 				<select
 					id="method-select"
-					value={selectedMethod}
+					value={selectedMethod as string}
 					onChange={handleSelectedMethodChange}
 					className="w-full px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-lg text-sm text-gray-900 dark:text-slate-300 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all cursor-pointer"
 				>
@@ -321,7 +326,7 @@ export function JoinRoomForm ({
 									<div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
 								</span>
 							) : (<>
-                {matchmakeMethods[selectedMethod]} <FontAwesomeIcon icon={faRightToBracket} className="ml-1 inline" />
+                {matchmakeMethods[selectedMethod as any]} <FontAwesomeIcon icon={faRightToBracket} className="ml-1 inline" />
               </>)}
 						</button>
 						{!isLoading && error && (

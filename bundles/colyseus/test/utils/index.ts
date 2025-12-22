@@ -145,7 +145,7 @@ export function createEmptyClient() {
   return new WebSocketClient();
 }
 
-export function createDummyClient (seatReservation: matchMaker.SeatReservation, options: any = {}) {
+export function createDummyClient (seatReservation: matchMaker.ISeatReservation, options: any = {}) {
   let client = new WebSocketClient(seatReservation.sessionId);
   (client as any).options = options;
   return client;

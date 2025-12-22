@@ -131,7 +131,7 @@ export class MyRoom extends Room<{ client: MyClient }> {
   }
 
   onRestoreRoom(cached: any): void {
-    console.log("ROOM HAS BEEN RESTORED!", cached);
+    console.log("onRestoreRoom", cached);
   }
 
   onDispose() {

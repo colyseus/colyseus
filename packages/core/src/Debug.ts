@@ -23,6 +23,8 @@ debugPresence.log = console.debug.bind(console); // STDOUT
 export const debugError = debug('colyseus:errors');
 debugError.log = console.error.bind(console); // STDERR
 
+export const debugDevMode = debug('colyseus:devmode');
+debugDevMode.log = console.debug.bind(console); // STDOUT
 
 export const debugAndPrintError = (e: Error | string) => {
   const message = (e instanceof Error) ? e.stack : e;

@@ -1,7 +1,7 @@
 /**
  * Monkey-patch Colyseus SDK to intercept and expose some private events
  */
-import { Room, Protocol } from "@colyseus/sdk";
+import { Room, Protocol, CloseCode } from "@colyseus/sdk";
 
 export const RAW_EVENTS_KEY = '$_raw';
 export const DEVMODE_RESTART = '$_devmode';
@@ -42,7 +42,7 @@ Room.prototype['connect'] = function(endpoint: string, devModeCloseCallback: () 
   const onclose = events.onclose;
   events.onclose = (event: any) => {
     delete (room as any)[RAW_EVENTS_KEY];
-    if (event.code === 4010) {// CloseCode.DEVMODE_RESTART
+    if (event.code === CloseCode.DEVMODE_RESTART) {
       room['onMessageHandlers'].emit(DEVMODE_RESTART);
       room['onMessageHandlers'].emit(RAW_EVENTS_KEY, ['close', 'CLOSE_DEVMODE_RESTART', { code: event.code }]);
     } else {

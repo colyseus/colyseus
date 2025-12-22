@@ -29,9 +29,13 @@ export { controller, stats, type MatchMakerDriver };
 export type ClientOptions = any;
 export type SelectProcessIdCallback = (roomName: string, clientOptions: ClientOptions) => Promise<string>;
 
-export interface SeatReservation {
+export interface ISeatReservation {
+  name: string;
   sessionId: string;
-  room: IRoomCache;
+  roomId: string;
+  publicAddress?: string;
+  processId?: string;
+  reconnectionToken?: string;
   devMode?: boolean;
 }
 
@@ -175,7 +179,7 @@ export async function accept() {
  * Join or create into a room and return seat reservation
  */
 export async function joinOrCreate(roomName: string, clientOptions: ClientOptions = {}, authContext?: AuthContext) {
-  return await retry<Promise<SeatReservation>>(async () => {
+  return await retry<Promise<ISeatReservation>>(async () => {
     const authData = await callOnAuth(roomName, clientOptions, authContext);
     let room: IRoomCache = await findOneRoomAvailable(roomName, clientOptions);
 
@@ -230,7 +234,7 @@ export async function create(roomName: string, clientOptions: ClientOptions = {}
  * Join a room and return seat reservation
  */
 export async function join(roomName: string, clientOptions: ClientOptions = {}, authContext?: AuthContext) {
-  return await retry<Promise<SeatReservation>>(async () => {
+  return await retry<Promise<ISeatReservation>>(async () => {
     const authData = await callOnAuth(roomName, clientOptions, authContext);
     const room = await findOneRoomAvailable(roomName, clientOptions);
 
@@ -264,7 +268,7 @@ export async function reconnect(roomId: string, clientOptions: ClientOptions = {
   // respond to re-connection!
   const sessionId = await remoteRoomCall(room.roomId, 'checkReconnectionToken', [reconnectionToken]);
   if (sessionId) {
-    return { room, sessionId };
+    return buildSeatReservation(room, sessionId);
 
   } else {
     // TODO: support a "logLevel" out of the box?
@@ -732,11 +736,6 @@ export async function gracefullyShutdown(): Promise<any> {
 export async function reserveSeatFor(room: IRoomCache, options: ClientOptions, authData?: any) {
   const sessionId: string = authData?.sessionId || generateId();
 
-  debugMatchMaking(
-    'reserving seat. sessionId: \'%s\', roomId: \'%s\', processId: \'%s\'',
-    sessionId, room.roomId, processId,
-  );
-
   let successfulSeatReservation: boolean;
 
   try {
@@ -773,13 +772,86 @@ export async function reserveSeatFor(room: IRoomCache, options: ClientOptions, a
     throw new SeatReservationError(`${room.roomId} is already full.`);
   }
 
-  const response: SeatReservation = { room, sessionId };
+  return buildSeatReservation(room, sessionId);
+}
 
-  if (isDevMode) {
-    response.devMode = isDevMode;
+/**
+ * Reserve multiple seats for clients in a room
+ */
+export async function reserveMultipleSeatsFor(room: IRoomCache, clientsData: Array<{ sessionId: string, options: ClientOptions, auth: any }>) {
+  let sessionIds: string[] = [];
+  let options: ClientOptions[] = [];
+  let authData: any[] = [];
+
+  for (const clientData of clientsData) {
+    sessionIds.push(clientData.sessionId);
+    options.push(clientData.options);
+    authData.push(clientData.auth);
   }
 
-  return response;
+  debugMatchMaking(
+    'reserving multiple seats. sessionIds: \'%s\', roomId: \'%s\', processId: \'%s\'',
+    sessionIds.join(', '), room.roomId, processId,
+  );
+
+  let successfulSeatReservations: boolean[];
+
+  try {
+    successfulSeatReservations = await remoteRoomCall<Room>(
+      room.roomId,
+      '_reserveMultipleSeats' as keyof Room,
+      [sessionIds, options, authData],
+      REMOTE_ROOM_SHORT_TIMEOUT,
+    );
+
+  } catch (e: any) {
+    debugMatchMaking(e);
+
+    //
+    // the room cache from an unavailable process might've been used here.
+    // (this is a broken state when a process wasn't gracefully shut down)
+    // perform a health-check on the process before proceeding.
+    //
+    if (
+      e.message === "ipc_timeout" &&
+      !(
+        enableHealthChecks &&
+        await healthCheckProcessId(room.processId)
+      )
+    ) {
+      throw new SeatReservationError(`process ${room.processId} is not available.`);
+
+    } else {
+      throw new SeatReservationError(`${room.roomId} is already full.`);
+    }
+  }
+
+  return successfulSeatReservations;
+}
+
+/**
+ * Build a seat reservation object.
+ * @param room - The room to build a seat reservation for.
+ * @param sessionId - The session ID of the client.
+ * @returns A seat reservation object.
+ */
+export function buildSeatReservation(room: IRoomCache, sessionId: string) {
+  const seatReservation: ISeatReservation = {
+    name: room.name,
+    sessionId,
+    roomId: room.roomId,
+    processId: room.processId,
+  };
+
+  if (isDevMode) {
+    seatReservation.devMode = isDevMode;
+  }
+
+  if (room.publicAddress) {
+    seatReservation.publicAddress = room.publicAddress;
+  }
+
+  return seatReservation;
 }
 
 async function callOnAuth(roomName: string, clientOptions?: ClientOptions, authContext?: AuthContext) {

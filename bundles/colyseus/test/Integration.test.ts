@@ -185,9 +185,9 @@ describe("Integration", () => {
               const activeConnection = await client.joinOrCreate("onjoin");
 
               const seatReservation = await matchMaker.joinOrCreate('onjoin', {});
-              const room = matchMaker.getLocalRoomById(seatReservation.room.roomId);
+              const room = matchMaker.getLocalRoomById(seatReservation.roomId);
 
-              const lostConnection = new WebSocket(`${TEST_ENDPOINT}/${seatReservation.room.processId}/${seatReservation.room.roomId}?sessionId=${seatReservation.sessionId}`);
+              const lostConnection = new WebSocket(`${TEST_ENDPOINT}/${seatReservation.processId}/${seatReservation.roomId}?sessionId=${seatReservation.sessionId}`);
 
               // close connection immediatelly after connecting.
               lostConnection.on("open", () => lostConnection.close());
@@ -261,7 +261,7 @@ describe("Integration", () => {
 
             // Quickly close WebSocket connetion before onAuth completes
             const seatReservation = await matchMaker.joinOrCreate('async_onauth', {});
-            const lostConnection = new WebSocket(`${TEST_ENDPOINT}/${seatReservation.room.processId}/${seatReservation.room.roomId}?sessionId=${seatReservation.sessionId}`);
+            const lostConnection = new WebSocket(`${TEST_ENDPOINT}/${seatReservation.processId}/${seatReservation.roomId}?sessionId=${seatReservation.sessionId}`);
             lostConnection.on("open", () => lostConnection.close());
 
             await onAuthDeferred;
@@ -821,10 +821,8 @@ describe("Integration", () => {
               type DummyState = SchemaType<typeof DummyState>;
 
               matchMaker.defineRoomType('send_afterpatch', class _ extends Room {
-                onCreate() {
-                  this.setPatchRate(100);
-                  this.setState(new DummyState);
-                }
+                state = new DummyState();
+                patchRate = 100;
                 onJoin(client: Client, options) {
                   client.send("startup", "hello", { afterNextPatch: true });
                   this.state.number = 1;
@@ -929,7 +927,7 @@ describe("Integration", () => {
 
           describe("disconnect()", () => {
             it("should remove room reference", async () => {
-              let roomId: string;
+              let roomId!: string;
               const clients: Client[] = [];
               matchMaker.defineRoomType('disconnect', class _ extends Room {
                 maxClients = 2;
@@ -955,7 +953,7 @@ describe("Integration", () => {
             });
 
             it("second .disconnect() call should return a resolved promise", async () => {
-              let roomId: string;
+              let roomId!: string;
               const clients: Client[] = [];
               matchMaker.defineRoomType('disconnect', class _ extends Room {
                 maxClients = 2;
@@ -1079,7 +1077,7 @@ describe("Integration", () => {
             it("consumeSeatReservation()", async () => {
               const seatReservation = await matchMaker.create("dummy", {});
               const conn = await client.consumeSeatReservation(seatReservation);
-              assert.strictEqual(conn.roomId, seatReservation.room.roomId);
+              assert.strictEqual(conn.roomId, seatReservation.roomId);
               conn.leave();
             })
           });
@@ -1118,11 +1116,11 @@ describe("Integration", () => {
               const seatReservation = await (client as any).createMatchMakeRequest('joinOrCreate', "dummy", {});
               await client['createMatchMakeRequest']('joinOrCreate', "dummy", {});
 
-              assert.ok(matchMaker.getLocalRoomById(seatReservation.room.roomId));
+              assert.ok(matchMaker.getLocalRoomById(seatReservation.roomId));
 
               await timeout(500);
 
-              assert.ok(!matchMaker.getLocalRoomById(seatReservation.room.roomId));
+              assert.ok(!matchMaker.getLocalRoomById(seatReservation.roomId));
 
               stub.restore();
             });
@@ -1357,7 +1355,7 @@ describe("Integration", () => {
 
             // Close WebSocket connetion before `onJoin` completes
             const seatReservation = await matchMaker.joinOrCreate('async_onjoin', {});
-            const lostConnection = new WebSocket(`${TEST_ENDPOINT}/${seatReservation.room.processId}/${seatReservation.room.roomId}?sessionId=${seatReservation.sessionId}`);
+            const lostConnection = new WebSocket(`${TEST_ENDPOINT}/${seatReservation.processId}/${seatReservation.roomId}?sessionId=${seatReservation.sessionId}`);
             lostConnection.on("open", () => {
               // force disconnect when onJoin starts
               onJoinStart.then(() => lostConnection.close());
@@ -1397,7 +1395,7 @@ describe("Integration", () => {
             });
 
             const seatReservation = await matchMaker.joinOrCreate('async_onjoin');
-            const lostConnection = new WebSocket(`${TEST_ENDPOINT}/${seatReservation.room.processId}/${seatReservation.room.roomId}?sessionId=${seatReservation.sessionId}`);
+            const lostConnection = new WebSocket(`${TEST_ENDPOINT}/${seatReservation.processId}/${seatReservation.roomId}?sessionId=${seatReservation.sessionId}`);
             lostConnection.on("open", () => {
               // disconnect only after join starts.
               joinStart.then(() => {
@@ -1652,7 +1650,7 @@ describe("Integration", () => {
             await timeout(80);
 
             assert.strictEqual(1, roomConnection.state.entities.size);
-            assert.strictEqual(2, roomConnection.state.entities.get(roomConnection.sessionId).items.length);
+            assert.strictEqual(2, roomConnection.state.entities.get(roomConnection.sessionId)!.items.length);
 
             // forcibly close connection
             roomConnection.connection.transport.close();
@@ -1664,7 +1662,7 @@ describe("Integration", () => {
             await timeout(80);
 
             assert.strictEqual(1, reconnectedRoom.state.entities.size);
-            assert.strictEqual(2, reconnectedRoom.state.entities.get(reconnectedRoom.sessionId).items.length);
+            assert.strictEqual(2, reconnectedRoom.state.entities.get(reconnectedRoom.sessionId)!.items.length);
 
             await reconnectedRoom.leave();
           });

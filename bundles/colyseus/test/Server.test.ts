@@ -40,10 +40,9 @@ describe("Server", () => {
       });
 
       assert.ok(data.sessionId);
-      assert.ok(data.room);
-      assert.ok(data.room.processId);
-      assert.ok(data.room.roomId);
-      assert.equal(data.room.name, 'roomName');
+      assert.ok(data.processId);
+      assert.ok(data.roomId);
+      assert.equal(data.name, 'roomName');
     });
 
 

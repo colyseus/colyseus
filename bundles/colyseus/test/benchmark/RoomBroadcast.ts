@@ -29,7 +29,7 @@ server.listen(9999, undefined, undefined, async () => {
   // add dumb clients
   for (let i = 0; i < numClients; i++) {
     const seatReservation = await matchMaker.reserveSeatFor(roomCreated, {});
-    const room = new WebSocket(`ws://localhost:9999/${seatReservation.room.processId}/${seatReservation.room.roomId}?sessionId=${seatReservation.sessionId}`);
+    const room = new WebSocket(`ws://localhost:9999/${seatReservation.processId}/${seatReservation.roomId}?sessionId=${seatReservation.sessionId}`);
     room.on("open", () => {
       connections.push(room);
 

@@ -78,7 +78,7 @@ describe("Transport: uWebSockets.js", () => {
 
         // Quickly close WebSocket connetion before onAuth completes
         const seatReservation = await matchMaker.joinOrCreate('dummy', {});
-        const connection = new WebSocket(`${TEST_ENDPOINT}/${seatReservation.room.processId}/${seatReservation.room.roomId}?sessionId=${seatReservation.sessionId}`);
+        const connection = new WebSocket(`${TEST_ENDPOINT}/${seatReservation.processId}/${seatReservation.roomId}?sessionId=${seatReservation.sessionId}`);
         connection.on("open", () => connection.close());
 
         await new Promise((resolve) => setTimeout(resolve, 100));
@@ -105,7 +105,7 @@ describe("Transport: uWebSockets.js", () => {
 
         // Quickly close WebSocket connetion before onAuth completes
         const seatReservation = await matchMaker.joinOrCreate('idle', {});
-        const connection = new WebSocket(`${TEST_ENDPOINT}/${seatReservation.room.processId}/${seatReservation.room.roomId}?sessionId=${seatReservation.sessionId}`);
+        const connection = new WebSocket(`${TEST_ENDPOINT}/${seatReservation.processId}/${seatReservation.roomId}?sessionId=${seatReservation.sessionId}`);
 
         let onOpenCalled = false;
         let onCloseCalled = false;
