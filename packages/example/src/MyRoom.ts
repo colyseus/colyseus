@@ -1,5 +1,5 @@
 import { CloseCode, Room, type Client, validate, type Messages, type AuthContext } from "@colyseus/core";
-import { schema, type SchemaType } from "@colyseus/schema";
+import { schema, type SchemaType, MapSchema } from "@colyseus/schema";
 import { z } from "zod";
 
 export const Player = schema({
@@ -100,6 +100,9 @@ export class MyRoom extends Room<{ client: MyClient }> {
     this.state.players.set(client.sessionId, player);
   }
 
+  public onReconnect(client: MyClient): void | Promise<any> {
+    console.log(client.sessionId, "reconnected!");
+  }
 
   update() {
     // this.state.players.forEach((player, key) => {

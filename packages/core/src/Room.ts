@@ -1361,7 +1361,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
     authData: any = undefined,
     seconds: number = this.seatReservationTimeout,
     allowReconnection: boolean = false,
-    devModeReconnection?: boolean,
+    devModeReconnectionToken?: string,
   ) {
     if (!allowReconnection && this.hasReachedMaxClients()) {
       return false;
@@ -1384,8 +1384,10 @@ export class Room<T extends RoomOptions = RoomOptions> {
     //
     // TODO: isDevMode workaround to allow players to reconnect on devMode
     //
-    if (devModeReconnection) {
-      // this._reconnectingSessionId.set(sessionId, sessionId);
+    if (devModeReconnectionToken) {
+      // Set up reconnection token mapping
+      const reconnection = new Deferred<Client & ClientPrivate>();
+      this._reconnections[devModeReconnectionToken] = [sessionId, reconnection];
     }
 
     return true;

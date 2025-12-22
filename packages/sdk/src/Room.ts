@@ -350,6 +350,7 @@ export class Room<
             }
 
             if (this.joinedAtTime === 0) {
+                this.joinedAtTime = Date.now();
                 this.onJoin.invoke();
 
             } else {
@@ -359,7 +360,6 @@ export class Room<
             }
 
             this.reconnectionToken = `${this.roomId}:${reconnectionToken}`;
-            this.joinedAtTime = Date.now();
 
             // acknowledge successfull JOIN_ROOM
             this.packr.buffer[0] = Protocol.JOIN_ROOM;

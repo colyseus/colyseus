@@ -5,7 +5,7 @@ import path from "node:path";
 import fs from "node:fs";
 
 import config, { listen } from "@colyseus/tools";
-import { createEndpoint, createRouter, defineRoom } from "@colyseus/core";
+import { createEndpoint, createRouter, defineRoom, matchMaker } from "@colyseus/core";
 import { playground } from "@colyseus/playground";
 import { auth } from "@colyseus/auth";
 import { z } from "zod";
@@ -166,7 +166,7 @@ const port = Number((process.env.PORT || 2567)) + Number(process.env.NODE_APP_IN
 
 export const server = config({
   options: {
-    // devMode: true,
+    devMode: true,
     // driver: new PostgresDriver(),
 
     // driver: new RedisDriver(),
@@ -211,7 +211,7 @@ export const server = config({
   },
 
   beforeListen: async () => {
-    // await matchMaker.createRoom("my_room", {});
+    await matchMaker.createRoom("my_room", {});
   }
 });
 
