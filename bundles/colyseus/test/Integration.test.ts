@@ -607,6 +607,32 @@ describe("Integration", () => {
               assert.deepStrictEqual(Array.from(new Uint8Array(receivedBytes)), [1, 2]);
             });
 
+            it("should disconnect if raw bytes validation fails", async () => {
+              // Validation schema that requires exactly 3 bytes
+              const bytesValidationSchema = z.custom<Buffer>((val) => {
+                return val instanceof Buffer && val.length === 3;
+              }, { message: "Expected exactly 3 bytes" });
+
+              matchMaker.defineRoomType('onmessage_bytes_validation_fail', class _ extends Room {
+                onCreate() {
+                  this.onMessageBytes("input_bytes", bytesValidationSchema, (client, payload) => {
+                    client.sendBytes("input_bytes", payload);
+                  });
+                }
+              });
+
+              const conn = await client.joinOrCreate('onmessage_bytes_validation_fail');
+
+              let onLeaveCode!: number;
+              conn.onLeave((code) => onLeaveCode = code);
+
+              // Send 5 bytes instead of expected 3, validation should fail
+              conn.sendBytes("input_bytes", new Uint8Array([1, 2, 3, 4, 5]));
+              await timeout(20);
+
+              assert.strictEqual(onLeaveCode, CloseCode.WITH_ERROR);
+            });
+
             xit("should disconnect if input validation throws", async () => {
               //
               // TODO:
