@@ -188,7 +188,7 @@ Please give feedback and report any issues you may find at https://github.com/co
     router.get("/userdata", auth.middleware(), async (req: Request, res) => {
       try {
         res.json({ user: await auth.settings.onParseToken(req.auth), });
-      } catch (e) {
+      } catch (e: any) {
         res.status(401).json({ error: e.message });
       }
     });
@@ -210,7 +210,7 @@ Please give feedback and report any issues you may find at https://github.com/co
           throw new Error("invalid_credentials");
         }
 
-      } catch (e) {
+      } catch (e: any) {
         logger.error(e);
         res.status(401).json({ error: e.message });
       }
@@ -232,7 +232,7 @@ Please give feedback and report any issues you may find at https://github.com/co
       try {
         existingUser = await auth.settings.onFindUserByEmail(email)
 
-      } catch (e) {
+      } catch (e: any) {
         logger.error('@colyseus/auth, onFindUserByEmail exception:' + e.stack);
       }
 
@@ -276,7 +276,7 @@ Please give feedback and report any issues you may find at https://github.com/co
 
         res.json({ user, token, });
 
-      } catch (e) {
+      } catch (e: any) {
         logger.error(e);
         res.status(401).json({ error: e.message });
       }
@@ -300,7 +300,7 @@ Please give feedback and report any issues you may find at https://github.com/co
         await auth.settings.onEmailConfirmed(data.email);
         res.redirect(auth.prefix + "/confirm-email?success=" + encodeURIComponent("Email confirmed successfully!"));
 
-      } catch (e) {
+      } catch (e: any) {
         res.redirect(auth.prefix + "/confirm-email?error=" + e.message);
       }
     });
@@ -321,7 +321,7 @@ Please give feedback and report any issues you may find at https://github.com/co
           user,
           token: await auth.settings.onGenerateToken(user)
         });
-      } catch(e) {
+      } catch(e: any) {
         debugAndPrintError(e);
         res.status(401).json({ error: e.message });
       }
@@ -373,7 +373,7 @@ Please give feedback and report any issues you may find at https://github.com/co
           .set("content-type", "text/html")
           .send(htmlForm);
 
-      } catch (e) {
+      } catch (e: any) {
         logger.debug(e);
         res.end(`Error: ${e.message}`);
       }
@@ -406,7 +406,7 @@ Please give feedback and report any issues you may find at https://github.com/co
 
         res.redirect(auth.prefix + "/reset-password?success=" + encodeURIComponent("Password reset successfully!"));
 
-      } catch (e) {
+      } catch (e: any) {
         res.redirect(auth.prefix + "/reset-password?token=" + token + "&error=" + e.message);
       }
     });
