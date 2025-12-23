@@ -1,12 +1,17 @@
 import assert from "assert";
-import { matchMaker, LobbyRoom, type Presence, type MatchMakerDriver, Server } from "../../src/index.ts";
+import { matchMaker, LobbyRoom, type Presence, type MatchMakerDriver, Server, Room, updateLobby, Deferred } from "../../src/index.ts";
 import { PRESENCE_IMPLEMENTATIONS, DRIVERS, DummyRoom, timeout } from "../utils/index.ts";
+import { Client as SDKClient, Room as SDKRoom } from "@colyseus/sdk";
 
 const TEST_PORT = 8567;
 
 async function createLobbyRoom () {
   const room = await matchMaker.createRoom("lobby", {});
   return matchMaker.getLocalRoomById(room.roomId) as LobbyRoom;
+}
+
+function createSDKClient() {
+  return new SDKClient(`ws://localhost:${TEST_PORT}`);
 }
 
 describe("LobbyRoom", () => {
@@ -93,6 +98,46 @@ describe("LobbyRoom", () => {
           assert.strictEqual(0, lobby.rooms.length, "Room should be removed from lobby list after disposal");
         });
 
+        it("updating metadata should not cause race condition", async () => {
+          const onDisposeDeferred = new Deferred();
+
+          matchMaker.defineRoomType("metadata_room", class _ extends Room {
+            onCreate(options: any) {
+              this.setMetadata({ field: "value 1" });
+            }
+            onJoin() {
+              this.setMetadata({ field: "value 2" });
+            }
+            onLeave() {
+              this.setMetadata({ field: "value " + Math.random() });
+              this.setMetadata({ field: "value " + Math.random() });
+            }
+            onDispose() {
+              onDisposeDeferred.resolve();
+            }
+          }).enableRealtimeListing();
+
+          const lobby = await createLobbyRoom();
+          assert.strictEqual(0, lobby.rooms.length);
+
+          const roomData = await matchMaker.createRoom("metadata_room", {});
+
+          const client = createSDKClient();
+          const [clientRoom1, clientRoom2] = await Promise.all([
+            client.joinById(roomData.roomId, {}),
+            client.joinById(roomData.roomId, {}),
+          ]);
+
+          assert.strictEqual(1, lobby.rooms.length, "Room should be added to lobby list after metadata update");
+          assert.strictEqual(lobby.rooms[0].metadata.field, "value 2", "Metadata should be set");
+
+          clientRoom1.leave();
+          clientRoom2.leave();
+
+          await onDisposeDeferred;
+
+          assert.strictEqual(0, lobby.rooms.length, "Room should be removed from lobby list after disposal");
+        });
       });
 
     }

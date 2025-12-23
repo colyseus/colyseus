@@ -44,6 +44,7 @@ export interface RegisteredHandlerEvents<RoomType extends Type<Room> = any> {
   leave: [room: InstanceType<RoomType>, client: Client, willDispose: boolean];
   dispose: [room: InstanceType<RoomType>];
   'visibility-change': [room: InstanceType<RoomType>, isVisible: boolean];
+  'metadata-change': [room: InstanceType<RoomType>];
 }
 
 export class RegisteredHandler<
@@ -58,6 +59,8 @@ export class RegisteredHandler<
   public filterOptions: Array<FilterByKeys<InstanceType<RoomType>>> = [];
   public sortOptions?: SortOptions;
 
+  public realtimeListingEnabled: boolean = false;
+
   constructor(klass: RoomType, options?: any) {
     super();
 
@@ -71,6 +74,7 @@ export class RegisteredHandler<
   }
 
   public enableRealtimeListing() {
+    this.realtimeListingEnabled = true;
     this.on('create', (room) => updateLobby(room));
     this.on('lock', (room) => updateLobby(room));
     this.on('unlock', (room) => updateLobby(room));
@@ -80,9 +84,9 @@ export class RegisteredHandler<
         updateLobby(room);
       }
     });
-    this.on('dispose', (room) => updateLobby(room, true));
     this.on('visibility-change', (room, isVisible) => updateLobby(room, isVisible));
-
+    this.on('metadata-change', (room) => updateLobby(room));
+    this.on('dispose', (room) => updateLobby(room, true));
     return this;
   }
 

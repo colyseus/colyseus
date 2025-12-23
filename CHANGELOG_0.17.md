@@ -13,6 +13,7 @@
 [ ] Introduce `maxMessagesPerSecond` for rate-limiting room messages (forcibly close if client exceeds threshold)
 [ ] New `room.ping(callback)` method.
 [ ] Introduce `ColyseusSDK.selectByLatency(endpoints)` and `sdk.getLatency()`
+[ ] `LobbyRoom`: no need to manually call `updateLobby()` when calling `.setMetadata()` anymore. This is done automatically for you.
 
 ## Changes on `@colyseus/schema`
 

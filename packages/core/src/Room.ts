@@ -681,6 +681,9 @@ export class Room<T extends RoomOptions = RoomOptions> {
 
     if (persist && this._internalState === RoomInternalState.CREATED) {
       await matchMaker.driver.persist(this._listing);
+
+      // emit metadata-change event to update lobby listing
+      this._events.emit('metadata-change');
     }
   }
 
@@ -693,6 +696,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
       await matchMaker.driver.persist(this._listing);
     }
 
+    // emit visibility-change event to update lobby listing
     this._events.emit('visibility-change', bool);
   }
 
@@ -805,6 +809,9 @@ export class Room<T extends RoomOptions = RoomOptions> {
     // Only persist if room is not CREATING
     if (this._internalState === RoomInternalState.CREATED) {
       await matchMaker.driver.update(this._listing, { $set: updates });
+
+      // emit metadata-change event to update lobby listing
+      this._events.emit('metadata-change');
     }
   }
 

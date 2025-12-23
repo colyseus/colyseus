@@ -588,15 +588,23 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
   room['_events'].on('unlock', unlockRoom.bind(undefined, room));
   room['_events'].on('join', onClientJoinRoom.bind(undefined, room));
   room['_events'].on('leave', onClientLeaveRoom.bind(undefined, room));
-  room['_events'].on('visibility-change', onVisibilityChange.bind(undefined, room));
   room['_events'].once('dispose', disposeRoom.bind(undefined, roomName, room));
+
+  if (handler.realtimeListingEnabled) {
+    room['_events'].on('visibility-change', onVisibilityChange.bind(undefined, room));
+    room['_events'].on('metadata-change', onMetadataChange.bind(undefined, room));
+  }
 
   // when disconnect()'ing, keep only join/leave events for stat counting
   room['_events'].once('disconnect', () => {
     room['_events'].removeAllListeners('lock');
     room['_events'].removeAllListeners('unlock');
-    room['_events'].removeAllListeners('visibility-change');
     room['_events'].removeAllListeners('dispose');
+
+    if (handler.realtimeListingEnabled) {
+      room['_events'].removeAllListeners('visibility-change');
+      room['_events'].removeAllListeners('metadata-change');
+    }
 
     //
     // emit "no active rooms" event when there are no more rooms in this process
@@ -1049,6 +1057,10 @@ async function unlockRoom(room: Room) {
 
 function onVisibilityChange(room: Room, isInvisible: boolean): void {
   handlers[room.roomName].emit('visibility-change', room, isInvisible);
+}
+
+function onMetadataChange(room: Room): void {
+  handlers[room.roomName].emit('metadata-change', room);
 }
 
 async function disposeRoom(roomName: string, room: Room) {
