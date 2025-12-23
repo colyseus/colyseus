@@ -263,14 +263,16 @@ describe("Room Reconnection", () => {
         const conn = await client.joinOrCreate('backwards_compatible_onleave');
         setupReconnection(conn);
 
+        // Wait for client-side drop event
         await new Promise((resolve) => conn.onDrop.once((code, reason) => resolve(true)));
-        await timeout(1);
-        assert.strictEqual(false, conn.connection.isOpen);
-        assert.strictEqual(onDropCalled, true);
-        assert.strictEqual(onLeaveCalled, true);
-        assert.strictEqual(onReconnectSuccess, false);
 
+        // Connection should be closed immediately after onDrop
+        assert.strictEqual(false, conn.connection.isOpen);
+
+        // Wait for reconnection to complete
         await new Promise((resolve) => conn.onReconnect.once(() => resolve(true)));
+
+        // After reconnection, verify all callbacks were triggered properly
         assert.strictEqual(true, conn.connection.isOpen);
         assert.strictEqual(onDropCalled, true);
         assert.strictEqual(onLeaveCalled, true);

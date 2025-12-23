@@ -54,5 +54,5 @@ We have separate methods now for handling `onMessage()` with raw bytes: `onMessa
 [ ] Drivers: Allow to filter with OR operation (metaField=X or metaField=Y)
 [ ] Support Express v5
 [ ] Full-stack type safety
-[ ] How to use new `messages = {}` for raw binary data? (`.onMessageBytes()` ??)
+[ ] How to use new `messages = {}` for raw binary data? (`.onMessageBytes()` ??, maybe using `binary()` utility?)
 [ ] Add Unity-like schema callbacks for TypeScript

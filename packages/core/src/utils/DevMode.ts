@@ -195,6 +195,7 @@ export function restoreFromJSON<T extends Schema>(
     // Handle nested Schema objects
     if (schemaField && typeof schemaField === 'object' && schemaField.constructor !== Object && typeof schemaField.assign === 'function') {
       if (typeof rawValue === 'object' && !Array.isArray(rawValue)) {
+        // TODO: use @colyseus/schema@4.0 and .restore() instead of .assign()
         const processedData = restoreFromJSON(schemaField, rawValue);
         schemaField.assign(processedData);
         continue;

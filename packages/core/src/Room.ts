@@ -210,7 +210,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
    *
    * @default 50ms (20fps)
    */
-  public patchRate: number = DEFAULT_PATCH_RATE;
+  public patchRate: number | null = DEFAULT_PATCH_RATE;
   #_patchRate: number;
   #_patchInterval: NodeJS.Timeout;
 
@@ -1001,8 +1001,33 @@ export class Room<T extends RoomOptions = RoomOptions> {
   // public onMessageBytes<T = any, C extends Client = TClient>(
     messageType: string | number,
     callback: (client: C, message: T) => void,
+  );
+  public onMessageBytes<T = any, C extends Client = ExtractRoomClient<T>>(
+  // public onMessageBytes<T = any, C extends Client = TClient>(
+    messageType: string | number,
+    validationSchema: StandardSchemaV1<T>,
+    callback: (client: C, message: T) => void,
+  );
+  public onMessageBytes<T = any>(
+    _messageType: string | number,
+    _validationSchema: StandardSchemaV1<T> | ((...args: any[]) => void),
+    _callback?: (...args: any[]) => void,
   ) {
-    this.onMessage(`_$b${messageType}`, callback);
+    const messageType = `_$b${_messageType}`;
+
+    const validationSchema = (typeof _callback === 'function')
+      ? _validationSchema as StandardSchemaV1<T>
+      : undefined;
+
+    const callback = (validationSchema === undefined)
+      ? _validationSchema as (...args: any[]) => void
+      : _callback;
+
+    if (validationSchema !== undefined) {
+      return this.onMessage(messageType, validationSchema as any, callback as any);
+    } else {
+      return this.onMessage(messageType, callback as any);
+    }
   }
 
   /**
@@ -1523,11 +1548,24 @@ export class Room<T extends RoomOptions = RoomOptions> {
         ? decode.string(buffer, it)
         : decode.number(buffer, it);
 
-      let message = buffer.subarray(it.offset, buffer.byteLength);
+      let message: any = buffer.subarray(it.offset, buffer.byteLength);
       debugMessage("received: '%s' -> %j (roomId: %s)", messageType, message, this.roomId);
 
-      if (this.onMessageEvents.events[`_$b${messageType}`]) {
-        this.onMessageEvents.emit(`_$b${messageType}`, client, message);
+      const bytesMessageType = `_$b${messageType}`;
+
+      // custom message validation
+      try {
+        if (this.onMessageValidators[bytesMessageType] !== undefined) {
+          message = standardValidate(this.onMessageValidators[bytesMessageType], message);
+        }
+      } catch (e: any) {
+        debugAndPrintError(e);
+        client.leave(CloseCode.WITH_ERROR);
+        return;
+      }
+
+      if (this.onMessageEvents.events[bytesMessageType]) {
+        this.onMessageEvents.emit(bytesMessageType, client, message);
 
       } else if (this.onMessageEvents.events['*']) {
         this.onMessageEvents.emit('*', client, messageType, message);

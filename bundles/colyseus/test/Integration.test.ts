@@ -270,7 +270,7 @@ describe("Integration", () => {
           });
 
           it("async onAuth() - maxClients should be respected", async() => {
-            let roomId: string;
+            let roomId!: string;
             let roomsCreated = 0;
 
             matchMaker.defineRoomType('async_onauth_maxclients', class _ extends Room {
@@ -408,7 +408,7 @@ describe("Integration", () => {
               };
 
               let onMessageCalled = false;
-              let sessionId: string;
+              let sessionId!: string;
 
               matchMaker.defineRoomType('onmessage', class _ extends Room {
                 onCreate() {
@@ -447,7 +447,7 @@ describe("Integration", () => {
 
               let onMessageCalled = false;
               let onMessageReceived = false;
-              let sessionId: string;
+              let sessionId!: string;
 
               matchMaker.defineRoomType('onmessage', class _ extends Room {
                 onCreate() {
@@ -479,7 +479,7 @@ describe("Integration", () => {
             it("should support send/receive messages by type without payload.", async () => {
               let onMessageCalled = false;
               let onMessageReceived = false;
-              let sessionId: string;
+              let sessionId!: string;
 
               matchMaker.defineRoomType('onmessage', class _ extends Room {
                 onCreate() {
@@ -520,7 +520,7 @@ describe("Integration", () => {
 
               const connection = await client.joinOrCreate('onmessage_bytes');
 
-              let receivedBytes: Buffer;
+              let receivedBytes!: Buffer;
               connection.onMessage("bytes", (pongBytes) => { receivedBytes = pongBytes; });
 
               connection.sendBytes("bytes", pingBytes);
@@ -547,7 +547,7 @@ describe("Integration", () => {
 
               const connection = await client.joinOrCreate('onmessage_bytes');
 
-              let receivedBytes: Buffer;
+              let receivedBytes!: Buffer;
               connection.onMessage("big-payload", (pongBytes) => { receivedBytes = pongBytes; });
 
               connection.sendBytes("big-payload", bigPayload);
@@ -583,6 +583,30 @@ describe("Integration", () => {
               assert.deepStrictEqual(receivedMessage, { x: 1, y: 2 });
             });
 
+            it("should validate raw message bytes", async () => {
+              // Validation schema that ensures bytes have exactly 3 elements
+              const bytesValidationSchema = z.custom<Buffer>((val) => {
+                return val instanceof Buffer && val.length === 3;
+              }).transform((val) => val.subarray(0, 2)); // Transform to only keep first 2 bytes
+
+              matchMaker.defineRoomType('onmessage_bytes_validation', class _ extends Room {
+                onCreate() {
+                  this.onMessageBytes("input_bytes", bytesValidationSchema, (client, payload) => {
+                    client.sendBytes("input_bytes", payload);
+                  });
+                }
+              });
+
+              const conn = await client.joinOrCreate('onmessage_bytes_validation');
+
+              let receivedBytes: any;
+              conn.onMessage("input_bytes", (bytes) => receivedBytes = bytes);
+              conn.sendBytes("input_bytes", new Uint8Array([1, 2, 3]));
+              await timeout(20);
+
+              assert.deepStrictEqual(Array.from(new Uint8Array(receivedBytes)), [1, 2]);
+            });
+
             xit("should disconnect if input validation throws", async () => {
               //
               // TODO:
@@ -601,7 +625,7 @@ describe("Integration", () => {
 
               const conn = await client.joinOrCreate('onmessage_validation');
 
-              let onLeaveCode: number;
+              let onLeaveCode!: number;
               conn.onLeave((code) => onLeaveCode = code);
 
               conn.send("input_xy", { x: 1, y: 2, z: 3 });
@@ -778,10 +802,8 @@ describe("Integration", () => {
               type DummyState = SchemaType<typeof DummyState>;
 
               matchMaker.defineRoomType('broadcast_afterpatch', class _ extends Room {
-                onCreate() {
-                  this.setPatchRate(100);
-                  this.setState(new DummyState);
-                }
+                patchRate = 100;
+                state = new DummyState();
                 onJoin(client, options) {
                   this.broadcast("startup", "hello", { afterNextPatch: true });
                   this.state.number = 1;
@@ -1139,12 +1161,12 @@ describe("Integration", () => {
               });
               type MyState = SchemaType<typeof MyState>;
 
-              let room: Room<typeof MyState>;
-              matchMaker.defineRoomType("onJoinFail", class _ extends Room<typeof MyState> {
+              let room!: Room<{ state: MyState }>;
+              matchMaker.defineRoomType("onJoinFail", class _ extends Room<{ state: MyState }> {
+                state = new MyState();
                 onCreate() {
                   room = this;
                   this.autoDispose = false;
-                  this.setState(new MyState());
                 }
                 onJoin(client) {
                   this.state.players.set(client.sessionId, new Player().assign({ name: "Player" + this.clients.length + 1 }));
@@ -1213,7 +1235,7 @@ describe("Integration", () => {
                 await client.joinOrCreate('nonexisting')
                 assert.fail("joinOrCreate should have failed.");
 
-              } catch (e) {
+              } catch (e: any) {
                 assert.strictEqual(ErrorCode.MATCHMAKE_NO_HANDLER, e.code)
               }
             });
@@ -1223,7 +1245,7 @@ describe("Integration", () => {
                 await client.joinOrCreate('')
                 assert.fail("joinOrCreate should have failed.");
 
-              } catch (e) {
+              } catch (e: any) {
                 assert.strictEqual(404, e.code)
               }
             });
@@ -1233,7 +1255,7 @@ describe("Integration", () => {
                 await client.joinById('abcdedfgh')
                 assert.fail("joinById with invalid id should fail.");
 
-              } catch (e) {
+              } catch (e: any) {
                 assert.strictEqual(ErrorCode.MATCHMAKE_INVALID_ROOM_ID, e.code)
               }
             });
@@ -1249,7 +1271,7 @@ describe("Integration", () => {
                 await client.joinOrCreate('onAuthFail')
                 assert.fail("joinOrCreate should have failed.");
 
-              } catch (e) {
+              } catch (e: any) {
                 assert.strictEqual(ErrorCode.AUTH_FAILED, e.code)
               }
             });
@@ -1265,7 +1287,7 @@ describe("Integration", () => {
                 await client.joinOrCreate('onAuthFail')
                 assert.fail("joinOrCreate should have failed.");
 
-              } catch (e) {
+              } catch (e: any) {
                 assert.strictEqual(ErrorCode.AUTH_FAILED, e.code)
               }
             });
@@ -1281,7 +1303,7 @@ describe("Integration", () => {
                 await client.joinOrCreate('onAuthFail')
                 assert.fail("joinOrCreate should have failed.");
 
-              } catch (e) {
+              } catch (e: any) {
                 assert.strictEqual(1, e.code);
                 assert.strictEqual("invalid token", e.message);
               }
@@ -1298,7 +1320,7 @@ describe("Integration", () => {
                 await client.joinOrCreate('onJoinError')
                 assert.fail("joinOrCreate should have failed.");
 
-              } catch (e) {
+              } catch (e: any) {
                 assert.strictEqual(ErrorCode.APPLICATION_ERROR, e.code)
                 assert.strictEqual("unexpected error", e.message)
               }
@@ -1315,7 +1337,7 @@ describe("Integration", () => {
                 await client.joinOrCreate('onJoinError')
                 assert.fail("joinOrCreate should have failed.");
 
-              } catch (e) {
+              } catch (e: any) {
                 assert.strictEqual(2, e.code)
                 assert.strictEqual("unexpected error", e.message)
               }
@@ -1437,7 +1459,7 @@ describe("Integration", () => {
                   // client.send("reconnected", "previous");
 
                   // sending message from new client instance
-                  this.clients.getById(client.sessionId).send("reconnected", "new");
+                  this.clients.getById(client.sessionId)!.send("reconnected", "new");
                 } catch (e) {}
               }
               onDispose() { onRoomDisposed.resolve(); }
@@ -1463,7 +1485,7 @@ describe("Integration", () => {
           });
 
           it("reconnected client should received messages from previous and new 'client' instance", async () => {
-            const reconnectionTokens = [];
+            const reconnectionTokens: string[] = [];
 
             matchMaker.defineRoomType('allow_reconnection', class _ extends Room {
               async onLeave(client: Client, code: CloseCode) {
@@ -1505,7 +1527,7 @@ describe("Integration", () => {
                     throw new Error("consented!");
                   }
                   await this.allowReconnection(client, 0.1);
-                } catch (e) {
+                } catch (e: any) {
                   console.log("not reconnected in time...", e.message);
                 }
               }
@@ -1534,7 +1556,7 @@ describe("Integration", () => {
           });
 
           it("should reject reconnection when using .disconnect()", async () => {
-            let room: Room;
+            let room!: Room;
             let failureError = "";
             let onLeaveCalled = false;
             let onRoomDisposed = false;
@@ -1545,7 +1567,7 @@ describe("Integration", () => {
                 onLeaveCalled = true;
                 try {
                   await this.allowReconnection(client, 0.1);
-                } catch (e) {
+                } catch (e: any) {
                   failureError = e.message;
                 }
               }
@@ -1568,7 +1590,7 @@ describe("Integration", () => {
           });
 
           it("should reject reconnection when already disposing", async () => {
-            let room: Room;
+            let room!: Room;
             let failureError = "";
             let onLeaveCalled = false;
             let onRoomDisposed = false;
@@ -1580,7 +1602,7 @@ describe("Integration", () => {
                 await new Promise((resolve) => setTimeout(resolve, 100));
                 try {
                   await this.allowReconnection(client, 0.1);
-                } catch (e) {
+                } catch (e: any) {
                   failureError = e.message;
                 }
               }
