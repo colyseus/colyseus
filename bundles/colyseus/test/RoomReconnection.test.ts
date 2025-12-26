@@ -196,11 +196,11 @@ describe("Room Reconnection", () => {
         }
         onDrop(client: Client, code: number) {
           this.allowReconnection(client, 10);
-          this.state.players.get(client.sessionId).connected = false;
+          this.state.players.get(client.sessionId)!.connected = false;
         }
         onReconnect(client: Client) {
-          this.state.players.get(client.sessionId).connected = true;
-          this.state.players.get(client.sessionId).items.push(new Item().assign({ name: `item${client.sessionId}` }));
+          this.state.players.get(client.sessionId)!.connected = true;
+          this.state.players.get(client.sessionId)!.items.push(new Item().assign({ name: `item${client.sessionId}` }));
         }
         onLeave(client: Client, code: CloseCode) {
           this.state.players.delete(client.sessionId);

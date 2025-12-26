@@ -50,6 +50,7 @@ describe("Server", () => {
 
   describe("API", () => {
     it("server.define() should throw error if argument is invalid", () => {
+      // @ts-ignore
       assert.throws(() => server.define("dummy", undefined));
     });
 
@@ -231,10 +232,10 @@ describe("Server", () => {
     after(() => matchMaker.controller.getCorsHeaders = originalGetCorsHeaders);
 
     it("should allow to customize getCorsHeaders()", async () => {
-      let refererHeader: string;
+      let refererHeader!: string;
 
       matchMaker.controller.getCorsHeaders = function (headers: Headers) {
-        const referer = new URL(headers.get('referer'));
+        const referer = new URL(headers.get('referer') || '');
 
         if (referer.hostname !== "safedomain.com") {
           refererHeader = "safedomain.com";

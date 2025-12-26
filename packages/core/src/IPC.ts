@@ -6,7 +6,7 @@ import { generateId, REMOTE_ROOM_SHORT_TIMEOUT } from './utils/Utils.ts';
 export async function requestFromIPC<T>(
   presence: Presence,
   publishToChannel: string,
-  method: string,
+  method: string | undefined,
   args: any[],
   rejectionTimeout: number = REMOTE_ROOM_SHORT_TIMEOUT,
 ): Promise<T> {

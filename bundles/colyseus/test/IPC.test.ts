@@ -45,7 +45,7 @@ describe("Inter-process Communication", () => {
         try {
           await requestFromIPC(presence, "nonexisting", "nonexisting", [])
           throw new Error("should have errored.");
-        } catch (e) {
+        } catch (e: any) {
           assert.strictEqual(e.message, "ipc_timeout");
         }
       });
@@ -95,7 +95,7 @@ describe("Inter-process Communication", () => {
           await requestFromIPC(presence, channel, "anything", []);
           assert.fail("should have errored.");
 
-        } catch (e) {
+        } catch (e: any) {
           assert.strictEqual(e.message, "error message");
           assert.strictEqual(e.code, 1000);
           // assert.ok(e instanceof Error);

@@ -49,7 +49,7 @@ describe("MatchMaker Stats", () => {
 
   describe("disposing the room", () => {
     it("using .disconnect() w/ 2 clients connected", async () => {
-      let roomId: string;
+      let roomId!: string;
       const clients: Client[] = [];
       matchMaker.defineRoomType('disconnect_stat', class _ extends Room {
         onCreate() { roomId = this.roomId; }
@@ -79,7 +79,7 @@ describe("MatchMaker Stats", () => {
       const onReadyToTest = new Deferred();
       const onRoomDisposed = new Deferred();
 
-      let room: Room;
+      let room!: Room;
       let numClientsJoining = 0;
       matchMaker.defineRoomType('disconnect_joining', class _ extends Room {
         onCreate() {
@@ -174,7 +174,7 @@ describe("MatchMaker Stats", () => {
       let onAuthCalled = 0;
       let onJoinCalled = 0;
       let onLeaveCalled = 0;
-      let room: Room;
+      let room!: Room;
       matchMaker.defineRoomType(ROOM_NAME, class _ extends Room {
         onCreate() {
           this.autoDispose = false;
@@ -348,7 +348,7 @@ describe("MatchMaker Stats", () => {
   });
 
   it("should maintain stats on manual reconnection", async () => {
-    let onRoomDisposed: Deferred;
+    let onRoomDisposed!: Deferred;
     matchMaker.defineRoomType('allow_reconnection', class _ extends Room {
       onCreate() {
         onRoomDisposed = new Deferred();

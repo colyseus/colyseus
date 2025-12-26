@@ -497,8 +497,8 @@ describe("MatchMaker", () => {
           const _secondRoom = await matchMaker.joinOrCreate("room3");
           rooms = await matchMaker.query({});
 
-          const firstRoom = rooms.find((r) => r.roomId === _firstRoom.roomId);
-          const secondRoom = rooms.find((r) => r.roomId === _secondRoom.roomId);
+          const firstRoom = rooms.find((r) => r.roomId === _firstRoom.roomId)!;
+          const secondRoom = rooms.find((r) => r.roomId === _secondRoom.roomId)!;
           assert.strictEqual(2, rooms.length);
           assert.strictEqual(3, firstRoom.clients);
           assert.strictEqual(1, secondRoom.clients);
@@ -584,7 +584,7 @@ describe("MatchMaker", () => {
           }).filterBy(['code']);
 
           const codes = ["000", "111", "222"];
-          const promises = [];
+          const promises: Promise<any>[] = [];
           for (let i = 0; i < 2; i++) {
             codes.forEach((code) => {
               promises.push(matchMaker.joinOrCreate("concurrent", { code }));
@@ -663,7 +663,7 @@ describe("MatchMaker", () => {
 
           assert.strictEqual(1, (await driver.query({})).length);
 
-          let room: matchMaker.ISeatReservation;
+          let room!: matchMaker.ISeatReservation;
           await assert.doesNotReject(async () => {
             room = await matchMaker.joinOrCreate("one");
           });
