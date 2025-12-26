@@ -1062,7 +1062,7 @@ describe("Integration", () => {
               assert.rejects(async () => {
                 await client.joinOrCreate('disconnect_oncreate');
                 onJoinResolved = true;
-              }, { message: "cannot disconnect during onCreate()" });
+              }, "cannot disconnect during onCreate()");
 
               await timeout(50);
 
