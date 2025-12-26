@@ -1,7 +1,7 @@
 {
     "name": "colyseus-sdk",
     "package_version": 2,
-    "version": "0.16.0",
+    "version": "0.17.0",
     "description": "Colyseus Multiplayer SDK for Cocos Creator",
     "author": "Endel Dreyer",
     "main": "browser.js",

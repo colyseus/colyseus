@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/fossil-delta-serializer",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "type": "module",
   "input": "./src/index.ts",
   "main": "./build/index.js",
