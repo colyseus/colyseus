@@ -105,12 +105,12 @@ describe("LobbyRoom", () => {
             onCreate(options: any) {
               this.setMetadata({ field: "value 1" });
             }
-            onJoin() {
-              this.setMetadata({ field: "value 2" });
+            async onJoin() {
+              await this.setMetadata({ field: "value 2" });
             }
-            onLeave() {
-              this.setMetadata({ field: "value " + Math.random() });
-              this.setMetadata({ field: "value " + Math.random() });
+            async onLeave() {
+              await this.setMetadata({ field: "value " + Math.random() });
+              await this.setMetadata({ field: "value " + Math.random() });
             }
             onDispose() {
               onDisposeDeferred.resolve();
