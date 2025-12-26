@@ -45,8 +45,11 @@ describe("Transport: uWebSockets.js", () => {
         await server.listen(TEST_PORT);
       });
 
-      // make sure driver is cleared out.
-      after(() => server.transport.shutdown());
+      // make sure driver is cleared out and shutdown.
+      after(async () => {
+        server.transport.shutdown();
+        await driver.shutdown();
+      });
 
       /**
        * `setup` matchmaker to re-set graceful shutdown status

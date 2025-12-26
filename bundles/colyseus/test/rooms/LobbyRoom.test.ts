@@ -44,6 +44,8 @@ describe("LobbyRoom", () => {
           matchMaker.defineRoomType("dummy_1", DummyRoom).enableRealtimeListing();
           matchMaker.defineRoomType("dummy_2", DummyRoom).enableRealtimeListing();
 
+          // boot the driver to ensure table exists
+          if (driver.boot) { await driver.boot(); }
           await driver.clear();
 
           // listen for testing
@@ -53,7 +55,10 @@ describe("LobbyRoom", () => {
         /**
          * ensure no rooms are avaialble in-between tests
          */
-        afterEach(async () => await server.gracefullyShutdown(false));
+        afterEach(async () => {
+          await server.gracefullyShutdown(false);
+          await driver.shutdown();
+        });
 
         it("initial room list should be empty", async () => {
           const lobby = await createLobbyRoom();

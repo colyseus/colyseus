@@ -27,9 +27,9 @@ describe("Graceful Shutdown", () => {
   });
 
   it("should wait all onLeave before onShutdown", async () => {
-    let onLeaveTime = [];
-    let onDisposeTime: number = undefined;
-    let onShutdownTime: number = undefined;
+    let onLeaveTime: number[] = [];
+    let onDisposeTime: number = NaN;
+    let onShutdownTime: number = NaN;
 
     server.onShutdown(() => {
       onShutdownTime = Date.now();
@@ -64,9 +64,9 @@ describe("Graceful Shutdown", () => {
   });
 
   it("early disconnect should trigger onLeave before onShutdown", async () => {
-    let onLeaveTime = [];
-    let onDisposeTime: number = undefined;
-    let onShutdownTime: number = undefined;
+    let onLeaveTime: number[] = [];
+    let onDisposeTime: number = NaN;
+    let onShutdownTime: number = NaN;
 
     server.define("my_room", class extends Room {
       onCreate() {}

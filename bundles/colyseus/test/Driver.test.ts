@@ -15,21 +15,15 @@ describe("Driver implementations", () => {
         if (driver.boot) { await driver.boot(); }
       });
 
-      // Make sure to clear driver's data after all tests run
+      // Make sure to clear driver's data after all tests run and shutdown
       after(async () => {
-        driver = new DRIVERS[i]();
-        if (driver.boot) { await driver.boot(); }
-        await driver.clear()
-        await driver.shutdown();
-      })
-
-      beforeEach(async () => {
-        driver = new DRIVERS[i]();
         await driver.clear();
+        await driver.shutdown();
       });
 
-      afterEach(async () => {
-        await driver.shutdown();
+      // Clear data before each test (reuse the same driver instance)
+      beforeEach(async () => {
+        await driver.clear();
       });
 
       async function createAndPersist(data: Partial<IRoomCache>) {
@@ -102,7 +96,9 @@ describe("Driver implementations", () => {
 
           assert.strictEqual(count, (await driver.query({ processId: p1 })).length);
 
-          await driver.cleanup(p1);
+          if (driver.cleanup) {
+            await driver.cleanup(p1);
+          }
 
           assert.strictEqual(0, (await driver.query({ processId: p1 })).length);
           assert.strictEqual(count, (await driver.query({ processId: p2 })).length);
@@ -120,7 +116,9 @@ describe("Driver implementations", () => {
 
           assert.strictEqual(count, (await driver.query({ processId: p1 })).length);
 
-          await driver.cleanup(p1);
+          if (driver.cleanup) {
+            await driver.cleanup(p1);
+          }
 
           assert.strictEqual(0, (await driver.query({ processId: p1 })).length);
           assert.strictEqual(count, (await driver.query({ processId: p2 })).length);

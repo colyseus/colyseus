@@ -46,8 +46,11 @@ describe("MatchMaker", () => {
         await timeout(50);
       });
 
-      // make sure driver is cleared out.
-      after(async() => await driver.clear());
+      // make sure driver is cleared out and shutdown.
+      after(async() => {
+        await driver.clear();
+        await driver.shutdown();
+      });
 
       /**
        * `setup` matchmaker to re-set graceful shutdown status

@@ -135,7 +135,7 @@ describe("Presence", () => {
       it("unsubscribe while triggering", async () => {
         const topic = "unsubscribe-ongoing";
 
-        let calls = [];
+        let calls: string[] = [];
 
         const one = (_) => calls.push("one");
         const two = (_) => calls.push("two");
@@ -330,7 +330,7 @@ describe("Presence", () => {
         });
 
         it("brpop should return new item", async () => {
-          let result: string[] = undefined;
+          let result: string[] | null = null;
           presence.brpop("brpop", 1).then((r) => {
             result = r;
           }).catch((e) => {

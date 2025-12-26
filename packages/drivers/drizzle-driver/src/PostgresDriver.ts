@@ -1,12 +1,11 @@
 import postgres from 'postgres';
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { pgTable, integer, boolean, timestamp, jsonb, getTableConfig, varchar } from 'drizzle-orm/pg-core';
-import { eq, and, asc, desc, sql } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 
 import {
   type IRoomCache,
   type MatchMakerDriver,
-  type RegisteredHandler,
   type Room,
   type SortOptions,
   debugMatchMaking,

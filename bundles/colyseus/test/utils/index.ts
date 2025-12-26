@@ -52,22 +52,24 @@ export class RawClient extends EventEmitter {
 export class WebSocketClient implements Client, ClientPrivate {
   '~messages': any;
 
-  id: string;
-  sessionId: string;
+  id!: string;
+  sessionId!: string;
   ref: RawClient;
   state: ClientState = ClientState.JOINING;
 
   messages: any[] = [];
-  _enqueuedMessages: any[] = [];
+  _enqueuedMessages?: any[] = [];
   _afterNextPatchQueue;
-  _joinedAt: number;
+  _joinedAt!: number;
   reconnectionToken;
 
   errors: any[] = [];
 
   constructor (id?: string) {
-    this.id = id || null;
-    this.sessionId = id || null;
+    if (id) {
+      this.id = id;
+      this.sessionId = id;
+    }
     this.ref = new RawClient();
     this.ref.once('close', () => this.ref.readyState = WebSocket.CLOSED);
   }
@@ -76,7 +78,8 @@ export class WebSocketClient implements Client, ClientPrivate {
     this.messages.push(bytes);
   }
 
-  send (message) {
+  // @ts-ignore
+  send (message: any) {
     this.messages.push(message);
   }
 
@@ -94,7 +97,7 @@ export class WebSocketClient implements Client, ClientPrivate {
 
   enqueueRaw(message, options) {
     if (this.state === ClientState.JOINING) {
-      this._enqueuedMessages.push(message);
+      this._enqueuedMessages?.push(message);
       return;
     }
     this.messages.push(message);
@@ -233,7 +236,7 @@ export class ReconnectRoom extends Room {
 
 export class ReconnectTokenRoom extends Room {
   maxClients = 4;
-  token: Deferred;
+  token!: Deferred;
 
   onCreate(options: any) {
     if (options.roomId) { this.roomId = options.roomId; }

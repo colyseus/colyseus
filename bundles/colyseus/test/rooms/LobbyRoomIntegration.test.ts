@@ -31,6 +31,8 @@ describe("LobbyRoom: Integration", () => {
           // setup matchmaker
           await matchMaker.setup(presence, driver);
           await matchMaker.accept();
+          // boot the driver to ensure table exists
+          if (driver.boot) { await driver.boot(); }
           await driver.clear();
 
           // define a room
@@ -39,7 +41,10 @@ describe("LobbyRoom: Integration", () => {
           matchMaker.defineRoomType("dummy_2", DummyRoom).enableRealtimeListing();
         });
 
-        after(async () => await server.gracefullyShutdown(false));
+        after(async () => {
+          await server.gracefullyShutdown(false);
+          await driver.shutdown();
+        });
         afterEach(async () => await matchMaker.gracefullyShutdown());
 
         it("should receive full list of rooms when connecting.", async () => {

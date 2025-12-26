@@ -44,6 +44,7 @@ describe("MatchMaker Stats", () => {
   after(async () => {
     await server.gracefullyShutdown(false)
     await driver.clear();
+    await driver.shutdown();
   });
 
   describe("disposing the room", () => {
