@@ -34,9 +34,9 @@ Server.prototype['getDefaultTransport'] = function (options: ServerOptions) {
 }
 
 export const DRIVERS = [
-  LocalDriver,
+  // LocalDriver,
   // RedisDriver,
-  // PostgresDriver,
+  PostgresDriver,
   // MongooseDriver,
 ];
 

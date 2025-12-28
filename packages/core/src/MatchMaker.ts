@@ -124,6 +124,11 @@ export async function setup(
     selectProcessIdToCreateRoom = _selectProcessIdToCreateRoom;
   }
 
+  // boot driver if necessary (e.g. RedisDriver/PostgresDriver)
+  if (driver.boot) {
+    await driver.boot();
+  }
+
   onReady.resolve();
 }
 

@@ -67,26 +67,20 @@ export class PostgresDriver implements MatchMakerDriver {
     const tableName = tableConfig.name;
 
     // Create table if it doesn't exist
+    // Use CREATE TABLE IF NOT EXISTS directly - it's atomic and handles concurrent calls
     try {
-      // Check if table exists
-      const tableExists = await this.sql`
-        SELECT EXISTS (
-          SELECT FROM information_schema.tables
-          WHERE table_schema = 'public'
-          AND table_name = ${tableName}
-        )
-      `;
+      await this.sql.unsafe(generateCreateTableSQL(tableConfig));
+      debugMatchMaking(`DrizzleDriver: created ${tableName} table`);
 
-      const exists = tableExists[0]?.exists;
-
-      if (!exists) {
-        await this.sql.unsafe(generateCreateTableSQL(tableConfig));
-        debugMatchMaking(`DrizzleDriver: created ${tableName} table`);
+    } catch (error: any) {
+      // Ignore "already exists" errors (code 42P07) and duplicate type errors
+      // These can occur when multiple processes try to create the table concurrently
+      if (error?.code === '42P07' || error?.code === '42710') {
+        debugMatchMaking(`DrizzleDriver: ${tableName} table already exists`);
+      } else {
+        debugMatchMaking(`DrizzleDriver: error creating ${tableName} table:`, error);
+        throw error;
       }
-
-    } catch (error) {
-      debugMatchMaking(`DrizzleDriver: error creating ${tableName} table:`, error);
-      throw error;
     }
   }
 
@@ -156,6 +150,7 @@ export class PostgresDriver implements MatchMakerDriver {
 
   public async update(room: IRoomCache, operations: Partial<{ $set: Partial<IRoomCache>, $inc: Partial<IRoomCache> }>) {
     const setFields: any = {};
+    let clientsIncrement: number | undefined;
 
     if (operations.$set) {
       for (const field in operations.$set) {
@@ -173,6 +168,11 @@ export class PostgresDriver implements MatchMakerDriver {
             setFields[field] = (value >= 0)
               ? sql`${this.schema[field]} + ${value}::integer`
               : sql`${this.schema[field]} - ${Math.abs(value)}::integer`;
+
+            // Track client increment for atomic locked calculation
+            if (field === 'clients') {
+              clientsIncrement = value;
+            }
           }
         }
       }
@@ -181,6 +181,28 @@ export class PostgresDriver implements MatchMakerDriver {
     // Skip update if there are no fields to update
     if (Object.keys(setFields).length === 0) {
       return true;
+    }
+
+    //
+    // When incrementing clients and setting locked, compute locked atomically
+    // based on the new clients value to prevent race conditions.
+    //
+    // Race condition scenario:
+    // 1. Client A reserves seat, sees 1 reserved seat, locked should stay false
+    // 2. Client B reserves seat, sees 2 reserved seats, locked should become true
+    // 3. Both execute UPDATE concurrently with their local locked values
+    // 4. If Client A's update executes last, it overwrites locked=true with locked=false
+    //
+    // Solution: Compute locked in SQL based on new clients value
+    //
+    // Note: Only apply this for increments (clientsIncrement > 0), not decrements.
+    // Decrements are handled locally with proper explicit lock checks.
+    //
+    // Use OR to preserve any existing explicit lock:
+    //   locked = locked OR (new_clients >= maxClients)
+    //
+    if (clientsIncrement !== undefined && clientsIncrement > 0 && setFields.locked !== undefined) {
+      setFields.locked = sql`${this.schema.locked} OR ((${this.schema.clients} + ${clientsIncrement}::integer) >= ${this.schema.maxClients})`;
     }
 
     await this.db
