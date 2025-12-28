@@ -14,12 +14,16 @@ import {
   initializeRoomCache,
 } from '@colyseus/core';
 
-import { Query } from './Query.ts';
+import { FILTER_AND_SORT_SCRIPT, FIND_ONE_SCRIPT } from './luaScripts.ts';
 
 const ROOMCACHES_KEY = 'roomcaches';
 
 export class RedisDriver implements MatchMakerDriver {
   private readonly _client: Redis | Cluster;
+
+  // Cache concurrent filterAndSort requests to avoid redundant Redis calls
+  private _pendingFilterRequests: Map<string, Promise<string[]>> = new Map();
+  private _pendingFindOneRequests: Map<string, Promise<string | null>> = new Map();
 
   constructor(options?: number | string | RedisOptions | ClusterNode[], clusterOptions?: ClusterOptions) {
     this._client = (Array.isArray(options))
@@ -32,13 +36,31 @@ export class RedisDriver implements MatchMakerDriver {
   }
 
   public async query(conditions: Partial<IRoomCache>, sortOptions?: SortOptions) {
-    const query = new Query<IRoomCache>(this.getRooms(), conditions);
+    const conditionsJson = JSON.stringify(conditions || {});
+    const sortOptionsJson = sortOptions ? JSON.stringify(sortOptions) : '';
+    const cacheKey = `${conditionsJson}:${sortOptionsJson}`;
 
-    if (sortOptions) {
-      query.sort(sortOptions);
+    // Check if there's already a pending request with the same parameters
+    let pendingRequest = this._pendingFilterRequests.get(cacheKey);
+
+    if (!pendingRequest) {
+      // Create new request and cache it
+      pendingRequest = (this._client as any).filterAndSort(
+        ROOMCACHES_KEY,
+        conditionsJson,
+        sortOptionsJson
+      ) as Promise<string[]>;
+
+      this._pendingFilterRequests.set(cacheKey, pendingRequest);
+
+      // Clean up cache after request completes
+      pendingRequest.finally(() => {
+        this._pendingFilterRequests.delete(cacheKey);
+      });
     }
 
-    return query.all();
+    const results = await pendingRequest;
+    return results.map((roomcache) => initializeRoomCache(JSON.parse(roomcache)));
   }
 
   public async cleanup(processId: string) {
@@ -53,7 +75,7 @@ export class RedisDriver implements MatchMakerDriver {
     }
   }
 
-  public findOne(conditions: Partial<IRoomCache>, sortOptions?: SortOptions): Promise<IRoomCache> {
+  public async findOne(conditions: Partial<IRoomCache>, sortOptions?: SortOptions): Promise<IRoomCache> {
     if (typeof conditions.roomId !== 'undefined') {
       // get room by roomId
 
@@ -62,63 +84,44 @@ export class RedisDriver implements MatchMakerDriver {
       // the API here is legacy from MongooseDriver which made sense on versions <= 0.14.0
       //
 
-      // @ts-ignore
-      return new Promise<IRoomCache>((resolve, reject) => {
-        this._client.hget(ROOMCACHES_KEY, conditions.roomId).then((roomcache) => {
-          if (roomcache) {
-            resolve(initializeRoomCache(JSON.parse(roomcache)));
-          } else {
-            resolve(undefined);
-          }
-        }).catch(reject);
-      });
+      const roomcache = await this._client.hget(ROOMCACHES_KEY, conditions.roomId);
+      if (roomcache) {
+        return initializeRoomCache(JSON.parse(roomcache));
+      }
+      return undefined;
 
     } else {
-      // filter list by other conditions
-      const query = new Query<IRoomCache>(this.getRooms(conditions['name']), conditions);
+      // Use Lua script to find first matching room in Redis
+      const conditionsJson = JSON.stringify(conditions || {});
+      const sortOptionsJson = sortOptions ? JSON.stringify(sortOptions) : '';
+      const cacheKey = `${conditionsJson}:${sortOptionsJson}`;
 
-      if (sortOptions) {
-        query.sort(sortOptions);
+      // Check if there's already a pending request with the same parameters
+      let pendingRequest = this._pendingFindOneRequests.get(cacheKey);
+
+      if (!pendingRequest) {
+        // Create new request and cache it
+        pendingRequest = (this._client as any).findOneRoom(
+          ROOMCACHES_KEY,
+          conditionsJson,
+          sortOptionsJson
+        ) as Promise<string | null>;
+
+        this._pendingFindOneRequests.set(cacheKey, pendingRequest);
+
+        // Clean up cache after request completes
+        pendingRequest.finally(() => {
+          this._pendingFindOneRequests.delete(cacheKey);
+        });
       }
 
-      return query as any as Promise<IRoomCache>;
-    }
-  }
+      const result = await pendingRequest;
 
-  // gets recent room caches w/o making multiple simultaneous reads to REDIS
-  private _concurrentRoomCacheRequest?: Promise<Record<string, string>>;
-  private _roomCacheRequestByName: {[roomName: string]: Promise<IRoomCache[]>} = {};
-  private getRooms(roomName?: string) {
-    // if there's a shared request, return it
-    if (this._roomCacheRequestByName[roomName] !== undefined) {
-      return this._roomCacheRequestByName[roomName];
-    }
-
-    const roomCacheRequest = this._concurrentRoomCacheRequest || this._client.hgetall(ROOMCACHES_KEY);
-    this._concurrentRoomCacheRequest = roomCacheRequest;
-
-    this._roomCacheRequestByName[roomName] = roomCacheRequest.then((result) => {
-      // clear shared promises so we can read it again
-      this._concurrentRoomCacheRequest = undefined;
-      delete this._roomCacheRequestByName[roomName];
-
-      let roomcaches = Object.entries(result ?? {});
-
-      //
-      // micro optimization:
-      // filter rooms by name before parsing JSON
-      //
-      if (roomName !== undefined) {
-        const roomNameField = `"name":"${roomName}"`;
-        roomcaches = roomcaches.filter(([, roomcache]) => (roomcache as string).includes(roomNameField));
+      if (result) {
+        return initializeRoomCache(JSON.parse(result));
       }
-
-      return roomcaches.map(
-        ([, roomcache]) => initializeRoomCache(JSON.parse(roomcache as string))
-      );
-    });
-
-    return this._roomCacheRequestByName[roomName];
+      return undefined;
+    }
   }
 
   public async update(room: IRoomCache, operations: Partial<{ $set: Partial<IRoomCache>, $inc: Partial<IRoomCache> }>) {
@@ -159,6 +162,20 @@ export class RedisDriver implements MatchMakerDriver {
 
   public async shutdown() {
     await this._client.quit();
+  }
+
+  public async boot() {
+    // Define custom Lua commands for filtering and sorting
+    // ioredis defineCommand works for both Redis and Cluster instances
+    (this._client as any).defineCommand('filterAndSort', {
+      numberOfKeys: 1,
+      lua: FILTER_AND_SORT_SCRIPT,
+    });
+
+    (this._client as any).defineCommand('findOneRoom', {
+      numberOfKeys: 1,
+      lua: FIND_ONE_SCRIPT,
+    });
   }
 
   //

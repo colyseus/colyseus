@@ -57,7 +57,6 @@ describe("LobbyRoom", () => {
          */
         afterEach(async () => {
           await server.gracefullyShutdown(false);
-          await driver.shutdown();
         });
 
         it("initial room list should be empty", async () => {
@@ -107,8 +106,8 @@ describe("LobbyRoom", () => {
           const onDisposeDeferred = new Deferred();
 
           matchMaker.defineRoomType("metadata_room", class _ extends Room {
-            onCreate(options: any) {
-              this.setMetadata({ field: "value 1" });
+            async onCreate(options: any) {
+              await this.setMetadata({ field: "value 1" });
             }
             async onJoin() {
               await this.setMetadata({ field: "value 2" });
@@ -133,6 +132,8 @@ describe("LobbyRoom", () => {
             client.joinById(roomData.roomId, {}),
           ]);
 
+          await timeout(10);
+
           assert.strictEqual(1, lobby.rooms.length, "Room should be added to lobby list after metadata update");
           assert.strictEqual(lobby.rooms[0].metadata.field, "value 2", "Metadata should be set");
 
@@ -140,6 +141,9 @@ describe("LobbyRoom", () => {
           clientRoom2.leave();
 
           await onDisposeDeferred;
+
+          // Wait for lobby to receive the room removal notification
+          await timeout(50);
 
           assert.strictEqual(0, lobby.rooms.length, "Room should be removed from lobby list after disposal");
         });

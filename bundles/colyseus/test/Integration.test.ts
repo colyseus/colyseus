@@ -63,9 +63,8 @@ describe("Integration", () => {
         });
 
         after(async () => {
-          await server.gracefullyShutdown(false);
           await driver.clear();
-          await driver.shutdown();
+          await server.gracefullyShutdown(false);
         });
 
         describe("Room lifecycle", () => {
