@@ -1,5 +1,5 @@
 import type { Server } from "http";
-import { type Endpoint, type Router, type RouterConfig, createRouter as createBetterCallRouter, createEndpoint, generator } from "@colyseus/better-call";
+import { type Endpoint, type Router, type RouterConfig, createRouter as createBetterCallRouter, createEndpoint } from "@colyseus/better-call";
 import { toNodeHandler } from "@colyseus/better-call/node";
 
 export {
@@ -30,6 +30,7 @@ export function createRouter<
   Config extends RouterConfig
 >(endpoints: E, config?: Config) {
   /**
+   * Expose documentation route for @colyseus/playground
    * TODO: this route should be protected in production
    */
   const openApiRoute = createEndpoint("/__openapi", {

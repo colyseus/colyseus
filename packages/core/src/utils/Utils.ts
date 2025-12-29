@@ -1,4 +1,4 @@
-import nanoid from 'nanoid';
+import { nanoid } from 'nanoid';
 
 import { EventEmitter } from "events";
 import { type RoomException, type RoomMethodName } from '../errors/RoomExceptions.ts';

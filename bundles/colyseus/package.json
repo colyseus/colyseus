@@ -41,6 +41,7 @@
   "dependencies": {},
   "devDependencies": {
     "@colyseus/auth": "workspace:^",
+    "@colyseus/better-call": "workspace:^",
     "@colyseus/core": "workspace:^",
     "@colyseus/redis-driver": "workspace:^",
     "@colyseus/redis-presence": "workspace:^",

@@ -20,7 +20,7 @@
     }
   },
   "scripts": {
-    "test": "TS_NODE_PROJECT=../../tsconfig/tsconfig.test.json c8 mocha --require tsx test/**.test.ts test/**/**.test.ts --exit --timeout 15000"
+    "test": "TS_NODE_PROJECT=../../tsconfig/tsconfig.test.json mocha test/**.test.ts test/**/**.test.ts --exit --timeout 15000"
   },
   "funding": "https://github.com/sponsors/endel",
   "author": "Endel Dreyer",
@@ -55,6 +55,7 @@
     "grant": "^5.4.24"
   },
   "devDependencies": {
+    "@colyseus/better-call": "workspace:^",
     "@colyseus/core": "workspace:^",
     "httpie": "^2.0.0-next.13"
   },

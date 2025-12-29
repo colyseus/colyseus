@@ -126,6 +126,10 @@ export const auth = {
   } as AuthSettings,
 
   prefix: "/auth",
+
+  /**
+   * Express middleware that verifies JsonWebTokens and sets `req.auth`.
+   */
   middleware: JWT.middleware,
 
   routes: function (settings: Partial<AuthSettings> = {}): Router {
@@ -287,7 +291,7 @@ Please give feedback and report any issues you may find at https://github.com/co
         const html = await fs.readFile(path.join(htmlTemplatePath, "address-confirmation.html"), "utf-8");
         return res.end(html);
       }
-      
+
       // send "address confirmed" message
       if (typeof (auth.settings.onEmailConfirmed) !== "function") {
         return res.status(404).end('Not found.');
@@ -310,7 +314,7 @@ Please give feedback and report any issues you may find at https://github.com/co
      */
     router.post("/anonymous", express.json(), async (req, res) => {
       try {
-        const options = req.body.options;
+        const options = (req.body || {}).options;
 
         // register anonymous user, if callback is defined.
         const user = (auth.settings.onRegisterAnonymously)
@@ -321,7 +325,7 @@ Please give feedback and report any issues you may find at https://github.com/co
           user,
           token: await auth.settings.onGenerateToken(user)
         });
-      } catch(e: any) {
+      } catch (e: any) {
         debugAndPrintError(e);
         res.status(401).json({ error: e.message });
       }

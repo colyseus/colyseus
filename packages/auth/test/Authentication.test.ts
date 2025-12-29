@@ -1,7 +1,7 @@
 import assert from "assert";
 import type http from "http";
 import * as httpie from "httpie";
-import { JWT, auth, Hash } from "../src/index";
+import { JWT, auth, Hash } from "../src/index.ts";
 import express from "express";
 
 const TEST_PORT = 8888;
