@@ -32,7 +32,7 @@ const betterCallProtectedRoute = createEndpoint("/better-call-route/protected", 
     method: "GET",
     use: [auth.middleware()],
 }, async (ctx) => {
-    return { ok: true };
+    return { ok: true, auth: ctx.context.auth };
 });
 
 // Create the router
@@ -71,7 +71,7 @@ describe("Auth: middleware", () => {
             // onGenerateToken
         }));
         app.get("/unprotected_route", (req, res) => res.json({ ok: true }));
-        app.get("/protected_route", auth.middleware(), (req, res) => res.json({ ok: true }));
+        app.get("/protected_route", auth.middleware(), (req: any, res) => res.json({ ok: true, auth: req.auth }));
 
         // Add better-call routes
         app.use(toNodeHandler(betterCallRouter.handler));
@@ -102,7 +102,10 @@ describe("Auth: middleware", () => {
                 headers: { Authorization: `Bearer ${signIn.data.token}` },
                 withCredentials: true,
             })).data;
-            assert.deepStrictEqual({ ok: true }, protected_route);
+            assert.strictEqual(protected_route.ok, true);
+            assert.ok(protected_route.auth, "auth data should be present");
+            assert.ok(protected_route.auth.anonymous, "auth.anonymous should be true");
+            assert.ok(protected_route.auth.anonymousId, "auth.anonymousId should be present");
         });
     })
 
@@ -129,7 +132,10 @@ describe("Auth: middleware", () => {
             const protected_route = (await get("/better-call-route/protected", {
                 headers: { Authorization: `Bearer ${signIn.data.token}` },
             })).data;
-            assert.deepStrictEqual({ ok: true }, protected_route);
+            assert.strictEqual(protected_route.ok, true);
+            assert.ok(protected_route.auth, "auth data should be present");
+            assert.ok(protected_route.auth.anonymous, "auth.anonymous should be true");
+            assert.ok(protected_route.auth.anonymousId, "auth.anonymousId should be present");
         });
     });
 

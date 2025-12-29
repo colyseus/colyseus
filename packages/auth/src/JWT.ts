@@ -1,8 +1,18 @@
 import jsonwebtoken, { type JwtPayload, type Jwt, type VerifyOptions } from 'jsonwebtoken';
 import { expressjwt } from 'express-jwt';
-import { APIError } from '@colyseus/better-call';
+import { APIError, createMiddleware, type MiddlewareOptions, type MiddlewareInputContext } from '@colyseus/better-call';
+import type { Request, Response, NextFunction } from 'express';
 
 export type { VerifyOptions, Jwt, JwtPayload };
+
+/**
+ * Type for the JWT auth middleware that works with both Express and better-call
+ * Note: The better-call signature must be last for ReturnType to infer correctly
+ */
+export type JWTAuthMiddleware<T = JwtPayload> =
+  ((req: Request, res: Response, next: NextFunction) => void) &
+  { options: MiddlewareOptions } &
+  ((ctx: MiddlewareInputContext<MiddlewareOptions>) => Promise<{ auth: T }>);
 
 export const JWT = {
   settings: {
@@ -47,73 +57,63 @@ export const JWT = {
   decode: jsonwebtoken.decode,
 
   /**
-   * Get express middleware that verifies JsonWebTokens and sets `req.auth`.
+   * Middleware that verifies JsonWebTokens.
+   * Works with both Express and better-call.
+   *
+   * Example (express):
+   *   app.get("/protected_route", auth.middleware(), (req, res) => { ... });
+   *
+   * Example (better-call):
+   *   const protectedRoute = createEndpoint("/protected-route", {
+   *     method: "GET",
+   *     use: [auth.middleware()],
+   *   }, async (ctx) => {
+   *     // ctx.context.auth contains the decoded JWT payload
+   *   });
    */
-  middleware: function (params?: Partial<Parameters<typeof expressjwt>[0]>): (req: any, res: any, next: any) => void {
-    const expressMiddleware = expressjwt(Object.assign({
+  middleware: function <T = JwtPayload>(options?: VerifyOptions): JWTAuthMiddleware<T> {
+    const expressjwtMiddleware = expressjwt(Object.assign({
       secret: getJWTSecret(),
-      // credentialsRequired: false,
       algorithms: JWT.settings.verify.algorithms,
       ...JWT.settings.verify,
-    }, params));
+    }, options)) as (req: Request, res: Response, next: NextFunction) => void;
 
-    return function () {
+    const betterCallMiddleware = createMiddleware<{}, { auth: T }>(async (ctx) => {
+      const authHeader = ctx.getHeader('authorization');
+
+      if (!authHeader) {
+        throw new APIError(401, { message: 'No authorization header' });
+      }
+
+      const [scheme, token] = authHeader.split(' ');
+
+      if (scheme?.toLowerCase() !== 'bearer' || !token) {
+        throw new APIError(401, { message: 'Invalid authorization header format' });
+      }
+
+      try {
+        const decoded = await JWT.verify<T>(token, options);
+        return { auth: decoded };
+      } catch (err: any) {
+        throw new APIError(401, { message: err.message || 'Invalid token' });
+      }
+    });
+
+    // Create wrapper function that works with both Express and better-call
+    const middleware = function (reqOrCtx: any, res?: Response, next?: NextFunction) {
       if (arguments.length === 3) {
-        /**
-         * using it via express
-         *
-         * Example:
-         *   app.get("/protected_route", auth.middleware(), (req, res) => { ...
-         */
-        expressMiddleware(arguments[0], arguments[1], arguments[2]);
-
+        // Express middleware: (req, res, next)
+        return expressjwtMiddleware(reqOrCtx, res!, next!);
       } else {
-        /**
-         * using it via @colyseus/better-call
-         *
-         * Example:
-         *   const protectedRoute = createEndpoint("/protected-route", {
-         *     method: "GET",
-         *     use: [auth.middleware()],
-         *   }, async (ctx) => { ... });
-         */
-        return new Promise((resolve, reject) => {
-          const ctx = arguments[0];
-
-          // Create a request-like object for express-jwt
-          // better-call's ctx.headers is a Headers instance, but express-jwt expects req.headers.authorization
-          const requestProperty = params?.requestProperty || 'auth';
-          const mockReq: any = {
-            headers: {},
-            [requestProperty]: undefined,
-          };
-
-          // Extract headers from better-call context
-          if (ctx.headers instanceof Headers) {
-            ctx.headers.forEach((value: string, key: string) => {
-              mockReq.headers[key.toLowerCase()] = value;
-            });
-          } else if (ctx.headers) {
-            mockReq.headers = ctx.headers;
-          }
-
-          try {
-            expressMiddleware(mockReq, undefined, function (err: any) {
-              if (err) {
-                reject(new APIError(err.status || 401, { message: err.message }));
-              } else {
-                // Copy the auth property back to ctx
-                ctx[requestProperty] = mockReq[requestProperty];
-                resolve(mockReq[requestProperty]);
-              }
-            });
-          } catch (e: any) {
-            reject(new APIError(e.status || 500, { message: e.message }));
-          }
-        });
-
+        // better-call middleware: (ctx)
+        return betterCallMiddleware(reqOrCtx);
       }
     };
+
+    // Copy over the options property for better-call middleware compatibility
+    (middleware as any).options = (betterCallMiddleware as any).options;
+
+    return middleware as JWTAuthMiddleware<T>;
   },
 };
 

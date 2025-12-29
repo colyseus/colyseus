@@ -128,7 +128,11 @@ export const auth = {
   prefix: "/auth",
 
   /**
-   * Express middleware that verifies JsonWebTokens and sets `req.auth`.
+   * Middleware that verifies JsonWebTokens.
+   * Works with both Express and better-call.
+   *
+   * Express: sets `req.auth`
+   * better-call: decoded JWT payload is available in `ctx.context.auth`
    */
   middleware: JWT.middleware,
 
