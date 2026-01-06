@@ -74,7 +74,6 @@ function postDeploy(config, reply) {
 
     // first deploy, start all processes
     if (apps.length === 0) {
-      console.log("First deploy detected, starting all processes... pm2.start(config) => ", config);
       return pm2.start(config, (err, result) => {
         reply({ success: !err, message: err?.message });
         updateAndSave(err, result);
