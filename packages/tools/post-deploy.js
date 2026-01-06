@@ -90,7 +90,11 @@ function restartAll () {
   });
 }
 
-function reloadAll(retry = 0) {
+async function reloadAll(retry = 0) {
+  // Read user's ecosystem config to get the desired number of instances
+  const config = await shared.getAppConfig(CONFIG_FILE_PATH);
+  const desiredInstances = config.apps?.[0]?.instances || shared.MAX_ACTIVE_PROCESSES;
+
   pm2.reload(CONFIG_FILE_PATH, { ...opts }, function (err, apps) {
     if (err) {
       //
@@ -110,9 +114,9 @@ function reloadAll(retry = 0) {
     const name = apps[0].name;
     const reloadedAppIds = apps.map(app => app.pm_id);
 
-    // scale app to use all CPUs available
-    if (apps.length !== shared.MAX_ACTIVE_PROCESSES) {
-      pm2.scale(name, shared.MAX_ACTIVE_PROCESSES, () => onAppRunning(reloadedAppIds));
+    // scale app to the number of instances specified in user's config
+    if (apps.length !== desiredInstances) {
+      pm2.scale(name, desiredInstances, () => onAppRunning(reloadedAppIds));
 
     } else {
       onAppRunning(reloadedAppIds);

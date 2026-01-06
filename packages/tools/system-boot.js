@@ -2,7 +2,87 @@
 
 const os = require('os');
 const fs = require('fs');
+const path = require('path');
 const { execSync } = require('child_process');
+
+/**
+ * Apply PM2 monkey-patch for custom functionality (e.g., updateProcessConfig)
+ * This patches the globally installed PM2 used by the system.
+ *
+ * Strategy: Rename ActionMethods.js -> ActionMethods_orig.js and replace with
+ * our wrapper that imports the original and adds custom methods.
+ */
+function applyPM2Patches() {
+  try {
+    // Find global PM2 installation
+    const globalPM2Path = execSync('npm root -g', { encoding: 'utf8' }).trim() + '/pm2';
+
+    if (!fs.existsSync(globalPM2Path)) {
+      console.log('[PM2 Patch] Global PM2 not found, skipping...');
+      return;
+    }
+
+    const godPath = path.join(globalPM2Path, 'lib/God');
+    const actionMethodsPath = path.join(godPath, 'ActionMethods.js');
+    const actionMethodsOrigPath = path.join(godPath, 'ActionMethods_orig.js');
+    const ourActionMethodsPath = path.join(__dirname, 'pm2', 'ActionMethods.js');
+
+    // Check if our patch file exists
+    if (!fs.existsSync(ourActionMethodsPath)) {
+      console.log('[PM2 Patch] Custom ActionMethods.js not found, skipping...');
+      return;
+    }
+
+    // Check if already patched (ActionMethods_orig.js exists)
+    if (!fs.existsSync(actionMethodsOrigPath)) {
+      // Rename original ActionMethods.js -> ActionMethods_orig.js
+      console.log('[PM2 Patch] Renaming original ActionMethods.js -> ActionMethods_orig.js');
+      fs.renameSync(actionMethodsPath, actionMethodsOrigPath);
+
+    } else {
+      console.log('[PM2 Patch] Already patched, skipping...');
+    }
+
+    // Copy our ActionMethods.js wrapper
+    console.log(`[PM2 Patch] Installing custom ActionMethods.js wrapper (${actionMethodsPath})`);
+    fs.copyFileSync(ourActionMethodsPath, actionMethodsPath);
+
+    // Patch Daemon.js to expose "updateProcessConfig" method
+    const daemonPath = path.join(globalPM2Path, 'lib/Daemon.js');
+    console.log(`[PM2 Patch] Patching Daemon.js to expose updateProcessConfig (${daemonPath})`);
+    if (fs.existsSync(daemonPath)) {
+      let daemonContent = fs.readFileSync(daemonPath, 'utf8');
+
+      // Check if updateProcessConfig is already exposed
+      if (!daemonContent.includes('updateProcessConfig')) {
+        // Find server.expose({ and add updateProcessConfig after it
+        const exposePattern = 'server.expose({';
+        const exposeIndex = daemonContent.indexOf(exposePattern);
+
+        if (exposeIndex !== -1) {
+          const insertPos = exposeIndex + exposePattern.length;
+          daemonContent = daemonContent.slice(0, insertPos) +
+            '\n    updateProcessConfig     : God.updateProcessConfig,' +
+            daemonContent.slice(insertPos);
+          fs.writeFileSync(daemonPath, daemonContent);
+          console.log(`[PM2 Patch] Daemon.js patched successfully.`);
+        } else {
+          console.warn('[PM2 Patch] Could not find server.expose pattern in Daemon.js');
+        }
+      } else {
+        console.log('[PM2 Patch] Daemon.js already has updateProcessConfig exposed.');
+      }
+    } else {
+      console.warn('[PM2 Patch] Daemon.js not found at', daemonPath);
+    }
+
+    console.log('[PM2 Patch] PM2 patches applied successfully.');
+
+  } catch (error) {
+    console.warn('[PM2 Patch] Failed to apply PM2 patches:', error.message);
+    // Don't exit - patches are optional enhancements
+  }
+}
 
 const NGINX_LIMITS_CONFIG_FILE = '/etc/nginx/colyseus_limits.conf';
 const LIMITS_CONF_FILE = '/etc/security/limits.d/colyseus.conf';
@@ -116,5 +196,8 @@ net.ipv4.tcp_keepalive_probes = 3
     process.exit(1);
   }
 }
+
+// Apply PM2 patches before configuring system limits
+applyPM2Patches();
 
 configureSystemLimits();

@@ -14,8 +14,7 @@ const io = require('@pm2/io');
 const path = require('path');
 const shared = require('./shared');
 
-const opts = { env: process.env.NODE_ENV || "production", };
-let config = undefined;
+let appConfig = undefined;
 
 io.initModule({
   pid: path.resolve('/var/run/colyseus-agent.pid'),
@@ -52,9 +51,11 @@ pm2.connect(function(err) {
     }
 
     try {
-      config = await shared.getAppConfig(ecosystemFilePath);
-      opts.cwd = cwd;
-      postDeploy(cwd, onReply);
+      const config = await shared.getAppConfig(ecosystemFilePath);
+
+      appConfig = { ...config.apps[0], cwd };
+
+      postDeploy(appConfig, onReply);
 
     } catch (err) {
       onReply({ success: false, message: err?.message });
@@ -64,7 +65,7 @@ pm2.connect(function(err) {
 
 const restartingAppIds = new Set();
 
-function postDeploy(cwd, reply) {
+function postDeploy(config, reply) {
   shared.listApps(function(err, apps) {
     if (err) {
       console.error(err);
@@ -73,7 +74,8 @@ function postDeploy(cwd, reply) {
 
     // first deploy, start all processes
     if (apps.length === 0) {
-      return pm2.start(config, {...opts}, (err, result) => {
+      console.log("First deploy detected, starting all processes... pm2.start(config) => ", config);
+      return pm2.start(config, (err, result) => {
         reply({ success: !err, message: err?.message });
         updateAndSave(err, result);
       });
@@ -82,7 +84,7 @@ function postDeploy(cwd, reply) {
     //
     // detect if cwd has changed, and restart PM2 if it has
     //
-    if (apps[0].pm2_env.pm_cwd !== cwd) {
+    if (apps[0].pm2_env.pm_cwd !== config.cwd) {
       console.log("App Root Directory changed. Restarting may take a bit longer...");
 
       //
@@ -92,7 +94,7 @@ function postDeploy(cwd, reply) {
         logIfError(err);
 
         // start again
-        pm2.start(config, { ...opts }, (err, result) => {
+        pm2.start(config, (err, result) => {
           reply({ success: !err, message: err?.message });
           updateAndSave(err, result);
         });
@@ -140,6 +142,20 @@ function postDeploy(cwd, reply) {
       if (err) { return console.error(err); }
 
       let numActiveApps = initialApps.length + restartingAppIds.size;
+      const maxActiveProcesses = config.instances;
+
+      // update config of newly spawned processes (memory limit, etc)
+      shared.listApps(function(err, apps) {
+        logIfError(err);
+
+        // get new processes excluding initialApps 
+        const new_app_envs = shared.filterActiveApps(apps)
+          .map((app) => app.pm2_env)
+          .filter(app_env => !initialApps.find(init_app => init_app.pm_id === app_env.pm_id)); 
+
+        new_app_envs.forEach((app_env) => 
+          shared.updateProcessConfig(app_env.pm_id, appConfig, logIfError));
+      });
 
       /**
        * - Write NGINX config to expose only the new active process
@@ -157,7 +173,7 @@ function postDeploy(cwd, reply) {
       // (They make take from minutes up to hours to stop)
       //
       appsToStop.forEach((app_env) => {
-        if (numActiveApps < shared.MAX_ACTIVE_PROCESSES) {
+        if (numActiveApps < maxActiveProcesses) {
           numActiveApps++;
 
           restartingAppIds.add(app_env.pm_id);
@@ -167,6 +183,9 @@ function postDeploy(cwd, reply) {
 
             // reset counter stats (restart_time=0)
             pm2.reset(app_env.pm_id, logIfError);
+
+            // update process config (memory limit, etc)
+            shared.updateProcessConfig(app_env.pm_id, config, logIfError);
           });
 
         } else {
@@ -174,8 +193,8 @@ function postDeploy(cwd, reply) {
         }
       });
 
-      if (numActiveApps < shared.MAX_ACTIVE_PROCESSES) {
-        const missingOnlineApps = shared.MAX_ACTIVE_PROCESSES - numActiveApps;
+      if (numActiveApps < maxActiveProcesses) {
+        const missingOnlineApps = maxActiveProcesses - numActiveApps;
 
         // console.log("Active apps is lower than MAX_ACTIVE_PROCESSES, will SCALE again =>", {
         //   missingOnlineApps,
@@ -183,11 +202,12 @@ function postDeploy(cwd, reply) {
         //   newNumTotalApps: numTotalApps + missingOnlineApps
         // });
 
+        console.log("Scale up to", numTotalApps + missingOnlineApps);
         pm2.scale(apps[0].name, numTotalApps + missingOnlineApps, updateAndSaveIfAllRunning);
       }
     };
 
-    const numHalfMaxActiveProcesses = Math.ceil(shared.MAX_ACTIVE_PROCESSES / 2);
+    const numHalfMaxActiveProcesses = Math.ceil(config.instances / 2);
 
     /**
      * Re-use previously stopped apps if available
@@ -206,6 +226,7 @@ function postDeploy(cwd, reply) {
 
           // reset counter stats (restart_time=0)
           pm2.reset(app_env.pm_id, logIfError);
+          shared.updateProcessConfig(app_env.pm_id, config, logIfError);
 
           // TODO: set timeout here to exit if some processes are not restarting
 
@@ -229,6 +250,8 @@ function postDeploy(cwd, reply) {
 
       numTotalApps = apps.length + numHalfMaxActiveProcesses;
 
+      console.log("Starting first half of new apps... pm2.scale(app, ", numTotalApps, ")");
+
       // Ensure to scale to a number of processes where `numHalfMaxActiveProcesses` can start immediately.
       pm2.scale(apps[0].name, numTotalApps, onFirstAppsStart.bind(undefined, initialApps));
     }
@@ -244,12 +267,12 @@ function updateAndSaveIfAllRunning(err) {
   if (err) { return console.error(err); }
 
   updateAndReloadNginx((app_envs) => {
-    // console.log("updateAndExitIfAllRunning, app_ids (", app_envs.map(app_env => app_env.NODE_APP_INSTANCE) ,") => ", app_envs.length, "/", shared.MAX_ACTIVE_PROCESSES);
+    // console.log("updateAndExitIfAllRunning, app_ids (", app_envs.map(app_env => app_env.NODE_APP_INSTANCE) ,") => ", app_envs.length, "/", config.instances);
 
     //
     // TODO: add timeout to exit here, in case some processes are not starting
     //
-    if (app_envs.length === shared.MAX_ACTIVE_PROCESSES) {
+    if (app_envs.length === appConfig.instances) {
       complete();
     }
   });
@@ -272,11 +295,13 @@ function updateAndReloadNginx(cb) {
     if (apps.length === 0) { err = "no apps running."; }
     if (err) { return console.error(err); }
 
-    const app_envs = apps
-      .filter(app => app.pm2_env.status !== cst.STOPPING_STATUS && app.pm2_env.status !== cst.STOPPED_STATUS)
-      .map((app) => app.pm2_env);
+    const app_envs = shared.filterActiveApps(apps).map((app) => app.pm2_env);
 
     writeNginxConfig(app_envs);
+
+    // update processes config (memory limit, etc)
+    app_envs.forEach((app_env) => 
+      shared.updateProcessConfig(app_env.pm_id, appConfig, logIfError));
 
     cb?.(app_envs);
   });
@@ -284,6 +309,10 @@ function updateAndReloadNginx(cb) {
 
 function writeNginxConfig(app_envs) {
   // console.log("writeNginxConfig: ", app_envs.map(app_env => app_env.NODE_APP_INSTANCE));
+  if (!fs.existsSync(shared.NGINX_SERVERS_CONFIG_FILE)) {
+    console.warn(`NGINX config file not found at ${shared.NGINX_SERVERS_CONFIG_FILE}, skipping NGINX config update.`);
+    return;
+  }
 
   const port = 2567;
   const addresses = [];

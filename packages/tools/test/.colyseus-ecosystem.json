@@ -1,0 +1,19 @@
+{
+  "apps": [
+    {
+      "name": "my-app",
+      "script": "./dummy-server.js",
+      "instances": 1,
+      "max_memory_restart": 104857600,
+      "namespace": "cloud",
+      "exec_mode": "fork",
+      "time": true,
+      "wait_ready": true,
+      "watch": false,
+      "merge_logs": true,
+      "kill_timeout": 1800000,
+      "kill_retry_time": 5000,
+      "cwd": "/Users/endel/Projects/colyseus/colyseus/packages/tools/test"
+    }
+  ]
+}
