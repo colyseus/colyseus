@@ -1,0 +1,73 @@
+{
+  "name": "@colyseus/monitor",
+  "version": "0.17.0",
+  "description": "Web Monitoring Panel for Colyseus",
+  "input": "./src/index.ts",
+  "main": "./build/index.js",
+  "module": "./build/index.mjs",
+  "typings": "./build/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./build/index.d.ts",
+      "import": "./build/index.mjs",
+      "require": "./build/index.js"
+    },
+    "./*": {
+      "types": "./build/*.d.ts",
+      "import": "./src-backend/*.ts",
+      "require": "./build/*.js"
+    }
+  },
+  "scripts": {
+    "start": "vite",
+    "build": "vite build && node build.mjs",
+    "preview": "vite preview",
+    "prepublishOnly": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/colyseus/colyseus.git"
+  },
+  "keywords": [
+    "colyseus",
+    "multiplayer",
+    "stats",
+    "monitoring",
+    "realtime",
+    "websockets"
+  ],
+  "author": "Endel Dreyer",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/colyseus/colyseus/issues"
+  },
+  "homepage": "https://github.com/colyseus/colyseus#readme",
+  "devDependencies": {
+    "@emotion/react": "^11.11.1",
+    "@emotion/styled": "^11.11.0",
+    "@fontsource/roboto": "^5.0.8",
+    "@mui/icons-material": "^5.14.18",
+    "@mui/lab": "^5.0.0-alpha.153",
+    "@mui/material": "^5.14.18",
+    "@mui/x-data-grid": "^6.18.2",
+    "@types/react": "^18.2.38",
+    "@types/react-router-dom": "^4.2.6",
+    "@types/superagent": "^3.5.8",
+    "@vitejs/plugin-react": "^4.2.1",
+    "esbuild": "^0.25.0",
+    "fast-glob": "^3.3.2",
+    "history": "^5.3.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-json-edit": "^0.3.1",
+    "react-router-dom": "^4.2.2",
+    "react18-json-view": "^0.2.6",
+    "typescript": "^5.9.3",
+    "vite": "^5.0.11"
+  },
+  "dependencies": {
+    "@colyseus/core": "workspace:^",
+    "express": ">=4.16.0",
+    "node-os-utils": "^2.0.0"
+  }
+}

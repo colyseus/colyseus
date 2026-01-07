@@ -1,0 +1,26 @@
+{
+    "compilerOptions": {
+        "outDir": "build",
+        "module": "ESNext",
+        "lib": ["ES2022", "DOM"],
+        "target": "ES2022",
+        "declaration": true,
+        "noImplicitAny": false,
+        "esModuleInterop": true,
+        "experimentalDecorators": true,
+        "useDefineForClassFields": false,
+        "sourceMap": false,
+        "skipLibCheck": true,
+        "jsx": "react-jsx",
+        "moduleResolution": "bundler",
+        "resolveJsonModule": true,
+        "isolatedModules": true,
+        "noEmit": true
+    },
+    "include": [
+      "src/**/*.ts",
+      "src/**/*.tsx",
+      "src-backend/**/*.ts",
+    ],
+    "references": [{ "path": "./tsconfig.node.json" }]
+}

@@ -7,6 +7,7 @@ import fs from "node:fs";
 import config, { listen } from "@colyseus/tools";
 import { createEndpoint, createRouter, defineRoom, matchMaker } from "@colyseus/core";
 import { playground } from "@colyseus/playground";
+import { monitor } from "@colyseus/monitor";
 import { auth } from "@colyseus/auth";
 import { z } from "zod";
 import { exposeServerToTraefik } from "@colyseus/traefik";
@@ -190,7 +191,35 @@ export const server = config({
     patchThing,
     deleteThing,
     createUser,
-    bulkCreateThings
+    bulkCreateThings,
+
+    /**
+     * create multiple dummy rooms
+     */
+    createDummyRooms: createEndpoint("/create-dummy-rooms", { method: "POST" }, async (ctx) => {
+      const count = 300;
+      for (let i = 0; i < count; i++) {
+        await matchMaker.createRoom("my_room", {});
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+
+      // @ts-ignore
+      matchMaker.driver.rooms[20].clients = 9;
+      // @ts-ignore
+      matchMaker.driver.rooms[21].clients = 99;
+      // @ts-ignore
+      matchMaker.driver.rooms[22].clients = 8;
+      // @ts-ignore
+      matchMaker.driver.rooms[23].clients = 800;
+      // @ts-ignore
+      matchMaker.driver.rooms[24].clients = 100;
+      // @ts-ignore
+      matchMaker.driver.rooms[25].clients = 10;
+      // @ts-ignore
+      matchMaker.driver.rooms[26].clients = 1;
+
+      return { message: `${count} dummy rooms created` };
+    })
   }, {
     onError: (err) => {
       // console.log(err);
@@ -206,6 +235,7 @@ export const server = config({
   initializeExpress: (app) => {
     // app.use("/playground", playground());
     app.use("/", playground());
+    app.use("/monitor", monitor());
     app.get("/express", (_, res) => res.json({ message: "Hello World" }));
     app.use(auth.prefix, auth.routes({}));
   },

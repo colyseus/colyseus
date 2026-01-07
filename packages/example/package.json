@@ -23,6 +23,7 @@
     "@colyseus/drizzle-driver": "workspace:^",
     "@colyseus/sdk": "workspace:^",
     "@colyseus/playground": "workspace:^",
+    "@colyseus/monitor": "workspace:^",
     "@colyseus/schema": "^3.0.69",
     "@colyseus/better-call": "workspace:^",
     "@colyseus/traefik": "workspace:^",
