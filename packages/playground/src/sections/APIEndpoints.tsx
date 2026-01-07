@@ -63,7 +63,7 @@ export function APIEndpoints({ authConfig }: { authConfig?: AuthConfig }) {
 	useEffect(() => {
 		const fetchEndpoints = async () => {
 			try {
-				const res = await fetch(`${endpoint}/__openapi`);
+				const res = await fetch(`${endpoint}/__apidocs`);
 				if (res.ok) {
 					const openapi = await res.json();
 					const parsedEndpoints: APIEndpoint[] = [];

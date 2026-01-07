@@ -29,11 +29,12 @@ export function createRouter<
   E extends Record<string, Endpoint>,
   Config extends RouterConfig
 >(endpoints: E, config?: Config) {
+
   /**
    * Expose documentation route for @colyseus/playground
    * TODO: this route should be protected in production
    */
-  const openApiRoute = createEndpoint("/__openapi", {
+  const openApiRoute = createEndpoint("/__apidocs", {
     method: "GET",
     // metadata: { SERVER_ONLY: true }
   }, async (ctx) => {

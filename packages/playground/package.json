@@ -9,6 +9,11 @@
       "types": "./build/index.d.ts",
       "import": "./build/index.mjs",
       "require": "./build/index.js"
+    },
+    "./*": {
+      "types": "./build/*.d.ts",
+      "import": "./src-backend/*.ts",
+      "require": "./build/*.js"
     }
   },
   "scripts": {

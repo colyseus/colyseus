@@ -1,16 +1,17 @@
 import { useEffect, useState } from "react";
 import { type RoomAvailable } from "@colyseus/sdk";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faGlobe, faChartLine, faDoorOpen, faChevronLeft, faChevronRight } from "@fortawesome/free-solid-svg-icons";
+import { faGlobe, faChartLine, faDoorOpen, faChevronLeft, faChevronRight, faBolt } from "@fortawesome/free-solid-svg-icons";
 
 import { endpoint, Connection, global } from "../utils/Types";
 import { RealtimeRooms, ServerState } from "./RealtimeRooms";
 import { APIEndpoints } from "./APIEndpoints";
 import { RealtimeStats } from "./RealtimeStats";
+import { PresenceInspector } from "./PresenceInspector";
 
 import { type AuthConfig } from "../../src-backend";
 
-type TabType = "rooms" | "api" | "stats";
+type TabType = "rooms" | "api" | "presence" | "stats";
 
 interface PlaygroundProps {
 	isMobileMenuOpen: boolean;
@@ -89,6 +90,7 @@ export function Playground({ isMobileMenuOpen, setIsMobileMenuOpen }: Playground
 	const tabs = [
 		{ id: "rooms" as TabType, label: "Rooms", icon: faDoorOpen },
 		{ id: "api" as TabType, label: "API Endpoints", icon: faGlobe },
+		{ id: "presence" as TabType, label: "Presence", icon: faBolt },
 		{ id: "stats" as TabType, label: "Stats", icon: faChartLine },
 	];
 
@@ -169,6 +171,7 @@ export function Playground({ isMobileMenuOpen, setIsMobileMenuOpen }: Playground
 					/>
 				)}
 				{activeTab === "api" && <APIEndpoints authConfig={authConfig} />}
+				{activeTab === "presence" && <PresenceInspector />}
 				{activeTab === "stats" && <RealtimeStats />}
 			</div>
 		</div>
