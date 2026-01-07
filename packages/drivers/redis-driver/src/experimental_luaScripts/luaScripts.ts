@@ -57,15 +57,24 @@ local function matches_conditions(room, conditions)
   return true
 end
 
+-- Micro optimization: filter by room name before parsing JSON
+local room_name_filter = nil
+if conditions.name then
+  room_name_filter = '"name":"' .. conditions.name .. '"'
+end
+
 -- Iterate through room caches (HGETALL returns field, value, field, value, ...)
 for i = 1, #all_rooms, 2 do
   local room_id = all_rooms[i]
   local room_json = all_rooms[i + 1]
 
-  local success, room = pcall(cjson.decode, room_json)
-  if success and room then
-    if matches_conditions(room, conditions) then
-      table.insert(matching_rooms, { data = room, json = room_json, idx = i })
+  -- Skip rooms that don't match the name filter (before parsing JSON)
+  if room_name_filter == nil or string.find(room_json, room_name_filter, 1, true) then
+    local success, room = pcall(cjson.decode, room_json)
+    if success and room then
+      if matches_conditions(room, conditions) then
+        table.insert(matching_rooms, { data = room, json = room_json, idx = i })
+      end
     end
   end
 end
@@ -172,15 +181,24 @@ local function matches_conditions(room, conditions)
   return true
 end
 
+-- Micro optimization: filter by room name before parsing JSON
+local room_name_filter = nil
+if conditions.name then
+  room_name_filter = '"name":"' .. conditions.name .. '"'
+end
+
 -- If no sort options, we can return early on first match
 if next(sort_options) == nil then
   for i = 1, #all_rooms, 2 do
     local room_id = all_rooms[i]
     local room_json = all_rooms[i + 1]
 
-    local success, room = pcall(cjson.decode, room_json)
-    if success and room and matches_conditions(room, conditions) then
-      return room_json
+    -- Skip rooms that don't match the name filter (before parsing JSON)
+    if room_name_filter == nil or string.find(room_json, room_name_filter, 1, true) then
+      local success, room = pcall(cjson.decode, room_json)
+      if success and room and matches_conditions(room, conditions) then
+        return room_json
+      end
     end
   end
   return nil
@@ -193,10 +211,13 @@ for i = 1, #all_rooms, 2 do
   local room_id = all_rooms[i]
   local room_json = all_rooms[i + 1]
 
-  local success, room = pcall(cjson.decode, room_json)
-  if success and room then
-    if matches_conditions(room, conditions) then
-      table.insert(matching_rooms, { data = room, json = room_json, idx = i })
+  -- Skip rooms that don't match the name filter (before parsing JSON)
+  if room_name_filter == nil or string.find(room_json, room_name_filter, 1, true) then
+    local success, room = pcall(cjson.decode, room_json)
+    if success and room then
+      if matches_conditions(room, conditions) then
+        table.insert(matching_rooms, { data = room, json = room_json, idx = i })
+      end
     end
   end
 end

@@ -125,6 +125,54 @@ describe("Driver implementations", () => {
         });
       })
 
+      describe("driver benchmark", () => {
+        const LEVEL_NAMES = ["level1", "level2", "level3", "level4", "level5"];
+
+        function createEntries(count: number) {
+          const entries: Array<Promise<any>> = [];
+          for (let i = 0; i < count; i++) {
+            entries.push(createAndPersist({
+              name: "test1",
+              metadata: {
+                level_name: LEVEL_NAMES[Math.floor(Math.random() * LEVEL_NAMES.length)],
+              },
+              processId: generateId(),
+              roomId: generateId() 
+            }));
+          }
+
+          return Promise.all(entries);
+        }
+
+        it("should persist 5000 entries in less than 1 second", async () => {
+          const count = 5000;
+          const createOperation = createEntries(count);
+
+          const startTime = Date.now();
+          await createOperation;
+          const endTime = Date.now();
+
+          const duration = endTime - startTime;
+          console.log(`Persisted ${count} entries in ${duration}ms`);
+
+          assert.ok(duration < 1000, `Expected to persist ${count} entries in less than 1 second, but took ${duration}ms`);
+        });
+
+        it("should filter 5000 entries in less than 60ms", async () => {
+          await createEntries(5000);
+
+          const startTime = Date.now();
+          const entries = await driver.query({ level_name: "level1" });
+          const endTime = Date.now();
+
+          const duration = endTime - startTime;
+          console.log(`Filtered ${entries.length} entries in ${duration}ms`);
+
+          assert.ok(duration < 30, `Expected to filter ${entries.length} entries in less than 100ms, but took ${duration}ms`);
+        });
+
+      });
+
     });
   }
 });
