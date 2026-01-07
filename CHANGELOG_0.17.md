@@ -50,11 +50,12 @@ We have separate methods now for handling `onMessage()` with raw bytes: `onMessa
 [x] Check why this test outputs `Error: UNDEFINED_VALUE` for `PostgresDriver`: `npm test -- --grep 'should not exceed maxClients'`
 [x] `RoomCache`: improve metadata handling and filters
 [x] Colyseus Cloud: allow `@colyseus/tools` - `listen()` method to accept a raw `server` instance and make it compatible with Colyseus Cloud infrastructure.
-[ ] Room caching and restoration ("migration") to new server
-[ ] `PostgresDriver`: confirm if delay between increment/decrement `clients` is affecting `maxClients` being respected.
-[ ] `RedisDriver`: implement `boot()` to create LUA Script for filtering rooms at the server instead of at the Redis client
-[ ] Drivers: Allow to filter with OR operation (metaField=X or metaField=Y)
-[ ] Support Express v5
-[ ] Full-stack type safety
-[ ] How to use new `messages = {}` for raw binary data? (`.onMessageBytes()` ??, maybe using `binary()` utility?)
+[x] Full-stack type safety
+[x] Support Express v5
 [ ] Add Unity-like schema callbacks for TypeScript
+[ ] Check if `@colyseus/testing` is working properly.
+[ ] How to use new `messages = {}` for raw binary data? (`.onMessageBytes()` ??, maybe using `binary()` utility?)
+[ ] `PostgresDriver`: confirm if delay between increment/decrement `clients` is affecting `maxClients` being respected.
+[ ] Drivers: Allow to filter with OR operation (metaField=X or metaField=Y)
+[ ] Room caching and restoration ("migration") to new server
+[ ] `RedisDriver`: implement `boot()` to create LUA Script for filtering rooms at the server instead of at the Redis client (currently under `redis-driver/src/experimental_luaScripts/*` directory. tho performance is worse than current implementation.)
