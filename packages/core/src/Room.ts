@@ -549,7 +549,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
     this.disconnect(
       (isDevMode)
         ? CloseCode.DEVMODE_RESTART
-        : CloseCode.CONSENTED
+        : CloseCode.SERVER_SHUTDOWN
     );
   }
 

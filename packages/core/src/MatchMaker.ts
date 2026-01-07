@@ -739,7 +739,7 @@ export async function gracefullyShutdown(): Promise<any> {
   return Promise.all(disconnectAll(
     (isDevMode)
       ? CloseCode.DEVMODE_RESTART
-      : undefined
+      : CloseCode.SERVER_SHUTDOWN
   ));
 }
 

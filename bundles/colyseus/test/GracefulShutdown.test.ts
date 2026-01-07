@@ -1,6 +1,6 @@
 import assert from "assert";
 
-import * as Colyseus from "@colyseus/sdk";
+import * as ColyseusSDK from "@colyseus/sdk";
 import { Room, Server, matchMaker } from "@colyseus/core";
 import WebSocket from "ws";
 
@@ -9,20 +9,19 @@ const TEST_ENDPOINT = `ws://localhost:${TEST_PORT}`;
 
 describe("Graceful Shutdown", () => {
   let server: Server;
-  let client = new Colyseus.Client(TEST_ENDPOINT);
+  let client = new ColyseusSDK.Client(TEST_ENDPOINT);
 
   beforeEach(async () => {
     server = new Server({ greet: false, gracefullyShutdown: false });
 
     // setup matchmaker
-    matchMaker.setup(undefined, undefined)
+    await matchMaker.setup();
 
     // listen for testing
     await server.listen(TEST_PORT);
   });
 
   afterEach(async () => {
-    await matchMaker.disconnectAll();
     await server.gracefullyShutdown(false);
   });
 
@@ -107,6 +106,44 @@ describe("Graceful Shutdown", () => {
     assert.ok(onLeaveTime[1] < onDisposeTime);
     assert.ok(onLeaveTime[2] < onDisposeTime);
     assert.ok(onDisposeTime <= onShutdownTime);
+  });
+
+  it("should not try to reconnect if client disconnects during shutdown", async () => {
+    let onLeaveCalled = false;
+    let onLeaveCode: number | undefined;
+    let onDropCalled = false;
+    let onReconnectCalled = false;
+
+    server.define("my_room", class extends Room {
+      onCreate() {}
+      onJoin() {}
+      onLeave() {}
+    });
+
+    const room = await client.joinOrCreate("my_room");
+
+    room.onLeave((code) => {
+      onLeaveCalled = true;
+      onLeaveCode = code;
+    });
+
+    room.onDrop(() => {
+      onDropCalled = true;
+    });
+
+    room.onReconnect(() => {
+      onReconnectCalled = true;
+    });
+
+    await server.gracefullyShutdown(false);
+
+    // give some time for any reconnection attempts to occur
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    assert.strictEqual(onLeaveCalled, true, "onLeave should have been called");
+    assert.strictEqual(onLeaveCode, ColyseusSDK.CloseCode.SERVER_SHUTDOWN, "onLeave code should be SERVER_SHUTDOWN (4001)");
+    assert.strictEqual(onDropCalled, false, "onDrop should NOT be called during graceful shutdown");
+    assert.strictEqual(onReconnectCalled, false, "onReconnect should NOT be called during graceful shutdown");
   });
 
 

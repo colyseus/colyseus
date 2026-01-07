@@ -7,6 +7,7 @@
 [ ] `.allowReconnection()` breaking changes. (https://github.com/colyseus/colyseus/issues/893)
   [ ] `onLeave(client, code)` - the onLeave now receives close `code` as number instead of `consented` boolean flag.
 [ ] `Protocol.WS_*` close codes have been moved to `CloseCode.*`
+[ ] Introduced `CloseCode.SERVER_SHUTDOWN`
 [ ] Skipping handshake when local state is available (when reconnecting or with concrete state provided)
 [ ] Fixed bug where setting `patchRate=0` would stop `clock` intervals and timeouts from working (https://github.com/colyseus/colyseus/issues/869)
 [ ] Playground: Automatically-generated postman-like UI

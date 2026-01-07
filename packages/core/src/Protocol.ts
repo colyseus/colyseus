@@ -29,6 +29,7 @@ export const CloseCode = {
   ABNORMAL_CLOSURE: 1006,
 
   CONSENTED: 4000,
+  SERVER_SHUTDOWN: 4001,
   WITH_ERROR: 4002,
   DEVMODE_RESTART: 4010
 } as const;
