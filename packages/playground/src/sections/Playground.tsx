@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { type RoomAvailable } from "@colyseus/sdk";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import type { IconProp } from "@fortawesome/fontawesome-svg-core";
 import { faGlobe, faChartLine, faDoorOpen, faChevronLeft, faChevronRight, faBolt } from "@fortawesome/free-solid-svg-icons";
 
 import { endpoint, Connection, global } from "../utils/Types";
@@ -11,7 +12,7 @@ import { PresenceInspector } from "./PresenceInspector";
 
 import { type AuthConfig } from "../../src-backend";
 
-type TabType = "rooms" | "api" | "presence" | "stats";
+ type TabType = "rooms" | "api" | "presence" | "stats";
 
 interface PlaygroundProps {
 	isMobileMenuOpen: boolean;
@@ -87,12 +88,22 @@ export function Playground({ isMobileMenuOpen, setIsMobileMenuOpen }: Playground
 		return () => window.clearInterval(retryWhenOfflineInterval);
 	}, []);
 
-	const tabs = [
-		{ id: "rooms" as TabType, label: "Rooms", icon: faDoorOpen },
-		{ id: "api" as TabType, label: "API Endpoints", icon: faGlobe },
-		{ id: "presence" as TabType, label: "Presence", icon: faBolt },
-		{ id: "stats" as TabType, label: "Stats", icon: faChartLine },
-	];
+	 const categories: { label: string; items: { id: TabType; label: string; icon: IconProp }[] }[] = [
+ 		{
+ 			label: "Frontend",
+ 			items: [
+ 				{ id: "rooms", label: "Rooms", icon: faDoorOpen },
+ 				{ id: "api", label: "API Endpoints", icon: faGlobe },
+ 			],
+ 		},
+ 		{
+ 			label: "Backend",
+ 			items: [
+ 				{ id: "presence", label: "Presence", icon: faBolt },
+ 				{ id: "stats", label: "Stats", icon: faChartLine },
+ 			],
+ 		},
+ 	];
 
 	const handleTabChange = (tabId: TabType) => {
 		setActiveTab(tabId);
@@ -123,24 +134,35 @@ export function Playground({ isMobileMenuOpen, setIsMobileMenuOpen }: Playground
 				transition-all duration-300 ease-in-out
 			`}>
 				<div className="flex-1 py-6">
-					<nav className="space-y-1 px-3">
-						{tabs.map((tab) => {
-							return (
-								<button
-									key={tab.id}
-									onClick={() => handleTabChange(tab.id)}
-									title={isDesktopSidebarCollapsed ? tab.label : undefined}
-									className={`w-full flex items-center ${isDesktopSidebarCollapsed ? 'justify-center px-2' : 'px-4'} py-3 text-sm font-medium rounded-lg transition-all ${
-										activeTab === tab.id
-											? "bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300"
-											: "text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800"
-									}`}
-								>
-									<FontAwesomeIcon icon={tab.icon} className={isDesktopSidebarCollapsed ? '' : 'mr-3'} size="lg" />
-									{!isDesktopSidebarCollapsed && <span>{tab.label}</span>}
-								</button>
-							);
-						})}
+					<nav className="space-y-3 px-3">
+						{categories.map((category) => (
+							<div key={category.label}>
+								{!isDesktopSidebarCollapsed ? (
+									<div className="px-2 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
+										{category.label}
+									</div>
+								) : (
+									<div className="h-px my-2 bg-gray-200 dark:bg-slate-700" />
+								)}
+								<div className="space-y-1">
+									{category.items.map((tab) => (
+										<button
+											key={tab.id}
+											onClick={() => handleTabChange(tab.id)}
+											title={isDesktopSidebarCollapsed ? tab.label : undefined}
+											className={`w-full flex items-center ${isDesktopSidebarCollapsed ? 'justify-center px-2' : 'px-4'} py-3 text-sm font-medium rounded-lg transition-all ${
+												activeTab === tab.id
+													? "bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300"
+													: "text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800"
+											}`}
+										>
+											<FontAwesomeIcon icon={tab.icon} className={isDesktopSidebarCollapsed ? '' : 'mr-3'} size="lg" />
+											{!isDesktopSidebarCollapsed && <span>{tab.label}</span>}
+										</button>
+									))}
+								</div>
+							</div>
+						))}
 					</nav>
 				</div>
 
