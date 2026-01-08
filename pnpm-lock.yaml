@@ -473,18 +473,15 @@ importers:
       '@colyseus/auth':
         specifier: workspace:^
         version: link:../auth
+      '@colyseus/better-call':
+        specifier: workspace:^
+        version: link:../better-call
       '@colyseus/core':
         specifier: workspace:^
         version: link:../core
-      '@types/react-syntax-highlighter':
-        specifier: ^15.5.13
-        version: 15.5.13
       express:
         specifier: '>=4.16.0'
         version: 5.1.0
-      react-syntax-highlighter:
-        specifier: ^16.1.0
-        version: 16.1.0(react@18.3.1)
       zod:
         specifier: ^4.1.12
         version: 4.1.12
@@ -519,6 +516,9 @@ importers:
       '@types/react-dom':
         specifier: ^18.2.4
         version: 18.3.7(@types/react@18.3.27)
+      '@types/react-syntax-highlighter':
+        specifier: ^15.5.13
+        version: 15.5.13
       '@vitejs/plugin-react':
         specifier: ^4.2.1
         version: 4.7.0(vite@5.4.21(@types/node@16.18.126))
@@ -549,6 +549,9 @@ importers:
       react-router-dom:
         specifier: ^6.11.2
         version: 6.30.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      react-syntax-highlighter:
+        specifier: ^16.1.0
+        version: 16.1.0(react@18.3.1)
       react-tailwindcss-select:
         specifier: ^1.8.5
         version: 1.8.5(react@18.3.1)

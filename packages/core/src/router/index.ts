@@ -25,38 +25,19 @@ export function bindRouterToServer(server: Server, router: Router) {
   }
 }
 
+/**
+ * Do not use this directly. This is used internally by `@colyseus/playground`.
+ * TODO: refactor. Avoid using globals.
+ * @internal
+ */
+export let __globalEndpoints: Record<string, Endpoint>;
+
 export function createRouter<
   E extends Record<string, Endpoint>,
   Config extends RouterConfig
 >(endpoints: E, config?: Config) {
+  // TODO: refactor. Avoid using globals.
+  __globalEndpoints = endpoints;
 
-  /**
-   * Expose documentation route for @colyseus/playground
-   * TODO: this route should be protected in production
-   */
-  const openApiRoute = createEndpoint("/__apidocs", {
-    method: "GET",
-    // metadata: { SERVER_ONLY: true }
-  }, async (ctx) => {
-
-    /**
-     * Optional: if zod is available, we can use toJSONSchema() for body and query types
-     */
-    let z: any = undefined;
-    try { z = await import("zod"); } catch (e: any) { /* zod not installed  */ }
-
-    return Object.values(endpoints).map((endpoint) => {
-      return {
-        method: endpoint.options.method,
-        path: endpoint.path,
-        body: z && endpoint.options.body && z.toJSONSchema(endpoint.options.body),
-        query: z && endpoint.options.query && z.toJSONSchema(endpoint.options.query),
-        metadata: endpoint.options.metadata,
-        description: endpoint.options.metadata?.openapi?.description,
-      };
-    });
-  });
-
-
-  return createBetterCallRouter({ ...endpoints, openApiRoute }, config);
+  return createBetterCallRouter({ ...endpoints, }, config);
 }

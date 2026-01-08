@@ -73,6 +73,7 @@ export {
   createMiddleware,
   createRouter,
   toNodeHandler,
+  __globalEndpoints,
   type Router,
 } from './router/index.ts';
 

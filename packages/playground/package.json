@@ -58,6 +58,7 @@
     "@types/node": "^16.18.31",
     "@types/react": "^18.2.6",
     "@types/react-dom": "^18.2.4",
+    "@types/react-syntax-highlighter": "^15.5.13",
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.16",
     "esbuild": "^0.17.19",
@@ -68,6 +69,7 @@
     "react-dom": "^18.2.0",
     "react-flatpickr": "^3.10.13",
     "react-router-dom": "^6.11.2",
+    "react-syntax-highlighter": "^16.1.0",
     "react-tailwindcss-select": "^1.8.5",
     "react-transition-group": "^4.4.5",
     "react18-json-view": "^0.0.8",
@@ -78,7 +80,6 @@
     "web-vitals": "^2.1.4"
   },
   "dependencies": {
-    "@types/react-syntax-highlighter": "^15.5.13",
-    "react-syntax-highlighter": "^16.1.0"
+    "@colyseus/better-call": "workspace:^"
   }
 }
