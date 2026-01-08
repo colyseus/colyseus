@@ -13,17 +13,17 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
   protected encoder: Encoder<T>;
   protected hasFilters: boolean = false;
 
-  protected handshakeCache: Buffer;
+  protected handshakeCache: Uint8Array;
 
   // flag to avoid re-encoding full state if no changes were made
   protected needFullEncode: boolean = true;
 
   // TODO: make this optional. allocating a new buffer for each room may not be always necessary.
-  protected fullEncodeBuffer: Buffer = Buffer.allocUnsafe(Encoder.BUFFER_SIZE);
-  protected fullEncodeCache: Buffer;
+  protected fullEncodeBuffer: Uint8Array = new Uint8Array(Encoder.BUFFER_SIZE);
+  protected fullEncodeCache: Uint8Array;
   protected sharedOffsetCache: Iterator = { offset: 0 };
 
-  protected encodedViews: Map<StateView | typeof SHARED_VIEW, Buffer>;
+  protected encodedViews: Map<StateView | typeof SHARED_VIEW, Uint8Array>;
 
   public reset(newState: T & Schema) {
     this.encoder = new Encoder(newState);

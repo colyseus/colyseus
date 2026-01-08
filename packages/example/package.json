@@ -24,7 +24,7 @@
     "@colyseus/sdk": "workspace:^",
     "@colyseus/playground": "workspace:^",
     "@colyseus/monitor": "workspace:^",
-    "@colyseus/schema": "^3.0.69",
+    "@colyseus/schema": "^4.0.1",
     "@colyseus/better-call": "workspace:^",
     "@colyseus/traefik": "workspace:^",
     "zod": "^4.1.12"

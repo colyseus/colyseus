@@ -65,7 +65,7 @@ const packr = new Packr({
 packr.encode(undefined);
 
 export const getMessageBytes = {
-  [Protocol.JOIN_ROOM]: (reconnectionToken: string, serializerId: string, handshake?: Buffer) => {
+  [Protocol.JOIN_ROOM]: (reconnectionToken: string, serializerId: string, handshake?: Uint8Array) => {
     const it: Iterator = { offset: 1 };
     packr.buffer[0] = Protocol.JOIN_ROOM;
 
@@ -83,7 +83,7 @@ export const getMessageBytes = {
     }
 
     if (handshakeLength > 0) {
-      handshake.copy(packr.buffer, it.offset, 0, handshakeLength);
+      packr.buffer.set(handshake, it.offset);
     }
 
     return Buffer.from(packr.buffer.subarray(0, it.offset + handshakeLength));

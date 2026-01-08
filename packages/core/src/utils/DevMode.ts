@@ -43,7 +43,7 @@ export async function reloadFromCache() {
         const rawState = JSON.parse(roomHistory.state);
         logger.debug(`📋 room '${roomId}' state =>`, rawState);
 
-        restoreFromJSON(recreatedRoom.state as any, rawState);
+        (recreatedRoom.state as Schema).restore(rawState);
       } catch (e: any) {
         debugAndPrintError(`❌ couldn't restore room '${roomId}' state:\n${e.stack}`);
       }
@@ -130,115 +130,4 @@ export function getRoomRestoreListKey() {
 
 export function getProcessRestoreKey() {
   return 'processhistory';
-}
-
-
-// ..............................................................................
-// Schema: restoreFromJSON()
-// TODO: extract this into @colyseus/schema
-// ..............................................................................
-
-/**
- * Recursively converts raw JSON objects into proper Schema instances.
- * Handles MapSchema, ArraySchema, SetSchema, CollectionSchema, and nested Schema objects.
- *
- * @param schemaInstance - The Schema instance with proper type definitions
- * @param toJSONData - The raw JSON object to convert
- * @returns The processed data ready for .assign()
- */
-export function restoreFromJSON<T extends Schema>(
-  schemaInstance: T,
-  toJSONData: Record<string, any>,
-): T {
-  const result: Record<string, any> = {};
-
-  for (const key in toJSONData) {
-    const rawValue = toJSONData[key];
-    const schemaField = (schemaInstance as any)[key];
-
-    if (rawValue === null || rawValue === undefined) {
-      result[key] = rawValue;
-      continue;
-    }
-
-    // Handle MapSchema fields
-    if (schemaField instanceof MapSchema) {
-      const ItemClass = getCollectionItemClass(schemaField);
-
-      if (ItemClass && typeof rawValue === 'object' && !Array.isArray(rawValue)) {
-        for (const mapKey in rawValue) {
-          schemaField.set(mapKey, createSchemaInstance(ItemClass, rawValue[mapKey]));
-        }
-        continue;
-      }
-    }
-
-    // Handle array-like collection fields (ArraySchema, SetSchema, CollectionSchema)
-    if (
-      schemaField instanceof ArraySchema ||
-      schemaField instanceof SetSchema ||
-      schemaField instanceof CollectionSchema
-    ) {
-      const ItemClass = getCollectionItemClass(schemaField);
-      const addItem = schemaField instanceof ArraySchema
-        ? (item: any) => schemaField.push(item)
-        : (item: any) => schemaField.add(item);
-
-      if (Array.isArray(rawValue)) {
-        for (const itemData of rawValue) {
-          addItem(ItemClass ? createSchemaInstance(ItemClass, itemData) : itemData);
-        }
-        continue;
-      }
-    }
-
-    // Handle nested Schema objects
-    if (schemaField && typeof schemaField === 'object' && schemaField.constructor !== Object && typeof schemaField.assign === 'function') {
-      if (typeof rawValue === 'object' && !Array.isArray(rawValue)) {
-        // TODO: use @colyseus/schema@4.0 and .restore() instead of .assign()
-        const processedData = restoreFromJSON(schemaField, rawValue);
-        schemaField.assign(processedData);
-        continue;
-      }
-    }
-
-    // Primitive value or unrecognized type - pass through
-    result[key] = rawValue;
-  }
-
-  return schemaInstance.assign(result);
-}
-
-/**
- * Attempts to get the item class from a collection schema (MapSchema, ArraySchema, etc.)
- * Uses the schema's internal ~childType property to find the constructor.
- */
-function getCollectionItemClass(collection: MapSchema | ArraySchema | SetSchema | CollectionSchema): (new (...args: any[]) => Schema) | null {
-  try {
-    // Access the child type via the internal ~childType property
-    const childType = collection[$childType];
-    if (childType && typeof childType === 'function') {
-      return childType;
-    }
-
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Creates a Schema instance from raw item data, recursively restoring nested structures.
- */
-function createSchemaInstance(ItemClass: new (...args: any[]) => Schema, itemData: any): Schema {
-  const itemInstance = new ItemClass();
-
-  if (typeof itemData === 'object' && itemData !== null) {
-    const processedItemData = restoreFromJSON(itemInstance, itemData);
-    itemInstance.assign(processedItemData);
-  } else {
-    itemInstance.assign(itemData);
-  }
-
-  return itemInstance;
 }

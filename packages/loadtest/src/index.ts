@@ -464,28 +464,28 @@ Example:
 
     const _originalJoinOrCreate = Client.prototype.joinOrCreate;
     Client.prototype.joinOrCreate = async function(this: typeof Client) {
-        const room = await _originalJoinOrCreate.apply(this, arguments);
+        const room = await _originalJoinOrCreate.apply(this, arguments as any);
         handleClientJoin(room);
         return room;
     }
 
     const _originalCreate = Client.prototype.create;
     Client.prototype.create = async function(this: typeof Client) {
-        const room = await _originalCreate.apply(this, arguments);
+        const room = await _originalCreate.apply(this, arguments as any);
         handleClientJoin(room);
         return room;
     }
 
     const _originalJoin = Client.prototype.join;
     Client.prototype.join = async function(this: typeof Client) {
-        const room = await _originalJoin.apply(this, arguments);
+        const room = await _originalJoin.apply(this, arguments as any);
         handleClientJoin(room);
         return room;
     }
 
     const _originalJoinById = Client.prototype.joinById;
     Client.prototype.joinById = async function(this: typeof Client) {
-        const room = await _originalJoinById.apply(this, arguments);
+        const room = await _originalJoinById.apply(this, arguments as any);
         handleClientJoin(room);
         return room;
     }
@@ -504,7 +504,7 @@ Example:
             }
         })();
 
-    } catch (e) {
+    } catch (e: any) {
         error(e.stack);
     }
 }

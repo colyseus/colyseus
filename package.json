@@ -6,7 +6,7 @@
   "packageManager": "pnpm@10.9.0",
   "scripts": {
     "build": "tsx build.ts",
-    "build-all": "pnpm run build && pnpm --filter @colyseus/better-call run build && pnpm --filter @colyseus/sdk run build && pnpm --filter @colyseus/playground run build",
+    "build-all": "pnpm --filter @colyseus/better-call run build && pnpm run build && pnpm --filter @colyseus/sdk run build && pnpm --filter @colyseus/playground run build && pnpm --filter @colyseus/monitor run build",
     "clean": "lerna clean",
     "test": "lerna run test --stream",
     "example": "lerna run start --scope @colyseus/example --stream",
@@ -32,7 +32,7 @@
     "benchmark": "^2.1.1",
     "c8": "^7.7.2",
     "cors": "^2.8.5",
-    "esbuild": "^0.23.0",
+    "esbuild": "^0.27.2",
     "express": ">=4.16.0",
     "fast-glob": "^3.2.11",
     "httpie": "^2.0.0-next.13",

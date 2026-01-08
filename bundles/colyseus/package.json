@@ -51,7 +51,7 @@
     "@colyseus/tools": "workspace:^",
     "@colyseus/sdk": "workspace:^",
     "@colyseus/msgpackr": "*",
-    "@colyseus/schema": "^3.0.69",
+    "@colyseus/schema": "^4.0.1",
     "@types/ws": "^8.5.14",
     "zod": "^4.1.12",
     "ws": "^8.18.0"
@@ -63,7 +63,7 @@
     "@colyseus/redis-presence": "0.16.x",
     "@colyseus/ws-transport": "0.16.x",
     "@colyseus/uwebsockets-transport": "0.16.x",
-    "@colyseus/schema": "^3.0.69"
+    "@colyseus/schema": "^4.0.1"
   },
   "gitHead": "25ba61e283429bb4fa02db0454f804ea218259eb"
 }

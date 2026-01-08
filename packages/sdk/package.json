@@ -66,7 +66,7 @@
   },
   "dependencies": {
     "@colyseus/msgpackr": "^1.11.2",
-    "@colyseus/schema": "^3.0.69",
+    "@colyseus/schema": "^4.0.1",
     "@colyseus/httpie": "^2.0.0",
     "tslib": "^2.1.0",
     "ws": "^8.13.0"

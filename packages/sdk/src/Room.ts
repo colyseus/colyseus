@@ -1,5 +1,5 @@
 import { type Room as ServerRoom, type ExtractMessageType } from '@colyseus/core';
-import { decode, encode, Iterator } from '@colyseus/schema';
+import { decode, Decoder, encode, Iterator, schema, Schema, SchemaType } from '@colyseus/schema';
 
 import { Packr, unpack } from '@colyseus/msgpackr';
 
@@ -13,8 +13,14 @@ import { createNanoEvents } from './core/nanoevents.ts';
 import { createSignal } from './core/signal.ts';
 
 import { SchemaConstructor, SchemaSerializer } from './serializer/SchemaSerializer.ts';
+
 import { CloseCode } from './errors/Errors.ts';
 import { now } from './core/utils.ts';
+
+// Infer serializer type based on State: SchemaSerializer for Schema types, Serializer otherwise
+export type InferSerializer<State> = [State] extends [Schema]
+    ? SchemaSerializer<State>
+    : Serializer<State>;
 
 export interface RoomAvailable<Metadata = any> {
     name: string;
@@ -102,7 +108,7 @@ export class Room<
     protected onJoin = createSignal();
 
     public serializerId: string;
-    public serializer: Serializer<State>;
+    public serializer: InferSerializer<State>;
 
     // reconnection logic
     public reconnection: ReconnectionOptions = {

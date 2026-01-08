@@ -50,7 +50,7 @@
     "blessed": "^0.1.81",
     "minimist": "^1.2.5",
     "typescript": "^5.9.3",
-    "ws": "^7.4.5"
+    "ws": "^8.19.0"
   },
   "devDependencies": {
     "@types/blessed": "^0.1.10"

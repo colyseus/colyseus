@@ -3,7 +3,7 @@ import type { Client } from '../Transport.ts';
 export interface Serializer<T> {
   id: string;
   reset(data: any): void;
-  getFullState(client?: Client): Buffer;
+  getFullState(client?: Client): Uint8Array;
   applyPatches(clients: Client[], state: T): boolean;
-  handshake?(): Buffer;
+  handshake?(): Uint8Array;
 }

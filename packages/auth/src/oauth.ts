@@ -172,7 +172,7 @@ ${(providerUrl) ? `<hr/><p><small><em>(Get your keys from <a href="${providerUrl
         }
       });
 
-      router.use(grant.express(config));
+      router.use(grant.default.express(config));
 
       router.get("/:providerId/callback", async (req, res) => {
         const session = (req as any).session as unknown & { grant: GrantSession };

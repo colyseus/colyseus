@@ -2,7 +2,7 @@ import http from 'http';
 import https from 'https';
 import { Http3Server } from '@fails-components/webtransport';
 import { URL } from 'url';
-import { decode, Iterator } from '@colyseus/schema';
+import { decode, type Iterator } from '@colyseus/schema';
 
 import { matchMaker, Protocol, Transport, debugAndPrintError, spliceOne, getBearerToken, CloseCode, connectClientToRoom } from '@colyseus/core';
 import { H3Client } from './H3Client.ts';
@@ -161,10 +161,11 @@ export class H3Transport extends Transport {
       const method = matchedParams[matchmakeIndex + 1];
       const roomName = matchedParams[matchmakeIndex + 2] || '';
 
+
       const headers = Object.assign(
         {},
         matchMaker.controller.DEFAULT_CORS_HEADERS,
-        matchMaker.controller.getCorsHeaders.call(undefined, req)
+        matchMaker.controller.getCorsHeaders.call(undefined, new Headers(req.headers))
       );
       headers['Content-Type'] = 'application/json';
       res.writeHead(200, headers);
@@ -197,7 +198,7 @@ export class H3Transport extends Transport {
     });
   }
 
-  protected async onConnection(h3Client: H3Client, data: ArrayBufferLike, req?: http.IncomingMessage & any) {
+  protected async onConnection(h3Client: H3Client, data: Uint8Array, req?: http.IncomingMessage & any) {
     const it: Iterator = { offset: 0 };
 
     const roomId = decode.string(data, it);

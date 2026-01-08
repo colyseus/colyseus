@@ -27,7 +27,7 @@ export class SchemaSerializer<T extends Schema = any> implements Serializer<T> {
     state: T;
     decoder: Decoder<T>;
 
-    setState(encodedState: Buffer, it?: Iterator) {
+    setState(encodedState: Uint8Array, it?: Iterator) {
         this.decoder.decode(encodedState, it);
     }
 
@@ -35,7 +35,7 @@ export class SchemaSerializer<T extends Schema = any> implements Serializer<T> {
         return this.state;
     }
 
-    patch(patches: Buffer, it?: Iterator) {
+    patch(patches: Uint8Array, it?: Iterator) {
         return this.decoder.decode(patches, it);
     }
 
@@ -43,7 +43,7 @@ export class SchemaSerializer<T extends Schema = any> implements Serializer<T> {
         this.decoder.root.clearRefs();
     }
 
-    handshake(bytes: Buffer, it?: Iterator) {
+    handshake(bytes: Uint8Array, it?: Iterator) {
         if (this.state) {
             //
             // TODO: validate definitions against concreate this.state instance

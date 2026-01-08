@@ -20,6 +20,7 @@
 
 [ ] `$refId` is now accessible both on client-side and server-side via `instance[$refId]`
 [ ] Encoder uses and expects `Uint8Array` instead of `Buffer` (compatibility with web browsers)
+[ ] Add Unity-like schema callbacks for TypeScript
 
 ## New features to document
 
@@ -52,7 +53,6 @@ We have separate methods now for handling `onMessage()` with raw bytes: `onMessa
 [x] Colyseus Cloud: allow `@colyseus/tools` - `listen()` method to accept a raw `server` instance and make it compatible with Colyseus Cloud infrastructure.
 [x] Full-stack type safety
 [x] Support Express v5
-[ ] Add Unity-like schema callbacks for TypeScript
 [ ] Check if `@colyseus/testing` is working properly.
 [ ] How to use new `messages = {}` for raw binary data? (`.onMessageBytes()` ??, maybe using `binary()` utility?)
 [ ] `PostgresDriver`: confirm if delay between increment/decrement `clients` is affecting `maxClients` being respected.

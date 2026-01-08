@@ -1,4 +1,4 @@
-import Clock, { Delayed } from '@colyseus/timer';
+import { ClockTimer as Clock, Delayed } from '@colyseus/timer';
 
 // Core classes
 export { Server, defineRoom, defineServer, type ServerOptions, type SDKTypes } from './Server.ts';

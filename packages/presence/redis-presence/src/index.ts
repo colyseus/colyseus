@@ -192,7 +192,7 @@ export class RedisPresence implements Presence {
       return await this.pub.lpop(key);
     }
 
-    public async brpop(...args: [...keys: string[], timeoutInSeconds: number]): Promise<[string, string] | null> {
+    public async brpop(...args: any): Promise<[string, string] | null> {
       return await this.pub.brpop.apply(this.pub, args);
     }
 

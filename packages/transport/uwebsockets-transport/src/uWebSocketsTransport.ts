@@ -203,14 +203,14 @@ export class uWebSocketsTransport extends Transport {
         const matchmakeRoute = 'matchmake';
         const allowedRoomNameChars = /([a-zA-Z_\-0-9]+)/gi;
 
-        const writeHeaders = (req: uWebSockets.HttpRequest, res: uWebSockets.HttpResponse) => {
+      const writeHeaders = (res: uWebSockets.HttpResponse, requestHeaders: Headers) => {
             // skip if aborted
             if (res.aborted) { return; }
 
             const headers = Object.assign(
                 {},
                 matchMaker.controller.DEFAULT_CORS_HEADERS,
-                matchMaker.controller.getCorsHeaders.call(undefined, req)
+                matchMaker.controller.getCorsHeaders(requestHeaders)
             );
 
             for (const header in headers) {
@@ -237,7 +237,11 @@ export class uWebSocketsTransport extends Transport {
         this.app.options("/matchmake/*", (res, req) => {
             res.onAborted(() => onAborted(res));
 
-            if (writeHeaders(req, res)) {
+            // cache all headers
+            const reqHeaders = new Headers();
+            req.forEach((key, value) => reqHeaders.set(key, value));
+
+            if (writeHeaders(res, reqHeaders)) {
               res.writeStatus("204 No Content");
               res.end();
             }
@@ -253,16 +257,16 @@ export class uWebSocketsTransport extends Transport {
               return res.close();
             }
 
-            writeHeaders(req, res);
+            // cache all headers
+            const headers = new Headers();
+            req.forEach((key, value) => headers.set(key, value));
+
+            writeHeaders(res, headers);
             res.writeHeader('Content-Type', 'application/json');
 
             const url = req.getUrl();
             const matchedParams = url.match(allowedRoomNameChars);
             const matchmakeIndex = matchedParams.indexOf(matchmakeRoute);
-
-            // cache all headers
-            const headers: IncomingHttpHeaders = {};
-            req.forEach((key, value) => headers[key] = value);
 
             const token = getBearerToken(headers['authorization']);
 
@@ -282,8 +286,8 @@ export class uWebSocketsTransport extends Transport {
                       clientOptions,
                       {
                         token,
-                        headers: new Headers(headers),
-                        ip: headers['x-real-ip'] ?? headers['x-forwarded-for'] ?? Buffer.from(res.getRemoteAddressAsText()).toString()
+                        headers,
+                        ip: headers.get('x-real-ip') ?? headers.get('x-forwarded-for') ?? Buffer.from(res.getRemoteAddressAsText()).toString()
                       }
                     );
 

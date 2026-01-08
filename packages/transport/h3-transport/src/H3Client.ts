@@ -40,12 +40,10 @@ export class H3Client implements Client, ClientPrivate {
 
     _wtSession.ready.then(() => {
       _wtSession.createBidirectionalStream().then((bidi) => {
-        // @ts-ignore
         this._bidiReader = bidi.readable.getReader();
-        // @ts-ignore
         this._bidiWriter = bidi.writable.getWriter();
 
-        this._bidiReader.read().then((read: any) => onInitialMessage(read.value));
+        this._bidiReader.read().then((read) => onInitialMessage(read.value));
 
         this._bidiReader.closed.catch((e: any) => {/* console.log("writer closed with error!", e) */});
         this._bidiWriter.closed.catch((e: any) => {/* console.log("reader closed with error!", e) */});
@@ -63,7 +61,6 @@ export class H3Client implements Client, ClientPrivate {
       });
 
       // reading datagrams
-      // @ts-ignore
       this._datagramReader = _wtSession.datagrams.readable.getReader();
       this._datagramReader.closed.catch((e: any) =>
         console.log("datagram reader closed with error!", e));
@@ -91,7 +88,6 @@ export class H3Client implements Client, ClientPrivate {
 
   public sendDatagram(data: Uint8Array | Buffer) {
     if (!this._datagramWriter) {
-      // @ts-ignore
       this._datagramWriter = this._wtSession.datagrams.writable.getWriter();
 
       this._datagramWriter.closed

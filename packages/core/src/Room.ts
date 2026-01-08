@@ -1,6 +1,6 @@
 import { unpack } from '@colyseus/msgpackr';
 import { decode, type Iterator, $changes } from '@colyseus/schema';
-import Clock from '@colyseus/timer';
+import { ClockTimer as Clock } from '@colyseus/timer';
 
 import { EventEmitter } from 'events';
 import { logger } from './Logger.ts';
@@ -265,7 +265,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
   private onMessageValidators: {[message: string]: StandardSchemaV1} = {};
 
   private onMessageFallbacks = {
-    '__no_message_handler': (client: ExtractRoomClient<T>, messageType: string, _: unknown) => {
+    '__no_message_handler': (client: ExtractRoomClient<T>, messageType: string | number, _: unknown) => {
       const errorMessage = `room onMessage for "${messageType}" not registered.`;
       debugMessage(`${errorMessage} (roomId: ${this.roomId})`);
 
@@ -1541,7 +1541,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
       }
 
       if (this.onMessageEvents.events[messageType]) {
-        this.onMessageEvents.emit(messageType, client, message);
+        this.onMessageEvents.emit(messageType as string, client, message);
 
       } else if (this.onMessageEvents.events['*']) {
         this.onMessageEvents.emit('*', client, messageType, message);
