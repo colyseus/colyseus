@@ -84,6 +84,28 @@ export class MongooseDriver implements MatchMakerDriver {
     await RoomCache.deleteMany({ processId });
   }
 
+  public async remove(roomId: string) {
+    const result = await RoomCache.deleteOne({ roomId });
+    return result.deletedCount > 0;
+  }
+
+  public async update(
+    room: IRoomCache,
+    operations: Partial<{ $set: Partial<IRoomCache>, $inc: Partial<IRoomCache> }>
+  ) {
+    const result = await RoomCache.updateOne({ roomId: room.roomId }, operations);
+    return result.modifiedCount > 0;
+  }
+
+  public async persist(room: IRoomCache, create: boolean = false) {
+    if (create) {
+      await RoomCache.create(room);
+      return true;
+    }
+    const result = await RoomCache.updateOne({ roomId: room.roomId }, { $set: room });
+    return result.modifiedCount > 0 || result.matchedCount > 0;
+  }
+
   public async shutdown() {
     await mongoose.disconnect();
   }
