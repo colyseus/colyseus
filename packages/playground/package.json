@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/playground",
-  "version": "0.17.2",
+  "version": "0.17.3",
   "main": "./build/index.js",
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
