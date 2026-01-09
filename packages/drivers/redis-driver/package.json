@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/redis-driver",
-  "version": "0.17.4",
+  "version": "0.17.5",
   "type": "module",
   "input": "./src/index.ts",
   "main": "./build/index.cjs",

@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/core",
-  "version": "0.17.4",
+  "version": "0.17.5",
   "description": "Multiplayer Framework for Node.js.",
   "type": "module",
   "input": "./src/index.ts",
@@ -47,8 +47,8 @@
   "dependencies": {
     "@colyseus/better-call": "workspace:^",
     "@colyseus/greeting-banner": "workspace:^",
-    "@colyseus/timer": "^2.0.0",
     "@colyseus/msgpackr": "^1.11.2",
+    "@colyseus/timer": "^2.0.0",
     "@standard-schema/spec": "^1.0.0",
     "debug": "^4.3.4",
     "nanoid": "^3.3.11"

@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/sdk",
-  "version": "0.17.4",
+  "version": "0.17.5",
   "description": "Colyseus Multiplayer SDK for JavaScript/TypeScript",
   "author": "Endel Dreyer",
   "license": "MIT",
@@ -66,9 +66,9 @@
     "node": ">= 12.x"
   },
   "dependencies": {
+    "@colyseus/httpie": "^2.0.0",
     "@colyseus/msgpackr": "^1.11.2",
     "@colyseus/schema": "^4.0.1",
-    "@colyseus/httpie": "^2.0.0",
     "tslib": "^2.1.0",
     "ws": "^8.13.0"
   },
@@ -99,11 +99,15 @@
     "vitest": "^2.1.1"
   },
   "peerDependencies": {
-    "@colyseus/core": "0.17.x",
-    "@colyseus/better-call": "workspace:^"
+    "@colyseus/better-call": "workspace:^",
+    "@colyseus/core": "0.17.x"
   },
   "peerDependenciesMeta": {
-    "@colyseus/core": { "optional": true },
-    "@colyseus/better-call": { "optional": true }
+    "@colyseus/core": {
+      "optional": true
+    },
+    "@colyseus/better-call": {
+      "optional": true
+    }
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/testing",
-  "version": "0.17.5",
+  "version": "0.17.6",
   "type": "module",
   "description": "Testing tools for Colyseus",
   "input": "./src/index.ts",
@@ -44,14 +44,14 @@
   },
   "devDependencies": {
     "@colyseus/core": "workspace:^",
+    "@colyseus/sdk": "workspace:^",
     "@colyseus/tools": "workspace:^",
-    "@colyseus/ws-transport": "workspace:^",
-    "@colyseus/sdk": "workspace:^"
+    "@colyseus/ws-transport": "workspace:^"
   },
   "peerDependencies": {
-    "@colyseus/tools": "0.17.x",
     "@colyseus/core": "0.17.x",
-    "@colyseus/sdk": "0.17.x"
+    "@colyseus/sdk": "0.17.x",
+    "@colyseus/tools": "0.17.x"
   },
   "publishConfig": {
     "access": "public"

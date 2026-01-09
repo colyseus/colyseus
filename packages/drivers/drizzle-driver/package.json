@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/drizzle-driver",
-  "version": "0.17.4",
+  "version": "0.17.5",
   "type": "module",
   "input": "./src/index.ts",
   "main": "./build/index.cjs",
@@ -29,8 +29,8 @@
     "drizzle-kit": "^0.30.6"
   },
   "peerDependencies": {
-    "drizzle-orm": "^0.38.4",
-    "drizzle-kit": "^0.30.6"
+    "drizzle-kit": "^0.30.6",
+    "drizzle-orm": "^0.38.4"
   },
   "author": "Endel Dreyer",
   "license": "MIT",

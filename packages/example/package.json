@@ -2,7 +2,7 @@
   "name": "@colyseus/example",
   "private": true,
   "type": "module",
-  "version": "0.17.2",
+  "version": "0.17.3",
   "author": "Endel Dreyer",
   "license": "MIT",
   "scripts": {
@@ -14,19 +14,19 @@
   },
   "devDependencies": {
     "@colyseus/auth": "workspace:^",
-    "@colyseus/uwebsockets-transport": "workspace:^",
-    "@colyseus/ws-transport": "workspace:^",
+    "@colyseus/better-call": "workspace:^",
+    "@colyseus/drizzle-driver": "workspace:^",
     "@colyseus/h3-transport": "workspace:^",
+    "@colyseus/monitor": "workspace:^",
+    "@colyseus/playground": "workspace:^",
     "@colyseus/redis-driver": "workspace:^",
     "@colyseus/redis-presence": "workspace:^",
-    "@colyseus/tools": "workspace:^",
-    "@colyseus/drizzle-driver": "workspace:^",
-    "@colyseus/sdk": "workspace:^",
-    "@colyseus/playground": "workspace:^",
-    "@colyseus/monitor": "workspace:^",
     "@colyseus/schema": "^4.0.1",
-    "@colyseus/better-call": "workspace:^",
+    "@colyseus/sdk": "workspace:^",
+    "@colyseus/tools": "workspace:^",
     "@colyseus/traefik": "workspace:^",
+    "@colyseus/uwebsockets-transport": "workspace:^",
+    "@colyseus/ws-transport": "workspace:^",
     "zod": "^4.1.12"
   }
 }

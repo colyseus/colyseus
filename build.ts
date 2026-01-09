@@ -96,6 +96,7 @@ async function main() {
       entryPoints: entrypoints,
       outdir,
       format: "cjs",
+      bundle: true,
       sourcemap: "external",
       platform: "node",
       outExtension: { '.js': '.cjs', },
@@ -103,7 +104,12 @@ async function main() {
         name: 'add-cjs',
         setup(build) {
           build.onResolve({ filter: /.*/ }, (args) => {
-            if (args.importer) return { path: args.path.replace(/^\.(.*)\.[jt]s$/, '.$1.cjs'), external: true }
+            if (args.importer) {
+              if (args.path.startsWith('.')) {
+                return { path: args.path.replace(/\.[jt]sx?$/, '.cjs'), external: true }
+              }
+              return { path: args.path, external: true }
+            }
           })
         },
       }],
@@ -122,11 +128,15 @@ async function main() {
         name: 'add-mjs',
         setup(build) {
           build.onResolve({ filter: /.*/ }, (args) => {
-            if (args.importer) return { path: args.path.replace(/^\.(.*)\.[jt]s$/, '.$1.mjs'), external: true }
+            if (args.importer) {
+              if (args.path.startsWith('.')) {
+                return { path: args.path.replace(/\.[jt]sx?$/, '.mjs'), external: true }
+              }
+              return { path: args.path, external: true }
+            }
           })
         },
-      },
-      ],
+      }],
     });
 
     // emit .d.ts files
