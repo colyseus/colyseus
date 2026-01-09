@@ -30,7 +30,7 @@ export function bindRouterToServer(server: Server, router: Router) {
  * TODO: refactor. Avoid using globals.
  * @internal
  */
-export let __globalEndpoints: Record<string, Endpoint>;
+export let __globalEndpoints: Record<string, Endpoint> = {};
 
 export function createRouter<
   E extends Record<string, Endpoint>,

@@ -17,7 +17,7 @@ import { SeatReservationError } from './errors/SeatReservationError.ts';
 import { ServerError } from './errors/ServerError.ts';
 
 import { type IRoomCache, type MatchMakerDriver, type SortOptions, LocalDriver } from './matchmaker/LocalDriver/LocalDriver.ts';
-import controller from './matchmaker/controller.ts';
+import { controller } from './matchmaker/controller.ts';
 import * as stats from './Stats.ts';
 
 import { logger } from './Logger.ts';

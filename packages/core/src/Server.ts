@@ -1,4 +1,4 @@
-import greeting from "@colyseus/greeting-banner";
+import { greet } from "@colyseus/greeting-banner";
 
 import { debugAndPrintError } from './Debug.ts';
 import * as matchMaker from './MatchMaker.ts';
@@ -138,7 +138,7 @@ export class Server<
      * Greetings!
      */
     if (this.greet) {
-      console.log(greeting);
+      greet();
     }
 
     return new Promise<void>((resolve, reject) => {

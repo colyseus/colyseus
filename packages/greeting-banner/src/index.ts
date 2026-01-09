@@ -1,4 +1,4 @@
-export default ((process.env.COLYSEUS_CLOUD)
+const banner = (process.env.COLYSEUS_CLOUD)
   ? String.raw`
    ______      __                              ________                __
   / ____/___  / /_  __________  __  _______   / ____/ /___  __  ______/ /
@@ -25,4 +25,8 @@ export default ((process.env.COLYSEUS_CLOUD)
 🌟 Give us a star on GitHub → https://github.com/colyseus/colyseus
 ☁️  Deploy and scale your project on Colyseus Cloud → https://cloud.colyseus.io
 
-`);
+`;
+
+export function greet() {
+  console.log(banner);
+}
