@@ -55,8 +55,23 @@ async function main() {
     outdir,
     format: "cjs",
     target: "es2017",
+    bundle: true,
     sourcemap: "external",
     platform: "node",
+    outExtension: { '.js': '.cjs' },
+    plugins: [{
+      name: 'add-cjs',
+      setup(build) {
+        build.onResolve({ filter: /.*/ }, (args) => {
+          if (args.importer) {
+            if (args.path.startsWith('.')) {
+              return { path: args.path.replace(/\.[jt]sx?$/, '.cjs'), external: true }
+            }
+            return { path: args.path, external: true }
+          }
+        })
+      },
+    }],
   });
 
   // ESM output
@@ -69,17 +84,20 @@ async function main() {
     bundle: true,
     sourcemap: "external",
     platform: "node",
-    outExtension: { '.js': '.mjs', },
+    outExtension: { '.js': '.mjs' },
     plugins: [{
-
       name: 'add-mjs',
       setup(build) {
         build.onResolve({ filter: /.*/ }, (args) => {
-          if (args.importer) return { path: args.path.replace(/^\.(.*)\.js$/, '.$1.mjs'), external: true }
+          if (args.importer) {
+            if (args.path.startsWith('.')) {
+              return { path: args.path.replace(/\.[jt]sx?$/, '.mjs'), external: true }
+            }
+            return { path: args.path, external: true }
+          }
         })
       },
     }, {
-
       //
       // WORKAROUND FOR __dirname usage in ESM
       // TODO: need to have a better appraoch for ESM + CJS builds...
@@ -96,7 +114,6 @@ async function main() {
           };
         });
       }
-
     }]
   });
 
