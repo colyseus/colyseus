@@ -1,18 +1,20 @@
 {
   "name": "@colyseus/playground",
-  "version": "0.17.1",
+  "version": "0.17.2",
   "main": "./build/index.js",
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
   "exports": {
     ".": {
+      "@source": "./src-backend/index.ts",
       "types": "./build/index.d.ts",
       "import": "./build/index.mjs",
       "require": "./build/index.js"
     },
     "./*": {
+      "@source": "./src-backend/*.ts",
       "types": "./build/*.d.ts",
-      "import": "./src-backend/*.ts",
+      "import": "./build/*.mjs",
       "require": "./build/*.js"
     }
   },

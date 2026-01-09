@@ -140,7 +140,7 @@ export class WebSocketTransport extends Transport {
 
     try {
       await connectClientToRoom(room, client, {
-        headers: new Headers(req.headers),
+        headers: new Headers(req.headers as Record<string, string>),
         token: parsedURL.searchParams.get("_authToken") ?? getBearerToken(req.headers.authorization),
         ip: req.headers['x-real-ip'] ?? req.headers['x-forwarded-for'] ?? req.socket.remoteAddress,
       }, {

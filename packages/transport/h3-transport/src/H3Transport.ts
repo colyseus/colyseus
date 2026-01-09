@@ -165,7 +165,7 @@ export class H3Transport extends Transport {
       const headers = Object.assign(
         {},
         matchMaker.controller.DEFAULT_CORS_HEADERS,
-        matchMaker.controller.getCorsHeaders.call(undefined, new Headers(req.headers))
+        matchMaker.controller.getCorsHeaders.call(undefined, new Headers(req.headers as Record<string, string>))
       );
       headers['Content-Type'] = 'application/json';
       res.writeHead(200, headers);
@@ -178,7 +178,7 @@ export class H3Transport extends Transport {
           clientOptions,
           {
             token: (req.query['_authToken'] as string) ?? getBearerToken(req.headers['authorization']),
-            headers: new Headers(req.headers),
+            headers: new Headers(req.headers as Record<string, string>),
             ip: req.headers['x-real-ip'] ?? req.ips
           },
         );

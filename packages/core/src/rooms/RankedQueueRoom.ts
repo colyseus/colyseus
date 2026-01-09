@@ -1,4 +1,4 @@
-import { Room, type Client, matchMaker, type IRoomCache, debugMatchMaking, ServerError, ErrorCode, isDevMode, } from "@colyseus/core";
+import { Room, type Client, matchMaker, type IRoomCache, debugMatchMaking, ServerError, ErrorCode } from "@colyseus/core";
 
 export interface RankedQueueOptions {
   /**

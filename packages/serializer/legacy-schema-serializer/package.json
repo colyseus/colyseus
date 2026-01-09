@@ -9,13 +9,15 @@
   "typings": "./build/index.d.ts",
   "exports": {
     ".": {
+      "@source": "./src/index.ts",
       "types": "./build/index.d.ts",
-      "import": "./src/index.ts",
+      "import": "./build/index.mjs",
       "require": "./build/index.js"
     },
     "./*": {
+      "@source": "./src/*.ts",
       "types": "./build/*.d.ts",
-      "import": "./src/*.ts",
+      "import": "./build/*.mjs",
       "require": "./build/*.js"
     }
   },

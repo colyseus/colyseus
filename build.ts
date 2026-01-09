@@ -66,12 +66,13 @@ async function main() {
         module: ts.ModuleKind.NodeNext,
         moduleResolution: ts.ModuleResolutionKind.NodeNext,
         target: ts.ScriptTarget.ESNext,
-        lib: ["lib.esnext.d.ts"],
+        lib: ["lib.esnext.d.ts", "lib.dom.d.ts"],
         outDir: outdir,
         downlevelIteration: true, // (redis-driver)
         esModuleInterop: true,
         experimentalDecorators: true,
         allowImportingTsExtensions: true,
+        customConditions: ["@source"],
       });
       const emitResult = program.emit();
 
