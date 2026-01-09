@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/loadtest",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "description": "Utility tool for load testing Colyseus.",
   "type": "module",
   "exports": {
@@ -24,6 +24,7 @@
   },
   "files": [
     "build",
+    "src",
     "bin.js",
     "bin.mjs",
     "tsconfig.json"

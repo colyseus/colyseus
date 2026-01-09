@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/testing",
-  "version": "0.17.0",
+  "version": "0.17.2",
   "type": "module",
   "description": "Testing tools for Colyseus",
   "input": "./src/index.ts",
@@ -27,8 +27,7 @@
   "license": "MIT",
   "files": [
     "build",
-    "LICENSE",
-    "README.md"
+    "src"
   ],
   "repository": {
     "type": "git",
@@ -48,9 +47,9 @@
     "@colyseus/sdk": "workspace:^"
   },
   "peerDependencies": {
-    "@colyseus/tools": "0.16.x",
-    "@colyseus/core": "0.16.x",
-    "@colyseus/sdk": "0.16.x"
+    "@colyseus/tools": "0.17.x",
+    "@colyseus/core": "0.17.x",
+    "@colyseus/sdk": "0.17.x"
   },
   "publishConfig": {
     "access": "public"

@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/tools",
-  "version": "0.17.0",
+  "version": "0.17.2",
   "type": "module",
   "description": "Simplify the development and production settings for your Colyseus project.",
   "input": "./src/index.ts",
@@ -42,11 +42,10 @@
     "url": "https://github.com/colyseus/colyseus/issues"
   },
   "files": [
-    "pm2",
-    "html",
     "build",
-    "LICENSE",
-    "README.md"
+    "src",
+    "pm2",
+    "html"
   ],
   "homepage": "https://colyseus.io",
   "dependencies": {
@@ -67,8 +66,8 @@
     "uwebsockets-express": "^1.1.10"
   },
   "peerDependencies": {
-    "@colyseus/core": "0.16.x",
-    "@colyseus/ws-transport": "0.16.x"
+    "@colyseus/core": "0.17.x",
+    "@colyseus/ws-transport": "0.17.x"
   },
   "publishConfig": {
     "access": "public"

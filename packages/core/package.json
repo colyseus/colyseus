@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/core",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "description": "Multiplayer Framework for Node.js.",
   "type": "module",
   "input": "./src/index.ts",
@@ -32,8 +32,7 @@
   ],
   "files": [
     "build",
-    "LICENSE",
-    "README.md"
+    "src"
   ],
   "repository": {
     "type": "git",

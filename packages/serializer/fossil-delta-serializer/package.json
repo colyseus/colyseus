@@ -28,8 +28,7 @@
   "license": "MIT",
   "files": [
     "build",
-    "LICENSE",
-    "README.md"
+    "src"
   ],
   "repository": {
     "type": "git",

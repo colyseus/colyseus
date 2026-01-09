@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/greeting-banner",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "type": "module",
   "description": "Greeting banner for Colyseus & Cloud",
   "input": "./src/index.ts",
@@ -31,7 +31,10 @@
   "bugs": {
     "url": "https://github.com/colyseus/colyseus/issues"
   },
-  "files": [ "build" ],
+  "files": [
+    "build",
+    "src"
+  ],
   "homepage": "https://colyseus.io",
   "dependencies": {},
   "publishConfig": {

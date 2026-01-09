@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/playground",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "main": "./build/index.js",
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
@@ -25,9 +25,7 @@
   },
   "files": [
     "build",
-    "README.md",
-    "LICENSE",
-    "screenshot.png"
+    "src-backend"
   ],
   "peerDependencies": {
     "@colyseus/auth": "workspace:^",

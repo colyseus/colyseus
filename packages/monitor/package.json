@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/monitor",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "description": "Web Monitoring Panel for Colyseus",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -24,6 +24,10 @@
     "preview": "vite preview",
     "prepublishOnly": "npm run build"
   },
+  "files": [
+    "build",
+    "src-backend"
+  ],
   "repository": {
     "type": "git",
     "url": "git://github.com/colyseus/colyseus.git"

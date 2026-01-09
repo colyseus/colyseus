@@ -1,6 +1,6 @@
 {
   "name": "colyseus",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "description": "Multiplayer Framework for Node.js",
   "type": "module",
   "input": "./src/index.ts",
@@ -28,7 +28,8 @@
     "websockets"
   ],
   "files": [
-    "build"
+    "build",
+    "src"
   ],
   "repository": {
     "type": "git",
@@ -57,12 +58,12 @@
     "ws": "^8.18.0"
   },
   "peerDependencies": {
-    "@colyseus/auth": "0.16.x",
-    "@colyseus/core": "0.16.x",
-    "@colyseus/redis-driver": "0.16.x",
-    "@colyseus/redis-presence": "0.16.x",
-    "@colyseus/ws-transport": "0.16.x",
-    "@colyseus/uwebsockets-transport": "0.16.x",
+    "@colyseus/auth": "0.17.x",
+    "@colyseus/core": "0.17.x",
+    "@colyseus/redis-driver": "0.17.x",
+    "@colyseus/redis-presence": "0.17.x",
+    "@colyseus/ws-transport": "0.17.x",
+    "@colyseus/uwebsockets-transport": "0.17.x",
     "@colyseus/schema": "^4.0.1"
   },
   "gitHead": "25ba61e283429bb4fa02db0454f804ea218259eb"

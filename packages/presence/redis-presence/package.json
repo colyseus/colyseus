@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/redis-presence",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "type": "module",
   "input": "./src/index.ts",
   "main": "./build/index.js",
@@ -26,8 +26,7 @@
   "license": "MIT",
   "files": [
     "build",
-    "LICENSE",
-    "README.md"
+    "src"
   ],
   "repository": {
     "type": "git",

@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/sdk",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "description": "Colyseus Multiplayer SDK for JavaScript/TypeScript",
   "author": "Endel Dreyer",
   "license": "MIT",
@@ -22,10 +22,9 @@
   "funding": "https://github.com/sponsors/endel",
   "files": [
     "dist",
+    "src",
     "build",
-    "lib",
-    "LICENSE",
-    "README.md"
+    "lib"
   ],
   "browser": "dist/colyseus.js",
   "main": "build/cjs/index.js",

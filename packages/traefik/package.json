@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/traefik",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "type": "module",
   "description": "Utility to expose Colyseus servers to Traefik as a load balancer",
   "input": "./src/index.ts",
@@ -34,7 +34,10 @@
   "bugs": {
     "url": "https://github.com/colyseus/colyseus/issues"
   },
-  "files": [ "build" ],
+  "files": [
+    "build",
+    "src"
+  ],
   "homepage": "https://colyseus.io",
   "dependencies": {
     "@colyseus/core": "workspace:^",

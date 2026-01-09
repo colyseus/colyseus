@@ -5,5 +5,5 @@ export class NoneSerializer<T = any> implements Serializer<T> {
     getState() { return null; }
     patch(patches) {}
     teardown() { }
-    handshake(bytes: number[]) {}
+    handshake(bytes: Uint8Array) {}
 }
