@@ -34,7 +34,7 @@ export default [
 
     {
         input: ['src/index.ts'],
-        output: [{ preserveModules: true, banner, dir: 'build/cjs', format: 'cjs', entryFileNames: '[name].js', sourcemap: true },],
+        output: [{ preserveModules: true, banner, dir: 'build/cjs', format: 'cjs', entryFileNames: '[name].cjs', sourcemap: true },],
         external,
         plugins: [
             replacePlugin,
