@@ -1,17 +1,17 @@
 {
   "name": "colyseus",
-  "version": "0.17.2",
+  "version": "0.17.3",
   "description": "Multiplayer Framework for Node.js",
   "type": "module",
   "input": "./src/index.ts",
-  "main": "./build/index.js",
+  "main": "./build/index.cjs",
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
   "exports": {
     ".": {
       "types": "./build/index.d.ts",
       "import": "./build/index.mjs",
-      "require": "./build/index.js"
+      "require": "./build/index.cjs"
     }
   },
   "scripts": {

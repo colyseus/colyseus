@@ -1,9 +1,9 @@
 {
   "name": "@colyseus/monitor",
-  "version": "0.17.3",
+  "version": "0.17.4",
   "description": "Web Monitoring Panel for Colyseus",
   "input": "./src/index.ts",
-  "main": "./build/index.js",
+  "main": "./build/index.cjs",
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
   "exports": {
@@ -11,13 +11,13 @@
       "@source": "./src-backend/index.ts",
       "types": "./build/index.d.ts",
       "import": "./build/index.mjs",
-      "require": "./build/index.js"
+      "require": "./build/index.cjs"
     },
     "./*": {
       "@source": "./src-backend/*.ts",
       "types": "./build/*.d.ts",
       "import": "./build/*.mjs",
-      "require": "./build/*.js"
+      "require": "./build/*.cjs"
     }
   },
   "scripts": {

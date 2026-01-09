@@ -1,10 +1,10 @@
 {
   "name": "@colyseus/testing",
-  "version": "0.17.4",
+  "version": "0.17.5",
   "type": "module",
   "description": "Testing tools for Colyseus",
   "input": "./src/index.ts",
-  "main": "./build/index.js",
+  "main": "./build/index.cjs",
   "module": "./src/index.ts",
   "typings": "./build/index.d.ts",
   "exports": {
@@ -12,13 +12,13 @@
       "@source": "./src/index.ts",
       "types": "./build/index.d.ts",
       "import": "./build/index.mjs",
-      "require": "./build/index.js"
+      "require": "./build/index.cjs"
     },
     "./*": {
       "@source": "./src/*.ts",
       "types": "./build/*.d.ts",
       "import": "./build/*.mjs",
-      "require": "./build/*.js"
+      "require": "./build/*.cjs"
     }
   },
   "scripts": {

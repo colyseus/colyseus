@@ -13,7 +13,7 @@ import {
 } from '@colyseus/core';
 
 import { sanitizeRoomData, generateCreateTableSQL, buildWhereClause, buildOrderBy } from './utils.ts';
-import type { ExtractMetadata } from '@colyseus/core/matchmaker/driver/api';
+import type { ExtractMetadata } from '@colyseus/core/matchmaker/driver';
 
 /**
  * Define default `roomcaches` table schema using Drizzle

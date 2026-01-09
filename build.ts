@@ -98,6 +98,15 @@ async function main() {
       format: "cjs",
       sourcemap: "external",
       platform: "node",
+      outExtension: { '.js': '.cjs', },
+      plugins: [{
+        name: 'add-cjs',
+        setup(build) {
+          build.onResolve({ filter: /.*/ }, (args) => {
+            if (args.importer) return { path: args.path.replace(/^\.(.*)\.[jt]s$/, '.$1.cjs'), external: true }
+          })
+        },
+      }],
     });
 
     // ESM output

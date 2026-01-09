@@ -1,9 +1,9 @@
 {
   "name": "@colyseus/redis-driver",
-  "version": "0.17.3",
+  "version": "0.17.4",
   "type": "module",
   "input": "./src/index.ts",
-  "main": "./build/index.js",
+  "main": "./build/index.cjs",
   "module": "./src/index.ts",
   "typings": "./build/index.d.ts",
   "exports": {
@@ -11,13 +11,13 @@
       "@source": "./src/index.ts",
       "types": "./build/index.d.ts",
       "import": "./build/index.mjs",
-      "require": "./build/index.js"
+      "require": "./build/index.cjs"
     },
     "./*": {
       "@source": "./src/*.ts",
       "types": "./build/*.d.ts",
       "import": "./build/*.mjs",
-      "require": "./build/*.js"
+      "require": "./build/*.cjs"
     }
   },
   "dependencies": {
