@@ -12,6 +12,7 @@ export { ServerError, CloseCode } from './errors/Errors.ts';
 import { SchemaSerializer, getStateCallbacks } from "./serializer/SchemaSerializer.ts";
 import { NoneSerializer } from "./serializer/NoneSerializer.ts";
 import { registerSerializer } from './serializer/Serializer.ts';
+export type { Callbacks } from "@colyseus/schema";
 
 export { registerSerializer, SchemaSerializer, getStateCallbacks };
 registerSerializer('schema', SchemaSerializer);

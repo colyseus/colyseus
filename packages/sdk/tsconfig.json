@@ -6,7 +6,7 @@
         "emitDeclarationOnly": true,
 
         "target": "es6",
-        "outDir": "lib",
+        "outDir": "build",
         "declaration": true,
         "downlevelIteration": true, /*only for tests*/
         "allowSyntheticDefaultImports": true,

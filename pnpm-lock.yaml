@@ -594,9 +594,6 @@ importers:
       '@colyseus/better-call':
         specifier: workspace:^
         version: link:../better-call
-      '@colyseus/httpie':
-        specifier: ^2.0.0
-        version: 2.0.1
       '@colyseus/msgpackr':
         specifier: ^1.11.2
         version: 1.11.2
@@ -1111,10 +1108,6 @@ packages:
 
   '@colyseus/clock@2.0.0':
     resolution: {integrity: sha512-7IdJxoZaqETT6OuqpfzDfA8bbfj5s4QPN8BXT0IlV3nXHfCM9yWrwwNT4oI6HEitjvEBIou4mbcUpHyJzCa0Vw==}
-
-  '@colyseus/httpie@2.0.1':
-    resolution: {integrity: sha512-JvABMZzPLiyrUsVj3ElXGORRDTu+NKzXHWd1uV1R1SThAKMm06cVW6bOyADARD65bs8JJoHNNbUkW8KoRvRDzA==}
-    engines: {node: '>=10'}
 
   '@colyseus/msgpackr@1.11.2':
     resolution: {integrity: sha512-MuwPFhizFKC3zmGfy0fpo+kcnZdNdnQHFVjw81v4WXHCelDeCX8yNRVtuEm8kGlHqq7qiASLC0pu0RPqYOhxXg==}
@@ -9198,8 +9191,6 @@ snapshots:
     optional: true
 
   '@colyseus/clock@2.0.0': {}
-
-  '@colyseus/httpie@2.0.1': {}
 
   '@colyseus/msgpackr@1.11.2':
     optionalDependencies:

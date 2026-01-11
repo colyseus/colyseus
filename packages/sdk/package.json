@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/sdk",
-  "version": "0.17.5",
+  "version": "0.17.6",
   "description": "Colyseus Multiplayer SDK for JavaScript/TypeScript",
   "author": "Endel Dreyer",
   "license": "MIT",
@@ -23,26 +23,25 @@
   "files": [
     "dist",
     "src",
-    "build",
-    "lib"
+    "build"
   ],
   "browser": "dist/colyseus.js",
-  "main": "build/cjs/index.cjs",
-  "module": "build/esm/index.mjs",
-  "typings": "lib/index.d.ts",
+  "main": "build/index.cjs",
+  "module": "build/index.mjs",
+  "typings": "build/index.d.ts",
   "exports": {
     ".": {
       "@source": "./src/index.ts",
-      "browser": "./build/cjs/index.cjs",
-      "import": "./build/esm/index.mjs",
-      "require": "./build/cjs/index.cjs",
-      "types": "./lib/index.d.ts"
+      "browser": "./build/index.mjs",
+      "import": "./build/index.mjs",
+      "require": "./build/index.cjs",
+      "types": "./build/index.d.ts"
     },
     "./*": {
       "@source": "./src/*.ts",
-      "types": "./lib/*.d.ts",
+      "types": "./build/*.d.ts",
       "import": "./build/esm/*.mjs",
-      "require": "./build/cjs/*.cjs"
+      "require": "./build/*.cjs"
     },
     "./package.json": "./package.json"
   },
@@ -66,7 +65,7 @@
     "node": ">= 12.x"
   },
   "dependencies": {
-    "@colyseus/httpie": "^2.0.0",
+    "@colyseus/better-call": "workspace:^",
     "@colyseus/msgpackr": "^1.11.2",
     "@colyseus/schema": "^4.0.1",
     "tslib": "^2.1.0",
@@ -99,7 +98,6 @@
     "vitest": "^2.1.1"
   },
   "peerDependencies": {
-    "@colyseus/better-call": "workspace:^",
     "@colyseus/core": "0.17.x"
   },
   "peerDependenciesMeta": {

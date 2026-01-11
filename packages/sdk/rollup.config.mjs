@@ -24,7 +24,7 @@ export default [
     // https://github.com/microsoft/TypeScript/issues/18442#issuecomment-749896695
     {
         input: ['src/index.ts'],
-        output: [{ preserveModules: true, banner, dir: 'build/esm', format: 'esm', entryFileNames: '[name].mjs', sourcemap: true },],
+        output: [{ preserveModules: true, banner, dir: 'build', format: 'esm', entryFileNames: '[name].mjs', sourcemap: true },],
         external,
         plugins: [
             replacePlugin,
@@ -34,7 +34,7 @@ export default [
 
     {
         input: ['src/index.ts'],
-        output: [{ preserveModules: true, banner, dir: 'build/cjs', format: 'cjs', entryFileNames: '[name].cjs', sourcemap: true },],
+        output: [{ preserveModules: true, banner, dir: 'build', format: 'cjs', entryFileNames: '[name].cjs', sourcemap: true },],
         external,
         plugins: [
             replacePlugin,
