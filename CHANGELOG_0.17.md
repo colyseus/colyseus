@@ -2,7 +2,7 @@
 [ ] `LobbyRoom` / `enableRealtimeListing()`: fix removing room from lobby listing when room is disposed.
 [ ] Room's protected members are now `private` for better DX. If you are using one of the undocumented protected methods, such as `resetAutoDisposeTimeout`, you can call it via `this['resetAutoDisposeTimeout']()`.
 [ ] The `.setSeatReservationTime()` method has been moved to `.seatReservationTimeout=` property.
-[ ] `Room<State>` is now `Room<Metadata>` (?? - Consider reverting this for fewer breaking changes on 0.17)
+[ ] The `Room` type has changed from `Room<State, Metadata>` to `Room<{ state?: MyState, metadata?: Metadata, client?: CustomClient }>`.
 [ ] Room's presence pub/sub now can unsubscribe themselves during `onDispose()`
 [ ] `.allowReconnection()` breaking changes. (https://github.com/colyseus/colyseus/issues/893)
   [ ] `onLeave(client, code)` - the onLeave now receives close `code` as number instead of `consented` boolean flag.
