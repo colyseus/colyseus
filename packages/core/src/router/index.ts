@@ -6,9 +6,17 @@ export {
   createEndpoint,
   createMiddleware,
   createInternalContext,
+
+  // Re-export types needed for declaration emit
+  type Router,
+  type RouterConfig,
+  type Endpoint,
+  type EndpointOptions,
+  type EndpointContext,
+  type StrictEndpoint,
 } from "@colyseus/better-call";
 
-export { type Router, toNodeHandler };
+export { toNodeHandler };
 
 export function bindRouterToServer(server: Server, router: Router) {
   // check if the server is bound to an express app

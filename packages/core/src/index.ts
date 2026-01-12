@@ -75,6 +75,11 @@ export {
   toNodeHandler,
   __globalEndpoints,
   type Router,
+  type RouterConfig,
+  type Endpoint,
+  type EndpointOptions,
+  type EndpointContext,
+  type StrictEndpoint,
 } from './router/index.ts';
 
 // Abstract logging support
