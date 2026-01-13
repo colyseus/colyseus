@@ -1,4 +1,10 @@
-import { Room, type Client, matchMaker, type IRoomCache, debugMatchMaking, ServerError, ErrorCode } from "@colyseus/core";
+import { Room } from '../Room.ts';
+import type { Client } from '../Transport.ts';
+import type { IRoomCache } from '../matchmaker/driver.ts';
+import * as matchMaker from '../MatchMaker.ts';
+import { debugMatchMaking } from '../Debug.ts';
+import { ServerError } from '../errors/ServerError.ts';
+import { ErrorCode } from '../Protocol.ts';
 
 export interface RankedQueueOptions {
   /**
