@@ -1,5 +1,10 @@
 import type { Router, HasRequiredKeys, Prettify, UnionToIntersection, Endpoint, HTTPMethod } from "@colyseus/better-call";
 import { ColyseusSDK } from "./Client.ts";
+import { ServerError } from "./errors/Errors.ts";
+
+/**
+ * TODO: we should clean up the types repetition in this file.
+ */
 
 // Helper to check if a type is 'any'
 type IsAny<T> = 0 extends 1 & T ? true : false;
@@ -514,7 +519,19 @@ export class HTTP<R extends Router | Router["endpoints"]> {
 
         const url = getURLWithQueryParams(this.sdk['getHttpEndpoint'](path.toString()), mergedOptions);
 
-        const response = await fetch(url, mergedOptions);
+        let response: Response;
+        try {
+            response = await fetch(url, mergedOptions);
+        } catch (err: any) {
+            // If it's an AbortError, re-throw as-is
+            if (err.name === 'AbortError') {
+                throw err;
+            }
+            // Re-throw with network error code at top level (e.g. ECONNREFUSED)
+            const networkError: ServerError = new ServerError(err.cause?.code || err.code, err.message);
+            networkError.cause = err.cause;
+            throw networkError;
+        }
         const contentType = response.headers.get("content-type");
 
         let data: any;

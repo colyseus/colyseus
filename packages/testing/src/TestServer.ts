@@ -1,22 +1,6 @@
 import { Server, Room, matchMaker, type SDKTypes } from "@colyseus/core";
-import { ColyseusSDK, type Room as SDKRoom } from "@colyseus/sdk";
+import { ColyseusSDK, type Room as SDKRoom, type InferRoomConstructor } from "@colyseus/sdk";
 import * as httpie from "httpie";
-
-/**
- * Infer the room constructor from ServerType based on the instance type.
- * This allows proper type inference for SDK Room methods like `send()` and `onMessage()`.
- */
-type InferRoomConstructor<ServerType extends SDKTypes, Instance> =
-  // First, try to find a matching room constructor in ServerType['~rooms']
-  ServerType extends SDKTypes<infer Rooms>
-    ? {
-        [K in keyof Rooms]: Instance extends InstanceType<Rooms[K]['~room']>
-          ? Rooms[K]['~room']
-          : never
-      }[keyof Rooms]
-    : // Fallback: create a synthetic constructor type from the instance
-      (typeof Room) & { prototype: Instance };
-
 
 export class ColyseusTestServer<ServerType extends SDKTypes = any> {
   public server: Server;

@@ -5,6 +5,8 @@ import { Client } from "../src/Client.ts";
 import { Schema, type } from '@colyseus/schema';
 import { discordURLBuilder } from '../src/3rd_party/discord.ts';
 
+import { defineServer, defineRoom, Room as ServerRoom } from "@colyseus/core";
+
 describe("Client", function () {
     let client: Client;
 
@@ -129,6 +131,73 @@ describe("Client", function () {
         const room = await client.joinOrCreate("chat", {}, State);
         room.state.str
 
+    });
+
+    describe("typescript inference using server type", () => {
+        // define server types
+        class MyState extends Schema {
+            @type("string") str: string;
+        }
+        class MyRoom extends ServerRoom {
+            state = new MyState();
+        }
+
+        // These tests verify TypeScript type inference at compile-time.
+        // They are skipped at runtime since they require a running server.
+
+        describe("passing RoomType directly as generic", () => {
+            let client: Client;
+
+            beforeAll(() => {
+                client = new Client("ws://localhost:2546");
+            });
+
+            test.skip("joinOrCreate<RoomType> should infer state type", async () => {
+                const room = await client.joinOrCreate<MyRoom>("chat");
+                // TypeScript should infer room.state as MyState
+                const str: string = room.state.str;
+                assert.ok(str);
+            });
+
+            test.skip("create<RoomType> should infer state type", async () => {
+                const room = await client.create<MyRoom>("chat");
+                // TypeScript should infer room.state as MyState
+                const str: string = room.state.str;
+                assert.ok(str);
+            });
+
+            test.skip("join<RoomType> should infer state type", async () => {
+                const room = await client.join<MyRoom>("chat");
+                // TypeScript should infer room.state as MyState
+                const str: string = room.state.str;
+                assert.ok(str);
+            });
+
+            test.skip("joinById<RoomType> should infer state type", async () => {
+                const room = await client.joinById<MyRoom>("roomId");
+                // TypeScript should infer room.state as MyState
+                const str: string = room.state.str;
+                assert.ok(str);
+            });
+
+            test.skip("reconnect<RoomType> should infer state type", async () => {
+                const room = await client.reconnect<MyRoom>("roomId:token");
+                // TypeScript should infer room.state as MyState
+                const str: string = room.state.str;
+                assert.ok(str);
+            });
+        });
+
+        describe("inferring room type from server definition", () => {
+            let client: Client;
+
+            test.skip("should infer room type from server type", async () => {
+                const room = await client.joinOrCreate("chat");
+                // TypeScript should infer room.state as MyState
+                const str: string = room.state.str;
+                assert.ok(str);
+            });
+        });
     });
 
 });

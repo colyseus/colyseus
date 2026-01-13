@@ -46,6 +46,7 @@ describe("HTTP", function() {
             try {
                 await client.http.post("/anything");
             } catch (e) {
+                console.log(e);
                 assert.strictEqual(e.code, 'ECONNREFUSED')
             }
         });
