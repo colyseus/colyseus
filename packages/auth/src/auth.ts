@@ -140,8 +140,8 @@ export const auth = {
     if (process.env.NODE_ENV !== 'production') {
       // do not warn in production
       console.warn(`
-        @colyseus/auth API's are in beta and may change in the future.
-        Please give feedback and report any issues you may find at https://github.com/colyseus/colyseus/issues/660
+  @colyseus/auth API's are in beta and may change in the future.
+  Please give feedback and report any issues you may find at https://github.com/colyseus/colyseus/issues/660
       `);
     }
 

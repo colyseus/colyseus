@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/testing",
-  "version": "0.17.7",
+  "version": "0.17.8",
   "type": "module",
   "description": "Testing tools for Colyseus",
   "input": "./src/index.ts",

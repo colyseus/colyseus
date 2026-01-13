@@ -56,11 +56,16 @@ export class ColyseusTestServer<ServerType extends SDKTypes = any> {
     roomName: R,
     clientOptions?: Parameters<ServerType['~rooms'][R]['~room']['prototype']['onJoin']>[1]
   ): Promise<InstanceType<ServerType['~rooms'][R]['~room']>>;
-  // Overload: Pass State type directly
-  async createRoom<State = any>(
+  // Overload: Pass Room type directly
+  async createRoom<R extends Room>(
     roomName: string,
     clientOptions?: any
-  ): Promise<Room<State>>;
+  ): Promise<R>;
+  // Overload: Pass State and Metadata type directly
+  async createRoom<State extends object = any, Metadata = any>( // TODO: deprecate on v1.0
+    roomName: string,
+    clientOptions?: any
+  ): Promise<Room<{ state: State, metadata: Metadata }>>;
   // Implementation
   async createRoom(roomName: string, clientOptions: any = {}) {
     const room = await matchMaker.createRoom(roomName, clientOptions);
@@ -74,10 +79,10 @@ export class ColyseusTestServer<ServerType extends SDKTypes = any> {
     return this.sdk.joinById<InferRoomConstructor<ServerType, RoomInstance>>(room.roomId, clientOptions);
   }
 
-  // Overload: Pass typeof Room to get instance type
-  getRoomById<T extends typeof Room>(roomId: string): InstanceType<T>;
-  // Overload: Pass State type directly
-  getRoomById<State extends object = any>(roomId: string): Room<{ state: State }>;
+  // Overload: Pass Room type directly
+  getRoomById<T extends Room>(roomId: string): T;
+  // Overload: Pass State and Metadata type directly
+  getRoomById<State extends object = any, Metadata = any>(roomId: string): Room<{ state: State, metadata: Metadata }>;
   // Implementation
   getRoomById(roomId: string) {
     return matchMaker.getLocalRoomById(roomId);

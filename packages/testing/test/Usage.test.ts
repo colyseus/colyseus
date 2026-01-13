@@ -6,10 +6,10 @@ import { before } from "mocha";
 import { boot, ColyseusTestServer } from "../src/index.ts";
 
 import appConfig from "./app1/app.config.ts";
-import { State } from "./app1/RoomWithState.ts";
-import { SimulationState } from "./app1/RoomWithSimulation.ts";
+import { State, RoomWithState } from "./app1/RoomWithState.ts";
 import { JWT } from "@colyseus/auth";
-import type { RoomWithoutState } from "./app1/RoomWithoutState.ts";
+import { MapSchema } from "@colyseus/schema";
+import { RoomWithoutState } from "./app1/RoomWithoutState.ts";
 
 describe("@colyseus/testing", () => {
   JWT.settings.secret = "secret";
@@ -69,7 +69,9 @@ describe("@colyseus/testing", () => {
 
   it("room.waitForNextMessage()", async () => {
     const sdkRoom = await colyseus.sdk.joinOrCreate("room_without_state");
-    const room = colyseus.getRoomById<typeof RoomWithoutState>(sdkRoom.roomId);
+    const room = colyseus.getRoomById<RoomWithoutState>(sdkRoom.roomId);
+
+    assert.ok(room instanceof RoomWithoutState);
 
     let received: boolean = false;
 
@@ -178,5 +180,80 @@ describe("@colyseus/testing", () => {
       assert.deepStrictEqual('one-pong', type);
       assert.deepStrictEqual(['one', 'data'], payload);
     });
+  });
+
+  describe("method overloads", () => {
+
+    describe("createRoom()", () => {
+      it("inferred generic", async () => {
+        // Type is automatically inferred from room name
+        const room = await colyseus.createRoom("room_with_state", {});
+
+        assert.ok(room.roomId);
+        assert.ok(room.state);
+        assert.ok(room.state.players instanceof MapSchema);
+        assert.strictEqual(typeof room.state.players.size, "number");
+
+        await room.disconnect();
+      });
+
+      it("explicit 'typeof Room'", async () => {
+        const room = await colyseus.createRoom<RoomWithState>("room_with_state", {});
+
+        assert.ok(room.roomId);
+        assert.ok(room.state);
+        assert.ok(room.state.players instanceof MapSchema);
+
+        await room.disconnect();
+      });
+
+      it("explicit 'State' generic", async () => {
+        const room = await colyseus.createRoom<State>("room_with_state", {});
+
+        assert.ok(room.roomId);
+        assert.ok(room.state);
+        assert.ok(room.state.players instanceof MapSchema);
+
+        await room.disconnect();
+      });
+    });
+
+    describe("getRoomById()", () => {
+      it("inferred generic (any)", async () => {
+        const sdkRoom = await colyseus.sdk.joinOrCreate("room_with_state", {});
+
+        // No type parameter - defaults to any
+        const room = colyseus.getRoomById(sdkRoom.roomId);
+
+        assert.strictEqual(room.roomId, sdkRoom.roomId);
+
+        await sdkRoom.leave();
+      });
+
+      it("explicit 'typeof Room'", async () => {
+        const sdkRoom = await colyseus.sdk.joinOrCreate("room_with_state", {});
+
+        const room = colyseus.getRoomById<RoomWithState>(sdkRoom.roomId);
+
+        assert.strictEqual(room.roomId, sdkRoom.roomId);
+        assert.ok(room.state);
+        assert.ok(room.state.players instanceof MapSchema);
+
+        await sdkRoom.leave();
+      });
+
+      it("explicit 'State' generic", async () => {
+        const sdkRoom = await colyseus.sdk.joinOrCreate("room_with_state", {});
+
+        const room = colyseus.getRoomById<State>(sdkRoom.roomId);
+
+        assert.strictEqual(room.roomId, sdkRoom.roomId);
+        assert.ok(room.state);
+        assert.ok(room.state.players instanceof MapSchema);
+
+        await sdkRoom.leave();
+      });
+    });
+
   });
 });
