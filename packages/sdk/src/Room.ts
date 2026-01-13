@@ -430,7 +430,7 @@ export class Room<
             this.onMessageHandlers.emit('*', type, message);
 
         } else if (!messageType.startsWith("__")) { // ignore internal messages
-            console.warn?.(`colyseus.js: onMessage() not registered for type '${type}'.`);
+            console.warn?.(`@colyseus/sdk: onMessage() not registered for type '${type}'.`);
         }
     }
 

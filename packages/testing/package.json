@@ -22,7 +22,7 @@
     }
   },
   "scripts": {
-    "test": "TS_NODE_PROJECT=../../tsconfig/tsconfig.test.json mocha --require tsx test/**Test.ts test/**/**Test.ts --exit --timeout 15000",
+    "test": "TS_NODE_PROJECT=../../tsconfig/tsconfig.test.json mocha --require tsx test/**.test.ts test/**/**.test.ts --exit --timeout 15000",
     "tslint": "tslint --project . --config ../../tslint.json"
   },
   "author": "Endel Dreyer",
@@ -43,10 +43,12 @@
     "httpie": "^2.0.0-next.13"
   },
   "devDependencies": {
+    "@colyseus/auth": "workspace:^",
     "@colyseus/core": "workspace:^",
     "@colyseus/sdk": "workspace:^",
     "@colyseus/tools": "workspace:^",
-    "@colyseus/ws-transport": "workspace:^"
+    "@colyseus/ws-transport": "workspace:^",
+    "@colyseus/schema": "^4.0.1"
   },
   "peerDependencies": {
     "@colyseus/core": "0.17.x",

@@ -1,15 +1,22 @@
 import config from "@colyseus/tools";
+import { defineRoom } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 
-import { MongooseDriver } from "@colyseus/mongoose-driver";
-import { RedisPresence } from "@colyseus/redis-presence";
+// import { MongooseDriver } from "@colyseus/mongoose-driver";
+// import { RedisPresence } from "@colyseus/redis-presence";
 
-import { RoomWithoutState } from "./RoomWithoutState";
-import { RoomWithState } from "./RoomWithState";
-import { RoomWithSimulation } from "./RoomWithSimulation";
-import {auth, Hash} from "../../../auth";
+import { RoomWithoutState } from "./RoomWithoutState.ts";
+import { RoomWithState } from "./RoomWithState.ts";
+import { RoomWithSimulation } from "./RoomWithSimulation.ts";
+import { auth, Hash } from "@colyseus/auth";
 
 export default config({
+  rooms: {
+    room_without_state: defineRoom(RoomWithoutState),
+    room_with_state: defineRoom(RoomWithState),
+    room_with_simulation: defineRoom(RoomWithSimulation),
+  },
+
   options: { greet: false, },
 
   // options: {
@@ -20,9 +27,7 @@ export default config({
   initializeTransport: (options) => new WebSocketTransport(options),
 
   initializeGameServer: (gameServer) => {
-    gameServer.define("room_without_state", RoomWithoutState);
-    gameServer.define("room_with_state", RoomWithState);
-    gameServer.define("room_with_simulation", RoomWithSimulation);
+    // ...
   },
 
   initializeExpress: (app) => {

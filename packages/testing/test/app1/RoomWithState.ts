@@ -1,4 +1,4 @@
-import { Client, Room } from "@colyseus/core";
+import { type Client, Room } from "@colyseus/core";
 import { MapSchema, Schema, type } from "@colyseus/schema";
 
 export class Player extends Schema {
@@ -10,18 +10,21 @@ export class State extends Schema {
   @type({ map: Player }) players = new MapSchema<Player>();
 }
 
-export class RoomWithState extends Room<State> {
+export class RoomWithState extends Room {
+  state = new State();
 
-  onCreate(options) {
-    this.setState(new State());
-
-    this.onMessage("mutate", (client, message) => {
+  messages = {
+    mutate: (client: Client, message) => {
       const player = this.state.players.get(client.sessionId);
       player.score++;
-    });
+    },
+    chat: (client: Client, message) => {
+      this.broadcast("chat", [client.sessionId, message])
+    },
+  }
 
-    this.onMessage("chat", (client, message) =>
-      this.broadcast("chat", [client.sessionId, message]));
+  onCreate(options) {
+    // ...
   }
 
   onJoin(client: Client, message: any) {

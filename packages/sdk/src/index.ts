@@ -3,7 +3,7 @@ import './legacy';
 export { ColyseusSDK, Client, MatchMakeError, type JoinOptions, type EndpointSettings, type ClientOptions, type ISeatReservation as SeatReservation } from './Client.ts';
 export { Protocol, ErrorCode } from './Protocol.ts';
 export { Room, type RoomAvailable } from './Room.ts';
-export { Auth, type AuthSettings, type PopupSettings } from "./Auth.ts";
+export { Auth, type AuthSettings, type PopupSettings, type AuthResponse, type UserDataResponse, type ForgotPasswordResponse, type AuthData } from "./Auth.ts";
 export { ServerError, CloseCode } from './errors/Errors.ts';
 
 /*

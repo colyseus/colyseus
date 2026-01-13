@@ -18,7 +18,7 @@ export class WebSocketTransport implements ITransport {
     }
 
     public sendUnreliable(data: Uint8Array): void {
-        console.warn("colyseus.js: The WebSocket transport does not support unreliable messages");
+        console.warn("@colyseus/sdk: The WebSocket transport does not support unreliable messages");
     }
 
     /**

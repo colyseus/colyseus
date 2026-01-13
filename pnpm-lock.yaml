@@ -710,9 +710,15 @@ importers:
         specifier: ^2.0.0-next.13
         version: 2.0.0-next.13
     devDependencies:
+      '@colyseus/auth':
+        specifier: workspace:^
+        version: link:../auth
       '@colyseus/core':
         specifier: workspace:^
         version: link:../core
+      '@colyseus/schema':
+        specifier: ^4.0.1
+        version: 4.0.1
       '@colyseus/sdk':
         specifier: workspace:^
         version: link:../sdk

@@ -1,18 +1,26 @@
-import { Server, Room, matchMaker } from "@colyseus/core";
-import { Client } from "@colyseus/sdk";
+import { Server, Room, matchMaker, type SDKTypes } from "@colyseus/core";
+import { ColyseusSDK, type Room as SDKRoom } from "@colyseus/sdk";
 import * as httpie from "httpie";
 
-export class ColyseusTestServer {
+/**
+ * Infer the room constructor from ServerType based on the instance type.
+ * This allows proper type inference for SDK Room methods like `send()` and `onMessage()`.
+ */
+type InferRoomConstructor<ServerType extends SDKTypes, Instance> =
+  // First, try to find a matching room constructor in ServerType['~rooms']
+  ServerType extends SDKTypes<infer Rooms>
+    ? {
+        [K in keyof Rooms]: Instance extends InstanceType<Rooms[K]['~room']>
+          ? Rooms[K]['~room']
+          : never
+      }[keyof Rooms]
+    : // Fallback: create a synthetic constructor type from the instance
+      (typeof Room) & { prototype: Instance };
+
+
+export class ColyseusTestServer<ServerType extends SDKTypes = any> {
   public server: Server;
-  public sdk: {
-    joinOrCreate: Client['joinOrCreate'],
-    join: Client['join'],
-    create: Client['create'],
-    joinById: Client['joinById'],
-    reconnect: Client['reconnect'],
-    auth: Client['auth'],
-    http: Client['http']
-  };
+  public sdk: ColyseusSDK<ServerType>;
 
   //
   // TODO: deprecate this on Colyseus 1.0.
@@ -31,7 +39,7 @@ export class ColyseusTestServer {
 
     const hostname = "127.0.0.1";
     const port = server['port'];
-    const client = new Client(`ws://${hostname}:${port}`);
+    this.sdk = new ColyseusSDK<ServerType>(`ws://${hostname}:${port}`);
 
     const httpEndpoint = `http://${hostname}:${port}`;
     this.http = {
@@ -41,29 +49,38 @@ export class ColyseusTestServer {
       ['delete']: (segments, opts) => httpie.del(`${httpEndpoint}${segments}`, opts),
       ['put']: (segments, opts) => httpie.put(`${httpEndpoint}${segments}`, opts),
     };
-
-    this.sdk = {
-      joinOrCreate: client.joinOrCreate.bind(client),
-      join: client.join.bind(client),
-      create: client.create.bind(client),
-      joinById: client.joinById.bind(client),
-      reconnect: client.reconnect.bind(client),
-      auth: client.auth,
-      http: client.http,
-    };
   }
 
-  async createRoom<State extends object = any>(roomName: string, clientOptions: any = {}) {
+  // Overload: Use room name from ServerType to infer room type
+  async createRoom<R extends keyof ServerType['~rooms']>(
+    roomName: R,
+    clientOptions?: Parameters<ServerType['~rooms'][R]['~room']['prototype']['onJoin']>[1]
+  ): Promise<InstanceType<ServerType['~rooms'][R]['~room']>>;
+  // Overload: Pass State type directly
+  async createRoom<State = any>(
+    roomName: string,
+    clientOptions?: any
+  ): Promise<Room<State>>;
+  // Implementation
+  async createRoom(roomName: string, clientOptions: any = {}) {
     const room = await matchMaker.createRoom(roomName, clientOptions);
-    return this.getRoomById<State>(room.roomId);
+    return this.getRoomById(room.roomId);
   }
 
-  connectTo<T extends object=any>(room: Room<T>, clientOptions: any = {}) {
-    return this.sdk.joinById<T>(room.roomId, clientOptions);
+  connectTo<RoomInstance extends Room>(
+    room: RoomInstance,
+    clientOptions: any = {},
+  ): Promise<SDKRoom<InferRoomConstructor<ServerType, RoomInstance>>> {
+    return this.sdk.joinById<InferRoomConstructor<ServerType, RoomInstance>>(room.roomId, clientOptions);
   }
 
-  getRoomById<State extends object= any>(roomId: string) {
-    return matchMaker.getLocalRoomById(roomId) as Room<State>;
+  // Overload: Pass typeof Room to get instance type
+  getRoomById<T extends typeof Room>(roomId: string): InstanceType<T>;
+  // Overload: Pass State type directly
+  getRoomById<State extends object = any>(roomId: string): Room<{ state: State }>;
+  // Implementation
+  getRoomById(roomId: string) {
+    return matchMaker.getLocalRoomById(roomId);
   }
 
   async cleanup() {

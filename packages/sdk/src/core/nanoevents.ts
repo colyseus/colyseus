@@ -21,15 +21,23 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-export const createNanoEvents = () => ({
-    emit(event: string, ...args: any[]) {
+export type EventsMap = Record<string, (...args: any[]) => void>;
+
+export interface Emitter<Events extends EventsMap> {
+    events: { [K in keyof Events]?: Array<Events[K]> };
+    emit<K extends keyof Events>(event: K, ...args: Parameters<Events[K]>): void;
+    on<K extends keyof Events>(event: K, cb: Events[K]): () => void;
+}
+
+export const createNanoEvents = <Events extends EventsMap = EventsMap>(): Emitter<Events> => ({
+    emit(event, ...args) {
         let callbacks = this.events[event] || []
         for (let i = 0, length = callbacks.length; i < length; i++) {
             callbacks[i](...args)
         }
     },
     events: {},
-    on(event: string, cb: (...args: any[]) => void) {
+    on(event, cb) {
         this.events[event]?.push(cb) || (this.events[event] = [cb])
         return () => {
             this.events[event] = this.events[event]?.filter(i => cb !== i)

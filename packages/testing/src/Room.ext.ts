@@ -39,27 +39,30 @@ Room.prototype.waitForNextMessage = async function(this: Room, additionalDelay: 
 }
 
 Room.prototype.waitForMessage = async function(this: Room, type: string, rejectTimeout: number = 3000) {
-  const originalMessageHandler = this['onMessageHandlers'][type] || { callback: () => { } };
+  const originalHandlers = this['onMessageEvents'].events[type] || [];
   const room = this;
 
   return new Promise<[Client, any]>((resolve, reject) => {
     const rejectionTimeout = setTimeout(() => reject(new Error(`message '${type}' was not called. timed out (${rejectTimeout}ms)`)), rejectTimeout);
 
-    room['onMessageHandlers'][type] = {
-      callback: async function (client, message) {
+    // Replace handlers with our interceptor
+    room['onMessageEvents'].events[type] = [
+      async function (client: Client, message: any) {
         // clear rejection timeout
         clearTimeout(rejectionTimeout);
 
-        // call original handler
-        await originalMessageHandler.callback.apply(room, arguments);
+        // call original handlers
+        for (const handler of originalHandlers) {
+          await handler.call(room, client, message);
+        }
 
-        // revert to original message handler
-        room['onMessageHandlers'][type] = originalMessageHandler;
+        // revert to original handlers
+        room['onMessageEvents'].events[type] = originalHandlers;
 
         // resolves waitForMessage promise.
         resolve([client, message]);
       }
-    }
+    ];
   });
 }
 
@@ -126,7 +129,7 @@ ClientRoom.prototype.waitForMessage = async function(this: Room, type: string, r
 
 const _originalClientOnMessage = ClientRoom.prototype['dispatchMessage'];
 ClientRoom.prototype['dispatchMessage'] = function(this: ClientRoom) {
-  _originalClientOnMessage.apply(this, arguments);
+  _originalClientOnMessage.apply(this, arguments as any);
   if (this._waitingForMessage) {
     setTimeout(() => {
       this._waitingForMessage[1].resolve([arguments[0], arguments[1]]);

@@ -483,6 +483,11 @@ export class HTTP<R extends Router | Router["endpoints"]> {
                 : requestOptions?.headers
         );
 
+        // Add Authorization header if authToken is set
+        if (this.authToken && !headers.has("authorization")) {
+            headers.set("authorization", `Bearer ${this.authToken}`);
+        }
+
         // Stringify JSON-serializable objects for fetch() body
         if (isJSONSerializable(body) && typeof body === 'object' && body !== null) {
             if (!headers.has("content-type")) {

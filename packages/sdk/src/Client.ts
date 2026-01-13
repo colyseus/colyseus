@@ -50,7 +50,7 @@ export interface LatencyOptions {
     pingCount?: number;
 }
 
-export class ColyseusSDK<ServerType extends SDKTypes = any> {
+export class ColyseusSDK<ServerType extends SDKTypes = any, UserData = any> {
     static VERSION = "0.17";
 
     /**
@@ -61,7 +61,7 @@ export class ColyseusSDK<ServerType extends SDKTypes = any> {
     /**
      * The authentication module to authenticate into requests and rooms.
      */
-    public auth: Auth;
+    public auth: Auth<UserData>;
 
     /**
      * The settings used to connect to the server.
@@ -144,12 +144,12 @@ export class ColyseusSDK<ServerType extends SDKTypes = any> {
      * @param latencyOptions Latency measurement options (protocol, pingCount).
      * @returns The client with the lowest latency.
      */
-    static async selectByLatency<ServerType extends SDKTypes = any>(
+    static async selectByLatency<ServerType extends SDKTypes = any, UserData = any>(
         endpoints: Array<string | EndpointSettings>,
         options?: ClientOptions,
         latencyOptions: LatencyOptions = {}
     ) {
-        const clients = endpoints.map(endpoint => new ColyseusSDK<ServerType>(endpoint, options));
+        const clients = endpoints.map(endpoint => new ColyseusSDK<ServerType, UserData>(endpoint, options));
 
         const latencies = (await Promise.allSettled(clients.map((client, index) => client.getLatency(latencyOptions).then(latency => {
             const settings = clients[index].settings;

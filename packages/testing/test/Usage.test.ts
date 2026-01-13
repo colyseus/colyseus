@@ -3,17 +3,18 @@ import sinon from "sinon";
 import { matchMaker } from "@colyseus/core";
 
 import { before } from "mocha";
-import { boot, ColyseusTestServer } from "../src";
+import { boot, ColyseusTestServer } from "../src/index.ts";
 
-import appConfig from "./app1/app.config";
-import { State } from "./app1/RoomWithState";
-import { SimulationState } from "./app1/RoomWithSimulation";
-import { JWT } from "../../auth";
+import appConfig from "./app1/app.config.ts";
+import { State } from "./app1/RoomWithState.ts";
+import { SimulationState } from "./app1/RoomWithSimulation.ts";
+import { JWT } from "@colyseus/auth";
+import type { RoomWithoutState } from "./app1/RoomWithoutState.ts";
 
 describe("@colyseus/testing", () => {
   JWT.settings.secret = "secret";
 
-  let colyseus: ColyseusTestServer;
+  let colyseus: ColyseusTestServer<typeof appConfig>;
 
   before(async () => colyseus = await boot(appConfig));
   after(async () => colyseus.shutdown());
@@ -30,42 +31,48 @@ describe("@colyseus/testing", () => {
   });
 
   it("basic usage", async () => {
-    const client = await colyseus.sdk.joinOrCreate("room_with_state", {});
-    const room = colyseus.getRoomById(client.roomId);
+    const sdkRoom = await colyseus.sdk.joinOrCreate("room_with_state", {});
+    const room = colyseus.getRoomById(sdkRoom.roomId);
 
-    assert.strictEqual(client.roomId, room.roomId);
+    assert.strictEqual(sdkRoom.roomId, room.roomId);
   });
 
   it("colyseus.createRoom() + connectTo()", async () => {
-    const room = await colyseus.createRoom<State>("room_with_state", {});
+    const room = await colyseus.createRoom("room_with_state", {});
 
     const onJoinSpy = sinon.spy(room, 'onJoin');
     const onLeaveSpy = sinon.spy(room, 'onLeave');
 
-    const client = await colyseus.connectTo(room);
+    const sdkRoom = await colyseus.connectTo(room);
     sinon.assert.callCount(onJoinSpy, 1);
     sinon.assert.callCount(onLeaveSpy, 0);
+
+    sdkRoom.send("chat", "hey");
+
+    sdkRoom.onMessage("chat", ([sessionId, message]) =>
+      console.log(sessionId, message));
 
     // wait for next state
     await room.waitForNextPatch();
     assert.deepStrictEqual({
       players: {
-        [client.sessionId]: {
+        [sdkRoom.sessionId]: {
           playerNum: 1,
           score: 0
         }
       }
-    }, client.state.toJSON());
+    }, sdkRoom.state.toJSON());
 
-    await client.leave();
+    await sdkRoom.leave();
     sinon.assert.callCount(onLeaveSpy, 1);
   });
 
   it("room.waitForNextMessage()", async () => {
-    const client = await colyseus.sdk.joinOrCreate("room_without_state");
-    const room = colyseus.getRoomById(client.roomId);
+    const sdkRoom = await colyseus.sdk.joinOrCreate("room_without_state");
+    const room = colyseus.getRoomById<typeof RoomWithoutState>(sdkRoom.roomId);
 
     let received: boolean = false;
+
     // client.onMessage("one-pong", (message) => {
     //   assert.deepStrictEqual(message, ["one", "data"]);
     //   received = true;
@@ -75,15 +82,15 @@ describe("@colyseus/testing", () => {
       received = true;
     })
 
-    client.send("one-ping", "data");
+    sdkRoom.send("one-ping", "data");
     await room.waitForNextMessage();
 
     assert.ok(received);
   });
 
   it("room.waitForNextPatch()", async () => {
-    const client1 = await colyseus.sdk.joinOrCreate<State>("room_with_state");
-    const client2 = await colyseus.sdk.joinOrCreate<State>("room_with_state");
+    const client1 = await colyseus.sdk.joinOrCreate("room_with_state");
+    const client2 = await colyseus.sdk.joinOrCreate("room_with_state");
 
     const room = colyseus.getRoomById<State>(client1.roomId);
     assert.strictEqual(0, room.state.players.get(client1.sessionId).score);
@@ -95,8 +102,8 @@ describe("@colyseus/testing", () => {
   });
 
   it("waitForNextSimulationTick()", async () => {
-    const room = await colyseus.createRoom<SimulationState>("room_with_simulation");
-    const client = await colyseus.connectTo(room);
+    const room = await colyseus.createRoom("room_with_simulation");
+    const sdkRoom = await colyseus.connectTo(room);
 
     let currentTick = room.state.tick;
     for (let i = 0; i < 5; i++) {
@@ -106,7 +113,7 @@ describe("@colyseus/testing", () => {
     }
 
     await room.waitForNextPatch();
-    assert.strictEqual(room.state.tick, client.state.tick);
+    assert.strictEqual(room.state.tick, sdkRoom.state.tick);
   });
 
   it("should disconnect all connected clients after test is done", async () => {

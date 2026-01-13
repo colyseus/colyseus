@@ -13,12 +13,32 @@ export interface PopupSettings {
     height: number;
 }
 
-export interface AuthData {
-    user: any;
+/**
+ * Response from getUserData()
+ */
+export interface UserDataResponse<UserData = any> {
+    user: UserData;
+}
+
+/**
+ * Response from authentication methods (login, register, anonymous, OAuth)
+ */
+export interface AuthResponse<UserData = any> {
+    user: UserData;
     token: string;
 }
 
-export class Auth {
+/**
+ * Response from sendPasswordResetEmail()
+ */
+export type ForgotPasswordResponse = boolean | unknown;
+
+/**
+ * @deprecated Use AuthResponse instead
+ */
+export type AuthData<UserData = any> = AuthResponse<UserData>;
+
+export class Auth<UserData = any> {
     settings: AuthSettings = {
         path: "/auth",
         key: "colyseus-auth-token",
@@ -26,7 +46,9 @@ export class Auth {
 
     #_initialized = false;
     #_signInWindow: WindowProxy | null = null;
-    #_events = createNanoEvents();
+    #_events = createNanoEvents<{
+        change: (response: AuthResponse) => void;
+    }>();
 
     protected http: HTTP<any>;
 
@@ -43,10 +65,10 @@ export class Auth {
         return this.http.authToken;
     }
 
-    public onChange(callback: (response: AuthData) => void) {
+    public onChange<U = UserData>(callback: (response: AuthResponse<U | null>) => void) {
         const unbindChange = this.#_events.on("change", callback);
         if (!this.#_initialized) {
-            this.getUserData().then((userData: any) => {
+            this.getUserData().then((userData) => {
                 this.emitChange({ ...userData, token: this.token });
 
             }).catch((e) => {
@@ -58,7 +80,7 @@ export class Auth {
         return unbindChange;
     }
 
-    public async getUserData() {
+    public async getUserData<U = UserData>(): Promise<UserDataResponse<U>> {
         if (this.token) {
             return (await this.http.get(`${this.settings.path}/userdata`)).data;
         } else {
@@ -66,43 +88,53 @@ export class Auth {
         }
     }
 
-    public async registerWithEmailAndPassword(email: string, password: string, options?: any) {
+    public async registerWithEmailAndPassword<U = UserData>(
+        email: string,
+         password: string,
+        options?: any
+    ): Promise<AuthResponse<U>> {
         const data = (await this.http.post(`${this.settings.path}/register`, {
             body: { email, password, options, },
         })).data;
 
-        this.emitChange(data as any);
+        this.emitChange(data);
 
         return data;
     }
 
-    public async signInWithEmailAndPassword(email: string, password: string) {
+    public async signInWithEmailAndPassword<U = UserData>(
+        email: string,
+        password: string
+    ): Promise<AuthResponse<U>> {
         const data = (await this.http.post(`${this.settings.path}/login`, {
             body: { email, password, },
         })).data;
 
-        this.emitChange(data as any);
+        this.emitChange(data);
 
         return data;
     }
 
-    public async signInAnonymously(options?: any) {
+    public async signInAnonymously<U = UserData>(options?: any): Promise<AuthResponse<U>> {
         const data = (await this.http.post(`${this.settings.path}/anonymous`, {
             body: { options, }
         })).data;
 
-        this.emitChange(data as any);
+        this.emitChange(data);
 
         return data;
     }
 
-    public async sendPasswordResetEmail(email: string) {
+    public async sendPasswordResetEmail(email: string): Promise<ForgotPasswordResponse> {
         return (await this.http.post(`${this.settings.path}/forgot-password`, {
             body: { email, }
         })).data;
     }
 
-    public async signInWithProvider(providerName: string, settings: Partial<PopupSettings> = {}) {
+    public async signInWithProvider<U = UserData>(
+        providerName: string,
+        settings: Partial<PopupSettings> = {}
+    ): Promise<AuthResponse<U>> {
         return new Promise((resolve, reject) => {
             const w = settings.width || 480;
             const h = settings.height || 768;
@@ -153,12 +185,11 @@ export class Auth {
         });
     }
 
-    public async signOut() {
-        // @ts-ignore
+    public async signOut(): Promise<void> {
         this.emitChange({ user: null, token: null });
     }
 
-    private emitChange(authData: Partial<AuthData>) {
+    private emitChange(authData: AuthResponse<UserData | null>) {
         if (authData.token !== undefined) {
             this.token = authData.token;
 
