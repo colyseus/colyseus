@@ -150,8 +150,8 @@ export async function listen<
 
     if (process.env.COLYSEUS_CLOUD !== undefined) {
         // listening on socket
-        // const socketPath: any = `/run/colyseus/${port}.sock`;
-        const socketPath: any = `/tmp/${port}.sock`;
+        const socketPath: any = `/run/colyseus/${port}.sock`;
+        // const socketPath: any = `/tmp/${port}.sock`;
 
         // check if .sock file is active
         // (fixes "ADDRINUSE" issue when restarting the server)
