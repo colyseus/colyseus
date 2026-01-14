@@ -296,19 +296,26 @@ export class Server<
     () => Promise.resolve()
 }
 
+export type DefineServerOptions<
+  T extends Record<string, RegisteredHandler>,
+  R extends Router
+> = ServerOptions & {
+  rooms: T,
+  routes?: R,
+};
+
 export function defineServer<
   T extends Record<string, RegisteredHandler>,
   R extends Router
 >(
-  roomHandlers: T,
-  router?: R,
-  serverOptions?: ServerOptions
+  options: DefineServerOptions<T, R>,
 ): Server<T, R> {
+  const { rooms, routes, ...serverOptions } = options;
   const server = new Server<T, R>(serverOptions);
 
-  server.router = router;
+  server.router = routes;
 
-  for (const [name, handler] of Object.entries(roomHandlers)) {
+  for (const [name, handler] of Object.entries(rooms)) {
     handler.name = name;
     matchMaker.addRoomType(handler);
   }

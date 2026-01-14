@@ -1,5 +1,4 @@
 import { EventEmitter } from 'events';
-import { CloseCode, ErrorCode } from './Protocol.ts';
 
 import { requestFromIPC, subscribeIPC, subscribeWithTimeout } from './IPC.ts';
 
@@ -24,8 +23,8 @@ import { logger } from './Logger.ts';
 import type { AuthContext, Client } from './Transport.ts';
 import { getLockId, initializeRoomCache, type ExtractMetadata } from './matchmaker/driver.ts';
 
-export type { ISeatReservation } from '@colyseus/shared-types';
-import type { ISeatReservation } from '@colyseus/shared-types';
+import { type ISeatReservation, CloseCode, ErrorCode } from '@colyseus/shared-types';
+export type { ISeatReservation }
 
 export { controller, stats, type MatchMakerDriver };
 

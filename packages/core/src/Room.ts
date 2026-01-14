@@ -12,7 +12,7 @@ import type { IRoomCache } from './matchmaker/driver.ts';
 import { NoneSerializer } from './serializer/NoneSerializer.ts';
 import { SchemaSerializer } from './serializer/SchemaSerializer.ts';
 
-import { CloseCode, ErrorCode, getMessageBytes, Protocol } from './Protocol.ts';
+import { getMessageBytes } from './Protocol.ts';
 import { type Type, Deferred, generateId, wrapTryCatch } from './utils/Utils.ts';
 import { createNanoEvents } from './utils/nanoevents.ts';
 import { isDevMode } from './utils/DevMode.ts';
@@ -26,10 +26,12 @@ import { standardValidate, type StandardSchemaV1 } from './utils/StandardSchema.
 import { matchMaker } from '@colyseus/core';
 
 import {
+  CloseCode,
+  ErrorCode,
+  Protocol,
   type MessageHandlerWithFormat as SharedMessageHandlerWithFormat,
   type MessageHandler as SharedMessageHandler,
   type Messages as SharedMessages,
-  type ServerRoomLike,
 } from '@colyseus/shared-types';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)

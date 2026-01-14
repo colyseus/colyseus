@@ -3,7 +3,7 @@
  * (for interoperability between different http frameworks, e.g. express, uWebSockets.js, etc)
  */
 
-import { ErrorCode } from '../Protocol.ts';
+import { ErrorCode } from '@colyseus/shared-types';
 import { ServerError } from '../errors/ServerError.ts';
 import * as matchMaker from '../MatchMaker.ts';
 import type { AuthContext } from '../Transport.ts';

@@ -2,6 +2,9 @@ import { ClockTimer as Clock, Delayed } from '@colyseus/timer';
 
 // Shared types - re-export from @colyseus/shared-types for convenience
 export {
+  Protocol,
+  ErrorCode,
+  CloseCode,
   type InferState,
   type ExtractRoomMessages,
   type ExtractRoomClientMessages,
@@ -10,7 +13,7 @@ export {
 // Core classes
 export { Server, defineRoom, defineServer, type ServerOptions, type SDKTypes } from './Server.ts';
 export { Room, room, RoomInternalState, validate, type RoomOptions, type MessageHandlerWithFormat, type Messages, type ExtractRoomState, type ExtractRoomMetadata, type ExtractRoomClient } from './Room.ts';
-export { Protocol, ErrorCode, getMessageBytes, CloseCode } from './Protocol.ts';
+export { getMessageBytes } from './Protocol.ts';
 export { RegisteredHandler } from './matchmaker/RegisteredHandler.ts';
 export { ServerError } from './errors/ServerError.ts';
 

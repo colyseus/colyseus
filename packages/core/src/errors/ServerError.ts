@@ -1,4 +1,4 @@
-import { ErrorCode } from '../Protocol.ts';
+import { ErrorCode } from '@colyseus/shared-types';
 
 export class ServerError extends Error {
   public code: number;

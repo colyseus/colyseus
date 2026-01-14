@@ -285,7 +285,9 @@ describe("RankedQueueRoom", () => {
   describe("Integration Test", () => {
     it("should create a ranked queue room", () => {
       const gameServer = defineServer({
-        ranked: defineRoom(RankedQueueRoom, { matchRoomName: "" }),
+        rooms: {
+          ranked: defineRoom(RankedQueueRoom, { matchRoomName: "" }),
+        },
       })
     });
   });

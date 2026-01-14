@@ -1,11 +1,13 @@
 import * as http from 'http';
 import * as https from 'https';
 
+import { ErrorCode } from '@colyseus/shared-types';
 import { StateView } from '@colyseus/schema';
+
 import { EventEmitter } from 'events';
 import { spliceOne } from './utils/Utils.ts';
 import { ServerError } from './errors/ServerError.ts';
-import { ErrorCode } from './Protocol.ts';
+
 import type { Room } from './Room.ts';
 
 export abstract class Transport {

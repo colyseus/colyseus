@@ -616,9 +616,6 @@ importers:
       '@colyseus/core':
         specifier: workspace:^
         version: link:../core
-      '@colyseus/ws-transport':
-        specifier: workspace:^
-        version: link:../transport/ws-transport
       '@rollup/plugin-alias':
         specifier: ^5.1.1
         version: 5.1.1(rollup@4.53.3)

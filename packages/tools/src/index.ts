@@ -193,7 +193,9 @@ async function buildServerFromOptions<
     }
   }
 
-  return defineServer<RoomTypes, Routes>(options.rooms || {} as RoomTypes, options.routes, {
+  return defineServer<RoomTypes, Routes>({
+    rooms: options.rooms || {} as RoomTypes,
+    routes: options.routes,
     ...serverOptions,
     transport: await getTransport(options),
   });

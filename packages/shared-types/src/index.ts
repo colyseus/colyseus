@@ -3,6 +3,9 @@ import type { StandardSchemaV1 } from '@standard-schema/spec';
 // Re-export StandardSchemaV1 for convenience
 export type { StandardSchemaV1 };
 
+// Re-export Protocol types
+export { Protocol, ErrorCode, CloseCode } from './Protocol.js';
+
 /**
  * Minimal Room-like interface for SDK type inference.
  * Allows typing SDK methods without depending on @colyseus/core.

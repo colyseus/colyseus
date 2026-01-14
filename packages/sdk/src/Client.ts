@@ -1,6 +1,6 @@
-import type { SDKTypes, ServerRoomLike, ISeatReservation } from '@colyseus/shared-types';
+import { CloseCode, type SDKTypes, type ServerRoomLike, type ISeatReservation } from '@colyseus/shared-types';
 
-import { CloseCode, ServerError } from './errors/Errors.ts';
+import { ServerError } from './errors/Errors.ts';
 import { Room } from './Room.ts';
 import { SchemaConstructor } from './serializer/SchemaSerializer.ts';
 import { HTTP } from './HTTP.ts';

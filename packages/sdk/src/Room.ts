@@ -1,4 +1,4 @@
-import { type InferState, type ExtractRoomMessages, type ExtractRoomClientMessages, type ExtractMessageType } from '@colyseus/shared-types';
+import { CloseCode, type InferState, type ExtractRoomMessages, type ExtractRoomClientMessages, type ExtractMessageType } from '@colyseus/shared-types';
 import { decode, encode, Iterator, Schema } from '@colyseus/schema';
 
 import { Packr, unpack } from '@colyseus/msgpackr';
@@ -14,7 +14,6 @@ import { createSignal } from './core/signal.ts';
 
 import { SchemaConstructor, SchemaSerializer } from './serializer/SchemaSerializer.ts';
 
-import { CloseCode } from './errors/Errors.ts';
 import { now } from './core/utils.ts';
 
 // Infer serializer type based on State: SchemaSerializer for Schema types, Serializer otherwise

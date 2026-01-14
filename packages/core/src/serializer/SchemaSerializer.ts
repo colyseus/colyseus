@@ -1,9 +1,10 @@
+import { Protocol } from '@colyseus/shared-types';
+
 import type { Serializer } from './Serializer.ts';
 import { type Client, ClientState } from '../Transport.ts';
 
 import { type Iterator, Encoder, dumpChanges, Reflection, Schema, StateView } from '@colyseus/schema';
 import { debugPatch } from '../Debug.ts';
-import { Protocol } from '../Protocol.ts';
 
 const SHARED_VIEW = {};
 

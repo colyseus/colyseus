@@ -1,4 +1,4 @@
-import { createEndpoint, createRouter, defineRoom, defineServer } from "@colyseus/core";
+import { createEndpoint, createRouter, defineRoom, defineServer, LocalDriver, LocalPresence } from "@colyseus/core";
 import { MyRoom } from "./MyRoom.ts";
 
 const listThings = createEndpoint("/things", { method: "GET" }, async (ctx) => {
@@ -6,9 +6,15 @@ const listThings = createEndpoint("/things", { method: "GET" }, async (ctx) => {
 })
 
 const gameServer = defineServer({
-  my_room: defineRoom(MyRoom),
-}, createRouter({
-  listThings,
-}));
+  presence: new LocalPresence(),
+  driver: new LocalDriver(),
+
+  rooms: {
+    my_room: defineRoom(MyRoom),
+  },
+  routes: createRouter({
+    listThings,
+  })
+});
 
 gameServer.listen(2567);
