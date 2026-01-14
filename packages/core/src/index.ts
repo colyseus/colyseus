@@ -49,7 +49,6 @@ export { LocalPresence } from './presence/LocalPresence.ts';
 // Serializers
 export { type Serializer } from './serializer/Serializer.ts';
 export { SchemaSerializer } from './serializer/SchemaSerializer.ts';
-// export { SchemaSerializerDebug } from './serializer/SchemaSerializerDebug.ts';
 
 // Utilities
 export { Clock, Delayed };

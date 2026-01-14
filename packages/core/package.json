@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/core",
-  "version": "0.17.11",
+  "version": "0.17.12",
   "description": "Multiplayer Framework for Node.js.",
   "type": "module",
   "input": "./src/index.ts",
@@ -19,7 +19,8 @@
       "types": "./build/*.d.ts",
       "import": "./build/*.mjs",
       "require": "./build/*.cjs"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "funding": "https://github.com/sponsors/endel",
   "author": "Endel Dreyer",

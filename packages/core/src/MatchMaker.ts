@@ -21,10 +21,10 @@ import * as stats from './Stats.ts';
 
 import { logger } from './Logger.ts';
 import type { AuthContext, Client } from './Transport.ts';
-import { getLockId, initializeRoomCache, type ExtractMetadata } from './matchmaker/driver.ts';
+import { getLockId, initializeRoomCache, type ExtractRoomCacheMetadata } from './matchmaker/driver.ts';
 
 import { type ISeatReservation, CloseCode, ErrorCode } from '@colyseus/shared-types';
-export type { ISeatReservation }
+export type { ISeatReservation, ExtractRoomCacheMetadata };
 
 export { controller, stats, type MatchMakerDriver };
 
@@ -304,7 +304,7 @@ export async function joinById(roomId: string, clientOptions: ClientOptions = {}
  * Perform a query for all cached rooms
  */
 export async function query<T extends Room = any>(
-  conditions: Partial<IRoomCache & ExtractMetadata<T>> = {},
+  conditions: Partial<IRoomCache & ExtractRoomCacheMetadata<T>> = {},
   sortOptions?: SortOptions,
 ) {
   return await driver.query<T>(conditions, sortOptions);

@@ -20,7 +20,7 @@ export type IRoomCacheFilterByKeys = 'clients' | 'maxClients' | 'processId';
 /**
  * Extract metadata type from Room type
  */
-export type ExtractMetadata<RoomType extends Room> = RoomType['~metadata'];
+export type ExtractRoomCacheMetadata<RoomType extends Room> = RoomType['~metadata'];
 
 /**
  * Generates a unique lock ID based on filter options.
@@ -125,9 +125,9 @@ export interface MatchMakerDriver {
    * @returns Promise<IRoomCache[]> | IRoomCache[] - A promise or an object contaning room metadata list.
    */
   query<T extends Room = any>(
-    conditions: Partial<IRoomCache & ExtractMetadata<T>>,
+    conditions: Partial<IRoomCache & ExtractRoomCacheMetadata<T>>,
     sortOptions?: SortOptions
-  ): Promise<Array<IRoomCache<ExtractMetadata<T>>>> | Array<IRoomCache<ExtractMetadata<T>>>;
+  ): Promise<Array<IRoomCache<ExtractRoomCacheMetadata<T>>>> | Array<IRoomCache<ExtractRoomCacheMetadata<T>>>;
 
   /**
    * Clean up rooms in room cache by process id.
@@ -143,9 +143,9 @@ export interface MatchMakerDriver {
    * @returns `IRoomCache` - An object contaning filtered room metadata.
    */
   findOne<T extends Room = any>(
-    conditions: Partial<IRoomCache & ExtractMetadata<T>>,
+    conditions: Partial<IRoomCache & ExtractRoomCacheMetadata<T>>,
     sortOptions?: SortOptions
-  ): Promise<IRoomCache<ExtractMetadata<T>>>;
+  ): Promise<IRoomCache<ExtractRoomCacheMetadata<T>>>;
 
   /**
    * Remove a room from room cache.

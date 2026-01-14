@@ -1,6 +1,7 @@
 import type { Server } from "http";
 import { type Endpoint, type Router, type RouterConfig, createRouter as createBetterCallRouter, createEndpoint } from "@colyseus/better-call";
 import { toNodeHandler } from "@colyseus/better-call/node";
+import pkg from "../../package.json" with { type: "json" };
 
 export {
   createEndpoint,
@@ -22,6 +23,14 @@ export function bindRouterToServer(server: Server, router: Router) {
   // check if the server is bound to an express app
   const expressApp: any = server.listeners('request').find((listener: Function) =>
     listener.name === "app" && listener['mountpath'] === '/');
+
+  // add default "/" route, if not provided.
+  const hasRootRoute = Object.values(router.endpoints).some(endpoint => endpoint.path === "/");
+  if (!hasRootRoute) {
+    router.addEndpoint(createEndpoint("/", { method: "GET" }, async (ctx) => {
+      return new Response(`Colyseus ${pkg.version}`, { status: 200 });
+    }));
+  }
 
   if (expressApp) {
     // bind the router to the express app

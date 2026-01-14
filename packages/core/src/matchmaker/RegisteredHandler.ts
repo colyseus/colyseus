@@ -3,7 +3,7 @@ import { logger } from '../Logger.ts';
 import { Room } from './../Room.ts';
 import { updateLobby } from './Lobby.ts';
 
-import type { IRoomCache, SortOptions, IRoomCacheFilterByKeys, IRoomCacheSortByKeys, ExtractMetadata } from './driver.ts';
+import type { IRoomCache, SortOptions, IRoomCacheFilterByKeys, IRoomCacheSortByKeys, ExtractRoomCacheMetadata } from './driver.ts';
 import type { Client } from '../Transport.ts';
 import type { Type } from "../utils/Utils.ts";
 
@@ -23,8 +23,8 @@ export const INVALID_OPTION_KEYS: Array<keyof IRoomCache> = [
  */
 type FilterByKeys<RoomType extends Room> =
   | IRoomCacheFilterByKeys
-  | (ExtractMetadata<RoomType> extends object
-      ? keyof ExtractMetadata<RoomType> & string
+  | (ExtractRoomCacheMetadata<RoomType> extends object
+      ? keyof ExtractRoomCacheMetadata<RoomType> & string
       : never)
 
 /**
@@ -32,8 +32,8 @@ type FilterByKeys<RoomType extends Room> =
  */
 type SortByKeys<RoomType extends Room> =
   | IRoomCacheSortByKeys
-  | (ExtractMetadata<RoomType> extends object
-      ? keyof ExtractMetadata<RoomType> & string
+  | (ExtractRoomCacheMetadata<RoomType> extends object
+      ? keyof ExtractRoomCacheMetadata<RoomType> & string
       : never);
 
 export interface RegisteredHandlerEvents<RoomType extends Type<Room> = any> {
