@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/sdk",
-  "version": "0.17.12",
+  "version": "0.17.13",
   "description": "Colyseus Multiplayer SDK for JavaScript/TypeScript",
   "author": "Endel Dreyer",
   "license": "MIT",
@@ -40,7 +40,7 @@
     "./*": {
       "@source": "./src/*.ts",
       "types": "./build/*.d.ts",
-      "import": "./build/esm/*.mjs",
+      "import": "./build/*.mjs",
       "require": "./build/*.cjs"
     },
     "./package.json": "./package.json"

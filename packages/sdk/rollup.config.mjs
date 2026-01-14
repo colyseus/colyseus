@@ -113,10 +113,14 @@ export default [
 
     },
 
-    // Debug tools - standalone script that patches global Colyseus
+    /**
+     * Debug tools
+     */
+    // standalone dist script that patches global Colyseus
     {
         input: 'src/debug.ts',
         external: ['./Client'],
+        treeshake: false,
         output: {
             file: 'dist/debug.js',
             format: 'iife',
@@ -127,9 +131,24 @@ export default [
             }
         },
         plugins: [
-            replacePlugin,
             typescript({ tsconfig: './tsconfig/tsconfig.cjs.json' }),
         ],
+    },
+    // Debug ESM build
+    {
+        input: 'src/debug.ts',
+        treeshake: false,
+        output: [{ preserveModules: true, banner, dir: 'build', format: 'esm', entryFileNames: '[name].mjs', sourcemap: true },],
+        external,
+        plugins: [ replacePlugin, typescript({ tsconfig: './tsconfig/tsconfig.esm.json' }), ],
+    },
+    // Debug CJS build
+    {
+        input: 'src/debug.ts',
+        treeshake: false,
+        output: [{ preserveModules: true, banner, dir: 'build', format: 'cjs', entryFileNames: '[name].cjs', sourcemap: true },],
+        external,
+        plugins: [ replacePlugin, typescript({ tsconfig: './tsconfig/tsconfig.cjs.json' }), ],
     },
 
 ];

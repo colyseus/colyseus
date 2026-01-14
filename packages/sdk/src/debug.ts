@@ -1,6 +1,6 @@
-import { Client } from "./Client";
-import type { Room } from "./Room";
-import type { WebSocketTransport } from "./transport/WebSocketTransport";
+import { Client } from "./Client.ts";
+import type { Room } from "./Room.ts";
+import type { WebSocketTransport } from "./transport/WebSocketTransport.ts";
 
 const logoIcon = `<svg viewBox="0 0 488.94 541.2" style="width: 100%; height: 100%;">
   <g>
@@ -1431,7 +1431,6 @@ function openStateInspectorModal(uniquePanelId) {
     }
 
     var room = debugInfo.room;
-    var refIds = room.serializer.decoder.root.refIds;
 
     // Remove existing modal if present
     var existingModal = document.getElementById('debug-state-inspector-modal');
@@ -1671,7 +1670,7 @@ function openStateInspectorModal(uniquePanelId) {
 
         var type = typeof obj;
         var indent = depth * 6;
-        var refId = refIds.get(obj);
+        var refId = obj["~refId"];
         var nodeId = 'state-node-' + refId;
         var currentPath = path ? path + '.' + (parentKey || '') : (parentKey || 'root');
         var isPathExpanded = expandedPaths.has(currentPath);
@@ -1747,6 +1746,7 @@ function openStateInspectorModal(uniquePanelId) {
 
                 for (var i = 0; i < keys.length; i++) {
                     var key = keys[i];
+                    if (key === "~refId") continue;// skip refId
                     html += renderKeyValue(key, obj[key], depth + 1, currentPath, key, false);
                 }
 
