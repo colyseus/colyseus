@@ -1,7 +1,7 @@
 {
-  "name": "@colyseus/core",
-  "version": "0.17.10",
-  "description": "Multiplayer Framework for Node.js.",
+  "name": "@colyseus/shared-types",
+  "version": "0.17.0",
+  "description": "Shared TypeScript types for Colyseus server and client SDK",
   "type": "module",
   "input": "./src/index.ts",
   "main": "./build/index.cjs",
@@ -27,10 +27,8 @@
   "keywords": [
     "colyseus",
     "multiplayer",
-    "netcode",
-    "realtime",
-    "networking",
-    "websockets"
+    "types",
+    "typescript"
   ],
   "files": [
     "build",
@@ -45,25 +43,9 @@
     "node": ">= 22.x"
   },
   "dependencies": {
-    "@colyseus/shared-types": "workspace:^",
-    "@colyseus/better-call": "workspace:^",
-    "@colyseus/greeting-banner": "workspace:^",
-    "@colyseus/msgpackr": "^1.11.2",
-    "@colyseus/timer": "^2.0.0",
-    "@standard-schema/spec": "^1.0.0",
-    "debug": "^4.3.4",
-    "nanoid": "^3.3.11"
-  },
-  "devDependencies": {
-    "@colyseus/schema": "^4.0.1"
-  },
-  "peerDependencies": {
-    "@colyseus/schema": "^4.0.1",
-    "@pm2/io": "^6.1.0",
-    "zod": "^4.1.12"
+    "@standard-schema/spec": "^1.0.0"
   },
   "publishConfig": {
     "access": "public"
-  },
-  "gitHead": "c45b410e99eadffff4b74e701339992e2faa15f8"
+  }
 }

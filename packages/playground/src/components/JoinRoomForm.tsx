@@ -1,4 +1,4 @@
-import { Client, Room, RoomAvailable } from "colyseus.js";
+import { Client, type Room, type RoomAvailable } from "@colyseus/sdk";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faRightToBracket, faSpinner } from "@fortawesome/free-solid-svg-icons";
 import { useState } from "react";
@@ -82,7 +82,7 @@ export function JoinRoomForm ({
 		setLoading(true);
 
 		try {
-			await client[method](roomName, JSON.parse(optionsText || "{}"));
+			await (client as any)[method](roomName, JSON.parse(optionsText || "{}"));
 
 		} catch (e: any) {
 			const error = e.target?.statusText || e.message || "server is down.";

@@ -1,4 +1,4 @@
-import type { matchMaker, SDKTypes, Room as ServerRoom } from '@colyseus/core';
+import type { SDKTypes, ServerRoomLike, ISeatReservation } from '@colyseus/shared-types';
 
 import { CloseCode, ServerError } from './errors/Errors.ts';
 import { Room } from './Room.ts';
@@ -8,10 +8,9 @@ import { Auth } from './Auth.ts';
 import { Protocol } from './Protocol.ts';
 import { Connection } from './Connection.ts';
 import { discordURLBuilder } from './3rd_party/discord.ts';
-import type { InferRoomConstructor } from './core/utils.ts';
 
 export type JoinOptions = any;
-export type ISeatReservation = matchMaker.ISeatReservation;
+export type { ISeatReservation };
 
 export class MatchMakeError extends Error {
     code: number;
@@ -174,11 +173,11 @@ export class ColyseusSDK<ServerType extends SDKTypes = any, UserData = any> {
         rootSchema?: SchemaConstructor<ServerType>
     ): Promise<Room<ServerType['~rooms'][R]['~room']>>
     // Overload: Pass RoomType directly to extract state
-    public async joinOrCreate<RoomType extends ServerRoom>(
+    public async joinOrCreate<RoomType extends ServerRoomLike>(
         roomName: string,
         options?: Parameters<RoomType['onJoin']>[1],
         rootSchema?: SchemaConstructor<RoomType['state']>
-    ): Promise<Room<InferRoomConstructor<ServerType, RoomType>>>
+    ): Promise<Room<RoomType, RoomType['state']>>
     // Overload: Pass State type directly
     public async joinOrCreate<State = any>(
         roomName: string,
@@ -197,11 +196,11 @@ export class ColyseusSDK<ServerType extends SDKTypes = any, UserData = any> {
         rootSchema?: SchemaConstructor<ServerType>
     ): Promise<Room<ServerType['~rooms'][R]['~room']>>
     // Overload: Pass RoomType directly to extract state
-    public async create<RoomType extends ServerRoom>(
+    public async create<RoomType extends ServerRoomLike>(
         roomName: string,
         options?: Parameters<RoomType['onJoin']>[1],
         rootSchema?: SchemaConstructor<RoomType['state']>
-    ): Promise<Room<InferRoomConstructor<ServerType, RoomType>>>
+    ): Promise<Room<RoomType, RoomType['state']>>
     // Overload: Pass State type directly
     public async create<State = any>(
         roomName: string,
@@ -220,11 +219,11 @@ export class ColyseusSDK<ServerType extends SDKTypes = any, UserData = any> {
         rootSchema?: SchemaConstructor<ServerType>
     ): Promise<Room<ServerType['~rooms'][R]['~room']>>
     // Overload: Pass RoomType directly to extract state
-    public async join<RoomType extends ServerRoom>(
+    public async join<RoomType extends ServerRoomLike>(
         roomName: string,
         options?: Parameters<RoomType['onJoin']>[1],
         rootSchema?: SchemaConstructor<RoomType['state']>
-    ): Promise<Room<InferRoomConstructor<ServerType, RoomType>>>
+    ): Promise<Room<RoomType, RoomType['state']>>
     // Overload: Pass State type directly
     public async join<State = any>(
         roomName: string,
@@ -243,11 +242,11 @@ export class ColyseusSDK<ServerType extends SDKTypes = any, UserData = any> {
         rootSchema?: SchemaConstructor<ServerType>
     ): Promise<Room<ServerType['~rooms'][R]['~room']>>
     // Overload: Pass RoomType directly to extract state
-    public async joinById<RoomType extends ServerRoom>(
+    public async joinById<RoomType extends ServerRoomLike>(
         roomId: string,
         options?: Parameters<RoomType['onJoin']>[1],
         rootSchema?: SchemaConstructor<RoomType['state']>
-    ): Promise<Room<InferRoomConstructor<ServerType, RoomType>>>
+    ): Promise<Room<RoomType, RoomType['state']>>
     // Overload: Pass State type directly
     public async joinById<State = any>(
         roomId: string,
@@ -269,10 +268,10 @@ export class ColyseusSDK<ServerType extends SDKTypes = any, UserData = any> {
     // Overload: Use room name from ServerType to infer room type
     public async reconnect<R extends keyof ServerType['~rooms']>(reconnectionToken: string, roomName?: R): Promise<Room<ServerType['~rooms'][R]['~room']>>
     // Overload: Pass RoomType directly to extract state
-    public async reconnect<RoomType extends ServerRoom>(
+    public async reconnect<RoomType extends ServerRoomLike>(
         reconnectionToken: string,
         rootSchema?: SchemaConstructor<RoomType['state']>
-    ): Promise<Room<InferRoomConstructor<ServerType, RoomType>>>
+    ): Promise<Room<RoomType, RoomType['state']>>
     // Overload: Pass State type directly
     public async reconnect<State = any>(
         reconnectionToken: string,

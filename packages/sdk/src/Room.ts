@@ -1,5 +1,5 @@
-import { type Room as ServerRoom, type ExtractMessageType } from '@colyseus/core';
-import { decode, Decoder, encode, Iterator, schema, Schema, SchemaType } from '@colyseus/schema';
+import { type InferState, type ExtractRoomMessages, type ExtractRoomClientMessages, type ExtractMessageType } from '@colyseus/shared-types';
+import { decode, encode, Iterator, Schema } from '@colyseus/schema';
 
 import { Packr, unpack } from '@colyseus/msgpackr';
 
@@ -87,8 +87,8 @@ export interface ReconnectionOptions {
 }
 
 export class Room<
-    RoomType extends typeof ServerRoom = any,
-    State = RoomType['prototype']['state'],
+    T = any,
+    State = InferState<T, never>,
 > {
     public roomId: string;
     public sessionId: string;
@@ -216,9 +216,9 @@ export class Room<
         });
     }
 
-    public onMessage<MessageType extends keyof RoomType['prototype']['~client']['~messages']>(
+    public onMessage<MessageType extends keyof ExtractRoomClientMessages<T>>(
         message: MessageType,
-        callback: (payload: RoomType['prototype']['~client']['~messages'][MessageType]) => void
+        callback: (payload: ExtractRoomClientMessages<T>[MessageType]) => void
     )
     public onMessage<T = any>(type: "*", callback: (messageType: string | number, payload: T) => void)
     public onMessage<T = any>(type: string | number, callback: (payload: T) => void)
@@ -233,9 +233,9 @@ export class Room<
         this.connection.send(this.packr.buffer.subarray(0, 1));
     }
 
-    public send<MessageType extends keyof RoomType['prototype']['messages']>(
+    public send<MessageType extends keyof ExtractRoomMessages<T>>(
         messageType: MessageType,
-        payload?: ExtractMessageType<RoomType['prototype']['messages'][MessageType]>
+        payload?: ExtractMessageType<ExtractRoomMessages<T>[MessageType]>
     )
     public send<T = any>(messageType: string | number, payload?: T): void {
         const it: Iterator = { offset: 1 };

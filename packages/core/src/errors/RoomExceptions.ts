@@ -1,4 +1,5 @@
-import type { ExtractMessageType, Room } from '../Room.ts';
+import type { ExtractMessageType } from '@colyseus/shared-types';
+import type { Room } from '../Room.ts';
 
 export type RoomMethodName = 'onCreate'
   | 'onAuth'

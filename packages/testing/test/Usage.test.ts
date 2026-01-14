@@ -63,6 +63,9 @@ describe("@colyseus/testing", () => {
       }
     }, sdkRoom.state.toJSON());
 
+    // @ts-expect-error - invalid message type
+    sdkRoom.send("invalid-message-type", "hey");
+
     await sdkRoom.leave();
     sinon.assert.callCount(onLeaveSpy, 1);
   });

@@ -24,20 +24,13 @@ import { logger } from './Logger.ts';
 import type { AuthContext, Client } from './Transport.ts';
 import { getLockId, initializeRoomCache, type ExtractMetadata } from './matchmaker/driver.ts';
 
+export type { ISeatReservation } from '@colyseus/shared-types';
+import type { ISeatReservation } from '@colyseus/shared-types';
+
 export { controller, stats, type MatchMakerDriver };
 
 export type ClientOptions = any;
 export type SelectProcessIdCallback = (roomName: string, clientOptions: ClientOptions) => Promise<string>;
-
-export interface ISeatReservation {
-  name: string;
-  sessionId: string;
-  roomId: string;
-  publicAddress?: string;
-  processId?: string;
-  reconnectionToken?: string;
-  devMode?: boolean;
-}
 
 const handlers: {[id: string]: RegisteredHandler} = {};
 const rooms: {[roomId: string]: Room} = {};

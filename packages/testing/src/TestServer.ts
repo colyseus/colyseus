@@ -59,8 +59,8 @@ export class ColyseusTestServer<ServerType extends SDKTypes = any> {
   connectTo<RoomInstance extends Room>(
     room: RoomInstance,
     clientOptions: any = {},
-  ): Promise<SDKRoom<InferRoomConstructor<ServerType, RoomInstance>>> {
-    return this.sdk.joinById<InferRoomConstructor<ServerType, RoomInstance>>(room.roomId, clientOptions);
+  ): Promise<SDKRoom<RoomInstance, RoomInstance['state']>> {
+    return this.sdk.joinById(room.roomId, clientOptions);
   }
 
   // Overload: Pass Room type directly

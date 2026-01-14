@@ -7,7 +7,7 @@ describe("RedisDriver", () => {
 
   before(async () => {
     driver = new RedisDriver();
-    await driver.boot(); // Register Lua scripts
+    // await driver.boot(); // Register Lua scripts
   });
 
   after(async () => {

@@ -16,6 +16,7 @@ import { logger, setLogger } from './Logger.ts';
 import { setDevMode, isDevMode } from './utils/DevMode.ts';
 import { bindRouterToServer, type Router } from './router/index.ts';
 import { getDefaultRouter } from "./router/default_routes.ts";
+import { type SDKTypes as SharedSDKTypes } from '@colyseus/shared-types';
 
 export type ServerOptions = {
   publicAddress?: string,
@@ -53,14 +54,12 @@ export type ServerOptions = {
 
 /**
  * Exposed types for the client-side SDK.
+ * Re-exported from @colyseus/shared-types with specific type constraints.
  */
 export interface SDKTypes<
   RoomTypes extends Record<string, RegisteredHandler> = any,
   Routes extends Router = any
-> {
-  '~rooms': RoomTypes;
-  '~routes': Routes;
-}
+> extends SharedSDKTypes<RoomTypes, Routes> {}
 
 export class Server<
   RoomTypes extends Record<string, RegisteredHandler> = any,

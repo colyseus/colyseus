@@ -1,11 +1,11 @@
 import './util';
 import { describe, beforeAll, test } from "vitest";
 import { assert } from "chai";
-import { Client } from "../src/Client.ts";
+import { Client, type ISeatReservation } from "../src/Client.ts";
 import { Schema, type } from '@colyseus/schema';
 import { discordURLBuilder } from '../src/3rd_party/discord.ts';
 
-import { defineServer, defineRoom, Room as ServerRoom } from "@colyseus/core";
+import { defineServer, defineRoom, Room } from "@colyseus/core";
 
 describe("Client", function () {
     let client: Client;
@@ -16,8 +16,8 @@ describe("Client", function () {
 
     describe("constructor settings", () => {
         test("url string", () => {
-            const room = { roomId: "roomId", processId: "processId", sessionId: "sessionId", };
-            const roomWithPublicAddress = { publicAddress: "node-1.colyseus.cloud", roomId: "roomId", processId: "processId", sessionId: "sessionId", };
+            const room = { roomId: "roomId", processId: "processId", sessionId: "sessionId", } as ISeatReservation;
+            const roomWithPublicAddress = { publicAddress: "node-1.colyseus.cloud", roomId: "roomId", processId: "processId", sessionId: "sessionId", } as ISeatReservation;
 
             const settingsByUrl = {
                 'ws://localhost:2567': {
@@ -81,8 +81,8 @@ describe("Client", function () {
         });
 
         test("discord url builder", () => {
-            const room = { roomId: "roomId", processId: "processId", sessionId: "sessionId", };
-            const roomWithPublicAddress = { publicAddress: "node-1.colyseus.cloud", roomId: "roomId", processId: "processId", sessionId: "sessionId", };
+            const room = { roomId: "roomId", processId: "processId", sessionId: "sessionId", } as ISeatReservation ;
+            const roomWithPublicAddress = { publicAddress: "node-1.colyseus.cloud", roomId: "roomId", processId: "processId", sessionId: "sessionId", } as ISeatReservation;
 
             const settingsByUrl = {
                 'ws://example.com': {
@@ -138,25 +138,68 @@ describe("Client", function () {
         class MyState extends Schema {
             @type("string") str: string;
         }
-        class MyRoom extends ServerRoom {
+        class MyRoom extends Room {
             state = new MyState();
+            messages = {
+                chat: (client, message: { text: string }) => {
+                    client.send("chat", { text: "hello" });
+                }
+            }
         }
 
         // These tests verify TypeScript type inference at compile-time.
         // They are skipped at runtime since they require a running server.
 
         describe("passing RoomType directly as generic", () => {
-            let client: Client;
+            // Type-only reference for compile-time checks (no actual server instantiation)
+            type ServerType = ReturnType<typeof defineServer<{ chat: ReturnType<typeof defineRoom<typeof MyRoom>> }, undefined>>;
+            const client = new Client<ServerType>("ws://localhost:2546");
 
-            beforeAll(() => {
-                client = new Client("ws://localhost:2546");
+            test.skip("joinOrCreate<RoomType> should infer state type", async () => {
+
+                const room = await client.joinOrCreate("chat");
+                // TypeScript should infer room.state as MyState
+                const str: string = room.state.str;
+
+                assert.ok(str);
+                room.send("chat", { text: "hello" });
+
+                // @ts-expect-error - room.state.error should not exist
+                room.send("chat", { invalid_type: "hello" });
+
+                // @ts-expect-error - room.state.error should not exist
+                room.send("invalid-message-type");
+
+                // @ts-expect-error - room.state.error should not exist
+                const _ = room.state.error;
             });
 
             test.skip("joinOrCreate<RoomType> should infer state type", async () => {
                 const room = await client.joinOrCreate<MyRoom>("chat");
                 // TypeScript should infer room.state as MyState
                 const str: string = room.state.str;
+
                 assert.ok(str);
+                room.send("chat", { text: "hello" });
+
+                // @ts-expect-error - room.state.error should not exist
+                room.send("chat", { invalid_type: "hello" });
+
+                // @ts-expect-error - room.state.error should not exist
+                room.send("invalid-message-type");
+
+                // @ts-expect-error - room.state.error should not exist
+                const _ = room.state.error;
+            });
+
+            test.skip("create<RoomType> should infer state type", async () => {
+                const room = await client.create("chat");
+                // TypeScript should infer room.state as MyState
+                const str: string = room.state.str;
+                assert.ok(str);
+
+                // @ts-expect-error - room.state.error should not exist
+                const _ = room.state.error;
             });
 
             test.skip("create<RoomType> should infer state type", async () => {
@@ -164,6 +207,19 @@ describe("Client", function () {
                 // TypeScript should infer room.state as MyState
                 const str: string = room.state.str;
                 assert.ok(str);
+
+                // @ts-expect-error - room.state.error should not exist
+                const _ = room.state.error;
+            });
+
+            test.skip("join<RoomType> should infer state type", async () => {
+                const room = await client.join("chat");
+                // TypeScript should infer room.state as MyState
+                const str: string = room.state.str;
+                assert.ok(str);
+
+                // @ts-expect-error - room.state.error should not exist
+                const _ = room.state.error;
             });
 
             test.skip("join<RoomType> should infer state type", async () => {
@@ -171,6 +227,9 @@ describe("Client", function () {
                 // TypeScript should infer room.state as MyState
                 const str: string = room.state.str;
                 assert.ok(str);
+
+                // @ts-expect-error - room.state.error should not exist
+                const _ = room.state.error;
             });
 
             test.skip("joinById<RoomType> should infer state type", async () => {
@@ -178,6 +237,9 @@ describe("Client", function () {
                 // TypeScript should infer room.state as MyState
                 const str: string = room.state.str;
                 assert.ok(str);
+
+                // @ts-expect-error - room.state.error should not exist
+                const _ = room.state.error;
             });
 
             test.skip("reconnect<RoomType> should infer state type", async () => {
@@ -185,6 +247,9 @@ describe("Client", function () {
                 // TypeScript should infer room.state as MyState
                 const str: string = room.state.str;
                 assert.ok(str);
+
+                // @ts-expect-error - room.state.error should not exist
+                const _ = room.state.error;
             });
         });
 
@@ -196,6 +261,8 @@ describe("Client", function () {
                 // TypeScript should infer room.state as MyState
                 const str: string = room.state.str;
                 assert.ok(str);
+
+                const _ = room.state.error;
             });
         });
     });

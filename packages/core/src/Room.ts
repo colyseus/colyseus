@@ -25,6 +25,13 @@ import { type RoomMethodName, OnAuthException, OnCreateException, OnDisposeExcep
 import { standardValidate, type StandardSchemaV1 } from './utils/StandardSchema.ts';
 import { matchMaker } from '@colyseus/core';
 
+import {
+  type MessageHandlerWithFormat as SharedMessageHandlerWithFormat,
+  type MessageHandler as SharedMessageHandler,
+  type Messages as SharedMessages,
+  type ServerRoomLike,
+} from '@colyseus/shared-types';
+
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
 const noneSerializer = new NoneSerializer();
@@ -52,32 +59,15 @@ export interface IBroadcastOptions extends ISendOptions {
  * Message handler with automatic type inference from format schema.
  * When a format is provided, the message type is automatically inferred from the schema.
  */
-export type MessageHandlerWithFormat<T extends StandardSchemaV1 = any, This = any> = {
-  format: T;
-  handler: (this: This, client: Client, message: StandardSchemaV1.InferOutput<T>) => void;
-};
+export type MessageHandlerWithFormat<T extends StandardSchemaV1 = any, This = any> =
+  SharedMessageHandlerWithFormat<T, Client, This>;
 
-export type MessageHandler<This = any> =
-  | ((this: This, client: Client, message: any) => void)
-  | MessageHandlerWithFormat<any, This>;
-
-/**
- * Extract the message payload type from a message handler.
- * Works with both function handlers and format handlers.
- *
- * (Imported from @colyseus/sdk, not used in the server-side)
- */
-export type ExtractMessageType<T> =
-  T extends { format: infer Format extends StandardSchemaV1; handler: any }
-    ? StandardSchemaV1.InferOutput<Format>
-    : T extends (this: any, client: any, message: infer Message) => void
-      ? Message
-      : any;
+export type MessageHandler<This = any> = SharedMessageHandler<Client, This>;
 
 /**
  * A map of message types to message handlers.
  */
-export type Messages<This extends Room> = Record<string, MessageHandler<This>>;
+export type Messages<This extends Room> = SharedMessages<This, Client>;
 
 /**
  * Helper function to create a validated message handler with automatic type inference.
