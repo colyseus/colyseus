@@ -2192,11 +2192,12 @@ function createDebugPanel(uniquePanelId, debugInfo) {
     title.style.paddingBottom = '4px';
     title.style.display = 'flex';
     title.style.alignItems = 'center';
-    title.style.gap = '4px';
+    title.style.justifyContent = 'space-between';
+    title.style.gap = '8px';
     title.style.position = 'relative';
-    title.innerHTML = '<span style="display: inline-flex; align-items: center;"></span><span id="debug-title-text-' + uniquePanelId + '"></span><span id="debug-message-icon-' + uniquePanelId + '" style="display: none; align-items: center; margin-left: auto; cursor: pointer; opacity: 0.6; transition: opacity 0.2s; margin-right: 4px; width: 16px; height: 16px;">' + messageIcon.replace('height="200px" width="200px"', 'height="16" width="16"') + '</span><span id="debug-hamburger-icon-' + uniquePanelId + '" style="display: inline-flex; align-items: center; cursor: pointer; opacity: 0.6; transition: opacity 0.2s; margin-right: 4px; width: 16px; height: 16px;">' + treeViewIcon.replace('height="200px" width="200px"', 'height="16" width="16"') + '</span><span id="debug-info-icon-' + uniquePanelId + '" style="display: inline-flex; align-items: center; cursor: pointer; opacity: 0.6; transition: opacity 0.2s; width: 16px; height: 16px;">' + infoIcon + '</span>';
+    title.innerHTML = '<span id="debug-title-text-' + uniquePanelId + '"></span><span id="debug-ping-' + uniquePanelId + '" style="font-size: 10px; font-weight: normal; color: #888;" title="Ping time">--</span>';
 
-    // Create tooltip for info icon
+    // Create tooltip for info button (will be shown on hover)
     var tooltip = document.createElement('div');
     tooltip.id = 'debug-tooltip-' + uniquePanelId;
     tooltip.style.position = 'absolute';
@@ -2214,66 +2215,97 @@ function createDebugPanel(uniquePanelId, debugInfo) {
     tooltip.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.5)';
     tooltip.style.lineHeight = '1.4';
     tooltip.innerHTML = '<div><strong>Room ID:</strong> ' + debugInfo.roomId + '</div><div><strong>Session ID:</strong> N/A</div><div><strong>Host:</strong> N/A</div>';
-    title.appendChild(tooltip);
-
-    // Add hover handlers - use a small delay to ensure element exists
-    setTimeout(function() {
-        var infoIconElement = document.getElementById('debug-info-icon-' + uniquePanelId);
-        if (infoIconElement) {
-            var showTooltip = function() {
-                tooltip.style.display = 'block';
-                infoIconElement.style.opacity = '1';
-            };
-            var hideTooltip = function() {
-                tooltip.style.display = 'none';
-                infoIconElement.style.opacity = '0.6';
-            };
-
-            infoIconElement.addEventListener('mouseenter', showTooltip);
-            infoIconElement.addEventListener('mouseleave', hideTooltip);
-
-            // Also handle tooltip hover to keep it visible
-            tooltip.style.pointerEvents = 'auto';
-            tooltip.addEventListener('mouseenter', showTooltip);
-            tooltip.addEventListener('mouseleave', hideTooltip);
-        }
-
-        // Add click handler for hamburger icon
-        var hamburgerIconElement = document.getElementById('debug-hamburger-icon-' + uniquePanelId);
-        if (hamburgerIconElement) {
-            hamburgerIconElement.addEventListener('mouseenter', function() {
-                hamburgerIconElement.style.opacity = '1';
-            });
-            hamburgerIconElement.addEventListener('mouseleave', function() {
-                hamburgerIconElement.style.opacity = '0.6';
-            });
-            hamburgerIconElement.addEventListener('click', function(e) {
-                e.stopPropagation();
-                openStateInspectorModal(uniquePanelId);
-            });
-        }
-
-        // Add click handler for message icon
-        var messageIconElement = document.getElementById('debug-message-icon-' + uniquePanelId);
-        if (messageIconElement) {
-            messageIconElement.addEventListener('mouseenter', function() {
-                messageIconElement.style.opacity = '1';
-            });
-            messageIconElement.addEventListener('mouseleave', function() {
-                messageIconElement.style.opacity = '0.6';
-            });
-            messageIconElement.addEventListener('click', function(e) {
-                e.stopPropagation();
-                openSendMessagesModal(uniquePanelId);
-            });
-        }
-    }, 0);
 
     var content = document.createElement('div');
     content.id = 'debug-content-' + uniquePanelId;
 
+    // Create action buttons container at the bottom
+    var actionsContainer = document.createElement('div');
+    actionsContainer.id = 'debug-actions-' + uniquePanelId;
+    actionsContainer.style.display = 'flex';
+    actionsContainer.style.gap = '4px';
+    actionsContainer.style.marginTop = '8px';
+    actionsContainer.style.paddingTop = '6px';
+    actionsContainer.style.borderTop = '1px solid rgba(255, 255, 255, 0.15)';
+    actionsContainer.style.position = 'relative';
+
+    // Helper function to create action button
+    function createActionButton(id, icon, label, onClick) {
+        var btn = document.createElement('button');
+        btn.id = id;
+        btn.style.display = 'flex';
+        btn.style.alignItems = 'center';
+        btn.style.gap = '4px';
+        btn.style.padding = '4px 8px';
+        btn.style.border = '1px solid rgba(255, 255, 255, 0.2)';
+        btn.style.borderRadius = '4px';
+        btn.style.background = 'rgba(255, 255, 255, 0.05)';
+        btn.style.color = '#fff';
+        btn.style.fontSize = '9px';
+        btn.style.cursor = 'pointer';
+        btn.style.transition = 'background 0.2s, border-color 0.2s';
+        btn.innerHTML = '<span style="display: inline-flex; align-items: center; width: 12px; height: 12px;">' + icon + '</span><span>' + label + '</span>';
+
+        btn.addEventListener('mouseenter', function() {
+            btn.style.background = 'rgba(255, 255, 255, 0.15)';
+            btn.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+        });
+        btn.addEventListener('mouseleave', function() {
+            btn.style.background = 'rgba(255, 255, 255, 0.05)';
+            btn.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+        });
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            onClick();
+        });
+
+        return btn;
+    }
+
+    // Create action buttons
+    var stateBtn = createActionButton(
+        'debug-state-btn-' + uniquePanelId,
+        treeViewIcon.replace('height="200px" width="200px"', 'height="12" width="12"'),
+        'State',
+        function() { openStateInspectorModal(uniquePanelId); }
+    );
+
+    var messageBtn = createActionButton(
+        'debug-message-btn-' + uniquePanelId,
+        messageIcon.replace('height="200px" width="200px"', 'height="12" width="12"'),
+        'Send',
+        function() { openSendMessagesModal(uniquePanelId); }
+    );
+    messageBtn.style.display = 'none'; // Hidden by default, shown when message types available
+
+    var infoBtn = createActionButton(
+        'debug-info-btn-' + uniquePanelId,
+        infoIcon.replace('height="200px" width="200px"', 'height="12" width="12"'),
+        'Info',
+        function() {} // Info button shows tooltip on hover
+    );
+
+    // Add tooltip hover handlers to info button
+    actionsContainer.appendChild(tooltip);
+    var showTooltip = function() {
+        tooltip.style.display = 'block';
+    };
+    var hideTooltip = function() {
+        tooltip.style.display = 'none';
+    };
+    infoBtn.addEventListener('mouseenter', showTooltip);
+    infoBtn.addEventListener('mouseleave', hideTooltip);
+    tooltip.style.pointerEvents = 'auto';
+    tooltip.addEventListener('mouseenter', showTooltip);
+    tooltip.addEventListener('mouseleave', hideTooltip);
+
+    actionsContainer.appendChild(stateBtn);
+    actionsContainer.appendChild(messageBtn);
+    actionsContainer.appendChild(infoBtn);
+
     panel.appendChild(title);
     panel.appendChild(content);
+    panel.appendChild(actionsContainer);
 
     // Prepend panel to body so new panels appear first
     if (document.body.firstChild) {
@@ -2362,13 +2394,22 @@ function updateDebugPanel(uniquePanelId, debugInfo) {
     document.getElementById('debug-title-text-' + uniquePanelId).textContent = debugInfo.roomName;
     document.getElementById('debug-tooltip-' + uniquePanelId).innerHTML = '<div><strong>Room ID:</strong> ' + debugInfo.roomId + '</div><div><strong>Session ID:</strong> ' + debugInfo.sessionId + '</div><div><strong>Host:</strong> ' + debugInfo.host + '</div>';
 
+    // Update ping in header
+    var pingDisplay = debugInfo.pingMs !== null ? debugInfo.pingMs + 'ms' : '--';
+    var pingColor = debugInfo.pingMs !== null ? (debugInfo.pingMs < 100 ? '#22c55e' : debugInfo.pingMs < 200 ? '#eab308' : '#ef4444') : '#888';
+    var pingElement = document.getElementById('debug-ping-' + uniquePanelId);
+    if (pingElement) {
+        pingElement.textContent = pingDisplay;
+        pingElement.style.color = pingColor;
+    }
+
     var html = '<div style="line-height: 1.3;">';
     html += '<div style="font-size: 10px; display: flex; gap: 8px;">';
     html += '<div style="flex: 1;">';
     html += '<div style="margin-bottom: 4px;"><div style="display: flex; align-items: center; gap: 6px;"><span style="display: inline-flex; align-items: center; width: 18px; height: 18px; color: #FF9800;">' + envelopeUp + '</span><span style="color: #FF9800;">' + formatBytes(debugInfo.bytesSentPerSec) + '/s</span></div><div style="margin-left: 24px; opacity: 0.7; font-size: 9px;">' + debugInfo.messagesSentPerSec.toFixed(0) + ' messages</div></div>';
     html += '<div><div style="display: flex; align-items: center; gap: 6px;"><span style="display: inline-flex; align-items: center; width: 18px; height: 18px; color: #2196F3;">' + envelopeDown + '</span><span style="color: #2196F3;">' + formatBytes(debugInfo.bytesReceivedPerSec) + '/s</span></div><div style="margin-left: 24px; opacity: 0.7; font-size: 9px;">' + debugInfo.messagesReceivedPerSec.toFixed(0) + ' messages</div></div>';
     html += '</div>';
-    html += '<div style="display: flex; flex-direction: column; gap: 4px;">';
+    html += '<div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-end;">';
     html += '<canvas id="graph-sent-' + uniquePanelId + '" width="80" height="30" style="display: block;"></canvas>';
     html += '<canvas id="graph-received-' + uniquePanelId + '" width="80" height="30" style="display: block;"></canvas>';
     html += '</div>';
@@ -2547,19 +2588,33 @@ function applyMonkeyPatches() {
             bytesReceivedHistory: [],
             // historyTimestamps: [],
             maxHistoryLength: 60, // Keep last 60 data points (1 minute at 1 second intervals)
-            messageTypes: null // Will store message types from __playground_message_types
+            messageTypes: null, // Will store message types from __playground_message_types
+            pingMs: null as number | null, // Current ping value in milliseconds
+            pingInterval: null as any // Interval for pinging the room
         };
 
         roomDebugInfo.set(uniquePanelId, debugInfo);
+
+        // Start ping interval (every 2 seconds)
+        debugInfo.pingInterval = setInterval(() => {
+            room.ping((ms: number) => {
+                debugInfo.pingMs = ms;
+            });
+        }, 2000);
+
+        // Initial ping
+        room.ping((ms: number) => {
+            debugInfo.pingMs = ms;
+        });
 
         // Listen for __playground_message_types message
         room.onMessage('__playground_message_types', (messageTypes: any) => {
             debugInfo.messageTypes = messageTypes;
 
-            // Show/hide message icon based on message types availability
-            var messageIconElement = document.getElementById('debug-message-icon-' + uniquePanelId);
-            if (messageIconElement) {
-                messageIconElement.style.display = messageTypes ? 'inline-flex' : 'none';
+            // Show/hide message button based on message types availability
+            var messageBtnElement = document.getElementById('debug-message-btn-' + uniquePanelId);
+            if (messageBtnElement) {
+                messageBtnElement.style.display = messageTypes ? 'flex' : 'none';
             }
         });
 
@@ -2605,42 +2660,37 @@ function applyMonkeyPatches() {
             debugInfo.bytesSentDelta += data.length;
         }
 
-        // Monkey-patch: WebSocket transport
-        if (transport.ws) {
-            const originalOnMessage = transport.ws.onmessage;
-            const ws = transport.ws;
+        // Monkey-patch: track received messages through onmessage event
+        const originalOnMessage = transport.events.onmessage;
+        transport.events.onmessage = function(event) {
+            // Clone event data to avoid issues with delayed processing
+            var eventData = event.data;
+            if (eventData instanceof Blob) {
+                eventData = eventData.slice();
+            } else if (eventData instanceof ArrayBuffer) {
+                eventData = eventData.slice(0);
+            } else if (typeof eventData === 'string') {
+                eventData = eventData;
+            }
 
-            transport.ws.onmessage = function(event) {
-                // Clone event data to avoid issues with delayed processing
-                var eventData = event.data;
-                if (eventData instanceof Blob) {
-                    eventData = eventData.slice();
-                } else if (eventData instanceof ArrayBuffer) {
-                    eventData = eventData.slice(0);
-                } else if (typeof eventData === 'string') {
-                    eventData = eventData;
-                }
+            trackReceivedMessage(eventData);
 
-                trackReceivedMessage(eventData);
-
-                // Apply latency simulation for received messages
-                if (preferences.latencySimulation.enabled && preferences.latencySimulation.delay > 0) {
-                    setTimeout(function() {
-                        // Create a synthetic event-like object
-                        var syntheticEvent = {
-                            data: eventData,
-                            target: ws,
-                            currentTarget: ws,
-                            type: 'message'
-                        };
-                        originalOnMessage.call(ws, syntheticEvent);
-                    }, preferences.latencySimulation.delay);
-                } else {
-                    return originalOnMessage.apply(this, arguments);
-                }
-            };
-        }
-
+            // Apply latency simulation for received messages
+            if (preferences.latencySimulation.enabled && preferences.latencySimulation.delay > 0) {
+                setTimeout(function() {
+                    // Create a synthetic event-like object
+                    var syntheticEvent = {
+                        data: eventData,
+                        target: event.target,
+                        currentTarget: event.currentTarget,
+                        type: 'message'
+                    };
+                    originalOnMessage.call(event.target, syntheticEvent);
+                }, preferences.latencySimulation.delay);
+            } else {
+                return originalOnMessage.apply(this, arguments);
+            }
+        };
 
         // Monkey-patch: sending messages through room connection
         const originalSend = room.connection.send.bind(room.connection);
@@ -2673,6 +2723,11 @@ function applyMonkeyPatches() {
 
         // Clean up on room leave
         room.onLeave.once(() => {
+            // Clear ping interval
+            if (debugInfo.pingInterval !== null) {
+                clearInterval(debugInfo.pingInterval);
+                debugInfo.pingInterval = null;
+            }
             roomDebugInfo.delete(uniquePanelId);
             var panel = document.getElementById('debug-panel-' + uniquePanelId);
             if (panel) {
@@ -2699,34 +2754,26 @@ function applyMonkeyPatches() {
     // Patch joinOrCreate
     Client.prototype.joinOrCreate = function() {
         var promise = originalJoinOrCreate.apply(this, arguments);
-        return promise.then(function(room) {
-            return patchRoom(room);
-        });
+        return promise.then((room) => patchRoom(room));
     };
 
     // Patch join
     Client.prototype.join = function() {
         var promise = originalJoin.apply(this, arguments);
-        return promise.then(function(room) {
-            return patchRoom(room);
-        });
+        return promise.then((room) => patchRoom(room));
     };
 
     // Patch create
     Client.prototype.create = function() {
         var promise = originalCreate.apply(this, arguments);
-        return promise.then(function(room) {
-            return patchRoom(room);
-        });
+        return promise.then((room) => patchRoom(room));
     };
 
     // Patch reconnect
     if (originalReconnect) {
         Client.prototype.reconnect = function() {
             var promise = originalReconnect.apply(this, arguments);
-            return promise.then(function(room) {
-                return patchRoom(room);
-            });
+            return promise.then((room) => patchRoom(room));
         };
     }
 }
