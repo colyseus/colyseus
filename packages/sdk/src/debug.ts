@@ -1,6 +1,7 @@
 import { Client } from "./Client.ts";
 import type { Room } from "./Room.ts";
 import type { WebSocketTransport } from "./transport/WebSocketTransport.ts";
+import { CloseCode } from "@colyseus/shared-types";
 
 const logoIcon = `<svg viewBox="0 0 488.94 541.2" style="width: 100%; height: 100%;">
   <g>
@@ -19,6 +20,7 @@ const infoIcon = `<svg stroke="currentColor" fill="currentColor" stroke-width="0
 const settingsIcon = `<svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" height="200px" width="200px" xmlns="http://www.w3.org/2000/svg"><path d="M12.003 21c-.732 .001 -1.465 -.438 -1.678 -1.317a1.724 1.724 0 0 0 -2.573 -1.066c-1.543 .94 -3.31 -.826 -2.37 -2.37a1.724 1.724 0 0 0 -1.065 -2.572c-1.756 -.426 -1.756 -2.924 0 -3.35a1.724 1.724 0 0 0 1.066 -2.573c-.94 -1.543 .826 -3.31 2.37 -2.37c1 .608 2.296 .07 2.572 -1.065c.426 -1.756 2.924 -1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543 -.94 3.31 .826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c.886 .215 1.325 .957 1.318 1.694"></path><path d="M9 12a3 3 0 1 0 6 0a3 3 0 0 0 -6 0"></path><path d="M19.001 19m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path><path d="M19.001 15.5v1.5"></path><path d="M19.001 21v1.5"></path><path d="M22.032 17.25l-1.299 .75"></path><path d="M17.27 20l-1.3 .75"></path><path d="M15.97 17.25l1.3 .75"></path><path d="M20.733 20l1.3 .75"></path></svg>`;
 const eyeSlashIcon = `<svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" height="16" width="16" xmlns="http://www.w3.org/2000/svg"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
 const closeIcon = `<svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><path d="M400 145.49 366.51 112 256 222.51 145.49 112 112 145.49 222.51 256 112 366.51 145.49 400 256 289.49 366.51 400 400 366.51 289.49 256 400 145.49z"></path></svg>`;
+const disconnectIcon = `<svg fill="currentColor" viewBox="0 0 36 36" height="200px" width="200px"><path fill="currentColor" d="M18 24.42a4 4 0 1 0 4 4a4 4 0 0 0-4-4m0 6a2 2 0 1 1 2-2a2 2 0 0 1-2 2" class="clr-i-outline clr-i-outline-path-1"></path><path fill="currentColor" d="M26.21 21.85a1 1 0 0 0-.23-1.4a13.6 13.6 0 0 0-5-2.23l3.87 3.87a1 1 0 0 0 1.36-.24" class="clr-i-outline clr-i-outline-path-2"></path><path fill="currentColor" d="M18.05 10.72a21 21 0 0 0-4.16.43l1.74 1.74a19 19 0 0 1 2.42-.17A18.76 18.76 0 0 1 28.64 16a1 1 0 0 0 1.12-1.65a20.75 20.75 0 0 0-11.71-3.63" class="clr-i-outline clr-i-outline-path-3"></path><path fill="currentColor" d="M33.55 8.2A28.11 28.11 0 0 0 8.11 5.36l1.58 1.57a26 26 0 0 1 22.76 2.94a1 1 0 0 0 1.1-1.67" class="clr-i-outline clr-i-outline-path-4"></path><path fill="currentColor" d="m1.84 4.75l2.43 2.43c-.62.34-1.23.7-1.83 1.1a1 1 0 1 0 1.12 1.66C4.26 9.47 5 9 5.74 8.65l3.87 3.87a20.6 20.6 0 0 0-3.38 1.88A1 1 0 0 0 7.36 16a18.8 18.8 0 0 1 3.77-2l4.16 4.16A13.5 13.5 0 0 0 10 20.55a1 1 0 0 0 1.18 1.61A11.5 11.5 0 0 1 17 20l10.8 10.8l1.41-1.41l-26-26Z" class="clr-i-outline clr-i-outline-path-5"></path><path fill="none" d="M0 0h36v36H0z"></path></svg>`;
 
 // Store debug info per room
 const roomDebugInfo = new Map();
@@ -2195,14 +2197,14 @@ function createDebugPanel(uniquePanelId, debugInfo) {
     title.style.justifyContent = 'space-between';
     title.style.gap = '8px';
     title.style.position = 'relative';
-    title.innerHTML = '<span id="debug-title-text-' + uniquePanelId + '"></span><span id="debug-ping-' + uniquePanelId + '" style="font-size: 10px; font-weight: normal; color: #888;" title="Ping time">--</span>';
+    title.innerHTML = '<span id="debug-title-text-' + uniquePanelId + '"><span class="debug-room-name"></span><span class="debug-info-icon" style="display: inline-flex; align-items: center; margin-left: 4px; cursor: pointer; opacity: 0.6; vertical-align: middle;">' + infoIcon.replace('height="200px" width="200px"', 'height="10" width="10"') + '</span></span><span id="debug-ping-' + uniquePanelId + '" style="font-size: 10px; font-weight: normal; color: #888;" title="Ping time">--</span>';
 
     // Create tooltip for info button (will be shown on hover)
     var tooltip = document.createElement('div');
     tooltip.id = 'debug-tooltip-' + uniquePanelId;
     tooltip.style.position = 'absolute';
     tooltip.style.top = '100%';
-    tooltip.style.right = '0';
+    tooltip.style.left = '0';
     tooltip.style.marginTop = '4px';
     tooltip.style.padding = '6px 8px';
     tooltip.style.backgroundColor = 'rgba(0, 0, 0, 0.95)';
@@ -2214,7 +2216,7 @@ function createDebugPanel(uniquePanelId, debugInfo) {
     tooltip.style.display = 'none';
     tooltip.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.5)';
     tooltip.style.lineHeight = '1.4';
-    tooltip.innerHTML = '<div><strong>Room ID:</strong> ' + debugInfo.roomId + '</div><div><strong>Session ID:</strong> N/A</div><div><strong>Host:</strong> N/A</div>';
+    tooltip.innerHTML = '<div><strong>Room ID:</strong> ' + debugInfo.roomId + '</div><div><strong>Session ID:</strong> N/A</div>';
 
     var content = document.createElement('div');
     content.id = 'debug-content-' + uniquePanelId;
@@ -2278,30 +2280,110 @@ function createDebugPanel(uniquePanelId, debugInfo) {
     );
     messageBtn.style.display = 'none'; // Hidden by default, shown when message types available
 
-    var infoBtn = createActionButton(
-        'debug-info-btn-' + uniquePanelId,
-        infoIcon.replace('height="200px" width="200px"', 'height="12" width="12"'),
-        'Info',
-        function() {} // Info button shows tooltip on hover
+    // Create disconnect button (red, simulates abnormal websocket close)
+    var disconnectBtn = createActionButton(
+        'debug-disconnect-btn-' + uniquePanelId,
+        disconnectIcon.replace('height="200px" width="200px"', 'height="12" width="12"'),
+        'Drop',
+        function() {
+            var info = roomDebugInfo.get(uniquePanelId);
+            if (info && info.room && info.room.connection) {
+                // Simulate connection closure
+                info.room.connection.close(CloseCode.MAY_TRY_RECONNECT);
+            }
+        }
     );
 
-    // Add tooltip hover handlers to info button
-    actionsContainer.appendChild(tooltip);
+    // Track button state for hover effects
+    var isReconnecting = false;
+
+    // Helper to apply normal (red) button style
+    function applyNormalStyle() {
+        disconnectBtn.style.background = 'rgba(239, 68, 68, 0.2)';
+        disconnectBtn.style.borderColor = 'rgba(239, 68, 68, 0.5)';
+        disconnectBtn.style.color = '#ef4444';
+        disconnectBtn.style.animation = '';
+        disconnectBtn.style.pointerEvents = 'auto';
+        disconnectBtn.style.opacity = '1';
+        var labelSpan = disconnectBtn.querySelector('span:last-child') as HTMLElement;
+        if (labelSpan) labelSpan.textContent = 'Drop';
+    }
+
+    // Helper to apply reconnecting (orange/pulsing) button style
+    function applyReconnectingStyle() {
+        disconnectBtn.style.background = 'rgba(251, 146, 60, 0.3)';
+        disconnectBtn.style.borderColor = 'rgba(251, 146, 60, 0.6)';
+        disconnectBtn.style.color = '#fb923c';
+        disconnectBtn.style.animation = 'debug-pulse 1.5s ease-in-out infinite';
+        disconnectBtn.style.pointerEvents = 'none';
+        disconnectBtn.style.opacity = '0.8';
+        var labelSpan = disconnectBtn.querySelector('span:last-child') as HTMLElement;
+        if (labelSpan) labelSpan.textContent = 'Reconnecting...';
+    }
+
+    // Inject CSS animation if not already present
+    if (!document.getElementById('debug-pulse-animation')) {
+        var style = document.createElement('style');
+        style.id = 'debug-pulse-animation';
+        style.textContent = '@keyframes debug-pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }';
+        document.head.appendChild(style);
+    }
+
+    // Apply initial style
+    applyNormalStyle();
+
+    // Register onDrop callback to show reconnecting state
+    if (debugInfo.room) {
+        debugInfo.room.onDrop(function() {
+            isReconnecting = true;
+            applyReconnectingStyle();
+        });
+
+        // Register onReconnect callback to restore normal state
+        debugInfo.room.onReconnect(function() {
+            isReconnecting = false;
+            applyNormalStyle();
+        });
+    }
+
+    // Hover effects (only when not reconnecting)
+    disconnectBtn.addEventListener('mouseenter', function() {
+        if (!isReconnecting) {
+            disconnectBtn.style.background = 'rgba(239, 68, 68, 0.35)';
+            disconnectBtn.style.borderColor = 'rgba(239, 68, 68, 0.7)';
+        }
+    });
+    disconnectBtn.addEventListener('mouseleave', function() {
+        if (!isReconnecting) {
+            disconnectBtn.style.background = 'rgba(239, 68, 68, 0.2)';
+            disconnectBtn.style.borderColor = 'rgba(239, 68, 68, 0.5)';
+        }
+    });
+
+    // Add tooltip hover handlers to info icon in title
+    title.appendChild(tooltip);
+    var infoIconEl = title.querySelector('.debug-info-icon') as HTMLElement;
+    var tooltipTimeout: any = null;
     var showTooltip = function() {
+        if (tooltipTimeout) { clearTimeout(tooltipTimeout); tooltipTimeout = null; }
         tooltip.style.display = 'block';
     };
     var hideTooltip = function() {
-        tooltip.style.display = 'none';
+        tooltipTimeout = setTimeout(function() {
+            tooltip.style.display = 'none';
+        }, 100);
     };
-    infoBtn.addEventListener('mouseenter', showTooltip);
-    infoBtn.addEventListener('mouseleave', hideTooltip);
+    if (infoIconEl) {
+        infoIconEl.addEventListener('mouseenter', showTooltip);
+        infoIconEl.addEventListener('mouseleave', hideTooltip);
+    }
     tooltip.style.pointerEvents = 'auto';
     tooltip.addEventListener('mouseenter', showTooltip);
     tooltip.addEventListener('mouseleave', hideTooltip);
 
     actionsContainer.appendChild(stateBtn);
     actionsContainer.appendChild(messageBtn);
-    actionsContainer.appendChild(infoBtn);
+    actionsContainer.appendChild(disconnectBtn);
 
     panel.appendChild(title);
     panel.appendChild(content);
@@ -2390,9 +2472,11 @@ function updateDebugPanel(uniquePanelId, debugInfo) {
         }
     }
 
-    // Update title with room name only (roomId, sessionId, and Host are in tooltip)
-    document.getElementById('debug-title-text-' + uniquePanelId).textContent = debugInfo.roomName;
-    document.getElementById('debug-tooltip-' + uniquePanelId).innerHTML = '<div><strong>Room ID:</strong> ' + debugInfo.roomId + '</div><div><strong>Session ID:</strong> ' + debugInfo.sessionId + '</div><div><strong>Host:</strong> ' + debugInfo.host + '</div>';
+    // Update title with room name only (roomId and sessionId are in tooltip)
+    var titleTextEl = document.getElementById('debug-title-text-' + uniquePanelId);
+    var roomNameEl = titleTextEl?.querySelector('.debug-room-name');
+    if (roomNameEl) roomNameEl.textContent = debugInfo.roomName;
+    document.getElementById('debug-tooltip-' + uniquePanelId).innerHTML = '<div><strong>Room ID:</strong> ' + debugInfo.roomId + '</div><div><strong>Session ID:</strong> ' + debugInfo.sessionId + '</div>';
 
     // Update ping in header
     var pingDisplay = debugInfo.pingMs !== null ? debugInfo.pingMs + 'ms' : '--';
