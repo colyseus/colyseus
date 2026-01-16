@@ -410,14 +410,16 @@ describe("DevMode", () => {
     class IntegrationDevModeRoom extends Room {
       state = new DevModeState();
 
+      messages = {
+        increment: (client, message) => {
+          this.state.count++;
+        }
+      }
+
       onCreate(options: any) {
         if (options.roomId) {
           this.roomId = options.roomId;
         }
-        // Register message handler to modify state
-        this.onMessage("increment", () => {
-          this.state.count++;
-        });
       }
 
       onCacheRoom() {
@@ -455,7 +457,7 @@ describe("DevMode", () => {
       const sdkClient = new SDKClient(TEST_ENDPOINT);
 
       // Join room and get initial state
-      const roomConnection = await sdkClient.joinOrCreate<DevModeState>("devmode_integration");
+      const roomConnection = await sdkClient.joinOrCreate<IntegrationDevModeRoom>("devmode_integration");
 
       // Configure reconnection for immediate retry (for testing)
       roomConnection.reconnection.minUptime = 0;
@@ -501,7 +503,7 @@ describe("DevMode", () => {
 
       // Wait for client to receive onDrop
       let dropCode = await dropTracker.deferred;
-      assert.strictEqual(dropCode, CloseCode.DEVMODE_RESTART, "Client should receive DEVMODE_RESTART close code");
+      assert.strictEqual(dropCode, CloseCode.MAY_TRY_RECONNECT, "Client should receive MAY_TRY_RECONNECT close code");
 
       // Create second server with same presence/driver (to access cached data)
       // This must happen quickly before the SDK gives up on reconnection
@@ -556,7 +558,7 @@ describe("DevMode", () => {
 
       // Wait for client to receive onDrop
       dropCode = await dropTracker.deferred;
-      assert.strictEqual(dropCode, CloseCode.DEVMODE_RESTART, "Client should receive DEVMODE_RESTART close code on second restart");
+      assert.strictEqual(dropCode, CloseCode.MAY_TRY_RECONNECT, "Client should receive MAY_TRY_RECONNECT close code on second restart");
 
       // Create third server with same presence/driver
       const server3 = new Server({

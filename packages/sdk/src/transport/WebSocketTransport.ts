@@ -1,4 +1,5 @@
 import NodeWebSocket from "ws";
+import { CloseCode } from "@colyseus/shared-types";
 import type { ITransport, ITransportEventMap } from "./ITransport.ts";
 
 const WebSocket = globalThis.WebSocket || NodeWebSocket;
@@ -36,13 +37,24 @@ export class WebSocketTransport implements ITransport {
         }
 
         this.ws.binaryType = 'arraybuffer';
-        this.ws.onopen = this.events.onopen;
-        this.ws.onmessage = this.events.onmessage;
-        this.ws.onclose = this.events.onclose;
-        this.ws.onerror = this.events.onerror;
+        this.ws.onopen = (event) => this.events.onopen?.(event);
+        this.ws.onmessage = (event) => this.events.onmessage?.(event);
+        this.ws.onclose = (event) => this.events.onclose?.(event);
+        this.ws.onerror = (event) => this.events.onerror?.(event);
     }
 
     public close(code?: number, reason?: string) {
+        //
+        // trigger the onclose event immediately if the code is MAY_TRY_RECONNECT
+        // when "offline" event is triggered, the close frame is delayed. this
+        // way client can try to reconnect immediately.
+        //
+        if (code === CloseCode.MAY_TRY_RECONNECT && this.events.onclose) {
+            this.ws.onclose = null;
+            this.events.onclose({ code, reason });
+        }
+
+        // then we close the connection
         this.ws.close(code, reason);
     }
 

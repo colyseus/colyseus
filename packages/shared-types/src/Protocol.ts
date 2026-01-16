@@ -45,6 +45,6 @@ export const CloseCode = {
   CONSENTED: 4000,
   SERVER_SHUTDOWN: 4001,
   WITH_ERROR: 4002,
-  DEVMODE_RESTART: 4010
+  MAY_TRY_RECONNECT: 4010
 } as const;
 export type CloseCode = typeof CloseCode[keyof typeof CloseCode];

@@ -112,7 +112,7 @@ export class Room<
     // reconnection logic
     public reconnection: ReconnectionOptions = {
         retryCount: 0,
-        maxRetries: 8,
+        maxRetries: 15,
         delay: 100,
         minDelay: 100,
         maxDelay: 5000,
@@ -145,7 +145,6 @@ export class Room<
             (this.serializer as SchemaSerializer).state = new rootSchema();
         }
 
-        this.onError((code, message) => console.warn?.(`colyseus.js - onError => (${code}) ${message}`));
         this.onLeave(() => this.removeAllListeners());
     }
 
@@ -163,7 +162,7 @@ export class Room<
                 e.code === CloseCode.NO_STATUS_RECEIVED ||
                 e.code === CloseCode.ABNORMAL_CLOSURE ||
                 e.code === CloseCode.GOING_AWAY ||
-                e.code === CloseCode.DEVMODE_RESTART
+                e.code === CloseCode.MAY_TRY_RECONNECT
             ) {
                 this.onDrop.invoke(e.code, e.reason);
                 this.handleReconnection();
@@ -175,7 +174,6 @@ export class Room<
         };
 
         this.connection.events.onerror = (e: CloseEvent) => {
-            console.warn?.(`Room, onError (${e.code}): ${e.reason}`);
             this.onError.invoke(e.code, e.reason);
         };
 
@@ -226,6 +224,11 @@ export class Room<
     }
 
     public ping(callback: (ms: number) => void) {
+        // skip if connection is not open
+        if (!this.connection?.isOpen) {
+            return;
+        }
+
         this.#lastPingTime = now();
         this.#pingCallback = callback;
         this.packr.buffer[0] = Protocol.PING;
@@ -413,8 +416,9 @@ export class Room<
                 : decode.number(buffer as Buffer, it);
 
             this.dispatchMessage(type, buffer.subarray(it.offset));
+
         } else if (code === Protocol.PING) {
-            this.#pingCallback?.(now() - this.#lastPingTime);
+            this.#pingCallback?.(Math.round(now() - this.#lastPingTime));
             this.#pingCallback = undefined;
         }
     }
@@ -458,7 +462,6 @@ export class Room<
         }
 
         if (!this.reconnection.isReconnecting) {
-            console.info(`[Colyseus reconnection]: ${String.fromCodePoint(0x1F504)} Re-establishing connection with roomId '${this.roomId}'...`); // 🔄
             this.reconnection.retryCount = 0;
             this.reconnection.isReconnecting = true;
         }
@@ -470,18 +473,19 @@ export class Room<
         this.reconnection.retryCount++;
 
         const delay = Math.min(this.reconnection.maxDelay, Math.max(this.reconnection.minDelay, this.reconnection.backoff(this.reconnection.retryCount, this.reconnection.delay)));
-
-        console.info(`[Colyseus reconnection]: ${String.fromCodePoint(0x1F504)} will retry in ${delay}ms... (${this.reconnection.retryCount} out of ${this.reconnection.maxRetries})`); // 🔄
+        console.info(`[Colyseus reconnection]: ${String.fromCodePoint(0x023F3)} will retry in ${(delay/1000).toFixed(1)} seconds...`); // 🔄
 
         // Wait before attempting reconnection
         setTimeout(() => {
             try {
+                console.info(`[Colyseus reconnection]: ${String.fromCodePoint(0x1F504)} Re-establishing sessionId '${this.sessionId}' with roomId '${this.roomId}'... (attempt ${this.reconnection.retryCount} of ${this.reconnection.maxRetries})`); // 🔄
                 this.connection.reconnect({
                     reconnectionToken: this.reconnectionToken.split(":")[1],
                     skipHandshake: true, // we already applied the handshake on first join
                 });
 
             } catch (e) {
+                console.log(".reconnect() failed", e);
                 if (this.reconnection.retryCount < this.reconnection.maxRetries) {
                     this.retryReconnection();
                 } else {

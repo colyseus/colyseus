@@ -55,6 +55,7 @@ export async function reloadFromCache() {
         // TODO: need to restore each client's StateView as well
         // reserve seat for 20 seconds
         const { sessionId, reconnectionToken } = clientData;
+        console.log("reserving seat for client", { sessionId, reconnectionToken });
         await remoteRoomCall(recreatedRoomListing.roomId, '_reserveSeat', [sessionId, {}, {}, 20, false, reconnectionToken]);
       }
     }

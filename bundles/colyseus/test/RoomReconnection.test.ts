@@ -1,10 +1,7 @@
 import assert from "assert";
-import crypto from "crypto";
-import sinon from "sinon";
 import { CloseCode, ColyseusSDK, getStateCallbacks, Room as SDKRoom } from "@colyseus/sdk";
 import { type Client,  type MatchMakerDriver, type Presence, matchMaker, Room, Server, Transport, LocalDriver, LocalPresence, Deferred } from "@colyseus/core";
 
-import WebSocket from "ws";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import { timeout } from "./utils/index.ts";
 import { schema, type SchemaType } from "@colyseus/schema";
@@ -235,6 +232,141 @@ describe("Room Reconnection", () => {
       assert.strictEqual(onItemAddCount, 12);
     });
 
+    it("reconnection should replace previous stale client if it's still connected", async () => {
+      let onDropCalled = false;
+      let onReconnectCalled = false;
+      let onLeaveCalled = false;
+
+      matchMaker.defineRoomType('reconnect_while_connected', class _ extends Room {
+        onJoin(client: Client, options: any) { }
+        async onDrop(client: Client, code: number) {
+          onDropCalled = true;
+          this.allowReconnection(client, 10);
+        }
+        async onReconnect(client: Client) {
+          onReconnectCalled = true;
+        }
+        async onLeave(client: Client, code: number) {
+          onLeaveCalled = true;
+        }
+      });
+
+      const conn = await client.joinOrCreate('reconnect_while_connected');
+      setupReconnection(conn);
+
+      // Store the reconnection token while still connected
+      const reconnectionToken = conn.reconnectionToken;
+      const originalSessionId = conn.sessionId;
+      assert.ok(reconnectionToken, "reconnectionToken should be available");
+      assert.strictEqual(true, conn.connection.isOpen, "connection should be open");
+
+      // Try to reconnect while the original connection is still open
+      // This should close the stale connection and allow the new connection
+      const newConn = await client.reconnect(reconnectionToken);
+
+      // Give time for the stale connection to close and callbacks to fire
+      await timeout(50);
+
+      // Reconnection should succeed
+      assert.ok(newConn, "reconnection should succeed");
+      assert.strictEqual(true, newConn.connection.isOpen, "new connection should be open");
+      assert.strictEqual(originalSessionId, newConn.sessionId, "sessionId should be preserved");
+
+      // Original connection should be closed
+      assert.strictEqual(false, conn.connection.isOpen, "original connection should be closed");
+
+      // Server-side callbacks should have been triggered
+      assert.strictEqual(onDropCalled, true, "onDrop should be called when stale connection is closed");
+      assert.strictEqual(onReconnectCalled, true, "onReconnect should be called");
+
+      // onLeave should NOT be called yet (client reconnected)
+      assert.strictEqual(onLeaveCalled, false, "onLeave should not be called after reconnection");
+
+      // Clean up
+      await newConn.leave();
+      await timeout(50);
+
+      assert.strictEqual(onLeaveCalled, true, "onLeave should be called after explicit leave");
+      assert.ok(!matchMaker.getLocalRoomById(newConn.roomId));
+    });
+
+    it("automatic reconnection should wait for stale connection to be dropped", async () => {
+      let onDropCalled = false;
+      let onReconnectCalled = false;
+      let onLeaveCalled = false;
+
+      matchMaker.defineRoomType('auto_reconnect_wait_stale', class _ extends Room {
+        onJoin(client: Client, options: any) { }
+        async onDrop(client: Client, code: number) {
+          onDropCalled = true;
+          this.allowReconnection(client, 10);
+        }
+        async onReconnect(client: Client) {
+          onReconnectCalled = true;
+        }
+        async onLeave(client: Client, code: number) {
+          onLeaveCalled = true;
+        }
+      });
+
+      const conn = await client.joinOrCreate('auto_reconnect_wait_stale');
+      setupReconnection(conn);
+
+      const originalSessionId = conn.sessionId;
+      const reconnectionToken = conn.reconnectionToken;
+      assert.ok(reconnectionToken, "reconnectionToken should be available");
+      assert.strictEqual(true, conn.connection.isOpen, "connection should be open");
+
+      // Simulate automatic reconnection arriving while old connection is still active.
+      // This happens during network switches when the new network establishes
+      // connectivity before the server detects the old connection was lost.
+      //
+      // The server-side code at Room.ts:1132-1147 handles this by:
+      // 1. Creating a deferred promise when reconnection arrives for a still-connected client
+      // 2. Waiting for the stale connection to trigger onDrop and allowReconnection
+      // 3. Resolving the deferred once allowReconnection is called
+      // 4. Completing the reconnection process
+
+      // Use reconnect() while old connection is open (simulates network switch scenario)
+      const newConn = await client.reconnect(reconnectionToken);
+
+      // Give time for server-side callbacks to fire
+      await timeout(50);
+
+      // Reconnection should succeed with preserved session
+      assert.ok(newConn, "reconnection should succeed");
+      assert.strictEqual(true, newConn.connection.isOpen, "new connection should be open");
+      assert.strictEqual(originalSessionId, newConn.sessionId, "sessionId should be preserved");
+
+      // Original connection should be closed
+      assert.strictEqual(false, conn.connection.isOpen, "original connection should be closed");
+
+      // Server-side callbacks should have been triggered
+      assert.strictEqual(onDropCalled, true, "onDrop should be called when stale connection is closed");
+      assert.strictEqual(onReconnectCalled, true, "onReconnect should be called");
+      assert.strictEqual(onLeaveCalled, false, "onLeave should not be called after reconnection");
+
+      // Clean up
+      await newConn.leave();
+      await timeout(50);
+
+      assert.strictEqual(onLeaveCalled, true, "onLeave should be called after explicit leave");
+      assert.ok(!matchMaker.getLocalRoomById(newConn.roomId));
+    });
+
+    describe("offline / online", () => {
+      it("should reconnect when going online", async () => {
+
+        let onDropCalled = false;
+        let onReconnectCalled = false;
+        let onLeaveCalled = false;
+
+        matchMaker.defineRoomType('offline_online_reconnect', class _ extends Room {
+          onJoin(client: Client, options: any) { }
+        });
+      });
+    })
+
     describe("onLeave should be backwards-compatible", () => {
       it("should allow to reconnect with onLeave + allowReconnection", async () => {
         let onLeaveCalled = false;
@@ -305,6 +437,7 @@ describe("Room Reconnection", () => {
         });
 
         const conn = await client.joinOrCreate('backwards_compatible_onleave_reconnection_cancelled');
+        conn.reconnection.minUptime = 0;
         conn.leave(false);
 
         await new Promise((resolve) => conn.onDrop.once((code, reason) => resolve(true)));

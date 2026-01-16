@@ -42,9 +42,9 @@ Room.prototype['connect'] = function(endpoint: string, devModeCloseCallback: () 
   const onclose = events.onclose;
   events.onclose = (event: any) => {
     delete (room as any)[RAW_EVENTS_KEY];
-    if (event.code === CloseCode.DEVMODE_RESTART) {
+    if (event.code === CloseCode.MAY_TRY_RECONNECT) {
       room['onMessageHandlers'].emit(DEVMODE_RESTART);
-      room['onMessageHandlers'].emit(RAW_EVENTS_KEY, ['close', 'CLOSE_DEVMODE_RESTART', { code: event.code }]);
+      room['onMessageHandlers'].emit(RAW_EVENTS_KEY, ['close', 'MAY_TRY_RECONNECT', { code: event.code }]);
     } else {
       room['onMessageHandlers'].emit(RAW_EVENTS_KEY, ['close', 'CLOSE', { code: event.code }]);
     }

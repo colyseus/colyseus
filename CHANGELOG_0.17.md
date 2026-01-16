@@ -53,9 +53,10 @@ We have separate methods now for handling `onMessage()` with raw bytes: `onMessa
 [x] Colyseus Cloud: allow `@colyseus/tools` - `listen()` method to accept a raw `server` instance and make it compatible with Colyseus Cloud infrastructure.
 [x] Full-stack type safety
 [x] Support Express v5
-[ ] Check if `@colyseus/testing` is working properly.
+[x] Check if `@colyseus/testing` is working properly.
+[x] `PostgresDriver`: confirm if delay between increment/decrement `clients` is affecting `maxClients` being respected.
+[ ] Automatic room connection recovery. Should cover Covers abnormal closure and wi-fi network change. (https://canary.discord.com/channels/525739117951320081/1408832885149929714/1408832885149929714)
 [ ] How to use new `messages = {}` for raw binary data? (`.onMessageBytes()` ??, maybe using `binary()` utility?)
-[ ] `PostgresDriver`: confirm if delay between increment/decrement `clients` is affecting `maxClients` being respected.
 [ ] Drivers: Allow to filter with OR operation (metaField=X or metaField=Y)
 [ ] Room caching and restoration ("migration") to new server
 [ ] `RedisDriver`: implement `boot()` to create LUA Script for filtering rooms at the server instead of at the Redis client (currently under `redis-driver/src/experimental_luaScripts/*` directory. tho performance is worse than current implementation.)

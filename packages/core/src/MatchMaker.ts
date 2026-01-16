@@ -261,7 +261,6 @@ export async function reconnect(roomId: string, clientOptions: ClientOptions = {
   const reconnectionToken = clientOptions.reconnectionToken;
   if (!reconnectionToken) { throw new ServerError(ErrorCode.MATCHMAKE_UNHANDLED, `'reconnectionToken' must be provided for reconnection.`); }
 
-
   // respond to re-connection!
   const sessionId = await remoteRoomCall(room.roomId, 'checkReconnectionToken', [reconnectionToken]);
   if (sessionId) {
@@ -575,7 +574,7 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
   room['_listing'].maxClients = room.maxClients;
 
   // imediatelly ask client to join the room
-  debugMatchMaking('spawning \'%s\', roomId: %s, processId: %s', roomName, room.roomId, processId);
+  debugMatchMaking('creating room \'%s\', roomId: \'%s\', processId: \'%s\'', roomName, room.roomId, processId);
 
   // increment amount of rooms this process is handling
   stats.local.roomCount++;
@@ -730,7 +729,7 @@ export async function gracefullyShutdown(): Promise<any> {
   // make sure all rooms are disposed
   return Promise.all(disconnectAll(
     (isDevMode)
-      ? CloseCode.DEVMODE_RESTART
+      ? CloseCode.MAY_TRY_RECONNECT
       : CloseCode.SERVER_SHUTDOWN
   ));
 }

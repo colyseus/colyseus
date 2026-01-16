@@ -250,6 +250,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
   private _reservedSeatTimeouts: { [sessionId: string]: NodeJS.Timeout } = {};
 
   private _reconnections: { [reconnectionToken: string]: [string, Deferred] } = {};
+  private _reconnectionAttempts: { [reconnectionToken: string]: Deferred } = {};
 
   public messages?: Messages<any>;
 
@@ -540,7 +541,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
   public onBeforeShutdown() {
     this.disconnect(
       (isDevMode)
-        ? CloseCode.DEVMODE_RESTART
+        ? CloseCode.MAY_TRY_RECONNECT
         : CloseCode.SERVER_SHUTDOWN
     );
   }
@@ -584,19 +585,21 @@ export class Room<T extends RoomOptions = RoomOptions> {
   public hasReservedSeat(sessionId: string, reconnectionToken?: string): boolean {
     const reservedSeat = this._reservedSeats[sessionId];
 
-    // seat reservation not found / expired
-    if (reservedSeat === undefined) {
-      return false;
+    if (reservedSeat) {
+      // seat reservation is present
+      return (
+        // not consumed
+        (reservedSeat[2] === false) ||
+        // reconnection is allowed and the reconnection token is valid.
+        (reservedSeat[3] && this._reconnections[reconnectionToken]?.[0] === sessionId)
+      )
+
+    } else if (typeof(reconnectionToken) === "string") {
+        // potentially a stale client reference, so a reconnection attempt is possible.
+        return this.clients.getById(sessionId)?.reconnectionToken === reconnectionToken;
     }
 
-    if (reservedSeat[3]) {
-      // reconnection
-      return (reconnectionToken && this._reconnections[reconnectionToken]?.[0] === sessionId);
-
-    } else {
-      // seat reservation not consumed
-      return reservedSeat[2] === false;
-    }
+    return false;
   }
 
   public checkReconnectionToken(reconnectionToken: string) {
@@ -605,10 +608,16 @@ export class Room<T extends RoomOptions = RoomOptions> {
 
     if (reservedSeat && reservedSeat[3]) {
       return sessionId;
-
-    } else {
-      return undefined;
     }
+
+    const client = this.clients.find((client) => client.reconnectionToken === reconnectionToken);
+    if (client) {
+      // this.allowReconnection(client, this.seatReservationTimeout);
+      this.#_forciblyCloseClient(client as ExtractRoomClient<T> & ClientPrivate, CloseCode.WITH_ERROR);
+      return client.sessionId;
+    }
+
+    return undefined;
   }
 
   /**
@@ -1080,6 +1089,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
     const sessionId = client.sessionId;
 
     // generate unique private reconnection token
+    // (each new reconnection receives a new reconnection token)
     client.reconnectionToken = generateId();
 
     if (this._reservedSeatTimeouts[sessionId]) {
@@ -1091,6 +1101,36 @@ export class Room<T extends RoomOptions = RoomOptions> {
     if (this._autoDisposeTimeout) {
       clearTimeout(this._autoDisposeTimeout);
       this._autoDisposeTimeout = undefined;
+    }
+
+    //
+    // user may be trying to reconnect while the old connection is still open (stale)
+    // (e.g. during network switches, where the old connection is still open while a new reconnection attempt is being made)
+    //
+    if (
+      this._reservedSeats[sessionId] === undefined &&
+      connectionOptions?.reconnectionToken &&
+      this.clients.getById(sessionId)?.reconnectionToken === connectionOptions.reconnectionToken
+    ) {
+      debugMatchMaking('attempting to reconnect client with a stale previous connection - sessionId: \'%s\', roomId: \'%s\'', client.sessionId, this.roomId);
+      this._reconnectionAttempts[connectionOptions.reconnectionToken] = new Deferred();
+
+      const reconnectionAttemptTimeout = setTimeout(() => {
+        this._reconnectionAttempts[connectionOptions.reconnectionToken].reject(new ServerError(CloseCode.MAY_TRY_RECONNECT, 'Reconnection attempt timed out'));
+      }, this.seatReservationTimeout * 1000);
+
+      const cleanup = () => {
+        clearTimeout(reconnectionAttemptTimeout);
+        delete this._reconnectionAttempts[connectionOptions.reconnectionToken];
+      }
+
+      await this._reconnectionAttempts[connectionOptions.reconnectionToken]
+        .then(() => cleanup())
+        .catch(() => cleanup());
+
+      if (!this._reservedSeats[sessionId]) {
+        throw new ServerError(ErrorCode.MATCHMAKE_EXPIRED, "failed to reconnect");
+      }
     }
 
     // get seat reservation options and clear it
@@ -1279,6 +1319,16 @@ export class Room<T extends RoomOptions = RoomOptions> {
     const sessionId = previousClient.sessionId;
     const reconnectionToken = previousClient.reconnectionToken;
 
+    //
+    // prevent duplicate .allowReconnection() calls
+    // (may occur during network switches, where the old connection is still
+    // open while a new reconnection attempt is being made)
+    //
+    if (this._reconnections[reconnectionToken]) {
+      debugMatchMaking('skipping duplicate .allowReconnection() call for client - sessionId: \'%s\', roomId: \'%s\'', sessionId, this.roomId);
+      return this._reconnections[reconnectionToken][1];
+    }
+
     this._reserveSeat(sessionId, true, previousClient.auth, seconds, true);
 
     // keep reconnection reference in case the user reconnects into this room.
@@ -1314,6 +1364,18 @@ export class Room<T extends RoomOptions = RoomOptions> {
     }).finally(() => {
       cleanup();
     });
+
+    //
+    // If a reconnection attempt is already in progress, resolve it
+    //
+    // This step ensures reconnection works when network changes (e.g.,
+    // switching Wi-Fi), as the original connection may still be open while a
+    // new reconnection attempt is being made.
+    //
+    if (this._reconnectionAttempts[reconnectionToken]) {
+      debugMatchMaking('resolving reconnection attempt for client - sessionId: \'%s\', roomId: \'%s\'', sessionId, this.roomId);
+      this._reconnectionAttempts[reconnectionToken].resolve(true);
+    }
 
     return reconnection;
   }
@@ -1392,8 +1454,8 @@ export class Room<T extends RoomOptions = RoomOptions> {
     }
 
     debugMatchMaking(
-      'reserving seat. sessionId: \'%s\', roomId: \'%s\', processId: \'%s\'',
-      sessionId, this.roomId, matchMaker.processId,
+      'reserving seat on \'%s\' - sessionId: \'%s\', roomId: \'%s\', processId: \'%s\'',
+      this.roomName, sessionId, this.roomId, matchMaker.processId,
     );
 
     this._reservedSeats[sessionId] = [joinOptions, authData, false, allowReconnection];
@@ -1503,6 +1565,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
       client._lastMessageTime = this.clock.currentTime;
     } else if (++client._numMessagesLastSecond > this.maxMessagesPerSecond) {
       // drop client if it sends more messages than the maximum allowed per second
+      debugMatchMaking('dropping client - sessionId: \'%s\' (roomId: %s), too many messages per second', client.sessionId, this.roomId);
       return this.#_forciblyCloseClient(client, CloseCode.WITH_ERROR);
     }
 
