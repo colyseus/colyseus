@@ -2155,11 +2155,15 @@ function hidePanelsForSession() {
 
 // Helper function to format bytes
 function formatBytes(bytes) {
-    if (bytes === 0) return '0 B';
+    if (!bytes) {
+        return '0 B';
+    } else if (bytes < 1) {
+        bytes = 1; // avoid visual glitches
+    }
     var k = 1024;
     var sizes = ['B', 'KB', 'MB', 'GB'];
     var i = Math.floor(Math.log(bytes) / Math.log(k));
-    return (bytes / Math.pow(k, i)).toFixed(1)  + ' ' + sizes[i];
+    return (Math.round(bytes) / Math.pow(k, i)).toFixed(1)  + ' ' + sizes[i];
 }
 
 // Helper function to create debug panel for a room
