@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/core",
-  "version": "0.17.12",
+  "version": "0.17.14",
   "description": "Multiplayer Framework for Node.js.",
   "type": "module",
   "input": "./src/index.ts",
@@ -56,12 +56,20 @@
     "nanoid": "^3.3.11"
   },
   "devDependencies": {
-    "@colyseus/schema": "^4.0.1"
+    "@colyseus/schema": "^4.0.1",
+    "@colyseus/redis-driver": "workspace:^",
+    "@colyseus/redis-presence": "workspace:^",
+    "@colyseus/tools": "workspace:^"
   },
   "peerDependencies": {
     "@colyseus/schema": "^4.0.1",
     "@pm2/io": "^6.1.0",
     "zod": "^4.1.12"
+  },
+  "optionalPeerDependencies": {
+    "@colyseus/tools": "0.17.x",
+    "@colyseus/redis-driver": "0.17.x",
+    "@colyseus/redis-presence": "0.17.x"
   },
   "publishConfig": {
     "access": "public"

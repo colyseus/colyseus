@@ -14,7 +14,7 @@ export abstract class Transport {
     public protocol?: string;
     public server?: http.Server | https.Server;
 
-    public abstract listen(port?: number, hostname?: string, backlog?: number, listeningListener?: Function): this;
+    public abstract listen(port?: number | string, hostname?: string, backlog?: number, listeningListener?: Function): this;
     public abstract shutdown(): void;
 
     public abstract simulateLatency(milliseconds: number): void;

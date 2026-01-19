@@ -24,6 +24,11 @@ export function bindRouterToServer(server: Server, router: Router) {
   const expressApp: any = server.listeners('request').find((listener: Function) =>
     listener.name === "app" && listener['mountpath'] === '/');
 
+  // add default "/__healthcheck" endpoint
+  router.addEndpoint(createEndpoint("/__healthcheck", { method: "GET" }, async (ctx) => {
+    return new Response("", { status: 200 });
+  }));
+
   // add default "/" route, if not provided.
   const hasRootRoute = Object.values(router.endpoints).some(endpoint => endpoint.path === "/");
   if (!hasRootRoute) {

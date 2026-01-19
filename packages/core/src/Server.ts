@@ -75,7 +75,7 @@ export class Server<
   protected presence: Presence;
   protected driver: matchMaker.MatchMakerDriver;
 
-  protected port: number;
+  protected port: number | string;
   protected greet: boolean;
 
   private _originalRoomOnMessage: typeof Room.prototype['_onMessage'] | null = null;
@@ -119,12 +119,36 @@ export class Server<
   /**
    * Bind the server into the port specified.
    *
-   * @param port
+   * @param port - Port number or Unix socket path
    * @param hostname
    * @param backlog
    * @param listeningListener
    */
-  public async listen(port: number, hostname?: string, backlog?: number, listeningListener?: Function) {
+  public async listen(port: number | string, hostname?: string, backlog?: number, listeningListener?: Function) {
+    //
+    // if Colyseus Cloud is detected, use @colyseus/tools to listen
+    //
+    if (process.env.COLYSEUS_CLOUD !== undefined ) {
+      if (typeof(hostname) === "number") {
+        //
+        // workaround, @colyseus/tools calls server.listen() again with the port as a string
+        //
+        hostname = undefined;
+
+      } else {
+        try {
+          return (await import("@colyseus/tools")).listen(this);
+        } catch (error) {
+          const err = new Error("Please install @colyseus/tools to be able to host on Colyseus Cloud.");
+          err.cause = error;
+          throw err;
+        }
+      }
+    }
+
+    //
+    // otherwise, listen on the port directly
+    //
     this.port = port;
 
     //

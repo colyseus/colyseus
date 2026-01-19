@@ -15,8 +15,6 @@ import {
   matchMaker,
   RegisteredHandler,
   defineServer,
-  LocalDriver,
-  LocalPresence
 } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 
@@ -122,22 +120,8 @@ export async function listen<
         server = options;
 
         // automatically configure for production under Colyseus Cloud
-        if (process.env.COLYSEUS_CLOUD !== undefined) {
-            // check if local driver/presence are being used (defaults)
-            const isLocalDriver = matchMaker.driver instanceof LocalDriver;
-            const isLocalPresence = matchMaker.presence instanceof LocalPresence;
-
-            const cloudConfig = await getColyseusCloudConfig(
-                port,
-                isLocalDriver ? undefined : matchMaker.driver,
-                isLocalPresence ? undefined : matchMaker.presence,
-            );
-
-            // re-setup matchMaker with Redis driver/presence
-            if (cloudConfig && (isLocalDriver || isLocalPresence)) {
-                await matchMaker.setup(cloudConfig.presence, cloudConfig.driver, cloudConfig.publicAddress);
-            }
-        }
+        // if on Colyseus Cloud, the matchMaker should have been configured by the time we get here
+        // See @colyseus/core src/utils/Env.ts
 
     } else {
         server = await buildServerFromOptions<RoomTypes, Routes>(options, port);
@@ -150,14 +134,17 @@ export async function listen<
 
     if (process.env.COLYSEUS_CLOUD !== undefined) {
         // listening on socket
-        const socketPath: any = `/run/colyseus/${port}.sock`;
+        const socketPath = `/run/colyseus/${port}.sock`;
         // const socketPath: any = `/tmp/${port}.sock`;
 
         // check if .sock file is active
         // (fixes "ADDRINUSE" issue when restarting the server)
         await checkInactiveSocketFile(socketPath);
 
-        await server.listen(socketPath);
+        await server.listen(
+          socketPath,
+          0 as any // workaround to allow using @colyseus/core's .listen() directly on Colyseus Cloud
+        );
 
     } else {
         // listening on port
@@ -243,11 +230,6 @@ export async function getTransport(options: ConfigOptions) {
       if (options.initializeExpress) {
           await options.initializeExpress(app);
       }
-
-      // health check for load balancers
-      app.get("/__healthcheck", (req, res) => {
-        res.status(200).end();
-      });
 
       if (options.displayLogs) {
           logger.info("✅ Express initialized");

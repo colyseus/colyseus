@@ -24,6 +24,7 @@ import type { AuthContext, Client } from './Transport.ts';
 import { getLockId, initializeRoomCache, type ExtractRoomCacheMetadata } from './matchmaker/driver.ts';
 
 import { type ISeatReservation, CloseCode, ErrorCode } from '@colyseus/shared-types';
+import { getDefaultDriver, getDefaultPresence, getDefaultPublicAddress } from './utils/Env.ts';
 export type { ISeatReservation, ExtractRoomCacheMetadata };
 
 export { controller, stats, type MatchMakerDriver };
@@ -96,10 +97,9 @@ export async function setup(
 
   state = MatchMakerState.INITIALIZING;
 
-  presence = _presence || new LocalPresence();
-
-  driver = _driver || new LocalDriver();
-  publicAddress = _publicAddress;
+  presence = _presence || await getDefaultPresence();
+  driver = _driver || await getDefaultDriver();
+  publicAddress = _publicAddress || getDefaultPublicAddress();
 
   stats.reset(false);
 
