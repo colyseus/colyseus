@@ -117,8 +117,8 @@ importers:
         specifier: workspace:^
         version: link:../../packages/presence/redis-presence
       '@colyseus/schema':
-        specifier: ^4.0.1
-        version: 4.0.1
+        specifier: ^4.0.4
+        version: 4.0.4(typescript@5.9.3)
       '@colyseus/sdk':
         specifier: workspace:^
         version: link:../../packages/sdk
@@ -291,8 +291,8 @@ importers:
         specifier: workspace:^
         version: link:../presence/redis-presence
       '@colyseus/schema':
-        specifier: ^4.0.1
-        version: 4.0.1
+        specifier: ^4.0.4
+        version: 4.0.4(typescript@5.9.3)
       '@colyseus/tools':
         specifier: workspace:^
         version: link:../tools
@@ -362,8 +362,8 @@ importers:
         specifier: workspace:^
         version: link:../presence/redis-presence
       '@colyseus/schema':
-        specifier: ^4.0.1
-        version: 4.0.1
+        specifier: ^4.0.4
+        version: 4.0.4(typescript@5.9.3)
       '@colyseus/sdk':
         specifier: workspace:^
         version: link:../sdk
@@ -716,8 +716,8 @@ importers:
         specifier: workspace:^
         version: link:../../core
       '@colyseus/schema':
-        specifier: ^4.0.1
-        version: 4.0.1
+        specifier: ^4.0.4
+        version: 4.0.4(typescript@5.9.3)
 
   packages/shared-types:
     dependencies:
@@ -738,8 +738,8 @@ importers:
         specifier: workspace:^
         version: link:../core
       '@colyseus/schema':
-        specifier: ^4.0.1
-        version: 4.0.1
+        specifier: ^4.0.4
+        version: 4.0.4(typescript@5.9.3)
       '@colyseus/sdk':
         specifier: workspace:^
         version: link:../sdk
@@ -822,8 +822,8 @@ importers:
         specifier: workspace:^
         version: link:../../core
       '@colyseus/schema':
-        specifier: ^4.0.1
-        version: 4.0.1
+        specifier: ^4.0.4
+        version: 4.0.4(typescript@5.9.3)
       '@fails-components/webtransport':
         specifier: ^1.3.1
         version: 1.4.4
@@ -1138,10 +1138,6 @@ packages:
 
   '@colyseus/msgpackr@1.11.2':
     resolution: {integrity: sha512-MuwPFhizFKC3zmGfy0fpo+kcnZdNdnQHFVjw81v4WXHCelDeCX8yNRVtuEm8kGlHqq7qiASLC0pu0RPqYOhxXg==}
-
-  '@colyseus/schema@4.0.1':
-    resolution: {integrity: sha512-phn7nNmfbg7+qKwse3kYeXBmN6/UJch1A9lwF950YKfFVcRFc4CleK5Aj4aTK957I108cncakNWsgzvIZ+AUIw==}
-    hasBin: true
 
   '@colyseus/schema@4.0.4':
     resolution: {integrity: sha512-Q/0qO3ypQVHDic3DVG4Zvxwyag0cyF14ZiA1PVRiBqTwPDlC/xtY5OnSS8E6zFlkdOkf/QAlqtIz7HPJYE1b/Q==}
@@ -9221,8 +9217,6 @@ snapshots:
   '@colyseus/msgpackr@1.11.2':
     optionalDependencies:
       msgpackr-extract: 3.0.3
-
-  '@colyseus/schema@4.0.1': {}
 
   '@colyseus/schema@4.0.4(typescript@5.9.3)':
     dependencies:

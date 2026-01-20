@@ -21,7 +21,7 @@
     "@colyseus/playground": "workspace:^",
     "@colyseus/redis-driver": "workspace:^",
     "@colyseus/redis-presence": "workspace:^",
-    "@colyseus/schema": "^4.0.1",
+    "@colyseus/schema": "^4.0.4",
     "@colyseus/sdk": "workspace:^",
     "@colyseus/tools": "workspace:^",
     "@colyseus/traefik": "workspace:^",

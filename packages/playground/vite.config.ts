@@ -17,7 +17,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
-      '@colyseus/sdk': path.resolve(__dirname, '../sdk/build/esm/index.mjs'),
+      '@colyseus/sdk': path.resolve(__dirname, '../sdk/build/index.mjs'),
     },
   },
   optimizeDeps: {

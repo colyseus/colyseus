@@ -11,12 +11,12 @@ import type { Presence } from "./presence/Presence.ts";
 import { LocalPresence } from './presence/LocalPresence.ts';
 import { LocalDriver } from './matchmaker/LocalDriver/LocalDriver.ts';
 
-import { Transport } from './Transport.ts';
+import { setTransport, Transport } from './Transport.ts';
 import { logger, setLogger } from './Logger.ts';
 import { setDevMode, isDevMode } from './utils/DevMode.ts';
-import { bindRouterToServer, type Router } from './router/index.ts';
-import { getDefaultRouter } from "./router/default_routes.ts";
+import { type Router, bindRouterToServer } from './router/index.ts';
 import { type SDKTypes as SharedSDKTypes } from '@colyseus/shared-types';
+import { getDefaultRouter } from './router/default_routes.ts';
 
 export type ServerOptions = {
   publicAddress?: string,
@@ -165,6 +165,10 @@ export class Server<
     }
 
     return new Promise<void>((resolve, reject) => {
+      // TODO: refactor me!
+      // set transport globally, to be used by matchmaking route
+      setTransport(this.transport);
+
       this.transport.listen(port, hostname, backlog, (err) => {
         const server = this.transport.server;
 

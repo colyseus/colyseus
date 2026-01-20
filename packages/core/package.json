@@ -56,13 +56,13 @@
     "nanoid": "^3.3.11"
   },
   "devDependencies": {
-    "@colyseus/schema": "^4.0.1",
+    "@colyseus/schema": "^4.0.4",
     "@colyseus/redis-driver": "workspace:^",
     "@colyseus/redis-presence": "workspace:^",
     "@colyseus/tools": "workspace:^"
   },
   "peerDependencies": {
-    "@colyseus/schema": "^4.0.1",
+    "@colyseus/schema": "^4.0.4",
     "@pm2/io": "^6.1.0",
     "zod": "^4.1.12"
   },

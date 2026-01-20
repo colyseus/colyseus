@@ -1,6 +1,7 @@
 import { createEndpoint, createRouter } from "@colyseus/better-call";
 import * as matchMaker from "../MatchMaker.ts";
 import { getBearerToken } from "../utils/Utils.ts";
+import { getTransport } from "../Transport.ts";
 
 export const postMatchmakeMethod = createEndpoint("/matchmake/:method/:roomName", { method: "POST" }, async (ctx) => {
   // do not accept matchmaking requests if already shutting down
@@ -9,18 +10,10 @@ export const postMatchmakeMethod = createEndpoint("/matchmake/:method/:roomName"
   }
 
   const requestHeaders = ctx.request.headers;
-  const headers = Object.assign(
-    {},
-    matchMaker.controller.DEFAULT_CORS_HEADERS,
-    matchMaker.controller.getCorsHeaders(requestHeaders)
-  );
 
   const method = ctx.params.method;
   const roomName = ctx.params.roomName;
 
-  Object.entries(headers).forEach(([key, value]) => {
-    ctx.setHeader(key, value);
-  })
   ctx.setHeader('Content-Type', 'application/json');
 
   try {
@@ -38,12 +31,13 @@ export const postMatchmakeMethod = createEndpoint("/matchmake/:method/:roomName"
     );
 
     //
-    // TODO: respond with protocol, if available
+    // TODO: refactor here.
+    // expose protocol, if available.
     //
-    // // specify protocol, if available.
-    // if (this.transport.protocol !== undefined) {
-    //   response.protocol = this.transport.protocol;
-    // }
+    const transport = getTransport();
+    if (transport.protocol !== undefined) {
+      response.protocol = transport.protocol;
+    }
 
     return response;
 

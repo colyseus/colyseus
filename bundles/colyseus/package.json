@@ -47,7 +47,7 @@
     "@colyseus/msgpackr": "*",
     "@colyseus/redis-driver": "workspace:^",
     "@colyseus/redis-presence": "workspace:^",
-    "@colyseus/schema": "^4.0.1",
+    "@colyseus/schema": "^4.0.4",
     "@colyseus/sdk": "workspace:^",
     "@colyseus/tools": "workspace:^",
     "@colyseus/uwebsockets-transport": "workspace:^",
@@ -61,7 +61,7 @@
     "@colyseus/core": "0.17.x",
     "@colyseus/redis-driver": "0.17.x",
     "@colyseus/redis-presence": "0.17.x",
-    "@colyseus/schema": "^4.0.1",
+    "@colyseus/schema": "^4.0.4",
     "@colyseus/uwebsockets-transport": "0.17.x",
     "@colyseus/ws-transport": "0.17.x"
   },

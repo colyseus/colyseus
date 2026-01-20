@@ -23,7 +23,7 @@
   },
   "dependencies": {
     "@colyseus/core": "workspace:^",
-    "@colyseus/schema": "^4.0.1"
+    "@colyseus/schema": "^4.0.4"
   },
   "author": "Endel Dreyer",
   "license": "MIT",

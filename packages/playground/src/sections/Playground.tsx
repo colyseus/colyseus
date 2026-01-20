@@ -96,13 +96,15 @@ export function Playground({ isMobileMenuOpen, setIsMobileMenuOpen }: Playground
  				{ id: "api", label: "API Endpoints", icon: faGlobe },
  			],
  		},
- 		{
- 			label: "Backend",
- 			items: [
- 				{ id: "presence", label: "Presence", icon: faBolt },
- 				{ id: "stats", label: "Stats", icon: faChartLine },
- 			],
- 		},
+
+    // // TODO: add backend tabs back in when presence/stats are working
+ 		// {
+ 		// 	label: "Backend",
+ 		// 	items: [
+ 		// 		{ id: "presence", label: "Presence", icon: faBolt },
+ 		// 		{ id: "stats", label: "Stats", icon: faChartLine },
+ 		// 	],
+ 		// },
  	];
 
 	const handleTabChange = (tabId: TabType) => {

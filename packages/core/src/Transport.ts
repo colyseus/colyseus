@@ -10,6 +10,10 @@ import { ServerError } from './errors/ServerError.ts';
 
 import type { Room } from './Room.ts';
 
+let _transport: Transport | undefined;
+export function setTransport(transport: Transport) { _transport = transport; }
+export function getTransport() { return _transport; }
+
 export abstract class Transport {
     public protocol?: string;
     public server?: http.Server | https.Server;

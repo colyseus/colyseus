@@ -69,7 +69,7 @@ export default [
                     { find: 'ws', replacement: path.resolve('./node_modules/ws/browser.js') },
 
                     // @colyseus/schema: force browser version.
-                    { find: '@colyseus/schema', replacement: path.resolve('./node_modules/@colyseus/schema/build/umd/index.js') },
+                    { find: '@colyseus/schema', replacement: path.resolve('./node_modules/@colyseus/schema/build/index.js') },
                 ]
             }),
             commonjs(),
@@ -104,7 +104,7 @@ export default [
                     { find: 'ws', replacement: path.resolve('./node_modules/ws/browser.js' ) },
 
                     // @colyseus/schema: force browser version.
-                    { find: '@colyseus/schema', replacement: path.resolve('./node_modules/@colyseus/schema/build/umd/index.js') },
+                    { find: '@colyseus/schema', replacement: path.resolve('./node_modules/@colyseus/schema/build/index.js') },
                 ]
             }),
             commonjs(),

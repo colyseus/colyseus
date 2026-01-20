@@ -3,7 +3,6 @@ import os from 'os';
 import fs from "fs";
 import net from "net";
 import http from 'http';
-import cors from 'cors';
 import express from 'express';
 import {
   type ServerOptions,
@@ -224,9 +223,6 @@ export async function getTransport(options: ConfigOptions) {
     }
 
     if (app) {
-      // Enable CORS
-      app.use(cors({ origin: true, credentials: true, }));
-
       if (options.initializeExpress) {
           await options.initializeExpress(app);
       }
