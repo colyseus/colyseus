@@ -94,6 +94,28 @@ importers:
         version: 5.9.3
 
   bundles/colyseus:
+    dependencies:
+      '@colyseus/core':
+        specifier: workspace:^
+        version: link:../../packages/core
+      '@colyseus/monitor':
+        specifier: workspace:^
+        version: link:../../packages/monitor
+      '@colyseus/playground':
+        specifier: workspace:^
+        version: link:../../packages/playground
+      '@colyseus/redis-driver':
+        specifier: workspace:^
+        version: link:../../packages/drivers/redis-driver
+      '@colyseus/redis-presence':
+        specifier: workspace:^
+        version: link:../../packages/presence/redis-presence
+      '@colyseus/tools':
+        specifier: workspace:^
+        version: link:../../packages/tools
+      '@colyseus/ws-transport':
+        specifier: workspace:^
+        version: link:../../packages/transport/ws-transport
     devDependencies:
       '@colyseus/auth':
         specifier: workspace:^
@@ -101,36 +123,21 @@ importers:
       '@colyseus/better-call':
         specifier: workspace:^
         version: link:../../packages/better-call
-      '@colyseus/core':
-        specifier: workspace:^
-        version: link:../../packages/core
       '@colyseus/drizzle-driver':
         specifier: workspace:^
         version: link:../../packages/drivers/drizzle-driver
       '@colyseus/msgpackr':
         specifier: '*'
         version: 1.11.2
-      '@colyseus/redis-driver':
-        specifier: workspace:^
-        version: link:../../packages/drivers/redis-driver
-      '@colyseus/redis-presence':
-        specifier: workspace:^
-        version: link:../../packages/presence/redis-presence
       '@colyseus/schema':
         specifier: ^4.0.4
         version: 4.0.4(typescript@5.9.3)
       '@colyseus/sdk':
         specifier: workspace:^
         version: link:../../packages/sdk
-      '@colyseus/tools':
-        specifier: workspace:^
-        version: link:../../packages/tools
       '@colyseus/uwebsockets-transport':
         specifier: workspace:^
         version: link:../../packages/transport/uwebsockets-transport
-      '@colyseus/ws-transport':
-        specifier: workspace:^
-        version: link:../../packages/transport/ws-transport
       '@types/ws':
         specifier: ^8.5.14
         version: 8.18.1
