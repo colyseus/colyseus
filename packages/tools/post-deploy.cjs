@@ -2,7 +2,7 @@
 const pm2 = require('pm2');
 const fs = require('fs');
 const path = require('path');
-const shared = require('./pm2/shared');
+const shared = require('./pm2/shared.cjs');
 
 const opts = { env: process.env.NODE_ENV || "production", };
 

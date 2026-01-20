@@ -12,7 +12,7 @@ const fs = require('fs');
 const cst = require('pm2/constants');
 const io = require('@pm2/io');
 const path = require('path');
-const shared = require('./shared');
+const shared = require('./shared.cjs');
 
 const opts = { env: process.env.NODE_ENV || "production", };
 let config = undefined;

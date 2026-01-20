@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/tools",
-  "version": "0.17.9",
+  "version": "0.17.11",
   "type": "module",
   "description": "Simplify the development and production settings for your Colyseus project.",
   "input": "./src/index.ts",
@@ -25,9 +25,9 @@
     "start": "tsx example/app.ts"
   },
   "bin": {
-    "colyseus-system-boot": "system-boot.js",
-    "colyseus-post-deploy": "post-deploy.js",
-    "colyseus-report-stats": "report-stats.js"
+    "colyseus-system-boot": "system-boot.cjs",
+    "colyseus-post-deploy": "post-deploy.cjs",
+    "colyseus-report-stats": "report-stats.cjs"
   },
   "repository": {
     "type": "git",
@@ -76,7 +76,7 @@
     {
       "merge_logs": true,
       "max_memory_restart": "256M",
-      "script": "./pm2/post-deploy-agent.js",
+      "script": "./pm2/post-deploy-agent.cjs",
       "instance_var": "INSTANCE_ID"
     }
   ]
