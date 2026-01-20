@@ -113,7 +113,6 @@ export class Server<
 
   public attach(options: ServerOptions) {
     this.transport = options.transport || this.getDefaultTransport(options);
-    delete options.transport;
   }
 
   /**

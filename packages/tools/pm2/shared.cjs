@@ -29,7 +29,9 @@ async function getAppConfig(ecosystemFilePath) {
     app.namespace = NAMESPACE;
     app.exec_mode = "fork";
 
-    app.instances = MAX_ACTIVE_PROCESSES;
+    if (app.instances === undefined) {
+      app.instances = MAX_ACTIVE_PROCESSES;
+    }
 
     app.time = true;
     app.wait_ready = true;

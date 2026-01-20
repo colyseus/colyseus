@@ -3,11 +3,17 @@
 const fs = require('fs');
 const net = require('net');
 const pm2 = require('pm2');
+const dotenv = require('dotenv');
 
 const COLYSEUS_CLOUD_URL = `${process.env.ENDPOINT}/vultr/stats`;
 
 const FAILED_ATTEMPS_FILE = "/var/tmp/pm2-stats-attempts.txt";
 const FETCH_TIMEOUT = 30000;
+
+// load environment variables (Colyseus Cloud environment variables)
+if (process.env.APP_ROOT_PATH) {
+  dotenv.config({ path: `${process.env.APP_ROOT_PATH}/.env.cloud` });
+}
 
 async function retryFailedAttempts() {
   /**
@@ -127,6 +133,9 @@ pm2.Client.executeRemote('getMonitorData', {}, async function(err, list) {
     version: 1,
     ip,
     time: new Date(),
+    statuses: {
+      driver: await checkDriverIsAccessible()
+    },
     aggregate,
     apps,
   };
@@ -165,6 +174,11 @@ pm2.Client.executeRemote('getMonitorData', {}, async function(err, list) {
   }
 });
 
+/**
+ * Check if a socket file is active
+ * @param {string} sockFilePath - The path to the socket file
+ * @returns {Promise<boolean>} true if the socket file is active, false otherwise
+ */
 function checkSocketIsActive(sockFilePath) {
   return new Promise((resolve, _) => {
     const client = net.createConnection({ path: sockFilePath, timeout: 5000 })
@@ -174,5 +188,47 @@ function checkSocketIsActive(sockFilePath) {
       })
       .on('error', () => resolve(false))
       .on('timeout', () => resolve(false));
+  });
+}
+
+/**
+ * Check if the driver is accessible
+ * @returns {Promise<boolean | string>} returns true if the driver is accessible, false otherwise or the error message
+ */
+async function checkDriverIsAccessible() {
+  try {
+    if (process.env.REDIS_URI) {
+      const url = new URL(process.env.REDIS_URI);
+      return await isPortOpen({
+        host: url.hostname,
+        port: url.port
+      });
+    } else {
+      return true;
+    }
+  } catch (e) {
+    return e.message || false;
+  }
+}
+
+/**
+ * Check if a port is open
+ * @param {{ host: string, port: number, timeout?: number }} options - The options to check
+ * @returns {Promise<boolean | string>}
+ */
+function isPortOpen({ host, port, timeout = 2000 }) {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    const onError = (value) => {
+      socket.destroy();
+      resolve(value || false);
+    };
+    socket.setTimeout(timeout);
+    socket.once("error", (e) => onError(e.message));
+    socket.once("timeout", () => onError("timeout"));
+    socket.connect(port, host, () => {
+      socket.end(); // immediately close
+      resolve(true);
+    });
   });
 }
