@@ -13,6 +13,7 @@ export {
   type Router,
   type RouterConfig,
   type Endpoint,
+  type EndpointHandler,
   type EndpointOptions,
   type EndpointContext,
   type StrictEndpoint,
@@ -55,7 +56,7 @@ export function bindRouterToServer(server: Server, router: Router) {
     const corsHeaders = {
       ...controller.DEFAULT_CORS_HEADERS,
       ...controller.getCorsHeaders(new Headers(req.headers as any)),
-    }
+    };
 
     if (req.method === "OPTIONS") {
       res.writeHead(204, corsHeaders);

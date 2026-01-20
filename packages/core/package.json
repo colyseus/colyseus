@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/core",
-  "version": "0.17.15",
+  "version": "0.17.16",
   "description": "Multiplayer Framework for Node.js.",
   "type": "module",
   "input": "./src/index.ts",
@@ -62,6 +62,7 @@
     "@colyseus/tools": "workspace:^"
   },
   "peerDependencies": {
+    "@colyseus/better-call": "workspace:^",
     "@colyseus/schema": "^4.0.4",
     "@pm2/io": "^6.1.0",
     "zod": "^4.1.12"

@@ -14,6 +14,11 @@ const gameServer = defineServer({
   },
   routes: createRouter({
     listThings,
+
+    hello_world: createEndpoint("/hello_world", { method: "GET" }, async (ctx) => {
+      return ctx.json({ message: "Hello world!" });
+    }),
+
   })
 });
 

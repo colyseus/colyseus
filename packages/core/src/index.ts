@@ -86,6 +86,7 @@ export {
   type Router,
   type RouterConfig,
   type Endpoint,
+  type EndpointHandler,
   type EndpointOptions,
   type EndpointContext,
   type StrictEndpoint,
