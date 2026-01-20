@@ -19,10 +19,10 @@
   },
   "input": "./src/index.ts",
   "main": "./build/index.cjs",
-  "module": "./src/index.ts",
+  "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
   "bin": {
-    "colyseus-loadtest": "./bin.js"
+    "colyseus-loadtest": "./bin.cjs"
   },
   "files": [
     "build",

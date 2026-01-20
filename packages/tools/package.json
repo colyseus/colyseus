@@ -22,7 +22,8 @@
     }
   },
   "scripts": {
-    "start": "tsx example/app.ts"
+    "start": "tsx example/app.ts",
+    "test": "mocha --require tsx test/pm2-deployment.test.ts"
   },
   "bin": {
     "colyseus-system-boot": "system-boot.cjs",
@@ -63,6 +64,8 @@
     "@colyseus/uwebsockets-transport": "workspace:^",
     "@colyseus/ws-transport": "workspace:^",
     "@types/dotenv": "^8.2.0",
+    "pm2": "^6.0.14",
+    "mocha": "^11.7.5",
     "uwebsockets-express": "^1.1.10"
   },
   "peerDependencies": {
