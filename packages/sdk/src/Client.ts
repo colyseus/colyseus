@@ -1,6 +1,6 @@
 import { CloseCode, type SDKTypes, type ServerRoomLike, type ISeatReservation } from '@colyseus/shared-types';
 
-import { ServerError } from './errors/Errors.ts';
+import { MatchMakeError, ServerError } from './errors/Errors.ts';
 import { Room } from './Room.ts';
 import { SchemaConstructor } from './serializer/SchemaSerializer.ts';
 import { HTTP } from './HTTP.ts';
@@ -12,15 +12,6 @@ import { discordURLBuilder } from './3rd_party/discord.ts';
 export type JoinOptions = any;
 export type { ISeatReservation };
 
-export class MatchMakeError extends Error {
-    code: number;
-    constructor(message: string, code: number) {
-        super(message);
-        this.code = code;
-        this.name = "MatchMakeError";
-        Object.setPrototypeOf(this, MatchMakeError.prototype);
-    }
-}
 
 // - React Native does not provide `window.location`
 // - Cocos Creator (Native) does not provide `window.location.hostname`
@@ -368,28 +359,29 @@ export class ColyseusSDK<ServerType extends SDKTypes = any, UserData = any> {
         options: JoinOptions = {},
         rootSchema?: SchemaConstructor<T>,
     ) {
-        const httpResponse = await (this.http as HTTP<any>).post(`/matchmake/${method}/${roomName}`, {
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json'
-            },
-            body: options
-        });
+        try {
+            const httpResponse = await (this.http as HTTP<any>).post(`/matchmake/${method}/${roomName}`, {
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                body: options
+            });
 
-        // Handle HTTP error responses
-        if (!httpResponse.ok) {
-            // @ts-ignore
-            throw new MatchMakeError(httpResponse.error.message || httpResponse.error, httpResponse.error.code || httpResponse.status);
+            const response = httpResponse.data as unknown as ISeatReservation;
+
+            // forward reconnection token during "reconnect" methods.
+            if (method === "reconnect") {
+                response.reconnectionToken = options.reconnectionToken;
+            }
+
+            return await this.consumeSeatReservation<T>(response, rootSchema);
+        } catch (error) {
+            if (error instanceof ServerError) {
+                throw new MatchMakeError(error.message, error.code);
+            }
+            throw error;
         }
-
-        const response = httpResponse.data as unknown as ISeatReservation;
-
-        // forward reconnection token during "reconnect" methods.
-        if (method === "reconnect") {
-            response.reconnectionToken = options.reconnectionToken;
-        }
-
-        return await this.consumeSeatReservation<T>(response, rootSchema);
     }
 
     protected createRoom<T>(roomName: string, rootSchema?: SchemaConstructor<T>) {

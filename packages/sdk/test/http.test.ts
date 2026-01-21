@@ -1,15 +1,27 @@
 import './util';
 import { describe, beforeAll, test, afterAll, beforeEach } from "vitest";
 import assert from "assert";
-import { Client } from "../src";
+import { Client, ServerError, AbortError } from "../src/index.ts";
 
-import { createServer, Server } from 'http';
-import { AddressInfo } from 'net';
-import { AbortError } from '../src/errors/Errors';
+import { createServer } from 'http';
+import type { AddressInfo } from 'net';
 
 function handler(req, res) {
     setTimeout(() => {
         res.setHeader('Content-Type', 'application/json');
+
+        if (req.url === '/error') {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ code: 1001, message: 'Bad request error' }));
+            return;
+        }
+
+        if (req.url === '/server-error') {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ code: 5000, message: 'Internal server error' }));
+            return;
+        }
+
         res.end('{invalid_json');
     }, 60);
 }
@@ -47,8 +59,47 @@ describe("HTTP", function() {
                 await client.http.post("/anything");
             } catch (e) {
                 console.log(e);
-                assert.strictEqual(e.code, 'ECONNREFUSED')
+                if (e instanceof ServerError) {
+                    assert.strictEqual(e.code, 'ECONNREFUSED')
+                } else {
+                }
             }
+        });
+
+        test("should throw ServerError with code, message, status and headers on error response", async () => {
+            let serverError: ServerError | undefined = undefined;
+
+            try {
+                await client.http.get("/error");
+            } catch (e) {
+                if (e instanceof ServerError) {
+                    serverError = e;
+                }
+            }
+
+            assert.ok(serverError, "Expected ServerError to be thrown");
+            assert.strictEqual(serverError!.code, 1001);
+            assert.strictEqual(serverError!.message, 'Bad request error');
+            assert.strictEqual(serverError!.status, 400);
+            assert.ok(serverError!.headers instanceof Headers);
+            assert.ok(serverError!.response instanceof Response);
+        });
+
+        test("should throw ServerError on 500 response", async () => {
+            let serverError: ServerError | undefined = undefined;
+
+            try {
+                await client.http.get("/server-error");
+            } catch (e) {
+                if (e instanceof ServerError) {
+                    serverError = e;
+                }
+            }
+
+            assert.ok(serverError, "Expected ServerError to be thrown");
+            assert.strictEqual(serverError!.code, 5000);
+            assert.strictEqual(serverError!.message, 'Internal server error');
+            assert.strictEqual(serverError!.status, 500);
         });
     });
 

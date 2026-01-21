@@ -146,34 +146,13 @@ type FetchRequestOptions<
   params?: Params;
 }>
 
-type ResponseData<T> = {
-  ok: true;
+type FetchResponse<T> = {
+  raw: Response;
   data: T;
-  error: null,
-  response: Response;
   headers: Headers;
   status: number;
   statusText: string;
 };
-
-type ResponseError<E> = {
-  ok: false,
-  data: null,
-  error: Prettify<(E extends Record<string, any> ? E : {
-    message?: string;
-  }) & {
-    code?: string;
-  }>;
-  response: Response;
-  headers: Headers;
-  status: number;
-  statusText: string;
-};
-
-type FetchResponse<T, E extends Record<string, unknown> | unknown = unknown, Throw extends boolean = false> =
-  Throw extends true
-    ? T
-    : ResponseData<T> | ResponseError<E>;
 
 export function isJSONSerializable(value: any) {
 	if (value === undefined) {
@@ -519,9 +498,9 @@ export class HTTP<R extends Router | Router["endpoints"]> {
 
         const url = getURLWithQueryParams(this.sdk['getHttpEndpoint'](path.toString()), mergedOptions);
 
-        let response: Response;
+        let raw: Response;
         try {
-            response = await fetch(url, mergedOptions);
+            raw = await fetch(url, mergedOptions);
         } catch (err: any) {
             // If it's an AbortError, re-throw as-is
             if (err.name === 'AbortError') {
@@ -529,39 +508,40 @@ export class HTTP<R extends Router | Router["endpoints"]> {
             }
             // Re-throw with network error code at top level (e.g. ECONNREFUSED)
             const networkError: ServerError = new ServerError(err.cause?.code || err.code, err.message);
+            networkError.response = raw;
             networkError.cause = err.cause;
             throw networkError;
         }
-        const contentType = response.headers.get("content-type");
+        const contentType = raw.headers.get("content-type");
 
         let data: any;
-        let error = null;
 
         // TODO: improve content-type detection here!
         if (contentType?.indexOf("json")) {
-            data = await response.json();
+            data = await raw.json();
 
         } else if (contentType?.indexOf("text")) {
-            data = await response.text();
+            data = await raw.text();
 
         } else {
-            data = await response.blob();
+            data = await raw.blob();
         }
 
-        if (!response.ok) {
-            // TODO: throw error here?!
-            error = data;
-            data = null;
+        if (!raw.ok) {
+            throw new ServerError(data.code ?? raw.status, data.message ?? raw.statusText, {
+                headers: raw.headers,
+                status: raw.status,
+                response: raw,
+                data
+            });
         }
 
         return {
-            ok: response.ok,
-            headers: response.headers,
+            raw,
             data,
-            error,
-            status: response.status,
-            statusText: response.statusText,
-            response,
+            headers: raw.headers,
+            status: raw.status,
+            statusText: raw.statusText,
         };
     }
 }
