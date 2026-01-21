@@ -47,6 +47,9 @@ if (fs.existsSync("/etc/environment")) {
   dotenv.config({ path: "/etc/environment", override: true })
 }
 
+// (overrides previous env configs)
+loadEnvFile([`.env.${getNodeEnv()}`, `.env`], 'both');
+
 // load .env.cloud defined on admin panel
 if (process.env.COLYSEUS_CLOUD !== undefined) {
     const cloudEnvFileNames = [".env.cloud"];
@@ -58,9 +61,6 @@ if (process.env.COLYSEUS_CLOUD !== undefined) {
 
     loadEnvFile(cloudEnvFileNames);
 }
-
-// (overrides previous env configs)
-loadEnvFile([`.env.${getNodeEnv()}`, `.env`], 'both');
 
 if (process.env.REGION !== undefined) {
   loadEnvFile([`.env.${getRegion()}.${getNodeEnv()}`], 'success');
