@@ -23,10 +23,10 @@ export const getMessageBytes = {
     packr.buffer[0] = Protocol.JOIN_ROOM;
 
     packr.buffer[it.offset++] = Buffer.byteLength(reconnectionToken, "utf8");
-    encode.utf8Write(packr.buffer as Buffer, reconnectionToken, it);
+    encode.utf8Write(packr.buffer, reconnectionToken, it);
 
     packr.buffer[it.offset++] = Buffer.byteLength(serializerId, "utf8");
-    encode.utf8Write(packr.buffer as Buffer, serializerId, it);
+    encode.utf8Write(packr.buffer, serializerId, it);
 
     let handshakeLength = handshake?.byteLength || 0;
 
@@ -46,8 +46,8 @@ export const getMessageBytes = {
     const it: Iterator = { offset: 1 };
     packr.buffer[0] = Protocol.ERROR;
 
-    encode.number(packr.buffer as Buffer, code, it);
-    encode.string(packr.buffer as Buffer, message, it);
+    encode.number(packr.buffer, code, it);
+    encode.string(packr.buffer, message, it);
 
     return Buffer.from(packr.buffer.subarray(0, it.offset));
   },
@@ -66,10 +66,10 @@ export const getMessageBytes = {
     packr.buffer[0] = code;
 
     if (typeof (type) === 'string') {
-      encode.string(packr.buffer as Buffer, type, it);
+      encode.string(packr.buffer, type, it);
 
     } else {
-      encode.number(packr.buffer as Buffer, type, it);
+      encode.number(packr.buffer, type, it);
     }
 
     if (message !== undefined) {
