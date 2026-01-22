@@ -1,7 +1,5 @@
-import type { IncomingHttpHeaders } from 'http';
 import querystring, { type ParsedUrlQuery } from 'querystring';
 import uWebSockets, { type WebSocket } from 'uWebSockets.js';
-import expressify, { Application } from "uwebsockets-express";
 
 import { type AuthContext, Transport, HttpServerMock, ErrorCode, matchMaker, Protocol, getBearerToken, debugAndPrintError, spliceOne, connectClientToRoom } from '@colyseus/core';
 import { uWebSocketClient, uWebSocketWrapper } from './uWebSocketClient.ts';
