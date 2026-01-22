@@ -59,8 +59,8 @@ export function cli(main: MainCallback) {
 
     const argv = minimist(process.argv.slice(2));
 
-    // const packageJson = import("../package.json");
-    const packageJson = { name: "@colyseus/loadtest", version: "0.15" };
+    // const packageJson = require("../package.json");
+    const packageJson = { name: "@colyseus/loadtest", version: "0.17" };
 
     function displayHelpAndExit() {
         console.log(`${packageJson.name} v${packageJson.version}

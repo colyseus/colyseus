@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/loadtest",
-  "version": "0.17.5",
+  "version": "0.17.7",
   "description": "Utility tool for load testing Colyseus.",
   "type": "module",
   "exports": {
@@ -15,7 +15,8 @@
       "types": "./build/*.d.ts",
       "import": "./build/*.mjs",
       "require": "./build/*.cjs"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "input": "./src/index.ts",
   "main": "./build/index.cjs",
