@@ -22,10 +22,6 @@ export {
 export { toNodeHandler };
 
 export function bindRouterToServer(server: Server, router: Router) {
-  // check if the server is bound to an express app
-  const expressApp: any = server.listeners('request').find((listener: Function) =>
-    listener.name === "app" && listener['mountpath'] === '/');
-
   // add default "/__healthcheck" endpoint
   router.addEndpoint(createEndpoint("/__healthcheck", { method: "GET" }, async (ctx) => {
     return new Response("", { status: 200 });
@@ -39,16 +35,21 @@ export function bindRouterToServer(server: Server, router: Router) {
     }));
   }
 
+  // check if the server is bound to an express app
+  const expressApp: any = server.listeners('request').find((listener: Function) =>
+    listener.name === "app" && listener['mountpath'] === '/');
+
+  // main router handler
+  let next: Function = toNodeHandler(router.handler);
+
   if (expressApp) {
-    // turn off x-powered-by header - it is breaking the cors headers
-    expressApp.set("x-powered-by", false);
+    server.removeListener('request', expressApp);
 
     // bind the router to the express app
-    expressApp.use(toNodeHandler(router.handler));
+    expressApp.use(next);
 
-  } else {
-    // otherwise, bind the router to the http server
-    server.on('request', toNodeHandler(router.handler));
+    // use the express app as the next function
+    next = expressApp;
   }
 
   // handle cors headers for all requests by default
@@ -67,6 +68,8 @@ export function bindRouterToServer(server: Server, router: Router) {
     Object.entries(corsHeaders).forEach(([key, value]) => {
       res.setHeader(key, value);
     });
+
+    next(req, res);
   });
 }
 

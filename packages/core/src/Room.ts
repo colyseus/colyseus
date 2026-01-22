@@ -456,8 +456,9 @@ export class Room<T extends RoomOptions = RoomOptions> {
    * This method is called when a client joins the room.
    * @param client - The client that joined the room.
    * @param options - The options passed to the client when it joined the room.
+   * @param auth - The data returned by the `onAuth` method - (Deprecated: use `client.auth` instead)
    */
-  public onJoin?(client: ExtractRoomClient<T>, options?: any): void | Promise<any>;
+  public onJoin?(client: ExtractRoomClient<T>, options?: any, auth?: any): void | Promise<any>;
 
   /**
    * This method is called when a client leaves the room without consent.
@@ -1217,7 +1218,8 @@ export class Room<T extends RoomOptions = RoomOptions> {
         });
 
         if (this.onJoin) {
-          await this.onJoin(client, joinOptions);
+          // TODO: deprecate auth as 3rd argument on Colyseus 1.0
+          await this.onJoin(client, joinOptions, client.auth);
         }
 
         // @ts-ignore: client left during `onJoin`, call _onLeave immediately.
