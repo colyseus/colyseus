@@ -33,14 +33,28 @@ export interface ISeatReservation {
 /**
  * Helper types for flexible Room generics on the client SDK.
  * Allows: Room<State>, Room<ServerRoom>, or Room<ServerRoom, State>
+ *
+ * Uses `~state` phantom property to distinguish Room types from plain state types.
+ * This prevents incorrectly extracting `state` from a state type that happens to have a `state` property.
  */
 export type InferState<T, S> = [S] extends [never]
-    ? (T extends abstract new (...args: any) => { state: infer ST }
-        ? ST  // Constructor type (typeof MyRoom): extract state from instance
-        : T extends { state: infer ST }
-            ? ST  // Instance type (MyRoom): extract state directly
+    ? (T extends abstract new (...args: any) => { '~state': infer ST }
+        ? ST  // Constructor type (typeof MyRoom): extract state via ~state phantom
+        : T extends { '~state': infer ST }
+            ? ST  // Instance type (MyRoom): extract state via ~state phantom
             : T)  // State type or other: return as-is
     : S;
+
+/**
+ * Normalizes T for message extraction: returns T if it has ~state (Room type),
+ * otherwise returns any (plain state type). This ensures Room<State> is equivalent
+ * to Room<any, State> when State doesn't have ~state.
+ */
+export type NormalizeRoomType<T> = T extends abstract new (...args: any) => { '~state': any }
+    ? T  // Constructor type with ~state: keep as-is
+    : T extends { '~state': any }
+        ? T  // Instance type with ~state: keep as-is
+        : any;  // Plain state type: normalize to any
 
 /**
  * Extract room messages type from a Room constructor or instance type.

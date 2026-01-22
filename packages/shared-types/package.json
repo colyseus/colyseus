@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/shared-types",
-  "version": "0.17.1",
+  "version": "0.17.2",
   "description": "Shared TypeScript types for Colyseus server and client SDK",
   "type": "module",
   "input": "./src/index.ts",
@@ -20,6 +20,9 @@
       "import": "./build/*.mjs",
       "require": "./build/*.cjs"
     }
+  },
+  "scripts": {
+    "test": "vitest"
   },
   "funding": "https://github.com/sponsors/endel",
   "author": "Endel Dreyer",
@@ -44,6 +47,11 @@
   },
   "dependencies": {
     "@standard-schema/spec": "^1.0.0"
+  },
+  "devDependencies": {
+    "@colyseus/core": "workspace:^",
+    "@colyseus/sdk": "workspace:^",
+    "vitest": "^3.1.1"
   },
   "publishConfig": {
     "access": "public"

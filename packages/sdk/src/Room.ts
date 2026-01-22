@@ -1,4 +1,4 @@
-import { CloseCode, type InferState, type ExtractRoomMessages, type ExtractRoomClientMessages, type ExtractMessageType } from '@colyseus/shared-types';
+import { CloseCode, type InferState, type NormalizeRoomType, type ExtractRoomMessages, type ExtractRoomClientMessages, type ExtractMessageType } from '@colyseus/shared-types';
 import { decode, encode, Iterator, Schema } from '@colyseus/schema';
 
 import { Packr, unpack } from '@colyseus/msgpackr';
@@ -213,12 +213,12 @@ export class Room<
         });
     }
 
-    public onMessage<MessageType extends keyof ExtractRoomClientMessages<T>>(
+    public onMessage<MessageType extends keyof ExtractRoomClientMessages<NormalizeRoomType<T>>>(
         message: MessageType,
-        callback: (payload: ExtractRoomClientMessages<T>[MessageType]) => void
-    )
-    public onMessage<T = any>(type: "*", callback: (messageType: string | number, payload: T) => void)
-    public onMessage<T = any>(type: string | number, callback: (payload: T) => void)
+        callback: (payload: ExtractRoomClientMessages<NormalizeRoomType<T>>[MessageType]) => void
+    ): () => void
+    public onMessage<Payload = any>(type: "*", callback: (messageType: string | number, payload: Payload) => void): () => void
+    public onMessage<Payload = any>(type: string | number, callback: (payload: Payload) => void): () => void
     public onMessage(type: '*' | string | number, callback: (...args: any[]) => void) {
         return this.onMessageHandlers.on(this.getMessageHandlerKey(type), callback);
     }
@@ -235,11 +235,12 @@ export class Room<
         this.connection.send(this.packr.buffer.subarray(0, 1));
     }
 
-    public send<MessageType extends keyof ExtractRoomMessages<T>>(
+    public send<MessageType extends keyof ExtractRoomMessages<NormalizeRoomType<T>>>(
         messageType: MessageType,
-        payload?: ExtractMessageType<ExtractRoomMessages<T>[MessageType]>
-    )
-    public send<T = any>(messageType: string | number, payload?: T): void {
+        payload?: ExtractMessageType<ExtractRoomMessages<NormalizeRoomType<T>>[MessageType]>
+    ): void
+    public send<Payload = any>(messageType: string | number, payload?: Payload): void
+    public send(messageType: string | number, payload?: any): void {
         const it: Iterator = { offset: 1 };
         this.packr.buffer[0] = Protocol.ROOM_DATA;
 
