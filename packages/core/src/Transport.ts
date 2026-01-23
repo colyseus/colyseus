@@ -1,6 +1,8 @@
 import * as http from 'http';
 import * as https from 'https';
 
+import type { Router } from '@colyseus/better-call';
+
 import { ErrorCode } from '@colyseus/shared-types';
 import { StateView } from '@colyseus/schema';
 
@@ -22,6 +24,20 @@ export abstract class Transport {
     public abstract shutdown(): void;
 
     public abstract simulateLatency(milliseconds: number): void;
+
+    /**
+     * Returns an Express-compatible application for HTTP route handling.
+     * For uWebSockets transport, this uses the uwebsockets-express module.
+     * This method is called lazily only when an express callback is provided in server options.
+     */
+    public getExpressApp?(resolved?: boolean): Promise<import('express').Application> | import('express').Application | undefined;
+
+    /**
+     * Binds a router to the transport.
+     * Some transports may have a custom way to bind a router to the transport.
+     * (uWebSocketsTransport)
+     */
+    public bindRouter?(router: Router): void;
 }
 
 export type AuthContext = {

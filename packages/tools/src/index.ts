@@ -3,7 +3,7 @@ import os from 'os';
 import fs from "fs";
 import net from "net";
 import http from 'http';
-import express from 'express';
+import type express from 'express';
 import {
   type ServerOptions,
   type SDKTypes,
@@ -30,7 +30,7 @@ export interface ConfigOptions<
     rooms?: RoomTypes,
     routes?: Routes,
     initializeTransport?: (options: any) => Transport,
-    initializeExpress?: (app: express.Express) => void,
+    initializeExpress?: (app: express.Application) => void,
     initializeGameServer?: (app: Server) => void,
     beforeListen?: () => void,
     /**
@@ -183,6 +183,7 @@ async function buildServerFromOptions<
     rooms: options.rooms || {} as RoomTypes,
     routes: options.routes,
     ...serverOptions,
+    express: options.initializeExpress,
     transport: await getTransport(options),
   });
 }
@@ -209,28 +210,10 @@ export async function getTransport(options: ConfigOptions) {
         }
     }
 
-    let app: express.Express | undefined = express();
-    let server = http.createServer(app);
+    // Create server without express app - the transport handles express via getExpressApp()
+    const server = http.createServer();
 
-    transport = await options.initializeTransport({ server, app });
-
-    //
-    // TODO: refactor me!
-    // BunWebSockets: There's no need to instantiate "app" and "server" above
-    //
-    if (transport['expressApp']) {
-      app = transport['expressApp'];
-    }
-
-    if (app) {
-      if (options.initializeExpress) {
-          await options.initializeExpress(app);
-      }
-
-      if (options.displayLogs) {
-          logger.info("✅ Express initialized");
-      }
-    }
+    transport = await options.initializeTransport({ server });
 
     return transport;
 }

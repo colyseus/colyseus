@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/uwebsockets-transport",
-  "version": "0.17.7",
+  "version": "0.17.10",
   "type": "module",
   "input": "./src/index.ts",
   "main": "./build/index.cjs",
@@ -27,7 +27,13 @@
     "@colyseus/core": "workspace:^"
   },
   "peerDependencies": {
-    "@colyseus/core": "0.17.x"
+    "@colyseus/core": "0.17.x",
+    "uwebsockets-express": "^1.4.1 || ^2.0.1"
+  },
+  "peerDependenciesMeta": {
+    "uwebsockets-express": {
+      "optional": true
+    }
   },
   "author": "Endel Dreyer",
   "license": "MIT",

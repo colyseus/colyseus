@@ -1,6 +1,8 @@
-import type { IncomingMessage, Server, ServerResponse } from "http";
+import type express from "express";
+import type { IncomingMessage, ServerResponse } from "http";
 import { type Endpoint, type Router, type RouterConfig, createRouter as createBetterCallRouter, createEndpoint } from "@colyseus/better-call";
 import { toNodeHandler } from "@colyseus/better-call/node";
+import { Transport } from "../Transport.ts";
 import { controller } from "../matchmaker/controller.ts";
 import pkg from "../../package.json" with { type: "json" };
 
@@ -21,26 +23,40 @@ export {
 
 export { toNodeHandler };
 
-export function bindRouterToServer(server: Server, router: Router) {
+export function bindRouterToTransport(transport: Transport, router: Router) {
   // add default "/__healthcheck" endpoint
   router.addEndpoint(createEndpoint("/__healthcheck", { method: "GET" }, async (ctx) => {
-    return new Response("", { status: 200 });
+    return new Response("OK", { status: 200 });
   }));
 
+  // check if the server is bound to an express app
+  const expressApp = transport.getExpressApp() as express.Application;
+
   // add default "/" route, if not provided.
-  const hasRootRoute = Object.values(router.endpoints).some(endpoint => endpoint.path === "/");
+  const hasRootRoute = (
+    // check if express app has a root route
+    expressRootRoute(expressApp) !== undefined ||
+
+    // check if router has a root route
+    Object.values(router.endpoints).some(endpoint => endpoint.path === "/")
+  );
+
   if (!hasRootRoute) {
     router.addEndpoint(createEndpoint("/", { method: "GET" }, async (ctx) => {
       return new Response(`Colyseus ${pkg.version}`, { status: 200 });
     }));
   }
 
-  // check if the server is bound to an express app
-  const expressApp: any = server.listeners('request').find((listener: Function) =>
-    listener.name === "app" && listener['mountpath'] === '/');
+  const server = transport.server;
+
+  // use custom bindRouter method if provided
+  if (!server && transport.bindRouter) {
+    transport.bindRouter(router);
+    return;
+  }
 
   // main router handler
-  let next: Function = toNodeHandler(router.handler);
+  let next: any = toNodeHandler(router.handler);
 
   if (expressApp) {
     server.removeListener('request', expressApp);
@@ -71,6 +87,22 @@ export function bindRouterToServer(server: Server, router: Router) {
 
     next(req, res);
   });
+}
+
+function expressRootRoute(expressApp: express.Application) {
+  //
+  // express v5 uses `app.router`, express v4 uses `app._router`
+  // check for `app._router` first, then `app.router`
+  //
+  // (express v4 will show a warning if `app.router` is used)
+  //
+  const stack = (expressApp as any)?._router?.stack ?? (expressApp as any)?.router?.stack;
+
+  if (!stack) {
+    throw new Error("Express app is not initialized");
+  }
+
+  return stack.find((layer: any) => layer.match('/') && !['query', 'expressInit'].includes(layer.name));
 }
 
 /**

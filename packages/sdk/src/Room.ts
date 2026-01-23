@@ -1,10 +1,9 @@
-import { CloseCode, type InferState, type NormalizeRoomType, type ExtractRoomMessages, type ExtractRoomClientMessages, type ExtractMessageType } from '@colyseus/shared-types';
-import { decode, encode, Iterator, Schema } from '@colyseus/schema';
+import { CloseCode, Protocol, type InferState, type NormalizeRoomType, type ExtractRoomMessages, type ExtractRoomClientMessages, type ExtractMessageType } from '@colyseus/shared-types';
+import { decode, Decoder, encode, Iterator, Schema } from '@colyseus/schema';
 
 import { Packr, unpack } from '@colyseus/msgpackr';
 
 import { Connection } from './Connection.ts';
-import { Protocol } from './Protocol.ts';
 import { getSerializer, Serializer } from './serializer/Serializer.ts';
 
 // The unused imports here are important for better `.d.ts` file generation
@@ -141,8 +140,12 @@ export class Room<
         this.packr.encode(undefined);
 
         if (rootSchema) {
-            this.serializer = new (getSerializer("schema"));
-            (this.serializer as SchemaSerializer).state = new rootSchema();
+            const serializer: SchemaSerializer = new (getSerializer("schema"));
+            this.serializer = serializer;
+
+            const state: State = new rootSchema();
+            serializer.state = state;
+            serializer.decoder = new Decoder(state as Schema);
         }
 
         this.onLeave(() => this.removeAllListeners());

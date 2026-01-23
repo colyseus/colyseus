@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/tools",
-  "version": "0.17.13",
+  "version": "0.17.15",
   "type": "module",
   "description": "Simplify the development and production settings for your Colyseus project.",
   "input": "./src/index.ts",
@@ -53,8 +53,7 @@
   "homepage": "https://colyseus.io",
   "dependencies": {
     "@pm2/io": "^6.0.1",
-    "dotenv": ">=14.1.0",
-    "express": ">=4.16.0"
+    "dotenv": ">=14.1.0"
   },
   "devDependencies": {
     "@colyseus/bun-websockets": "workspace:^",
@@ -66,7 +65,7 @@
     "@types/dotenv": "^8.2.0",
     "pm2": "^6.0.14",
     "mocha": "^11.7.5",
-    "uwebsockets-express": "^1.1.10"
+    "uwebsockets-express": "^2.0.1"
   },
   "peerDependencies": {
     "@colyseus/core": "0.17.x",

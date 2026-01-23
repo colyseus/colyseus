@@ -24,7 +24,6 @@ const banner = (process.env.COLYSEUS_CLOUD)
 💖 Consider becoming a Sponsor on GitHub → https://github.com/sponsors/endel
 🌟 Give us a star on GitHub → https://github.com/colyseus/colyseus
 ☁️  Deploy and scale your project on Colyseus Cloud → https://cloud.colyseus.io
-
 `;
 
 export function greet() {

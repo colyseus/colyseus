@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/core",
-  "version": "0.17.17",
+  "version": "0.17.18",
   "description": "Multiplayer Framework for Node.js.",
   "type": "module",
   "input": "./src/index.ts",
@@ -59,12 +59,15 @@
     "@colyseus/schema": "^4.0.4",
     "@colyseus/redis-driver": "workspace:^",
     "@colyseus/redis-presence": "workspace:^",
-    "@colyseus/tools": "workspace:^"
+    "@colyseus/tools": "workspace:^",
+    "express": "^5.0.0"
   },
   "peerDependencies": {
     "@colyseus/better-call": "workspace:^",
+    "@colyseus/ws-transport": "workspace:^",
     "@colyseus/schema": "^4.0.4",
     "@pm2/io": "^6.1.0",
+    "express": "^4.16.0 || ^5.0.0",
     "zod": "^4.1.12"
   },
   "optionalPeerDependencies": {

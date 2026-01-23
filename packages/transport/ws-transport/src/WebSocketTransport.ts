@@ -1,6 +1,7 @@
 import http from 'http';
 import { URL } from 'url';
 import WebSocket, { type ServerOptions, WebSocketServer } from 'ws';
+import express from 'express';
 
 import { matchMaker, Protocol, Transport, debugAndPrintError, debugConnection, getBearerToken, CloseCode, connectClientToRoom } from '@colyseus/core';
 import { WebSocketClient } from './WebSocketClient.ts';
@@ -23,6 +24,7 @@ export class WebSocketTransport extends Transport {
   protected pingMaxRetries: number;
 
   private _originalSend: typeof WebSocketClient.prototype.raw | null = null;
+  private _expressApp?: express.Application;
 
   constructor(options: TransportOptions = {}) {
     super();
@@ -64,6 +66,14 @@ export class WebSocketTransport extends Transport {
       this.server.on('close', () =>
         clearInterval(this.pingInterval));
     }
+  }
+
+  public getExpressApp(): express.Application {
+    if (!this._expressApp) {
+      this._expressApp = express();
+      this.server.on('request', this._expressApp);
+    }
+    return this._expressApp;
   }
 
   public listen(port: number, hostname?: string, backlog?: number, listeningListener?: () => void) {

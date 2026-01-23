@@ -1,11 +1,12 @@
 import { greet } from "@colyseus/greeting-banner";
+import type express from 'express';
 
 import { debugAndPrintError } from './Debug.ts';
 import * as matchMaker from './MatchMaker.ts';
 import { RegisteredHandler } from './matchmaker/RegisteredHandler.ts';
 
 import { type OnCreateOptions, Room } from './Room.ts';
-import { registerGracefulShutdown, type Type } from './utils/Utils.ts';
+import { Deferred, registerGracefulShutdown, type Type } from './utils/Utils.ts';
 
 import type { Presence } from "./presence/Presence.ts";
 import { LocalPresence } from './presence/LocalPresence.ts';
@@ -14,7 +15,7 @@ import { LocalDriver } from './matchmaker/LocalDriver/LocalDriver.ts';
 import { setTransport, Transport } from './Transport.ts';
 import { logger, setLogger } from './Logger.ts';
 import { setDevMode, isDevMode } from './utils/DevMode.ts';
-import { type Router, bindRouterToServer } from './router/index.ts';
+import { type Router, bindRouterToTransport } from './router/index.ts';
 import { type SDKTypes as SharedSDKTypes } from '@colyseus/shared-types';
 import { getDefaultRouter } from './router/default_routes.ts';
 
@@ -25,6 +26,15 @@ export type ServerOptions = {
   transport?: Transport,
   gracefullyShutdown?: boolean,
   logger?: any;
+
+  /**
+   * Optional callback to configure Express routes.
+   * When provided, the transport layer will initialize an Express-compatible app
+   * and pass it to this callback for custom route configuration.
+   *
+   * For uWebSockets transport, this uses the uwebsockets-express module.
+   */
+  express?: (app: express.Application) => void,
 
   /**
    * Custom function to determine which process should handle room creation.
@@ -78,6 +88,8 @@ export class Server<
   protected port: number | string;
   protected greet: boolean;
 
+  protected _onTransportReady = new Deferred<Transport>();
+
   private _originalRoomOnMessage: typeof Room.prototype['_onMessage'] | null = null;
 
   constructor(options: ServerOptions = {}) {
@@ -111,8 +123,17 @@ export class Server<
     }
   }
 
-  public attach(options: ServerOptions) {
-    this.transport = options.transport || this.getDefaultTransport(options);
+  public async attach(options: ServerOptions) {
+    this.transport = options.transport || await this.getDefaultTransport(options);
+
+    // Initialize Express if callback is provided
+    if (options.express && this.transport.getExpressApp) {
+      const expressApp = await this.transport.getExpressApp();
+      options.express(expressApp);
+    }
+
+    // Resolve the promise when the transport is ready
+    this._onTransportReady.resolve(this.transport);
   }
 
   /**
@@ -163,13 +184,18 @@ export class Server<
       greet();
     }
 
+    // Wait for the transport to be ready
+    await this._onTransportReady;
+
     return new Promise<void>((resolve, reject) => {
       // TODO: refactor me!
       // set transport globally, to be used by matchmaking route
       setTransport(this.transport);
 
       this.transport.listen(port, hostname, backlog, (err) => {
-        const server = this.transport.server;
+        if (this.transport.server) {
+          this.transport.server.on('error', (err) => reject(err));
+        }
 
         // default router is used if no router is provided
         if (!this.router) {
@@ -181,10 +207,7 @@ export class Server<
           this.router = this.router.extend({ ...getDefaultRouter().endpoints }) as unknown as Routes;
         }
 
-        if (server) {
-          server.on('error', (err) => reject(err));
-          bindRouterToServer(server, this.router);
-        }
+        bindRouterToTransport(this.transport, this.router);
 
         if (listeningListener) {
           listeningListener(err);
@@ -312,8 +335,16 @@ export class Server<
     this.onBeforeShutdownCallback = callback;
   }
 
-  protected getDefaultTransport(_: any): Transport {
-    throw new Error("Please provide a 'transport' layer. Default transport not set.");
+  protected async getDefaultTransport(options: any): Promise<Transport> {
+    try {
+      const module = await import('@colyseus/ws-transport');
+      const WebSocketTransport = module.WebSocketTransport;
+      return new WebSocketTransport(options);
+
+    } catch (error) {
+      this._onTransportReady.reject(error);
+      throw new Error("Please provide a 'transport' layer. Default transport not set.");
+    }
   }
 
   protected onShutdownCallback: () => void | Promise<any> =

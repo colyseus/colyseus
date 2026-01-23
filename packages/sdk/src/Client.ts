@@ -1,17 +1,15 @@
-import { CloseCode, type SDKTypes, type ServerRoomLike, type ISeatReservation } from '@colyseus/shared-types';
+import { CloseCode, Protocol, type SDKTypes, type ServerRoomLike, type ISeatReservation } from '@colyseus/shared-types';
 
 import { MatchMakeError, ServerError } from './errors/Errors.ts';
 import { Room } from './Room.ts';
 import { SchemaConstructor } from './serializer/SchemaSerializer.ts';
 import { HTTP } from './HTTP.ts';
 import { Auth } from './Auth.ts';
-import { Protocol } from './Protocol.ts';
 import { Connection } from './Connection.ts';
 import { discordURLBuilder } from './3rd_party/discord.ts';
 
 export type JoinOptions = any;
 export type { ISeatReservation };
-
 
 // - React Native does not provide `window.location`
 // - Cocos Creator (Native) does not provide `window.location.hostname`
