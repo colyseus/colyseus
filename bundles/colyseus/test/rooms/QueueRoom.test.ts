@@ -1,5 +1,5 @@
 import assert from "assert";
-import { RankedQueueRoom, Room, defineRoom, defineServer, generateId, type Client } from "../../src/index.ts";
+import { QueueRoom, Room, defineRoom, defineServer, generateId, type Client } from "../../src/index.ts";
 
 const clientMessages: { [sessionId: string]: any[] } = {};
 
@@ -16,12 +16,12 @@ export function createClient(room: Room, clientOptions: any) {
   room.clients.push(client);
 }
 
-describe("RankedQueueRoom", () => {
+describe("QueueRoom", () => {
   describe("Unit Test", () => {
-    let room: RankedQueueRoom;
+    let room: QueueRoom;
 
     beforeEach(() => {
-      room = new RankedQueueRoom();
+      room = new QueueRoom();
       room.onCreate({ matchRoomName: "my_room" });
 
       /**
@@ -283,10 +283,10 @@ describe("RankedQueueRoom", () => {
   });
 
   describe("Integration Test", () => {
-    it("should create a ranked queue room", () => {
+    it("should create a queue room", () => {
       const gameServer = defineServer({
         rooms: {
-          ranked: defineRoom(RankedQueueRoom, { matchRoomName: "" }),
+          ranked: defineRoom(QueueRoom, { matchRoomName: "" }),
         },
       })
     });

@@ -6,7 +6,7 @@ import { debugMatchMaking } from '../Debug.ts';
 import { ServerError } from '../errors/ServerError.ts';
 import { ErrorCode } from '@colyseus/shared-types';
 
-export interface RankedQueueOptions {
+export interface QueueOptions {
   /**
    * number of players on each match
    */
@@ -44,29 +44,29 @@ export interface RankedQueueOptions {
    * Comparison function for matching clients to groups
    * Returns true if the client is compatible with the group
    */
-  compare?: (client: ClientQueueData, matchGroup: MatchGroup) => boolean;
+  compare?: (client: QueueClientData, matchGroup: QueueMatchGroup) => boolean;
 
   /**
    *
    * When onGroupReady is set, the "roomNameToCreate" option is ignored.
    */
-  onGroupReady?: (this: RankedQueueRoom, group: MatchGroup) => Promise<IRoomCache>;
+  onGroupReady?: (this: QueueRoom, group: QueueMatchGroup) => Promise<IRoomCache>;
 }
 
-export interface MatchGroup {
+export interface QueueMatchGroup {
   averageRank: number;
-  clients: Array<Client<{ userData: ClientQueueData }>>,
+  clients: Array<Client<{ userData: QueueClientData }>>,
   ready?: boolean;
   confirmed?: number;
 }
 
-export interface MatchTeam {
+export interface QueueMatchTeam {
   averageRank: number;
-  clients: Array<Client<{ userData: ClientQueueData }>>,
+  clients: Array<Client<{ userData: QueueClientData }>>,
   teamId: string | symbol;
 }
 
-export interface ClientQueueData {
+export interface QueueClientData {
   /**
    * Rank of the client
    */
@@ -90,7 +90,7 @@ export interface ClientQueueData {
   /**
    * Match group the client is currently in
    */
-  group?: MatchGroup;
+  group?: QueueMatchGroup;
 
   /**
    * Whether the client has confirmed the connection to the room
@@ -110,14 +110,14 @@ export interface ClientQueueData {
 }
 
 const DEFAULT_TEAM = Symbol("$default_team");
-const DEFAULT_COMPARE = (client: ClientQueueData, matchGroup: MatchGroup) => {
+const DEFAULT_COMPARE = (client: QueueClientData, matchGroup: QueueMatchGroup) => {
   const diff = Math.abs(client.rank - matchGroup.averageRank);
   const diffRatio = (diff / matchGroup.averageRank);
   // If diff ratio is too high, create a new match group
   return (diff < 10 || diffRatio <= 2);
 }
 
-export class RankedQueueRoom extends Room {
+export class QueueRoom extends Room {
   maxPlayers = 4;
   maxTeamSize: number;
   allowIncompleteGroups: boolean = false;
@@ -133,13 +133,13 @@ export class RankedQueueRoom extends Room {
   /**
    * Groups of players per iteration
    */
-  groups: MatchGroup[] = [];
-  highPriorityGroups: MatchGroup[] = [];
+  groups: QueueMatchGroup[] = [];
+  highPriorityGroups: QueueMatchGroup[] = [];
 
   matchRoomName: string;
 
   protected compare = DEFAULT_COMPARE;
-  protected onGroupReady = (group: MatchGroup) => matchMaker.createRoom(this.matchRoomName, {});
+  protected onGroupReady = (group: QueueMatchGroup) => matchMaker.createRoom(this.matchRoomName, {});
 
   messages = {
     confirm: (client: Client, _: unknown) => {
@@ -153,7 +153,7 @@ export class RankedQueueRoom extends Room {
     },
   }
 
-  onCreate(options: RankedQueueOptions) {
+  onCreate(options: QueueOptions) {
     if (typeof(options.maxWaitingCycles) === "number") {
       this.maxWaitingCycles = options.maxWaitingCycles;
     }
@@ -182,10 +182,10 @@ export class RankedQueueRoom extends Room {
       this.matchRoomName = options.matchRoomName;
 
     } else {
-      throw new ServerError(ErrorCode.APPLICATION_ERROR, "RankedQueueRoom: 'matchRoomName' option is required.");
+      throw new ServerError(ErrorCode.APPLICATION_ERROR, "QueueRoom: 'matchRoomName' option is required.");
     }
 
-    debugMatchMaking("RankedQueueRoom#onCreate() maxPlayers: %d, maxWaitingCycles: %d, maxTeamSize: %d, allowIncompleteGroups: %d, roomNameToCreate: %s", this.maxPlayers, this.maxWaitingCycles, this.maxTeamSize, this.allowIncompleteGroups, this.matchRoomName);
+    debugMatchMaking("QueueRoom#onCreate() maxPlayers: %d, maxWaitingCycles: %d, maxTeamSize: %d, allowIncompleteGroups: %d, roomNameToCreate: %s", this.maxPlayers, this.maxWaitingCycles, this.maxTeamSize, this.allowIncompleteGroups, this.matchRoomName);
 
     /**
      * Redistribute clients into groups at every interval
@@ -201,7 +201,7 @@ export class RankedQueueRoom extends Room {
     });
   }
 
-  addToQueue(client: Client, queueData: ClientQueueData) {
+  addToQueue(client: Client, queueData: QueueClientData) {
     if (queueData.currentCycle === undefined) {
       queueData.currentCycle = 0;
     }
@@ -212,7 +212,7 @@ export class RankedQueueRoom extends Room {
   }
 
   createMatchGroup() {
-    const group: MatchGroup = { clients: [], averageRank: 0 };
+    const group: QueueMatchGroup = { clients: [], averageRank: 0 };
     this.groups.push(group);
     return group;
   }
@@ -253,8 +253,8 @@ export class RankedQueueRoom extends Room {
     this.processGroupsReady();
   }
 
-  redistributeTeams(sortedClients: Client<{ userData: ClientQueueData }>[]) {
-    const teamsByID: { [teamId: string | symbol]: MatchTeam } = {};
+  redistributeTeams(sortedClients: Client<{ userData: QueueClientData }>[]) {
+    const teamsByID: { [teamId: string | symbol]: QueueMatchTeam } = {};
 
     sortedClients.forEach((client) => {
       const teamId = client.userData.teamId || DEFAULT_TEAM;
@@ -279,7 +279,7 @@ export class RankedQueueRoom extends Room {
 
     // Iterate over teams multiple times until all clients are assigned to a group
     do {
-      let currentGroup: MatchGroup = this.createMatchGroup();
+      let currentGroup: QueueMatchGroup = this.createMatchGroup();
       teams = teams.filter((team) => {
         // Remove clients from the team and add them to the current group
         const totalRank = team.averageRank * team.clients.length;
@@ -303,8 +303,8 @@ export class RankedQueueRoom extends Room {
   }
 
   redistributeClients(
-    sortedClients: Client<{ userData: ClientQueueData }>[],
-    currentGroup: MatchGroup = this.createMatchGroup(),
+    sortedClients: Client<{ userData: QueueClientData }>[],
+    currentGroup: QueueMatchGroup = this.createMatchGroup(),
     totalRank: number = 0,
   ) {
     for (let i = 0, l = sortedClients.length; i < l; i++) {
