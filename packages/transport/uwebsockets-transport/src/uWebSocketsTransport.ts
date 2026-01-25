@@ -223,7 +223,7 @@ export class uWebSocketsTransport extends Transport {
       // fallback to express stack if 404
       if (response.status === 404 && this._expressApp) {
         const ereq = new uWebSocketsExpressModule.IncomingMessage(req, res, this._expressApp as any, {
-          headers: Object.fromEntries(headers.entries()),
+          headers: Object.fromEntries((headers as any).entries()),
           method: requestInit.method,
           url,
           query,
