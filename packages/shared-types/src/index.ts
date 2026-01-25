@@ -9,10 +9,11 @@ export { Protocol, ErrorCode, CloseCode } from './Protocol.js';
 /**
  * Minimal Room-like interface for SDK type inference.
  * Allows typing SDK methods without depending on @colyseus/core.
+ * Note: onJoin is optional because core Room defines it as optional.
  */
 export interface ServerRoomLike<State = any, Options = any> {
   state: State;
-  onJoin: (client: any, options?: Options, auth?: any) => any;
+  onJoin?: (client: any, options?: Options, auth?: any) => any;
   messages?: Record<string, any>;
   '~client'?: { '~messages'?: Record<string, any> };
 }
@@ -31,18 +32,59 @@ export interface ISeatReservation {
 }
 
 /**
- * Helper types for flexible Room generics on the client SDK.
- * Allows: Room<State>, Room<ServerRoom>, or Room<ServerRoom, State>
+ * Extract instance type from a constructor type.
+ * If T is not a constructor, returns T as-is.
+ */
+type Instantiate<T> = T extends abstract new (...args: any) => infer I ? I : T;
+
+/**
+ * Check if a type is a Schema (has ~refId marker).
+ * Schema defines ~refId as optional, so we check keyof instead of property presence.
+ */
+type IsSchema<T> = '~refId' extends keyof T ? true : false;
+
+/**
+ * Check if ~state phantom property contains a useful type (not object/any/never).
+ * Returns true if ~state exists and has meaningful structure.
+ */
+type HasUsefulStatePhantom<T> = T extends { '~state': infer S }
+    ? [S] extends [never] ? false           // never is not useful
+    : unknown extends S ? false             // any is not useful
+    : S extends object
+        ? [keyof S] extends [never] ? false // {} or object with no keys is not useful
+        : true
+        : false
+    : false;
+
+/**
+ * Extract state from a Room-like instance type.
+ * Priority: useful ~state phantom > Schema state property > return T as-is
+ */
+type ExtractStateFromRoom<T> = T extends { '~state': infer S }
+    ? HasUsefulStatePhantom<T> extends true
+        ? S  // Use ~state if it's useful
+        : T extends { state: infer St }
+            ? IsSchema<St> extends true ? St : T  // Fallback to state if Schema
+            : T
+    : T extends { state: infer S }
+        ? IsSchema<S> extends true ? S : T
+        : T;
+
+/**
+ * Infer the state type from T, or use explicit S if provided.
  *
- * Uses `~state` phantom property to distinguish Room types from plain state types.
- * This prevents incorrectly extracting `state` from a state type that happens to have a `state` property.
+ * Supports multiple usage patterns:
+ * - Room<MyState>: T is a Schema type, return as-is
+ * - Room<MyRoom>: T is a Room instance, extract from ~state or state property
+ * - Room<typeof MyRoom>: T is a constructor, instantiate first then extract
+ * - Room<T, ExplicitState>: S overrides all inference
  */
 export type InferState<T, S> = [S] extends [never]
-    ? (T extends abstract new (...args: any) => { '~state': infer ST }
-        ? ST  // Constructor type (typeof MyRoom): extract state via ~state phantom
-        : T extends { '~state': infer ST }
-            ? ST  // Instance type (MyRoom): extract state via ~state phantom
-            : T)  // State type or other: return as-is
+    ? Instantiate<T> extends infer I
+        ? IsSchema<I> extends true
+            ? I  // It's a Schema, return as-is
+            : ExtractStateFromRoom<I>
+        : never
     : S;
 
 /**
@@ -50,31 +92,19 @@ export type InferState<T, S> = [S] extends [never]
  * otherwise returns any (plain state type). This ensures Room<State> is equivalent
  * to Room<any, State> when State doesn't have ~state.
  */
-export type NormalizeRoomType<T> = T extends abstract new (...args: any) => { '~state': any }
-    ? T  // Constructor type with ~state: keep as-is
-    : T extends { '~state': any }
-        ? T  // Instance type with ~state: keep as-is
-        : any;  // Plain state type: normalize to any
+export type NormalizeRoomType<T> = Instantiate<T> extends { '~state': any } ? T : any;
 
 /**
  * Extract room messages type from a Room constructor or instance type.
  * Supports both constructor types (typeof MyRoom) and instance types (MyRoom)
  */
-export type ExtractRoomMessages<T> = T extends abstract new (...args: any) => { messages: infer M }
-    ? M
-    : T extends { messages: infer M }
-        ? M
-        : {};
+export type ExtractRoomMessages<T> = Instantiate<T> extends { messages: infer M } ? M : {};
 
 /**
  * Extract client-side messages type from a Room constructor or instance type.
  * These are messages that the server can send to the client.
  */
-export type ExtractRoomClientMessages<T> = T extends abstract new (...args: any) => { '~client': { '~messages': infer M } }
-    ? M
-    : T extends { '~client': { '~messages': infer M } }
-        ? M
-        : {};
+export type ExtractRoomClientMessages<T> = Instantiate<T> extends { '~client': { '~messages': infer M } } ? M : {};
 
 /**
  * Message handler with automatic type inference from format schema.

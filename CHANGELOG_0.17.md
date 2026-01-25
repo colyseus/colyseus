@@ -1,7 +1,8 @@
 ## Bug fixes / improvements to document
-[ ] `LobbyRoom` / `enableRealtimeListing()`: fix removing room from lobby listing when room is disposed.
-[ ] Room's protected members are now `private` for better DX. If you are using one of the undocumented protected methods, such as `resetAutoDisposeTimeout`, you can call it via `this['resetAutoDisposeTimeout']()`.
-[ ] The `.setSeatReservationTime()` method has been moved to `.seatReservationTimeout=` property.
+[x] In order to enable uWebSockets.js - you need to install either `uwebsockets-express@^1.4.1` (for express v4) or `uwebsockets-express@^2.0.1` (for express v5)
+[x] `LobbyRoom` / `enableRealtimeListing()`: fix removing room from lobby listing when room is disposed.
+[x] Room's protected members are now `private` for better DX. If you are using one of the undocumented protected methods, such as `resetAutoDisposeTimeout`, you can call it via `this['resetAutoDisposeTimeout']()`.
+[x] The `.setSeatReservationTime()` method has been moved to `.seatReservationTimeout=` property.
 [ ] The `Room` type has changed from `Room<State, Metadata>` to `Room<{ state?: MyState, metadata?: Metadata, client?: CustomClient }>`.
 [ ] Room's presence pub/sub now can unsubscribe themselves during `onDispose()`
 [ ] `.allowReconnection()` breaking changes. (https://github.com/colyseus/colyseus/issues/893)
@@ -14,7 +15,7 @@
 [ ] Introduce `maxMessagesPerSecond` for rate-limiting room messages (forcibly close if client exceeds threshold)
 [ ] New `room.ping(callback)` method.
 [ ] Introduce `ColyseusSDK.selectByLatency(endpoints)` and `sdk.getLatency()`
-[ ] `LobbyRoom`: no need to manually call `updateLobby()` when calling `.setMetadata()` anymore. This is done automatically for you.
+[x] `LobbyRoom`: no need to manually call `updateLobby()` when calling `.setMetadata()` anymore. This is done automatically for you.
 
 ## Changes on `@colyseus/schema`
 
@@ -27,7 +28,7 @@
 [ ] `@colyseus/tools`: New `routes` and `rooms` options
 [ ] `@colyseus/core`: New `defineServer()` option
 [ ] Introduced `.setMatchmaking()` for batch modifying the listing entry of the room on the matchmaking driver. Allows to modify `metadata`, `locked`, `maxClients`, etc in a single operation.
-[ ] Document `RankedQueueRoom` and its usage example: https://github.com/endel/colyseus-ranked-matchmaking/?tab=readme-ov-file#ranked-queue-with-colyseus
+[ ] Document `QueueRoom` and its usage example: https://github.com/endel/colyseus-ranked-matchmaking/?tab=readme-ov-file#ranked-queue-with-colyseus
 [ ] `@colyseus/sdk/debug` - New embedded realtime debug/inspector for rooms. On Unity available at **Window → Colyseus → Room Inspector**.
 
 

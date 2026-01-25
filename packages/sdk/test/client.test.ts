@@ -155,9 +155,26 @@ describe("Client", function () {
             type ServerType = ReturnType<typeof defineServer<{ chat: ReturnType<typeof defineRoom<typeof MyRoom>> }, undefined>>;
             const client = new Client<ServerType>("ws://localhost:2546");
 
-            test.skip("joinOrCreate<RoomType> should infer state type", async () => {
-
+            test.skip("joinOrCreate should infer state type", async () => {
                 const room = await client.joinOrCreate("chat");
+                // TypeScript should infer room.state as MyState
+                const str: string = room.state.str;
+
+                assert.ok(str);
+                room.send("chat", { text: "hello" });
+
+                // @ts-expect-error - room.state.error should not exist
+                room.send("chat", { invalid_type: "hello" });
+
+                // @ts-expect-error - room.state.error should not exist
+                room.send("invalid-message-type");
+
+                // @ts-expect-error - room.state.error should not exist
+                const _ = room.state.error;
+            });
+
+            test.skip("joinOrCreate with concrete class should infer state type", async () => {
+                const room = await client.joinOrCreate("chat", {}, MyState);
                 // TypeScript should infer room.state as MyState
                 const str: string = room.state.str;
 
@@ -192,7 +209,7 @@ describe("Client", function () {
                 const _ = room.state.error;
             });
 
-            test.skip("create<RoomType> should infer state type", async () => {
+            test.skip("create should infer state type", async () => {
                 const room = await client.create("chat");
                 // TypeScript should infer room.state as MyState
                 const str: string = room.state.str;

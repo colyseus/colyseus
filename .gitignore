@@ -4,6 +4,7 @@ yarn.lock
 /lib
 .DS_Store
 build/
+.devmode.json
 
 **/README.md
 **/LICENSE

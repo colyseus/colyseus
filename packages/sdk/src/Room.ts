@@ -129,7 +129,7 @@ export class Room<
     protected packr: Packr;
 
     #lastPingTime: number = 0;
-    #pingCallback: (ms: number) => void;
+    #pingCallback?: (ms: number) => void = undefined;
 
     constructor(name: string, rootSchema?: SchemaConstructor<State>) {
         this.name = name;
@@ -221,7 +221,11 @@ export class Room<
         callback: (payload: ExtractRoomClientMessages<NormalizeRoomType<T>>[MessageType]) => void
     ): () => void
     public onMessage<Payload = any>(type: "*", callback: (messageType: string | number, payload: Payload) => void): () => void
-    public onMessage<Payload = any>(type: string | number, callback: (payload: Payload) => void): () => void
+    // Fallback overload: only available when no typed client messages are defined
+    public onMessage<Payload = any>(
+        type: [keyof ExtractRoomClientMessages<NormalizeRoomType<T>>] extends [never] ? (string | number) : never,
+        callback: (payload: Payload) => void
+    ): () => void
     public onMessage(type: '*' | string | number, callback: (...args: any[]) => void) {
         return this.onMessageHandlers.on(this.getMessageHandlerKey(type), callback);
     }
@@ -242,7 +246,11 @@ export class Room<
         messageType: MessageType,
         payload?: ExtractMessageType<ExtractRoomMessages<NormalizeRoomType<T>>[MessageType]>
     ): void
-    public send<Payload = any>(messageType: string | number, payload?: Payload): void
+    // Fallback overload: only available when no typed messages are defined
+    public send<Payload = any>(
+        messageType: [keyof ExtractRoomMessages<NormalizeRoomType<T>>] extends [never] ? (string | number) : never,
+        payload?: Payload
+    ): void
     public send(messageType: string | number, payload?: any): void {
         const it: Iterator = { offset: 1 };
         this.packr.buffer[0] = Protocol.ROOM_DATA;

@@ -30,7 +30,7 @@ export abstract class Transport {
      * For uWebSockets transport, this uses the uwebsockets-express module.
      * This method is called lazily only when an express callback is provided in server options.
      */
-    public getExpressApp?(resolved?: boolean): Promise<import('express').Application> | import('express').Application | undefined;
+    public getExpressApp?(): Promise<import('express').Application> | import('express').Application | undefined;
 
     /**
      * Binds a router to the transport.

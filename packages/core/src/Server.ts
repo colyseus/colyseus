@@ -384,6 +384,6 @@ export function defineServer<
 export function defineRoom<T extends Type<Room>>(
   roomKlass: T,
   defaultOptions?: Parameters<NonNullable<InstanceType<T>['onCreate']>>[0],
-): RegisteredHandler<T> {
-  return new RegisteredHandler(roomKlass, defaultOptions);
+): RegisteredHandler<InstanceType<T>> {
+  return new RegisteredHandler(roomKlass, defaultOptions) as unknown as RegisteredHandler<InstanceType<T>>;
 }

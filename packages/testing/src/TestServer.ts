@@ -38,8 +38,8 @@ export class ColyseusTestServer<ServerType extends SDKTypes = any> {
   // Overload: Use room name from ServerType to infer room type
   async createRoom<R extends keyof ServerType['~rooms']>(
     roomName: R,
-    clientOptions?: Parameters<ServerType['~rooms'][R]['~room']['prototype']['onJoin']>[1]
-  ): Promise<InstanceType<ServerType['~rooms'][R]['~room']>>;
+    clientOptions?: Parameters<ServerType['~rooms'][R]['~room']['onJoin']>[1]
+  ): Promise<ServerType['~rooms'][R]['~room']>;
   // Overload: Pass Room type directly
   async createRoom<R extends Room>(
     roomName: string,

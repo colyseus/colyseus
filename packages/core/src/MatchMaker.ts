@@ -390,8 +390,8 @@ export function defineRoomType<T extends Type<Room>>(
   roomName: string,
   klass: T,
   defaultOptions?: OnCreateOptions<T>,
-) {
-  const registeredHandler = new RegisteredHandler(klass, defaultOptions);
+): RegisteredHandler<InstanceType<T>> {
+  const registeredHandler = new RegisteredHandler(klass, defaultOptions) as unknown as RegisteredHandler<InstanceType<T>>;
   registeredHandler.name = roomName;
 
   handlers[roomName] = registeredHandler;

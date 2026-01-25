@@ -1,4 +1,4 @@
-import { CloseCode, Protocol, type SDKTypes, type ServerRoomLike, type ISeatReservation } from '@colyseus/shared-types';
+import { CloseCode, Protocol, type InferState, type SDKTypes, type ServerRoomLike, type ISeatReservation } from '@colyseus/shared-types';
 
 import { MatchMakeError, ServerError } from './errors/Errors.ts';
 import { Room } from './Room.ts';
@@ -156,15 +156,15 @@ export class ColyseusSDK<ServerType extends SDKTypes = any, UserData = any> {
     }
 
     // Overload: Use room name from ServerType to infer room type
-    public async joinOrCreate<R extends keyof ServerType['~rooms']>(
+    public async joinOrCreate<R extends keyof ServerType['~rooms'], State = InferState<ServerType['~rooms'][R]['~room'], never>>(
         roomName: R,
-        options?: Parameters<ServerType['~rooms'][R]['~room']['prototype']['onJoin']>[1],
-        rootSchema?: SchemaConstructor<ServerType>
-    ): Promise<Room<ServerType['~rooms'][R]['~room']>>
+        options?: Parameters<ServerType['~rooms'][R]['~room']['onJoin']>[1],
+        rootSchema?: SchemaConstructor<State>
+    ): Promise<Room<ServerType['~rooms'][R]['~room'], State>>
     // Overload: Pass RoomType directly to extract state
     public async joinOrCreate<RoomType extends ServerRoomLike>(
         roomName: string,
-        options?: Parameters<RoomType['onJoin']>[1],
+        options?: Parameters<NonNullable<RoomType['onJoin']>>[1],
         rootSchema?: SchemaConstructor<RoomType['state']>
     ): Promise<Room<RoomType, RoomType['state']>>
     // Overload: Pass State type directly
@@ -179,15 +179,15 @@ export class ColyseusSDK<ServerType extends SDKTypes = any, UserData = any> {
     }
 
     // Overload: Use room name from ServerType to infer room type
-    public async create<R extends keyof ServerType['~rooms']>(
+    public async create<R extends keyof ServerType['~rooms'], State = InferState<ServerType['~rooms'][R]['~room'], never>>(
         roomName: R,
-        options?: Parameters<ServerType['~rooms'][R]['~room']['prototype']['onJoin']>[1],
-        rootSchema?: SchemaConstructor<ServerType>
-    ): Promise<Room<ServerType['~rooms'][R]['~room']>>
+        options?: Parameters<ServerType['~rooms'][R]['~room']['onJoin']>[1],
+        rootSchema?: SchemaConstructor<State>
+    ): Promise<Room<ServerType['~rooms'][R]['~room'], State>>
     // Overload: Pass RoomType directly to extract state
     public async create<RoomType extends ServerRoomLike>(
         roomName: string,
-        options?: Parameters<RoomType['onJoin']>[1],
+        options?: Parameters<NonNullable<RoomType['onJoin']>>[1],
         rootSchema?: SchemaConstructor<RoomType['state']>
     ): Promise<Room<RoomType, RoomType['state']>>
     // Overload: Pass State type directly
@@ -202,15 +202,15 @@ export class ColyseusSDK<ServerType extends SDKTypes = any, UserData = any> {
     }
 
     // Overload: Use room name from ServerType to infer room type
-    public async join<R extends keyof ServerType['~rooms']>(
+    public async join<R extends keyof ServerType['~rooms'], State = InferState<ServerType['~rooms'][R]['~room'], never>>(
         roomName: R,
-        options?: Parameters<ServerType['~rooms'][R]['~room']['prototype']['onJoin']>[1],
-        rootSchema?: SchemaConstructor<ServerType>
-    ): Promise<Room<ServerType['~rooms'][R]['~room']>>
+        options?: Parameters<ServerType['~rooms'][R]['~room']['onJoin']>[1],
+        rootSchema?: SchemaConstructor<State>
+    ): Promise<Room<ServerType['~rooms'][R]['~room'], State>>
     // Overload: Pass RoomType directly to extract state
     public async join<RoomType extends ServerRoomLike>(
         roomName: string,
-        options?: Parameters<RoomType['onJoin']>[1],
+        options?: Parameters<NonNullable<RoomType['onJoin']>>[1],
         rootSchema?: SchemaConstructor<RoomType['state']>
     ): Promise<Room<RoomType, RoomType['state']>>
     // Overload: Pass State type directly
@@ -225,15 +225,15 @@ export class ColyseusSDK<ServerType extends SDKTypes = any, UserData = any> {
     }
 
     // Overload: Use room name from ServerType to infer room type
-    public async joinById<R extends keyof ServerType['~rooms']>(
+    public async joinById<R extends keyof ServerType['~rooms'], State = InferState<ServerType['~rooms'][R]['~room'], never>>(
         roomName: R,
-        options?: Parameters<ServerType['~rooms'][R]['~room']['prototype']['onJoin']>[1],
-        rootSchema?: SchemaConstructor<ServerType>
-    ): Promise<Room<ServerType['~rooms'][R]['~room']>>
+        options?: Parameters<ServerType['~rooms'][R]['~room']['onJoin']>[1],
+        rootSchema?: SchemaConstructor<State>
+    ): Promise<Room<ServerType['~rooms'][R]['~room'], State>>
     // Overload: Pass RoomType directly to extract state
     public async joinById<RoomType extends ServerRoomLike>(
         roomId: string,
-        options?: Parameters<RoomType['onJoin']>[1],
+        options?: Parameters<NonNullable<RoomType['onJoin']>>[1],
         rootSchema?: SchemaConstructor<RoomType['state']>
     ): Promise<Room<RoomType, RoomType['state']>>
     // Overload: Pass State type directly

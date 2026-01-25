@@ -99,7 +99,7 @@ function expressRootRoute(expressApp: express.Application) {
   const stack = (expressApp as any)?._router?.stack ?? (expressApp as any)?.router?.stack;
 
   if (!stack) {
-    throw new Error("Express app is not initialized");
+    return false;
   }
 
   return stack.find((layer: any) => layer.match('/') && !['query', 'expressInit'].includes(layer.name));

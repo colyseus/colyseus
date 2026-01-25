@@ -4,13 +4,10 @@ import { DRIVERS } from "../utils/index.ts";
 
 import { uWebSocketsTransport } from "@colyseus/uwebsockets-transport";
 
-import * as Colyseus from "@colyseus/sdk";
 import WebSocket from "ws";
-import { WebSocketTransport } from "@colyseus/ws-transport";
 
 const TEST_PORT = 8567;
 const TEST_ENDPOINT = `ws://localhost:${TEST_PORT}`;
-const client = new Colyseus.Client(TEST_ENDPOINT);
 
 describe("Transport: uWebSockets.js", () => {
   for (let i = 0; i < DRIVERS.length; i++) {

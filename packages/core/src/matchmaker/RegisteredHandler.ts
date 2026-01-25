@@ -36,32 +36,32 @@ type SortByKeys<RoomType extends Room> =
       ? keyof ExtractRoomCacheMetadata<RoomType> & string
       : never);
 
-export interface RegisteredHandlerEvents<RoomType extends Type<Room> = any> {
-  create: [room: InstanceType<RoomType>];
-  lock: [room: InstanceType<RoomType>];
-  unlock: [room: InstanceType<RoomType>];
-  join: [room: InstanceType<RoomType>, client: Client];
-  leave: [room: InstanceType<RoomType>, client: Client, willDispose: boolean];
-  dispose: [room: InstanceType<RoomType>];
-  'visibility-change': [room: InstanceType<RoomType>, isVisible: boolean];
-  'metadata-change': [room: InstanceType<RoomType>];
+export interface RegisteredHandlerEvents<RoomType extends Room = any> {
+  create: [room: RoomType];
+  lock: [room: RoomType];
+  unlock: [room: RoomType];
+  join: [room: RoomType, client: Client];
+  leave: [room: RoomType, client: Client, willDispose: boolean];
+  dispose: [room: RoomType];
+  'visibility-change': [room: RoomType, isVisible: boolean];
+  'metadata-change': [room: RoomType];
 }
 
 export class RegisteredHandler<
-  RoomType extends Type<Room> = any
+  RoomType extends Room = any
 > extends EventEmitter<RegisteredHandlerEvents<RoomType>> {
   '~room': RoomType;
 
-  public klass: RoomType;
+  public klass: Type<RoomType>;
   public options: any;
 
   public name: string;
-  public filterOptions: Array<FilterByKeys<InstanceType<RoomType>>> = [];
+  public filterOptions: Array<FilterByKeys<RoomType>> = [];
   public sortOptions?: SortOptions;
 
   public realtimeListingEnabled: boolean = false;
 
-  constructor(klass: RoomType, options?: any) {
+  constructor(klass: Type<RoomType>, options?: any) {
     super();
 
     this.klass = klass;
@@ -106,7 +106,7 @@ export class RegisteredHandler<
    * // Mix both
    * .filterBy(['mode', 'difficulty', 'maxClients'])
    */
-  public filterBy<T extends FilterByKeys<InstanceType<RoomType>>>(
+  public filterBy<T extends FilterByKeys<RoomType>>(
     options: T[]
   ) {
     this.filterOptions = options;
@@ -129,7 +129,7 @@ export class RegisteredHandler<
    * // Multiple sort criteria
    * .sortBy({ 'metadata.skillLevel': 1, clients: -1 })
    */
-  public sortBy<T extends SortByKeys<InstanceType<RoomType>>>(
+  public sortBy<T extends SortByKeys<RoomType>>(
     options: { [K in T]: SortOptions[string] }
   ): this {
     this.sortOptions = options as unknown as SortOptions;
