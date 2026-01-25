@@ -259,6 +259,18 @@ export function APIEndpoints({ authConfig }: { authConfig?: AuthConfig }) {
 					<h2 className="text-lg md:text-xl font-semibold mb-4 dark:text-slate-300">Available Endpoints</h2>
 
 					<div className="space-y-2 mb-6">
+						{endpoints.length === 0 && (
+							<Callout>
+								<a
+									href="https://docs.colyseus.io/server/http-routes"
+									target="_blank"
+									rel="noreferrer"
+									className="text-purple-600 dark:text-purple-300 hover:underline"
+								>
+									Router endpoints will appear here automatically
+								</a>
+							</Callout>
+						)}
 						{endpoints.map((endpoint, idx) => (
 							<button
 								key={idx}
