@@ -13,8 +13,8 @@
 [ ] Fixed bug where setting `patchRate=0` would stop `clock` intervals and timeouts from working (https://github.com/colyseus/colyseus/issues/869)
 [ ] Playground: Automatically-generated postman-like UI
 [ ] Introduce `maxMessagesPerSecond` for rate-limiting room messages (forcibly close if client exceeds threshold)
-[ ] New `room.ping(callback)` method.
-[ ] Introduce `ColyseusSDK.selectByLatency(endpoints)` and `sdk.getLatency()`
+[x] New `room.ping(callback)` method.
+[x] Introduce `ColyseusSDK.selectByLatency(endpoints)` and `sdk.getLatency()`
 [x] `LobbyRoom`: no need to manually call `updateLobby()` when calling `.setMetadata()` anymore. This is done automatically for you.
 
 ## Changes on `@colyseus/schema`
