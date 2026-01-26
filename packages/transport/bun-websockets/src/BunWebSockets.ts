@@ -2,100 +2,161 @@
 
 // "bun-types" is currently conflicting with "ws" types.
 // @ts-ignore
-import { ServerWebSocket, WebSocketHandler } from 'bun';
+import { Server, ServerWebSocket, WebSocketHandler } from 'bun';
+import express, { type  Application } from "express";
+import type { Router } from '@colyseus/core';
 
-// import bunExpress from 'bun-serve-express';
-import type { Application, Request, Response } from "express";
-
-import { HttpServerMock, matchMaker, Protocol, Transport, debugAndPrintError, getBearerToken, CloseCode, connectClientToRoom } from '@colyseus/core';
+import { matchMaker, Protocol, Transport, debugAndPrintError, getBearerToken, CloseCode, connectClientToRoom, spliceOne } from '@colyseus/core';
 import { WebSocketClient, WebSocketWrapper } from './WebSocketClient.ts';
 
-export type TransportOptions = Partial<Omit<WebSocketHandler, "message" | "open" | "drain" | "close" | "ping" | "pong">>;
+// Bun global is available at runtime
+declare const Bun: any;
+
+export type TransportOptions = Partial<Omit<WebSocketHandler<WebSocketData>, "message" | "open" | "drain" | "close" | "ping" | "pong">>;
 
 interface WebSocketData {
-  url: URL;
-  headers: any;
+  url: string;
+  searchParams: URLSearchParams;
+  headers: Headers;
+  remoteAddress: string;
 }
 
 export class BunWebSockets extends Transport {
-  public expressApp: Application;
-
   protected clients: ServerWebSocket<WebSocketData>[] = [];
   protected clientWrappers = new WeakMap<ServerWebSocket<WebSocketData>, WebSocketWrapper>();
 
-  private _listening: any;
+  private _server: Server<WebSocketData> | undefined;
+  private _expressApp: Application | undefined;
+  private _router: Router | undefined;
   private _originalRawSend: typeof WebSocketClient.prototype.raw | null = null;
   private options: TransportOptions = {};
 
   constructor(options: TransportOptions = {}) {
     super();
-
-    const self = this;
-
     this.options = options;
+  }
 
-    // this.expressApp = bunExpress({
-    //   websocket: {
-    //     ...this.options,
-
-    //     async open(ws) {
-    //       await self.onConnection(ws);
-    //     },
-
-    //     message(ws, message) {
-    //       self.clientWrappers.get(ws)?.emit('message', message);
-    //     },
-
-    //     close(ws, code, reason) {
-    //       // remove from client list
-    //       spliceOne(self.clients, self.clients.indexOf(ws));
-
-    //       const clientWrapper = self.clientWrappers.get(ws);
-    //       if (clientWrapper) {
-    //         self.clientWrappers.delete(ws);
-
-    //         // emit 'close' on wrapper
-    //         clientWrapper.emit('close', code);
-    //       }
-    //     },
-    //   }
-    // });
-
-    // Adding a mock object for Transport.server
-    if (!this.server) {
-      // @ts-ignore
-      this.server = new HttpServerMock();
+  public getExpressApp(): Application {
+    if (!this._expressApp) {
+      this._expressApp = express();
     }
+    return this._expressApp;
+  }
+
+  public bindRouter(router: Router) {
+    this._router = router;
   }
 
   public listen(port: number, hostname?: string, backlog?: number, listeningListener?: () => void) {
-    this._listening = this.expressApp.listen(port, listeningListener);
+    const self = this;
 
-    this.expressApp.use(`/${matchMaker.controller.matchmakeRoute}`, async (req, res) => {
-      try {
-        // TODO: use shared handler here
-        // await this.handleMatchMakeRequest(req, res);
-      } catch (e: any) {
-        res.status(500).json({
-          code: e.code,
-          error: e.message
-        });
+    this._server = Bun.serve({
+      port,
+      hostname,
+
+      async fetch(req, server) {
+        const url = new URL(req.url);
+
+        // Try to upgrade to WebSocket
+        if (server.upgrade(req, {
+          data: {
+            url: url.pathname + url.search,
+            searchParams: url.searchParams,
+            headers: req.headers as Headers,
+            remoteAddress: server.requestIP(req)?.address || 'unknown',
+          }
+        })) {
+          return; // WebSocket upgrade successful
+        }
+
+        // Handle HTTP requests through router
+        if (self._router) {
+          try {
+            // Write CORS headers
+            const corsHeaders = {
+              ...matchMaker.controller.DEFAULT_CORS_HEADERS,
+              ...matchMaker.controller.getCorsHeaders(req.headers)
+            };
+
+            // Handle OPTIONS requests
+            if (req.method === "OPTIONS") {
+              return new Response(null, {
+                status: 204,
+                headers: corsHeaders
+              });
+            }
+
+            const response = await self._router.handler(req);
+
+            // Add CORS headers to response
+            const headers = new Headers(response.headers);
+            Object.entries(corsHeaders).forEach(([key, value]) => {
+              if (!headers.has(key)) {
+                headers.set(key, value.toString());
+              }
+            });
+
+            return new Response(response.body, {
+              status: response.status,
+              statusText: response.statusText,
+              headers
+            });
+
+          } catch (e: any) {
+            debugAndPrintError(e);
+            return new Response(JSON.stringify({
+              code: e.code,
+              error: e.message
+            }), {
+              status: 500,
+              headers: { 'Content-Type': 'application/json' }
+            });
+          }
+        }
+
+        // Fallback to express app if available
+        if (self._expressApp) {
+          // TODO: Implement express integration for Bun
+          console.warn("Express integration not yet implemented for BunWebSockets");
+        }
+
+        return new Response("Not Found", { status: 404 });
+      },
+
+      websocket: {
+        ...this.options,
+
+        async open(ws) {
+          await self.onConnection(ws);
+        },
+
+        message(ws, message) {
+          self.clientWrappers.get(ws)?.emit('message', message);
+        },
+
+        close(ws, code, reason) {
+          // remove from client list
+          spliceOne(self.clients, self.clients.indexOf(ws));
+
+          const clientWrapper = self.clientWrappers.get(ws);
+          if (clientWrapper) {
+            self.clientWrappers.delete(ws);
+
+            // emit 'close' on wrapper
+            clientWrapper.emit('close', code);
+          }
+        },
       }
     });
 
-    // Mocking Transport.server behaviour, https://github.com/colyseus/colyseus/issues/458
-    // @ts-ignore
-    this.server.emit("listening");
+    listeningListener?.();
 
     return this;
   }
 
   public shutdown() {
-    if (this._listening) {
-      this._listening.close();
-
-      // @ts-ignore
-      this.server.emit("close"); // Mocking Transport.server behaviour, https://github.com/colyseus/colyseus/issues/458
+    if (this._server) {
+      this._server.stop();
     }
   }
 
@@ -119,10 +180,11 @@ export class BunWebSockets extends Transport {
     this.clients.push(rawClient);
     this.clientWrappers.set(rawClient, wrapper);
 
-    const parsedURL = new URL(rawClient.data.url);
+    const url = rawClient.data.url;
+    const searchParams = rawClient.data.searchParams;
 
-    const sessionId = parsedURL.searchParams.get("sessionId");
-    const processAndRoomId = parsedURL.pathname.match(/\/[a-zA-Z0-9_\-]+\/([a-zA-Z0-9_\-]+)$/);
+    const sessionId = searchParams.get("sessionId");
+    const processAndRoomId = url.match(/\/[a-zA-Z0-9_\-]+\/([a-zA-Z0-9_\-]+)$/);
     const roomId = processAndRoomId && processAndRoomId[1];
 
     // If sessionId is not provided, allow ping-pong utility.
@@ -136,14 +198,14 @@ export class BunWebSockets extends Transport {
 
     const room = matchMaker.getLocalRoomById(roomId);
     const client = new WebSocketClient(sessionId, wrapper);
-    const reconnectionToken = parsedURL.searchParams.get("reconnectionToken");
-    const skipHandshake = (parsedURL.searchParams.has("skipHandshake"));
+    const reconnectionToken = searchParams.get("reconnectionToken");
+    const skipHandshake = searchParams.has("skipHandshake");
 
     try {
       await connectClientToRoom(room, client, {
-        token: parsedURL.searchParams.get("_authToken") ?? getBearerToken(rawClient.data.headers['authorization']),
+        token: searchParams.get("_authToken") ?? getBearerToken(rawClient.data.headers['authorization']),
         headers: rawClient.data.headers,
-        ip: rawClient.data.headers['x-real-ip'] ?? rawClient.data.headers['x-forwarded-for'] ?? rawClient.remoteAddress,
+        ip: rawClient.data.headers['x-real-ip'] ?? rawClient.data.headers['x-forwarded-for'] ?? rawClient.data.remoteAddress,
       }, {
         reconnectionToken,
         skipHandshake
