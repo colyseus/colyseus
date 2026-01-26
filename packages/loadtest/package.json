@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/loadtest",
-  "version": "0.17.7",
+  "version": "0.17.8",
   "description": "Utility tool for load testing Colyseus.",
   "type": "module",
   "exports": {

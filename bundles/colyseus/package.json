@@ -1,6 +1,6 @@
 {
   "name": "colyseus",
-  "version": "0.17.7",
+  "version": "0.17.8",
   "description": "Multiplayer Framework for Node.js",
   "type": "module",
   "input": "./src/index.ts",

@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/shared-types",
-  "version": "0.17.3",
+  "version": "0.17.4",
   "description": "Shared TypeScript types for Colyseus server and client SDK",
   "type": "module",
   "input": "./src/index.ts",

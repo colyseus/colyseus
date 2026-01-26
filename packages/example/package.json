@@ -2,7 +2,7 @@
   "name": "@colyseus/example",
   "private": true,
   "type": "module",
-  "version": "0.17.3",
+  "version": "0.17.4",
   "author": "Endel Dreyer",
   "license": "MIT",
   "scripts": {

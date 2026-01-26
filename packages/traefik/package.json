@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/traefik",
-  "version": "0.17.5",
+  "version": "0.17.6",
   "type": "module",
   "description": "Utility to expose Colyseus servers to Traefik as a load balancer",
   "input": "./src/index.ts",
