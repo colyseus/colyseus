@@ -11,6 +11,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus, vs } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { AuthTokenSection } from "../components/AuthTokenSection";
 import type { AuthConfig } from "../../src-backend/index";
+import { ServerError } from "@colyseus/sdk";
 
 interface APIEndpoint {
 	method: string;
@@ -75,13 +76,13 @@ export function APIEndpoints({ authConfig }: { authConfig?: AuthConfig }) {
 								parsedEndpoints.push({
 									method: endpoint.method.toUpperCase(),
 									path: endpoint.path,
-                  body: endpoint.body,
-                  query: endpoint.query,
+									body: endpoint.body,
+									query: endpoint.query,
 									description: endpoint.description || `${endpoint.method.toUpperCase()} ${endpoint.path}`,
 								});
 							}
 						}
-          }
+					}
 
 					setEndpoints(parsedEndpoints);
 				}
@@ -203,18 +204,15 @@ export function APIEndpoints({ authConfig }: { authConfig?: AuthConfig }) {
 				throw new Error(`Unsupported HTTP method: ${method}`);
 		}
 
-		// Check if response is ok or contains error
-		if (!res.ok) {
-			// HTTP error response
-			const errorMessage = res.error?.message
-				|| (typeof res.error === 'string' ? res.error : JSON.stringify(res.error))
-				|| res.statusText;
-			setError(`${res.status} - ${res.error.code} ${errorMessage}`);
-		} else {
-			setResponse(res.data);
-		}
+		setResponse(res.data);
+
 	} catch (e: any) {
-		setError(e.message || "Failed to fetch");
+		if (e instanceof ServerError) {
+			// HTTP error response
+			setError(`${e.status} - ${e.code} ${e.message}`);
+		} else {
+			setError(e.message || "Failed to fetch");
+		}
 		} finally {
 			setLoading(false);
 		}
