@@ -254,6 +254,9 @@ export class HTTP<R extends Router | Router["endpoints"]> {
     public options: FetchRequestOptions;
 
     private sdk: ColyseusSDK;
+    
+    // alias "del()" to "delete()"
+    public del = this.delete;
 
     constructor(sdk: ColyseusSDK, baseOptions: FetchRequestOptions) {
         this.sdk = sdk;

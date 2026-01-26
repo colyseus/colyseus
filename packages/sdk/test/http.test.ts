@@ -62,6 +62,14 @@ describe("HTTP", function() {
         assert.strictEqual(response.data.length, undefined);
     });
 
+    test("del and delete should be equivalent", async () => {
+        const response1 = await client.http.delete("/anything");
+        assert.strictEqual(response1.data.message, "ok");
+
+        const response2 = await client.http.del("/anything");
+        assert.strictEqual(response2.data.message, "ok");
+    });
+
     describe("errors", () => {
         test("should return 'offline' error when requesting offline service", async () => {
             client = new Client(`http://localhost:9090`);
