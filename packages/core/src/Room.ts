@@ -210,9 +210,9 @@ export class Room<T extends RoomOptions = RoomOptions> {
    * Maximum number of messages a client can send to the server per second.
    * If a client sends more messages than this, it will be disconnected.
    *
-   * @default 60
+   * @default Infinity
    */
-  public maxMessagesPerSecond: number = 60;
+  public maxMessagesPerSecond: number = Infinity;
 
   /**
    * The state instance you provided to `setState()`.
