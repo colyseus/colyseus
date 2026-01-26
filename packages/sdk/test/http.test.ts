@@ -22,6 +22,11 @@ function handler(req, res) {
             return;
         }
 
+        if (req.url === '/anything') {
+            res.end(JSON.stringify({ message: 'ok' }));
+            return;
+        }
+
         res.end('{invalid_json');
     }, 60);
 }
@@ -50,6 +55,11 @@ describe("HTTP", function() {
 
     afterAll(() => {
         localServer.close();
+    });
+
+    test("when untyped, response.data should resolve as 'any'", async () => {
+        const response = await client.http.get("/anything");
+        assert.strictEqual(response.data.length, undefined);
     });
 
     describe("errors", () => {

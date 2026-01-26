@@ -243,6 +243,12 @@ type InferredAPI<R> = R extends { endpoints: Record<string, Endpoint> }
     ? WithoutServerOnly<R["endpoints"]>
     : WithoutServerOnly<R & Record<string, Endpoint>>;
 
+// Helper type to resolve return type, returning 'any' when R is untyped
+type InferReturnType<R, OPT, K extends keyof OPT> =
+    IsAnyOrAnyIndexed<R> extends true
+        ? any
+        : Awaited<ReturnType<OPT[K] extends Endpoint ? OPT[K] : never>>;
+
 export class HTTP<R extends Router | Router["endpoints"]> {
     public authToken: string | undefined;
     public options: FetchRequestOptions;
@@ -282,7 +288,7 @@ export class HTTP<R extends Router | Router["endpoints"]> {
             ? FetchRequestOptions<any, any, any>
             : WithRequired<FetchRequestOptions<C["body"], C["query"], C["params"]>, keyof RequiredOptionKeys<C>>
     ): Promise<
-        FetchResponse<Awaited<ReturnType<OPT[K] extends Endpoint ? OPT[K] : never>>>
+        FetchResponse<InferReturnType<R, OPT, K>>
     >;
 
     // Overload for endpoints WITHOUT required fields (permissive when R is 'any')
@@ -297,7 +303,7 @@ export class HTTP<R extends Router | Router["endpoints"]> {
             ? FetchRequestOptions<any, any, any>
             : FetchRequestOptions<C["body"], C["query"], C["params"]>
     ): Promise<
-        FetchResponse<Awaited<ReturnType<OPT[K] extends Endpoint ? OPT[K] : never>>>
+        FetchResponse<InferReturnType<R, OPT, K>>
     >;
 
     get(path: any, options?: any): Promise<any> {
@@ -316,7 +322,7 @@ export class HTTP<R extends Router | Router["endpoints"]> {
             ? FetchRequestOptions<any, any, any>
             : WithRequired<FetchRequestOptions<C["body"], C["query"], C["params"]>, keyof RequiredOptionKeys<C>>)
     ): Promise<
-        FetchResponse<Awaited<ReturnType<OPT[K] extends Endpoint ? OPT[K] : never>>>
+        FetchResponse<InferReturnType<R, OPT, K>>
     >;
 
     // Overload for endpoints WITHOUT required fields (permissive when R is 'any')
@@ -331,7 +337,7 @@ export class HTTP<R extends Router | Router["endpoints"]> {
             ? FetchRequestOptions<any, any, any>
             : FetchRequestOptions<C["body"], C["query"], C["params"]>)
     ): Promise<
-        FetchResponse<Awaited<ReturnType<OPT[K] extends Endpoint ? OPT[K] : never>>>
+        FetchResponse<InferReturnType<R, OPT, K>>
     >;
 
     post(path: any, options?: any): Promise<any> {
@@ -350,7 +356,7 @@ export class HTTP<R extends Router | Router["endpoints"]> {
             ? FetchRequestOptions<any, any, any>
             : WithRequired<FetchRequestOptions<C["body"], C["query"], C["params"]>, keyof RequiredOptionKeys<C>>
     ): Promise<
-        FetchResponse<Awaited<ReturnType<OPT[K] extends Endpoint ? OPT[K] : never>>>
+        FetchResponse<InferReturnType<R, OPT, K>>
     >;
 
     // Overload for endpoints WITHOUT required fields (permissive when R is 'any')
@@ -365,7 +371,7 @@ export class HTTP<R extends Router | Router["endpoints"]> {
             ? FetchRequestOptions<any, any, any>
             : FetchRequestOptions<C["body"], C["query"], C["params"]>
     ): Promise<
-        FetchResponse<Awaited<ReturnType<OPT[K] extends Endpoint ? OPT[K] : never>>>
+        FetchResponse<InferReturnType<R, OPT, K>>
     >;
 
     delete(path: any, options?: any): Promise<any> {
@@ -384,7 +390,7 @@ export class HTTP<R extends Router | Router["endpoints"]> {
             ? FetchRequestOptions<any, any, any>
             : WithRequired<FetchRequestOptions<C["body"], C["query"], C["params"]>, keyof RequiredOptionKeys<C>>
     ): Promise<
-        FetchResponse<Awaited<ReturnType<OPT[K] extends Endpoint ? OPT[K] : never>>>
+        FetchResponse<InferReturnType<R, OPT, K>>
     >;
 
     // Overload for endpoints WITHOUT required fields (permissive when R is 'any')
@@ -399,7 +405,7 @@ export class HTTP<R extends Router | Router["endpoints"]> {
             ? FetchRequestOptions<any, any, any>
             : FetchRequestOptions<C["body"], C["query"], C["params"]>
     ): Promise<
-        FetchResponse<Awaited<ReturnType<OPT[K] extends Endpoint ? OPT[K] : never>>>
+        FetchResponse<InferReturnType<R, OPT, K>>
     >;
 
     patch(path: any, options?: any): Promise<any> {
@@ -418,7 +424,7 @@ export class HTTP<R extends Router | Router["endpoints"]> {
             ? FetchRequestOptions<any, any, any>
             : WithRequired<FetchRequestOptions<C["body"], C["query"], C["params"]>, keyof RequiredOptionKeys<C>>
     ): Promise<
-        FetchResponse<Awaited<ReturnType<OPT[K] extends Endpoint ? OPT[K] : never>>>
+        FetchResponse<InferReturnType<R, OPT, K>>
     >;
 
     // Overload for endpoints WITHOUT required fields (permissive when R is 'any')
@@ -433,7 +439,7 @@ export class HTTP<R extends Router | Router["endpoints"]> {
             ? FetchRequestOptions<any, any, any>
             : FetchRequestOptions<C["body"], C["query"], C["params"]>
     ): Promise<
-        FetchResponse<Awaited<ReturnType<OPT[K] extends Endpoint ? OPT[K] : never>>>
+        FetchResponse<InferReturnType<R, OPT, K>>
     >;
 
     put(path: any, options?: any): Promise<any> {
