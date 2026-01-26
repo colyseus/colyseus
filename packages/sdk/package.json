@@ -68,7 +68,7 @@
     "@colyseus/shared-types": "workspace:^",
     "@colyseus/better-call": "workspace:^",
     "@colyseus/msgpackr": "^1.11.2",
-    "@colyseus/schema": "^4.0.4",
+    "@colyseus/schema": "^4.0.6",
     "tslib": "^2.1.0",
     "ws": "^8.13.0"
   },

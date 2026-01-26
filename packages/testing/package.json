@@ -48,7 +48,7 @@
     "@colyseus/sdk": "workspace:^",
     "@colyseus/tools": "workspace:^",
     "@colyseus/ws-transport": "workspace:^",
-    "@colyseus/schema": "^4.0.4"
+    "@colyseus/schema": "^4.0.6"
   },
   "peerDependencies": {
     "@colyseus/core": "0.17.x",

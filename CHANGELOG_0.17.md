@@ -9,13 +9,14 @@
   [ ] `onLeave(client, code)` - the onLeave now receives close `code` as number instead of `consented` boolean flag.
 [ ] `Protocol.WS_*` close codes have been moved to `CloseCode.*`
 [ ] Introduced `CloseCode.SERVER_SHUTDOWN`
-[ ] Skipping handshake when local state is available (when reconnecting or with concrete state provided)
-[ ] Fixed bug where setting `patchRate=0` would stop `clock` intervals and timeouts from working (https://github.com/colyseus/colyseus/issues/869)
+[x] Skipping handshake when local state is available (when reconnecting or with concrete state provided)
+[x] Fixed bug where setting `patchRate=0` would stop `clock` intervals and timeouts from working (https://github.com/colyseus/colyseus/issues/869)
 [ ] Playground: Automatically-generated postman-like UI
-[ ] Introduce `maxMessagesPerSecond` for rate-limiting room messages (forcibly close if client exceeds threshold)
+[x] Introduce `maxMessagesPerSecond` for rate-limiting room messages (forcibly close if client exceeds threshold)
 [x] New `room.ping(callback)` method.
 [x] Introduce `ColyseusSDK.selectByLatency(endpoints)` and `sdk.getLatency()`
 [x] `LobbyRoom`: no need to manually call `updateLobby()` when calling `.setMetadata()` anymore. This is done automatically for you.
+[ ] SDK: onDrop / onReconnect - (`allowReconnection()`)
 
 ## Changes on `@colyseus/schema`
 
