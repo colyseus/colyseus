@@ -28,6 +28,12 @@ export type ServerOptions = {
   logger?: any;
 
   /**
+   * Optional callback to execute before the server listens.
+   * This is useful for example to connect into a database or other services before the server listens.
+   */
+  beforeListen?: () => Promise<void> | void,
+
+  /**
    * Optional callback to configure Express routes.
    * When provided, the transport layer will initialize an Express-compatible app
    * and pass it to this callback for custom route configuration.
@@ -145,6 +151,10 @@ export class Server<
    * @param listeningListener
    */
   public async listen(port: number | string, hostname?: string, backlog?: number, listeningListener?: Function) {
+    if (this.options.beforeListen) {
+      await this.options.beforeListen();
+    }
+
     //
     // if Colyseus Cloud is detected, use @colyseus/tools to listen
     //
