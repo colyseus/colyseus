@@ -66,8 +66,14 @@ export class Connection implements ITransport {
     }
 
     reconnect(queryParams: { reconnectionToken: string, skipHandshake?: boolean }): void {
-        const queryString = new URLSearchParams(queryParams as unknown as Record<string, string>).toString();
-        this.transport.connect(`${this.url}&${queryString}`, this.options);
+        const url = new URL(this.url);
+
+        // override query params
+        for (const key in queryParams) {
+            url.searchParams.set(key, queryParams[key]);
+        }
+
+        this.transport.connect(url.toString(), this.options);
     }
 
     close(code?: number, reason?: string): void {
