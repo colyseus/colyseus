@@ -10,6 +10,7 @@
     "clean": "lerna clean",
     "test": "lerna run test --stream",
     "example": "lerna run start --scope @colyseus/example --stream",
+    "sdk-test-server": "lerna run sdk-test-server --scope @colyseus/example --stream",
     "update-contributors": "all-contributors generate",
     "graph": "lerna list --graph",
     "watch": "node compile-packages.mjs --watch",

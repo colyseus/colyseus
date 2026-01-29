@@ -7,7 +7,8 @@
   "license": "MIT",
   "scripts": {
     "start": "tsx src/app.config.ts",
-    "example-h3": "tsx src/ServerH3.ts"
+    "example-h3": "tsx src/ServerH3.ts",
+    "sdk-test-server": "tsx src/sdks.server.ts"
   },
   "dependencies": {
     "@colyseus/core": "workspace:^"

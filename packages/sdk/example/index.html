@@ -12,31 +12,18 @@
       <h1 class="mb-5 text-gray-800 text-2xl font-semibold">Colyseus SDK Test App</h1>
 
       <div class="mb-8 p-5 bg-gray-50 rounded-md">
-        <h2 class="mb-4 text-gray-600 text-lg font-semibold">Connection Settings</h2>
-        <div class="mb-4">
-          <label class="block mb-1 font-medium text-gray-600">Server Endpoints:</label>
-          <div id="endpointsList" class="space-y-2">
-            <div class="flex items-center gap-2 endpoint-row">
-              <input type="text" value="ws://localhost:2567" placeholder="ws://localhost:2567" class="endpoint-input flex-1 max-w-md p-2.5 border border-gray-300 rounded text-sm" />
-            </div>
-          </div>
-          <button id="addEndpointBtn" class="mt-2 bg-blue-500 hover:bg-blue-600 text-white border-none cursor-pointer px-3 py-1.5 rounded text-sm">+ Add Endpoint</button>
-        </div>
-        <button id="connectBtn" class="bg-green-500 hover:bg-green-600 text-white border-none cursor-pointer px-5 py-2.5 mr-2.5 mt-2.5 rounded text-sm disabled:bg-gray-300 disabled:cursor-not-allowed">Connect</button>
-        <button id="disconnectBtn" class="bg-red-500 hover:bg-red-700 text-white border-none cursor-pointer px-5 py-2.5 mr-2.5 mt-2.5 rounded text-sm disabled:bg-gray-300 disabled:cursor-not-allowed" disabled>Disconnect</button>
-        <span id="connectionStatus" class="inline-block px-2 py-1 rounded text-xs font-medium ml-2.5 bg-red-500 text-white">Disconnected</span>
+        <h2 class="mb-4 text-gray-600 text-lg font-semibold">Connection</h2>
+        <span id="connectionStatus" class="inline-block px-2 py-1 rounded text-xs font-medium bg-orange-500 text-white">Connecting...</span>
+        <button id="disconnectBtn" class="ml-4 bg-red-500 hover:bg-red-700 text-white border-none cursor-pointer px-5 py-2.5 rounded text-sm disabled:bg-gray-300 disabled:cursor-not-allowed">Disconnect</button>
       </div>
 
       <div class="mb-8 p-5 bg-gray-50 rounded-md">
-        <h2 class="mb-4 text-gray-600 text-lg font-semibold">Room</h2>
-        <div class="flex items-center gap-2 mb-4">
-          <input type="text" id="roomName" value="my_room" placeholder="Room name" class="max-w-xs p-2.5 border border-gray-300 rounded text-sm" />
-          <button id="joinBtn" class="bg-green-500 hover:bg-green-600 text-white border-none cursor-pointer px-5 py-2.5 rounded text-sm disabled:bg-gray-300 disabled:cursor-not-allowed" disabled>Join Room</button>
-          <button id="leaveBtn" class="bg-green-500 hover:bg-green-600 text-white border-none cursor-pointer px-5 py-2.5 rounded text-sm disabled:bg-gray-300 disabled:cursor-not-allowed" disabled>Leave Room</button>
-        </div>
+        <h2 class="mb-4 text-gray-600 text-lg font-semibold">Manipulate State</h2>
         <div class="flex items-center gap-2">
-          <input type="text" id="message" value="Hello from SDK!" placeholder="Enter message" class="flex-1 max-w-md p-2.5 border border-gray-300 rounded text-sm" />
-          <button id="sendMessageBtn" class="bg-green-500 hover:bg-green-600 text-white border-none cursor-pointer px-5 py-2.5 rounded text-sm disabled:bg-gray-300 disabled:cursor-not-allowed" disabled>Send Message</button>
+          <button id="addBotBtn" class="bg-blue-500 hover:bg-blue-600 text-white border-none cursor-pointer px-5 py-2.5 rounded text-sm disabled:bg-gray-300 disabled:cursor-not-allowed" disabled>Add Bot</button>
+          <button id="removeBotBtn" class="bg-blue-500 hover:bg-blue-600 text-white border-none cursor-pointer px-5 py-2.5 rounded text-sm disabled:bg-gray-300 disabled:cursor-not-allowed" disabled>Remove Bot</button>
+          <button id="addItemBtn" class="bg-purple-500 hover:bg-purple-600 text-white border-none cursor-pointer px-5 py-2.5 rounded text-sm disabled:bg-gray-300 disabled:cursor-not-allowed" disabled>Add Item</button>
+          <button id="removeItemBtn" class="bg-purple-500 hover:bg-purple-600 text-white border-none cursor-pointer px-5 py-2.5 rounded text-sm disabled:bg-gray-300 disabled:cursor-not-allowed" disabled>Remove Item</button>
         </div>
       </div>
 
@@ -49,4 +36,3 @@
     <script type="module" src="/main.ts"></script>
   </body>
 </html>
-
