@@ -1117,7 +1117,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
       this._reconnectionAttempts[connectionOptions.reconnectionToken] = new Deferred();
 
       const reconnectionAttemptTimeout = setTimeout(() => {
-        this._reconnectionAttempts[connectionOptions.reconnectionToken].reject(new ServerError(CloseCode.MAY_TRY_RECONNECT, 'Reconnection attempt timed out'));
+        this._reconnectionAttempts[connectionOptions.reconnectionToken]?.reject(new ServerError(CloseCode.MAY_TRY_RECONNECT, 'Reconnection attempt timed out'));
       }, this.seatReservationTimeout * 1000);
 
       const cleanup = () => {
