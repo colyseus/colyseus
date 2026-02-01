@@ -1,6 +1,6 @@
 process.env.JWT_SECRET = "test"; // use .env instead.
 
-import { type Client, createEndpoint, createRouter, defineRoom, defineServer, Room } from "@colyseus/core";
+import { type Client, createEndpoint, createRouter, defineRoom, defineServer, generateId, LobbyRoom, QueueRoom, Room } from "@colyseus/core";
 import { auth } from "@colyseus/auth";
 import { MapSchema, Schema, type } from "@colyseus/schema";
 import { playground } from "@colyseus/playground";
@@ -86,8 +86,9 @@ export class MyRoom extends Room {
       const randomIndex = Math.floor(Math.random() * player.items.length);
       player.items.splice(randomIndex, 1);
     },
-    add_bot: (client: Client, message: { name: string }) => {
-      this.state.players.set(client.sessionId, new Player().assign({
+    add_bot: (client: Client) => {
+      const botId = generateId();
+      this.state.players.set(botId, new Player().assign({
         isBot: true,
         x: Math.random() * 800,
         y: Math.random() * 600,
@@ -172,7 +173,12 @@ export class MyRoom extends Room {
  */
 const server = defineServer({
   rooms: {
-    my_room: defineRoom(MyRoom),
+    my_room: defineRoom(MyRoom).enableRealtimeListing(),
+    lobby: defineRoom(LobbyRoom),
+    queue: defineRoom(QueueRoom, {
+      matchRoomName: "my_room",
+      maxPlayers: 4
+    }),
   },
 
   express: (app) => {
