@@ -109,6 +109,18 @@ export interface QueueClientData {
   lastQueueClientCount?: number;
 }
 
+//
+// Optional: strongly-typed client messages
+// (This is optional, but recommended for better type safety and code generation for native SDKs)
+//
+type QueueClient = Client<{
+  userData: QueueClientData;
+  messages: {
+    clients: number;
+    seat: matchMaker.ISeatReservation;
+  }
+}>;
+
 const DEFAULT_TEAM = Symbol("$default_team");
 const DEFAULT_COMPARE = (client: QueueClientData, matchGroup: QueueMatchGroup) => {
   const diff = Math.abs(client.rank - matchGroup.averageRank);
@@ -193,7 +205,7 @@ export class QueueRoom extends Room {
     this.setSimulationInterval(() => this.reassignMatchGroups(), this.cycleTickInterval);
   }
 
-  onJoin(client: Client, options: any, auth?: unknown) {
+  onJoin(client: QueueClient, options: any, auth?: unknown) {
     this.addToQueue(client, {
       rank: options.rank,
       teamId: options.teamId,
@@ -201,7 +213,7 @@ export class QueueRoom extends Room {
     });
   }
 
-  addToQueue(client: Client, queueData: QueueClientData) {
+  addToQueue(client: QueueClient, queueData: QueueClientData) {
     if (queueData.currentCycle === undefined) {
       queueData.currentCycle = 0;
     }

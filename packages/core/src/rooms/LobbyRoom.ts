@@ -1,4 +1,3 @@
-
 import * as matchMaker from '../MatchMaker.ts';
 import type { IRoomCache } from '../matchmaker/LocalDriver/LocalDriver.ts';
 import type { Client } from '../Transport.ts';
@@ -11,6 +10,18 @@ import { Room } from '../Room.ts';
 //   @type("number") public _: number;
 // }
 
+//
+// Strongly-typed client messages for LobbyRoom
+// (This is optional, but recommended for better type safety and code generation for native SDKs)
+//
+type LobbyClient = Client<{
+  messages: {
+    rooms: IRoomCache[];
+    '+': [roomId: string, room: IRoomCache];
+    '-': string;
+  }
+}>;
+
 export interface FilterInput {
   name?: string;
   metadata?: any;
@@ -20,11 +31,21 @@ export interface LobbyOptions {
   filter?: FilterInput;
 }
 
-export class LobbyRoom extends Room {
-  public rooms: IRoomCache[] = [];
+export class LobbyRoom<Metadata = any> extends Room {
+  public rooms: IRoomCache<Metadata>[] = [];
   public unsubscribeLobby: () => void;
 
   public clientOptions: { [sessionId: string]: LobbyOptions } = {};
+
+  messages = {
+    filter: (client: LobbyClient, filter: FilterInput) => {
+      const clientOptions = this.clientOptions[client.sessionId];
+      if (!clientOptions) { return; }
+
+      clientOptions.filter = filter;
+      client.send('rooms', this.filterItemsForClient(clientOptions));
+    }
+  }
 
   public async onCreate(options: any) {
     // prevent LobbyRoom to notify itself
@@ -79,19 +100,14 @@ export class LobbyRoom extends Room {
     });
 
     this.rooms = await matchMaker.query({ private: false, unlisted: false });
-
-    this.onMessage('filter', (client: Client, filter: FilterInput) => {
-      this.clientOptions[client.sessionId].filter = filter;
-      client.send('rooms', this.filterItemsForClient(this.clientOptions[client.sessionId]));
-    });
   }
 
-  public onJoin(client: Client, options: LobbyOptions) {
+  public onJoin(client: LobbyClient, options: LobbyOptions) {
     this.clientOptions[client.sessionId] = options || {};
     client.send('rooms', this.filterItemsForClient(this.clientOptions[client.sessionId]));
   }
 
-  public onLeave(client: Client) {
+  public onLeave(client: LobbyClient) {
     delete this.clientOptions[client.sessionId];
   }
 
@@ -101,7 +117,7 @@ export class LobbyRoom extends Room {
     }
   }
 
-  protected filterItemsForClient(options: LobbyOptions) {
+  protected filterItemsForClient(options: LobbyOptions): IRoomCache<Metadata>[] {
     const filter = options.filter;
 
     return (filter)
