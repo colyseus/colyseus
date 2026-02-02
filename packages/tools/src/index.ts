@@ -14,12 +14,13 @@ import {
   matchMaker,
   RegisteredHandler,
   defineServer,
+  dynamicImport,
 } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 
-const BunWebSockets = import('@colyseus/bun-websockets'); BunWebSockets.catch(() => {});
-const RedisDriver = import('@colyseus/redis-driver'); RedisDriver.catch(() => {});
-const RedisPresence = import('@colyseus/redis-presence'); RedisPresence.catch(() => {});
+const BunWebSockets = dynamicImport('@colyseus/bun-websockets');
+const RedisDriver = dynamicImport('@colyseus/redis-driver');
+const RedisPresence = dynamicImport('@colyseus/redis-presence');
 
 export interface ConfigOptions<
   RoomTypes extends Record<string, RegisteredHandler> = any,

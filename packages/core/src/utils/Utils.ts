@@ -1,6 +1,4 @@
 import { nanoid } from 'nanoid';
-
-import { EventEmitter } from "events";
 import { type RoomException, type RoomMethodName } from '../errors/RoomExceptions.ts';
 
 import { debugAndPrintError, debugMatchMaking } from '../Debug.ts';
@@ -166,4 +164,27 @@ export function wrapTryCatch(
   };
 }
 
-export class HttpServerMock extends EventEmitter {}
+/**
+ * Dynamically import a module using either require() or import()
+ * based on the current module system (CJS vs ESM).
+ *
+ * This avoids double-loading packages when running in mixed ESM/CJS environments.
+ * Errors are silently caught - await the promise and handle errors at usage site.
+ */
+export function dynamicImport<T = any>(moduleName: string): Promise<T> {
+  // __dirname exists in CJS but not in ESM
+  if (typeof __dirname !== 'undefined') {
+    // CJS context - use require()
+    try {
+      return Promise.resolve(require(moduleName));
+    } catch (e: any) {
+      // If the error is not a MODULE_NOT_FOUND error, reject with the error.
+      return Promise.reject((e.code !== 'MODULE_NOT_FOUND') ? e : undefined);
+    }
+  } else {
+    // ESM context - use import()
+    const promise = import(moduleName);
+    promise.catch(() => {}); // prevent unhandled rejection warnings
+    return promise;
+  }
+}

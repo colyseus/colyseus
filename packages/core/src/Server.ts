@@ -6,7 +6,7 @@ import * as matchMaker from './MatchMaker.ts';
 import { RegisteredHandler } from './matchmaker/RegisteredHandler.ts';
 
 import { type OnCreateOptions, Room } from './Room.ts';
-import { Deferred, registerGracefulShutdown, type Type } from './utils/Utils.ts';
+import { Deferred, registerGracefulShutdown, dynamicImport, type Type } from './utils/Utils.ts';
 
 import type { Presence } from "./presence/Presence.ts";
 import { LocalPresence } from './presence/LocalPresence.ts';
@@ -167,7 +167,7 @@ export class Server<
 
       } else {
         try {
-          return (await import("@colyseus/tools")).listen(this);
+          return (await dynamicImport("@colyseus/tools")).listen(this);
         } catch (error) {
           const err = new Error("Please install @colyseus/tools to be able to host on Colyseus Cloud.");
           err.cause = error;
@@ -347,7 +347,7 @@ export class Server<
 
   protected async getDefaultTransport(options: any): Promise<Transport> {
     try {
-      const module = await import('@colyseus/ws-transport');
+      const module = await dynamicImport('@colyseus/ws-transport');
       const WebSocketTransport = module.WebSocketTransport;
       return new WebSocketTransport(options);
 

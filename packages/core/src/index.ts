@@ -52,7 +52,7 @@ export { SchemaSerializer } from './serializer/SchemaSerializer.ts';
 
 // Utilities
 export { Clock, Delayed };
-export { generateId, Deferred, HttpServerMock, spliceOne, getBearerToken } from './utils/Utils.ts';
+export { generateId, Deferred, spliceOne, getBearerToken, dynamicImport } from './utils/Utils.ts';
 export { isDevMode } from './utils/DevMode.ts';
 
 // IPC

@@ -5,6 +5,7 @@
 
 import { ErrorCode } from '@colyseus/shared-types';
 import { ServerError } from '../errors/ServerError.ts';
+import { debugError } from '../Debug.ts';
 import * as matchMaker from '../MatchMaker.ts';
 import type { AuthContext } from '../Transport.ts';
 
@@ -56,6 +57,7 @@ export const controller = {
       return await matchMaker[method](roomName, clientOptions, authOptions);
 
     } catch (e: any) {
+      debugError(e);
       throw new ServerError(e.code || ErrorCode.MATCHMAKE_UNHANDLED, e.message);
     }
   }
