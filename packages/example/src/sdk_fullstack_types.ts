@@ -89,7 +89,7 @@ sdk.http.put("/things/:id", {
 async function connect() {
   const room = await sdk.joinOrCreate("my_room");
 
-  room.onMessage("something", (payload) => {
+  room.onMessage("hello", (payload) => {
     //
   });
 

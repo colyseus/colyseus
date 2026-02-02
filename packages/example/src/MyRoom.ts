@@ -14,17 +14,28 @@ export const MyRoomState = schema({
 });
 
 const thirdPartyMessages: Messages<MyRoom> = {
-  nopayload (client: MyClient, message: any) {
-    this.broadcast("wtf", {});
-    client.send("wtf", {});
+  nopayload: function (client: MyClient, message: any) {
+    this.broadcast("hello", {});
+    client.send("hello", {});
   },
 
   with_validation: validate(z.object({
     name: z.string(),
-  }), function (client: MyClient, message) {
-    // this.broadcast("with_validation", message);
+  }), function (client: MyClient, message: any) {
+    this.broadcast("obj_message", { message: "hello" });
     client.send("obj_message", { message: "hello" })
   }),
+
+  // _ and * are equivalent (fallback handlers)
+  // we're using both just to check types
+  _: function (client: MyClient, type: string, message: any) {
+    this.broadcast("hello", {});
+  },
+  // // _ and * are equivalent (fallback handlers)
+  // // we're using both just to check types
+  // '*': function (client: MyClient, type: string, message: any) {
+  //   this.broadcast("hello", {});
+  // },
 }
 
 type MyClient = Client<{
@@ -35,6 +46,7 @@ type MyClient = Client<{
     message: any;
     nopayload_2: any;
     obj_message: { message: string };
+    hello: any;
   };
 }>;
 
@@ -57,6 +69,10 @@ export class MyRoom extends Room<{ client: MyClient }> {
       client.send("obj_message", { message: "hello" })
       this.broadcast("obj_message", { message: "hello" })
     },
+
+    _: (client: MyClient, type: string, message: any) => {
+      this.broadcast(type as any, message);
+    },
   };
 
   onCreate(options: any) {
@@ -66,19 +82,8 @@ export class MyRoom extends Room<{ client: MyClient }> {
     this.state.mapWidth = 800;
     this.state.mapHeight = 600;
 
-    this.onMessage("*", (client, type, message) => {
-      this.broadcast(type as any, message);
-    });
-
-    this.onMessage("move", (client, message) => {
-      const player = this.state.players.get(client.sessionId)!;
-      player.x = message.x;
-      player.y = message.y;
-    })
-
-    this.onMessage("dummy", (client, message) => {
-      // this.broadcast("dummy", message);
-    })
+    this.onMessage("__move", (client, message) => {})
+    this.onMessage("__dummy", (client, message) => { })
 
     this.onMessage("move_with_validation", z.object({ x: z.number(), y: z.number() }), (client, message) => {
       const player = this.state.players.get(client.sessionId)!;

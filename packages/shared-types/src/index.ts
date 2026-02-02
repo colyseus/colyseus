@@ -141,12 +141,32 @@ export type ExtractMessageType<T> =
       : any;
 
 /**
+ * Fallback message handler that receives the message type as an additional parameter.
+ * Used for "_" or "*" catch-all handlers.
+ *
+ * @template Client - The client type
+ * @template This - The Room class context
+ */
+export type FallbackMessageHandler<Client = any, This = any> =
+  (this: This, client: Client, type: string, message: any) => void;
+
+/**
+ * Message handler type including fallback handlers.
+ * Used internally to allow "_" and "*" fallback handlers in the Messages type.
+ * @internal
+ */
+export type AnyMessageHandler<Client = any, This = any> =
+  | MessageHandler<Client, This>
+  | FallbackMessageHandler<Client, This>;
+
+/**
  * A map of message types to message handlers.
+ * Supports special "_" and "*" keys for fallback/catch-all handlers.
  *
  * @template Room - The Room class type
  * @template Client - The client type
  */
-export type Messages<Room = any, Client = any> = Record<string, MessageHandler<Client, Room>>;
+export type Messages<Room = any, Client = any> = Record<string, AnyMessageHandler<Client, Room>> & ThisType<Room>;
 
 /**
  * Exposed types for the client-side SDK.

@@ -381,10 +381,17 @@ export class Room<T extends RoomOptions = RoomOptions> {
 
     // Bind messages to the room
     if (this.messages !== undefined) {
+
+      // Handle "_" as a fallback handler
+      if (this.messages['_']) {
+        this.onMessage('*', (this.messages['_'] as Function).bind(this));
+        delete this.messages['_'];
+      }
+
       Object.entries(this.messages).forEach(([messageType, callback]) => {
         if (typeof callback === 'function') {
           // Direct handler function - bind to room instance
-          this.onMessage(messageType, callback.bind(this));
+          this.onMessage(messageType, callback.bind(this) as any);
         } else {
           // Object with format and handler - bind handler to room instance
           this.onMessage(messageType, callback.format, callback.handler.bind(this));
@@ -959,17 +966,14 @@ export class Room<T extends RoomOptions = RoomOptions> {
    * ```
    */
   public onMessage<T = any, C extends Client = ExtractRoomClient<T>>(
-  // public onMessage<T = any, C extends Client = TClient>(
     messageType: '*',
     callback: (client: C, type: string | number, message: T) => void
   );
   public onMessage<T = any, C extends Client = ExtractRoomClient<T>>(
-  // public onMessage<T = any, C extends Client = TClient>(
     messageType: string | number,
     callback: (client: C, message: T) => void,
   );
   public onMessage<T = any, C extends Client = ExtractRoomClient<T>>(
-  // public onMessage<T = any, C extends Client = TClient>(
     messageType: string | number,
     validationSchema: StandardSchemaV1<T>,
     callback: (client: C, message: T) => void,
