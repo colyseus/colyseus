@@ -14,8 +14,6 @@ export const postMatchmakeMethod = createEndpoint("/matchmake/:method/:roomName"
   const method = ctx.params.method;
   const roomName = ctx.params.roomName;
 
-  ctx.setHeader('Content-Type', 'application/json');
-
   try {
     const clientOptions = ctx.body;
     const response = await matchMaker.controller.invokeMethod(
@@ -39,7 +37,18 @@ export const postMatchmakeMethod = createEndpoint("/matchmake/:method/:roomName"
       response.protocol = transport.protocol;
     }
 
-    return response;
+    const json = JSON.stringify(response);
+
+    return new Response(json, {
+      headers: {
+        'content-type': 'application/json',
+        //
+        // Set content length manually to avoid "chunked" transfer-encoding header
+        // See https://github.com/haxetink/tink_http/issues/27
+        //
+        'content-length': json.length.toString(),
+      },
+    }) as any;
 
   } catch (e: any) {
     throw ctx.error(e.code, { code: e.code, error: e.message, });
