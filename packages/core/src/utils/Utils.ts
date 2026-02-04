@@ -179,7 +179,10 @@ export function dynamicImport<T = any>(moduleName: string): Promise<T> {
       return Promise.resolve(require(moduleName));
     } catch (e: any) {
       // If the error is not a MODULE_NOT_FOUND error, reject with the error.
-      return Promise.reject((e.code !== 'MODULE_NOT_FOUND') ? e : undefined);
+      if (e.code !== 'MODULE_NOT_FOUND') {
+        return Promise.reject(e);
+      }
+      return Promise.resolve(undefined);
     }
   } else {
     // ESM context - use import()

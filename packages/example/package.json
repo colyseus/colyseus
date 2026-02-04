@@ -11,7 +11,8 @@
     "sdk-test-server": "tsx src/sdks.server.ts",
 
     "sdk-codegen": "npm run sdk-codegen-unity",
-    "sdk-codegen-unity": "schema-codegen src/sdks.server.ts --csharp --output ../../../colyseus-unity-sdk/Assets/RawExample/Schema/"
+    "sdk-codegen-unity": "schema-codegen src/sdks.server.ts --csharp --output ../../../colyseus-unity-sdk/Assets/RawExample/Schema/",
+    "sdk-codegen-haxe": "schema-codegen src/sdks.server.ts --haxe --output ../../../colyseus-haxe/example/openfl/Source/"
   },
   "dependencies": {
     "@colyseus/core": "workspace:^"

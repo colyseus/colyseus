@@ -6,12 +6,14 @@ export const Player = schema({
   x: "number",
   y: "number",
 });
+export type Player = SchemaType<typeof Player>;
 
 export const MyRoomState = schema({
   mapWidth: "number",
   mapHeight: "number",
   players: { map: Player },
 });
+export type MyRoomState = SchemaType<typeof MyRoomState>;
 
 const thirdPartyMessages: Messages<MyRoom> = {
   nopayload: function (client: MyClient, message: any) {
@@ -50,7 +52,7 @@ type MyClient = Client<{
   };
 }>;
 
-export class MyRoom extends Room<{ client: MyClient }> {
+export class MyRoom extends Room<{ state: MyRoomState, client: MyClient }> {
   state = new MyRoomState();
 
   messages = {
