@@ -9,19 +9,25 @@
             "outFile": "./dist/colyseus.d.ts",
 
             "failOnClass": false,
-            "noCheck": false,
+            "noCheck": true,
 
             "libraries": {
                 "inlinedLibraries": [
+                    "node:async_hooks",
+                    "events",
                     "@colyseus/msgpackr",
                     "@colyseus/schema",
-                    "@colyseus/httpie"
+                    "@colyseus/better-call",
+                    "@colyseus/timer",
+                    "@colyseus/clock",
+                    "@standard-schema/spec"
                 ]
             },
 
             "output": {
                 "inlineDeclareGlobals": false,
                 "sortNodes": false,
+                "exportReferencedTypes": false,
 
                 "umdModuleName": "Colyseus",
                 "inlineDeclareExternals": false,

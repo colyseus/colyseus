@@ -5,5 +5,5 @@ npm-debug.log
 .DS_Store
 lib
 build
-cocos-creator-3-extension/colyseus-sdk/runtime/colyseus.d.ts
-cocos-creator-3-extension/colyseus-sdk/runtime/colyseus.js
+cocos-creator-3-extension/colyseus-sdk/runtime/*
+cocos-creator-3-extension/colyseus-sdk.zip
