@@ -215,7 +215,10 @@ export class BunWebSockets extends Transport {
       debugAndPrintError(e);
 
       // send error code to client then terminate
-      client.error(e.code, e.message, () => rawClient.close());
+      client.error(e.code, e.message, () =>
+        rawClient.close(reconnectionToken
+          ? CloseCode.FAILED_TO_RECONNECT
+          : CloseCode.WITH_ERROR));
     }
   }
 

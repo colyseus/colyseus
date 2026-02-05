@@ -620,7 +620,6 @@ export class Room<T extends RoomOptions = RoomOptions> {
 
     const client = this.clients.find((client) => client.reconnectionToken === reconnectionToken);
     if (client) {
-      // this.allowReconnection(client, this.seatReservationTimeout);
       this.#_forciblyCloseClient(client as ExtractRoomClient<T> & ClientPrivate, CloseCode.WITH_ERROR);
       return client.sessionId;
     }

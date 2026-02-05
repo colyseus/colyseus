@@ -228,7 +228,10 @@ export class H3Transport extends Transport {
       debugAndPrintError(e);
 
       // send error code to client then terminate
-      h3Client.error(e.code, e.message, () => h3Client.close(CloseCode.WITH_ERROR));
+      h3Client.error(e.code, e.message, () =>
+        h3Client.close(reconnectionToken
+          ? CloseCode.FAILED_TO_RECONNECT
+          : CloseCode.WITH_ERROR));
     }
   }
 

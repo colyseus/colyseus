@@ -2,7 +2,7 @@ import querystring, { type ParsedUrlQuery } from 'querystring';
 import uWebSockets, { type WebSocket } from 'uWebSockets.js';
 import type express from 'express';
 
-import { type AuthContext, Transport, matchMaker, Protocol, getBearerToken, debugAndPrintError, spliceOne, connectClientToRoom, type Router } from '@colyseus/core';
+import { type AuthContext, Transport, matchMaker, Protocol, getBearerToken, debugAndPrintError, spliceOne, connectClientToRoom, CloseCode, type Router } from '@colyseus/core';
 import { uWebSocketClient, uWebSocketWrapper } from './uWebSocketClient.ts';
 import { Deferred } from '@colyseus/core';
 
@@ -324,7 +324,10 @@ export class uWebSocketsTransport extends Transport {
       debugAndPrintError(e);
 
       // send error code to client then terminate
-      client.error(e.code, e.message, () => client.leave());
+      client.error(e.code, e.message, () =>
+        rawClient.end(reconnectionToken
+          ? CloseCode.FAILED_TO_RECONNECT
+          : CloseCode.WITH_ERROR));
     }
   }
 

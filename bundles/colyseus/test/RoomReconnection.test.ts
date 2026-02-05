@@ -451,6 +451,53 @@ describe("Room Reconnection", () => {
       });
     });
 
+    describe("Leave close codes", () => {
+      it(".leave(false) without reconnection should result in CloseCode.FAILED_TO_RECONNECT", async () => {
+        matchMaker.defineRoomType('leave_without_reconnect', class _ extends Room {
+          onJoin(client: Client, options: any) { }
+        });
+
+        const conn = await client.joinOrCreate('leave_without_reconnect');
+        conn.reconnection.minUptime = 0;
+
+        let closeCode!: number;
+        conn.onLeave((code) => closeCode = code);
+
+        await conn.leave(false);
+        await timeout(100);
+
+        assert.strictEqual(CloseCode.FAILED_TO_RECONNECT, closeCode);
+      });
+
+      it(".leave(false) without minUptime should result in CloseCode.ABNORMAL_CLOSURE", async () => {
+        matchMaker.defineRoomType('leave_without_minuptime', class _ extends Room {
+          onJoin(client: Client, options: any) { }
+        });
+
+        const conn = await client.joinOrCreate('leave_without_minuptime');
+
+        let closeCode!: number;
+        conn.onLeave((code) => closeCode = code);
+
+        await conn.leave(false);
+        assert.strictEqual(CloseCode.ABNORMAL_CLOSURE, closeCode);
+      });
+
+      it(".leave() should result in CloseCode.CONSENTED", async () => {
+        matchMaker.defineRoomType('leave_consented', class _ extends Room {
+          onJoin(client: Client, options: any) { }
+        });
+
+        const conn = await client.joinOrCreate('leave_consented');
+
+        let closeCode!: number;
+        conn.onLeave((code) => closeCode = code);
+
+        await conn.leave();
+        assert.strictEqual(CloseCode.CONSENTED, closeCode);
+      });
+    });
+
   });
 
 });

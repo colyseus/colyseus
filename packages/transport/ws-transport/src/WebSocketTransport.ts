@@ -163,7 +163,9 @@ export class WebSocketTransport extends Transport {
 
       // send error code to client then terminate
       client.error(e.code, e.message, () =>
-        rawClient.close(CloseCode.WITH_ERROR));
+        rawClient.close(reconnectionToken
+          ? CloseCode.FAILED_TO_RECONNECT
+          : CloseCode.WITH_ERROR));
     }
   }
 
