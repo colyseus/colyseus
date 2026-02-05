@@ -148,7 +148,10 @@ export class Room<
             serializer.decoder = new Decoder(state as Schema);
         }
 
-        this.onLeave(() => this.removeAllListeners());
+        this.onLeave(() => {
+            this.removeAllListeners();
+            this.destroy();
+        });
     }
 
     public connect(endpoint: string, options?: any, headers?: any) {
@@ -172,7 +175,6 @@ export class Room<
 
             } else {
                 this.onLeave.invoke(e.code, e.reason);
-                this.destroy();
             }
         };
 
@@ -340,6 +342,8 @@ export class Room<
         this.onStateChange.clear();
         this.onError.clear();
         this.onLeave.clear();
+        this.onReconnect.clear();
+        this.onDrop.clear();
         this.onMessageHandlers.events = {};
 
         if (this.serializer instanceof SchemaSerializer) {
@@ -470,6 +474,7 @@ export class Room<
     private handleReconnection() {
         if (Date.now() - this.joinedAtTime < this.reconnection.minUptime) {
             console.info(`[Colyseus reconnection]: ${String.fromCodePoint(0x274C)} Room has not been up for long enough for automatic reconnection. (min uptime: ${this.reconnection.minUptime}ms)`); // ❌
+            this.onLeave.invoke(CloseCode.ABNORMAL_CLOSURE, "Room uptime too short for reconnection.");
             return;
         }
 
@@ -482,6 +487,14 @@ export class Room<
     }
 
     private retryReconnection() {
+        if (this.reconnection.retryCount >= this.reconnection.maxRetries) {
+            // No more retries
+            console.info(`[Colyseus reconnection]: ${String.fromCodePoint(0x274C)} ❌ Reconnection failed after ${this.reconnection.maxRetries} attempts.`); // ❌
+            this.reconnection.isReconnecting = false;
+            this.onLeave.invoke(CloseCode.FAILED_TO_RECONNECT, "No more retries. Reconnection failed.");
+            return;
+        }
+
         this.reconnection.retryCount++;
 
         const delay = Math.min(this.reconnection.maxDelay, Math.max(this.reconnection.minDelay, this.reconnection.backoff(this.reconnection.retryCount, this.reconnection.delay)));
@@ -497,12 +510,7 @@ export class Room<
                 });
 
             } catch (e) {
-                console.log(".reconnect() failed", e);
-                if (this.reconnection.retryCount < this.reconnection.maxRetries) {
-                    this.retryReconnection();
-                } else {
-                    console.info(`[Colyseus reconnection]: ${String.fromCodePoint(0x274C)} Failed to reconnect. Is your server running? Please check server logs.`); // ❌
-                }
+                this.retryReconnection();
             }
         }, delay);
     }

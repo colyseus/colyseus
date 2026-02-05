@@ -103,7 +103,10 @@ export class LobbyRoom<Metadata = any> extends Room {
   }
 
   public onJoin(client: LobbyClient, options: LobbyOptions) {
-    this.clientOptions[client.sessionId] = options || {};
+    this.clientOptions[client.sessionId] = (
+      !Array.isArray(options) && // Defold (Lua) sends empty objects as Array instead of object
+      options
+    ) || {};
     client.send('rooms', this.filterItemsForClient(this.clientOptions[client.sessionId]));
   }
 
