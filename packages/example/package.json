@@ -7,12 +7,7 @@
   "license": "MIT",
   "scripts": {
     "start": "tsx src/app.config.ts",
-    "example-h3": "tsx src/ServerH3.ts",
-    "sdk-test-server": "tsx src/sdks.server.ts",
-
-    "sdk-codegen": "npm run sdk-codegen-unity",
-    "sdk-codegen-unity": "schema-codegen src/sdks.server.ts --csharp --output ../../../colyseus-unity-sdk/Assets/RawExample/Schema/",
-    "sdk-codegen-haxe": "schema-codegen src/sdks.server.ts --haxe --output ../../../colyseus-haxe/example/openfl/Source/"
+    "example-h3": "tsx src/ServerH3.ts"
   },
   "dependencies": {
     "@colyseus/core": "workspace:^"
