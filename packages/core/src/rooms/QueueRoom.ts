@@ -4,7 +4,7 @@ import type { IRoomCache } from '../matchmaker/driver.ts';
 import * as matchMaker from '../MatchMaker.ts';
 import { debugMatchMaking } from '../Debug.ts';
 import { ServerError } from '../errors/ServerError.ts';
-import { ErrorCode } from '@colyseus/shared-types';
+import { CloseCode, ErrorCode } from '@colyseus/shared-types';
 
 export interface QueueOptions {
   /**
@@ -160,7 +160,7 @@ export class QueueRoom extends Room {
       if (queueData && queueData.group && typeof (queueData.group.confirmed) === "number") {
         queueData.confirmed = true;
         queueData.group.confirmed++;
-        client.leave();
+        client.leave(CloseCode.NORMAL_CLOSURE);
       }
     },
   }
