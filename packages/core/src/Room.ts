@@ -20,7 +20,7 @@ import { isDevMode } from './utils/DevMode.ts';
 import { debugAndPrintError, debugMatchMaking, debugMessage } from './Debug.ts';
 import { ServerError } from './errors/ServerError.ts';
 import { ClientState, type AuthContext, type Client, type ClientPrivate, ClientArray, type ISendOptions, type MessageArgs } from './Transport.ts';
-import { type RoomMethodName, OnAuthException, OnCreateException, OnDisposeException, OnJoinException, OnLeaveException, OnMessageException, type RoomException, SimulationIntervalException, TimedEventException } from './errors/RoomExceptions.ts';
+import { type RoomMethodName, OnAuthException, OnCreateException, OnDisposeException, OnDropException, OnJoinException, OnLeaveException, OnMessageException, OnReconnectException, type RoomException, SimulationIntervalException, TimedEventException } from './errors/RoomExceptions.ts';
 
 import { standardValidate, type StandardSchemaV1 } from './utils/StandardSchema.ts';
 import { matchMaker } from '@colyseus/core';
@@ -1818,6 +1818,14 @@ export class Room<T extends RoomOptions = RoomOptions> {
 
     if (this.onLeave !== undefined) {
       this.onLeave = wrapTryCatch(this.onLeave.bind(this), onUncaughtException, OnLeaveException, 'onLeave', true);
+    }
+
+    if (this.onDrop !== undefined) {
+      this.onDrop = wrapTryCatch(this.onDrop.bind(this), onUncaughtException, OnDropException, 'onDrop', true);
+    }
+
+    if (this.onReconnect !== undefined) {
+      this.onReconnect = wrapTryCatch(this.onReconnect.bind(this), onUncaughtException, OnReconnectException, 'onReconnect', true);
     }
 
     if (this.onDispose !== undefined) {

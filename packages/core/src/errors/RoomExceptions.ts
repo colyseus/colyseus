@@ -5,6 +5,8 @@ export type RoomMethodName = 'onCreate'
   | 'onAuth'
   | 'onJoin'
   | 'onLeave'
+  | 'onDrop'
+  | 'onReconnect'
   | 'onDispose'
   | 'onMessage'
   | 'setSimulationInterval'
@@ -16,6 +18,8 @@ export type RoomException<R extends Room = Room> =
   OnAuthException<R> |
   OnJoinException<R> |
   OnLeaveException<R> |
+  OnDropException<R> |
+  OnReconnectException<R> |
   OnDisposeException |
   OnMessageException<R> |
   SimulationIntervalException |
@@ -82,6 +86,35 @@ export class OnLeaveException<R extends Room = Room> extends Error {
     this.name = 'OnLeaveException';
     this.client = client;
     this.consented = consented;
+  }
+}
+
+export class OnDropException<R extends Room = Room> extends Error {
+  client: Parameters<R['onDrop']>[0];
+  code: Parameters<R['onDrop']>[1];
+  constructor(
+    cause: Error,
+    message: string,
+    client: Parameters<R['onDrop']>[0],
+    code: Parameters<R['onDrop']>[1],
+  ) {
+    super(message, { cause });
+    this.name = 'OnDropException';
+    this.client = client;
+    this.code = code;
+  }
+}
+
+export class OnReconnectException<R extends Room = Room> extends Error {
+  client: Parameters<R['onReconnect']>[0];
+  constructor(
+    cause: Error,
+    message: string,
+    client: Parameters<R['onReconnect']>[0],
+  ) {
+    super(message, { cause });
+    this.name = 'OnReconnectException';
+    this.client = client;
   }
 }
 
