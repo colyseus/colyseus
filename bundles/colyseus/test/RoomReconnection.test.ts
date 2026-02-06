@@ -54,6 +54,138 @@ describe("Room Reconnection", () => {
 
   describe("Auto-reconnection", () => {
 
+    it("should allow to deny reconnection via client.leave() during onReconnect()", async () => {
+      let onDropCalled = false;
+      let onReconnectCalled = false;
+
+      let onLeaveCalled = false;
+      let onDisposeCalled = false;
+
+      let onDropCode: number | undefined;
+      let onLeaveCode: number | undefined;
+
+      matchMaker.defineRoomType('auto_reconnect_leave', class _ extends Room {
+
+        async onDrop(client: Client, code: number) {
+          onDropCalled = true;
+          onDropCode = code;
+          await this.allowReconnection(client, 10);
+        }
+
+        async onReconnect(client: Client) {
+          onReconnectCalled = true;
+          client.leave();
+        }
+
+        async onLeave(client: Client, code: number) {
+          onLeaveCalled = true;
+          onLeaveCode = code;
+        }
+
+        onDispose() {
+          onDisposeCalled = true;
+        }
+      });
+
+      const conn = await client.joinOrCreate('auto_reconnect_leave');
+      setupReconnection(conn);
+
+      // trigger abnormal closure from client side (simulates network drop)
+      conn.leave(false);
+
+      // wait for the connection to be abnormally closed
+      let sdkDropCode!: number;
+      await new Promise((resolve) => conn.onDrop.once((code, reason) => {
+        sdkDropCode = code;
+        resolve(true);
+      }));
+
+      let sdkLeaveCode!: number;
+      conn.onLeave((code) => sdkLeaveCode = code);
+
+      // wait a tiny bit for server-side onDrop to be called
+      await timeout(20);
+
+      assert.strictEqual(sdkDropCode, onDropCode);
+      assert.strictEqual(sdkDropCode, CloseCode.NO_STATUS_RECEIVED);
+
+      assert.strictEqual(sdkLeaveCode, onLeaveCode);
+      assert.strictEqual(sdkLeaveCode, CloseCode.FAILED_TO_RECONNECT);
+
+      assert.strictEqual(false, conn.connection.isOpen);
+      assert.strictEqual(onDropCalled, true, "server-side onDrop should be called");
+      assert.strictEqual(onLeaveCalled, true, "server-side onLeave should be called");
+      assert.strictEqual(onReconnectCalled, true, "server-side onReconnect should be called");
+
+      assert.strictEqual(onDisposeCalled, true, "onDispose should be called");
+    });
+
+    it("should allow to deny reconnection throwing an error during onReconnect()", async () => {
+      let onDropCalled = false;
+      let onReconnectCalled = false;
+
+      let onLeaveCalled = false;
+      let onDisposeCalled = false;
+
+      let onDropCode: number | undefined;
+      let onLeaveCode: number | undefined;
+
+      matchMaker.defineRoomType('auto_reconnect_leave', class _ extends Room {
+
+        async onDrop(client: Client, code: number) {
+          onDropCalled = true;
+          onDropCode = code;
+          await this.allowReconnection(client, 10);
+        }
+
+        async onReconnect(client: Client) {
+          onReconnectCalled = true;
+          throw new Error("reconnection denied");
+        }
+
+        async onLeave(client: Client, code: number) {
+          onLeaveCalled = true;
+          onLeaveCode = code;
+        }
+
+        onDispose() {
+          onDisposeCalled = true;
+        }
+      });
+
+      const conn = await client.joinOrCreate('auto_reconnect_leave');
+      setupReconnection(conn);
+
+      // trigger abnormal closure from client side (simulates network drop)
+      conn.leave(false);
+
+      // wait for the connection to be abnormally closed
+      let sdkDropCode!: number;
+      await new Promise((resolve) => conn.onDrop.once((code, reason) => {
+        sdkDropCode = code;
+        resolve(true);
+      }));
+
+      let sdkLeaveCode!: number;
+      conn.onLeave((code) => sdkLeaveCode = code);
+
+      // wait a tiny bit for server-side onDrop to be called
+      await timeout(20);
+
+      assert.strictEqual(sdkDropCode, onDropCode);
+      assert.strictEqual(sdkDropCode, CloseCode.NO_STATUS_RECEIVED);
+
+      assert.strictEqual(sdkLeaveCode, onLeaveCode);
+      assert.strictEqual(sdkLeaveCode, CloseCode.FAILED_TO_RECONNECT);
+
+      assert.strictEqual(false, conn.connection.isOpen);
+      assert.strictEqual(onDropCalled, true, "server-side onDrop should be called");
+      assert.strictEqual(onLeaveCalled, true, "server-side onLeave should be called");
+      assert.strictEqual(onReconnectCalled, true, "server-side onReconnect should be called");
+
+      assert.strictEqual(onDisposeCalled, true, "onDispose should be called");
+    });
+
     it("should reconnect on abnormal closure", async () => {
       let onDropCalled = false;
       let onReconnectCalled = false;

@@ -53,7 +53,14 @@ export interface ISendOptions {
   afterNextPatch?: boolean;
 }
 
-export const ClientState = { JOINING: 0, JOINED: 1, RECONNECTED: 2, LEAVING: 3, CLOSED: 4 } as const;
+export const ClientState = {
+  JOINING: 0,
+  JOINED: 1,
+  RECONNECTING: 2,
+  RECONNECTED: 3,
+  LEAVING: 4,
+  CLOSED: 5
+} as const;
 export type ClientState = (typeof ClientState)[keyof typeof ClientState];
 
 // Helper types to extract properties from the Client type parameter

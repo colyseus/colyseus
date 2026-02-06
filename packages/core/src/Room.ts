@@ -1164,14 +1164,33 @@ export class Room<T extends RoomOptions = RoomOptions> {
       const reconnectionToken = connectionOptions?.reconnectionToken;
       if (reconnectionToken && this._reconnections[reconnectionToken]?.[0] === sessionId) {
         this.clients.push(client);
+
         //
         // await for reconnection:
         // (end user may customize the reconnection token at this step)
         //
         await this._reconnections[reconnectionToken]?.[1].resolve(client);
 
-        if (this.onReconnect) {
-          await this.onReconnect(client);
+        try {
+          if (this.onReconnect) {
+            await this.onReconnect(client);
+          }
+
+          // FIXME: we shouldn't rely on WebSocket specific API here (make it transport agnostic)
+          if (client.readyState !== WebSocket.OPEN) {
+            throw new Error("reconnection denied");
+          }
+
+          // client.leave() may have been called during onReconnect()
+          if (client.state === ClientState.RECONNECTING) {
+            // switch client state from RECONNECTING to JOINING
+            // (to allow to attach messages to the client again)
+            client.state = ClientState.JOINING;
+          }
+
+        } catch (e) {
+          await this._onLeave(client, CloseCode.FAILED_TO_RECONNECT);
+          throw e;
         }
 
       } else {
@@ -1356,6 +1375,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
       newClient.auth = previousClient.auth;
       newClient.userData = previousClient.userData;
       newClient.view = previousClient.view;
+      newClient.state = ClientState.RECONNECTING;
 
       // for convenience: populate previous client reference with new client
       previousClient.state = ClientState.RECONNECTED;
@@ -1677,17 +1697,17 @@ export class Room<T extends RoomOptions = RoomOptions> {
   }
 
   private async _onLeave(client: ExtractRoomClient<T>, code?: number): Promise<any> {
-    // call 'onLeave' method only if the client has been successfully accepted.
+    // reconnecting check is required here to allow user to deny reconnection via onReconnect()
+    const method = (code === CloseCode.CONSENTED || client.state === ClientState.RECONNECTING)
+      ? this.onLeave
+      : (this.onDrop || this.onLeave);
+
     client.state = ClientState.LEAVING;
 
     if (!this.clients.delete(client)) {
       // skip if client already left the room
       return;
     }
-
-    const method = (code === CloseCode.CONSENTED)
-      ? this.onLeave
-      : (this.onDrop || this.onLeave);
 
     if (method) {
       debugMatchMaking(`${method.name}, sessionId: \'%s\' (close code: %d, roomId: %s)`, client.sessionId, code, this.roomId);
