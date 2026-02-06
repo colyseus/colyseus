@@ -17,13 +17,7 @@ jobs:
       has_changes: ${{ steps.set-matrix.outputs.has_changes }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: '10.9.0'
-          run_install: false
+        uses: actions/checkout@v6
 
       - name: Install Node.js
         uses: actions/setup-node@v4
