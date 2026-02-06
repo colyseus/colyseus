@@ -8,3 +8,8 @@ packages:
 
 onlyBuiltDependencies:
   - '@biomejs/biome'
+  - '@fails-components/webtransport-transport-http3-quiche'
+  - '@parcel/watcher'
+  - esbuild
+  - msgpackr-extract
+  - nx
