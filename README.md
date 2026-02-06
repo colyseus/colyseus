@@ -19,7 +19,7 @@
 </div>
 
 Colyseus is an Authoritative Multiplayer Framework for Node.js, with SDKs
-available for the Web, Unity, Defold, Haxe, Cocos and Construct3. ([See official SDKs](https://docs.colyseus.io/client/))
+available for the Web, Unity, Defold, Haxe, Cocos and Construct3. ([See official SDKs](https://docs.colyseus.io/getting-started))
 
 The project focuses on providing synchronizable data structures for realtime and
 turn-based games, matchmaking, and ease of usage both on the server-side and
@@ -28,23 +28,24 @@ client-side.
 The mission of the framework is to be a standard netcode & matchmaking solution
 for any kind of project you can think of!
 
-## Key features:
+## Why developers choose Colyseus:
 
-- WebSocket-based communication
-- Simple API in the server-side and client-side.
-- Automatic state synchronization from server-to-client (delta compressed)
-- Matchmaking clients into game rooms/sessions
-- Scale vertically or horizontally
+- ⚡️ **Real-time state sync that just works** → Define your state on the server and it automatically synchronizes to all clients, delta-compressed and binary-encoded.
+- ⚔️ **Built-in matchmaking** → Room-based architecture with filtering, queuing, and reconnection support out of the box.
+- 📈 **Scalable** → Go from 10 to 10,000+ CCU by scaling vertically or horizontally with Redis and load balancers.
+- 🛡️ **Cheat-proof by design** → Authoritative server model ensures game logic runs on the server, not the client.
+- 🛠️ **Use the tools you already know** → Built on Node.js and TypeScript with a simple, familiar API on both server and client.
+- 💙 **Free forever** → MIT licensed, even for commercial games.
 
 See [public roadmap](https://docs.colyseus.io/roadmap) for version 1.0.
 
 # 🚀 Quickstart
 
-Create a bare-bones Colyseus server by using `npm create colyseus-app@latest`:
+Set up your own Colyseus server project for your game using `npm create colyseus-app@latest`:
 
 ```
-npm create colyseus-app@latest my-colyseus-server
-cd my-colyseus-server
+npm create colyseus-app@latest ./my-server
+cd my-server
 npm start
 ```
 

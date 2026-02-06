@@ -8,15 +8,15 @@
 - Build packages: `pnpm build` (rebuild after any code change & before testing)
 - To run the test suite: `pnpm test`
 
-Observations:
+**Observations:**
 
 - The Colyseus project has multiple packages. They are all under `packages/` folder.
 - We use [Lerna](https://github.com/lerna/lerna) for managing the multiple packages.
 - Packages that have a `"build"` script are not going to be built with `rollup` (e.g. @colyseus/monitor)
 
-Publishing:
+**Publishing:**
 
-For publishing the packages, run `pnpm -r publish`
+Publishing is currently managed via CI. We manually keep track of changes per version in the `CHANGELOG.md` file located at the root of each package under `packages/[...]`.
 
 ---
 
