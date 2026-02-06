@@ -9,44 +9,129 @@ on:
       - master
 
 jobs:
-  npm-publish:
-    name: npm-publish
+  detect-changes:
+    name: Detect packages to publish
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      has_changes: ${{ steps.set-matrix.outputs.has_changes }}
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - uses: pnpm/action-setup@v4
-      name: Install pnpm
-      with:
-        version: '10.9.0'
-        run_install: false
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '10.9.0'
+          run_install: false
 
-    - name: Install Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: 20
-        cache: 'pnpm'
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+          registry-url: 'https://registry.npmjs.org'
 
-    - name: Install dependencies
-      run: pnpm install
+      - name: Install dependencies
+        run: pnpm install
 
-    - id: check
-      uses: EndBug/version-check@v2
-      with:
-        file-name: bundles/colyseus/package.json
-        diff-search: true
+      - name: Build
+        run: pnpm build
 
-    - name: Publish package on NPM 📦
-      if: steps.check.outputs.changed == 'true'
-      run: |
-        pnpm build
-        pnpm publish -r
-      env:
-        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Detect packages that need publishing
+        run: pnpm -r publish --dry-run --no-git-checks --report-summary
 
-    - name: Release
-      if: steps.check.outputs.changed == 'true'
-      uses: softprops/action-gh-release@v2
-      with:
-        prerelease: true
+      - name: Set output matrix
+        id: set-matrix
+        run: |
+          PACKAGES=$(cat pnpm-publish-summary.json | jq -c '.publishedPackages')
+          HAS_CHANGES=$([ "$PACKAGES" != "[]" ] && echo "true" || echo "false")
+          echo "matrix={\"include\":$PACKAGES}" >> $GITHUB_OUTPUT
+          echo "has_changes=$HAS_CHANGES" >> $GITHUB_OUTPUT
+          echo "Packages to publish: $PACKAGES"
+
+  publish:
+    name: Publish ${{ matrix.name }}
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '10.9.0'
+          run_install: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build
+        run: pnpm build
+
+      - name: Publish ${{ matrix.name }}@${{ matrix.version }}
+        run: pnpm --filter "${{ matrix.name }}" publish --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Extract changelog
+        id: changelog
+        run: |
+          PKG_DIR=$(pnpm --filter "${{ matrix.name }}" exec pwd)
+          CHANGELOG="$PKG_DIR/CHANGELOG.md"
+          if [ -f "$CHANGELOG" ]; then
+            # Extract section for current version (from "## version" until next "## ")
+            CONTENT=$(awk '/^## ${{ matrix.version }}/,/^## [0-9]/' "$CHANGELOG" | head -n -1)
+            echo "body<<EOF" >> $GITHUB_OUTPUT
+            echo "$CONTENT" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build release assets
+        id: assets
+        run: |
+          PKG_DIR=$(pnpm --filter "${{ matrix.name }}" exec pwd)
+          cd "$PKG_DIR"
+
+          # Check if build-release-assets script exists
+          if npm pkg get scripts.build-release-assets 2>/dev/null | grep -qv "{}"; then
+            echo "Building release assets..."
+            pnpm --filter "${{ matrix.name }}" run build-release-assets
+
+            # Find zip files to attach
+            ZIP_FILES=$(find . -maxdepth 1 -name "*.zip" -type f)
+            if [ -n "$ZIP_FILES" ]; then
+              # Convert to comma-separated absolute paths
+              ASSETS=""
+              for f in $ZIP_FILES; do
+                if [ -n "$ASSETS" ]; then
+                  ASSETS="$ASSETS,"
+                fi
+                ASSETS="$ASSETS$PKG_DIR/$(basename $f)"
+              done
+              echo "files=$ASSETS" >> $GITHUB_OUTPUT
+              echo "Release assets: $ASSETS"
+            fi
+          else
+            echo "No build-release-assets script found, skipping."
+          fi
+
+      - name: Create Release ${{ matrix.name }}@${{ matrix.version }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "${{ matrix.name }}@${{ matrix.version }}"
+          name: "${{ matrix.name }} v${{ matrix.version }}"
+          body: ${{ steps.changelog.outputs.body }}
+          files: ${{ steps.assets.outputs.files }}

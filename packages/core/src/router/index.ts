@@ -1,7 +1,7 @@
 import type express from "express";
 import type { IncomingMessage, ServerResponse } from "http";
 import { type Endpoint, type Router, type RouterConfig, createRouter as createBetterCallRouter, createEndpoint } from "@colyseus/better-call";
-import { toNodeHandler } from "@colyseus/better-call/node";
+import { toNodeHandler, getRequest, setResponse } from "@colyseus/better-call/node";
 import { Transport } from "../Transport.ts";
 import { controller } from "../matchmaker/controller.ts";
 import pkg from "../../package.json" with { type: "json" };
@@ -55,17 +55,29 @@ export function bindRouterToTransport(transport: Transport, router: Router) {
     return;
   }
 
-  // main router handler
-  let next: any = toNodeHandler(router.handler);
+  // which route handler to use
+  // (router + fallback to express, or just router)
+  let next: any;
 
   if (expressApp) {
     server.removeListener('request', expressApp);
 
-    // bind the router to the express app
-    expressApp.use(next);
+    // execute router first, fallback to express in case of 404
+    next = async (req: IncomingMessage, res: ServerResponse) => {
+      const protocol = req.headers["x-forwarded-proto"] || ((req.socket as any).encrypted ? "https" : "http");
+      const base = `${protocol}://${req.headers[":authority"] || req.headers.host}`;
+      const response = await router.handler(getRequest({ base, request: req }));
 
-    // use the express app as the next function
-    next = expressApp;
+      // fallback to express if 404
+      if (response.status === 404) {
+        return expressApp['handle'](req, res);
+      }
+
+      return setResponse(res, response);
+    };
+
+  } else {
+    next = toNodeHandler(router.handler);
   }
 
   // handle cors headers for all requests by default

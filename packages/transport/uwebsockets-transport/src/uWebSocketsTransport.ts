@@ -138,15 +138,19 @@ export class uWebSocketsTransport extends Transport {
   }
 
   public bindRouter(router: Router) {
-    const writeHeaders = (res: uWebSockets.HttpResponse, requestHeaders: Headers) => {
-      // skip if aborted
-      if (res.aborted) { return; }
-
-      const headers = Object.assign(
+    const getCorsHeaders = (requestHeaders: Headers) => {
+      return Object.assign(
         {},
         matchMaker.controller.DEFAULT_CORS_HEADERS,
         matchMaker.controller.getCorsHeaders(requestHeaders)
       );
+    }
+
+    const writeCorsHeaders = (res: uWebSockets.HttpResponse, requestHeaders: Headers) => {
+      // skip if aborted
+      if (res.aborted) { return; }
+
+      const headers = getCorsHeaders(requestHeaders);
 
       for (const header in headers) {
         res.writeHeader(header, headers[header].toString());
@@ -162,10 +166,11 @@ export class uWebSocketsTransport extends Transport {
       const reqHeaders = new Headers();
       req.forEach((key, value) => reqHeaders.set(key, value));
 
-      if (writeHeaders(res, reqHeaders)) {
+      res.cork(() => {
         res.writeStatus("204 No Content");
+        writeCorsHeaders(res, reqHeaders);
         res.end();
-      }
+      });
     });
 
     this.app.any('/*', async (res, req) => {
@@ -178,9 +183,6 @@ export class uWebSocketsTransport extends Transport {
 
       const headers = new Headers();
       req.forEach((key, value) => headers.set(key, value));
-
-      // write cors headers
-      writeHeaders(res, headers);
 
       const requestInit: RequestInit = {
         method: req.getMethod().toUpperCase(),
@@ -222,6 +224,13 @@ export class uWebSocketsTransport extends Transport {
 
       // fallback to express stack if 404
       if (response.status === 404 && this._expressApp) {
+        // Set CORS headers on the Express ServerResponse wrapper
+        // (Do NOT write them directly to the raw uWS `res` here, because
+        // uWebSockets.js requires writeStatus() before writeHeader().
+        // Pre-writing headers would lock the status to 200 and break
+        // non-200 responses like 304 Not Modified from serve-static.)
+        const corsHeaders = getCorsHeaders(headers);
+
         const ereq = new uWebSocketsExpressModule.IncomingMessage(req, res, this._expressApp as any, {
           headers: Object.fromEntries((headers as any).entries()),
           method: requestInit.method,
@@ -230,6 +239,12 @@ export class uWebSocketsTransport extends Transport {
           remoteAddress
         });
         const eres = new uWebSocketsExpressModule.ServerResponse(res, req, this._expressApp);
+
+        // Apply CORS headers through the Express response wrapper
+        for (const header in corsHeaders) {
+          eres.setHeader(header, corsHeaders[header].toString());
+        }
+
         this._expressApp['handle'](ereq, eres);
         return;
       }
@@ -240,8 +255,10 @@ export class uWebSocketsTransport extends Transport {
       // read response body before cork (cork callback must be synchronous)
       const responseBody = await response.arrayBuffer();
 
+      // writeStatus() must be called before writeHeader() in uWebSockets.js
       res.cork(() => {
         res.writeStatus(`${response.status} ${response.statusText}`);
+        writeCorsHeaders(res, headers);
         response.headers.forEach((value, key) => {
           res.writeHeader(key, value);
         });
@@ -331,156 +348,4 @@ export class uWebSocketsTransport extends Transport {
     }
   }
 
-  // protected registerMatchMakeRequest() {
-  //   const matchmakeRoute = 'matchmake';
-  //   const allowedRoomNameChars = /([a-zA-Z_\-0-9]+)/gi;
-
-  //   const writeHeaders = (res: uWebSockets.HttpResponse, requestHeaders: Headers) => {
-  //     // skip if aborted
-  //     if (res.aborted) { return; }
-
-  //     const headers = Object.assign(
-  //       {},
-  //       matchMaker.controller.DEFAULT_CORS_HEADERS,
-  //       matchMaker.controller.getCorsHeaders(requestHeaders)
-  //     );
-
-  //     for (const header in headers) {
-  //       res.writeHeader(header, headers[header].toString());
-  //     }
-
-  //     return true;
-  //   }
-
-  //   const writeError = (res: uWebSockets.HttpResponse, error: { code: number, error: string }) => {
-  //     // skip if aborted
-  //     if (res.aborted) { return; }
-
-  //     res.cork(() => {
-  //       res.writeStatus("406 Not Acceptable");
-  //       res.end(JSON.stringify(error));
-  //     });
-  //   }
-
-  //   const onAborted = (res: uWebSockets.HttpResponse) => {
-  //     res.aborted = true;
-  //   };
-
-  //   this.app.options("/matchmake/*", (res, req) => {
-  //     res.onAborted(() => onAborted(res));
-
-  //     // cache all headers
-  //     const reqHeaders = new Headers();
-  //     req.forEach((key, value) => reqHeaders.set(key, value));
-
-  //     if (writeHeaders(res, reqHeaders)) {
-  //       res.writeStatus("204 No Content");
-  //       res.end();
-  //     }
-  //   });
-
-
-  //   // @ts-ignore
-  //   this.app.post("/matchmake/*", (res, req) => {
-  //     res.onAborted(() => onAborted(res));
-
-  //     // do not accept matchmaking requests if already shutting down
-  //     if (matchMaker.state === matchMaker.MatchMakerState.SHUTTING_DOWN) {
-  //       return res.close();
-  //     }
-
-  //     // cache all headers
-  //     const headers = new Headers();
-  //     req.forEach((key, value) => headers.set(key, value));
-
-  //     writeHeaders(res, headers);
-  //     res.writeHeader('Content-Type', 'application/json');
-
-  //     const url = req.getUrl();
-  //     const matchedParams = url.match(allowedRoomNameChars);
-  //     const matchmakeIndex = matchedParams.indexOf(matchmakeRoute);
-
-  //     const token = getBearerToken(headers['authorization']);
-
-  //     // read json body
-  //     this.readJson(res, async (clientOptions) => {
-  //       try {
-  //         if (clientOptions === undefined) {
-  //           throw new Error("invalid JSON input");
-  //         }
-
-  //         const method = matchedParams[matchmakeIndex + 1];
-  //         const roomName = matchedParams[matchmakeIndex + 2] || '';
-
-  //         const response = await matchMaker.controller.invokeMethod(
-  //           method,
-  //           roomName,
-  //           clientOptions,
-  //           {
-  //             token,
-  //             headers,
-  //             ip: headers.get('x-real-ip') ?? headers.get('x-forwarded-for') ?? Buffer.from(res.getRemoteAddressAsText()).toString()
-  //           }
-  //         );
-
-  //         if (!res.aborted) {
-  //           res.cork(() => {
-  //             res.writeStatus("200 OK");
-  //             res.end(JSON.stringify(response));
-  //           });
-  //         }
-
-  //       } catch (e: any) {
-  //         debugAndPrintError(e);
-  //         writeError(res, {
-  //           code: e.code || ErrorCode.MATCHMAKE_UNHANDLED,
-  //           error: e.message
-  //         });
-  //       }
-
-  //     });
-  //   });
-  // }
-
-  /* Helper function for reading a posted JSON body */
-  /* Extracted from https://github.com/uNetworking/uWebSockets.js/blob/master/examples/JsonPost.js */
-  private readJson(res: uWebSockets.HttpResponse, cb: (json: any) => void) {
-    let buffer: Buffer;
-    /* Register data cb */
-    res.onData((ab, isLast) => {
-      let chunk = Buffer.from(ab);
-      if (isLast) {
-        let json;
-        if (buffer) {
-          try {
-            // @ts-ignore
-            json = JSON.parse(Buffer.concat([buffer, chunk]));
-          } catch (e) {
-            /* res.close calls onAborted */
-            // res.close();
-            cb(undefined);
-            return;
-          }
-          cb(json);
-        } else {
-          try {
-            // @ts-ignore
-            json = JSON.parse(chunk);
-          } catch (e) {
-            /* res.close calls onAborted */
-            // res.close();
-            cb(undefined);
-            return;
-          }
-          cb(json);
-        }
-      } else {
-        if (buffer) {
-          buffer = Buffer.concat([buffer, chunk]);
-        } else {
-          buffer = Buffer.concat([chunk]);
-        }
-      }
-    });
-  }
 }
