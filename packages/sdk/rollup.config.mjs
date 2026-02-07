@@ -119,16 +119,14 @@ export default [
     // standalone dist script that patches global Colyseus
     {
         input: 'src/debug.ts',
-        external: ['./Client'],
+        external: (id) => !(id === 'src/debug.ts' || id.endsWith('/src/debug.ts') || id.startsWith('\0')),
         treeshake: false,
         output: {
             file: 'dist/debug.js',
             format: 'iife',
             sourcemap: true,
             banner,
-            globals: (filename) => {
-                return "Colyseus";
-            }
+            globals: (id) => "Colyseus",
         },
         plugins: [
             typescript({ tsconfig: './tsconfig/tsconfig.cjs.json' }),
