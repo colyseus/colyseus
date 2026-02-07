@@ -194,7 +194,7 @@ export class Room<
             this.connection.connect(url.origin, { ...options, skipHandshake });
 
         } else {
-            this.connection.connect(`${endpoint}${skipHandshake ? "?skipHandshake=1" : ""}`, headers);
+            this.connection.connect(`${endpoint}${skipHandshake ? "&skipHandshake=1" : ""}`, headers);
         }
 
     }

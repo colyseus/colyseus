@@ -92,14 +92,31 @@ jobs:
       - name: Extract changelog
         id: changelog
         run: |
-          PKG_DIR=$(pnpm --filter "${{ matrix.name }}" exec pwd)
+          PKG_DIR=$(pnpm --filter "${{ matrix.name }}" exec pwd | tail -1)
           CHANGELOG="$PKG_DIR/CHANGELOG.md"
+          VERSION="${{ matrix.version }}"
+
+          BODY=""
           if [ -f "$CHANGELOG" ]; then
-            # Extract section for current version (from "## version" until next "## ")
-            CONTENT=$(awk '/^## ${{ matrix.version }}/,/^## [0-9]/' "$CHANGELOG" | head -n -1)
-            echo "body<<EOF" >> $GITHUB_OUTPUT
-            echo "$CONTENT" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
+            # Escape dots in version for reliable regex matching
+            ESCAPED_VERSION=$(echo "$VERSION" | sed 's/\./\\./g')
+
+            # Extract content between "## <version>" and the next "## " heading,
+            # excluding the version heading itself
+            BODY=$(awk "/^## ${ESCAPED_VERSION}/{found=1; next} /^## /{if(found) exit} found" "$CHANGELOG")
+
+            # Trim leading and trailing blank lines
+            BODY=$(echo "$BODY" | sed -e '/./,$!d' -e :a -e '/^\n*$/{$d;N;ba}')
+          fi
+
+          if [ -n "$BODY" ]; then
+            DELIMITER="CHANGELOG_DELIMITER_$RANDOM"
+            echo "body<<${DELIMITER}" >> $GITHUB_OUTPUT
+            printf '%s\n' "$BODY" >> $GITHUB_OUTPUT
+            echo "${DELIMITER}" >> $GITHUB_OUTPUT
+            echo "has_changelog=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changelog=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Build release assets
@@ -136,5 +153,6 @@ jobs:
         with:
           tag_name: "${{ matrix.name }}@${{ matrix.version }}"
           name: "${{ matrix.name }} v${{ matrix.version }}"
-          body: ${{ steps.changelog.outputs.body }}
+          body: ${{ steps.changelog.outputs.body || '' }}
+          generate_release_notes: ${{ steps.changelog.outputs.has_changelog != 'true' }}
           files: ${{ steps.assets.outputs.files }}
