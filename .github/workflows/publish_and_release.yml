@@ -155,4 +155,5 @@ jobs:
           name: "${{ matrix.name }} v${{ matrix.version }}"
           body: ${{ steps.changelog.outputs.body || '' }}
           generate_release_notes: ${{ steps.changelog.outputs.has_changelog != 'true' }}
+          make_latest: false
           files: ${{ steps.assets.outputs.files }}
