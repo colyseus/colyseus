@@ -1262,7 +1262,8 @@ describe("Integration", () => {
                 assert.fail("joinOrCreate should have failed.");
 
               } catch (e: any) {
-                assert.strictEqual(ErrorCode.MATCHMAKE_NO_HANDLER, e.code)
+                assert.strictEqual(ErrorCode.MATCHMAKE_NO_HANDLER, e.code);
+                assert.strictEqual('provided room name "nonexisting" not defined', e.message);
               }
             });
 

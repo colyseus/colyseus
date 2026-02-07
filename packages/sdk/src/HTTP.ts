@@ -254,7 +254,7 @@ export class HTTP<R extends Router | Router["endpoints"]> {
     public options: FetchRequestOptions;
 
     private sdk: ColyseusSDK;
-    
+
     // alias "del()" to "delete()"
     public del = this.delete;
 
@@ -537,7 +537,7 @@ export class HTTP<R extends Router | Router["endpoints"]> {
         }
 
         if (!raw.ok) {
-            throw new ServerError(data.code ?? raw.status, data.message ?? raw.statusText, {
+            throw new ServerError(data.code ?? raw.status, data.error ?? data.message ?? raw.statusText, {
                 headers: raw.headers,
                 status: raw.status,
                 response: raw,
