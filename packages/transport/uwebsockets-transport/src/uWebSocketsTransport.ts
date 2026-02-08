@@ -246,7 +246,9 @@ export class uWebSocketsTransport extends Transport {
           res.writeStatus(`${response.status} ${response.statusText}`);
           writeCorsHeaders(res, headers);
           response.headers.forEach((value, key) => {
-            res.writeHeader(key, value);
+            if (key.toLowerCase() !== 'content-length') {
+              res.writeHeader(key, value);
+            }
           });
           res.end(responseBody);
         });
