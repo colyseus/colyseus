@@ -15,7 +15,8 @@
     "watch": "node compile-packages.mjs --watch",
     "publish-from-package-stable": "pnpm run build && lerna publish from-package",
     "publish-from-package-preview": "pnpm run build && lerna publish from-package --dist-tag preview",
-    "postinstall": "git submodule update --init --recursive && pnpm --filter @colyseus/better-call run build"
+    "update-submodule": "git submodule update --remote packages/better-call",
+    "postinstall": "git submodule update --init --recursive && pnpm --filter @better-auth/root run build"
   },
   "devDependencies": {
     "@lerna/filter-packages": "^6.4.1",
