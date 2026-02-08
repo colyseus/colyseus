@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.17.30
+
+- Throw error if requesting to join a room without a room name.
+- Fix `e.code` of `client.http.*` errors to always be a number.
+
 ## 0.17.29
 
 - Fix `dist/debug.js` build to be embedded via CDN (e.g. `https://unpkg.com/@colyseus/sdk@^0.17.0/dist/debug.js`)

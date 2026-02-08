@@ -537,7 +537,7 @@ export class HTTP<R extends Router | Router["endpoints"]> {
         }
 
         if (!raw.ok) {
-            throw new ServerError(data.code ?? raw.status, data.error ?? data.message ?? raw.statusText, {
+            throw new ServerError(raw.status, data.message ?? data.error ?? raw.statusText, {
                 headers: raw.headers,
                 status: raw.status,
                 response: raw,

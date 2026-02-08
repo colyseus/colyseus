@@ -358,6 +358,10 @@ export class ColyseusSDK<ServerType extends SDKTypes = any, UserData = any> {
         rootSchema?: SchemaConstructor<T>,
     ) {
         try {
+            if (!roomName) {
+                throw new Error("Must provide a room name");
+            }
+
             const httpResponse = await (this.http as HTTP<any>).post(`/matchmake/${method}/${roomName}`, {
                 headers: {
                     'Accept': 'application/json',
