@@ -4,8 +4,6 @@ import { ColyseusSDK, MatchMakeError, ServerError } from "@colyseus/sdk";
 import { matchMaker, ErrorCode,  LocalPresence, LocalDriver, defineServer, defineRoom, createRouter, createEndpoint } from "@colyseus/core";
 import { DummyRoom, Room3Clients } from "../utils/index.ts";
 
-import { z } from "zod";
-
 const TEST_PORT = 8567;
 const TEST_ENDPOINT = `ws://localhost:${TEST_PORT}`;
 
@@ -64,9 +62,9 @@ describe("SDK: HTTP", () => {
         if (e instanceof ServerError) {
           assert.ok(e.headers);
           assert.strictEqual(e.status, 403);
-          assert.strictEqual(e.code, "FORBIDDEN_ERROR");
+          assert.strictEqual(e.code, 403);
           assert.strictEqual(e.message, "Forbidden error");
-          assert.deepStrictEqual(e.data, { code: 'FORBIDDEN_ERROR', message: 'Forbidden error' });
+          assert.deepStrictEqual(e.data, { message: 'Forbidden error' });
         } else {
           assert.fail("Expected ServerError to be thrown");
         }

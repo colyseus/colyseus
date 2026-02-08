@@ -1273,7 +1273,7 @@ describe("Integration", () => {
                 assert.fail("joinOrCreate should have failed.");
 
               } catch (e: any) {
-                assert.strictEqual(404, e.code)
+                assert.strictEqual("Must provide a room name", e.message)
               }
             });
 
