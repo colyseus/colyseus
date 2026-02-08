@@ -62,18 +62,18 @@ export function bindRouterToTransport(transport: Transport, router: Router) {
   if (expressApp) {
     server.removeListener('request', expressApp);
 
-    // execute router first, fallback to express in case of 404
     next = async (req: IncomingMessage, res: ServerResponse) => {
-      const protocol = req.headers["x-forwarded-proto"] || ((req.socket as any).encrypted ? "https" : "http");
-      const base = `${protocol}://${req.headers[":authority"] || req.headers.host}`;
-      const response = await router.handler(getRequest({ base, request: req }));
+      // check if the route is defined in the router
+      // if so, use the router handler, otherwise fallback to express
+      if (router.findRoute(req.method, req.url) !== undefined) {
+        const protocol = req.headers["x-forwarded-proto"] || ((req.socket as any).encrypted ? "https" : "http");
+        const base = `${protocol}://${req.headers[":authority"] || req.headers.host}`;
+        const response = await router.handler(getRequest({ base, request: req }));
+        return setResponse(res, response);
 
-      // fallback to express if 404
-      if (response.status === 404) {
+      } else {
         return expressApp['handle'](req, res);
       }
-
-      return setResponse(res, response);
     };
 
   } else {
