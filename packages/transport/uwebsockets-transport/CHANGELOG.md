@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.16
+
+- Fix `HPE_UNEXPECTED_CONTENT_LENGTH` error (#908), thanks to @lkinasiewicz
+
 ## 0.17.15
 
 - Fix express and auth routes hanging. Use `@colyseus/better-auth` version that exposes `.findRoute()`.
