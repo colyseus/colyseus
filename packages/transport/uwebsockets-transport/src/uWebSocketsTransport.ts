@@ -118,9 +118,17 @@ export class uWebSocketsTransport extends Transport {
         try {
           const module = await uWebSocketsExpress;
           uWebSocketsExpressModule = module;
+
+          // Temporarily stub `app.any` to prevent uwebsockets-express Application.init()
+          // from registering its own catch-all handler — we manage HTTP routing ourselves
+          // in bindRouter().
+          const originalAny = this.app.any;
+          this.app.any = (() => this.app) as any;
           this._expressApp = (module.default(this.app) as unknown) as express.Application;
+          this.app.any = originalAny;
           resolve(this._expressApp);
         } catch (error) {
+          reject(error);
           console.warn("");
           console.warn("❌ Error: could not initialize express.");
           console.warn("");
@@ -181,59 +189,74 @@ export class uWebSocketsTransport extends Transport {
         res.aborted = true;
       });
 
+      // cache all headers and request info synchronously
+      // (uWebSockets.js req is only valid in the synchronous callback scope)
       const headers = new Headers();
       req.forEach((key, value) => headers.set(key, value));
 
-      const requestInit: RequestInit = {
-        method: req.getMethod().toUpperCase(),
-        referrer: req.getHeader('referer'),
-        keepalive: req.getHeader('keep-alive') === 'true',
-        headers,
-        signal: abortController.signal,
-      };
-
-      // Construct full URL (Request constructor requires absolute URL)
+      const method = req.getMethod().toUpperCase();
       const url = req.getUrl();
       const query = req.getQuery();
       const remoteAddress = res.getRemoteAddressAsText();
 
-      // read request body
-      if (requestInit.method.toUpperCase() !== "GET" && requestInit.method.toUpperCase() !== "HEAD") {
-        let body: Buffer = undefined;
+      // check if the route is defined in the router
+      // if so, use the router handler, otherwise fallback to express
+      if (router.findRoute(method, url) !== undefined) {
+        const requestInit: RequestInit = {
+          method,
+          referrer: headers.get('referer') || undefined,
+          keepalive: headers.get('keep-alive') === 'true',
+          headers,
+          signal: abortController.signal,
+        };
 
-        // uWebSockets.js `HttpRequest` does not provide 'getData', must aggregate POST body via HttpResponse
-        await new Promise<void>((resolve) => {
-          res.onData((ab, isLast) => {
-            const chunk = Buffer.from(ab);
-            if (body === undefined) {
-              body = Buffer.from(chunk);
-            } else {
-              body = Buffer.concat([body, chunk]);
-            }
-            if (isLast) {
-              resolve();
-            }
+        // read request body
+        if (method !== "GET" && method !== "HEAD") {
+          let body: Buffer = undefined;
+
+          // uWebSockets.js `HttpRequest` does not provide 'getData', must aggregate POST body via HttpResponse
+          await new Promise<void>((resolve) => {
+            res.onData((ab, isLast) => {
+              const chunk = Buffer.from(ab);
+              if (body === undefined) {
+                body = Buffer.from(chunk);
+              } else {
+                body = Buffer.concat([body, chunk]);
+              }
+              if (isLast) {
+                resolve();
+              }
+            });
           });
+
+          requestInit.body = body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength) as ArrayBuffer;
+        }
+
+        const fullUrl = `http://${headers.get('host') || 'localhost'}${url}${(query ? `?${query}` : '')}`;
+        const response = await router.handler(new Request(fullUrl, requestInit));
+
+        // skip if aborted
+        if (res.aborted) { return; }
+
+        // read response body before cork (cork callback must be synchronous)
+        const responseBody = await response.arrayBuffer();
+
+        // writeStatus() must be called before writeHeader() in uWebSockets.js
+        res.cork(() => {
+          res.writeStatus(`${response.status} ${response.statusText}`);
+          writeCorsHeaders(res, headers);
+          response.headers.forEach((value, key) => {
+            res.writeHeader(key, value);
+          });
+          res.end(responseBody);
         });
 
-        requestInit.body = body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength) as ArrayBuffer;
-      }
-
-      const fullUrl = `http://${headers.get('host') || 'localhost'}${url}${(query ? `?${query}` : '')}`
-      const response = await router.handler(new Request(fullUrl, requestInit));
-
-      // fallback to express stack if 404
-      if (response.status === 404 && this._expressApp) {
-        // Set CORS headers on the Express ServerResponse wrapper
-        // (Do NOT write them directly to the raw uWS `res` here, because
-        // uWebSockets.js requires writeStatus() before writeHeader().
-        // Pre-writing headers would lock the status to 200 and break
-        // non-200 responses like 304 Not Modified from serve-static.)
+      } else if (this._expressApp) {
         const corsHeaders = getCorsHeaders(headers);
 
         const ereq = new uWebSocketsExpressModule.IncomingMessage(req, res, this._expressApp as any, {
           headers: Object.fromEntries((headers as any).entries()),
-          method: requestInit.method,
+          method,
           url,
           query,
           remoteAddress
@@ -245,25 +268,12 @@ export class uWebSocketsTransport extends Transport {
           eres.setHeader(header, corsHeaders[header].toString());
         }
 
+        // Read the request body from uWebSockets before passing to express
+        // (uWebSockets requires res.onData() to be called to consume the body)
+        await ereq._readBody();
+
         this._expressApp['handle'](ereq, eres);
-        return;
       }
-
-      // skip if aborted
-      if (res.aborted) { return; }
-
-      // read response body before cork (cork callback must be synchronous)
-      const responseBody = await response.arrayBuffer();
-
-      // writeStatus() must be called before writeHeader() in uWebSockets.js
-      res.cork(() => {
-        res.writeStatus(`${response.status} ${response.statusText}`);
-        writeCorsHeaders(res, headers);
-        response.headers.forEach((value, key) => {
-          res.writeHeader(key, value);
-        });
-        res.end(responseBody);
-      });
     });
   }
 
