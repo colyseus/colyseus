@@ -1048,7 +1048,7 @@ function openSendMessagesModal(uniquePanelId) {
     typeSelect.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
     typeSelect.style.border = '1px solid rgba(255, 255, 255, 0.2)';
     typeSelect.style.borderRadius = '4px';
-    typeSelect.style.color = '#000';
+    typeSelect.style.color = '#fff';
     typeSelect.style.fontSize = '12px';
     typeSelect.style.cursor = 'pointer';
     typeSelect.style.outline = 'none';
@@ -1066,6 +1066,7 @@ function openSendMessagesModal(uniquePanelId) {
     Object.keys(messageTypes).forEach(function(msgType) {
         var option = document.createElement('option');
         option.value = msgType;
+        option.style.color = '#000';
         option.textContent = msgType;
         typeSelect.appendChild(option);
     });
