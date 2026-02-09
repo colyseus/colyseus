@@ -96,9 +96,9 @@ describe("HTTP", function() {
             }
 
             assert.ok(serverError, "Expected ServerError to be thrown");
-            assert.strictEqual(serverError!.code, 1001);
             assert.strictEqual(serverError!.message, 'Bad request error');
             assert.strictEqual(serverError!.status, 400);
+            assert.strictEqual(serverError!.data.code, 1001);
             assert.ok(serverError!.headers instanceof Headers);
             assert.ok(serverError!.response instanceof Response);
         });
@@ -115,9 +115,9 @@ describe("HTTP", function() {
             }
 
             assert.ok(serverError, "Expected ServerError to be thrown");
-            assert.strictEqual(serverError!.code, 5000);
             assert.strictEqual(serverError!.message, 'Internal server error');
             assert.strictEqual(serverError!.status, 500);
+            assert.strictEqual(serverError!.data.code, 5000);
         });
     });
 
