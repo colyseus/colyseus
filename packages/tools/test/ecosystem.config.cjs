@@ -5,8 +5,7 @@
 module.exports = {
   apps: [{
     name: 'my-app',
-    script: './dummy-server.js',
+    script: './dummy-server.cjs',
     instances: 1,
-    max_memory_restart: '256M',
   }]
 };

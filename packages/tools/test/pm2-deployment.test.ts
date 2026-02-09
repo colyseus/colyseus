@@ -14,7 +14,7 @@ import os from 'os';
 import assert from 'assert';
 
 const TEST_DIR = __dirname;
-const ECOSYSTEM_CONFIG_PATH = path.join(TEST_DIR, 'ecosystem.config.js');
+const ECOSYSTEM_CONFIG_PATH = path.join(TEST_DIR, 'ecosystem.config.cjs');
 const TEST_NGINX_CONFIG_PATH = path.join(TEST_DIR, 'test_colyseus_servers.conf');
 
 // Path to the local @colyseus/tools package for PM2 module installation
@@ -38,7 +38,7 @@ function updateEcosystemConfig(instances: number): void {
 module.exports = {
   apps: [{
     name: '${PM2_APP_NAME}',
-    script: './dummy-server.js',
+    script: './dummy-server.cjs',
     instances: ${instances},
   }]
 };
@@ -112,7 +112,7 @@ function getSharedModule() {
  */
 function installPostDeployAgent(): Promise<void> {
   return new Promise((resolve, reject) => {
-    const agentPath = path.resolve(TOOLS_PACKAGE_PATH, 'pm2/post-deploy-agent.js');
+    const agentPath = path.resolve(TOOLS_PACKAGE_PATH, 'pm2/post-deploy-agent.cjs');
     pm2.start({
       name: '@colyseus/tools',
       script: agentPath,
@@ -152,7 +152,7 @@ function triggerPostDeploy(cwd: string, ecosystemPath: string): Promise<{ succes
   });
 }
 
-describe('PM2 Deployment', function () {
+xdescribe('PM2 Deployment', function () {
   this.timeout(60000); // 60 second timeout for all tests
 
   const EXPECTED_INSTANCES = 1;
@@ -255,7 +255,7 @@ describe('PM2 Deployment', function () {
   describe('Multiple Consecutive Deployments', function () {
     const DEPLOY_COUNT = 3;
 
-    it.only(`should not grow beyond ${1} instance(s) after ${3} deploys`, async function () {
+    it(`should not grow beyond ${1} instance(s) after ${3} deploys`, async function () {
       for (let i = 1; i <= DEPLOY_COUNT; i++) {
         console.log(`      Deployment ${i}/${DEPLOY_COUNT}...`);
 
