@@ -26,6 +26,7 @@
     "@colyseus/tools": "workspace:^",
     "@colyseus/traefik": "workspace:^",
     "@colyseus/uwebsockets-transport": "workspace:^",
+    "@colyseus/bun-websockets": "workspace:^",
     "@colyseus/ws-transport": "workspace:^",
     "zod": "^4.1.12",
     "serve-index": "^1.8.0"
