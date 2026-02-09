@@ -21,10 +21,12 @@
     }
   },
   "dependencies": {
-    "@colyseus/core": "workspace:^"
+    "@colyseus/core": "workspace:^",
+    "bun-serve-express": "^2.0.0"
   },
   "devDependencies": {
     "@colyseus/core": "workspace:^",
+    "@colyseus/sdk": "workspace:^",
     "bun-types": "^1.2.0"
   },
   "author": "Endel Dreyer",

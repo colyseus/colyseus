@@ -3,11 +3,12 @@
 // "bun-types" is currently conflicting with "ws" types.
 // @ts-ignore
 import { Server, ServerWebSocket, WebSocketHandler } from 'bun';
-import express, { type  Application } from "express";
-import type { Router } from '@colyseus/core';
 
-import { matchMaker, Protocol, Transport, debugAndPrintError, getBearerToken, CloseCode, connectClientToRoom, spliceOne } from '@colyseus/core';
+import { matchMaker, Protocol, Transport, debugAndPrintError, getBearerToken, CloseCode, connectClientToRoom, spliceOne, type Router } from '@colyseus/core';
 import { WebSocketClient, WebSocketWrapper } from './WebSocketClient.ts';
+
+import type { Application } from "express";
+import bunExpress, { IncomingMessage, ServerResponse } from 'bun-serve-express';
 
 // Bun global is available at runtime
 declare const Bun: any;
@@ -38,7 +39,9 @@ export class BunWebSockets extends Transport {
 
   public getExpressApp(): Application {
     if (!this._expressApp) {
-      this._expressApp = express();
+      // @ts-ignore
+      this._expressApp = bunExpress({});
+      // this._expressApp = bunExpress.default({});
     }
     return this._expressApp;
   }
@@ -60,7 +63,7 @@ export class BunWebSockets extends Transport {
         // Try to upgrade to WebSocket
         if (server.upgrade(req, {
           data: {
-            url: url.pathname + url.search,
+            url: url.pathname,
             searchParams: url.searchParams,
             headers: req.headers as Headers,
             remoteAddress: server.requestIP(req)?.address || 'unknown',
@@ -70,54 +73,57 @@ export class BunWebSockets extends Transport {
         }
 
         // Handle HTTP requests through router
-        if (self._router) {
-          try {
-            // Write CORS headers
-            const corsHeaders = {
-              ...matchMaker.controller.DEFAULT_CORS_HEADERS,
-              ...matchMaker.controller.getCorsHeaders(req.headers)
-            };
+        // Write CORS headers
+        const corsHeaders = {
+          ...matchMaker.controller.DEFAULT_CORS_HEADERS,
+          ...matchMaker.controller.getCorsHeaders(req.headers)
+        };
 
-            // Handle OPTIONS requests
-            if (req.method === "OPTIONS") {
-              return new Response(null, {
-                status: 204,
-                headers: corsHeaders
-              });
-            }
-
-            const response = await self._router.handler(req);
-
-            // Add CORS headers to response
-            const headers = new Headers(response.headers);
-            Object.entries(corsHeaders).forEach(([key, value]) => {
-              if (!headers.has(key)) {
-                headers.set(key, value.toString());
-              }
-            });
-
-            return new Response(response.body, {
-              status: response.status,
-              statusText: response.statusText,
-              headers
-            });
-
-          } catch (e: any) {
-            debugAndPrintError(e);
-            return new Response(JSON.stringify({
-              code: e.code,
-              error: e.message
-            }), {
-              status: 500,
-              headers: { 'Content-Type': 'application/json' }
-            });
-          }
+        // Handle OPTIONS requests
+        if (req.method === "OPTIONS") {
+          return new Response(null, {
+            status: 204,
+            headers: corsHeaders
+          });
         }
 
-        // Fallback to express app if available
-        if (self._expressApp) {
-          // TODO: Implement express integration for Bun
-          console.warn("Express integration not yet implemented for BunWebSockets");
+        if (self._router.findRoute(req.method, url.pathname) !== undefined) {
+          const response = await self._router.handler(req);
+
+          // Add CORS headers to response
+          const headers = new Headers(response.headers);
+          Object.entries(corsHeaders).forEach(([key, value]) => {
+            if (!headers.has(key)) {
+              headers.set(key, value.toString());
+            }
+          });
+
+          return new Response(response.body, {
+            status: response.status,
+            statusText: response.statusText,
+            headers
+          });
+
+        } else if (self._expressApp) {
+          // Fallback to express routes
+          const ereq = new IncomingMessage(req, url, self._expressApp);
+          const eres = new ServerResponse(ereq, self._expressApp);
+
+          // Apply CORS headers through the Express response wrapper
+          Object.entries(corsHeaders).forEach(([key, value]) => {
+            eres.setHeader(key, value.toString());
+          });
+
+          // Read the request body before passing to express
+          if (req.method !== "GET" && req.method !== "HEAD") {
+            await (ereq as any).readBody();
+          }
+
+          (ereq as any).complete = true;
+
+          self._expressApp['handle'](ereq, eres);
+
+          return await eres.getBunResponse();
         }
 
         return new Response("Not Found", { status: 404 });
