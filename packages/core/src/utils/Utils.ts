@@ -173,7 +173,11 @@ export function wrapTryCatch(
  */
 export function dynamicImport<T = any>(moduleName: string): Promise<T> {
   // __dirname exists in CJS but not in ESM
-  if (typeof __dirname !== 'undefined') {
+  if (
+    typeof __dirname !== 'undefined' &&
+    // @ts-ignore
+    typeof (Bun) === 'undefined' // prevent bun from loading CJS modules
+  ) {
     // CJS context - use require()
     try {
       return Promise.resolve(require(moduleName));
