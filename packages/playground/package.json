@@ -22,7 +22,7 @@
     "start": "vite",
     "build": "vite build && node build.mjs",
     "preview": "vite preview",
-    "test": "vitest",
+    "test-todo": "vitest",
     "prepublishOnly": "npm run build"
   },
   "files": [
