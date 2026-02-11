@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.17.36
+
+- Allow to provide `server` with Express app bound as argument for `WebSocketTransport`, while keeping `better-call` + Express stacks working.
+- Fix `Error: 'app.router' is deprecated!` error when not providing `"express"` key to `defineServer()`
+
 ## 0.17.35
 
 - Bun: Fix `dynamicImport` utility method to prevent dual-loading of CJS + ESM modules in Bun, causing "seat reservation" errors.

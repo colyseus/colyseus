@@ -217,7 +217,7 @@ export class Server<
           this.router = this.router.extend({ ...getDefaultRouter().endpoints }) as unknown as Routes;
         }
 
-        bindRouterToTransport(this.transport, this.router);
+        bindRouterToTransport(this.transport, this.router, this.options.express !== undefined);
 
         if (listeningListener) {
           listeningListener(err);

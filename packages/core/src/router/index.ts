@@ -23,19 +23,24 @@ export {
 
 export { toNodeHandler };
 
-export function bindRouterToTransport(transport: Transport, router: Router) {
+export function bindRouterToTransport(transport: Transport, router: Router, useExpress: boolean) {
   // add default "/__healthcheck" endpoint
   router.addEndpoint(createEndpoint("/__healthcheck", { method: "GET" }, async (ctx) => {
     return new Response("OK", { status: 200 });
   }));
 
+  const server = transport.server;
+
   // check if the server is bound to an express app
-  const expressApp = transport.getExpressApp() as express.Application;
+  const expressApp: express.Application = (useExpress)
+    ? transport.getExpressApp() as express.Application
+    // fallback searching for express app in server listeners
+    : server?.listeners('request').find((listener: Function) => listener.name === "app" && listener['mountpath'] === '/') as express.Application;
 
   // add default "/" route, if not provided.
   const hasRootRoute = (
     // check if express app has a root route
-    expressRootRoute(expressApp) !== undefined ||
+    (expressApp && expressRootRoute(expressApp) !== undefined) ||
 
     // check if router has a root route
     Object.values(router.endpoints).some(endpoint => endpoint.path === "/")
@@ -46,8 +51,6 @@ export function bindRouterToTransport(transport: Transport, router: Router) {
       return new Response(`Colyseus ${pkg.version}`, { status: 200 });
     }));
   }
-
-  const server = transport.server;
 
   // use custom bindRouter method if provided
   if (!server && transport.bindRouter) {
