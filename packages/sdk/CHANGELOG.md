@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.32
+
+- Fix `debug.js` panel text color. (#910, thanks @Andrek25)
+
 ## 0.17.31
 
 - Fix `debug.js` panel text color. (#909, thanks @Andrek25)
