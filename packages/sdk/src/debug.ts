@@ -2834,37 +2834,13 @@ function applyMonkeyPatches() {
         return room;
     }
 
-    // Store original methods that return rooms
-    var originalJoinOrCreate = Client.prototype.joinOrCreate;
-    var originalJoin = Client.prototype.join;
-    var originalCreate = Client.prototype.create;
-    var originalReconnect = Client.prototype.reconnect;
-
-    // Patch joinOrCreate
-    Client.prototype.joinOrCreate = function() {
-        var promise = originalJoinOrCreate.apply(this, arguments);
+    // Patch consumeSeatReservation to intercept all room connections
+    var originalConsumeSeatReservation = Client.prototype.consumeSeatReservation;
+    Client.prototype.consumeSeatReservation = function() {
+        var promise = originalConsumeSeatReservation.apply(this, arguments);
         return promise.then((room) => patchRoom(room));
     };
 
-    // Patch join
-    Client.prototype.join = function() {
-        var promise = originalJoin.apply(this, arguments);
-        return promise.then((room) => patchRoom(room));
-    };
-
-    // Patch create
-    Client.prototype.create = function() {
-        var promise = originalCreate.apply(this, arguments);
-        return promise.then((room) => patchRoom(room));
-    };
-
-    // Patch reconnect
-    if (originalReconnect) {
-        Client.prototype.reconnect = function() {
-            var promise = originalReconnect.apply(this, arguments);
-            return promise.then((room) => patchRoom(room));
-        };
-    }
 }
 
 applyMonkeyPatches();

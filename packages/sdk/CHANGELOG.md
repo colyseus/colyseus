@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.33
+
+- Fix `debug.js` panel to intercept all `consumeSeatReservation()` calls.
+
 ## 0.17.32
 
 - Fix `debug.js` panel text color. (#910, thanks @Andrek25)
