@@ -59,11 +59,12 @@ export const oauth = {
    * Default 'grant' module configuration.
    */
   defaults: {
-    // TODO: automatically retrieve "origin" based on "publicAddress" config [?]
-    // origin: process.env.BACKEND_URL,
     transport: "session",
     state: true,
     response: ["tokens", "raw", "profile"],
+    // Allow 'origin' to be set dynamically per-request
+    // (needed when origin is auto-detected after grant middleware is initialized)
+    dynamic: ['origin'],
   } as GrantProvider & { prefix: never },
 
   /**
@@ -118,16 +119,6 @@ export const oauth = {
       const config: GrantConfig = Object.assign({ defaults: this.defaults }, this.providers);
       config.defaults.prefix = oauth.prefix;
 
-      // // if origin is not set, guess it from environment
-      // if (!this.defaults.origin) {
-      //   const isProduction = (process.env.NODE_ENV && process.env.NODE_ENV !== "development" || process.env.COLYSEUS_CLOUD)
-      //   const hostname = (process.env.SUBDOMAIN && process.env.SERVER_NAME)
-      //     ? `${process.env.SUBDOMAIN}.${process.env.SERVER_NAME}`
-      //     : `localhost:${process.env.PORT || "2567"}`;
-      //   this.defaults.origin = `${(isProduction) ? "https" : "http"}://${hostname}`;
-      //   logger.info(`OAuth: 'auth.oauth.defaults.origin' not set. Guessing it from environment: '${this.defaults.origin}'`);
-      // }
-
       router.use(sessionMiddleware);
 
       router.get("/:providerId", async (req, res, next) => {
@@ -170,6 +161,21 @@ ${(providerUrl) ? `<hr/><p><small><em>(Get your keys from <a href="${providerUrl
 </html>`);
           }
         }
+      });
+
+      //
+      // Dynamically inject origin for grant per-request.
+      // This handles the case where origin is auto-detected after grant was initialized.
+      // Grant reads dynamic overrides from res.locals.grant.dynamic
+      //
+      router.use((req, res, next) => {
+        const dynamicOrigin = oauth.defaults.origin || auth.backend_url;
+        if (dynamicOrigin) {
+          res.locals.grant = {
+            dynamic: { origin: dynamicOrigin }
+          };
+        }
+        next();
       });
 
       router.use(grant.default.express(config));
