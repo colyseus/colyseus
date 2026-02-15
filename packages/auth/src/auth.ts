@@ -151,16 +151,19 @@ export const auth = {
     // Auto-detect backend URL from the first request, if not defined.
     // (We do only once to reduce chances of 'Host' header injection vulnerability)
     //
-    router.use(function (req, _, next) {
+    const originDetector: any = function (req, _, next) {
       if (!auth.backend_url) {
         auth.backend_url = req.protocol + '://' + req.get('host');
       }
       if (!oauth.defaults.origin) {
         oauth.defaults.origin = auth.backend_url;
       }
-      router.stack.shift(); // remove this middleware
+      // remove this middleware from the stack
+      const stackIndex = router.stack.indexOf(originDetector);
+      if (stackIndex !== -1) { router.stack.splice(stackIndex, 1); }
       next();
-    });
+    };
+    router.use(originDetector);
 
     // set register/login callbacks
     Object.keys(settings).forEach(key => {
