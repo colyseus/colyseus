@@ -16,7 +16,7 @@ function getRegion() {
   return (process.env.REGION || "unknown").toLowerCase();
 }
 
-function loadEnvFile(envFileOptions: string[], log: 'none' | 'success' | 'both'  = 'none') {
+function loadEnvFile(envFileOptions: string[], log: 'none' | 'success' | 'both'  = 'none', override: boolean = false) {
     const envPaths = [];
     envFileOptions.forEach((envFilename) => {
       if (envFilename.startsWith("/")) {
@@ -31,7 +31,7 @@ function loadEnvFile(envFileOptions: string[], log: 'none' | 'success' | 'both' 
     const envPath = envPaths.find((envPath) => fs.existsSync(envPath));
 
     if (envPath) {
-        dotenv.config({ path: envPath });
+        dotenv.config({ path: envPath, override });
 
         if (log !== "none") {
             console.info(`✅ ${path.basename(envPath)} loaded.`);
@@ -59,7 +59,8 @@ if (process.env.COLYSEUS_CLOUD !== undefined) {
       cloudEnvFileNames.unshift(`${process.env.APP_ROOT_PATH}${(process.env.APP_ROOT_PATH.endsWith("/") ? "" : "/")}.env.cloud`);
     }
 
-    loadEnvFile(cloudEnvFileNames);
+    // .env.cloud can override previously loaded environment variables
+    loadEnvFile(cloudEnvFileNames, 'none', true);
 }
 
 if (process.env.REGION !== undefined) {
