@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.34
+
+- Bundle `dist/colyseus.js` file with latest `@colyseus/schema` version.
+
 ## 0.17.33
 
 - Fix `debug.js` panel to intercept all `consumeSeatReservation()` calls.
