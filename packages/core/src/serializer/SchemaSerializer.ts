@@ -62,6 +62,10 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
     let numClients = clients.length;
 
     if (numClients === 0) {
+      if (this.encoder.hasChanges) {
+        // if there are changes but no clients, we need to encode full state on next patch
+        this.needFullEncode = true;
+      }
       // skip patching and clear changes
       this.encoder.discardChanges();
       return false;
