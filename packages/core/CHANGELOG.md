@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.38
+
+- Make `zod` an optional peer dependency
+
 ## 0.17.37
 
 - `SchemaSerializer`: fix clearing "full encode" cache when state is mutated while no clients are connected (reported by @krabas https://github.com/colyseus/colyseus/issues/917)

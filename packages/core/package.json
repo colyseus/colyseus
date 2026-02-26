@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/core",
-  "version": "0.17.37",
+  "version": "0.17.38",
   "description": "Multiplayer Framework for Node.js.",
   "type": "module",
   "input": "./src/index.ts",
@@ -69,6 +69,20 @@
     "@pm2/io": "^6.1.0",
     "express": "^4.16.0 || ^5.0.0",
     "zod": "^4.1.12"
+  },
+  "peerDependenciesMeta": {
+    "@colyseus/ws-transport": {
+      "optional": true
+    },
+    "@pm2/io": {
+      "optional": true
+    },
+    "express": {
+      "optional": true
+    },
+    "zod": {
+      "optional": true
+    }
   },
   "optionalPeerDependencies": {
     "@colyseus/tools": "0.17.x",

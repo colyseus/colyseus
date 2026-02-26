@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/playground",
-  "version": "0.17.11",
+  "version": "0.17.12",
   "main": "./build/index.cjs",
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
@@ -34,6 +34,11 @@
     "@colyseus/core": "workspace:^",
     "express": ">=4.16.0",
     "zod": "^4.1.12"
+  },
+  "peerDependenciesMeta": {
+    "zod": {
+      "optional": true
+    }
   },
   "browserslist": {
     "production": [
