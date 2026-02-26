@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/bun-websockets",
-  "version": "0.17.7",
+  "version": "0.17.8",
   "type": "module",
   "input": "./src/index.ts",
   "main": "./build/index.cjs",

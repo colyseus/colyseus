@@ -34,6 +34,11 @@ export class BunWebSockets extends Transport {
 
   constructor(options: TransportOptions = {}) {
     super();
+
+    if (options.maxPayloadLength === undefined) {
+      options.maxPayloadLength = 4 * 1024;
+    }
+
     this.options = options;
   }
 
@@ -41,7 +46,6 @@ export class BunWebSockets extends Transport {
     if (!this._expressApp) {
       // @ts-ignore
       this._expressApp = bunExpress({});
-      // this._expressApp = bunExpress.default({});
     }
     return this._expressApp;
   }
@@ -87,7 +91,7 @@ export class BunWebSockets extends Transport {
           });
         }
 
-        if (self._router.findRoute(req.method, url.pathname) !== undefined) {
+        if (self._router?.findRoute(req.method, url.pathname) !== undefined) {
           const response = await self._router.handler(req);
 
           // Add CORS headers to response
@@ -137,7 +141,7 @@ export class BunWebSockets extends Transport {
         },
 
         message(ws, message) {
-          self.clientWrappers.get(ws)?.emit('message', message);
+          self.clientWrappers.get(ws)?.emit('message', Buffer.from(message));
         },
 
         close(ws, code, reason) {
@@ -209,9 +213,9 @@ export class BunWebSockets extends Transport {
 
     try {
       await connectClientToRoom(room, client, {
-        token: searchParams.get("_authToken") ?? getBearerToken(rawClient.data.headers['authorization']),
+        token: searchParams.get("_authToken") ?? getBearerToken(rawClient.data.headers.get('authorization')),
         headers: rawClient.data.headers,
-        ip: rawClient.data.headers['x-real-ip'] ?? rawClient.data.headers['x-forwarded-for'] ?? rawClient.data.remoteAddress,
+        ip: rawClient.data.headers.get('x-real-ip') ?? rawClient.data.headers.get('x-forwarded-for') ?? rawClient.data.remoteAddress,
       }, {
         reconnectionToken,
         skipHandshake
