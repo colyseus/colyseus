@@ -81,6 +81,9 @@ export function RealtimeRooms({
 	};
 
 	const clearConnections = () => {
+		for (const connection of global.connections) {
+			delete roomsBySessionId[connection.sessionId];
+		}
 		global.connections = [];
 		setConnections(global.connections);
 		setSelectedConnection(undefined as unknown as Connection);

@@ -1,5 +1,5 @@
 import type { Client } from "@colyseus/sdk";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Connection, roomsBySessionId, messageTypesByRoom } from "../utils/Types";
 import { Timestamp } from "../elements/Timestamp";
 
@@ -97,9 +97,12 @@ export function InspectConnection({
 		setSelectedTab(lastTabSelected);
 	}
 
+	const errorTimeoutRef = useRef<number>();
+
 	const displayError = (message: any) => {
 		setCurrentError(message);
-		setTimeout(() => setCurrentError(""), 3000);
+		clearTimeout(errorTimeoutRef.current);
+		errorTimeoutRef.current = window.setTimeout(() => setCurrentError(""), 3000);
 	}
 
 	// actions
@@ -142,7 +145,11 @@ export function InspectConnection({
 	useEffect(() => {
 		connection.events.onChange = () => setEvents([...connection.events]);
 		connection.messages.onChange = () => setMessages([...connection.messages]);
-	}, []);
+		return () => {
+			connection.events.onChange = undefined;
+			connection.messages.onChange = undefined;
+		};
+	}, [connection]);
 
 	return (
 		<>
