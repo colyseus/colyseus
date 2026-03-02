@@ -129,8 +129,20 @@ export async function setup(
  * - Check for leftover/invalid processId's on startup
  * @private
  */
-export async function accept() {
+export async function accept(isStandalone: boolean = false) {
   await onReady; // make sure "processId" is available
+
+  /**
+   * Skip setting up IPC and health checks if this process is running as a
+   * standalone match-maker. 
+   * 
+   * When in "standalone" mode, this process will not spawn rooms and will only
+   * be responsible for matchmaking.
+   */
+  if (isStandalone) {
+    state = MatchMakerState.READY;
+    return; 
+  }
 
   /**
    * Process-level subscription

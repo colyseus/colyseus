@@ -49,6 +49,12 @@ export type ServerOptions = {
   selectProcessIdToCreateRoom?: matchMaker.SelectProcessIdCallback;
 
   /**
+   * Whether this process is running as a standalone match-maker or not. (default: false)
+   * When enabled, this process will not spawn rooms and will only be responsible for matchmaking.
+   */
+  isStandaloneMatchMaker?: boolean; 
+
+  /**
    * If enabled, rooms are going to be restored in the server-side upon restart,
    * clients are going to automatically re-connect when server reboots.
    *
@@ -185,7 +191,7 @@ export class Server<
     // Make sure matchmaker is ready before accepting connections
     // (isDevMode: matchmaker may take extra milliseconds to restore the rooms)
     //
-    await matchMaker.accept();
+    await matchMaker.accept(this.options.isStandaloneMatchMaker);
 
     /**
      * Greetings!

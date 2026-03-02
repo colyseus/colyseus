@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.39
+
+- Introduce `isStandaloneMatchMaker` option for `defineServer()`. When enabled, the current process will not spawn rooms and will only be responsible for matchmaking.
+
 ## 0.17.38
 
 - Make `zod` an optional peer dependency
