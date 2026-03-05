@@ -2,10 +2,21 @@ import * as React from "react";
 import type { MonitorOptions } from "../../";
 import { fetchRoomList, remoteRoomCall } from "../services";
 
-import { Card, Button, mobileStepperClasses, getModalUtilityClass } from '@mui/material';
-import { DataGrid, GridColDef, gridDateComparator, gridNumberComparator, gridStringOrNumberComparator } from '@mui/x-data-grid';
-import OpenInBrowserIcon from '@mui/icons-material/OpenInBrowser';
-import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
+import {
+  Card,
+  Button,
+  mobileStepperClasses,
+  getModalUtilityClass,
+} from "@mui/material";
+import {
+  DataGrid,
+  GridColDef,
+  gridDateComparator,
+  gridNumberComparator,
+  gridStringOrNumberComparator,
+} from "@mui/x-data-grid";
+import OpenInBrowserIcon from "@mui/icons-material/OpenInBrowser";
+import DeleteForeverIcon from "@mui/icons-material/DeleteForever";
 
 import {
   Chip,
@@ -15,22 +26,24 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Paper
-} from '@mui/material';
+  Paper,
+} from "@mui/material";
 
 import { ExtractStringNames, valueFormatter } from "../helpers/helpers";
 
 const UPDATE_ROOM_LIST_INTERVAL = 5000;
-const NO_ACTIVE_ROOMS_ROOM_ID = 'No active rooms.';
+const NO_ACTIVE_ROOMS_ROOM_ID = "No active rooms.";
 
 /**
  * Define default sort method by column name
  */
-const sortComparator: { [key in ExtractStringNames<MonitorOptions['columns']>]?: Function } = {
+const sortComparator: {
+  [key in ExtractStringNames<MonitorOptions["columns"]>]?: Function;
+} = {
   clients: gridNumberComparator,
   maxClients: gridNumberComparator,
-  elapsedTime: gridDateComparator
-}
+  elapsedTime: gridDateComparator,
+};
 
 export class RoomList extends React.Component {
   state = {
@@ -38,7 +51,7 @@ export class RoomList extends React.Component {
     rooms: [],
     connections: 0,
     cpu: 0,
-    memory: { totalMemMb: 0, usedMemMb: 0 },
+    memory: { rss: 0, heapTotal: 0, heapUsed: 0 },
     columns: [],
   };
 
@@ -56,12 +69,11 @@ export class RoomList extends React.Component {
     clearInterval(this.updateRoomListInterval);
   }
 
-  async fetchRoomList () {
+  async fetchRoomList() {
     try {
-      this.setState((await fetchRoomList()));
-
+      this.setState(await fetchRoomList());
     } catch (err) {
-      console.error(err)
+      console.error(err);
     }
 
     clearInterval(this.updateRoomListInterval);
@@ -79,7 +91,7 @@ export class RoomList extends React.Component {
 
   inspectRoom(roomId) {
     const history = (this.props as any).history;
-    history.push('/room/' + roomId);
+    history.push("/room/" + roomId);
   }
 
   async disposeRoom(roomId) {
@@ -88,9 +100,7 @@ export class RoomList extends React.Component {
   }
 
   getColumnHeader(column) {
-    return (typeof (column) === "string")
-      ? column
-      : column.metadata
+    return typeof column === "string" ? column : column.metadata;
   }
 
   getRoomColumn(room, column) {
@@ -101,8 +111,7 @@ export class RoomList extends React.Component {
     let postProcessValue: any = undefined;
 
     if (field === "elapsedTime" && valueFromObject[field] >= 0) {
-      postProcessValue = (milliseconds) => new Date( Date.now() - milliseconds );
-
+      postProcessValue = (milliseconds) => new Date(Date.now() - milliseconds);
     } else if (column.metadata && room.metadata) {
       field = column.metadata;
       valueFromObject = room.metadata;
@@ -114,12 +123,19 @@ export class RoomList extends React.Component {
       value = "";
     }
 
-    return (postProcessValue) ? postProcessValue(value) : `${value}`;
+    return postProcessValue ? postProcessValue(value) : `${value}`;
   }
 
   bytesToStr(size: number) {
+    if (size === 0) {
+      return "0 B";
+    }
     const i = Math.floor(Math.log(size) / Math.log(1024));
-    return ((size / Math.pow(1024, i)).toFixed(2) as any) * 1 + ' ' + ['B', 'kB', 'MB', 'GB', 'TB'][i];
+    return (
+      ((size / Math.pow(1024, i)).toFixed(2) as any) * 1 +
+      " " +
+      ["B", "kB", "MB", "GB", "TB"][i]
+    );
   }
 
   formatMemory(memInMb: number) {
@@ -130,7 +146,7 @@ export class RoomList extends React.Component {
   }
 
   getColumnsNames(columns: any): Array<GridColDef> {
-    const data: GridColDef[] = columns.map(column => {
+    const data: GridColDef[] = columns.map((column) => {
       const value = this.getColumnHeader(column);
 
       return {
@@ -139,7 +155,7 @@ export class RoomList extends React.Component {
         headerName: value,
         flex: 1,
         valueFormatter: valueFormatter[value],
-        sortComparator: sortComparator[value] || gridStringOrNumberComparator
+        sortComparator: sortComparator[value] || gridStringOrNumberComparator,
       } as GridColDef;
     });
 
@@ -151,23 +167,33 @@ export class RoomList extends React.Component {
       headerName: "", // Inspect
       flex: 1,
       renderCell: (param) => {
-        return (param.value !== NO_ACTIVE_ROOMS_ROOM_ID)
-          ? <div style={{ cursor: "pointer" }} onClick={() => {
+        return param.value !== NO_ACTIVE_ROOMS_ROOM_ID ? (
+          <div
+            style={{ cursor: "pointer" }}
+            onClick={() => {
               this.inspectRoom(param.value);
-            }}>
-              {/* TODO: use IconButton on sm/xs devices */}
-              <Button variant="contained" disableElevation startIcon={<OpenInBrowserIcon />}>
-                  <Typography
-                    noWrap
-                    component="span"
-                    sx={{ flexGrow: 1, display: { xs: 'none', sm: 'none', md: "block" } }}
-                  >
-                      Inspect
-                  </Typography>
-              </Button>
-            </div>
-          : null;
-      }
+            }}
+          >
+            {/* TODO: use IconButton on sm/xs devices */}
+            <Button
+              variant="contained"
+              disableElevation
+              startIcon={<OpenInBrowserIcon />}
+            >
+              <Typography
+                noWrap
+                component="span"
+                sx={{
+                  flexGrow: 1,
+                  display: { xs: "none", sm: "none", md: "block" },
+                }}
+              >
+                Inspect
+              </Typography>
+            </Button>
+          </div>
+        ) : null;
+      },
     });
 
     //
@@ -178,29 +204,40 @@ export class RoomList extends React.Component {
       headerName: "", // Dispose
       flex: 1,
       renderCell: (param) => {
-        return (param.value !== NO_ACTIVE_ROOMS_ROOM_ID)
-          ? <div style={{ cursor: "pointer" }} onClick={() => {
+        return param.value !== NO_ACTIVE_ROOMS_ROOM_ID ? (
+          <div
+            style={{ cursor: "pointer" }}
+            onClick={() => {
               this.disposeRoom(param.value);
-            }}>
-              {/* TODO: use IconButton on sm/xs devices */}
-              <Button variant="contained" disableElevation color="error" startIcon={<DeleteForeverIcon />}>
-                  <Typography
-                    noWrap
-                    component="span"
-                    sx={{ flexGrow: 1, display: { xs: 'none', sm: 'none', md: "block" } }}
-                  >
-                      Dispose
-                  </Typography>
-              </Button>
-            </div>
-          : null;
-      }
+            }}
+          >
+            {/* TODO: use IconButton on sm/xs devices */}
+            <Button
+              variant="contained"
+              disableElevation
+              color="error"
+              startIcon={<DeleteForeverIcon />}
+            >
+              <Typography
+                noWrap
+                component="span"
+                sx={{
+                  flexGrow: 1,
+                  display: { xs: "none", sm: "none", md: "block" },
+                }}
+              >
+                Dispose
+              </Typography>
+            </Button>
+          </div>
+        ) : null;
+      },
     });
     return data;
   }
 
   getRowsData(rooms: any): Array<any> {
-    return rooms.map(room => {
+    return rooms.map((room) => {
       const data = { id: room.roomId };
       for (const column of this.state.columns) {
         const value = this.getRoomColumn(room, column);
@@ -208,7 +245,7 @@ export class RoomList extends React.Component {
       }
       data["Inspect"] = room.roomId;
       data["Dispose"] = room.roomId;
-      return data
+      return data;
     });
   }
 
@@ -216,23 +253,27 @@ export class RoomList extends React.Component {
     const columns = this.getColumnsNames(this.state.columns);
     const rows = this.getRowsData(this.state.rooms);
 
-    return <DataGrid
-      columns={columns}
-      rows={
-        (rows.length === 0)
-          ? this.getRowsData([{ roomId: NO_ACTIVE_ROOMS_ROOM_ID, elapsedTime: -1 }])
-          : rows
-      }
-      autoHeight
-      sx={{ overflow: "hidden" }}
-      slots={{
-        noRowsOverlay: () => <></>,
-      }}
-      disableRowSelectionOnClick
-      // hideFooter
-      // hideFooterPagination
-      // hideFooterSelectedRowCount
-    />
+    return (
+      <DataGrid
+        columns={columns}
+        rows={
+          rows.length === 0
+            ? this.getRowsData([
+                { roomId: NO_ACTIVE_ROOMS_ROOM_ID, elapsedTime: -1 },
+              ])
+            : rows
+        }
+        autoHeight
+        sx={{ overflow: "hidden" }}
+        slots={{
+          noRowsOverlay: () => <></>,
+        }}
+        disableRowSelectionOnClick
+        // hideFooter
+        // hideFooterPagination
+        // hideFooterSelectedRowCount
+      />
+    );
   }
 
   render() {
@@ -245,19 +286,51 @@ export class RoomList extends React.Component {
                 <TableRow>
                   <TableCell align={"center"}>
                     Connections
-                    <Chip sx={{ marginLeft: "6px" }} size="small" color="primary" label={this.state.connections} />
+                    <Chip
+                      sx={{ marginLeft: "6px" }}
+                      size="small"
+                      color="primary"
+                      label={this.state.connections}
+                    />
                   </TableCell>
                   <TableCell align={"center"}>
                     Rooms
-                    <Chip sx={{ marginLeft: "6px" }} size="small" color="primary" label={this.state.rooms.length} />
+                    <Chip
+                      sx={{ marginLeft: "6px" }}
+                      size="small"
+                      color="primary"
+                      label={this.state.rooms.length}
+                    />
                   </TableCell>
                   <TableCell align={"center"}>
                     CPU Usage
-                    <Chip sx={{ marginLeft: "6px" }} size="small" color="primary" label={`${this.state.cpu.toFixed(2)} %`} />
+                    <Chip
+                      sx={{ marginLeft: "6px" }}
+                      size="small"
+                      color="primary"
+                      label={`${this.state.cpu.toFixed(2)} %`}
+                    />
                   </TableCell>
                   <TableCell align={"center"}>
                     Memory
-                    <Chip sx={{ marginLeft: "6px" }} size="small" color="primary" label={this.formatMemory(this.state.memory.usedMemMb)} />
+                    <Chip
+                      sx={{ marginLeft: "6px" }}
+                      size="small"
+                      color="primary"
+                      label={`RSS: ${this.bytesToStr(this.state.memory.rss)}`}
+                    />
+                    <Chip
+                      sx={{ marginLeft: "6px" }}
+                      size="small"
+                      color="primary"
+                      label={`Heap: ${this.bytesToStr(this.state.memory.heapTotal)}`}
+                    />
+                    <Chip
+                      sx={{ marginLeft: "6px" }}
+                      size="small"
+                      color="primary"
+                      label={`Heap Used: ${this.bytesToStr(this.state.memory.heapUsed)}`}
+                    />
                   </TableCell>
                 </TableRow>
               </TableHead>
@@ -270,5 +343,4 @@ export class RoomList extends React.Component {
       </div>
     );
   }
-
 }
