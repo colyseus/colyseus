@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.9
+
+- Bump `bun-serve-express` version to fix static and Buffer responses.
+
 ## 0.17.8
 
 - Fixes retrieving HTTP headers
