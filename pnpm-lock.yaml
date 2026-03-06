@@ -850,8 +850,8 @@ importers:
         specifier: workspace:^
         version: link:../../core
       bun-serve-express:
-        specifier: ^2.0.0
-        version: 2.0.0(@types/express@5.0.6)
+        specifier: ^2.0.2
+        version: 2.0.2(@types/express@5.0.6)
     devDependencies:
       '@colyseus/sdk':
         specifier: workspace:^
@@ -4126,8 +4126,8 @@ packages:
     engines: {node: '>=18'}
     hasBin: true
 
-  bun-serve-express@2.0.0:
-    resolution: {integrity: sha512-hOO38qyVT2zCz9+7zWD52YrtxezM5azBfSrYtj5pmefiga+4U0zyCc5TTsV5SXAVWFks5Qg9Ky4XB6IgQTwZ3Q==}
+  bun-serve-express@2.0.2:
+    resolution: {integrity: sha512-76/H8XaWxjtL7oXCRkyHuRmlyOFGb+BjAFlouJnnCzhKe4Vflsx5W4OIPqzzcmQyTJp18R7FEliH3C1fnMxPSA==}
     peerDependencies:
       '@types/express': ^5.0.0
 
@@ -12387,7 +12387,7 @@ snapshots:
     transitivePeerDependencies:
       - magicast
 
-  bun-serve-express@2.0.0(@types/express@5.0.6):
+  bun-serve-express@2.0.2(@types/express@5.0.6):
     dependencies:
       '@types/express': 5.0.6
       express: 5.2.1
