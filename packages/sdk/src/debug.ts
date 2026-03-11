@@ -40,7 +40,7 @@ const preferences = {
     }
 };
 
-// Load preferences from localStorage
+// Load preferences from localStorage (hidden state from sessionStorage)
 function loadPreferences() {
     try {
         const savedPrefs = localStorage.getItem('colyseus-debug-preferences') || '{}';
@@ -60,25 +60,25 @@ function loadPreferences() {
             }
         }
 
-        // Load hidden state
-        if (prefs.hidden === true) {
+        // Load hidden state from sessionStorage
+        if (sessionStorage.getItem('colyseus-debug-hidden') === 'true') {
             panelsHidden = true;
         }
     } catch (e) {
-        // localStorage might not be available or JSON parse failed, ignore
+        // Storage might not be available or JSON parse failed, ignore
     }
 }
 
-// Save preferences to localStorage
+// Save preferences to localStorage (hidden state to sessionStorage)
 function savePreferences() {
     try {
         localStorage.setItem('colyseus-debug-preferences', JSON.stringify({
             position: preferences.panelPosition.position,
             latency: preferences.latencySimulation.delay,
-            hidden: panelsHidden
         }));
+        sessionStorage.setItem('colyseus-debug-hidden', panelsHidden ? 'true' : 'false');
     } catch (e) {
-        // localStorage might not be available, ignore
+        // Storage might not be available, ignore
     }
 }
 

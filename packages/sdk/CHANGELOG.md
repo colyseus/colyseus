@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.35
+
+- Add `room.reconnection.enabled` flag. Use `sessionStorage` instead of `localStorage` to determine if "debug" panel is hidden.
+
 ## 0.17.34
 
 - Bundle `dist/colyseus.js` file with latest `@colyseus/schema` version.
