@@ -30,6 +30,13 @@ export interface RoomAvailable<Metadata = any> {
 
 export interface ReconnectionOptions {
     /**
+     * Whether automatic reconnection is enabled.
+     * Set to `false` to disable automatic reconnection entirely.
+     * @default true
+     */
+    enabled: boolean;
+
+    /**
      * The maximum number of reconnection attempts.
      */
     maxRetries: number;
@@ -110,6 +117,7 @@ export class Room<
 
     // reconnection logic
     public reconnection: ReconnectionOptions = {
+        enabled: true,
         retryCount: 0,
         maxRetries: 15,
         delay: 100,
@@ -171,7 +179,7 @@ export class Room<
                 e.code === CloseCode.MAY_TRY_RECONNECT
             ) {
                 this.onDrop.invoke(e.code, e.reason);
-                this.handleReconnection();
+                this.handleReconnection(e.code, e.reason);
 
             } else {
                 this.onLeave.invoke(e.code, e.reason);
@@ -471,7 +479,12 @@ export class Room<
         }
     }
 
-    private handleReconnection() {
+    private handleReconnection(code: number, reason?: string) {
+        if (!this.reconnection.enabled) {
+            this.onLeave.invoke(code, reason);
+            return;
+        }
+
         if (Date.now() - this.joinedAtTime < this.reconnection.minUptime) {
             console.info(`[Colyseus reconnection]: ${String.fromCodePoint(0x274C)} Room has not been up for long enough for automatic reconnection. (min uptime: ${this.reconnection.minUptime}ms)`); // ❌
             this.onLeave.invoke(CloseCode.ABNORMAL_CLOSURE, "Room uptime too short for reconnection.");
