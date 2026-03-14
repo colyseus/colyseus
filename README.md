@@ -19,7 +19,21 @@
 </div>
 
 Colyseus is an Authoritative Multiplayer Framework for Node.js, with SDKs
-available for the Web, Unity, Defold, Haxe, Cocos and Construct3. ([See official SDKs](https://docs.colyseus.io/getting-started))
+available for all major platforms and engines.
+
+## Client SDKs
+
+| Platform | Install | Documentation | Demo |
+|----------|---------|---------------|------|
+| TypeScript | `npm install @colyseus/sdk` | [Getting Started](https://docs.colyseus.io/getting-started/typescript) | [PlayCanvas](https://github.com/endel/tank-battle-multiplayer/tree/master/web-playcanvas) |
+| React | `npm install @colyseus/react` | [Getting Started](https://docs.colyseus.io/getting-started/react) | [R3F Lobby](https://github.com/endel/r3f-lobby-car-prototype) |
+| Unity | [Download](https://github.com/colyseus/colyseus-unity3d/releases/latest/download/Colyseus_Plugin.unitypackage) | [Getting Started](https://docs.colyseus.io/getting-started/unity) | [Tank Battle](https://github.com/endel/tank-battle-multiplayer/tree/master/unity) |
+| Godot | [Download](https://github.com/colyseus/native-sdk/releases?q=godot+sdk&expanded=true) | [Getting Started](https://docs.colyseus.io/getting-started/godot) | [Tank Battle](https://github.com/endel/tank-battle-multiplayer/tree/master/godot) |
+| GameMaker | [Download](https://github.com/colyseus/native-sdk/releases?q=gamemaker+sdk&expanded=true) | [Getting Started](https://docs.colyseus.io/getting-started/gamemaker) | [Tank Battle](https://github.com/endel/tank-battle-multiplayer/tree/master/gamemaker) |
+| Defold | See documentation → | [Getting Started](https://docs.colyseus.io/getting-started/defold) | [Tank Battle](https://github.com/endel/tank-battle-multiplayer/tree/master/defold) |
+| Construct | [Download](https://www.construct.net/en/make-games/addons/111/colyseus-multiplayer-sdk) | [Getting Started](https://docs.colyseus.io/getting-started/construct3) | [Raw Demo](https://github.com/colyseus/construct3-demo) |
+| Haxe | `haxelib install colyseus` | [Getting Started](https://docs.colyseus.io/getting-started/haxe) | [Tank Battle](https://github.com/endel/tank-battle-multiplayer/tree/master/haxe) |
+| C / Static Libraries | [Download](https://github.com/colyseus/native-sdk/releases?q=%22Colyseus+Native+SDK+-+Static+Library%22&expanded=true) | [GitHub](https://github.com/colyseus/native-sdk) | [raylib](https://github.com/colyseus/native-sdk/tree/main/platforms/raylib) |
 
 The project focuses on providing synchronizable data structures for realtime and
 turn-based games, matchmaking, and ease of usage both on the server-side and
