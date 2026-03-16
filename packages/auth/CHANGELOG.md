@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.9
+
+- Fix null handling for `onFindUserByEmail` return value in `/login` and `/register` routes. Previously, a `null` return was silently converted to `{}` via `Object.assign`, masking the missing user. (https://github.com/colyseus/colyseus/pull/922, thanks @JoaoCnh)
+
 ## 0.17.8
 
 - Fix dynamic 'origin' detection during OAuth. Before this change you were required to manually set `auth.oauth.defaults.origin` per environment for some OAuth providers (e.g. `twitch`). Now the `origin` can be auto-detected.
