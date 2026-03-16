@@ -13,7 +13,7 @@ export type MayHaveUpgradeToken = { upgradingToken?: JwtPayload };
 
 export type RegisterWithEmailAndPasswordCallback<T = any> = (email: string, password: string, options: T & MayHaveUpgradeToken) => Promise<unknown>;
 export type RegisterAnonymouslyCallback<T = any> = (options: T) => Promise<unknown>;
-export type FindUserByEmailCallback = (email: string) => Promise<unknown & { password: string }>;
+export type FindUserByEmailCallback = (email: string) => Promise<(unknown & { password: string }) | null | undefined>;
 
 export type SendEmailConfirmationCallback = (email: string, html: string, confirmLink: string) => Promise<unknown>;
 export type EmailConfirmedCallback = (email: string) => Promise<unknown>;
