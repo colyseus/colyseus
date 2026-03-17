@@ -254,6 +254,9 @@ export class uWebSocketsTransport extends Transport {
         });
 
       } else if (this._expressApp) {
+        // skip if already aborted
+        if (res.aborted) { return; }
+
         const corsHeaders = getCorsHeaders(headers);
 
         const ereq = new uWebSocketsExpressModule.IncomingMessage(req, res, this._expressApp as any, {
@@ -265,6 +268,15 @@ export class uWebSocketsTransport extends Transport {
         });
         const eres = new uWebSocketsExpressModule.ServerResponse(res, req, this._expressApp);
 
+        // Propagate uWS abort to the Express response wrapper.
+        // When the client disconnects, mark the wrapper as finished
+        // so it won't try to write to the already-aborted uWS response.
+        // (fixes: "uWS.HttpResponse must not be accessed after onAborted callback")
+        abortController.signal.addEventListener('abort', () => {
+          eres.finished = true;
+          eres.writableEnded = true;
+        });
+
         // Apply CORS headers through the Express response wrapper
         for (const header in corsHeaders) {
           eres.setHeader(header, corsHeaders[header].toString());
@@ -273,6 +285,9 @@ export class uWebSocketsTransport extends Transport {
         // Read the request body from uWebSockets before passing to express
         // (uWebSockets requires res.onData() to be called to consume the body)
         await ereq._readBody();
+
+        // skip if aborted during body read
+        if (res.aborted) { return; }
 
         this._expressApp['handle'](ereq, eres);
       }

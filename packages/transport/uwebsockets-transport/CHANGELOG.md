@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.17
+
+- Fix `uWS.HttpResponse must not be accessed after onAborted callback` error when client disconnects during Express-handled requests (#924)
+
 ## 0.17.16
 
 - Fix `HPE_UNEXPECTED_CONTENT_LENGTH` error (#908), thanks to @lkinasiewicz
