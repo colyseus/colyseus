@@ -99,7 +99,9 @@ export class uWebSocketClient implements Client, ClientPrivate {
     if (cb) {
       // delay callback execution - uWS doesn't acknowledge when the message was sent
       // (same API as "ws" transport)
-      setTimeout(cb, 1);
+      setTimeout(() => {
+        try { cb(); } catch (_e) {}
+      }, 1);
     }
   }
 
