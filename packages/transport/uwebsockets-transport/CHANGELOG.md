@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.18
+
+- Fix `Invalid access of closed uWS.WebSocket/SSLWebSocket` crash when socket closes before deferred `error()` callback fires (#925)
+
 ## 0.17.17
 
 - Fix `uWS.HttpResponse must not be accessed after onAborted callback` error when client disconnects during Express-handled requests (#924)
