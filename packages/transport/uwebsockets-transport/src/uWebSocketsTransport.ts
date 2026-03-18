@@ -12,7 +12,17 @@ import('uwebsockets-express')
   .then((module) => uWebSocketsExpress.resolve(module))
   .catch((error) => uWebSocketsExpress.reject(error));
 
-export type TransportOptions = Omit<uWebSockets.WebSocketBehavior<any>, "upgrade" | "open" | "pong" | "close" | "message">;
+export type TransportOptions = Omit<uWebSockets.WebSocketBehavior<any>, "upgrade" | "open" | "pong" | "close" | "message"> & {
+  /**
+   * Called before WebSocket upgrade. Return false to prevent the upgrade.
+   * Useful for custom routing (e.g., Fly.io fly-replay header redirection).
+   */
+  beforeUpgrade?: (
+    res: uWebSockets.HttpResponse,
+    req: uWebSockets.HttpRequest,
+    context: uWebSockets.us_socket_context_t
+  ) => boolean | void | Promise<boolean | void>;
+};
 
 type RawWebSocketClient = uWebSockets.WebSocket<any> & {
   url: string,
@@ -56,7 +66,15 @@ export class uWebSocketsTransport extends Transport {
     this.app.ws('/*', {
       ...options,
 
-      upgrade: (res, req, context) => {
+      upgrade: async (res, req, context) => {
+        // Call beforeUpgrade hook if provided
+        if (options.beforeUpgrade) {
+          const result = await options.beforeUpgrade(res, req, context);
+          if (result === false) {
+            return;
+          }
+        }
+
         // get all headers
         const headers: { [id: string]: string } = {};
         req.forEach((key, value) => headers[key] = value);
