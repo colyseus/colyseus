@@ -298,6 +298,54 @@ describe("Room Reconnection", () => {
       assert.ok(!matchMaker.getLocalRoomById(conn.roomId));
     });
 
+    it("should receive messages sent by server during onReconnect() after client onReconnect fires", async () => {
+      const events: string[] = [];
+
+      matchMaker.defineRoomType('reconnect_server_messages', class _ extends Room {
+        onJoin(client: Client) {
+          simulateAbnormalClosure(client);
+        }
+        onDrop(client: Client) {
+          this.allowReconnection(client, 10);
+        }
+        onReconnect(client: Client) {
+          client.send("reconnect-msg", { hello: "world" });
+          this.broadcast("broadcast-msg", { from: "server" });
+        }
+        onLeave() {}
+      });
+
+      const conn = await client.joinOrCreate('reconnect_server_messages');
+      setupReconnection(conn);
+
+      // register message handlers before reconnection
+      conn.onMessage("reconnect-msg", () => {
+        events.push("message:reconnect-msg");
+      });
+      conn.onMessage("broadcast-msg", () => {
+        events.push("message:broadcast-msg");
+      });
+
+      // wait for disconnect
+      await new Promise((resolve) => conn.onDrop.once(() => resolve(true)));
+
+      // wait for the reconnection to happen
+      await new Promise((resolve) => conn.onReconnect.once(() => {
+        events.push("onReconnect");
+        resolve(true);
+      }));
+
+      await timeout(100);
+
+      // messages should arrive after onReconnect
+      assert.ok(events.includes("onReconnect"), "onReconnect should have fired");
+      assert.ok(events.includes("message:reconnect-msg"), "should receive reconnect-msg");
+      assert.ok(events.includes("message:broadcast-msg"), "should receive broadcast-msg");
+
+      await conn.leave();
+      await timeout(50);
+    });
+
     it("state sync: should keep callbacks and not trigger them twice for existing items", async () => {
       const Item = schema({
         name: "string",
