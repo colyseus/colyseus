@@ -1,4 +1,5 @@
 import assert from "assert";
+import { Redis } from "ioredis";
 import { RedisDriver } from "@colyseus/redis-driver";
 import { initializeRoomCache } from "@colyseus/core";
 
@@ -12,6 +13,34 @@ describe("RedisDriver", () => {
 
   after(async () => {
     await driver.shutdown();
+  });
+
+  describe("constructor with pre-created client", () => {
+    it("should accept an existing Redis client", async () => {
+      const client = new Redis();
+      const injectedDriver = new RedisDriver(client);
+
+      await injectedDriver.persist(initializeRoomCache({ name: "injected", roomId: "inj1", clients: 1, maxClients: 10 }));
+      const room = await injectedDriver.findOne({ roomId: "inj1" });
+      assert.strictEqual(room.name, "injected");
+
+      injectedDriver.clear();
+      await injectedDriver.shutdown();
+    });
+
+    it("should use the same Redis connection when client is injected", async () => {
+      const client = new Redis();
+      const injectedDriver = new RedisDriver(client);
+
+      // Write via the injected driver, read via the raw client to confirm same connection
+      await injectedDriver.persist(initializeRoomCache({ name: "shared", roomId: "shared1", clients: 0, maxClients: 10 }));
+      const raw = await client.hget("roomcaches", "shared1");
+      assert.ok(raw);
+      assert.strictEqual(JSON.parse(raw).name, "shared");
+
+      injectedDriver.clear();
+      await injectedDriver.shutdown();
+    });
   });
 
   it("should allow concurrent queries to multiple room names", async () => {

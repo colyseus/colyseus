@@ -1,4 +1,5 @@
 import assert from "assert";
+import { Redis } from "ioredis";
 import { LocalPresence, type Presence, RedisPresence } from "../src/index.ts";
 import { timeout } from "./utils/index.ts";
 
@@ -369,5 +370,37 @@ describe("Presence", () => {
     });
 
   }
+
+  describe("RedisPresence: constructor with pre-created client", () => {
+    it("should accept an existing Redis client", async () => {
+      const client = new Redis();
+      const presence = new RedisPresence(client);
+
+      await presence.set("injected-key", "hello");
+      assert.strictEqual("hello", await presence.get("injected-key"));
+      await presence.del("injected-key");
+
+      presence.shutdown();
+    });
+
+    it("should support pub/sub when client is injected", async () => {
+      const client = new Redis();
+      const presence = new RedisPresence(client);
+
+      let received: any = null;
+      await presence.subscribe("injected-topic", (data) => {
+        received = data;
+      });
+
+      await presence.publish("injected-topic", "test-message");
+      await timeout(50);
+
+      assert.strictEqual("test-message", received);
+
+      await presence.unsubscribe("injected-topic");
+      presence.shutdown();
+    });
+  });
+
 });
 

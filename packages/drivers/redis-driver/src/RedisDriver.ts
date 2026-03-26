@@ -21,10 +21,12 @@ const ROOMCACHES_KEY = 'roomcaches';
 export class RedisDriver implements MatchMakerDriver {
   private readonly _client: Redis | Cluster;
 
-  constructor(options?: number | string | RedisOptions | ClusterNode[], clusterOptions?: ClusterOptions) {
-    this._client = (Array.isArray(options))
-      ? new Cluster(options, clusterOptions)
-      : new Redis(options as RedisOptions);
+  constructor(options?: number | string | RedisOptions | ClusterNode[] | Redis | Cluster, clusterOptions?: ClusterOptions) {
+    this._client = (options instanceof Redis || options instanceof Cluster)
+      ? options
+      : (Array.isArray(options))
+        ? new Cluster(options, clusterOptions)
+        : new Redis(options as RedisOptions);
   }
 
   public async has(roomId: string) {

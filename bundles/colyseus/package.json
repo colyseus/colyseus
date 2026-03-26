@@ -42,12 +42,12 @@
   "dependencies": {
     "@colyseus/auth": "workspace:^",
     "@colyseus/core": "workspace:^",
-    "@colyseus/playground": "workspace:^",
     "@colyseus/monitor": "workspace:^",
-    "@colyseus/tools": "workspace:^",
-    "@colyseus/ws-transport": "workspace:^",
+    "@colyseus/playground": "workspace:^",
+    "@colyseus/redis-driver": "workspace:^",
     "@colyseus/redis-presence": "workspace:^",
-    "@colyseus/redis-driver": "workspace:^"
+    "@colyseus/tools": "workspace:^",
+    "@colyseus/ws-transport": "workspace:^"
   },
   "devDependencies": {
     "@colyseus/better-call": "workspace:^",
@@ -59,6 +59,7 @@
     "@colyseus/tools": "workspace:^",
     "@colyseus/uwebsockets-transport": "workspace:^",
     "@types/ws": "^8.5.14",
+    "ioredis": "^5.9.3",
     "ws": "^8.18.0",
     "zod": "^4.1.12"
   },

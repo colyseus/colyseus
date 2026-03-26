@@ -10,11 +10,13 @@ export class RedisPresence implements Presence {
 
     protected subscriptions = new EventEmitter();
 
-    constructor(options?: number | string | RedisOptions | ClusterNode[], clusterOptions?: ClusterOptions) {
-        if (Array.isArray(options)) {
+    constructor(options?: number | string | RedisOptions | ClusterNode[] | Redis | Cluster, clusterOptions?: ClusterOptions) {
+        if (options instanceof Redis || options instanceof Cluster) {
+            this.pub = options;
+            this.sub = options.duplicate();
+        } else if (Array.isArray(options)) {
             this.sub = new Cluster(options, clusterOptions)
             this.pub = new Cluster(options, clusterOptions);
-
         } else {
             this.sub = new Redis(options as RedisOptions);
             this.pub = new Redis(options as RedisOptions);
