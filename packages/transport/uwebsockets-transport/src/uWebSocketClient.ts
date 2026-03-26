@@ -105,11 +105,7 @@ export class uWebSocketClient implements Client, ClientPrivate {
     if (cb) {
       // delay callback execution - uWS doesn't acknowledge when the message was sent
       // (same API as "ws" transport)
-      setTimeout(() => {
-        // skip if client is no longer open (uWS v20.57.0+ throws on closed socket access)
-        if (this.readyState !== ReadyState.OPEN) { return; }
-        cb();
-      }, 1);
+      process.nextTick(cb);
     }
   }
 
@@ -121,16 +117,10 @@ export class uWebSocketClient implements Client, ClientPrivate {
 
     this.readyState = ReadyState.CLOSING;
 
-    try {
-      if (code !== undefined) {
-        this._ref.ws.end(code, data);
-      } else {
-        this._ref.ws.close();
-      }
-    } catch (e: any) {
-      // uWS throws "Invalid access of closed uWS.WebSocket" if the socket
-      // closed between the readyState check and the end()/close() call.
-      this.readyState = ReadyState.CLOSED;
+    if (code !== undefined) {
+      this._ref.ws.end(code, data);
+    } else {
+      this._ref.ws.close();
     }
   }
 

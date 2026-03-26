@@ -165,13 +165,8 @@ describe("Transport: uWebSockets.js", () => {
         connection.terminate();
         await onLeaveCalled;
 
-        // Simulate the race condition for leave()
-        serverClient!.readyState = 1; // ReadyState.OPEN
-
-        // Without the try/catch fix in leave(), this would crash
-        assert.doesNotThrow(() => {
-          serverClient!.leave(1000);
-        });
+        // This call should not crash
+        assert.doesNotThrow(() => serverClient!.leave(1000));
 
         // The catch handler should have updated readyState to CLOSED
         assert.strictEqual(serverClient!.readyState, 3); // ReadyState.CLOSED

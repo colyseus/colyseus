@@ -348,6 +348,7 @@ export class uWebSocketsTransport extends Transport {
     // If sessionId is not provided, allow ping-pong utility.
     if (!sessionId && !roomId) {
       // Disconnect automatically after 1 second if no message is received.
+      // uWS throws "Invalid access of closed uWS.WebSocket" if the socket closed between the readyState check and the end()/close() call.
       const timeout = setTimeout(() => {
         try { rawClient.close(); } catch (e: any) {}
       }, 1000);
@@ -374,6 +375,7 @@ export class uWebSocketsTransport extends Transport {
 
       // send error code to client then terminate
       client.error(e.code, e.message, () => {
+        // uWS throws "Invalid access of closed uWS.WebSocket" if the socket closed between the readyState check and the end()/close() call.
         try {
           rawClient.end(reconnectionToken
             ? CloseCode.FAILED_TO_RECONNECT
