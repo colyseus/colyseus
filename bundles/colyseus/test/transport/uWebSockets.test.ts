@@ -2,7 +2,7 @@ import assert from "assert";
 import { Deferred, LocalPresence, matchMaker, type MatchMakerDriver, type Presence, Room, Server } from "../../src/index.ts";
 import { DRIVERS } from "../utils/index.ts";
 
-import { uWebSocketsTransport } from "@colyseus/uwebsockets-transport";
+import { uWebSocketsTransport, uWebSocketClient } from "@colyseus/uwebsockets-transport";
 
 import WebSocket from "ws";
 
@@ -86,6 +86,95 @@ describe("Transport: uWebSockets.js", () => {
         assert.strictEqual(connection.readyState, WebSocket.CLOSED);
         assert.strictEqual(true, onJoinCalled);
         assert.strictEqual(true, onLeaveCalled);
+      });
+
+      it("should not crash when sending to a client whose uWS socket was closed", async () => {
+        /**
+         * Reproduces: "Invalid access of closed uWS.WebSocket/SSLWebSocket"
+         *
+         * When uWS internally closes a socket (TCP drop, client kill, etc.),
+         * there is a window between the actual close and the JS close callback
+         * where readyState is still OPEN but the socket is dead.
+         *
+         * We simulate this by resetting readyState to OPEN after the client
+         * has disconnected, then calling raw() — which would throw and crash
+         * the process without the try/catch fix.
+         */
+        let serverClient: uWebSocketClient | null = null;
+        const onJoinCalled = new Deferred();
+        const onLeaveCalled = new Deferred();
+
+        matchMaker.defineRoomType("send_closed_ws", class _ extends Room {
+          onCreate() {}
+          onJoin(client: any) {
+            serverClient = client;
+            onJoinCalled.resolve();
+          }
+          async onLeave() {
+            onLeaveCalled.resolve();
+          }
+        });
+
+        const seatReservation = await matchMaker.joinOrCreate('send_closed_ws', {});
+        const connection = new WebSocket(`${TEST_ENDPOINT}/${seatReservation.processId}/${seatReservation.roomId}?sessionId=${seatReservation.sessionId}`);
+
+        await onJoinCalled;
+        await new Promise<void>((resolve) => connection.on("open", resolve));
+
+        // Abruptly kill the connection
+        connection.terminate();
+        await onLeaveCalled;
+
+        // Simulate the race condition: socket is dead but readyState
+        // hasn't been updated yet (uWS closed the socket internally
+        // but the JS close callback hasn't fired yet)
+        serverClient!.readyState = 1; // ReadyState.OPEN
+
+        // Without the try/catch fix in raw(), this throws
+        // "Invalid access of closed uWS.WebSocket/SSLWebSocket" and crashes
+        assert.doesNotThrow(() => {
+          serverClient!.raw(new Uint8Array([1, 2, 3]));
+        });
+
+        // The catch handler should have updated readyState to CLOSED
+        assert.strictEqual(serverClient!.readyState, 3); // ReadyState.CLOSED
+      });
+
+      it("should not crash when calling leave() on an already-closed uWS socket", async () => {
+        let serverClient: uWebSocketClient | null = null;
+        const onJoinCalled = new Deferred();
+        const onLeaveCalled = new Deferred();
+
+        matchMaker.defineRoomType("leave_closed_ws", class _ extends Room {
+          onCreate() {}
+          onJoin(client: any) {
+            serverClient = client;
+            onJoinCalled.resolve();
+          }
+          async onLeave() {
+            onLeaveCalled.resolve();
+          }
+        });
+
+        const seatReservation = await matchMaker.joinOrCreate('leave_closed_ws', {});
+        const connection = new WebSocket(`${TEST_ENDPOINT}/${seatReservation.processId}/${seatReservation.roomId}?sessionId=${seatReservation.sessionId}`);
+
+        await onJoinCalled;
+        await new Promise<void>((resolve) => connection.on("open", resolve));
+
+        connection.terminate();
+        await onLeaveCalled;
+
+        // Simulate the race condition for leave()
+        serverClient!.readyState = 1; // ReadyState.OPEN
+
+        // Without the try/catch fix in leave(), this would crash
+        assert.doesNotThrow(() => {
+          serverClient!.leave(1000);
+        });
+
+        // The catch handler should have updated readyState to CLOSED
+        assert.strictEqual(serverClient!.readyState, 3); // ReadyState.CLOSED
       });
 
       it("idleTimeout: inactive socket should disconnect and call onLeave", async () => {

@@ -348,8 +348,12 @@ export class uWebSocketsTransport extends Transport {
     // If sessionId is not provided, allow ping-pong utility.
     if (!sessionId && !roomId) {
       // Disconnect automatically after 1 second if no message is received.
-      const timeout = setTimeout(() => rawClient.close(), 1000);
-      wrapper.on('message', (_) => rawClient.send(new Uint8Array([Protocol.PING]), true));
+      const timeout = setTimeout(() => {
+        try { rawClient.close(); } catch (e: any) {}
+      }, 1000);
+      wrapper.on('message', (_) => {
+        try { rawClient.send(new Uint8Array([Protocol.PING]), true); } catch (e: any) {}
+      });
       wrapper.on('close', () => clearTimeout(timeout));
       return;
     }
@@ -369,10 +373,13 @@ export class uWebSocketsTransport extends Transport {
       debugAndPrintError(e);
 
       // send error code to client then terminate
-      client.error(e.code, e.message, () =>
-        rawClient.end(reconnectionToken
-          ? CloseCode.FAILED_TO_RECONNECT
-          : CloseCode.WITH_ERROR));
+      client.error(e.code, e.message, () => {
+        try {
+          rawClient.end(reconnectionToken
+            ? CloseCode.FAILED_TO_RECONNECT
+            : CloseCode.WITH_ERROR);
+        } catch (e: any) {}
+      });
     }
   }
 

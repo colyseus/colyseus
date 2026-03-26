@@ -54,8 +54,8 @@ export class WebSocketClient implements Client, ClientPrivate {
       return;
     }
 
-    if (this.state === ClientState.JOINING) {
-      // sending messages during `onJoin`.
+    if (this.state !== ClientState.JOINED) {
+      // sending messages during `onJoin` or `onReconnect`.
       // - the client-side cannot register "onMessage" callbacks at this point.
       // - enqueue the messages to be send after JOIN_ROOM message has been sent
       // - create a new buffer for enqueued messages, as the underlying buffer might be modified
@@ -67,11 +67,6 @@ export class WebSocketClient implements Client, ClientPrivate {
   }
 
   public raw(data: Uint8Array | Buffer, options?: ISendOptions, cb?: (err?: Error) => void) {
-    // skip if client not open
-    if (this.ref.readyState !== WebSocket.OPEN) {
-      return;
-    }
-
     this.ref.send(data, SEND_OPTS, cb);
   }
 

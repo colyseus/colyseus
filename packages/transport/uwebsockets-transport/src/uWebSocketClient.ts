@@ -72,12 +72,12 @@ export class uWebSocketClient implements Client, ClientPrivate {
       return;
     }
 
-    if (this.state === ClientState.JOINING) {
-      // sending messages during `onJoin`.
+    if (this.state !== ClientState.JOINED) {
+      // sending messages during `onJoin` or `onReconnect`.
       // - the client-side cannot register "onMessage" callbacks at this point.
       // - enqueue the messages to be send after JOIN_ROOM message has been sent
       // - create a new buffer for enqueued messages, as the underlying buffer might be modified
-      this._enqueuedMessages.push(data);
+      this._enqueuedMessages?.push(data);
       return;
     }
 
@@ -90,7 +90,13 @@ export class uWebSocketClient implements Client, ClientPrivate {
       return;
     }
 
-    this._ref.ws.send(data, true, false);
+    try {
+      this._ref.ws.send(data, true, false);
+    } catch (e: any) {
+      // uWS throws "Invalid access of closed uWS.WebSocket" if the socket
+      // closed between the readyState check and the send() call.
+      this.readyState = ReadyState.CLOSED;
+    }
   }
 
   public error(code: number, message: string = '', cb?: (err?: Error) => void) {
@@ -115,11 +121,16 @@ export class uWebSocketClient implements Client, ClientPrivate {
 
     this.readyState = ReadyState.CLOSING;
 
-    if (code !== undefined) {
-      this._ref.ws.end(code, data);
-
-    } else {
-      this._ref.ws.close();
+    try {
+      if (code !== undefined) {
+        this._ref.ws.end(code, data);
+      } else {
+        this._ref.ws.close();
+      }
+    } catch (e: any) {
+      // uWS throws "Invalid access of closed uWS.WebSocket" if the socket
+      // closed between the readyState check and the end()/close() call.
+      this.readyState = ReadyState.CLOSED;
     }
   }
 

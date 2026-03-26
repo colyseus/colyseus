@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.19
+
+- Enqueue messages sent during `onReconnect()`, ensuring they arrive after the client completes the reconnection handshake.
+
 ## 0.17.18
 
 - Fix `Invalid access of closed uWS.WebSocket/SSLWebSocket` crash when socket closes before deferred `error()` callback fires (#925)
