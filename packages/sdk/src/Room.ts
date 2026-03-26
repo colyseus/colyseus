@@ -14,6 +14,7 @@ import { createSignal } from './core/signal.ts';
 import { SchemaConstructor, SchemaSerializer } from './serializer/SchemaSerializer.ts';
 
 import { now } from './core/utils.ts';
+import { InputBuffer, type InputBufferOptions } from './input/InputBuffer.ts';
 
 // Infer serializer type based on State: SchemaSerializer for Schema types, Serializer otherwise
 export type InferSerializer<State> = [State] extends [Schema]
@@ -238,6 +239,18 @@ export class Room<
     ): () => void
     public onMessage(type: '*' | string | number, callback: (...args: any[]) => void) {
         return this.onMessageHandlers.on(this.getMessageHandlerKey(type), callback);
+    }
+
+    /**
+     * Create an InputBuffer for client-side prediction.
+     * Tracks inputs with sequence numbers, sends them to the server,
+     * and maintains a buffer of unconfirmed inputs for reconciliation.
+     *
+     * @param options - Configuration options for the InputBuffer
+     * @returns A new InputBuffer instance wired to this room
+     */
+    public input<I = any>(options?: InputBufferOptions): InputBuffer<I> {
+        return new InputBuffer<I>(this, options);
     }
 
     public ping(callback: (ms: number) => void) {

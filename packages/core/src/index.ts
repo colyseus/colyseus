@@ -92,5 +92,8 @@ export {
   type StrictEndpoint,
 } from './router/index.ts';
 
+// Input processing
+export { processInputs, resetInputSequence, type ProcessInputsOptions } from './InputProcessing.ts';
+
 // Abstract logging support
 export { logger } from './Logger.ts';
