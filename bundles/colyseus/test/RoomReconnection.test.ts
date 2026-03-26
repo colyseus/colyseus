@@ -346,6 +346,55 @@ describe("Room Reconnection", () => {
       await timeout(50);
     });
 
+    it("messages sent during onReconnect() should arrive after client onReconnect event", async () => {
+      const events: string[] = [];
+
+      matchMaker.defineRoomType('reconnect_message_order', class _ extends Room {
+        onJoin(client: Client) {
+          simulateAbnormalClosure(client);
+        }
+        onDrop(client: Client) {
+          this.allowReconnection(client, 10);
+        }
+        onReconnect(client: Client) {
+          // Messages sent here must be enqueued until after JOIN_ROOM
+          // handshake completes. Without enqueuing during RECONNECTING,
+          // these are sent via raw() immediately — arriving at the client
+          // BEFORE the JOIN_ROOM message, and thus BEFORE the client's
+          // onReconnect event fires.
+          client.send("post-reconnect", { value: 1 });
+        }
+        onLeave() {}
+      });
+
+      const conn = await client.joinOrCreate('reconnect_message_order');
+      setupReconnection(conn);
+
+      conn.onMessage("post-reconnect", () => {
+        events.push("message");
+      });
+
+      // wait for disconnect
+      await new Promise((resolve) => conn.onDrop.once(() => resolve(true)));
+
+      // wait for reconnection — track ordering
+      await new Promise((resolve) => conn.onReconnect.once(() => {
+        events.push("onReconnect");
+        resolve(true);
+      }));
+
+      await timeout(100);
+
+      // onReconnect must fire before the message arrives.
+      // Without the enqueue fix, the message is sent via raw() before
+      // JOIN_ROOM, so it arrives at the client first.
+      assert.strictEqual(events[0], "onReconnect", "onReconnect should fire before messages arrive");
+      assert.ok(events.includes("message"), "message should be received");
+
+      await conn.leave();
+      await timeout(50);
+    });
+
     it("state sync: should keep callbacks and not trigger them twice for existing items", async () => {
       const Item = schema({
         name: "string",

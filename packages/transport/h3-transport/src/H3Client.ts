@@ -189,7 +189,7 @@ export class H3Client implements Client, ClientPrivate {
       return;
     }
 
-    if (this.state === ClientState.JOINING || this.state === ClientState.RECONNECTING) {
+    if (this.state !== ClientState.JOINED) {
       // sending messages during `onJoin` or `onReconnect`.
       // - the client-side cannot register "onMessage" callbacks at this point.
       // - enqueue the messages to be send after JOIN_ROOM message has been sent
