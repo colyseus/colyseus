@@ -66,7 +66,7 @@ export class WebSocketClient implements Client, ClientPrivate {
       // - the client-side cannot register "onMessage" callbacks at this point.
       // - enqueue the messages to be send after JOIN_ROOM message has been sent
       // - create a new buffer for enqueued messages, as the underlying buffer might be modified
-      this._enqueuedMessages.push(data);
+      this._enqueuedMessages?.push(data);
       return;
     }
 

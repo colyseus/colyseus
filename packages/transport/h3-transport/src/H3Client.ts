@@ -193,7 +193,7 @@ export class H3Client implements Client, ClientPrivate {
       // sending messages during `onJoin` or `onReconnect`.
       // - the client-side cannot register "onMessage" callbacks at this point.
       // - enqueue the messages to be send after JOIN_ROOM message has been sent
-      this._enqueuedMessages.push(data);
+      this._enqueuedMessages?.push(data);
       return;
     }
 
