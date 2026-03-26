@@ -24,7 +24,8 @@
     "uWebSockets.js": "github:uNetworking/uWebSockets.js#v20.57.0"
   },
   "devDependencies": {
-    "@colyseus/core": "workspace:^"
+    "@colyseus/core": "workspace:^",
+    "uwebsockets-express": "^2.0.1"
   },
   "peerDependencies": {
     "@colyseus/core": "0.17.x",

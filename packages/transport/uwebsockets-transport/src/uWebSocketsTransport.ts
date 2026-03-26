@@ -274,6 +274,7 @@ export class uWebSocketsTransport extends Transport {
         // (fixes: "uWS.HttpResponse must not be accessed after onAborted callback")
         abortController.signal.addEventListener('abort', () => {
           eres.finished = true;
+          // @ts-ignore
           eres.writableEnded = true;
         });
 
