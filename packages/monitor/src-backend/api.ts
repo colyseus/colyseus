@@ -82,7 +82,7 @@ export function getAPI (opts: Partial<MonitorOptions>): express.Router {
 
         try {
             const data = await matchMaker.remoteRoomCall(roomId, method, args);
-            res.json(data);
+            res.json(data ?? {});
         } catch (e) {
             const message = UNAVAILABLE_ROOM_ERROR.replace("$roomId", roomId);
             res.status(500);

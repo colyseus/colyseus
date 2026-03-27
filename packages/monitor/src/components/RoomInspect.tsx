@@ -1,30 +1,26 @@
 import * as React from "react";
-import { JsonEditor } from "react-json-edit";
-
-import ReactJson from "react18-json-view";
-import 'react18-json-view/src/style.css'
+import { JsonEditor, githubDarkTheme, githubLightTheme } from "json-edit-react";
 
 import { remoteRoomCall, fetchRoomData } from "../services";
 
 import {
     AppBar,
-    IconButton,
-    Toolbar,
-    Typography,
-    Chip,
-    Table,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    Paper,
+    Box,
     Button,
+    Chip,
+    Container,
     Dialog,
     DialogActions,
     DialogContent,
     DialogTitle,
+    IconButton,
+    Paper,
+    Stack,
     Tab,
-    Box
+    TextField,
+    Toolbar,
+    Tooltip,
+    Typography,
 } from '@mui/material';
 
 import { DataGrid, GridColDef, gridNumberComparator } from '@mui/x-data-grid';
@@ -35,13 +31,35 @@ import {
     TabPanel
 } from '@mui/lab';
 
+import { useTheme } from '@mui/material/styles';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import LockIcon from '@mui/icons-material/Lock';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
 import SendIcon from '@mui/icons-material/Send';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import DoDisturbOnIcon from '@mui/icons-material/DoDisturbOn';
-import { humanizeElapsedTime, valueFormatter } from "../helpers/helpers";
+import CableOutlined from '@mui/icons-material/CableOutlined';
+import DataObjectOutlined from '@mui/icons-material/DataObjectOutlined';
+import { valueFormatter } from "../helpers/helpers";
+
+function ThemedJsonEditor(props: any) {
+    const theme = useTheme();
+    return <JsonEditor {...props} theme={theme.palette.mode === 'dark' ? githubDarkTheme : githubLightTheme} />;
+}
+
+function StatCard({ icon, label, value }: { icon?: React.ReactNode, label: string, value: string | number }) {
+    return (
+        <Paper variant="outlined" sx={{ flex: 1, px: 2.5, py: 1.5, textAlign: 'center' }}>
+            <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5, fontSize: '0.7rem' }}>
+                {icon && <Box component="span" sx={{ verticalAlign: 'middle', mr: 0.5 }}>{icon}</Box>}
+                {label}
+            </Typography>
+            <Typography variant="h6" fontWeight={600} sx={{ mt: 0.25 }}>
+                {value}
+            </Typography>
+        </Paper>
+    );
+}
 
 // fetch room data every 5 seconds.
 const FETCH_DATA_INTERVAL = 5000;
@@ -127,9 +145,6 @@ export class RoomInspect extends React.Component<Props, State> {
     }
 
     disconnectClient(sessionId: string) {
-        /**
-         * `room._forceClientDisconnect` has been added via ext/Room.ts
-         */
         this.roomCall('_forceClientDisconnect', sessionId).
             then(() => this.fetchRoomData());
     }
@@ -144,12 +159,11 @@ export class RoomInspect extends React.Component<Props, State> {
     updateSendType = (e) => {
         const sendType = e.target.value;
         localStorage.setItem(SEND_TYPE_CACHE, sendType);
-	this.setState({ sendType })
+        this.setState({ sendType })
     }
 
     updateSendData = (changes) => {
         localStorage.setItem(SEND_DATA_CACHE, JSON.stringify(changes));
-        // this.setState({ sendData: changes });
         this.state.sendData = changes;
     }
 
@@ -158,9 +172,6 @@ export class RoomInspect extends React.Component<Props, State> {
     }
 
     handleSend = () => {
-        /**
-         * `room._sendMessageToClient` has been added via ext/Room.ts
-         */
         let promise = (this.state.sendToClient)
             ? this.roomCall('_sendMessageToClient', this.state.sendToClient, this.state.sendType, this.state.sendData)
             : this.roomCall('broadcast', this.state.sendType, this.state.sendData);
@@ -175,6 +186,16 @@ export class RoomInspect extends React.Component<Props, State> {
     handleTabChange = (event: React.SyntheticEvent, newValue: string) => {
         this.setState({ currentTab: newValue });
     };
+
+    handleStateEdit = ({ newValue, path }) => {
+        this.roomCall('_editStateProperty', path, newValue)
+            .then(() => this.fetchRoomData());
+    }
+
+    handleStateDelete = ({ path }) => {
+        this.roomCall('_deleteStateProperty', path)
+            .then(() => this.fetchRoomData());
+    }
 
     render() {
         const client_columns: GridColDef[] = [
@@ -192,17 +213,22 @@ export class RoomInspect extends React.Component<Props, State> {
             } as GridColDef,
             {
                 field: "actions",
-                headerName: "actions",
-                flex: 1,
+                headerName: "",
+                width: 200,
+                sortable: false,
                 renderCell: (param) => {
-                    return <>
-                        <Button variant="text" startIcon={<SendIcon />} onClick={this.sendMessage.bind(this, param.id)}>
-                            Send
-                        </Button>
-                        <Button variant="text" color="error" startIcon={<DoDisturbOnIcon />} onClick={this.disconnectClient.bind(this, param.id)}>
-                            Disconnect
-                        </Button>
-                    </>
+                    return (
+                        <Stack direction="row" spacing={0.5}>
+                            <Button size="small" variant="text" startIcon={<SendIcon />} onClick={this.sendMessage.bind(this, param.id)}>
+                                Send
+                            </Button>
+                            <Tooltip title="Disconnect client">
+                                <IconButton size="small" color="error" onClick={this.disconnectClient.bind(this, param.id)}>
+                                    <DoDisturbOnIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        </Stack>
+                    );
                 }
             }
         ]
@@ -215,116 +241,120 @@ export class RoomInspect extends React.Component<Props, State> {
             };
         });
 
+        const clientsLabel = this.state.maxClients
+            ? `${this.state.clients.length} / ${this.state.maxClients}`
+            : `${this.state.clients.length}`;
+
         return (
-            <div>
-                <AppBar position="static">
-                    <Toolbar>
-                        <IconButton aria-label="delete" onClick={this.goBack.bind(this)}>
+            <Box>
+                <AppBar position="static" elevation={0} sx={{ borderBottom: 1, borderColor: 'divider' }}>
+                    <Toolbar variant="dense">
+                        <IconButton edge="start" size="small" onClick={this.goBack.bind(this)} sx={{ mr: 1 }}>
                             <ArrowBackIcon />
                         </IconButton>
-                        <Typography
-                            variant="h6"
-                            noWrap
-                            component="div"
-                            sx={{ flexGrow: 1 }}
-                        >
-                            {'Room ' + this.state.roomId}
+                        <Typography variant="subtitle1" fontWeight={600} sx={{ flexGrow: 1 }}>
+                            Room {this.state.roomId}
                         </Typography>
+                        <Stack direction="row" spacing={1}>
+                            <Button size="small" variant="outlined" startIcon={<SendIcon />} onClick={this.sendMessage.bind(this, undefined)}>
+                                Broadcast
+                            </Button>
+                            <Button size="small" variant="outlined" color="error" startIcon={<DeleteForeverIcon />} onClick={this.disposeRoom.bind(this)}>
+                                Dispose
+                            </Button>
+                        </Stack>
                     </Toolbar>
                 </AppBar>
-                <TableContainer component={Paper}>
-                    <Table aria-label="simple table">
-                        <TableHead>
-                            <TableRow>
-                                <TableCell align={"center"}>
-                                    {(this.state.locked) ? <LockIcon /> : <LockOpenIcon />}
-                                    {(this.state.locked) ? 'Locked' : 'Unlocked'}
-                                </TableCell>
 
-                                <TableCell align={"center"}>
-                                    Clients
-                                    <Chip sx={{ marginLeft: "6px" }} size="small" color="primary" label={`${this.state.clients.length}${(this.state.maxClients ? ' / ' + this.state.maxClients : '')}`} />
-                                </TableCell>
+                <Container maxWidth="lg" sx={{ py: 3 }}>
+                    <Stack spacing={2}>
+                        <Stack direction="row" spacing={1.5}>
+                            <StatCard
+                                icon={this.state.locked ? <LockIcon sx={{ fontSize: 14 }} /> : <LockOpenIcon sx={{ fontSize: 14 }} />}
+                                label="Status"
+                                value={this.state.locked ? 'Locked' : 'Unlocked'}
+                            />
+                            <StatCard icon={<CableOutlined sx={{ fontSize: 14 }} />} label="Clients" value={clientsLabel} />
+                            <StatCard icon={<DataObjectOutlined sx={{ fontSize: 14 }} />} label="State Size" value={`${this.state.stateSize} B`} />
+                        </Stack>
 
-                                <TableCell align={"center"}>
-                                    State Size
-                                    <Chip sx={{ marginLeft: "6px" }} size="small" color="primary" label={`${this.state.stateSize} bytes`} />
-                                </TableCell>
-
-                                <TableCell align={"center"}>
-                                    <Button variant="text" startIcon={<SendIcon />} onClick={this.sendMessage.bind(this, undefined)}>
-                                        Broadcast
-                                    </Button>
-                                </TableCell>
-
-                                <TableCell align={"center"}>
-                                    <Button variant="text" color="error" startIcon={<DeleteForeverIcon />} onClick={this.disposeRoom.bind(this)}>
-                                        Dispose room
-                                    </Button>
-                                </TableCell>
-
-                            </TableRow>
-                        </TableHead>
-                    </Table>
-                </TableContainer>
-
-                <TabContext value={this.state.currentTab}>
-                    <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-                        <TabList onChange={this.handleTabChange} aria-label="lab API tabs example" variant={"fullWidth"}>
-                            <Tab label="Clients" value="1" />
-                            <Tab label="State" value="2" />
-                        </TabList>
-                    </Box>
-                    <TabPanel value="1">
-                        <DataGrid
-                            columns={client_columns}
-                            rows={client_rows}
-                            sx={{ overflow: "hidden" }}
-                            disableRowSelectionOnClick
-                            hideFooter
-                            hideFooterPagination
-                            hideFooterSelectedRowCount
-                        />
-                    </TabPanel>
-                    <TabPanel value="2">
-                        <ReactJson src={this.state.state} theme={"default"} />
-                    </TabPanel>
-                </TabContext>
+                        <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
+                            <TabContext value={this.state.currentTab}>
+                                <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+                                    <TabList onChange={this.handleTabChange} variant="fullWidth">
+                                        <Tab
+                                            label={<Box sx={{ display: 'flex', alignItems: 'center' }}>Clients <Chip size="small" label={this.state.clients.length} sx={{ ml: 1 }} /></Box>}
+                                            value="1"
+                                        />
+                                        <Tab label="State" value="2" />
+                                    </TabList>
+                                </Box>
+                                <TabPanel value="1" sx={{ p: 0 }}>
+                                    <DataGrid
+                                        columns={client_columns}
+                                        rows={client_rows}
+                                        autoHeight
+                                        sx={{
+                                            border: 0,
+                                            '& .MuiDataGrid-columnHeaders': { bgcolor: 'action.hover' },
+                                            '& .MuiDataGrid-cell': { display: 'flex', alignItems: 'center' },
+                                        }}
+                                        disableRowSelectionOnClick
+                                        hideFooter
+                                    />
+                                </TabPanel>
+                                <TabPanel value="2" sx={{ p: 0 }}>
+                                    <Box sx={{ p: 1 }}>
+                                        <ThemedJsonEditor
+                                            rootName=""
+                                            data={this.state.state}
+                                            onUpdate={this.handleStateEdit}
+                                            onDelete={this.handleStateDelete}
+                                            restrictEdit={({ value }) => typeof value === 'object' && value !== null}
+                                            restrictTypeSelection={true}
+                                            restrictAdd={true}
+                                        />
+                                    </Box>
+                                </TabPanel>
+                            </TabContext>
+                        </Paper>
+                    </Stack>
+                </Container>
 
                 <Dialog
                     open={this.state.sendDialogOpen}
                     onClose={this.handleCloseSend}
-                    aria-labelledby="alert-dialog-title"
-                    aria-describedby="alert-dialog-description"
+                    maxWidth="sm"
+                    fullWidth
                 >
-                    <DialogTitle id="alert-dialog-title">
-                        {this.state.sendDialogTitle}
-                    </DialogTitle>
+                    <DialogTitle>{this.state.sendDialogTitle}</DialogTitle>
                     <DialogContent>
-                        <h2>Message type:</h2>
-                        <input type="text" value={this.state.sendType} onChange={this.updateSendType} />
-
-                        <h2>Message payload</h2>
-                        <JsonEditor value={this.state.sendData} propagateChanges={this.updateSendData} />
+                        <Stack spacing={2} sx={{ mt: 1 }}>
+                            <TextField
+                                label="Message type"
+                                size="small"
+                                fullWidth
+                                value={this.state.sendType}
+                                onChange={this.updateSendType}
+                            />
+                            <Box>
+                                <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                                    Message payload
+                                </Typography>
+                                <ThemedJsonEditor rootName="" data={this.state.sendData} onUpdate={({ newData }) => this.updateSendData(newData)} />
+                            </Box>
+                        </Stack>
                     </DialogContent>
-                    <DialogActions>
-                        <Button
-                            variant="text"
-                            color="error"
-                            onClick={this.handleCloseSend}
-                        >
+                    <DialogActions sx={{ px: 3, pb: 2 }}>
+                        <Button variant="text" color="inherit" onClick={this.handleCloseSend}>
                             Cancel
                         </Button>
-                        <Button
-                            variant="text"
-                            onClick={this.handleSend}
-                        >
+                        <Button variant="contained" disableElevation onClick={this.handleSend}>
                             Send
                         </Button>
                     </DialogActions>
                 </Dialog>
-            </div>
+            </Box>
         );
     }
 }
-

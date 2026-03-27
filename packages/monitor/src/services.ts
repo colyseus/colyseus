@@ -19,5 +19,6 @@ export function remoteRoomCall(roomId: string, method: string, ...args: any[]) {
     query.set('method', method);
     query.set('args', JSON.stringify(args));
     return fetch(`${ENDPOINT}/api/room/call?${query.toString()}`)
-      .then(res => res.json());
+      .then(res => res.text())
+      .then(text => text ? JSON.parse(text) : {});
 }

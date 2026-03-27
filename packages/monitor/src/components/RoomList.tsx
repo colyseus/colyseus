@@ -2,34 +2,48 @@ import * as React from "react";
 import type { MonitorOptions } from "../../";
 import { fetchRoomList, remoteRoomCall } from "../services";
 
-import { Card, Button, mobileStepperClasses, getModalUtilityClass } from '@mui/material';
+import {
+  Box,
+  Button,
+  CircularProgress,
+  Container,
+  IconButton,
+  Paper,
+  Stack,
+  Tooltip,
+  Typography,
+} from '@mui/material';
 import { DataGrid, GridColDef, gridDateComparator, gridNumberComparator, gridStringOrNumberComparator } from '@mui/x-data-grid';
 import OpenInBrowserIcon from '@mui/icons-material/OpenInBrowser';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
-
-import {
-  Chip,
-  Table,
-  Typography,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper
-} from '@mui/material';
+import CableOutlined from '@mui/icons-material/CableOutlined';
+import MeetingRoomOutlined from '@mui/icons-material/MeetingRoomOutlined';
+import MemoryOutlined from '@mui/icons-material/MemoryOutlined';
+import StorageOutlined from '@mui/icons-material/StorageOutlined';
 
 import { ExtractStringNames, valueFormatter } from "../helpers/helpers";
 
 const UPDATE_ROOM_LIST_INTERVAL = 5000;
 const NO_ACTIVE_ROOMS_ROOM_ID = 'No active rooms.';
 
-/**
- * Define default sort method by column name
- */
 const sortComparator: { [key in ExtractStringNames<MonitorOptions['columns']>]?: Function } = {
   clients: gridNumberComparator,
   maxClients: gridNumberComparator,
   elapsedTime: gridDateComparator
+}
+
+function StatCard({ icon, label, value }: { icon?: React.ReactNode, label: string, value: string | number }) {
+  return (
+    <Paper variant="outlined" sx={{ flex: 1, px: 2.5, py: 1.5, textAlign: 'center' }}>
+      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5, fontSize: '0.7rem' }}>
+        {icon && <Box component="span" sx={{ verticalAlign: 'middle', mr: 0.5 }}>{icon}</Box>}
+        {label}
+      </Typography>
+      <Typography variant="h6" fontWeight={600} sx={{ mt: 0.25 }}>
+        {value}
+      </Typography>
+    </Paper>
+  );
 }
 
 export class RoomList extends React.Component {
@@ -40,6 +54,7 @@ export class RoomList extends React.Component {
     cpu: 0,
     memory: { totalMemMb: 0, usedMemMb: 0 },
     columns: [],
+    loaded: false,
   };
 
   updateRoomListInterval: number;
@@ -58,14 +73,12 @@ export class RoomList extends React.Component {
 
   async fetchRoomList () {
     try {
-      this.setState((await fetchRoomList()));
-
+      this.setState({ ...(await fetchRoomList()), loaded: true });
     } catch (err) {
       console.error(err)
     }
 
     clearInterval(this.updateRoomListInterval);
-
     this.updateRoomListInterval = window.setInterval(() => {
       this.fetchRoomList();
     }, UPDATE_ROOM_LIST_INTERVAL);
@@ -97,29 +110,21 @@ export class RoomList extends React.Component {
     let field = column;
     let value: any;
     let valueFromObject: any = room;
-
     let postProcessValue: any = undefined;
 
     if (field === "elapsedTime" && valueFromObject[field] >= 0) {
       postProcessValue = (milliseconds) => new Date( Date.now() - milliseconds );
-
     } else if (column.metadata && room.metadata) {
       field = column.metadata;
       valueFromObject = room.metadata;
     }
 
     value = valueFromObject[field];
-
     if (value === undefined) {
       value = "";
     }
 
     return (postProcessValue) ? postProcessValue(value) : `${value}`;
-  }
-
-  bytesToStr(size: number) {
-    const i = Math.floor(Math.log(size) / Math.log(1024));
-    return ((size / Math.pow(1024, i)).toFixed(2) as any) * 1 + ' ' + ['B', 'kB', 'MB', 'GB', 'TB'][i];
   }
 
   formatMemory(memInMb: number) {
@@ -132,7 +137,6 @@ export class RoomList extends React.Component {
   getColumnsNames(columns: any): Array<GridColDef> {
     const data: GridColDef[] = columns.map(column => {
       const value = this.getColumnHeader(column);
-
       return {
         id: value,
         field: value,
@@ -143,59 +147,45 @@ export class RoomList extends React.Component {
       } as GridColDef;
     });
 
-    //
-    // "Inspect" action column
-    //
     data.push({
       field: "Inspect",
-      headerName: "", // Inspect
-      flex: 1,
+      headerName: "",
+      width: 120,
+      sortable: false,
       renderCell: (param) => {
         return (param.value !== NO_ACTIVE_ROOMS_ROOM_ID)
-          ? <div style={{ cursor: "pointer" }} onClick={() => {
-              this.inspectRoom(param.value);
-            }}>
-              {/* TODO: use IconButton on sm/xs devices */}
-              <Button variant="contained" disableElevation startIcon={<OpenInBrowserIcon />}>
-                  <Typography
-                    noWrap
-                    component="span"
-                    sx={{ flexGrow: 1, display: { xs: 'none', sm: 'none', md: "block" } }}
-                  >
-                      Inspect
-                  </Typography>
-              </Button>
-            </div>
+          ? <Button
+              size="small"
+              variant="outlined"
+              startIcon={<OpenInBrowserIcon />}
+              onClick={() => this.inspectRoom(param.value)}
+            >
+              Inspect
+            </Button>
           : null;
       }
     });
 
-    //
-    // "Dispose" action column
-    //
     data.push({
       field: "Dispose",
-      headerName: "", // Dispose
-      flex: 1,
+      headerName: "",
+      width: 120,
+      sortable: false,
       renderCell: (param) => {
         return (param.value !== NO_ACTIVE_ROOMS_ROOM_ID)
-          ? <div style={{ cursor: "pointer" }} onClick={() => {
-              this.disposeRoom(param.value);
-            }}>
-              {/* TODO: use IconButton on sm/xs devices */}
-              <Button variant="contained" disableElevation color="error" startIcon={<DeleteForeverIcon />}>
-                  <Typography
-                    noWrap
-                    component="span"
-                    sx={{ flexGrow: 1, display: { xs: 'none', sm: 'none', md: "block" } }}
-                  >
-                      Dispose
-                  </Typography>
-              </Button>
-            </div>
+          ? <Tooltip title="Dispose room">
+              <IconButton
+                size="small"
+                color="error"
+                onClick={() => this.disposeRoom(param.value)}
+              >
+                <DeleteForeverIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
           : null;
       }
     });
+
     return data;
   }
 
@@ -212,63 +202,49 @@ export class RoomList extends React.Component {
     });
   }
 
-  generateRoomListDataGrid(): JSX.Element {
+  render() {
     const columns = this.getColumnsNames(this.state.columns);
     const rows = this.getRowsData(this.state.rooms);
 
-    return <DataGrid
-      columns={columns}
-      rows={
-        (rows.length === 0)
-          ? this.getRowsData([{ roomId: NO_ACTIVE_ROOMS_ROOM_ID, elapsedTime: -1 }])
-          : rows
-      }
-      autoHeight
-      sx={{ overflow: "hidden" }}
-      slots={{
-        noRowsOverlay: () => <></>,
-      }}
-      disableRowSelectionOnClick
-      // hideFooter
-      // hideFooterPagination
-      // hideFooterSelectedRowCount
-    />
-  }
-
-  render() {
     return (
-      <div>
-        <Card>
-          <TableContainer component={Paper}>
-            <Table aria-label="simple table">
-              <TableHead>
-                <TableRow>
-                  <TableCell align={"center"}>
-                    Connections
-                    <Chip sx={{ marginLeft: "6px" }} size="small" color="primary" label={this.state.connections} />
-                  </TableCell>
-                  <TableCell align={"center"}>
-                    Rooms
-                    <Chip sx={{ marginLeft: "6px" }} size="small" color="primary" label={this.state.rooms.length} />
-                  </TableCell>
-                  <TableCell align={"center"}>
-                    CPU Usage
-                    <Chip sx={{ marginLeft: "6px" }} size="small" color="primary" label={`${this.state.cpu.toFixed(2)} %`} />
-                  </TableCell>
-                  <TableCell align={"center"}>
-                    Memory
-                    <Chip sx={{ marginLeft: "6px" }} size="small" color="primary" label={this.formatMemory(this.state.memory.usedMemMb)} />
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-            </Table>
-          </TableContainer>
-        </Card>
-        <Card style={{ marginTop: "2px" }}>
-          {this.generateRoomListDataGrid()}
-        </Card>
-      </div>
+      <Container maxWidth="lg" sx={{ py: 3 }}>
+        <Stack spacing={2}>
+          <Stack direction="row" spacing={1.5}>
+            <StatCard icon={<CableOutlined sx={{ fontSize: 20, color: 'text.secondary' }} />} label="Connections" value={this.state.connections} />
+            <StatCard icon={<MeetingRoomOutlined sx={{ fontSize: 20, color: 'text.secondary' }} />} label="Rooms" value={this.state.rooms.length} />
+            <StatCard icon={<MemoryOutlined sx={{ fontSize: 20, color: 'text.secondary' }} />} label="CPU" value={`${this.state.cpu.toFixed(1)}%`} />
+            <StatCard icon={<StorageOutlined sx={{ fontSize: 20, color: 'text.secondary' }} />} label="Memory" value={this.formatMemory(this.state.memory.usedMemMb)} />
+          </Stack>
+
+          {!this.state.loaded ? (
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 4, gap: 1 }}>
+              <CircularProgress size={24} />
+              <Typography color="text.secondary">Loading...</Typography>
+            </Box>
+          ) : rows.length === 0 ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+              <Typography color="text.secondary">No active rooms.</Typography>
+            </Box>
+          ) : (
+            <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
+              <DataGrid
+                columns={columns}
+                rows={rows}
+                autoHeight
+                sx={{
+                  border: 0,
+                  '& .MuiDataGrid-columnHeaders': { bgcolor: 'action.hover' },
+                  '& .MuiDataGrid-cell': { display: 'flex', alignItems: 'center' },
+                }}
+                slots={{
+                  noRowsOverlay: () => <></>,
+                }}
+                disableRowSelectionOnClick
+              />
+            </Paper>
+          )}
+        </Stack>
+      </Container>
     );
   }
-
 }

@@ -6,6 +6,8 @@ export const valueFormatter: { [key in ExtractStringNames<MonitorOptions['column
   elapsedTime: (params) => {
     if (params.value && params.value.getTime) {
       return humanizeElapsedTime(Date.now() - params.value.getTime());
+    } else if (typeof params.value === 'number' && params.value >= 0) {
+      return humanizeElapsedTime(params.value);
     } else {
       return "";
     }
