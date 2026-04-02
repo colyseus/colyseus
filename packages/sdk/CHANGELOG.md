@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.36
+
+- Fix `debug.js` panel ID collision when the same `sessionId` is reused across rooms (e.g. QueueRoom handoff).
+
 ## 0.17.35
 
 - Add `room.reconnection.enabled` flag. Use `sessionStorage` instead of `localStorage` to determine if "debug" panel is hidden.

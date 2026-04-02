@@ -2644,10 +2644,11 @@ function applyMonkeyPatches() {
         const roomId = room.roomId;
         const sessionId = room.sessionId;
 
-        // Generate unique panel ID: use sessionId if available, otherwise use roomId + timestamp
-        const uniquePanelId = sessionId && sessionId !== 'N/A' && sessionId !== ''
+        // Generate unique panel ID: use roomId + sessionId to avoid collisions
+        // when the same sessionId is reused across rooms (e.g. QueueRoom handoff)
+        const uniquePanelId = roomId + '_' + (sessionId && sessionId !== 'N/A' && sessionId !== ''
             ? sessionId
-            : roomId + '-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
+            : Date.now() + '-' + Math.random().toString(36).substring(2, 9));
 
         const transport = room.connection?.transport as WebSocketTransport;
         const endpoint = transport.ws?.url || 'N/A';
