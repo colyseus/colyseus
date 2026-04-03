@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.37
+
+- Fix `debug.js` "refId not found" schema decoder errors when connection closes while latency simulation is enabled. The `onclose` handler is now delayed to fire after all pending `onmessage` callbacks.
+
 ## 0.17.36
 
 - Fix `debug.js` panel ID collision when the same `sessionId` is reused across rooms (e.g. QueueRoom handoff).

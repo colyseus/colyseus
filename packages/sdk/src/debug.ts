@@ -2782,6 +2782,21 @@ function applyMonkeyPatches() {
             }
         };
 
+        // Monkey-patch: delay onclose so it fires AFTER any pending onmessage
+        // callbacks scheduled via setTimeout (latency simulation). Without this,
+        // onclose → onLeave → clearRefs() runs before delayed messages are
+        // decoded, causing "refId not found" schema decoder errors.
+        const originalOnClose = transport.events.onclose;
+        transport.events.onclose = function(event) {
+            if (preferences.latencySimulation.enabled && preferences.latencySimulation.delay > 0) {
+                setTimeout(function() {
+                    if (originalOnClose) originalOnClose.call(this, event);
+                }, preferences.latencySimulation.delay + 1);
+            } else {
+                if (originalOnClose) return originalOnClose.apply(this, arguments);
+            }
+        };
+
         // Monkey-patch: sending messages through room connection
         const originalSend = room.connection.send.bind(room.connection);
         room.connection.send = function(data: any) {
