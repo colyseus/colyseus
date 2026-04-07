@@ -1067,7 +1067,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
 
     // reject pending reconnections
     for (const [_, reconnection] of Object.values(this._reconnections)) {
-      reconnection.reject(new Error("disconnecting"));
+      reconnection.reject(new ServerError(CloseCode.NORMAL_CLOSURE, "disconnecting"));
     }
 
     let numClients = this.clients.length;
@@ -1323,7 +1323,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
     //
     if ((previousClient as unknown as ClientPrivate)._enqueuedMessages !== undefined) {
       // @ts-ignore
-      return Promise.reject(new Error("not joined"));
+      return Promise.reject(new ServerError("not joined"));
     }
 
     if (seconds === undefined) { // TODO: remove this check
@@ -1717,7 +1717,10 @@ export class Room<T extends RoomOptions = RoomOptions> {
         await method.call(this, client, code);
 
       } catch (e: any) {
-        debugAndPrintError(`${method.name} error: ${(e && e.message || e || 'promise rejected')} (roomId: ${this.roomId})`);
+        const serverError = (!(e instanceof ServerError))
+          ? new ServerError(CloseCode.WITH_ERROR, `${method.name} error`, { cause: e })
+          : e;
+        debugAndPrintError(serverError);
 
       } finally {
         this.#_onLeaveConcurrent--;
