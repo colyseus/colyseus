@@ -6,7 +6,7 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "test": "vitest --dir test --reporter verbose",
+    "test": "vitest run --dir test --reporter verbose",
     "start": "vite --config example/vite.config.ts",
     "build": "rollup -c rollup.config.mjs",
     "build-dist-dts": "dts-bundle-generator --config dts-generator.json",

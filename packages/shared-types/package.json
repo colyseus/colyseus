@@ -22,7 +22,7 @@
     }
   },
   "scripts": {
-    "test": "vitest"
+    "test": "vitest run"
   },
   "funding": "https://github.com/sponsors/endel",
   "author": "Endel Dreyer",

@@ -1,8 +1,0 @@
-{
-  "version": "independent",
-  "publish": {
-    "message": "chore(release): publish"
-  },
-  "hoist": true,
-  "npmClient": "pnpm"
-}

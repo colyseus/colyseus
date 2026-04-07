@@ -6,6 +6,8 @@
         "target": "ESNext",
         "declaration": true,
 
+        "types": ["node", "mocha"],
+
         "strict": true,
         "strictNullChecks": true,
         "noImplicitAny": false,
@@ -21,6 +23,6 @@
     },
     "include": [
       "**/*.ts",
-      "./../src/**/*.ts"
-, "../../../packages/core/src/rooms/createRoom.ts"    ]
+      "./../src/**/*.ts",
+    ]
 }

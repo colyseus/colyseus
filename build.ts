@@ -4,9 +4,7 @@ import glob from 'fast-glob';
 import { fileURLToPath } from 'url';
 import minimist from 'minimist';
 import ts from "typescript";
-
-import { getPackages } from '@lerna/project';
-import { filterPackages } from '@lerna/filter-packages';
+import micromatch from 'micromatch';
 
 import esbuild from "esbuild";
 
@@ -16,17 +14,66 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /**
  * Get a list of the non-private sorted packages
  */
-async function getAllPackages(scope, ignore) {
-  const packages = await getPackages(__dirname);
-  return filterPackages(packages, scope, ignore, false);
+function getAllPackages(scope?: string | string[], ignore?: string | string[]) {
+  // Read workspace globs from pnpm-workspace.yaml
+  const content = fs.readFileSync(path.join(__dirname, 'pnpm-workspace.yaml'), 'utf-8');
+  const workspaceGlobs: string[] = [];
+  let inPackages = false;
+  for (const line of content.split('\n')) {
+    if (line.trim() === 'packages:') { inPackages = true; continue; }
+    if (inPackages) {
+      const match = line.match(/^\s+-\s+(.+)/);
+      if (match) {
+        workspaceGlobs.push(match[1].trim().replace(/['"]/g, ''));
+      } else if (line.trim() && !line.startsWith(' ') && !line.startsWith('\t')) {
+        break;
+      }
+    }
+  }
+
+  // Discover all package.json files matching workspace globs
+  const patterns = workspaceGlobs.map(g => `${g}/package.json`);
+  const packageJsonPaths = glob.sync(patterns, {
+    cwd: __dirname,
+    absolute: true,
+    ignore: ['**/node_modules/**'],
+  });
+
+  // Parse packages, filter out private ones
+  let packages = packageJsonPaths.map(pkgPath => {
+    const pkgJSON = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+    return { name: pkgJSON.name as string, location: path.dirname(pkgPath), toJSON: () => pkgJSON };
+  }).filter(pkg => !pkg.toJSON().private);
+
+  // Apply --scope / --ignore filtering
+  if (scope || ignore) {
+    const names = packages.map(p => p.name);
+    const patterns: string[] = [];
+
+    if (scope) {
+      patterns.push(...(Array.isArray(scope) ? scope : [scope]));
+    } else {
+      patterns.push('**');
+    }
+
+    if (ignore) {
+      const excludes = Array.isArray(ignore) ? ignore : [ignore];
+      patterns.push(...excludes.map(p => `!${p}`));
+    }
+
+    const matched = new Set(micromatch(names, patterns));
+    packages = packages.filter(p => matched.has(p.name));
+  }
+
+  return packages;
 }
 
 async function main() {
 
   // Support --scope and --ignore globs if passed in via commandline
-  const argv = minimist(process.argv.slice(2));
+  const argv = minimist(process.argv.slice(2).filter(arg => arg !== '--'));
 
-  const packages = await getAllPackages(argv.scope, argv.ignore);
+  const packages = getAllPackages(argv.scope, argv.ignore);
 
   packages.map(pkg => {
     // Absolute path to package directory
