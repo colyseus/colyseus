@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.17.40
+
+- Fix endpoints with query params returning 404 when Express app is present. `bindRouterToTransport` was passing `req.url` (including query string) to `router.findRoute()`, causing route mismatches. (thanks @thedomeffm for reporting - https://github.com/colyseus/colyseus/issues/930)
+- Internal `onDrop`/`onLeave` errors (e.g. "not joined", "disconnecting", "promise rejected") are no longer logged to stderr. They are now only logged when `DEBUG=colyseus:errors` is enabled.
+
 ## 0.17.39
 
 - Introduce `isStandaloneMatchMaker` option for `defineServer()`. When enabled, the current process will not spawn rooms and will only be responsible for matchmaking.

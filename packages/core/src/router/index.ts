@@ -68,7 +68,7 @@ export function bindRouterToTransport(transport: Transport, router: Router, useE
     next = async (req: IncomingMessage, res: ServerResponse) => {
       // check if the route is defined in the router
       // if so, use the router handler, otherwise fallback to express
-      if (router.findRoute(req.method, req.url) !== undefined) {
+      if (router.findRoute(req.method, req.url.split('?')[0]) !== undefined) {
         const protocol = req.headers["x-forwarded-proto"] || ((req.socket as any).encrypted ? "https" : "http");
         const base = `${protocol}://${req.headers[":authority"] || req.headers.host}`;
         const response = await router.handler(getRequest({ base, request: req }));
