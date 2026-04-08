@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.39
+
+- Allow swapping the `fetch` implementation via `fetchFn` option in `ClientOptions`. Automatically falls back to `XMLHttpRequest` when `fetch` is unavailable (e.g. Cocos Creator Native). Closes [#931](https://github.com/colyseus/colyseus/issues/931) - thanks @nickreserved for reporting!
+
 ## 0.17.38
 
 - Fix HTTP response content-type detection using `indexOf()` instead of `includes()`, which caused non-JSON responses to be incorrectly parsed as JSON

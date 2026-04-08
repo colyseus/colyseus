@@ -62,9 +62,6 @@ export default [
             typescript({ tsconfig: './tsconfig/tsconfig.cjs.json' }),
             alias({
                 entries: [
-                    // httpie: force `fetch` for web environments
-                    { find: '@colyseus/httpie', replacement: path.resolve('./node_modules/@colyseus/httpie/fetch/index.js') },
-
                     // ws: force browser.js version.
                     { find: 'ws', replacement: path.resolve('./node_modules/ws/browser.js') },
 
@@ -73,44 +70,8 @@ export default [
                 ]
             }),
             commonjs(),
-            nodeResolve({ browser: true }), // "browser" seems to have no effect here. (why??)
+            nodeResolve({ browser: true }),
         ],
-    },
-
-    // Cocos Creator SDK (same as browser/embedded, but use XHR instead of fetch)
-    {
-        input: ['src/index.ts'],
-        output: [
-            {
-                preserveModules: false,
-                banner: `${bannerStatic}\n// THIS VERSION USES "XMLHttpRequest" INSTEAD OF "fetch" FOR COMPATIBILITY WITH COCOS CREATOR`,
-                dir: 'dist',
-                name: "Colyseus",
-                format: 'umd',
-                entryFileNames: 'colyseus-cocos-creator.js',
-                sourcemap: true,
-                amd: { id: pkg.name }
-            },
-        ],
-        plugins: [
-            replacePlugin,
-            typescript({ tsconfig: './tsconfig/tsconfig.cjs.json' }),
-            alias({
-                entries: [
-                    // httpie: force XHR implementation on browser/UMD environment
-                    { find: '@colyseus/httpie', replacement: path.resolve('./node_modules/@colyseus/httpie/xhr/index.js' ) },
-
-                    // ws: force browser.js version.
-                    { find: 'ws', replacement: path.resolve('./node_modules/ws/browser.js' ) },
-
-                    // @colyseus/schema: force browser version.
-                    { find: '@colyseus/schema', replacement: path.resolve('./node_modules/@colyseus/schema/build/index.js') },
-                ]
-            }),
-            commonjs(),
-            nodeResolve({ browser: true }), // "browser" seems to have no effect here. (why??)
-        ],
-
     },
 
     /**

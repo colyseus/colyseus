@@ -1,6 +1,7 @@
 import type { Router, HasRequiredKeys, Prettify, UnionToIntersection, Endpoint, HTTPMethod } from "@colyseus/better-call";
 import { ColyseusSDK } from "./Client.ts";
 import { ServerError } from "./errors/Errors.ts";
+import { xhrFetch } from "./fetchXHR.ts";
 
 /**
  * TODO: we should clean up the types repetition in this file.
@@ -249,18 +250,35 @@ type InferReturnType<R, OPT, K extends keyof OPT> =
         ? any
         : Awaited<ReturnType<OPT[K] extends Endpoint ? OPT[K] : never>>;
 
+export type FetchFn = (url: string | URL | Request, init?: RequestInit) => Promise<Response>;
+
 export class HTTP<R extends Router | Router["endpoints"]> {
     public authToken: string | undefined;
     public options: FetchRequestOptions;
 
     private sdk: ColyseusSDK;
+    private _fetchFn: FetchFn | undefined;
 
     // alias "del()" to "delete()"
     public del = this.delete;
 
-    constructor(sdk: ColyseusSDK, baseOptions: FetchRequestOptions) {
+    constructor(sdk: ColyseusSDK, baseOptions: FetchRequestOptions, fetchFn?: FetchFn) {
         this.sdk = sdk;
         this.options = baseOptions;
+        this._fetchFn = fetchFn;
+    }
+
+    /**
+     * Lazily resolve the fetch implementation.
+     * Falls back to XMLHttpRequest when fetch is unavailable (e.g. Cocos Creator Native).
+     */
+    private get fetchFn(): FetchFn {
+        if (!this._fetchFn) {
+            this._fetchFn = (typeof(globalThis.fetch) !== 'undefined')
+                ? globalThis.fetch.bind(globalThis)
+                : xhrFetch;
+        }
+        return this._fetchFn;
     }
 
     private async request<
@@ -509,7 +527,7 @@ export class HTTP<R extends Router | Router["endpoints"]> {
 
         let raw: Response;
         try {
-            raw = await fetch(url, mergedOptions);
+            raw = await this.fetchFn(url, mergedOptions);
         } catch (err: any) {
             // If it's an AbortError, re-throw as-is
             if (err.name === 'AbortError') {

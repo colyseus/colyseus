@@ -3,7 +3,7 @@ import { CloseCode, Protocol, type InferState, type SDKTypes, type ServerRoomLik
 import { MatchMakeError, ServerError } from './errors/Errors.ts';
 import { Room } from './Room.ts';
 import { SchemaConstructor } from './serializer/SchemaSerializer.ts';
-import { HTTP } from './HTTP.ts';
+import { HTTP, type FetchFn } from './HTTP.ts';
 import { Auth } from './Auth.ts';
 import { Connection } from './Connection.ts';
 import { discordURLBuilder } from './3rd_party/discord.ts';
@@ -30,6 +30,7 @@ export interface ClientOptions {
     headers?: { [id: string]: string };
     urlBuilder?: (url: URL) => string;
     protocol?: "ws" | "h3";
+    fetchFn?: FetchFn;
 }
 
 export interface LatencyOptions {
@@ -108,7 +109,7 @@ export class ColyseusSDK<ServerType extends SDKTypes = any, UserData = any> {
 
         this.http = new HTTP(this, {
             headers: options?.headers || {},
-        });
+        }, options?.fetchFn);
         this.auth = new Auth(this.http);
 
         this.urlBuilder = options?.urlBuilder;
