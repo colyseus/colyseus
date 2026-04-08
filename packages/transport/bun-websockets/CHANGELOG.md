@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.17.12
+
+- Fix `sendBinary requires an ArrayBufferView` error by ensuring `raw()` always passes an `ArrayBufferView` to Bun's `sendBinary()`
+- Fix `shutdown()` not fully releasing the port — use `stop(true)` to force-close the listener so a new `Bun.serve()` on the same port gets a fresh handler
+
 ## 0.17.11
 
 - Defensive check for enqueuing messages after client has already joined (#927)

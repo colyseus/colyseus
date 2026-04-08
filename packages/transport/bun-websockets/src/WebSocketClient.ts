@@ -82,8 +82,9 @@ export class WebSocketClient implements Client, ClientPrivate {
       return;
     }
 
-    // FIXME: can we avoid creating a new buffer here?
-    this.ref.ws.sendBinary(data);
+    // Bun's sendBinary requires an ArrayBufferView (Uint8Array, etc).
+    // Ensure we don't pass a plain number[] array.
+    this.ref.ws.sendBinary(ArrayBuffer.isView(data) ? data : new Uint8Array(data));
   }
 
   public error(code: number, message: string = '', cb?: (err?: Error) => void) {

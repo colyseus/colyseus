@@ -166,7 +166,7 @@ export class BunWebSockets extends Transport {
 
   public shutdown() {
     if (this._server) {
-      this._server.stop();
+      this._server.stop(true);
     }
   }
 
