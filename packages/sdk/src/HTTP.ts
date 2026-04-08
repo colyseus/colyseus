@@ -525,11 +525,10 @@ export class HTTP<R extends Router | Router["endpoints"]> {
 
         let data: any;
 
-        // TODO: improve content-type detection here!
-        if (contentType?.indexOf("json")) {
+        if (contentType?.includes("json")) {
             data = await raw.json();
 
-        } else if (contentType?.indexOf("text")) {
+        } else if (contentType?.includes("text")) {
             data = await raw.text();
 
         } else {

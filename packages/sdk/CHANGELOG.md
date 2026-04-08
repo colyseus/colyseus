@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.38
+
+- Fix HTTP response content-type detection using `indexOf()` instead of `includes()`, which caused non-JSON responses to be incorrectly parsed as JSON
+
 ## 0.17.37
 
 - Fix `debug.js` "refId not found" schema decoder errors when connection closes while latency simulation is enabled. The `onclose` handler is now delayed to fire after all pending `onmessage` callbacks.
