@@ -84,6 +84,32 @@ describe('BunWebSockets', () => {
     await server.gracefullyShutdown(false);
   });
 
+  it('simulateLatency should not break sendBinary', async () => {
+    const transport = new BunWebSockets();
+    const server = defineServer({
+      greet: false,
+      transport,
+      rooms: {
+        dummy: defineRoom(DummyRoom),
+      },
+    });
+
+    transport.simulateLatency(1);
+
+    await server.listen(8567);
+
+    const client = new ColyseusSDK(`ws://localhost:8567`);
+    const sdkRoom = await client.joinOrCreate('dummy');
+    const room = matchMaker.getLocalRoomById(sdkRoom.roomId) as DummyRoom;
+    assert.equal(room.roomName, 'dummy');
+
+    // wait for delayed messages to be sent
+    await Bun.sleep(100);
+
+    await sdkRoom.leave();
+    await server.gracefullyShutdown(false);
+  });
+
   it('client.raw() should accept non-ArrayBufferView data without throwing', async () => {
     const port = 8568;
 

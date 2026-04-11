@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.13
+
+- Use `MAY_TRY_RECONNECT` close code (instead of `FAILED_TO_RECONNECT`) in devMode when a reconnection token is present but the seat hasn't been reserved yet. This allows the SDK to retry during the brief HMR reload window.
+
 ## 0.17.12
 
 - Fix `sendBinary requires an ArrayBufferView` error by ensuring `raw()` always passes an `ArrayBufferView` to Bun's `sendBinary()`

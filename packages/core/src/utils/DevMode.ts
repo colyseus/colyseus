@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { type Schema, MapSchema, ArraySchema, SetSchema, CollectionSchema, $childType } from '@colyseus/schema';
+import { type Schema, MapSchema, ArraySchema, SetSchema, CollectionSchema, $childType, $changes } from '@colyseus/schema';
 import { logger } from '../Logger.ts';
 import { debugAndPrintError, debugDevMode } from '../Debug.ts';
 import { getLocalRoomById, handleCreateRoom, presence, remoteRoomCall } from '../MatchMaker.ts';
@@ -44,19 +44,33 @@ export async function reloadFromCache() {
         logger.debug(`📋 room '${roomId}' state =>`, rawState);
 
         (recreatedRoom.state as Schema).restore(rawState);
+
+        // Restore the encoder's nextUniqueId so refIds increase
+        // monotonically across HMR cycles. Without this, restore()
+        // always produces the same refIds (0,1,2,3...) and onJoin()
+        // always assigns the same next refIds (4,5...), causing the
+        // client decoder to reuse stale instances on the 2nd+ cycle.
+        if (roomHistory.nextRefId !== undefined) {
+          const encoderRoot = recreatedRoom.state[$changes]?.root;
+          if (encoderRoot && roomHistory.nextRefId > encoderRoot['nextUniqueId']) {
+            encoderRoot['nextUniqueId'] = roomHistory.nextRefId;
+          }
+        }
       } catch (e: any) {
         debugAndPrintError(`❌ couldn't restore room '${roomId}' state:\n${e.stack}`);
       }
     }
 
-    // Reserve seats for clients from cached history
+    // Reserve seats for clients from cached history.
+    // Skip entries without a reconnectionToken — these are stale
+    // seats from allowReconnection() where the client already left
+    // (e.g. page refresh). Restoring them would block room disposal.
     if (roomHistory.clients) {
       for (const clientData of roomHistory.clients) {
-        // TODO: need to restore each client's StateView as well
-        // reserve seat for 20 seconds
         const { sessionId, reconnectionToken } = clientData;
-        console.log("reserving seat for client", { sessionId, reconnectionToken });
-        await remoteRoomCall(recreatedRoomListing.roomId, '_reserveSeat', [sessionId, {}, {}, 20, false, reconnectionToken]);
+        if (!reconnectionToken) { continue; }
+        // TODO: need to restore each client's StateView as well
+        await remoteRoomCall(recreatedRoomListing.roomId, '_reserveSeat', [sessionId, {}, {}, recreatedRoom.seatReservationTimeout, false, reconnectionToken]);
       }
     }
 
@@ -86,6 +100,15 @@ export async function cacheRoomHistory(rooms: { [roomId: string]: Room }) {
 
         if (room.state) {
           roomHistory["state"] = JSON.stringify(room.state);
+
+          // Cache the encoder's nextUniqueId so it can be restored.
+          // This ensures refIds increase monotonically across HMR cycles,
+          // preventing the client decoder from reusing stale refs that
+          // happen to have the same refId as newly created instances.
+          const encoderRoot = room.state[$changes]?.root;
+          if (encoderRoot) {
+            roomHistory["nextRefId"] = encoderRoot['nextUniqueId'];
+          }
         }
 
         // cache active clients with their reconnection tokens

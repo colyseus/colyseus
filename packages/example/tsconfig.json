@@ -4,6 +4,7 @@
         "module": "NodeNext",
         "moduleResolution": "NodeNext",
         "strictNullChecks": true,
-        "target": "ESNext"
+        "target": "ESNext",
+        "lib": ["ESNext", "DOM"]
     }
 }

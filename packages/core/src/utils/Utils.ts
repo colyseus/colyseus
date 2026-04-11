@@ -190,7 +190,7 @@ export function dynamicImport<T = any>(moduleName: string): Promise<T> {
     }
   } else {
     // ESM context - use import()
-    const promise = import(moduleName);
+    const promise = import(/* @vite-ignore */ moduleName);
     promise.catch(() => {}); // prevent unhandled rejection warnings
     return promise;
   }

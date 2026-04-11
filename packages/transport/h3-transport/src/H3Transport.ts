@@ -4,7 +4,7 @@ import { Http3Server } from '@fails-components/webtransport';
 import { URL } from 'url';
 import { decode, type Iterator } from '@colyseus/schema';
 
-import { matchMaker, Protocol, Transport, debugAndPrintError, spliceOne, getBearerToken, CloseCode, connectClientToRoom } from '@colyseus/core';
+import { matchMaker, Protocol, Transport, debugAndPrintError, spliceOne, getBearerToken, CloseCode, connectClientToRoom, isDevMode } from '@colyseus/core';
 import { H3Client } from './H3Client.ts';
 import { generateWebTransportCertificate } from './utils/mkcert.ts';
 import type { Application, Request, Response } from 'express';
@@ -227,10 +227,14 @@ export class H3Transport extends Transport {
     } catch (e: any) {
       debugAndPrintError(e);
 
-      // send error code to client then terminate
+      // send error code to client then terminate.
+      // Use MAY_TRY_RECONNECT in devMode so the SDK retries — the seat
+      // may not be reserved yet during HMR reload.
       h3Client.error(e.code, e.message, () =>
         h3Client.close(reconnectionToken
-          ? CloseCode.FAILED_TO_RECONNECT
+          ? (isDevMode)
+            ? CloseCode.MAY_TRY_RECONNECT
+            : CloseCode.FAILED_TO_RECONNECT
           : CloseCode.WITH_ERROR));
     }
   }

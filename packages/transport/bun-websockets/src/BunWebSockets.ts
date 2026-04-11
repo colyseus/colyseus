@@ -4,7 +4,7 @@
 // @ts-ignore
 import { Server, ServerWebSocket, WebSocketHandler } from 'bun';
 
-import { matchMaker, Protocol, Transport, debugAndPrintError, getBearerToken, CloseCode, connectClientToRoom, spliceOne, type Router } from '@colyseus/core';
+import { matchMaker, Protocol, Transport, debugAndPrintError, getBearerToken, CloseCode, connectClientToRoom, spliceOne, isDevMode, type Router } from '@colyseus/core';
 import { WebSocketClient, WebSocketWrapper } from './WebSocketClient.ts';
 
 import type { Application } from "express";
@@ -224,10 +224,14 @@ export class BunWebSockets extends Transport {
     } catch (e: any) {
       debugAndPrintError(e);
 
-      // send error code to client then terminate
+      // send error code to client then terminate.
+      // Use MAY_TRY_RECONNECT in devMode so the SDK retries — the seat
+      // may not be reserved yet during HMR reload.
       client.error(e.code, e.message, () =>
         rawClient.close(reconnectionToken
-          ? CloseCode.FAILED_TO_RECONNECT
+          ? (isDevMode)
+            ? CloseCode.MAY_TRY_RECONNECT
+            : CloseCode.FAILED_TO_RECONNECT
           : CloseCode.WITH_ERROR));
     }
   }

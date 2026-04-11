@@ -3,7 +3,7 @@ import { URL } from 'url';
 import WebSocket, { type ServerOptions, WebSocketServer } from 'ws';
 import express from 'express';
 
-import { matchMaker, Protocol, Transport, debugAndPrintError, debugConnection, getBearerToken, CloseCode, connectClientToRoom } from '@colyseus/core';
+import { matchMaker, Protocol, Transport, debugAndPrintError, debugConnection, getBearerToken, CloseCode, connectClientToRoom, isDevMode } from '@colyseus/core';
 import { WebSocketClient } from './WebSocketClient.ts';
 
 function noop() {}
@@ -16,12 +16,29 @@ export interface TransportOptions extends ServerOptions {
   pingMaxRetries?: number;
 }
 
+/**
+ * Options for binding this transport to an existing HTTP server.
+ *
+ * This is primarily used by `colyseus/vite`, which shares Vite's dev HTTP server
+ * and forwards only Colyseus websocket upgrade requests to this transport.
+ */
+export interface AttachToServerOptions {
+  /**
+   * Return `true` to let this transport handle the upgrade request.
+   * Requests that return `false` are left for the host HTTP server.
+   */
+  filter?: (req: http.IncomingMessage) => boolean;
+}
+
 export class WebSocketTransport extends Transport {
   protected wss: WebSocketServer;
 
   protected pingInterval: NodeJS.Timeout;
   protected pingIntervalMS: number;
   protected pingMaxRetries: number;
+
+  // False when sharing an external HTTP server, such as Vite's dev server.
+  protected shouldShutdownServer: boolean = true;
 
   private _originalSend: typeof WebSocketClient.prototype.raw | null = null;
   private _expressApp?: express.Application;
@@ -46,7 +63,8 @@ export class WebSocketTransport extends Transport {
       ? options.pingMaxRetries
       : 2;
 
-    // create server by default
+    // `noServer: true` lets callers attach later via `attachToServer()`.
+    // `colyseus/vite` uses this to share the Vite dev server instead of creating a new one.
     if (!options.server && !options.noServer) {
       options.server = http.createServer();
     }
@@ -59,7 +77,7 @@ export class WebSocketTransport extends Transport {
 
     this.server = options.server;
 
-    if (this.pingIntervalMS > 0 && this.pingMaxRetries > 0) {
+    if (this.server && this.pingIntervalMS > 0 && this.pingMaxRetries > 0) {
       this.server.on('listening', () =>
         this.autoTerminateUnresponsiveClients(this.pingIntervalMS, this.pingMaxRetries));
 
@@ -69,6 +87,10 @@ export class WebSocketTransport extends Transport {
   }
 
   public getExpressApp(): express.Application {
+    if (!this.server) {
+      throw new Error('WebSocketTransport is not attached to an HTTP server.');
+    }
+
     if (!this._expressApp) {
       this._expressApp = express();
       this.server.on('request', this._expressApp);
@@ -77,13 +99,56 @@ export class WebSocketTransport extends Transport {
   }
 
   public listen(port: number, hostname?: string, backlog?: number, listeningListener?: () => void) {
+    if (!this.server) {
+      throw new Error('WebSocketTransport is not attached to an HTTP server.');
+    }
+
     this.server.listen(port, hostname, backlog, listeningListener);
     return this;
   }
 
+  /**
+   * Attach this transport to an already-running HTTP server.
+   *
+   * `colyseus/vite` uses this in dev mode so Colyseus can reuse Vite's HTTP server
+   * instead of creating and owning a separate one.
+   */
+  public attachToServer(server: http.Server, options: AttachToServerOptions = {}) {
+    this.server = server;
+    this.shouldShutdownServer = false;
+
+    server.on('upgrade', (req, socket, head) => {
+      if (options.filter && !options.filter(req)) {
+        return;
+      }
+
+      this.wss.handleUpgrade(req, socket as any, head, (ws) => {
+        this.wss.emit('connection', ws, req);
+      });
+    });
+
+    if (this.pingIntervalMS > 0 && this.pingMaxRetries > 0 && !this.pingInterval) {
+      // An externally-managed server may already be listening, so start heartbeat here
+      // instead of waiting for a future "listening" event.
+      this.autoTerminateUnresponsiveClients(this.pingIntervalMS, this.pingMaxRetries);
+      server.on('close', () => clearInterval(this.pingInterval));
+    }
+
+    return this;
+  }
+
+  /**
+   * Close the websocket server and all active websocket connections.
+   *
+   * When attached through `attachToServer()`, keep the shared HTTP server alive.
+   * This is required for `colyseus/vite`, which does not own the Vite dev server.
+   */
   public shutdown() {
     this.wss.close();
-    this.server.close();
+
+    if (this.shouldShutdownServer) {
+      this.server?.close();
+    }
   }
 
   public simulateLatency(milliseconds: number) {
@@ -161,10 +226,14 @@ export class WebSocketTransport extends Transport {
     } catch (e: any) {
       debugAndPrintError(e);
 
-      // send error code to client then terminate
+      // send error code to client then terminate.
+      // Use MAY_TRY_RECONNECT when a reconnection token is present so the
+      // SDK retries — the seat may not be reserved yet during devMode HMR.
       client.error(e.code, e.message, () =>
         rawClient.close(reconnectionToken
-          ? CloseCode.FAILED_TO_RECONNECT
+          ? (isDevMode)
+            ? CloseCode.MAY_TRY_RECONNECT 
+            : CloseCode.FAILED_TO_RECONNECT
           : CloseCode.WITH_ERROR));
     }
   }

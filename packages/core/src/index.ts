@@ -11,7 +11,7 @@ export {
 } from '@colyseus/shared-types';
 
 // Core classes
-export { Server, defineRoom, defineServer, type ServerOptions, type SDKTypes } from './Server.ts';
+export { Server, defineRoom, defineServer, registerRoomDefinitions, unregisterRoomDefinitions, type RoomDefinitions, type ServerOptions, type SDKTypes } from './Server.ts';
 export { Room, room, RoomInternalState, validate, type RoomOptions, type MessageHandlerWithFormat, type Messages, type ExtractRoomState, type ExtractRoomMetadata, type ExtractRoomClient } from './Room.ts';
 export { getMessageBytes } from './Protocol.ts';
 export { RegisteredHandler } from './matchmaker/RegisteredHandler.ts';
@@ -34,6 +34,7 @@ export {
 import * as matchMaker from './MatchMaker.ts';
 export { matchMaker };
 export { updateLobby, subscribeLobby } from './matchmaker/Lobby.ts';
+export { createNodeMatchmakingMiddleware } from './router/node.ts';
 
 // Driver
 export * from './matchmaker/LocalDriver/LocalDriver.ts';
@@ -53,7 +54,7 @@ export { SchemaSerializer } from './serializer/SchemaSerializer.ts';
 // Utilities
 export { Clock, Delayed };
 export { generateId, Deferred, spliceOne, getBearerToken, dynamicImport } from './utils/Utils.ts';
-export { isDevMode } from './utils/DevMode.ts';
+export { isDevMode, setDevMode } from './utils/DevMode.ts';
 
 // IPC
 export { subscribeIPC, requestFromIPC } from './IPC.ts';

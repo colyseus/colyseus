@@ -724,6 +724,17 @@ export async function gracefullyShutdown(): Promise<any> {
   onReady = undefined;
 
   if (isDevMode) {
+    // Reject pending allowReconnection() deferreds BEFORE caching.
+    // This should trigger a state cleanup via user's onLeave (e.g. players.delete)
+    // so the cached state doesn't contain stale player data from clients
+    for (const roomId in rooms) {
+      if (!rooms.hasOwnProperty(roomId)) { continue; }
+      rooms[roomId]['_rejectPendingReconnections']?.("devmode_restart");
+    }
+
+    // Wait for async onLeave handlers to finish state cleanup.
+    await new Promise(resolve => setTimeout(resolve, 50));
+
     await cacheRoomHistory(rooms);
   }
 
@@ -744,6 +755,62 @@ export async function gracefullyShutdown(): Promise<any> {
       ? CloseCode.MAY_TRY_RECONNECT
       : CloseCode.SERVER_SHUTDOWN
   ));
+}
+
+/**
+ * DO NOT USE THIS IN PRODUCTION. 
+ * THIS METHOD IS MEANT TO BE USED FOR VITE DEV SERVER ONLY.
+ * ---------------------------------------------------------
+ *
+ * 
+ * Lightweight HMR reload for dev mode. 
+ *
+ * Unlike gracefullyShutdown() + setup() + accept(), this preserves the
+ * matchMaker infrastructure (presence, driver, IPC subscriptions, processId)
+ * and only cycles room instances: cache state → dispose → restore.
+ */
+export async function hotReload(): Promise<void> {
+  state = MatchMakerState.SHUTTING_DOWN;
+
+  // Reject pending allowReconnection() deferreds BEFORE caching.
+  // Triggers onLeave state cleanup so cached state is clean.
+  for (const roomId in rooms) {
+    if (!rooms.hasOwnProperty(roomId)) { continue; }
+    rooms[roomId]['_rejectPendingReconnections']?.("devmode_restart");
+  }
+
+  // Wait for async onLeave handlers to finish state cleanup.
+  await new Promise(resolve => setTimeout(resolve, 50));
+
+  await cacheRoomHistory(rooms);
+
+  // Lock all rooms and trigger default onBeforeShutdown (dev mode impl).
+  const noActiveRooms = new Deferred();
+  if (stats.local.roomCount <= 0) {
+    noActiveRooms.resolve();
+  } else {
+    events.once('no-active-rooms', () => noActiveRooms.resolve());
+  }
+
+  for (const roomId in rooms) {
+    if (!rooms.hasOwnProperty(roomId)) { continue; }
+    const room = rooms[roomId];
+    room.lock();
+    Room.prototype.onBeforeShutdown.call(room);
+  }
+
+  await noActiveRooms;
+
+  // Disconnect all clients — they will auto-reconnect.
+  await Promise.all(disconnectAll(CloseCode.MAY_TRY_RECONNECT));
+
+  // Clear driver cache so reloadFromCache() can recreate rooms.
+  await removeRoomsByProcessId(processId);
+
+  // Restore rooms from cached state.
+  state = MatchMakerState.READY;
+  await reloadFromCache();
+  await stats.persist();
 }
 
 /**

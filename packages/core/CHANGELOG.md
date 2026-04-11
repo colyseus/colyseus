@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.17.41
+
+- Export `registerRoomDefinitions`, `unregisterRoomDefinitions`, `RoomDefinitions`, and `createNodeMatchmakingMiddleware` from `@colyseus/core` (used by `colyseus/vite` plugin).
+- Silence expected `ServerError("disconnecting")` in default `onBeforeShutdown`.
+
+### DevMode: 
+
+- fix `gracefullyShutdown` ordering — reject pending `allowReconnection()` deferreds before caching room state, so `onLeave()` cleanup runs first and the cached state doesn't contain stale player data.
+- fix reconnection path seat cleanup — delete `_reservedSeats` and `_reconnections` entries after successful reconnection in `_onJoin`, preventing stale seats from blocking room disposal.
+- `_reserveSeat` timeout now calls `onLeave()` for clients that fail to reconnect, cleaning up stale player state.
+- cache and restore the encoder's `nextRefId` across HMR cycles, ensuring Schema refIds increase monotonically and preventing client-side decoder refId collisions.
+- skip restoring reserved seats without a `reconnectionToken` (stale `allowReconnection` from page refresh) to prevent orphaned seats blocking room disposal.
+- use `recreatedRoom.seatReservationTimeout` instead of hardcoded 20s in `reloadFromCache`.
+
 ## 0.17.40
 
 - Fix endpoints with query params returning 404 when Express app is present. `bindRouterToTransport` was passing `req.url` (including query string) to `router.findRoute()`, causing route mismatches. (thanks @thedomeffm for reporting - https://github.com/colyseus/colyseus/issues/930)

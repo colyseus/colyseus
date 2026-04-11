@@ -7,10 +7,13 @@
   "license": "MIT",
   "scripts": {
     "start": "tsx src/app.config.ts",
-    "example-h3": "tsx src/ServerH3.ts"
+    "example-h3": "tsx src/ServerH3.ts",
+    "vite": "vite --config vite.config.ts",
+    "vite:build": "vite build --app"
   },
   "dependencies": {
-    "@colyseus/core": "workspace:^"
+    "@colyseus/core": "workspace:^",
+    "colyseus": "workspace:^"
   },
   "devDependencies": {
     "@colyseus/auth": "workspace:^",
@@ -29,6 +32,7 @@
     "@colyseus/bun-websockets": "workspace:^",
     "@colyseus/ws-transport": "workspace:^",
     "zod": "^4.1.12",
-    "serve-index": "^1.8.0"
+    "serve-index": "^1.8.0",
+    "vite": "^8.0.2"
   }
 }

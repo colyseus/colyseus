@@ -370,6 +370,40 @@ export class Server<
     () => Promise.resolve()
 }
 
+export type RoomDefinitions = Record<string, RegisteredHandler | Type<Room>>;
+
+function isRegisteredHandler(value: RegisteredHandler | Type<Room>): value is RegisteredHandler {
+  return value instanceof RegisteredHandler || (
+    typeof(value) === "object" &&
+    value !== null &&
+    'klass' in (value as object)
+  );
+}
+
+export function registerRoomDefinitions<T extends RoomDefinitions>(rooms: T): string[] {
+  const roomNames: string[] = [];
+
+  for (const [name, value] of Object.entries(rooms)) {
+    if (isRegisteredHandler(value)) {
+      value.name = name;
+      matchMaker.addRoomType(value);
+
+    } else {
+      matchMaker.defineRoomType(name, value);
+    }
+
+    roomNames.push(name);
+  }
+
+  return roomNames;
+}
+
+export function unregisterRoomDefinitions(roomNames: Iterable<string>) {
+  for (const roomName of roomNames) {
+    matchMaker.removeRoomType(roomName);
+  }
+}
+
 export type DefineServerOptions<
   T extends Record<string, RegisteredHandler>,
   R extends Router
@@ -385,14 +419,21 @@ export function defineServer<
   options: DefineServerOptions<T, R>,
 ): Server<T, R> {
   const { rooms, routes, ...serverOptions } = options;
-  const server = new Server<T, R>(serverOptions);
 
+  if (isDevMode) {
+    // In dev mode, the Vite plugin manages Server/matchMaker lifecycle.
+    // Return a config-only object — no Server instance, no matchMaker.setup().
+    return {
+      options: serverOptions,
+      router: routes,
+      '~rooms': rooms,
+    } as unknown as Server<T, R>;
+  }
+
+  const server = new Server<T, R>(serverOptions);
   server.router = routes;
 
-  for (const [name, handler] of Object.entries(rooms)) {
-    handler.name = name;
-    matchMaker.addRoomType(handler);
-  }
+  registerRoomDefinitions(rooms);
 
   return server;
 }

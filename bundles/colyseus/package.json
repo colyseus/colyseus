@@ -1,6 +1,6 @@
 {
   "name": "colyseus",
-  "version": "0.17.8",
+  "version": "0.17.9",
   "description": "Multiplayer Framework for Node.js",
   "type": "module",
   "input": "./src/index.ts",
@@ -12,6 +12,11 @@
       "types": "./build/index.d.ts",
       "import": "./build/index.mjs",
       "require": "./build/index.cjs"
+    },
+    "./vite": {
+      "types": "./build/vite.d.ts",
+      "import": "./build/vite.mjs",
+      "require": "./build/vite.cjs"
     }
   },
   "scripts": {
@@ -70,7 +75,13 @@
     "@colyseus/redis-presence": "0.17.x",
     "@colyseus/schema": "^4.0.7",
     "@colyseus/uwebsockets-transport": "0.17.x",
-    "@colyseus/ws-transport": "0.17.x"
+    "@colyseus/ws-transport": "0.17.x",
+    "vite": ">=6.0.0"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
   },
   "gitHead": "25ba61e283429bb4fa02db0454f804ea218259eb"
 }

@@ -23,7 +23,7 @@ import { ClientState, type AuthContext, type Client, type ClientPrivate, ClientA
 import { type RoomMethodName, OnAuthException, OnCreateException, OnDisposeException, OnDropException, OnJoinException, OnLeaveException, OnMessageException, OnReconnectException, type RoomException, SimulationIntervalException, TimedEventException } from './errors/RoomExceptions.ts';
 
 import { standardValidate, type StandardSchemaV1 } from './utils/StandardSchema.ts';
-import { matchMaker } from '@colyseus/core';
+import * as matchMaker from './MatchMaker.ts';
 
 import {
   CloseCode,
@@ -551,7 +551,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
       (isDevMode)
         ? CloseCode.MAY_TRY_RECONNECT
         : CloseCode.SERVER_SHUTDOWN
-    );
+    ).catch(() => {});
   }
 
   /**
@@ -1066,9 +1066,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
       this._events.once('disconnect', () => resolve()));
 
     // reject pending reconnections
-    for (const [_, reconnection] of Object.values(this._reconnections)) {
-      reconnection.reject(new ServerError(CloseCode.NORMAL_CLOSURE, "disconnecting"));
-    }
+    this._rejectPendingReconnections("disconnecting");
 
     let numClients = this.clients.length;
     if (numClients > 0) {
@@ -1083,6 +1081,15 @@ export class Room<T extends RoomOptions = RoomOptions> {
     }
 
     return delayedDisconnection;
+  }
+
+  private _rejectPendingReconnections(message: string) {
+    for (const [_, reconnection] of Object.values(this._reconnections)) {
+      reconnection.reject(new ServerError(CloseCode.NORMAL_CLOSURE, message));
+      // Suppress unhandled rejection — expected during shutdown/devMode
+      // restart, handled downstream by _onLeave's .catch() handler.
+      reconnection.catch(() => {});
+    }
   }
 
   private async _onJoin(
@@ -1497,13 +1504,26 @@ export class Room<T extends RoomOptions = RoomOptions> {
       this.resetAutoDisposeTimeout(seconds);
     }
 
-    //
-    // TODO: isDevMode workaround to allow players to reconnect on devMode
-    //
     if (devModeReconnectionToken) {
-      // Set up reconnection token mapping
       const reconnection = new Deferred<Client & ClientPrivate>();
       this._reconnections[devModeReconnectionToken] = [sessionId, reconnection];
+
+      // If the client doesn't reconnect within the timeout, call onLeave
+      // so the room can clean up stale state (e.g. delete player data).
+      clearTimeout(this._reservedSeatTimeouts[sessionId]);
+      this._reservedSeatTimeouts[sessionId] = setTimeout(async () => {
+        if (!this._reconnections[devModeReconnectionToken]) { return; }
+
+        delete this._reconnections[devModeReconnectionToken];
+        delete this._reservedSeats[sessionId];
+        delete this._reservedSeatTimeouts[sessionId];
+
+        if (!allowReconnection) {
+          await this.#_decrementClientCount();
+        }
+
+        this.onLeave?.({ sessionId } as any, CloseCode.MAY_TRY_RECONNECT);
+      }, seconds * 1000);
     }
 
     return true;

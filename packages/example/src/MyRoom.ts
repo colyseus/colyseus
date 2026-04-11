@@ -1,6 +1,8 @@
 import { CloseCode, Room, type Client, validate, type Messages, type AuthContext } from "@colyseus/core";
-import { schema, type SchemaType, MapSchema } from "@colyseus/schema";
+import { schema, type SchemaType } from "@colyseus/schema";
 import { z } from "zod";
+
+const VERSION = 5;
 
 export const Player = schema({
   x: "number",
@@ -65,6 +67,7 @@ export class MyRoom extends Room<{ state: MyRoomState, client: MyClient }> {
       const player = this.state.players.get(client.sessionId)!;
       player.x = message.x;
       player.y = message.y;
+      console.log("MOVE", { sessionId: client.sessionId, VERSION });
     }),
 
     nopayload_2: (client: MyClient, message: any) => {
@@ -78,7 +81,7 @@ export class MyRoom extends Room<{ state: MyRoomState, client: MyClient }> {
   };
 
   onCreate(options: any) {
-    this.seatReservationTimeout = 30;
+    this.seatReservationTimeout = 31;
 
     // map dimensions
     this.state.mapWidth = 800;
@@ -96,15 +99,12 @@ export class MyRoom extends Room<{ state: MyRoomState, client: MyClient }> {
     this.setSimulationInterval(() => this.update());
   }
 
-  // onJoin(client: Client<{ custom: boolean }, { custom: boolean }>, options: any) {
   onJoin(client: MyClient, options: any) {
-    console.log(client.sessionId, "joined! options =>", options);
-
     const player = new Player();
     player.x = Math.random() * this.state.mapWidth;
     player.y = Math.random() * this.state.mapHeight;
-
     this.state.players.set(client.sessionId, player);
+    console.log("ON JOIN", { VERSION });
   }
 
   public onReconnect(client: MyClient): void | Promise<any> {
@@ -147,7 +147,7 @@ export class MyRoom extends Room<{ state: MyRoomState, client: MyClient }> {
 
   onBeforeShutdown() {
     //
-    // Disconnect all clients after 30 seconds
+    // Disconnect all clients after 5 seconds
     //
     this.clock.setTimeout(() => this.disconnect(), 5 * 1000);
   }

@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Colyseus Vite Example</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Inter, system-ui, sans-serif;
+        background: #111827;
+        color: #f9fafb;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: radial-gradient(circle at top, #1f2937, #111827 60%);
+      }
+
+      main {
+        width: min(640px, calc(100vw - 32px));
+        padding: 24px;
+        border-radius: 16px;
+        background: rgba(17, 24, 39, 0.85);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+      }
+
+      p {
+        margin: 0 0 16px;
+        color: #d1d5db;
+      }
+
+      button {
+        border: 0;
+        border-radius: 10px;
+        padding: 12px 16px;
+        background: #2563eb;
+        color: white;
+        font: inherit;
+        cursor: pointer;
+      }
+
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      #status {
+        display: inline-block;
+        margin-left: 12px;
+        font-size: 14px;
+        color: #9ca3af;
+      }
+
+      #status .dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 6px;
+        background: #6b7280;
+        vertical-align: middle;
+      }
+
+      #status.connected .dot { background: #22c55e; }
+      #status.disconnected .dot { background: #ef4444; }
+      #status.connecting .dot { background: #eab308; }
+
+      canvas {
+        display: block;
+        margin: 16px 0 0;
+        border-radius: 12px;
+        background: #030712;
+        width: 100%;
+        aspect-ratio: 4/3;
+      }
+
+      pre {
+        margin: 12px 0 0;
+        padding: 12px;
+        border-radius: 12px;
+        background: #030712;
+        color: #93c5fd;
+        overflow: auto;
+        font-size: 13px;
+        max-height: 120px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Colyseus + Vite</h1>
+      <p>Minimal example running the Colyseus server through the Vite plugin.</p>
+      <div>
+        <button id="connect" type="button">Join my_room</button>
+        <span id="status"><span class="dot"></span>Idle</span>
+      </div>
+      <div style="margin-top: 12px; display: flex; gap: 8px;">
+        <button id="btn-hello" type="button">GET /hello</button>
+        <button id="btn-time" type="button">GET /time</button>
+        <button id="btn-express" type="button">GET /express-hello</button>
+      </div>
+      <canvas id="game" width="800" height="600"></canvas>
+      <pre id="log">Ready.</pre>
+    </main>
+    <script type="module" src="/src/client.ts"></script>
+  </body>
+  </html>

@@ -18,7 +18,7 @@ import {
   getProcessRestoreKey,
   getPreviousProcessId,
 } from "@colyseus/core/utils/DevMode";
-import { Client as SDKClient } from "@colyseus/sdk";
+import { Client as SDKClient, Callbacks } from "@colyseus/sdk";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import { timeout } from "./utils/index.ts";
 
@@ -95,6 +95,33 @@ class NestedStateRoom extends Room {
   onDispose() {}
 }
 
+// Room that tracks onLeave calls for stale player cleanup testing
+class PlayerCleanupRoom extends Room {
+  state = new NestedState();
+  leaveCallLog: { sessionId: string; code: number }[] = [];
+
+  onCreate(options: any) {
+    this.state.mapWidth = 800;
+    this.state.mapHeight = 600;
+  }
+
+  onJoin(client) {
+    const player = new Player();
+    player.x = Math.random() * 800;
+    player.y = Math.random() * 600;
+    this.state.players.set(client.sessionId, player);
+  }
+
+  onLeave(client, code) {
+    this.leaveCallLog.push({ sessionId: client.sessionId, code });
+    this.state.players.delete(client.sessionId);
+  }
+
+  onCacheRoom() { return {}; }
+  onRestoreRoom() {}
+  onDispose() {}
+}
+
 describe("DevMode", () => {
   let presence: LocalPresence;
   let driver: LocalDriver;
@@ -105,6 +132,7 @@ describe("DevMode", () => {
     await matchMaker.setup(presence, driver);
     matchMaker.defineRoomType("devmode_room", DevModeRoom);
     matchMaker.defineRoomType("nested_room", NestedStateRoom);
+    matchMaker.defineRoomType("player_cleanup_room", PlayerCleanupRoom);
   });
 
   afterEach(async () => {
@@ -402,12 +430,114 @@ describe("DevMode", () => {
     });
   });
 
+  describe("stale player cleanup on devMode restore", () => {
+    it("should call onLeave for clients that fail to reconnect within the timeout", async () => {
+      setDevMode(true);
+
+      const roomId = "cleanup-room";
+
+      // Store room history with two players in state but clients that won't reconnect
+      await presence.hset(getRoomRestoreListKey(), roomId, JSON.stringify({
+        roomName: "player_cleanup_room",
+        clientOptions: {},
+        state: JSON.stringify({
+          mapWidth: 800,
+          mapHeight: 600,
+          players: {
+            "stale-client-1": { x: 10, y: 20 },
+            "stale-client-2": { x: 30, y: 40 },
+          },
+        }),
+        clients: [
+          { sessionId: "stale-client-1", reconnectionToken: "token-stale-1" },
+          { sessionId: "stale-client-2", reconnectionToken: "token-stale-2" },
+        ],
+      }));
+
+      await reloadFromCache();
+
+      const room = matchMaker.getLocalRoomById(roomId) as PlayerCleanupRoom;
+      assert.ok(room, "Room should be restored");
+
+      // Players should be in state after restore
+      assert.strictEqual(room.state.players.size, 2);
+
+      // Seats should be reserved
+      assert.ok(room['_reservedSeats']["stale-client-1"]);
+      assert.ok(room['_reservedSeats']["stale-client-2"]);
+
+      // Wait for the seat reservation to expire
+      // (COLYSEUS_SEAT_RESERVATION_TIME=0.3 in test env → 300ms)
+      await timeout(500);
+
+      // onLeave should have been called for both stale clients
+      assert.strictEqual(room.leaveCallLog.length, 2, "onLeave should have been called for both stale clients");
+      const sessionIds = room.leaveCallLog.map(l => l.sessionId).sort();
+      assert.deepStrictEqual(sessionIds, ["stale-client-1", "stale-client-2"]);
+      assert.strictEqual(room.leaveCallLog[0].code, CloseCode.MAY_TRY_RECONNECT);
+      assert.strictEqual(room.leaveCallLog[1].code, CloseCode.MAY_TRY_RECONNECT);
+
+      // Players should be cleaned up from state
+      assert.strictEqual(room.state.players.size, 0, "Stale players should be removed from state");
+
+      // Reservations should be cleaned up
+      assert.strictEqual(room['_reservedSeats']["stale-client-1"], undefined);
+      assert.strictEqual(room['_reservedSeats']["stale-client-2"], undefined);
+
+      // Reconnection entries should be cleaned up
+      assert.strictEqual(room['_reconnections']["token-stale-1"], undefined);
+      assert.strictEqual(room['_reconnections']["token-stale-2"], undefined);
+    });
+
+    it("should NOT call onLeave for clients that successfully reconnect", async () => {
+      setDevMode(true);
+
+      const roomId = "cleanup-room-partial";
+
+      // Store room history with one player
+      await presence.hset(getRoomRestoreListKey(), roomId, JSON.stringify({
+        roomName: "player_cleanup_room",
+        clientOptions: {},
+        state: JSON.stringify({
+          mapWidth: 800,
+          mapHeight: 600,
+          players: {
+            "reconnecting-client": { x: 50, y: 60 },
+          },
+        }),
+        clients: [
+          { sessionId: "reconnecting-client", reconnectionToken: "token-reconnect" },
+        ],
+      }));
+
+      await reloadFromCache();
+
+      const room = matchMaker.getLocalRoomById(roomId) as PlayerCleanupRoom;
+      assert.ok(room, "Room should be restored");
+      assert.strictEqual(room.state.players.size, 1);
+
+      // Simulate the client reconnecting by clearing the reconnection entry
+      // (this is what happens when _onJoin processes the reconnection)
+      delete room['_reconnections']["token-reconnect"];
+
+      // Wait for the timeout to fire
+      await timeout(500);
+
+      // onLeave should NOT have been called since the client "reconnected"
+      assert.strictEqual(room.leaveCallLog.length, 0, "onLeave should not be called for reconnected clients");
+
+      // Player should still be in state
+      assert.strictEqual(room.state.players.size, 1);
+    });
+  });
+
   describe("integration test", () => {
     const TEST_PORT = 8568;
     const TEST_ENDPOINT = `ws://localhost:${TEST_PORT}`;
 
     // Room class for integration test
     class IntegrationDevModeRoom extends Room {
+      seatReservationTimeout = 10;
       state = new DevModeState();
 
       messages = {
@@ -431,6 +561,7 @@ describe("DevMode", () => {
       }
 
       onJoin() {}
+      onReconnect() {}
       onLeave() {}
       onDispose() {}
     }
@@ -595,6 +726,170 @@ describe("DevMode", () => {
 
       // Cleanup
       await roomConnection.leave();
+      await timeout(50);
+      await server3.gracefullyShutdown(false);
+    });
+  });
+
+  describe("devMode client-side state sync with multiple clients", () => {
+    const TEST_PORT = 8569;
+    const TEST_ENDPOINT = `ws://localhost:${TEST_PORT}`;
+
+    class MultiClientDevModeRoom extends Room {
+      seatReservationTimeout = 10;
+      state = new NestedState();
+
+      messages = {
+        move: (client, message: { x: number; y: number }) => {
+          const player = this.state.players.get(client.sessionId);
+          if (player) {
+            player.x = message.x;
+            player.y = message.y;
+          }
+        },
+      };
+
+      onCreate() {
+        this.state.mapWidth = 800;
+        this.state.mapHeight = 600;
+      }
+
+      onJoin(client) {
+        const player = new Player();
+        player.x = Math.random() * 800;
+        player.y = Math.random() * 600;
+        this.state.players.set(client.sessionId, player);
+      }
+
+      onLeave(client) {
+        this.state.players.delete(client.sessionId);
+      }
+
+      onCacheRoom() { return {}; }
+      onRestoreRoom() {}
+      onDispose() {}
+    }
+
+    function createServer(presence: LocalPresence, driver: LocalDriver) {
+      const server = new Server({
+        greet: false,
+        gracefullyShutdown: false,
+        devMode: true,
+        presence,
+        driver,
+        transport: new WebSocketTransport({ pingInterval: 100, pingMaxRetries: 3 }),
+      });
+      server.define("multi_client_room", MultiClientDevModeRoom);
+      return server;
+    }
+
+    it("should maintain distinct player references on client after 2nd devMode restart", async () => {
+      const sharedPresence = new LocalPresence();
+      const sharedDriver = new LocalDriver();
+
+      // === Server 1: initial connections ===
+      const server1 = createServer(sharedPresence, sharedDriver);
+      await server1.listen(TEST_PORT);
+
+      const sdk1 = new SDKClient(TEST_ENDPOINT);
+      const sdk2 = new SDKClient(TEST_ENDPOINT);
+
+      const room1 = await sdk1.joinOrCreate<MultiClientDevModeRoom>("multi_client_room");
+      const room2 = await sdk2.joinOrCreate<MultiClientDevModeRoom>("multi_client_room");
+
+      room1.reconnection.minUptime = 0;
+      room1.reconnection.delay = 10;
+      room1.reconnection.minDelay = 10;
+      room2.reconnection.minUptime = 0;
+      room2.reconnection.delay = 10;
+      room2.reconnection.minDelay = 10;
+
+      await timeout(100);
+
+      // Both clients should see 2 players
+      assert.strictEqual(room1.state.players.size, 2, "Room1 should see 2 players");
+      assert.strictEqual(room2.state.players.size, 2, "Room2 should see 2 players");
+
+      // Players should be distinct objects on the client
+      const room1Players = [...room1.state.players.values()];
+      assert.notStrictEqual(room1Players[0], room1Players[1], "Initial: players should be distinct objects on client 1");
+
+      // Set up reconnection trackers
+      const drop1 = { d: new Deferred<void>() };
+      const drop2 = { d: new Deferred<void>() };
+      const recon1 = { d: new Deferred<void>() };
+      const recon2 = { d: new Deferred<void>() };
+
+      room1.onDrop(() => drop1.d.resolve());
+      room2.onDrop(() => drop2.d.resolve());
+      room1.onReconnect(() => recon1.d.resolve());
+      room2.onReconnect(() => recon2.d.resolve());
+
+      // === Server 2: first devMode restart ===
+      await server1.gracefullyShutdown(false);
+      await Promise.all([drop1.d, drop2.d]);
+
+      const server2 = createServer(sharedPresence, sharedDriver);
+      await server2.listen(TEST_PORT);
+
+      await Promise.all([recon1.d, recon2.d]);
+      await timeout(100);
+
+      // Verify state after 1st reconnection
+      assert.strictEqual(room1.state.players.size, 2, "After 1st restart: room1 should see 2 players");
+      const after1stPlayers = [...room1.state.players.values()];
+      assert.notStrictEqual(after1stPlayers[0], after1stPlayers[1],
+        "After 1st restart: players should be distinct objects on client 1");
+
+      // Move player 1 and verify only their player moves
+      const session1 = room1.sessionId;
+      const session2 = room2.sessionId;
+      room1.send("move", { x: 111, y: 222 });
+      await timeout(100);
+
+      const p1 = room1.state.players.get(session1);
+      const p2 = room1.state.players.get(session2);
+      assert.strictEqual(p1.x, 111, "After 1st restart: player 1 x should be 111");
+      assert.strictEqual(p1.y, 222, "After 1st restart: player 1 y should be 222");
+      assert.notStrictEqual(p2.x, 111, "After 1st restart: player 2 x should NOT be 111");
+
+      // === Server 3: second devMode restart (where the bug occurs) ===
+      drop1.d = new Deferred();
+      drop2.d = new Deferred();
+      recon1.d = new Deferred();
+      recon2.d = new Deferred();
+
+      await server2.gracefullyShutdown(false);
+      await Promise.all([drop1.d, drop2.d]);
+
+      const server3 = createServer(sharedPresence, sharedDriver);
+      await server3.listen(TEST_PORT);
+
+      await Promise.all([recon1.d, recon2.d]);
+      await timeout(100);
+
+      // Verify state after 2nd reconnection
+      assert.strictEqual(room1.state.players.size, 2, "After 2nd restart: room1 should see 2 players");
+
+      // THIS IS THE KEY ASSERTION: players must be distinct objects
+      const after2ndPlayers = [...room1.state.players.values()];
+      assert.notStrictEqual(after2ndPlayers[0], after2ndPlayers[1],
+        "After 2nd restart: players should be distinct objects (not same reference)");
+
+      // Move player 1 and verify only their player moves (not both)
+      room1.send("move", { x: 999, y: 888 });
+      await timeout(100);
+
+      const p1After = room1.state.players.get(session1);
+      const p2After = room1.state.players.get(session2);
+      assert.strictEqual(p1After.x, 999, "After 2nd restart: player 1 x should be 999");
+      assert.strictEqual(p1After.y, 888, "After 2nd restart: player 1 y should be 888");
+      assert.notStrictEqual(p2After.x, 999,
+        "After 2nd restart: player 2 x should NOT be 999 (must not share reference with player 1)");
+
+      // Cleanup
+      await room1.leave();
+      await room2.leave();
       await timeout(50);
       await server3.gracefullyShutdown(false);
     });

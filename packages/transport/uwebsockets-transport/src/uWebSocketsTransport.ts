@@ -2,7 +2,7 @@ import querystring, { type ParsedUrlQuery } from 'querystring';
 import uWebSockets, { type WebSocket } from 'uWebSockets.js';
 import type express from 'express';
 
-import { type AuthContext, Transport, matchMaker, Protocol, getBearerToken, debugAndPrintError, spliceOne, connectClientToRoom, CloseCode, type Router } from '@colyseus/core';
+import { type AuthContext, Transport, matchMaker, Protocol, getBearerToken, debugAndPrintError, spliceOne, connectClientToRoom, CloseCode, isDevMode, type Router } from '@colyseus/core';
 import { uWebSocketClient, uWebSocketWrapper } from './uWebSocketClient.ts';
 import { Deferred } from '@colyseus/core';
 
@@ -376,9 +376,13 @@ export class uWebSocketsTransport extends Transport {
       // send error code to client then terminate
       client.error(e.code, e.message, () => {
         // uWS throws "Invalid access of closed uWS.WebSocket" if the socket closed between the readyState check and the end()/close() call.
+        // Use MAY_TRY_RECONNECT in devMode so the SDK retries — the seat
+        // may not be reserved yet during HMR reload.
         try {
           rawClient.end(reconnectionToken
-            ? CloseCode.FAILED_TO_RECONNECT
+            ? (isDevMode)
+              ? CloseCode.MAY_TRY_RECONNECT
+              : CloseCode.FAILED_TO_RECONNECT
             : CloseCode.WITH_ERROR);
         } catch (e: any) {}
       });
