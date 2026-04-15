@@ -30,27 +30,7 @@ type HasRequired<
         query?: any;
         params?: any;
     },
-> = T["body"] extends object
-    ? HasRequiredKeys<T["body"]> extends true
-        ? true
-        : T["query"] extends object
-            ? HasRequiredKeys<T["query"]> extends true
-                ? true
-                : T["params"] extends object
-                    ? HasRequiredKeys<T["params"]>
-                    : false
-            : T["params"] extends object
-                ? HasRequiredKeys<T["params"]>
-                : false
-    : T["query"] extends object
-        ? HasRequiredKeys<T["query"]> extends true
-            ? true
-            : T["params"] extends object
-                ? HasRequiredKeys<T["params"]>
-                : false
-        : T["params"] extends object
-            ? HasRequiredKeys<T["params"]>
-            : false;
+> = keyof RequiredOptionKeys<T> extends never ? false : true;
 
 type InferContext<T> = T extends (ctx: infer Ctx) => any
     ? Ctx extends object
@@ -87,27 +67,42 @@ type MethodOptions<API, M extends HTTPMethod> = API extends { [key: string]: inf
         : {}
     : {};
 
+// When the endpoint didn't declare a schema, better-call infers:
+//   - body: `any`
+//   - query: `Record<string, any> | undefined`
+//   - params: `Record<string, any> | undefined` (no `:param` in path)
+// Under `strictNullChecks: false`, `undefined extends T` is vacuously true and
+// `undefined extends object` is also true, so the previous `extends object`
+// guard wrongly classified these undeclared slots as required. The checks
+// below use `IsAny` for body and `string extends keyof NonNullable<…>` to
+// detect the fallback index signature — both are immune to null-check mode.
+type IsUndeclaredSchema<T> = [T] extends [never]
+    ? true
+    : string extends keyof NonNullable<T> ? true : false;
+
 export type RequiredOptionKeys<
     C extends {
         body?: any;
         query?: any;
         params?: any;
     },
-> = (C["body"] extends object
-    ? HasRequiredKeys<C["body"]> extends true
-        ? { body: true }
-        : {}
-    : {}) &
-    (C["query"] extends object
-        ? HasRequiredKeys<C["query"]> extends true
+> = (IsAny<C["body"]> extends true
+    ? {}
+    : NonNullable<C["body"]> extends object
+        ? HasRequiredKeys<NonNullable<C["body"]>> extends true
+            ? { body: true }
+            : {}
+        : { body: true }) &
+    (IsUndeclaredSchema<C["query"]> extends true
+        ? {}
+        : HasRequiredKeys<NonNullable<C["query"]>> extends true
             ? { query: true }
-            : {}
-        : {}) &
-    (C["params"] extends object
-        ? HasRequiredKeys<C["params"]> extends true
+            : {}) &
+    (IsUndeclaredSchema<C["params"]> extends true
+        ? {}
+        : HasRequiredKeys<NonNullable<C["params"]>> extends true
             ? { params: true }
-            : {}
-        : {});
+            : {});
 
 
 type CommonHeaders = {

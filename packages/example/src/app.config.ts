@@ -27,6 +27,11 @@ auth.oauth.addProvider("discord", {
   scope: ["identify", "email"]
 })
 
+// The endpoints below double as fixtures for the SDK client-side type tests
+// in `sdk_fullstack_types.ts` — each one exercises a different combination of
+// `body` / `query` / `params` (declared vs. undeclared, required vs. optional)
+// so the inferred `client.http.*` signatures stay covered.
+
 const index = createEndpoint("/", { method: "GET" }, async (ctx) => {
   return new Response(await fs.promises.readFile(path.join(import.meta.dirname, "index.html"), "utf8"), {
     headers: { "Content-Type": "text/html", },
@@ -74,6 +79,61 @@ const createThing = createEndpoint("/things", {
     createdAt: new Date().toISOString()
   };
 });
+
+// Issue #933 reproduction: PUT with only `body` declared (no query, no params)
+const setupMe = createEndpoint("/api/v1/players/me", {
+  method: "PUT",
+  body: z.object({
+    username: z.string().min(3),
+    race: z.enum(["HUMAN", "ELF", "DWARF"]),
+  }),
+}, async (ctx) => {
+  return { ok: true, ...ctx.body };
+});
+
+// PATCH with only `body` declared (no query, no params)
+const patchMe = createEndpoint("/api/v1/players/me/profile", {
+  method: "PATCH",
+  body: z.object({
+    bio: z.string().optional(),
+    avatar: z.string().url().optional(),
+  }),
+}, async (ctx) => ({ ok: true, ...ctx.body }));
+
+// DELETE with only `body` declared (no query, no params)
+const bulkDelete = createEndpoint("/api/v1/things/bulk-delete", {
+  method: "DELETE",
+  body: z.object({ ids: z.array(z.string()).min(1) }),
+}, async (ctx) => ({ deleted: ctx.body.ids.length }));
+
+// GET with only `query` declared (required)
+const searchThings = createEndpoint("/api/v1/search", {
+  method: "GET",
+  query: z.object({
+    q: z.string().min(1),
+    limit: z.number().int().optional(),
+  }),
+}, async (ctx) => ({ q: ctx.query.q, results: [] }));
+
+// GET with only `query` declared, all fields optional
+const listArticles = createEndpoint("/api/v1/articles", {
+  method: "GET",
+  query: z.object({
+    page: z.number().int().optional(),
+    tag: z.string().optional(),
+  }),
+}, async (ctx) => ({ articles: [] }));
+
+// Multi-param path: params required, no body, no query
+const getPostComment = createEndpoint("/api/v1/posts/:postId/comments/:commentId", {
+  method: "GET",
+}, async (ctx) => ({ postId: ctx.params.postId, commentId: ctx.params.commentId }));
+
+// Params + required body (common "update nested resource" shape)
+const updatePostComment = createEndpoint("/api/v1/posts/:postId/comments/:commentId", {
+  method: "PUT",
+  body: z.object({ text: z.string().min(1) }),
+}, async (ctx) => ({ ...ctx.params, text: ctx.body.text }));
 
 const updateThing = createEndpoint("/things/:id", {
   method: "PUT",
@@ -187,6 +247,13 @@ export const server = config({
     listThings,
     getThing,
     createThing,
+    setupMe,
+    patchMe,
+    bulkDelete,
+    searchThings,
+    listArticles,
+    getPostComment,
+    updatePostComment,
     updateThing,
     patchThing,
     deleteThing,

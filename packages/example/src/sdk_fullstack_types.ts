@@ -86,6 +86,73 @@ sdk.http.put("/things/:id", {
   }
 });
 
+// Issue #933 — PUT endpoint with only `body` declared (no query, no params).
+// Per the issue, the type checker currently demands `query` and `params`
+// even though the endpoint declared neither.
+
+// @ts-expect-error - body is required for /api/v1/players/me
+sdk.http.put("/api/v1/players/me");
+
+// @ts-expect-error - body is required
+sdk.http.put("/api/v1/players/me", {});
+
+// This SHOULD typecheck (body-only, no query, no params).
+// If issue #933 is reproduced, this line errors with:
+//   "Type '{ body: ... }' is missing the following properties: query, params"
+sdk.http.put("/api/v1/players/me", {
+  body: { username: "Johnny", race: "DWARF" },
+});
+
+// --- Related coverage: make sure the fix didn't loosen surrounding cases ---
+
+// PATCH body-only, body fields all optional → whole options arg should be optional
+sdk.http.patch("/api/v1/players/me/profile");
+sdk.http.patch("/api/v1/players/me/profile", { body: {} });
+sdk.http.patch("/api/v1/players/me/profile", { body: { bio: "hi" } });
+
+// DELETE body-only, body has a required field
+// @ts-expect-error - body is required for /api/v1/things/bulk-delete
+sdk.http.delete("/api/v1/things/bulk-delete");
+// @ts-expect-error - body.ids is required
+sdk.http.delete("/api/v1/things/bulk-delete", { body: {} });
+sdk.http.delete("/api/v1/things/bulk-delete", { body: { ids: ["a", "b"] } });
+
+// GET query-only, required query field
+// @ts-expect-error - query is required for /api/v1/search
+sdk.http.get("/api/v1/search");
+// @ts-expect-error - query.q is required
+sdk.http.get("/api/v1/search", { query: {} });
+sdk.http.get("/api/v1/search", { query: { q: "hello" } });
+sdk.http.get("/api/v1/search", { query: { q: "hello", limit: 10 } });
+
+// GET query-only, all query fields optional → everything optional
+sdk.http.get("/api/v1/articles");
+sdk.http.get("/api/v1/articles", { query: {} });
+sdk.http.get("/api/v1/articles", { query: { page: 2 } });
+
+// Multi-param path: params required (body/query untouched)
+// @ts-expect-error - params is required for nested path
+sdk.http.get("/api/v1/posts/:postId/comments/:commentId");
+// @ts-expect-error - commentId param missing
+sdk.http.get("/api/v1/posts/:postId/comments/:commentId", {
+  params: { postId: "1" },
+});
+sdk.http.get("/api/v1/posts/:postId/comments/:commentId", {
+  params: { postId: "1", commentId: "42" },
+});
+
+// Multi-param path + required body
+// @ts-expect-error - params and body both required
+sdk.http.put("/api/v1/posts/:postId/comments/:commentId");
+// @ts-expect-error - body is required even when params is provided
+sdk.http.put("/api/v1/posts/:postId/comments/:commentId", {
+  params: { postId: "1", commentId: "42" },
+});
+sdk.http.put("/api/v1/posts/:postId/comments/:commentId", {
+  params: { postId: "1", commentId: "42" },
+  body: { text: "updated" },
+});
+
 async function connect() {
   const room = await sdk.joinOrCreate("my_room");
 
