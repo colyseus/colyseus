@@ -10,6 +10,7 @@ export {
   createEndpoint,
   createMiddleware,
   createInternalContext,
+  APIError,
 
   // Re-export types needed for declaration emit
   type Router,

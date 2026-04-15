@@ -83,6 +83,7 @@ export {
   createMiddleware,
   createRouter,
   toNodeHandler,
+  APIError,
   __globalEndpoints,
   type Router,
   type RouterConfig,

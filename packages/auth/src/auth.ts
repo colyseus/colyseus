@@ -188,12 +188,18 @@ export const auth = {
     }
 
     if (oAuthProviderCallback) {
-      const prefix = oauth.prefix;
+      // Preserve the relative mount-point for router.use() — oauth.prefix may
+      // already have been promoted to a fully-qualified path by a previous
+      // call (back-compat shim can be invoked more than once across tests).
+      const relativePrefix = oauth.prefix.startsWith(auth.prefix)
+        ? oauth.prefix.slice(auth.prefix.length)
+        : oauth.prefix;
 
-      // make sure oauth.prefix contains the full prefix
-      oauth.prefix = auth.prefix + prefix;
+      if (!oauth.prefix.startsWith(auth.prefix)) {
+        oauth.prefix = auth.prefix + oauth.prefix;
+      }
 
-      router.use(prefix, oauth.routes());
+      router.use(relativePrefix, oauth.routes());
     }
 
     /**

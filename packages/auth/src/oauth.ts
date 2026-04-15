@@ -1,14 +1,16 @@
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import express, { Router } from 'express';
 import grant, { type GrantProvider, type GrantConfig, type GrantSession } from 'grant';
 import session from 'express-session';
-import { matchMaker } from '@colyseus/core';
+import { createEndpoint, matchMaker } from '@colyseus/core';
 import { type MayHaveUpgradeToken, auth } from './auth.ts';
 
 // @ts-ignore
 import RedisStore from "connect-redis";
 import { JWT } from './JWT.ts';
+import { runExpressApp } from './express-bridge.ts';
 
 export type OAuthProviderName = '23andme' | '500px' | 'acton' | 'acuityscheduling' | 'adobe' | 'aha' | 'alchemer' | 'amazon' | 'angellist' | 'apple' | 'arcgis' | 'asana' | 'assembla' | 'atlassian' | 'auth0' | 'authentiq' | 'authing' | 'autodesk' | 'aweber' | 'axosoft' | 'baidu' | 'basecamp' | 'battlenet' | 'beatport' | 'bitbucket' | 'bitly' | 'box' | 'buffer' | 'campaignmonitor' | 'cas' | 'cheddar' | 'clio' | 'cognito' | 'coinbase' | 'concur' | 'constantcontact' | 'coursera' | 'crossid' | 'dailymotion' | 'deezer' | 'delivery' | 'deputy' | 'deviantart' | 'digitalocean' | 'discogs' | 'discord' | 'disqus' | 'docusign' | 'dribbble' | 'dropbox' | 'ebay' | 'echosign' | 'ecwid' | 'edmodo' | 'egnyte' | 'etsy' | 'eventbrite' | 'evernote' | 'eyeem' | 'facebook' | 'familysearch' | 'feedly' | 'figma' | 'fitbit' | 'flickr' | 'formstack' | 'foursquare' | 'freeagent' | 'freelancer' | 'freshbooks' | 'fusionauth' | 'garmin' | 'geeklist' | 'genius' | 'getbase' | 'getpocket' | 'gitbook' | 'github' | 'gitlab' | 'gitter' | 'goodreads' | 'google' | 'groove' | 'gumroad' | 'harvest' | 'hellosign' | 'heroku' | 'homeaway' | 'hootsuite' | 'huddle' | 'ibm' | 'iconfinder' | 'idme' | 'idonethis' | 'imgur' | 'infusionsoft' | 'instagram' | 'intuit' | 'jamendo' | 'jumplead' | 'kakao' | 'keycloak' | 'line' | 'linkedin' | 'live' | 'livechat' | 'logingov' | 'lyft' | 'mailchimp' | 'mailup' | 'mailxpert' | 'mapmyfitness' | 'mastodon' | 'medium' | 'meetup' | 'mendeley' | 'mention' | 'microsoft' | 'mixcloud' | 'moxtra' | 'myob' | 'naver' | 'nest' | 'netlify' | 'nokotime' | 'notion' | 'nylas' | 'okta' | 'onelogin' | 'openstreetmap' | 'optimizely' | 'osu' | 'patreon' | 'paypal' | 'phantauth' | 'pinterest' | 'plurk' | 'podio' | 'procore' | 'producthunt' | 'projectplace' | 'pushbullet' | 'qq' | 'ravelry' | 'redbooth' | 'reddit' | 'runkeeper' | 'salesforce' | 'sellsy' | 'shoeboxed' | 'shopify' | 'skyrock' | 'slack' | 'slice' | 'smartsheet' | 'smugmug' | 'snapchat' | 'snowflake' | 'socialpilot' | 'socrata' | 'soundcloud' | 'spotify' | 'square' | 'stackexchange' | 'stocktwits' | 'stormz' | 'storyblok' | 'strava' | 'stripe' | 'surveymonkey' | 'surveysparrow' | 'thingiverse' | 'ticketbud' | 'tiktok' | 'timelyapp' | 'todoist' | 'trakt' | 'traxo' | 'trello' | 'tripit' | 'trustpilot' | 'tumblr' | 'twitch' | 'twitter' | 'typeform' | 'uber' | 'unbounce' | 'underarmour' | 'unsplash' | 'untappd' | 'upwork' | 'uservoice' | 'vend' | 'venmo' | 'vercel' | 'verticalresponse' | 'viadeo' | 'vimeo' | 'visualstudio' | 'vk' | 'wechat' | 'weekdone' | 'weibo' | 'withings' | 'wordpress' | 'workos' | 'wrike' | 'xero' | 'xing' | 'yahoo' | 'yammer' | 'yandex' | 'zendesk' | 'zoom';
 export type OAuthProviderConfig = {
@@ -54,6 +56,135 @@ export let oAuthProviderCallback: (data: GrantSession['response'] & MayHaveUpgra
   return data;
 };
 
+// Ensure `oauth.prefix` is a fully-qualified path (`/auth/provider`) rather
+// than the relative default (`/provider`). The back-compat `auth.routes()`
+// path performs the same mutation at mount time.
+function resolveOAuthPrefix(): string {
+  if (!oauth.prefix.startsWith(auth.prefix)) {
+    oauth.prefix = auth.prefix + oauth.prefix;
+  }
+  return oauth.prefix;
+}
+
+// Synchronous router builder. Safe to call only after `matchMaker.onReady`
+// has resolved so that `matchMaker.presence` is available.
+function buildOAuthExpressRouter(): Router {
+  const router = express.Router();
+
+  const store = (matchMaker.presence?.['pub'])
+    ? new RedisStore({ client: matchMaker.presence['pub'] })
+    : undefined;
+
+  const sessionMiddleware = session({
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    store,
+  });
+
+  const config: GrantConfig = Object.assign({ defaults: oauth.defaults }, oauth.providers);
+  config.defaults.prefix = oauth.prefix;
+
+  router.use(sessionMiddleware);
+
+  router.get("/:providerId", async (req, res, next) => {
+    const providerId = req.params.providerId as OAuthProviderName;
+    if (oauth.providers[providerId]) {
+      next();
+    } else {
+      if (process.env.NODE_ENV === "production") {
+        res.send(`Missing OAuth provider configuration for "${providerId}".`);
+      } else {
+        const dirname = (typeof __dirname !== 'undefined') ? __dirname : path.dirname(fileURLToPath(import.meta.url));
+        const helpURLs = JSON.parse(fs.readFileSync(path.normalize(dirname + '/../oauth_help_urls.json')).toString());
+        const providerUrl = helpURLs[providerId];
+        res.send(`<!doctype html>
+<html>
+<head>
+<title>Missing "${providerId}" provider configuration</title>
+<style>p { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans",Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji"; }</style>
+</head>
+<body>
+<p>Missing config for "${providerId}" OAuth provider.</p>
+<hr />
+<p><small><strong>Config example:</strong></small></p>
+<pre><code>import { auth } from "@colyseus/auth";<br />
+auth.oauth.addProvider("${providerId}", {
+  key: "xxx",
+  secret: "xxx",
+});
+</code></pre>
+${(providerUrl) ? `<hr/><p><small><em>(Get your keys from <a href="${providerUrl}" target="_blank">${providerUrl}</a>)</em></small></p>` : ""}
+</body>
+</html>`);
+      }
+    }
+  });
+
+  // Dynamically inject origin for grant per-request. Grant reads overrides
+  // from `res.locals.grant.dynamic`.
+  router.use((req, res, next) => {
+    const dynamicOrigin = oauth.defaults.origin || auth.backend_url;
+    if (dynamicOrigin) {
+      res.locals.grant = { dynamic: { origin: dynamicOrigin } };
+    }
+    next();
+  });
+
+  router.use(grant.default.express(config));
+
+  router.get("/:providerId/callback", async (req, res) => {
+    const grantSession = (req as any).session as unknown & { grant: GrantSession };
+
+    let user = null;
+    let token = null;
+    let response = undefined;
+
+    if (grantSession.grant.response.error) {
+      response = { error: grantSession.grant.response.error, user, token };
+    } else {
+      const data: GrantSession['response'] & MayHaveUpgradeToken = grantSession.grant.response;
+
+      if (grantSession.grant.dynamic?.token) {
+        data.upgradingToken = await JWT.verify(grantSession.grant.dynamic?.token);
+      }
+
+      if (data.profile) {
+        data.profile = oauth.transformProfileData(data.profile);
+      }
+
+      user = await oAuthProviderCallback(data, grantSession.grant.provider as OAuthProviderName);
+      token = await auth.settings.onGenerateToken(user);
+      response = { user, token };
+    }
+
+    // Safe to use "*" for postMessage target origin: the token and origin are
+    // already validated by the OAuth provider.
+    // https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage
+    res.send(`<!DOCTYPE html><html><head><script type="text/javascript">window.opener.postMessage(${JSON.stringify(response)}, '*');</script></head><body></body></html>`);
+    res.end();
+  });
+
+  return router;
+}
+
+// Singleton Express app that hosts the grant + session router. Built lazily
+// on first OAuth request so that `oauth.providers` / `oauth.prefix` overrides
+// can still be applied before the bridge locks them in.
+let _bridgeApp: express.Application | undefined;
+let _bridgeAppPrefix: string | undefined;
+
+async function getBridgeApp(): Promise<express.Application> {
+  await matchMaker.onReady;
+  const fullPrefix = resolveOAuthPrefix();
+  if (_bridgeApp && _bridgeAppPrefix === fullPrefix) return _bridgeApp;
+  const app = express();
+  app.use(fullPrefix, buildOAuthExpressRouter());
+  _bridgeApp = app;
+  _bridgeAppPrefix = fullPrefix;
+  return app;
+}
+
 export const oauth = {
   /**
    * Default 'grant' module configuration.
@@ -80,6 +211,8 @@ export const oauth = {
    */
   addProvider: function (providerId: OAuthProviderName, config: OAuthProviderConfig) {
     this.providers[providerId] = config;
+    // Invalidate cached bridge app so the new provider is picked up.
+    _bridgeApp = undefined;
   },
 
   /**
@@ -91,6 +224,8 @@ export const oauth = {
 
   /**
    * Returns an Express Router that handles OAuth for configured providers.
+   * Used by the back-compat `auth.routes()` shim and internally by the
+   * better-call bridge endpoints.
    * @param callback (optional) Callback function that is called when OAuth is successful.
    * @returns Express Router
    */
@@ -99,128 +234,57 @@ export const oauth = {
 
     const router = express.Router();
 
+    // Populate the router once matchMaker is ready so we can read
+    // `matchMaker.presence` for the shared Redis session store.
     matchMaker.onReady.then(() => {
-      //
-      // Here we are using the same Redis connection from the MatchMaker.
-      // FIXME: make it type-safe. (This is a hacky way to auto-detection)
-      //
-      const store = (matchMaker.presence['pub'])
-        ? new RedisStore({ client: matchMaker.presence['pub'] })
-        : undefined;
-
-      const sessionMiddleware = session({
-        secret: process.env.SESSION_SECRET,
-        resave: false,
-        saveUninitialized: false, // true
-        store
-      });
-
-      // set prefix
-      const config: GrantConfig = Object.assign({ defaults: this.defaults }, this.providers);
-      config.defaults.prefix = oauth.prefix;
-
-      router.use(sessionMiddleware);
-
-      router.get("/:providerId", async (req, res, next) => {
-        const providerId = req.params.providerId as OAuthProviderName;
-        if (oauth.providers[providerId]) {
-          next();
-
-        } else {
-          if (process.env.NODE_ENV === "production") {
-            //
-            // Production environment:
-            //
-            res.send(`Missing OAuth provider configuration for "${providerId}".`);
-
-          } else {
-            //
-            // Development environment:
-            // Display help URL for missing OAuth provider configuration
-            //
-            const helpURLs = JSON.parse(fs.readFileSync(path.normalize(__dirname + '/../oauth_help_urls.json')).toString());
-            const providerUrl = helpURLs[providerId];
-            res.send(`<!doctype html>
-<html>
-<head>
-<title>Missing "${providerId}" provider configuration</title>
-<style>p { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans",Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji"; }</style>
-</head>
-<body>
-<p>Missing config for "${providerId}" OAuth provider.</p>
-<hr />
-<p><small><strong>Config example:</strong></small></p>
-<pre><code>import { auth } from "@colyseus/auth";<br />
-auth.oauth.addProvider("${providerId}", {
-  key: "xxx",
-  secret: "xxx",
-});
-</code></pre>
-${(providerUrl) ? `<hr/><p><small><em>(Get your keys from <a href="${providerUrl}" target="_blank">${providerUrl}</a>)</em></small></p>` : ""}
-</body>
-</html>`);
-          }
-        }
-      });
-
-      //
-      // Dynamically inject origin for grant per-request.
-      // This handles the case where origin is auto-detected after grant was initialized.
-      // Grant reads dynamic overrides from res.locals.grant.dynamic
-      //
-      router.use((req, res, next) => {
-        const dynamicOrigin = oauth.defaults.origin || auth.backend_url;
-        if (dynamicOrigin) {
-          res.locals.grant = {
-            dynamic: { origin: dynamicOrigin }
-          };
-        }
-        next();
-      });
-
-      router.use(grant.default.express(config));
-
-      router.get("/:providerId/callback", async (req, res) => {
-        const session = (req as any).session as unknown & { grant: GrantSession };
-
-        let user = null;
-        let token = null;
-        let response = undefined;
-
-        if (session.grant.response.error) {
-          response = { error: session.grant.response.error, user, token, };
-
-        } else {
-          const data: GrantSession['response'] & MayHaveUpgradeToken = session.grant.response;
-
-          /**
-           * Verify existing token, if available
-           * (Upgrading user)
-           */
-          if (session.grant.dynamic?.token) {
-            data.upgradingToken = await JWT.verify(session.grant.dynamic?.token);
-          }
-
-          // transform profile data
-          if (data.profile) {
-            data.profile = oauth.transformProfileData(data.profile);
-          }
-
-          user = await oAuthProviderCallback(data, session.grant.provider as OAuthProviderName);
-          token = await auth.settings.onGenerateToken(user);
-          response = { user, token };
-        }
-
-        /**
-         * I believe it is safe to use "*" in the origin here, since the token and origin are already validated by the OAuth provider.
-         * => https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage
-         */
-        res.send(`<!DOCTYPE html><html><head><script type="text/javascript">window.opener.postMessage(${JSON.stringify(response)}, '*');</script></head><body></body></html>`);
-        res.end();
-      });
+      router.use(buildOAuthExpressRouter());
     });
 
     return router;
+  },
+
+  /**
+   * Build better-call endpoints for OAuth start + callback. Each endpoint
+   * forwards the request to the internal grant + express-session router via
+   * an Express bridge so grant's provider knowledge and session state are
+   * preserved without reimplementing them.
+   *
+   * Meant to be spread into a `createRouter({ ... })` call:
+   *
+   *   createRouter({ ...auth.endpoints, ...oauth.createEndpoints() })
+   */
+  createEndpoints: function () {
+    const fullPrefix = resolveOAuthPrefix();
+    const startPath = `${fullPrefix}/:providerId`;
+    const callbackPath = `${fullPrefix}/:providerId/callback`;
+
+    const oauthStart = createEndpoint(startPath, {
+      method: "GET",
+      requireRequest: true,
+      metadata: {
+        openapi: {
+          description: "Start OAuth flow with the given provider.",
+        },
+      },
+    }, async (ctx) => {
+      const app = await getBridgeApp();
+      return runExpressApp(app, ctx.request);
+    });
+
+    const oauthCallback = createEndpoint(callbackPath, {
+      method: "GET",
+      requireRequest: true,
+      metadata: {
+        openapi: {
+          description: "OAuth callback; closes popup and posts message to opener.",
+        },
+      },
+    }, async (ctx) => {
+      const app = await getBridgeApp();
+      return runExpressApp(app, ctx.request);
+    });
+
+    return { oauthStart, oauthCallback };
   },
 
   /**
