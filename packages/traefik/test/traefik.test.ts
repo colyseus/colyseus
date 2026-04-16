@@ -52,6 +52,50 @@ describe("Traefik", () => {
 
     await server.gracefullyShutdown(false);
   });
+
+  describe("internalAddress parsing", () => {
+    const cases: Array<[string, string | undefined, string]> = [
+      // [label, internalAddress input, expected URL]
+      ["bare IPv4 uses server port",          "192.168.1.1",            "http://192.168.1.1:{port}"],
+      ["IPv4 with explicit port",             "192.168.1.1:9999",       "http://192.168.1.1:9999"],
+      ["bracketed IPv6 with port",            "[::1]:9999",             "http://[::1]:9999"],
+      ["bracketed IPv6 without port",         "[::1]",                  "http://[::1]:{port}"],
+      ["bare IPv6 uses server port",          "fd12:3456:abcd::1",      "http://[fd12:3456:abcd::1]:{port}"],
+      ["loopback IPv6 bare",                  "::1",                    "http://[::1]:{port}"],
+      ["hostname with port",                  "localhost:9999",         "http://localhost:9999"],
+    ];
+
+    for (const [label, input, expectedTemplate] of cases) {
+      it(label, async () => {
+        const port = 25700 + Math.floor(Math.random() * 100);
+        const server = new Server({
+          transport: new WebSocketTransport(),
+          presence: new RedisPresence(),
+          publicAddress: `node-${port}.example.com`,
+          greet: false,
+        });
+
+        await server.listen(port);
+        await exposeServerToTraefik({
+          server,
+          provider: "http",
+          mainAddress: "main.example.com",
+          internalAddress: input,
+        });
+
+        const config: any = await get(`http://localhost:${port}/__traefik`);
+        const subdomain = `node-${port}`;
+        const expected = expectedTemplate.replace("{port}", String(port));
+
+        assert.strictEqual(
+          config.http.services[subdomain].loadBalancer.servers[0].url,
+          expected,
+        );
+
+        await server.gracefullyShutdown(false);
+      });
+    }
+  });
 });
 
 async function get(url: string) {
