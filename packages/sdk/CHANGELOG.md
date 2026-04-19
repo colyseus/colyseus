@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.41
+
+- Isolate `debug.js` panel inside a Shadow DOM root so page-level CSS (e.g. a global `canvas { width: 100vw }` rule) can no longer stretch or restyle the debug UI.
+
 ## 0.17.40
 
 - Fix `client.http.*` type inference wrongly requiring `query` and `params` on endpoints that declared neither (most visible under `strictNullChecks: false`). Closes [#933](https://github.com/colyseus/colyseus/issues/933) - thanks @thedomeffm for reporting!

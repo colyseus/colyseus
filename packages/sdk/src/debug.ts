@@ -92,6 +92,19 @@ const BASE_MODAL_ZINDEX = 10000;
 // Load preferences on script load
 loadPreferences();
 
+// Shadow DOM root — isolates all debug UI from page-level CSS.
+// Every SDK element is appended here so page rules like `canvas { width: 100vw }`
+// can't reach (or stretch) the debug panel's sparklines, logo, menu, or modals.
+let _debugShadowRoot: ShadowRoot | null = null;
+function getDebugRoot(): ShadowRoot {
+    if (_debugShadowRoot) return _debugShadowRoot;
+    const host = document.createElement('div');
+    host.id = 'colyseus-debug-shadow-host';
+    _debugShadowRoot = host.attachShadow({ mode: 'open' });
+    document.body.appendChild(host);
+    return _debugShadowRoot;
+}
+
 // Function to select a modal (bring to front)
 function selectModal(modal) {
     if (!modal) return;
@@ -106,8 +119,9 @@ function selectModal(modal) {
     modalStack.push(modal);
 
     // Update z-indexes for all modals based on their position in stack
+    var root = getDebugRoot();
     modalStack.forEach((m, i) => {
-        if (document.body.contains(m)) {
+        if (root.contains(m)) {
             m.style.zIndex = (BASE_MODAL_ZINDEX + i).toString();
         }
     });
@@ -126,7 +140,7 @@ document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape' && modalStack.length > 0) {
         // Get the most recent modal (top of stack)
         const topModal = modalStack[modalStack.length - 1];
-        if (topModal && document.body.contains(topModal)) {
+        if (topModal && getDebugRoot().contains(topModal)) {
             topModal.remove();
         }
     }
@@ -405,7 +419,7 @@ function initialize() {
     icon.insertAdjacentHTML('beforeend', logoIcon);
 
     container.appendChild(icon);
-    document.body.appendChild(container);
+    getDebugRoot().appendChild(container);
 
     // Create menu first
     createMenu(container);
@@ -549,7 +563,8 @@ function createMenu(logoContainer) {
         }
 
         var styleId = 'latency-slider-style';
-        var existingStyle = document.getElementById(styleId);
+        var root = getDebugRoot();
+        var existingStyle = root.getElementById(styleId);
         if (existingStyle) {
             existingStyle.remove();
         }
@@ -569,7 +584,7 @@ function createMenu(logoContainer) {
                 border: none;
             }
         `;
-        document.head.appendChild(style);
+        root.appendChild(style);
     }
 
     // Initialize slider color
@@ -615,11 +630,11 @@ function createMenu(logoContainer) {
             box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
         }
     `;
-    document.head.appendChild(style);
+    getDebugRoot().appendChild(style);
 
     // Function to update container border color
     function updateContainerBackgroundColor() {
-        var container = document.getElementById('debug-logo-container');
+        var container = getDebugRoot().getElementById('debug-logo-container');
         if (container) {
             // Update to normal state (hover handlers will update on hover)
             container.style.borderColor = getBorderColor(preferences.latencySimulation.delay, 0.7);
@@ -688,7 +703,7 @@ function createMenu(logoContainer) {
     });
     menu.appendChild(settingsOption);
 
-    document.body.appendChild(menu);
+    getDebugRoot().appendChild(menu);
 
     // Toggle menu on logo click
     var menuVisible = false;
@@ -710,9 +725,15 @@ function createMenu(logoContainer) {
         }
     });
 
-    // Close menu when clicking outside
+    // Close menu when clicking outside.
+    // Because menu/logo live inside a shadow root, event.target is retargeted
+    // to the shadow host for document-level listeners, so we walk the composed
+    // path to see whether the real click target was inside the menu or logo.
     document.addEventListener('click', function(e) {
-        if (menuVisible && !menu.contains(e.target as Node) && !logoContainer.contains(e.target as Node)) {
+        var path = typeof e.composedPath === 'function' ? e.composedPath() : [e.target as EventTarget];
+        var clickedInsideMenu = path.indexOf(menu) !== -1;
+        var clickedInsideLogo = path.indexOf(logoContainer) !== -1;
+        if (menuVisible && !clickedInsideMenu && !clickedInsideLogo) {
             menuVisible = false;
             menu.style.display = 'none';
             if (hostUpdateInterval) {
@@ -726,7 +747,7 @@ function createMenu(logoContainer) {
 // Create and open Settings modal
 function openSettingsModal() {
     // Remove existing modal if present
-    var existingModal = document.getElementById('debug-settings-modal');
+    var existingModal = getDebugRoot().getElementById('debug-settings-modal');
     if (existingModal) {
         existingModal.remove();
     }
@@ -935,7 +956,7 @@ function openSettingsModal() {
     modal.appendChild(hideContainer);
 
     overlay.appendChild(modal);
-    document.body.appendChild(overlay);
+    getDebugRoot().appendChild(overlay);
 
     // Mark as selected modal when opened
     selectModal(overlay);
@@ -977,7 +998,7 @@ function openSendMessagesModal(uniquePanelId) {
     }
 
     // Remove existing modal if present
-    var existingModal = document.getElementById('debug-send-messages-modal');
+    var existingModal = getDebugRoot().getElementById('debug-send-messages-modal');
     if (existingModal) {
         existingModal.remove();
     }
@@ -1422,7 +1443,7 @@ function openSendMessagesModal(uniquePanelId) {
     formContainer.appendChild(sendButton);
 
     modal.appendChild(formContainer);
-    document.body.appendChild(modal);
+    getDebugRoot().appendChild(modal);
 }
 
 // Create and open State Inspector modal
@@ -1436,7 +1457,7 @@ function openStateInspectorModal(uniquePanelId) {
     var room = debugInfo.room;
 
     // Remove existing modal if present
-    var existingModal = document.getElementById('debug-state-inspector-modal');
+    var existingModal = getDebugRoot().getElementById('debug-state-inspector-modal');
     if (existingModal) {
         existingModal.remove();
     }
@@ -1873,7 +1894,7 @@ function openStateInspectorModal(uniquePanelId) {
     }
 
     modal.appendChild(contentContainer);
-    document.body.appendChild(modal);
+    getDebugRoot().appendChild(modal);
 
     // Drag and resize state variables
     var isDragging = false;
@@ -2095,9 +2116,10 @@ function openStateInspectorModal(uniquePanelId) {
 
 // Apply panel position based on current setting
 function applyPanelPosition() {
-    var logoContainer = document.getElementById('debug-logo-container');
-    var menu = document.getElementById('debug-menu');
-    var panels = document.querySelectorAll('[id^="debug-panel-"]');
+    var root = getDebugRoot();
+    var logoContainer = root.getElementById('debug-logo-container');
+    var menu = root.getElementById('debug-menu');
+    var panels = root.querySelectorAll('[id^="debug-panel-"]');
 
     var positions = {
         'bottom-right': { bottom: '14px', right: '14px', top: 'auto', left: 'auto' },
@@ -2139,9 +2161,10 @@ function hidePanelsForSession() {
     panelsHidden = true;
     savePreferences(); // Save the hidden state
 
-    var logoContainer = document.getElementById('debug-logo-container');
-    var menu = document.getElementById('debug-menu');
-    var panels = document.querySelectorAll('[id^="debug-panel-"]') as NodeListOf<HTMLElement>;
+    var root = getDebugRoot();
+    var logoContainer = root.getElementById('debug-logo-container');
+    var menu = root.getElementById('debug-menu');
+    var panels = root.querySelectorAll('[id^="debug-panel-"]') as NodeListOf<HTMLElement>;
 
     if (logoContainer) {
         logoContainer.style.display = 'none';
@@ -2170,7 +2193,7 @@ function formatBytes(bytes) {
 // Helper function to create debug panel for a room
 function createDebugPanel(uniquePanelId, debugInfo) {
     // Check if panel already exists
-    var existingPanel = document.getElementById('debug-panel-' + uniquePanelId);
+    var existingPanel = getDebugRoot().getElementById('debug-panel-' + uniquePanelId);
     if (existingPanel) {
         return existingPanel;
     }
@@ -2327,11 +2350,12 @@ function createDebugPanel(uniquePanelId, debugInfo) {
     }
 
     // Inject CSS animation if not already present
-    if (!document.getElementById('debug-pulse-animation')) {
+    var pulseRoot = getDebugRoot();
+    if (!pulseRoot.getElementById('debug-pulse-animation')) {
         var style = document.createElement('style');
         style.id = 'debug-pulse-animation';
         style.textContent = '@keyframes debug-pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }';
-        document.head.appendChild(style);
+        pulseRoot.appendChild(style);
     }
 
     // Apply initial style
@@ -2394,11 +2418,12 @@ function createDebugPanel(uniquePanelId, debugInfo) {
     panel.appendChild(content);
     panel.appendChild(actionsContainer);
 
-    // Prepend panel to body so new panels appear first
-    if (document.body.firstChild) {
-        document.body.insertBefore(panel, document.body.firstChild);
+    // Prepend panel inside the shadow root so new panels appear first
+    var root = getDebugRoot();
+    if (root.firstChild) {
+        root.insertBefore(panel, root.firstChild);
     } else {
-        document.body.appendChild(panel);
+        root.appendChild(panel);
     }
 
     return panel;
@@ -2408,7 +2433,7 @@ function createDebugPanel(uniquePanelId, debugInfo) {
 function repositionDebugPanels() {
     if (panelsHidden) return;
 
-    var panels = Array.from(document.querySelectorAll('[id^="debug-panel-"]') as NodeListOf<HTMLElement>)
+    var panels = Array.from(getDebugRoot().querySelectorAll('[id^="debug-panel-"]') as NodeListOf<HTMLElement>)
         .filter(function(panel: HTMLElement) { return panel.style.display !== 'none'; })
         .reverse(); // Reverse to get oldest first (since new panels are prepended)
 
@@ -2457,36 +2482,37 @@ function repositionDebugPanels() {
 
 // Update debug panel content
 function updateDebugPanel(uniquePanelId, debugInfo) {
+    var root = getDebugRoot();
     var contentId = 'debug-content-' + uniquePanelId;
     var panelId = 'debug-panel-' + uniquePanelId;
     var titleId = 'debug-title-' + uniquePanelId;
-    var content = document.getElementById(contentId);
-    var panel = document.getElementById(panelId);
-    var title = document.getElementById(titleId);
+    var content = root.getElementById(contentId);
+    var panel = root.getElementById(panelId);
+    var title = root.getElementById(titleId);
 
     if (!content || !panel) {
         // Only create if panel doesn't exist
         if (!panel) {
             createDebugPanel(uniquePanelId, debugInfo);
-            content = document.getElementById(contentId);
-            title = document.getElementById(titleId);
+            content = root.getElementById(contentId);
+            title = root.getElementById(titleId);
             repositionDebugPanels();
         } else {
-            content = document.getElementById(contentId);
-            title = document.getElementById(titleId);
+            content = root.getElementById(contentId);
+            title = root.getElementById(titleId);
         }
     }
 
     // Update title with room name only (roomId and sessionId are in tooltip)
-    var titleTextEl = document.getElementById('debug-title-text-' + uniquePanelId);
+    var titleTextEl = root.getElementById('debug-title-text-' + uniquePanelId);
     var roomNameEl = titleTextEl?.querySelector('.debug-room-name');
     if (roomNameEl) roomNameEl.textContent = debugInfo.roomName;
-    document.getElementById('debug-tooltip-' + uniquePanelId).innerHTML = '<div><strong>Room ID:</strong> ' + debugInfo.roomId + '</div><div><strong>Session ID:</strong> ' + debugInfo.sessionId + '</div>';
+    root.getElementById('debug-tooltip-' + uniquePanelId).innerHTML = '<div><strong>Room ID:</strong> ' + debugInfo.roomId + '</div><div><strong>Session ID:</strong> ' + debugInfo.sessionId + '</div>';
 
     // Update ping in header
     var pingDisplay = debugInfo.pingMs !== null ? debugInfo.pingMs + 'ms' : '--';
     var pingColor = debugInfo.pingMs !== null ? (debugInfo.pingMs < 100 ? '#22c55e' : debugInfo.pingMs < 200 ? '#eab308' : '#ef4444') : '#888';
-    var pingElement = document.getElementById('debug-ping-' + uniquePanelId);
+    var pingElement = root.getElementById('debug-ping-' + uniquePanelId);
     if (pingElement) {
         pingElement.textContent = pingDisplay;
         pingElement.style.color = pingColor;
@@ -2516,7 +2542,7 @@ function updateDebugPanel(uniquePanelId, debugInfo) {
 
 // Draw graph on canvas
 function drawGraph(canvasId, data, color) {
-    var canvas = document.getElementById(canvasId) as HTMLCanvasElement;
+    var canvas = getDebugRoot().getElementById(canvasId) as HTMLCanvasElement;
     if (!canvas) return;
 
     var ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
@@ -2702,7 +2728,7 @@ function applyMonkeyPatches() {
             debugInfo.messageTypes = messageTypes;
 
             // Show/hide message button based on message types availability
-            var messageBtnElement = document.getElementById('debug-message-btn-' + uniquePanelId);
+            var messageBtnElement = getDebugRoot().getElementById('debug-message-btn-' + uniquePanelId);
             if (messageBtnElement) {
                 messageBtnElement.style.display = messageTypes ? 'flex' : 'none';
             }
@@ -2834,7 +2860,7 @@ function applyMonkeyPatches() {
                 debugInfo.pingInterval = null;
             }
             roomDebugInfo.delete(uniquePanelId);
-            var panel = document.getElementById('debug-panel-' + uniquePanelId);
+            var panel = getDebugRoot().getElementById('debug-panel-' + uniquePanelId);
             if (panel) {
                 panel.remove();
                 repositionDebugPanels();
