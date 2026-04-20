@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.42
+
+- `defineServer()` / `new Server()`: `express` callback can now return a `Promise<void>`, and is awaited before the transport is marked ready. This lets async setup inside the callback (e.g. `await apolloServer.start()`) complete before any request is served.
+
 ## 0.17.41
 
 - Export `registerRoomDefinitions`, `unregisterRoomDefinitions`, `RoomDefinitions`, and `createNodeMatchmakingMiddleware` from `@colyseus/core` (used by `colyseus/vite` plugin).

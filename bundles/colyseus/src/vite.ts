@@ -59,6 +59,15 @@ export interface ColyseusViteOptions {
       attachToServer(server: any, options?: { filter?: (req: any) => boolean }): any;
     };
   }>;
+  /**
+   * HTTP server to attach the WebSocket transport to.
+   *
+   * Required when running Vite in middleware mode (`server.middlewareMode`),
+   * where the HTTP server is owned by the parent process (e.g. Express).
+   * In standalone Vite dev mode this is ignored — the plugin uses Vite's
+   * own HTTP server.
+   */
+  httpServer?: import('http').Server;
 }
 
 // ─── Internal types ───────────────────────────────────────────────────
@@ -237,11 +246,15 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
         });
 
         return async () => {
-          if (!server.httpServer) {
-            throw new Error('[colyseus] Vite HTTP server not available.');
+          const httpServer = options.httpServer ?? server.httpServer;
+          if (!httpServer) {
+            throw new Error(
+              '[colyseus] No HTTP server available. When running Vite in ' +
+              'middlewareMode, pass `httpServer` to the colyseus() plugin.'
+            );
           }
-          await loadServerModule();
-          console.log("[colyseus] Server ready on Vite's HTTP server");
+          await loadServerModule(httpServer);
+          console.log("[colyseus] Server ready on " + (options.httpServer ? 'user-provided' : "Vite's") + ' HTTP server');
         };
       },
     },
@@ -270,7 +283,7 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
    * On HMR reload: re-imports user code, swaps rooms/router, hot-reloads
    * running rooms (cache → dispose → restore).
    */
-  async function loadServerModule() {
+  async function loadServerModule(httpServer?: import('http').Server) {
     const env = viteServer.environments.colyseus;
     if (!env) {
       console.error('[colyseus] Environment not found');
@@ -300,7 +313,7 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
           throw new Error('[colyseus] Vite dev mode requires a transport with attachToServer().');
         }
 
-        (transport as any).attachToServer(viteServer.httpServer, {
+        (transport as any).attachToServer(httpServer ?? viteServer.httpServer, {
           filter(req: any) {
             return /^\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_-]+\/?$/.test(
               new URL(req.url || '', 'http://localhost').pathname,
@@ -325,9 +338,10 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
       // Set up express once — persistent across HMR reloads.
       if (!expressApp && config?.options?.express) {
         try {
-          const express = (await dynamicImport<any>('express')).default;
+          const expressModule = await dynamicImport<any>('express');
+          const express = expressModule?.default ?? expressModule;
           expressApp = express();
-          config.options.express(expressApp);
+          await config.options.express(expressApp);
         } catch (e) {
           console.warn('[colyseus] Express not available. Install express to use the express option.');
         }

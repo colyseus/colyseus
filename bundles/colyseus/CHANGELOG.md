@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.17.10
+
+### Vite plugin fixes
+
+- **Fix `express` interop in dev mode.** `(await dynamicImport('express')).default` could resolve to `undefined` in some ESM module-loader setups, causing the plugin to silently fall back to `[colyseus] Express not available. Install express to use the express option.` The plugin now accepts both shapes via `expressModule?.default ?? expressModule`. (thanks @ajgell for reporting)
+- **Support `server.middlewareMode`.** When Vite is wrapped by a custom parent server (e.g. Express hosting GraphQL alongside the Vite dev middleware), the Colyseus plugin previously threw `[colyseus] Vite HTTP server not available.` because `server.httpServer` is null in middleware mode. A new `httpServer` plugin option lets you pass your own `http.Server` for the WebSocket transport to attach to:
+
+  ```typescript
+  import http from 'http';
+  import express from 'express';
+  import { createServer as createViteServer } from 'vite';
+  import { colyseus } from 'colyseus/vite';
+
+  const app = express();
+  const httpServer = http.createServer(app);
+
+  const vite = await createViteServer({
+    plugins: [
+      colyseus({ serverEntry: '/src/server/index.ts', httpServer }),
+    ],
+    server: { middlewareMode: true },
+    appType: 'custom',
+  });
+
+  app.use(vite.middlewares);
+  httpServer.listen(3000);
+  ```
+
+- **Await async `express` callback.** The dev-mode path now awaits `config.options.express(expressApp)` so async setup (e.g. `await apolloServer.start()` before mounting `expressMiddleware`) resolves before any request is served, matching the behavior of `beforeListen`.
+
 ## 0.17.9
 
 ### Vite Integration

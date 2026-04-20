@@ -40,7 +40,7 @@ export type ServerOptions = {
    *
    * For uWebSockets transport, this uses the uwebsockets-express module.
    */
-  express?: (app: express.Application) => void,
+  express?: (app: express.Application) => Promise<void> | void,
 
   /**
    * Custom function to determine which process should handle room creation.
@@ -141,7 +141,7 @@ export class Server<
     // Initialize Express if callback is provided
     if (options.express && this.transport.getExpressApp) {
       const expressApp = await this.transport.getExpressApp();
-      options.express(expressApp);
+      await options.express(expressApp);
     }
 
     // Resolve the promise when the transport is ready
