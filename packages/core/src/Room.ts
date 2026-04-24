@@ -185,25 +185,25 @@ export class Room<T extends RoomOptions = RoomOptions> {
    * it is locked automatically. Unless the room was explicitly locked by you via `lock()` method,
    * the room will be unlocked as soon as a client disconnects from it.
    */
-  public declare maxClients: number;
-  #_maxClients: number = Infinity;
+  public maxClients: number = Infinity;
   #_maxClientsReached: boolean = false;
+  #_maxClients: number;
 
   /**
    * Automatically dispose the room when last client disconnects.
    *
    * @default true
    */
-  public declare autoDispose: boolean;
-  #_autoDispose: boolean = true;
+  public autoDispose: boolean = true;
+  #_autoDispose: boolean;
 
   /**
    * Frequency to send the room state to connected clients, in milliseconds.
    *
    * @default 50ms (20fps)
    */
-  public declare patchRate: number | null;
-  #_patchRate: number | null = DEFAULT_PATCH_RATE;
+  public patchRate: number | null = DEFAULT_PATCH_RATE;
+  #_patchRate: number;
   #_patchInterval: NodeJS.Timeout;
 
   /**
@@ -217,7 +217,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
   /**
    * The state instance you provided to `setState()`.
    */
-  public declare state: ExtractRoomState<T>;
+  public state: ExtractRoomState<T>;
   #_state: ExtractRoomState<T>;
 
   /**
@@ -246,17 +246,10 @@ export class Room<T extends RoomOptions = RoomOptions> {
 
   private _events = new EventEmitter();
 
-  private _reservedSeats: {
-    [sessionId: string]: [
-      joinOptions: any,
-      authData: any,
-      isConsumed?: boolean,
-      isWaitingReconnection?: boolean
-    ]
-  } = {};
+  private _reservedSeats: { [sessionId: string]: [any, any, boolean?, boolean?] } = {};
   private _reservedSeatTimeouts: { [sessionId: string]: NodeJS.Timeout } = {};
 
-  private _reconnections: { [reconnectionToken: string]: [sessionId: string, deferred: Deferred] } = {};
+  private _reconnections: { [reconnectionToken: string]: [string, Deferred] } = {};
   private _reconnectionAttempts: { [reconnectionToken: string]: Deferred } = {};
 
   public messages?: Messages<any>;
@@ -287,11 +280,6 @@ export class Room<T extends RoomOptions = RoomOptions> {
 
   private _internalState: RoomInternalState = RoomInternalState.CREATING;
 
-  // flipped to true at the start of __init(); gates accessor side effects
-  // (interval installation, listing persistence) that depend on infrastructure
-  // set up by the MatchMaker.
-  #_postInit: boolean = false;
-
   private _lockedExplicitly: boolean = false;
   #_locked: boolean = false;
 
@@ -300,11 +288,6 @@ export class Room<T extends RoomOptions = RoomOptions> {
   private _autoDisposeTimeout: NodeJS.Timeout;
 
   constructor() {
-    // Install getter/setter pairs for state/maxClients/autoDispose/patchRate.
-    // These fields are `declare`d on the class (so subclasses can override them
-    // with class-field initializers), with the runtime accessor installed here.
-    this.#installAccessors();
-
     this._events.once('dispose', () => {
       this.#_dispose()
         .catch((e) => debugAndPrintError(`onDispose error: ${(e && e.stack || e.message || e || 'promise rejected')} (roomId: ${this.roomId})`))
@@ -319,99 +302,79 @@ export class Room<T extends RoomOptions = RoomOptions> {
     }
   }
 
-  #installAccessors() {
-    Object.defineProperties(this, {
-      state: {
-        enumerable: true,
-        get: () => this.#_state,
-        set: (newState: ExtractRoomState<T>) => this.#setState(newState),
-      },
-      maxClients: {
-        enumerable: true,
-        get: () => this.#_maxClients,
-        set: (value: number) => this.#setMaxClients(value),
-      },
-      autoDispose: {
-        enumerable: true,
-        get: () => this.#_autoDispose,
-        set: (value: boolean) => this.#setAutoDispose(value),
-      },
-      patchRate: {
-        enumerable: true,
-        get: () => this.#_patchRate,
-        set: (milliseconds: number | null) => this.#setPatchRate(milliseconds),
-      },
-    });
-  }
-
-  #setState(newState: ExtractRoomState<T>) {
-    if (!this.#_postInit) {
-      this.#_state = newState;
-      return;
-    }
-    if (newState?.constructor[Symbol.metadata] !== undefined || newState[$changes] !== undefined) {
-      this.setSerializer(new SchemaSerializer());
-    } else if ('_definition' in newState) {
-      throw new Error("@colyseus/schema v2 compatibility currently missing (reach out if you need it)");
-    } else if ($changes === undefined) {
-      throw new Error("Multiple @colyseus/schema versions detected. Please make sure you don't have multiple versions of @colyseus/schema installed.");
-    }
-    this._serializer.reset(newState);
-    this.#_state = newState;
-  }
-
-  #setMaxClients(value: number) {
-    if (!this.#_postInit) {
-      this.#_maxClients = value;
-      return;
-    }
-    this.setMatchmaking({ maxClients: value });
-  }
-
-  #setAutoDispose(value: boolean) {
-    if (!this.#_postInit) {
-      this.#_autoDispose = value;
-      return;
-    }
-    if (
-      value !== this.#_autoDispose &&
-      this._internalState !== RoomInternalState.DISPOSING
-    ) {
-      this.#_autoDispose = value;
-      this.resetAutoDisposeTimeout();
-    }
-  }
-
-  #setPatchRate(milliseconds: number | null) {
-    this.#_patchRate = milliseconds;
-    if (!this.#_postInit) { return; }
-    // clear previous interval in case patchRate is reassigned more than once
-    if (this.#_patchInterval) {
-      clearInterval(this.#_patchInterval);
-      this.#_patchInterval = undefined;
-    }
-    if (milliseconds !== null && milliseconds !== 0) {
-      this.#_patchInterval = setInterval(() => this.broadcastPatch(), milliseconds);
-    } else if (!this._simulationInterval) {
-      // When patchRate and no simulation interval are both set to 0, tick the clock to keep timers working
-      this.#_patchInterval = setInterval(() => this.clock.tick(), DEFAULT_SIMULATION_INTERVAL);
-    }
-  }
-
   /**
    * This method is called by the MatchMaker before onCreate()
    * @internal
    */
   private __init() {
-    // Activate accessor side effects (patchRate interval, setMatchmaking, etc.).
-    // Values assigned by subclass field initializers or the defaults on #_ backing
-    // fields were stashed by the gated setters in #installAccessors.
-    this.#_postInit = true;
+    this.#_state = this.state;
+    this.#_autoDispose = this.autoDispose;
+    this.#_patchRate = this.patchRate;
+    this.#_maxClients = this.maxClients;
 
-    // install the initial patch interval
+    Object.defineProperties(this, {
+      state: {
+        enumerable: true,
+        get: () => this.#_state,
+        set: (newState: ExtractRoomState<T>) => {
+          if (newState?.constructor[Symbol.metadata] !== undefined || newState[$changes] !== undefined) {
+            this.setSerializer(new SchemaSerializer());
+          } else if ('_definition' in newState) {
+            throw new Error("@colyseus/schema v2 compatibility currently missing (reach out if you need it)");
+          } else if ($changes === undefined) {
+            throw new Error("Multiple @colyseus/schema versions detected. Please make sure you don't have multiple versions of @colyseus/schema installed.");
+          }
+          this._serializer.reset(newState);
+          this.#_state = newState;
+        },
+      },
+
+      maxClients: {
+        enumerable: true,
+        get: () => this.#_maxClients,
+        set: (value: number) => {
+          this.setMatchmaking({ maxClients: value });
+        },
+      },
+
+      autoDispose: {
+        enumerable: true,
+        get: () => this.#_autoDispose,
+        set: (value: boolean) => {
+          if (
+            value !== this.#_autoDispose &&
+            this._internalState !== RoomInternalState.DISPOSING
+          ) {
+            this.#_autoDispose = value;
+            this.resetAutoDisposeTimeout();
+          }
+        },
+      },
+
+      patchRate: {
+        enumerable: true,
+        get: () => this.#_patchRate,
+        set: (milliseconds: number) => {
+          this.#_patchRate = milliseconds;
+          // clear previous interval in case called setPatchRate more than once
+          if (this.#_patchInterval) {
+            clearInterval(this.#_patchInterval);
+            this.#_patchInterval = undefined;
+          }
+          if (milliseconds !== null && milliseconds !== 0) {
+            this.#_patchInterval = setInterval(() => this.broadcastPatch(), milliseconds);
+          } else if (!this._simulationInterval) {
+            // When patchRate and no simulation interval are both set to 0, tick the clock to keep timers working
+            this.#_patchInterval = setInterval(() => this.clock.tick(), DEFAULT_SIMULATION_INTERVAL);
+          }
+        },
+      },
+    });
+
+    // set patch interval, now with the setter
     this.patchRate = this.#_patchRate;
 
-    // run state setter side effects (setSerializer, _serializer.reset)
+    // set state, now with the setter
     if (this.#_state) {
       this.state = this.#_state;
     }
