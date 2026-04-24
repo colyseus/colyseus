@@ -17,9 +17,19 @@ const packr = new Packr({
 // msgpackr workaround: initialize buffer
 packr.encode(undefined);
 
+// Cached at module load so the per-send hot path avoids the `process.env`
+// getter. The dev-only `packr.useBuffer` workaround below is gated by this.
+const __isDev = process.env.NODE_ENV !== "production";
+
+// Reused across `getMessageBytes` calls to avoid a per-call object allocation
+// on the hot send path. `encode.string`/`encode.number` are leaf functions that
+// mutate `.offset` in place and never call back into this module, so sharing is
+// safe (Node's JS layer is single-threaded).
+const it: Iterator = { offset: 0 };
+
 export const getMessageBytes = {
   [Protocol.JOIN_ROOM]: (reconnectionToken: string, serializerId: string, handshake?: Uint8Array) => {
-    const it: Iterator = { offset: 1 };
+    it.offset = 1;
     packr.buffer[0] = Protocol.JOIN_ROOM;
 
     packr.buffer[it.offset++] = Buffer.byteLength(reconnectionToken, "utf8");
@@ -43,7 +53,7 @@ export const getMessageBytes = {
   },
 
   [Protocol.ERROR]: (code: number, message: string = '') => {
-    const it: Iterator = { offset: 1 };
+    it.offset = 1;
     packr.buffer[0] = Protocol.ERROR;
 
     encode.number(packr.buffer, code, it);
@@ -61,8 +71,15 @@ export const getMessageBytes = {
     return Buffer.from(packr.buffer.subarray(0, 1));
   },
 
-  raw: (code: Protocol, type: string | number, message?: any, rawMessage?: Uint8Array | Buffer) => {
-    const it: Iterator = { offset: 1 };
+  // Each call returns a fresh Buffer copy because `packr.buffer` is shared
+  // and reused on the next pack. Callers (transports / Room.broadcast) hand
+  // the result to async consumers — Node `socket.write` retains it for libuv
+  // writev across event-loop ticks, so a stable allocation is required for
+  // correctness. See benchmark/test-buffer-corruption.ts for a wire-level
+  // reproduction of the corruption that occurs without this copy under
+  // sustained back-pressure (e.g. burst of 1000 × 4KB sends).
+  raw: (code: Protocol, type: string | number, message?: any, rawMessage?: Uint8Array | Buffer): Buffer => {
+    it.offset = 1;
     packr.buffer[0] = code;
 
     if (typeof (type) === 'string') {
@@ -82,7 +99,7 @@ export const getMessageBytes = {
       // - This check is only required when running integration tests.
       //   (colyseus.js' usage of msgpackr/buffer is conflicting)
       //
-      if (process.env.NODE_ENV !== "production") {
+      if (__isDev) {
         packr.useBuffer(packr.buffer);
       }
 
