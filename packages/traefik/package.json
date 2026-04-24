@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/traefik",
-  "version": "0.17.7",
+  "version": "0.18.0",
   "type": "module",
   "description": "Utility to expose Colyseus servers to Traefik as a load balancer",
   "input": "./src/index.ts",
@@ -49,6 +49,7 @@
     "@colyseus/ws-transport": "workspace:^"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "tag": "next"
   }
 }

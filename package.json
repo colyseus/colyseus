@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/monorepo",
-  "version": "0.17.0",
+  "version": "0.18.0",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.9.0",
@@ -42,7 +42,7 @@
     "ts-jest": "^28.0.3",
     "tsx": "^4.1.2",
     "typescript": "^6.0.3",
-    "@colyseus/schema": "^4.0.13"
+    "@colyseus/schema": "^5.0.0"
   },
   "nyc": {
     "extension": [

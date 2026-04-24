@@ -1,26 +1,20 @@
 import { CloseCode } from '@colyseus/shared-types';
-import { defineTypes, MapSchema, Schema } from '@colyseus/schema';
+import { schema, t, type SchemaType } from '@colyseus/schema';
 
 import { Room } from '../Room.ts';
 import type { Client } from '../Transport.ts';
 
-class Player extends Schema {
-  public connected: boolean;
-  public name: string;
-  public sessionId: string;
-}
-defineTypes(Player, {
-  connected: 'boolean',
-  name: 'string',
-  sessionId: 'string',
+export const Player = schema({
+  connected: t.boolean(),
+  name: t.string(),
+  sessionId: t.string(),
 });
+export type Player = SchemaType<typeof Player>;
 
-class State extends Schema {
-  public players = new MapSchema<Player>();
-}
-defineTypes(State, {
-  players: { map: Player },
+export const State = schema({
+  players: t.map(Player),
 });
+export type State = SchemaType<typeof State>;
 
 /**
  * client.joinOrCreate("relayroom", {

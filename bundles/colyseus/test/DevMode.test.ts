@@ -1,5 +1,5 @@
 import assert from "assert";
-import { schema, type SchemaType } from "@colyseus/schema";
+import { schema, t, type SchemaType } from "@colyseus/schema";
 import {
   Room,
   matchMaker,
@@ -23,22 +23,22 @@ import { WebSocketTransport } from "@colyseus/ws-transport";
 import { timeout } from "./utils/index.ts";
 
 const DevModeState = schema({
-  message: { type: "string", default: "hello" },
-  count: { type: "number", default: 0 },
+  message: t.string().default("hello"),
+  count: t.number().default(0),
 });
 type DevModeState = SchemaType<typeof DevModeState>;
 
 // State with nested structures (similar to MyRoom's state)
 const Player = schema({
-  x: "number",
-  y: "number",
+  x: t.number(),
+  y: t.number(),
 });
 type Player = SchemaType<typeof Player>;
 
 const NestedState = schema({
-  mapWidth: "number",
-  mapHeight: "number",
-  players: { map: Player },
+  mapWidth: t.number(),
+  mapHeight: t.number(),
+  players: t.map(Player),
 });
 type NestedState = SchemaType<typeof NestedState>;
 

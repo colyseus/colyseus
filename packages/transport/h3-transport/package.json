@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/h3-transport",
-  "version": "0.17.10",
+  "version": "0.18.0",
   "type": "module",
   "input": "./src/index.ts",
   "main": "./build/index.cjs",
@@ -27,7 +27,7 @@
     "node-forge": "^1.3.1"
   },
   "peerDependencies": {
-    "@colyseus/schema": "^4.0.7"
+    "@colyseus/schema": "^5.0.0"
   },
   "author": "Endel Dreyer",
   "license": "MIT",
@@ -41,6 +41,7 @@
   },
   "homepage": "https://colyseus.io/",
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "tag": "next"
   }
 }

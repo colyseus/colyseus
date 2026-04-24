@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/drizzle-driver",
-  "version": "0.17.7",
+  "version": "0.18.0",
   "type": "module",
   "input": "./src/index.ts",
   "main": "./build/index.cjs",
@@ -49,7 +49,8 @@
     "url": "git://github.com/colyseus/colyseus.git"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "tag": "next"
   },
   "homepage": "https://colyseus.io/"
 }

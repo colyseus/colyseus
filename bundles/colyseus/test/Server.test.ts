@@ -5,7 +5,7 @@ import * as Colyseus from "@colyseus/sdk";
 import { Deferred, Room, Server, matchMaker } from "@colyseus/core";
 import { DummyRoom } from "./utils/index.ts";
 import { URL } from "url";
-import { Schema, type, schema, type SchemaType } from "@colyseus/schema";
+import { Schema, type, schema, t, type SchemaType } from "@colyseus/schema";
 
 const TEST_PORT = 8567;
 const TEST_ENDPOINT = `ws://localhost:${TEST_PORT}`;
@@ -57,13 +57,13 @@ describe("Server", () => {
     describe("server.simulateLatency", () => {
       it("should synchronize state with delay", async () => {
         const Item = schema({
-          name: "string",
+          name: t.string(),
         });
         type Item = SchemaType<typeof Item>;
 
         const MyState = schema({
-          message: { type: "string", default: "Hello world!" },
-          items: { map: Item },
+          message: t.string().default("Hello world!"),
+          items: t.map(Item),
         });
         type MyState = SchemaType<typeof MyState>;
 

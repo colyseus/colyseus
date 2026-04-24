@@ -1,6 +1,6 @@
 {
   "name": "colyseus",
-  "version": "0.17.10",
+  "version": "0.18.0",
   "description": "Multiplayer Framework for Node.js",
   "type": "module",
   "input": "./src/index.ts",
@@ -59,7 +59,7 @@
     "@colyseus/core": "workspace:^",
     "@colyseus/drizzle-driver": "workspace:^",
     "@colyseus/msgpackr": "*",
-    "@colyseus/schema": "^4.0.7",
+    "@colyseus/schema": "^5.0.0",
     "@colyseus/sdk": "workspace:^",
     "@colyseus/tools": "workspace:^",
     "@colyseus/uwebsockets-transport": "workspace:^",
@@ -69,13 +69,13 @@
     "zod": "^4.1.12"
   },
   "peerDependencies": {
-    "@colyseus/auth": "0.17.x",
-    "@colyseus/core": "0.17.x",
-    "@colyseus/redis-driver": "0.17.x",
-    "@colyseus/redis-presence": "0.17.x",
-    "@colyseus/schema": "^4.0.7",
-    "@colyseus/uwebsockets-transport": "0.17.x",
-    "@colyseus/ws-transport": "0.17.x",
+    "@colyseus/auth": "0.18.x",
+    "@colyseus/core": "0.18.x",
+    "@colyseus/redis-driver": "0.18.x",
+    "@colyseus/redis-presence": "0.18.x",
+    "@colyseus/schema": "^5.0.0",
+    "@colyseus/uwebsockets-transport": "0.18.x",
+    "@colyseus/ws-transport": "0.18.x",
     "vite": ">=6.0.0"
   },
   "peerDependenciesMeta": {
@@ -83,5 +83,8 @@
       "optional": true
     }
   },
-  "gitHead": "25ba61e283429bb4fa02db0454f804ea218259eb"
+  "gitHead": "25ba61e283429bb4fa02db0454f804ea218259eb",
+  "publishConfig": {
+    "tag": "next"
+  }
 }

@@ -2,7 +2,7 @@ import assert from "assert";
 import crypto from "crypto";
 import sinon from "sinon";
 import { Client as SDKClient, Room as SDKRoom } from "@colyseus/sdk";
-import { Schema, type, MapSchema, ArraySchema, view, StateView, schema, type SchemaType } from "@colyseus/schema";
+import { Schema, type, MapSchema, ArraySchema, view, StateView, schema, t, type SchemaType } from "@colyseus/schema";
 
 import { type Client, type AuthContext, type MatchMakerDriver, type Presence, matchMaker, Room, Server, ErrorCode,  Deferred, Transport, CloseCode } from "@colyseus/core";
 import { DummyRoom, DRIVERS, timeout, Room3Clients, PRESENCE_IMPLEMENTATIONS, Room2Clients, Room2ClientsExplicitLock } from "./utils/index.ts";
@@ -664,7 +664,7 @@ describe("Integration", () => {
 
           describe("patchRate", () => {
             const PatchState = schema({
-              number: { type: "number", default: 0 },
+              number: t.number().default(0),
             });
             type PatchState = SchemaType<typeof PatchState>;
 
@@ -823,7 +823,7 @@ describe("Integration", () => {
 
             it("should broadcast after patch", async () => {
               const DummyState = schema({
-                number: { type: "number", default: 0 },
+                number: t.number().default(0),
               });
               type DummyState = SchemaType<typeof DummyState>;
 
@@ -864,7 +864,7 @@ describe("Integration", () => {
 
             it("should send after patch", async () => {
               const DummyState = schema({
-                number: { type: "number", default: 0 },
+                number: t.number().default(0),
               });
               type DummyState = SchemaType<typeof DummyState>;
 
@@ -1178,12 +1178,12 @@ describe("Integration", () => {
           describe("onLeave with exceptions", () => {
             it("should trigger onLeave if onJoin fails", async () => {
               const Player = schema({
-                name: { type: "string" },
+                name: t.string(),
               });
               type Player = SchemaType<typeof Player>;
 
               const MyState = schema({
-                players: { map: Player },
+                players: t.map(Player),
               });
               type MyState = SchemaType<typeof MyState>;
 
@@ -1654,17 +1654,17 @@ describe("Integration", () => {
 
           it("reconnection with StateView should recreate the StateView", async () => {
             const Item = schema({
-              name: { type: "string" },
+              name: t.string(),
             });
             type Item = SchemaType<typeof Item>;
 
             const Entity = schema({
-              items: { array: Item },
+              items: t.array(Item),
             });
             type Entity = SchemaType<typeof Entity>;
 
             const State = schema({
-              entities: { map: Entity, view: true },
+              entities: t.map(Entity).view(),
             });
             type State = SchemaType<typeof State>;
 

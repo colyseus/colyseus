@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/playground",
-  "version": "0.17.12",
+  "version": "0.18.0",
   "main": "./build/index.cjs",
   "module": "./build/index.mjs",
   "typings": "./build/index.d.ts",
@@ -86,5 +86,8 @@
   },
   "dependencies": {
     "@colyseus/better-call": "workspace:^"
+  },
+  "publishConfig": {
+    "tag": "next"
   }
 }

@@ -91,14 +91,9 @@ export interface Client<T extends { userData?: any, auth?: any, messages?: Recor
   ref: EventEmitter;
 
   /**
-   * @deprecated use `sessionId` instead.
-   */
-  id: string;
-
-  /**
    * Unique id per session.
    */
-  sessionId: string; // TODO: remove sessionId on version 1.0.0
+  sessionId: string;
 
   /**
    * Connection state

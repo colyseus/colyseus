@@ -1404,7 +1404,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
     // switching Wi-Fi), as the original connection may still be open while a
     // new reconnection attempt is being made.
     //
-    if (this._reconnectionAttempts[reconnectionToken]) {
+    if (this._reconnectionAttempts[reconnectionToken] !== undefined) {
       debugMatchMaking('resolving reconnection attempt for client - sessionId: \'%s\', roomId: \'%s\'', sessionId, this.roomId);
       this._reconnectionAttempts[reconnectionToken].resolve(true);
     }

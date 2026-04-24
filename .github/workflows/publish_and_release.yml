@@ -7,6 +7,7 @@ on:
   push:
     branches:
       - master
+      - "0.18"
 
 jobs:
   detect-changes:
@@ -84,13 +85,23 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Publish ${{ matrix.name }}@${{ matrix.version }}
-        run: pnpm --filter "${{ matrix.name }}" publish --no-git-checks
+      - name: Resolve npm dist-tag
+        id: dist_tag
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/0.18" ]; then
+            echo "tag=next" >> $GITHUB_OUTPUT
+          else
+            echo "tag=latest" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Publish ${{ matrix.name }}@${{ matrix.version }} (${{ steps.dist_tag.outputs.tag }})
+        run: pnpm --filter "${{ matrix.name }}" publish --no-git-checks --tag ${{ steps.dist_tag.outputs.tag }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Extract changelog
         id: changelog
+        if: steps.dist_tag.outputs.tag == 'latest'
         run: |
           PKG_DIR=$(pnpm --filter "${{ matrix.name }}" exec pwd | tail -1)
           CHANGELOG="$PKG_DIR/CHANGELOG.md"
@@ -121,6 +132,7 @@ jobs:
 
       - name: Build release assets
         id: assets
+        if: steps.dist_tag.outputs.tag == 'latest'
         run: |
           PKG_DIR=$(pnpm --filter "${{ matrix.name }}" exec pwd)
           cd "$PKG_DIR"
@@ -149,6 +161,7 @@ jobs:
           fi
 
       - name: Create Release ${{ matrix.name }}@${{ matrix.version }}
+        if: steps.dist_tag.outputs.tag == 'latest'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "${{ matrix.name }}@${{ matrix.version }}"

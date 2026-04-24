@@ -1,6 +1,6 @@
 import assert from "assert";
 import { defineRoom, room, Room, type Client } from "@colyseus/core";
-import { schema } from "@colyseus/schema";
+import { schema, t } from "@colyseus/schema";
 
 describe("Room: Type Inference", () => {
 
@@ -155,7 +155,7 @@ describe("Room: Type Inference", () => {
     }>;
 
     const TestState = schema({
-      count: "number",
+      count: t.number(),
     });
 
     const MyRoom = room<{ client: MyClient }>({

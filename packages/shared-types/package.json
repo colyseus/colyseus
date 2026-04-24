@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/shared-types",
-  "version": "0.17.6",
+  "version": "0.18.0",
   "description": "Shared TypeScript types for Colyseus server and client SDK",
   "type": "module",
   "input": "./src/index.ts",
@@ -54,6 +54,7 @@
     "vitest": "^3.1.1"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "tag": "next"
   }
 }

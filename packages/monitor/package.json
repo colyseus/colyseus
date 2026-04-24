@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/monitor",
-  "version": "0.17.8",
+  "version": "0.18.0",
   "description": "Web Monitoring Panel for Colyseus",
   "input": "./src/index.ts",
   "main": "./build/index.cjs",
@@ -74,5 +74,8 @@
     "@colyseus/core": "workspace:^",
     "express": ">=4.16.0",
     "node-os-utils": "^2.0.0"
+  },
+  "publishConfig": {
+    "tag": "next"
   }
 }

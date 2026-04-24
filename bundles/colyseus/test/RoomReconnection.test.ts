@@ -4,7 +4,7 @@ import { type Client,  type MatchMakerDriver, type Presence, matchMaker, Room, S
 
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import { timeout } from "./utils/index.ts";
-import { schema, type SchemaType } from "@colyseus/schema";
+import { schema, t, type SchemaType } from "@colyseus/schema";
 
 const TEST_PORT = 8567;
 const TEST_ENDPOINT = `ws://localhost:${TEST_PORT}`;
@@ -397,16 +397,16 @@ describe("Room Reconnection", () => {
 
     it("state sync: should keep callbacks and not trigger them twice for existing items", async () => {
       const Item = schema({
-        name: "string",
+        name: t.string(),
       });
 
       const Player = schema({
-        items: [Item],
-        connected: "boolean",
+        items: t.array(Item),
+        connected: t.boolean(),
       });
 
       const State = schema({
-        players: { map: Player },
+        players: t.map(Player),
       });
       type State = SchemaType<typeof State>;
 
