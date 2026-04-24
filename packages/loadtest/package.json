@@ -53,7 +53,7 @@
     "@colyseus/sdk": "workspace:^",
     "blessed": "^0.1.81",
     "minimist": "^1.2.5",
-    "typescript": "^5.9.3",
+    "typescript": "^6.0.3",
     "ws": "^8.19.0"
   },
   "devDependencies": {

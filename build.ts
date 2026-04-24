@@ -109,13 +109,15 @@ async function main() {
         emitDeclarationOnly: true,
         resolveJsonModule: true,
         skipLibCheck: true,
+        // TS 6.0 defaults `strict` to true; keep .d.ts emit non-strict as
+        // before — the project's tsconfig still governs typechecking in CI.
+        strict: false,
         // module: ts.ModuleKind.CommonJS,
         module: ts.ModuleKind.NodeNext,
         moduleResolution: ts.ModuleResolutionKind.NodeNext,
         target: ts.ScriptTarget.ESNext,
         lib: ["lib.esnext.d.ts", "lib.dom.d.ts"],
         outDir: outdir,
-        downlevelIteration: true, // (redis-driver)
         esModuleInterop: true,
         experimentalDecorators: true,
         allowImportingTsExtensions: true,
