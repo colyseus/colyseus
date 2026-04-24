@@ -1,10 +1,72 @@
-import { encode, decode, type Iterator } from '@colyseus/schema';
-import type { ITransport, ITransportEventMap } from "./ITransport.ts";
+import { ITransport, ITransportEventMap } from "./ITransport";
+import { encode, decode, Iterator } from '@colyseus/schema';
+
+// 9 bytes is the maximum length of a variable-length integer prefix
+const MAX_LENGTH_PREFIX_BYTES = 9;
+
+/**
+ * Reassembles length-prefixed frames from arbitrary byte chunks.
+ *
+ * A single WebTransport `reader.read()` may:
+ *   - deliver multiple whole frames in one chunk
+ *   - split a frame (or its length prefix) across multiple chunks
+ *
+ * This reassembler buffers partial data across reads so each dispatched
+ * frame is exactly one complete message.
+ */
+export class FrameReassembler {
+    private pending: Uint8Array = new Uint8Array(0);
+
+    push(chunk: Uint8Array | undefined): Uint8Array[] {
+        if (!chunk || chunk.byteLength === 0) { return []; }
+
+        const bytes = (this.pending.byteLength === 0)
+            ? chunk
+            : concatBytes(this.pending, chunk);
+
+        const frames: Uint8Array[] = [];
+        let offset = 0;
+
+        while (offset < bytes.byteLength) {
+            const it: Iterator = { offset };
+            let length: number;
+
+            try {
+                length = decode.number(bytes as any, it);
+            } catch (e) {
+                // length prefix is incomplete — wait for more bytes
+                if (bytes.byteLength - offset <= MAX_LENGTH_PREFIX_BYTES) { break; }
+                throw e;
+            }
+
+            const frameEnd = it.offset + length;
+            if (frameEnd > bytes.byteLength) {
+                // payload is incomplete — wait for more bytes
+                break;
+            }
+
+            frames.push(bytes.subarray(it.offset, frameEnd));
+            offset = frameEnd;
+        }
+
+        this.pending = (offset < bytes.byteLength)
+            ? bytes.slice(offset)
+            : new Uint8Array(0);
+
+        return frames;
+    }
+}
+
+function concatBytes(a: Uint8Array, b: Uint8Array): Uint8Array {
+    const out = new Uint8Array(a.byteLength + b.byteLength);
+    out.set(a, 0);
+    out.set(b, a.byteLength);
+    return out;
+}
 
 export class H3TransportTransport implements ITransport {
     wt: WebTransport;
     isOpen: boolean = false;
-    events: ITransportEventMap;
 
     reader: ReadableStreamDefaultReader;
     writer: WritableStreamDefaultWriter;
@@ -14,9 +76,10 @@ export class H3TransportTransport implements ITransport {
 
     private lengthPrefixBuffer = new Uint8Array(9); // 9 bytes is the maximum length of a length prefix
 
-    constructor(events: ITransportEventMap) {
-        this.events = events;
-    }
+    private reliableReassembler = new FrameReassembler();
+    private unreliableReassembler = new FrameReassembler();
+
+    constructor(public events: ITransportEventMap) { }
 
     public connect(url: string, options: any = {}) {
         const wtOpts: WebTransportOptions = options.fingerprint && ({
@@ -44,7 +107,7 @@ export class H3TransportTransport implements ITransport {
                 this.writer = stream.value.writable.getWriter();
 
                 // immediately write room/sessionId for establishing the room connection
-                this.sendSeatReservation(options.roomId, options.sessionId, options.reconnectionToken, options.skipHandshake);
+                this.sendSeatReservation(options.room.roomId, options.sessionId, options.reconnectionToken);
 
                 // start reading incoming data
                 this.readIncomingData();
@@ -110,19 +173,11 @@ export class H3TransportTransport implements ITransport {
                 //
                 // a single read may contain multiple messages
                 // each message is prefixed with its length
+                // a read may also deliver a partial frame; buffer across reads
                 //
-
-                const messages = result.value;
-                const it: Iterator = { offset: 0 };
-                do {
-                    //
-                    // QUESTION: should we buffer the message in case it's not fully read?
-                    //
-
-                    const length = decode.number(messages as any, it);
-                    this.events.onmessage({ data: messages.subarray(it.offset, it.offset + length) });
-                    it.offset += length;
-                } while (it.offset < messages.length);
+                for (const frame of this.reliableReassembler.push(result.value)) {
+                    this.events.onmessage({ data: frame });
+                }
 
             } catch (e) {
                 if (e.message.indexOf("session is closed") === -1) {
@@ -147,19 +202,11 @@ export class H3TransportTransport implements ITransport {
                 //
                 // a single read may contain multiple messages
                 // each message is prefixed with its length
+                // a read may also deliver a partial frame; buffer across reads
                 //
-
-                const messages = result.value;
-                const it: Iterator = { offset: 0 };
-                do {
-                    //
-                    // QUESTION: should we buffer the message in case it's not fully read?
-                    //
-
-                    const length = decode.number(messages as any, it);
-                    this.events.onmessage({ data: messages.subarray(it.offset, it.offset + length) });
-                    it.offset += length;
-                } while (it.offset < messages.length);
+                for (const frame of this.unreliableReassembler.push(result.value)) {
+                    this.events.onmessage({ data: frame });
+                }
 
             } catch (e) {
                 if (e.message.indexOf("session is closed") === -1) {
@@ -174,7 +221,7 @@ export class H3TransportTransport implements ITransport {
         }
     }
 
-    protected sendSeatReservation (roomId: string, sessionId: string, reconnectionToken?: string, skipHandshake?: boolean) {
+    protected sendSeatReservation (roomId: string, sessionId: string, reconnectionToken?: string) {
         const it: Iterator = { offset: 0 };
         const bytes: number[] = [];
 
@@ -183,10 +230,6 @@ export class H3TransportTransport implements ITransport {
 
         if (reconnectionToken) {
             encode.string(bytes, reconnectionToken, it);
-        }
-
-        if (skipHandshake) {
-            encode.boolean(bytes, 1, it);
         }
 
         this.writer.write(new Uint8Array(bytes).buffer);
