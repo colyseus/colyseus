@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.42
+
+- Fix `H3Transport` frame reassembly: a single WebTransport `reader.read()` is not guaranteed to land on a frame boundary, so chunks ending mid-payload or mid-varint-prefix caused sporadic handshake failures and `ROOM_STATE_PATCH` decode errors on rooms with larger initial state. The reader now buffers partial data across reads and only dispatches complete length-prefixed frames. Closes [#934](https://github.com/colyseus/colyseus/pull/934) — thanks @anaibol for reporting and contributing the initial fix!
+
 ## 0.17.41
 
 - Isolate `debug.js` panel inside a Shadow DOM root so page-level CSS (e.g. a global `canvas { width: 100vw }` rule) can no longer stretch or restyle the debug UI.

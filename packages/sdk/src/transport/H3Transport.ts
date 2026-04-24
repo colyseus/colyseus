@@ -1,5 +1,5 @@
-import { ITransport, ITransportEventMap } from "./ITransport";
-import { encode, decode, Iterator } from '@colyseus/schema';
+import { encode, decode, type Iterator } from '@colyseus/schema';
+import type { ITransport, ITransportEventMap } from "./ITransport.ts";
 
 // 9 bytes is the maximum length of a variable-length integer prefix
 const MAX_LENGTH_PREFIX_BYTES = 9;
@@ -67,6 +67,7 @@ function concatBytes(a: Uint8Array, b: Uint8Array): Uint8Array {
 export class H3TransportTransport implements ITransport {
     wt: WebTransport;
     isOpen: boolean = false;
+    events: ITransportEventMap;
 
     reader: ReadableStreamDefaultReader;
     writer: WritableStreamDefaultWriter;
@@ -79,7 +80,9 @@ export class H3TransportTransport implements ITransport {
     private reliableReassembler = new FrameReassembler();
     private unreliableReassembler = new FrameReassembler();
 
-    constructor(public events: ITransportEventMap) { }
+    constructor(events: ITransportEventMap) {
+        this.events = events;
+    }
 
     public connect(url: string, options: any = {}) {
         const wtOpts: WebTransportOptions = options.fingerprint && ({
@@ -107,7 +110,7 @@ export class H3TransportTransport implements ITransport {
                 this.writer = stream.value.writable.getWriter();
 
                 // immediately write room/sessionId for establishing the room connection
-                this.sendSeatReservation(options.room.roomId, options.sessionId, options.reconnectionToken);
+                this.sendSeatReservation(options.roomId, options.sessionId, options.reconnectionToken, options.skipHandshake);
 
                 // start reading incoming data
                 this.readIncomingData();
@@ -221,7 +224,7 @@ export class H3TransportTransport implements ITransport {
         }
     }
 
-    protected sendSeatReservation (roomId: string, sessionId: string, reconnectionToken?: string) {
+    protected sendSeatReservation (roomId: string, sessionId: string, reconnectionToken?: string, skipHandshake?: boolean) {
         const it: Iterator = { offset: 0 };
         const bytes: number[] = [];
 
@@ -230,6 +233,10 @@ export class H3TransportTransport implements ITransport {
 
         if (reconnectionToken) {
             encode.string(bytes, reconnectionToken, it);
+        }
+
+        if (skipHandshake) {
+            encode.boolean(bytes, 1, it);
         }
 
         this.writer.write(new Uint8Array(bytes).buffer);
