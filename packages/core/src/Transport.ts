@@ -196,12 +196,53 @@ export interface ClientPrivate {
 }
 
 export class ClientArray<C extends Client = Client> extends Array<C> {
+  /**
+   * Secondary index for O(1) lookup by sessionId. Kept in sync by the
+   * mutating methods overridden below. Direct index assignment
+   * (`arr[i] = client`) and `arr.length = 0` bypass this index — use
+   * `push` / `splice` / `delete` / `pop` / `shift` / `unshift` instead.
+   */
+  private _byId: Map<string, C> = new Map();
+
   public getById(sessionId: string): C | undefined {
-    return this.find((client) => client.sessionId === sessionId);
+    return this._byId.get(sessionId);
   }
 
   public delete(client: C): boolean {
-    return spliceOne(this, this.indexOf(client));
+    const removed = spliceOne(this, this.indexOf(client));
+    if (removed) this._byId.delete(client.sessionId);
+    return removed;
+  }
+
+  public push(...items: C[]): number {
+    for (let i = 0; i < items.length; i++) this._byId.set(items[i].sessionId, items[i]);
+    return super.push(...items);
+  }
+
+  public pop(): C | undefined {
+    const removed = super.pop();
+    if (removed !== undefined) this._byId.delete(removed.sessionId);
+    return removed;
+  }
+
+  public shift(): C | undefined {
+    const removed = super.shift();
+    if (removed !== undefined) this._byId.delete(removed.sessionId);
+    return removed;
+  }
+
+  public unshift(...items: C[]): number {
+    for (let i = 0; i < items.length; i++) this._byId.set(items[i].sessionId, items[i]);
+    return super.unshift(...items);
+  }
+
+  public splice(start: number, deleteCount?: number, ...items: C[]): C[] {
+    const removed = (deleteCount === undefined)
+      ? super.splice(start)
+      : super.splice(start, deleteCount, ...items);
+    for (let i = 0; i < removed.length; i++) this._byId.delete(removed[i].sessionId);
+    for (let i = 0; i < items.length; i++) this._byId.set(items[i].sessionId, items[i]);
+    return removed;
   }
 }
 
