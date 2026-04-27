@@ -28,7 +28,22 @@ const __isDev = process.env.NODE_ENV !== "production";
 const it: Iterator = { offset: 0 };
 
 export const getMessageBytes = {
-  [Protocol.JOIN_ROOM]: (reconnectionToken: string, serializerId: string, handshake?: Uint8Array) => {
+  /**
+   * Build the JOIN_ROOM payload.
+   *
+   * Wire layout:
+   *   [JOIN_ROOM byte][rt-len][rt][sid-len][sid][stateReflection?][...sections]
+   *
+   * Each trailing section is `[tag (uint8)][length (varint)][payload]`. The
+   * SDK skips unknown tags via `length`, so new sections can be added without
+   * breaking older clients. See {@link HandshakeSection} in shared-types.
+   */
+  [Protocol.JOIN_ROOM]: (
+    reconnectionToken: string,
+    serializerId: string,
+    handshake?: Uint8Array,
+    extraSections?: Array<{ tag: number; bytes: Uint8Array }>,
+  ) => {
     it.offset = 1;
     packr.buffer[0] = Protocol.JOIN_ROOM;
 
@@ -40,16 +55,36 @@ export const getMessageBytes = {
 
     let handshakeLength = handshake?.byteLength || 0;
 
+    // upper-bound for sections: 1 byte tag + 9 bytes max varint + payload bytes
+    let extraLength = 0;
+    if (extraSections !== undefined) {
+      for (let i = 0; i < extraSections.length; i++) {
+        extraLength += 1 + 9 + extraSections[i].bytes.byteLength;
+      }
+    }
+
     // check if buffer needs to be resized
-    if (handshakeLength > packr.buffer.byteLength - it.offset) {
-      packr.useBuffer(Buffer.alloc(it.offset + handshakeLength, packr.buffer));
+    const requiredCapacity = it.offset + handshakeLength + extraLength;
+    if (requiredCapacity > packr.buffer.byteLength) {
+      packr.useBuffer(Buffer.alloc(requiredCapacity, packr.buffer));
     }
 
     if (handshakeLength > 0) {
       packr.buffer.set(handshake, it.offset);
+      it.offset += handshakeLength;
     }
 
-    return Buffer.from(packr.buffer.subarray(0, it.offset + handshakeLength));
+    if (extraSections !== undefined) {
+      for (let i = 0; i < extraSections.length; i++) {
+        const section = extraSections[i];
+        packr.buffer[it.offset++] = section.tag;
+        encode.number(packr.buffer, section.bytes.byteLength, it);
+        packr.buffer.set(section.bytes, it.offset);
+        it.offset += section.bytes.byteLength;
+      }
+    }
+
+    return Buffer.from(packr.buffer.subarray(0, it.offset));
   },
 
   [Protocol.ERROR]: (code: number, message: string = '') => {

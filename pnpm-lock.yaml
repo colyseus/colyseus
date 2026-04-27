@@ -9,8 +9,8 @@ importers:
   .:
     devDependencies:
       '@colyseus/schema':
-        specifier: ^5.0.1
-        version: 5.0.2(typescript@6.0.3)
+        specifier: ^5.0.3
+        version: 5.0.3(typescript@6.0.3)
       '@types/debug':
         specifier: ^0.0.31
         version: 0.0.31
@@ -127,8 +127,8 @@ importers:
         specifier: '*'
         version: 1.11.2
       '@colyseus/schema':
-        specifier: ^5.0.1
-        version: 5.0.2(typescript@6.0.3)
+        specifier: ^5.0.3
+        version: 5.0.3(typescript@6.0.3)
       '@colyseus/sdk':
         specifier: workspace:^
         version: link:../../packages/sdk
@@ -310,8 +310,8 @@ importers:
         specifier: workspace:^
         version: link:../presence/redis-presence
       '@colyseus/schema':
-        specifier: ^5.0.1
-        version: 5.0.2(typescript@6.0.3)
+        specifier: ^5.0.3
+        version: 5.0.3(typescript@6.0.3)
       '@colyseus/tools':
         specifier: workspace:^
         version: link:../tools
@@ -390,8 +390,8 @@ importers:
         specifier: workspace:^
         version: link:../presence/redis-presence
       '@colyseus/schema':
-        specifier: ^5.0.1
-        version: 5.0.2(typescript@6.0.3)
+        specifier: ^5.0.3
+        version: 5.0.3(typescript@6.0.3)
       '@colyseus/sdk':
         specifier: workspace:^
         version: link:../sdk
@@ -641,8 +641,8 @@ importers:
         specifier: ^1.11.2
         version: 1.11.2
       '@colyseus/schema':
-        specifier: ^5.0.1
-        version: 5.0.2(typescript@6.0.3)
+        specifier: ^5.0.3
+        version: 5.0.3(typescript@6.0.3)
       '@colyseus/shared-types':
         specifier: workspace:^
         version: link:../shared-types
@@ -779,8 +779,8 @@ importers:
         specifier: workspace:^
         version: link:../core
       '@colyseus/schema':
-        specifier: ^5.0.1
-        version: 5.0.2(typescript@6.0.3)
+        specifier: ^5.0.3
+        version: 5.0.3(typescript@6.0.3)
       '@colyseus/sdk':
         specifier: workspace:^
         version: link:../sdk
@@ -1218,6 +1218,12 @@ packages:
 
   '@colyseus/schema@5.0.2':
     resolution: {integrity: sha512-x3qVCw3HKRCSN9ZYnVUoEOLUdezSm4OTp2eM6H9HPc4cris0C+83DZz+OAFhNpnPxnX/03KwQzr9yDoK2o5KwA==}
+    hasBin: true
+    peerDependencies:
+      typescript: ^5.9.3
+
+  '@colyseus/schema@5.0.3':
+    resolution: {integrity: sha512-yqT2R9A7ItVHG38Dh5fIFW5WxP79RGCBjeMLjvr+C8OzeR7LzD2CGKxHTJK7xk7bSltQGrv6pecWc+dxUP2kQA==}
     hasBin: true
     peerDependencies:
       typescript: ^5.9.3
@@ -8282,6 +8288,10 @@ snapshots:
       msgpackr-extract: 3.0.3
 
   '@colyseus/schema@5.0.2(typescript@6.0.3)':
+    dependencies:
+      typescript: 6.0.3
+
+  '@colyseus/schema@5.0.3(typescript@6.0.3)':
     dependencies:
       typescript: 6.0.3
 

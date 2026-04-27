@@ -1,8 +1,15 @@
 import { unpack } from '@colyseus/msgpackr';
-import { decode, type Iterator, $changes } from '@colyseus/schema';
+import { decode, Encoder, Reflection, type Iterator, $changes } from '@colyseus/schema';
 import { InputDecoder } from '@colyseus/schema/input';
 import { type InputAccessor, type InputAPI, type InputOptions, type NumericFieldsOf, InputAccessorImpl, InputBufferImpl, NO_OP_INPUT_ACCESSOR } from './input/InputBuffer.ts';
 export { type InputAccessor, type InputAPI, type InputOptions, type NumericFieldsOf } from './input/InputBuffer.ts';
+
+/**
+ * Module-level cache of `Reflection.encode` output keyed by input
+ * constructor — pays the encoding cost once per Room class regardless of
+ * room instance count. WeakMap so unused classes can be GC'd.
+ */
+const _inputReflectionCache = new WeakMap<Function, Uint8Array>();
 import { ClockTimer as Clock } from '@colyseus/timer';
 
 import { EventEmitter } from 'events';
@@ -31,6 +38,7 @@ import * as matchMaker from './MatchMaker.ts';
 import {
   CloseCode,
   ErrorCode,
+  HandshakeSection,
   Protocol,
   type MessageHandlerWithFormat as SharedMessageHandlerWithFormat,
   type MessageHandler as SharedMessageHandler,
@@ -571,6 +579,12 @@ export class Room<T extends RoomOptions = RoomOptions> {
       seqField: opts?.seqField ?? "seq",
       bufferMaxSize: opts?.bufferMaxSize ?? 32,
     };
+    if (!_inputReflectionCache.has(type)) {
+      // Reflection.encode walks the schema's TypeContext via a one-shot
+      // Encoder around a throwaway instance; the bytes are SDK-deserializable
+      // back into a constructor through Reflection.decode.
+      _inputReflectionCache.set(type, Reflection.encode(new Encoder(new type())));
+    }
     return ((sessionId: string): InputAccessor<InstanceType<C>> => {
       const c = this.clients.getById(sessionId) as unknown as ClientPrivate | undefined;
       return (c?._inputAccessor as InputAccessor<InstanceType<C>>) ?? NO_OP_INPUT_ACCESSOR;
@@ -1435,6 +1449,17 @@ export class Room<T extends RoomOptions = RoomOptions> {
       // allow client to send messages after onJoin has succeeded.
       client.ref.on('message', this._onMessage.bind(this, client));
 
+      // Append input reflection as a tagged section when the room declared
+      // input. The SDK uses these bytes to materialize a constructor for
+      // `conn.input()` calls that don't pass an explicit `type`.
+      let extraSections: Array<{ tag: number; bytes: Uint8Array }> | undefined;
+      if (!connectionOptions?.skipHandshake && this.inputOptions !== undefined) {
+        const inputBytes = _inputReflectionCache.get(this.inputOptions.ctor);
+        if (inputBytes !== undefined) {
+          extraSections = [{ tag: HandshakeSection.INPUT_REFLECTION, bytes: inputBytes }];
+        }
+      }
+
       // confirm room id that matches the room name requested to join
       client.raw(getMessageBytes[Protocol.JOIN_ROOM](
         client.reconnectionToken,
@@ -1446,6 +1471,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
         (connectionOptions?.skipHandshake)
           ? undefined
           : this._serializer.handshake && this._serializer.handshake(),
+        extraSections,
       ));
     }
   }

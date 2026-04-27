@@ -1,5 +1,5 @@
-import { CloseCode, Protocol, type InferState, type InferInput, type NormalizeRoomType, type ExtractRoomMessages, type ExtractRoomClientMessages, type ExtractMessageType } from '@colyseus/shared-types';
-import { decode, Decoder, encode, Iterator, Schema } from '@colyseus/schema';
+import { CloseCode, HandshakeSection, Protocol, type InferState, type InferInput, type NormalizeRoomType, type ExtractRoomMessages, type ExtractRoomClientMessages, type ExtractMessageType } from '@colyseus/shared-types';
+import { decode, Decoder, encode, Iterator, Reflection, Schema } from '@colyseus/schema';
 import { InputEncoder } from '@colyseus/schema/input';
 
 import { ClientInputHandleImpl, type ClientInputHandle, type ClientInputOptions } from './input/InputHandle.ts';
@@ -145,9 +145,11 @@ export class Room<
 
     #inputHandle?: ClientInputHandle<any>;
     /**
-     * Schema constructor recovered via Reflection from the server's handshake.
-     * Populated when handshake-time input reflection is wired up; until then
-     * users must pass `{ type: ... }` to {@link input}.
+     * Schema constructor recovered via Reflection from the server's
+     * handshake (the `INPUT_REFLECTION` tagged section). Populated on JOIN
+     * when the server room called `defineInput()`; falls back to `undefined`
+     * otherwise. Survives reconnects that skip the handshake — the field is
+     * set on the original join and never cleared.
      *
      * Typed as `new () => any` (not `Schema`) on purpose — pinning to this
      * SDK's Schema type would clash with user instances coming from a
@@ -364,9 +366,13 @@ export class Room<
      * ignored).
      *
      * Schema discovery, in order:
-     * 1. `options.type` — explicit constructor (always works).
-     * 2. Server-sent reflection at handshake (not yet wired — pass `type`
-     *    until then).
+     * 1. `options.type` — explicit constructor (overrides everything).
+     * 2. Server-sent reflection from the JOIN handshake — populated when the
+     *    server room called `defineInput()`. The synthesized class has the
+     *    same fields as the server's input schema; `instanceof YourInput`
+     *    won't pass on it.
+     *
+     * Throws if neither source has produced a constructor.
      *
      * For rollback netcode, prefer `{ mode: "unreliable", delta: true,
      * historySize: 4 }`: tiny per-tick payloads, redundancy across drops,
@@ -375,7 +381,7 @@ export class Room<
      * @example
      * ```typescript
      * const conn = await client.joinOrCreate<typeof FpsRoom>("fps");
-     * const input = conn.input({ type: MoveInput, mode: "unreliable" });
+     * const input = conn.input({ mode: "unreliable" });   // type from server
      * // each simulation tick:
      * input.data.seq++;
      * input.data.vx = vx;
@@ -393,8 +399,8 @@ export class Room<
         const Ctor = (options?.type ?? this.#inputCtorFromReflection) as (new () => I) | undefined;
         if (!Ctor) {
             throw new Error(
-                "conn.input(): no input schema available. Pass `{ type: YourInput }` " +
-                "(reflection-based discovery is not yet wired)."
+                "conn.input(): no input schema available. The server room must call " +
+                "`defineInput(YourInput)`, or you can pass `{ type: YourInput }` explicitly."
             );
         }
 
@@ -442,6 +448,25 @@ export class Room<
             // apply handshake on first join (no need to do this on reconnect)
             if (buffer.byteLength > it.offset && this.serializer.handshake) {
                 this.serializer.handshake(buffer, it);
+            }
+
+            // Parse trailing tagged sections (forward-compatible: unknown tags
+            // are skipped via length). See HandshakeSection in shared-types.
+            while (it.offset < buffer.byteLength) {
+                const tag = buffer[it.offset++];
+                const sectionLen = decode.number(buffer as Buffer, it);
+                const sectionEnd = it.offset + sectionLen;
+
+                if (tag === HandshakeSection.INPUT_REFLECTION) {
+                    const inputDecoder = Reflection.decode(buffer.subarray(0, sectionEnd) as any, it);
+                    // Install schema-builder field descriptors on the
+                    // reconstructed class so `InputEncoder` can read its
+                    // `$values` and emit non-empty packets.
+                    Reflection.makeEncodable(inputDecoder.state.constructor as any);
+                    this.#inputCtorFromReflection = inputDecoder.state.constructor as new () => any;
+                }
+
+                it.offset = sectionEnd;
             }
 
             if (this.joinedAtTime === 0) {
@@ -602,4 +627,5 @@ function enqueueMessage(room: Room, message: Uint8Array) {
         room.reconnection.enqueuedMessages.shift();
     }
 }
+
 

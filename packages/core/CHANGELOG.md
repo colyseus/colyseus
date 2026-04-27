@@ -2,6 +2,27 @@
 
 ## 0.18.0
 
+### Experimental: typed binary client→server input
+
+> **Status: experimental.** API surface and wire format may change before 0.18 stable. Feedback welcome.
+
+- New: `Room.defineInput(InputClass, opts?)` — declare the per-client input schema. Returns a callable accessor; assign it to the room's `input` field. `opts` accepts `{ seqField?, bufferMaxSize? }` (defaults: `seqField: "seq"`, `bufferMaxSize: 32`). The framework allocates one input instance + `InputDecoder` per joining client and dedupes redundant unreliable frames via `seqField` when present.
+- New: `room.input(sessionId)` returns a per-client `InputAccessor` with:
+  - `.latest` — bound schema instance, mutated in place by the decoder (cheapest read)
+  - `.at(seq)` — buffered snapshot whose `[seqField]` matches `seq` (rollback / lockstep)
+  - `.drain()` / `.peek()` — buffered snapshots oldest → newest
+  - `.size` / `.clear()`
+  - Returns a frozen no-op accessor for unknown sessionIds and for rooms that didn't call `defineInput()`.
+- New: `Room.setTickedSimulation(callback, delay?, startTick?)` — fixed-rate simulation that passes `(tick, deltaTime)` to the callback.
+- New: `room.tick` — current simulation tick getter (incremented after each `setTickedSimulation` callback returns). **Breaking:** subclasses with a user-defined `tick()` method must rename to avoid the accessor/method override clash.
+- New: `Protocol.ROOM_INPUT_RELIABLE` and `Protocol.ROOM_INPUT_UNRELIABLE` wire bytes routed to the per-client `InputDecoder`. Unreliable mode supports framed ring redundancy.
+- New: `ClientArray.getById(sessionId)` — O(1) lookup for the per-tick hot path. Existing mutating methods (`push` / `splice` / `pop` / `shift` / `unshift` / `delete`) keep the secondary index in sync.
+- Handshake: when `defineInput()` was called, the JOIN_ROOM payload now carries the input schema's `Reflection.encode(...)` bytes as a tagged section (`HandshakeSection.INPUT_REFLECTION`). Cached once per input ctor via a module-level `WeakMap`.
+- Generics on the input feature are intentionally unconstrained (`new () => any`, no `extends Schema`) so user input classes from a different copy of `@colyseus/schema` (multi-version installs) still type-check.
+
+### Other
+
+- Bump `@colyseus/schema` to `^5.0.3` (required for input-reflection auto-discovery on the SDK side via `Reflection.makeEncodable`).
 - Remove deprecated `Client#id` property. Use `Client#sessionId` instead.
 
 ## 0.17.42

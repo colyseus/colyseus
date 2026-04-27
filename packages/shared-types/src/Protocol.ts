@@ -21,6 +21,29 @@ export const Protocol = {
 export type Protocol = typeof Protocol[keyof typeof Protocol];
 
 /**
+ * Section tags for trailing tagged blobs in the JOIN_ROOM handshake payload.
+ *
+ * Layout after the existing `[rt][sid][stateReflection]` fields:
+ *   while (more bytes):
+ *     section tag (uint8)
+ *     section length (varint)
+ *     section payload (length bytes)
+ *
+ * Unknown tags are skipped via `length`, so adding new sections is
+ * forward-compatible with older clients.
+ */
+export const HandshakeSection = {
+  /**
+   * Reflection bytes (`Reflection.encode`) for the Room's input schema —
+   * present when the server called `defineInput()`. The SDK reconstructs a
+   * constructor and uses it as the default for `conn.input()` calls that
+   * don't pass an explicit `type`.
+   */
+  INPUT_REFLECTION: 1,
+} as const;
+export type HandshakeSection = typeof HandshakeSection[keyof typeof HandshakeSection];
+
+/**
  * HTTP MatchMaking Error Codes
  */
 export const ErrorCode = {

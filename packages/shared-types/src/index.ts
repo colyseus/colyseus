@@ -4,7 +4,7 @@ import type { StandardSchemaV1 } from '@standard-schema/spec';
 export type { StandardSchemaV1 };
 
 // Re-export Protocol types
-export { Protocol, ErrorCode, CloseCode } from './Protocol.js';
+export { Protocol, ErrorCode, CloseCode, HandshakeSection } from './Protocol.js';
 
 /**
  * Minimal Room-like interface for SDK type inference.

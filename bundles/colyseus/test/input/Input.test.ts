@@ -370,6 +370,49 @@ describe("Input (InputEncoder / InputDecoder integration)", () => {
     await timeout(50);
   });
 
+  it("Reflection — conn.input() with no `type` resolves the schema from the server's handshake", async () => {
+    let observedAtTick: { x: number; y: number; jump: boolean } | undefined;
+
+    matchMaker.defineRoomType('input_reflection', class _ extends Room<{ input: MoveInput }> {
+      input = this.defineInput(MoveInput);
+      onCreate() {
+        this.setSimulationInterval(() => {
+          for (const c of this.clients) {
+            const latest = this.input(c.sessionId).latest;
+            if (latest) observedAtTick = { x: latest.x, y: latest.y, jump: latest.jump };
+          }
+        }, 30);
+      }
+    });
+
+    const conn = await client.joinOrCreate('input_reflection');
+    // No `type` here — schema is reconstructed from server reflection bytes.
+    const input = conn.input<MoveInput>();
+
+    input.data.x = 7; input.data.y = 8; input.data.jump = true;
+    input.send();
+    await timeout(50);
+
+    assert.deepStrictEqual(observedAtTick, { x: 7, y: 8, jump: true });
+
+    await conn.leave();
+    await timeout(50);
+  });
+
+  it("Reflection — conn.input() with no `type` and no server-side defineInput throws clearly", async () => {
+    matchMaker.defineRoomType('input_reflection_absent', class _ extends Room {});
+
+    const conn = await client.joinOrCreate('input_reflection_absent');
+
+    assert.throws(
+      () => conn.input(),
+      /no input schema available/,
+    );
+
+    await conn.leave();
+    await timeout(50);
+  });
+
   it("no input declared on the Room — ROOM_INPUT_* packets are silently ignored", async () => {
     matchMaker.defineRoomType('input_unset', class _ extends Room {});
 
