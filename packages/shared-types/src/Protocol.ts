@@ -13,6 +13,10 @@ export const Protocol = {
   ROOM_DATA_SCHEMA: 16, // DEPRECATED: used to send schema instances via room.send()
   ROOM_DATA_BYTES: 17,
   PING: 18,
+
+  // Input-related (19~20)
+  ROOM_INPUT_RELIABLE: 19,   // [byte, ...InputEncoder.encode() bytes]               single input
+  ROOM_INPUT_UNRELIABLE: 20, // [byte, len|input, len|input, ...]                    length-framed ring
 } as const;
 export type Protocol = typeof Protocol[keyof typeof Protocol];
 

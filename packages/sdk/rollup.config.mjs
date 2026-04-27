@@ -66,6 +66,8 @@ export default [
                     { find: 'ws', replacement: path.resolve('./node_modules/ws/browser.js') },
 
                     // @colyseus/schema: force browser version.
+                    // Subpath /input is matched first to avoid the bare alias swallowing it.
+                    { find: '@colyseus/schema/input', replacement: path.resolve('./node_modules/@colyseus/schema/build/input/index.mjs') },
                     { find: '@colyseus/schema', replacement: path.resolve('./node_modules/@colyseus/schema/build/index.js') },
                 ]
             }),

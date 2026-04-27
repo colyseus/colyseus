@@ -1,5 +1,8 @@
 import { unpack } from '@colyseus/msgpackr';
 import { decode, type Iterator, $changes } from '@colyseus/schema';
+import { InputDecoder } from '@colyseus/schema/input';
+import { type InputAccessor, type InputAPI, type InputOptions, type NumericFieldsOf, InputAccessorImpl, InputBufferImpl, NO_OP_INPUT_ACCESSOR } from './input/InputBuffer.ts';
+export { type InputAccessor, type InputAPI, type InputOptions, type NumericFieldsOf } from './input/InputBuffer.ts';
 import { ClockTimer as Clock } from '@colyseus/timer';
 
 import { EventEmitter } from 'events';
@@ -46,12 +49,23 @@ export interface RoomOptions {
   state?: object;
   metadata?: any;
   client?: Client;
+  /**
+   * Schema class for client→server input packets. When set, the Room
+   * allocates one instance per joining client and binds an InputDecoder.
+   * Must be a flat Schema (primitive fields only — see InputEncoder docs).
+   *
+   * Typed loosely (no `Schema` constraint) to avoid type-identity clashes
+   * when the user's app loads a different copy of `@colyseus/schema` than
+   * `@colyseus/core` does. Runtime validation happens via the encoder.
+   */
+  input?: any;
 }
 
 // Helper types to extract individual properties from RoomOptions
 export type ExtractRoomState<T> = T extends { state?: infer S extends object } ? S : any;
 export type ExtractRoomMetadata<T> = T extends { metadata?: infer M } ? M : any;
 export type ExtractRoomClient<T> = T extends { client?: infer C extends Client } ? C : Client;
+export type ExtractRoomInput<T> = T extends { input?: infer I } ? I : never;
 
 export interface IBroadcastOptions extends ISendOptions {
   except?: Client | Client[];
@@ -490,6 +504,80 @@ export class Room<T extends RoomOptions = RoomOptions> {
   public onLeave?(client: ExtractRoomClient<T>, code?: number): void | Promise<any>;
 
   /**
+   * Per-client input accessor. Set by `defineInput()`. Call `room.input(sessionId)`
+   * each tick to read the latest decoded input and/or the buffered snapshot ring
+   * for that client.
+   *
+   * @example
+   * ```typescript
+   * class FpsRoom extends Room<{ input: MoveInput }> {
+   *   input = this.defineInput(MoveInput);
+   *
+   *   onCreate() {
+   *     this.setSimulationInterval(() => {
+   *       for (const c of this.clients) {
+   *         const input = this.input(c.sessionId);
+   *         if (input.latest) this.apply(c, input.latest);
+   *         // for rollback / lockstep:
+   *         //   const snapshot = input.at(this.clock.ticks);
+   *         //   for (const snapshot of input.drain()) ...
+   *       }
+   *     }, 1000 / 30);
+   *   }
+   * }
+   * ```
+   */
+  public input?: InputAPI<ExtractRoomInput<T>>;
+
+  /**
+   * Input configuration. Set via {@link defineInput} only.
+   * @internal
+   */
+  private inputOptions?: InputOptions;
+
+  /**
+   * Declare the input schema and configuration in a single line. Returns the
+   * callable accessor that gets assigned to `this.input` — call
+   * `this.input(sessionId)` per tick to consume.
+   *
+   * ```typescript
+   * class FpsRoom extends Room<{ input: MoveInput }> {
+   *   input = this.defineInput(MoveInput, {
+   *     seqField: "tick",       // typed: only numeric fields of MoveInput
+   *     bufferMaxSize: 64,
+   *   });
+   *
+   *   // …or without options — defaults to seqField: "seq", bufferMaxSize: 32:
+   *   // input = this.defineInput(MoveInput);
+   * }
+   * ```
+   *
+   * **Defaults** when `opts` (or individual fields) are omitted:
+   * - `seqField`: `"seq"` — framework dedupes by `input.seq` if the schema has
+   *   such a field. Schemas without it gracefully skip dedupe.
+   * - `bufferMaxSize`: `32` — enables per-client snapshot buffering for
+   *   `room.input(sessionId).drain() / .peek() / .at()`. Set to `0` to disable
+   *   buffering (the `.latest` read still works).
+   */
+  protected defineInput<C extends new () => any>(
+    type: C,
+    opts?: {
+      seqField?: NumericFieldsOf<InstanceType<C>>;
+      bufferMaxSize?: number;
+    },
+  ): InputAPI<InstanceType<C>> {
+    this.inputOptions = {
+      ctor: type,
+      seqField: opts?.seqField ?? "seq",
+      bufferMaxSize: opts?.bufferMaxSize ?? 32,
+    };
+    return ((sessionId: string): InputAccessor<InstanceType<C>> => {
+      const c = this.clients.getById(sessionId) as unknown as ClientPrivate | undefined;
+      return (c?._inputAccessor as InputAccessor<InstanceType<C>>) ?? NO_OP_INPUT_ACCESSOR;
+    });
+  }
+
+  /**
    * This method is called when the room is disposed.
    */
   public onDispose?(): void | Promise<any>;
@@ -652,6 +740,51 @@ export class Room<T extends RoomOptions = RoomOptions> {
       }, delay);
     }
   }
+
+  /**
+   * Run a fixed-rate simulation tagged with a monotonic server tick number.
+   * Combine with `room.input(sessionId).at(tick)` to retrieve each client's
+   * input *for a specific tick* — the building block for lockstep / rollback
+   * netcode.
+   *
+   * Replaces any previous {@link setSimulationInterval}. The current tick is
+   * exposed via {@link tick}.
+   *
+   * @example
+   * ```typescript
+   * class LockstepRoom extends Room<{ input: MoveInput }> {
+   *   input = this.defineInput(MoveInput, { seqField: "tick", bufferMaxSize: 64 });
+   *
+   *   onCreate() {
+   *     this.setTickedSimulation((tick, dt) => {
+   *       for (const c of this.clients) {
+   *         const snapshot = this.input(c.sessionId).at(tick);
+   *         if (snapshot) this.apply(c, snapshot);
+   *         // else: predict, freeze, etc. — game-level decision
+   *       }
+   *     }, 1000 / 60);
+   *   }
+   * }
+   * ```
+   */
+  public setTickedSimulation(
+    onTickCallback: (tick: number, deltaTime: number) => void,
+    delay: number = DEFAULT_SIMULATION_INTERVAL,
+    startTick: number = 0,
+  ): void {
+    this.#_tick = startTick;
+    this.setSimulationInterval((dt) => {
+      onTickCallback(this.#_tick, dt);
+      this.#_tick++;
+    }, delay);
+  }
+
+  /**
+   * Current server tick. Incremented by {@link setTickedSimulation} after each
+   * tick callback returns. Returns 0 when no ticked simulation is running.
+   */
+  public get tick(): number { return this.#_tick; }
+  #_tick: number = 0;
 
   /**
    * @deprecated Use `.patchRate=` instead.
@@ -1102,6 +1235,19 @@ export class Room<T extends RoomOptions = RoomOptions> {
     // generate unique private reconnection token
     // (each new reconnection receives a new reconnection token)
     client.reconnectionToken = generateId();
+
+    // Allocate per-client input instance + decoder if the Room called `defineInput()`.
+    // Done early so onJoin can reference room.input(sessionId).latest.
+    if (this.inputOptions !== undefined) {
+      client._input = new this.inputOptions.ctor();
+      client._inputDecoder = new InputDecoder(client._input);
+      // Buffer is opt-in via bufferMaxSize > 0 (rollback / lockstep).
+      const maxSize = this.inputOptions.bufferMaxSize;
+      if (maxSize > 0) {
+        client._inputBuffer = new InputBufferImpl(maxSize, this.inputOptions.seqField);
+      }
+      client._inputAccessor = new InputAccessorImpl(client);
+    }
 
     if (this._reservedSeatTimeouts[sessionId]) {
       clearTimeout(this._reservedSeatTimeouts[sessionId]);
@@ -1595,6 +1741,23 @@ export class Room<T extends RoomOptions = RoomOptions> {
     return await (userReturnData || Promise.resolve());
   }
 
+  /**
+   * After the decoder has mutated `client._input`, push a clone into the
+   * per-client buffer (when buffering is enabled). Honors
+   * `inputOptions.seqField` for dedupe of redundant frames.
+   */
+  #captureInput(client: ClientPrivate) {
+    const buf = client._inputBuffer;
+    if (!buf) { return; } // no consumer registered — skip the clone allocation
+    const inst = client._input!;
+    const seqField = this.inputOptions?.seqField;
+    if (seqField !== undefined) {
+      const value = (inst as any)[seqField] as number;
+      if (typeof value === 'number' && !buf.accept(value)) { return; }
+    }
+    buf.push(inst.clone() as any);
+  }
+
   private _onMessage(client: ExtractRoomClient<T> & ClientPrivate, buffer: Buffer) {
     // skip if client is on LEAVING state.
     if (client.state === ClientState.LEAVING) { return; }
@@ -1679,6 +1842,27 @@ export class Room<T extends RoomOptions = RoomOptions> {
 
       } else {
         this.onMessageFallbacks['__no_message_handler'](client, messageType, message);
+      }
+
+    } else if (code === Protocol.ROOM_INPUT_RELIABLE) {
+      if (client._inputDecoder) {
+        try {
+          client._inputDecoder.decode(buffer.subarray(1));
+        } catch (e: any) {
+          debugAndPrintError(e);
+          return;
+        }
+        this.#captureInput(client);
+      }
+
+    } else if (code === Protocol.ROOM_INPUT_UNRELIABLE) {
+      if (client._inputDecoder) {
+        try {
+          client._inputDecoder.decodeAll(buffer.subarray(1), () => this.#captureInput(client));
+        } catch (e: any) {
+          debugAndPrintError(e);
+          return;
+        }
       }
 
     } else if (code === Protocol.JOIN_ROOM && client.state === ClientState.JOINING) {

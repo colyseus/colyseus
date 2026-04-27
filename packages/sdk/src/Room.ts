@@ -1,5 +1,9 @@
-import { CloseCode, Protocol, type InferState, type NormalizeRoomType, type ExtractRoomMessages, type ExtractRoomClientMessages, type ExtractMessageType } from '@colyseus/shared-types';
+import { CloseCode, Protocol, type InferState, type InferInput, type NormalizeRoomType, type ExtractRoomMessages, type ExtractRoomClientMessages, type ExtractMessageType } from '@colyseus/shared-types';
 import { decode, Decoder, encode, Iterator, Schema } from '@colyseus/schema';
+import { InputEncoder } from '@colyseus/schema/input';
+
+import { ClientInputHandleImpl, type ClientInputHandle, type ClientInputOptions } from './input/InputHandle.ts';
+export { type ClientInputHandle, type ClientInputOptions } from './input/InputHandle.ts';
 
 import { Packr, unpack } from '@colyseus/msgpackr';
 
@@ -138,6 +142,19 @@ export class Room<
 
     #lastPingTime: number = 0;
     #pingCallback?: (ms: number) => void = undefined;
+
+    #inputHandle?: ClientInputHandle<any>;
+    /**
+     * Schema constructor recovered via Reflection from the server's handshake.
+     * Populated when handshake-time input reflection is wired up; until then
+     * users must pass `{ type: ... }` to {@link input}.
+     *
+     * Typed as `new () => any` (not `Schema`) on purpose — pinning to this
+     * SDK's Schema type would clash with user instances coming from a
+     * different copy of `@colyseus/schema` under multi-version installs.
+     * @internal
+     */
+    #inputCtorFromReflection?: new () => any;
 
     constructor(name: string, rootSchema?: SchemaConstructor<State>) {
         this.name = name;
@@ -341,6 +358,52 @@ export class Room<
 
     }
 
+    /**
+     * Get the per-room input handle. Lazily created on first call and cached;
+     * subsequent calls return the same handle (options on later calls are
+     * ignored).
+     *
+     * Schema discovery, in order:
+     * 1. `options.type` — explicit constructor (always works).
+     * 2. Server-sent reflection at handshake (not yet wired — pass `type`
+     *    until then).
+     *
+     * For rollback netcode, prefer `{ mode: "unreliable", delta: true,
+     * historySize: 4 }`: tiny per-tick payloads, redundancy across drops,
+     * idempotent under reordering.
+     *
+     * @example
+     * ```typescript
+     * const conn = await client.joinOrCreate<typeof FpsRoom>("fps");
+     * const input = conn.input({ type: MoveInput, mode: "unreliable" });
+     * // each simulation tick:
+     * input.data.seq++;
+     * input.data.vx = vx;
+     * input.data.vy = vy;
+     * input.send();
+     * ```
+     */
+    public input<
+        I = ([InferInput<T>] extends [never] ? any : InferInput<T>),
+    >(options?: ClientInputOptions<I>): ClientInputHandle<I> {
+        if (this.#inputHandle) {
+            return this.#inputHandle as ClientInputHandle<I>;
+        }
+
+        const Ctor = (options?.type ?? this.#inputCtorFromReflection) as (new () => I) | undefined;
+        if (!Ctor) {
+            throw new Error(
+                "conn.input(): no input schema available. Pass `{ type: YourInput }` " +
+                "(reflection-based discovery is not yet wired)."
+            );
+        }
+
+        const instance = new Ctor();
+        const encoder = new InputEncoder(instance as any, options);
+        this.#inputHandle = new ClientInputHandleImpl(this, instance, encoder);
+        return this.#inputHandle as ClientInputHandle<I>;
+    }
+
     public get state (): State {
         return this.serializer.getState();
     }
@@ -539,3 +602,4 @@ function enqueueMessage(room: Room, message: Uint8Array) {
         room.reconnection.enqueuedMessages.shift();
     }
 }
+

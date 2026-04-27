@@ -45,10 +45,10 @@
   "devDependencies": {
     "@colyseus/auth": "workspace:^",
     "@colyseus/core": "workspace:^",
+    "@colyseus/schema": "^5.0.1",
     "@colyseus/sdk": "workspace:^",
     "@colyseus/tools": "workspace:^",
-    "@colyseus/ws-transport": "workspace:^",
-    "@colyseus/schema": "^5.0.0"
+    "@colyseus/ws-transport": "workspace:^"
   },
   "peerDependencies": {
     "@colyseus/core": "0.18.x",

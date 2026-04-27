@@ -1,19 +1,19 @@
 import { CloseCode, Room, type Client, validate, type Messages, type AuthContext } from "@colyseus/core";
-import { schema, type SchemaType } from "@colyseus/schema";
+import { schema, t, type SchemaType } from "@colyseus/schema";
 import { z } from "zod";
 
 const VERSION = 5;
 
 export const Player = schema({
-  x: "number",
-  y: "number",
+  x: t.number(),
+  y: t.number(),
 });
 export type Player = SchemaType<typeof Player>;
 
 export const MyRoomState = schema({
-  mapWidth: "number",
-  mapHeight: "number",
-  players: { map: Player },
+  mapWidth: t.number(),
+  mapHeight: t.number(),
+  players: t.map(Player),
 });
 export type MyRoomState = SchemaType<typeof MyRoomState>;
 
@@ -54,7 +54,14 @@ type MyClient = Client<{
   };
 }>;
 
-export class MyRoom extends Room<{ state: MyRoomState, client: MyClient }> {
+const Input = schema({
+  seq: t.number(),
+  x: t.number(),
+  y: t.number(),
+});
+type Input = SchemaType<typeof Input>;
+
+export class MyRoom extends Room<{ state: MyRoomState, client: MyClient, input: Input }> {
   state = new MyRoomState();
 
   messages = {

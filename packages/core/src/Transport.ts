@@ -5,6 +5,7 @@ import type { Router } from '@colyseus/better-call';
 
 import { ErrorCode } from '@colyseus/shared-types';
 import { StateView } from '@colyseus/schema';
+import type { InputDecoder } from '@colyseus/schema/input';
 
 import { EventEmitter } from 'events';
 import { spliceOne } from './utils/Utils.ts';
@@ -193,6 +194,37 @@ export interface ClientPrivate {
    */
   _numMessagesLastSecond?: number;
   _lastMessageTime?: number;
+
+  /**
+   * Per-client input Schema instance, allocated on join when the Room
+   * declares `input`. Mutated in-place by {@link _inputDecoder} on each
+   * incoming ROOM_INPUT_* packet.
+   *
+   * Typed loosely (`any`) so duplicate `@colyseus/schema` installs don't
+   * trigger type-identity errors against user-defined input classes.
+   */
+  _input?: any;
+  _inputDecoder?: InputDecoder;
+
+  /**
+   * Per-client buffer of cloned input snapshots, allocated on join when
+   * `Room.inputOptions.bufferMaxSize > 0`. Populated on each decoded frame.
+   */
+  _inputBuffer?: import('./input/InputBuffer.ts').InputBufferImpl;
+
+  /**
+   * Cached per-client accessor returned by `room.input(sessionId)`. Built
+   * once at join (when the Room called `defineInput()`), so the public API
+   * call is a Map lookup + property read with no per-call allocation.
+   */
+  _inputAccessor?: import('./input/InputBuffer.ts').InputAccessor;
+
+  /**
+   * Used for rate limiting ROOM_INPUT_* packets via maxInputsPerSecond,
+   * independent of maxMessagesPerSecond.
+   */
+  _numInputsLastSecond?: number;
+  _lastInputTime?: number;
 }
 
 export class ClientArray<C extends Client = Client> extends Array<C> {

@@ -107,6 +107,16 @@ export type ExtractRoomMessages<T> = Instantiate<T> extends { messages: infer M 
 export type ExtractRoomClientMessages<T> = Instantiate<T> extends { '~client': { '~messages': infer M } } ? M : {};
 
 /**
+ * Extract the input Schema instance type from a Room constructor or instance.
+ * The server declares `input?: new () => MoveInput` (typically via
+ * `defineInput`); this returns `MoveInput` so the SDK can constrain
+ * `room.setInput()` to the same shape.
+ *
+ * Returns `never` when the room doesn't declare `input`.
+ */
+export type InferInput<T> = Instantiate<T> extends { input?: new () => infer I } ? I : never;
+
+/**
  * Message handler with automatic type inference from format schema.
  * When a format is provided, the message type is automatically inferred from the schema.
  *

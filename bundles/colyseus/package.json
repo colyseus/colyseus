@@ -59,7 +59,7 @@
     "@colyseus/core": "workspace:^",
     "@colyseus/drizzle-driver": "workspace:^",
     "@colyseus/msgpackr": "*",
-    "@colyseus/schema": "^5.0.0",
+    "@colyseus/schema": "^5.0.1",
     "@colyseus/sdk": "workspace:^",
     "@colyseus/tools": "workspace:^",
     "@colyseus/uwebsockets-transport": "workspace:^",
