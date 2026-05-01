@@ -146,5 +146,32 @@ describe("Graceful Shutdown", () => {
     assert.strictEqual(onReconnectCalled, false, "onReconnect should NOT be called during graceful shutdown");
   });
 
+});
 
+describe("Graceful Shutdown - presence/driver race", () => {
+  it("should not crash when presence/driver are unset (matchMaker.setup().then() hasn't fired)", async () => {
+    // Reproduces the race window between Server construction and the chained
+    // matchMaker.setup().then() callback that assigns this.presence/this.driver.
+    // Observable in production when setup is slow (e.g. Redis client connecting
+    // on Colyseus Cloud). gracefullyShutdown must guard against undefined here.
+    const noopTransport = {
+      listen() { return this; },
+      shutdown() {},
+      simulateLatency() {},
+    } as any;
+
+    const server = new Server({
+      greet: false,
+      gracefullyShutdown: false,
+      transport: noopTransport,
+    });
+
+    // Let matchMaker.setup() and the constructor's chained .then() complete,
+    // then clear the assignments to simulate the pre-resolution window.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    (server as any).presence = undefined;
+    (server as any).driver = undefined;
+
+    await assert.doesNotReject(() => server.gracefullyShutdown(false));
+  });
 });

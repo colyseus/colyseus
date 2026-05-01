@@ -9,8 +9,6 @@ import { type OnCreateOptions, Room } from './Room.ts';
 import { Deferred, registerGracefulShutdown, dynamicImport, type Type } from './utils/Utils.ts';
 
 import type { Presence } from "./presence/Presence.ts";
-import { LocalPresence } from './presence/LocalPresence.ts';
-import { LocalDriver } from './matchmaker/LocalDriver/LocalDriver.ts';
 
 import { setTransport, Transport } from './Transport.ts';
 import { logger, setLogger } from './Logger.ts';
@@ -112,19 +110,23 @@ export class Server<
 
     setDevMode(options.devMode === true);
 
-    this.presence = options.presence || new LocalPresence();
-    this.driver = options.driver || new LocalDriver();
     this.options = options;
     this.greet = greet;
 
     this.attach(options);
 
+    // Pass options.presence/driver through as-is (possibly undefined).
+    // matchMaker.setup() falls back to getDefaultPresence/getDefaultDriver,
+    // which auto-select RedisPresence/RedisDriver on Colyseus Cloud.
     matchMaker.setup(
-      this.presence,
-      this.driver,
+      options.presence,
+      options.driver,
       options.publicAddress,
       options.selectProcessIdToCreateRoom,
-    );
+    ).then(() => {
+      this.presence = matchMaker.presence;
+      this.driver = matchMaker.driver;
+    });
 
     if (gracefullyShutdown) {
       registerGracefulShutdown((err) => this.gracefullyShutdown(true, err));
@@ -296,8 +298,8 @@ export class Server<
       await matchMaker.gracefullyShutdown();
 
       this.transport.shutdown();
-      this.presence.shutdown();
-      await this.driver.shutdown();
+      this.presence?.shutdown();
+      await this.driver?.shutdown();
 
       // custom "after shutdown" method
       await this.onShutdownCallback();

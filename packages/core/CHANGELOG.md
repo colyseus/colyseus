@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.17.43
+
+- Fix `defineServer()` + `server.listen()` not configuring `RedisDriver` / `RedisPresence` on Colyseus Cloud. The `Server` constructor was pre-instantiating `LocalPresence` / `LocalDriver`, shadowing the cloud auto-detection in `matchMaker.setup()` (`utils/Env.ts`). Now passes `options.presence` / `options.driver` through as-is so `getDefaultPresence` / `getDefaultDriver` can pick Redis when running on Cloud.
+- `Env.ts` `getDefaultPresence` / `getDefaultDriver` now gate Redis selection on `os.cpus().length > 1 || REDIS_URI`, matching the existing behavior in `@colyseus/tools`. Single-CPU Cloud instances without `REDIS_URI` keep using Local.
+- Guard `Server.gracefullyShutdown()` against `presence` / `driver` being unset during the brief window before `matchMaker.setup()` resolves (relevant when setup is slow, e.g. Redis client connecting).
+
 ## 0.17.42
 
 - `defineServer()` / `new Server()`: `express` callback can now return a `Promise<void>`, and is awaited before the transport is marked ready. This lets async setup inside the callback (e.g. `await apolloServer.start()`) complete before any request is served.
