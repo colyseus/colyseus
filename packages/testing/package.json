@@ -22,6 +22,7 @@
     }
   },
   "scripts": {
+    "pretest": "pnpm --filter @colyseus/sdk run build",
     "test": "TS_NODE_PROJECT=../../tsconfig/tsconfig.test.json mocha --require tsx test/**.test.ts test/**/**.test.ts --exit --timeout 15000",
     "tslint": "tslint --project . --config ../../tslint.json"
   },

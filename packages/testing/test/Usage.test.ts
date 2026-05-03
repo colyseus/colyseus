@@ -10,6 +10,7 @@ import { State, RoomWithState } from "./app1/RoomWithState.ts";
 import { JWT } from "@colyseus/auth";
 import { MapSchema } from "@colyseus/schema";
 import { RoomWithoutState } from "./app1/RoomWithoutState.ts";
+import { RoomWithFilteredAndPublic } from "./app1/RoomWithFilteredAndPublic.ts";
 
 describe("@colyseus/testing", () => {
   JWT.settings.secret = "secret";
@@ -258,5 +259,38 @@ describe("@colyseus/testing", () => {
       });
     });
 
+  describe("late-joiner snapshot (#935)", () => {
+    it("two filtered clients with non-@view mutations between joins decode without 'refId not found'", async () => {
+      const consoleErrorSpy = sinon.spy(console, "error");
+      try {
+        const sdkRoomA = await colyseus.sdk.joinOrCreate("room_with_filtered_and_public", {});
+        const room = colyseus.getRoomById<RoomWithFilteredAndPublic>(sdkRoomA.roomId);
+        await room.waitForNextPatch();
+
+        room.bumpNested("after-A-joined");
+        await room.waitForNextPatch();
+
+        const sdkRoomB = await colyseus.sdk.joinOrCreate("room_with_filtered_and_public", {});
+        await room.waitForNextPatch();
+
+        const refIdNotFound = consoleErrorSpy.getCalls().some((call) =>
+          call.args.some((arg) =>
+            typeof arg === "string" && arg.includes("refId") && arg.includes("not found")
+          )
+        );
+        assert.strictEqual(refIdNotFound, false,
+          "client B should not see 'refId not found' errors during snapshot decode");
+
+        assert.strictEqual(sdkRoomB.state.nested.mode, "after-A-joined");
+        assert.strictEqual(sdkRoomB.state.nested.tickCount, 1);
+        assert.ok(sdkRoomA.state.entities.get(sdkRoomA.sessionId));
+
+        await sdkRoomA.leave();
+        await sdkRoomB.leave();
+      } finally {
+        consoleErrorSpy.restore();
+      }
+    });
+  });
   });
 });

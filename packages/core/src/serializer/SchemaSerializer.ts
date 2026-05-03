@@ -1,12 +1,11 @@
 import { Protocol } from '@colyseus/shared-types';
-
-import type { Serializer } from './Serializer.ts';
-import { type Client, ClientState } from '../Transport.ts';
-
 import { type Iterator, Encoder, dumpChanges, Reflection, Schema, StateView } from '@colyseus/schema';
 import { debugPatch } from '../Debug.ts';
+import { type Client, ClientState } from '../Transport.ts';
+import type { Serializer } from './Serializer.ts';
 
 const SHARED_VIEW = {};
+const SWITCH_TO_ROOT = new Uint8Array([255, 0]);
 
 export class SchemaSerializer<T extends Schema> implements Serializer<T> {
   public id = 'schema';
@@ -46,13 +45,47 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
     }
 
     if (this.hasFilters && client?.view) {
-      return this.encoder.encodeAllView(
+      const sharedOffset = this.sharedOffsetCache.offset;
+      const fullViewBytes = this.encoder.encodeAllView(
         client.view,
-        this.sharedOffsetCache.offset,
+        sharedOffset,
         { ...this.sharedOffsetCache },
-        this.fullEncodeBuffer
+        this.fullEncodeBuffer,
       );
 
+      // Encode pending view introductions before the cached encodeAll baseline
+      // so late filtered snapshots do not reference refs before introducing them.
+      // See: https://github.com/colyseus/colyseus/issues/935
+      if (client.view.changes.size === 0) {
+        return fullViewBytes;
+      }
+
+      const viewChangesBytes = this.encoder.encodeView(
+        client.view,
+        sharedOffset,
+        { ...this.sharedOffsetCache },
+        this.fullEncodeBuffer,
+      );
+
+      // Layout: [protocol byte][view introductions][switch root][encodeAll baseline][per-view filtered ops]
+      const baselineBody = fullViewBytes.subarray(1, sharedOffset);
+      const introductions = viewChangesBytes.subarray(sharedOffset);
+      const fullViewBody = fullViewBytes.subarray(sharedOffset);
+      const out = new Uint8Array(
+        1 +
+          introductions.length +
+          (baselineBody.length > 0 ? SWITCH_TO_ROOT.length : 0) +
+          baselineBody.length +
+          fullViewBody.length,
+      );
+      out.set(fullViewBytes.subarray(0, 1), 0);
+      let offset = 1;
+      const write = (bytes: Uint8Array) => { out.set(bytes, offset); offset += bytes.length; };
+      write(introductions);
+      if (baselineBody.length > 0) write(SWITCH_TO_ROOT);
+      write(baselineBody);
+      write(fullViewBody);
+      return out;
     } else {
       return this.fullEncodeCache;
     }
@@ -72,7 +105,6 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
     }
 
     if (!this.encoder.hasChanges) {
-
       // check if views have changes (manual add() or remove() items)
       if (this.hasFilters) {
         //
@@ -82,7 +114,7 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
         // (one for handling state with filters, and another for handling state without filters)
         //
         const clientsWithViewChange = clients.filter((client) => {
-          return client.state === ClientState.JOINED && client.view?.changes.size > 0
+          return client.state === ClientState.JOINED && client.view?.changes.size > 0;
         });
 
         if (clientsWithViewChange.length > 0) {
@@ -131,7 +163,6 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
 
         client.raw(encodedChanges);
       }
-
     } else {
       // cache shared offset
       const sharedOffset = it.offset;
@@ -153,9 +184,10 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
 
         // allow to pass the same encoded view for multiple clients
         if (encodedView === undefined) {
-          encodedView = (view === SHARED_VIEW)
-            ? encodedChanges
-            : this.encoder.encodeView(client.view, sharedOffset, it);
+          encodedView =
+            view === SHARED_VIEW
+              ? encodedChanges
+              : this.encoder.encodeView(client.view, sharedOffset, it);
           this.encodedViews.set(view, encodedView);
         }
 
@@ -190,10 +222,9 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
       //
       // TODO: re-use handshake buffer for all rooms of same type (?)
       //
-      this.handshakeCache = (this.encoder.state && Reflection.encode(this.encoder));
+      this.handshakeCache = this.encoder.state && Reflection.encode(this.encoder);
     }
 
     return this.handshakeCache;
   }
-
 }

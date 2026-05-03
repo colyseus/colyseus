@@ -20,6 +20,7 @@
     }
   },
   "scripts": {
+    "pretest": "pnpm --filter @colyseus/monitor --filter @colyseus/playground run build",
     "test": "COLYSEUS_SEAT_RESERVATION_TIME=0.3 COLYSEUS_PRESENCE_SHORT_TIMEOUT=300 mocha test/**.test.ts test/**/**.test.ts --exit --timeout 15000"
   },
   "author": "Endel Dreyer",

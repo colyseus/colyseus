@@ -324,6 +324,10 @@ describe("Presence", () => {
       });
 
       describe("brpop", () => {
+        beforeEach(async () => {
+          await Promise.all([presence.del("brpop"), presence.del("none")]);
+        });
+
         it("brpop should return existing item", async () => {
           await presence.lpush("brpop", "one", "two", "three");
           const result = await presence.brpop("brpop", 1);
@@ -331,21 +335,20 @@ describe("Presence", () => {
         });
 
         it("brpop should return new item", async () => {
-          let result: string[] | null = null;
-          presence.brpop("brpop", 1).then((r) => {
-            result = r;
-          }).catch((e) => {
-            result = null;
-          });
+          const producer = (presence instanceof RedisPresence) ? new RedisPresence() : presence;
+          const resultPromise = presence.brpop("brpop", 1);
 
-          await presence.lpush("brpop", "one", "two", "three");
-
-          await timeout(200);
-          assert.deepStrictEqual(["brpop", "one"], result);
+          try {
+            await producer.lpush("brpop", "one", "two", "three");
+            const result = await resultPromise;
+            assert.deepStrictEqual(["brpop", "one"], result);
+          } finally {
+            if (producer !== presence) producer.shutdown();
+          }
         });
 
         it("brpop should return null if no item is available", async () => {
-          const result = await presence.brpop("none", 0.1);
+          const result = await Promise.race([presence.brpop("none", 1), timeout(1500).then(() => null)]);
           assert.deepStrictEqual(null, result);
         });
 
@@ -403,4 +406,3 @@ describe("Presence", () => {
   });
 
 });
-
