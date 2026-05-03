@@ -7,6 +7,13 @@ import { timeout } from "./utils/index.ts";
 const TEST_PORT = 8570;
 const TEST_ENDPOINT = `ws://localhost:${TEST_PORT}`;
 
+async function waitFor(predicate: () => boolean, timeoutMs: number = 500) {
+  const startedAt = Date.now();
+  while (!predicate() && Date.now() - startedAt < timeoutMs) {
+    await timeout(10);
+  }
+}
+
 describe("Exception Handling", () => {
   let server: Server;
   let client = new Colyseus.Client(TEST_ENDPOINT);
@@ -351,7 +358,7 @@ describe("Exception Handling", () => {
     });
 
     await client.joinOrCreate("my_room", { arg0: "arg0" });
-    await timeout(110);
+    await waitFor(() => caught.error !== undefined);
 
     assert.ok(caught.error instanceof TimedEventException);
     assert.strictEqual(caught.error.message, "setTimeout Error");
@@ -436,7 +443,7 @@ describe("Exception Handling", () => {
 
     const conn = await client.joinOrCreate("my_room", { arg0: "arg0" });
     await conn.send("foo", "bar");
-    await timeout(50);
+    await waitFor(() => caught.error !== undefined);
     await conn.leave();
 
     assert.ok(caught.error instanceof OnMessageException);
