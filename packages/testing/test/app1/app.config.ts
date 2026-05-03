@@ -6,6 +6,7 @@ import { WebSocketTransport } from "@colyseus/ws-transport";
 // import { RedisPresence } from "@colyseus/redis-presence";
 
 import { RoomWithoutState } from "./RoomWithoutState.ts";
+import { RoomWithFilteredAndPublic } from "./RoomWithFilteredAndPublic.ts";
 import { RoomWithState } from "./RoomWithState.ts";
 import { RoomWithSimulation } from "./RoomWithSimulation.ts";
 import { auth, Hash } from "@colyseus/auth";
@@ -15,6 +16,7 @@ export default config({
     room_without_state: defineRoom(RoomWithoutState),
     room_with_state: defineRoom(RoomWithState),
     room_with_simulation: defineRoom(RoomWithSimulation),
+    room_with_filtered_and_public: defineRoom(RoomWithFilteredAndPublic),
   },
 
   options: { greet: false, },

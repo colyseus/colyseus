@@ -10,6 +10,7 @@ import { State, RoomWithState } from "./app1/RoomWithState.ts";
 import { JWT } from "@colyseus/auth";
 import { MapSchema } from "@colyseus/schema";
 import { RoomWithoutState } from "./app1/RoomWithoutState.ts";
+import { RoomWithFilteredAndPublic } from "./app1/RoomWithFilteredAndPublic.ts";
 
 describe("@colyseus/testing", () => {
   JWT.settings.secret = "secret";
@@ -258,5 +259,54 @@ describe("@colyseus/testing", () => {
       });
     });
 
+  describe("late-joiner snapshot (#935)", () => {
+    it("two filtered clients with non-@view mutations between joins decode without 'refId not found'", async () => {
+      const consoleErrorSpy = sinon.spy(console, "error");
+      const consoleWarnSpy = sinon.spy(console, "warn");
+      try {
+        // Client A joins first.
+        const sdkRoomA = await colyseus.sdk.joinOrCreate("room_with_filtered_and_public", {});
+        const room = colyseus.getRoomById<RoomWithFilteredAndPublic>(sdkRoomA.roomId);
+        await room.waitForNextPatch();
+
+        // Server mutates the non-@view nested Schema between A's join and B's join.
+        // This is the trigger for issue #935: the new `root.changes` will cause
+        // `getFullState`'s cached `encodeAll` output to be invalidated and
+        // re-encoded — but the re-encode no longer contains the structural ADD
+        // ops that introduced the nested Schema's refId.
+        room.bumpNested("after-A-joined");
+        await room.waitForNextPatch();
+
+        // Client B joins. Its first patch references the nested ref's refId.
+        // Without the getFullState reorder fix, B's decoder errors with
+        // `"refId not found"` because the introduction op for the nested
+        // Schema is missing from B's snapshot.
+        const sdkRoomB = await colyseus.sdk.joinOrCreate("room_with_filtered_and_public", {});
+        await room.waitForNextPatch();
+
+        // Assert: no decoder errors fired during B's snapshot decode.
+        const refIdNotFound = consoleErrorSpy.getCalls().some((call) =>
+          call.args.some((arg) =>
+            typeof arg === "string" && arg.includes("refId") && arg.includes("not found")
+          )
+        );
+        assert.strictEqual(refIdNotFound, false,
+          "client B should not see 'refId not found' errors during snapshot decode");
+
+        // Assert: B sees the latest non-@view state.
+        assert.strictEqual(sdkRoomB.state.nested.mode, "after-A-joined");
+        assert.strictEqual(sdkRoomB.state.nested.tickCount, 1);
+
+        // Assert: A still sees their own entity (filtered field, AOI-tagged).
+        assert.ok(sdkRoomA.state.entities.get(sdkRoomA.sessionId));
+
+        await sdkRoomA.leave();
+        await sdkRoomB.leave();
+      } finally {
+        consoleErrorSpy.restore();
+        consoleWarnSpy.restore();
+      }
+    });
+  });
   });
 });
