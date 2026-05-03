@@ -8,10 +8,8 @@ const TEST_PORT = 8570;
 const TEST_ENDPOINT = `ws://localhost:${TEST_PORT}`;
 
 async function waitFor(predicate: () => boolean, timeoutMs: number = 500) {
-  const startedAt = Date.now();
-  while (!predicate() && Date.now() - startedAt < timeoutMs) {
-    await timeout(10);
-  }
+  const deadline = Date.now() + timeoutMs;
+  while (!predicate() && Date.now() < deadline) await timeout(10);
 }
 
 describe("Exception Handling", () => {

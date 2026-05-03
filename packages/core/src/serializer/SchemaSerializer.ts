@@ -1,21 +1,11 @@
-import {
-  dumpChanges,
-  Encoder,
-  type Iterator,
-  Reflection,
-  type Schema,
-  type StateView,
-} from '@colyseus/schema';
 import { Protocol } from '@colyseus/shared-types';
+import { type Iterator, Encoder, dumpChanges, Reflection, Schema, StateView } from '@colyseus/schema';
 import { debugPatch } from '../Debug.ts';
 import { type Client, ClientState } from '../Transport.ts';
 import type { Serializer } from './Serializer.ts';
 
 const SHARED_VIEW = {};
-const SWITCH_TO_STRUCTURE = 255;
-const ROOT_REF_ID = 0;
-const EMPTY_BYTES = new Uint8Array();
-const SWITCH_TO_ROOT = new Uint8Array([SWITCH_TO_STRUCTURE, ROOT_REF_ID]);
+const SWITCH_TO_ROOT = new Uint8Array([255, 0]);
 
 export class SchemaSerializer<T extends Schema> implements Serializer<T> {
   public id = 'schema';
@@ -63,19 +53,9 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
         this.fullEncodeBuffer,
       );
 
-      //
-      // If the client's StateView has any pending `view.changes` entries —
-      // typically structural ADD ops seeded by `view.add()` calls before the
-      // client has synced (e.g. a late joiner whose AOI tracker just tagged
-      // pre-existing entities) — encode those FIRST so their refIds are
-      // introduced on the wire before the cached `encodeAll` baseline
-      // references them. Without this reordering, baseline ops emitted in
-      // earlier `encodeAll` runs (whose introducing ADDs are no longer in
-      // `root.allChanges`) reference refIds the new client's decoder never
-      // registered, producing "refId not found" errors.
-      //
+      // Encode pending view introductions before the cached encodeAll baseline
+      // so late filtered snapshots do not reference refs before introducing them.
       // See: https://github.com/colyseus/colyseus/issues/935
-      //
       if (client.view.changes.size === 0) {
         return fullViewBytes;
       }
@@ -88,30 +68,23 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
       );
 
       // Layout: [protocol byte][view introductions][switch root][encodeAll baseline][per-view filtered ops]
-      const PROTOCOL_PREFIX_LEN = 1;
-      const protocolByte = fullViewBytes.subarray(0, PROTOCOL_PREFIX_LEN);
-      const baselineBody = fullViewBytes.subarray(PROTOCOL_PREFIX_LEN, sharedOffset);
+      const baselineBody = fullViewBytes.subarray(1, sharedOffset);
       const introductions = viewChangesBytes.subarray(sharedOffset);
       const fullViewBody = fullViewBytes.subarray(sharedOffset);
-      const switchToRoot = baselineBody.length > 0 ? SWITCH_TO_ROOT : EMPTY_BYTES;
-
       const out = new Uint8Array(
-        protocolByte.length +
+        1 +
           introductions.length +
-          switchToRoot.length +
+          (baselineBody.length > 0 ? SWITCH_TO_ROOT.length : 0) +
           baselineBody.length +
           fullViewBody.length,
       );
-      let offset = 0;
-      out.set(protocolByte, offset);
-      offset += protocolByte.length;
-      out.set(introductions, offset);
-      offset += introductions.length;
-      out.set(switchToRoot, offset);
-      offset += switchToRoot.length;
-      out.set(baselineBody, offset);
-      offset += baselineBody.length;
-      out.set(fullViewBody, offset);
+      out.set(fullViewBytes.subarray(0, 1), 0);
+      let offset = 1;
+      const write = (bytes: Uint8Array) => { out.set(bytes, offset); offset += bytes.length; };
+      write(introductions);
+      if (baselineBody.length > 0) write(SWITCH_TO_ROOT);
+      write(baselineBody);
+      write(fullViewBody);
       return out;
     } else {
       return this.fullEncodeCache;
