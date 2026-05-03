@@ -1,5 +1,5 @@
 import { type Client, Room } from "@colyseus/core";
-import { MapSchema, Schema, type, view } from "@colyseus/schema";
+import { MapSchema, Schema, StateView, type, view } from "@colyseus/schema";
 
 const AOI = 1;
 
@@ -44,9 +44,9 @@ export class RoomWithFilteredAndPublic extends Room<FilteredAndPublicState> {
     entity.tileY = 0;
     entity.hp = 100;
     this.state.entities.set(client.sessionId, entity);
-    if (client.view) {
-      client.view.add(entity, AOI);
-    }
+
+    client.view = new StateView();
+    client.view.add(entity, AOI);
   }
 
   onLeave(client: Client) {

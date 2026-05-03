@@ -12,6 +12,10 @@ import { type Client, ClientState } from '../Transport.ts';
 import type { Serializer } from './Serializer.ts';
 
 const SHARED_VIEW = {};
+const SWITCH_TO_STRUCTURE = 255;
+const ROOT_REF_ID = 0;
+const EMPTY_BYTES = new Uint8Array();
+const SWITCH_TO_ROOT = new Uint8Array([SWITCH_TO_STRUCTURE, ROOT_REF_ID]);
 
 export class SchemaSerializer<T extends Schema> implements Serializer<T> {
   public id = 'schema';
@@ -83,21 +87,28 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
         this.fullEncodeBuffer,
       );
 
-      // Layout: [protocol byte][view introductions][encodeAll baseline][per-view filtered ops]
+      // Layout: [protocol byte][view introductions][switch root][encodeAll baseline][per-view filtered ops]
       const PROTOCOL_PREFIX_LEN = 1;
       const protocolByte = fullViewBytes.subarray(0, PROTOCOL_PREFIX_LEN);
       const baselineBody = fullViewBytes.subarray(PROTOCOL_PREFIX_LEN, sharedOffset);
       const introductions = viewChangesBytes.subarray(sharedOffset);
       const fullViewBody = fullViewBytes.subarray(sharedOffset);
+      const switchToRoot = baselineBody.length > 0 ? SWITCH_TO_ROOT : EMPTY_BYTES;
 
       const out = new Uint8Array(
-        protocolByte.length + introductions.length + baselineBody.length + fullViewBody.length,
+        protocolByte.length +
+          introductions.length +
+          switchToRoot.length +
+          baselineBody.length +
+          fullViewBody.length,
       );
       let offset = 0;
       out.set(protocolByte, offset);
       offset += protocolByte.length;
       out.set(introductions, offset);
       offset += introductions.length;
+      out.set(switchToRoot, offset);
+      offset += switchToRoot.length;
       out.set(baselineBody, offset);
       offset += baselineBody.length;
       out.set(fullViewBody, offset);
