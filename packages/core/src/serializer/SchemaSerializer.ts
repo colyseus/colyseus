@@ -5,7 +5,194 @@ import { type Client, ClientState } from '../Transport.ts';
 import type { Serializer } from './Serializer.ts';
 
 const SHARED_VIEW = {};
+const PROTOCOL_PREFIX_LEN = 1;
 const SWITCH_TO_ROOT = new Uint8Array([255, 0]);
+const EMPTY_BYTES = new Uint8Array();
+
+type ViewChangeSet = Record<string, number>;
+type ViewChanges = Map<number, ViewChangeSet>;
+type ViewWithMutableChanges = StateView & {
+  changes: ViewChanges;
+};
+type ChangeTreeList = {
+  next?: unknown;
+  tail?: unknown;
+};
+type EncoderRootInternals = {
+  filteredChanges: ChangeTreeList;
+  changeTrees: Record<number, { ref?: unknown } | undefined>;
+};
+type SchemaMetadataEntry = {
+  type?: unknown;
+};
+
+function encoderRoot<T extends Schema>(encoder: Encoder<T>): EncoderRootInternals {
+  return (encoder as unknown as { root: EncoderRootInternals }).root;
+}
+
+function createEmptyChangeTreeList(): ChangeTreeList {
+  return { next: undefined, tail: undefined };
+}
+
+function getSchemaMetadata(ref: unknown): Record<number, SchemaMetadataEntry> | undefined {
+  if ((typeof ref !== 'object' && typeof ref !== 'function') || ref === null) {
+    return undefined;
+  }
+
+  return (ref as { constructor?: { [Symbol.metadata]?: Record<number, SchemaMetadataEntry> } })
+    .constructor?.[Symbol.metadata];
+}
+
+function isStructuralViewChange<T extends Schema>(
+  encoder: Encoder<T>,
+  refId: number,
+  fieldIndex: string,
+): boolean {
+  const changeTree = encoderRoot(encoder).changeTrees[refId];
+  const metadata = getSchemaMetadata(changeTree?.ref);
+
+  if (metadata === undefined) {
+    return true;
+  }
+
+  const field = metadata[Number(fieldIndex)];
+  return field !== undefined && typeof field.type !== 'string';
+}
+
+function splitViewChangesForIntroductions<T extends Schema>(
+  encoder: Encoder<T>,
+  view: ViewWithMutableChanges,
+): { introductions: ViewChanges; remaining: ViewChanges } {
+  const introductions: ViewChanges = new Map();
+  const remaining: ViewChanges = new Map();
+
+  for (const [refId, changes] of view.changes) {
+    for (const fieldIndex of Object.keys(changes)) {
+      const operation = changes[fieldIndex];
+      if (operation === undefined) {
+        continue;
+      }
+
+      const target = isStructuralViewChange(encoder, refId, fieldIndex)
+        ? introductions
+        : remaining;
+      const targetChanges = target.get(refId) ?? {};
+      targetChanges[fieldIndex] = operation;
+      target.set(refId, targetChanges);
+    }
+  }
+
+  return { introductions, remaining };
+}
+
+function encodeViewIntroductions<T extends Schema>(
+  encoder: Encoder<T>,
+  view: ViewWithMutableChanges,
+  sharedOffset: number,
+  it: Iterator,
+  bytes: Uint8Array,
+): Uint8Array {
+  const root = encoderRoot(encoder);
+  const filteredChanges = root.filteredChanges;
+  const { introductions, remaining } = splitViewChangesForIntroductions(encoder, view);
+
+  root.filteredChanges = createEmptyChangeTreeList();
+  view.changes = introductions;
+
+  try {
+    return encoder.encodeView(view, sharedOffset, it, bytes);
+  } finally {
+    root.filteredChanges = filteredChanges;
+    view.changes = remaining;
+  }
+}
+
+function encodeViewChangesOnly<T extends Schema>(
+  encoder: Encoder<T>,
+  view: ViewWithMutableChanges,
+  sharedOffset: number,
+  it: Iterator,
+  bytes: Uint8Array,
+): Uint8Array {
+  const root = encoderRoot(encoder);
+  const filteredChanges = root.filteredChanges;
+
+  root.filteredChanges = createEmptyChangeTreeList();
+
+  try {
+    return encoder.encodeView(view, sharedOffset, it, bytes);
+  } finally {
+    root.filteredChanges = filteredChanges;
+  }
+}
+
+function concatViewState(
+  viewIntroductionsState: Uint8Array,
+  baseState: Uint8Array,
+  sharedOffset: number,
+  remainingViewState: Uint8Array = EMPTY_BYTES,
+): Uint8Array {
+  const protocolByte = baseState.subarray(0, PROTOCOL_PREFIX_LEN);
+  const baseBody = baseState.subarray(PROTOCOL_PREFIX_LEN, sharedOffset);
+  const viewIntroductions = viewIntroductionsState.subarray(sharedOffset);
+  const remainingViewChanges = remainingViewState.subarray(sharedOffset);
+  const baseTail = baseState.subarray(sharedOffset);
+  const switchToRoot = baseBody.length > 0 ? SWITCH_TO_ROOT : EMPTY_BYTES;
+  const out = new Uint8Array(
+    protocolByte.length +
+      viewIntroductions.length +
+      switchToRoot.length +
+      baseBody.length +
+      remainingViewChanges.length +
+      baseTail.length,
+  );
+
+  let offset = 0;
+  out.set(protocolByte, offset);
+  offset += protocolByte.length;
+  out.set(viewIntroductions, offset);
+  offset += viewIntroductions.length;
+  out.set(switchToRoot, offset);
+  offset += switchToRoot.length;
+  out.set(baseBody, offset);
+  offset += baseBody.length;
+  out.set(remainingViewChanges, offset);
+  offset += remainingViewChanges.length;
+  out.set(baseTail, offset);
+
+  return out;
+}
+
+function discardInvalidViewChanges<T extends Schema>(
+  encoder: Encoder<T>,
+  view: ViewWithMutableChanges,
+): void {
+  const root = encoderRoot(encoder);
+
+  for (const [refId, changes] of view.changes) {
+    const changeTree = root.changeTrees[refId];
+
+    if (changeTree === undefined) {
+      view.changes.delete(refId);
+      continue;
+    }
+
+    const metadata = getSchemaMetadata(changeTree.ref);
+    if (metadata === undefined) {
+      continue;
+    }
+
+    for (const fieldIndex of Object.keys(changes)) {
+      if (metadata[Number(fieldIndex)] === undefined) {
+        delete changes[fieldIndex];
+      }
+    }
+
+    if (Object.keys(changes).length === 0) {
+      view.changes.delete(refId);
+    }
+  }
+}
 
 export class SchemaSerializer<T extends Schema> implements Serializer<T> {
   public id = 'schema';
@@ -39,15 +226,19 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
 
   public getFullState(client?: Client) {
     if (this.needFullEncode || this.encoder.root.changes.next !== undefined) {
-      this.sharedOffsetCache = { offset: 1 };
+      this.sharedOffsetCache = { offset: PROTOCOL_PREFIX_LEN };
       this.fullEncodeCache = this.encoder.encodeAll(this.sharedOffsetCache, this.fullEncodeBuffer);
+      if (this.fullEncodeCache.buffer !== this.fullEncodeBuffer.buffer) {
+        this.fullEncodeBuffer = new Uint8Array(this.fullEncodeCache.buffer);
+      }
       this.needFullEncode = false;
     }
 
     if (this.hasFilters && client?.view) {
+      const view = client.view as ViewWithMutableChanges;
       const sharedOffset = this.sharedOffsetCache.offset;
       const fullViewBytes = this.encoder.encodeAllView(
-        client.view,
+        view,
         sharedOffset,
         { ...this.sharedOffsetCache },
         this.fullEncodeBuffer,
@@ -56,36 +247,36 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
       // Encode pending view introductions before the cached encodeAll baseline
       // so late filtered snapshots do not reference refs before introducing them.
       // See: https://github.com/colyseus/colyseus/issues/935
-      if (client.view.changes.size === 0) {
+      if (view.changes.size === 0) {
         return fullViewBytes;
       }
 
-      const viewChangesBytes = this.encoder.encodeView(
-        client.view,
+      discardInvalidViewChanges(this.encoder, view);
+      if (view.changes.size === 0) {
+        return fullViewBytes;
+      }
+
+      const viewIntroductionsBytes = encodeViewIntroductions(
+        this.encoder,
+        view,
+        sharedOffset,
+        { ...this.sharedOffsetCache },
+        this.fullEncodeBuffer,
+      );
+      const remainingViewBytes = encodeViewChangesOnly(
+        this.encoder,
+        view,
         sharedOffset,
         { ...this.sharedOffsetCache },
         this.fullEncodeBuffer,
       );
 
-      // Layout: [protocol byte][view introductions][switch root][encodeAll baseline][per-view filtered ops]
-      const baselineBody = fullViewBytes.subarray(1, sharedOffset);
-      const introductions = viewChangesBytes.subarray(sharedOffset);
-      const fullViewBody = fullViewBytes.subarray(sharedOffset);
-      const out = new Uint8Array(
-        1 +
-          introductions.length +
-          (baselineBody.length > 0 ? SWITCH_TO_ROOT.length : 0) +
-          baselineBody.length +
-          fullViewBody.length,
+      return concatViewState(
+        viewIntroductionsBytes,
+        fullViewBytes,
+        sharedOffset,
+        remainingViewBytes,
       );
-      out.set(fullViewBytes.subarray(0, 1), 0);
-      let offset = 1;
-      const write = (bytes: Uint8Array) => { out.set(bytes, offset); offset += bytes.length; };
-      write(introductions);
-      if (baselineBody.length > 0) write(SWITCH_TO_ROOT);
-      write(baselineBody);
-      write(fullViewBody);
-      return out;
     } else {
       return this.fullEncodeCache;
     }
@@ -118,13 +309,17 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
         });
 
         if (clientsWithViewChange.length > 0) {
-          const it: Iterator = { offset: 1 };
+          const it: Iterator = { offset: PROTOCOL_PREFIX_LEN };
 
           const sharedOffset = it.offset;
           this.encoder.sharedBuffer[0] = Protocol.ROOM_STATE_PATCH;
 
           clientsWithViewChange.forEach((client) => {
-            client.raw(this.encoder.encodeView(client.view, sharedOffset, it));
+            const view = client.view as ViewWithMutableChanges;
+            discardInvalidViewChanges(this.encoder, view);
+            if (view.changes.size > 0) {
+              client.raw(this.encoder.encodeView(view, sharedOffset, it));
+            }
           });
         }
       }
@@ -144,7 +339,7 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
     }
 
     // get patch bytes
-    const it: Iterator = { offset: 1 };
+    const it: Iterator = { offset: PROTOCOL_PREFIX_LEN };
     this.encoder.sharedBuffer[0] = Protocol.ROOM_STATE_PATCH;
 
     // encode changes once, for all clients
@@ -184,10 +379,39 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
 
         // allow to pass the same encoded view for multiple clients
         if (encodedView === undefined) {
-          encodedView =
-            view === SHARED_VIEW
-              ? encodedChanges
-              : this.encoder.encodeView(client.view, sharedOffset, it);
+          if (view !== SHARED_VIEW) {
+            discardInvalidViewChanges(this.encoder, client.view as ViewWithMutableChanges);
+          }
+
+          if (view !== SHARED_VIEW && client.view!.changes.size > 0) {
+            const typedView = client.view as ViewWithMutableChanges;
+            const viewIntroductionsBytes = encodeViewIntroductions(
+              this.encoder,
+              typedView,
+              sharedOffset,
+              { ...it },
+              this.encoder.sharedBuffer,
+            );
+            const remainingViewBytes = this.encoder.encodeView(
+              typedView,
+              sharedOffset,
+              { ...it },
+              this.encoder.sharedBuffer,
+            );
+
+            encodedView = concatViewState(
+              viewIntroductionsBytes,
+              encodedChanges,
+              sharedOffset,
+              remainingViewBytes,
+            );
+          } else {
+            encodedView =
+              view === SHARED_VIEW
+                ? encodedChanges
+                : this.encoder.encodeView(client.view, sharedOffset, it);
+          }
+
           this.encodedViews.set(view, encodedView);
         }
 

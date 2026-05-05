@@ -284,6 +284,8 @@ describe("@colyseus/testing", () => {
         assert.strictEqual(sdkRoomB.state.nested.mode, "after-A-joined");
         assert.strictEqual(sdkRoomB.state.nested.tickCount, 1);
         assert.ok(sdkRoomA.state.entities.get(sdkRoomA.sessionId));
+        assert.ok(sdkRoomB.state.entities.get(sdkRoomB.sessionId));
+        assert.strictEqual(sdkRoomB.state.entities.has(sdkRoomA.sessionId), false);
 
         await sdkRoomA.leave();
         await sdkRoomB.leave();
