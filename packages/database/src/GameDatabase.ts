@@ -67,6 +67,15 @@ export class GameDatabase {
   analytics: AnalyticsService;
   moderation: ModerationService;
 
+  /**
+   * Map of resolved drizzle tables, keyed by their canonical name
+   * (e.g. "users", "configs", "leaderboards" — not the colyseus_-prefixed
+   * physical table name). Available after boot(). Pass into the admin
+   * panel — and any other tooling that needs to introspect schemas —
+   * via `tables: { ...database.tables, ...customTables }`.
+   */
+  tables: Record<string, any>;
+
   /** The underlying Drizzle database instance (available after boot). */
   drizzle: any;
 
@@ -100,6 +109,7 @@ export class GameDatabase {
 
     // 2. Resolve schemas (user overrides or defaults)
     const schemas = await this.resolveSchemas();
+    this.tables = { ...schemas };
 
     // 3. Create tables (and add any missing columns to existing tables)
     await this.createTables(schemas);
