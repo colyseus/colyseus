@@ -2,6 +2,7 @@ import { generateCreateTableSQL } from './utils.ts';
 import { AuthService } from './services/AuthService.ts';
 import { ConfigService } from './services/ConfigService.ts';
 import { CloudSaveService } from './services/CloudSaveService.ts';
+import { LeaderboardsService } from './services/LeaderboardsService.ts';
 
 export interface GameDatabaseOptions {
   /**
@@ -39,6 +40,8 @@ export interface GameDatabaseOptions {
     users?: any;
     configs?: any;
     cloudSaves?: any;
+    leaderboards?: any;
+    leaderboardEntries?: any;
   };
 }
 
@@ -48,6 +51,7 @@ export class GameDatabase {
   auth: AuthService;
   config: ConfigService;
   saves: CloudSaveService;
+  leaderboards: LeaderboardsService;
 
   /** The underlying Drizzle database instance (available after boot). */
   drizzle: any;
@@ -90,6 +94,12 @@ export class GameDatabase {
     this.auth = new AuthService(this.drizzle, schemas.users);
     this.config = new ConfigService(this.drizzle, schemas.configs);
     this.saves = new CloudSaveService(this.drizzle, schemas.cloudSaves);
+    this.leaderboards = new LeaderboardsService(
+      this.drizzle,
+      schemas.leaderboards,
+      schemas.leaderboardEntries,
+      this.dialect,
+    );
   }
 
   async shutdown() {
@@ -148,6 +158,8 @@ export class GameDatabase {
         users: userSchemas.users || defaults.colyseusUsers,
         configs: userSchemas.configs || defaults.colyseusConfigs,
         cloudSaves: userSchemas.cloudSaves || defaults.colyseusCloudSaves,
+        leaderboards: userSchemas.leaderboards || defaults.colyseusLeaderboards,
+        leaderboardEntries: userSchemas.leaderboardEntries || defaults.colyseusLeaderboardEntries,
       };
     }
 
@@ -156,16 +168,26 @@ export class GameDatabase {
       users: userSchemas.users || defaults.colyseusUsers,
       configs: userSchemas.configs || defaults.colyseusConfigs,
       cloudSaves: userSchemas.cloudSaves || defaults.colyseusCloudSaves,
+      leaderboards: userSchemas.leaderboards || defaults.colyseusLeaderboards,
+      leaderboardEntries: userSchemas.leaderboardEntries || defaults.colyseusLeaderboardEntries,
     };
   }
 
-  private async createTables(schemas: { users: any; configs: any; cloudSaves: any }) {
+  private async createTables(schemas: ReturnType<GameDatabase['resolveSchemas']> extends Promise<infer S> ? S : never) {
     const getTableConfig: (table: any) => any = this.dialect === 'pg'
       ? (await import('drizzle-orm/pg-core')).getTableConfig
       : (await import('drizzle-orm/sqlite-core')).getTableConfig;
 
-    // Users must be created first (cloud_saves has a FK to users)
-    const tables = [schemas.users, schemas.configs, schemas.cloudSaves];
+    // Order matters: tables with FKs must come after their referenced tables.
+    // Currently no schemas declare FKs (custom user-table names break .references()),
+    // but the ordering is preserved as documentation of the dependency graph.
+    const tables = [
+      schemas.users,
+      schemas.configs,
+      schemas.leaderboards,
+      schemas.cloudSaves,           // depends on users
+      schemas.leaderboardEntries,   // depends on users + leaderboards
+    ];
 
     for (const table of tables) {
       const config = getTableConfig(table);

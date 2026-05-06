@@ -38,6 +38,19 @@ export const cloudSaveColumns = {
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 };
 
+export const leaderboardColumns = {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+};
+
+export const leaderboardEntryColumns = {
+  boardId: text('board_id').notNull(),
+  userId: text('user_id').notNull(),
+  season: text('season').notNull().default('global'),
+  score: integer('score').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+};
+
 // ---------------------------------------------------------------------------
 // Default table instances — used when the user does NOT provide custom schemas
 // ---------------------------------------------------------------------------
@@ -49,3 +62,11 @@ export const colyseusConfigs = pgTable('colyseus_configs', { ...configColumns })
 export const colyseusCloudSaves = pgTable('colyseus_cloud_saves', { ...cloudSaveColumns }, (table) => [
   primaryKey({ columns: [table.userId, table.slot] }),
 ]);
+
+export const colyseusLeaderboards = pgTable('colyseus_leaderboards', { ...leaderboardColumns });
+
+export const colyseusLeaderboardEntries = pgTable(
+  'colyseus_leaderboard_entries',
+  { ...leaderboardEntryColumns },
+  (table) => [primaryKey({ columns: [table.boardId, table.userId, table.season] })],
+);
