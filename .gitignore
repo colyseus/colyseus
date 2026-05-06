@@ -13,3 +13,9 @@ build/
 coverage
 esm
 dump.rdb
+
+# Per-package runtime/build artifacts
+**/dist
+*.db
+*.db-shm
+*.db-wal
