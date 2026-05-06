@@ -82,6 +82,16 @@ export const analyticsEventColumns = {
   ts: integer('ts', { mode: 'timestamp' as const }).notNull().default(sql`(unixepoch())`),
 };
 
+export const userRoleColumns = {
+  userId: text('user_id').primaryKey(),
+  role: text('role', { enum: ['admin', 'mod', 'user'] as const }).notNull(),
+};
+
+export const modAssignmentColumns = {
+  userId: text('user_id').notNull(),
+  collection: text('collection').notNull(),
+};
+
 // ---------------------------------------------------------------------------
 // Default table instances — used when the user does NOT provide custom schemas
 // ---------------------------------------------------------------------------
@@ -113,3 +123,11 @@ export const colyseusPlayerItems = sqliteTable(
 export const colyseusTimedEvents = sqliteTable('colyseus_timed_events', { ...timedEventColumns });
 
 export const colyseusAnalyticsEvents = sqliteTable('colyseus_analytics_events', { ...analyticsEventColumns });
+
+export const colyseusUserRoles = sqliteTable('colyseus_user_roles', { ...userRoleColumns });
+
+export const colyseusModAssignments = sqliteTable(
+  'colyseus_mod_assignments',
+  { ...modAssignmentColumns },
+  (table) => [primaryKey({ columns: [table.userId, table.collection] })],
+);

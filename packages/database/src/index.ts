@@ -6,6 +6,7 @@ export type { LeaderboardEntry } from './services/LeaderboardsService.ts';
 export type { Item, PlayerItem } from './services/ItemsService.ts';
 export type { TimedEvent } from './services/TimedEventsService.ts';
 export type { RetentionResult, FunnelStep } from './services/AnalyticsService.ts';
+export type { Role, Action } from './services/ModerationService.ts';
 
 // Spreadable base columns per dialect for user schema customization
 export {
@@ -18,6 +19,8 @@ export {
   playerItemColumns as sqlitePlayerItemColumns,
   timedEventColumns as sqliteTimedEventColumns,
   analyticsEventColumns as sqliteAnalyticsEventColumns,
+  userRoleColumns as sqliteUserRoleColumns,
+  modAssignmentColumns as sqliteModAssignmentColumns,
 } from './schemas/sqlite.ts';
 export {
   userColumns as pgUserColumns,
@@ -29,6 +32,8 @@ export {
   playerItemColumns as pgPlayerItemColumns,
   timedEventColumns as pgTimedEventColumns,
   analyticsEventColumns as pgAnalyticsEventColumns,
+  userRoleColumns as pgUserRoleColumns,
+  modAssignmentColumns as pgModAssignmentColumns,
 } from './schemas/pg.ts';
 
 // Namespaced columns export: columns.sqlite.users, columns.pg.users, etc.
@@ -42,6 +47,8 @@ import {
   playerItemColumns as sqlitePlayerItems,
   timedEventColumns as sqliteTimedEvents,
   analyticsEventColumns as sqliteAnalyticsEvents,
+  userRoleColumns as sqliteUserRoles,
+  modAssignmentColumns as sqliteModAssignments,
 } from './schemas/sqlite.ts';
 import {
   userColumns as pgUsers,
@@ -53,6 +60,8 @@ import {
   playerItemColumns as pgPlayerItems,
   timedEventColumns as pgTimedEvents,
   analyticsEventColumns as pgAnalyticsEvents,
+  userRoleColumns as pgUserRoles,
+  modAssignmentColumns as pgModAssignments,
 } from './schemas/pg.ts';
 
 export const columns = {
@@ -66,6 +75,8 @@ export const columns = {
     playerItems: sqlitePlayerItems,
     timedEvents: sqliteTimedEvents,
     analyticsEvents: sqliteAnalyticsEvents,
+    userRoles: sqliteUserRoles,
+    modAssignments: sqliteModAssignments,
   },
   pg: {
     users: pgUsers,
@@ -77,5 +88,7 @@ export const columns = {
     playerItems: pgPlayerItems,
     timedEvents: pgTimedEvents,
     analyticsEvents: pgAnalyticsEvents,
+    userRoles: pgUserRoles,
+    modAssignments: pgModAssignments,
   },
 };

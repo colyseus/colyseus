@@ -81,6 +81,16 @@ export const analyticsEventColumns = {
   ts: timestamp('ts').notNull().defaultNow(),
 };
 
+export const userRoleColumns = {
+  userId: text('user_id').primaryKey(),
+  role: text('role', { enum: ['admin', 'mod', 'user'] as const }).notNull(),
+};
+
+export const modAssignmentColumns = {
+  userId: text('user_id').notNull(),
+  collection: text('collection').notNull(),
+};
+
 // ---------------------------------------------------------------------------
 // Default table instances — used when the user does NOT provide custom schemas
 // ---------------------------------------------------------------------------
@@ -112,3 +122,11 @@ export const colyseusPlayerItems = pgTable(
 export const colyseusTimedEvents = pgTable('colyseus_timed_events', { ...timedEventColumns });
 
 export const colyseusAnalyticsEvents = pgTable('colyseus_analytics_events', { ...analyticsEventColumns });
+
+export const colyseusUserRoles = pgTable('colyseus_user_roles', { ...userRoleColumns });
+
+export const colyseusModAssignments = pgTable(
+  'colyseus_mod_assignments',
+  { ...modAssignmentColumns },
+  (table) => [primaryKey({ columns: [table.userId, table.collection] })],
+);

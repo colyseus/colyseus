@@ -6,6 +6,7 @@ import { LeaderboardsService } from './services/LeaderboardsService.ts';
 import { ItemsService } from './services/ItemsService.ts';
 import { TimedEventsService } from './services/TimedEventsService.ts';
 import { AnalyticsService } from './services/AnalyticsService.ts';
+import { ModerationService } from './services/ModerationService.ts';
 
 export interface GameDatabaseOptions {
   /**
@@ -49,6 +50,8 @@ export interface GameDatabaseOptions {
     playerItems?: any;
     timedEvents?: any;
     analyticsEvents?: any;
+    userRoles?: any;
+    modAssignments?: any;
   };
 }
 
@@ -62,6 +65,7 @@ export class GameDatabase {
   items: ItemsService;
   events: TimedEventsService;
   analytics: AnalyticsService;
+  moderation: ModerationService;
 
   /** The underlying Drizzle database instance (available after boot). */
   drizzle: any;
@@ -113,6 +117,11 @@ export class GameDatabase {
     this.items = new ItemsService(this.drizzle, schemas.items, schemas.playerItems);
     this.events = new TimedEventsService(this.drizzle, schemas.timedEvents);
     this.analytics = new AnalyticsService(this.drizzle, schemas.analyticsEvents);
+    this.moderation = new ModerationService(
+      this.drizzle,
+      schemas.userRoles,
+      schemas.modAssignments,
+    );
   }
 
   async shutdown() {
@@ -177,6 +186,8 @@ export class GameDatabase {
         playerItems: userSchemas.playerItems || defaults.colyseusPlayerItems,
         timedEvents: userSchemas.timedEvents || defaults.colyseusTimedEvents,
         analyticsEvents: userSchemas.analyticsEvents || defaults.colyseusAnalyticsEvents,
+        userRoles: userSchemas.userRoles || defaults.colyseusUserRoles,
+        modAssignments: userSchemas.modAssignments || defaults.colyseusModAssignments,
       };
     }
 
@@ -191,6 +202,8 @@ export class GameDatabase {
       playerItems: userSchemas.playerItems || defaults.colyseusPlayerItems,
       timedEvents: userSchemas.timedEvents || defaults.colyseusTimedEvents,
       analyticsEvents: userSchemas.analyticsEvents || defaults.colyseusAnalyticsEvents,
+      userRoles: userSchemas.userRoles || defaults.colyseusUserRoles,
+      modAssignments: userSchemas.modAssignments || defaults.colyseusModAssignments,
     };
   }
 
@@ -212,6 +225,8 @@ export class GameDatabase {
       schemas.cloudSaves,           // depends on users
       schemas.leaderboardEntries,   // depends on users + leaderboards
       schemas.playerItems,          // depends on users + items
+      schemas.userRoles,            // depends on users
+      schemas.modAssignments,       // depends on users
     ];
 
     for (const table of tables) {
