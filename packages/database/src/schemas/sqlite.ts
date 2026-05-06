@@ -52,6 +52,20 @@ export const leaderboardEntryColumns = {
   createdAt: integer('created_at', { mode: 'timestamp' as const }).notNull().default(sql`(unixepoch())`),
 };
 
+export const itemColumns = {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  kind: text('kind').notNull().default('misc'),
+  meta: text('meta', { mode: 'json' as const }),
+};
+
+export const playerItemColumns = {
+  userId: text('user_id').notNull(),
+  itemId: text('item_id').notNull(),
+  qty: integer('qty').notNull().default(1),
+  acquiredAt: integer('acquired_at', { mode: 'timestamp' as const }).notNull().default(sql`(unixepoch())`),
+};
+
 // ---------------------------------------------------------------------------
 // Default table instances — used when the user does NOT provide custom schemas
 // ---------------------------------------------------------------------------
@@ -70,4 +84,12 @@ export const colyseusLeaderboardEntries = sqliteTable(
   'colyseus_leaderboard_entries',
   { ...leaderboardEntryColumns },
   (table) => [primaryKey({ columns: [table.boardId, table.userId, table.season] })],
+);
+
+export const colyseusItems = sqliteTable('colyseus_items', { ...itemColumns });
+
+export const colyseusPlayerItems = sqliteTable(
+  'colyseus_player_items',
+  { ...playerItemColumns },
+  (table) => [primaryKey({ columns: [table.userId, table.itemId] })],
 );

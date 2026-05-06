@@ -51,6 +51,20 @@ export const leaderboardEntryColumns = {
   createdAt: timestamp('created_at').notNull().defaultNow(),
 };
 
+export const itemColumns = {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  kind: text('kind').notNull().default('misc'),
+  meta: jsonb('meta'),
+};
+
+export const playerItemColumns = {
+  userId: text('user_id').notNull(),
+  itemId: text('item_id').notNull(),
+  qty: integer('qty').notNull().default(1),
+  acquiredAt: timestamp('acquired_at').notNull().defaultNow(),
+};
+
 // ---------------------------------------------------------------------------
 // Default table instances — used when the user does NOT provide custom schemas
 // ---------------------------------------------------------------------------
@@ -69,4 +83,12 @@ export const colyseusLeaderboardEntries = pgTable(
   'colyseus_leaderboard_entries',
   { ...leaderboardEntryColumns },
   (table) => [primaryKey({ columns: [table.boardId, table.userId, table.season] })],
+);
+
+export const colyseusItems = pgTable('colyseus_items', { ...itemColumns });
+
+export const colyseusPlayerItems = pgTable(
+  'colyseus_player_items',
+  { ...playerItemColumns },
+  (table) => [primaryKey({ columns: [table.userId, table.itemId] })],
 );

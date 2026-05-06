@@ -3,6 +3,7 @@ import { AuthService } from './services/AuthService.ts';
 import { ConfigService } from './services/ConfigService.ts';
 import { CloudSaveService } from './services/CloudSaveService.ts';
 import { LeaderboardsService } from './services/LeaderboardsService.ts';
+import { ItemsService } from './services/ItemsService.ts';
 
 export interface GameDatabaseOptions {
   /**
@@ -42,6 +43,8 @@ export interface GameDatabaseOptions {
     cloudSaves?: any;
     leaderboards?: any;
     leaderboardEntries?: any;
+    items?: any;
+    playerItems?: any;
   };
 }
 
@@ -52,6 +55,7 @@ export class GameDatabase {
   config: ConfigService;
   saves: CloudSaveService;
   leaderboards: LeaderboardsService;
+  items: ItemsService;
 
   /** The underlying Drizzle database instance (available after boot). */
   drizzle: any;
@@ -100,6 +104,7 @@ export class GameDatabase {
       schemas.leaderboardEntries,
       this.dialect,
     );
+    this.items = new ItemsService(this.drizzle, schemas.items, schemas.playerItems);
   }
 
   async shutdown() {
@@ -160,6 +165,8 @@ export class GameDatabase {
         cloudSaves: userSchemas.cloudSaves || defaults.colyseusCloudSaves,
         leaderboards: userSchemas.leaderboards || defaults.colyseusLeaderboards,
         leaderboardEntries: userSchemas.leaderboardEntries || defaults.colyseusLeaderboardEntries,
+        items: userSchemas.items || defaults.colyseusItems,
+        playerItems: userSchemas.playerItems || defaults.colyseusPlayerItems,
       };
     }
 
@@ -170,6 +177,8 @@ export class GameDatabase {
       cloudSaves: userSchemas.cloudSaves || defaults.colyseusCloudSaves,
       leaderboards: userSchemas.leaderboards || defaults.colyseusLeaderboards,
       leaderboardEntries: userSchemas.leaderboardEntries || defaults.colyseusLeaderboardEntries,
+      items: userSchemas.items || defaults.colyseusItems,
+      playerItems: userSchemas.playerItems || defaults.colyseusPlayerItems,
     };
   }
 
@@ -185,8 +194,10 @@ export class GameDatabase {
       schemas.users,
       schemas.configs,
       schemas.leaderboards,
+      schemas.items,
       schemas.cloudSaves,           // depends on users
       schemas.leaderboardEntries,   // depends on users + leaderboards
+      schemas.playerItems,          // depends on users + items
     ];
 
     for (const table of tables) {
