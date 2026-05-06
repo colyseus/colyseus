@@ -1,0 +1,68 @@
+{
+  "name": "@colyseus/database",
+  "version": "0.18.0",
+  "type": "module",
+  "description": "Database-first game backend features for Colyseus (auth, configs, cloud saves)",
+  "input": "./src/index.ts",
+  "main": "./build/index.cjs",
+  "module": "./src/index.ts",
+  "typings": "./build/index.d.ts",
+  "exports": {
+    ".": {
+      "@source": "./src/index.ts",
+      "types": "./build/index.d.ts",
+      "import": "./build/index.mjs",
+      "require": "./build/index.cjs"
+    },
+    "./*": {
+      "@source": "./src/*.ts",
+      "types": "./build/*.d.ts",
+      "import": "./build/*.mjs",
+      "require": "./build/*.cjs"
+    }
+  },
+  "funding": "https://github.com/sponsors/endel",
+  "author": "Endel Dreyer",
+  "license": "MIT",
+  "keywords": [
+    "colyseus",
+    "database",
+    "auth",
+    "cloud-saves",
+    "game-backend",
+    "drizzle"
+  ],
+  "files": [
+    "build",
+    "src"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/colyseus/colyseus.git"
+  },
+  "homepage": "https://colyseus.io/",
+  "engines": {
+    "node": ">= 22.x"
+  },
+  "dependencies": {
+    "drizzle-orm": "1.0.0-beta.20"
+  },
+  "peerDependencies": {
+    "@colyseus/core": "0.18.x",
+    "@colyseus/auth": "0.18.x",
+    "postgres": "^3.4.7"
+  },
+  "peerDependenciesMeta": {
+    "postgres": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@colyseus/core": "workspace:^",
+    "@colyseus/auth": "workspace:^"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "next"
+  }
+}
