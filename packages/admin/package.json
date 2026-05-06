@@ -1,0 +1,85 @@
+{
+  "name": "@colyseus/admin",
+  "version": "0.18.0",
+  "type": "module",
+  "description": "Database-backed admin panel for Colyseus (REST + Refine UI, no express)",
+  "input": "./src-backend/index.ts",
+  "main": "./build/index.cjs",
+  "module": "./build/index.mjs",
+  "typings": "./build/index.d.ts",
+  "exports": {
+    ".": {
+      "@source": "./src-backend/index.ts",
+      "types": "./build/index.d.ts",
+      "import": "./build/index.mjs",
+      "require": "./build/index.cjs"
+    },
+    "./*": {
+      "@source": "./src-backend/*.ts",
+      "types": "./build/*.d.ts",
+      "import": "./build/*.mjs",
+      "require": "./build/*.cjs"
+    }
+  },
+  "scripts": {
+    "start": "vite",
+    "build": "vite build && node build.mjs",
+    "preview": "vite preview"
+  },
+  "files": [
+    "build",
+    "src-backend"
+  ],
+  "funding": "https://github.com/sponsors/endel",
+  "author": "Endel Dreyer",
+  "license": "MIT",
+  "keywords": [
+    "colyseus",
+    "admin",
+    "refine",
+    "antd",
+    "game-backend"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/colyseus/colyseus.git"
+  },
+  "homepage": "https://colyseus.io/",
+  "engines": {
+    "node": ">= 22.x"
+  },
+  "peerDependencies": {
+    "@colyseus/core": "0.18.x",
+    "@colyseus/database": "0.18.x"
+  },
+  "dependencies": {
+    "@colyseus/better-call": "workspace:^"
+  },
+  "devDependencies": {
+    "@ant-design/icons": "^5.5.0",
+    "@colyseus/core": "workspace:^",
+    "@colyseus/database": "workspace:^",
+    "@refinedev/antd": "^5.47.0",
+    "@refinedev/core": "^4.57.0",
+    "@refinedev/react-router": "^1.0.0",
+    "@refinedev/simple-rest": "^5.0.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "antd": "^5.17.0",
+    "axios": "^1.7.0",
+    "dayjs": "^1.11.0",
+    "drizzle-orm": "1.0.0-beta.20",
+    "esbuild": "^0.27.2",
+    "fast-glob": "^3.2.12",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^7.0.0",
+    "typescript": "^6.0.3",
+    "vite": "^5.4.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "next"
+  }
+}
