@@ -1,5 +1,8 @@
 import type { Action, Role } from '@colyseus/database';
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _ResourceTypeDeps = Action | Role;
+
 export interface ResourceAction {
   /** action name (URL: POST /admin-api/:resource/_action/:name) */
   name: string;

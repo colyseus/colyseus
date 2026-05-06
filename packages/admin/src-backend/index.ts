@@ -1,15 +1,15 @@
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath } from 'url'; // required for ESM build (see build.mjs)
 import { createEndpoint, type Endpoint } from '@colyseus/core';
 import { sql, asc, desc, eq } from 'drizzle-orm';
 import type { Action, GameDatabase } from '@colyseus/database';
-import { serveStatic } from './static.ts';
-import { json, errorResponse } from './respond.ts';
-import { iconForTableName } from './default-icons.ts';
-import type { ResourceDefinition } from './define-resource.ts';
+import { serveStatic } from './static.js';
+import { json, errorResponse } from './respond.js';
+import { iconForTableName } from './default-icons.js';
+import type { ResourceDefinition } from './define-resource.js';
 
-export { defineAdminResource } from './define-resource.ts';
-export type { ResourceDefinition, ResourceAction, PolicyEntry } from './define-resource.ts';
+export { defineAdminResource } from './define-resource.js';
+export type { ResourceDefinition, ResourceAction, PolicyEntry } from './define-resource.js';
 
 export interface AdminOptions {
   /** GameDatabase instance — provides drizzle client + moderation. */
@@ -44,8 +44,9 @@ export interface AdminOptions {
   enforceRbac?: boolean;
 }
 
-const defaultResolve: AdminOptions['resolveUserId'] = (ctx) =>
-  (ctx.getHeader('x-user-id') || undefined) as string | undefined;
+function defaultResolve(ctx: { getHeader: (k: string) => string | null }): string | undefined {
+  return ctx.getHeader('x-user-id') ?? undefined;
+}
 
 /**
  * Returns an object of better-call endpoints for the admin panel — REST + static UI.
@@ -55,8 +56,8 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
   const { database } = opts;
   const apiPath = (opts.apiPath ?? '/admin-api').replace(/\/$/, '');
   const uiPath = (opts.uiPath ?? '/admin').replace(/\/$/, '');
-  const here = path.dirname(fileURLToPath(import.meta.url));
-  const uiDistDir = opts.uiDistDir ?? path.resolve(here, '..', 'build');
+  // build.mjs's "dirname" plugin rewrites __dirname to a fileURLToPath call for the ESM build
+  const uiDistDir = opts.uiDistDir ?? path.resolve(__dirname, '..', 'build');
   const resolveUserId = opts.resolveUserId ?? defaultResolve;
   const enforceRbac = opts.enforceRbac !== false;
 

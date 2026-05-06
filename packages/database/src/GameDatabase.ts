@@ -174,7 +174,9 @@ export class GameDatabase {
     const connectionString = this.options.connectionString || process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/postgres';
     const sql = pg(connectionString);
 
-    this.drizzle = drizzle(sql);
+    // Drizzle 1.0 requires the named-arg form for postgres-js. Positional
+    // form is for connection-string overloads only.
+    this.drizzle = drizzle({ client: sql });
     this.ownedConnection = sql;
   }
 
