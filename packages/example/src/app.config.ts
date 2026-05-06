@@ -16,6 +16,25 @@ import { RedisPresence } from "@colyseus/redis-presence";
 import { RedisDriver } from "@colyseus/redis-driver";
 import { PostgresDriver } from "@colyseus/drizzle-driver";
 
+import { GameDatabase } from "@colyseus/database";
+import { adminEndpoints, defineAdminResource } from "@colyseus/admin";
+
+// Spin up an embedded sqlite-backed GameDatabase. The admin panel below
+// reflects every table on it. Set DATABASE_URL=postgres://... to switch.
+const database = new GameDatabase({
+  connectionString: process.env.DATABASE_URL,
+});
+await database.boot();
+
+// Tiny test-only seed endpoint — creates an admin + a mod for the panel demo.
+async function seedAdminAndMod() {
+  const admin = await database.auth.settings.onRegisterAnonymously?.({});
+  await database.moderation.setRole((admin as any).id, "admin");
+  const mod = await database.auth.settings.onRegisterAnonymously?.({});
+  await database.moderation.assignMod((mod as any).id, "users");
+  return { adminId: (admin as any).id, modId: (mod as any).id };
+}
+
 // import { Client } from "@colyseus/sdk";
 // const client = new Client<typeof server>("ws://localhost:2567");
 
@@ -243,6 +262,13 @@ export const server = config({
   },
 
   routes: createRouter({
+    // Admin panel + REST. Browse to http://localhost:2567/admin/.
+    // Send `X-User-Id: <id>` to authenticate; POST /admin-seed to bootstrap one.
+    ...adminEndpoints({ database }),
+    adminSeed: createEndpoint("/admin-seed", { method: "POST" }, async () => {
+      return seedAdminAndMod();
+    }),
+
     // index,
     listThings,
     getThing,

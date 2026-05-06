@@ -2,6 +2,8 @@ import path from 'path';
 import { fileURLToPath } from 'url'; // required for ESM build (see build.mjs)
 import { createEndpoint, type Endpoint } from '@colyseus/core';
 import { sql, asc, desc, eq } from 'drizzle-orm';
+import { getTableConfig as getPgTableConfig } from 'drizzle-orm/pg-core';
+import { getTableConfig as getSqliteTableConfig } from 'drizzle-orm/sqlite-core';
 import type { Action, GameDatabase } from '@colyseus/database';
 import { serveStatic } from './static.js';
 import { json, errorResponse } from './respond.js';
@@ -107,19 +109,11 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
     return { table, cfg: getTableConfig(table) };
   }
 
-  function getTableConfig(table: any): any {
-    // Drizzle pg-core and sqlite-core expose the same getTableConfig shape.
-    // Lazy-load both and use whichever the table belongs to.
-    const dialect = (database as any).dialect;
-    if (dialect === 'pg') {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { getTableConfig } = require('drizzle-orm/pg-core');
-      return getTableConfig(table);
-    }
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { getTableConfig } = require('drizzle-orm/sqlite-core');
-    return getTableConfig(table);
-  }
+  // pg-core and sqlite-core expose getTableConfig with the same structural shape.
+  // Pick once at setup based on the GameDatabase's dialect.
+  const getTableConfig: (table: any) => any = (database as any).dialect === 'pg'
+    ? (getPgTableConfig as any)
+    : (getSqliteTableConfig as any);
 
   function castPk(raw: string, col: any): any {
     const t = (col as any).getSQLType?.();

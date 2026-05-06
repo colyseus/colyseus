@@ -16,9 +16,11 @@
     "colyseus": "workspace:^"
   },
   "devDependencies": {
+    "@colyseus/admin": "workspace:^",
     "@colyseus/auth": "workspace:^",
     "@colyseus/better-call": "workspace:^",
     "@colyseus/bun-websockets": "workspace:^",
+    "@colyseus/database": "workspace:^",
     "@colyseus/drizzle-driver": "workspace:^",
     "@colyseus/h3-transport": "workspace:^",
     "@colyseus/monitor": "workspace:^",

@@ -103,7 +103,10 @@ async function main() {
         build.onLoad({ filter: /.*/ }, ({ path: filePath }) => {
           let contents = fs.readFileSync(filePath, 'utf8');
           const loader = path.extname(filePath).substring(1);
-          contents = contents.replace('__dirname', `path.dirname(fileURLToPath(import.meta.url))`);
+          if (contents.includes('__dirname')) {
+            console.log('  [dirname plugin] rewriting __dirname in', path.relative(process.cwd(), filePath));
+          }
+          contents = contents.replace(/__dirname/g, `path.dirname(fileURLToPath(import.meta.url))`);
           return { contents, loader };
         });
       },
