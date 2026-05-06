@@ -8,6 +8,7 @@ import type { Action, GameDatabase } from '@colyseus/database';
 import { serveStatic } from './static.js';
 import { json, errorResponse } from './respond.js';
 import { iconForTableName } from './default-icons.js';
+import { humanize } from './humanize.js';
 import type { ResourceDefinition } from './define-resource.js';
 
 export { defineAdminResource } from './define-resource.js';
@@ -137,7 +138,7 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
         const singlePk = cfg.columns.filter((c: any) => c.primary).map((c: any) => c.name);
         return {
           name,
-          label: def?.label ?? name,
+          label: def?.label ?? humanize(name),
           icon: def?.icon ?? iconForTableName(cfg.name),
           columns: cfg.columns.map((c: any) => ({
             name: c.name,
