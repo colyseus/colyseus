@@ -66,6 +66,14 @@ export const playerItemColumns = {
   acquiredAt: integer('acquired_at', { mode: 'timestamp' as const }).notNull().default(sql`(unixepoch())`),
 };
 
+export const timedEventColumns = {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  startsAt: integer('starts_at', { mode: 'timestamp' as const }).notNull(),
+  endsAt: integer('ends_at', { mode: 'timestamp' as const }).notNull(),
+  payload: text('payload', { mode: 'json' as const }),
+};
+
 // ---------------------------------------------------------------------------
 // Default table instances — used when the user does NOT provide custom schemas
 // ---------------------------------------------------------------------------
@@ -93,3 +101,5 @@ export const colyseusPlayerItems = sqliteTable(
   { ...playerItemColumns },
   (table) => [primaryKey({ columns: [table.userId, table.itemId] })],
 );
+
+export const colyseusTimedEvents = sqliteTable('colyseus_timed_events', { ...timedEventColumns });

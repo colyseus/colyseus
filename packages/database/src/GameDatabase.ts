@@ -4,6 +4,7 @@ import { ConfigService } from './services/ConfigService.ts';
 import { CloudSaveService } from './services/CloudSaveService.ts';
 import { LeaderboardsService } from './services/LeaderboardsService.ts';
 import { ItemsService } from './services/ItemsService.ts';
+import { TimedEventsService } from './services/TimedEventsService.ts';
 
 export interface GameDatabaseOptions {
   /**
@@ -45,6 +46,7 @@ export interface GameDatabaseOptions {
     leaderboardEntries?: any;
     items?: any;
     playerItems?: any;
+    timedEvents?: any;
   };
 }
 
@@ -56,6 +58,7 @@ export class GameDatabase {
   saves: CloudSaveService;
   leaderboards: LeaderboardsService;
   items: ItemsService;
+  events: TimedEventsService;
 
   /** The underlying Drizzle database instance (available after boot). */
   drizzle: any;
@@ -105,6 +108,7 @@ export class GameDatabase {
       this.dialect,
     );
     this.items = new ItemsService(this.drizzle, schemas.items, schemas.playerItems);
+    this.events = new TimedEventsService(this.drizzle, schemas.timedEvents);
   }
 
   async shutdown() {
@@ -167,6 +171,7 @@ export class GameDatabase {
         leaderboardEntries: userSchemas.leaderboardEntries || defaults.colyseusLeaderboardEntries,
         items: userSchemas.items || defaults.colyseusItems,
         playerItems: userSchemas.playerItems || defaults.colyseusPlayerItems,
+        timedEvents: userSchemas.timedEvents || defaults.colyseusTimedEvents,
       };
     }
 
@@ -179,6 +184,7 @@ export class GameDatabase {
       leaderboardEntries: userSchemas.leaderboardEntries || defaults.colyseusLeaderboardEntries,
       items: userSchemas.items || defaults.colyseusItems,
       playerItems: userSchemas.playerItems || defaults.colyseusPlayerItems,
+      timedEvents: userSchemas.timedEvents || defaults.colyseusTimedEvents,
     };
   }
 
@@ -195,6 +201,7 @@ export class GameDatabase {
       schemas.configs,
       schemas.leaderboards,
       schemas.items,
+      schemas.timedEvents,
       schemas.cloudSaves,           // depends on users
       schemas.leaderboardEntries,   // depends on users + leaderboards
       schemas.playerItems,          // depends on users + items

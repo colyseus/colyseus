@@ -65,6 +65,14 @@ export const playerItemColumns = {
   acquiredAt: timestamp('acquired_at').notNull().defaultNow(),
 };
 
+export const timedEventColumns = {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  startsAt: timestamp('starts_at').notNull(),
+  endsAt: timestamp('ends_at').notNull(),
+  payload: jsonb('payload'),
+};
+
 // ---------------------------------------------------------------------------
 // Default table instances — used when the user does NOT provide custom schemas
 // ---------------------------------------------------------------------------
@@ -92,3 +100,5 @@ export const colyseusPlayerItems = pgTable(
   { ...playerItemColumns },
   (table) => [primaryKey({ columns: [table.userId, table.itemId] })],
 );
+
+export const colyseusTimedEvents = pgTable('colyseus_timed_events', { ...timedEventColumns });
