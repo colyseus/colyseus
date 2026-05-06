@@ -24,7 +24,8 @@
   "scripts": {
     "start": "vite",
     "build": "vite build && node build.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "tsx --test test/**.test.ts"
   },
   "files": [
     "build",
