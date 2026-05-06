@@ -5,6 +5,7 @@ import { CloudSaveService } from './services/CloudSaveService.ts';
 import { LeaderboardsService } from './services/LeaderboardsService.ts';
 import { ItemsService } from './services/ItemsService.ts';
 import { TimedEventsService } from './services/TimedEventsService.ts';
+import { AnalyticsService } from './services/AnalyticsService.ts';
 
 export interface GameDatabaseOptions {
   /**
@@ -47,6 +48,7 @@ export interface GameDatabaseOptions {
     items?: any;
     playerItems?: any;
     timedEvents?: any;
+    analyticsEvents?: any;
   };
 }
 
@@ -59,6 +61,7 @@ export class GameDatabase {
   leaderboards: LeaderboardsService;
   items: ItemsService;
   events: TimedEventsService;
+  analytics: AnalyticsService;
 
   /** The underlying Drizzle database instance (available after boot). */
   drizzle: any;
@@ -109,6 +112,7 @@ export class GameDatabase {
     );
     this.items = new ItemsService(this.drizzle, schemas.items, schemas.playerItems);
     this.events = new TimedEventsService(this.drizzle, schemas.timedEvents);
+    this.analytics = new AnalyticsService(this.drizzle, schemas.analyticsEvents);
   }
 
   async shutdown() {
@@ -172,6 +176,7 @@ export class GameDatabase {
         items: userSchemas.items || defaults.colyseusItems,
         playerItems: userSchemas.playerItems || defaults.colyseusPlayerItems,
         timedEvents: userSchemas.timedEvents || defaults.colyseusTimedEvents,
+        analyticsEvents: userSchemas.analyticsEvents || defaults.colyseusAnalyticsEvents,
       };
     }
 
@@ -185,6 +190,7 @@ export class GameDatabase {
       items: userSchemas.items || defaults.colyseusItems,
       playerItems: userSchemas.playerItems || defaults.colyseusPlayerItems,
       timedEvents: userSchemas.timedEvents || defaults.colyseusTimedEvents,
+      analyticsEvents: userSchemas.analyticsEvents || defaults.colyseusAnalyticsEvents,
     };
   }
 
@@ -202,6 +208,7 @@ export class GameDatabase {
       schemas.leaderboards,
       schemas.items,
       schemas.timedEvents,
+      schemas.analyticsEvents,      // userId is nullable text, no FK
       schemas.cloudSaves,           // depends on users
       schemas.leaderboardEntries,   // depends on users + leaderboards
       schemas.playerItems,          // depends on users + items

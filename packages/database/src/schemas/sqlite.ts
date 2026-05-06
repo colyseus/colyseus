@@ -74,6 +74,14 @@ export const timedEventColumns = {
   payload: text('payload', { mode: 'json' as const }),
 };
 
+export const analyticsEventColumns = {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  userId: text('user_id'),
+  name: text('name').notNull(),
+  props: text('props', { mode: 'json' as const }),
+  ts: integer('ts', { mode: 'timestamp' as const }).notNull().default(sql`(unixepoch())`),
+};
+
 // ---------------------------------------------------------------------------
 // Default table instances — used when the user does NOT provide custom schemas
 // ---------------------------------------------------------------------------
@@ -103,3 +111,5 @@ export const colyseusPlayerItems = sqliteTable(
 );
 
 export const colyseusTimedEvents = sqliteTable('colyseus_timed_events', { ...timedEventColumns });
+
+export const colyseusAnalyticsEvents = sqliteTable('colyseus_analytics_events', { ...analyticsEventColumns });

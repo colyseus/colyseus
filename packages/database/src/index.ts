@@ -5,6 +5,7 @@ export { VersionConflictError } from './services/CloudSaveService.ts';
 export type { LeaderboardEntry } from './services/LeaderboardsService.ts';
 export type { Item, PlayerItem } from './services/ItemsService.ts';
 export type { TimedEvent } from './services/TimedEventsService.ts';
+export type { RetentionResult, FunnelStep } from './services/AnalyticsService.ts';
 
 // Spreadable base columns per dialect for user schema customization
 export {
@@ -16,6 +17,7 @@ export {
   itemColumns as sqliteItemColumns,
   playerItemColumns as sqlitePlayerItemColumns,
   timedEventColumns as sqliteTimedEventColumns,
+  analyticsEventColumns as sqliteAnalyticsEventColumns,
 } from './schemas/sqlite.ts';
 export {
   userColumns as pgUserColumns,
@@ -26,6 +28,7 @@ export {
   itemColumns as pgItemColumns,
   playerItemColumns as pgPlayerItemColumns,
   timedEventColumns as pgTimedEventColumns,
+  analyticsEventColumns as pgAnalyticsEventColumns,
 } from './schemas/pg.ts';
 
 // Namespaced columns export: columns.sqlite.users, columns.pg.users, etc.
@@ -38,6 +41,7 @@ import {
   itemColumns as sqliteItems,
   playerItemColumns as sqlitePlayerItems,
   timedEventColumns as sqliteTimedEvents,
+  analyticsEventColumns as sqliteAnalyticsEvents,
 } from './schemas/sqlite.ts';
 import {
   userColumns as pgUsers,
@@ -48,6 +52,7 @@ import {
   itemColumns as pgItems,
   playerItemColumns as pgPlayerItems,
   timedEventColumns as pgTimedEvents,
+  analyticsEventColumns as pgAnalyticsEvents,
 } from './schemas/pg.ts';
 
 export const columns = {
@@ -60,6 +65,7 @@ export const columns = {
     items: sqliteItems,
     playerItems: sqlitePlayerItems,
     timedEvents: sqliteTimedEvents,
+    analyticsEvents: sqliteAnalyticsEvents,
   },
   pg: {
     users: pgUsers,
@@ -70,5 +76,6 @@ export const columns = {
     items: pgItems,
     playerItems: pgPlayerItems,
     timedEvents: pgTimedEvents,
+    analyticsEvents: pgAnalyticsEvents,
   },
 };

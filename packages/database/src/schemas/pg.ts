@@ -1,4 +1,4 @@
-import { pgTable, text, boolean, integer, jsonb, timestamp, primaryKey } from 'drizzle-orm/pg-core';
+import { pgTable, text, boolean, integer, jsonb, serial, timestamp, primaryKey } from 'drizzle-orm/pg-core';
 import { generateId } from '@colyseus/core';
 
 // ---------------------------------------------------------------------------
@@ -73,6 +73,14 @@ export const timedEventColumns = {
   payload: jsonb('payload'),
 };
 
+export const analyticsEventColumns = {
+  id: serial('id').primaryKey(),
+  userId: text('user_id'),
+  name: text('name').notNull(),
+  props: jsonb('props'),
+  ts: timestamp('ts').notNull().defaultNow(),
+};
+
 // ---------------------------------------------------------------------------
 // Default table instances — used when the user does NOT provide custom schemas
 // ---------------------------------------------------------------------------
@@ -102,3 +110,5 @@ export const colyseusPlayerItems = pgTable(
 );
 
 export const colyseusTimedEvents = pgTable('colyseus_timed_events', { ...timedEventColumns });
+
+export const colyseusAnalyticsEvents = pgTable('colyseus_analytics_events', { ...analyticsEventColumns });
