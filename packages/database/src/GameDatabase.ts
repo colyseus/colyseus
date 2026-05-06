@@ -1,4 +1,4 @@
-import { generateCreateTableSQL } from './utils.ts';
+import { generateCreateTableSQL, generateAlterAddColumnSQL } from './utils.ts';
 import { AuthService } from './services/AuthService.ts';
 import { ConfigService } from './services/ConfigService.ts';
 import { CloudSaveService } from './services/CloudSaveService.ts';
@@ -101,8 +101,9 @@ export class GameDatabase {
     // 2. Resolve schemas (user overrides or defaults)
     const schemas = await this.resolveSchemas();
 
-    // 3. Create tables
+    // 3. Create tables (and add any missing columns to existing tables)
     await this.createTables(schemas);
+    await this.alterTablesForNewColumns(schemas);
 
     // 4. Instantiate services
     this.auth = new AuthService(this.drizzle, schemas.users);
@@ -205,6 +206,50 @@ export class GameDatabase {
       userRoles: userSchemas.userRoles || defaults.colyseusUserRoles,
       modAssignments: userSchemas.modAssignments || defaults.colyseusModAssignments,
     };
+  }
+
+  /**
+   * For every registered table, diff drizzle's column list against the live DB and
+   * emit ALTER TABLE … ADD COLUMN for fields that don't exist yet. Picks up new
+   * columns added to user-spread schemas without forcing a fresh DB.
+   *
+   * Drop/type changes are not handled — those are risky and out of scope.
+   */
+  private async alterTablesForNewColumns(
+    schemas: ReturnType<GameDatabase['resolveSchemas']> extends Promise<infer S> ? S : never,
+  ) {
+    const getTableConfig: (table: any) => any = this.dialect === 'pg'
+      ? (await import('drizzle-orm/pg-core')).getTableConfig
+      : (await import('drizzle-orm/sqlite-core')).getTableConfig;
+
+    const allTables = Object.values(schemas);
+    for (const table of allTables) {
+      const config = getTableConfig(table);
+      const existing = await this.fetchExistingColumns(config.name);
+      if (existing.size === 0) { continue; } // table doesn't exist yet (createTables would have made it)
+      const stmts = generateAlterAddColumnSQL(config, existing);
+      for (const stmt of stmts) {
+        if (this.dialect === 'pg') {
+          await this.ownedConnection.unsafe(stmt);
+        } else {
+          this.ownedConnection.exec(stmt);
+        }
+      }
+    }
+  }
+
+  private async fetchExistingColumns(tableName: string): Promise<Set<string>> {
+    if (this.dialect === 'pg') {
+      const rows = await this.ownedConnection`
+        SELECT column_name AS name
+        FROM information_schema.columns
+        WHERE table_name = ${tableName}
+      `;
+      return new Set(rows.map((r: { name: string }) => r.name));
+    }
+    // sqlite — pragma_table_info on a missing table returns no rows (no error)
+    const rows = this.ownedConnection.prepare(`SELECT name FROM pragma_table_info(?)`).all(tableName);
+    return new Set((rows as Array<{ name: string }>).map((r) => r.name));
   }
 
   private async createTables(schemas: ReturnType<GameDatabase['resolveSchemas']> extends Promise<infer S> ? S : never) {

@@ -76,6 +76,47 @@ export function generateCreateTableSQL(config: {
   return `CREATE TABLE IF NOT EXISTS "${tableName}" (\n  ${columnDefinitions.join(',\n  ')}\n)`;
 }
 
+/**
+ * Generate ALTER TABLE … ADD COLUMN statements for columns that exist in the
+ * drizzle table config but not in `existingColumnNames`. Returns one statement
+ * per missing column. Empty array if everything is up to date.
+ *
+ * Drop and type-change are intentionally not handled — they're risky, and
+ * dev workflows can blow away the file/PGlite to force a recreate.
+ */
+export function generateAlterAddColumnSQL(
+  config: {
+    name: string;
+    columns: Array<{
+      name: string;
+      getSQLType(): string;
+      primary: boolean;
+      notNull: boolean;
+      default?: any;
+    }>;
+  },
+  existingColumnNames: Set<string>,
+): string[] {
+  const result: string[] = [];
+  for (const col of config.columns) {
+    if (existingColumnNames.has(col.name)) { continue; }
+
+    let columnDef = `"${col.name}" ${col.getSQLType()}`;
+    // ADD COLUMN cannot specify PRIMARY KEY directly in either dialect; that's set up at CREATE.
+    if (col.notNull && col.default === undefined) {
+      // SQLite + PG both reject NOT NULL ADD COLUMN without a default on a non-empty table.
+      // Skip the constraint here — caller still gets the column; the operator can tighten later.
+    } else if (col.notNull) {
+      columnDef += ' NOT NULL';
+    }
+    if (col.default !== undefined) {
+      columnDef += ` DEFAULT ${extractSQLString(col.default)}`;
+    }
+    result.push(`ALTER TABLE "${config.name}" ADD COLUMN ${columnDef}`);
+  }
+  return result;
+}
+
 // Extract SQL string from Drizzle SQL objects
 function extractSQLString(sqlObj: any): string {
   if (!sqlObj || !sqlObj.queryChunks) {
