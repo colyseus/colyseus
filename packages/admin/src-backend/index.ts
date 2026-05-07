@@ -12,6 +12,7 @@ import { humanize } from './humanize.js';
 import type { ResourceDefinition } from './define-resource.js';
 import { authEndpoints } from './auth.js';
 import { readSessionFromHeader, type SessionConfig } from './sessions.js';
+import { logger as defaultLogger, withRequestLogger, type Logger } from './logger.js';
 
 export { defineAdminResource } from './define-resource.js';
 export type { ResourceDefinition, ResourceAction, PolicyEntry } from './define-resource.js';
@@ -62,6 +63,13 @@ export interface AdminOptions {
 
   /** Session/cookie config (TTL, domain, SameSite). See SessionConfig. */
   session?: SessionConfig;
+
+  /**
+   * Pino-compatible logger (or any object with .info/.warn/.error/.child).
+   * Defaults to a JSON-stdout logger; pass `null` to silence; pass your own
+   * to integrate with your existing logging stack.
+   */
+  logger?: Logger | null;
 }
 
 /**
@@ -94,6 +102,7 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
   const resolveUserId = opts.resolveUserId ?? makeDefaultResolver(allowDevHeader);
   const enforceRbac = opts.enforceRbac !== false;
   const sessionConfig = opts.session ?? {};
+  const logger = opts.logger === null ? null : (opts.logger ?? defaultLogger);
 
   // Resolve tables. Default to GameDatabase's resolved schemas.
   const tables = opts.tables ?? database.tables;
@@ -162,8 +171,31 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
   // CRUD endpoints so consumers get one map to spread into createRouter.
   const auth = authEndpoints({ database, apiPath, session: sessionConfig });
 
+  // GET /admin-api/_health — readiness probe. Verifies DB connectivity by
+  // running a trivial SELECT against the live drizzle client. Suitable for
+  // k8s readinessProbe / ALB target group health checks.
+  const healthcheck = createEndpoint(`${apiPath}/_health`, { method: 'GET' }, async () => {
+    const start = Date.now();
+    try {
+      // Cross-dialect connectivity check: SELECT 1 from any registered table.
+      // .execute() is pg-only; .select().from().limit(0) works on both pg + sqlite.
+      await database.drizzle
+        .select({ one: sql<number>`1` })
+        .from(database.tables.users)
+        .limit(0);
+      return json({ ok: true, db: 'ok', latencyMs: Date.now() - start });
+    } catch (err: any) {
+      logger?.error?.({ err: err?.message ?? String(err) }, 'healthcheck: db failure');
+      return json(
+        { ok: false, db: 'down', error: err?.message ?? String(err) },
+        { status: 503 },
+      );
+    }
+  });
+
   return {
     ...auth,
+    adminHealthcheck: healthcheck,
 
     // GET /admin-api → resource catalog
     adminResources: createEndpoint(apiPath, { method: 'GET' }, async () => {
