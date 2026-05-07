@@ -1,3 +1,4 @@
+import type { DatabaseSyncOptions } from 'node:sqlite';
 import { generateCreateTableSQL, generateAlterAddColumnSQL } from './utils.ts';
 import { AuthService } from './services/AuthService.ts';
 import { ConfigService } from './services/ConfigService.ts';
@@ -8,43 +9,93 @@ import { TimedEventsService } from './services/TimedEventsService.ts';
 import { AnalyticsService } from './services/AnalyticsService.ts';
 import { ModerationService } from './services/ModerationService.ts';
 
-export interface GameDatabaseOptions {
+/**
+ * postgres-js Options surface (curated subset). The full type comes from the
+ * `postgres` package which is an optional peer; we inline the well-known
+ * tuning fields so users can autocomplete + type-check the common production
+ * settings without forcing a `postgres` install on sqlite-only consumers.
+ *
+ * Strict — no index signature, so dialect-mismatched fields (e.g. PGlite's
+ * `relaxedDurability`) trip the compiler. For obscure postgres-js options,
+ * cast at the call site: `connection: { weirdOpt: 1 } as any`.
+ */
+export interface PostgresJsConnectionOptions {
+  /** Connection pool size (postgres-js default: 10). */
+  max?: number;
+  /** TLS posture. `'require'` is the safe production default. */
+  ssl?: 'require' | 'allow' | 'prefer' | 'verify-full' | boolean | object;
+  /** Close idle connections after N seconds. */
+  idle_timeout?: number;
+  /** Error if a connection can't be established within N seconds. */
+  connect_timeout?: number;
+  /** `false` disables prepared-statement caching (use over PgBouncer). */
+  prepare?: boolean;
+  /** Maximum lifetime for a single connection in seconds. */
+  max_lifetime?: number;
+  /** Session GUCs sent at connect time (statement_timeout, etc.). */
+  connection?: {
+    statement_timeout?: number;
+    idle_in_transaction_session_timeout?: number;
+    application_name?: string;
+    [k: string]: string | number | undefined;
+  };
+  /** Custom column/value transformers (see postgres-js docs). */
+  transform?: any;
+  /** Custom type parsers (see postgres-js docs). */
+  types?: Record<string, any>;
+  onnotice?: (notice: any) => void;
+  onparameter?: (key: string, value: any) => void;
+  debug?: boolean | ((...args: any[]) => void);
+  fetch_types?: boolean;
+}
+
+/**
+ * @electric-sql/pglite options (curated subset). `dataDir` falls back to
+ * whatever the `pglite://...` connection string specifies; explicit value
+ * here wins. Strict — no index signature.
+ */
+export interface PgliteConnectionOptions {
+  dataDir?: string;
+  /** Trade durability for throughput — skip fsync on commit. */
+  relaxedDurability?: boolean;
+  extensions?: Record<string, any>;
+  username?: string;
+  password?: string;
+  loadDataDir?: any;
+  fs?: any;
+}
+
+/** Public dialect tag — surfaces in option type to let TS pick the right `connection` shape. */
+export type Dialect = 'sqlite' | 'pg' | 'pglite';
+
+/** Fields shared across every dialect. */
+interface CommonOptions {
   /**
-   * Connection string. Determines dialect:
-   * - starts with "postgres://" or "postgresql://" → PostgreSQL
-   * - otherwise or omitted → SQLite (default)
+   * Connection string. When `dialect` isn't set, the prefix decides:
+   *   - "postgres://..." or "postgresql://..." → PostgreSQL
+   *   - "pglite://path-or-:memory:"            → embedded PGlite
+   *   - anything else (or unset)               → SQLite file path
    *
-   * For SQLite, this is the file path (default: "colyseus.db").
+   * SQLite default file: "colyseus.db".
    */
   connectionString?: string;
 
   /**
-   * Provide an existing Drizzle database instance.
-   * When set, connectionString is ignored and no connection is managed.
+   * Provide an existing Drizzle database instance. When set, connectionString
+   * is ignored and no connection is managed (must pair with `dialect`).
    */
   db?: any;
 
   /**
-   * Dialect hint — required when providing a custom `db` instance.
-   * Auto-detected from connectionString when not provided.
-   */
-  dialect?: 'sqlite' | 'pg';
-
-  /**
    * Migration strategy:
-   *  - `"auto"` (default): on every boot, CREATE TABLE IF NOT EXISTS for every
-   *    schema, then ALTER TABLE … ADD COLUMN for any new columns. Convenient
-   *    for development but DROP/type-change is not handled — drop the DB to
-   *    apply destructive changes.
-   *  - `{ files: "./drizzle" }`: skip auto-migrate; run drizzle-orm's
-   *    file-based migrator from the given folder. Generate the SQL files
-   *    once via `drizzle-kit generate`, review, commit, deploy.
-   *  - `"skip"`: don't migrate at all (you're managing the schema externally).
+   *  - `"auto"` (default): CREATE TABLE IF NOT EXISTS + ALTER ADD COLUMN.
+   *  - `{ files: "./drizzle" }`: drizzle-orm's file-based migrator.
+   *  - `"skip"`: caller manages the schema externally.
    */
   migrations?: 'auto' | 'skip' | { files: string };
 
   /**
-   * Custom table schemas. Spread the base columns and add your own:
+   * Custom table schemas. Spread base columns + extend:
    *
    *   import { columns } from '@colyseus/database';
    *   const users = sqliteTable('my_users', {
@@ -66,66 +117,74 @@ export interface GameDatabaseOptions {
     userRoles?: any;
     modAssignments?: any;
   };
+}
 
-  /**
-   * Driver-specific connection options forwarded to the underlying drizzle
-   * driver (drizzle's `connection` field). Shape depends on dialect:
-   *
-   *   sqlite (file path):
-   *     Node's DatabaseSyncOptions — `readOnly`, `enableForeignKeyConstraints`,
-   *     `allowExtension`, `enableDoubleQuotedStringLiterals`, `open`.
-   *
-   *   postgres (postgres://...):
-   *     postgres-js Options — `max` (pool size), `ssl`, `idle_timeout`,
-   *     `connect_timeout`, `prepare`, `connection: { statement_timeout, ... }`,
-   *     `transform`, etc.
-   *
-   *   pglite (pglite://...):
-   *     PGliteOptions — `relaxedDurability`, `extensions`, `loadDataDir`, etc.
-   *
-   * Examples:
-   *
-   *   // Production Postgres tuning
-   *   new GameDatabase({
-   *     connectionString: process.env.DATABASE_URL,
-   *     connection: {
-   *       max: 20,
-   *       ssl: 'require',
-   *       idle_timeout: 30,
-   *       connection: { statement_timeout: 30_000 },
-   *     },
-   *   });
-   *
-   *   // Read-only sqlite replica
-   *   new GameDatabase({
-   *     connectionString: './replica.db',
-   *     connection: { readOnly: true },
-   *   });
-   *
-   *   // PGlite with relaxed fsync (tests / ephemeral environments)
-   *   new GameDatabase({
-   *     connectionString: 'pglite://./.data',
-   *     connection: { relaxedDurability: true },
-   *   });
-   */
-  connection?: Record<string, any>;
-
-  /**
-   * SQLite PRAGMA overrides applied immediately after open. Defaults are
-   *   journal_mode = WAL
-   *   foreign_keys = ON
-   *
-   *   pragmas: { synchronous: 'NORMAL', cache_size: -64000 }   // merge with defaults
-   *   pragmas: { journal_mode: 'DELETE' }                      // override WAL
-   *   pragmas: false                                            // skip ALL defaults
-   *
-   * Postgres / PGlite ignore this option — pg has session-level GUCs
-   * (statement_timeout, etc.) which belong on `connection.connection`.
-   */
+/**
+ * SQLite-specific options. `dialect` is optional here and defaults the
+ * narrowing — `new GameDatabase({})` and
+ * `new GameDatabase({ connection: { readOnly: true } })` both get sqlite typing.
+ *
+ *   connection: Node's DatabaseSyncOptions
+ *               → readOnly, enableForeignKeyConstraints, allowExtension, ...
+ *   pragmas:    PRAGMA overrides (WAL + foreign_keys=ON applied by default)
+ *               → { synchronous: 'NORMAL', cache_size: -64000, ... } | false
+ */
+export interface SqliteDatabaseOptions extends CommonOptions {
+  dialect?: 'sqlite';
+  connection?: DatabaseSyncOptions;
+  /** SQLite-only PRAGMAs applied after open. `false` skips all defaults. */
   pragmas?: Record<string, string | number> | false;
 }
 
-type Dialect = 'sqlite' | 'pg';
+/**
+ * PostgreSQL options (real Postgres via postgres-js).
+ *
+ *   connection: PostgresJsConnectionOptions
+ *               → max, ssl, idle_timeout, prepare, connection.statement_timeout, ...
+ */
+export interface PostgresDatabaseOptions extends CommonOptions {
+  dialect: 'pg';
+  connection?: PostgresJsConnectionOptions;
+  /** PRAGMAs are SQLite-only — pg has session GUCs in connection.connection.* */
+  pragmas?: never;
+}
+
+/**
+ * PGlite options (embedded Wasm Postgres).
+ *
+ *   connection: PgliteConnectionOptions
+ *               → relaxedDurability, extensions, dataDir, ...
+ */
+export interface PgliteDatabaseOptions extends CommonOptions {
+  dialect: 'pglite';
+  connection?: PgliteConnectionOptions;
+  pragmas?: never;
+}
+
+/**
+ * Discriminated by `dialect`. Misuse is a type error:
+ *
+ *   new GameDatabase({ dialect: 'sqlite', connection: { max: 20 } });
+ *   //                                                  ~~~ not in DatabaseSyncOptions
+ *
+ *   new GameDatabase({ dialect: 'pg', pragmas: { foreign_keys: 'ON' } });
+ *   //                                ~~~~~~~ Type 'object' is not assignable to 'never'
+ *
+ * Without explicit `dialect`, the union narrows to sqlite (the default). For
+ * env-var-driven runtime configs where the literal type is just `string`,
+ * set `dialect` explicitly to get the right `connection` typing.
+ */
+export type GameDatabaseOptions =
+  | SqliteDatabaseOptions
+  | PostgresDatabaseOptions
+  | PgliteDatabaseOptions;
+
+/**
+ * SQL flavor — controls dialect-specific query construction (e.g. GREATEST
+ * vs max() in LeaderboardsService). pg-flavored is shared by both real
+ * Postgres and PGlite; only the driver differs.
+ */
+type SQLFlavor = 'sqlite' | 'pg';
 
 /**
  * Internal sub-dialect: pg-flavored connections come in two flavors with
@@ -162,22 +221,29 @@ export class GameDatabase {
   /** The underlying Drizzle database instance (available after boot). */
   drizzle: any;
 
-  private dialect: Dialect;
+  private dialect: SQLFlavor;
   private subDialect: SubDialect = 'sqlite';
   private options: GameDatabaseOptions;
   private ownedConnection: any = null;
 
-  constructor(options: GameDatabaseOptions = {}) {
+  constructor(options: GameDatabaseOptions = {} as GameDatabaseOptions) {
     this.options = options;
 
-    // Detect dialect
-    if (options.dialect) {
-      this.dialect = options.dialect;
-    } else if (options.db) {
+    // Detect SQL flavor (sqlite | pg). The 'pglite' public dialect maps to
+    // 'pg' here — PGlite is just a different driver for the same SQL surface.
+    // The discriminator narrows `options` to `never` once every dialect literal
+    // has been eliminated; access shared CommonOptions fields via a CommonOptions
+    // view rather than the dispatched union.
+    const common = options as CommonOptions;
+    if (options.dialect === 'pg' || options.dialect === 'pglite') {
+      this.dialect = 'pg';
+    } else if (options.dialect === 'sqlite') {
+      this.dialect = 'sqlite';
+    } else if (common.db) {
       // When user provides db without dialect hint, default to sqlite
       this.dialect = 'sqlite';
     } else {
-      this.dialect = detectDialect(options.connectionString);
+      this.dialect = detectDialect(common.connectionString);
     }
   }
 
@@ -186,6 +252,11 @@ export class GameDatabase {
     if (this.options.db) {
       this.drizzle = this.options.db;
       this.subDialect = this.dialect === 'pg' ? 'postgres-js' : 'sqlite';
+    } else if (this.options.dialect === 'pglite') {
+      // Explicit pglite — connectionString is the data dir (or empty/:memory:)
+      const cs = this.options.connectionString ?? '';
+      const dataDir = cs.startsWith('pglite://') ? cs.slice('pglite://'.length) : cs;
+      await this.bootPGlite(dataDir);
     } else if (this.dialect === 'pg') {
       const cs = this.options.connectionString ?? '';
       if (cs.startsWith('pglite://')) {
@@ -319,8 +390,9 @@ export class GameDatabase {
     const { drizzle } = await import('drizzle-orm/pglite');
 
     // PGliteOptions also accepts `dataDir`, so honor explicit override and
-    // fall back to the value parsed from the connection string.
-    const userOpts = this.options.connection ?? {};
+    // fall back to the value parsed from the connection string. We're in the
+    // pglite path so the `connection` field is PgliteConnectionOptions.
+    const userOpts = (this.options.connection ?? {}) as PgliteConnectionOptions;
     const resolvedDataDir = userOpts.dataDir ?? (
       dataDir === ':memory:' || dataDir === '' ? undefined : dataDir
     );
@@ -498,7 +570,7 @@ export class GameDatabase {
   }
 }
 
-function detectDialect(connectionString?: string): Dialect {
+function detectDialect(connectionString?: string): SQLFlavor {
   if (!connectionString) { return 'sqlite'; }
   if (
     connectionString.startsWith('postgres://') ||
