@@ -34,7 +34,7 @@ export class CloudSaveService {
           eq(this.cloudSaves.version, expectedVersion),
         ));
 
-      const affected = result.changes ?? result.rowsAffected ?? result.count ?? 0;
+      const affected = result.changes ?? result.rowsAffected ?? result.affectedRows ?? result.count ?? 0;
       if (affected === 0) {
         throw new VersionConflictError(userId, slot, expectedVersion);
       }
@@ -114,6 +114,6 @@ export class CloudSaveService {
         eq(this.cloudSaves.userId, userId),
         eq(this.cloudSaves.slot, slot),
       ));
-    return (result.changes ?? result.rowsAffected ?? result.count ?? 0) > 0;
+    return (result.changes ?? result.rowsAffected ?? result.affectedRows ?? result.count ?? 0) > 0;
   }
 }

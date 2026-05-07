@@ -117,18 +117,37 @@ export function generateAlterAddColumnSQL(
   return result;
 }
 
-// Extract SQL string from Drizzle SQL objects
-function extractSQLString(sqlObj: any): string {
-  if (!sqlObj || !sqlObj.queryChunks) {
-    return String(sqlObj);
+/**
+ * Format a column default for inclusion in CREATE TABLE.
+ *
+ * Drizzle stores defaults as one of:
+ *   - a JS primitive (string, number, boolean) — `default('misc')`, `default(1)`, `default(true)`
+ *   - a Date — `default(new Date('2020-01-01'))`
+ *   - a SQL object with queryChunks — `default(sql\`now()\`)`, `defaultNow()`
+ *
+ * Bare String() coercion was emitting `DEFAULT misc` (unquoted) for string
+ * defaults, which Postgres rejects as "cannot use column reference in DEFAULT
+ * expression". SQLite accepted it loosely. Each value type now formats
+ * dialect-portably.
+ */
+function extractSQLString(value: any): string {
+  if (value === null || value === undefined) { return 'NULL'; }
+  if (typeof value === 'string') { return `'${value.replace(/'/g, "''")}'`; }
+  if (typeof value === 'number' || typeof value === 'boolean') { return String(value); }
+  if (value instanceof Date) { return `'${value.toISOString()}'`; }
+  if (value && Array.isArray(value.queryChunks)) {
+    return value.queryChunks
+      .map((chunk: any) => {
+        if (typeof chunk === 'string') { return chunk; }
+        if (chunk?.value !== undefined) {
+          if (Array.isArray(chunk.value)) { return chunk.value.join(''); }
+          if (typeof chunk.value === 'string') { return chunk.value; }
+        }
+        return '';
+      })
+      .join('');
   }
-
-  return sqlObj.queryChunks
-    .map((chunk: any) => {
-      if (chunk.value && Array.isArray(chunk.value)) {
-        return chunk.value.join('');
-      }
-      return '';
-    })
-    .join('');
+  // Fallback — unknown shape; coerce, single-quote if it produced text content.
+  const s = String(value);
+  return /^[A-Za-z_]/.test(s) ? `'${s.replace(/'/g, "''")}'` : s;
 }
