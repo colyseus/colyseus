@@ -31,6 +31,19 @@ export interface GameDatabaseOptions {
   dialect?: 'sqlite' | 'pg';
 
   /**
+   * Migration strategy:
+   *  - `"auto"` (default): on every boot, CREATE TABLE IF NOT EXISTS for every
+   *    schema, then ALTER TABLE … ADD COLUMN for any new columns. Convenient
+   *    for development but DROP/type-change is not handled — drop the DB to
+   *    apply destructive changes.
+   *  - `{ files: "./drizzle" }`: skip auto-migrate; run drizzle-orm's
+   *    file-based migrator from the given folder. Generate the SQL files
+   *    once via `drizzle-kit generate`, review, commit, deploy.
+   *  - `"skip"`: don't migrate at all (you're managing the schema externally).
+   */
+  migrations?: 'auto' | 'skip' | { files: string };
+
+  /**
    * Custom table schemas. Spread the base columns and add your own:
    *
    *   import { columns } from '@colyseus/database';
@@ -111,9 +124,23 @@ export class GameDatabase {
     const schemas = await this.resolveSchemas();
     this.tables = { ...schemas };
 
-    // 3. Create tables (and add any missing columns to existing tables)
-    await this.createTables(schemas);
-    await this.alterTablesForNewColumns(schemas);
+    // 3. Apply migrations according to the configured strategy
+    const strategy = this.options.migrations ?? 'auto';
+    if (strategy === 'auto') {
+      // Create-or-extend behavior: idempotent, dev-friendly. No DROP/type-change.
+      await this.createTables(schemas);
+      await this.alterTablesForNewColumns(schemas);
+    } else if (strategy === 'skip') {
+      // No-op: caller manages the schema externally (e.g. CI step that ran
+      // `drizzle-kit migrate` before the server started).
+    } else if (typeof strategy === 'object' && 'files' in strategy) {
+      // File-based: run drizzle-orm's migrator from the SQL folder produced
+      // by `drizzle-kit generate`. Idempotent — drizzle tracks applied
+      // migrations in its own __drizzle_migrations table.
+      await this.runFileMigrations(strategy.files);
+    } else {
+      throw new Error(`[GameDatabase] unknown migration strategy: ${JSON.stringify(strategy)}`);
+    }
 
     // 4. Instantiate services
     this.auth = new AuthService(this.drizzle, schemas.users);
@@ -247,6 +274,21 @@ export class GameDatabase {
           this.ownedConnection.exec(stmt);
         }
       }
+    }
+  }
+
+  /**
+   * Run SQL migration files produced by `drizzle-kit generate`. Drizzle
+   * tracks applied migrations in `__drizzle_migrations`, so reruns are
+   * idempotent.
+   */
+  private async runFileMigrations(folder: string) {
+    if (this.dialect === 'pg') {
+      const { migrate } = await import('drizzle-orm/postgres-js/migrator');
+      await migrate(this.drizzle, { migrationsFolder: folder });
+    } else {
+      const { migrate } = await import('drizzle-orm/node-sqlite/migrator');
+      await migrate(this.drizzle, { migrationsFolder: folder });
     }
   }
 

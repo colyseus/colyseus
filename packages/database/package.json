@@ -45,7 +45,11 @@
     "node": ">= 22.x"
   },
   "scripts": {
-    "test": "tsx --test test/**.test.ts"
+    "test": "tsx --test test/**.test.ts",
+    "db:generate-pg": "drizzle-kit generate --config=drizzle.config.pg.ts",
+    "db:generate-sqlite": "drizzle-kit generate --config=drizzle.config.sqlite.ts",
+    "db:migrate-pg": "drizzle-kit migrate --config=drizzle.config.pg.ts",
+    "db:migrate-sqlite": "drizzle-kit migrate --config=drizzle.config.sqlite.ts"
   },
   "dependencies": {
     "drizzle-orm": "1.0.0-beta.20"
@@ -65,6 +69,7 @@
     "@colyseus/auth": "workspace:^",
     "@types/mocha": "^10.0.1",
     "@types/node": "^22.13.14",
+    "drizzle-kit": "^0.31.0",
     "mocha": "^10.2.0",
     "tsx": "^4.1.2"
   },
