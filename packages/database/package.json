@@ -49,7 +49,8 @@
     "db:generate-pg": "drizzle-kit generate --config=drizzle.config.pg.ts",
     "db:generate-sqlite": "drizzle-kit generate --config=drizzle.config.sqlite.ts",
     "db:migrate-pg": "drizzle-kit migrate --config=drizzle.config.pg.ts",
-    "db:migrate-sqlite": "drizzle-kit migrate --config=drizzle.config.sqlite.ts"
+    "db:migrate-sqlite": "drizzle-kit migrate --config=drizzle.config.sqlite.ts",
+    "test:regen-fixture": "drizzle-kit generate --config=test/fixtures/custom-schema/drizzle.config.ts"
   },
   "dependencies": {
     "drizzle-orm": "1.0.0-rc.2"
