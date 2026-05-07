@@ -50,6 +50,7 @@
     "node": ">= 22.x"
   },
   "peerDependencies": {
+    "@colyseus/auth": "0.18.x",
     "@colyseus/core": "0.18.x",
     "@colyseus/database": "0.18.x"
   },
@@ -58,6 +59,7 @@
   },
   "devDependencies": {
     "@ant-design/icons": "^5.5.0",
+    "@colyseus/auth": "workspace:^",
     "@colyseus/core": "workspace:^",
     "@colyseus/database": "workspace:^",
     "@refinedev/antd": "^5.47.0",

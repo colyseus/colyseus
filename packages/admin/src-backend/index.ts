@@ -10,9 +10,12 @@ import { json, errorResponse } from './respond.js';
 import { iconForTableName } from './default-icons.js';
 import { humanize } from './humanize.js';
 import type { ResourceDefinition } from './define-resource.js';
+import { authEndpoints } from './auth.js';
+import { readSessionFromHeader, type SessionConfig } from './sessions.js';
 
 export { defineAdminResource } from './define-resource.js';
 export type { ResourceDefinition, ResourceAction, PolicyEntry } from './define-resource.js';
+export type { SessionConfig, AdminSession } from './sessions.js';
 
 export interface AdminOptions {
   /** GameDatabase instance — provides drizzle client + moderation. */
@@ -40,15 +43,41 @@ export interface AdminOptions {
   /** Absolute path to the built UI; defaults to ../build relative to this file. */
   uiDistDir?: string;
 
-  /** How to identify the requesting user — defaults to X-User-Id header. */
-  resolveUserId?: (ctx: { getHeader: (k: string) => string | null }) => string | undefined;
+  /**
+   * Override the default identity resolver. Default reads the session cookie
+   * (HttpOnly JWT) and falls back to the X-User-Id header iff allowDevHeader
+   * is true. Provide your own to integrate with another auth scheme.
+   */
+  resolveUserId?: (ctx: { getHeader: (k: string) => string | null }) => Promise<string | undefined> | string | undefined;
 
   /** Set to false to skip RBAC entirely (dev only). */
   enforceRbac?: boolean;
+
+  /**
+   * Permit `X-User-Id: <id>` as a fallback identity source. Defaults to true
+   * in dev (NODE_ENV !== "production") so puppeteer/curl can auth without a
+   * real session, and false in production. Set explicitly to override.
+   */
+  allowDevHeader?: boolean;
+
+  /** Session/cookie config (TTL, domain, SameSite). See SessionConfig. */
+  session?: SessionConfig;
 }
 
-function defaultResolve(ctx: { getHeader: (k: string) => string | null }): string | undefined {
-  return ctx.getHeader('x-user-id') ?? undefined;
+/**
+ * Default resolver: try the session cookie first, fall back to X-User-Id only
+ * when allowDevHeader is true. Cookie-based sessions are the production path;
+ * the header is dev-only convenience for puppeteer/curl.
+ */
+function makeDefaultResolver(allowDevHeader: boolean) {
+  return async function defaultResolve(ctx: { getHeader: (k: string) => string | null }): Promise<string | undefined> {
+    const session = await readSessionFromHeader(ctx.getHeader('cookie'));
+    if (session) { return session.userId; }
+    if (allowDevHeader) {
+      return ctx.getHeader('x-user-id') ?? undefined;
+    }
+    return undefined;
+  };
 }
 
 /**
@@ -61,8 +90,10 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
   const uiPath = (opts.uiPath ?? '/admin').replace(/\/$/, '');
   // build.mjs's "dirname" plugin rewrites __dirname to a fileURLToPath call for the ESM build
   const uiDistDir = opts.uiDistDir ?? path.resolve(__dirname, '..', 'build');
-  const resolveUserId = opts.resolveUserId ?? defaultResolve;
+  const allowDevHeader = opts.allowDevHeader ?? (process.env.NODE_ENV !== 'production');
+  const resolveUserId = opts.resolveUserId ?? makeDefaultResolver(allowDevHeader);
   const enforceRbac = opts.enforceRbac !== false;
+  const sessionConfig = opts.session ?? {};
 
   // Resolve tables. Default to GameDatabase's resolved schemas.
   const tables = opts.tables ?? database.tables;
@@ -86,8 +117,8 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
   /** Returns null if allowed; a Response (401/403) if denied. */
   async function guard(ctx: any, action: Action, resource: string): Promise<Response | null> {
     if (!enforceRbac) { return null; }
-    const userId = resolveUserId({ getHeader: ctx.getHeader });
-    if (!userId) { return errorResponse(401, 'missing user id (X-User-Id header)'); }
+    const userId = await resolveUserId({ getHeader: ctx.getHeader });
+    if (!userId) { return errorResponse(401, 'not authenticated — sign in at /admin/login'); }
 
     // Per-resource policy override takes precedence
     const policy = resources[resource]?.policies?.[action];
@@ -127,7 +158,13 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
     return cfg.columns.map((c: any) => c.name);
   }
 
+  // Auth endpoints (login/logout/bootstrap/me/status). Spread alongside the
+  // CRUD endpoints so consumers get one map to spread into createRouter.
+  const auth = authEndpoints({ database, apiPath, session: sessionConfig });
+
   return {
+    ...auth,
+
     // GET /admin-api → resource catalog
     adminResources: createEndpoint(apiPath, { method: 'GET' }, async () => {
       const result = Object.entries(tables).map(([name, t]) => {
@@ -168,9 +205,9 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
       const found = def?.actions?.find((a) => a.name === actionName);
       if (!found) { return errorResponse(404, `unknown action '${actionName}' on '${resource}'`); }
 
-      const userId = resolveUserId({ getHeader: ctx.getHeader });
+      const userId = await resolveUserId({ getHeader: ctx.getHeader });
       if (enforceRbac) {
-        if (!userId) { return errorResponse(401, 'missing user id (X-User-Id header)'); }
+        if (!userId) { return errorResponse(401, 'not authenticated — sign in at /admin/login'); }
         if (found.roles && found.roles.length > 0) {
           const role = await database.moderation.getRole(userId);
           if (!found.roles.includes(role)) {
