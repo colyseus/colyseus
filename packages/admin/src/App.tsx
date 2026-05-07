@@ -5,7 +5,7 @@ import '@refinedev/antd/dist/reset.css';
 import './index.css';
 import { ConfigProvider, Layout } from 'antd';
 import dataProvider from '@refinedev/simple-rest';
-import routerProvider, { CatchAllNavigate } from '@refinedev/react-router';
+import routerProvider from '@refinedev/react-router';
 import { BrowserRouter, Routes, Route, Outlet } from 'react-router-dom';
 import axios from 'axios';
 import type { Resource } from './types';
@@ -15,6 +15,7 @@ import { shadcnTheme } from './theme';
 import { authProvider } from './authProvider';
 import { LoginPage } from './LoginPage';
 import { SetupPage } from './SetupPage';
+import { SignInGate } from './SignInGate';
 import { UserHeader } from './UserHeader';
 
 const API = '/admin-api';
@@ -34,7 +35,7 @@ http.interceptors.request.use((config) => {
 const provider = dataProvider(API, http);
 
 export function App() {
-  const [resources, setResources] = useState<Resource[]>([]);
+  const [resources, setResources] = useState<Resource[] | null>(null);
 
   useEffect(() => {
     fetch(API, { credentials: 'include' })
@@ -42,6 +43,17 @@ export function App() {
       .then(setResources)
       .catch(() => setResources([]));
   }, []);
+
+  // Refine binds `resources` once at mount — empty array → empty sidebar even
+  // after a later setResources(...). Block render until the catalog is loaded
+  // so the menu is correct from the first paint.
+  if (resources === null) {
+    return (
+      <div data-testid="loading" style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', color: '#71717a' }}>
+        loading…
+      </div>
+    );
+  }
 
   return (
     <BrowserRouter basename="/admin">
@@ -66,12 +78,14 @@ export function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/setup" element={<SetupPage />} />
 
-            {/* Authenticated routes — Refine's <Authenticated> guards them
-                via authProvider.check(); unauthenticated requests are redirected
-                to /login (or /setup on first run). */}
+            {/* Authenticated routes — <Authenticated> guards them via
+                authProvider.check(). The fallback is SignInGate which itself
+                checks /auth/status to decide between rendering LoginPage and
+                redirecting to /setup (first-run). This preserves the
+                "no admin yet → bootstrap" UX without storing extra state. */}
             <Route
               element={
-                <Authenticated key="protected" fallback={<CatchAllNavigate to="/login" />}>
+                <Authenticated key="protected" fallback={<SignInGate />}>
                   <ProtectedShell resources={resources} />
                 </Authenticated>
               }

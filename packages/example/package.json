@@ -9,7 +9,8 @@
     "start": "tsx src/app.config.ts",
     "example-h3": "tsx src/ServerH3.ts",
     "vite": "vite --config vite.config.ts",
-    "vite:build": "vite build --app"
+    "vite:build": "vite build --app",
+    "test": "tsx --test test/**.test.ts"
   },
   "dependencies": {
     "@colyseus/core": "workspace:^",
@@ -33,7 +34,9 @@
     "@colyseus/traefik": "workspace:^",
     "@colyseus/uwebsockets-transport": "workspace:^",
     "@colyseus/ws-transport": "workspace:^",
+    "puppeteer": "^23.0.0",
     "serve-index": "^1.8.0",
+    "tsx": "^4.1.2",
     "vite": "^8.0.2",
     "zod": "^4.1.12"
   }
