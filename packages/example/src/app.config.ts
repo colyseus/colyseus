@@ -16,23 +16,19 @@ import { RedisPresence } from "@colyseus/redis-presence";
 import { RedisDriver } from "@colyseus/redis-driver";
 import { PostgresDriver } from "@colyseus/drizzle-driver";
 
-import { GameDatabase, tables } from "@colyseus/database";
+import { GameDatabase } from "@colyseus/database";
 import { adminEndpoints, defineAdminResource } from "@colyseus/admin";
-import { integer, text } from "drizzle-orm/sqlite-core";
-
-// Custom users table — spreads the built-in user columns plus a couple of
-// game-specific extras. The admin panel reflects them automatically and the
-// AuthService return types include them at the type level.
-const users = tables.sqlite.users("users", {
-  displayName: text("display_name"),
-  level: integer("level").default(1),
-});
+import * as schema from "./db/schema.ts";
 
 // Spin up an embedded sqlite-backed GameDatabase. The admin panel below
 // reflects every table on it. Set DATABASE_URL=postgres://... to switch.
+//
+// `schemas` accepts the whole barrel — both customized tables (users) and
+// re-exported defaults (configs, leaderboards, ...). The same file feeds
+// `drizzle-kit generate` so runtime + migration tooling never drift.
 const database = new GameDatabase({
   connectionString: process.env.DATABASE_URL,
-  schemas: { users },
+  schemas: schema,
 });
 await database.boot();
 
