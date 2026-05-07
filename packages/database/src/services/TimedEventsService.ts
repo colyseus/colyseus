@@ -13,11 +13,13 @@ export interface TimedEvent {
  * accept an explicit `at` time so server code can check past/future windows
  * without relying on wall-clock time.
  */
-export class TimedEventsService {
-  private db: any;
-  private events: any;
+import type { TimedEventsTableShape } from '../types.ts';
 
-  constructor(db: any, events: any) {
+export class TimedEventsService<T extends TimedEventsTableShape = TimedEventsTableShape> {
+  private db: any;
+  private events: T;
+
+  constructor(db: any, events: T) {
     this.db = db;
     this.events = events;
   }

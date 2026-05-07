@@ -8,6 +8,16 @@ import { ItemsService } from './services/ItemsService.ts';
 import { TimedEventsService } from './services/TimedEventsService.ts';
 import { AnalyticsService } from './services/AnalyticsService.ts';
 import { ModerationService } from './services/ModerationService.ts';
+import type { SchemaSet } from './types.ts';
+
+/**
+ * Resolve schema slot K to the user's table type if provided, else fall back
+ * to the loose constraint shape. Drives the GameDatabase generic so e.g.
+ * `db.auth.findByEmail()` returns the user's full row including custom
+ * columns when they passed a customized `users` table.
+ */
+type Resolve<S extends Partial<SchemaSet>, K extends keyof SchemaSet> =
+  S extends { [P in K]: infer T } ? T : SchemaSet[K];
 
 /**
  * postgres-js Options surface (curated subset). The full type comes from the
@@ -69,7 +79,7 @@ export interface PgliteConnectionOptions {
 export type Dialect = 'sqlite' | 'pg' | 'pglite';
 
 /** Fields shared across every dialect. */
-interface CommonOptions {
+interface CommonOptions<S extends Partial<SchemaSet> = {}> {
   /**
    * Connection string. When `dialect` isn't set, the prefix decides:
    *   - "postgres://..." or "postgresql://..." → PostgreSQL
@@ -97,26 +107,20 @@ interface CommonOptions {
   /**
    * Custom table schemas. Spread base columns + extend:
    *
-   *   import { columns } from '@colyseus/database';
-   *   const users = sqliteTable('my_users', {
-   *     ...columns.sqlite.users,
+   *   import { tables } from '@colyseus/database';
+   *   const users = tables.sqlite.users('users', {
    *     displayName: text('display_name'),
    *   });
-   *   new GameDatabase({ schemas: { users } });
+   *   const db = new GameDatabase({ schemas: { users } });
+   *   await db.boot();
+   *   db.auth.settings.onFindUserByEmail!('a@b').then((u) => u?.displayName);
+   *   //                                                       ^ inferred — flows from `users`
+   *
+   * The generic `S` is inferred from this field: services on the resulting
+   * GameDatabase get types specialized to whatever tables you passed.
+   * Slots not provided fall back to the loose `SchemaSet[K]` shape.
    */
-  schemas?: {
-    users?: any;
-    configs?: any;
-    cloudSaves?: any;
-    leaderboards?: any;
-    leaderboardEntries?: any;
-    items?: any;
-    playerItems?: any;
-    timedEvents?: any;
-    analyticsEvents?: any;
-    userRoles?: any;
-    modAssignments?: any;
-  };
+  schemas?: S;
 }
 
 /**
@@ -129,7 +133,7 @@ interface CommonOptions {
  *   pragmas:    PRAGMA overrides (WAL + foreign_keys=ON applied by default)
  *               → { synchronous: 'NORMAL', cache_size: -64000, ... } | false
  */
-export interface SqliteDatabaseOptions extends CommonOptions {
+export interface SqliteDatabaseOptions<S extends Partial<SchemaSet> = {}> extends CommonOptions<S> {
   dialect?: 'sqlite';
   connection?: DatabaseSyncOptions;
   /** SQLite-only PRAGMAs applied after open. `false` skips all defaults. */
@@ -142,7 +146,7 @@ export interface SqliteDatabaseOptions extends CommonOptions {
  *   connection: PostgresJsConnectionOptions
  *               → max, ssl, idle_timeout, prepare, connection.statement_timeout, ...
  */
-export interface PostgresDatabaseOptions extends CommonOptions {
+export interface PostgresDatabaseOptions<S extends Partial<SchemaSet> = {}> extends CommonOptions<S> {
   dialect: 'pg';
   connection?: PostgresJsConnectionOptions;
   /** PRAGMAs are SQLite-only — pg has session GUCs in connection.connection.* */
@@ -155,7 +159,7 @@ export interface PostgresDatabaseOptions extends CommonOptions {
  *   connection: PgliteConnectionOptions
  *               → relaxedDurability, extensions, dataDir, ...
  */
-export interface PgliteDatabaseOptions extends CommonOptions {
+export interface PgliteDatabaseOptions<S extends Partial<SchemaSet> = {}> extends CommonOptions<S> {
   dialect: 'pglite';
   connection?: PgliteConnectionOptions;
   pragmas?: never;
@@ -174,10 +178,10 @@ export interface PgliteDatabaseOptions extends CommonOptions {
  * env-var-driven runtime configs where the literal type is just `string`,
  * set `dialect` explicitly to get the right `connection` typing.
  */
-export type GameDatabaseOptions =
-  | SqliteDatabaseOptions
-  | PostgresDatabaseOptions
-  | PgliteDatabaseOptions;
+export type GameDatabaseOptions<S extends Partial<SchemaSet> = {}> =
+  | SqliteDatabaseOptions<S>
+  | PostgresDatabaseOptions<S>
+  | PgliteDatabaseOptions<S>;
 
 /**
  * SQL flavor — controls dialect-specific query construction (e.g. GREATEST
@@ -199,15 +203,15 @@ type SQLFlavor = 'sqlite' | 'pg';
  */
 type SubDialect = 'sqlite' | 'postgres-js' | 'pglite';
 
-export class GameDatabase {
-  auth: AuthService;
-  config: ConfigService;
-  saves: CloudSaveService;
-  leaderboards: LeaderboardsService;
-  items: ItemsService;
-  events: TimedEventsService;
-  analytics: AnalyticsService;
-  moderation: ModerationService;
+export class GameDatabase<S extends Partial<SchemaSet> = {}> {
+  auth: AuthService<Resolve<S, 'users'>>;
+  config: ConfigService<Resolve<S, 'configs'>>;
+  saves: CloudSaveService<Resolve<S, 'cloudSaves'>>;
+  leaderboards: LeaderboardsService<Resolve<S, 'leaderboards'>, Resolve<S, 'leaderboardEntries'>>;
+  items: ItemsService<Resolve<S, 'items'>, Resolve<S, 'playerItems'>>;
+  events: TimedEventsService<Resolve<S, 'timedEvents'>>;
+  analytics: AnalyticsService<Resolve<S, 'analyticsEvents'>>;
+  moderation: ModerationService<Resolve<S, 'userRoles'>, Resolve<S, 'modAssignments'>>;
 
   /**
    * Map of resolved drizzle tables, keyed by their canonical name
@@ -216,17 +220,17 @@ export class GameDatabase {
    * panel — and any other tooling that needs to introspect schemas —
    * via `tables: { ...database.tables, ...customTables }`.
    */
-  tables: Record<string, any>;
+  tables: { [K in keyof SchemaSet]: Resolve<S, K> };
 
   /** The underlying Drizzle database instance (available after boot). */
   drizzle: any;
 
   private dialect: SQLFlavor;
   private subDialect: SubDialect = 'sqlite';
-  private options: GameDatabaseOptions;
+  private options: GameDatabaseOptions<S>;
   private ownedConnection: any = null;
 
-  constructor(options: GameDatabaseOptions = {} as GameDatabaseOptions) {
+  constructor(options: GameDatabaseOptions<S> = {} as GameDatabaseOptions<S>) {
     this.options = options;
 
     // Detect SQL flavor (sqlite | pg). The 'pglite' public dialect maps to
@@ -234,7 +238,7 @@ export class GameDatabase {
     // The discriminator narrows `options` to `never` once every dialect literal
     // has been eliminated; access shared CommonOptions fields via a CommonOptions
     // view rather than the dispatched union.
-    const common = options as CommonOptions;
+    const common = options as CommonOptions<S>;
     if (options.dialect === 'pg' || options.dialect === 'pglite') {
       this.dialect = 'pg';
     } else if (options.dialect === 'sqlite') {
@@ -408,40 +412,26 @@ export class GameDatabase {
   // Private: schema resolution and table creation
   // -------------------------------------------------------------------------
 
-  private async resolveSchemas() {
-    const userSchemas = this.options.schemas || {};
+  private async resolveSchemas(): Promise<{ [K in keyof SchemaSet]: Resolve<S, K> }> {
+    const userSchemas = (this.options.schemas ?? {}) as Partial<SchemaSet>;
 
-    if (this.dialect === 'pg') {
-      const defaults = await import('./schemas/pg.ts');
-      return {
-        users: userSchemas.users || defaults.colyseusUsers,
-        configs: userSchemas.configs || defaults.colyseusConfigs,
-        cloudSaves: userSchemas.cloudSaves || defaults.colyseusCloudSaves,
-        leaderboards: userSchemas.leaderboards || defaults.colyseusLeaderboards,
-        leaderboardEntries: userSchemas.leaderboardEntries || defaults.colyseusLeaderboardEntries,
-        items: userSchemas.items || defaults.colyseusItems,
-        playerItems: userSchemas.playerItems || defaults.colyseusPlayerItems,
-        timedEvents: userSchemas.timedEvents || defaults.colyseusTimedEvents,
-        analyticsEvents: userSchemas.analyticsEvents || defaults.colyseusAnalyticsEvents,
-        userRoles: userSchemas.userRoles || defaults.colyseusUserRoles,
-        modAssignments: userSchemas.modAssignments || defaults.colyseusModAssignments,
-      };
-    }
+    const defaults = this.dialect === 'pg'
+      ? await import('./schemas/pg.ts')
+      : await import('./schemas/sqlite.ts');
 
-    const defaults = await import('./schemas/sqlite.ts');
     return {
-      users: userSchemas.users || defaults.colyseusUsers,
-      configs: userSchemas.configs || defaults.colyseusConfigs,
-      cloudSaves: userSchemas.cloudSaves || defaults.colyseusCloudSaves,
-      leaderboards: userSchemas.leaderboards || defaults.colyseusLeaderboards,
-      leaderboardEntries: userSchemas.leaderboardEntries || defaults.colyseusLeaderboardEntries,
-      items: userSchemas.items || defaults.colyseusItems,
-      playerItems: userSchemas.playerItems || defaults.colyseusPlayerItems,
-      timedEvents: userSchemas.timedEvents || defaults.colyseusTimedEvents,
-      analyticsEvents: userSchemas.analyticsEvents || defaults.colyseusAnalyticsEvents,
-      userRoles: userSchemas.userRoles || defaults.colyseusUserRoles,
-      modAssignments: userSchemas.modAssignments || defaults.colyseusModAssignments,
-    };
+      users: userSchemas.users ?? defaults.colyseusUsers,
+      configs: userSchemas.configs ?? defaults.colyseusConfigs,
+      cloudSaves: userSchemas.cloudSaves ?? defaults.colyseusCloudSaves,
+      leaderboards: userSchemas.leaderboards ?? defaults.colyseusLeaderboards,
+      leaderboardEntries: userSchemas.leaderboardEntries ?? defaults.colyseusLeaderboardEntries,
+      items: userSchemas.items ?? defaults.colyseusItems,
+      playerItems: userSchemas.playerItems ?? defaults.colyseusPlayerItems,
+      timedEvents: userSchemas.timedEvents ?? defaults.colyseusTimedEvents,
+      analyticsEvents: userSchemas.analyticsEvents ?? defaults.colyseusAnalyticsEvents,
+      userRoles: userSchemas.userRoles ?? defaults.colyseusUserRoles,
+      modAssignments: userSchemas.modAssignments ?? defaults.colyseusModAssignments,
+    } as { [K in keyof SchemaSet]: Resolve<S, K> };
   }
 
   /**

@@ -14,12 +14,17 @@ export interface PlayerItem {
   acquiredAt: Date;
 }
 
-export class ItemsService {
-  private db: any;
-  private items: any;
-  private playerItems: any;
+import type { ItemsTableShape, PlayerItemsTableShape } from '../types.ts';
 
-  constructor(db: any, items: any, playerItems: any) {
+export class ItemsService<
+  TItems extends ItemsTableShape = ItemsTableShape,
+  TPlayerItems extends PlayerItemsTableShape = PlayerItemsTableShape,
+> {
+  private db: any;
+  private items: TItems;
+  private playerItems: TPlayerItems;
+
+  constructor(db: any, items: TItems, playerItems: TPlayerItems) {
     this.db = db;
     this.items = items;
     this.playerItems = playerItems;

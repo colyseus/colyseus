@@ -18,12 +18,17 @@ export type Action = 'list' | 'read' | 'create' | 'update' | 'delete';
  *  - user:  read-only on non-sensitive collections (caller decides what's
  *           sensitive — this service only enforces "no writes")
  */
-export class ModerationService {
-  private db: any;
-  private userRoles: any;
-  private modAssignments: any;
+import type { UserRolesTableShape, ModAssignmentsTableShape } from '../types.ts';
 
-  constructor(db: any, userRoles: any, modAssignments: any) {
+export class ModerationService<
+  TRoles extends UserRolesTableShape = UserRolesTableShape,
+  TAssignments extends ModAssignmentsTableShape = ModAssignmentsTableShape,
+> {
+  private db: any;
+  private userRoles: TRoles;
+  private modAssignments: TAssignments;
+
+  constructor(db: any, userRoles: TRoles, modAssignments: TAssignments) {
     this.db = db;
     this.userRoles = userRoles;
     this.modAssignments = modAssignments;

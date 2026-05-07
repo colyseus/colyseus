@@ -19,11 +19,13 @@ export interface FunnelStep {
  * ingestion into a dedicated OLAP store (ClickHouse, BigQuery) and treat
  * this table as the staging buffer.
  */
-export class AnalyticsService {
-  private db: any;
-  private events: any;
+import type { AnalyticsEventsTableShape } from '../types.ts';
 
-  constructor(db: any, events: any) {
+export class AnalyticsService<T extends AnalyticsEventsTableShape = AnalyticsEventsTableShape> {
+  private db: any;
+  private events: T;
+
+  constructor(db: any, events: T) {
     this.db = db;
     this.events = events;
   }

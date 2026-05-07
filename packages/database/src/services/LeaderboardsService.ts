@@ -10,13 +10,18 @@ export interface LeaderboardEntry {
   createdAt: Date;
 }
 
-export class LeaderboardsService {
+import type { LeaderboardsTableShape, LeaderboardEntriesTableShape } from '../types.ts';
+
+export class LeaderboardsService<
+  TBoards extends LeaderboardsTableShape = LeaderboardsTableShape,
+  TEntries extends LeaderboardEntriesTableShape = LeaderboardEntriesTableShape,
+> {
   private db: any;
-  private leaderboards: any;
-  private entries: any;
+  private leaderboards: TBoards;
+  private entries: TEntries;
   private dialect: Dialect;
 
-  constructor(db: any, leaderboards: any, entries: any, dialect: Dialect) {
+  constructor(db: any, leaderboards: TBoards, entries: TEntries, dialect: Dialect) {
     this.db = db;
     this.leaderboards = leaderboards;
     this.entries = entries;

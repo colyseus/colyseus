@@ -137,6 +137,7 @@ describe('GameDatabaseOptions.connection (pglite)', () => {
 
   it('forwards relaxedDurability through to PGlite', async () => {
     db = new GameDatabase({
+      dialect: 'pglite',
       connectionString: `pglite://${dataDir}`,
       connection: { relaxedDurability: true },
     });

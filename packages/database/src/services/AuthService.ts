@@ -1,12 +1,21 @@
-import { eq } from 'drizzle-orm';
+import { eq, type InferSelectModel } from 'drizzle-orm';
 import { generateId } from '@colyseus/core';
 import type { AuthSettings } from '@colyseus/auth';
+import type { UsersTableShape } from '../types.ts';
 
-export class AuthService {
+/**
+ * `T` is the user's actual users-table type. By default it's
+ * `UsersTableShape` (the constraint itself, types loose to AnyColumn). When
+ * a user passes their own table to GameDatabase — e.g. one with
+ * `displayName` and `level` extras — `T` flows in via GameDatabase's
+ * generic, and `findByEmail()` returns the full row including those
+ * extras.
+ */
+export class AuthService<T extends UsersTableShape = UsersTableShape> {
   private db: any;
-  private users: any;
+  private users: T;
 
-  constructor(db: any, users: any) {
+  constructor(db: any, users: T) {
     this.db = db;
     this.users = users;
   }
@@ -30,8 +39,11 @@ export class AuthService {
   /**
    * Find user by email. Returns the user with `password` field mapped from
    * `passwordHash`, as expected by @colyseus/auth (auth.ts line 219).
+   *
+   * Return type includes whatever columns the user added to their custom
+   * `users` table — `InferSelectModel<T>` resolves them.
    */
-  private async findByEmail(email: string) {
+  private async findByEmail(email: string): Promise<(InferSelectModel<T> & { password: any }) | null> {
     const rows = await this.db
       .select()
       .from(this.users)

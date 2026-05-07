@@ -1,4 +1,5 @@
 import { eq, and, sql } from 'drizzle-orm';
+import type { CloudSavesTableShape } from '../types.ts';
 
 export class VersionConflictError extends Error {
   constructor(userId: string, slot: number, expectedVersion: number) {
@@ -7,11 +8,11 @@ export class VersionConflictError extends Error {
   }
 }
 
-export class CloudSaveService {
+export class CloudSaveService<T extends CloudSavesTableShape = CloudSavesTableShape> {
   private db: any;
-  private cloudSaves: any;
+  private cloudSaves: T;
 
-  constructor(db: any, cloudSaves: any) {
+  constructor(db: any, cloudSaves: T) {
     this.db = db;
     this.cloudSaves = cloudSaves;
   }

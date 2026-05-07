@@ -1,10 +1,11 @@
 import { eq, sql } from 'drizzle-orm';
+import type { ConfigsTableShape } from '../types.ts';
 
-export class ConfigService {
+export class ConfigService<T extends ConfigsTableShape = ConfigsTableShape> {
   private db: any;
-  private configs: any;
+  private configs: T;
 
-  constructor(db: any, configs: any) {
+  constructor(db: any, configs: T) {
     this.db = db;
     this.configs = configs;
   }
