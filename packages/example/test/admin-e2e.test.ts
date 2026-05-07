@@ -224,4 +224,44 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     });
     assert.equal(res.status, 403);
   });
+
+  it('catalog reflects custom columns spread onto the users table', async () => {
+    // app.config.ts customizes the users table with `display_name` + `level`.
+    // The catalog endpoint should surface them so the admin UI can render them.
+    const res = await fetch(`${BASE}/admin-api`);
+    assert.equal(res.status, 200);
+    const catalog = await res.json() as Array<{ name: string; columns: Array<{ name: string }> }>;
+    const usersResource = catalog.find((r) => r.name === 'users');
+    assert.ok(usersResource, 'users resource should be in the catalog');
+    const colNames = usersResource!.columns.map((c) => c.name);
+    assert.ok(colNames.includes('display_name'),
+      `users.columns should include display_name, got: ${colNames.join(', ')}`);
+    assert.ok(colNames.includes('level'),
+      `users.columns should include level, got: ${colNames.join(', ')}`);
+    // Sanity: built-in columns still present
+    assert.ok(colNames.includes('email'), 'built-in email column should still be there');
+  });
+
+  it('admin UI table renders custom column headers', async () => {
+    const page = await browser!.newPage();
+    await page.setViewport({ width: 1400, height: 900 });
+    await page.goto(`${BASE}/admin/login`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-testid="login-email"]');
+    await page.type('input[data-testid="login-email"]', BOOTSTRAP_EMAIL);
+    await page.type('input[data-testid="login-password"]', BOOTSTRAP_PASSWORD);
+    await page.click('[data-testid="login-submit"]');
+    await page.waitForSelector('.ant-menu-item a[href$="/users"]', { timeout: 15_000 });
+    await page.click('.ant-menu-item a[href$="/users"]');
+    await page.waitForSelector('[data-testid="list-users"] .ant-table-thead', { timeout: 10_000 });
+
+    const headers = await page.$$eval(
+      '[data-testid="list-users"] .ant-table-thead .ant-table-cell',
+      (cells) => cells.map((c) => (c.textContent ?? '').trim()),
+    );
+    assert.ok(headers.includes('display_name'),
+      `expected display_name header, got: ${headers.join(', ')}`);
+    assert.ok(headers.includes('level'),
+      `expected level header, got: ${headers.join(', ')}`);
+    await page.close();
+  });
 });
