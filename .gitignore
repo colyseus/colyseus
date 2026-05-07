@@ -19,3 +19,7 @@ dump.rdb
 *.db
 *.db-shm
 *.db-wal
+
+# drizzle-kit generated migrations land here when developers run db:generate
+# locally; consumers commit their own migration folders into their own repos.
+packages/database/drizzle/

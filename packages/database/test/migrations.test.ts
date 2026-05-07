@@ -66,19 +66,21 @@ describe('GameDatabase: migration strategies', () => {
     });
     afterEach(cleanup);
 
-    it("delegates to drizzle-orm's migrator (no auto-create on the side)", async () => {
-      // drizzle-orm reads <folder>/meta/_journal.json — exact shape varies
-      // by drizzle-kit version, so testing the FULL migration application
-      // here couples this test to drizzle-kit. Instead we test the
-      // delegation contract: when files-mode is selected, the colyseus_*
-      // auto-tables are NOT created (the auto path is skipped), and the
-      // migrator is invoked. An empty-but-valid folder lets the migrator
-      // run with zero pending migrations.
+    it('applies a real drizzle-kit-generated migration', async () => {
+      // drizzle-orm 1.0+ folder format: <folder>/<YYYYMMDDHHMMSS_name>/migration.sql.
+      // No _journal.json — that was the old format. Each migration directory's
+      // 14-char prefix is parsed by formatToMillis() in migrator.utils.
       const folder = path.join(__dirname, `.fm-${Date.now()}`);
-      fs.mkdirSync(path.join(folder, 'meta'), { recursive: true });
+      const migDir = path.join(folder, '20260101000000_test_initial');
+      fs.mkdirSync(migDir, { recursive: true });
       fs.writeFileSync(
-        path.join(folder, 'meta', '_journal.json'),
-        JSON.stringify({ version: '7', dialect: 'sqlite', entries: [] }),
+        path.join(migDir, 'migration.sql'),
+        `CREATE TABLE "test_evolving" (\n` +
+        `  "id" text PRIMARY KEY,\n` +
+        `  "name" text NOT NULL\n` +
+        `);\n` +
+        `--> statement-breakpoint\n` +
+        `INSERT INTO "test_evolving" ("id", "name") VALUES ('a', 'first');\n`,
       );
 
       try {
@@ -86,16 +88,53 @@ describe('GameDatabase: migration strategies', () => {
           connectionString: dbPath,
           migrations: { files: folder },
         });
-        // The migrator may still complain about journal-version drift across
-        // drizzle-kit releases. We accept either outcome — what matters is
-        // that the auto-create path was NOT taken (asserted below).
-        await db.boot().catch(() => { /* migrator-version mismatch is ok here */ });
+        await db.boot();
 
         const conn = (db as any).ownedConnection;
+        const rows = conn.prepare("SELECT id, name FROM test_evolving").all() as Array<{ id: string; name: string }>;
+        assert.equal(rows.length, 1);
+        assert.equal(rows[0]!.id, 'a');
+        assert.equal(rows[0]!.name, 'first');
+
+        // Auto-create path was bypassed: built-in colyseus_* tables don't exist.
         const auto = conn.prepare(
           "SELECT name FROM sqlite_master WHERE type='table' AND name = 'colyseus_users'"
         ).all();
-        assert.equal(auto.length, 0, 'files strategy should bypass auto-create');
+        assert.equal(auto.length, 0, 'files strategy should skip auto-create');
+
+        // Drizzle's tracking table exists and recorded the migration.
+        const journal = conn.prepare(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name = '__drizzle_migrations'"
+        ).all();
+        assert.equal(journal.length, 1);
+      } finally {
+        fs.rmSync(folder, { recursive: true, force: true });
+      }
+    });
+
+    it('is idempotent — re-running with the same folder is a no-op', async () => {
+      const folder = path.join(__dirname, `.idempotent-${Date.now()}`);
+      const migDir = path.join(folder, '20260101000000_init');
+      fs.mkdirSync(migDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(migDir, 'migration.sql'),
+        `CREATE TABLE "once" ("id" text PRIMARY KEY);\n` +
+        `--> statement-breakpoint\n` +
+        `INSERT INTO "once" ("id") VALUES ('only');\n`,
+      );
+
+      try {
+        db = new GameDatabase({ connectionString: dbPath, migrations: { files: folder } });
+        await db.boot();
+        await db.shutdown();
+
+        // Second boot with the same folder — should NOT re-run the INSERT
+        // (which would fail with a UNIQUE-constraint violation).
+        db = new GameDatabase({ connectionString: dbPath, migrations: { files: folder } });
+        await db.boot();
+        const conn = (db as any).ownedConnection;
+        const rows = conn.prepare("SELECT id FROM once").all() as Array<{ id: string }>;
+        assert.equal(rows.length, 1, 'migration should apply exactly once');
       } finally {
         fs.rmSync(folder, { recursive: true, force: true });
       }
