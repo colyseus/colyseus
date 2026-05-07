@@ -15,11 +15,15 @@ export interface PlayerItem {
 }
 
 export class ItemsService {
-  constructor(
-    private db: any,
-    private items: any,
-    private playerItems: any,
-  ) {}
+  private db: any;
+  private items: any;
+  private playerItems: any;
+
+  constructor(db: any, items: any, playerItems: any) {
+    this.db = db;
+    this.items = items;
+    this.playerItems = playerItems;
+  }
 
   /**
    * Idempotently register an item in the catalog.

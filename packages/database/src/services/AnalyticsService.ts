@@ -20,10 +20,13 @@ export interface FunnelStep {
  * this table as the staging buffer.
  */
 export class AnalyticsService {
-  constructor(
-    private db: any,
-    private events: any,
-  ) {}
+  private db: any;
+  private events: any;
+
+  constructor(db: any, events: any) {
+    this.db = db;
+    this.events = events;
+  }
 
   async track(name: string, userId: string | null, props?: Record<string, any>): Promise<void> {
     await this.db.insert(this.events).values({ name, userId, props });

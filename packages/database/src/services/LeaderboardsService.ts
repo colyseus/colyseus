@@ -11,12 +11,17 @@ export interface LeaderboardEntry {
 }
 
 export class LeaderboardsService {
-  constructor(
-    private db: any,
-    private leaderboards: any,
-    private entries: any,
-    private dialect: Dialect,
-  ) {}
+  private db: any;
+  private leaderboards: any;
+  private entries: any;
+  private dialect: Dialect;
+
+  constructor(db: any, leaderboards: any, entries: any, dialect: Dialect) {
+    this.db = db;
+    this.leaderboards = leaderboards;
+    this.entries = entries;
+    this.dialect = dialect;
+  }
 
   /**
    * Idempotently register a leaderboard with the given id (and optional display name).

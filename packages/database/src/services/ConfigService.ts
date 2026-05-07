@@ -1,10 +1,13 @@
 import { eq, sql } from 'drizzle-orm';
 
 export class ConfigService {
-  constructor(
-    private db: any,
-    private configs: any,
-  ) {}
+  private db: any;
+  private configs: any;
+
+  constructor(db: any, configs: any) {
+    this.db = db;
+    this.configs = configs;
+  }
 
   async get<T = any>(key: string): Promise<T | null> {
     const rows = await this.db

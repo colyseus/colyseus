@@ -3,10 +3,13 @@ import { generateId } from '@colyseus/core';
 import type { AuthSettings } from '@colyseus/auth';
 
 export class AuthService {
-  constructor(
-    private db: any,
-    private users: any,
-  ) {}
+  private db: any;
+  private users: any;
+
+  constructor(db: any, users: any) {
+    this.db = db;
+    this.users = users;
+  }
 
   /**
    * Returns an AuthSettings-compatible object to pass to auth.routes().

@@ -8,10 +8,13 @@ export class VersionConflictError extends Error {
 }
 
 export class CloudSaveService {
-  constructor(
-    private db: any,
-    private cloudSaves: any,
-  ) {}
+  private db: any;
+  private cloudSaves: any;
+
+  constructor(db: any, cloudSaves: any) {
+    this.db = db;
+    this.cloudSaves = cloudSaves;
+  }
 
   async save(
     userId: string,

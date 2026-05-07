@@ -19,11 +19,15 @@ export type Action = 'list' | 'read' | 'create' | 'update' | 'delete';
  *           sensitive — this service only enforces "no writes")
  */
 export class ModerationService {
-  constructor(
-    private db: any,
-    private userRoles: any,
-    private modAssignments: any,
-  ) {}
+  private db: any;
+  private userRoles: any;
+  private modAssignments: any;
+
+  constructor(db: any, userRoles: any, modAssignments: any) {
+    this.db = db;
+    this.userRoles = userRoles;
+    this.modAssignments = modAssignments;
+  }
 
   async setRole(userId: string, role: Role): Promise<void> {
     await this.db

@@ -14,10 +14,13 @@ export interface TimedEvent {
  * without relying on wall-clock time.
  */
 export class TimedEventsService {
-  constructor(
-    private db: any,
-    private events: any,
-  ) {}
+  private db: any;
+  private events: any;
+
+  constructor(db: any, events: any) {
+    this.db = db;
+    this.events = events;
+  }
 
   /**
    * Idempotently schedule an event. Re-running with the same id updates the window/payload.
