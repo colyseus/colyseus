@@ -92,3 +92,13 @@ export const columns = {
     modAssignments: pgModAssignments,
   },
 };
+
+// Per-dialect table factories. Mirrors the `columns.{sqlite,pg}.*` shape:
+//
+//   const users = tables.sqlite.users('users', { displayName: text(...) });
+//   const items = tables.pg.items('items', { rarity: text(...) });
+//
+// One-line replacement for the manual sqliteTable/pgTable + spread pattern.
+import { sqlite } from './factories/sqlite.ts';
+import { pg } from './factories/pg.ts';
+export const tables = { sqlite, pg };
