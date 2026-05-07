@@ -66,6 +66,63 @@ export interface GameDatabaseOptions {
     userRoles?: any;
     modAssignments?: any;
   };
+
+  /**
+   * Driver-specific connection options forwarded to the underlying drizzle
+   * driver (drizzle's `connection` field). Shape depends on dialect:
+   *
+   *   sqlite (file path):
+   *     Node's DatabaseSyncOptions — `readOnly`, `enableForeignKeyConstraints`,
+   *     `allowExtension`, `enableDoubleQuotedStringLiterals`, `open`.
+   *
+   *   postgres (postgres://...):
+   *     postgres-js Options — `max` (pool size), `ssl`, `idle_timeout`,
+   *     `connect_timeout`, `prepare`, `connection: { statement_timeout, ... }`,
+   *     `transform`, etc.
+   *
+   *   pglite (pglite://...):
+   *     PGliteOptions — `relaxedDurability`, `extensions`, `loadDataDir`, etc.
+   *
+   * Examples:
+   *
+   *   // Production Postgres tuning
+   *   new GameDatabase({
+   *     connectionString: process.env.DATABASE_URL,
+   *     connection: {
+   *       max: 20,
+   *       ssl: 'require',
+   *       idle_timeout: 30,
+   *       connection: { statement_timeout: 30_000 },
+   *     },
+   *   });
+   *
+   *   // Read-only sqlite replica
+   *   new GameDatabase({
+   *     connectionString: './replica.db',
+   *     connection: { readOnly: true },
+   *   });
+   *
+   *   // PGlite with relaxed fsync (tests / ephemeral environments)
+   *   new GameDatabase({
+   *     connectionString: 'pglite://./.data',
+   *     connection: { relaxedDurability: true },
+   *   });
+   */
+  connection?: Record<string, any>;
+
+  /**
+   * SQLite PRAGMA overrides applied immediately after open. Defaults are
+   *   journal_mode = WAL
+   *   foreign_keys = ON
+   *
+   *   pragmas: { synchronous: 'NORMAL', cache_size: -64000 }   // merge with defaults
+   *   pragmas: { journal_mode: 'DELETE' }                      // override WAL
+   *   pragmas: false                                            // skip ALL defaults
+   *
+   * Postgres / PGlite ignore this option — pg has session-level GUCs
+   * (statement_timeout, etc.) which belong on `connection.connection`.
+   */
+  pragmas?: Record<string, string | number> | false;
 }
 
 type Dialect = 'sqlite' | 'pg';
@@ -204,17 +261,33 @@ export class GameDatabase {
 
     const dbPath = this.options.connectionString || 'colyseus.db';
 
-    // Let drizzle create and own the DatabaseSync connection
-    this.drizzle = drizzle(dbPath);
+    // Forward user options to Node's DatabaseSync via drizzle's `connection`
+    // passthrough. `path` is filled from connectionString if not overridden.
+    const userOpts = this.options.connection ?? {};
+    this.drizzle = drizzle({ connection: { path: dbPath, ...userOpts } });
 
-    // Access drizzle's internal connection for pragmas and raw DDL
+    // $client is the underlying DatabaseSync — needed for raw DDL + pragmas
     this.ownedConnection = (this.drizzle as any).$client;
     this.subDialect = 'sqlite';
 
-    // Enable WAL mode for better concurrent read performance
-    this.ownedConnection.exec('PRAGMA journal_mode = WAL');
-    // Enable foreign keys (off by default in SQLite)
-    this.ownedConnection.exec('PRAGMA foreign_keys = ON');
+    this.applySqlitePragmas();
+  }
+
+  private applySqlitePragmas() {
+    const userPragmas = this.options.pragmas;
+    if (userPragmas === false) {
+      // Caller opted out of all defaults — no WAL, no FK, no nothing.
+      return;
+    }
+    // Defaults preserved unless the caller overrides them in `pragmas`.
+    const defaults: Record<string, string | number> = {
+      journal_mode: 'WAL',          // better concurrent read performance
+      foreign_keys: 'ON',           // off by default in SQLite, on everywhere else
+    };
+    const merged = { ...defaults, ...(userPragmas ?? {}) };
+    for (const [key, value] of Object.entries(merged)) {
+      this.ownedConnection.exec(`PRAGMA ${key} = ${value}`);
+    }
   }
 
   private async bootPostgres() {
@@ -222,10 +295,10 @@ export class GameDatabase {
     const { drizzle } = await import('drizzle-orm/postgres-js');
 
     const connectionString = this.options.connectionString || process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/postgres';
-    const sql = pg(connectionString);
+    // postgres-js: pass the URL positionally + any tuning opts (max, ssl,
+    // idle_timeout, prepare, statement_timeout, etc.) as a second arg.
+    const sql = pg(connectionString, this.options.connection);
 
-    // Drizzle 1.0 requires the named-arg form for postgres-js. Positional
-    // form is for connection-string overloads only.
     this.drizzle = drizzle({ client: sql });
     this.ownedConnection = sql;
     this.subDialect = 'postgres-js';
@@ -245,7 +318,13 @@ export class GameDatabase {
     const { PGlite } = await import('@electric-sql/pglite');
     const { drizzle } = await import('drizzle-orm/pglite');
 
-    const client = new PGlite(dataDir === ':memory:' || dataDir === '' ? undefined : dataDir);
+    // PGliteOptions also accepts `dataDir`, so honor explicit override and
+    // fall back to the value parsed from the connection string.
+    const userOpts = this.options.connection ?? {};
+    const resolvedDataDir = userOpts.dataDir ?? (
+      dataDir === ':memory:' || dataDir === '' ? undefined : dataDir
+    );
+    const client = new PGlite({ ...userOpts, dataDir: resolvedDataDir });
     await client.waitReady;
 
     this.drizzle = drizzle({ client });
