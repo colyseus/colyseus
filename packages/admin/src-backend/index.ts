@@ -235,6 +235,32 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
     return raw;
   }
 
+  /**
+   * The frontend posts form bodies keyed by SQL column names
+   * (`board_id`, `user_id`) — that's what we surface in the catalog and
+   * what AntD/shadcn forms bind to. drizzle's `.insert().values({...})`
+   * and `.update().set({...})` expect the **JS field names** (`boardId`,
+   * `userId`), and silently drop unrecognized keys. That silent drop is
+   * how a NOT NULL FK column ended up null even though the form had it
+   * filled in.
+   *
+   * Translate before handing the body to drizzle: map each SQL column
+   * name to its JS key by iterating the table object's properties.
+   */
+  function translateBodyKeys(body: Record<string, any>, table: any): Record<string, any> {
+    const sqlToJs: Record<string, string> = {};
+    for (const [jsKey, col] of Object.entries(table)) {
+      if (col && typeof col === 'object' && 'name' in (col as any) && typeof (col as any).name === 'string') {
+        sqlToJs[(col as any).name] = jsKey;
+      }
+    }
+    const out: Record<string, any> = {};
+    for (const [k, v] of Object.entries(body)) {
+      out[sqlToJs[k] ?? k] = v;
+    }
+    return out;
+  }
+
   /** Build a drizzle WHERE condition from `(col, op, rawValue)`. */
   function buildFilterCondition(col: any, op: string, raw: string): SQL | undefined {
     if (op === 'like') {
@@ -568,7 +594,8 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
       if (denied) { return denied; }
       const r = tableOrError(resource);
       if (r instanceof Response) { return r; }
-      const [row] = await database.drizzle.insert(r.table).values((ctx.body ?? {}) as any).returning();
+      const values = translateBodyKeys((ctx.body ?? {}) as Record<string, any>, r.table);
+      const [row] = await database.drizzle.insert(r.table).values(values).returning();
       return json(row, { status: 201 });
     }),
 
@@ -582,7 +609,8 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
       const { table, cfg } = r;
       const pkCol = cfg.columns.find((c: any) => c.primary);
       if (!pkCol) { return errorResponse(400, 'no single-column primary key'); }
-      const [row] = await database.drizzle.update(table).set((ctx.body ?? {}) as any)
+      const set = translateBodyKeys((ctx.body ?? {}) as Record<string, any>, table);
+      const [row] = await database.drizzle.update(table).set(set)
         .where(eq(pkCol, castPk(id, pkCol))).returning();
       if (!row) { return errorResponse(404, 'not found'); }
       return json(row);

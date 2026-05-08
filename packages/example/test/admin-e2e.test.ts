@@ -200,6 +200,41 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     await page.close();
   });
 
+  it('CRUD with FK columns: POST translates SQL→JS column names so FKs land', async () => {
+    // Regression test for the form-to-drizzle key translation. The frontend
+    // posts bodies keyed by SQL column names (`board_id`, `user_id`); drizzle
+    // expects JS field names (`boardId`, `userId`) and silently drops
+    // unknown keys, which previously caused NOT NULL constraint failures
+    // on FK fields the user actually filled in.
+    const loginRes = await fetch(`${BASE}/admin-api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: BOOTSTRAP_EMAIL, password: BOOTSTRAP_PASSWORD }),
+    });
+    const cookieHeader = loginRes.headers.get('set-cookie')!.split(';')[0];
+
+    // Seed a leaderboard + a user to point the entry at.
+    await fetch(`${BASE}/admin-api/leaderboards`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: cookieHeader },
+      body: JSON.stringify({ id: 'main', name: 'Main' }),
+    });
+    const usersRes = await fetch(`${BASE}/admin-api/users`, { headers: { cookie: cookieHeader } });
+    const userId = (await usersRes.json() as Array<{ id: string }>)[0]!.id;
+
+    const create = await fetch(`${BASE}/admin-api/leaderboardEntries`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: cookieHeader },
+      body: JSON.stringify({ board_id: 'main', user_id: userId, score: 100 }),
+    });
+    const body = await create.text();
+    assert.equal(create.status, 201, `expected 201, got ${create.status}: ${body}`);
+    const row = JSON.parse(body) as { boardId: string; userId: string; score: number };
+    assert.equal(row.boardId, 'main');
+    assert.equal(row.userId, userId);
+    assert.equal(row.score, 100);
+  });
+
   it('CRUD via cookie: create configs row through the API', async () => {
     // Re-login to get a fresh cookie for the fetch
     const loginRes = await fetch(`${BASE}/admin-api/auth/login`, {
