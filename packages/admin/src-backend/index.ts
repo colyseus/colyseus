@@ -406,6 +406,48 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
       return json(result);
     }),
 
+    // GET /admin-api/:resource/:id/_counts
+    //   → { <relName>: count, ... } across every many-relation on this
+    //     resource. Replaces N parallel `_start=0&_end=1` calls used to
+    //     populate tab counts on the detail page with a single request.
+    //     Counts run in Promise.all so wall-clock stays short.
+    adminCounts: createEndpoint(
+      `${apiPath}/:resource/:id/_counts`,
+      { method: 'GET' },
+      async (ctx) => {
+        const { resource, id } = ctx.params as { resource: string; id: string };
+        const denied = await guard(ctx, 'list', resource);
+        if (denied) { return denied; }
+
+        const r = tableOrError(resource);
+        if (r instanceof Response) { return r; }
+        const sourceCfg = r.cfg;
+        const sourcePk = sourceCfg.columns.find((c: any) => c.primary);
+        if (!sourcePk) { return errorResponse(400, 'no single-column primary key'); }
+        const castedId = castPk(id, sourcePk);
+
+        const manyRels = (database.relations[resource] ?? []).filter(
+          (rel) => rel.kind === 'many' && !!tables[rel.target],
+        );
+
+        const counts: Record<string, number> = {};
+        await Promise.all(
+          manyRels.map(async (rel) => {
+            const targetTable = tables[rel.target];
+            const fkCol = (targetTable as any)[rel.fk];
+            if (!fkCol) { counts[rel.name] = 0; return; }
+            const rows = await database.drizzle
+              .select({ c: sql<number>`count(*)` })
+              .from(targetTable)
+              .where(eq(fkCol, castedId));
+            counts[rel.name] = Number((rows[0] as { c?: number })?.c ?? 0);
+          }),
+        );
+
+        return json(counts);
+      },
+    ),
+
     // GET /admin-api/:resource/:id/relations/:name
     //   → paginated list of related rows. The relation's `fk` column on the
     //     target table is matched against this row's primary key value.

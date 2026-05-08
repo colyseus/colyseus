@@ -314,6 +314,36 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     assert.equal(role.target, 'userRoles');
   });
 
+  it('counts endpoint returns every many-relation in one request', async () => {
+    // Replaces N parallel `_start=0&_end=1` per-tab calls with a single
+    // bulk fetch — the source of truth for the count badges on detail
+    // page tabs. Should include only kind:'many' relations whose target
+    // is registered as an admin resource.
+    const loginRes = await fetch(`${BASE}/admin-api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: BOOTSTRAP_EMAIL, password: BOOTSTRAP_PASSWORD }),
+    });
+    const cookieHeader = loginRes.headers.get('set-cookie')!.split(';')[0];
+
+    const usersRes = await fetch(`${BASE}/admin-api/users`, { headers: { cookie: cookieHeader } });
+    const userId = (await usersRes.json() as Array<{ id: string }>)[0]!.id;
+
+    const res = await fetch(`${BASE}/admin-api/users/${userId}/_counts`, {
+      headers: { cookie: cookieHeader },
+    });
+    assert.equal(res.status, 200);
+    const counts = await res.json() as Record<string, number>;
+
+    // Every many-relation declared on `users` shows up in the map.
+    for (const expected of ['cloudSaves', 'playerItems', 'leaderboardEntries', 'analyticsEvents', 'modAssignments']) {
+      assert.ok(expected in counts, `expected '${expected}' in counts, got: ${Object.keys(counts).join(', ')}`);
+      assert.equal(typeof counts[expected], 'number');
+    }
+    // `role` is a one-relation — should NOT appear in the counts map.
+    assert.ok(!('role' in counts), 'one-relations should be excluded');
+  });
+
   it('relation endpoint returns related rows for a given parent id', async () => {
     // Login as admin
     const loginRes = await fetch(`${BASE}/admin-api/auth/login`, {

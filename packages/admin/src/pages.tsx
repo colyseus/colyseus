@@ -715,6 +715,9 @@ export function ShowPage({ resources }: { resources: Resource[] }) {
   const def = findResource(resources, name);
   const { data, isLoading } = useOne({ resource: name, id });
   const record = (data?.data ?? {}) as any;
+  // Single bulk fetch for every many-relation count — replaces N parallel
+  // per-tab requests we used to fire from inside <RelationTabLabel>.
+  const counts = useRelationCounts(name, id);
 
   if (!def) { return <div>unknown resource</div>; }
 
@@ -770,7 +773,7 @@ export function ShowPage({ resources }: { resources: Resource[] }) {
             <TabsTrigger value="__profile">Profile</TabsTrigger>
             {manyRels.map((rel) => (
               <TabsTrigger key={rel.name} value={rel.name}>
-                <RelationTabLabel parentResource={name!} parentId={id} relation={rel} />
+                <RelationTabLabel relation={rel} count={counts?.[rel.name]} />
               </TabsTrigger>
             ))}
           </TabsList>
@@ -795,21 +798,33 @@ function Profilerow({ label, children }: { label: string; children: React.ReactN
   );
 }
 
-function RelationTabLabel({
-  parentResource, parentId, relation,
-}: { parentResource: string; parentId: string; relation: ResourceRelation }) {
-  const [count, setCount] = useState<number | null>(null);
+/**
+ * Single fetch for all many-relation counts on a resource detail page.
+ * Replaces N per-tab `_start=0&_end=1` calls with one request — server
+ * runs the per-relation count(*)s in Promise.all. Returns `null` while
+ * the request is in flight so labels can hide the count until it lands.
+ */
+function useRelationCounts(
+  resource: string | undefined,
+  id: string | undefined,
+): Record<string, number> | null {
+  const [counts, setCounts] = useState<Record<string, number> | null>(null);
   useEffect(() => {
-    fetch(`/admin-api/${parentResource}/${parentId}/relations/${relation.name}?_start=0&_end=1`, {
-      credentials: 'include',
-    })
-      .then((r) => (r.ok ? Number(r.headers.get('x-total-count') ?? '0') : null))
-      .then(setCount)
-      .catch(() => setCount(null));
-  }, [parentResource, parentId, relation.name]);
+    if (!resource || !id) { return; }
+    let cancelled = false;
+    fetch(`/admin-api/${resource}/${encodeURIComponent(id)}/_counts`, { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (!cancelled) { setCounts(data); } })
+      .catch(() => { if (!cancelled) { setCounts(null); } });
+    return () => { cancelled = true; };
+  }, [resource, id]);
+  return counts;
+}
+
+function RelationTabLabel({ relation, count }: { relation: ResourceRelation; count: number | undefined }) {
   return (
     <span data-testid={`tab-relation-${relation.name}`}>
-      {relation.name}{count !== null ? ` (${count})` : ''}
+      {relation.name}{count !== undefined ? ` (${count})` : ''}
     </span>
   );
 }
@@ -937,6 +952,7 @@ export function EditPage({ resources }: { resources: Resource[] }) {
   const def = findResource(resources, name);
   const { data, isLoading } = useOne({ resource: name, id });
   const { mutate: update, isLoading: saving } = useUpdate();
+  const counts = useRelationCounts(name, id);
 
   if (!def) { return <div>unknown resource</div>; }
 
@@ -973,7 +989,7 @@ export function EditPage({ resources }: { resources: Resource[] }) {
             <TabsTrigger value="__profile">Profile</TabsTrigger>
             {manyRels.map((rel) => (
               <TabsTrigger key={rel.name} value={rel.name}>
-                <RelationTabLabel parentResource={name!} parentId={id} relation={rel} />
+                <RelationTabLabel relation={rel} count={counts?.[rel.name]} />
               </TabsTrigger>
             ))}
           </TabsList>
