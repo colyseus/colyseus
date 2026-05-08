@@ -21,8 +21,14 @@ import { integer, text } from 'drizzle-orm/sqlite-core';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// Custom users table with `level` so we can write a non-trivial segment.
+// Hoisted so `typeof users` is a clean type ref for `db`.
+const users = schemaFactories.sqlite.users('users', {
+  level: integer('level').default(1),
+});
+
 let dbPath: string;
-let db: GameDatabase;
+let db: GameDatabase<{ users: typeof users }>;
 
 function freshDbPath(): string {
   return path.join(__dirname, `.seg-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
@@ -36,11 +42,6 @@ async function cleanup() {
 }
 
 describe('SegmentsService', () => {
-  // Custom users table with `level` so we can write a non-trivial segment.
-  const users = schemaFactories.sqlite.users('users', {
-    level: integer('level').default(1),
-  });
-
   const lowLevel = defineSegment('lowLevel', {
     description: 'Players still under level 5',
     resolve: async ({ drizzle, tables }) => {
@@ -205,6 +206,72 @@ describe('SegmentsService', () => {
 
     assert.equal(await inline.segments.size('inlineTyped'), 1);
     db = inline; // afterEach handles cleanup
+  });
+
+  it("where-based segment composes count(*) — size doesn't materialize ids", async () => {
+    // Register a where-based segment alongside the existing resolve-based ones
+    // and prove (1) the count matches and (2) ids() paginates via SQL.
+    db.segments.define('whereLow', {
+      description: 'where-based equivalent of lowLevel',
+      where: ({ tables }) => eq(tables.users.level, 1),
+    });
+
+    assert.equal(await db.segments.size('whereLow'), 3);
+
+    // SQL pagination — limit 2 should return exactly 2 ids; offset advances.
+    const page1 = await db.segments.ids('whereLow', { limit: 2 });
+    assert.equal(page1.length, 2);
+    const page2 = await db.segments.ids('whereLow', { limit: 2, offset: 2 });
+    assert.equal(page2.length, 1);
+    assert.notDeepEqual(page1, page2);
+
+    // has() is a single-row exists query
+    const allIds = await db.segments.ids('whereLow');
+    assert.equal(await db.segments.has('whereLow', allIds[0]!), true);
+
+    // Spot-check the unrelated cohort
+    db.segments.define('whereHigh', {
+      where: ({ tables }) => gte(tables.users.level, 10),
+    });
+    assert.equal(await db.segments.size('whereHigh'), 2);
+    assert.equal(await db.segments.has('whereHigh', allIds[0]!), false);
+  });
+
+  it("where returning undefined short-circuits to empty/zero", async () => {
+    db.segments.define('emptyByDesign', {
+      where: () => undefined,
+    });
+    assert.equal(await db.segments.size('emptyByDesign'), 0);
+    assert.deepEqual(await db.segments.ids('emptyByDesign'), []);
+    assert.equal(await db.segments.has('emptyByDesign', 'anything'), false);
+  });
+
+  it('forEach pages through where-based segments without loading all ids', async () => {
+    db.segments.define('whereAll', {
+      where: ({ tables }) => gte(tables.users.level, 1),
+    });
+    const seen: string[] = [];
+    await db.segments.forEach('whereAll', (uid) => { seen.push(uid); }, { pageSize: 2 });
+    // 5 users seeded in beforeEach (3 newbies + 2 vets)
+    assert.equal(seen.length, 5);
+    // No duplicates
+    assert.equal(new Set(seen).size, 5);
+  });
+
+  it('rejects definitions with both or neither of where/resolve', () => {
+    assert.throws(
+      // @ts-expect-error — both where and resolve set; the type union forbids this
+      () => db.segments.define('both', {
+        where: () => undefined,
+        resolve: async () => [],
+      }),
+      /must provide exactly one of 'where' or 'resolve'/,
+    );
+    assert.throws(
+      // @ts-expect-error — neither set
+      () => db.segments.define('neither', {}),
+      /must provide exactly one of 'where' or 'resolve'/,
+    );
   });
 
   it('reflects state changes between calls (no stale caching at the service level)', async () => {

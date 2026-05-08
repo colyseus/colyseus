@@ -10,29 +10,23 @@
  *   NOT let operators rewrite the rules from the panel. UI-editable rules
  *   are a separate, future story (v2) sitting on top of this primitive.
  *
- * Usage — `createSegmentDefiner<Schema, Dialect>()` captures your schema
- * + dialect once so `tables` and `drizzle` are both strictly typed inside
- * every resolver:
+ * Two definition shapes:
  *
- *   import * as schema from './db/schema.ts';
- *   import { createSegmentDefiner } from '@colyseus/database';
- *   import { gte } from 'drizzle-orm';
+ *   1. `where(ctx)` returning a drizzle SQL predicate over the users
+ *      table. Preferred — the service composes `count(*)`, `EXISTS`, and
+ *      `LIMIT/OFFSET` directly, so size / has / paginated ids never
+ *      materialize the full cohort. Use this for "users with property X".
  *
- *   const defineSegment = createSegmentDefiner<typeof schema>();   // 'sqlite' default
- *   //  for postgres: createSegmentDefiner<typeof schema, 'pg'>();
+ *   2. `resolve(ctx)` returning a fully materialized `string[]` of user
+ *      ids. Fallback — works for any shape (cross-table aggregates,
+ *      external API calls), but size + has + ids load every id into
+ *      memory. Acceptable for small/admin-only segments; switch to
+ *      `where` once a cohort grows.
  *
- *   export const veterans = defineSegment('veterans', {
- *     description: 'Level >= 10',
- *     resolve: async ({ drizzle, tables }) => {
- *       const rows = await drizzle
- *         .select({ id: tables.users.id })   // tables.users.id: typed column
- *         .from(tables.users)
- *         .where(gte(tables.users.level, 10));
- *       return rows.map((r) => r.id);
- *     },
- *   });
+ * Exactly one of `where` / `resolve` must be provided.
  */
 
+import type { SQL } from 'drizzle-orm';
 import type { BaseSQLiteDatabase } from 'drizzle-orm/sqlite-core';
 import type { PgAsyncDatabase } from 'drizzle-orm/pg-core/async';
 
@@ -65,23 +59,55 @@ export interface SegmentResolveContext<
   now: Date;
 }
 
+type LooseCtx = { drizzle: any; tables: Record<string, any>; now: Date };
+
 /**
- * Stored shape of a segment after `defineSegment(...)` returns. The
- * schema + dialect generics are intentionally erased at this boundary so
- * segments authored against different schemas can be registered together.
+ * Stored shape of a segment after registration. The schema + dialect
+ * generics are intentionally erased at this boundary so segments
+ * authored against different schemas can be registered together.
  *
- * The `resolve` ctx is loose here on purpose: the strict typing lives at
- * authoring time (inside the `createSegmentDefiner<S, D>()` factory), not
- * at the registration boundary the SegmentsService consumes.
+ * Exactly one of `where` / `resolve` is set on each definition; the
+ * service prefers `where` whenever present for efficient COUNT / EXISTS
+ * paths.
  */
 export interface SegmentDefinition {
   /** Stable, unique identifier — used as a URL slug + as the lookup key. */
   id: string;
   /** Human-readable description shown in the admin UI. Optional. */
   description?: string;
-  /** Returns the list of user ids in this segment at call time. */
-  resolve: (ctx: { drizzle: any; tables: Record<string, any>; now: Date }) => Promise<string[]>;
+  /**
+   * SQL predicate over the users table. Composable: the service wraps it
+   * in `count(*)`, `EXISTS`, or paginated SELECT depending on the call.
+   * `undefined` means "no rows match" — useful for short-circuiting.
+   */
+  where?: (ctx: LooseCtx) => SQL | undefined;
+  /**
+   * Materialized resolver returning user ids. Fallback for shapes a
+   * single users-table predicate can't express. Service uses it as-is
+   * for ids/size/has, so cost scales with cohort size.
+   */
+  resolve?: (ctx: LooseCtx) => Promise<string[]>;
 }
+
+/**
+ * Strictly-typed config accepted by a segment definer. Exactly one of
+ * `where` / `resolve` must be provided — the discriminated union enforces
+ * this at compile time.
+ */
+export type SegmentDefineConfig<
+  S extends Record<string, any>,
+  Dialect extends 'sqlite' | 'pg' = 'sqlite',
+> =
+  | {
+      description?: string;
+      where: (ctx: SegmentResolveContext<S, Dialect>) => SQL | undefined;
+      resolve?: never;
+    }
+  | {
+      description?: string;
+      resolve: (ctx: SegmentResolveContext<S, Dialect>) => Promise<string[]>;
+      where?: never;
+    };
 
 /**
  * The strictly-typed `defineSegment` returned by `createSegmentDefiner<S, Dialect>()`.
@@ -91,13 +117,7 @@ export interface SegmentDefinition {
 export type SegmentDefiner<
   S extends Record<string, any>,
   Dialect extends 'sqlite' | 'pg' = 'sqlite',
-> = (
-  id: string,
-  config: {
-    description?: string;
-    resolve: (ctx: SegmentResolveContext<S, Dialect>) => Promise<string[]>;
-  },
-) => SegmentDefinition;
+> = (id: string, config: SegmentDefineConfig<S, Dialect>) => SegmentDefinition;
 
 /**
  * Build a `defineSegment` function pre-bound to your schema. Both `tables`
@@ -115,18 +135,7 @@ export function createSegmentDefiner<
   S extends Record<string, any>,
   Dialect extends 'sqlite' | 'pg' = 'sqlite',
 >(): SegmentDefiner<S, Dialect> {
-  return (id, config) => {
-    if (!id || typeof id !== 'string') {
-      throw new Error('[defineSegment] id must be a non-empty string');
-    }
-    return {
-      id,
-      description: config.description,
-      // The resolve signature widens at the registration boundary — same
-      // erasure as making segments interchangeable at the GameDatabase level.
-      resolve: config.resolve as SegmentDefinition['resolve'],
-    };
-  };
+  return (id, config) => buildDefinition(id, config as Omit<SegmentDefinition, 'id'>);
 }
 
 /**
@@ -140,8 +149,24 @@ export function defineSegment(
   id: string,
   config: Omit<SegmentDefinition, 'id'>,
 ): SegmentDefinition {
+  return buildDefinition(id, config);
+}
+
+function buildDefinition(
+  id: string,
+  config: Omit<SegmentDefinition, 'id'>,
+): SegmentDefinition {
   if (!id || typeof id !== 'string') {
     throw new Error('[defineSegment] id must be a non-empty string');
   }
-  return { id, ...config };
+  const hasWhere = typeof config.where === 'function';
+  const hasResolve = typeof config.resolve === 'function';
+  if (hasWhere === hasResolve) {
+    throw new Error(
+      `[defineSegment] segment '${id}' must provide exactly one of 'where' or 'resolve' (got ${
+        hasWhere && hasResolve ? 'both' : 'neither'
+      })`,
+    );
+  }
+  return { id, description: config.description, where: config.where, resolve: config.resolve };
 }

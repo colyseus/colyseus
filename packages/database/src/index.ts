@@ -12,6 +12,7 @@ export type {
   SegmentDefinition,
   SegmentResolveContext,
   SegmentDefiner,
+  SegmentDefineConfig,
   DrizzleFor,
 } from './segments.ts';
 
