@@ -273,18 +273,22 @@ export const server = config({
     ...adminEndpoints({
       database,
       dashboard: {
+        // Skip the noisy `totals` widget and `activeEvents` (we don't use timed
+        // events here). Keep recentUsers + health from the built-ins, then
+        // override `health` and append a new `rooms` widget.
+        builtIns: ['recentUsers'],
         widgets: [
+          // Re-include `health` via its factory — but with a custom data fn
+          // that also reports process uptime.
           {
-            // Reuse a built-in id to override its data fn — replaces the
-            // default `health` widget.
             id: 'health',
             title: 'System health',
             icon: 'heart',
             render: 'kpi',
             data: async () => ({ db: 'ok', uptime: `${Math.round(process.uptime())}s` }),
           },
+          // New widget — appended after the built-ins.
           {
-            // New widget id — appended alongside the defaults.
             id: 'rooms',
             title: 'Rooms',
             icon: 'cluster',

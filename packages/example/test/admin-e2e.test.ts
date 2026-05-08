@@ -155,7 +155,7 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     // Login lands on /. Wait for the dashboard data to render before clicking
     // the menu — its async re-render reflows AntD's layout and detaches nodes
     // grabbed before settle.
-    await page.waitForSelector('[data-testid="widget-totals"]', { timeout: 15_000 });
+    await page.waitForSelector('[data-testid="widget-recentUsers"]', { timeout: 15_000 });
     await page.waitForSelector('.ant-menu-item a[href$="/users"]', { timeout: 5_000 });
     await page.click('.ant-menu-item a[href$="/users"]');
 
@@ -176,7 +176,7 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     await page.type('input[data-testid="login-email"]', BOOTSTRAP_EMAIL);
     await page.type('input[data-testid="login-password"]', BOOTSTRAP_PASSWORD);
     await page.click('[data-testid="login-submit"]');
-    await page.waitForSelector('[data-testid="widget-totals"]', { timeout: 15_000 });
+    await page.waitForSelector('[data-testid="widget-recentUsers"]', { timeout: 15_000 });
     await page.waitForSelector('[data-testid="logout-button"]', { timeout: 10_000 });
 
     await page.click('[data-testid="logout-button"]');
@@ -246,8 +246,10 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     assert.ok(colNames.includes('email'), 'built-in email column should still be there');
   });
 
-  it('dashboard endpoint returns built-in + custom widgets', async () => {
-    // app.config.ts overrides `health` and adds `rooms` via dashboard.widgets.
+  it('dashboard endpoint respects builtIns allowlist + widget overrides', async () => {
+    // app.config.ts: builtIns = ['recentUsers']; widgets override `health`
+    // and append `rooms`. So expected ids are: recentUsers, health, rooms.
+    // `totals` and `activeEvents` are explicitly opted-out.
     const loginRes = await fetch(`${BASE}/admin-api/auth/login`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -263,21 +265,19 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
       widgets: Array<{ id: string; render: string; data: any; error?: string }>;
     };
     const ids = payload.widgets.map((w) => w.id);
-    // built-ins still present (totals, recentUsers, activeEvents)
-    assert.ok(ids.includes('totals'));
-    assert.ok(ids.includes('recentUsers'));
+    assert.deepEqual(ids.sort(), ['health', 'recentUsers', 'rooms'].sort(),
+      `expected only allow-listed + custom widgets, got: ${ids.join(', ')}`);
+
     // overridden built-in (health) carries the user's data shape
     const health = payload.widgets.find((w) => w.id === 'health')!;
-    assert.ok(health, 'health widget should still exist after override');
     assert.equal(health.error, undefined);
     assert.ok('uptime' in (health.data as any), `health override should expose uptime, got: ${JSON.stringify(health.data)}`);
     // appended custom widget
-    const rooms = payload.widgets.find((w) => w.id === 'rooms');
-    assert.ok(rooms, 'custom rooms widget should be in the payload');
-    assert.equal(rooms!.error, undefined);
+    const rooms = payload.widgets.find((w) => w.id === 'rooms')!;
+    assert.equal(rooms.error, undefined);
   });
 
-  it('dashboard renders built-in + custom widget cards in the UI', async () => {
+  it('dashboard renders only the configured widget cards in the UI', async () => {
     const page = await browser!.newPage();
     await page.setViewport({ width: 1400, height: 900 });
     await page.goto(`${BASE}/admin/login`, { waitUntil: 'domcontentloaded' });
@@ -286,14 +286,16 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     await page.type('input[data-testid="login-password"]', BOOTSTRAP_PASSWORD);
     await page.click('[data-testid="login-submit"]');
 
-    // built-in totals card
-    await page.waitForSelector('[data-testid="widget-totals"]', { timeout: 15_000 });
-    // built-in recentUsers (table render)
-    await page.waitForSelector('[data-testid="widget-recentUsers"]', { timeout: 5_000 });
-    // overridden built-in: still rendered
+    // builtIns allowlist kept recentUsers; widgets override health + add rooms
+    await page.waitForSelector('[data-testid="widget-recentUsers"]', { timeout: 15_000 });
     await page.waitForSelector('[data-testid="widget-health"]', { timeout: 5_000 });
-    // appended custom widget
     await page.waitForSelector('[data-testid="widget-rooms"]', { timeout: 5_000 });
+
+    // opted-out built-ins must NOT appear
+    const totalsCard = await page.$('[data-testid="widget-totals"]');
+    assert.equal(totalsCard, null, 'totals widget should be opted out via builtIns allowlist');
+    const eventsCard = await page.$('[data-testid="widget-activeEvents"]');
+    assert.equal(eventsCard, null, 'activeEvents widget should be opted out via builtIns allowlist');
     await page.close();
   });
 
@@ -305,7 +307,7 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     await page.type('input[data-testid="login-email"]', BOOTSTRAP_EMAIL);
     await page.type('input[data-testid="login-password"]', BOOTSTRAP_PASSWORD);
     await page.click('[data-testid="login-submit"]');
-    await page.waitForSelector('[data-testid="widget-totals"]', { timeout: 15_000 });
+    await page.waitForSelector('[data-testid="widget-recentUsers"]', { timeout: 15_000 });
     await page.waitForSelector('.ant-menu-item a[href$="/users"]', { timeout: 5_000 });
     await page.click('.ant-menu-item a[href$="/users"]');
     await page.waitForSelector('[data-testid="list-users"] .ant-table-thead', { timeout: 10_000 });

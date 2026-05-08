@@ -13,12 +13,20 @@ import type { ResourceDefinition } from './define-resource.js';
 import { authEndpoints } from './auth.js';
 import { readSessionFromHeader, type SessionConfig } from './sessions.js';
 import { logger as defaultLogger, withRequestLogger, type Logger } from './logger.js';
-import { resolveWidgets, runWidgets, type DashboardWidget, type DashboardPayload } from './dashboard.js';
+import {
+  resolveWidgets,
+  runWidgets,
+  dashboardWidgets,
+  type DashboardWidget,
+  type DashboardPayload,
+  type BuiltInWidgetId,
+} from './dashboard.js';
 
 export { defineAdminResource } from './define-resource.js';
 export type { ResourceDefinition, ResourceAction, PolicyEntry } from './define-resource.js';
 export type { SessionConfig, AdminSession } from './sessions.js';
-export type { DashboardWidget, DashboardPayload } from './dashboard.js';
+export type { DashboardWidget, DashboardPayload, BuiltInWidgetId } from './dashboard.js';
+export { dashboardWidgets } from './dashboard.js';
 
 export interface AdminOptions {
   /** GameDatabase instance — provides drizzle client + moderation. */
@@ -74,11 +82,37 @@ export interface AdminOptions {
   logger?: Logger | null;
 
   /**
-   * Dashboard widgets shown on the admin home page. Reuse a built-in id
-   * (totals / recentUsers / activeEvents / health) to override its data
-   * function; any new id appends a new card.
+   * Dashboard customization for the admin home page.
+   *
+   * Built-in widgets — `totals`, `recentUsers`, `activeEvents`, `health` —
+   * are auto-included by default and can be tuned three ways:
+   *
+   *   1. **Pick which to keep** with `builtIns`: e.g. `['health', 'recentUsers']`
+   *      drops `totals` (often noisy in real games) and `activeEvents`. Pass
+   *      `[]` to disable all built-ins and ship only your own widgets.
+   *   2. **Override by id** in `widgets`: a widget with `id: 'recentUsers'`
+   *      replaces the built-in's data fn while preserving order.
+   *   3. **Append new ids** in `widgets`: any unrecognized id is added at
+   *      the end — typical for game-specific KPIs.
+   *
+   * For composition, the built-ins are also exported as factory functions
+   * via `dashboardWidgets.{totals,recentUsers,activeEvents,health}` — pass
+   * one with custom options into your `widgets` array.
+   *
+   * @example
+   *   import { dashboardWidgets } from '@colyseus/admin';
+   *   dashboard: {
+   *     builtIns: ['health'],            // keep only the health widget
+   *     widgets: [
+   *       dashboardWidgets.recentUsers({ limit: 10 }),  // re-add, customized
+   *       { id: 'rooms', render: 'kpi', data: async () => ({ active: 5 }) },
+   *     ],
+   *   }
    */
   dashboard?: {
+    /** Built-in widget ids to auto-include. Default: all four. */
+    builtIns?: BuiltInWidgetId[];
+    /** Custom widgets — override built-ins by id, or append new ones. */
     widgets?: DashboardWidget[];
   };
 }
@@ -207,8 +241,9 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
     }
   });
 
-  // Pre-resolve widget set once at setup; the data fns close over `tables`.
-  const widgets = resolveWidgets(database, tables, opts.dashboard?.widgets);
+  // Pre-resolve widget set once at setup. `dashboard.builtIns` selects which
+  // defaults to include; `dashboard.widgets` overrides by id or appends.
+  const widgets = resolveWidgets(opts.dashboard?.builtIns, opts.dashboard?.widgets);
 
   // GET /admin-api/_dashboard — runs every widget and returns JSON to render.
   // Reads through the same auth resolver as CRUD endpoints; anonymous users

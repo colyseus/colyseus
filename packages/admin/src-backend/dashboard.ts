@@ -60,16 +60,43 @@ function humanize(id: string): string {
   return id.replace(/[_-]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function builtIns(database: GameDatabase, knownTables: Record<string, any>): DashboardWidget[] {
-  return [
-    {
+/**
+ * Built-in widget ids. Use as the discriminator for `dashboard.builtIns`.
+ */
+export type BuiltInWidgetId = 'totals' | 'recentUsers' | 'activeEvents' | 'health';
+
+/**
+ * Factory functions for the built-in widgets. Re-usable as composition
+ * primitives — call them directly inside your `widgets` array if you want
+ * a default widget at a non-default position, or wrap their data fn:
+ *
+ *   import { dashboardWidgets } from '@colyseus/admin';
+ *   dashboard: {
+ *     builtIns: [],          // skip the auto-injection
+ *     widgets: [
+ *       dashboardWidgets.health(),
+ *       dashboardWidgets.recentUsers({ limit: 10 }),
+ *       myCustomRoomsWidget,
+ *     ],
+ *   }
+ *
+ * Each factory accepts a small options bag to tune title/icon/limit without
+ * forking the whole widget.
+ */
+export const dashboardWidgets = {
+  totals(opts: { title?: string; icon?: string; only?: string[] } = {}): DashboardWidget {
+    return {
       id: 'totals',
-      title: 'Totals',
-      icon: 'pie-chart',
+      title: opts.title ?? 'Totals',
+      icon: opts.icon ?? 'pie-chart',
       render: 'kpi',
-      data: async () => {
+      data: async ({ database }) => {
+        const knownTables = database.tables as unknown as Record<string, any>;
+        const entries = opts.only
+          ? opts.only.map((k) => [k, knownTables[k]] as const).filter(([, t]) => !!t)
+          : Object.entries(knownTables);
         const out: Record<string, number> = {};
-        for (const [name, table] of Object.entries(knownTables)) {
+        for (const [name, table] of entries) {
           try {
             const rows = await database.drizzle
               .select({ c: sql<number>`count(*)` })
@@ -81,30 +108,36 @@ function builtIns(database: GameDatabase, knownTables: Record<string, any>): Das
         }
         return out;
       },
-    },
-    {
+    };
+  },
+
+  recentUsers(opts: { title?: string; icon?: string; limit?: number } = {}): DashboardWidget {
+    const limit = opts.limit ?? 5;
+    return {
       id: 'recentUsers',
-      title: 'Recent users',
-      icon: 'team',
+      title: opts.title ?? 'Recent users',
+      icon: opts.icon ?? 'team',
       render: 'table',
-      data: async () => {
+      data: async ({ database }) => {
         const users = database.tables.users;
-        // createdAt is a column on the default users table; respect a
-        // customized table that lacks it by falling back to "no order".
         const hasCreatedAt = !!(users as any)?.createdAt;
-        let q = database.drizzle.select().from(users).limit(5) as any;
+        let q = database.drizzle.select().from(users).limit(limit) as any;
         if (hasCreatedAt) { q = q.orderBy(desc((users as any).createdAt)); }
         const rows = await q;
         const columns = rows.length > 0 ? Object.keys(rows[0] as Record<string, any>) : [];
         return { columns, rows };
       },
-    },
-    {
+    };
+  },
+
+  activeEvents(opts: { title?: string; icon?: string; limit?: number } = {}): DashboardWidget {
+    const limit = opts.limit ?? 10;
+    return {
       id: 'activeEvents',
-      title: 'Active timed events',
-      icon: 'clock-circle',
+      title: opts.title ?? 'Active timed events',
+      icon: opts.icon ?? 'clock-circle',
       render: 'list',
-      data: async () => {
+      data: async ({ database }) => {
         const events = database.tables.timedEvents;
         const now = new Date();
         const rows = await database.drizzle
@@ -114,19 +147,22 @@ function builtIns(database: GameDatabase, knownTables: Record<string, any>): Das
             lte((events as any).startsAt, now),
             gte((events as any).endsAt, now),
           ))
-          .limit(10);
+          .limit(limit);
         return (rows as Array<{ id: string; name: string; endsAt: Date }>).map((r) => ({
           title: r.name,
           description: `id=${r.id} · ends ${new Date(r.endsAt).toISOString()}`,
         }));
       },
-    },
-    {
+    };
+  },
+
+  health(opts: { title?: string; icon?: string } = {}): DashboardWidget {
+    return {
       id: 'health',
-      title: 'Database health',
-      icon: 'heart',
+      title: opts.title ?? 'Database health',
+      icon: opts.icon ?? 'heart',
       render: 'kpi',
-      data: async () => {
+      data: async ({ database }) => {
         const start = Date.now();
         await database.drizzle
           .select({ one: sql<number>`1` })
@@ -134,21 +170,29 @@ function builtIns(database: GameDatabase, knownTables: Record<string, any>): Das
           .limit(0);
         return { status: 'ok', latency: `${Date.now() - start}ms` };
       },
-    },
-  ];
-}
+    };
+  },
+};
+
+const ALL_BUILT_INS: BuiltInWidgetId[] = ['totals', 'recentUsers', 'activeEvents', 'health'];
 
 /**
- * Merge user-provided widgets with the built-ins. Same-id widgets from the
- * user replace the built-in version; new ids are appended.
+ * Resolve the final widget set for a request.
+ *
+ * @param builtIns Which built-ins to auto-include. Defaults to all four.
+ *                 Pass `[]` to start with a blank slate.
+ * @param userWidgets User widgets — override a built-in by reusing its id, or
+ *                    append a new widget by giving it a fresh id.
  */
 export function resolveWidgets(
-  database: GameDatabase,
-  knownTables: Record<string, any>,
+  builtIns: BuiltInWidgetId[] | undefined,
   userWidgets: DashboardWidget[] = [],
 ): DashboardWidget[] {
+  const selected = builtIns ?? ALL_BUILT_INS;
   const merged = new Map<string, DashboardWidget>();
-  for (const w of builtIns(database, knownTables)) { merged.set(w.id, w); }
+  for (const id of selected) {
+    merged.set(id, dashboardWidgets[id]());
+  }
   for (const w of userWidgets) { merged.set(w.id, w); }
   return [...merged.values()];
 }
