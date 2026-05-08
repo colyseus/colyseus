@@ -10,7 +10,8 @@ import {
   ShowButton,
   DeleteButton,
 } from '@refinedev/antd';
-import { Table, Form, Input, InputNumber, DatePicker, Space, Descriptions, Tag, Button, Tabs, Empty, Tooltip, Typography, message } from 'antd';
+import { Table, Form, Input, InputNumber, DatePicker, Space, Descriptions, Tag, Button, Tabs, Empty, Tooltip, Typography, message, Popconfirm } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { useEffect, useState } from 'react';
@@ -142,42 +143,58 @@ function tryParseJson(raw: any): any {
 
 function ActionButton({ resource, action, rowId, onComplete }: {
   resource: string;
-  action: { name: string; label: string; perRow: boolean };
+  action: { name: string; label: string; perRow: boolean; confirm?: { title?: string; description?: string } };
   rowId?: string;
   onComplete?: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const { open } = useNotification();
-  return (
+
+  const run = async () => {
+    setBusy(true);
+    try {
+      const headers: HeadersInit = { 'content-type': 'application/json' };
+      const userId = localStorage.getItem('colyseus-admin-user-id') ?? '';
+      if (userId) { (headers as any)['X-User-Id'] = userId; }
+      const res = await fetch(`/admin-api/${resource}/_action/${action.name}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(rowId ? { id: rowId } : {}),
+      });
+      const text = await res.text();
+      if (!res.ok) {
+        open?.({ type: 'error', message: `${action.label} failed`, description: text });
+      } else {
+        open?.({ type: 'success', message: `${action.label} succeeded` });
+        onComplete?.();
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const button = (
     <Button
       size="small"
       data-testid={`action-${action.name}-${rowId ?? 'global'}`}
       loading={busy}
-      onClick={async () => {
-        setBusy(true);
-        try {
-          const headers: HeadersInit = { 'content-type': 'application/json' };
-          const userId = localStorage.getItem('colyseus-admin-user-id') ?? '';
-          if (userId) { (headers as any)['X-User-Id'] = userId; }
-          const res = await fetch(`/admin-api/${resource}/_action/${action.name}`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(rowId ? { id: rowId } : {}),
-          });
-          const text = await res.text();
-          if (!res.ok) {
-            open?.({ type: 'error', message: `${action.label} failed`, description: text });
-          } else {
-            open?.({ type: 'success', message: `${action.label} succeeded` });
-            onComplete?.();
-          }
-        } finally {
-          setBusy(false);
-        }
-      }}
+      onClick={action.confirm ? undefined : run}
     >
       {action.label}
     </Button>
+  );
+
+  if (!action.confirm) { return button; }
+  return (
+    <Popconfirm
+      title={action.confirm.title ?? `Run "${action.label}"?`}
+      description={action.confirm.description}
+      okText="Confirm"
+      cancelText="Cancel"
+      onConfirm={run}
+    >
+      {button}
+    </Popconfirm>
   );
 }
 
@@ -245,6 +262,26 @@ export function ListPage({ resources }: { resources: Resource[] }) {
           onRow={onRow as any}
           size="small"
           scroll={{ x: true }}
+          locale={{
+            emptyText: (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={
+                  currentQ
+                    ? `no ${def.label.toLowerCase()} matching "${currentQ}"`
+                    : `no ${def.label.toLowerCase()} yet`
+                }
+              >
+                {!currentQ && (
+                  <Link to={`/${resourceName}/create`}>
+                    <Button size="small" icon={<PlusOutlined />}>
+                      Create one
+                    </Button>
+                  </Link>
+                )}
+              </Empty>
+            ),
+          }}
         >
           {cols.map((c) => (
             <Table.Column key={c.name} dataIndex={c.name} title={c.name} render={(v) => format(v, c)} />
@@ -414,37 +451,70 @@ function RelatedTable({
   const targetPk = singlePk(targetDef);
   const cols = visibleColumns(targetDef, targetDef.listColumns);
 
+  // "+ New <target>" button — opens Create form on the target with the FK
+  // pre-filled via URL param, so support agents grant items / send mail
+  // without re-typing the userId.
+  const fk = relation.fk; // optional metadata not always present
+  const newHref = `/${relation.target}/create?_prefill_${fk ?? 'fk'}=${encodeURIComponent(parentId)}`;
+
   return (
-    <Table
-      size="small"
-      data-testid={`related-${relation.name}`}
-      loading={loading}
-      rowKey={(r, i) => (targetPk ? r[targetPk] : i) as any}
-      dataSource={rows}
-      pagination={{
-        current: page,
-        pageSize,
-        total,
-        onChange: setPage,
-        showSizeChanger: false,
-      }}
-      scroll={{ x: true }}
-    >
-      {cols.map((c) => (
-        <Table.Column
-          key={c.name}
-          title={c.name}
-          dataIndex={c.name}
-          render={(v, row: any) => {
-            // Make the PK column a link to the target's Show page
-            if (targetPk && c.name === targetPk) {
-              return <Link to={`/${relation.target}/show/${row[targetPk]}`}>{format(v, c)}</Link>;
-            }
-            return format(v, c);
-          }}
-        />
-      ))}
-    </Table>
+    <>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+        <Link to={newHref}>
+          <Button
+            size="small"
+            type="default"
+            icon={<PlusOutlined />}
+            data-testid={`new-related-${relation.name}`}
+          >
+            New {targetDef.label}
+          </Button>
+        </Link>
+      </div>
+      <Table
+        size="small"
+        data-testid={`related-${relation.name}`}
+        loading={loading}
+        rowKey={(r, i) => (targetPk ? r[targetPk] : i) as any}
+        dataSource={rows}
+        locale={{
+          emptyText: (
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={`no ${targetDef.label.toLowerCase()} yet`}
+            >
+              <Link to={newHref}>
+                <Button size="small" icon={<PlusOutlined />}>
+                  Create one
+                </Button>
+              </Link>
+            </Empty>
+          ),
+        }}
+        pagination={{
+          current: page,
+          pageSize,
+          total,
+          onChange: setPage,
+          showSizeChanger: false,
+        }}
+        scroll={{ x: true }}
+      >
+        {cols.map((c) => (
+          <Table.Column
+            key={c.name}
+            title={c.name}
+            dataIndex={c.name}
+            render={(v, row: any) => {
+              if (targetPk && c.name === targetPk) {
+                return <Link to={`/${relation.target}/show/${row[targetPk]}`}>{format(v, c)}</Link>;
+              }
+              return format(v, c);
+            }}
+          />
+        ))}
+      </Table>
+    </>
   );
 }
 
@@ -490,8 +560,14 @@ function OneRelationLink({
   );
 }
 
+/**
+ * Edit page mirrors the Show page layout: tabbed Profile + relation tabs.
+ * Editing happens on the Profile tab; the relation tabs reuse RelatedTable
+ * so support agents can navigate between a user's row and their saves /
+ * items / leaderboard entries without leaving the edit context.
+ */
 export function EditPage({ resources }: { resources: Resource[] }) {
-  const { resource: name } = useParams();
+  const { resource: name, id } = useParams();
   const def = findResource(resources, name);
   const { formProps, saveButtonProps, queryResult } = useForm({ resource: name, action: 'edit' });
 
@@ -503,15 +579,44 @@ export function EditPage({ resources }: { resources: Resource[] }) {
     if (isDate(c) && initialValues[c.name]) { initialValues[c.name] = dayjs(initialValues[c.name]); }
   }
 
+  const relations = def.relations ?? [];
+  const manyRels = relations.filter((r) => r.kind === 'many');
+
+  const formTab = (
+    <Form {...formProps} layout="vertical" initialValues={initialValues} data-testid={`edit-${name}`}>
+      <FormFields cols={cols} omitPrimary />
+    </Form>
+  );
+
+  if (manyRels.length === 0 || !id) {
+    return (
+      <Edit saveButtonProps={saveButtonProps} isLoading={queryResult?.isLoading}>
+        {formTab}
+      </Edit>
+    );
+  }
+
+  const items = [
+    { key: '__profile', label: 'Profile', children: formTab },
+    ...manyRels.map((rel) => ({
+      key: rel.name,
+      label: <RelationTabLabel parentResource={name!} parentId={id} relation={rel} />,
+      children: <RelatedTable parentResource={name!} parentId={id} relation={rel} resources={resources} />,
+    })),
+  ];
+
   return (
     <Edit saveButtonProps={saveButtonProps} isLoading={queryResult?.isLoading}>
-      <Form {...formProps} layout="vertical" initialValues={initialValues} data-testid={`edit-${name}`}>
-        <FormFields cols={cols} omitPrimary />
-      </Form>
+      <Tabs defaultActiveKey="__profile" items={items} data-testid={`edit-tabs-${name}`} />
     </Edit>
   );
 }
 
+/**
+ * Create form. Reads `?_prefill_<col>=<value>` query params to seed initial
+ * values — used by the "New related" button on relation tabs to pass the
+ * parent FK without manual entry.
+ */
 export function CreatePage({ resources }: { resources: Resource[] }) {
   const { resource: name } = useParams();
   const def = findResource(resources, name);
@@ -520,9 +625,23 @@ export function CreatePage({ resources }: { resources: Resource[] }) {
   if (!def) { return <div>unknown resource</div>; }
   const cols = visibleColumns(def, def.formFields);
 
+  // Pull `_prefill_*` params off the URL to seed initial values.
+  const search = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const prefill: Record<string, any> = {};
+  if (search) {
+    for (const [k, v] of search.entries()) {
+      if (k.startsWith('_prefill_')) { prefill[k.slice('_prefill_'.length)] = v; }
+    }
+  }
+
   return (
     <Create saveButtonProps={saveButtonProps}>
-      <Form {...formProps} layout="vertical" data-testid={`create-${name}`}>
+      <Form
+        {...formProps}
+        layout="vertical"
+        initialValues={prefill}
+        data-testid={`create-${name}`}
+      >
         <FormFields cols={cols} omitDefaulted />
       </Form>
     </Create>

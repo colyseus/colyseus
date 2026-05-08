@@ -274,7 +274,16 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
         // resource — otherwise we'd point the UI at endpoints that 404.
         const sourceRelations = (database.relations[name] ?? [])
           .filter((r) => !!tables[r.target])
-          .map((r) => ({ name: r.name, target: r.target, kind: r.kind }));
+          .map((r) => {
+            // The runtime `fk` is the drizzle JS field name (e.g. `userId`),
+            // which the relation endpoint accesses via `targetTable[fk]`.
+            // The frontend uses SQL column names for form fields, so look up
+            // and emit the SQL name here.
+            const targetTable = tables[r.target];
+            const col = targetTable ? (targetTable as any)[r.fk] : null;
+            const fkSql = (col && (col as any).name) ?? r.fk;
+            return { name: r.name, target: r.target, kind: r.kind, fk: fkSql };
+          });
         return {
           name,
           label: def?.label ?? humanize(name),
@@ -282,6 +291,11 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
           columns: cfg.columns.map((c: any) => ({
             name: c.name,
             type: typeof c.getSQLType === 'function' ? c.getSQLType() : 'text',
+            // dataType is the JS-side category ('date', 'json', 'number',
+            // 'string', 'boolean'). Distinguishes timestamp-mode integers
+            // from regular integers — `c.getSQLType()` would return
+            // 'integer' for both.
+            dataType: c.dataType ?? null,
             notNull: c.notNull,
             primary: c.primary,
             hasDefault: !!c.hasDefault || !!c.defaultFn,
@@ -294,6 +308,7 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
             name: a.name,
             label: a.label ?? a.name,
             perRow: !!a.perRow,
+            confirm: a.confirm,
           })),
           relations: sourceRelations,
         };

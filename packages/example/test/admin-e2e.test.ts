@@ -412,6 +412,73 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     await page.close();
   });
 
+  it('Edit page mirrors the Show layout with relation tabs', async () => {
+    const loginRes = await fetch(`${BASE}/admin-api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: BOOTSTRAP_EMAIL, password: BOOTSTRAP_PASSWORD }),
+    });
+    const cookieHeader = loginRes.headers.get('set-cookie')!.split(';')[0];
+    const usersRes = await fetch(`${BASE}/admin-api/users`, { headers: { cookie: cookieHeader } });
+    const userId = (await usersRes.json() as Array<{ id: string }>)[0]!.id;
+
+    const page = await browser!.newPage();
+    await page.setViewport({ width: 1400, height: 900 });
+    await page.goto(`${BASE}/admin/login`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-testid="login-email"]');
+    await page.type('input[data-testid="login-email"]', BOOTSTRAP_EMAIL);
+    await page.type('input[data-testid="login-password"]', BOOTSTRAP_PASSWORD);
+    await page.click('[data-testid="login-submit"]');
+    await page.waitForSelector('[data-testid="widget-recentUsers"]', { timeout: 15_000 });
+
+    await page.goto(`${BASE}/admin/users/edit/${userId}`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-testid="edit-tabs-users"]', { timeout: 10_000 });
+    await page.waitForSelector('[data-testid="edit-users"]', { timeout: 5_000 });
+    await page.waitForSelector('[data-testid="tab-relation-cloudSaves"]', { timeout: 5_000 });
+    await page.close();
+  });
+
+  it('"+ New related" button on a relation tab opens Create with FK pre-filled', async () => {
+    const loginRes = await fetch(`${BASE}/admin-api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: BOOTSTRAP_EMAIL, password: BOOTSTRAP_PASSWORD }),
+    });
+    const cookieHeader = loginRes.headers.get('set-cookie')!.split(';')[0];
+    const usersRes = await fetch(`${BASE}/admin-api/users`, { headers: { cookie: cookieHeader } });
+    const userId = (await usersRes.json() as Array<{ id: string }>)[0]!.id;
+
+    const page = await browser!.newPage();
+    await page.setViewport({ width: 1400, height: 900 });
+    await page.goto(`${BASE}/admin/login`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-testid="login-email"]');
+    await page.type('input[data-testid="login-email"]', BOOTSTRAP_EMAIL);
+    await page.type('input[data-testid="login-password"]', BOOTSTRAP_PASSWORD);
+    await page.click('[data-testid="login-submit"]');
+    await page.waitForSelector('[data-testid="widget-recentUsers"]', { timeout: 15_000 });
+
+    await page.goto(`${BASE}/admin/users/show/${userId}`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-testid="tab-relation-cloudSaves"]', { timeout: 10_000 });
+    await page.click('[data-testid="tab-relation-cloudSaves"]');
+    await page.waitForSelector('[data-testid="new-related-cloudSaves"]', { timeout: 5_000 });
+    await page.click('[data-testid="new-related-cloudSaves"]');
+    // landed on the cloudSaves Create page with prefill in the URL — fk is
+    // sent as the SQL column name (`user_id`), matching the form field name.
+    await page.waitForFunction(
+      () => /\/cloudSaves\/create\?_prefill_user_id=/.test(window.location.href),
+      { timeout: 5_000 },
+    );
+    await page.waitForSelector('[data-testid="create-cloudSaves"]', { timeout: 5_000 });
+
+    // The user_id field should carry the prefilled parent id
+    const userIdInput = await page.$eval(
+      '#user_id, [name="user_id"]',
+      (el: any) => el.value,
+    ).catch(() => null);
+    assert.ok(userIdInput && userIdInput.length > 0, `prefill should populate user_id, got: ${userIdInput}`);
+    await page.close();
+  });
+
   it('Show page renders relation tabs with counts and a one-relation link', async () => {
     // Login + navigate to a user's Show page; assert the cloudSaves and
     // playerItems tabs render, and the `role` one-relation appears as a

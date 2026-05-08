@@ -155,8 +155,11 @@ export const shadcnTheme: ThemeConfig = {
       borderRadiusLG: 10,
     },
     Pagination: {
-      itemActiveBg: zinc[900],
-      itemBg: 'transparent',
+      // Active item: light gray background + the dark border, matches the
+      // rest of the theme (Menu's `itemSelectedBg`). Previously zinc[900] —
+      // the page number text inherited dark color and disappeared.
+      itemActiveBg: zinc[100],
+      itemBg: '#ffffff',
     },
     Typography: {
       titleMarginTop: 0,

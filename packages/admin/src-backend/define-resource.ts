@@ -20,6 +20,16 @@ export interface ResourceAction {
   roles?: Role[];
   /** If true, requires a row id; UI shows it as a row-level action. */
   perRow?: boolean;
+  /**
+   * If set, the UI prompts before invoking the action. Use for destructive
+   * or expensive operations (refunds, bans, item revokes).
+   */
+  confirm?: {
+    /** Popconfirm title — defaults to `Run "<label>"?`. */
+    title?: string;
+    /** Optional supporting copy shown below the title. */
+    description?: string;
+  };
 }
 
 export type PolicyEntry =
