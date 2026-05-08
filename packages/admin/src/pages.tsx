@@ -27,6 +27,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsUpDown,
+  Eye,
   Filter as FilterIcon,
   Loader2,
   Pencil,
@@ -267,6 +268,11 @@ export function ListPage({ resources }: { resources: Resource[] }) {
                   {pk && (
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
+                        <Button asChild variant="ghost" size="icon">
+                          <Link to={`/${resourceName}/show/${row[pk]}`} aria-label="view">
+                            <Eye />
+                          </Link>
+                        </Button>
                         <Button asChild variant="ghost" size="icon">
                           <Link to={`/${resourceName}/edit/${row[pk]}`} aria-label="edit">
                             <Pencil />
@@ -1028,7 +1034,13 @@ function FormBody({
     <form onSubmit={submit} className="space-y-4" data-testid={dataTestId}>
       {visible.map((c) => {
         const rel = fkRelByCol.get(c.name);
-        const required = c.notNull && !c.primary && !c.hasDefault;
+        // A column is required when (NOT NULL or PK) and no default. PKs
+        // are non-null by definition; some drizzle column definitions
+        // don't add `.notNull()` to PKs explicitly, so we treat `primary`
+        // as implying required when there's no default. Previously a
+        // user could create a leaderboard with an empty id, leaving
+        // /admin/leaderboards/edit/ unreachable.
+        const required = (c.notNull || c.primary) && !c.hasDefault;
         return (
           <div key={c.name} className="space-y-1.5">
             <Label htmlFor={`f-${c.name}`}>

@@ -11,38 +11,74 @@
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
+    --foreground: 240 10% 8%;
 
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
+    --card-foreground: 240 10% 8%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
+    --popover-foreground: 240 10% 8%;
 
-    --primary: 240 5.9% 10%;
+    /* Slightly warmer, less stark than near-black — softens primary
+     * buttons, sort/filter affordances, and active focus rings against
+     * the white surface. */
+    --primary: 240 6% 18%;
     --primary-foreground: 0 0% 98%;
 
     --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
+    --secondary-foreground: 240 5.9% 12%;
 
     --muted: 240 4.8% 95.9%;
     --muted-foreground: 240 3.8% 46.1%;
 
     --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
+    --accent-foreground: 240 5.9% 12%;
 
     --destructive: 0 72.2% 50.6%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 240 5.9% 10%;
+    /* Lighter borders — was 90% (zinc-200), now 92% (between zinc 100/200).
+     * The previous value combined with our card+table-row stack made
+     * surfaces feel heavily outlined. */
+    --border: 240 5% 92%;
+    --input: 240 5% 92%;
+    --ring: 240 6% 18%;
 
     --radius: 0.5rem;
 
     /* Custom semantic tokens we use in tables / dashboards */
     --success: 142 71% 45%;
     --warning: 38 92% 50%;
+  }
+
+  .dark {
+    --background: 240 10% 4%;
+    --foreground: 0 0% 98%;
+
+    --card: 240 10% 6%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 240 10% 6%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 5.9% 12%;
+
+    --secondary: 240 4% 15%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 240 4% 14%;
+    --muted-foreground: 240 5% 64.9%;
+
+    --accent: 240 4% 16%;
+    --accent-foreground: 0 0% 98%;
+
+    --destructive: 0 62.8% 45%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 240 4% 18%;
+    --input: 240 4% 18%;
+    --ring: 240 5% 84%;
   }
 }
 

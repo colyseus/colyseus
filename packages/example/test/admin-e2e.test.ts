@@ -639,6 +639,42 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     await page.close();
   });
 
+  it('row actions include View, Edit, Delete', async () => {
+    const page = await browser!.newPage();
+    await page.setViewport({ width: 1400, height: 900 });
+    await page.goto(`${BASE}/admin/login`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-testid="login-email"]');
+    await page.type('input[data-testid="login-email"]', BOOTSTRAP_EMAIL);
+    await page.type('input[data-testid="login-password"]', BOOTSTRAP_PASSWORD);
+    await page.click('[data-testid="login-submit"]');
+    await page.waitForSelector('[data-testid="widget-recentUsers"]', { timeout: 15_000 });
+
+    await page.goto(`${BASE}/admin/users`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-testid="list-users"] tbody tr[data-row-id]', { timeout: 10_000 });
+
+    // Three icon buttons in the actions column: view, edit, delete
+    const actionLabels = await page.$$eval(
+      '[data-testid="list-users"] tbody tr[data-row-id]:first-child td:last-child a, [data-testid="list-users"] tbody tr[data-row-id]:first-child td:last-child button',
+      (els) => els.map((e) => (e.getAttribute('aria-label') ?? '')),
+    );
+    assert.ok(actionLabels.includes('view'), `expected view button, got: ${actionLabels.join(', ')}`);
+    assert.ok(actionLabels.includes('edit'), `expected edit button, got: ${actionLabels.join(', ')}`);
+    assert.ok(actionLabels.includes('delete'), `expected delete button, got: ${actionLabels.join(', ')}`);
+    await page.close();
+  });
+
+  it('theme toggle is reachable from the header', async () => {
+    const page = await browser!.newPage();
+    await page.setViewport({ width: 1400, height: 900 });
+    await page.goto(`${BASE}/admin/login`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-testid="login-email"]');
+    await page.type('input[data-testid="login-email"]', BOOTSTRAP_EMAIL);
+    await page.type('input[data-testid="login-password"]', BOOTSTRAP_PASSWORD);
+    await page.click('[data-testid="login-submit"]');
+    await page.waitForSelector('[data-testid="theme-toggle"]', { timeout: 15_000 });
+    await page.close();
+  });
+
   it('admin UI table renders custom column headers', async () => {
     const page = await browser!.newPage();
     await page.setViewport({ width: 1400, height: 900 });

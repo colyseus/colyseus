@@ -16,6 +16,8 @@ import { LoginPage } from './LoginPage';
 import { SetupPage } from './SetupPage';
 import { SignInGate } from './SignInGate';
 import { UserHeader } from './UserHeader';
+import { ThemeToggle } from './ThemeToggle';
+import { ThemeProvider } from '@/lib/theme-provider';
 import { LayoutDashboard } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -57,6 +59,7 @@ export function App() {
   }
 
   return (
+    <ThemeProvider>
     <BrowserRouter basename="/admin">
       <Refine
         dataProvider={provider}
@@ -100,6 +103,7 @@ export function App() {
         <Toaster position="bottom-right" richColors closeButton />
       </Refine>
     </BrowserRouter>
+    </ThemeProvider>
   );
 }
 
@@ -115,6 +119,7 @@ function ProtectedShell({ resources }: { resources: Resource[] }) {
       <Sidebar resources={resources} />
       <div className="flex flex-1 flex-col">
         <header className="flex h-14 items-center justify-end gap-3 border-b bg-background px-6">
+          <ThemeToggle />
           <UserHeader />
         </header>
         <main className="flex-1 p-6">
