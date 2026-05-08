@@ -3,11 +3,15 @@
  * GameDatabase via `segments: [...]` so admin tools and broadcast/mail/AB
  * features can target them by id.
  *
- * Resolvers re-run against the live DB each call. For expensive segments,
- * cache externally (e.g. a cron snapshot).
+ * The `createSegmentDefiner<typeof schema>()` factory captures our schema
+ * once, so `tables` and `drizzle` are strictly typed inside every resolver
+ * — autocomplete on `tables.users.level`, row shape inferred on `.select()`.
  */
-import { defineSegment } from "@colyseus/database";
+import { createSegmentDefiner } from "@colyseus/database";
 import { eq, gte, lt, and } from "drizzle-orm";
+import * as schema from "./schema.ts";
+
+const defineSegment = createSegmentDefiner<typeof schema>();
 
 /** Newly registered players (level still 1 — i.e. tutorial cohort). */
 export const newPlayers = defineSegment("newPlayers", {
@@ -17,7 +21,7 @@ export const newPlayers = defineSegment("newPlayers", {
       .select({ id: tables.users.id })
       .from(tables.users)
       .where(eq(tables.users.level, 1));
-    return rows.map((r: { id: string }) => r.id);
+    return rows.map((r) => r.id);
   },
 });
 
@@ -29,7 +33,7 @@ export const veterans = defineSegment("veterans", {
       .select({ id: tables.users.id })
       .from(tables.users)
       .where(gte(tables.users.level, 10));
-    return rows.map((r: { id: string }) => r.id);
+    return rows.map((r) => r.id);
   },
 });
 
@@ -41,6 +45,6 @@ export const climbing = defineSegment("climbing", {
       .select({ id: tables.users.id })
       .from(tables.users)
       .where(and(gte(tables.users.level, 2), lt(tables.users.level, 10)));
-    return rows.map((r: { id: string }) => r.id);
+    return rows.map((r) => r.id);
   },
 });

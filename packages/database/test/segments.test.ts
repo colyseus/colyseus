@@ -11,7 +11,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import { eq, gte } from 'drizzle-orm';
-import { GameDatabase, defineSegment, tables as schemaFactories } from '../src/index.ts';
+import {
+  GameDatabase,
+  defineSegment,
+  createSegmentDefiner,
+  tables as schemaFactories,
+} from '../src/index.ts';
 import { integer, text } from 'drizzle-orm/sqlite-core';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -134,6 +139,35 @@ describe('SegmentsService', () => {
       segments: [lowLevel, lowLevel],
     });
     await assert.rejects(() => db.boot(), /duplicate segment id: lowLevel/);
+  });
+
+  it('createSegmentDefiner<S>() strictly types tables + drizzle inside resolve', async () => {
+    // Compile-time assertions: building a definer over a custom schema must
+    // expose `tables.users.level` (the custom column) without `as any`, and
+    // accesses to non-existent columns must FAIL to compile. If the generic
+    // threading regresses, the @ts-expect-error firing or NOT firing breaks
+    // the build.
+    const localSchema = { users };
+    const defineForSchema = createSegmentDefiner<typeof localSchema>();
+
+    const seg = defineForSchema('typed', {
+      resolve: async ({ drizzle, tables }) => {
+        // tables.users is `typeof users` — `.level` exists at the type level.
+        const _level = tables.users.level;
+        // drizzle.select() chain infers row shape from the projection.
+        const rows = await drizzle
+          .select({ id: tables.users.id })
+          .from(tables.users)
+          .where(eq(tables.users.level, 1));
+        // @ts-expect-error — `nonexistent` is not a column on the custom users table
+        const _bad = tables.users.nonexistent;
+        // @ts-expect-error — `notATable` is not in the schema barrel
+        const _bad2 = tables.notATable;
+        return rows.map((r) => r.id);
+      },
+    });
+
+    assert.equal(seg.id, 'typed');
   });
 
   it('reflects state changes between calls (no stale caching at the service level)', async () => {

@@ -7,8 +7,13 @@ export type { Item, PlayerItem } from './services/ItemsService.ts';
 export type { TimedEvent } from './services/TimedEventsService.ts';
 export type { RetentionResult, FunnelStep } from './services/AnalyticsService.ts';
 export type { Role, Action } from './services/ModerationService.ts';
-export { defineSegment } from './segments.ts';
-export type { SegmentDefinition, SegmentResolveContext } from './segments.ts';
+export { defineSegment, createSegmentDefiner } from './segments.ts';
+export type {
+  SegmentDefinition,
+  SegmentResolveContext,
+  SegmentDefiner,
+  DrizzleFor,
+} from './segments.ts';
 
 // Spreadable base columns per dialect for user schema customization
 export {
