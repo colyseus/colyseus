@@ -9,7 +9,8 @@ import routerProvider from '@refinedev/react-router';
 import { BrowserRouter, Routes, Route, Outlet } from 'react-router-dom';
 import axios from 'axios';
 import type { Resource } from './types';
-import { ListPage, ShowPage, EditPage, CreatePage, Welcome } from './pages';
+import { ListPage, ShowPage, EditPage, CreatePage } from './pages';
+import { Dashboard } from './Dashboard';
 import { iconFor } from './icons';
 import { shadcnTheme } from './theme';
 import { authProvider } from './authProvider';
@@ -90,7 +91,7 @@ export function App() {
                 </Authenticated>
               }
             >
-              <Route path="/" element={<Welcome resources={resources} />} />
+              <Route path="/" element={<Dashboard />} />
               <Route path=":resource" element={<ListPage resources={resources} />} />
               <Route path=":resource/show/:id" element={<ShowPage resources={resources} />} />
               <Route path=":resource/edit/:id" element={<EditPage resources={resources} />} />

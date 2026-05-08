@@ -152,8 +152,11 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     await page.type('input[data-testid="login-password"]', BOOTSTRAP_PASSWORD);
     await page.click('[data-testid="login-submit"]');
 
-    // Login lands on /. Click the users menu item to navigate to the list.
-    await page.waitForSelector('.ant-menu-item a[href$="/users"]', { timeout: 15_000 });
+    // Login lands on /. Wait for the dashboard data to render before clicking
+    // the menu — its async re-render reflows AntD's layout and detaches nodes
+    // grabbed before settle.
+    await page.waitForSelector('[data-testid="widget-totals"]', { timeout: 15_000 });
+    await page.waitForSelector('.ant-menu-item a[href$="/users"]', { timeout: 5_000 });
     await page.click('.ant-menu-item a[href$="/users"]');
 
     await page.waitForSelector('[data-testid="list-users"] .ant-table-row', { timeout: 10_000 });
@@ -173,6 +176,7 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     await page.type('input[data-testid="login-email"]', BOOTSTRAP_EMAIL);
     await page.type('input[data-testid="login-password"]', BOOTSTRAP_PASSWORD);
     await page.click('[data-testid="login-submit"]');
+    await page.waitForSelector('[data-testid="widget-totals"]', { timeout: 15_000 });
     await page.waitForSelector('[data-testid="logout-button"]', { timeout: 10_000 });
 
     await page.click('[data-testid="logout-button"]');
@@ -242,6 +246,57 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     assert.ok(colNames.includes('email'), 'built-in email column should still be there');
   });
 
+  it('dashboard endpoint returns built-in + custom widgets', async () => {
+    // app.config.ts overrides `health` and adds `rooms` via dashboard.widgets.
+    const loginRes = await fetch(`${BASE}/admin-api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: BOOTSTRAP_EMAIL, password: BOOTSTRAP_PASSWORD }),
+    });
+    const cookieHeader = loginRes.headers.get('set-cookie')!.split(';')[0];
+
+    const res = await fetch(`${BASE}/admin-api/_dashboard`, {
+      headers: { cookie: cookieHeader },
+    });
+    assert.equal(res.status, 200);
+    const payload = await res.json() as {
+      widgets: Array<{ id: string; render: string; data: any; error?: string }>;
+    };
+    const ids = payload.widgets.map((w) => w.id);
+    // built-ins still present (totals, recentUsers, activeEvents)
+    assert.ok(ids.includes('totals'));
+    assert.ok(ids.includes('recentUsers'));
+    // overridden built-in (health) carries the user's data shape
+    const health = payload.widgets.find((w) => w.id === 'health')!;
+    assert.ok(health, 'health widget should still exist after override');
+    assert.equal(health.error, undefined);
+    assert.ok('uptime' in (health.data as any), `health override should expose uptime, got: ${JSON.stringify(health.data)}`);
+    // appended custom widget
+    const rooms = payload.widgets.find((w) => w.id === 'rooms');
+    assert.ok(rooms, 'custom rooms widget should be in the payload');
+    assert.equal(rooms!.error, undefined);
+  });
+
+  it('dashboard renders built-in + custom widget cards in the UI', async () => {
+    const page = await browser!.newPage();
+    await page.setViewport({ width: 1400, height: 900 });
+    await page.goto(`${BASE}/admin/login`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-testid="login-email"]');
+    await page.type('input[data-testid="login-email"]', BOOTSTRAP_EMAIL);
+    await page.type('input[data-testid="login-password"]', BOOTSTRAP_PASSWORD);
+    await page.click('[data-testid="login-submit"]');
+
+    // built-in totals card
+    await page.waitForSelector('[data-testid="widget-totals"]', { timeout: 15_000 });
+    // built-in recentUsers (table render)
+    await page.waitForSelector('[data-testid="widget-recentUsers"]', { timeout: 5_000 });
+    // overridden built-in: still rendered
+    await page.waitForSelector('[data-testid="widget-health"]', { timeout: 5_000 });
+    // appended custom widget
+    await page.waitForSelector('[data-testid="widget-rooms"]', { timeout: 5_000 });
+    await page.close();
+  });
+
   it('admin UI table renders custom column headers', async () => {
     const page = await browser!.newPage();
     await page.setViewport({ width: 1400, height: 900 });
@@ -250,7 +305,8 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     await page.type('input[data-testid="login-email"]', BOOTSTRAP_EMAIL);
     await page.type('input[data-testid="login-password"]', BOOTSTRAP_PASSWORD);
     await page.click('[data-testid="login-submit"]');
-    await page.waitForSelector('.ant-menu-item a[href$="/users"]', { timeout: 15_000 });
+    await page.waitForSelector('[data-testid="widget-totals"]', { timeout: 15_000 });
+    await page.waitForSelector('.ant-menu-item a[href$="/users"]', { timeout: 5_000 });
     await page.click('.ant-menu-item a[href$="/users"]');
     await page.waitForSelector('[data-testid="list-users"] .ant-table-thead', { timeout: 10_000 });
 

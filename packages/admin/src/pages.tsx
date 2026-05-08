@@ -244,12 +244,3 @@ export function CreatePage({ resources }: { resources: Resource[] }) {
   );
 }
 
-export function Welcome({ resources }: { resources: Resource[] }) {
-  return (
-    <div data-testid="welcome">
-      <h2>Colyseus Admin</h2>
-      <p>{resources.length} resources discovered.</p>
-      <p>Pick one from the sidebar.</p>
-    </div>
-  );
-}

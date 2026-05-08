@@ -20,6 +20,7 @@ import {
   ClockCircleOutlined,
   LineChartOutlined,
   BarChartOutlined,
+  PieChartOutlined,
   FileTextOutlined,
   SafetyOutlined,
   KeyOutlined,
@@ -37,6 +38,9 @@ import {
   SkinOutlined,
   NodeIndexOutlined,
   DatabaseOutlined,
+  HeartOutlined,
+  ClusterOutlined,
+  DashboardOutlined,
 } from '@ant-design/icons';
 import type React from 'react';
 
@@ -55,6 +59,10 @@ const MAP: Record<string, React.ReactElement> = {
   'clock-circle': <ClockCircleOutlined />,
   'line-chart': <LineChartOutlined />,
   'bar-chart': <BarChartOutlined />,
+  'pie-chart': <PieChartOutlined />,
+  dashboard: <DashboardOutlined />,
+  heart: <HeartOutlined />,
+  cluster: <ClusterOutlined />,
   'file-text': <FileTextOutlined />,
   safety: <SafetyOutlined />,
   key: <KeyOutlined />,

@@ -270,7 +270,30 @@ export const server = config({
   routes: createRouter({
     // Admin panel + REST. Browse to http://localhost:2567/admin/.
     // Send `X-User-Id: <id>` to authenticate; POST /admin-seed to bootstrap one.
-    ...adminEndpoints({ database }),
+    ...adminEndpoints({
+      database,
+      dashboard: {
+        widgets: [
+          {
+            // Reuse a built-in id to override its data fn — replaces the
+            // default `health` widget.
+            id: 'health',
+            title: 'System health',
+            icon: 'heart',
+            render: 'kpi',
+            data: async () => ({ db: 'ok', uptime: `${Math.round(process.uptime())}s` }),
+          },
+          {
+            // New widget id — appended alongside the defaults.
+            id: 'rooms',
+            title: 'Rooms',
+            icon: 'cluster',
+            render: 'kpi',
+            data: async () => ({ active: matchMaker.driver.rooms?.length ?? 0 }),
+          },
+        ],
+      },
+    }),
     adminSeed: createEndpoint("/admin-seed", { method: "POST" }, async () => {
       return seedAdminAndMod();
     }),

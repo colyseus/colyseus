@@ -13,10 +13,12 @@ import type { ResourceDefinition } from './define-resource.js';
 import { authEndpoints } from './auth.js';
 import { readSessionFromHeader, type SessionConfig } from './sessions.js';
 import { logger as defaultLogger, withRequestLogger, type Logger } from './logger.js';
+import { resolveWidgets, runWidgets, type DashboardWidget, type DashboardPayload } from './dashboard.js';
 
 export { defineAdminResource } from './define-resource.js';
 export type { ResourceDefinition, ResourceAction, PolicyEntry } from './define-resource.js';
 export type { SessionConfig, AdminSession } from './sessions.js';
+export type { DashboardWidget, DashboardPayload } from './dashboard.js';
 
 export interface AdminOptions {
   /** GameDatabase instance — provides drizzle client + moderation. */
@@ -70,6 +72,15 @@ export interface AdminOptions {
    * to integrate with your existing logging stack.
    */
   logger?: Logger | null;
+
+  /**
+   * Dashboard widgets shown on the admin home page. Reuse a built-in id
+   * (totals / recentUsers / activeEvents / health) to override its data
+   * function; any new id appends a new card.
+   */
+  dashboard?: {
+    widgets?: DashboardWidget[];
+  };
 }
 
 /**
@@ -104,11 +115,14 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
   const sessionConfig = opts.session ?? {};
   const logger = opts.logger === null ? null : (opts.logger ?? defaultLogger);
 
-  // Resolve tables. Default to GameDatabase's resolved schemas.
-  const tables = opts.tables ?? database.tables;
-  if (!tables) {
+  const resolvedTables = opts.tables ?? database.tables;
+  if (!resolvedTables) {
     throw new Error('[adminEndpoints] no tables provided — pass `tables` or call database.boot() first');
   }
+  // Cast to a string-indexable map: GameDatabase types `tables` as a strict
+  // mapped record (no string index signature) but the path-param lookup needs
+  // a string key.
+  const tables = resolvedTables as Record<string, any>;
 
   // Index resources by their underlying drizzle table name
   const resources = Object.fromEntries(
@@ -193,9 +207,25 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
     }
   });
 
+  // Pre-resolve widget set once at setup; the data fns close over `tables`.
+  const widgets = resolveWidgets(database, tables, opts.dashboard?.widgets);
+
+  // GET /admin-api/_dashboard — runs every widget and returns JSON to render.
+  // Reads through the same auth resolver as CRUD endpoints; anonymous users
+  // see 401 and the SignInGate kicks them to /login.
+  const dashboardEndpoint = createEndpoint(`${apiPath}/_dashboard`, { method: 'GET' }, async (ctx) => {
+    const userId = await resolveUserId({ getHeader: ctx.getHeader });
+    if (enforceRbac && !userId) {
+      return errorResponse(401, 'not authenticated — sign in at /admin/login');
+    }
+    const payload = await runWidgets(widgets, { database, userId: userId ?? '' });
+    return json(payload);
+  });
+
   return {
     ...auth,
     adminHealthcheck: healthcheck,
+    adminDashboard: dashboardEndpoint,
 
     // GET /admin-api → resource catalog
     adminResources: createEndpoint(apiPath, { method: 'GET' }, async () => {
