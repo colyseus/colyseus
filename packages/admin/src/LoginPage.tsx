@@ -5,56 +5,86 @@
  */
 import { useState } from 'react';
 import { useLogin } from '@refinedev/core';
-import { Card, Form, Input, Button, Typography, Alert, Space } from 'antd';
+import { Loader2 } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 
 export function LoginPage() {
-  const { mutate: login, isLoading } = useLogin();
+  const { mutate: login, isLoading } = useLogin<{ email: string; password: string }>();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
 
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    login(
+      { email, password },
+      {
+        onSuccess: (data) => {
+          if (data?.success === false) {
+            setError(data.error?.message ?? 'Sign in failed');
+          }
+        },
+      },
+    );
+  };
+
   return (
-    <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#fafafa' }}>
-      <Card style={{ width: 380 }} data-testid="login-card">
-        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-          <Typography.Title level={3} style={{ margin: 0 }}>Sign in</Typography.Title>
-          <Typography.Text type="secondary">Colyseus Admin</Typography.Text>
-          {error && <Alert type="error" message={error} showIcon closable onClose={() => setError(null)} />}
-          <Form
-            layout="vertical"
-            onFinish={(values) =>
-              login(values, {
-                onSuccess: (data) => {
-                  if (data?.success === false) {
-                    setError(data.error?.message ?? 'Sign in failed');
-                  }
-                },
-              })
-            }
-          >
-            <Form.Item
-              label="Email"
-              name="email"
-              rules={[{ required: true, type: 'email', message: 'Enter a valid email' }]}
+    <div className="min-h-screen grid place-items-center bg-background">
+      <Card className="w-[380px]" data-testid="login-card">
+        <CardHeader>
+          <CardTitle>Sign in</CardTitle>
+          <CardDescription>Colyseus Admin</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {error && (
+            <div
+              role="alert"
+              className="mb-4 rounded-md border border-destructive/50 bg-destructive/5 p-3 text-sm text-destructive"
             >
-              <Input data-testid="login-email" autoComplete="email" autoFocus />
-            </Form.Item>
-            <Form.Item
-              label="Password"
-              name="password"
-              rules={[{ required: true, message: 'Enter your password' }]}
-            >
-              <Input.Password data-testid="login-password" autoComplete="current-password" />
-            </Form.Item>
+              {error}
+            </div>
+          )}
+          <form onSubmit={submit} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="login-email">Email</Label>
+              <Input
+                id="login-email"
+                type="email"
+                autoComplete="email"
+                autoFocus
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                data-testid="login-email"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="login-password">Password</Label>
+              <Input
+                id="login-password"
+                type="password"
+                autoComplete="current-password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                data-testid="login-password"
+              />
+            </div>
             <Button
-              type="primary"
-              htmlType="submit"
-              loading={isLoading}
-              block
+              type="submit"
+              className="w-full"
+              disabled={isLoading}
               data-testid="login-submit"
             >
+              {isLoading && <Loader2 className="animate-spin" />}
               Sign in
             </Button>
-          </Form>
-        </Space>
+          </form>
+        </CardContent>
       </Card>
     </div>
   );

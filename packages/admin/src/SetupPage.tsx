@@ -9,67 +9,94 @@
  */
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, Form, Input, Button, Typography, Alert, Space } from 'antd';
+import { Loader2 } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 
 export function SetupPage() {
   const navigate = useNavigate();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch('/admin-api/auth/bootstrap', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      if (res.ok) { navigate('/', { replace: true }); return; }
+      const body = await res.json().catch(() => ({}));
+      setError(body.error || `Setup failed (${res.status})`);
+    } catch (err: any) {
+      setError(err?.message ?? 'Setup failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
-    <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#fafafa' }}>
-      <Card style={{ width: 420 }} data-testid="setup-card">
-        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-          <Typography.Title level={3} style={{ margin: 0 }}>Welcome — create the first admin</Typography.Title>
-          <Typography.Text type="secondary">
+    <div className="min-h-screen grid place-items-center bg-background">
+      <Card className="w-[420px]" data-testid="setup-card">
+        <CardHeader>
+          <CardTitle>Welcome — create the first admin</CardTitle>
+          <CardDescription>
             This panel doesn't have any administrator yet. The account you create here will own the database.
-          </Typography.Text>
-          {error && <Alert type="error" message={error} showIcon closable onClose={() => setError(null)} />}
-          <Form
-            layout="vertical"
-            onFinish={async (values) => {
-              setBusy(true);
-              setError(null);
-              try {
-                const res = await fetch('/admin-api/auth/bootstrap', {
-                  method: 'POST',
-                  credentials: 'include',
-                  headers: { 'content-type': 'application/json' },
-                  body: JSON.stringify(values),
-                });
-                if (res.ok) {
-                  navigate('/', { replace: true });
-                  return;
-                }
-                const body = await res.json().catch(() => ({}));
-                setError(body.error || `Setup failed (${res.status})`);
-              } catch (e: any) {
-                setError(e?.message ?? 'Setup failed');
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            <Form.Item
-              label="Admin email"
-              name="email"
-              rules={[{ required: true, type: 'email', message: 'Enter a valid email' }]}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {error && (
+            <div
+              role="alert"
+              className="mb-4 rounded-md border border-destructive/50 bg-destructive/5 p-3 text-sm text-destructive"
             >
-              <Input data-testid="setup-email" autoComplete="email" autoFocus />
-            </Form.Item>
-            <Form.Item
-              label="Password"
-              name="password"
-              rules={[{ required: true, min: 8, message: 'At least 8 characters' }]}
-              extra="Choose something strong — there's no recovery flow yet."
-            >
-              <Input.Password data-testid="setup-password" autoComplete="new-password" />
-            </Form.Item>
-            <Button type="primary" htmlType="submit" loading={busy} block data-testid="setup-submit">
+              {error}
+            </div>
+          )}
+          <form onSubmit={submit} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="setup-email">Admin email</Label>
+              <Input
+                id="setup-email"
+                type="email"
+                autoComplete="email"
+                autoFocus
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                data-testid="setup-email"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="setup-password">Password</Label>
+              <Input
+                id="setup-password"
+                type="password"
+                autoComplete="new-password"
+                minLength={8}
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                data-testid="setup-password"
+              />
+              <p className="text-xs text-muted-foreground">
+                At least 8 characters. There's no recovery flow yet.
+              </p>
+            </div>
+            <Button type="submit" className="w-full" disabled={busy} data-testid="setup-submit">
+              {busy && <Loader2 className="animate-spin" />}
               Create admin
             </Button>
-          </Form>
-        </Space>
+          </form>
+        </CardContent>
       </Card>
     </div>
   );
