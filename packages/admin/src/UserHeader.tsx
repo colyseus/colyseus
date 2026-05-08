@@ -6,9 +6,11 @@
  * to swap roles fast without going through login).
  */
 import { useGetIdentity, useLogout } from '@refinedev/core';
-import { Button, Space, Tag, Typography, Input } from 'antd';
-import { LogoutOutlined } from '@ant-design/icons';
+import { LogOut } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 
 interface Identity {
   userId: string;
@@ -25,27 +27,20 @@ export function UserHeader() {
 
   if (!identity) { return null; }
 
+  const variant: 'success' | 'info' | 'secondary' =
+    identity.role === 'admin' ? 'success' :
+    identity.role === 'mod' ? 'info' : 'secondary';
+
   return (
-    <Space size="middle">
+    <div className="flex items-center gap-3">
       {isDev && <DevImpersonateInput />}
-      <Tag color={
-        identity.role === 'admin' ? 'green' :
-        identity.role === 'mod' ? 'blue' : 'default'
-      }>
-        {identity.role}
-      </Tag>
-      <Typography.Text type="secondary" style={{ fontSize: 13, fontFamily: 'monospace' }}>
-        {identity.userId}
-      </Typography.Text>
-      <Button
-        size="small"
-        icon={<LogoutOutlined />}
-        onClick={() => logout()}
-        data-testid="logout-button"
-      >
+      <Badge variant={variant}>{identity.role}</Badge>
+      <span className="text-xs text-muted-foreground font-mono">{identity.userId}</span>
+      <Button size="sm" variant="outline" onClick={() => logout()} data-testid="logout-button">
+        <LogOut />
         Sign out
       </Button>
-    </Space>
+    </div>
   );
 }
 
@@ -54,8 +49,7 @@ function DevImpersonateInput() {
   useEffect(() => { localStorage.setItem('colyseus-admin-user-id', v); }, [v]);
   return (
     <Input
-      size="small"
-      style={{ width: 320, fontFamily: 'monospace' }}
+      className="w-80 font-mono text-xs h-8"
       value={v}
       onChange={(e) => setV(e.target.value)}
       data-testid="user-id-input"
