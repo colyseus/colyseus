@@ -55,7 +55,7 @@ import {
 } from '@/components/ui/table';
 import {
   type Column, type Resource, type ResourceRelation,
-  singlePk, isJsonish, isNumeric, isDate, isBoolean,
+  singlePk, rowId, isJsonish, isNumeric, isDate, isBoolean,
 } from './types';
 import { cn } from '@/lib/utils';
 
@@ -276,7 +276,7 @@ export function ListPage({ resources }: { resources: Resource[] }) {
                     />
                   </TableHead>
                 ))}
-                {pk && (
+                {def.primaryKey.length > 0 && (
                   <TableHead
                     className={cn(
                       'w-[1%] whitespace-nowrap text-right',
@@ -292,56 +292,57 @@ export function ListPage({ resources }: { resources: Resource[] }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map((row, i) => (
-                <TableRow
-                  key={pk ? row[pk] : i}
-                  data-testid={pk ? `row-${row[pk]}` : undefined}
-                  data-row-id={pk ? String(row[pk]) : undefined}
-                >
-                  {cols.map((c) => (
-                    <TableCell key={c.name}>{formatCell(row[c.name], c)}</TableCell>
-                  ))}
-                  {pk && (
-                    <TableCell
-                      className={cn(
-                        'text-right',
-                        // Match the header's sticky positioning. z-10 puts the
-                        // body cell above scrolling siblings but below the
-                        // header (z-20) so column headers stay layered cleanly.
-                        // group-hover mirrors the row's hover bg.
-                        'sticky right-0 z-10 bg-background group-hover:bg-muted/40 border-l shadow-[-4px_0_4px_-4px_rgba(0,0,0,0.05)]',
-                      )}
-                    >
-                      <div className="flex justify-end gap-1">
-                        <Button asChild variant="ghost" size="icon">
-                          <Link to={`/${resourceName}/show/${row[pk]}`} aria-label="view">
-                            <Eye />
-                          </Link>
-                        </Button>
-                        <Button asChild variant="ghost" size="icon">
-                          <Link to={`/${resourceName}/edit/${row[pk]}`} aria-label="edit">
-                            <Pencil />
-                          </Link>
-                        </Button>
-                        <DeleteRowButton
-                          resource={resourceName!}
-                          id={row[pk]}
-                          onDeleted={() => tableQuery?.refetch()}
-                        />
-                        {rowActions.map((a) => (
-                          <ActionButton
-                            key={a.name}
+              {rows.map((row, i) => {
+                // rowId() handles single-PK (bare value) and composite-PK
+                // (base64url JSON tuple) shapes uniformly.
+                const id = rowId(def, row);
+                return (
+                  <TableRow
+                    key={id ?? i}
+                    data-testid={id ? `row-${id}` : undefined}
+                    data-row-id={id ?? undefined}
+                  >
+                    {cols.map((c) => (
+                      <TableCell key={c.name}>{formatCell(row[c.name], c)}</TableCell>
+                    ))}
+                    {id && (
+                      <TableCell
+                        className={cn(
+                          'text-right',
+                          'sticky right-0 z-10 bg-background group-hover:bg-muted/40 border-l shadow-[-4px_0_4px_-4px_rgba(0,0,0,0.05)]',
+                        )}
+                      >
+                        <div className="flex justify-end gap-1">
+                          <Button asChild variant="ghost" size="icon">
+                            <Link to={`/${resourceName}/show/${id}`} aria-label="view">
+                              <Eye />
+                            </Link>
+                          </Button>
+                          <Button asChild variant="ghost" size="icon">
+                            <Link to={`/${resourceName}/edit/${id}`} aria-label="edit">
+                              <Pencil />
+                            </Link>
+                          </Button>
+                          <DeleteRowButton
                             resource={resourceName!}
-                            action={a}
-                            rowId={String(row[pk])}
-                            onComplete={() => tableQuery?.refetch()}
+                            id={id}
+                            onDeleted={() => tableQuery?.refetch()}
                           />
-                        ))}
-                      </div>
-                    </TableCell>
-                  )}
-                </TableRow>
-              ))}
+                          {rowActions.map((a) => (
+                            <ActionButton
+                              key={a.name}
+                              resource={resourceName!}
+                              action={a}
+                              rowId={id}
+                              onComplete={() => tableQuery?.refetch()}
+                            />
+                          ))}
+                        </div>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         )}
@@ -890,17 +891,27 @@ function RelatedTable({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map((row, i) => (
-                <TableRow key={targetPk ? row[targetPk] : i}>
+              {rows.map((row, i) => {
+                const childId = rowId(targetDef, row);
+                return (
+                <TableRow key={childId ?? i}>
                   {cols.map((c) => (
                     <TableCell key={c.name}>
-                      {targetPk && c.name === targetPk
-                        ? <Link to={`/${relation.target}/show/${row[targetPk]}`} className="text-primary hover:underline">{formatCell(row[c.name], c)}</Link>
+                      {/*
+                        Link to the related row's show page. For single-PK
+                        targets the PK column itself becomes a link; for
+                        composite-PK targets we attach the link to the first
+                        column of the projection so support agents always
+                        have a way to navigate.
+                      */}
+                      {childId && (targetPk ? c.name === targetPk : c.name === cols[0]!.name)
+                        ? <Link to={`/${relation.target}/show/${childId}`} className="text-primary hover:underline">{formatCell(row[c.name], c)}</Link>
                         : formatCell(row[c.name], c)}
                     </TableCell>
                   ))}
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
         )}

@@ -47,9 +47,36 @@ export interface Resource {
   relations: ResourceRelation[];
 }
 
-/** Single-PK tables get edit/show/delete actions; composite-PK tables are list-only. */
+/** Single-PK tables get edit/show/delete actions; composite-PK tables use a base64url-of-JSON id. */
 export function singlePk(r: Resource): string | null {
   return r.primaryKey.length === 1 ? r.primaryKey[0]! : null;
+}
+
+/**
+ * Returns the URL-safe row id for a resource — the bare PK value for
+ * single-PK tables, or a base64url-encoded JSON tuple of the composite
+ * PK columns. Lets row Show/Edit/Delete links work uniformly across
+ * both shapes.
+ */
+export function rowId(def: Resource, row: any): string | null {
+  if (def.primaryKey.length === 0) { return null; }
+  if (def.primaryKey.length === 1) {
+    const v = row[def.primaryKey[0]!];
+    return v == null ? null : String(v);
+  }
+  // composite-id codec lives in @/lib so we don't pull in types from /lib
+  // (this file is the lowest of the dependency tree).
+  return encodeCompositeIdImpl(def.primaryKey.map((c) => row[c]));
+}
+
+// inline copy of the encoder so types.ts stays at the bottom of the module
+// graph (referenced by lib/composite-id.ts indirectly via its consumers).
+function encodeCompositeIdImpl(values: ReadonlyArray<unknown>): string {
+  const json = JSON.stringify(values);
+  const utf8 = new TextEncoder().encode(json);
+  let bin = '';
+  for (const b of utf8) { bin += String.fromCharCode(b); }
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 /**

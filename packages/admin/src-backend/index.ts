@@ -2,6 +2,7 @@ import path from 'path';
 import { fileURLToPath } from 'url'; // required for ESM build (see build.mjs)
 import { createEndpoint, type Endpoint } from '@colyseus/core';
 import { sql, asc, desc, eq, ne, gt, gte, lt, lte, like, or, and, type SQL } from 'drizzle-orm';
+import { tryDecodeCompositeId } from './composite-id.js';
 import { getTableConfig as getPgTableConfig } from 'drizzle-orm/pg-core';
 import { getTableConfig as getSqliteTableConfig } from 'drizzle-orm/sqlite-core';
 import type { Action, GameDatabase } from '@colyseus/database';
@@ -204,6 +205,47 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
     ? (getPgTableConfig as any)
     : (getSqliteTableConfig as any);
 
+  /**
+   * The PK columns for a resource, in declaration order:
+   *   - Single-column PKs surface via `c.primary === true` on the column.
+   *   - Composite PKs are stored on `cfg.primaryKeys[].columns` instead.
+   * Returns `[]` for tables without any PK (which makes row-level
+   * Get/Update/Delete unsupported by definition).
+   */
+  function pkColumns(cfg: any): any[] {
+    const single = cfg.columns.filter((c: any) => c.primary);
+    if (single.length > 0) { return single; }
+    return (cfg.primaryKeys ?? [])[0]?.columns ?? [];
+  }
+
+  /**
+   * Build the `WHERE pk1=v1 AND pk2=v2 ...` predicate for a row identified
+   * by `id`. For single-PK tables `id` is the bare value; for composite-PK
+   * tables it's the base64url-of-JSON-array shape produced by the
+   * frontend's `encodeCompositeId`.
+   *
+   * Returns null + a Response when the input doesn't have a usable PK
+   * (table without a primary key, or composite-id decode failure).
+   */
+  function buildPkWhere(cfg: any, id: string): { where: SQL } | Response {
+    const cols = pkColumns(cfg);
+    if (cols.length === 0) {
+      return errorResponse(400, 'resource has no primary key');
+    }
+    let values: unknown[];
+    try {
+      values = tryDecodeCompositeId(id, cols);
+    } catch (err: any) {
+      return errorResponse(400, `invalid composite id: ${err?.message ?? String(err)}`);
+    }
+    if (values.length !== cols.length) {
+      return errorResponse(400, `composite id arity mismatch: expected ${cols.length}, got ${values.length}`);
+    }
+    const conds = cols.map((col, i) => eq(col, castPk(String(values[i]), col)));
+    const where = (conds.length === 1 ? conds[0] : and(...conds)) as SQL;
+    return { where };
+  }
+
   function castPk(raw: string, col: any): any {
     const t = (col as any).getSQLType?.();
     if (t === 'integer' || t === 'serial' || t === 'bigint') { return Number(raw); }
@@ -269,11 +311,11 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
     const r = tableOrError(resource);
     if (r instanceof Response) { return r; }
     const { table, cfg } = r;
-    const pkCol = cfg.columns.find((c: any) => c.primary);
-    if (!pkCol) { return errorResponse(400, 'no single-column primary key'); }
+    const built = buildPkWhere(cfg, id);
+    if (built instanceof Response) { return built; }
     const set = translateBodyKeys((ctx.body ?? {}) as Record<string, any>, table);
     const [row] = await database.drizzle.update(table).set(set)
-      .where(eq(pkCol, castPk(id, pkCol))).returning();
+      .where(built.where).returning();
     if (!row) { return errorResponse(404, 'not found'); }
     return json(row);
   };
@@ -639,9 +681,9 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
       const r = tableOrError(resource);
       if (r instanceof Response) { return r; }
       const { table, cfg } = r;
-      const pkCol = cfg.columns.find((c: any) => c.primary);
-      if (!pkCol) { return errorResponse(400, 'no single-column primary key'); }
-      const rows = await database.drizzle.select().from(table).where(eq(pkCol, castPk(id, pkCol))).limit(1);
+      const built = buildPkWhere(cfg, id);
+      if (built instanceof Response) { return built; }
+      const rows = await database.drizzle.select().from(table).where(built.where).limit(1);
       if (!rows[0]) { return errorResponse(404, 'not found'); }
       return json(rows[0]);
     }),
@@ -672,9 +714,9 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
       const r = tableOrError(resource);
       if (r instanceof Response) { return r; }
       const { table, cfg } = r;
-      const pkCol = cfg.columns.find((c: any) => c.primary);
-      if (!pkCol) { return errorResponse(400, 'no single-column primary key'); }
-      const [row] = await database.drizzle.delete(table).where(eq(pkCol, castPk(id, pkCol))).returning();
+      const built = buildPkWhere(cfg, id);
+      if (built instanceof Response) { return built; }
+      const [row] = await database.drizzle.delete(table).where(built.where).returning();
       if (!row) { return errorResponse(404, 'not found'); }
       return json(row);
     }),

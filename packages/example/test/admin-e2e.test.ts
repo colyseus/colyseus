@@ -200,6 +200,61 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     await page.close();
   });
 
+  it('composite-PK row CRUD: GET / PATCH / DELETE work via base64url id', async () => {
+    // cloudSaves has a composite PK (userId, slot). The frontend builds a
+    // base64url-encoded JSON tuple as the URL :id; the backend decodes it
+    // and runs `WHERE userId = ? AND slot = ?`. Cover the full
+    // GET/PATCH/DELETE round-trip so this stays wired.
+    const loginRes = await fetch(`${BASE}/admin-api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: BOOTSTRAP_EMAIL, password: BOOTSTRAP_PASSWORD }),
+    });
+    const cookieHeader = loginRes.headers.get('set-cookie')!.split(';')[0];
+
+    const usersRes = await fetch(`${BASE}/admin-api/users`, { headers: { cookie: cookieHeader } });
+    const userId = (await usersRes.json() as Array<{ id: string }>)[0]!.id;
+
+    // Create a save to operate on
+    const create = await fetch(`${BASE}/admin-api/cloudSaves`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: cookieHeader },
+      body: JSON.stringify({ user_id: userId, slot: 1, data: '{"hp":100}', version: 1 }),
+    });
+    assert.equal(create.status, 201, await create.text());
+
+    // base64url(JSON.stringify([userId, 1])) — same shape the frontend produces
+    const compositeId = Buffer.from(JSON.stringify([userId, 1]))
+      .toString('base64')
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+    // GET
+    const get = await fetch(`${BASE}/admin-api/cloudSaves/${compositeId}`, {
+      headers: { cookie: cookieHeader },
+    });
+    assert.equal(get.status, 200);
+    const row = await get.json() as { userId: string; slot: number };
+    assert.equal(row.userId, userId);
+    assert.equal(row.slot, 1);
+
+    // PATCH version
+    const patch = await fetch(`${BASE}/admin-api/cloudSaves/${compositeId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: cookieHeader },
+      body: JSON.stringify({ version: 99 }),
+    });
+    assert.equal(patch.status, 200);
+    const updated = await patch.json() as { version: number };
+    assert.equal(updated.version, 99);
+
+    // DELETE
+    const del = await fetch(`${BASE}/admin-api/cloudSaves/${compositeId}`, {
+      method: 'DELETE',
+      headers: { cookie: cookieHeader },
+    });
+    assert.equal(del.status, 200);
+  });
+
   it('row update accepts both PATCH and PUT', async () => {
     // Refine's simple-rest data provider sends PATCH for the `update` op;
     // some custom clients use PUT. The endpoint accepts both and runs the
