@@ -84,6 +84,23 @@
   }
 }
 
+/*
+ * Tailwind v4 default border-color flipped from `gray-200` (v3) to
+ * `currentColor`. Without an explicit color, every `border` class — and
+ * we use a lot of them — picks up the text color, which is near-white
+ * in dark mode. That's why our Cards / Pages / Inputs glowed with bright
+ * outlines while shadcn.com's looked subtle. Restore v3-style behavior:
+ * default border + ring colors come from --border.
+ */
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+  :focus-visible {
+    outline-color: hsl(var(--ring));
+  }
+}
+
 @theme inline {
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
