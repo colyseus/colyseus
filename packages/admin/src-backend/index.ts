@@ -1,7 +1,7 @@
 import path from 'path';
 import { fileURLToPath } from 'url'; // required for ESM build (see build.mjs)
 import { createEndpoint, type Endpoint } from '@colyseus/core';
-import { sql, asc, desc, eq, like, or, type SQL } from 'drizzle-orm';
+import { sql, asc, desc, eq, ne, gt, gte, lt, lte, like, or, and, type SQL } from 'drizzle-orm';
 import { getTableConfig as getPgTableConfig } from 'drizzle-orm/pg-core';
 import { getTableConfig as getSqliteTableConfig } from 'drizzle-orm/sqlite-core';
 import type { Action, GameDatabase } from '@colyseus/database';
@@ -208,6 +208,50 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
     const t = (col as any).getSQLType?.();
     if (t === 'integer' || t === 'serial' || t === 'bigint') { return Number(raw); }
     return raw;
+  }
+
+  /**
+   * Coerce a query-string filter value into the column's expected JS type
+   * before passing it to drizzle's comparison operators. Matches what
+   * `c.dataType` reports — date columns get parsed via Date, numbers via
+   * Number, booleans via 'true'/'1'.
+   */
+  function castFilterValue(raw: string, col: any): any {
+    const dt = (col as any).dataType;
+    if (dt === 'number') {
+      const n = Number(raw);
+      return Number.isFinite(n) ? n : raw;
+    }
+    if (dt === 'date') {
+      const d = new Date(raw);
+      return isNaN(d.getTime()) ? raw : d;
+    }
+    if (dt === 'boolean') {
+      return raw === 'true' || raw === '1';
+    }
+    if (dt === 'json') {
+      try { return JSON.parse(raw); } catch { return raw; }
+    }
+    return raw;
+  }
+
+  /** Build a drizzle WHERE condition from `(col, op, rawValue)`. */
+  function buildFilterCondition(col: any, op: string, raw: string): SQL | undefined {
+    if (op === 'like') {
+      // LIKE only makes sense on text-ish columns; otherwise fall through
+      // to an eq match.
+      return like(col, `%${raw}%`);
+    }
+    const v = castFilterValue(raw, col);
+    switch (op) {
+      case 'eq':  return eq(col, v);
+      case 'ne':  return ne(col, v);
+      case 'gt':  return gt(col, v);
+      case 'gte': return gte(col, v);
+      case 'lt':  return lt(col, v);
+      case 'lte': return lte(col, v);
+    }
+    return undefined;
   }
 
   function listColumns(cfg: any, def: ResourceDefinition | undefined): string[] {
@@ -442,19 +486,43 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
         if (col.primary && !(col.name in projection)) { projection[col.name] = col; }
       }
 
-      // Build the WHERE for search: OR over LIKE on every text-typed column
-      // currently visible. Stays narrow on intent — searching `users` with
-      // displayName + email works without the user defining anything.
-      let whereClause: SQL | undefined;
+      // Build the WHERE clause from (1) free-text `_q` search and (2)
+      // per-column filters sent as `?<col>[_op]=<value>`.
+      const conditions: SQL[] = [];
+
       if (search.length > 0) {
         const pattern = `%${search}%`;
         const textCols = cfg.columns.filter((c: any) => {
           const t = typeof c.getSQLType === 'function' ? c.getSQLType() : '';
           return /^(text|varchar|char)/i.test(t);
         });
-        const conds = textCols.map((c: any) => like(c, pattern));
-        if (conds.length > 0) { whereClause = or(...conds); }
+        const orConds = textCols.map((c: any) => like(c, pattern));
+        if (orConds.length > 0) {
+          const oredOpt = or(...orConds);
+          if (oredOpt) { conditions.push(oredOpt); }
+        }
       }
+
+      // Per-column filters. Refine simple-rest serializes filters as
+      // `field=value` (eq), `field_like=value`, `field_gte=value`, etc.
+      // We accept eq/ne/like/gt/gte/lt/lte; everything else is ignored.
+      const RESERVED = new Set(['_start', '_end', '_sort', '_order', '_q']);
+      for (const [key, raw] of Object.entries(q)) {
+        if (RESERVED.has(key)) { continue; }
+        if (typeof raw !== 'string' || raw.length === 0) { continue; }
+        const match = key.match(/^(.+?)_(like|eq|ne|gt|gte|lt|lte)$/);
+        const fieldName = match ? match[1]! : key;
+        const op = match ? match[2]! : 'eq';
+        const col = cfg.columns.find((c: any) => c.name === fieldName);
+        if (!col) { continue; }
+        const cond = buildFilterCondition(col, op, raw);
+        if (cond) { conditions.push(cond); }
+      }
+
+      const whereClause: SQL | undefined =
+        conditions.length === 0 ? undefined :
+        conditions.length === 1 ? conditions[0]! :
+        and(...conditions);
 
       let query = database.drizzle.select(projection).from(table).limit(end - start).offset(start) as any;
       if (whereClause) { query = query.where(whereClause); }

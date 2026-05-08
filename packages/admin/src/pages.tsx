@@ -94,6 +94,204 @@ function safeParse(raw: string): any {
   try { return JSON.parse(raw); } catch { return raw; }
 }
 
+type SetFilters = (filters: any[], behavior?: 'merge' | 'replace') => void;
+
+/**
+ * Active filter values for a column, regardless of operator suffix. Used
+ * to highlight columns with active filters and to seed the dropdown with
+ * the current value on URL refresh.
+ */
+function activeFiltersForColumn(c: Column, filters: any[] | undefined) {
+  return (filters ?? []).filter((f: any) => {
+    if (f.field === c.name) { return true; }
+    if (typeof f.field === 'string' && f.field.startsWith(`${c.name}_`)) { return true; }
+    return false;
+  });
+}
+
+/**
+ * Build the AntD column filter props for a given column. Each dropdown
+ * calls `setFilters` directly with the right `field_<op>` form so we
+ * fully control the operator instead of fighting AntD's onChange shape.
+ */
+function columnFilterProps(
+  c: Column,
+  filters: any[] | undefined,
+  setFilters: SetFilters,
+): Record<string, any> {
+  if (isJsonish(c)) { return {}; }
+  const active = activeFiltersForColumn(c, filters);
+
+  if (isBoolean(c)) {
+    return {
+      filterDropdown: () => (
+        <BooleanFilter colName={c.name} filters={filters} setFilters={setFilters} />
+      ),
+      filteredValue: active.length > 0 ? active.map((f: any) => f.value) : null,
+    };
+  }
+
+  if (isDate(c)) {
+    return {
+      filterDropdown: () => (
+        <DateFilter colName={c.name} filters={filters} setFilters={setFilters} />
+      ),
+      filteredValue: active.length > 0 ? active.map((f: any) => f.value) : null,
+    };
+  }
+
+  if (isNumeric(c)) {
+    return {
+      filterDropdown: () => (
+        <NumberFilter colName={c.name} filters={filters} setFilters={setFilters} />
+      ),
+      filteredValue: active.length > 0 ? active.map((f: any) => f.value) : null,
+    };
+  }
+
+  return {
+    filterDropdown: () => (
+      <TextFilter colName={c.name} filters={filters} setFilters={setFilters} />
+    ),
+    filteredValue: active.length > 0 ? active.map((f: any) => f.value) : null,
+  };
+}
+
+/**
+ * Replace any existing filters on the same field (with or without an
+ * operator suffix) with `next`, leaving unrelated filters intact.
+ */
+function replaceColumnFilters(
+  setFilters: SetFilters,
+  filters: any[] | undefined,
+  field: string,
+  next: any[],
+) {
+  const others = (filters ?? []).filter((f: any) => {
+    return !(f.field === field || (typeof f.field === 'string' && f.field.startsWith(`${field}_`)));
+  });
+  setFilters([...others, ...next], 'replace');
+}
+
+function TextFilter({ colName, filters, setFilters }: {
+  colName: string; filters: any[] | undefined; setFilters: SetFilters;
+}) {
+  const current = (filters ?? []).find((f: any) => f.field === `${colName}_like`)?.value ?? '';
+  const [value, setValue] = useState<string>(String(current));
+  const apply = () => {
+    const trimmed = value.trim();
+    replaceColumnFilters(setFilters, filters, colName,
+      trimmed.length === 0 ? [] : [{ field: `${colName}_like`, operator: 'eq', value: trimmed }],
+    );
+  };
+  const clear = () => {
+    setValue('');
+    replaceColumnFilters(setFilters, filters, colName, []);
+  };
+  return (
+    <div style={{ padding: 8, minWidth: 220 }}>
+      <Input
+        placeholder={`Search ${colName}`}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onPressEnter={apply}
+        style={{ marginBottom: 8, display: 'block' }}
+        data-testid={`filter-text-${colName}`}
+      />
+      <Space>
+        <Button type="primary" size="small" onClick={apply}>Apply</Button>
+        <Button size="small" onClick={clear}>Reset</Button>
+      </Space>
+    </div>
+  );
+}
+
+function BooleanFilter({ colName, filters, setFilters }: {
+  colName: string; filters: any[] | undefined; setFilters: SetFilters;
+}) {
+  const current = (filters ?? []).find((f: any) => f.field === colName)?.value;
+  const set = (v: boolean | null) => {
+    replaceColumnFilters(setFilters, filters, colName,
+      v === null ? [] : [{ field: colName, operator: 'eq', value: v }],
+    );
+  };
+  return (
+    <div style={{ padding: 8, minWidth: 160 }}>
+      <Space direction="vertical" style={{ width: '100%' }}>
+        <Button block size="small" type={current === true ? 'primary' : 'default'} onClick={() => set(true)}>Yes</Button>
+        <Button block size="small" type={current === false ? 'primary' : 'default'} onClick={() => set(false)}>No</Button>
+        <Button block size="small" type={current == null ? 'primary' : 'default'} onClick={() => set(null)}>Any</Button>
+      </Space>
+    </div>
+  );
+}
+
+function NumberFilter({ colName, filters, setFilters }: {
+  colName: string; filters: any[] | undefined; setFilters: SetFilters;
+}) {
+  const minCurrent = (filters ?? []).find((f: any) => f.field === `${colName}_gte`)?.value;
+  const maxCurrent = (filters ?? []).find((f: any) => f.field === `${colName}_lte`)?.value;
+  const [min, setMin] = useState<number | null>(minCurrent ?? null);
+  const [max, setMax] = useState<number | null>(maxCurrent ?? null);
+  const apply = () => {
+    const next: any[] = [];
+    if (min !== null && min !== undefined) { next.push({ field: `${colName}_gte`, operator: 'eq', value: min }); }
+    if (max !== null && max !== undefined) { next.push({ field: `${colName}_lte`, operator: 'eq', value: max }); }
+    replaceColumnFilters(setFilters, filters, colName, next);
+  };
+  const clear = () => {
+    setMin(null); setMax(null);
+    replaceColumnFilters(setFilters, filters, colName, []);
+  };
+  return (
+    <div style={{ padding: 8, minWidth: 240 }}>
+      <Space.Compact style={{ width: '100%', marginBottom: 8 }}>
+        <InputNumber placeholder="min" value={min} onChange={(v) => setMin(v as any)} style={{ width: '50%' }} />
+        <InputNumber placeholder="max" value={max} onChange={(v) => setMax(v as any)} style={{ width: '50%' }} />
+      </Space.Compact>
+      <Space>
+        <Button type="primary" size="small" onClick={apply}>Apply</Button>
+        <Button size="small" onClick={clear}>Reset</Button>
+      </Space>
+    </div>
+  );
+}
+
+function DateFilter({ colName, filters, setFilters }: {
+  colName: string; filters: any[] | undefined; setFilters: SetFilters;
+}) {
+  const startCurrent = (filters ?? []).find((f: any) => f.field === `${colName}_gte`)?.value;
+  const endCurrent = (filters ?? []).find((f: any) => f.field === `${colName}_lte`)?.value;
+  const [start, setStart] = useState<string | null>(startCurrent ?? null);
+  const [end, setEnd] = useState<string | null>(endCurrent ?? null);
+  const apply = () => {
+    const next: any[] = [];
+    if (start) { next.push({ field: `${colName}_gte`, operator: 'eq', value: start }); }
+    if (end) { next.push({ field: `${colName}_lte`, operator: 'eq', value: end }); }
+    replaceColumnFilters(setFilters, filters, colName, next);
+  };
+  const clear = () => {
+    setStart(null); setEnd(null);
+    replaceColumnFilters(setFilters, filters, colName, []);
+  };
+  return (
+    <div style={{ padding: 8, minWidth: 280 }}>
+      <DatePicker.RangePicker
+        value={[start ? dayjs(start) : null, end ? dayjs(end) : null] as any}
+        onChange={(range) => {
+          setStart(range?.[0]?.toISOString() ?? null);
+          setEnd(range?.[1]?.toISOString() ?? null);
+        }}
+        style={{ width: '100%', marginBottom: 8 }}
+      />
+      <Space>
+        <Button type="primary" size="small" onClick={apply}>Apply</Button>
+        <Button size="small" onClick={clear}>Reset</Button>
+      </Space>
+    </div>
+  );
+}
+
 function findResource(resources: Resource[], name?: string): Resource | undefined {
   return resources.find((r) => r.name === name);
 }
@@ -284,7 +482,13 @@ export function ListPage({ resources }: { resources: Resource[] }) {
           }}
         >
           {cols.map((c) => (
-            <Table.Column key={c.name} dataIndex={c.name} title={c.name} render={(v) => format(v, c)} />
+            <Table.Column
+              key={c.name}
+              dataIndex={c.name}
+              title={c.name}
+              render={(v) => format(v, c)}
+              {...columnFilterProps(c, filters as any[] | undefined, setFilters as SetFilters)}
+            />
           ))}
           {pk && (
             <Table.Column

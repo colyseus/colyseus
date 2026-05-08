@@ -412,6 +412,32 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     await page.close();
   });
 
+  it('list endpoint supports per-column filters (email_like, level_gte)', async () => {
+    const loginRes = await fetch(`${BASE}/admin-api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: BOOTSTRAP_EMAIL, password: BOOTSTRAP_PASSWORD }),
+    });
+    const cookieHeader = loginRes.headers.get('set-cookie')!.split(';')[0];
+
+    // email_like should match the bootstrap admin
+    const byEmail = await fetch(`${BASE}/admin-api/users?email_like=admin%40`, {
+      headers: { cookie: cookieHeader },
+    });
+    assert.equal(byEmail.status, 200);
+    const byEmailRows = await byEmail.json() as Array<{ email: string }>;
+    assert.ok(byEmailRows.length >= 1);
+    assert.ok(byEmailRows[0]!.email.includes('admin@'));
+
+    // level_gte=99 should match no users (default level is 1)
+    const byLevel = await fetch(`${BASE}/admin-api/users?level_gte=99`, {
+      headers: { cookie: cookieHeader },
+    });
+    const byLevelRows = await byLevel.json() as any[];
+    assert.equal(byLevelRows.length, 0);
+    assert.equal(byLevel.headers.get('x-total-count'), '0');
+  });
+
   it('Edit page mirrors the Show layout with relation tabs', async () => {
     const loginRes = await fetch(`${BASE}/admin-api/auth/login`, {
       method: 'POST',
