@@ -9,7 +9,11 @@ import { cn } from '@/lib/utils';
 
 export const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
   ({ className, ...props }, ref) => (
-    <div className="relative w-full overflow-auto">
+    // overflow-x-auto so horizontal-only scroll lives inside the table wrapper
+    // — vertical scroll stays on the page. The minimum is set to whatever the
+    // content needs, so a many-column table grows past its container instead
+    // of squeezing columns to invisibility.
+    <div className="relative w-full overflow-x-auto">
       <table ref={ref} className={cn('w-full caption-bottom text-sm', className)} {...props} />
     </div>
   ),
@@ -36,10 +40,14 @@ export const TableRow = React.forwardRef<
   HTMLTableRowElement,
   React.HTMLAttributes<HTMLTableRowElement>
 >(({ className, ...props }, ref) => (
+  // `group` on every row lets sticky cells (which need a solid bg to mask
+  // horizontal scroll content underneath) match the row hover via
+  // `group-hover:bg-muted/40` — without this the actions column would stay
+  // bg-background while the rest of the row hovers.
   <tr
     ref={ref}
     className={cn(
-      'border-b transition-colors hover:bg-muted/40 data-[state=selected]:bg-muted',
+      'group border-b transition-colors hover:bg-muted/40 data-[state=selected]:bg-muted',
       className,
     )}
     {...props}

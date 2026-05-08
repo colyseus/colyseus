@@ -252,7 +252,19 @@ export function ListPage({ resources }: { resources: Resource[] }) {
                     />
                   </TableHead>
                 ))}
-                {pk && <TableHead className="w-[1%] whitespace-nowrap text-right">actions</TableHead>}
+                {pk && (
+                  <TableHead
+                    className={cn(
+                      'w-[1%] whitespace-nowrap text-right',
+                      // Sticky to the right edge so it stays visible when the
+                      // table overflows horizontally. Solid bg-background +
+                      // border-l mask scrolling content underneath.
+                      'sticky right-0 z-20 bg-background border-l shadow-[-4px_0_4px_-4px_rgba(0,0,0,0.05)]',
+                    )}
+                  >
+                    actions
+                  </TableHead>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -266,7 +278,16 @@ export function ListPage({ resources }: { resources: Resource[] }) {
                     <TableCell key={c.name}>{formatCell(row[c.name], c)}</TableCell>
                   ))}
                   {pk && (
-                    <TableCell className="text-right">
+                    <TableCell
+                      className={cn(
+                        'text-right',
+                        // Match the header's sticky positioning. z-10 puts the
+                        // body cell above scrolling siblings but below the
+                        // header (z-20) so column headers stay layered cleanly.
+                        // group-hover mirrors the row's hover bg.
+                        'sticky right-0 z-10 bg-background group-hover:bg-muted/40 border-l shadow-[-4px_0_4px_-4px_rgba(0,0,0,0.05)]',
+                      )}
+                    >
                       <div className="flex justify-end gap-1">
                         <Button asChild variant="ghost" size="icon">
                           <Link to={`/${resourceName}/show/${row[pk]}`} aria-label="view">
