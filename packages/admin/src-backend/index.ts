@@ -261,6 +261,23 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
     return out;
   }
 
+  // Shared update handler used by both PUT and PATCH adminUpdate endpoints.
+  const runUpdate = async (ctx: any) => {
+    const { resource, id } = ctx.params as { resource: string; id: string };
+    const denied = await guard(ctx, 'update', resource);
+    if (denied) { return denied; }
+    const r = tableOrError(resource);
+    if (r instanceof Response) { return r; }
+    const { table, cfg } = r;
+    const pkCol = cfg.columns.find((c: any) => c.primary);
+    if (!pkCol) { return errorResponse(400, 'no single-column primary key'); }
+    const set = translateBodyKeys((ctx.body ?? {}) as Record<string, any>, table);
+    const [row] = await database.drizzle.update(table).set(set)
+      .where(eq(pkCol, castPk(id, pkCol))).returning();
+    if (!row) { return errorResponse(404, 'not found'); }
+    return json(row);
+  };
+
   /** Build a drizzle WHERE condition from `(col, op, rawValue)`. */
   function buildFilterCondition(col: any, op: string, raw: string): SQL | undefined {
     if (op === 'like') {
@@ -599,22 +616,11 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
       return json(row, { status: 201 });
     }),
 
-    // PUT /admin-api/:resource/:id
-    adminUpdate: createEndpoint(`${apiPath}/:resource/:id`, { method: 'PUT' }, async (ctx) => {
-      const { resource, id } = ctx.params as { resource: string; id: string };
-      const denied = await guard(ctx, 'update', resource);
-      if (denied) { return denied; }
-      const r = tableOrError(resource);
-      if (r instanceof Response) { return r; }
-      const { table, cfg } = r;
-      const pkCol = cfg.columns.find((c: any) => c.primary);
-      if (!pkCol) { return errorResponse(400, 'no single-column primary key'); }
-      const set = translateBodyKeys((ctx.body ?? {}) as Record<string, any>, table);
-      const [row] = await database.drizzle.update(table).set(set)
-        .where(eq(pkCol, castPk(id, pkCol))).returning();
-      if (!row) { return errorResponse(404, 'not found'); }
-      return json(row);
-    }),
+    // PUT/PATCH /admin-api/:resource/:id — updates partial set on either
+    // verb. @refinedev/simple-rest sends PATCH for `update` by default;
+    // accepting both keeps things working if a custom client uses PUT.
+    adminUpdate: createEndpoint(`${apiPath}/:resource/:id`, { method: 'PUT' }, runUpdate),
+    adminPatch: createEndpoint(`${apiPath}/:resource/:id`, { method: 'PATCH' }, runUpdate),
 
     // DELETE /admin-api/:resource/:id
     adminDelete: createEndpoint(`${apiPath}/:resource/:id`, { method: 'DELETE' }, async (ctx) => {

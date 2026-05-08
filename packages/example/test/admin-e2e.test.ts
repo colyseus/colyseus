@@ -200,6 +200,33 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     await page.close();
   });
 
+  it('row update accepts both PATCH and PUT', async () => {
+    // Refine's simple-rest data provider sends PATCH for the `update` op;
+    // some custom clients use PUT. The endpoint accepts both and runs the
+    // same handler. Regression test pins this so the frontend's PATCH
+    // doesn't 404 again.
+    const loginRes = await fetch(`${BASE}/admin-api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: BOOTSTRAP_EMAIL, password: BOOTSTRAP_PASSWORD }),
+    });
+    const cookieHeader = loginRes.headers.get('set-cookie')!.split(';')[0];
+
+    const usersRes = await fetch(`${BASE}/admin-api/users`, { headers: { cookie: cookieHeader } });
+    const userId = (await usersRes.json() as Array<{ id: string }>)[0]!.id;
+
+    for (const method of ['PATCH', 'PUT'] as const) {
+      const res = await fetch(`${BASE}/admin-api/users/${userId}`, {
+        method,
+        headers: { 'content-type': 'application/json', cookie: cookieHeader },
+        body: JSON.stringify({ display_name: `Endel via ${method}` }),
+      });
+      assert.equal(res.status, 200, `expected 200 for ${method}`);
+      const row = await res.json() as { displayName: string };
+      assert.equal(row.displayName, `Endel via ${method}`);
+    }
+  });
+
   it('CRUD with FK columns: POST translates SQL→JS column names so FKs land', async () => {
     // Regression test for the form-to-drizzle key translation. The frontend
     // posts bodies keyed by SQL column names (`board_id`, `user_id`); drizzle
