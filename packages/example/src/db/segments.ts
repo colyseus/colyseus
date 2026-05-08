@@ -1,50 +1,50 @@
 /**
- * Live-ops segments — declarative cohorts of players. Imported into
- * GameDatabase via `segments: [...]` so admin tools and broadcast/mail/AB
- * features can target them by id.
+ * Live-ops segments — declarative cohorts of players, registered against
+ * the GameDatabase passed in. Imported by app.config.ts after constructing
+ * the DB so `db.defineSegment(...)` infers `tables` + `drizzle` from the
+ * instance's own schema generic — no separate schema-type import needed.
  *
- * The `createSegmentDefiner<typeof schema>()` factory captures our schema
- * once, so `tables` and `drizzle` are strictly typed inside every resolver
- * — autocomplete on `tables.users.level`, row shape inferred on `.select()`.
+ * The function takes the database typed against our schema barrel so each
+ * resolver gets full autocomplete on `tables.users.level`, etc.
  */
-import { createSegmentDefiner } from "@colyseus/database";
+import type { GameDatabase } from "@colyseus/database";
 import { eq, gte, lt, and } from "drizzle-orm";
-import * as schema from "./schema.ts";
+import type * as schema from "./schema.ts";
 
-const defineSegment = createSegmentDefiner<typeof schema>();
+export function registerSegments(db: GameDatabase<typeof schema>) {
+  /** Newly registered players (level still 1 — i.e. tutorial cohort). */
+  db.defineSegment("newPlayers", {
+    description: "Just signed up — still on level 1",
+    resolve: async ({ drizzle, tables }) => {
+      const rows = await drizzle
+        .select({ id: tables.users.id })
+        .from(tables.users)
+        .where(eq(tables.users.level, 1));
+      return rows.map((r) => r.id);
+    },
+  });
 
-/** Newly registered players (level still 1 — i.e. tutorial cohort). */
-export const newPlayers = defineSegment("newPlayers", {
-  description: "Just signed up — still on level 1",
-  resolve: async ({ drizzle, tables }) => {
-    const rows = await drizzle
-      .select({ id: tables.users.id })
-      .from(tables.users)
-      .where(eq(tables.users.level, 1));
-    return rows.map((r) => r.id);
-  },
-});
+  /** Active players who completed the tutorial. */
+  db.defineSegment("veterans", {
+    description: "Level >= 10",
+    resolve: async ({ drizzle, tables }) => {
+      const rows = await drizzle
+        .select({ id: tables.users.id })
+        .from(tables.users)
+        .where(gte(tables.users.level, 10));
+      return rows.map((r) => r.id);
+    },
+  });
 
-/** Active players who completed the tutorial. */
-export const veterans = defineSegment("veterans", {
-  description: "Level >= 10",
-  resolve: async ({ drizzle, tables }) => {
-    const rows = await drizzle
-      .select({ id: tables.users.id })
-      .from(tables.users)
-      .where(gte(tables.users.level, 10));
-    return rows.map((r) => r.id);
-  },
-});
-
-/** Mid-tier players — between tutorial and veterans. */
-export const climbing = defineSegment("climbing", {
-  description: "Level 2-9 — past tutorial, not yet veteran",
-  resolve: async ({ drizzle, tables }) => {
-    const rows = await drizzle
-      .select({ id: tables.users.id })
-      .from(tables.users)
-      .where(and(gte(tables.users.level, 2), lt(tables.users.level, 10)));
-    return rows.map((r) => r.id);
-  },
-});
+  /** Mid-tier players — between tutorial and veterans. */
+  db.defineSegment("climbing", {
+    description: "Level 2-9 — past tutorial, not yet veteran",
+    resolve: async ({ drizzle, tables }) => {
+      const rows = await drizzle
+        .select({ id: tables.users.id })
+        .from(tables.users)
+        .where(and(gte(tables.users.level, 2), lt(tables.users.level, 10)));
+      return rows.map((r) => r.id);
+    },
+  });
+}

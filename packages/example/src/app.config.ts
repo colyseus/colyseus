@@ -19,7 +19,7 @@ import { PostgresDriver } from "@colyseus/drizzle-driver";
 import { GameDatabase } from "@colyseus/database";
 import { adminEndpoints, defineAdminResource } from "@colyseus/admin";
 import * as schema from "./db/schema.ts";
-import { newPlayers, veterans, climbing } from "./db/segments.ts";
+import { registerSegments } from "./db/segments.ts";
 
 // Spin up an embedded sqlite-backed GameDatabase. The admin panel below
 // reflects every table on it. Set DATABASE_URL=postgres://... to switch.
@@ -30,8 +30,8 @@ import { newPlayers, veterans, climbing } from "./db/segments.ts";
 const database = new GameDatabase({
   connectionString: process.env.DATABASE_URL,
   schemas: schema,
-  segments: [newPlayers, veterans, climbing],
 });
+registerSegments(database); // typed against the database's schema generic
 await database.boot();
 
 // Tiny test-only seed endpoint — creates an admin + a mod for the panel demo.

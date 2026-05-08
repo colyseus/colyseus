@@ -10,7 +10,7 @@ import { AnalyticsService } from './services/AnalyticsService.ts';
 import { ModerationService } from './services/ModerationService.ts';
 import { SegmentsService } from './services/SegmentsService.ts';
 import type { SchemaSet } from './types.ts';
-import type { SegmentDefinition } from './segments.ts';
+import type { SegmentDefinition, SegmentResolveContext } from './segments.ts';
 
 /**
  * Resolve schema slot K to the user's table type if provided, else fall back
@@ -213,7 +213,17 @@ type SQLFlavor = 'sqlite' | 'pg';
  */
 type SubDialect = 'sqlite' | 'postgres-js' | 'pglite';
 
-export class GameDatabase<S extends Partial<SchemaSet> = {}> {
+/**
+ * The fully-resolved tables map exposed on `db.tables`. Drives the type
+ * argument for `db.defineSegment(...)` so resolvers see the user's actual
+ * schema (custom + default) without re-importing it.
+ */
+type ResolvedTables<S extends Partial<SchemaSet>> = { [K in keyof SchemaSet]: Resolve<S, K> };
+
+export class GameDatabase<
+  S extends Partial<SchemaSet> = {},
+  Dialect extends 'sqlite' | 'pg' = 'sqlite',
+> {
   auth: AuthService<Resolve<S, 'users'>>;
   config: ConfigService<Resolve<S, 'configs'>>;
   saves: CloudSaveService<Resolve<S, 'cloudSaves'>>;
@@ -240,6 +250,9 @@ export class GameDatabase<S extends Partial<SchemaSet> = {}> {
   private subDialect: SubDialect = 'sqlite';
   private options: GameDatabaseOptions<S>;
   private ownedConnection: any = null;
+  /** Segments registered via `db.defineSegment(...)` before boot. Merged with
+   *  `options.segments` when SegmentsService is instantiated at boot time. */
+  private inlineSegments: SegmentDefinition[] = [];
 
   constructor(options: GameDatabaseOptions<S> = {} as GameDatabaseOptions<S>) {
     this.options = options;
@@ -326,8 +339,52 @@ export class GameDatabase<S extends Partial<SchemaSet> = {}> {
     this.segments = new SegmentsService(
       this.drizzle,
       this.tables as Record<string, any>,
-      this.options.segments ?? [],
+      [...this.inlineSegments, ...(this.options.segments ?? [])],
     );
+  }
+
+  /**
+   * Define a segment inline, typed against this database's schema and dialect
+   * — no need to import the schema type or call `createSegmentDefiner` first.
+   *
+   * Inside the resolver, `tables` reflects every schema slot resolved for
+   * this instance (custom + default), and `drizzle` is typed for the chosen
+   * dialect so `.select().from(tables.users)` infers row shapes.
+   *
+   * Call before `boot()`. The segment registers into the SegmentsService
+   * when boot wires services up.
+   *
+   *   const db = new GameDatabase({ schemas });
+   *   db.defineSegment('veterans', {
+   *     description: 'Level >= 10',
+   *     resolve: async ({ drizzle, tables }) => {
+   *       const rows = await drizzle.select({ id: tables.users.id })
+   *         .from(tables.users).where(gte(tables.users.level, 10));
+   *       return rows.map((r) => r.id);
+   *     },
+   *   });
+   *   await db.boot();
+   *   await db.segments.size('veterans'); // → 42
+   */
+  defineSegment(
+    id: string,
+    config: {
+      description?: string;
+      resolve: (
+        ctx: SegmentResolveContext<ResolvedTables<S>, Dialect>,
+      ) => Promise<string[]>;
+    },
+  ): SegmentDefinition {
+    if (!id || typeof id !== 'string') {
+      throw new Error('[defineSegment] id must be a non-empty string');
+    }
+    const def: SegmentDefinition = {
+      id,
+      description: config.description,
+      resolve: config.resolve as SegmentDefinition['resolve'],
+    };
+    this.inlineSegments.push(def);
+    return def;
   }
 
   async shutdown() {

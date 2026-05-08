@@ -170,6 +170,43 @@ describe('SegmentsService', () => {
     assert.equal(seg.id, 'typed');
   });
 
+  it('db.defineSegment(...) types tables + drizzle via the GameDatabase generic', async () => {
+    // No createSegmentDefiner / no <typeof schema> needed — the class generic
+    // already carries the schema type, so the resolver gets full inference
+    // for free. Compile-time @ts-expect-error locks in the strict shape.
+    await db.shutdown();
+    dbPath = freshDbPath();
+    const inline = new GameDatabase({
+      connectionString: dbPath,
+      schemas: { users },
+    });
+    inline.defineSegment('inlineTyped', {
+      description: 'level 1, defined inline',
+      resolve: async ({ drizzle, tables }) => {
+        const _level = tables.users.level;
+        // @ts-expect-error — `nonexistent` is not a column on the custom users table
+        const _bad = tables.users.nonexistent;
+        // @ts-expect-error — `notATable` is not in the resolved schema
+        const _bad2 = tables.notATable;
+        const rows = await drizzle
+          .select({ id: tables.users.id })
+          .from(tables.users)
+          .where(eq(tables.users.level, 1));
+        return rows.map((r) => r.id);
+      },
+    });
+    await inline.boot();
+
+    // seed one user at level 1, one at 12
+    await inline.auth.settings.onRegisterAnonymously?.({});
+    const vet = (await inline.auth.settings.onRegisterAnonymously?.({})) as { id: string };
+    const conn = (inline as any).ownedConnection;
+    conn.prepare('UPDATE users SET level = 12 WHERE id = ?').run(vet.id);
+
+    assert.equal(await inline.segments.size('inlineTyped'), 1);
+    db = inline; // afterEach handles cleanup
+  });
+
   it('reflects state changes between calls (no stale caching at the service level)', async () => {
     assert.equal(await db.segments.size('highLevel'), 2);
 
