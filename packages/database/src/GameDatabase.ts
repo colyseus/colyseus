@@ -10,7 +10,7 @@ import { AnalyticsService } from './services/AnalyticsService.ts';
 import { ModerationService } from './services/ModerationService.ts';
 import { SegmentsService } from './services/SegmentsService.ts';
 import type { SchemaSet } from './types.ts';
-import type { SegmentDefinition } from './segments.ts';
+import type { SegmentDefinition, DrizzleFor } from './segments.ts';
 
 /**
  * Resolve schema slot K to the user's table type if provided, else fall back
@@ -248,8 +248,17 @@ export class GameDatabase<
    */
   tables: { [K in keyof SchemaSet]: Resolve<S, K> };
 
-  /** The underlying Drizzle database instance (available after boot). */
-  drizzle: any;
+  /**
+   * The underlying Drizzle database instance (available after boot). Typed
+   * against this database's resolved schema + dialect, so:
+   *
+   *   db.drizzle.select(...).from(db.tables.users)        // row shape inferred
+   *   db.drizzle.query.users.findFirst({ with: { ... } }) // schema-aware (sqlite)
+   *
+   * For dialect-specific extension methods (e.g. postgres-js's `unsafe`),
+   * narrow with a type guard or cast at the call site.
+   */
+  drizzle: DrizzleFor<ResolvedTables<S>, Dialect>;
 
   private dialect: SQLFlavor;
   private subDialect: SubDialect = 'sqlite';
@@ -373,7 +382,10 @@ export class GameDatabase<
     // Forward user options to Node's DatabaseSync via drizzle's `connection`
     // passthrough. `path` is filled from connectionString if not overridden.
     const userOpts = this.options.connection ?? {};
-    this.drizzle = drizzle({ connection: { path: dbPath, ...userOpts } });
+    // Concrete factory return (NodeSQLiteDatabase) is a subtype of the public
+    // `DrizzleFor<S, Dialect>` for sqlite; a cast keeps the internal assignment
+    // tidy without leaking the dialect-specific subclass to consumers.
+    this.drizzle = drizzle({ connection: { path: dbPath, ...userOpts } }) as unknown as typeof this.drizzle;
 
     // $client is the underlying DatabaseSync — needed for raw DDL + pragmas
     this.ownedConnection = (this.drizzle as any).$client;
@@ -408,7 +420,7 @@ export class GameDatabase<
     // idle_timeout, prepare, statement_timeout, etc.) as a second arg.
     const sql = pg(connectionString, this.options.connection);
 
-    this.drizzle = drizzle({ client: sql });
+    this.drizzle = drizzle({ client: sql }) as unknown as typeof this.drizzle;
     this.ownedConnection = sql;
     this.subDialect = 'postgres-js';
   }
@@ -437,7 +449,7 @@ export class GameDatabase<
     const client = new PGlite({ ...userOpts, dataDir: resolvedDataDir });
     await client.waitReady;
 
-    this.drizzle = drizzle({ client });
+    this.drizzle = drizzle({ client }) as unknown as typeof this.drizzle;
     this.ownedConnection = client;
     this.subDialect = 'pglite';
   }
@@ -516,15 +528,19 @@ export class GameDatabase<
    * idempotent.
    */
   private async runFileMigrations(folder: string) {
+    // Each dialect's migrator wants its own concrete db class; the public
+    // `db.drizzle` type is the conditional union, so cast through `any` at
+    // each branch. Pre-narrowed at runtime by `subDialect`.
+    const drizzleClient = this.drizzle as any;
     if (this.subDialect === 'postgres-js') {
       const { migrate } = await import('drizzle-orm/postgres-js/migrator');
-      await migrate(this.drizzle, { migrationsFolder: folder });
+      await migrate(drizzleClient, { migrationsFolder: folder });
     } else if (this.subDialect === 'pglite') {
       const { migrate } = await import('drizzle-orm/pglite/migrator');
-      await migrate(this.drizzle, { migrationsFolder: folder });
+      await migrate(drizzleClient, { migrationsFolder: folder });
     } else {
       const { migrate } = await import('drizzle-orm/node-sqlite/migrator');
-      await migrate(this.drizzle, { migrationsFolder: folder });
+      await migrate(drizzleClient, { migrationsFolder: folder });
     }
   }
 

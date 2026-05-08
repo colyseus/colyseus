@@ -171,6 +171,29 @@ describe('SegmentsService', () => {
     assert.equal(seg.id, 'typed');
   });
 
+  it('db.drizzle is strictly typed against the GameDatabase schema generic', async () => {
+    // Compile-time assertion: db.drizzle is no longer `any`. .select() chains
+    // infer row shapes from the projection, and projecting bogus columns is
+    // a compile error. The relation-aware query API (`db.drizzle.query.X`)
+    // depends on Phase 1 — once relations() are wired in, `.query.users`
+    // becomes typed too. For now, test what's there today.
+
+    const rows = await db.drizzle
+      .select({ id: users.id, level: users.level })
+      .from(users)
+      .where(eq(users.level, 1));
+
+    if (rows.length > 0) {
+      const r = rows[0]!;
+      // Each row has typed `id: string` and `level: number | null`
+      const _id: string = r.id;
+      const _level: number | null = r.level;
+      // @ts-expect-error — `nope` was not in the projection
+      const _bad = r.nope;
+      assert.equal(typeof _id, 'string');
+    }
+  });
+
   it('db.segments.define(...) types tables + drizzle via the GameDatabase generic', async () => {
     // No createSegmentDefiner / no <typeof schema> needed — the class generic
     // already carries the schema type, so the resolver gets full inference
