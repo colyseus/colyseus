@@ -120,11 +120,11 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     await page.click('[data-testid="setup-submit"]');
 
     try {
-      await page.waitForSelector('.ant-menu-item a[href$="/users"]', { timeout: 15_000 });
+      await page.waitForSelector('nav a[href$="/users"]', { timeout: 15_000 });
     } catch (err) {
       const url = page.url();
       const body = await page.evaluate(() => document.body.innerText.slice(0, 600)).catch(() => '?');
-      const menuCount = await page.$$eval('.ant-menu-item', (els) => els.length).catch(() => -1);
+      const menuCount = await page.$$eval('nav a[role="menuitem"]', (els) => els.length).catch(() => -1);
       const catalogJson = await page.evaluate(async () => {
         const r = await fetch('/admin-api', { credentials: 'include' });
         return { status: r.status, len: (await r.json()).length };
@@ -153,11 +153,13 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     await page.click('[data-testid="login-submit"]');
 
     // Login lands on /. Wait for the dashboard data to render before clicking
-    // the menu — its async re-render reflows AntD's layout and detaches nodes
-    // grabbed before settle.
+    // the menu — async re-renders can detach link nodes grabbed before settle.
+    // Use evaluate-click to sidestep stale ElementHandle references.
     await page.waitForSelector('[data-testid="widget-recentUsers"]', { timeout: 15_000 });
-    await page.waitForSelector('.ant-menu-item a[href$="/users"]', { timeout: 5_000 });
-    await page.click('.ant-menu-item a[href$="/users"]');
+    await page.waitForSelector('nav a[href$="/users"]', { timeout: 5_000 });
+    await page.evaluate(() => {
+      (document.querySelector('nav a[href$="/users"]') as HTMLAnchorElement).click();
+    });
 
     await page.waitForSelector('[data-testid="list-users"] .ant-table-row', { timeout: 10_000 });
     const rowIds = await page.$$eval(
@@ -179,7 +181,10 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     await page.waitForSelector('[data-testid="widget-recentUsers"]', { timeout: 15_000 });
     await page.waitForSelector('[data-testid="logout-button"]', { timeout: 10_000 });
 
-    await page.click('[data-testid="logout-button"]');
+    // Click via evaluate to avoid stale handle on layout settle
+    await page.evaluate(() => {
+      (document.querySelector('[data-testid="logout-button"]') as HTMLButtonElement).click();
+    });
     await page.waitForSelector('[data-testid="login-card"]', { timeout: 10_000 });
     assert.match(page.url(), /\/admin\/login$/);
 
@@ -608,8 +613,10 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     await page.type('input[data-testid="login-password"]', BOOTSTRAP_PASSWORD);
     await page.click('[data-testid="login-submit"]');
     await page.waitForSelector('[data-testid="widget-recentUsers"]', { timeout: 15_000 });
-    await page.waitForSelector('.ant-menu-item a[href$="/users"]', { timeout: 5_000 });
-    await page.click('.ant-menu-item a[href$="/users"]');
+    await page.waitForSelector('nav a[href$="/users"]', { timeout: 5_000 });
+    await page.evaluate(() => {
+      (document.querySelector('nav a[href$="/users"]') as HTMLAnchorElement).click();
+    });
     await page.waitForSelector('[data-testid="list-users"] .ant-table-thead', { timeout: 10_000 });
 
     const headers = await page.$$eval(
