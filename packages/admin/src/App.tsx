@@ -117,12 +117,15 @@ function ProtectedShell({ resources }: { resources: Resource[] }) {
   return (
     <div className="flex min-h-screen bg-muted/30">
       <Sidebar resources={resources} />
-      <div className="flex flex-1 flex-col">
+      {/* min-w-0 + min-w-0 on every flex link in the chain — without this the
+          column expands to fit a wide table and the entire page grows
+          horizontally instead of the table scrolling inside its container. */}
+      <div className="flex flex-1 flex-col min-w-0">
         <header className="flex h-14 items-center justify-end gap-3 border-b bg-background px-6">
           <ThemeToggle />
           <UserHeader />
         </header>
-        <main className="flex-1 p-6">
+        <main className="flex-1 p-6 min-w-0">
           <Outlet />
         </main>
       </div>
