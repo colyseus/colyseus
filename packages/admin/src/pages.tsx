@@ -10,11 +10,11 @@ import {
   ShowButton,
   DeleteButton,
 } from '@refinedev/antd';
-import { Table, Form, Input, InputNumber, DatePicker, Space, Descriptions, Tag, Button } from 'antd';
+import { Table, Form, Input, InputNumber, DatePicker, Space, Descriptions, Tag, Button, Tabs, Empty } from 'antd';
 import dayjs from 'dayjs';
-import { useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { type Column, type Resource, singlePk, isJsonish, isNumeric, isDate } from './types';
+import { useEffect, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { type Column, type Resource, type ResourceRelation, singlePk, isJsonish, isNumeric, isDate } from './types';
 
 function format(v: any, c?: Column): React.ReactNode {
   if (v == null) { return <Tag>null</Tag>; }
@@ -183,25 +183,216 @@ export function ListPage({ resources }: { resources: Resource[] }) {
   );
 }
 
+/**
+ * Detail page with tabs:
+ *   - Profile        → the row's column data (default tab)
+ *   - <one-relation> → a clickable Tag-link to the related row (kind: 'one')
+ *   - <many-rel>     → a paginated mini-table of related rows (kind: 'many')
+ *
+ * Many-relations also get a count badge in the tab title. Both kinds fetch
+ * /admin-api/:resource/:id/relations/:name; counts come from the
+ * `x-total-count` header.
+ */
 export function ShowPage({ resources }: { resources: Resource[] }) {
-  const { resource: name } = useParams();
+  const { resource: name, id } = useParams();
   const def = findResource(resources, name);
   const { queryResult } = useShow({ resource: name });
   const record = queryResult?.data?.data ?? {};
 
   if (!def) { return <div>unknown resource</div>; }
   const cols = visibleColumns(def, def.showFields);
+  const relations = def.relations ?? [];
+  const manyRels = relations.filter((r) => r.kind === 'many');
+  const oneRels = relations.filter((r) => r.kind === 'one');
+
+  const profileTab = (
+    <Descriptions bordered column={1} size="small" data-testid={`show-${name}`}>
+      {cols.map((c) => (
+        <Descriptions.Item key={c.name} label={c.name}>
+          {format((record as any)[c.name], c)}
+        </Descriptions.Item>
+      ))}
+      {oneRels.length > 0 && id && (
+        <Descriptions.Item label="related">
+          <Space wrap size="small">
+            {oneRels.map((rel) => (
+              <OneRelationLink
+                key={rel.name}
+                parentResource={name!}
+                parentId={id}
+                relation={rel}
+                resources={resources}
+              />
+            ))}
+          </Space>
+        </Descriptions.Item>
+      )}
+    </Descriptions>
+  );
+
+  const items = [
+    { key: '__profile', label: 'Profile', children: profileTab },
+    ...manyRels.map((rel) => ({
+      key: rel.name,
+      label: <RelationTabLabel parentResource={name!} parentId={id!} relation={rel} />,
+      children: id ? (
+        <RelatedTable
+          parentResource={name!}
+          parentId={id}
+          relation={rel}
+          resources={resources}
+        />
+      ) : null,
+    })),
+  ];
 
   return (
     <Show isLoading={queryResult?.isLoading}>
-      <Descriptions bordered column={1} size="small" data-testid={`show-${name}`}>
-        {cols.map((c) => (
-          <Descriptions.Item key={c.name} label={c.name}>
-            {format((record as any)[c.name], c)}
-          </Descriptions.Item>
-        ))}
-      </Descriptions>
+      <Tabs defaultActiveKey="__profile" items={items} data-testid={`show-tabs-${name}`} />
     </Show>
+  );
+}
+
+/** Renders the tab title with a `(count)` badge fetched from `x-total-count`. */
+function RelationTabLabel({
+  parentResource, parentId, relation,
+}: { parentResource: string; parentId: string; relation: ResourceRelation }) {
+  const [count, setCount] = useState<number | null>(null);
+  useEffect(() => {
+    fetch(`/admin-api/${parentResource}/${parentId}/relations/${relation.name}?_start=0&_end=1`, {
+      credentials: 'include',
+    })
+      .then((r) => {
+        if (!r.ok) { return null; }
+        const total = r.headers.get('x-total-count');
+        return total ? Number(total) : null;
+      })
+      .then(setCount)
+      .catch(() => setCount(null));
+  }, [parentResource, parentId, relation.name]);
+  return (
+    <span data-testid={`tab-relation-${relation.name}`}>
+      {relation.name}{count !== null ? ` (${count})` : ''}
+    </span>
+  );
+}
+
+/** Paginated mini-table for a `many` relation. */
+function RelatedTable({
+  parentResource, parentId, relation, resources,
+}: {
+  parentResource: string;
+  parentId: string;
+  relation: ResourceRelation;
+  resources: Resource[];
+}) {
+  const targetDef = findResource(resources, relation.target);
+  const [rows, setRows] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
+  const [total, setTotal] = useState(0);
+
+  useEffect(() => {
+    setLoading(true);
+    const start = (page - 1) * pageSize;
+    fetch(
+      `/admin-api/${parentResource}/${parentId}/relations/${relation.name}?_start=${start}&_end=${start + pageSize}`,
+      { credentials: 'include' },
+    )
+      .then(async (r) => {
+        if (!r.ok) { return { rows: [], total: 0 }; }
+        const totalHeader = r.headers.get('x-total-count');
+        return { rows: await r.json() as any[], total: totalHeader ? Number(totalHeader) : 0 };
+      })
+      .then(({ rows, total }) => {
+        setRows(rows);
+        setTotal(total);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, [parentResource, parentId, relation.name, page]);
+
+  if (!targetDef) {
+    return <Empty description={`unknown target resource '${relation.target}'`} />;
+  }
+
+  const targetPk = singlePk(targetDef);
+  const cols = visibleColumns(targetDef, targetDef.listColumns);
+
+  return (
+    <Table
+      size="small"
+      data-testid={`related-${relation.name}`}
+      loading={loading}
+      rowKey={(r, i) => (targetPk ? r[targetPk] : i) as any}
+      dataSource={rows}
+      pagination={{
+        current: page,
+        pageSize,
+        total,
+        onChange: setPage,
+        showSizeChanger: false,
+      }}
+      scroll={{ x: true }}
+    >
+      {cols.map((c) => (
+        <Table.Column
+          key={c.name}
+          title={c.name}
+          dataIndex={c.name}
+          render={(v, row: any) => {
+            // Make the PK column a link to the target's Show page
+            if (targetPk && c.name === targetPk) {
+              return <Link to={`/${relation.target}/show/${row[targetPk]}`}>{format(v, c)}</Link>;
+            }
+            return format(v, c);
+          }}
+        />
+      ))}
+    </Table>
+  );
+}
+
+/** Clickable Tag for a `one` relation — fetches the row, then links to its Show page. */
+function OneRelationLink({
+  parentResource, parentId, relation, resources,
+}: {
+  parentResource: string;
+  parentId: string;
+  relation: ResourceRelation;
+  resources: Resource[];
+}) {
+  const targetDef = findResource(resources, relation.target);
+  const [row, setRow] = useState<any | null>(null);
+  const [empty, setEmpty] = useState(false);
+
+  useEffect(() => {
+    fetch(`/admin-api/${parentResource}/${parentId}/relations/${relation.name}?_start=0&_end=1`, {
+      credentials: 'include',
+    })
+      .then(async (r) => (r.ok ? (await r.json()) as any[] : []))
+      .then((rows) => {
+        if (rows.length === 0) { setEmpty(true); }
+        else { setRow(rows[0]); }
+      })
+      .catch(() => setEmpty(true));
+  }, [parentResource, parentId, relation.name]);
+
+  if (empty) { return <Tag>{relation.name}: <em>none</em></Tag>; }
+  if (!row || !targetDef) { return <Tag>{relation.name}: …</Tag>; }
+  const targetPk = singlePk(targetDef);
+  if (!targetPk) {
+    // Composite-PK target — show without link
+    return <Tag color="blue">{relation.name}</Tag>;
+  }
+  return (
+    <Link
+      to={`/${relation.target}/show/${row[targetPk]}`}
+      data-testid={`one-relation-${relation.name}`}
+    >
+      <Tag color="blue">{relation.name}: {String(row[targetPk])}</Tag>
+    </Link>
   );
 }
 

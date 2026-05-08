@@ -12,6 +12,16 @@ export interface ResourceAction {
   perRow: boolean;
 }
 
+/** Foreign-key relation to another resource — shown as a tab or badge on the detail page. */
+export interface ResourceRelation {
+  /** Display name + URL slug for the relation endpoint. */
+  name: string;
+  /** Canonical name of the target resource. */
+  target: string;
+  /** `'many'` → tab with a paginated table. `'one'` → clickable badge. */
+  kind: 'one' | 'many';
+}
+
 export interface Resource {
   name: string;
   label: string;
@@ -22,6 +32,7 @@ export interface Resource {
   formFields?: string[];
   showFields?: string[];
   actions: ResourceAction[];
+  relations: ResourceRelation[];
 }
 
 /** Single-PK tables get edit/show/delete actions; composite-PK tables are list-only. */

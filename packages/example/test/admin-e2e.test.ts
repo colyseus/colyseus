@@ -362,6 +362,49 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     await page.close();
   });
 
+  it('Show page renders relation tabs with counts and a one-relation link', async () => {
+    // Login + navigate to a user's Show page; assert the cloudSaves and
+    // playerItems tabs render, and the `role` one-relation appears as a
+    // clickable Tag in the Profile descriptions.
+    const loginRes = await fetch(`${BASE}/admin-api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: BOOTSTRAP_EMAIL, password: BOOTSTRAP_PASSWORD }),
+    });
+    const cookieHeader = loginRes.headers.get('set-cookie')!.split(';')[0];
+
+    const usersRes = await fetch(`${BASE}/admin-api/users`, { headers: { cookie: cookieHeader } });
+    const users = await usersRes.json() as Array<{ id: string }>;
+    const userId = users[0]!.id;
+
+    const page = await browser!.newPage();
+    await page.setViewport({ width: 1400, height: 900 });
+    await page.goto(`${BASE}/admin/login`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-testid="login-email"]');
+    await page.type('input[data-testid="login-email"]', BOOTSTRAP_EMAIL);
+    await page.type('input[data-testid="login-password"]', BOOTSTRAP_PASSWORD);
+    await page.click('[data-testid="login-submit"]');
+    await page.waitForSelector('[data-testid="widget-recentUsers"]', { timeout: 15_000 });
+
+    await page.goto(`${BASE}/admin/users/show/${userId}`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector(`[data-testid="show-tabs-users"]`, { timeout: 10_000 });
+
+    // Many-relation tabs present
+    await page.waitForSelector('[data-testid="tab-relation-cloudSaves"]', { timeout: 5_000 });
+    await page.waitForSelector('[data-testid="tab-relation-playerItems"]', { timeout: 5_000 });
+    await page.waitForSelector('[data-testid="tab-relation-leaderboardEntries"]', { timeout: 5_000 });
+
+    // One-relation: bootstrapped admin has role=admin, so the link should appear
+    await page.waitForSelector('[data-testid="one-relation-role"]', { timeout: 10_000 });
+    const roleText = await page.$eval('[data-testid="one-relation-role"]', (el) => el.textContent);
+    assert.match(roleText ?? '', /role:/i);
+
+    // Click cloudSaves tab → mini-table renders (empty for fresh admin)
+    await page.click('[data-testid="tab-relation-cloudSaves"]');
+    await page.waitForSelector('[data-testid="related-cloudSaves"]', { timeout: 5_000 });
+    await page.close();
+  });
+
   it('admin UI table renders custom column headers', async () => {
     const page = await browser!.newPage();
     await page.setViewport({ width: 1400, height: 900 });
