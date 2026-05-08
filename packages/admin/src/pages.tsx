@@ -39,6 +39,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { JsonEditor } from '@/components/ui/json-editor';
 import { Page } from '@/components/ui/page';
 import { Empty } from '@/components/ui/empty';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -1114,12 +1115,17 @@ function FormBody({
                 onChange={(v) => setValues((prev) => ({ ...prev, [c.name]: v }))}
               />
             ) : isJsonish(c) ? (
-              <textarea
-                id={`f-${c.name}`}
-                className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                value={typeof values[c.name] === 'string' ? values[c.name] : JSON.stringify(values[c.name] ?? '', null, 0)}
-                onChange={(e) => setValues((prev) => ({ ...prev, [c.name]: e.target.value }))}
+              <JsonEditor
+                value={
+                  typeof values[c.name] === 'string'
+                    ? values[c.name]
+                    // Pretty-print on entry — we get back a single string from
+                    // the API; format it so the editor opens to readable JSON.
+                    : JSON.stringify(values[c.name] ?? null, null, 2)
+                }
+                onChange={(next) => setValues((prev) => ({ ...prev, [c.name]: next }))}
                 placeholder='valid JSON, e.g. "value" or {"a":1}'
+                data-testid={`json-${c.name}`}
               />
             ) : isDate(c) ? (
               <Input

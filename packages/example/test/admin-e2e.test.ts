@@ -561,6 +561,28 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     await page.close();
   });
 
+  it('JSON columns render the CodeMirror json editor, not a textarea', async () => {
+    // cloudSaves.data is a `text` column with JSON mode; the form should
+    // route it to the syntax-highlighted JsonEditor (CodeMirror under
+    // the hood), not the plain textarea we used to render.
+    const page = await browser!.newPage();
+    await page.setViewport({ width: 1400, height: 900 });
+    await page.goto(`${BASE}/admin/login`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-testid="login-email"]');
+    await page.type('input[data-testid="login-email"]', BOOTSTRAP_EMAIL);
+    await page.type('input[data-testid="login-password"]', BOOTSTRAP_PASSWORD);
+    await page.click('[data-testid="login-submit"]');
+    await page.waitForSelector('[data-testid="widget-recentUsers"]', { timeout: 15_000 });
+
+    await page.goto(`${BASE}/admin/cloudSaves/create`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-testid="create-cloudSaves"]', { timeout: 10_000 });
+
+    // The JsonEditor wrapper uses data-testid="json-<colname>" and renders
+    // CodeMirror inside (look for .cm-editor as a stable hook).
+    await page.waitForSelector('[data-testid="json-data"] .cm-editor', { timeout: 5_000 });
+    await page.close();
+  });
+
   it('FK columns render a searchable RelationPicker, not a text input', async () => {
     const loginRes = await fetch(`${BASE}/admin-api/auth/login`, {
       method: 'POST',
