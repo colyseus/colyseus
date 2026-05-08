@@ -265,8 +265,16 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
       widgets: Array<{ id: string; render: string; data: any; error?: string }>;
     };
     const ids = payload.widgets.map((w) => w.id);
-    assert.deepEqual(ids.sort(), ['health', 'recentUsers', 'rooms'].sort(),
+    assert.deepEqual(ids.sort(), ['health', 'recentUsers', 'rooms', 'segments'].sort(),
       `expected only allow-listed + custom widgets, got: ${ids.join(', ')}`);
+
+    // `segments` widget reflects every registered segment as a KPI key
+    const segments = payload.widgets.find((w) => w.id === 'segments')!;
+    assert.equal(segments.error, undefined);
+    const segData = segments.data as Record<string, number>;
+    for (const expected of ['newPlayers', 'veterans', 'climbing']) {
+      assert.ok(expected in segData, `segments KPI should include '${expected}', got: ${Object.keys(segData).join(', ')}`);
+    }
 
     // overridden built-in (health) carries the user's data shape
     const health = payload.widgets.find((w) => w.id === 'health')!;
@@ -286,8 +294,9 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     await page.type('input[data-testid="login-password"]', BOOTSTRAP_PASSWORD);
     await page.click('[data-testid="login-submit"]');
 
-    // builtIns allowlist kept recentUsers; widgets override health + add rooms
+    // builtIns allowlist kept recentUsers + segments; widgets override health + add rooms
     await page.waitForSelector('[data-testid="widget-recentUsers"]', { timeout: 15_000 });
+    await page.waitForSelector('[data-testid="widget-segments"]', { timeout: 5_000 });
     await page.waitForSelector('[data-testid="widget-health"]', { timeout: 5_000 });
     await page.waitForSelector('[data-testid="widget-rooms"]', { timeout: 5_000 });
 

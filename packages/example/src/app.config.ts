@@ -19,6 +19,7 @@ import { PostgresDriver } from "@colyseus/drizzle-driver";
 import { GameDatabase } from "@colyseus/database";
 import { adminEndpoints, defineAdminResource } from "@colyseus/admin";
 import * as schema from "./db/schema.ts";
+import { newPlayers, veterans, climbing } from "./db/segments.ts";
 
 // Spin up an embedded sqlite-backed GameDatabase. The admin panel below
 // reflects every table on it. Set DATABASE_URL=postgres://... to switch.
@@ -29,6 +30,7 @@ import * as schema from "./db/schema.ts";
 const database = new GameDatabase({
   connectionString: process.env.DATABASE_URL,
   schemas: schema,
+  segments: [newPlayers, veterans, climbing],
 });
 await database.boot();
 
@@ -274,9 +276,9 @@ export const server = config({
       database,
       dashboard: {
         // Skip the noisy `totals` widget and `activeEvents` (we don't use timed
-        // events here). Keep recentUsers + health from the built-ins, then
+        // events here). Keep recentUsers + segments from the built-ins, then
         // override `health` and append a new `rooms` widget.
-        builtIns: ['recentUsers'],
+        builtIns: ['recentUsers', 'segments'],
         widgets: [
           // Re-include `health` via its factory — but with a custom data fn
           // that also reports process uptime.

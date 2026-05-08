@@ -63,7 +63,7 @@ function humanize(id: string): string {
 /**
  * Built-in widget ids. Use as the discriminator for `dashboard.builtIns`.
  */
-export type BuiltInWidgetId = 'totals' | 'recentUsers' | 'activeEvents' | 'health';
+export type BuiltInWidgetId = 'totals' | 'recentUsers' | 'activeEvents' | 'health' | 'segments';
 
 /**
  * Factory functions for the built-in widgets. Re-usable as composition
@@ -172,9 +172,29 @@ export const dashboardWidgets = {
       },
     };
   },
+
+  /**
+   * Segment sizes — KPI of each registered segment's current member count.
+   * Empty + hidden when no segments are defined on the GameDatabase.
+   */
+  segments(opts: { title?: string; icon?: string } = {}): DashboardWidget {
+    return {
+      id: 'segments',
+      title: opts.title ?? 'Segments',
+      icon: opts.icon ?? 'cluster',
+      render: 'kpi',
+      data: async ({ database }) => {
+        const out: Record<string, number> = {};
+        for (const { id } of database.segments.list()) {
+          out[id] = await database.segments.size(id);
+        }
+        return out;
+      },
+    };
+  },
 };
 
-const ALL_BUILT_INS: BuiltInWidgetId[] = ['totals', 'recentUsers', 'activeEvents', 'health'];
+const ALL_BUILT_INS: BuiltInWidgetId[] = ['totals', 'recentUsers', 'activeEvents', 'health', 'segments'];
 
 /**
  * Resolve the final widget set for a request.

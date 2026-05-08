@@ -8,7 +8,9 @@ import { ItemsService } from './services/ItemsService.ts';
 import { TimedEventsService } from './services/TimedEventsService.ts';
 import { AnalyticsService } from './services/AnalyticsService.ts';
 import { ModerationService } from './services/ModerationService.ts';
+import { SegmentsService } from './services/SegmentsService.ts';
 import type { SchemaSet } from './types.ts';
+import type { SegmentDefinition } from './segments.ts';
 
 /**
  * Resolve schema slot K to the user's table type if provided, else fall back
@@ -121,6 +123,14 @@ interface CommonOptions<S extends Partial<SchemaSet> = {}> {
    * Slots not provided fall back to the loose `SchemaSet[K]` shape.
    */
   schemas?: S;
+
+  /**
+   * Player segments — declarative cohorts used by live-ops features
+   * (mailbox, A/B experiments, targeted configs). Define with
+   * `defineSegment(id, { resolve })`; resolution runs at call time
+   * against the live DB.
+   */
+  segments?: SegmentDefinition[];
 }
 
 /**
@@ -212,6 +222,7 @@ export class GameDatabase<S extends Partial<SchemaSet> = {}> {
   events: TimedEventsService<Resolve<S, 'timedEvents'>>;
   analytics: AnalyticsService<Resolve<S, 'analyticsEvents'>>;
   moderation: ModerationService<Resolve<S, 'userRoles'>, Resolve<S, 'modAssignments'>>;
+  segments: SegmentsService;
 
   /**
    * Map of resolved drizzle tables, keyed by their canonical name
@@ -311,6 +322,11 @@ export class GameDatabase<S extends Partial<SchemaSet> = {}> {
       this.drizzle,
       schemas.userRoles,
       schemas.modAssignments,
+    );
+    this.segments = new SegmentsService(
+      this.drizzle,
+      this.tables as Record<string, any>,
+      this.options.segments ?? [],
     );
   }
 
