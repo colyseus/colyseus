@@ -10,7 +10,7 @@ import {
   ShowButton,
   DeleteButton,
 } from '@refinedev/antd';
-import { Table, Form, Input, InputNumber, DatePicker, Space, Descriptions, Tag, Button, Tabs, Empty, Tooltip, Typography, message, Popconfirm } from 'antd';
+import { Table, Form, Input, InputNumber, DatePicker, Space, Descriptions, Tag, Button, Tabs, Empty, Tooltip, Typography, message, Popconfirm, Select } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -304,33 +304,164 @@ function visibleColumns(def: Resource, subset: string[] | undefined): Column[] {
     .sort((a, b) => order.get(a.name)! - order.get(b.name)!);
 }
 
-function FormFields({ cols, omitPrimary = false, omitDefaulted = false }: {
-  cols: Column[]; omitPrimary?: boolean; omitDefaulted?: boolean;
+/**
+ * Pick a "label" column for a target resource — what the user actually
+ * recognizes when picking a related row. Common patterns first
+ * (display_name, email, name, title), then any non-PK text column.
+ */
+function pickLabelColumn(def: Resource): string | null {
+  const colNames = def.columns.map((c) => c.name);
+  for (const candidate of ['display_name', 'name', 'email', 'title']) {
+    if (colNames.includes(candidate)) { return candidate; }
+  }
+  const firstText = def.columns.find((c) =>
+    !c.primary && (c.dataType === 'string' || /^(text|varchar|char)/i.test(c.type)),
+  );
+  return firstText?.name ?? null;
+}
+
+function FormFields({ cols, resources, oneRelations, omitPrimary = false, omitDefaulted = false }: {
+  cols: Column[];
+  resources: Resource[];
+  oneRelations: ResourceRelation[];
+  omitPrimary?: boolean;
+  omitDefaulted?: boolean;
 }) {
+  // Build a map of FK column → relation so the form can swap a raw input
+  // for a searchable picker against the target resource. fk on the relation
+  // is already the SQL column name, matching c.name.
+  const fkRelByCol = new Map(oneRelations.map((r) => [r.fk, r]));
+
   return (
     <>
       {cols
         .filter((c) => !(omitPrimary && c.primary) && !(omitDefaulted && c.hasDefault))
-        .map((c) => (
-          <Form.Item
-            key={c.name}
-            label={c.name}
-            name={c.name}
-            rules={c.notNull && !c.primary && !c.hasDefault
-              ? [{ required: true, message: `${c.name} is required` }]
-              : undefined}
-            getValueFromEvent={isJsonish(c) ? (e) => tryParseJson(e?.target?.value) : undefined}
-            getValueProps={isJsonish(c)
-              ? (v) => ({ value: typeof v === 'string' ? v : JSON.stringify(v ?? '', null, 0) })
-              : undefined}
-          >
-            {isJsonish(c) ? <Input.TextArea rows={3} placeholder='valid JSON, e.g. "value" or {"a":1}' />
-              : isNumeric(c) ? <InputNumber style={{ width: '100%' }} />
-              : isDate(c) ? <DatePicker showTime style={{ width: '100%' }} />
-              : <Input />}
-          </Form.Item>
-        ))}
+        .map((c) => {
+          const rel = fkRelByCol.get(c.name);
+          if (rel) {
+            // FK column — render a searchable picker.
+            return (
+              <Form.Item
+                key={c.name}
+                label={c.name}
+                name={c.name}
+                rules={c.notNull && !c.primary && !c.hasDefault
+                  ? [{ required: true, message: `${c.name} is required` }]
+                  : undefined}
+              >
+                <RelationPicker target={rel.target} resources={resources} />
+              </Form.Item>
+            );
+          }
+          return (
+            <Form.Item
+              key={c.name}
+              label={c.name}
+              name={c.name}
+              rules={c.notNull && !c.primary && !c.hasDefault
+                ? [{ required: true, message: `${c.name} is required` }]
+                : undefined}
+              getValueFromEvent={isJsonish(c) ? (e) => tryParseJson(e?.target?.value) : undefined}
+              getValueProps={isJsonish(c)
+                ? (v) => ({ value: typeof v === 'string' ? v : JSON.stringify(v ?? '', null, 0) })
+                : undefined}
+            >
+              {isJsonish(c) ? <Input.TextArea rows={3} placeholder='valid JSON, e.g. "value" or {"a":1}' />
+                : isNumeric(c) ? <InputNumber style={{ width: '100%' }} />
+                : isDate(c) ? <DatePicker showTime style={{ width: '100%' }} />
+                : <Input />}
+            </Form.Item>
+          );
+        })}
     </>
+  );
+}
+
+/**
+ * Searchable picker for a foreign-key column. Loads a first page from the
+ * target resource, paged-search via `?_q=…` as the user types, displays
+ * `<label> · <id>` so an id-only option is still recognizable. Standard
+ * controlled component shape (value + onChange) so `Form.Item` drives it.
+ *
+ * On mount with a pre-set value (Edit / prefilled Create), fetches the
+ * specific row by id so the dropdown shows the human label, not just the
+ * raw UUID.
+ */
+function RelationPicker({
+  target, resources, value, onChange,
+}: {
+  target: string;
+  resources: Resource[];
+  value?: string | number;
+  onChange?: (v: any) => void;
+}) {
+  const targetDef = findResource(resources, target);
+  const targetPk = targetDef ? singlePk(targetDef) : null;
+  const labelCol = targetDef ? pickLabelColumn(targetDef) : null;
+
+  const [options, setOptions] = useState<Array<{ value: any; label: string }>>([]);
+  const [loading, setLoading] = useState(false);
+
+  const makeOption = (row: any): { value: any; label: string } => {
+    const id = targetPk ? row[targetPk] : '';
+    const label = labelCol && row[labelCol] != null && row[labelCol] !== ''
+      ? `${row[labelCol]} · ${id}`
+      : String(id);
+    return { value: id, label };
+  };
+
+  const fetchOptions = async (search: string) => {
+    if (!targetDef) { return; }
+    setLoading(true);
+    try {
+      const url = `/admin-api/${target}?_start=0&_end=20${search ? `&_q=${encodeURIComponent(search)}` : ''}`;
+      const res = await fetch(url, { credentials: 'include' });
+      if (!res.ok) { return; }
+      const rows = await res.json() as any[];
+      setOptions(rows.map(makeOption));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Initial page on mount + when target changes.
+  useEffect(() => { fetchOptions(''); /* eslint-disable-line react-hooks/exhaustive-deps */ }, [target]);
+
+  // If the form has a preset value not yet in `options`, fetch its row so
+  // the picker shows the friendly label rather than just the UUID.
+  useEffect(() => {
+    if (value == null || value === '' || !targetDef) { return; }
+    if (options.find((o) => o.value === value)) { return; }
+    fetch(`/admin-api/${target}/${encodeURIComponent(String(value))}`, { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((row) => {
+        if (row) { setOptions((prev) => [makeOption(row), ...prev]); }
+      })
+      .catch(() => { /* ignore — show id-only fallback */ });
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [value, target]);
+
+  if (!targetDef) {
+    // Target wasn't registered as a resource — fall back to a text input
+    // rather than a non-functional picker.
+    return <Input value={value as any} onChange={(e) => onChange?.(e.target.value)} />;
+  }
+
+  return (
+    <span data-testid={`relation-picker-${target}`} style={{ display: 'block' }}>
+      <Select
+        showSearch
+        allowClear
+        filterOption={false}
+        onSearch={(q) => { void fetchOptions(q); }}
+        onChange={(v) => onChange?.(v)}
+        value={value as any}
+        loading={loading}
+        options={options}
+        placeholder={`Select ${targetDef.label.toLowerCase()}…`}
+        style={{ width: '100%' }}
+      />
+    </span>
   );
 }
 
@@ -785,10 +916,11 @@ export function EditPage({ resources }: { resources: Resource[] }) {
 
   const relations = def.relations ?? [];
   const manyRels = relations.filter((r) => r.kind === 'many');
+  const oneRels = relations.filter((r) => r.kind === 'one');
 
   const formTab = (
     <Form {...formProps} layout="vertical" initialValues={initialValues} data-testid={`edit-${name}`}>
-      <FormFields cols={cols} omitPrimary />
+      <FormFields cols={cols} resources={resources} oneRelations={oneRels} omitPrimary />
     </Form>
   );
 
@@ -838,6 +970,8 @@ export function CreatePage({ resources }: { resources: Resource[] }) {
     }
   }
 
+  const oneRels = (def.relations ?? []).filter((r) => r.kind === 'one');
+
   return (
     <Create saveButtonProps={saveButtonProps}>
       <Form
@@ -846,7 +980,7 @@ export function CreatePage({ resources }: { resources: Resource[] }) {
         initialValues={prefill}
         data-testid={`create-${name}`}
       >
-        <FormFields cols={cols} omitDefaulted />
+        <FormFields cols={cols} resources={resources} oneRelations={oneRels} omitDefaulted />
       </Form>
     </Create>
   );

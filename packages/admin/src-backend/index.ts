@@ -316,15 +316,18 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
         const singlePk = cfg.columns.filter((c: any) => c.primary).map((c: any) => c.name);
         // Filter to only relations whose target is actually registered as a
         // resource — otherwise we'd point the UI at endpoints that 404.
+        const sourceTable = tables[name];
         const sourceRelations = (database.relations[name] ?? [])
           .filter((r) => !!tables[r.target])
           .map((r) => {
-            // The runtime `fk` is the drizzle JS field name (e.g. `userId`),
-            // which the relation endpoint accesses via `targetTable[fk]`.
-            // The frontend uses SQL column names for form fields, so look up
-            // and emit the SQL name here.
-            const targetTable = tables[r.target];
-            const col = targetTable ? (targetTable as any)[r.fk] : null;
+            // The runtime `fk` is the drizzle JS field name (e.g. `userId`).
+            // For `many` relations the FK column lives on the target table
+            // (target.userId → source.id); for `one` relations it lives on
+            // the source (source.userId → target.id). Look up on the correct
+            // side and emit the SQL column name so the frontend's form
+            // fields (which use SQL names) can match.
+            const ownerTable = r.kind === 'one' ? sourceTable : tables[r.target];
+            const col = ownerTable ? (ownerTable as any)[r.fk] : null;
             const fkSql = (col && (col as any).name) ?? r.fk;
             return { name: r.name, target: r.target, kind: r.kind, fk: fkSql };
           });

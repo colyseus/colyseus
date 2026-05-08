@@ -464,6 +464,50 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     await page.close();
   });
 
+  it('FK columns render a searchable RelationPicker, not a text input', async () => {
+    const loginRes = await fetch(`${BASE}/admin-api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: BOOTSTRAP_EMAIL, password: BOOTSTRAP_PASSWORD }),
+    });
+    const cookieHeader = loginRes.headers.get('set-cookie')!.split(';')[0];
+    const usersRes = await fetch(`${BASE}/admin-api/users`, { headers: { cookie: cookieHeader } });
+    const userId = (await usersRes.json() as Array<{ id: string }>)[0]!.id;
+
+    const page = await browser!.newPage();
+    await page.setViewport({ width: 1400, height: 900 });
+    await page.goto(`${BASE}/admin/login`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-testid="login-email"]');
+    await page.type('input[data-testid="login-email"]', BOOTSTRAP_EMAIL);
+    await page.type('input[data-testid="login-password"]', BOOTSTRAP_PASSWORD);
+    await page.click('[data-testid="login-submit"]');
+    await page.waitForSelector('[data-testid="widget-recentUsers"]', { timeout: 15_000 });
+
+    // cloudSaves has a one-relation `user` with fk `user_id`. The Create
+    // page should render a RelationPicker for that column instead of a
+    // plain text input.
+    await page.goto(
+      `${BASE}/admin/cloudSaves/create?_prefill_user_id=${encodeURIComponent(userId)}`,
+      { waitUntil: 'domcontentloaded' },
+    );
+    await page.waitForSelector('[data-testid="create-cloudSaves"]', { timeout: 10_000 });
+    await page.waitForSelector('[data-testid="relation-picker-users"]', { timeout: 5_000 });
+
+    // The picker should contain the prefilled user id (rendered inside an
+    // AntD Select selection item — the inner span carries the label/value).
+    await page.waitForFunction(
+      (uid: string) => {
+        const picker = document.querySelector('[data-testid="relation-picker-users"]');
+        if (!picker) { return false; }
+        const txt = (picker.textContent ?? '');
+        return txt.includes(uid.slice(0, 6));
+      },
+      { timeout: 5_000 },
+      userId,
+    );
+    await page.close();
+  });
+
   it('"+ New related" button on a relation tab opens Create with FK pre-filled', async () => {
     const loginRes = await fetch(`${BASE}/admin-api/auth/login`, {
       method: 'POST',
@@ -496,12 +540,19 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     );
     await page.waitForSelector('[data-testid="create-cloudSaves"]', { timeout: 5_000 });
 
-    // The user_id field should carry the prefilled parent id
-    const userIdInput = await page.$eval(
-      '#user_id, [name="user_id"]',
-      (el: any) => el.value,
-    ).catch(() => null);
-    assert.ok(userIdInput && userIdInput.length > 0, `prefill should populate user_id, got: ${userIdInput}`);
+    // user_id is a FK column → renders as a RelationPicker, not a plain
+    // input. The picker should show the prefilled parent id (or its label)
+    // in its visible selection area.
+    await page.waitForSelector('[data-testid="relation-picker-users"]', { timeout: 5_000 });
+    await page.waitForFunction(
+      (uid: string) => {
+        const picker = document.querySelector('[data-testid="relation-picker-users"]');
+        if (!picker) { return false; }
+        return (picker.textContent ?? '').includes(uid.slice(0, 6));
+      },
+      { timeout: 5_000 },
+      userId,
+    );
     await page.close();
   });
 
