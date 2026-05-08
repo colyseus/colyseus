@@ -10,17 +10,87 @@ import {
   ShowButton,
   DeleteButton,
 } from '@refinedev/antd';
-import { Table, Form, Input, InputNumber, DatePicker, Space, Descriptions, Tag, Button, Tabs, Empty } from 'antd';
+import { Table, Form, Input, InputNumber, DatePicker, Space, Descriptions, Tag, Button, Tabs, Empty, Tooltip, Typography, message } from 'antd';
 import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { type Column, type Resource, type ResourceRelation, singlePk, isJsonish, isNumeric, isDate } from './types';
+import { type Column, type Resource, type ResourceRelation, singlePk, isJsonish, isNumeric, isDate, isBoolean } from './types';
 
+dayjs.extend(relativeTime);
+
+/**
+ * Cell renderer for list/detail views. Type-aware:
+ *
+ *  - null/undefined  → faded em-dash (no more "null" Tag noise)
+ *  - boolean         → green/gray Tag with Yes/No
+ *  - date / timestamp → relative time + tooltip with full ISO
+ *  - JSON / object   → first-line preview, full content in a tooltip
+ *  - long-ish ids/strings → truncated + click-to-copy + tooltip
+ *  - numbers         → right-aligned with thousand separators
+ *  - everything else → plain text
+ *
+ * Falls back gracefully when `c` is omitted (e.g. relation back-fetches
+ * where we don't have column metadata yet).
+ */
 function format(v: any, c?: Column): React.ReactNode {
-  if (v == null) { return <Tag>null</Tag>; }
-  if (c && isDate(c) && typeof v === 'string') { return new Date(v).toISOString(); }
-  if (typeof v === 'object') { return <code style={{ fontSize: 11 }}>{JSON.stringify(v)}</code>; }
-  return String(v);
+  if (v == null) { return <span style={{ color: '#a1a1aa' }}>—</span>; }
+
+  if (c && isBoolean(c)) {
+    const b = v === true || v === 1 || v === '1' || v === 'true';
+    return <Tag color={b ? 'green' : 'default'}>{b ? 'Yes' : 'No'}</Tag>;
+  }
+
+  if (c && isDate(c)) {
+    const asDate = v instanceof Date ? v : (typeof v === 'string' || typeof v === 'number') ? new Date(v) : null;
+    if (asDate && !isNaN(asDate.getTime())) {
+      return (
+        <Tooltip title={asDate.toISOString()}>
+          <span>{dayjs(asDate).fromNow()}</span>
+        </Tooltip>
+      );
+    }
+    return String(v);
+  }
+
+  if (c && isNumeric(c) && typeof v === 'number') {
+    return (
+      <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+        {Number.isInteger(v) ? v.toLocaleString() : v.toString()}
+      </span>
+    );
+  }
+
+  if (typeof v === 'object' || (c && isJsonish(c) && typeof v === 'string')) {
+    const obj = typeof v === 'string' ? safeParse(v) : v;
+    const preview = JSON.stringify(obj).slice(0, 60);
+    return (
+      <Tooltip title={<pre style={{ margin: 0, color: '#fff', fontSize: 11 }}>{JSON.stringify(obj, null, 2)}</pre>}>
+        <code style={{ fontSize: 11, color: '#71717a' }}>
+          {preview}{JSON.stringify(obj).length > 60 ? '…' : ''}
+        </code>
+      </Tooltip>
+    );
+  }
+
+  // Long string (id-shaped) → truncate with copy affordance
+  const s = String(v);
+  if (s.length > 24 && !/\s/.test(s)) {
+    return (
+      <Typography.Text
+        style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }}
+        copyable={{ text: s, onCopy: () => message.success('copied', 1) }}
+      >
+        <Tooltip title={s}>{s.slice(0, 8)}…{s.slice(-4)}</Tooltip>
+      </Typography.Text>
+    );
+  }
+
+  return s;
+}
+
+function safeParse(raw: string): any {
+  try { return JSON.parse(raw); } catch { return raw; }
 }
 
 function findResource(resources: Resource[], name?: string): Resource | undefined {

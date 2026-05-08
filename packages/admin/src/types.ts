@@ -51,3 +51,7 @@ export function isNumeric(c: Column): boolean {
 export function isDate(c: Column): boolean {
   return c.type === 'timestamp' || c.type === 'date' || c.type === 'timestamp with time zone';
 }
+
+export function isBoolean(c: Column): boolean {
+  return c.type === 'boolean';
+}
