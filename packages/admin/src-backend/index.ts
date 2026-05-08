@@ -206,6 +206,20 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
     : (getSqliteTableConfig as any);
 
   /**
+   * Build a drizzle projection keyed by SQL column names so the response
+   * rows match what the frontend expects. Without this, drizzle's default
+   * `select()` returns rows keyed by the JS field names (camelCase) and
+   * the column metadata we expose to the UI uses snake_case — every
+   * `record[c.name]` lookup misses for any column whose JS and SQL names
+   * differ (createdAt / created_at, userId / user_id, etc.).
+   */
+  function sqlKeyedProjection(cfg: any): Record<string, any> {
+    const out: Record<string, any> = {};
+    for (const c of cfg.columns) { out[c.name] = c; }
+    return out;
+  }
+
+  /**
    * The PK columns for a resource, in declaration order:
    *   - Single-column PKs surface via `c.primary === true` on the column.
    *   - Composite PKs are stored on `cfg.primaryKeys[].columns` instead.
@@ -315,7 +329,7 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
     if (built instanceof Response) { return built; }
     const set = translateBodyKeys((ctx.body ?? {}) as Record<string, any>, table);
     const [row] = await database.drizzle.update(table).set(set)
-      .where(built.where).returning();
+      .where(built.where).returning(sqlKeyedProjection(cfg));
     if (!row) { return errorResponse(404, 'not found'); }
     return json(row);
   };
@@ -529,8 +543,9 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
         const start = parseInt(q._start as string) || 0;
         const end = parseInt(q._end as string) || start + 100;
 
+        const targetCfg = getTableConfig(targetTable);
         const rowsQuery = database.drizzle
-          .select()
+          .select(sqlKeyedProjection(targetCfg))
           .from(targetTable)
           .where(eq(fkCol, castId))
           .limit(end - start)
@@ -575,9 +590,13 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
         if (!body.id) { return errorResponse(400, `action '${actionName}' requires an id`); }
         const r = tableOrError(resource);
         if (r instanceof Response) { return r; }
-        const pkCol = r.cfg.columns.find((c: any) => c.primary);
-        if (!pkCol) { return errorResponse(400, 'no single-column primary key for per-row action'); }
-        const rows = await database.drizzle.select().from(r.table).where(eq(pkCol, castPk(body.id, pkCol))).limit(1);
+        const built = buildPkWhere(r.cfg, body.id);
+        if (built instanceof Response) { return built; }
+        const rows = await database.drizzle
+          .select(sqlKeyedProjection(r.cfg))
+          .from(r.table)
+          .where(built.where)
+          .limit(1);
         if (!rows[0]) { return errorResponse(404, 'row not found'); }
         row = rows[0];
       }
@@ -683,7 +702,11 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
       const { table, cfg } = r;
       const built = buildPkWhere(cfg, id);
       if (built instanceof Response) { return built; }
-      const rows = await database.drizzle.select().from(table).where(built.where).limit(1);
+      const rows = await database.drizzle
+        .select(sqlKeyedProjection(cfg))
+        .from(table)
+        .where(built.where)
+        .limit(1);
       if (!rows[0]) { return errorResponse(404, 'not found'); }
       return json(rows[0]);
     }),
@@ -696,7 +719,10 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
       const r = tableOrError(resource);
       if (r instanceof Response) { return r; }
       const values = translateBodyKeys((ctx.body ?? {}) as Record<string, any>, r.table);
-      const [row] = await database.drizzle.insert(r.table).values(values).returning();
+      const [row] = await database.drizzle
+        .insert(r.table)
+        .values(values)
+        .returning(sqlKeyedProjection(r.cfg));
       return json(row, { status: 201 });
     }),
 
@@ -716,7 +742,8 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
       const { table, cfg } = r;
       const built = buildPkWhere(cfg, id);
       if (built instanceof Response) { return built; }
-      const [row] = await database.drizzle.delete(table).where(built.where).returning();
+      const [row] = await database.drizzle.delete(table).where(built.where)
+        .returning(sqlKeyedProjection(cfg));
       if (!row) { return errorResponse(404, 'not found'); }
       return json(row);
     }),

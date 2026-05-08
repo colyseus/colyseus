@@ -228,24 +228,30 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
       .toString('base64')
       .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
-    // GET
+    // GET — response keys are SQL column names so the frontend's
+    // `record[c.name]` reads land. Without this, fields like board_id,
+    // user_id, created_at on the Show page rendered as "—" because
+    // drizzle's default `.select()` returns rows keyed by JS field names.
     const get = await fetch(`${BASE}/admin-api/cloudSaves/${compositeId}`, {
       headers: { cookie: cookieHeader },
     });
     assert.equal(get.status, 200);
-    const row = await get.json() as { userId: string; slot: number };
-    assert.equal(row.userId, userId);
+    const row = await get.json() as Record<string, any>;
+    assert.equal(row.user_id, userId);
     assert.equal(row.slot, 1);
+    assert.ok(row.created_at, 'created_at should be present (SQL key)');
+    assert.equal(row.userId, undefined, 'JS-name keys should not leak through');
 
-    // PATCH version
+    // PATCH version — response also SQL-keyed
     const patch = await fetch(`${BASE}/admin-api/cloudSaves/${compositeId}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', cookie: cookieHeader },
       body: JSON.stringify({ version: 99 }),
     });
     assert.equal(patch.status, 200);
-    const updated = await patch.json() as { version: number };
+    const updated = await patch.json() as Record<string, any>;
     assert.equal(updated.version, 99);
+    assert.equal(updated.user_id, userId);
 
     // DELETE
     const del = await fetch(`${BASE}/admin-api/cloudSaves/${compositeId}`, {
@@ -277,8 +283,9 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
         body: JSON.stringify({ display_name: `Endel via ${method}` }),
       });
       assert.equal(res.status, 200, `expected 200 for ${method}`);
-      const row = await res.json() as { displayName: string };
-      assert.equal(row.displayName, `Endel via ${method}`);
+      // Response is SQL-keyed (display_name), matching what the form binds to.
+      const row = await res.json() as Record<string, any>;
+      assert.equal(row.display_name, `Endel via ${method}`);
     }
   });
 
@@ -311,9 +318,10 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     });
     const body = await create.text();
     assert.equal(create.status, 201, `expected 201, got ${create.status}: ${body}`);
-    const row = JSON.parse(body) as { boardId: string; userId: string; score: number };
-    assert.equal(row.boardId, 'main');
-    assert.equal(row.userId, userId);
+    // Response is SQL-keyed: board_id / user_id, not boardId / userId.
+    const row = JSON.parse(body) as Record<string, any>;
+    assert.equal(row.board_id, 'main');
+    assert.equal(row.user_id, userId);
     assert.equal(row.score, 100);
   });
 
