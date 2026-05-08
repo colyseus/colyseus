@@ -9,6 +9,7 @@ import { TimedEventsService } from './services/TimedEventsService.ts';
 import { AnalyticsService } from './services/AnalyticsService.ts';
 import { ModerationService } from './services/ModerationService.ts';
 import { SegmentsService } from './services/SegmentsService.ts';
+import { mergeRelations, type RelationDefinition } from './relations-meta.ts';
 import type { SchemaSet } from './types.ts';
 import type { SegmentDefinition, DrizzleFor } from './segments.ts';
 
@@ -131,6 +132,28 @@ interface CommonOptions<S extends Partial<SchemaSet> = {}> {
    * against the live DB.
    */
   segments?: SegmentDefinition[];
+
+  /**
+   * Foreign-key relations between tables, keyed by source table name. The
+   * admin engine reads this metadata to surface related rows on resource
+   * detail pages (tabs / badges) and to back the `/admin-api/:resource/:id/
+   * relations/:name` endpoint.
+   *
+   * Built-ins between the package's own tables (users ↔ cloudSaves /
+   * playerItems / leaderboardEntries / etc.) are auto-included. Use this
+   * field to declare relations involving custom tables.
+   *
+   * @example
+   *   relations: {
+   *     users: [
+   *       { name: 'guilds', target: 'guildMembers', kind: 'many', fk: 'userId' },
+   *     ],
+   *     guildMembers: [
+   *       { name: 'user', target: 'users', kind: 'one', fk: 'userId' },
+   *     ],
+   *   }
+   */
+  relations?: Record<string, RelationDefinition[]>;
 }
 
 /**
@@ -253,12 +276,18 @@ export class GameDatabase<
    * against this database's resolved schema + dialect, so:
    *
    *   db.drizzle.select(...).from(db.tables.users)        // row shape inferred
-   *   db.drizzle.query.users.findFirst({ with: { ... } }) // schema-aware (sqlite)
    *
    * For dialect-specific extension methods (e.g. postgres-js's `unsafe`),
    * narrow with a type guard or cast at the call site.
    */
   drizzle: DrizzleFor<ResolvedTables<S>, Dialect>;
+
+  /**
+   * Foreign-key relations between tables, keyed by source table name. The
+   * admin reads this for relationship-aware detail pages. Built-ins +
+   * `options.relations` merged at boot time.
+   */
+  relations: Record<string, RelationDefinition[]> = mergeRelations(undefined);
 
   private dialect: SQLFlavor;
   private subDialect: SubDialect = 'sqlite';
@@ -267,6 +296,7 @@ export class GameDatabase<
 
   constructor(options: GameDatabaseOptions<S> = {} as GameDatabaseOptions<S>) {
     this.options = options;
+    this.relations = mergeRelations(options.relations);
 
     // Detect SQL flavor (sqlite | pg). The 'pglite' public dialect maps to
     // 'pg' here — PGlite is just a different driver for the same SQL surface.

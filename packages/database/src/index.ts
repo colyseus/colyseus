@@ -8,6 +8,7 @@ export type { TimedEvent } from './services/TimedEventsService.ts';
 export type { RetentionResult, FunnelStep } from './services/AnalyticsService.ts';
 export type { Role, Action } from './services/ModerationService.ts';
 export { defineSegment, createSegmentDefiner } from './segments.ts';
+export type { RelationDefinition, RelationKind } from './relations-meta.ts';
 export type {
   SegmentDefinition,
   SegmentResolveContext,

@@ -229,6 +229,60 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     assert.equal(res.status, 403);
   });
 
+  it('catalog includes FK relations per resource', async () => {
+    const res = await fetch(`${BASE}/admin-api`);
+    const catalog = await res.json() as Array<{
+      name: string;
+      relations: Array<{ name: string; target: string; kind: 'one' | 'many' }>;
+    }>;
+    const usersResource = catalog.find((r) => r.name === 'users')!;
+    const relNames = usersResource.relations.map((r) => r.name).sort();
+    // Built-ins users → cloudSaves / playerItems / leaderboardEntries / etc.
+    for (const expected of ['cloudSaves', 'playerItems', 'leaderboardEntries', 'role']) {
+      assert.ok(relNames.includes(expected),
+        `users relations should include ${expected}, got: ${relNames.join(', ')}`);
+    }
+    const role = usersResource.relations.find((r) => r.name === 'role')!;
+    assert.equal(role.kind, 'one');
+    assert.equal(role.target, 'userRoles');
+  });
+
+  it('relation endpoint returns related rows for a given parent id', async () => {
+    // Login as admin
+    const loginRes = await fetch(`${BASE}/admin-api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: BOOTSTRAP_EMAIL, password: BOOTSTRAP_PASSWORD }),
+    });
+    const cookieHeader = loginRes.headers.get('set-cookie')!.split(';')[0];
+
+    // Find the bootstrap admin's user id from the users list
+    const usersRes = await fetch(`${BASE}/admin-api/users`, { headers: { cookie: cookieHeader } });
+    const users = await usersRes.json() as Array<{ id: string }>;
+    assert.ok(users.length > 0, 'expected at least one user');
+    const userId = users[0]!.id;
+
+    // The bootstrap flow assigned the admin role — users → role (one) should
+    // now resolve to that single row.
+    const roleRes = await fetch(
+      `${BASE}/admin-api/users/${userId}/relations/role`,
+      { headers: { cookie: cookieHeader } },
+    );
+    assert.equal(roleRes.status, 200);
+    const roleRows = await roleRes.json() as Array<{ userId: string; role: string }>;
+    assert.equal(roleRows.length, 1, 'admin should have exactly one role row');
+    assert.equal(roleRows[0]!.role, 'admin');
+
+    // users → cloudSaves (many) should be empty for a fresh admin
+    const savesRes = await fetch(
+      `${BASE}/admin-api/users/${userId}/relations/cloudSaves`,
+      { headers: { cookie: cookieHeader } },
+    );
+    assert.equal(savesRes.status, 200);
+    const saves = await savesRes.json();
+    assert.deepEqual(saves, []);
+  });
+
   it('catalog reflects custom columns spread onto the users table', async () => {
     // app.config.ts customizes the users table with `display_name` + `level`.
     // The catalog endpoint should surface them so the admin UI can render them.

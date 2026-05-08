@@ -270,6 +270,11 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
         const compositePk = (cfg.primaryKeys ?? []).flatMap((pk: any) =>
           pk.columns.map((c: any) => c.name));
         const singlePk = cfg.columns.filter((c: any) => c.primary).map((c: any) => c.name);
+        // Filter to only relations whose target is actually registered as a
+        // resource — otherwise we'd point the UI at endpoints that 404.
+        const sourceRelations = (database.relations[name] ?? [])
+          .filter((r) => !!tables[r.target])
+          .map((r) => ({ name: r.name, target: r.target, kind: r.kind }));
         return {
           name,
           label: def?.label ?? humanize(name),
@@ -290,10 +295,72 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
             label: a.label ?? a.name,
             perRow: !!a.perRow,
           })),
+          relations: sourceRelations,
         };
       });
       return json(result);
     }),
+
+    // GET /admin-api/:resource/:id/relations/:name
+    //   → paginated list of related rows. The relation's `fk` column on the
+    //     target table is matched against this row's primary key value.
+    adminRelation: createEndpoint(
+      `${apiPath}/:resource/:id/relations/:name`,
+      { method: 'GET' },
+      async (ctx) => {
+        const { resource, id, name } = ctx.params as { resource: string; id: string; name: string };
+        const denied = await guard(ctx, 'list', resource);
+        if (denied) { return denied; }
+
+        const rel = (database.relations[resource] ?? []).find((r) => r.name === name);
+        if (!rel) { return errorResponse(404, `unknown relation '${name}' on '${resource}'`); }
+
+        const targetTable = tables[rel.target];
+        if (!targetTable) { return errorResponse(404, `relation '${name}' targets unknown resource '${rel.target}'`); }
+
+        // RBAC on the *target* — viewing a parent's items respects items' policies.
+        const targetDenied = await guard(ctx, 'list', rel.target);
+        if (targetDenied) { return targetDenied; }
+
+        // RelationDefinition.fk is the drizzle JS field name (e.g. 'userId'),
+        // matching the property on the table object — not the SQL column
+        // name. Direct property access gives us the typed Column for `eq()`.
+        const fkCol = (targetTable as any)[rel.fk];
+        if (!fkCol) {
+          return errorResponse(500, `relation '${name}' fk '${rel.fk}' not found on '${rel.target}'`);
+        }
+
+        // Cast the parent id to the source table's PK type. We use the source
+        // resource's PK column to figure out the target type.
+        const sourceCfg = getTableConfig(tables[resource]);
+        const pkCol = sourceCfg.columns.find((c: any) => c.primary);
+        const castId = pkCol ? castPk(id, pkCol) : id;
+
+        const q = ctx.query ?? {};
+        const start = parseInt(q._start as string) || 0;
+        const end = parseInt(q._end as string) || start + 100;
+
+        const rowsQuery = database.drizzle
+          .select()
+          .from(targetTable)
+          .where(eq(fkCol, castId))
+          .limit(end - start)
+          .offset(start);
+        const rows = await rowsQuery;
+        const totalRows = await database.drizzle
+          .select({ c: sql<number>`count(*)` })
+          .from(targetTable)
+          .where(eq(fkCol, castId));
+        const total = Number(totalRows[0]?.c ?? 0);
+
+        return json(rows, {
+          headers: {
+            'x-total-count': String(total),
+            'access-control-expose-headers': 'x-total-count',
+          },
+        });
+      },
+    ),
 
     // POST /admin-api/:resource/_action/:action → run a custom action
     adminAction: createEndpoint(`${apiPath}/:resource/_action/:action`, { method: 'POST' }, async (ctx) => {
