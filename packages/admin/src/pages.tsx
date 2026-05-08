@@ -62,15 +62,38 @@ import { cn } from '@/lib/utils';
 // Cell renderer
 // ---------------------------------------------------------------------------
 
+/**
+ * Compact relative time for table cells, with absolute fallback for
+ * older dates. Matches what the user sees in github-style "5 min ago"
+ * widgets — short, no extra words.
+ */
 function relativeTime(date: Date): string {
   const seconds = Math.round((Date.now() - date.getTime()) / 1000);
   const abs = Math.abs(seconds);
-  const dir = seconds >= 0 ? 'ago' : 'from now';
-  if (abs < 60) { return `just now`; }
-  if (abs < 3600) { return `${Math.round(abs / 60)} min ${dir}`; }
-  if (abs < 86_400) { return `${Math.round(abs / 3600)} hr ${dir}`; }
-  if (abs < 30 * 86_400) { return `${Math.round(abs / 86_400)} d ${dir}`; }
-  return date.toISOString().slice(0, 10);
+  const past = seconds >= 0;
+  if (abs < 5) { return 'just now'; }
+  if (abs < 60) { return past ? `${abs}s ago` : `in ${abs}s`; }
+  const minutes = Math.round(abs / 60);
+  if (minutes < 60) { return past ? `${minutes}m ago` : `in ${minutes}m`; }
+  const hours = Math.round(abs / 3600);
+  if (hours < 24) { return past ? `${hours}h ago` : `in ${hours}h`; }
+  const days = Math.round(abs / 86_400);
+  if (days < 30) { return past ? `${days}d ago` : `in ${days}d`; }
+  // Older than a month — show short date `May 8`. Same year drops
+  // the year suffix; cross-year keeps it (`May 8, 2025`).
+  const now = new Date();
+  const sameYear = date.getFullYear() === now.getFullYear();
+  return date.toLocaleDateString(undefined, sameYear
+    ? { month: 'short', day: 'numeric' }
+    : { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+/** Full absolute datetime for the cell tooltip. Locale-aware. */
+function absoluteTime(date: Date): string {
+  return date.toLocaleString(undefined, {
+    year: 'numeric', month: 'short', day: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  });
 }
 
 function formatCell(v: any, c?: Column): React.ReactNode {
@@ -84,7 +107,7 @@ function formatCell(v: any, c?: Column): React.ReactNode {
   if (c && isDate(c)) {
     const d = v instanceof Date ? v : new Date(v);
     if (!isNaN(d.getTime())) {
-      return <span title={d.toISOString()}>{relativeTime(d)}</span>;
+      return <span className="whitespace-nowrap" title={absoluteTime(d)}>{relativeTime(d)}</span>;
     }
     return String(v);
   }

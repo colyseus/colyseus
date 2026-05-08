@@ -52,25 +52,36 @@ export function singlePk(r: Resource): string | null {
   return r.primaryKey.length === 1 ? r.primaryKey[0]! : null;
 }
 
+/**
+ * Drizzle 1.0 emits `dataType` as space-separated tokens for some column
+ * shapes — `"object date"` for `integer({ mode: 'timestamp' })`,
+ * `"number int53"` for plain integers, etc. Match any token rather than
+ * the whole string so renderers don't fall through to "unknown".
+ */
+function hasDataType(c: Column, kind: string): boolean {
+  if (!c.dataType) { return false; }
+  return c.dataType.split(/\s+/).includes(kind);
+}
+
 export function isJsonish(c: Column): boolean {
-  if (c.dataType === 'json') { return true; }
+  if (hasDataType(c, 'json')) { return true; }
   return c.type === 'jsonb' || c.type === 'json';
 }
 
 export function isNumeric(c: Column): boolean {
-  if (c.dataType === 'number') { return true; }
+  if (hasDataType(c, 'number') || hasDataType(c, 'bigint')) { return true; }
   return ['integer', 'serial', 'bigint', 'numeric', 'double precision', 'real'].includes(c.type);
 }
 
 export function isDate(c: Column): boolean {
   // dataType is authoritative — sqlite stores timestamp-mode as `integer` SQL
-  // type but drizzle reports dataType: 'date'. Without this we'd render
-  // created_at as a raw unix epoch number.
-  if (c.dataType === 'date') { return true; }
+  // type but drizzle reports dataType containing 'date'. Without this we'd
+  // render created_at as a raw unix epoch number.
+  if (hasDataType(c, 'date')) { return true; }
   return c.type === 'timestamp' || c.type === 'date' || c.type === 'timestamp with time zone';
 }
 
 export function isBoolean(c: Column): boolean {
-  if (c.dataType === 'boolean') { return true; }
+  if (hasDataType(c, 'boolean')) { return true; }
   return c.type === 'boolean';
 }
