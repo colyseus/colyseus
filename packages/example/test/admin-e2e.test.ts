@@ -161,9 +161,9 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
       (document.querySelector('nav a[href$="/users"]') as HTMLAnchorElement).click();
     });
 
-    await page.waitForSelector('[data-testid="list-users"] .ant-table-row', { timeout: 10_000 });
+    await page.waitForSelector('[data-testid="list-users"] tbody tr[data-row-id]', { timeout: 10_000 });
     const rowIds = await page.$$eval(
-      '[data-testid="list-users"] .ant-table-row',
+      '[data-testid="list-users"] tbody tr[data-row-id]',
       (rows) => rows.map((r) => r.getAttribute('data-row-id')).filter(Boolean) as string[],
     );
     assert.ok(rowIds.length >= 1, 'users table should contain at least the bootstrap admin');
@@ -402,8 +402,8 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     await page.waitForSelector('[data-testid="widget-recentUsers"]', { timeout: 15_000 });
 
     await page.goto(`${BASE}/admin/users`, { waitUntil: 'domcontentloaded' });
-    await page.waitForSelector('[data-testid="list-users"] .ant-table-row', { timeout: 10_000 });
-    const initialRowCount = (await page.$$eval('[data-testid="list-users"] .ant-table-row',
+    await page.waitForSelector('[data-testid="list-users"] tbody tr[data-row-id]', { timeout: 10_000 });
+    const initialRowCount = (await page.$$eval('[data-testid="list-users"] tbody tr[data-row-id]',
       (rows) => rows.length));
     assert.ok(initialRowCount >= 1);
 
@@ -411,7 +411,7 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     await page.type('[data-testid="search-users"] input', 'zzznotpresent');
     await page.keyboard.press('Enter');
     await page.waitForFunction(
-      () => document.querySelectorAll('[data-testid="list-users"] .ant-table-row').length === 0,
+      () => document.querySelectorAll('[data-testid="list-users"] tbody tr[data-row-id]').length === 0,
       { timeout: 5_000 },
     );
     await page.close();
@@ -617,10 +617,10 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     await page.evaluate(() => {
       (document.querySelector('nav a[href$="/users"]') as HTMLAnchorElement).click();
     });
-    await page.waitForSelector('[data-testid="list-users"] .ant-table-thead', { timeout: 10_000 });
+    await page.waitForSelector('[data-testid="list-users"] thead', { timeout: 10_000 });
 
     const headers = await page.$$eval(
-      '[data-testid="list-users"] .ant-table-thead .ant-table-cell',
+      '[data-testid="list-users"] thead th',
       (cells) => cells.map((c) => (c.textContent ?? '').trim()),
     );
     assert.ok(headers.includes('display_name'),

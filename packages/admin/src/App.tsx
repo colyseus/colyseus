@@ -1,19 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Authenticated, Refine } from '@refinedev/core';
-import { useNotificationProvider } from '@refinedev/antd';
-import '@refinedev/antd/dist/reset.css';
 import './index.css';
-import { ConfigProvider } from 'antd';
 import dataProvider from '@refinedev/simple-rest';
 import routerProvider from '@refinedev/react-router';
 import { BrowserRouter, Routes, Route, Outlet, NavLink, useLocation } from 'react-router-dom';
 import axios from 'axios';
+import { Toaster } from 'sonner';
 import type { Resource } from './types';
 import { ListPage, ShowPage, EditPage, CreatePage } from './pages';
 import { Dashboard } from './Dashboard';
 import { iconFor } from './icons';
-import { shadcnTheme } from './theme';
 import { authProvider } from './authProvider';
+import { notificationProvider } from './notification-provider';
 import { LoginPage } from './LoginPage';
 import { SetupPage } from './SetupPage';
 import { SignInGate } from './SignInGate';
@@ -60,48 +58,47 @@ export function App() {
 
   return (
     <BrowserRouter basename="/admin">
-      <ConfigProvider theme={shadcnTheme}>
-        <Refine
-          dataProvider={provider}
-          routerProvider={routerProvider}
-          authProvider={authProvider}
-          notificationProvider={useNotificationProvider}
-          options={{ syncWithLocation: true, warnWhenUnsavedChanges: false }}
-          resources={resources.map((r) => ({
-            name: r.name,
-            list: `/${r.name}`,
-            show: `/${r.name}/show/:id`,
-            edit: `/${r.name}/edit/:id`,
-            create: `/${r.name}/create`,
-            meta: { label: r.label, icon: iconFor(r.icon) },
-          }))}
-        >
-          <Routes>
-            {/* Public routes — login + first-run setup */}
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/setup" element={<SetupPage />} />
+      <Refine
+        dataProvider={provider}
+        routerProvider={routerProvider}
+        authProvider={authProvider}
+        notificationProvider={notificationProvider}
+        options={{ syncWithLocation: true, warnWhenUnsavedChanges: false }}
+        resources={resources.map((r) => ({
+          name: r.name,
+          list: `/${r.name}`,
+          show: `/${r.name}/show/:id`,
+          edit: `/${r.name}/edit/:id`,
+          create: `/${r.name}/create`,
+          meta: { label: r.label },
+        }))}
+      >
+        <Routes>
+          {/* Public routes — login + first-run setup */}
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/setup" element={<SetupPage />} />
 
-            {/* Authenticated routes — <Authenticated> guards them via
-                authProvider.check(). The fallback is SignInGate which itself
-                checks /auth/status to decide between rendering LoginPage and
-                redirecting to /setup (first-run). This preserves the
-                "no admin yet → bootstrap" UX without storing extra state. */}
-            <Route
-              element={
-                <Authenticated key="protected" fallback={<SignInGate />}>
-                  <ProtectedShell resources={resources} />
-                </Authenticated>
-              }
-            >
-              <Route path="/" element={<Dashboard />} />
-              <Route path=":resource" element={<ListPage resources={resources} />} />
-              <Route path=":resource/show/:id" element={<ShowPage resources={resources} />} />
-              <Route path=":resource/edit/:id" element={<EditPage resources={resources} />} />
-              <Route path=":resource/create" element={<CreatePage resources={resources} />} />
-            </Route>
-          </Routes>
-        </Refine>
-      </ConfigProvider>
+          {/* Authenticated routes — <Authenticated> guards them via
+              authProvider.check(). The fallback is SignInGate which itself
+              checks /auth/status to decide between rendering LoginPage and
+              redirecting to /setup (first-run). This preserves the
+              "no admin yet → bootstrap" UX without storing extra state. */}
+          <Route
+            element={
+              <Authenticated key="protected" fallback={<SignInGate />}>
+                <ProtectedShell resources={resources} />
+              </Authenticated>
+            }
+          >
+            <Route path="/" element={<Dashboard />} />
+            <Route path=":resource" element={<ListPage resources={resources} />} />
+            <Route path=":resource/show/:id" element={<ShowPage resources={resources} />} />
+            <Route path=":resource/edit/:id" element={<EditPage resources={resources} />} />
+            <Route path=":resource/create" element={<CreatePage resources={resources} />} />
+          </Route>
+        </Routes>
+        <Toaster position="bottom-right" richColors closeButton />
+      </Refine>
     </BrowserRouter>
   );
 }

@@ -86,14 +86,3 @@ html, body, #root {
 ::-webkit-scrollbar-thumb { background: #d4d4d8; border-radius: 6px; }
 ::-webkit-scrollbar-thumb:hover { background: #a1a1aa; }
 ::-webkit-scrollbar-track { background: transparent; }
-
-/*
- * Legacy AntD overrides — kept while the migration is in progress so
- * pages we haven't ported yet still look reasonable. Will get pruned as
- * components flip to shadcn.
- */
-.ant-layout-sider { border-right: 1px solid #e4e4e7; }
-.ant-layout-header { border-bottom: 1px solid #e4e4e7; }
-.ant-card { border: 1px solid #e4e4e7; box-shadow: 0 1px 2px rgb(0 0 0 / 0.03); }
-.ant-menu-title-content { font-weight: 500; }
-.ant-page-header, .ant-card .ant-card-body { padding: 16px 20px; }

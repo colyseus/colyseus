@@ -1,176 +1,451 @@
-import { useShow, useNotification } from '@refinedev/core';
-import {
-  List,
-  Show,
-  Edit,
-  Create,
-  useTable,
-  useForm,
-  EditButton,
-  ShowButton,
-  DeleteButton,
-} from '@refinedev/antd';
-import { Table, Form, Input, InputNumber, DatePicker, Space, Descriptions, Tag, Button, Tabs, Empty, Tooltip, Typography, message, Popconfirm, Select } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
-import dayjs from 'dayjs';
-import relativeTime from 'dayjs/plugin/relativeTime';
-import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { type Column, type Resource, type ResourceRelation, singlePk, isJsonish, isNumeric, isDate, isBoolean } from './types';
-
-dayjs.extend(relativeTime);
-
 /**
- * Cell renderer for list/detail views. Type-aware:
+ * List / Show / Edit / Create — the four CRUD pages every resource gets.
+ * shadcn/Tailwind via plain Radix primitives + headless refine hooks
+ * (@refinedev/core). The previous implementation leaned heavily on
+ * @refinedev/antd's page wrappers + AntD Table/Form; those are gone.
  *
- *  - null/undefined  → faded em-dash (no more "null" Tag noise)
- *  - boolean         → green/gray Tag with Yes/No
- *  - date / timestamp → relative time + tooltip with full ISO
- *  - JSON / object   → first-line preview, full content in a tooltip
- *  - long-ish ids/strings → truncated + click-to-copy + tooltip
- *  - numbers         → right-aligned with thousand separators
- *  - everything else → plain text
- *
- * Falls back gracefully when `c` is omitted (e.g. relation back-fetches
- * where we don't have column metadata yet).
+ * Shape kept stable from the AntD version:
+ *  - ListPage: search bar + per-column filter dropdowns + paginated table
+ *  - ShowPage: tabs — Profile + per-many-relation paginated mini-table
+ *  - EditPage: same tabs as Show, Profile is editable form
+ *  - CreatePage: form, optional `?_prefill_<col>=<val>` seeds initial values
  */
-function format(v: any, c?: Column): React.ReactNode {
-  if (v == null) { return <span style={{ color: '#a1a1aa' }}>—</span>; }
+import { useEffect, useMemo, useState } from 'react';
+import {
+  useList,
+  useTable,
+  useOne,
+  useUpdate,
+  useCreate,
+  useDelete,
+  useNotification,
+} from '@refinedev/core';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsUpDown,
+  Filter as FilterIcon,
+  Loader2,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Page } from '@/components/ui/page';
+import { Empty } from '@/components/ui/empty';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table';
+import {
+  type Column, type Resource, type ResourceRelation,
+  singlePk, isJsonish, isNumeric, isDate, isBoolean,
+} from './types';
+import { cn } from '@/lib/utils';
+
+// ---------------------------------------------------------------------------
+// Cell renderer
+// ---------------------------------------------------------------------------
+
+function relativeTime(date: Date): string {
+  const seconds = Math.round((Date.now() - date.getTime()) / 1000);
+  const abs = Math.abs(seconds);
+  const dir = seconds >= 0 ? 'ago' : 'from now';
+  if (abs < 60) { return `just now`; }
+  if (abs < 3600) { return `${Math.round(abs / 60)} min ${dir}`; }
+  if (abs < 86_400) { return `${Math.round(abs / 3600)} hr ${dir}`; }
+  if (abs < 30 * 86_400) { return `${Math.round(abs / 86_400)} d ${dir}`; }
+  return date.toISOString().slice(0, 10);
+}
+
+function formatCell(v: any, c?: Column): React.ReactNode {
+  if (v == null) { return <span className="text-muted-foreground">—</span>; }
 
   if (c && isBoolean(c)) {
     const b = v === true || v === 1 || v === '1' || v === 'true';
-    return <Tag color={b ? 'green' : 'default'}>{b ? 'Yes' : 'No'}</Tag>;
+    return <Badge variant={b ? 'success' : 'secondary'}>{b ? 'Yes' : 'No'}</Badge>;
   }
 
   if (c && isDate(c)) {
-    const asDate = v instanceof Date ? v : (typeof v === 'string' || typeof v === 'number') ? new Date(v) : null;
-    if (asDate && !isNaN(asDate.getTime())) {
-      return (
-        <Tooltip title={asDate.toISOString()}>
-          <span>{dayjs(asDate).fromNow()}</span>
-        </Tooltip>
-      );
+    const d = v instanceof Date ? v : new Date(v);
+    if (!isNaN(d.getTime())) {
+      return <span title={d.toISOString()}>{relativeTime(d)}</span>;
     }
     return String(v);
   }
 
   if (c && isNumeric(c) && typeof v === 'number') {
     return (
-      <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+      <span className="tabular-nums">
         {Number.isInteger(v) ? v.toLocaleString() : v.toString()}
       </span>
     );
   }
 
   if (typeof v === 'object' || (c && isJsonish(c) && typeof v === 'string')) {
-    const obj = typeof v === 'string' ? safeParse(v) : v;
-    const preview = JSON.stringify(obj).slice(0, 60);
+    const obj = typeof v === 'string' ? safeParseJson(v) : v;
+    const json = JSON.stringify(obj);
     return (
-      <Tooltip title={<pre style={{ margin: 0, color: '#fff', fontSize: 11 }}>{JSON.stringify(obj, null, 2)}</pre>}>
-        <code style={{ fontSize: 11, color: '#71717a' }}>
-          {preview}{JSON.stringify(obj).length > 60 ? '…' : ''}
-        </code>
-      </Tooltip>
+      <code
+        className="text-xs text-muted-foreground"
+        title={JSON.stringify(obj, null, 2)}
+      >
+        {json.slice(0, 60)}{json.length > 60 ? '…' : ''}
+      </code>
     );
   }
 
-  // Long string (id-shaped) → truncate with copy affordance
   const s = String(v);
   if (s.length > 24 && !/\s/.test(s)) {
     return (
-      <Typography.Text
-        style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }}
-        copyable={{ text: s, onCopy: () => message.success('copied', 1) }}
+      <span
+        className="font-mono text-xs cursor-pointer"
+        title={s}
+        onClick={() => { navigator.clipboard.writeText(s).catch(() => {}); }}
       >
-        <Tooltip title={s}>{s.slice(0, 8)}…{s.slice(-4)}</Tooltip>
-      </Typography.Text>
+        {s.slice(0, 8)}…{s.slice(-4)}
+      </span>
     );
   }
 
   return s;
 }
 
-function safeParse(raw: string): any {
+function safeParseJson(raw: string): any {
   try { return JSON.parse(raw); } catch { return raw; }
 }
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function findResource(resources: Resource[], name?: string): Resource | undefined {
+  return resources.find((r) => r.name === name);
+}
+
+function visibleColumns(def: Resource, subset: string[] | undefined): Column[] {
+  if (!subset || subset.length === 0) { return def.columns; }
+  const order = new Map(subset.map((n, i) => [n, i]));
+  return def.columns
+    .filter((c) => order.has(c.name))
+    .sort((a, b) => order.get(a.name)! - order.get(b.name)!);
+}
+
+function pickLabelColumn(def: Resource): string | null {
+  const colNames = def.columns.map((c) => c.name);
+  for (const candidate of ['display_name', 'name', 'email', 'title']) {
+    if (colNames.includes(candidate)) { return candidate; }
+  }
+  const firstText = def.columns.find((c) =>
+    !c.primary && (c.dataType === 'string' || /^(text|varchar|char)/i.test(c.type)),
+  );
+  return firstText?.name ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// ListPage
+// ---------------------------------------------------------------------------
+
+export function ListPage({ resources }: { resources: Resource[] }) {
+  const { resource: resourceName } = useParams();
+  const def = findResource(resources, resourceName);
+  const pk = def && singlePk(def);
+
+  const {
+    tableQuery, current, setCurrent, pageSize,
+    sorters, setSorters, filters, setFilters,
+  } = useTable({ resource: resourceName, syncWithLocation: true });
+
+  if (!def) { return <div data-testid="unknown">unknown resource: {resourceName}</div>; }
+
+  const cols = visibleColumns(def, def.listColumns);
+  const rowActions = def.actions.filter((a) => a.perRow);
+  const toolbarActions = def.actions.filter((a) => !a.perRow);
+  const currentQ = (filters?.find?.((f: any) => f.field === '_q') as any)?.value ?? '';
+  const rows = (tableQuery?.data?.data ?? []) as any[];
+  const total = tableQuery?.data?.total ?? 0;
+
+  return (
+    <Page
+      title={def.label}
+      actions={
+        <div className="flex items-center gap-2">
+          <SearchInput
+            resourceName={resourceName!}
+            currentValue={currentQ}
+            onApply={(value) => {
+              const trimmed = value.trim();
+              setFilters(
+                trimmed.length === 0
+                  ? [{ field: '_q', operator: 'eq', value: undefined } as any]
+                  : [{ field: '_q', operator: 'eq', value: trimmed } as any],
+                'replace',
+              );
+            }}
+          />
+          {toolbarActions.map((a) => (
+            <ActionButton
+              key={a.name}
+              resource={resourceName!}
+              action={a}
+              onComplete={() => tableQuery?.refetch()}
+            />
+          ))}
+          <Button asChild size="sm">
+            <Link to={`/${resourceName}/create`}>
+              <Plus />
+              New
+            </Link>
+          </Button>
+        </div>
+      }
+    >
+      <div data-testid={`list-${resourceName}`}>
+        {tableQuery?.isLoading && rows.length === 0 ? (
+          <div className="flex items-center justify-center py-10 text-muted-foreground">
+            <Loader2 className="size-4 animate-spin mr-2" /> loading…
+          </div>
+        ) : rows.length === 0 ? (
+          <Empty
+            title={
+              currentQ
+                ? `no ${def.label.toLowerCase()} matching "${currentQ}"`
+                : `no ${def.label.toLowerCase()} yet`
+            }
+          >
+            {!currentQ && (
+              <Button asChild size="sm">
+                <Link to={`/${resourceName}/create`}>
+                  <Plus />
+                  Create one
+                </Link>
+              </Button>
+            )}
+          </Empty>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                {cols.map((c) => (
+                  <TableHead key={c.name}>
+                    <ColumnHeader
+                      column={c}
+                      sorters={sorters}
+                      setSorters={setSorters}
+                      filters={filters}
+                      setFilters={setFilters}
+                    />
+                  </TableHead>
+                ))}
+                {pk && <TableHead className="w-[1%] whitespace-nowrap text-right">actions</TableHead>}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((row, i) => (
+                <TableRow
+                  key={pk ? row[pk] : i}
+                  data-testid={pk ? `row-${row[pk]}` : undefined}
+                  data-row-id={pk ? String(row[pk]) : undefined}
+                >
+                  {cols.map((c) => (
+                    <TableCell key={c.name}>{formatCell(row[c.name], c)}</TableCell>
+                  ))}
+                  {pk && (
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button asChild variant="ghost" size="icon">
+                          <Link to={`/${resourceName}/edit/${row[pk]}`} aria-label="edit">
+                            <Pencil />
+                          </Link>
+                        </Button>
+                        <DeleteRowButton
+                          resource={resourceName!}
+                          id={row[pk]}
+                          onDeleted={() => tableQuery?.refetch()}
+                        />
+                        {rowActions.map((a) => (
+                          <ActionButton
+                            key={a.name}
+                            resource={resourceName!}
+                            action={a}
+                            rowId={String(row[pk])}
+                            onComplete={() => tableQuery?.refetch()}
+                          />
+                        ))}
+                      </div>
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+
+        {total > pageSize && (
+          <Pagination
+            current={current}
+            pageSize={pageSize}
+            total={total}
+            onChange={setCurrent}
+          />
+        )}
+      </div>
+    </Page>
+  );
+}
+
+function SearchInput({
+  resourceName, currentValue, onApply,
+}: { resourceName: string; currentValue: string; onApply: (v: string) => void }) {
+  const [v, setV] = useState(currentValue);
+  useEffect(() => { setV(currentValue); }, [currentValue]);
+  return (
+    <span data-testid={`search-${resourceName}`} className="relative inline-block w-60">
+      <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+      <Input
+        value={v}
+        onChange={(e) => setV(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') { onApply(v); }
+        }}
+        onBlur={() => { if (v !== currentValue) { onApply(v); } }}
+        placeholder="Search…"
+        className="pl-8"
+      />
+    </span>
+  );
+}
+
+function Pagination({ current, pageSize, total, onChange }: {
+  current: number; pageSize: number; total: number; onChange: (n: number) => void;
+}) {
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  return (
+    <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
+      <div>
+        Page {current} of {pages} · {total.toLocaleString()} rows
+      </div>
+      <div className="flex items-center gap-1">
+        <Button
+          variant="outline"
+          size="icon"
+          disabled={current <= 1}
+          onClick={() => onChange(current - 1)}
+        >
+          <ChevronLeft />
+        </Button>
+        <span className="inline-flex h-9 min-w-9 items-center justify-center rounded-md border bg-muted px-3 text-sm font-medium text-foreground">
+          {current}
+        </span>
+        <Button
+          variant="outline"
+          size="icon"
+          disabled={current >= pages}
+          onClick={() => onChange(current + 1)}
+        >
+          <ChevronRight />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ColumnHeader({
+  column: c, sorters, setSorters, filters, setFilters,
+}: {
+  column: Column;
+  sorters: any[] | undefined;
+  setSorters: (s: any[]) => void;
+  filters: any[] | undefined;
+  setFilters: (f: any[], behavior?: 'merge' | 'replace') => void;
+}) {
+  const sort = sorters?.find((s) => s.field === c.name);
+  const cycle = () => {
+    if (!sort) { setSorters([{ field: c.name, order: 'asc' }]); }
+    else if (sort.order === 'asc') { setSorters([{ field: c.name, order: 'desc' }]); }
+    else { setSorters([]); }
+  };
+  const filterCount = (filters ?? []).filter((f: any) =>
+    f.field === c.name || (typeof f.field === 'string' && f.field.startsWith(`${c.name}_`)),
+  ).length;
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        onClick={cycle}
+        className="inline-flex items-center gap-1 rounded px-1 py-0.5 hover:bg-accent hover:text-accent-foreground"
+      >
+        <span>{c.name}</span>
+        {sort?.order === 'asc' ? <ArrowUp className="size-3" />
+          : sort?.order === 'desc' ? <ArrowDown className="size-3" />
+          : <ChevronsUpDown className="size-3 opacity-40" />}
+      </button>
+      {!isJsonish(c) && (
+        <ColumnFilter c={c} filters={filters} setFilters={setFilters} active={filterCount > 0} />
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Per-column filter dropdowns
+// ---------------------------------------------------------------------------
+
 type SetFilters = (filters: any[], behavior?: 'merge' | 'replace') => void;
 
-/**
- * Active filter values for a column, regardless of operator suffix. Used
- * to highlight columns with active filters and to seed the dropdown with
- * the current value on URL refresh.
- */
-function activeFiltersForColumn(c: Column, filters: any[] | undefined) {
-  return (filters ?? []).filter((f: any) => {
-    if (f.field === c.name) { return true; }
-    if (typeof f.field === 'string' && f.field.startsWith(`${c.name}_`)) { return true; }
-    return false;
-  });
-}
-
-/**
- * Build the AntD column filter props for a given column. Each dropdown
- * calls `setFilters` directly with the right `field_<op>` form so we
- * fully control the operator instead of fighting AntD's onChange shape.
- */
-function columnFilterProps(
-  c: Column,
-  filters: any[] | undefined,
-  setFilters: SetFilters,
-): Record<string, any> {
-  if (isJsonish(c)) { return {}; }
-  const active = activeFiltersForColumn(c, filters);
-
-  if (isBoolean(c)) {
-    return {
-      filterDropdown: () => (
-        <BooleanFilter colName={c.name} filters={filters} setFilters={setFilters} />
-      ),
-      filteredValue: active.length > 0 ? active.map((f: any) => f.value) : null,
-    };
-  }
-
-  if (isDate(c)) {
-    return {
-      filterDropdown: () => (
-        <DateFilter colName={c.name} filters={filters} setFilters={setFilters} />
-      ),
-      filteredValue: active.length > 0 ? active.map((f: any) => f.value) : null,
-    };
-  }
-
-  if (isNumeric(c)) {
-    return {
-      filterDropdown: () => (
-        <NumberFilter colName={c.name} filters={filters} setFilters={setFilters} />
-      ),
-      filteredValue: active.length > 0 ? active.map((f: any) => f.value) : null,
-    };
-  }
-
-  return {
-    filterDropdown: () => (
-      <TextFilter colName={c.name} filters={filters} setFilters={setFilters} />
-    ),
-    filteredValue: active.length > 0 ? active.map((f: any) => f.value) : null,
-  };
-}
-
-/**
- * Replace any existing filters on the same field (with or without an
- * operator suffix) with `next`, leaving unrelated filters intact.
- */
 function replaceColumnFilters(
-  setFilters: SetFilters,
-  filters: any[] | undefined,
-  field: string,
-  next: any[],
+  setFilters: SetFilters, filters: any[] | undefined, field: string, next: any[],
 ) {
   const others = (filters ?? []).filter((f: any) => {
     return !(f.field === field || (typeof f.field === 'string' && f.field.startsWith(`${field}_`)));
   });
   setFilters([...others, ...next], 'replace');
+}
+
+function ColumnFilter({ c, filters, setFilters, active }: {
+  c: Column; filters: any[] | undefined; setFilters: SetFilters; active: boolean;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            'inline-flex h-6 items-center justify-center rounded px-1.5 hover:bg-accent',
+            active && 'text-foreground bg-accent',
+          )}
+          aria-label={`filter ${c.name}`}
+        >
+          <FilterIcon className={cn('size-3', active ? 'opacity-100' : 'opacity-40')} />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-72 p-3" align="start">
+        {isBoolean(c) ? (
+          <BooleanFilter colName={c.name} filters={filters} setFilters={setFilters} />
+        ) : isDate(c) ? (
+          <DateFilter colName={c.name} filters={filters} setFilters={setFilters} />
+        ) : isNumeric(c) ? (
+          <NumberFilter colName={c.name} filters={filters} setFilters={setFilters} />
+        ) : (
+          <TextFilter colName={c.name} filters={filters} setFilters={setFilters} />
+        )}
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 function TextFilter({ colName, filters, setFilters }: {
@@ -184,24 +459,21 @@ function TextFilter({ colName, filters, setFilters }: {
       trimmed.length === 0 ? [] : [{ field: `${colName}_like`, operator: 'eq', value: trimmed }],
     );
   };
-  const clear = () => {
-    setValue('');
-    replaceColumnFilters(setFilters, filters, colName, []);
-  };
+  const clear = () => { setValue(''); replaceColumnFilters(setFilters, filters, colName, []); };
   return (
-    <div style={{ padding: 8, minWidth: 220 }}>
+    <div className="space-y-2">
       <Input
-        placeholder={`Search ${colName}`}
+        autoFocus
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        onPressEnter={apply}
-        style={{ marginBottom: 8, display: 'block' }}
+        onKeyDown={(e) => { if (e.key === 'Enter') { apply(); } }}
+        placeholder={`Search ${colName}`}
         data-testid={`filter-text-${colName}`}
       />
-      <Space>
-        <Button type="primary" size="small" onClick={apply}>Apply</Button>
-        <Button size="small" onClick={clear}>Reset</Button>
-      </Space>
+      <div className="flex gap-2">
+        <Button size="sm" onClick={apply}>Apply</Button>
+        <Button size="sm" variant="outline" onClick={clear}>Reset</Button>
+      </div>
     </div>
   );
 }
@@ -216,12 +488,10 @@ function BooleanFilter({ colName, filters, setFilters }: {
     );
   };
   return (
-    <div style={{ padding: 8, minWidth: 160 }}>
-      <Space direction="vertical" style={{ width: '100%' }}>
-        <Button block size="small" type={current === true ? 'primary' : 'default'} onClick={() => set(true)}>Yes</Button>
-        <Button block size="small" type={current === false ? 'primary' : 'default'} onClick={() => set(false)}>No</Button>
-        <Button block size="small" type={current == null ? 'primary' : 'default'} onClick={() => set(null)}>Any</Button>
-      </Space>
+    <div className="space-y-1">
+      <Button className="w-full" size="sm" variant={current === true ? 'default' : 'outline'} onClick={() => set(true)}>Yes</Button>
+      <Button className="w-full" size="sm" variant={current === false ? 'default' : 'outline'} onClick={() => set(false)}>No</Button>
+      <Button className="w-full" size="sm" variant={current == null ? 'default' : 'outline'} onClick={() => set(null)}>Any</Button>
     </div>
   );
 }
@@ -231,28 +501,25 @@ function NumberFilter({ colName, filters, setFilters }: {
 }) {
   const minCurrent = (filters ?? []).find((f: any) => f.field === `${colName}_gte`)?.value;
   const maxCurrent = (filters ?? []).find((f: any) => f.field === `${colName}_lte`)?.value;
-  const [min, setMin] = useState<number | null>(minCurrent ?? null);
-  const [max, setMax] = useState<number | null>(maxCurrent ?? null);
+  const [min, setMin] = useState<string>(minCurrent != null ? String(minCurrent) : '');
+  const [max, setMax] = useState<string>(maxCurrent != null ? String(maxCurrent) : '');
   const apply = () => {
     const next: any[] = [];
-    if (min !== null && min !== undefined) { next.push({ field: `${colName}_gte`, operator: 'eq', value: min }); }
-    if (max !== null && max !== undefined) { next.push({ field: `${colName}_lte`, operator: 'eq', value: max }); }
+    if (min !== '') { next.push({ field: `${colName}_gte`, operator: 'eq', value: Number(min) }); }
+    if (max !== '') { next.push({ field: `${colName}_lte`, operator: 'eq', value: Number(max) }); }
     replaceColumnFilters(setFilters, filters, colName, next);
   };
-  const clear = () => {
-    setMin(null); setMax(null);
-    replaceColumnFilters(setFilters, filters, colName, []);
-  };
+  const clear = () => { setMin(''); setMax(''); replaceColumnFilters(setFilters, filters, colName, []); };
   return (
-    <div style={{ padding: 8, minWidth: 240 }}>
-      <Space.Compact style={{ width: '100%', marginBottom: 8 }}>
-        <InputNumber placeholder="min" value={min} onChange={(v) => setMin(v as any)} style={{ width: '50%' }} />
-        <InputNumber placeholder="max" value={max} onChange={(v) => setMax(v as any)} style={{ width: '50%' }} />
-      </Space.Compact>
-      <Space>
-        <Button type="primary" size="small" onClick={apply}>Apply</Button>
-        <Button size="small" onClick={clear}>Reset</Button>
-      </Space>
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <Input type="number" placeholder="min" value={min} onChange={(e) => setMin(e.target.value)} />
+        <Input type="number" placeholder="max" value={max} onChange={(e) => setMax(e.target.value)} />
+      </div>
+      <div className="flex gap-2">
+        <Button size="sm" onClick={apply}>Apply</Button>
+        <Button size="sm" variant="outline" onClick={clear}>Reset</Button>
+      </div>
     </div>
   );
 }
@@ -262,213 +529,37 @@ function DateFilter({ colName, filters, setFilters }: {
 }) {
   const startCurrent = (filters ?? []).find((f: any) => f.field === `${colName}_gte`)?.value;
   const endCurrent = (filters ?? []).find((f: any) => f.field === `${colName}_lte`)?.value;
-  const [start, setStart] = useState<string | null>(startCurrent ?? null);
-  const [end, setEnd] = useState<string | null>(endCurrent ?? null);
+  const [start, setStart] = useState<string>(startCurrent ? toLocalDate(startCurrent) : '');
+  const [end, setEnd] = useState<string>(endCurrent ? toLocalDate(endCurrent) : '');
   const apply = () => {
     const next: any[] = [];
-    if (start) { next.push({ field: `${colName}_gte`, operator: 'eq', value: start }); }
-    if (end) { next.push({ field: `${colName}_lte`, operator: 'eq', value: end }); }
+    if (start) { next.push({ field: `${colName}_gte`, operator: 'eq', value: new Date(start).toISOString() }); }
+    if (end) { next.push({ field: `${colName}_lte`, operator: 'eq', value: new Date(end + 'T23:59:59').toISOString() }); }
     replaceColumnFilters(setFilters, filters, colName, next);
   };
-  const clear = () => {
-    setStart(null); setEnd(null);
-    replaceColumnFilters(setFilters, filters, colName, []);
-  };
+  const clear = () => { setStart(''); setEnd(''); replaceColumnFilters(setFilters, filters, colName, []); };
   return (
-    <div style={{ padding: 8, minWidth: 280 }}>
-      <DatePicker.RangePicker
-        value={[start ? dayjs(start) : null, end ? dayjs(end) : null] as any}
-        onChange={(range) => {
-          setStart(range?.[0]?.toISOString() ?? null);
-          setEnd(range?.[1]?.toISOString() ?? null);
-        }}
-        style={{ width: '100%', marginBottom: 8 }}
-      />
-      <Space>
-        <Button type="primary" size="small" onClick={apply}>Apply</Button>
-        <Button size="small" onClick={clear}>Reset</Button>
-      </Space>
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <Input type="date" value={start} onChange={(e) => setStart(e.target.value)} />
+        <Input type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
+      </div>
+      <div className="flex gap-2">
+        <Button size="sm" onClick={apply}>Apply</Button>
+        <Button size="sm" variant="outline" onClick={clear}>Reset</Button>
+      </div>
     </div>
   );
 }
 
-function findResource(resources: Resource[], name?: string): Resource | undefined {
-  return resources.find((r) => r.name === name);
+function toLocalDate(iso: string): string {
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
 }
 
-function visibleColumns(def: Resource, subset: string[] | undefined): Column[] {
-  if (!subset || subset.length === 0) { return def.columns; }
-  const order = new Map(subset.map((n, i) => [n, i]));
-  return def.columns
-    .filter((c) => order.has(c.name))
-    .sort((a, b) => order.get(a.name)! - order.get(b.name)!);
-}
-
-/**
- * Pick a "label" column for a target resource — what the user actually
- * recognizes when picking a related row. Common patterns first
- * (display_name, email, name, title), then any non-PK text column.
- */
-function pickLabelColumn(def: Resource): string | null {
-  const colNames = def.columns.map((c) => c.name);
-  for (const candidate of ['display_name', 'name', 'email', 'title']) {
-    if (colNames.includes(candidate)) { return candidate; }
-  }
-  const firstText = def.columns.find((c) =>
-    !c.primary && (c.dataType === 'string' || /^(text|varchar|char)/i.test(c.type)),
-  );
-  return firstText?.name ?? null;
-}
-
-function FormFields({ cols, resources, oneRelations, omitPrimary = false, omitDefaulted = false }: {
-  cols: Column[];
-  resources: Resource[];
-  oneRelations: ResourceRelation[];
-  omitPrimary?: boolean;
-  omitDefaulted?: boolean;
-}) {
-  // Build a map of FK column → relation so the form can swap a raw input
-  // for a searchable picker against the target resource. fk on the relation
-  // is already the SQL column name, matching c.name.
-  const fkRelByCol = new Map(oneRelations.map((r) => [r.fk, r]));
-
-  return (
-    <>
-      {cols
-        .filter((c) => !(omitPrimary && c.primary) && !(omitDefaulted && c.hasDefault))
-        .map((c) => {
-          const rel = fkRelByCol.get(c.name);
-          if (rel) {
-            // FK column — render a searchable picker.
-            return (
-              <Form.Item
-                key={c.name}
-                label={c.name}
-                name={c.name}
-                rules={c.notNull && !c.primary && !c.hasDefault
-                  ? [{ required: true, message: `${c.name} is required` }]
-                  : undefined}
-              >
-                <RelationPicker target={rel.target} resources={resources} />
-              </Form.Item>
-            );
-          }
-          return (
-            <Form.Item
-              key={c.name}
-              label={c.name}
-              name={c.name}
-              rules={c.notNull && !c.primary && !c.hasDefault
-                ? [{ required: true, message: `${c.name} is required` }]
-                : undefined}
-              getValueFromEvent={isJsonish(c) ? (e) => tryParseJson(e?.target?.value) : undefined}
-              getValueProps={isJsonish(c)
-                ? (v) => ({ value: typeof v === 'string' ? v : JSON.stringify(v ?? '', null, 0) })
-                : undefined}
-            >
-              {isJsonish(c) ? <Input.TextArea rows={3} placeholder='valid JSON, e.g. "value" or {"a":1}' />
-                : isNumeric(c) ? <InputNumber style={{ width: '100%' }} />
-                : isDate(c) ? <DatePicker showTime style={{ width: '100%' }} />
-                : <Input />}
-            </Form.Item>
-          );
-        })}
-    </>
-  );
-}
-
-/**
- * Searchable picker for a foreign-key column. Loads a first page from the
- * target resource, paged-search via `?_q=…` as the user types, displays
- * `<label> · <id>` so an id-only option is still recognizable. Standard
- * controlled component shape (value + onChange) so `Form.Item` drives it.
- *
- * On mount with a pre-set value (Edit / prefilled Create), fetches the
- * specific row by id so the dropdown shows the human label, not just the
- * raw UUID.
- */
-function RelationPicker({
-  target, resources, value, onChange,
-}: {
-  target: string;
-  resources: Resource[];
-  value?: string | number;
-  onChange?: (v: any) => void;
-}) {
-  const targetDef = findResource(resources, target);
-  const targetPk = targetDef ? singlePk(targetDef) : null;
-  const labelCol = targetDef ? pickLabelColumn(targetDef) : null;
-
-  const [options, setOptions] = useState<Array<{ value: any; label: string }>>([]);
-  const [loading, setLoading] = useState(false);
-
-  const makeOption = (row: any): { value: any; label: string } => {
-    const id = targetPk ? row[targetPk] : '';
-    const label = labelCol && row[labelCol] != null && row[labelCol] !== ''
-      ? `${row[labelCol]} · ${id}`
-      : String(id);
-    return { value: id, label };
-  };
-
-  const fetchOptions = async (search: string) => {
-    if (!targetDef) { return; }
-    setLoading(true);
-    try {
-      const url = `/admin-api/${target}?_start=0&_end=20${search ? `&_q=${encodeURIComponent(search)}` : ''}`;
-      const res = await fetch(url, { credentials: 'include' });
-      if (!res.ok) { return; }
-      const rows = await res.json() as any[];
-      setOptions(rows.map(makeOption));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Initial page on mount + when target changes.
-  useEffect(() => { fetchOptions(''); /* eslint-disable-line react-hooks/exhaustive-deps */ }, [target]);
-
-  // If the form has a preset value not yet in `options`, fetch its row so
-  // the picker shows the friendly label rather than just the UUID.
-  useEffect(() => {
-    if (value == null || value === '' || !targetDef) { return; }
-    if (options.find((o) => o.value === value)) { return; }
-    fetch(`/admin-api/${target}/${encodeURIComponent(String(value))}`, { credentials: 'include' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((row) => {
-        if (row) { setOptions((prev) => [makeOption(row), ...prev]); }
-      })
-      .catch(() => { /* ignore — show id-only fallback */ });
-    /* eslint-disable-next-line react-hooks/exhaustive-deps */
-  }, [value, target]);
-
-  if (!targetDef) {
-    // Target wasn't registered as a resource — fall back to a text input
-    // rather than a non-functional picker.
-    return <Input value={value as any} onChange={(e) => onChange?.(e.target.value)} />;
-  }
-
-  return (
-    <span data-testid={`relation-picker-${target}`} style={{ display: 'block' }}>
-      <Select
-        showSearch
-        allowClear
-        filterOption={false}
-        onSearch={(q) => { void fetchOptions(q); }}
-        onChange={(v) => onChange?.(v)}
-        value={value as any}
-        loading={loading}
-        options={options}
-        placeholder={`Select ${targetDef.label.toLowerCase()}…`}
-        style={{ width: '100%' }}
-      />
-    </span>
-  );
-}
-
-function tryParseJson(raw: any): any {
-  if (typeof raw !== 'string') { return raw; }
-  try { return JSON.parse(raw); } catch { return raw; }
-}
+// ---------------------------------------------------------------------------
+// Action button (with optional confirmation) + Delete
+// ---------------------------------------------------------------------------
 
 function ActionButton({ resource, action, rowId, onComplete }: {
   resource: string;
@@ -478,7 +569,6 @@ function ActionButton({ resource, action, rowId, onComplete }: {
 }) {
   const [busy, setBusy] = useState(false);
   const { open } = useNotification();
-
   const run = async () => {
     setBusy(true);
     try {
@@ -497,190 +587,102 @@ function ActionButton({ resource, action, rowId, onComplete }: {
         open?.({ type: 'success', message: `${action.label} succeeded` });
         onComplete?.();
       }
-    } finally {
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
   };
 
-  const button = (
+  const trigger = (
     <Button
-      size="small"
+      size="sm"
+      variant="outline"
       data-testid={`action-${action.name}-${rowId ?? 'global'}`}
-      loading={busy}
+      disabled={busy}
       onClick={action.confirm ? undefined : run}
     >
+      {busy && <Loader2 className="animate-spin" />}
       {action.label}
     </Button>
   );
 
-  if (!action.confirm) { return button; }
+  if (!action.confirm) { return trigger; }
   return (
-    <Popconfirm
-      title={action.confirm.title ?? `Run "${action.label}"?`}
-      description={action.confirm.description}
-      okText="Confirm"
-      cancelText="Cancel"
-      onConfirm={run}
-    >
-      {button}
-    </Popconfirm>
-  );
-}
-
-export function ListPage({ resources }: { resources: Resource[] }) {
-  const { resource: resourceName } = useParams();
-  const def = findResource(resources, resourceName);
-  const pk = def && singlePk(def);
-  const { tableProps, tableQueryResult, setFilters, filters } = useTable({
-    resource: resourceName,
-    syncWithLocation: true,
-  });
-
-  if (!def) { return <div data-testid="unknown">unknown resource: {resourceName}</div>; }
-
-  const cols = visibleColumns(def, def.listColumns);
-  const rowActions = def.actions.filter((a) => a.perRow);
-  const toolbarActions = def.actions.filter((a) => !a.perRow);
-
-  // The current `_q` value comes back through refine's filters array. We use
-  // a synthetic filter id `_q` because simple-rest serializes `eq` filters as
-  // `field=value` query params — so the backend just reads `ctx.query._q`.
-  const currentQ = (filters?.find?.((f: any) => f.field === '_q') as any)?.value ?? '';
-
-  const onRow = (record: any) => ({
-    'data-testid': pk ? `row-${record[pk]}` : undefined,
-    'data-row-id': pk ? String(record[pk]) : undefined,
-  });
-
-  return (
-    <List
-      headerButtons={({ defaultButtons }) => (
-        <Space>
-          <span data-testid={`search-${resourceName}`} style={{ display: 'inline-block', width: 240 }}>
-            <Input.Search
-              allowClear
-              placeholder="Search…"
-              defaultValue={currentQ}
-              onSearch={(value) => {
-                const trimmed = value.trim();
-                if (trimmed.length === 0) {
-                  setFilters([{ field: '_q', operator: 'eq', value: undefined } as any], 'replace');
-                } else {
-                  setFilters([{ field: '_q', operator: 'eq', value: trimmed } as any], 'replace');
-                }
-              }}
-              style={{ width: '100%' }}
-            />
-          </span>
-          {defaultButtons}
-          {toolbarActions.map((a) => (
-            <ActionButton
-              key={a.name}
-              resource={resourceName!}
-              action={a}
-              onComplete={() => tableQueryResult?.refetch()}
-            />
-          ))}
-        </Space>
-      )}
-    >
-      <div data-testid={`list-${resourceName}`}>
-        <Table
-          {...tableProps}
-          rowKey={pk ?? def.columns[0]!.name}
-          onRow={onRow as any}
-          size="small"
-          scroll={{ x: true }}
-          locale={{
-            emptyText: (
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={
-                  currentQ
-                    ? `no ${def.label.toLowerCase()} matching "${currentQ}"`
-                    : `no ${def.label.toLowerCase()} yet`
-                }
-              >
-                {!currentQ && (
-                  <Link to={`/${resourceName}/create`}>
-                    <Button size="small" icon={<PlusOutlined />}>
-                      Create one
-                    </Button>
-                  </Link>
-                )}
-              </Empty>
-            ),
-          }}
-        >
-          {cols.map((c) => (
-            <Table.Column
-              key={c.name}
-              dataIndex={c.name}
-              title={c.name}
-              render={(v) => format(v, c)}
-              {...columnFilterProps(c, filters as any[] | undefined, setFilters as SetFilters)}
-            />
-          ))}
-          {pk && (
-            <Table.Column
-              title="actions"
-              key="actions"
-              render={(_, row: any) => (
-                <Space size="small" wrap>
-                  <ShowButton hideText size="small" recordItemId={row[pk]} />
-                  <EditButton hideText size="small" recordItemId={row[pk]} />
-                  <DeleteButton hideText size="small" recordItemId={row[pk]} />
-                  {rowActions.map((a) => (
-                    <ActionButton
-                      key={a.name}
-                      resource={resourceName!}
-                      action={a}
-                      rowId={String(row[pk])}
-                      onComplete={() => tableQueryResult?.refetch()}
-                    />
-                  ))}
-                </Space>
-              )}
-            />
+    <AlertDialog>
+      <AlertDialogTrigger asChild>{trigger}</AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{action.confirm.title ?? `Run "${action.label}"?`}</AlertDialogTitle>
+          {action.confirm.description && (
+            <AlertDialogDescription>{action.confirm.description}</AlertDialogDescription>
           )}
-        </Table>
-      </div>
-    </List>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={run}>Confirm</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
-/**
- * Detail page with tabs:
- *   - Profile        → the row's column data (default tab)
- *   - <one-relation> → a clickable Tag-link to the related row (kind: 'one')
- *   - <many-rel>     → a paginated mini-table of related rows (kind: 'many')
- *
- * Many-relations also get a count badge in the tab title. Both kinds fetch
- * /admin-api/:resource/:id/relations/:name; counts come from the
- * `x-total-count` header.
- */
+function DeleteRowButton({ resource, id, onDeleted }: {
+  resource: string; id: string; onDeleted: () => void;
+}) {
+  const { mutate: deleteRow } = useDelete();
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button variant="ghost" size="icon" aria-label="delete" data-testid={`delete-${id}`}>
+          <Trash2 />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete row?</AlertDialogTitle>
+          <AlertDialogDescription>This action can't be undone.</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            onClick={() => deleteRow(
+              { resource, id },
+              { onSuccess: onDeleted },
+            )}
+          >
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ShowPage
+// ---------------------------------------------------------------------------
+
 export function ShowPage({ resources }: { resources: Resource[] }) {
   const { resource: name, id } = useParams();
   const def = findResource(resources, name);
-  const { queryResult } = useShow({ resource: name });
-  const record = queryResult?.data?.data ?? {};
+  const { data, isLoading } = useOne({ resource: name, id });
+  const record = (data?.data ?? {}) as any;
 
   if (!def) { return <div>unknown resource</div>; }
+
   const cols = visibleColumns(def, def.showFields);
   const relations = def.relations ?? [];
   const manyRels = relations.filter((r) => r.kind === 'many');
   const oneRels = relations.filter((r) => r.kind === 'one');
 
-  const profileTab = (
-    <Descriptions bordered column={1} size="small" data-testid={`show-${name}`}>
+  const profile = (
+    <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-[160px_1fr]" data-testid={`show-${name}`}>
       {cols.map((c) => (
-        <Descriptions.Item key={c.name} label={c.name}>
-          {format((record as any)[c.name], c)}
-        </Descriptions.Item>
+        <Profilerow key={c.name} label={c.name}>
+          {formatCell(record[c.name], c)}
+        </Profilerow>
       ))}
       {oneRels.length > 0 && id && (
-        <Descriptions.Item label="related">
-          <Space wrap size="small">
+        <Profilerow label="related">
+          <div className="flex flex-wrap gap-2">
             {oneRels.map((rel) => (
               <OneRelationLink
                 key={rel.name}
@@ -690,36 +692,59 @@ export function ShowPage({ resources }: { resources: Resource[] }) {
                 resources={resources}
               />
             ))}
-          </Space>
-        </Descriptions.Item>
+          </div>
+        </Profilerow>
       )}
-    </Descriptions>
+    </dl>
   );
 
-  const items = [
-    { key: '__profile', label: 'Profile', children: profileTab },
-    ...manyRels.map((rel) => ({
-      key: rel.name,
-      label: <RelationTabLabel parentResource={name!} parentId={id!} relation={rel} />,
-      children: id ? (
-        <RelatedTable
-          parentResource={name!}
-          parentId={id}
-          relation={rel}
-          resources={resources}
-        />
-      ) : null,
-    })),
-  ];
-
   return (
-    <Show isLoading={queryResult?.isLoading}>
-      <Tabs defaultActiveKey="__profile" items={items} data-testid={`show-tabs-${name}`} />
-    </Show>
+    <Page
+      back={`/${name}`}
+      title={def.label}
+      actions={id && (
+        <Button asChild size="sm" variant="outline">
+          <Link to={`/${name}/edit/${id}`}><Pencil />Edit</Link>
+        </Button>
+      )}
+    >
+      {isLoading ? (
+        <div className="flex items-center justify-center py-10 text-muted-foreground">
+          <Loader2 className="size-4 animate-spin mr-2" /> loading…
+        </div>
+      ) : manyRels.length === 0 || !id ? (
+        profile
+      ) : (
+        <Tabs defaultValue="__profile">
+          <TabsList data-testid={`show-tabs-${name}`}>
+            <TabsTrigger value="__profile">Profile</TabsTrigger>
+            {manyRels.map((rel) => (
+              <TabsTrigger key={rel.name} value={rel.name}>
+                <RelationTabLabel parentResource={name!} parentId={id} relation={rel} />
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          <TabsContent value="__profile">{profile}</TabsContent>
+          {manyRels.map((rel) => (
+            <TabsContent key={rel.name} value={rel.name}>
+              <RelatedTable parentResource={name!} parentId={id} relation={rel} resources={resources} />
+            </TabsContent>
+          ))}
+        </Tabs>
+      )}
+    </Page>
   );
 }
 
-/** Renders the tab title with a `(count)` badge fetched from `x-total-count`. */
+function Profilerow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <>
+      <dt className="text-sm font-medium text-muted-foreground">{label}</dt>
+      <dd className="text-sm">{children}</dd>
+    </>
+  );
+}
+
 function RelationTabLabel({
   parentResource, parentId, relation,
 }: { parentResource: string; parentId: string; relation: ResourceRelation }) {
@@ -728,11 +753,7 @@ function RelationTabLabel({
     fetch(`/admin-api/${parentResource}/${parentId}/relations/${relation.name}?_start=0&_end=1`, {
       credentials: 'include',
     })
-      .then((r) => {
-        if (!r.ok) { return null; }
-        const total = r.headers.get('x-total-count');
-        return total ? Number(total) : null;
-      })
+      .then((r) => (r.ok ? Number(r.headers.get('x-total-count') ?? '0') : null))
       .then(setCount)
       .catch(() => setCount(null));
   }, [parentResource, parentId, relation.name]);
@@ -743,21 +764,17 @@ function RelationTabLabel({
   );
 }
 
-/** Paginated mini-table for a `many` relation. */
 function RelatedTable({
   parentResource, parentId, relation, resources,
 }: {
-  parentResource: string;
-  parentId: string;
-  relation: ResourceRelation;
-  resources: Resource[];
+  parentResource: string; parentId: string; relation: ResourceRelation; resources: Resource[];
 }) {
   const targetDef = findResource(resources, relation.target);
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const pageSize = 20;
   const [total, setTotal] = useState(0);
+  const pageSize = 20;
 
   useEffect(() => {
     setLoading(true);
@@ -767,105 +784,76 @@ function RelatedTable({
       { credentials: 'include' },
     )
       .then(async (r) => {
-        if (!r.ok) { return { rows: [], total: 0 }; }
+        if (!r.ok) { return { rows: [] as any[], total: 0 }; }
         const totalHeader = r.headers.get('x-total-count');
         return { rows: await r.json() as any[], total: totalHeader ? Number(totalHeader) : 0 };
       })
-      .then(({ rows, total }) => {
-        setRows(rows);
-        setTotal(total);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+      .then(({ rows, total }) => { setRows(rows); setTotal(total); })
+      .finally(() => setLoading(false));
   }, [parentResource, parentId, relation.name, page]);
 
-  if (!targetDef) {
-    return <Empty description={`unknown target resource '${relation.target}'`} />;
-  }
+  if (!targetDef) { return <Empty title={`unknown target resource '${relation.target}'`} />; }
 
   const targetPk = singlePk(targetDef);
   const cols = visibleColumns(targetDef, targetDef.listColumns);
-
-  // "+ New <target>" button — opens Create form on the target with the FK
-  // pre-filled via URL param, so support agents grant items / send mail
-  // without re-typing the userId.
-  const fk = relation.fk; // optional metadata not always present
-  const newHref = `/${relation.target}/create?_prefill_${fk ?? 'fk'}=${encodeURIComponent(parentId)}`;
+  const newHref = `/${relation.target}/create?_prefill_${relation.fk}=${encodeURIComponent(parentId)}`;
 
   return (
-    <>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-        <Link to={newHref}>
-          <Button
-            size="small"
-            type="default"
-            icon={<PlusOutlined />}
-            data-testid={`new-related-${relation.name}`}
-          >
-            New {targetDef.label}
-          </Button>
-        </Link>
+    <div className="space-y-3">
+      <div className="flex justify-end">
+        <Button asChild size="sm" variant="outline" data-testid={`new-related-${relation.name}`}>
+          <Link to={newHref}><Plus />New {targetDef.label}</Link>
+        </Button>
       </div>
-      <Table
-        size="small"
-        data-testid={`related-${relation.name}`}
-        loading={loading}
-        rowKey={(r, i) => (targetPk ? r[targetPk] : i) as any}
-        dataSource={rows}
-        locale={{
-          emptyText: (
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={`no ${targetDef.label.toLowerCase()} yet`}
-            >
-              <Link to={newHref}>
-                <Button size="small" icon={<PlusOutlined />}>
-                  Create one
-                </Button>
-              </Link>
-            </Empty>
-          ),
-        }}
-        pagination={{
-          current: page,
-          pageSize,
-          total,
-          onChange: setPage,
-          showSizeChanger: false,
-        }}
-        scroll={{ x: true }}
-      >
-        {cols.map((c) => (
-          <Table.Column
-            key={c.name}
-            title={c.name}
-            dataIndex={c.name}
-            render={(v, row: any) => {
-              if (targetPk && c.name === targetPk) {
-                return <Link to={`/${relation.target}/show/${row[targetPk]}`}>{format(v, c)}</Link>;
-              }
-              return format(v, c);
-            }}
-          />
-        ))}
-      </Table>
-    </>
+      <div data-testid={`related-${relation.name}`}>
+        {loading && rows.length === 0 ? (
+          <div className="flex items-center justify-center py-10 text-muted-foreground">
+            <Loader2 className="size-4 animate-spin mr-2" />
+          </div>
+        ) : rows.length === 0 ? (
+          <Empty title={`no ${targetDef.label.toLowerCase()} yet`}>
+            <Button asChild size="sm" variant="outline">
+              <Link to={newHref}><Plus />Create one</Link>
+            </Button>
+          </Empty>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                {cols.map((c) => (<TableHead key={c.name}>{c.name}</TableHead>))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((row, i) => (
+                <TableRow key={targetPk ? row[targetPk] : i}>
+                  {cols.map((c) => (
+                    <TableCell key={c.name}>
+                      {targetPk && c.name === targetPk
+                        ? <Link to={`/${relation.target}/show/${row[targetPk]}`} className="text-primary hover:underline">{formatCell(row[c.name], c)}</Link>
+                        : formatCell(row[c.name], c)}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+        {total > pageSize && (
+          <Pagination current={page} pageSize={pageSize} total={total} onChange={setPage} />
+        )}
+      </div>
+    </div>
   );
 }
 
-/** Clickable Tag for a `one` relation — fetches the row, then links to its Show page. */
 function OneRelationLink({
   parentResource, parentId, relation, resources,
 }: {
-  parentResource: string;
-  parentId: string;
-  relation: ResourceRelation;
-  resources: Resource[];
+  parentResource: string; parentId: string; relation: ResourceRelation; resources: Resource[];
 }) {
   const targetDef = findResource(resources, relation.target);
   const [row, setRow] = useState<any | null>(null);
   const [empty, setEmpty] = useState(false);
-
   useEffect(() => {
     fetch(`/admin-api/${parentResource}/${parentId}/relations/${relation.name}?_start=0&_end=1`, {
       credentials: 'include',
@@ -878,111 +866,353 @@ function OneRelationLink({
       .catch(() => setEmpty(true));
   }, [parentResource, parentId, relation.name]);
 
-  if (empty) { return <Tag>{relation.name}: <em>none</em></Tag>; }
-  if (!row || !targetDef) { return <Tag>{relation.name}: …</Tag>; }
+  if (empty) { return <Badge variant="secondary">{relation.name}: <em className="not-italic ml-1 text-muted-foreground">none</em></Badge>; }
+  if (!row || !targetDef) { return <Badge variant="secondary">{relation.name}: …</Badge>; }
   const targetPk = singlePk(targetDef);
-  if (!targetPk) {
-    // Composite-PK target — show without link
-    return <Tag color="blue">{relation.name}</Tag>;
-  }
+  if (!targetPk) { return <Badge variant="info">{relation.name}</Badge>; }
   return (
-    <Link
-      to={`/${relation.target}/show/${row[targetPk]}`}
-      data-testid={`one-relation-${relation.name}`}
-    >
-      <Tag color="blue">{relation.name}: {String(row[targetPk])}</Tag>
+    <Link to={`/${relation.target}/show/${row[targetPk]}`} data-testid={`one-relation-${relation.name}`}>
+      <Badge variant="info" className="hover:opacity-90">{relation.name}: {String(row[targetPk])}</Badge>
     </Link>
   );
 }
 
-/**
- * Edit page mirrors the Show page layout: tabbed Profile + relation tabs.
- * Editing happens on the Profile tab; the relation tabs reuse RelatedTable
- * so support agents can navigate between a user's row and their saves /
- * items / leaderboard entries without leaving the edit context.
- */
+// ---------------------------------------------------------------------------
+// EditPage / CreatePage  + form + RelationPicker
+// ---------------------------------------------------------------------------
+
 export function EditPage({ resources }: { resources: Resource[] }) {
   const { resource: name, id } = useParams();
+  const navigate = useNavigate();
   const def = findResource(resources, name);
-  const { formProps, saveButtonProps, queryResult } = useForm({ resource: name, action: 'edit' });
+  const { data, isLoading } = useOne({ resource: name, id });
+  const { mutate: update, isLoading: saving } = useUpdate();
 
   if (!def) { return <div>unknown resource</div>; }
 
   const cols = visibleColumns(def, def.formFields);
-  const initialValues = { ...(queryResult?.data?.data ?? {}) } as any;
-  for (const c of cols) {
-    if (isDate(c) && initialValues[c.name]) { initialValues[c.name] = dayjs(initialValues[c.name]); }
-  }
-
   const relations = def.relations ?? [];
   const manyRels = relations.filter((r) => r.kind === 'many');
   const oneRels = relations.filter((r) => r.kind === 'one');
 
-  const formTab = (
-    <Form {...formProps} layout="vertical" initialValues={initialValues} data-testid={`edit-${name}`}>
-      <FormFields cols={cols} resources={resources} oneRelations={oneRels} omitPrimary />
-    </Form>
-  );
-
-  if (manyRels.length === 0 || !id) {
-    return (
-      <Edit saveButtonProps={saveButtonProps} isLoading={queryResult?.isLoading}>
-        {formTab}
-      </Edit>
-    );
-  }
-
-  const items = [
-    { key: '__profile', label: 'Profile', children: formTab },
-    ...manyRels.map((rel) => ({
-      key: rel.name,
-      label: <RelationTabLabel parentResource={name!} parentId={id} relation={rel} />,
-      children: <RelatedTable parentResource={name!} parentId={id} relation={rel} resources={resources} />,
-    })),
-  ];
-
   return (
-    <Edit saveButtonProps={saveButtonProps} isLoading={queryResult?.isLoading}>
-      <Tabs defaultActiveKey="__profile" items={items} data-testid={`edit-tabs-${name}`} />
-    </Edit>
+    <Page
+      back={`/${name}`}
+      title={def.label}
+    >
+      {isLoading ? (
+        <div className="flex items-center justify-center py-10 text-muted-foreground">
+          <Loader2 className="size-4 animate-spin mr-2" /> loading…
+        </div>
+      ) : manyRels.length === 0 || !id ? (
+        <FormBody
+          cols={cols}
+          resources={resources}
+          oneRelations={oneRels}
+          omitPrimary
+          initialValues={(data?.data ?? {}) as any}
+          saving={saving}
+          dataTestId={`edit-${name}`}
+          onSubmit={(values) => update({ resource: name!, id: id!, values }, {
+            onSuccess: () => navigate(`/${name}`),
+          })}
+        />
+      ) : (
+        <Tabs defaultValue="__profile">
+          <TabsList data-testid={`edit-tabs-${name}`}>
+            <TabsTrigger value="__profile">Profile</TabsTrigger>
+            {manyRels.map((rel) => (
+              <TabsTrigger key={rel.name} value={rel.name}>
+                <RelationTabLabel parentResource={name!} parentId={id} relation={rel} />
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          <TabsContent value="__profile">
+            <FormBody
+              cols={cols}
+              resources={resources}
+              oneRelations={oneRels}
+              omitPrimary
+              initialValues={(data?.data ?? {}) as any}
+              saving={saving}
+              dataTestId={`edit-${name}`}
+              onSubmit={(values) => update({ resource: name!, id, values }, {
+                onSuccess: () => navigate(`/${name}`),
+              })}
+            />
+          </TabsContent>
+          {manyRels.map((rel) => (
+            <TabsContent key={rel.name} value={rel.name}>
+              <RelatedTable parentResource={name!} parentId={id} relation={rel} resources={resources} />
+            </TabsContent>
+          ))}
+        </Tabs>
+      )}
+    </Page>
   );
 }
 
-/**
- * Create form. Reads `?_prefill_<col>=<value>` query params to seed initial
- * values — used by the "New related" button on relation tabs to pass the
- * parent FK without manual entry.
- */
 export function CreatePage({ resources }: { resources: Resource[] }) {
   const { resource: name } = useParams();
+  const navigate = useNavigate();
   const def = findResource(resources, name);
-  const { formProps, saveButtonProps } = useForm({ resource: name, action: 'create' });
+  const { mutate: create, isLoading: saving } = useCreate();
 
   if (!def) { return <div>unknown resource</div>; }
   const cols = visibleColumns(def, def.formFields);
-
-  // Pull `_prefill_*` params off the URL to seed initial values.
-  const search = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-  const prefill: Record<string, any> = {};
-  if (search) {
-    for (const [k, v] of search.entries()) {
-      if (k.startsWith('_prefill_')) { prefill[k.slice('_prefill_'.length)] = v; }
-    }
-  }
-
   const oneRels = (def.relations ?? []).filter((r) => r.kind === 'one');
 
+  // ?_prefill_<col>=<value> seeds initial values for the form. Used by the
+  // "+ New related" button on relation tabs to pass the parent FK.
+  const prefill = useMemo(() => {
+    const out: Record<string, any> = {};
+    if (typeof window === 'undefined') { return out; }
+    for (const [k, v] of new URLSearchParams(window.location.search).entries()) {
+      if (k.startsWith('_prefill_')) { out[k.slice('_prefill_'.length)] = v; }
+    }
+    return out;
+  }, []);
+
   return (
-    <Create saveButtonProps={saveButtonProps}>
-      <Form
-        {...formProps}
-        layout="vertical"
+    <Page back={`/${name}`} title={`New ${def.label}`}>
+      <FormBody
+        cols={cols}
+        resources={resources}
+        oneRelations={oneRels}
+        omitDefaulted
         initialValues={prefill}
-        data-testid={`create-${name}`}
-      >
-        <FormFields cols={cols} resources={resources} oneRelations={oneRels} omitDefaulted />
-      </Form>
-    </Create>
+        saving={saving}
+        dataTestId={`create-${name}`}
+        onSubmit={(values) => create({ resource: name!, values }, {
+          onSuccess: () => navigate(`/${name}`),
+        })}
+      />
+    </Page>
   );
 }
 
+interface FormBodyProps {
+  cols: Column[];
+  resources: Resource[];
+  oneRelations: ResourceRelation[];
+  omitPrimary?: boolean;
+  omitDefaulted?: boolean;
+  initialValues: Record<string, any>;
+  saving: boolean;
+  dataTestId: string;
+  onSubmit: (values: Record<string, any>) => void;
+}
+
+function FormBody({
+  cols, resources, oneRelations, omitPrimary, omitDefaulted, initialValues, saving, dataTestId, onSubmit,
+}: FormBodyProps) {
+  const [values, setValues] = useState<Record<string, any>>(() => ({ ...initialValues }));
+  // Re-seed when initialValues becomes available (e.g. Edit useOne resolves).
+  useEffect(() => { setValues({ ...initialValues }); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [JSON.stringify(initialValues)]);
+  const fkRelByCol = new Map(oneRelations.map((r) => [r.fk, r]));
+
+  const visible = cols.filter((c) => !(omitPrimary && c.primary) && !(omitDefaulted && c.hasDefault));
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const out: Record<string, any> = {};
+    for (const c of visible) {
+      let v = values[c.name];
+      if (isJsonish(c) && typeof v === 'string') { v = safeParseJson(v); }
+      out[c.name] = v;
+    }
+    onSubmit(out);
+  };
+
+  return (
+    <form onSubmit={submit} className="space-y-4" data-testid={dataTestId}>
+      {visible.map((c) => {
+        const rel = fkRelByCol.get(c.name);
+        const required = c.notNull && !c.primary && !c.hasDefault;
+        return (
+          <div key={c.name} className="space-y-1.5">
+            <Label htmlFor={`f-${c.name}`}>
+              {c.name}{required && <span className="text-destructive ml-0.5">*</span>}
+            </Label>
+            {rel ? (
+              <RelationPicker
+                target={rel.target}
+                resources={resources}
+                value={values[c.name]}
+                onChange={(v) => setValues((prev) => ({ ...prev, [c.name]: v }))}
+              />
+            ) : isJsonish(c) ? (
+              <textarea
+                id={`f-${c.name}`}
+                className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                value={typeof values[c.name] === 'string' ? values[c.name] : JSON.stringify(values[c.name] ?? '', null, 0)}
+                onChange={(e) => setValues((prev) => ({ ...prev, [c.name]: e.target.value }))}
+                placeholder='valid JSON, e.g. "value" or {"a":1}'
+              />
+            ) : isDate(c) ? (
+              <Input
+                id={`f-${c.name}`}
+                type="datetime-local"
+                value={values[c.name] ? toLocalDateTime(values[c.name]) : ''}
+                onChange={(e) => setValues((prev) => ({ ...prev, [c.name]: e.target.value }))}
+                required={required}
+              />
+            ) : isNumeric(c) ? (
+              <Input
+                id={`f-${c.name}`}
+                type="number"
+                value={values[c.name] ?? ''}
+                onChange={(e) => setValues((prev) => ({ ...prev, [c.name]: e.target.value === '' ? '' : Number(e.target.value) }))}
+                required={required}
+              />
+            ) : isBoolean(c) ? (
+              <select
+                id={`f-${c.name}`}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+                value={values[c.name] === true ? 'true' : values[c.name] === false ? 'false' : ''}
+                onChange={(e) => setValues((prev) => ({
+                  ...prev,
+                  [c.name]: e.target.value === '' ? null : e.target.value === 'true',
+                }))}
+              >
+                <option value=""></option>
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+              </select>
+            ) : (
+              <Input
+                id={`f-${c.name}`}
+                value={values[c.name] ?? ''}
+                onChange={(e) => setValues((prev) => ({ ...prev, [c.name]: e.target.value }))}
+                required={required}
+                name={c.name}
+              />
+            )}
+          </div>
+        );
+      })}
+      <div className="flex justify-end gap-2 pt-2">
+        <Button type="submit" disabled={saving}>
+          {saving && <Loader2 className="animate-spin" />}
+          Save
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function toLocalDateTime(v: any): string {
+  const d = v instanceof Date ? v : new Date(v);
+  if (isNaN(d.getTime())) { return ''; }
+  // YYYY-MM-DDTHH:MM in local time
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// ---------------------------------------------------------------------------
+// RelationPicker — searchable FK select
+// ---------------------------------------------------------------------------
+
+function RelationPicker({
+  target, resources, value, onChange,
+}: {
+  target: string; resources: Resource[]; value?: string | number; onChange?: (v: any) => void;
+}) {
+  const targetDef = findResource(resources, target);
+  const targetPk = targetDef ? singlePk(targetDef) : null;
+  const labelCol = targetDef ? pickLabelColumn(targetDef) : null;
+
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const [options, setOptions] = useState<Array<{ value: any; label: string }>>([]);
+  const [labelByValue, setLabelByValue] = useState<Map<any, string>>(new Map());
+
+  const makeOption = (row: any): { value: any; label: string } => {
+    const id = targetPk ? row[targetPk] : '';
+    const label = labelCol && row[labelCol] != null && row[labelCol] !== ''
+      ? `${row[labelCol]} · ${id}`
+      : String(id);
+    return { value: id, label };
+  };
+
+  // Search + initial load via the same _q endpoint we use for the list page.
+  useEffect(() => {
+    if (!targetDef) { return; }
+    const url = `/admin-api/${target}?_start=0&_end=20${q ? `&_q=${encodeURIComponent(q)}` : ''}`;
+    fetch(url, { credentials: 'include' })
+      .then((r) => (r.ok ? (r.json() as Promise<any[]>) : Promise.resolve([])))
+      .then((rows) => {
+        const mapped = rows.map(makeOption);
+        setOptions(mapped);
+        setLabelByValue((prev) => {
+          const next = new Map(prev);
+          for (const o of mapped) { next.set(o.value, o.label); }
+          return next;
+        });
+      })
+      .catch(() => {});
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [target, q]);
+
+  // Resolve label for a preset value (Edit / prefill) on first render.
+  useEffect(() => {
+    if (value == null || value === '' || !targetDef || labelByValue.has(value)) { return; }
+    fetch(`/admin-api/${target}/${encodeURIComponent(String(value))}`, { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((row) => {
+        if (!row) { return; }
+        const o = makeOption(row);
+        setLabelByValue((prev) => new Map(prev).set(o.value, o.label));
+      })
+      .catch(() => {});
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [value, target]);
+
+  if (!targetDef) {
+    return <Input value={(value as any) ?? ''} onChange={(e) => onChange?.(e.target.value)} />;
+  }
+
+  const currentLabel = value != null && value !== ''
+    ? labelByValue.get(value) ?? String(value)
+    : null;
+
+  return (
+    <span data-testid={`relation-picker-${target}`} className="block">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className="w-full justify-between font-normal"
+          >
+            <span className={cn('truncate', !currentLabel && 'text-muted-foreground')}>
+              {currentLabel ?? `Select ${targetDef.label.toLowerCase()}…`}
+            </span>
+            <ChevronsUpDown className="opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
+          <Command shouldFilter={false}>
+            <CommandInput placeholder="Search…" value={q} onValueChange={setQ} />
+            <CommandList>
+              <CommandEmpty>No results.</CommandEmpty>
+              <CommandGroup>
+                {options.map((o) => (
+                  <CommandItem
+                    key={String(o.value)}
+                    value={String(o.value)}
+                    onSelect={() => { onChange?.(o.value); setOpen(false); }}
+                  >
+                    {o.label}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    </span>
+  );
+}
