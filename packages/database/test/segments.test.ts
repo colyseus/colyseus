@@ -170,7 +170,7 @@ describe('SegmentsService', () => {
     assert.equal(seg.id, 'typed');
   });
 
-  it('db.defineSegment(...) types tables + drizzle via the GameDatabase generic', async () => {
+  it('db.segments.define(...) types tables + drizzle via the GameDatabase generic', async () => {
     // No createSegmentDefiner / no <typeof schema> needed — the class generic
     // already carries the schema type, so the resolver gets full inference
     // for free. Compile-time @ts-expect-error locks in the strict shape.
@@ -180,7 +180,7 @@ describe('SegmentsService', () => {
       connectionString: dbPath,
       schemas: { users },
     });
-    inline.defineSegment('inlineTyped', {
+    inline.segments.define('inlineTyped', {
       description: 'level 1, defined inline',
       resolve: async ({ drizzle, tables }) => {
         const _level = tables.users.level;

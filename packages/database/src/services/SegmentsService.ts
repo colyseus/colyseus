@@ -1,27 +1,77 @@
-import type { SegmentDefinition } from '../segments.ts';
+import type { SegmentDefinition, SegmentResolveContext } from '../segments.ts';
 
 /**
- * Runtime accessor over the registered segments. Materializes ids lazily
- * — every call re-runs the segment's `resolve()` against the live DB. For
- * large or expensive segments, callers should cache externally (e.g. a
- * cron job that snapshots into a `segment_membership` table). Future
- * versions may grow first-class materialization here.
+ * Runtime accessor + registration point for player segments.
+ *
+ * The service is constructed eagerly by GameDatabase so `db.segments.define(...)`
+ * is available before `boot()`. It buffers definitions until boot calls the
+ * internal `__attach` hook with the live drizzle client + resolved tables;
+ * before that, methods that need DB access (size/ids/has/forEach) throw a
+ * clear error so misordered code fails loudly.
+ *
+ * Materializes ids lazily — every read re-runs the segment's `resolve()`
+ * against the live DB. For large or expensive segments, callers should
+ * cache externally (e.g. a cron job that snapshots into a
+ * `segment_membership` table). Future versions may grow first-class
+ * materialization here.
  */
-export class SegmentsService {
-  private drizzle: any;
-  private tables: Record<string, any>;
-  private byId: Map<string, SegmentDefinition>;
+export class SegmentsService<
+  S extends Record<string, any> = Record<string, any>,
+  Dialect extends 'sqlite' | 'pg' = 'sqlite',
+> {
+  private drizzle: any = null;
+  private tables: Record<string, any> = {};
+  private byId: Map<string, SegmentDefinition> = new Map();
+  private booted = false;
 
-  constructor(drizzle: any, tables: Record<string, any>, segments: SegmentDefinition[]) {
+  /**
+   * Attach the live drizzle client + resolved tables. Called by
+   * GameDatabase at the end of `boot()`. Also accepts a final batch of
+   * segments — the discriminated `options.segments` array — to merge with
+   * anything already registered via `define`.
+   *
+   * @internal — not part of the public API.
+   */
+  __attach(drizzle: any, tables: Record<string, any>, extras: SegmentDefinition[] = []): void {
     this.drizzle = drizzle;
     this.tables = tables;
-    this.byId = new Map();
-    for (const s of segments) {
+    for (const s of extras) {
       if (this.byId.has(s.id)) {
         throw new Error(`[SegmentsService] duplicate segment id: ${s.id}`);
       }
       this.byId.set(s.id, s);
     }
+    this.booted = true;
+  }
+
+  /**
+   * Register a segment with the service. Strictly typed via the
+   * GameDatabase's schema + dialect generics — `tables` and `drizzle`
+   * inside the resolver autocomplete against the user's actual schema.
+   *
+   * Safe to call at any time (before or after boot). Buffered definitions
+   * are picked up when `__attach` runs.
+   */
+  define(
+    id: string,
+    config: {
+      description?: string;
+      resolve: (ctx: SegmentResolveContext<S, Dialect>) => Promise<string[]>;
+    },
+  ): SegmentDefinition {
+    if (!id || typeof id !== 'string') {
+      throw new Error('[SegmentsService.define] id must be a non-empty string');
+    }
+    if (this.byId.has(id)) {
+      throw new Error(`[SegmentsService] duplicate segment id: ${id}`);
+    }
+    const def: SegmentDefinition = {
+      id,
+      description: config.description,
+      resolve: config.resolve as SegmentDefinition['resolve'],
+    };
+    this.byId.set(id, def);
+    return def;
   }
 
   /** Names + descriptions of every registered segment. Synchronous — no DB hit. */
@@ -37,6 +87,7 @@ export class SegmentsService {
 
   /** All user ids in the segment. Order is whatever the resolver returned. */
   async ids(id: string): Promise<string[]> {
+    this.requireBoot('ids');
     const def = this.requireSegment(id);
     return def.resolve({ drizzle: this.drizzle, tables: this.tables, now: new Date() });
   }
@@ -55,6 +106,14 @@ export class SegmentsService {
   async forEach(id: string, fn: (userId: string) => Promise<void> | void): Promise<void> {
     const ids = await this.ids(id);
     for (const userId of ids) { await fn(userId); }
+  }
+
+  private requireBoot(method: string): void {
+    if (!this.booted) {
+      throw new Error(
+        `[SegmentsService.${method}] not booted yet — call db.boot() before reading segment members`,
+      );
+    }
   }
 
   private requireSegment(id: string): SegmentDefinition {
