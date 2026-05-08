@@ -21,6 +21,11 @@ export const userColumns = {
   anonymousId: text('anonymous_id'),
   createdAt: integer('created_at', { mode: 'timestamp' as const }).notNull().default(sql`(unixepoch())`),
   updatedAt: integer('updated_at', { mode: 'timestamp' as const }).notNull().default(sql`(unixepoch())`),
+  // Ban state — null bannedUntil means not banned. A future timestamp
+  // means banned through that instant; the AuthService.findByEmail check
+  // rejects sign-in while bannedUntil > now.
+  bannedUntil: integer('banned_until', { mode: 'timestamp' as const }),
+  bannedReason: text('banned_reason'),
 };
 
 export const configColumns = {

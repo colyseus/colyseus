@@ -52,10 +52,76 @@ export class AuthService<T extends UsersTableShape = UsersTableShape> {
 
     if (!rows[0]) { return null; }
 
+    // Reject banned users at the auth boundary so a banned user can't
+    // sign in even if their session expires. The login flow surfaces
+    // this as plain "invalid credentials" today — distinguishing
+    // "you're banned until X" needs upstream @colyseus/auth wiring.
+    const row = rows[0] as any;
+    if (row.bannedUntil && new Date(row.bannedUntil).getTime() > Date.now()) {
+      return null;
+    }
+
     const user = { ...rows[0] };
     // @colyseus/auth checks user.password — map from passwordHash
     user.password = user.passwordHash;
     return user;
+  }
+
+  /**
+   * Ban a user. `until` defaults to a far-future timestamp (effectively
+   * permanent). The next sign-in attempt is rejected via findByEmail
+   * while bannedUntil > now.
+   */
+  async ban(userId: string, opts: { reason?: string; until?: Date | null } = {}): Promise<void> {
+    // Permanent bans use a far-future sentinel so the same `> now()`
+    // check in findByEmail handles both timed and permanent bans. Year
+    // 9999 fits inside both PG's TIMESTAMP and sqlite's INTEGER (unix
+    // epoch in seconds) — JS Date.MAX_VALUE overflows PG.
+    const PERMANENT = new Date(Date.UTC(9999, 11, 31));
+    const until = opts.until === undefined ? PERMANENT : (opts.until ?? PERMANENT);
+    await this.db
+      .update(this.users)
+      .set({
+        bannedUntil: until,
+        bannedReason: opts.reason ?? null,
+        updatedAt: new Date(),
+      })
+      .where(eq(this.users.id, userId));
+  }
+
+  /** Lift a ban (clears bannedUntil + bannedReason). Idempotent. */
+  async unban(userId: string): Promise<void> {
+    await this.db
+      .update(this.users)
+      .set({
+        bannedUntil: null,
+        bannedReason: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(this.users.id, userId));
+  }
+
+  /**
+   * Current ban state for a user. Returns `{ banned: false }` for
+   * unknown users — callers shouldn't lock-out missing players.
+   */
+  async isBanned(
+    userId: string,
+    at: Date = new Date(),
+  ): Promise<{ banned: true; reason: string | null; until: Date } | { banned: false }> {
+    const rows = await this.db
+      .select({
+        bannedUntil: (this.users as any).bannedUntil,
+        bannedReason: (this.users as any).bannedReason,
+      })
+      .from(this.users)
+      .where(eq(this.users.id, userId))
+      .limit(1);
+    const row = rows[0] as any;
+    if (!row || !row.bannedUntil) { return { banned: false }; }
+    const until = row.bannedUntil instanceof Date ? row.bannedUntil : new Date(row.bannedUntil);
+    if (until.getTime() <= at.getTime()) { return { banned: false }; }
+    return { banned: true, reason: row.bannedReason ?? null, until };
   }
 
   /**

@@ -21,6 +21,8 @@ export type UsersTableShape = Table & {
   anonymousId: AnyColumn;
   createdAt: AnyColumn;
   updatedAt: AnyColumn;
+  bannedUntil: AnyColumn;
+  bannedReason: AnyColumn;
 };
 
 export type ConfigsTableShape = Table & {

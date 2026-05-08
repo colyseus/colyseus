@@ -20,6 +20,11 @@ export const userColumns = {
   anonymousId: text('anonymous_id'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  // Ban state — null bannedUntil means not banned. A future timestamp
+  // means banned through that instant; the AuthService.findByEmail check
+  // rejects sign-in while bannedUntil > now.
+  bannedUntil: timestamp('banned_until'),
+  bannedReason: text('banned_reason'),
 };
 
 export const configColumns = {

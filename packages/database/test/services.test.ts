@@ -112,6 +112,52 @@ for (const backend of BACKENDS) {
         assert.ok(u.id, 'anonymous user has an id');
         assert.equal(u.anonymous, true);
       });
+
+      it('ban / unban / isBanned round-trip', async () => {
+        // Seed a user via the auth flow so the row has all defaults.
+        const u: any = await db.auth.settings.onRegisterAnonymously!({} as any);
+
+        // Initial state
+        const before = await db.auth.isBanned(u.id);
+        assert.equal(before.banned, false);
+
+        // Permanent ban (no `until`)
+        await db.auth.ban(u.id, { reason: 'fraud' });
+        const banned = await db.auth.isBanned(u.id);
+        assert.equal(banned.banned, true);
+        if (banned.banned) {
+          assert.equal(banned.reason, 'fraud');
+          assert.ok(banned.until.getTime() > Date.now() + 86_400_000);
+        }
+
+        // Unban clears state
+        await db.auth.unban(u.id);
+        assert.equal((await db.auth.isBanned(u.id)).banned, false);
+      });
+
+      it('isBanned reports false once the expiry passes', async () => {
+        const u: any = await db.auth.settings.onRegisterAnonymously!({} as any);
+        const past = new Date(Date.now() - 60_000);
+        await db.auth.ban(u.id, { reason: 'cool down', until: past });
+        const r = await db.auth.isBanned(u.id);
+        assert.equal(r.banned, false);
+      });
+
+      it('findByEmail rejects banned users (login enforcement)', async () => {
+        const s = db.auth.settings;
+        // Register the user with email
+        await s.onRegisterWithEmailAndPassword!('a@b.com', 'hash', {} as any);
+        // Confirm sign-in works pre-ban
+        const pre = await s.onFindUserByEmail!('a@b.com');
+        assert.ok(pre, 'pre-ban findByEmail returns user');
+
+        // Ban through the public API
+        await db.auth.ban((pre as any).id, { reason: 'TOS' });
+
+        // Sign-in path now refuses
+        const post = await s.onFindUserByEmail!('a@b.com');
+        assert.equal(post, null, 'banned user no longer signs in');
+      });
     });
 
     describe('ConfigService', () => {
