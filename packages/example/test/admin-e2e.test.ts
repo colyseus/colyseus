@@ -362,6 +362,56 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     await page.close();
   });
 
+  it('list endpoint supports ?_q=… search across text columns', async () => {
+    // The bootstrap admin's email is admin@example.com — searching by part
+    // of the email should return them, and searching for nonsense should
+    // return an empty list with x-total-count: 0.
+    const loginRes = await fetch(`${BASE}/admin-api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: BOOTSTRAP_EMAIL, password: BOOTSTRAP_PASSWORD }),
+    });
+    const cookieHeader = loginRes.headers.get('set-cookie')!.split(';')[0];
+
+    const hit = await fetch(`${BASE}/admin-api/users?_q=admin%40`, { headers: { cookie: cookieHeader } });
+    assert.equal(hit.status, 200);
+    const hits = await hit.json() as Array<{ email: string }>;
+    assert.ok(hits.length >= 1, 'should find the bootstrap admin by email substring');
+    assert.ok(hits[0]!.email.includes('admin@'), 'returned row should match the search');
+    assert.equal(hit.headers.get('x-total-count'), String(hits.length));
+
+    const miss = await fetch(`${BASE}/admin-api/users?_q=zzznotpresent`, { headers: { cookie: cookieHeader } });
+    const missRows = await miss.json() as any[];
+    assert.equal(missRows.length, 0);
+    assert.equal(miss.headers.get('x-total-count'), '0');
+  });
+
+  it('list page search input filters the rendered table', async () => {
+    const page = await browser!.newPage();
+    await page.setViewport({ width: 1400, height: 900 });
+    await page.goto(`${BASE}/admin/login`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-testid="login-email"]');
+    await page.type('input[data-testid="login-email"]', BOOTSTRAP_EMAIL);
+    await page.type('input[data-testid="login-password"]', BOOTSTRAP_PASSWORD);
+    await page.click('[data-testid="login-submit"]');
+    await page.waitForSelector('[data-testid="widget-recentUsers"]', { timeout: 15_000 });
+
+    await page.goto(`${BASE}/admin/users`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-testid="list-users"] .ant-table-row', { timeout: 10_000 });
+    const initialRowCount = (await page.$$eval('[data-testid="list-users"] .ant-table-row',
+      (rows) => rows.length));
+    assert.ok(initialRowCount >= 1);
+
+    // Search for nonsense → table should empty out
+    await page.type('[data-testid="search-users"] input', 'zzznotpresent');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(
+      () => document.querySelectorAll('[data-testid="list-users"] .ant-table-row').length === 0,
+      { timeout: 5_000 },
+    );
+    await page.close();
+  });
+
   it('Show page renders relation tabs with counts and a one-relation link', async () => {
     // Login + navigate to a user's Show page; assert the cloudSaves and
     // playerItems tabs render, and the `role` one-relation appears as a

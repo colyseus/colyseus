@@ -115,13 +115,21 @@ export function ListPage({ resources }: { resources: Resource[] }) {
   const { resource: resourceName } = useParams();
   const def = findResource(resources, resourceName);
   const pk = def && singlePk(def);
-  const { tableProps, tableQueryResult } = useTable({ resource: resourceName, syncWithLocation: true });
+  const { tableProps, tableQueryResult, setFilters, filters } = useTable({
+    resource: resourceName,
+    syncWithLocation: true,
+  });
 
   if (!def) { return <div data-testid="unknown">unknown resource: {resourceName}</div>; }
 
   const cols = visibleColumns(def, def.listColumns);
   const rowActions = def.actions.filter((a) => a.perRow);
   const toolbarActions = def.actions.filter((a) => !a.perRow);
+
+  // The current `_q` value comes back through refine's filters array. We use
+  // a synthetic filter id `_q` because simple-rest serializes `eq` filters as
+  // `field=value` query params — so the backend just reads `ctx.query._q`.
+  const currentQ = (filters?.find?.((f: any) => f.field === '_q') as any)?.value ?? '';
 
   const onRow = (record: any) => ({
     'data-testid': pk ? `row-${record[pk]}` : undefined,
@@ -132,6 +140,22 @@ export function ListPage({ resources }: { resources: Resource[] }) {
     <List
       headerButtons={({ defaultButtons }) => (
         <Space>
+          <span data-testid={`search-${resourceName}`} style={{ display: 'inline-block', width: 240 }}>
+            <Input.Search
+              allowClear
+              placeholder="Search…"
+              defaultValue={currentQ}
+              onSearch={(value) => {
+                const trimmed = value.trim();
+                if (trimmed.length === 0) {
+                  setFilters([{ field: '_q', operator: 'eq', value: undefined } as any], 'replace');
+                } else {
+                  setFilters([{ field: '_q', operator: 'eq', value: trimmed } as any], 'replace');
+                }
+              }}
+              style={{ width: '100%' }}
+            />
+          </span>
           {defaultButtons}
           {toolbarActions.map((a) => (
             <ActionButton

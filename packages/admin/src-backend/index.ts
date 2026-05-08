@@ -1,7 +1,7 @@
 import path from 'path';
 import { fileURLToPath } from 'url'; // required for ESM build (see build.mjs)
 import { createEndpoint, type Endpoint } from '@colyseus/core';
-import { sql, asc, desc, eq } from 'drizzle-orm';
+import { sql, asc, desc, eq, like, or, type SQL } from 'drizzle-orm';
 import { getTableConfig as getPgTableConfig } from 'drizzle-orm/pg-core';
 import { getTableConfig as getSqliteTableConfig } from 'drizzle-orm/sqlite-core';
 import type { Action, GameDatabase } from '@colyseus/database';
@@ -412,6 +412,9 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
       const end = parseInt(q._end as string) || start + 100;
       const sortField = q._sort as string | undefined;
       const sortOrder = (q._order as string)?.toUpperCase() === 'DESC' ? 'desc' : 'asc';
+      // Free-text search across text columns. ILIKE-style on pg, LIKE on
+      // sqlite (LIKE is already case-insensitive for ASCII in sqlite default).
+      const search = typeof q._q === 'string' ? q._q.trim() : '';
 
       const visibleCols = listColumns(cfg, def);
       const projection: Record<string, any> = {};
@@ -424,14 +427,31 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
         if (col.primary && !(col.name in projection)) { projection[col.name] = col; }
       }
 
+      // Build the WHERE for search: OR over LIKE on every text-typed column
+      // currently visible. Stays narrow on intent — searching `users` with
+      // displayName + email works without the user defining anything.
+      let whereClause: SQL | undefined;
+      if (search.length > 0) {
+        const pattern = `%${search}%`;
+        const textCols = cfg.columns.filter((c: any) => {
+          const t = typeof c.getSQLType === 'function' ? c.getSQLType() : '';
+          return /^(text|varchar|char)/i.test(t);
+        });
+        const conds = textCols.map((c: any) => like(c, pattern));
+        if (conds.length > 0) { whereClause = or(...conds); }
+      }
+
       let query = database.drizzle.select(projection).from(table).limit(end - start).offset(start) as any;
+      if (whereClause) { query = query.where(whereClause); }
       if (sortField) {
         const col = cfg.columns.find((c: any) => c.name === sortField);
         if (col) { query = query.orderBy(sortOrder === 'desc' ? desc(col) : asc(col)); }
       }
 
       const rows = await query;
-      const totalRows = await database.drizzle.select({ c: sql<number>`count(*)` }).from(table);
+      let countQuery = database.drizzle.select({ c: sql<number>`count(*)` }).from(table) as any;
+      if (whereClause) { countQuery = countQuery.where(whereClause); }
+      const totalRows = await countQuery;
       const total = Number(totalRows[0]?.c ?? 0);
 
       return json(rows, { headers: {
