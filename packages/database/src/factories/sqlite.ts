@@ -37,6 +37,7 @@ import {
   analyticsEventColumns,
   userRoleColumns,
   modAssignmentColumns,
+  userNoteColumns,
 } from '../schemas/sqlite.ts';
 
 export const sqlite = {
@@ -80,4 +81,7 @@ export const sqlite = {
     sqliteTable(name, { ...modAssignmentColumns, ...(extras as E) }, (table) => [
       primaryKey({ columns: [table.userId, table.collection] }),
     ]),
+
+  userNotes: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
+    sqliteTable(name, { ...userNoteColumns, ...(extras as E) }),
 };

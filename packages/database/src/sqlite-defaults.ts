@@ -53,4 +53,5 @@ export {
   colyseusAnalyticsEvents as analyticsEvents,
   colyseusUserRoles as userRoles,
   colyseusModAssignments as modAssignments,
+  colyseusUserNotes as userNotes,
 } from './schemas/sqlite.ts';

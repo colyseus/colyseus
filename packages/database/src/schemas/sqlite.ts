@@ -97,6 +97,26 @@ export const modAssignmentColumns = {
   collection: text('collection').notNull(),
 };
 
+/**
+ * Free-form admin notes attached to a user. Append-only by convention
+ * (the service exposes create + delete; no edit), so an audit trail of
+ * "Refunded once 2026-04 — Endel" remains stable. authorId is the
+ * operator who wrote the note.
+ *
+ * createdAt uses `timestamp_ms` mode so notes added back-to-back keep
+ * a stable order — `unixepoch()` only has second precision, which made
+ * "newest first" tests flake.
+ */
+export const userNoteColumns = {
+  id: text('id').primaryKey().$defaultFn(() => generateId(21)),
+  userId: text('user_id').notNull(),
+  authorId: text('author_id'),
+  text: text('text').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' as const })
+    .notNull()
+    .$defaultFn(() => new Date()),
+};
+
 // ---------------------------------------------------------------------------
 // Default table instances — used when the user does NOT provide custom schemas
 // ---------------------------------------------------------------------------
@@ -136,3 +156,5 @@ export const colyseusModAssignments = sqliteTable(
   { ...modAssignmentColumns },
   (table) => [primaryKey({ columns: [table.userId, table.collection] })],
 );
+
+export const colyseusUserNotes = sqliteTable('colyseus_user_notes', { ...userNoteColumns });

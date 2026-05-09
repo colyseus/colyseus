@@ -96,6 +96,20 @@ export const modAssignmentColumns = {
   collection: text('collection').notNull(),
 };
 
+/**
+ * Free-form admin notes attached to a user. Append-only by convention
+ * (the service exposes create + delete; no edit), so an audit trail of
+ * "Refunded once 2026-04 — Endel" remains stable. authorId is the
+ * operator who wrote the note.
+ */
+export const userNoteColumns = {
+  id: text('id').primaryKey().$defaultFn(() => generateId(21)),
+  userId: text('user_id').notNull(),
+  authorId: text('author_id'),
+  text: text('text').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+};
+
 // ---------------------------------------------------------------------------
 // Default table instances — used when the user does NOT provide custom schemas
 // ---------------------------------------------------------------------------
@@ -135,3 +149,5 @@ export const colyseusModAssignments = pgTable(
   { ...modAssignmentColumns },
   (table) => [primaryKey({ columns: [table.userId, table.collection] })],
 );
+
+export const colyseusUserNotes = pgTable('colyseus_user_notes', { ...userNoteColumns });

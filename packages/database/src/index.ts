@@ -30,6 +30,7 @@ export {
   analyticsEventColumns as sqliteAnalyticsEventColumns,
   userRoleColumns as sqliteUserRoleColumns,
   modAssignmentColumns as sqliteModAssignmentColumns,
+  userNoteColumns as sqliteUserNoteColumns,
 } from './schemas/sqlite.ts';
 export {
   userColumns as pgUserColumns,
@@ -43,6 +44,7 @@ export {
   analyticsEventColumns as pgAnalyticsEventColumns,
   userRoleColumns as pgUserRoleColumns,
   modAssignmentColumns as pgModAssignmentColumns,
+  userNoteColumns as pgUserNoteColumns,
 } from './schemas/pg.ts';
 
 // Namespaced columns export: columns.sqlite.users, columns.pg.users, etc.
@@ -58,6 +60,7 @@ import {
   analyticsEventColumns as sqliteAnalyticsEvents,
   userRoleColumns as sqliteUserRoles,
   modAssignmentColumns as sqliteModAssignments,
+  userNoteColumns as sqliteUserNotes,
 } from './schemas/sqlite.ts';
 import {
   userColumns as pgUsers,
@@ -71,6 +74,7 @@ import {
   analyticsEventColumns as pgAnalyticsEvents,
   userRoleColumns as pgUserRoles,
   modAssignmentColumns as pgModAssignments,
+  userNoteColumns as pgUserNotes,
 } from './schemas/pg.ts';
 
 export const columns = {
@@ -86,6 +90,7 @@ export const columns = {
     analyticsEvents: sqliteAnalyticsEvents,
     userRoles: sqliteUserRoles,
     modAssignments: sqliteModAssignments,
+    userNotes: sqliteUserNotes,
   },
   pg: {
     users: pgUsers,
@@ -99,6 +104,7 @@ export const columns = {
     analyticsEvents: pgAnalyticsEvents,
     userRoles: pgUserRoles,
     modAssignments: pgModAssignments,
+    userNotes: pgUserNotes,
   },
 };
 

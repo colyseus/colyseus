@@ -22,6 +22,7 @@ import {
   analyticsEventColumns,
   userRoleColumns,
   modAssignmentColumns,
+  userNoteColumns,
 } from '../schemas/pg.ts';
 
 export const pg = {
@@ -65,4 +66,7 @@ export const pg = {
     pgTable(name, { ...modAssignmentColumns, ...(extras as E) }, (table) => [
       primaryKey({ columns: [table.userId, table.collection] }),
     ]),
+
+  userNotes: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
+    pgTable(name, { ...userNoteColumns, ...(extras as E) }),
 };

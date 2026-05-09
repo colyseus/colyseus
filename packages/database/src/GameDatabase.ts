@@ -8,6 +8,7 @@ import { ItemsService } from './services/ItemsService.ts';
 import { TimedEventsService } from './services/TimedEventsService.ts';
 import { AnalyticsService } from './services/AnalyticsService.ts';
 import { ModerationService } from './services/ModerationService.ts';
+import { NotesService } from './services/NotesService.ts';
 import { SegmentsService } from './services/SegmentsService.ts';
 import { mergeRelations, type RelationDefinition } from './relations-meta.ts';
 import type { SchemaSet } from './types.ts';
@@ -255,6 +256,7 @@ export class GameDatabase<
   events: TimedEventsService<Resolve<S, 'timedEvents'>>;
   analytics: AnalyticsService<Resolve<S, 'analyticsEvents'>>;
   moderation: ModerationService<Resolve<S, 'userRoles'>, Resolve<S, 'modAssignments'>>;
+  notes: NotesService<Resolve<S, 'userNotes'>>;
   /**
    * Player segments. Available before boot — `db.segments.define(...)` is
    * typed via this database's schema + dialect generics. Reads (`size`,
@@ -377,6 +379,7 @@ export class GameDatabase<
       schemas.userRoles,
       schemas.modAssignments,
     );
+    this.notes = new NotesService(this.drizzle, schemas.userNotes);
     // The segments service was created at construction time so users could
     // call `db.segments.define(...)` pre-boot. Now that drizzle + tables
     // are live, hand them over and merge any segments passed via options.
@@ -507,6 +510,7 @@ export class GameDatabase<
       analyticsEvents: userSchemas.analyticsEvents ?? defaults.colyseusAnalyticsEvents,
       userRoles: userSchemas.userRoles ?? defaults.colyseusUserRoles,
       modAssignments: userSchemas.modAssignments ?? defaults.colyseusModAssignments,
+      userNotes: userSchemas.userNotes ?? defaults.colyseusUserNotes,
     } as { [K in keyof SchemaSet]: Resolve<S, K> };
   }
 
@@ -617,6 +621,7 @@ export class GameDatabase<
       schemas.playerItems,          // depends on users + items
       schemas.userRoles,            // depends on users
       schemas.modAssignments,       // depends on users
+      schemas.userNotes,            // depends on users (operator notes)
     ];
 
     for (const table of tables) {

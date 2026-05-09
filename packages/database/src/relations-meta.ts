@@ -48,6 +48,7 @@ export const builtInRelations: Record<string, RelationDefinition[]> = {
     { name: 'analyticsEvents', target: 'analyticsEvents', kind: 'many', fk: 'userId' },
     { name: 'role', target: 'userRoles', kind: 'one', fk: 'userId' },
     { name: 'modAssignments', target: 'modAssignments', kind: 'many', fk: 'userId' },
+    { name: 'notes', target: 'userNotes', kind: 'many', fk: 'userId' },
   ],
   cloudSaves: [
     { name: 'user', target: 'users', kind: 'one', fk: 'userId' },
@@ -73,6 +74,9 @@ export const builtInRelations: Record<string, RelationDefinition[]> = {
     { name: 'user', target: 'users', kind: 'one', fk: 'userId' },
   ],
   modAssignments: [
+    { name: 'user', target: 'users', kind: 'one', fk: 'userId' },
+  ],
+  userNotes: [
     { name: 'user', target: 'users', kind: 'one', fk: 'userId' },
   ],
 };

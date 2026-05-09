@@ -376,5 +376,47 @@ for (const backend of BACKENDS) {
         assert.equal(await db.moderation.can('unknown', 'create', 'whatever'), false);
       });
     });
+
+    describe('NotesService', () => {
+      beforeEach(async () => { await fresh(); });
+      afterEach(async () => { await backend.cleanupOne(db); });
+
+      it('add / list / delete round-trip', async () => {
+        const u: any = await db.auth.settings.onRegisterAnonymously!({} as any);
+
+        const a = await db.notes.add(u.id, 'first observation', 'op-1');
+        const b = await db.notes.add(u.id, 'second observation', 'op-1');
+
+        // Both notes are listed for the user; order may vary at sub-ms
+        // precision but both must appear with the right author + text.
+        const list = await db.notes.list(u.id);
+        assert.equal(list.length, 2);
+        const ids = new Set(list.map((n) => n.id));
+        assert.ok(ids.has(a.id) && ids.has(b.id));
+        assert.ok(list.every((n) => n.authorId === 'op-1'));
+
+        await db.notes.delete(a.id);
+        const after = await db.notes.list(u.id);
+        assert.equal(after.length, 1);
+        assert.equal(after[0]!.id, b.id);
+      });
+
+      it('rejects empty / whitespace-only text', async () => {
+        const u: any = await db.auth.settings.onRegisterAnonymously!({} as any);
+        await assert.rejects(() => db.notes.add(u.id, '   '), /text must not be empty/);
+      });
+
+      it('deleteAllForUser drops every note for that user only', async () => {
+        const a: any = await db.auth.settings.onRegisterAnonymously!({} as any);
+        const b: any = await db.auth.settings.onRegisterAnonymously!({} as any);
+        await db.notes.add(a.id, 'A1');
+        await db.notes.add(a.id, 'A2');
+        await db.notes.add(b.id, 'B1');
+
+        await db.notes.deleteAllForUser(a.id);
+        assert.equal((await db.notes.list(a.id)).length, 0);
+        assert.equal((await db.notes.list(b.id)).length, 1);
+      });
+    });
   });
 }

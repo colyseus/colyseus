@@ -94,6 +94,14 @@ export type ModAssignmentsTableShape = Table & {
   collection: AnyColumn;
 };
 
+export type UserNotesTableShape = Table & {
+  id: AnyColumn;
+  userId: AnyColumn;
+  authorId: AnyColumn;
+  text: AnyColumn;
+  createdAt: AnyColumn;
+};
+
 /** All known schema slots — used as the base type for GameDatabaseOptions['schemas']. */
 export interface SchemaSet {
   users: UsersTableShape;
@@ -107,4 +115,5 @@ export interface SchemaSet {
   analyticsEvents: AnalyticsEventsTableShape;
   userRoles: UserRolesTableShape;
   modAssignments: ModAssignmentsTableShape;
+  userNotes: UserNotesTableShape;
 }
