@@ -261,6 +261,39 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     assert.equal(del.status, 200);
   });
 
+  it('PATCH coerces datetime-local strings into Date for timestamp columns', async () => {
+    // Regression: the form's <input type="datetime-local"> sends
+    // "2026-05-08T22:05" strings; drizzle's timestamp `mapToDriverValue`
+    // calls `value.getTime()` which used to throw because the body still
+    // had the raw string at the drizzle boundary. Backend now coerces
+    // by column dataType.
+    const loginRes = await fetch(`${BASE}/admin-api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: BOOTSTRAP_EMAIL, password: BOOTSTRAP_PASSWORD }),
+    });
+    const cookieHeader = loginRes.headers.get('set-cookie')!.split(';')[0];
+
+    const usersRes = await fetch(`${BASE}/admin-api/users`, { headers: { cookie: cookieHeader } });
+    const userId = (await usersRes.json() as Array<{ id: string }>)[0]!.id;
+
+    // Submit a body that mirrors what the form actually sends — strings
+    // for timestamp fields, including updated_at.
+    const res = await fetch(`${BASE}/admin-api/users/${userId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: cookieHeader },
+      body: JSON.stringify({
+        display_name: 'Patched',
+        updated_at: '2026-05-08T22:05',  // datetime-local shape
+      }),
+    });
+    const text = await res.text();
+    assert.equal(res.status, 200, text);
+    const row = JSON.parse(text) as Record<string, any>;
+    assert.equal(row.display_name, 'Patched');
+    assert.ok(row.updated_at, 'updated_at survived round-trip');
+  });
+
   it('row update accepts both PATCH and PUT', async () => {
     // Refine's simple-rest data provider sends PATCH for the `update` op;
     // some custom clients use PUT. The endpoint accepts both and runs the

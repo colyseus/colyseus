@@ -294,27 +294,88 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
   /**
    * The frontend posts form bodies keyed by SQL column names
    * (`board_id`, `user_id`) — that's what we surface in the catalog and
-   * what AntD/shadcn forms bind to. drizzle's `.insert().values({...})`
+   * what shadcn forms bind to. drizzle's `.insert().values({...})`
    * and `.update().set({...})` expect the **JS field names** (`boardId`,
    * `userId`), and silently drop unrecognized keys. That silent drop is
    * how a NOT NULL FK column ended up null even though the form had it
    * filled in.
    *
-   * Translate before handing the body to drizzle: map each SQL column
-   * name to its JS key by iterating the table object's properties.
+   * On top of key translation we coerce each value into the shape
+   * drizzle's column type expects:
+   *   date  → JS Date (datetime-local inputs send "2026-05-08T22:05" strings)
+   *   number → Number (form values are sometimes strings)
+   *   boolean → true/false (form values may be 'true'/'false' strings)
+   *   json  → parsed object (the JsonEditor passes the raw JSON string)
+   *
+   * Without these coercions drizzle's `mapToDriverValue` calls
+   * `value.getTime()` / etc. on the wrong type and throws.
    */
   function translateBodyKeys(body: Record<string, any>, table: any): Record<string, any> {
     const sqlToJs: Record<string, string> = {};
+    const colByJsKey: Record<string, any> = {};
     for (const [jsKey, col] of Object.entries(table)) {
       if (col && typeof col === 'object' && 'name' in (col as any) && typeof (col as any).name === 'string') {
         sqlToJs[(col as any).name] = jsKey;
+        colByJsKey[jsKey] = col;
       }
     }
     const out: Record<string, any> = {};
     for (const [k, v] of Object.entries(body)) {
-      out[sqlToJs[k] ?? k] = v;
+      const jsKey = sqlToJs[k] ?? k;
+      const col = colByJsKey[jsKey];
+      out[jsKey] = coerceForColumn(v, col);
     }
     return out;
+  }
+
+  /**
+   * Cast a JSON-body value to what drizzle's column expects. Empty strings
+   * become null so optional fields can clear; unknown columns pass through
+   * unchanged.
+   */
+  function coerceForColumn(value: any, col: any): any {
+    if (value === null || value === undefined) { return value; }
+    if (!col) { return value; }
+    const dt: string = (col as any).dataType ?? '';
+    const tokens = new Set(dt.split(/\s+/));
+
+    // Empty string → null. Lets users clear nullable fields by emptying
+    // the input rather than typing the literal word "null".
+    if (typeof value === 'string' && value === '' && !tokens.has('string')) {
+      return null;
+    }
+
+    if (tokens.has('date')) {
+      if (value instanceof Date) { return value; }
+      if (typeof value === 'string' || typeof value === 'number') {
+        const d = new Date(value);
+        return isNaN(d.getTime()) ? null : d;
+      }
+      return value;
+    }
+
+    if (tokens.has('number') || tokens.has('bigint')) {
+      if (typeof value === 'number') { return value; }
+      if (typeof value === 'string' && value.trim() !== '') {
+        const n = Number(value);
+        return Number.isFinite(n) ? n : value;
+      }
+      return value;
+    }
+
+    if (tokens.has('boolean')) {
+      if (typeof value === 'boolean') { return value; }
+      if (typeof value === 'string') { return value === 'true' || value === '1'; }
+      if (typeof value === 'number') { return value !== 0; }
+      return value;
+    }
+
+    if (tokens.has('json')) {
+      if (typeof value !== 'string') { return value; }
+      try { return JSON.parse(value); } catch { return value; }
+    }
+
+    return value;
   }
 
   /**
