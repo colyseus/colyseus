@@ -112,6 +112,16 @@ export type AdminAuditTableShape = Table & {
   createdAt: AnyColumn;
 };
 
+export type BannedAddressesTableShape = Table & {
+  id: AnyColumn;
+  kind: AnyColumn;
+  value: AnyColumn;
+  reason: AnyColumn;
+  until: AnyColumn;
+  createdBy: AnyColumn;
+  createdAt: AnyColumn;
+};
+
 /** All known schema slots — used as the base type for GameDatabaseOptions['schemas']. */
 export interface SchemaSet {
   users: UsersTableShape;
@@ -127,4 +137,5 @@ export interface SchemaSet {
   modAssignments: ModAssignmentsTableShape;
   userNotes: UserNotesTableShape;
   adminAudit: AdminAuditTableShape;
+  bannedAddresses: BannedAddressesTableShape;
 }

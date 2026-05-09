@@ -465,5 +465,56 @@ for (const backend of BACKENDS) {
         assert.equal(remaining[0]!.action, 'update');
       });
     });
+
+    describe('AddressBansService', () => {
+      beforeEach(async () => { await fresh(); });
+      afterEach(async () => { await backend.cleanupOne(db); });
+
+      it('ban / isBanned / unban round-trip with kind isolation', async () => {
+        assert.equal(await db.addressBans.isBanned('ip', '1.2.3.4'), false);
+
+        await db.addressBans.ban('ip', '1.2.3.4', { reason: 'fraud', createdBy: 'op-1' });
+        assert.equal(await db.addressBans.isBanned('ip', '1.2.3.4'), true);
+        // Different value with the same kind isn't affected
+        assert.equal(await db.addressBans.isBanned('ip', '5.6.7.8'), false);
+        // Same value but different kind isn't affected
+        assert.equal(await db.addressBans.isBanned('device', '1.2.3.4'), false);
+
+        await db.addressBans.unban('ip', '1.2.3.4');
+        assert.equal(await db.addressBans.isBanned('ip', '1.2.3.4'), false);
+      });
+
+      it('expired timed bans report unbanned; pruneExpired drops them', async () => {
+        const past = new Date(Date.now() - 60_000);
+        await db.addressBans.ban('ip', '9.9.9.9', { until: past });
+        assert.equal(await db.addressBans.isBanned('ip', '9.9.9.9'), false);
+
+        const removed = await db.addressBans.pruneExpired();
+        assert.ok(removed >= 1);
+      });
+
+      it('re-banning an existing tuple overwrites instead of duplicating', async () => {
+        await db.addressBans.ban('device', 'fp-1', { reason: 'first' });
+        await db.addressBans.ban('device', 'fp-1', { reason: 'updated' });
+        const all = await db.addressBans.list('device');
+        const matches = all.filter((b) => b.value === 'fp-1');
+        assert.equal(matches.length, 1);
+        assert.equal(matches[0]!.reason, 'updated');
+      });
+
+      it('list filters by kind and excludes expired bans', async () => {
+        await db.addressBans.ban('ip', 'active');
+        await db.addressBans.ban('ip', 'expired', { until: new Date(Date.now() - 60_000) });
+        await db.addressBans.ban('device', 'd1');
+
+        const ips = await db.addressBans.list('ip');
+        const ipValues = ips.map((b) => b.value);
+        assert.ok(ipValues.includes('active'));
+        assert.ok(!ipValues.includes('expired'));
+
+        const devices = await db.addressBans.list('device');
+        assert.equal(devices.length, 1);
+      });
+    });
   });
 }

@@ -39,6 +39,7 @@ import {
   modAssignmentColumns,
   userNoteColumns,
   adminAuditColumns,
+  bannedAddressColumns,
 } from '../schemas/sqlite.ts';
 
 export const sqlite = {
@@ -88,4 +89,7 @@ export const sqlite = {
 
   adminAudit: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
     sqliteTable(name, { ...adminAuditColumns, ...(extras as E) }),
+
+  bannedAddresses: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
+    sqliteTable(name, { ...bannedAddressColumns, ...(extras as E) }),
 };

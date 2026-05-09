@@ -98,6 +98,29 @@ export const modAssignmentColumns = {
 };
 
 /**
+ * IP / device bans, separate from per-user bans. Lets operators block
+ * a connection-source identifier (an IP, a device fingerprint, etc.)
+ * regardless of which account is signing in. The `kind` column is
+ * a free-form tag — `'ip'` and `'device'` are the conventional
+ * values, but games can introduce their own (e.g. `'install_id'`).
+ *
+ * (kind, value) is the lookup key; uniqueness is the caller's
+ * responsibility — re-banning the same address overwrites by design,
+ * use the service's ban() method.
+ */
+export const bannedAddressColumns = {
+  id: text('id').primaryKey().$defaultFn(() => generateId(21)),
+  kind: text('kind').notNull(),
+  value: text('value').notNull(),
+  reason: text('reason'),
+  until: integer('until', { mode: 'timestamp_ms' as const }),
+  createdBy: text('created_by'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' as const })
+    .notNull()
+    .$defaultFn(() => new Date()),
+};
+
+/**
  * Admin audit log. Every Create / Update / Delete / custom action that
  * passes through `adminEndpoints` records a row here so operators can
  * answer "who edited this config / banned which player". The table is
@@ -185,3 +208,5 @@ export const colyseusModAssignments = sqliteTable(
 export const colyseusUserNotes = sqliteTable('colyseus_user_notes', { ...userNoteColumns });
 
 export const colyseusAdminAudit = sqliteTable('colyseus_admin_audit', { ...adminAuditColumns });
+
+export const colyseusBannedAddresses = sqliteTable('colyseus_banned_addresses', { ...bannedAddressColumns });

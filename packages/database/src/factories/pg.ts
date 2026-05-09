@@ -24,6 +24,7 @@ import {
   modAssignmentColumns,
   userNoteColumns,
   adminAuditColumns,
+  bannedAddressColumns,
 } from '../schemas/pg.ts';
 
 export const pg = {
@@ -73,4 +74,7 @@ export const pg = {
 
   adminAudit: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
     pgTable(name, { ...adminAuditColumns, ...(extras as E) }),
+
+  bannedAddresses: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
+    pgTable(name, { ...bannedAddressColumns, ...(extras as E) }),
 };

@@ -56,4 +56,5 @@ export {
   colyseusModAssignments as modAssignments,
   colyseusUserNotes as userNotes,
   colyseusAdminAudit as adminAudit,
+  colyseusBannedAddresses as bannedAddresses,
 } from './schemas/pg.ts';

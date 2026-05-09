@@ -97,6 +97,19 @@ export const modAssignmentColumns = {
 };
 
 /**
+ * IP / device bans — see schemas/sqlite.ts for full notes.
+ */
+export const bannedAddressColumns = {
+  id: text('id').primaryKey().$defaultFn(() => generateId(21)),
+  kind: text('kind').notNull(),
+  value: text('value').notNull(),
+  reason: text('reason'),
+  until: timestamp('until'),
+  createdBy: text('created_by'),
+  createdAt: timestamp('created_at').notNull().$defaultFn(() => new Date()),
+};
+
+/**
  * Admin audit log — see schemas/sqlite.ts for full notes.
  *
  * createdAt uses a JS-side `$defaultFn` instead of `defaultNow()` so
@@ -171,3 +184,5 @@ export const colyseusModAssignments = pgTable(
 export const colyseusUserNotes = pgTable('colyseus_user_notes', { ...userNoteColumns });
 
 export const colyseusAdminAudit = pgTable('colyseus_admin_audit', { ...adminAuditColumns });
+
+export const colyseusBannedAddresses = pgTable('colyseus_banned_addresses', { ...bannedAddressColumns });

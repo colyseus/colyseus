@@ -32,6 +32,7 @@ export {
   modAssignmentColumns as sqliteModAssignmentColumns,
   userNoteColumns as sqliteUserNoteColumns,
   adminAuditColumns as sqliteAdminAuditColumns,
+  bannedAddressColumns as sqliteBannedAddressColumns,
 } from './schemas/sqlite.ts';
 export {
   userColumns as pgUserColumns,
@@ -47,6 +48,7 @@ export {
   modAssignmentColumns as pgModAssignmentColumns,
   userNoteColumns as pgUserNoteColumns,
   adminAuditColumns as pgAdminAuditColumns,
+  bannedAddressColumns as pgBannedAddressColumns,
 } from './schemas/pg.ts';
 
 // Namespaced columns export: columns.sqlite.users, columns.pg.users, etc.
@@ -64,6 +66,7 @@ import {
   modAssignmentColumns as sqliteModAssignments,
   userNoteColumns as sqliteUserNotes,
   adminAuditColumns as sqliteAdminAudit,
+  bannedAddressColumns as sqliteBannedAddresses,
 } from './schemas/sqlite.ts';
 import {
   userColumns as pgUsers,
@@ -79,6 +82,7 @@ import {
   modAssignmentColumns as pgModAssignments,
   userNoteColumns as pgUserNotes,
   adminAuditColumns as pgAdminAudit,
+  bannedAddressColumns as pgBannedAddresses,
 } from './schemas/pg.ts';
 
 export const columns = {
@@ -96,6 +100,7 @@ export const columns = {
     modAssignments: sqliteModAssignments,
     userNotes: sqliteUserNotes,
     adminAudit: sqliteAdminAudit,
+    bannedAddresses: sqliteBannedAddresses,
   },
   pg: {
     users: pgUsers,
@@ -111,6 +116,7 @@ export const columns = {
     modAssignments: pgModAssignments,
     userNotes: pgUserNotes,
     adminAudit: pgAdminAudit,
+    bannedAddresses: pgBannedAddresses,
   },
 };
 
