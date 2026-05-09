@@ -98,6 +98,31 @@ export const modAssignmentColumns = {
 };
 
 /**
+ * Admin audit log. Every Create / Update / Delete / custom action that
+ * passes through `adminEndpoints` records a row here so operators can
+ * answer "who edited this config / banned which player". The table is
+ * append-only; deletion is a separate, opt-in operation (e.g. a cron
+ * that prunes rows older than N days).
+ *
+ * `payload` is opaque JSON — its shape depends on the action:
+ *   create → { row }
+ *   update → { before, after }
+ *   delete → { row }
+ *   custom → { name, args, result }
+ */
+export const adminAuditColumns = {
+  id: text('id').primaryKey().$defaultFn(() => generateId(21)),
+  operatorId: text('operator_id'),
+  action: text('action').notNull(),
+  resource: text('resource').notNull(),
+  targetId: text('target_id'),
+  payload: text('payload', { mode: 'json' as const }),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' as const })
+    .notNull()
+    .$defaultFn(() => new Date()),
+};
+
+/**
  * Free-form admin notes attached to a user. Append-only by convention
  * (the service exposes create + delete; no edit), so an audit trail of
  * "Refunded once 2026-04 — Endel" remains stable. authorId is the
@@ -158,3 +183,5 @@ export const colyseusModAssignments = sqliteTable(
 );
 
 export const colyseusUserNotes = sqliteTable('colyseus_user_notes', { ...userNoteColumns });
+
+export const colyseusAdminAudit = sqliteTable('colyseus_admin_audit', { ...adminAuditColumns });

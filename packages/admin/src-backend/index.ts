@@ -317,6 +317,25 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
     return out;
   }
 
+  /**
+   * Fire-and-forget audit log writer. Wrapped in try/catch so a failure
+   * to log never breaks the user's mutation. Errors land in the admin
+   * logger so operators can debug.
+   */
+  async function tryAudit(entry: {
+    operatorId?: string | null;
+    action: 'create' | 'update' | 'delete' | 'custom';
+    resource: string;
+    targetId?: string | null;
+    payload?: unknown;
+  }): Promise<void> {
+    try {
+      await database.audit.record(entry);
+    } catch (err: any) {
+      logger?.error?.({ err: err?.message ?? String(err), entry }, 'audit log write failed');
+    }
+  }
+
   // Shared update handler used by both PUT and PATCH adminUpdate endpoints.
   const runUpdate = async (ctx: any) => {
     const { resource, id } = ctx.params as { resource: string; id: string };
@@ -327,10 +346,25 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
     const { table, cfg } = r;
     const built = buildPkWhere(cfg, id);
     if (built instanceof Response) { return built; }
+    // Snapshot before-state so the audit entry has a {before, after} diff
+    // rather than just the post-update row.
+    const beforeRows = await database.drizzle
+      .select(sqlKeyedProjection(cfg))
+      .from(table)
+      .where(built.where)
+      .limit(1);
     const set = translateBodyKeys((ctx.body ?? {}) as Record<string, any>, table);
     const [row] = await database.drizzle.update(table).set(set)
       .where(built.where).returning(sqlKeyedProjection(cfg));
     if (!row) { return errorResponse(404, 'not found'); }
+    const operatorId = await resolveUserId({ getHeader: ctx.getHeader });
+    await tryAudit({
+      operatorId,
+      action: 'update',
+      resource,
+      targetId: id,
+      payload: { before: beforeRows[0] ?? null, after: row },
+    });
     return json(row);
   };
 
@@ -602,6 +636,13 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
       }
 
       const result = await found.handler(row, { userId: userId ?? '', resource });
+      await tryAudit({
+        operatorId: userId ?? null,
+        action: 'custom',
+        resource,
+        targetId: body.id ?? null,
+        payload: { name: actionName, args: body, result: result ?? null },
+      });
       return json({ ok: true, result: result ?? null });
     }),
 
@@ -723,6 +764,14 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
         .insert(r.table)
         .values(values)
         .returning(sqlKeyedProjection(r.cfg));
+      // Audit: capture the created row + the operator behind the creation.
+      const operatorId = await resolveUserId({ getHeader: ctx.getHeader });
+      const targetId = (() => {
+        const pkCols = pkColumns(r.cfg);
+        if (pkCols.length === 1) { return String(row[pkCols[0]!.name]); }
+        return null;
+      })();
+      await tryAudit({ operatorId, action: 'create', resource, targetId, payload: { row } });
       return json(row, { status: 201 });
     }),
 
@@ -745,6 +794,8 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
       const [row] = await database.drizzle.delete(table).where(built.where)
         .returning(sqlKeyedProjection(cfg));
       if (!row) { return errorResponse(404, 'not found'); }
+      const operatorId = await resolveUserId({ getHeader: ctx.getHeader });
+      await tryAudit({ operatorId, action: 'delete', resource, targetId: id, payload: { row } });
       return json(row);
     }),
 

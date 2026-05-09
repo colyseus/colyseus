@@ -23,6 +23,7 @@ import {
   userRoleColumns,
   modAssignmentColumns,
   userNoteColumns,
+  adminAuditColumns,
 } from '../schemas/pg.ts';
 
 export const pg = {
@@ -69,4 +70,7 @@ export const pg = {
 
   userNotes: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
     pgTable(name, { ...userNoteColumns, ...(extras as E) }),
+
+  adminAudit: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
+    pgTable(name, { ...adminAuditColumns, ...(extras as E) }),
 };

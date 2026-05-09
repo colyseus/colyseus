@@ -55,4 +55,5 @@ export {
   colyseusUserRoles as userRoles,
   colyseusModAssignments as modAssignments,
   colyseusUserNotes as userNotes,
+  colyseusAdminAudit as adminAudit,
 } from './schemas/pg.ts';

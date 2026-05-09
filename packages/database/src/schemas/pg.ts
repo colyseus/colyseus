@@ -97,6 +97,24 @@ export const modAssignmentColumns = {
 };
 
 /**
+ * Admin audit log — see schemas/sqlite.ts for full notes.
+ *
+ * createdAt uses a JS-side `$defaultFn` instead of `defaultNow()` so
+ * the timestamp comes from the same clock the test cutoff uses; PG's
+ * server-side now() and the JS Date sometimes drift enough to flake
+ * `prune(before)` cutoffs by a millisecond.
+ */
+export const adminAuditColumns = {
+  id: text('id').primaryKey().$defaultFn(() => generateId(21)),
+  operatorId: text('operator_id'),
+  action: text('action').notNull(),
+  resource: text('resource').notNull(),
+  targetId: text('target_id'),
+  payload: jsonb('payload'),
+  createdAt: timestamp('created_at').notNull().$defaultFn(() => new Date()),
+};
+
+/**
  * Free-form admin notes attached to a user. Append-only by convention
  * (the service exposes create + delete; no edit), so an audit trail of
  * "Refunded once 2026-04 — Endel" remains stable. authorId is the
@@ -151,3 +169,5 @@ export const colyseusModAssignments = pgTable(
 );
 
 export const colyseusUserNotes = pgTable('colyseus_user_notes', { ...userNoteColumns });
+
+export const colyseusAdminAudit = pgTable('colyseus_admin_audit', { ...adminAuditColumns });

@@ -102,6 +102,16 @@ export type UserNotesTableShape = Table & {
   createdAt: AnyColumn;
 };
 
+export type AdminAuditTableShape = Table & {
+  id: AnyColumn;
+  operatorId: AnyColumn;
+  action: AnyColumn;
+  resource: AnyColumn;
+  targetId: AnyColumn;
+  payload: AnyColumn;
+  createdAt: AnyColumn;
+};
+
 /** All known schema slots — used as the base type for GameDatabaseOptions['schemas']. */
 export interface SchemaSet {
   users: UsersTableShape;
@@ -116,4 +126,5 @@ export interface SchemaSet {
   userRoles: UserRolesTableShape;
   modAssignments: ModAssignmentsTableShape;
   userNotes: UserNotesTableShape;
+  adminAudit: AdminAuditTableShape;
 }

@@ -289,6 +289,49 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     }
   });
 
+  it('admin Create / Update / Delete writes audit log entries', async () => {
+    const loginRes = await fetch(`${BASE}/admin-api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: BOOTSTRAP_EMAIL, password: BOOTSTRAP_PASSWORD }),
+    });
+    const cookieHeader = loginRes.headers.get('set-cookie')!.split(';')[0];
+
+    // Mutations of all three kinds
+    await fetch(`${BASE}/admin-api/configs`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: cookieHeader },
+      body: JSON.stringify({ key: 'audit_test', value: 'one' }),
+    });
+    await fetch(`${BASE}/admin-api/configs/audit_test`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: cookieHeader },
+      body: JSON.stringify({ value: 'two' }),
+    });
+    await fetch(`${BASE}/admin-api/configs/audit_test`, {
+      method: 'DELETE',
+      headers: { cookie: cookieHeader },
+    });
+
+    // Read the audit table directly via the admin's CRUD endpoint —
+    // it's a plain resource because adminAudit is registered as a table.
+    const log = await fetch(`${BASE}/admin-api/adminAudit?_sort=created_at&_order=DESC&_start=0&_end=10`, {
+      headers: { cookie: cookieHeader },
+    });
+    assert.equal(log.status, 200);
+    const entries = await log.json() as Array<{
+      action: string; resource: string; target_id: string | null; operator_id: string | null;
+    }>;
+    const ours = entries.filter((e) => e.resource === 'configs' && e.target_id === 'audit_test');
+    assert.ok(ours.length >= 3, `expected 3 audit entries for configs/audit_test, got ${ours.length}`);
+    const actions = new Set(ours.map((e) => e.action));
+    assert.ok(actions.has('create'));
+    assert.ok(actions.has('update'));
+    assert.ok(actions.has('delete'));
+    // Operator id was the bootstrap admin
+    assert.ok(ours.every((e) => e.operator_id != null));
+  });
+
   it('CRUD with FK columns: POST translates SQL→JS column names so FKs land', async () => {
     // Regression test for the form-to-drizzle key translation. The frontend
     // posts bodies keyed by SQL column names (`board_id`, `user_id`); drizzle

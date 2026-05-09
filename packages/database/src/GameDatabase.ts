@@ -9,6 +9,7 @@ import { TimedEventsService } from './services/TimedEventsService.ts';
 import { AnalyticsService } from './services/AnalyticsService.ts';
 import { ModerationService } from './services/ModerationService.ts';
 import { NotesService } from './services/NotesService.ts';
+import { AuditService } from './services/AuditService.ts';
 import { SegmentsService } from './services/SegmentsService.ts';
 import { mergeRelations, type RelationDefinition } from './relations-meta.ts';
 import type { SchemaSet } from './types.ts';
@@ -257,6 +258,7 @@ export class GameDatabase<
   analytics: AnalyticsService<Resolve<S, 'analyticsEvents'>>;
   moderation: ModerationService<Resolve<S, 'userRoles'>, Resolve<S, 'modAssignments'>>;
   notes: NotesService<Resolve<S, 'userNotes'>>;
+  audit: AuditService<Resolve<S, 'adminAudit'>>;
   /**
    * Player segments. Available before boot — `db.segments.define(...)` is
    * typed via this database's schema + dialect generics. Reads (`size`,
@@ -380,6 +382,7 @@ export class GameDatabase<
       schemas.modAssignments,
     );
     this.notes = new NotesService(this.drizzle, schemas.userNotes);
+    this.audit = new AuditService(this.drizzle, schemas.adminAudit);
     // The segments service was created at construction time so users could
     // call `db.segments.define(...)` pre-boot. Now that drizzle + tables
     // are live, hand them over and merge any segments passed via options.
@@ -511,6 +514,7 @@ export class GameDatabase<
       userRoles: userSchemas.userRoles ?? defaults.colyseusUserRoles,
       modAssignments: userSchemas.modAssignments ?? defaults.colyseusModAssignments,
       userNotes: userSchemas.userNotes ?? defaults.colyseusUserNotes,
+      adminAudit: userSchemas.adminAudit ?? defaults.colyseusAdminAudit,
     } as { [K in keyof SchemaSet]: Resolve<S, K> };
   }
 
@@ -622,6 +626,7 @@ export class GameDatabase<
       schemas.userRoles,            // depends on users
       schemas.modAssignments,       // depends on users
       schemas.userNotes,            // depends on users (operator notes)
+      schemas.adminAudit,            // standalone — operator log
     ];
 
     for (const table of tables) {

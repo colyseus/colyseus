@@ -418,5 +418,52 @@ for (const backend of BACKENDS) {
         assert.equal((await db.notes.list(b.id)).length, 1);
       });
     });
+
+    describe('AuditService', () => {
+      beforeEach(async () => { await fresh(); });
+      afterEach(async () => { await backend.cleanupOne(db); });
+
+      it('record + list newest-first; filter by resource and operator', async () => {
+        await db.audit.record({
+          operatorId: 'op-1', action: 'create', resource: 'configs',
+          targetId: 'double_xp', payload: { row: { key: 'double_xp', value: 'on' } },
+        });
+        await db.audit.record({
+          operatorId: 'op-2', action: 'update', resource: 'users',
+          targetId: 'u1', payload: { before: { level: 1 }, after: { level: 5 } },
+        });
+        await db.audit.record({
+          operatorId: 'op-1', action: 'delete', resource: 'configs',
+          targetId: 'old_flag', payload: { row: { key: 'old_flag' } },
+        });
+
+        const all = await db.audit.list();
+        assert.equal(all.length, 3);
+
+        const byOp1 = await db.audit.list({ operatorId: 'op-1' });
+        assert.equal(byOp1.length, 2);
+        assert.ok(byOp1.every((e) => e.operatorId === 'op-1'));
+
+        const byConfigs = await db.audit.list({ resource: 'configs' });
+        assert.equal(byConfigs.length, 2);
+        assert.ok(byConfigs.every((e) => e.resource === 'configs'));
+      });
+
+      it('prune drops entries older than the cutoff', async () => {
+        // 50ms gaps so PGlite's microsecond-granular timestamps comfortably
+        // straddle the cutoff. With smaller gaps the JS Date here can
+        // round to the same second the server-side `defaultNow()` used.
+        await db.audit.record({ action: 'create', resource: 'foo' });
+        await new Promise((r) => setTimeout(r, 50));
+        const cutoff = new Date();
+        await new Promise((r) => setTimeout(r, 50));
+        await db.audit.record({ action: 'update', resource: 'foo' });
+
+        await db.audit.prune(cutoff);
+        const remaining = await db.audit.list();
+        assert.equal(remaining.length, 1);
+        assert.equal(remaining[0]!.action, 'update');
+      });
+    });
   });
 }
