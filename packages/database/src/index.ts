@@ -7,6 +7,8 @@ export type { Item, PlayerItem } from './services/ItemsService.ts';
 export type { TimedEvent } from './services/TimedEventsService.ts';
 export type { RetentionResult, FunnelStep } from './services/AnalyticsService.ts';
 export type { Role, Action } from './services/ModerationService.ts';
+export { diffRows } from './services/AuditService.ts';
+export type { AuditEntry, AuditAction } from './services/AuditService.ts';
 export { defineSegment, createSegmentDefiner } from './segments.ts';
 export type { RelationDefinition, RelationKind } from './relations-meta.ts';
 export type {

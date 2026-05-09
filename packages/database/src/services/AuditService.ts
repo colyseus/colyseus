@@ -14,6 +14,49 @@ export interface AuditEntry {
 }
 
 /**
+ * Column-level diff between two row snapshots. Result keys are the
+ * shared/changed column names; values are `{ before, after }` pairs
+ * for fields that actually differ. Untouched columns are omitted.
+ *
+ * Equality:
+ *   - `===` for primitives
+ *   - `getTime()` for Date instances
+ *   - stringified for objects (good enough for audit payloads)
+ *
+ * Exported so game code can produce audit-shaped diffs from
+ * non-admin code paths (e.g. cron jobs, scheduled migrations).
+ */
+export function diffRows(
+  before: Record<string, any> | null | undefined,
+  after: Record<string, any> | null | undefined,
+): Record<string, { before: any; after: any }> {
+  const out: Record<string, { before: any; after: any }> = {};
+  const keys = new Set<string>([
+    ...Object.keys(before ?? {}),
+    ...Object.keys(after ?? {}),
+  ]);
+  for (const k of keys) {
+    const a = before?.[k];
+    const b = after?.[k];
+    if (!isShallowlyEqual(a, b)) {
+      out[k] = { before: a, after: b };
+    }
+  }
+  return out;
+}
+
+function isShallowlyEqual(a: any, b: any): boolean {
+  if (a === b) { return true; }
+  if (a == null || b == null) { return false; }
+  if (a instanceof Date && b instanceof Date) { return a.getTime() === b.getTime(); }
+  if (typeof a === 'object' && typeof b === 'object') {
+    try { return JSON.stringify(a) === JSON.stringify(b); }
+    catch { return false; }
+  }
+  return false;
+}
+
+/**
  * Append-only log of admin actions. Used by the admin's
  * Create/Update/Delete/custom-action endpoints to record who did what,
  * when, and to which row. Reads are cheap (paginated, indexed by
@@ -56,6 +99,33 @@ export class AuditService<T extends AdminAuditTableShape = AdminAuditTableShape>
       })
       .returning();
     return row as AuditEntry;
+  }
+
+  /**
+   * Convenience for the common "I just updated row X, log the change"
+   * pattern. Computes a column-level diff via `diffRows` and stores it
+   * under `payload.changes`. Equivalent to:
+   *
+   *   audit.record({
+   *     ...,
+   *     action: 'update',
+   *     payload: { changes: diffRows(before, after) },
+   *   });
+   */
+  async recordUpdate(opts: {
+    operatorId?: string | null;
+    resource: string;
+    targetId?: string | null;
+    before: Record<string, any> | null | undefined;
+    after: Record<string, any>;
+  }): Promise<AuditEntry> {
+    return this.record({
+      operatorId: opts.operatorId ?? null,
+      action: 'update',
+      resource: opts.resource,
+      targetId: opts.targetId ?? null,
+      payload: { changes: diffRows(opts.before, opts.after) },
+    });
   }
 
   /**

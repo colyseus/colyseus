@@ -379,60 +379,14 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
   }
 
   /**
-   * Compute a column-level diff between two row snapshots. Result keys are
-   * SQL column names; values are `{ before, after }` pairs for fields that
-   * changed. Auto-updated fields (e.g. `updated_at`) naturally show up as
-   * changes — that's the operator's signal that the row was touched.
-   *
-   * Equality uses === for primitives, getTime() for Dates, and stringified
-   * comparison for objects (good enough for jsonb columns).
-   */
-  function computeDiff(
-    before: Record<string, any> | null | undefined,
-    after: Record<string, any>,
-  ): Record<string, { before: any; after: any }> {
-    const diff: Record<string, { before: any; after: any }> = {};
-    const keys = new Set<string>([
-      ...Object.keys(before ?? {}),
-      ...Object.keys(after ?? {}),
-    ]);
-    for (const k of keys) {
-      const a = before?.[k];
-      const b = after?.[k];
-      if (!isShallowlyEqual(a, b)) {
-        diff[k] = { before: a, after: b };
-      }
-    }
-    return diff;
-  }
-
-  function isShallowlyEqual(a: any, b: any): boolean {
-    if (a === b) { return true; }
-    if (a == null || b == null) { return false; }
-    if (a instanceof Date && b instanceof Date) { return a.getTime() === b.getTime(); }
-    if (typeof a === 'object' && typeof b === 'object') {
-      try { return JSON.stringify(a) === JSON.stringify(b); }
-      catch { return false; }
-    }
-    return false;
-  }
-
-  /**
    * Fire-and-forget audit log writer. Wrapped in try/catch so a failure
    * to log never breaks the user's mutation. Errors land in the admin
    * logger so operators can debug.
    */
-  async function tryAudit(entry: {
-    operatorId?: string | null;
-    action: 'create' | 'update' | 'delete' | 'custom';
-    resource: string;
-    targetId?: string | null;
-    payload?: unknown;
-  }): Promise<void> {
-    try {
-      await database.audit.record(entry);
-    } catch (err: any) {
-      logger?.error?.({ err: err?.message ?? String(err), entry }, 'audit log write failed');
+  async function tryAudit<T>(work: () => Promise<T>): Promise<void> {
+    try { await work(); }
+    catch (err: any) {
+      logger?.error?.({ err: err?.message ?? String(err) }, 'audit log write failed');
     }
   }
 
@@ -458,16 +412,13 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
       .where(built.where).returning(sqlKeyedProjection(cfg));
     if (!row) { return errorResponse(404, 'not found'); }
     const operatorId = await resolveUserId({ getHeader: ctx.getHeader });
-    // Audit payload is a column-level diff so the log shows just what
-    // changed, not the entire row. Snapshot of the post-update row is
-    // implicit in the `after` half of each diff entry.
-    await tryAudit({
-      operatorId,
-      action: 'update',
-      resource,
-      targetId: id,
-      payload: { changes: computeDiff(beforeRows[0] as any, row) },
-    });
+    // Diff lives in AuditService.recordUpdate so non-admin code paths
+    // (cron jobs, scripts) get the same `{ changes: { col: { before,
+    // after } } }` shape without re-implementing the comparison.
+    await tryAudit(() => database.audit.recordUpdate({
+      operatorId, resource, targetId: id,
+      before: beforeRows[0] as any, after: row,
+    }));
     return json(row);
   };
 
@@ -739,13 +690,13 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
       }
 
       const result = await found.handler(row, { userId: userId ?? '', resource });
-      await tryAudit({
+      await tryAudit(() => database.audit.record({
         operatorId: userId ?? null,
         action: 'custom',
         resource,
         targetId: body.id ?? null,
         payload: { name: actionName, args: body, result: result ?? null },
-      });
+      }));
       return json({ ok: true, result: result ?? null });
     }),
 
@@ -874,7 +825,9 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
         if (pkCols.length === 1) { return String(row[pkCols[0]!.name]); }
         return null;
       })();
-      await tryAudit({ operatorId, action: 'create', resource, targetId, payload: { row } });
+      await tryAudit(() => database.audit.record({
+        operatorId, action: 'create', resource, targetId, payload: { row },
+      }));
       return json(row, { status: 201 });
     }),
 
@@ -898,7 +851,9 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
         .returning(sqlKeyedProjection(cfg));
       if (!row) { return errorResponse(404, 'not found'); }
       const operatorId = await resolveUserId({ getHeader: ctx.getHeader });
-      await tryAudit({ operatorId, action: 'delete', resource, targetId: id, payload: { row } });
+      await tryAudit(() => database.audit.record({
+        operatorId, action: 'delete', resource, targetId: id, payload: { row },
+      }));
       return json(row);
     }),
 
