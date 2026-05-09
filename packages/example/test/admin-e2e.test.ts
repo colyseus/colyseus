@@ -354,6 +354,7 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     assert.equal(log.status, 200);
     const entries = await log.json() as Array<{
       action: string; resource: string; target_id: string | null; operator_id: string | null;
+      payload: any;
     }>;
     const ours = entries.filter((e) => e.resource === 'configs' && e.target_id === 'audit_test');
     assert.ok(ours.length >= 3, `expected 3 audit entries for configs/audit_test, got ${ours.length}`);
@@ -363,6 +364,14 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     assert.ok(actions.has('delete'));
     // Operator id was the bootstrap admin
     assert.ok(ours.every((e) => e.operator_id != null));
+
+    // Update payload is a column-level diff under `changes`, not full
+    // before/after snapshots. value=one was overwritten with value=two.
+    const update = ours.find((e) => e.action === 'update')!;
+    assert.ok(update.payload?.changes, `update payload should have a 'changes' map, got: ${JSON.stringify(update.payload)}`);
+    assert.deepEqual(update.payload.changes.value, { before: 'one', after: 'two' });
+    // Untouched fields (e.g. key) should NOT appear in the diff
+    assert.equal(update.payload.changes.key, undefined);
   });
 
   it('CRUD with FK columns: POST translates SQL→JS column names so FKs land', async () => {

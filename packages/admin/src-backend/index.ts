@@ -379,6 +379,45 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
   }
 
   /**
+   * Compute a column-level diff between two row snapshots. Result keys are
+   * SQL column names; values are `{ before, after }` pairs for fields that
+   * changed. Auto-updated fields (e.g. `updated_at`) naturally show up as
+   * changes — that's the operator's signal that the row was touched.
+   *
+   * Equality uses === for primitives, getTime() for Dates, and stringified
+   * comparison for objects (good enough for jsonb columns).
+   */
+  function computeDiff(
+    before: Record<string, any> | null | undefined,
+    after: Record<string, any>,
+  ): Record<string, { before: any; after: any }> {
+    const diff: Record<string, { before: any; after: any }> = {};
+    const keys = new Set<string>([
+      ...Object.keys(before ?? {}),
+      ...Object.keys(after ?? {}),
+    ]);
+    for (const k of keys) {
+      const a = before?.[k];
+      const b = after?.[k];
+      if (!isShallowlyEqual(a, b)) {
+        diff[k] = { before: a, after: b };
+      }
+    }
+    return diff;
+  }
+
+  function isShallowlyEqual(a: any, b: any): boolean {
+    if (a === b) { return true; }
+    if (a == null || b == null) { return false; }
+    if (a instanceof Date && b instanceof Date) { return a.getTime() === b.getTime(); }
+    if (typeof a === 'object' && typeof b === 'object') {
+      try { return JSON.stringify(a) === JSON.stringify(b); }
+      catch { return false; }
+    }
+    return false;
+  }
+
+  /**
    * Fire-and-forget audit log writer. Wrapped in try/catch so a failure
    * to log never breaks the user's mutation. Errors land in the admin
    * logger so operators can debug.
@@ -419,12 +458,15 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
       .where(built.where).returning(sqlKeyedProjection(cfg));
     if (!row) { return errorResponse(404, 'not found'); }
     const operatorId = await resolveUserId({ getHeader: ctx.getHeader });
+    // Audit payload is a column-level diff so the log shows just what
+    // changed, not the entire row. Snapshot of the post-update row is
+    // implicit in the `after` half of each diff entry.
     await tryAudit({
       operatorId,
       action: 'update',
       resource,
       targetId: id,
-      payload: { before: beforeRows[0] ?? null, after: row },
+      payload: { changes: computeDiff(beforeRows[0] as any, row) },
     });
     return json(row);
   };
