@@ -12,8 +12,9 @@ import { NotesService } from './services/NotesService.ts';
 import { AuditService } from './services/AuditService.ts';
 import { AddressBansService } from './services/AddressBansService.ts';
 import { SegmentsService } from './services/SegmentsService.ts';
-import { mergeRelations, type RelationDefinition } from './relations-meta.ts';
+import { buildRelationsCallback, mergeRelations, type RelationDefinition } from './relations-meta.ts';
 import type { SchemaSet } from './types.ts';
+import { topologicalSort, type TableEntry } from './schemas/registry.ts';
 import type { SegmentDefinition, DrizzleFor } from './segments.ts';
 
 /**
@@ -323,7 +324,13 @@ export class GameDatabase<
   }
 
   async boot() {
-    // 1. Create or adopt Drizzle instance
+    // 1. Resolve schemas first — drizzle needs them at construction time so
+    //    `db.query.<table>` is wired up (sqlite consumes `schema:` directly;
+    //    pg/pglite get the table set via auto-built `defineRelations`).
+    const schemas = await this.resolveSchemas();
+    this.tables = { ...schemas };
+
+    // 2. Create or adopt Drizzle instance
     if (this.options.db) {
       this.drizzle = this.options.db;
       this.subDialect = this.dialect === 'pg' ? 'postgres-js' : 'sqlite';
@@ -331,21 +338,17 @@ export class GameDatabase<
       // Explicit pglite — connectionString is the data dir (or empty/:memory:)
       const cs = this.options.connectionString ?? '';
       const dataDir = cs.startsWith('pglite://') ? cs.slice('pglite://'.length) : cs;
-      await this.bootPGlite(dataDir);
+      await this.bootPGlite(dataDir, schemas);
     } else if (this.dialect === 'pg') {
       const cs = this.options.connectionString ?? '';
       if (cs.startsWith('pglite://')) {
-        await this.bootPGlite(cs.slice('pglite://'.length));
+        await this.bootPGlite(cs.slice('pglite://'.length), schemas);
       } else {
-        await this.bootPostgres();
+        await this.bootPostgres(schemas);
       }
     } else {
-      await this.bootSQLite();
+      await this.bootSQLite(schemas);
     }
-
-    // 2. Resolve schemas (user overrides or defaults)
-    const schemas = await this.resolveSchemas();
-    this.tables = { ...schemas };
 
     // 3. Apply migrations according to the configured strategy
     const strategy = this.options.migrations ?? 'auto';
@@ -413,18 +416,37 @@ export class GameDatabase<
   // Private: dialect-specific boot
   // -------------------------------------------------------------------------
 
-  private async bootSQLite() {
+  private async bootSQLite(schemas: Record<string, any>) {
     const { drizzle } = await import('drizzle-orm/node-sqlite');
+    const { defineRelations } = await import('drizzle-orm');
 
     const dbPath = this.options.connectionString || 'colyseus.db';
 
     // Forward user options to Node's DatabaseSync via drizzle's `connection`
     // passthrough. `path` is filled from connectionString if not overridden.
-    const userOpts = this.options.connection ?? {};
+    // Cast: `this.options` is the wide GameDatabaseOptions union here (TS
+    // can't narrow on a runtime dialect dispatch); we know we're on sqlite.
+    const userOpts = (this.options.connection ?? {}) as DatabaseSyncOptions;
     // Concrete factory return (NodeSQLiteDatabase) is a subtype of the public
     // `DrizzleFor<S, Dialect>` for sqlite; a cast keeps the internal assignment
     // tidy without leaking the dialect-specific subclass to consumers.
-    this.drizzle = drizzle({ connection: { path: dbPath, ...userOpts } }) as unknown as typeof this.drizzle;
+    //
+    // `schema` enables the relational query API (db.query.users.findMany());
+    // `relations` is auto-built from our RelationDefinition metadata
+    // (built-ins + options.relations), so `with: { saves: true }`-style
+    // joins work out of the box for both dialects.
+    //
+    // The whole config is `as any`-cast: `schemas` is typed `Record<string,
+    // any>` here, too wide for drizzle's strict relational inference, so
+    // both `defineRelations(...)` and the resulting drizzle() call fail
+    // overload matching. The public `database.drizzle` type still resolves
+    // correctly via DrizzleFor<S, ...> which threads the user's actual
+    // schema generic — that's what consumers see.
+    this.drizzle = drizzle({
+      connection: { path: dbPath, ...userOpts },
+      schema: schemas,
+      relations: defineRelations(schemas as any, buildRelationsCallback(schemas, this.relations) as any),
+    } as any) as unknown as typeof this.drizzle;
 
     // $client is the underlying DatabaseSync — needed for raw DDL + pragmas
     this.ownedConnection = (this.drizzle as any).$client;
@@ -450,16 +472,27 @@ export class GameDatabase<
     }
   }
 
-  private async bootPostgres() {
+  private async bootPostgres(schemas: Record<string, any>) {
     const pg = (await import('postgres')).default;
     const { drizzle } = await import('drizzle-orm/postgres-js');
+    const { defineRelations } = await import('drizzle-orm');
 
     const connectionString = this.options.connectionString || process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/postgres';
     // postgres-js: pass the URL positionally + any tuning opts (max, ssl,
     // idle_timeout, prepare, statement_timeout, etc.) as a second arg.
-    const sql = pg(connectionString, this.options.connection);
+    // Cast: see bootSQLite — `this.options` is the wide union here.
+    const userOpts = this.options.connection as PostgresJsConnectionOptions | undefined;
+    const sql = pg(connectionString, userOpts);
 
-    this.drizzle = drizzle({ client: sql }) as unknown as typeof this.drizzle;
+    // PG drivers don't accept a `schema` option (DrizzlePgConfig omits it);
+    // the relational query API (db.query.X) is built entirely from the
+    // `relations` arg. We auto-build the join wiring from our
+    // RelationDefinition metadata so `with: { ... }` works on both dialects.
+    // (See bootSQLite for the `as any` rationale.)
+    this.drizzle = drizzle({
+      client: sql,
+      relations: defineRelations(schemas as any, buildRelationsCallback(schemas, this.relations) as any),
+    } as any) as unknown as typeof this.drizzle;
     this.ownedConnection = sql;
     this.subDialect = 'postgres-js';
   }
@@ -474,9 +507,10 @@ export class GameDatabase<
    *   ":memory:" — fully ephemeral
    *   "./path"   — file-backed, persists across boots
    */
-  private async bootPGlite(dataDir: string) {
+  private async bootPGlite(dataDir: string, schemas: Record<string, any>) {
     const { PGlite } = await import('@electric-sql/pglite');
     const { drizzle } = await import('drizzle-orm/pglite');
+    const { defineRelations } = await import('drizzle-orm');
 
     // PGliteOptions also accepts `dataDir`, so honor explicit override and
     // fall back to the value parsed from the connection string. We're in the
@@ -488,7 +522,11 @@ export class GameDatabase<
     const client = new PGlite({ ...userOpts, dataDir: resolvedDataDir });
     await client.waitReady;
 
-    this.drizzle = drizzle({ client }) as unknown as typeof this.drizzle;
+    // See bootPostgres for why we pass `relations` (not `schema`) on pg.
+    this.drizzle = drizzle({
+      client,
+      relations: defineRelations(schemas as any, buildRelationsCallback(schemas, this.relations) as any),
+    } as any) as unknown as typeof this.drizzle;
     this.ownedConnection = client;
     this.subDialect = 'pglite';
   }
@@ -497,29 +535,33 @@ export class GameDatabase<
   // Private: schema resolution and table creation
   // -------------------------------------------------------------------------
 
+  /**
+   * Load the dialect-specific table registry. Cached per boot so the dynamic
+   * import only runs once across resolveSchemas/createTables/alterTablesForNewColumns.
+   */
+  private async loadRegistry(): Promise<ReadonlyArray<TableEntry>> {
+    if (this._registryCache) { return this._registryCache; }
+    // Branch on dialect so each `await import(...)` returns its own concrete
+    // module type — TS can't narrow `mod.PG_TABLES || mod.SQLITE_TABLES`
+    // off a unioned dynamic-import return.
+    if (this.dialect === 'pg') {
+      this._registryCache = (await import('./schemas/pg.ts')).PG_TABLES;
+    } else {
+      this._registryCache = (await import('./schemas/sqlite.ts')).SQLITE_TABLES;
+    }
+    return this._registryCache;
+  }
+  private _registryCache: ReadonlyArray<TableEntry> | null = null;
+
   private async resolveSchemas(): Promise<{ [K in keyof SchemaSet]: Resolve<S, K> }> {
     const userSchemas = (this.options.schemas ?? {}) as Partial<SchemaSet>;
-
-    const defaults = this.dialect === 'pg'
-      ? await import('./schemas/pg.ts')
-      : await import('./schemas/sqlite.ts');
-
-    return {
-      users: userSchemas.users ?? defaults.colyseusUsers,
-      configs: userSchemas.configs ?? defaults.colyseusConfigs,
-      cloudSaves: userSchemas.cloudSaves ?? defaults.colyseusCloudSaves,
-      leaderboards: userSchemas.leaderboards ?? defaults.colyseusLeaderboards,
-      leaderboardEntries: userSchemas.leaderboardEntries ?? defaults.colyseusLeaderboardEntries,
-      items: userSchemas.items ?? defaults.colyseusItems,
-      playerItems: userSchemas.playerItems ?? defaults.colyseusPlayerItems,
-      timedEvents: userSchemas.timedEvents ?? defaults.colyseusTimedEvents,
-      analyticsEvents: userSchemas.analyticsEvents ?? defaults.colyseusAnalyticsEvents,
-      userRoles: userSchemas.userRoles ?? defaults.colyseusUserRoles,
-      modAssignments: userSchemas.modAssignments ?? defaults.colyseusModAssignments,
-      userNotes: userSchemas.userNotes ?? defaults.colyseusUserNotes,
-      adminAudit: userSchemas.adminAudit ?? defaults.colyseusAdminAudit,
-      bannedAddresses: userSchemas.bannedAddresses ?? defaults.colyseusBannedAddresses,
-    } as { [K in keyof SchemaSet]: Resolve<S, K> };
+    const registry = await this.loadRegistry();
+    const out = {} as { [K in keyof SchemaSet]: Resolve<S, K> };
+    for (const entry of registry) {
+      // User-supplied table wins over the registry default.
+      (out as any)[entry.key] = userSchemas[entry.key] ?? entry.table;
+    }
+    return out;
   }
 
   /**
@@ -614,27 +656,18 @@ export class GameDatabase<
       ? (await import('drizzle-orm/pg-core')).getTableConfig
       : (await import('drizzle-orm/sqlite-core')).getTableConfig;
 
-    // Order matters: tables with FKs must come after their referenced tables.
-    // Currently no schemas declare FKs (custom user-table names break .references()),
-    // but the ordering is preserved as documentation of the dependency graph.
-    const tables = [
-      schemas.users,
-      schemas.configs,
-      schemas.leaderboards,
-      schemas.items,
-      schemas.timedEvents,
-      schemas.analyticsEvents,      // userId is nullable text, no FK
-      schemas.cloudSaves,           // depends on users
-      schemas.leaderboardEntries,   // depends on users + leaderboards
-      schemas.playerItems,          // depends on users + items
-      schemas.userRoles,            // depends on users
-      schemas.modAssignments,       // depends on users
-      schemas.userNotes,            // depends on users (operator notes)
-      schemas.adminAudit,            // standalone — operator log
-      schemas.bannedAddresses,       // standalone — IP/device blacklist
-    ];
+    // dependsOn drives the order: each table is preceded by anything it
+    // references via FK. Currently no schemas declare FKs (custom user-table
+    // names break drizzle's `.references()` relinking), but the ordering is
+    // preserved as documentation of the dependency graph and so we're ready
+    // when FKs land.
+    const registry = await this.loadRegistry();
+    const ordered = topologicalSort(registry);
 
-    for (const table of tables) {
+    for (const entry of ordered) {
+      // Use the resolved table (which may be the user's override) for SQL
+      // generation — the registry's `entry.table` is only the default.
+      const table = (schemas as any)[entry.key];
       const config = getTableConfig(table);
       const sql = generateCreateTableSQL(config);
 

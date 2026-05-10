@@ -1,6 +1,7 @@
 import { sqliteTable, text, integer, primaryKey } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 import { generateId } from '@colyseus/core';
+import type { TableEntry } from './registry.ts';
 
 // ---------------------------------------------------------------------------
 // Spreadable base columns — users can spread these into their own sqliteTable
@@ -210,3 +211,26 @@ export const colyseusUserNotes = sqliteTable('colyseus_user_notes', { ...userNot
 export const colyseusAdminAudit = sqliteTable('colyseus_admin_audit', { ...adminAuditColumns });
 
 export const colyseusBannedAddresses = sqliteTable('colyseus_banned_addresses', { ...bannedAddressColumns });
+
+// ---------------------------------------------------------------------------
+// Registry — single source of truth consumed by GameDatabase.boot() for
+// schema resolution + table creation. Order is enforced via `dependsOn`
+// (topologically sorted at boot); declaration order here is informational.
+// ---------------------------------------------------------------------------
+
+export const SQLITE_TABLES: ReadonlyArray<TableEntry> = [
+  { key: 'users',              table: colyseusUsers,              columns: userColumns,            dependsOn: [] },
+  { key: 'configs',            table: colyseusConfigs,            columns: configColumns,          dependsOn: [] },
+  { key: 'leaderboards',       table: colyseusLeaderboards,       columns: leaderboardColumns,     dependsOn: [] },
+  { key: 'items',              table: colyseusItems,              columns: itemColumns,            dependsOn: [] },
+  { key: 'timedEvents',        table: colyseusTimedEvents,        columns: timedEventColumns,      dependsOn: [] },
+  { key: 'analyticsEvents',    table: colyseusAnalyticsEvents,    columns: analyticsEventColumns,  dependsOn: [] },
+  { key: 'cloudSaves',         table: colyseusCloudSaves,         columns: cloudSaveColumns,       dependsOn: ['users'] },
+  { key: 'leaderboardEntries', table: colyseusLeaderboardEntries, columns: leaderboardEntryColumns, dependsOn: ['users', 'leaderboards'] },
+  { key: 'playerItems',        table: colyseusPlayerItems,        columns: playerItemColumns,      dependsOn: ['users', 'items'] },
+  { key: 'userRoles',          table: colyseusUserRoles,          columns: userRoleColumns,        dependsOn: ['users'] },
+  { key: 'modAssignments',     table: colyseusModAssignments,     columns: modAssignmentColumns,   dependsOn: ['users'] },
+  { key: 'userNotes',          table: colyseusUserNotes,          columns: userNoteColumns,        dependsOn: ['users'] },
+  { key: 'adminAudit',         table: colyseusAdminAudit,         columns: adminAuditColumns,      dependsOn: [] },
+  { key: 'bannedAddresses',    table: colyseusBannedAddresses,    columns: bannedAddressColumns,   dependsOn: [] },
+];

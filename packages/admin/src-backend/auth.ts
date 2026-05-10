@@ -2,7 +2,7 @@ import { count, eq } from 'drizzle-orm';
 import { Hash } from '@colyseus/auth';
 import { createEndpoint, type Endpoint } from '@colyseus/core';
 import type { GameDatabase } from '@colyseus/database';
-import { json, errorResponse } from './respond.js';
+import { json, errorResponse } from './http.js';
 import {
   signSession,
   setSessionCookie,

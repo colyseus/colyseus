@@ -1,5 +1,6 @@
 import { pgTable, text, boolean, integer, jsonb, serial, timestamp, primaryKey } from 'drizzle-orm/pg-core';
 import { generateId } from '@colyseus/core';
+import type { TableEntry } from './registry.ts';
 
 // ---------------------------------------------------------------------------
 // Spreadable base columns — users can spread these into their own pgTable
@@ -186,3 +187,26 @@ export const colyseusUserNotes = pgTable('colyseus_user_notes', { ...userNoteCol
 export const colyseusAdminAudit = pgTable('colyseus_admin_audit', { ...adminAuditColumns });
 
 export const colyseusBannedAddresses = pgTable('colyseus_banned_addresses', { ...bannedAddressColumns });
+
+// ---------------------------------------------------------------------------
+// Registry — see ./sqlite.ts SQLITE_TABLES for the design rationale. PG
+// declares its own array because GameDatabase loads dialect modules lazily;
+// keeping the registry per-dialect preserves that.
+// ---------------------------------------------------------------------------
+
+export const PG_TABLES: ReadonlyArray<TableEntry> = [
+  { key: 'users',              table: colyseusUsers,              columns: userColumns,            dependsOn: [] },
+  { key: 'configs',            table: colyseusConfigs,            columns: configColumns,          dependsOn: [] },
+  { key: 'leaderboards',       table: colyseusLeaderboards,       columns: leaderboardColumns,     dependsOn: [] },
+  { key: 'items',              table: colyseusItems,              columns: itemColumns,            dependsOn: [] },
+  { key: 'timedEvents',        table: colyseusTimedEvents,        columns: timedEventColumns,      dependsOn: [] },
+  { key: 'analyticsEvents',    table: colyseusAnalyticsEvents,    columns: analyticsEventColumns,  dependsOn: [] },
+  { key: 'cloudSaves',         table: colyseusCloudSaves,         columns: cloudSaveColumns,       dependsOn: ['users'] },
+  { key: 'leaderboardEntries', table: colyseusLeaderboardEntries, columns: leaderboardEntryColumns, dependsOn: ['users', 'leaderboards'] },
+  { key: 'playerItems',        table: colyseusPlayerItems,        columns: playerItemColumns,      dependsOn: ['users', 'items'] },
+  { key: 'userRoles',          table: colyseusUserRoles,          columns: userRoleColumns,        dependsOn: ['users'] },
+  { key: 'modAssignments',     table: colyseusModAssignments,     columns: modAssignmentColumns,   dependsOn: ['users'] },
+  { key: 'userNotes',          table: colyseusUserNotes,          columns: userNoteColumns,        dependsOn: ['users'] },
+  { key: 'adminAudit',         table: colyseusAdminAudit,         columns: adminAuditColumns,      dependsOn: [] },
+  { key: 'bannedAddresses',    table: colyseusBannedAddresses,    columns: bannedAddressColumns,   dependsOn: [] },
+];

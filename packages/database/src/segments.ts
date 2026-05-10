@@ -26,22 +26,41 @@
  * Exactly one of `where` / `resolve` must be provided.
  */
 
-import type { SQL } from 'drizzle-orm';
+import type { SQL, ExtractTablesFromSchema, ExtractTablesWithRelations } from 'drizzle-orm';
 import type { BaseSQLiteDatabase } from 'drizzle-orm/sqlite-core';
 import type { PgAsyncDatabase } from 'drizzle-orm/pg-core/async';
 
 /**
- * Resolves to the drizzle client class for `Dialect`. SQLite carries the
- * schema in its generic so `.select().from(tables.x)` infers row shapes;
- * Postgres infers from the table arg alone, so the schema isn't threaded
- * into the type at this level.
+ * Auto-built relational config for the user's schema. GameDatabase calls
+ * `defineRelations(schemas)` at boot time with no joins declared, which is
+ * enough to wire `db.query.<table>.findMany()` for both dialects.
+ *
+ * Implemented as the underlying `ExtractTablesWithRelations<{}, ...>` type
+ * rather than `ReturnType<typeof defineRelations<S>>` because TS doesn't
+ * propagate the schema generic through `ReturnType<typeof fn<T>>` when the
+ * resulting type is then used as another generic argument — the keys
+ * collapse to `{}` and `db.query.<table>` stops resolving.
+ */
+type RelationsFor<S extends Record<string, any>> =
+  ExtractTablesWithRelations<{}, ExtractTablesFromSchema<S>>;
+
+/**
+ * Public type for the `database.drizzle` field. Both dialects expose
+ * `.select()`, `.insert()`, `.update()`, `.delete()`, AND `.query.<table>`
+ * for the relational query API:
+ *
+ *   await database.drizzle.query.users.findFirst({ where: eq(users.id, '...') });
+ *
+ * The `.query` API is built from the `relations` arg passed at boot. Joins
+ * (`with: { ... }`) require explicit `defineRelations(schema, helpers => ...)`
+ * — see GameDatabase boot methods for how to wire that.
  */
 export type DrizzleFor<
   S extends Record<string, any>,
   Dialect extends 'sqlite' | 'pg',
 > = Dialect extends 'pg'
-  ? PgAsyncDatabase<any, any>
-  : BaseSQLiteDatabase<'sync' | 'async', any, S>;
+  ? PgAsyncDatabase<any, RelationsFor<S>>
+  : BaseSQLiteDatabase<'sync' | 'async', any, S, RelationsFor<S>>;
 
 export interface SegmentResolveContext<
   S extends Record<string, any>,

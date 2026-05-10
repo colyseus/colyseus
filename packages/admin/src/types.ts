@@ -1,51 +1,17 @@
-export interface Column {
-  name: string;
-  /** Dialect SQL type (e.g. "integer", "text", "varchar(255)"). */
-  type: string;
-  /**
-   * JS-side category drizzle reports for this column ('date', 'json',
-   * 'number', 'string', 'boolean'). Use this for renderer routing — it
-   * distinguishes timestamp-mode integers from regular integers, which
-   * `type` alone cannot.
-   */
-  dataType?: string | null;
-  notNull: boolean;
-  primary: boolean;
-  hasDefault: boolean;
-}
+// Wire-format types are owned by the backend (single source of truth shared
+// with external admin clients via the package's `./catalog-types` subpath).
+// Re-exported under the friendlier local names this UI codebase already uses.
+import type {
+  CatalogColumn,
+  CatalogResource,
+  CatalogResourceAction,
+  CatalogResourceRelation,
+} from '../src-backend/catalog-types.ts';
 
-export interface ResourceAction {
-  name: string;
-  label: string;
-  perRow: boolean;
-  /** Show a confirmation prompt before invoking. */
-  confirm?: { title?: string; description?: string };
-}
-
-/** Foreign-key relation to another resource — shown as a tab or badge on the detail page. */
-export interface ResourceRelation {
-  /** Display name + URL slug for the relation endpoint. */
-  name: string;
-  /** Canonical name of the target resource. */
-  target: string;
-  /** `'many'` → tab with a paginated table. `'one'` → clickable badge. */
-  kind: 'one' | 'many';
-  /** FK column on the target — used to pre-fill on "New related" forms. */
-  fk: string;
-}
-
-export interface Resource {
-  name: string;
-  label: string;
-  icon?: string;
-  columns: Column[];
-  primaryKey: string[];
-  listColumns?: string[];
-  formFields?: string[];
-  showFields?: string[];
-  actions: ResourceAction[];
-  relations: ResourceRelation[];
-}
+export type Column = CatalogColumn;
+export type Resource = CatalogResource;
+export type ResourceAction = CatalogResourceAction;
+export type ResourceRelation = CatalogResourceRelation;
 
 /** Single-PK tables get edit/show/delete actions; composite-PK tables use a base64url-of-JSON id. */
 export function singlePk(r: Resource): string | null {

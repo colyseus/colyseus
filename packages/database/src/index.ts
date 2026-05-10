@@ -11,6 +11,7 @@ export { diffRows } from './services/AuditService.ts';
 export type { AuditEntry, AuditAction } from './services/AuditService.ts';
 export { defineSegment, createSegmentDefiner } from './segments.ts';
 export type { RelationDefinition, RelationKind } from './relations-meta.ts';
+export { resolveFkLayout } from './relations-meta.ts';
 export type {
   SegmentDefinition,
   SegmentResolveContext,

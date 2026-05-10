@@ -528,6 +528,77 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     assert.deepEqual(saves, []);
   });
 
+  it('relation endpoint resolves "one" relations with FK on SOURCE (cloudSaves → user)', async () => {
+    // Regression: the relation endpoint hardcoded `(targetTable)[rel.fk]`
+    // for the WHERE column. That works for FK-on-target relations like
+    // `users → role → userRoles.userId`, but breaks for the inverse
+    // direction `cloudSaves → user → users` because `users.userId` doesn't
+    // exist (FK lives on cloudSaves). Endpoint used to 500; now uses
+    // resolveFkLayout to detect FK position and runs a two-step lookup.
+    const loginRes = await fetch(`${BASE}/admin-api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: BOOTSTRAP_EMAIL, password: BOOTSTRAP_PASSWORD }),
+    });
+    const cookieHeader = loginRes.headers.get('set-cookie')!.split(';')[0];
+
+    const usersRes = await fetch(`${BASE}/admin-api/users`, { headers: { cookie: cookieHeader } });
+    const userId = (await usersRes.json() as Array<{ id: string }>)[0]!.id;
+
+    // Create a cloudSave we can navigate FROM. Use a fresh slot to avoid
+    // collisions with prior tests in the file.
+    const create = await fetch(`${BASE}/admin-api/cloudSaves`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: cookieHeader },
+      body: JSON.stringify({ user_id: userId, slot: 7, data: '{"hp":50}' }),
+    });
+    assert.equal(create.status, 201, await create.text());
+
+    // Composite-id encoding identical to what the frontend produces.
+    const compositeId = Buffer.from(JSON.stringify([userId, 7]))
+      .toString('base64')
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+    const userRelRes = await fetch(
+      `${BASE}/admin-api/cloudSaves/${compositeId}/relations/user`,
+      { headers: { cookie: cookieHeader } },
+    );
+    // Read once — `await res.text()` in an assert message would consume the
+    // body and leave `.json()` unusable.
+    const userRelBody = await userRelRes.text();
+    assert.equal(userRelRes.status, 200, userRelBody);
+    const rows = JSON.parse(userRelBody) as Array<{ id: string; email: string }>;
+    assert.equal(rows.length, 1, 'cloudSaves → user should resolve to exactly one user row');
+    assert.equal(rows[0]!.id, userId);
+    assert.equal(userRelRes.headers.get('x-total-count'), '1');
+
+    // Cleanup
+    await fetch(`${BASE}/admin-api/cloudSaves/${compositeId}`, {
+      method: 'DELETE', headers: { cookie: cookieHeader },
+    });
+  });
+
+  it('relation endpoint returns [] for a "one" relation when source row is unknown', async () => {
+    // Edge case for the FK-on-source path: the source PK doesn't exist.
+    // Should be 404 (the source row), not 500.
+    const loginRes = await fetch(`${BASE}/admin-api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: BOOTSTRAP_EMAIL, password: BOOTSTRAP_PASSWORD }),
+    });
+    const cookieHeader = loginRes.headers.get('set-cookie')!.split(';')[0];
+
+    // Bogus composite id (random user + nonexistent slot)
+    const bogusId = Buffer.from(JSON.stringify(['no-such-user', 99]))
+      .toString('base64')
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const res = await fetch(
+      `${BASE}/admin-api/cloudSaves/${bogusId}/relations/user`,
+      { headers: { cookie: cookieHeader } },
+    );
+    assert.equal(res.status, 404);
+  });
+
   it('catalog reflects custom columns spread onto the users table', async () => {
     // app.config.ts customizes the users table with `display_name` + `level`.
     // The catalog endpoint should surface them so the admin UI can render them.
@@ -543,6 +614,195 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
       `users.columns should include level, got: ${colNames.join(', ')}`);
     // Sanity: built-in columns still present
     assert.ok(colNames.includes('email'), 'built-in email column should still be there');
+  });
+
+  it('catalog emits linkTo metadata for FK columns (cloudSaves.user_id → users)', async () => {
+    // FK navigation depends on the catalog flagging which columns are
+    // single-FKs to another resource. Cell renderer reads `column.linkTo`
+    // to decide whether to wrap in a Link and which target to fetch
+    // labels from.
+    const res = await fetch(`${BASE}/admin-api`);
+    assert.equal(res.status, 200);
+    const catalog = await res.json() as Array<{
+      name: string;
+      columns: Array<{ name: string; linkTo?: { resource: string; pkColumn: string; labelColumn: string | null } }>;
+    }>;
+    const cloudSaves = catalog.find((r) => r.name === 'cloudSaves');
+    assert.ok(cloudSaves, 'cloudSaves resource should be in the catalog');
+    const userIdCol = cloudSaves!.columns.find((c) => c.name === 'user_id');
+    assert.ok(userIdCol?.linkTo, 'cloudSaves.user_id should have linkTo metadata');
+    assert.equal(userIdCol!.linkTo!.resource, 'users');
+    assert.equal(userIdCol!.linkTo!.pkColumn, 'id');
+    // app.config.ts customizes users with display_name; that's the heuristic winner.
+    assert.equal(userIdCol!.linkTo!.labelColumn, 'display_name');
+
+    // Sanity: a non-FK column should NOT have linkTo set.
+    const slot = cloudSaves!.columns.find((c) => c.name === 'slot');
+    assert.equal(slot?.linkTo, undefined);
+  });
+
+  it('admin list endpoint accepts _in batched-lookup operator', async () => {
+    // The frontend's useFkLabels hook fires ONE `<pk>_in=v1,v2,...` request
+    // per FK column per page render. Backend support is in
+    // buildFilterCondition's 'in' branch.
+    const loginRes = await fetch(`${BASE}/admin-api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: BOOTSTRAP_EMAIL, password: BOOTSTRAP_PASSWORD }),
+    });
+    const cookieHeader = loginRes.headers.get('set-cookie')!.split(';')[0];
+
+    const usersRes = await fetch(`${BASE}/admin-api/users`, { headers: { cookie: cookieHeader } });
+    const users = await usersRes.json() as Array<{ id: string }>;
+    const ids = users.slice(0, 3).map((u) => u.id);
+
+    const inRes = await fetch(
+      `${BASE}/admin-api/users?id_in=${ids.join(',')}&_end=${ids.length}`,
+      { headers: { cookie: cookieHeader } },
+    );
+    assert.equal(inRes.status, 200);
+    const matched = await inRes.json() as Array<{ id: string }>;
+    const matchedIds = new Set(matched.map((r) => r.id));
+    for (const id of ids) {
+      assert.ok(matchedIds.has(id), `_in result should include ${id}`);
+    }
+
+    // Empty filter value → no condition → returns everything (sanity:
+    // doesn't blow up, and isn't accidentally filtering to zero).
+    const emptyRes = await fetch(
+      `${BASE}/admin-api/users?id_in=`,
+      { headers: { cookie: cookieHeader } },
+    );
+    assert.equal(emptyRes.status, 200);
+  });
+
+  it('list page renders FK cells as links + fires ONE batched lookup per FK column', async () => {
+    // Regression guard for the query-budget promise: navigating to the
+    // cloudSaves list page should fire the list query + at most ONE
+    // additional `_in` lookup (for the user_id FK column), regardless of
+    // how many rows are on the page.
+    const loginRes = await fetch(`${BASE}/admin-api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: BOOTSTRAP_EMAIL, password: BOOTSTRAP_PASSWORD }),
+    });
+    const cookieHeader = loginRes.headers.get('set-cookie')!.split(';')[0];
+    const userId = (await (
+      await fetch(`${BASE}/admin-api/users`, { headers: { cookie: cookieHeader } })
+    ).json() as Array<{ id: string }>)[0]!.id;
+
+    // Seed 3 cloud saves with the SAME user so the dedup kicks in: the
+    // batched lookup must collapse 3 rows worth of FK references into one
+    // distinct value, hence one fetch.
+    for (const slot of [10, 11, 12]) {
+      await fetch(`${BASE}/admin-api/cloudSaves`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie: cookieHeader },
+        body: JSON.stringify({ user_id: userId, slot, data: '{"hp":1}' }),
+      });
+    }
+
+    const page = await browser!.newPage();
+    await page.setViewport({ width: 1400, height: 900 });
+    await page.goto(`${BASE}/admin/login`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-testid="login-email"]');
+    await page.type('input[data-testid="login-email"]', BOOTSTRAP_EMAIL);
+    await page.type('input[data-testid="login-password"]', BOOTSTRAP_PASSWORD);
+    await page.click('[data-testid="login-submit"]');
+    await page.waitForSelector('[data-testid="widget-recentUsers"]', { timeout: 15_000 });
+
+    // Count user-lookup requests fired AFTER navigating to the list page.
+    const userLookupRequests: string[] = [];
+    page.on('request', (req) => {
+      const url = req.url();
+      // The batched FK lookup hits /admin-api/users with `id_in=...`. Other
+      // user-related requests on the page (e.g. /admin-api/_dashboard or
+      // the list of cloudSaves) shouldn't match this filter.
+      if (url.includes('/admin-api/users?') && url.includes('id_in=')) {
+        userLookupRequests.push(url);
+      }
+    });
+
+    await page.goto(`${BASE}/admin/cloudSaves`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-testid="list-cloudSaves"] tbody tr', { timeout: 10_000 });
+    // Wait for the FK label fetch to settle (gives useFkLabels time to
+    // fire and resolve before we count).
+    await page.waitForSelector('[data-testid="fk-link-user_id"]', { timeout: 10_000 });
+    // Small grace period to catch any unexpected duplicate lookups.
+    await new Promise((r) => setTimeout(r, 500));
+
+    assert.equal(
+      userLookupRequests.length,
+      1,
+      `expected exactly 1 batched user lookup, got ${userLookupRequests.length}: ${userLookupRequests.join(', ')}`,
+    );
+    // The single lookup should be a *_in fetch for user_id, not 3 separate
+    // GET-by-id requests.
+    assert.ok(
+      userLookupRequests[0]!.includes('id_in='),
+      `lookup URL should be a batched _in: ${userLookupRequests[0]}`,
+    );
+
+    // FK cell renders as a link to the user's show page.
+    const fkHref = await page.$eval(
+      '[data-testid="fk-link-user_id"]',
+      (el) => el.getAttribute('href'),
+    );
+    assert.ok(fkHref?.includes(`/users/show/${userId}`),
+      `expected FK link to /users/show/${userId}, got: ${fkHref}`);
+
+    await page.close();
+
+    // Cleanup: drop the seeded saves so other tests stay deterministic.
+    for (const slot of [10, 11, 12]) {
+      const id = Buffer.from(JSON.stringify([userId, slot]))
+        .toString('base64')
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      await fetch(`${BASE}/admin-api/cloudSaves/${id}`, {
+        method: 'DELETE', headers: { cookie: cookieHeader },
+      });
+    }
+  });
+
+  it('Create form omits auto-generated PKs (autoIncrement, $defaultFn) and shows user-supplied PKs', async () => {
+    // Three primary-key shapes covered:
+    //   - analyticsEvents.id : integer + autoIncrement → omitted (db fills in)
+    //   - users.id           : text + $defaultFn        → omitted (server fills in)
+    //   - leaderboards.id    : text, no default         → SHOWN (user must provide)
+    const page = await browser!.newPage();
+    await page.setViewport({ width: 1400, height: 900 });
+    await page.goto(`${BASE}/admin/login`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-testid="login-email"]');
+    await page.type('input[data-testid="login-email"]', BOOTSTRAP_EMAIL);
+    await page.type('input[data-testid="login-password"]', BOOTSTRAP_PASSWORD);
+    await page.click('[data-testid="login-submit"]');
+    await page.waitForSelector('[data-testid="widget-recentUsers"]', { timeout: 15_000 });
+
+    // analyticsEvents/create: id field must NOT be present.
+    await page.goto(`${BASE}/admin/analyticsEvents/create`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-testid="create-analyticsEvents"]', { timeout: 10_000 });
+    const aeIdField = await page.$('#f-id');
+    assert.equal(aeIdField, null,
+      'analyticsEvents Create form should NOT include the autoIncrement PK field');
+    // Sanity: the form rendered other fields (so we know we didn't false-pass on a blank page).
+    const aeNameField = await page.$('#f-name');
+    assert.ok(aeNameField, 'analyticsEvents Create form should still include the name field');
+
+    // users/create: id field (text + $defaultFn) must NOT be present.
+    await page.goto(`${BASE}/admin/users/create`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-testid="create-users"]', { timeout: 10_000 });
+    const usersIdField = await page.$('#f-id');
+    assert.equal(usersIdField, null,
+      'users Create form should NOT include the $defaultFn-generated PK field');
+
+    // leaderboards/create: id field (no default) MUST be present.
+    await page.goto(`${BASE}/admin/leaderboards/create`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-testid="create-leaderboards"]', { timeout: 10_000 });
+    const lbIdField = await page.$('#f-id');
+    assert.ok(lbIdField,
+      'leaderboards Create form SHOULD include the id field (no DB default — user must supply)');
+
+    await page.close();
   });
 
   it('dashboard endpoint respects builtIns allowlist + widget overrides', async () => {
@@ -706,6 +966,18 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     await page.waitForSelector('[data-testid="edit-tabs-users"]', { timeout: 10_000 });
     await page.waitForSelector('[data-testid="edit-users"]', { timeout: 5_000 });
     await page.waitForSelector('[data-testid="tab-relation-cloudSaves"]', { timeout: 5_000 });
+
+    // Tab labels are humanized — `cloudSaves` should render as "Cloud Saves"
+    // (testid stays raw for stable selectors). Regression guard for the
+    // catalog `label` field powering RelationTabLabel.
+    const tabText = await page.$eval(
+      '[data-testid="tab-relation-cloudSaves"]',
+      (el) => (el.textContent ?? '').trim(),
+    );
+    assert.ok(
+      tabText.startsWith('Cloud Saves'),
+      `expected tab to start with "Cloud Saves", got: ${tabText}`,
+    );
     await page.close();
   });
 
@@ -921,10 +1193,13 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
       '[data-testid="list-users"] thead th',
       (cells) => cells.map((c) => (c.textContent ?? '').trim()),
     );
-    assert.ok(headers.includes('display_name'),
-      `expected display_name header, got: ${headers.join(', ')}`);
-    assert.ok(headers.includes('level'),
-      `expected level header, got: ${headers.join(', ')}`);
+    // Headers are humanized for display (`display_name` → `Display Name`).
+    // The catalog API still surfaces the raw column `name` for form/URL use;
+    // the test on line 611 covers that side.
+    assert.ok(headers.includes('Display Name'),
+      `expected "Display Name" header, got: ${headers.join(', ')}`);
+    assert.ok(headers.includes('Level'),
+      `expected "Level" header, got: ${headers.join(', ')}`);
     await page.close();
   });
 });
