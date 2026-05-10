@@ -764,6 +764,98 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     }
   });
 
+  it('Show page renders composite-PK subtitle + FK profile rows as labeled links', async () => {
+    // Two UI behaviors verified together since they share the same setup:
+    //   1. Composite-PK rows (cloudSaves) get a `(user_id=X · slot=N)`
+    //      subtitle next to the page title — operators don't need to
+    //      hover the URL to know which row they're on.
+    //   2. FK columns on the Show page profile (cloudSaves.user_id →
+    //      users) render as <Link>s with the target's label column
+    //      (display_name) substituted; useFkLabels fires ONE batched
+    //      lookup per FK column even though there's only 1 row.
+    const loginRes = await fetch(`${BASE}/admin-api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: BOOTSTRAP_EMAIL, password: BOOTSTRAP_PASSWORD }),
+    });
+    const cookieHeader = loginRes.headers.get('set-cookie')!.split(';')[0];
+
+    // Set the admin's display_name so we can assert the FK label substitution.
+    const usersRes = await fetch(`${BASE}/admin-api/users`, { headers: { cookie: cookieHeader } });
+    const userId = (await usersRes.json() as Array<{ id: string }>)[0]!.id;
+    await fetch(`${BASE}/admin-api/users/${userId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: cookieHeader },
+      body: JSON.stringify({ display_name: 'Show Page Operator' }),
+    });
+
+    // Seed a cloudSave we can navigate TO.
+    await fetch(`${BASE}/admin-api/cloudSaves`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: cookieHeader },
+      body: JSON.stringify({ user_id: userId, slot: 42, data: '{"hp":7}' }),
+    });
+    const compositeId = Buffer.from(JSON.stringify([userId, 42]))
+      .toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+    const page = await browser!.newPage();
+    await page.setViewport({ width: 1400, height: 900 });
+    await page.goto(`${BASE}/admin/login`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-testid="login-email"]');
+    await page.type('input[data-testid="login-email"]', BOOTSTRAP_EMAIL);
+    await page.type('input[data-testid="login-password"]', BOOTSTRAP_PASSWORD);
+    await page.click('[data-testid="login-submit"]');
+    await page.waitForSelector('[data-testid="widget-recentUsers"]', { timeout: 15_000 });
+
+    // Count batched user-lookup requests on the SHOW page (same query
+    // budget guard as the list page test).
+    const userLookupRequests: string[] = [];
+    page.on('request', (req) => {
+      const url = req.url();
+      if (url.includes('/admin-api/users?') && url.includes('id_in=')) {
+        userLookupRequests.push(url);
+      }
+    });
+
+    await page.goto(`${BASE}/admin/cloudSaves/show/${compositeId}`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-testid="show-cloudSaves"]', { timeout: 10_000 });
+
+    // (1) Composite-PK subtitle present + decoded
+    const subtitle = await page.$eval(
+      '[data-testid="composite-pk-subtitle"]',
+      (el) => (el.textContent ?? '').trim(),
+    );
+    assert.ok(subtitle.includes('user_id'), `subtitle should contain user_id, got: ${subtitle}`);
+    assert.ok(subtitle.includes(userId), `subtitle should contain the userId, got: ${subtitle}`);
+    assert.ok(subtitle.includes('slot'), `subtitle should contain slot, got: ${subtitle}`);
+    assert.ok(subtitle.includes('42'), `subtitle should contain the slot value, got: ${subtitle}`);
+
+    // (2) FK link renders with the target's display_name substituted.
+    await page.waitForSelector('[data-testid="fk-link-user_id"]', { timeout: 10_000 });
+    await new Promise((r) => setTimeout(r, 300));
+    const fkLink = await page.$eval(
+      '[data-testid="fk-link-user_id"]',
+      (el) => ({ href: el.getAttribute('href'), text: (el.textContent ?? '').trim() }),
+    );
+    assert.ok(fkLink.href?.includes(`/users/show/${userId}`),
+      `FK link should point to /users/show/${userId}, got: ${fkLink.href}`);
+    assert.equal(fkLink.text, 'Show Page Operator',
+      `FK link should display the target's display_name, got: ${fkLink.text}`);
+
+    // Single-row "list" → still exactly one batched lookup.
+    assert.equal(
+      userLookupRequests.length, 1,
+      `expected exactly 1 batched user lookup on show page, got ${userLookupRequests.length}`,
+    );
+
+    await page.close();
+
+    // Cleanup
+    await fetch(`${BASE}/admin-api/cloudSaves/${compositeId}`, {
+      method: 'DELETE', headers: { cookie: cookieHeader },
+    });
+  });
+
   it('Create form omits auto-generated PKs (autoIncrement, $defaultFn) and shows user-supplied PKs', async () => {
     // Three primary-key shapes covered:
     //   - analyticsEvents.id : integer + autoIncrement → omitted (db fills in)

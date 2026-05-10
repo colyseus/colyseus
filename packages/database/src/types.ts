@@ -21,8 +21,12 @@ export type UsersTableShape = Table & {
   anonymousId: AnyColumn;
   createdAt: AnyColumn;
   updatedAt: AnyColumn;
-  bannedUntil: AnyColumn;
-  bannedReason: AnyColumn;
+  // Ban-related columns are optional on the constraint so existing
+  // custom users tables (predating the bans feature) keep type-checking.
+  // AuthService.ban / unban / isBanned guard at runtime when missing and
+  // surface a clear error pointing at the spreadable userColumns import.
+  bannedUntil?: AnyColumn;
+  bannedReason?: AnyColumn;
 };
 
 export type ConfigsTableShape = Table & {

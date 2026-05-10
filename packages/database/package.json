@@ -46,11 +46,11 @@
   },
   "scripts": {
     "test": "tsx --test test/**.test.ts",
-    "db:generate-pg": "drizzle-kit generate --config=drizzle.config.pg.ts",
-    "db:generate-sqlite": "drizzle-kit generate --config=drizzle.config.sqlite.ts",
+    "db:generate-pg": "tsx scripts/regen-migration.ts --dialect pg --schema ./src/schemas/pg.ts --out ./drizzle/pg",
+    "db:generate-sqlite": "tsx scripts/regen-migration.ts --dialect sqlite --schema ./src/schemas/sqlite.ts --out ./drizzle/sqlite",
     "db:migrate-pg": "drizzle-kit migrate --config=drizzle.config.pg.ts",
     "db:migrate-sqlite": "drizzle-kit migrate --config=drizzle.config.sqlite.ts",
-    "test:regen-fixture": "drizzle-kit generate --config=test/fixtures/custom-schema/drizzle.config.ts"
+    "test:regen-fixture": "tsx scripts/regen-migration.ts --dialect sqlite --schema ./test/fixtures/custom-schema/schema.ts --out ./test/fixtures/custom-schema/migrations"
   },
   "dependencies": {
     "drizzle-orm": "1.0.0-rc.2"

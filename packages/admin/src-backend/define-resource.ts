@@ -37,6 +37,25 @@ export type PolicyEntry =
   | 'everyone'
   | 'deny';
 
+/**
+ * Per-column UX override. Today the only field is `label`; the shape is
+ * an object so future per-column tweaks (formatter, hidden flag, etc.)
+ * land additively without re-doing the API.
+ */
+export interface ColumnOverride {
+  /** Override the default humanized header/profile/form label. */
+  label?: string;
+}
+
+/**
+ * Per-relation UX override. Same future-proofing rationale as
+ * `ColumnOverride`.
+ */
+export interface RelationOverride {
+  /** Override the default humanized tab + badge label. */
+  label?: string;
+}
+
 export interface ResourceDefinition {
   /** drizzle table name (auto-extracted) */
   __tableName: string;
@@ -58,6 +77,20 @@ export interface ResourceDefinition {
     /** fields to show on the show page; defaults to all */
     fields?: string[];
   };
+  /**
+   * Per-column overrides keyed by SQL column name. Most fields fall back
+   * to defaults (label → humanize(name)); only set what you want to change.
+   *
+   *   columns: { created_at: { label: 'Joined' } }
+   */
+  columns?: Record<string, ColumnOverride>;
+  /**
+   * Per-relation overrides keyed by relation name (the same name used in
+   * RelationDefinition / `database.relations`).
+   *
+   *   relations: { cloudSaves: { label: 'Saves' } }
+   */
+  relations?: Record<string, RelationOverride>;
   actions?: ResourceAction[];
   /**
    * Per-action RBAC override. If set for an action, replaces the default

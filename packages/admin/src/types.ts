@@ -46,6 +46,25 @@ function encodeCompositeIdImpl(values: ReadonlyArray<unknown>): string {
 }
 
 /**
+ * Inverse of `encodeCompositeIdImpl`. Returns `null` (rather than throwing)
+ * for malformed input so renderers can fall back to displaying the raw id.
+ */
+export function decodeCompositeId(encoded: string): unknown[] | null {
+  try {
+    let b64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4) { b64 += '='; }
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) { bytes[i] = bin.charCodeAt(i); }
+    const json = new TextDecoder().decode(bytes);
+    const parsed = JSON.parse(json);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Drizzle 1.0 emits `dataType` as space-separated tokens for some column
  * shapes — `"object date"` for `integer({ mode: 'timestamp' })`,
  * `"number int53"` for plain integers, etc. Match any token rather than

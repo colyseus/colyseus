@@ -173,7 +173,7 @@ function buildContext(opts: AdminOptions): EndpointContext {
 
   // pg-core and sqlite-core expose getTableConfig with the same structural
   // shape. Pick once at setup based on the GameDatabase's dialect.
-  const getTableConfig: (table: any) => any = (database as any).dialect === 'pg'
+  const getTableConfig: (table: any) => any = database.dialect === 'pg'
     ? (getPgTableConfig as any)
     : (getSqliteTableConfig as any);
 

@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { Resource } from '../types';
 import { findResource, visibleColumns } from './internals/helpers';
 import { FormBody } from './internals/form';
+import { CompositePkSubtitle } from './internals/composite-pk-subtitle';
 import { RelatedTable, RelationTabLabel, useRelationCounts } from './internals/relations';
 
 export function EditPage({ resources }: { resources: Resource[] }) {
@@ -26,7 +27,12 @@ export function EditPage({ resources }: { resources: Resource[] }) {
   return (
     <Page
       back={`/${name}`}
-      title={def.label}
+      title={
+        <>
+          {def.label}
+          {id && <CompositePkSubtitle def={def} id={id} />}
+        </>
+      }
     >
       {isLoading ? (
         <div className="flex items-center justify-center py-10 text-muted-foreground">

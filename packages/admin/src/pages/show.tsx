@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useOne } from '@refinedev/core';
 import { Link, useParams } from 'react-router-dom';
 import { Loader2, Pencil } from 'lucide-react';
@@ -10,6 +11,8 @@ import { formatCell } from './internals/format-cell';
 import {
   OneRelationLink, Profilerow, RelatedTable, RelationTabLabel, useRelationCounts,
 } from './internals/relations';
+import { CompositePkSubtitle } from './internals/composite-pk-subtitle';
+import { useFkLabels } from './internals/use-fk-labels';
 
 export function ShowPage({ resources }: { resources: Resource[] }) {
   const { resource: name, id } = useParams();
@@ -19,6 +22,15 @@ export function ShowPage({ resources }: { resources: Resource[] }) {
   // Single bulk fetch for every many-relation count — replaces N parallel
   // per-tab requests we used to fire from inside <RelationTabLabel>.
   const counts = useRelationCounts(name, id);
+
+  // FK label lookup — same hook the list page uses, fed a single-row
+  // "list". Stays at 1 query per FK column on the resource (typically 0–2).
+  // Memoize the row-array so the hook's dep key is stable across renders.
+  const rowsForFkLookup = useMemo(
+    () => (record && Object.keys(record).length > 0 ? [record] : []),
+    [record],
+  );
+  const fkLabels = useFkLabels(rowsForFkLookup, def);
 
   if (!def) { return <div>unknown resource</div>; }
 
@@ -31,7 +43,7 @@ export function ShowPage({ resources }: { resources: Resource[] }) {
     <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-[160px_1fr]" data-testid={`show-${name}`}>
       {cols.map((c) => (
         <Profilerow key={c.name} label={c.label}>
-          {formatCell(record[c.name], c)}
+          {formatCell(record[c.name], c, fkLabels.get(c.name)?.get(record[c.name]))}
         </Profilerow>
       ))}
       {oneRels.length > 0 && id && (
@@ -55,7 +67,12 @@ export function ShowPage({ resources }: { resources: Resource[] }) {
   return (
     <Page
       back={`/${name}`}
-      title={def.label}
+      title={
+        <>
+          {def.label}
+          {id && <CompositePkSubtitle def={def} id={id} />}
+        </>
+      }
       actions={id && (
         <Button asChild size="sm" variant="outline">
           <Link to={`/${name}/edit/${id}`}><Pencil />Edit</Link>

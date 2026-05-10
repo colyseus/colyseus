@@ -1,14 +1,21 @@
 /**
- * End-to-end check of the documented drizzle-kit + custom-schemas workflow:
+ * End-to-end check of the documented `migrations: { files }` workflow:
  *
  *   1. User defines schema barrel that customizes one table (`users`) and
  *      re-exports the rest from sqlite-defaults — see fixtures/custom-schema/schema.ts.
- *   2. drizzle-kit generate produces SQL files under fixtures/custom-schema/migrations/.
- *      (Committed; regenerate via the package's `db:generate-*` scripts pointed at
- *       the fixture config — see fixtures/custom-schema/drizzle.config.ts.)
- *   3. GameDatabase boots with `schemas: schema` + `migrations: { files }` and
- *      should land with both the customized `users` table and the colyseus_*
- *      defaults available.
+ *   2. The committed migration files under fixtures/custom-schema/migrations/
+ *      are produced by `pnpm test:regen-fixture` (scripts/regen-migration.ts).
+ *      The package's own DDL generator (`utils.ts: generateCreateTableSQL`)
+ *      backs both the file-based migrator AND the auto-strategy, so they
+ *      can't drift.
+ *   3. GameDatabase boots with `schemas: schema` + `migrations: { files }`
+ *      and should land with both the customized `users` table and the
+ *      colyseus_* defaults available.
+ *
+ * Drizzle 1.0's migrator is permissive — it walks `<timestamp>_*` dirs in
+ * name-sorted order and reads each `migration.sql` (no journal needed),
+ * so this fixture is one consolidated initial migration. If you add new
+ * built-in tables to schemas/sqlite.ts later, just re-run the regen script.
  */
 import assert from 'node:assert';
 import fs from 'node:fs';
@@ -42,18 +49,20 @@ describe('GameDatabase with drizzle-kit-generated migrations + custom schemas', 
     }
   });
 
-  it('the migrations folder used here is the one drizzle-kit produced', () => {
+  it('the migrations folder used here matches the regen-migration output', () => {
     // Sanity: someone breaking the fixture (deleting the file, regenerating
     // with a different schema) should fail loudly here, not deep inside the
-    // boot path.
+    // boot path. Quote-agnostic so the assertion survives format swaps
+    // (drizzle-kit emits backticks for sqlite; our regen-migration script
+    // uses double-quoted identifiers — both run fine through sqlite).
     const dirs = fs.readdirSync(migrationsFolder).filter((d) =>
       fs.statSync(path.join(migrationsFolder, d)).isDirectory(),
     );
     assert.ok(dirs.length >= 1, 'fixture should contain at least one migration dir');
     const sql = fs.readFileSync(path.join(migrationsFolder, dirs[0]!, 'migration.sql'), 'utf8');
-    assert.match(sql, /CREATE TABLE `users`/, 'expected the customized `users` table in the generated SQL');
-    assert.match(sql, /`display_name` text/, 'expected the custom display_name column');
-    assert.match(sql, /CREATE TABLE `colyseus_configs`/, 'expected default colyseus_configs table');
+    assert.match(sql, /CREATE TABLE [`"]?(?:IF NOT EXISTS [`"]?)?users/, 'expected the customized `users` table in the generated SQL');
+    assert.match(sql, /[`"]display_name[`"] text/, 'expected the custom display_name column');
+    assert.match(sql, /CREATE TABLE [`"]?(?:IF NOT EXISTS [`"]?)?colyseus_configs/, 'expected default colyseus_configs table');
   });
 
   it('creates the customized `users` table with extra columns', async () => {
@@ -83,6 +92,11 @@ describe('GameDatabase with drizzle-kit-generated migrations + custom schemas', 
       'colyseus_player_items',
       'colyseus_timed_events',
       'colyseus_user_roles',
+      // Newer built-ins surfaced via sqlite-defaults — verify the
+      // regenerated migration includes them.
+      'colyseus_user_notes',
+      'colyseus_admin_audit',
+      'colyseus_banned_addresses',
     ]) {
       assert.ok(names.includes(expected), `expected default table ${expected}; got: ${names.join(', ')}`);
     }

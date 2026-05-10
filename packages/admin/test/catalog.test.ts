@@ -137,6 +137,43 @@ describe('buildResourceCatalog', () => {
     assert.deepStrictEqual(r!.relations, []);
   });
 
+  it('honors per-column / per-relation label overrides from defineAdminResource', () => {
+    // Source: users (single PK)
+    const usersId = col({ name: 'id', primary: true, getSQLType: () => 'text' });
+    const createdAt = col({ name: 'created_at', getSQLType: () => 'integer', dataType: 'date' });
+    const users = tableLike('colyseus_users', [usersId, createdAt]);
+    users.table.__cfg = users.cfg;
+
+    // Target: cloudSaves (so the relation has somewhere to point)
+    const userIdCol = col({ name: 'user_id', getSQLType: () => 'text', jsKey: 'userId' });
+    const slot = col({ name: 'slot', primary: true, getSQLType: () => 'integer' });
+    const saves = tableLike('colyseus_cloud_saves', [userIdCol, slot]);
+    saves.table.__cfg = saves.cfg;
+
+    const def: any = {
+      __tableName: 'users',
+      columns: { created_at: { label: 'Joined' } },
+      relations: { cloudSaves: { label: 'Saves' } },
+    };
+
+    const [r] = buildResourceCatalog({
+      tables: { users: users.table, cloudSaves: saves.table },
+      resources: { users: def },
+      getTableConfig: cfgFor,
+      relations: {
+        users: [{ name: 'cloudSaves', target: 'cloudSaves', kind: 'many', fk: 'userId' }],
+      },
+    });
+    // Column override wins over humanize().
+    const created = r!.columns.find((c) => c.name === 'created_at')!;
+    assert.equal(created.label, 'Joined');
+    // Other columns still get humanize fallback.
+    const id = r!.columns.find((c) => c.name === 'id')!;
+    assert.equal(id.label, 'Id');
+    // Relation override wins.
+    assert.equal(r!.relations[0]!.label, 'Saves');
+  });
+
   it('marks hasDefault=true for any of {default, defaultFn, autoIncrement}', () => {
     const id = col({ name: 'id', primary: true, getSQLType: () => 'text', defaultFn: () => 'auto' });
     const created = col({ name: 'created_at', getSQLType: () => 'integer', dataType: 'date', hasDefault: true });

@@ -68,11 +68,30 @@ export class AuthService<T extends UsersTableShape = UsersTableShape> {
   }
 
   /**
+   * Throw a clear error when a ban-related method is invoked but the
+   * user's custom `users` table doesn't include the ban columns.
+   * `bannedUntil` / `bannedReason` are optional on UsersTableShape so
+   * pre-bans schemas keep type-checking; this is the runtime side of
+   * that contract.
+   */
+  private requireBanColumns(method: string): void {
+    const u = this.users as any;
+    if (!u.bannedUntil || !u.bannedReason) {
+      throw new Error(
+        `[AuthService.${method}] users table is missing 'bannedUntil' / 'bannedReason' columns. ` +
+        `Spread \`...columns.{sqlite|pg}.users\` from '@colyseus/database' into your custom users ` +
+        `table (or include them manually) to enable bans.`,
+      );
+    }
+  }
+
+  /**
    * Ban a user. `until` defaults to a far-future timestamp (effectively
    * permanent). The next sign-in attempt is rejected via findByEmail
    * while bannedUntil > now.
    */
   async ban(userId: string, opts: { reason?: string; until?: Date | null } = {}): Promise<void> {
+    this.requireBanColumns('ban');
     // Permanent bans use a far-future sentinel so the same `> now()`
     // check in findByEmail handles both timed and permanent bans. Year
     // 9999 fits inside both PG's TIMESTAMP and sqlite's INTEGER (unix
@@ -91,6 +110,7 @@ export class AuthService<T extends UsersTableShape = UsersTableShape> {
 
   /** Lift a ban (clears bannedUntil + bannedReason). Idempotent. */
   async unban(userId: string): Promise<void> {
+    this.requireBanColumns('unban');
     await this.db
       .update(this.users)
       .set({
@@ -103,16 +123,21 @@ export class AuthService<T extends UsersTableShape = UsersTableShape> {
 
   /**
    * Current ban state for a user. Returns `{ banned: false }` for
-   * unknown users — callers shouldn't lock-out missing players.
+   * unknown users — callers shouldn't lock-out missing players. Returns
+   * `{ banned: false }` (without throwing) when the users table doesn't
+   * carry ban columns at all — the read path is meant to be safe to
+   * call on any schema, so probing apps don't have to special-case.
    */
   async isBanned(
     userId: string,
     at: Date = new Date(),
   ): Promise<{ banned: true; reason: string | null; until: Date } | { banned: false }> {
+    const u = this.users as any;
+    if (!u.bannedUntil) { return { banned: false }; }
     const rows = await this.db
       .select({
-        bannedUntil: (this.users as any).bannedUntil,
-        bannedReason: (this.users as any).bannedReason,
+        bannedUntil: u.bannedUntil,
+        bannedReason: u.bannedReason,
       })
       .from(this.users)
       .where(eq(this.users.id, userId))

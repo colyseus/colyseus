@@ -97,7 +97,7 @@ export function buildResourceCatalog(input: BuildCatalogInput): CatalogResource[
         const fkSql = (col && (col as any).name) ?? r.fk;
         return {
           name: r.name,
-          label: humanize(r.name),
+          label: def?.relations?.[r.name]?.label ?? humanize(r.name),
           target: r.target,
           kind: r.kind,
           fk: fkSql,
@@ -111,7 +111,7 @@ export function buildResourceCatalog(input: BuildCatalogInput): CatalogResource[
         const linkTo = linkToBySqlName.get(c.name);
         return {
           name: c.name,
-          label: humanize(c.name),
+          label: def?.columns?.[c.name]?.label ?? humanize(c.name),
           ...(linkTo ? { linkTo } : {}),
           type: typeof c.getSQLType === 'function' ? c.getSQLType() : 'text',
           // dataType is the JS-side category ('date', 'json', 'number',

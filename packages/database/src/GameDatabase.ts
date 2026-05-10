@@ -296,7 +296,13 @@ export class GameDatabase<
    */
   relations: Record<string, RelationDefinition[]> = mergeRelations(undefined);
 
-  private dialect: SQLFlavor;
+  /**
+   * SQL flavor — `'sqlite'` or `'pg'`. PGlite collapses to `'pg'` here
+   * (same SQL surface; only the driver differs). Public + readonly so
+   * downstream code (admin panel, custom services, anything reading
+   * `db.dialect`) can branch on this without `any`-casting.
+   */
+  readonly dialect: SQLFlavor;
   private subDialect: SubDialect = 'sqlite';
   private options: GameDatabaseOptions<S>;
   private ownedConnection: any = null;

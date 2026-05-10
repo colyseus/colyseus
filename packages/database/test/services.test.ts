@@ -158,6 +158,31 @@ for (const backend of BACKENDS) {
         const post = await s.onFindUserByEmail!('a@b.com');
         assert.equal(post, null, 'banned user no longer signs in');
       });
+
+      it('ban / unban throw a clear error when ban columns are missing', async () => {
+        // Simulate a custom users table that predates the bans feature —
+        // UsersTableShape's bannedUntil/bannedReason are optional so the
+        // type-check passes; the runtime guard fires on actual ban use.
+        const usersStub = { ...db.tables.users } as any;
+        delete usersStub.bannedUntil;
+        delete usersStub.bannedReason;
+        const { AuthService } = await import('../src/services/AuthService.ts');
+        const auth = new AuthService(db.drizzle, usersStub);
+
+        await assert.rejects(
+          () => auth.ban('user_x'),
+          /missing 'bannedUntil' \/ 'bannedReason' columns/,
+        );
+        await assert.rejects(
+          () => auth.unban('user_x'),
+          /missing 'bannedUntil' \/ 'bannedReason' columns/,
+        );
+
+        // Read path is the safe one — never throws, just reports `not banned`
+        // so probing apps don't have to special-case schema variants.
+        const r = await auth.isBanned('user_x');
+        assert.equal(r.banned, false);
+      });
     });
 
     describe('ConfigService', () => {

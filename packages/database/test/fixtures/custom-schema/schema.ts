@@ -25,4 +25,7 @@ export {
   analyticsEvents,
   userRoles,
   modAssignments,
+  userNotes,
+  adminAudit,
+  bannedAddresses,
 } from '../../../src/sqlite-defaults.ts';
