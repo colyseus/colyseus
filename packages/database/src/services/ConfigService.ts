@@ -1,11 +1,12 @@
 import { eq, sql } from 'drizzle-orm';
 import type { ConfigsTableShape } from '../types.ts';
+import { affectedRows, type ServiceDb } from './_db.ts';
 
 export class ConfigService<T extends ConfigsTableShape = ConfigsTableShape> {
-  private db: any;
+  private db: ServiceDb;
   private configs: T;
 
-  constructor(db: any, configs: T) {
+  constructor(db: ServiceDb, configs: T) {
     this.db = db;
     this.configs = configs;
   }
@@ -52,6 +53,6 @@ export class ConfigService<T extends ConfigsTableShape = ConfigsTableShape> {
     const result = await this.db
       .delete(this.configs)
       .where(eq(this.configs.key, key));
-    return (result.changes ?? result.rowsAffected ?? result.count ?? 0) > 0;
+    return affectedRows(result) > 0;
   }
 }

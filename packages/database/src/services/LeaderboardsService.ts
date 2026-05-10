@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, gt, lt, sql } from 'drizzle-orm';
+import type { ServiceDb } from './_db.ts';
 
 type Dialect = 'sqlite' | 'pg';
 
@@ -16,12 +17,12 @@ export class LeaderboardsService<
   TBoards extends LeaderboardsTableShape = LeaderboardsTableShape,
   TEntries extends LeaderboardEntriesTableShape = LeaderboardEntriesTableShape,
 > {
-  private db: any;
+  private db: ServiceDb;
   private leaderboards: TBoards;
   private entries: TEntries;
   private dialect: Dialect;
 
-  constructor(db: any, leaderboards: TBoards, entries: TEntries, dialect: Dialect) {
+  constructor(db: ServiceDb, leaderboards: TBoards, entries: TEntries, dialect: Dialect) {
     this.db = db;
     this.leaderboards = leaderboards;
     this.entries = entries;

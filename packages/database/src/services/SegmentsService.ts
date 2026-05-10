@@ -1,5 +1,6 @@
 import { and, eq, sql, type SQL } from 'drizzle-orm';
 import type { SegmentDefinition, SegmentDefineConfig, SegmentResolveContext } from '../segments.ts';
+import type { ServiceDb } from './_db.ts';
 
 /**
  * Runtime accessor + registration point for player segments.
@@ -21,8 +22,11 @@ export class SegmentsService<
   S extends Record<string, any> = Record<string, any>,
   Dialect extends 'sqlite' | 'pg' = 'sqlite',
 > {
-  private drizzle: any = null;
-  private tables: Record<string, any> = {};
+  // Nullable because the service is constructed pre-boot (so users can
+  // call `db.segments.define(...)` before db.boot()); `__attach` fills
+  // these in once drizzle + tables exist.
+  private drizzle: ServiceDb | null = null;
+  private tables: Record<string, unknown> = {};
   private byId: Map<string, SegmentDefinition> = new Map();
   private booted = false;
 
@@ -34,7 +38,7 @@ export class SegmentsService<
    *
    * @internal — not part of the public API.
    */
-  __attach(drizzle: any, tables: Record<string, any>, extras: SegmentDefinition[] = []): void {
+  __attach(drizzle: ServiceDb, tables: Record<string, unknown>, extras: SegmentDefinition[] = []): void {
     this.drizzle = drizzle;
     this.tables = tables;
     for (const s of extras) {
@@ -92,12 +96,12 @@ export class SegmentsService<
    * takes its `.length`.
    */
   async size(id: string): Promise<number> {
-    this.requireBoot('size');
+    const drizzle = this.requireBoot('size');
     const def = this.requireSegment(id);
     if (def.where) {
       const predicate = def.where(this.ctx());
       if (!predicate) { return 0; }
-      const rows = await this.drizzle
+      const rows = await drizzle
         .select({ c: sql<number>`count(*)` })
         .from(this.usersTable())
         .where(predicate);
@@ -113,16 +117,16 @@ export class SegmentsService<
    * still loads everything.
    */
   async ids(id: string, opts: { limit?: number; offset?: number } = {}): Promise<string[]> {
-    this.requireBoot('ids');
+    const drizzle = this.requireBoot('ids');
     const def = this.requireSegment(id);
     if (def.where) {
       const predicate = def.where(this.ctx());
       if (!predicate) { return []; }
       const users = this.usersTable();
-      let q = this.drizzle
+      let q = drizzle
         .select({ id: users.id })
         .from(users)
-        .where(predicate) as any;
+        .where(predicate);
       if (opts.limit !== undefined) { q = q.limit(opts.limit); }
       if (opts.offset !== undefined) { q = q.offset(opts.offset); }
       const rows = await q;
@@ -142,13 +146,13 @@ export class SegmentsService<
    * For `resolve`-based segments it falls back to materialization.
    */
   async has(id: string, userId: string): Promise<boolean> {
-    this.requireBoot('has');
+    const drizzle = this.requireBoot('has');
     const def = this.requireSegment(id);
     if (def.where) {
       const predicate = def.where(this.ctx());
       if (!predicate) { return false; }
       const users = this.usersTable();
-      const rows = await this.drizzle
+      const rows = await drizzle
         .select({ id: users.id })
         .from(users)
         .where(and(predicate, eq(users.id, userId)))
@@ -187,6 +191,10 @@ export class SegmentsService<
     for (const userId of await def.resolve!(this.ctx())) { await fn(userId); }
   }
 
+  // Loose return on ctx() — public callers (segment resolvers) expect to
+  // see drizzle + tables typed via the SegmentResolveContext generic, not
+  // the internal `ServiceDb`/`Record<string, unknown>`. The cast keeps
+  // both honest: internals are narrow, callers see the rich generic.
   private ctx(): { drizzle: any; tables: Record<string, any>; now: Date } {
     return { drizzle: this.drizzle, tables: this.tables, now: new Date() };
   }
@@ -199,12 +207,19 @@ export class SegmentsService<
     return t;
   }
 
-  private requireBoot(method: string): void {
-    if (!this.booted) {
+  /**
+   * Throws when the service hasn't been attached yet; otherwise returns
+   * the live drizzle client so the caller can use it without a non-null
+   * assertion. `forEach` calls this for the side effect (it doesn't query
+   * directly — it loops through `ids()` which re-checks).
+   */
+  private requireBoot(method: string): ServiceDb {
+    if (!this.booted || !this.drizzle) {
       throw new Error(
         `[SegmentsService.${method}] not booted yet — call db.boot() before reading segment members`,
       );
     }
+    return this.drizzle;
   }
 
   private requireSegment(id: string): SegmentDefinition {

@@ -1,5 +1,6 @@
 import { eq, desc, and } from 'drizzle-orm';
 import type { UserNotesTableShape } from '../types.ts';
+import type { ServiceDb } from './_db.ts';
 
 export interface UserNote {
   id: string;
@@ -22,10 +23,10 @@ export interface UserNote {
  *   await db.notes.delete(noteId);
  */
 export class NotesService<T extends UserNotesTableShape = UserNotesTableShape> {
-  private db: any;
+  private db: ServiceDb;
   private notes: T;
 
-  constructor(db: any, notes: T) {
+  constructor(db: ServiceDb, notes: T) {
     this.db = db;
     this.notes = notes;
   }

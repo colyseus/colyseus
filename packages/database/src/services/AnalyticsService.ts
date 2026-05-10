@@ -1,4 +1,5 @@
-import { and, eq, gte, inArray, lt } from 'drizzle-orm';
+import { and, eq, gte, inArray, lt, type SQL } from 'drizzle-orm';
+import type { ServiceDb } from './_db.ts';
 
 export interface RetentionResult {
   cohortSize: number;
@@ -22,15 +23,15 @@ export interface FunnelStep {
 import type { AnalyticsEventsTableShape } from '../types.ts';
 
 export class AnalyticsService<T extends AnalyticsEventsTableShape = AnalyticsEventsTableShape> {
-  private db: any;
+  private db: ServiceDb;
   private events: T;
 
-  constructor(db: any, events: T) {
+  constructor(db: ServiceDb, events: T) {
     this.db = db;
     this.events = events;
   }
 
-  async track(name: string, userId: string | null, props?: Record<string, any>): Promise<void> {
+  async track(name: string, userId: string | null, props?: Record<string, unknown>): Promise<void> {
     await this.db.insert(this.events).values({ name, userId, props });
   }
 
@@ -92,7 +93,7 @@ export class AnalyticsService<T extends AnalyticsEventsTableShape = AnalyticsEve
     const result: FunnelStep[] = [];
 
     for (const step of steps) {
-      const conds: any[] = [eq(this.events.name, step)];
+      const conds: SQL[] = [eq(this.events.name, step)];
       if (prevUsers !== null) {
         if (prevUsers.length === 0) {
           result.push({ step, users: 0 });

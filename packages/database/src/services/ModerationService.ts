@@ -1,4 +1,5 @@
 import { and, eq } from 'drizzle-orm';
+import type { ServiceDb } from './_db.ts';
 
 export type Role = 'admin' | 'mod' | 'user';
 export type Action = 'list' | 'read' | 'create' | 'update' | 'delete';
@@ -24,11 +25,11 @@ export class ModerationService<
   TRoles extends UserRolesTableShape = UserRolesTableShape,
   TAssignments extends ModAssignmentsTableShape = ModAssignmentsTableShape,
 > {
-  private db: any;
+  private db: ServiceDb;
   private userRoles: TRoles;
   private modAssignments: TAssignments;
 
-  constructor(db: any, userRoles: TRoles, modAssignments: TAssignments) {
+  constructor(db: ServiceDb, userRoles: TRoles, modAssignments: TAssignments) {
     this.db = db;
     this.userRoles = userRoles;
     this.modAssignments = modAssignments;

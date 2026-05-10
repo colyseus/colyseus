@@ -1,10 +1,12 @@
 import { and, eq, sql } from 'drizzle-orm';
+import type { ServiceDb } from './_db.ts';
 
 export interface Item {
   id: string;
   name: string;
   kind: string;
-  meta?: any;
+  /** Free-form metadata; game code defines its shape. */
+  meta?: unknown;
 }
 
 export interface PlayerItem {
@@ -20,11 +22,11 @@ export class ItemsService<
   TItems extends ItemsTableShape = ItemsTableShape,
   TPlayerItems extends PlayerItemsTableShape = PlayerItemsTableShape,
 > {
-  private db: any;
+  private db: ServiceDb;
   private items: TItems;
   private playerItems: TPlayerItems;
 
-  constructor(db: any, items: TItems, playerItems: TPlayerItems) {
+  constructor(db: ServiceDb, items: TItems, playerItems: TPlayerItems) {
     this.db = db;
     this.items = items;
     this.playerItems = playerItems;
@@ -34,7 +36,7 @@ export class ItemsService<
    * Idempotently register an item in the catalog.
    * Re-running with the same id updates the name/kind/meta.
    */
-  async defineItem(id: string, name: string, kind = 'misc', meta?: any): Promise<void> {
+  async defineItem(id: string, name: string, kind = 'misc', meta?: unknown): Promise<void> {
     await this.db
       .insert(this.items)
       .values({ id, name, kind, meta })

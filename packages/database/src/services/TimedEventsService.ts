@@ -1,11 +1,13 @@
 import { and, eq, gte, lte } from 'drizzle-orm';
+import type { ServiceDb } from './_db.ts';
 
 export interface TimedEvent {
   id: string;
   name: string;
   startsAt: Date;
   endsAt: Date;
-  payload?: any;
+  /** Free-form payload; game code defines its shape. */
+  payload?: unknown;
 }
 
 /**
@@ -16,10 +18,10 @@ export interface TimedEvent {
 import type { TimedEventsTableShape } from '../types.ts';
 
 export class TimedEventsService<T extends TimedEventsTableShape = TimedEventsTableShape> {
-  private db: any;
+  private db: ServiceDb;
   private events: T;
 
-  constructor(db: any, events: T) {
+  constructor(db: ServiceDb, events: T) {
     this.db = db;
     this.events = events;
   }
@@ -32,7 +34,7 @@ export class TimedEventsService<T extends TimedEventsTableShape = TimedEventsTab
     name: string,
     startsAt: Date,
     endsAt: Date,
-    payload?: any,
+    payload?: unknown,
   ): Promise<void> {
     await this.db
       .insert(this.events)

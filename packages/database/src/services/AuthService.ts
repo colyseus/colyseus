@@ -2,6 +2,7 @@ import { eq, type InferSelectModel } from 'drizzle-orm';
 import { generateId } from '@colyseus/core';
 import type { AuthSettings } from '@colyseus/auth';
 import type { UsersTableShape } from '../types.ts';
+import type { ServiceDb } from './_db.ts';
 
 /**
  * `T` is the user's actual users-table type. By default it's
@@ -12,10 +13,10 @@ import type { UsersTableShape } from '../types.ts';
  * extras.
  */
 export class AuthService<T extends UsersTableShape = UsersTableShape> {
-  private db: any;
+  private db: ServiceDb;
   private users: T;
 
-  constructor(db: any, users: T) {
+  constructor(db: ServiceDb, users: T) {
     this.db = db;
     this.users = users;
   }

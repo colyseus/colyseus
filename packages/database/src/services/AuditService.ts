@@ -1,5 +1,6 @@
 import { and, desc, eq, lt } from 'drizzle-orm';
 import type { AdminAuditTableShape } from '../types.ts';
+import { affectedRows, type ServiceDb } from './_db.ts';
 
 export type AuditAction = 'create' | 'update' | 'delete' | 'custom';
 
@@ -68,10 +69,10 @@ function isShallowlyEqual(a: any, b: any): boolean {
  * days.
  */
 export class AuditService<T extends AdminAuditTableShape = AdminAuditTableShape> {
-  private db: any;
+  private db: ServiceDb;
   private audit: T;
 
-  constructor(db: any, audit: T) {
+  constructor(db: ServiceDb, audit: T) {
     this.db = db;
     this.audit = audit;
   }
@@ -145,7 +146,10 @@ export class AuditService<T extends AdminAuditTableShape = AdminAuditTableShape>
     if (opts.resource) { conds.push(eq(this.audit.resource, opts.resource)); }
     if (opts.before) { conds.push(lt(this.audit.createdAt, opts.before)); }
 
-    let q = this.db.select().from(this.audit) as any;
+    // ServiceDb returns `any` from select() — chain inference would need
+    // pinning to a specific drizzle subclass and isn't worth the coupling.
+    // Local `q` keeps the conditional `.where(...)` legible.
+    let q = this.db.select().from(this.audit);
     if (conds.length === 1) { q = q.where(conds[0]); }
     else if (conds.length > 1) { q = q.where(and(...conds)); }
     q = q.orderBy(desc(this.audit.createdAt), desc(this.audit.id)).limit(limit);
@@ -157,12 +161,6 @@ export class AuditService<T extends AdminAuditTableShape = AdminAuditTableShape>
     const result = await this.db
       .delete(this.audit)
       .where(lt(this.audit.createdAt, before));
-    return Number(
-      (result as any)?.changes
-        ?? (result as any)?.rowsAffected
-        ?? (result as any)?.affectedRows
-        ?? (result as any)?.count
-        ?? 0,
-    );
+    return affectedRows(result);
   }
 }

@@ -35,8 +35,13 @@ export interface TableColumn {
   primary: boolean;
   notNull: boolean;
   hasDefault?: boolean;
-  /** Drizzle's $defaultFn marker — used together with hasDefault for the catalog. */
-  defaultFn?: any;
+  /**
+   * Drizzle's `$defaultFn` marker — present when the column was declared
+   * with `.$defaultFn(() => ...)`. We only check for truthiness (the
+   * catalog uses it to OR into `hasDefault`), so the function shape stays
+   * loose; calling it isn't part of our usage.
+   */
+  defaultFn?: () => unknown;
   /** sqlite-core sets this to `true` for `integer().primaryKey({ autoIncrement: true })`. */
   autoIncrement?: boolean;
   /**
@@ -57,6 +62,19 @@ export interface TableConfig {
   columns: TableColumn[];
   /** Composite primary key constraints. Empty/undefined when single-column PK. */
   primaryKeys?: Array<{ columns: TableColumn[] }>;
+}
+
+/**
+ * Type predicate for "this property looks like a drizzle column object".
+ * Used by `translateBodyKeys` to filter out non-column entries on a
+ * drizzle table (helper methods, internal symbol-keyed metadata, etc.).
+ */
+export function isTableColumn(v: unknown): v is TableColumn {
+  return (
+    !!v &&
+    typeof v === 'object' &&
+    typeof (v as { name?: unknown }).name === 'string'
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -193,17 +211,16 @@ export function coerceForColumn(value: any, col: TableColumn | null | undefined)
 //    silently drop unrecognized keys and a NOT NULL FK ends up null.
 // ---------------------------------------------------------------------------
 
-export function translateBodyKeys(body: Record<string, any>, table: any): Record<string, any> {
+export function translateBodyKeys(body: Record<string, unknown>, table: any): Record<string, unknown> {
   const sqlToJs: Record<string, string> = {};
   const colByJsKey: Record<string, TableColumn> = {};
   for (const [jsKey, col] of Object.entries(table)) {
-    if (col && typeof col === 'object' && 'name' in (col as any) && typeof (col as any).name === 'string') {
-      const tc = col as TableColumn;
-      sqlToJs[tc.name] = jsKey;
-      colByJsKey[jsKey] = tc;
+    if (isTableColumn(col)) {
+      sqlToJs[col.name] = jsKey;
+      colByJsKey[jsKey] = col;
     }
   }
-  const out: Record<string, any> = {};
+  const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(body)) {
     const jsKey = sqlToJs[k] ?? k;
     const col = colByJsKey[jsKey];

@@ -1,5 +1,6 @@
 import { eq, and, sql } from 'drizzle-orm';
 import type { CloudSavesTableShape } from '../types.ts';
+import type { ServiceDb } from './_db.ts';
 
 export class VersionConflictError extends Error {
   constructor(userId: string, slot: number, expectedVersion: number) {
@@ -9,18 +10,23 @@ export class VersionConflictError extends Error {
 }
 
 export class CloudSaveService<T extends CloudSavesTableShape = CloudSavesTableShape> {
-  private db: any;
+  private db: ServiceDb;
   private cloudSaves: T;
 
-  constructor(db: any, cloudSaves: T) {
+  constructor(db: ServiceDb, cloudSaves: T) {
     this.db = db;
     this.cloudSaves = cloudSaves;
   }
 
+  /**
+   * Save a per-user payload at the given slot. `data` is opaque to the
+   * service — game code defines its shape — typed as `unknown` so callers
+   * narrow at the boundary instead of relying on implicit `any`.
+   */
   async save(
     userId: string,
     slot: number,
-    data: any,
+    data: unknown,
     expectedVersion?: number,
   ): Promise<{ version: number }> {
     if (expectedVersion !== undefined) {
@@ -82,7 +88,7 @@ export class CloudSaveService<T extends CloudSavesTableShape = CloudSavesTableSh
   async load(
     userId: string,
     slot: number,
-  ): Promise<{ data: any; version: number } | null> {
+  ): Promise<{ data: unknown; version: number } | null> {
     const rows = await this.db
       .select({
         data: this.cloudSaves.data,

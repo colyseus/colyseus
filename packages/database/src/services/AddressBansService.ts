@@ -1,5 +1,6 @@
 import { and, desc, eq, gt, isNotNull, isNull, lte, or, type SQL } from 'drizzle-orm';
 import type { BannedAddressesTableShape } from '../types.ts';
+import { affectedRows, type ServiceDb } from './_db.ts';
 
 export interface AddressBan {
   id: string;
@@ -29,10 +30,10 @@ export interface AddressBan {
  * caller is responsible for extracting the value.
  */
 export class AddressBansService<T extends BannedAddressesTableShape = BannedAddressesTableShape> {
-  private db: any;
+  private db: ServiceDb;
   private bans: T;
 
-  constructor(db: any, bans: T) {
+  constructor(db: ServiceDb, bans: T) {
     this.db = db;
     this.bans = bans;
   }
@@ -128,12 +129,6 @@ export class AddressBansService<T extends BannedAddressesTableShape = BannedAddr
     const result = await this.db
       .delete(this.bans)
       .where(and(isNotNull(this.bans.until), lte(this.bans.until, at)));
-    return Number(
-      (result as any)?.changes
-        ?? (result as any)?.rowsAffected
-        ?? (result as any)?.affectedRows
-        ?? (result as any)?.count
-        ?? 0,
-    );
+    return affectedRows(result);
   }
 }
