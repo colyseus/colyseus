@@ -10,18 +10,26 @@
  */
 
 /**
- * Narrow contract every service uses against the drizzle client. Both
- * dialect-specific drizzle classes (`BaseSQLiteDatabase`, `PgAsyncDatabase`)
- * satisfy this shape, so `database.drizzle` from any GameDatabase is
- * assignable to it.
+ * The shape services see for `db`. We tried two stricter alternatives
+ * before settling here:
  *
- * Method signatures use plain `any` (no generics) on purpose — drizzle's
- * own methods are heavily overloaded with generic constraints that don't
- * unify with the dialect-union TS computes for `database.drizzle`. A
- * generic ServiceDb signature would break that assignability. Chain
- * return types are loose for the same reason; the win here is just at
- * the call boundary (typos like `db.fetch(...)` become an error) plus
- * documenting the actual surface services use.
+ *  1. `BaseSQLiteDatabase<...> | PgAsyncDatabase<...>` (concrete union)
+ *     — drizzle's per-method overload signatures across the two
+ *     dialects don't unify, so `db.select(...)` errored with
+ *     "expression is not callable" at every call site.
+ *  2. `DrizzleDbFor<Dialect>` conditional, fed via a service-level
+ *     `Dialect extends 'sqlite' | 'pg'` generic — TS only resolves
+ *     the conditional once the generic is bound, so inside class
+ *     methods (where the generic is still abstract) `this.db`
+ *     resolves to the un-narrowed conditional union with the same
+ *     "not callable" failure.
+ *
+ * Plain interface with `any` returns is what works. Win at this level:
+ * typos like `db.fetch(...)` become a compile error, and the actual
+ * surface every service consumes is documented in one place. Chain
+ * return types stay loose — pinning them would require a per-service
+ * coupling to a specific drizzle subclass that TS doesn't let us
+ * express across the dialect dispatch.
  */
 export interface ServiceDb {
   select(fields?: any): any;

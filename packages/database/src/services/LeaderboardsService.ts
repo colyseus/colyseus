@@ -13,6 +13,17 @@ export interface LeaderboardEntry {
 
 import type { LeaderboardsTableShape, LeaderboardEntriesTableShape } from '../types.ts';
 
+/**
+ * Leaderboards is dialect-aware (the keep-best upsert uses `GREATEST`
+ * on pg vs `max()` on sqlite — see `submit`). We carry the dialect as
+ * a runtime field rather than a type generic on `db` because TS can't
+ * narrow class-method `this.db` through a `Dialect extends 'sqlite' |
+ * 'pg'` conditional — inside the class body the generic stays unbound
+ * and a `db: Dialect extends 'pg' ? PgAsync : BaseSqlite` field
+ * resolves to a union TS won't allow method calls on. So `db: ServiceDb`
+ * (the loose structural shape) is what we end up with for every
+ * service, dialect-aware or not.
+ */
 export class LeaderboardsService<
   TBoards extends LeaderboardsTableShape = LeaderboardsTableShape,
   TEntries extends LeaderboardEntriesTableShape = LeaderboardEntriesTableShape,
