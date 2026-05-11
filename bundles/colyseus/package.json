@@ -17,6 +17,11 @@
       "types": "./build/vite.d.ts",
       "import": "./build/vite.mjs",
       "require": "./build/vite.cjs"
+    },
+    "./plugins/webrtc": {
+      "types": "./build/plugins/webrtc.d.ts",
+      "import": "./build/plugins/webrtc.mjs",
+      "require": "./build/plugins/webrtc.cjs"
     }
   },
   "scripts": {
