@@ -887,14 +887,63 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     assert.equal(usersIdField, null,
       'users Create form should NOT include the $defaultFn-generated PK field');
 
-    // leaderboards/create: id field (no default) MUST be present.
+    // leaderboards/create: id is auto-generated ($defaultFn) — field hidden.
+    // Sanity: name (no default) IS present.
     await page.goto(`${BASE}/admin/leaderboards/create`, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('[data-testid="create-leaderboards"]', { timeout: 10_000 });
     const lbIdField = await page.$('#f-id');
-    assert.ok(lbIdField,
-      'leaderboards Create form SHOULD include the id field (no DB default — user must supply)');
+    assert.equal(lbIdField, null,
+      'leaderboards Create form should NOT include the auto-generated id field');
+    const lbNameField = await page.$('#f-name');
+    assert.ok(lbNameField, 'leaderboards Create form SHOULD include the name field');
+
+    // cloudSaves/create: composite-PK columns (user_id + slot) have no defaults
+    // — both fields MUST appear. Negative-case guard for the "always hide PKs"
+    // anti-pattern: only auto-generated PKs should be hidden, user-supplied
+    // ones (FKs that double as PK components) must remain visible.
+    // user_id is also the FK of cloudSaves → user (one-relation), so the
+    // form renders it as a <RelationPicker> instead of a plain <input>.
+    await page.goto(`${BASE}/admin/cloudSaves/create`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-testid="create-cloudSaves"]', { timeout: 10_000 });
+    const userIdPicker = await page.$('[data-testid="relation-picker-users"]');
+    const slotField = await page.$('#f-slot');
+    assert.ok(userIdPicker, 'cloudSaves Create form SHOULD include the user_id RelationPicker');
+    assert.ok(slotField, 'cloudSaves Create form SHOULD include slot (composite PK, no default)');
 
     await page.close();
+  });
+
+  it('admin can create a leaderboard without supplying id (server auto-generates)', async () => {
+    // Regression: leaderboards.id was originally `text('id').primaryKey()`
+    // with no default; the admin Create form required the operator to type
+    // an id manually. Schema now uses `$defaultFn(() => generateId(21))` so
+    // the server fills in a nanoid when no id is provided. Same fix applied
+    // to items.id and timedEvents.id.
+    const loginRes = await fetch(`${BASE}/admin-api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: BOOTSTRAP_EMAIL, password: BOOTSTRAP_PASSWORD }),
+    });
+    const cookieHeader = loginRes.headers.get('set-cookie')!.split(';')[0];
+
+    const res = await fetch(`${BASE}/admin-api/leaderboards`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: cookieHeader },
+      body: JSON.stringify({ name: 'Auto-id leaderboard' }),
+    });
+    // Read body once — `await res.text()` in an assert message would consume
+    // it and leave `.json()` unusable.
+    const body = await res.text();
+    assert.equal(res.status, 201, body);
+    const row = JSON.parse(body) as { id: string; name: string };
+    assert.equal(typeof row.id, 'string');
+    assert.ok(row.id.length > 0, 'server should fill in an id');
+    assert.equal(row.name, 'Auto-id leaderboard');
+
+    // Cleanup
+    await fetch(`${BASE}/admin-api/leaderboards/${row.id}`, {
+      method: 'DELETE', headers: { cookie: cookieHeader },
+    });
   });
 
   it('dashboard endpoint respects builtIns allowlist + widget overrides', async () => {

@@ -107,16 +107,32 @@ async function main() {
   });
   const sql = statements.join(';\n--> statement-breakpoint\n') + ';\n';
 
-  // Wipe existing <timestamp>_* directories so the fresh migration is the
-  // only one. (Hand-rolled migration dirs that don't match the timestamp
-  // prefix pattern are left alone, in case they're being preserved
-  // intentionally.)
+  // Idempotent: if exactly one timestamped migration dir exists and its
+  // SQL is byte-identical to what we'd produce, no-op. Saves users a
+  // pointless directory rename on every regen when only runtime-only
+  // schema bits ($defaultFn, etc.) changed.
   fs.mkdirSync(outAbs, { recursive: true });
-  for (const entry of fs.readdirSync(outAbs)) {
-    const full = path.join(outAbs, entry);
-    if (fs.statSync(full).isDirectory() && /^\d{14}_/.test(entry)) {
-      fs.rmSync(full, { recursive: true, force: true });
+  const existing = fs.readdirSync(outAbs)
+    .filter((e) => /^\d{14}_/.test(e) && fs.statSync(path.join(outAbs, e)).isDirectory());
+
+  if (existing.length === 1) {
+    const existingPath = path.join(outAbs, existing[0]!, 'migration.sql');
+    if (fs.existsSync(existingPath) && fs.readFileSync(existingPath, 'utf8') === sql) {
+      // eslint-disable-next-line no-console
+      console.log(
+        `[regen-migration] no change — ${tables.length} CREATE TABLE statement(s) in\n` +
+        `  ${path.relative(cwd, existingPath)}`,
+      );
+      return;
     }
+  }
+
+  // Content differs (or no existing migration) — wipe timestamped dirs
+  // and write a fresh one. Hand-rolled dirs not matching the timestamp
+  // prefix pattern are left alone, in case they're being preserved
+  // intentionally.
+  for (const entry of existing) {
+    fs.rmSync(path.join(outAbs, entry), { recursive: true, force: true });
   }
 
   const ts = timestamp();
@@ -125,8 +141,6 @@ async function main() {
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, 'migration.sql'), sql);
 
-  // Console output is the source of truth for the user — keep it short
-  // but tell them where the file landed and how many tables made it in.
   // eslint-disable-next-line no-console
   console.log(
     `[regen-migration] wrote ${tables.length} CREATE TABLE statement(s) to\n` +
