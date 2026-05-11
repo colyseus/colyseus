@@ -102,7 +102,13 @@ export function ListPage({ resources }: { resources: Resource[] }) {
             <TableHeader>
               <TableRow>
                 {cols.map((c) => (
-                  <TableHead key={c.name}>
+                  // w-[1%] + whitespace-nowrap: classic table trick to make
+                  // each column shrink to its content width while the table
+                  // itself stays w-full. Without this, browsers distribute
+                  // leftover container width across columns and a 2-column
+                  // table gets weirdly stretched (Id "gRpl_..." floating
+                  // alone at the left of a half-empty cell).
+                  <TableHead key={c.name} className="w-[1%] whitespace-nowrap">
                     <ColumnHeader
                       column={c}
                       sorters={sorters}
@@ -139,7 +145,13 @@ export function ListPage({ resources }: { resources: Resource[] }) {
                     data-row-id={id ?? undefined}
                   >
                     {cols.map((c) => (
-                      <TableCell key={c.name}>{formatCell(row[c.name], c, fkLabels.get(c.name)?.get(row[c.name]))}</TableCell>
+                      // Match the header — w-[1%] + whitespace-nowrap shrinks
+                      // each cell to its content. formatCell already truncates
+                      // long opaque ids and JSON blobs, so nothing legitimate
+                      // wants to wrap inside a cell.
+                      <TableCell key={c.name} className="w-[1%] whitespace-nowrap">
+                        {formatCell(row[c.name], c, fkLabels.get(c.name)?.get(row[c.name]))}
+                      </TableCell>
                     ))}
                     {id && (
                       <TableCell
