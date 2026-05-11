@@ -173,6 +173,44 @@ describe("ExtractRoomMessages", () => {
         expectTypeOf<ExtractRoomMessages<MockRoomWithState>>().toEqualTypeOf<{}>();
     });
 
+    it("merges messages contributed by room plugins", () => {
+        // A room with no own messages but two plugins that each declare some.
+        class MockRoomWithPlugins {
+            state!: MyState;
+            plugins!: {
+                chat:    { messages: { say: (client: any, msg: { text: string }) => void } };
+                ranking: { messages: { vote: (client: any, msg: { id: string }) => void } };
+            };
+        }
+        type Messages = ExtractRoomMessages<MockRoomWithPlugins>;
+        expectTypeOf<Messages>().toHaveProperty("say");
+        expectTypeOf<Messages>().toHaveProperty("vote");
+    });
+
+    it("merges plugin messages with the room's own messages", () => {
+        class MockRoomMixed {
+            state!: MyState;
+            messages!: { move: (client: any, msg: { x: number; y: number }) => void };
+            plugins!: {
+                chat: { messages: { say: (client: any, msg: { text: string }) => void } };
+            };
+        }
+        type Messages = ExtractRoomMessages<MockRoomMixed>;
+        expectTypeOf<Messages>().toHaveProperty("move");  // from room
+        expectTypeOf<Messages>().toHaveProperty("say");   // from plugin
+    });
+
+    it("plugins without messages don't contribute keys", () => {
+        class MockRoomPluginNoMessages {
+            state!: MyState;
+            plugins!: {
+                analytics: { /* no `messages` declared */ };
+            };
+        }
+        // Nothing should be added — the result is still empty.
+        expectTypeOf<ExtractRoomMessages<MockRoomPluginNoMessages>>().toEqualTypeOf<{}>();
+    });
+
     it("SDKRoom<State> should be equivalent to SDKRoom<any, State>", () => {
         type RoomWithOneGeneric = SDKRoom<MyState>;
         type RoomWithTwoGenerics = SDKRoom<any, MyState>;

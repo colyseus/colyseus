@@ -45,6 +45,9 @@ import {
   type Messages as SharedMessages,
 } from '@colyseus/shared-types';
 
+import { RoomPlugin, PLUGIN_LIFECYCLE_KEYS, type PluginLifecycleKey } from './RoomPlugin.ts';
+export { RoomPlugin, definePlugins, attachToTestRoom, type RoomPluginOrder } from './RoomPlugin.ts';
+
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
 const noneSerializer = new NoneSerializer();
@@ -276,6 +279,15 @@ export class Room<T extends RoomOptions = RoomOptions> {
 
   public messages?: Messages<any>;
 
+  /**
+   * Room plugins, keyed by an operator-chosen handle. Each plugin contributes
+   * any subset of: declarative message handlers (merged into `this.messages`),
+   * lifecycle hooks (composed with the room's own), and public methods
+   * callable via `this.plugins.<key>.<method>()`. See RoomPlugin and
+   * `definePlugins` for details. Frozen after __init.
+   */
+  public plugins?: Record<string, RoomPlugin<any>>;
+
   private onMessageEvents = createNanoEvents();
   private onMessageValidators: {[message: string]: StandardSchemaV1} = {};
 
@@ -401,6 +413,15 @@ export class Room<T extends RoomOptions = RoomOptions> {
       this.state = this.#_state;
     }
 
+    // Wire room plugins: inject room ref, merge plugin messages into
+    // `this.messages`, compose lifecycle hooks. Plugin instance methods
+    // (the public surface reached via `this.plugins.<key>.method()`) are
+    // left as-is — their `this` is the plugin, and plugin authors access
+    // the room via `this.room`.
+    if (this.plugins !== undefined) {
+      this.#_wirePlugins();
+    }
+
     // Bind messages to the room
     if (this.messages !== undefined) {
 
@@ -425,6 +446,93 @@ export class Room<T extends RoomOptions = RoomOptions> {
     this.resetAutoDisposeTimeout(this.seatReservationTimeout);
 
     this.clock.start();
+  }
+
+  /**
+   * Wire room plugins into the room — called once during construction
+   * (only when `this.plugins` is set). Responsibilities:
+   *
+   *   1. Inject `room` reference on each plugin so its lifecycle hooks +
+   *      public methods can reach the host room via `this.room`.
+   *   2. Merge each plugin's `messages` into `this.messages`. Conflict
+   *      policy:
+   *        - room declared the key → room wins, plugin's handler dropped
+   *          (silent — documented escape hatch for overrides)
+   *        - two plugins declared the same key → throw at __init naming
+   *          both plugin keys
+   *   3. Compose each lifecycle hook by wrapping `this.onX` with a new
+   *      function that calls before-plugins, the original, then
+   *      after-plugins. Per-hook defaults (overridable via plugin.order):
+   *        onCreate / onJoin    → plugins before room
+   *        onLeave  / onDispose → plugins after room
+   *   4. Freeze the plugins record so accidental post-init mutation
+   *      doesn't silently drift from the wired state.
+   */
+  #_wirePlugins() {
+    const pluginEntries = Object.entries(this.plugins!);
+
+    // 1. Inject room reference
+    for (const [, plugin] of pluginEntries) {
+      (plugin as any).room = this;
+    }
+
+    // 2. Merge plugin messages
+    if (pluginEntries.length > 0) {
+      const ownedBy = new Map<string, string>();          // messageKey → pluginKey
+      const roomMessages = this.messages ?? {};
+      for (const [pluginKey, plugin] of pluginEntries) {
+        if (!plugin.messages) { continue; }
+        for (const [messageKey, handler] of Object.entries(plugin.messages)) {
+          if (roomMessages[messageKey]) {
+            // Room declared it too — room wins. Documented escape hatch.
+            continue;
+          }
+          const prior = ownedBy.get(messageKey);
+          if (prior !== undefined) {
+            throw new Error(
+              `[Room] message key "${messageKey}" declared by multiple plugins: ` +
+              `"${prior}" and "${pluginKey}". Resolve by giving one of them a ` +
+              `different key, or override on the room's own \`messages\`.`,
+            );
+          }
+          ownedBy.set(messageKey, pluginKey);
+          (this.messages ??= {} as any)[messageKey] = handler as any;
+        }
+      }
+    }
+
+    // 3. Compose lifecycle hooks
+    const defaultOrder: Record<PluginLifecycleKey, 'before' | 'after'> = {
+      onCreate:  'before',
+      onJoin:    'before',
+      onLeave:   'after',
+      onDispose: 'after',
+    };
+    for (const hook of PLUGIN_LIFECYCLE_KEYS) {
+      const before: RoomPlugin[] = [];
+      const after: RoomPlugin[] = [];
+      for (const [, plugin] of pluginEntries) {
+        if (typeof (plugin as any)[hook] !== 'function') { continue; }
+        const order = plugin.order?.[hook] ?? defaultOrder[hook];
+        (order === 'before' ? before : after).push(plugin);
+      }
+      if (before.length === 0 && after.length === 0) { continue; }
+
+      // Capture the original (room-declared) hook, if any. We wrap it
+      // unconditionally so the call-site `if (this.onJoin)` checks
+      // elsewhere in this file still gate the composed hook correctly.
+      const original = (this as any)[hook]?.bind(this);
+      (this as any)[hook] = async function(this: Room, ...args: any[]) {
+        for (const p of before) { await ((p as any)[hook] as Function).call(p, ...args); }
+        let result;
+        if (original) { result = await original(...args); }
+        for (const p of after) { await ((p as any)[hook] as Function).call(p, ...args); }
+        return result;
+      };
+    }
+
+    // 4. Freeze so accidental mutation doesn't silently drift
+    Object.freeze(this.plugins);
   }
 
   /**

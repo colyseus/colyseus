@@ -96,9 +96,33 @@ export type NormalizeRoomType<T> = Instantiate<T> extends { '~state': any } ? T 
 
 /**
  * Extract room messages type from a Room constructor or instance type.
- * Supports both constructor types (typeof MyRoom) and instance types (MyRoom)
+ *
+ * Walks both:
+ *  - the room's own `messages` field (declarative handlers on the class)
+ *  - the room's `plugins` record (each plugin may also declare `messages`)
+ *
+ * The merged shape is what the SDK sees when typing `room.send(...)`. If
+ * two plugins declare the same message key the intersection collapses to
+ * a never-callable signature (TS surfaces the conflict at the SDK call
+ * site); runtime mirrors this with a thrown error at room __init.
+ *
+ * Supports both constructor types (typeof MyRoom) and instance types (MyRoom).
  */
-export type ExtractRoomMessages<T> = Instantiate<T> extends { messages: infer M } ? M : {};
+export type ExtractRoomMessages<T> =
+  & (Instantiate<T> extends { messages: infer M } ? M : {})
+  & ExtractPluginMessages<T>;
+
+/** Internal: walks `room.plugins` values and unions their `messages` shapes. */
+type ExtractPluginMessages<T> =
+  Instantiate<T> extends { plugins: infer P }
+    ? P extends Record<string, { messages?: infer _ }>
+      ? UnionToIntersection<NonNullable<P[keyof P]['messages']>>
+      : {}
+    : {};
+
+/** Standard `union → intersection` helper used by the plugin walk above. */
+type UnionToIntersection<U> =
+  (U extends any ? (x: U) => 0 : never) extends ((x: infer I) => 0) ? I : never;
 
 /**
  * Extract client-side messages type from a Room constructor or instance type.
