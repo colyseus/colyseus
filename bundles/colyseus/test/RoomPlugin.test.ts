@@ -5,13 +5,16 @@ import { Room, RoomPlugin, definePlugins, attachToTestRoom } from '@colyseus/cor
  * Phase 1 unit tests for the RoomPlugin wiring inside Room.
  *
  * We exercise the wiring directly instead of spinning up a server:
- *   - instantiate a Room subclass
- *   - set `messages` and `plugins`
+ *   - declare a Room subclass with `plugins = definePlugins({...})`
  *   - call the private `__init()` to trigger the wiring
  *   - assert side effects (lifecycle composition, message merge, frozen, etc.)
  *
  * The plugin classes here are tiny stand-ins — not meant for production
  * use; they're shaped to verify framework behavior.
+ *
+ * NOTE: Each `describe`/`it` defines a FRESH Room subclass so the
+ * per-class layout cache (`Room.__pluginLayout` installed on the
+ * constructor) doesn't bleed between tests.
  */
 
 // Test seam: __init is private; expose it via cast.
@@ -24,7 +27,7 @@ describe('RoomPlugin core plumbing', () => {
       class P extends RoomPlugin { }
       const p = new P();
       class R extends Room {
-        plugins = definePlugins<this>({ p });
+        plugins = definePlugins({ p });
       }
       const room = new R();
       assert.equal(p.room, undefined, 'room should not be set before __init');
@@ -50,7 +53,7 @@ describe('RoomPlugin core plumbing', () => {
         messages = { ping: function() { /* noop */ } };
       }
       class R extends Room {
-        plugins = definePlugins<this>({ p: new P() });
+        plugins = definePlugins({ p: new P() });
       }
       const room = new R();
       runInit(room);
@@ -64,7 +67,7 @@ describe('RoomPlugin core plumbing', () => {
       }
       class R extends Room {
         messages: any = { collide: function() { return 'room'; } };
-        plugins = definePlugins<this>({ p: new P() });
+        plugins = definePlugins({ p: new P() });
       }
       const room = new R();
       runInit(room);
@@ -76,7 +79,7 @@ describe('RoomPlugin core plumbing', () => {
       class A extends RoomPlugin { messages = { collide: function() {} }; }
       class B extends RoomPlugin { messages = { collide: function() {} }; }
       class R extends Room {
-        plugins = definePlugins<this>({ a: new A(), b: new B() });
+        plugins = definePlugins({ a: new A(), b: new B() });
       }
       const room = new R();
       assert.throws(() => runInit(room), /message key "collide" declared by multiple plugins.*"a".*"b"/);
@@ -88,7 +91,7 @@ describe('RoomPlugin core plumbing', () => {
       const order: string[] = [];
       class P extends RoomPlugin { onJoin() { order.push('plugin'); } }
       class R extends Room {
-        plugins = definePlugins<this>({ p: new P() });
+        plugins = definePlugins({ p: new P() });
         onJoin() { order.push('room'); }
       }
       const room = new R();
@@ -104,7 +107,7 @@ describe('RoomPlugin core plumbing', () => {
         onDispose() { order.push('plugin-dispose'); }
       }
       class R extends Room {
-        plugins = definePlugins<this>({ p: new P() });
+        plugins = definePlugins({ p: new P() });
         onLeave() { order.push('room-leave'); }
         onDispose() { order.push('room-dispose'); }
       }
@@ -122,7 +125,7 @@ describe('RoomPlugin core plumbing', () => {
         onLeave() { order.push('plugin'); }
       }
       class R extends Room {
-        plugins = definePlugins<this>({ p: new P() });
+        plugins = definePlugins({ p: new P() });
         onLeave() { order.push('room'); }
       }
       const room = new R();
@@ -138,7 +141,7 @@ describe('RoomPlugin core plumbing', () => {
       class B extends RoomPlugin { onJoin() { order.push('b'); } }
       class C extends RoomPlugin { onJoin() { order.push('c'); } }
       class R extends Room {
-        plugins = definePlugins<this>({ a: new A(), b: new B(), c: new C() });
+        plugins = definePlugins({ a: new A(), b: new B(), c: new C() });
       }
       const room = new R();
       runInit(room);
@@ -155,7 +158,7 @@ describe('RoomPlugin core plumbing', () => {
         async onJoin() { order.push('b'); }
       }
       class R extends Room {
-        plugins = definePlugins<this>({ a: new A(), b: new B() });
+        plugins = definePlugins({ a: new A(), b: new B() });
         onJoin() { order.push('room'); }
       }
       const room = new R();
@@ -168,7 +171,7 @@ describe('RoomPlugin core plumbing', () => {
       const order: string[] = [];
       class P extends RoomPlugin { /* no lifecycle hooks at all */ }
       class R extends Room {
-        plugins = definePlugins<this>({ p: new P() });
+        plugins = definePlugins({ p: new P() });
         onJoin() { order.push('room'); }
       }
       const room = new R();
@@ -188,7 +191,7 @@ describe('RoomPlugin core plumbing', () => {
       }
       const counter = new Counter();
       class R extends Room {
-        plugins = definePlugins<this>({ counter });
+        plugins = definePlugins({ counter });
       }
       const room = new R();
       runInit(room);
@@ -203,7 +206,7 @@ describe('RoomPlugin core plumbing', () => {
     it('freezes the plugins record so accidental mutation throws in strict mode', () => {
       class P extends RoomPlugin { }
       class R extends Room {
-        plugins = definePlugins<this>({ p: new P() });
+        plugins = definePlugins({ p: new P() });
       }
       const room = new R();
       runInit(room);
@@ -218,7 +221,8 @@ describe('RoomPlugin core plumbing', () => {
         bump() { this.n++; }
       }
       class R extends Room {
-        plugins = definePlugins<this>({ counter: new Counter() });
+        // Each instance constructs a fresh Counter via the field initializer.
+        plugins = definePlugins({ counter: new Counter() });
       }
       const room1 = new R();
       const room2 = new R();
@@ -229,6 +233,50 @@ describe('RoomPlugin core plumbing', () => {
       room2.plugins!.counter.bump();
       assert.equal(room1.plugins!.counter.n, 2);
       assert.equal(room2.plugins!.counter.n, 1, 'rooms should not share plugin state');
+    });
+  });
+
+  describe('class-level layout caching', () => {
+    it('computes layout once per class and reuses on subsequent constructs', () => {
+      class P extends RoomPlugin {
+        onJoin() { /* no-op — exists so layout has a hook to wire */ }
+      }
+      class R extends Room {
+        plugins = definePlugins({ p: new P() });
+      }
+      const r1 = new R(); runInit(r1);
+      // The class has its layout cached after the first construct.
+      assert.ok(
+        (R as any).__pluginLayout,
+        'layout should be cached on the constructor after first construct',
+      );
+      // Layout reference is stable across subsequent constructs.
+      const layoutAfterR1 = (R as any).__pluginLayout;
+      const r2 = new R(); runInit(r2);
+      assert.strictEqual((R as any).__pluginLayout, layoutAfterR1, 'cached layout is stable');
+    });
+
+    it('installs lifecycle wrappers on the class prototype (not per-instance)', () => {
+      class P extends RoomPlugin { onJoin() {} }
+      class R extends Room {
+        plugins = definePlugins({ p: new P() });
+      }
+      const r1 = new R();
+      runInit(r1);
+      // After init, the wrapper sits on the prototype — not on the instance.
+      assert.strictEqual(
+        (r1 as any).onJoin,
+        (R.prototype as any).onJoin,
+        'onJoin wrapper should live on the prototype, not be a per-instance closure',
+      );
+      // A second room shares the exact same wrapper function reference.
+      const r2 = new R();
+      runInit(r2);
+      assert.strictEqual(
+        (r1 as any).onJoin,
+        (r2 as any).onJoin,
+        'two rooms of the same class share the same prototype-level wrapper',
+      );
     });
   });
 

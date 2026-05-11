@@ -123,6 +123,20 @@ export const columns = {
   },
 };
 
+// Room plugins — surfaced from the main entry for one-import ergonomics.
+// Also available individually via the `./plugins` subpath if a user wants
+// to keep the main bundle lean.
+export {
+  AnalyticsPlugin,
+  type AnalyticsPluginOptions,
+  type AnalyticsLifecycleEvent,
+  CloudSavesPlugin,
+  type CloudSavesPluginOptions,
+  LeaderboardsPlugin,
+  type LeaderboardsPluginOptions,
+  type UserIdResolver,
+} from './plugins/index.ts';
+
 // Per-dialect table factories. Mirrors the `columns.{sqlite,pg}.*` shape:
 //
 //   const users = tables.sqlite.users('users', { displayName: text(...) });

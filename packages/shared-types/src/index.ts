@@ -112,12 +112,29 @@ export type ExtractRoomMessages<T> =
   & (Instantiate<T> extends { messages: infer M } ? M : {})
   & ExtractPluginMessages<T>;
 
-/** Internal: walks `room.plugins` values and unions their `messages` shapes. */
+/**
+ * Internal: walks `room.plugins` values and intersects their `messages`
+ * shapes. Plugins that DON'T narrow `messages` away from the base
+ * `Messages<This>` type (i.e. still a `Record<string, AnyMessageHandler>`)
+ * contribute `{}` here — otherwise the SDK's `room.send(...)` would
+ * accept any string and silently lose its closed-set safety.
+ *
+ * The narrow-detection trick: a literal message map like `{ ping: ... }`
+ * has `keyof` = literal union, so `string extends keyof M` is `false`.
+ * A wide `Record<string, ...>` has `keyof` = `string`, so it's `true`.
+ */
 type ExtractPluginMessages<T> =
   Instantiate<T> extends { plugins: infer P }
-    ? P extends Record<string, { messages?: infer _ }>
-      ? UnionToIntersection<NonNullable<P[keyof P]['messages']>>
-      : {}
+    ? UnionToIntersection<
+        { [K in keyof P]: P[K] extends { messages?: infer M }
+          ? NonNullable<M> extends Record<PropertyKey, any>
+            ? string extends keyof NonNullable<M>
+              ? {}
+              : NonNullable<M>
+            : {}
+          : {}
+        }[keyof P]
+      >
     : {};
 
 /** Standard `union → intersection` helper used by the plugin walk above. */

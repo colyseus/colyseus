@@ -16,23 +16,16 @@ import { RedisPresence } from "@colyseus/redis-presence";
 import { RedisDriver } from "@colyseus/redis-driver";
 import { PostgresDriver } from "@colyseus/drizzle-driver";
 
-import { GameDatabase } from "@colyseus/database";
 import { adminEndpoints, defineAdminResource } from "@colyseus/admin";
-import * as schema from "./db/schema.ts";
 import { registerSegments } from "./db/segments.ts";
+import { database, databaseBoot } from "./db/database.ts";
 
-// Spin up an embedded sqlite-backed GameDatabase. The admin panel below
-// reflects every table on it. Set DATABASE_URL=postgres://... to switch.
-//
-// `schemas` accepts the whole barrel — both customized tables (users) and
-// re-exported defaults (configs, leaderboards, ...). The same file feeds
-// `drizzle-kit generate` so runtime + migration tooling never drift.
-const database = new GameDatabase({
-  connectionString: process.env.DATABASE_URL,
-  schemas: schema,
-});
+// Database lives in ./db/database.ts so MyRoom can consume the same
+// instance for plugins without forming a circular import via this file.
+// We still register custom segments + await boot here, in the same
+// startup sequence as before.
 registerSegments(database); // typed against the database's schema generic
-await database.boot();
+await databaseBoot;
 
 // Tiny test-only seed endpoint — creates an admin + a mod for the panel demo.
 async function seedAdminAndMod() {

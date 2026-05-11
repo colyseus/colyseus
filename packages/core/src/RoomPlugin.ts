@@ -29,7 +29,7 @@
  * Use via `definePlugins`:
  *
  *   class MyRoom extends Room<{ state: MyState }> {
- *     plugins = definePlugins<this>({
+ *     plugins = definePlugins({
  *       chat: new ChatPlugin({ historyLimit: 100 }),
  *     });
  *   }
@@ -103,24 +103,35 @@ export abstract class RoomPlugin<This extends Room = Room> {
 }
 
 /**
- * Define the plugins record for a room with full per-key type
- * preservation. The `const T` modifier (TS 5.0+) keeps each value's
- * exact class type so `this.plugins.<key>.method()` autocompletes
- * against the specific plugin subclass rather than the base.
+ * Define the plugin record for a Room subclass. Each entry is a plugin
+ * instance; the framework wires them at `__init` time and (lazily, on
+ * the first construct of the class) computes the lifecycle/message
+ * layout, caches it on the constructor, and installs hook wrappers on
+ * the class prototype. Subsequent constructs reuse the cached layout.
+ *
+ * The `const T` modifier (TS 5.0+) preserves each value's literal class
+ * type so `this.plugins.<key>.method()` autocompletes against the
+ * specific plugin subclass rather than the base.
  *
  * Usage:
  *
- *   plugins = definePlugins<this>({
- *     chat:    new ChatPlugin({ historyLimit: 100 }),
- *     physics: new PhysicsPlugin({ gravity: 12 }),
- *   });
+ *   class MyRoom extends Room<{ state: MyState }> {
+ *     plugins = definePlugins({
+ *       chat:    new ChatPlugin({ historyLimit: 100 }),
+ *       physics: new PhysicsPlugin<this>({ gravity: 12 }),
+ *     });
+ *   }
  *
- * Then `this.plugins.chat.getHistory()` and `this.plugins.physics.step(dt)`
- * are both typed against the specific plugin class.
+ * Plugins that need typed access to the host room's state should
+ * parameterize their own generic with `<this>` (e.g.
+ * `LeaderboardsPlugin<this>` for plugins that read `room.state.X`).
+ * `definePlugins` constrains values to `RoomPlugin<any>` here on
+ * purpose — narrowing to `RoomPlugin<this>` would force every
+ * non-generic plugin to be spelled `new X<this>(...)`, which adds noise
+ * without adding safety.
  */
 export function definePlugins<
-  This extends Room,
-  const T extends Record<string, RoomPlugin<This>>,
+  const T extends Record<string, RoomPlugin<any>>,
 >(plugins: T): T {
   return plugins;
 }
@@ -153,4 +164,140 @@ export function attachToTestRoom<This extends Room, R extends Partial<This>>(
 ): R {
   (plugin as any).room = roomStub;
   return roomStub;
+}
+
+// ---------------------------------------------------------------------------
+// Layout machinery — used by Room.__init to set plugins up once per class.
+// Lives in this file (rather than Room.ts) so the plugin-related types and
+// helpers stay co-located. These are framework internals; callers outside
+// `@colyseus/core` should not depend on them.
+// ---------------------------------------------------------------------------
+
+/**
+ * Precomputed plugin layout for a Room subclass — populated on the
+ * first construction and cached on the constructor (`static
+ * __pluginLayout`). The framework reads this on subsequent constructs
+ * to skip the conflict-detection / hook-ordering work and just
+ * materialize fresh plugin instances + wire their `.room` ref.
+ *
+ * Lifecycle hook wrappers are installed on the class prototype as part
+ * of the same one-shot setup — see `installPluginHookWrappers`.
+ *
+ * @internal
+ */
+export interface PluginLayout {
+  /** Per-hook participation: which plugin keys run before/after the room's own hook. */
+  hooks: Record<PluginLifecycleKey, { before: string[]; after: string[] }>;
+  /** Message key → plugin key. Conflict detection ran when this was built. */
+  messageOwners: Map<string, string>;
+}
+
+/**
+ * Default before/after policy for lifecycle hooks vs the room's own
+ * hook. Plugins can override per-hook via the `order` field on the
+ * plugin instance.
+ *
+ *   onCreate / onJoin    → plugins run BEFORE room (guards + setup)
+ *   onLeave  / onDispose → plugins run AFTER room (capture final state)
+ *
+ * @internal
+ */
+export const DEFAULT_PLUGIN_ORDER: Record<PluginLifecycleKey, 'before' | 'after'> = {
+  onCreate:  'before',
+  onJoin:    'before',
+  onLeave:   'after',
+  onDispose: 'after',
+};
+
+/**
+ * Walk the room's plugin instances and produce the lifecycle + message
+ * layout for the Room class. Called once per Room subclass — on the
+ * first construct — and the result is cached on the constructor. Throws
+ * on duplicate message keys (named both plugin keys) so the failure is
+ * visible at class-init rather than at first message dispatch.
+ *
+ * Returns `null` when no plugins participate in any hook AND none
+ * declare a message — distinguishes "computed, nothing to do" from
+ * "not computed yet" in the `__pluginLayout` cache.
+ *
+ * @internal
+ */
+export function computePluginLayout(plugins: Record<string, RoomPlugin>): PluginLayout | null {
+  const entries = Object.entries(plugins);
+  const hooks = {} as Record<PluginLifecycleKey, { before: string[]; after: string[] }>;
+  let anyHook = false;
+
+  for (const hook of PLUGIN_LIFECYCLE_KEYS) {
+    const before: string[] = [];
+    const after: string[] = [];
+    for (const [pluginKey, plugin] of entries) {
+      if (typeof (plugin as any)[hook] !== 'function') { continue; }
+      const order = plugin.order?.[hook] ?? DEFAULT_PLUGIN_ORDER[hook];
+      (order === 'before' ? before : after).push(pluginKey);
+      anyHook = true;
+    }
+    hooks[hook] = { before, after };
+  }
+
+  const messageOwners = new Map<string, string>();
+  for (const [pluginKey, plugin] of entries) {
+    if (!plugin.messages) { continue; }
+    for (const messageKey of Object.keys(plugin.messages)) {
+      const prior = messageOwners.get(messageKey);
+      if (prior !== undefined) {
+        throw new Error(
+          `[Room] message key "${messageKey}" declared by multiple plugins: ` +
+          `"${prior}" and "${pluginKey}". Resolve by giving one of them a ` +
+          `different key, or override on the room's own \`messages\`.`,
+        );
+      }
+      messageOwners.set(messageKey, pluginKey);
+    }
+  }
+
+  if (!anyHook && messageOwners.size === 0) { return null; }
+  return { hooks, messageOwners };
+}
+
+/**
+ * Install one wrapper per participating lifecycle hook on the Room
+ * subclass's prototype. The wrapper closes over `before`/`after`
+ * arrays of plugin KEYS (not refs) so it works for every instance of
+ * the class — at call time it resolves the per-instance plugin via
+ * `this.plugins[key]`.
+ *
+ * The "original" room hook (whatever sat on `ctor.prototype[hook]`
+ * before this call — typically the user's `onJoin() {...}` method) is
+ * captured in closure so the wrapper can still invoke it between the
+ * before-plugins and the after-plugins.
+ *
+ * The constructor is typed structurally so this helper doesn't have
+ * to import the concrete `Room` class (which would create a cycle).
+ *
+ * @internal
+ */
+export function installPluginHookWrappers(
+  ctor: { prototype: any },
+  layout: PluginLayout | null,
+): void {
+  if (layout === null) { return; }
+  const proto = ctor.prototype;
+  for (const hook of PLUGIN_LIFECYCLE_KEYS) {
+    const { before, after } = layout.hooks[hook];
+    if (before.length === 0 && after.length === 0) { continue; }
+
+    const original = proto[hook] as Function | undefined;
+    proto[hook] = async function (this: { plugins?: Record<string, RoomPlugin> }, ...args: any[]) {
+      const plugins = this.plugins!;
+      for (const k of before) {
+        await ((plugins[k] as any)[hook] as Function).call(plugins[k], ...args);
+      }
+      let result;
+      if (original) { result = await original.apply(this, args); }
+      for (const k of after) {
+        await ((plugins[k] as any)[hook] as Function).call(plugins[k], ...args);
+      }
+      return result;
+    };
+  }
 }
