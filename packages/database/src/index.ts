@@ -1,11 +1,10 @@
 export { GameDatabase } from './GameDatabase.ts';
 export type { GameDatabaseOptions } from './GameDatabase.ts';
+export { defineConfigs } from './configs.ts';
+export type { ConfigsRegistry, ConfigValue, AllConfigs } from './configs.ts';
 
 export { VersionConflictError } from './services/CloudSaveService.ts';
 export type { LeaderboardEntry } from './services/LeaderboardsService.ts';
-export type { Item, PlayerItem } from './services/ItemsService.ts';
-export type { TimedEvent } from './services/TimedEventsService.ts';
-export type { RetentionResult, FunnelStep } from './services/AnalyticsService.ts';
 export type { Role, Action } from './services/ModerationService.ts';
 export { diffRows } from './services/AuditService.ts';
 export type { AuditEntry, AuditAction } from './services/AuditService.ts';
@@ -27,15 +26,10 @@ export {
   cloudSaveColumns as sqliteCloudSaveColumns,
   leaderboardColumns as sqliteLeaderboardColumns,
   leaderboardEntryColumns as sqliteLeaderboardEntryColumns,
-  itemColumns as sqliteItemColumns,
-  playerItemColumns as sqlitePlayerItemColumns,
-  timedEventColumns as sqliteTimedEventColumns,
   analyticsEventColumns as sqliteAnalyticsEventColumns,
-  userRoleColumns as sqliteUserRoleColumns,
-  modAssignmentColumns as sqliteModAssignmentColumns,
+  roleColumns as sqliteRoleColumns,
   userNoteColumns as sqliteUserNoteColumns,
   adminAuditColumns as sqliteAdminAuditColumns,
-  bannedAddressColumns as sqliteBannedAddressColumns,
 } from './schemas/sqlite.ts';
 export {
   userColumns as pgUserColumns,
@@ -43,15 +37,10 @@ export {
   cloudSaveColumns as pgCloudSaveColumns,
   leaderboardColumns as pgLeaderboardColumns,
   leaderboardEntryColumns as pgLeaderboardEntryColumns,
-  itemColumns as pgItemColumns,
-  playerItemColumns as pgPlayerItemColumns,
-  timedEventColumns as pgTimedEventColumns,
   analyticsEventColumns as pgAnalyticsEventColumns,
-  userRoleColumns as pgUserRoleColumns,
-  modAssignmentColumns as pgModAssignmentColumns,
+  roleColumns as pgRoleColumns,
   userNoteColumns as pgUserNoteColumns,
   adminAuditColumns as pgAdminAuditColumns,
-  bannedAddressColumns as pgBannedAddressColumns,
 } from './schemas/pg.ts';
 
 // Namespaced columns export: columns.sqlite.users, columns.pg.users, etc.
@@ -61,15 +50,10 @@ import {
   cloudSaveColumns as sqliteCloudSaves,
   leaderboardColumns as sqliteLeaderboards,
   leaderboardEntryColumns as sqliteLeaderboardEntries,
-  itemColumns as sqliteItems,
-  playerItemColumns as sqlitePlayerItems,
-  timedEventColumns as sqliteTimedEvents,
   analyticsEventColumns as sqliteAnalyticsEvents,
-  userRoleColumns as sqliteUserRoles,
-  modAssignmentColumns as sqliteModAssignments,
+  roleColumns as sqliteRoles,
   userNoteColumns as sqliteUserNotes,
   adminAuditColumns as sqliteAdminAudit,
-  bannedAddressColumns as sqliteBannedAddresses,
 } from './schemas/sqlite.ts';
 import {
   userColumns as pgUsers,
@@ -77,15 +61,10 @@ import {
   cloudSaveColumns as pgCloudSaves,
   leaderboardColumns as pgLeaderboards,
   leaderboardEntryColumns as pgLeaderboardEntries,
-  itemColumns as pgItems,
-  playerItemColumns as pgPlayerItems,
-  timedEventColumns as pgTimedEvents,
   analyticsEventColumns as pgAnalyticsEvents,
-  userRoleColumns as pgUserRoles,
-  modAssignmentColumns as pgModAssignments,
+  roleColumns as pgRoles,
   userNoteColumns as pgUserNotes,
   adminAuditColumns as pgAdminAudit,
-  bannedAddressColumns as pgBannedAddresses,
 } from './schemas/pg.ts';
 
 export const columns = {
@@ -95,15 +74,10 @@ export const columns = {
     cloudSaves: sqliteCloudSaves,
     leaderboards: sqliteLeaderboards,
     leaderboardEntries: sqliteLeaderboardEntries,
-    items: sqliteItems,
-    playerItems: sqlitePlayerItems,
-    timedEvents: sqliteTimedEvents,
     analyticsEvents: sqliteAnalyticsEvents,
-    userRoles: sqliteUserRoles,
-    modAssignments: sqliteModAssignments,
+    roles: sqliteRoles,
     userNotes: sqliteUserNotes,
     adminAudit: sqliteAdminAudit,
-    bannedAddresses: sqliteBannedAddresses,
   },
   pg: {
     users: pgUsers,
@@ -111,15 +85,10 @@ export const columns = {
     cloudSaves: pgCloudSaves,
     leaderboards: pgLeaderboards,
     leaderboardEntries: pgLeaderboardEntries,
-    items: pgItems,
-    playerItems: pgPlayerItems,
-    timedEvents: pgTimedEvents,
     analyticsEvents: pgAnalyticsEvents,
-    userRoles: pgUserRoles,
-    modAssignments: pgModAssignments,
+    roles: pgRoles,
     userNotes: pgUserNotes,
     adminAudit: pgAdminAudit,
-    bannedAddresses: pgBannedAddresses,
   },
 };
 
@@ -140,7 +109,7 @@ export {
 // Per-dialect table factories. Mirrors the `columns.{sqlite,pg}.*` shape:
 //
 //   const users = tables.sqlite.users('users', { displayName: text(...) });
-//   const items = tables.pg.items('items', { rarity: text(...) });
+//   const board = tables.pg.leaderboards('leaderboards', { season: text(...) });
 //
 // One-line replacement for the manual sqliteTable/pgTable + spread pattern.
 import { sqlite } from './factories/sqlite.ts';

@@ -2,7 +2,21 @@ import { and, desc, eq, lt } from 'drizzle-orm';
 import type { AdminAuditTableShape } from '../types.ts';
 import { affectedRows, type ServiceDb } from './_db.ts';
 
-export type AuditAction = 'create' | 'update' | 'delete' | 'custom';
+/**
+ * Audit action tags. CRUD verbs cover mutations through the admin's
+ * create/update/delete endpoints; `custom` is for `_action`-style
+ * handlers; `auth.*` covers admin sign-in/out/bootstrap so a stolen
+ * credential trail is visible in the same log as data mutations.
+ */
+export type AuditAction =
+  | 'create'
+  | 'update'
+  | 'delete'
+  | 'custom'
+  | 'auth.login'
+  | 'auth.login_failed'
+  | 'auth.logout'
+  | 'auth.bootstrap';
 
 export interface AuditEntry {
   id: string;

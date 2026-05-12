@@ -1,24 +1,20 @@
-import { and, eq, gte, inArray, lt, type SQL } from 'drizzle-orm';
 import type { ServiceDb } from './_db.ts';
 
-export interface RetentionResult {
-  cohortSize: number;
-  returned: number;
-  ratio: number;
-}
-
-export interface FunnelStep {
-  step: string;
-  users: number;
-}
-
 /**
- * Lightweight analytics — track named events with optional userId + props,
- * then compute classic retention/funnel queries against the table.
+ * Lightweight analytics event ingestion. `track(name, userId?, props?)`
+ * appends a single row to the `analyticsEvents` table — that's the
+ * whole service. Reporting (retention, funnels, cohort analysis) is
+ * intentionally out of scope: running those queries against an OLTP
+ * row store doesn't scale, and shipping a hand-rolled query layer
+ * would hide that limitation from operators.
  *
- * Designed for prototyping and low-volume games. For serious volume, batch
- * ingestion into a dedicated OLAP store (ClickHouse, BigQuery) and treat
- * this table as the staging buffer.
+ * For real analytics:
+ *   - read the rows yourself via `db.drizzle.select().from(db.tables.analyticsEvents)`
+ *     for tiny one-off checks
+ *   - export to ClickHouse / BigQuery / Snowflake and report there
+ *
+ * The room-side AnalyticsPlugin auto-emits room lifecycle events into
+ * this table; custom events go through `plugin.track('event_name', ...)`.
  */
 import type { AnalyticsEventsTableShape } from '../types.ts';
 
@@ -33,86 +29,5 @@ export class AnalyticsService<T extends AnalyticsEventsTableShape = AnalyticsEve
 
   async track(name: string, userId: string | null, props?: Record<string, unknown>): Promise<void> {
     await this.db.insert(this.events).values({ name, userId, props });
-  }
-
-  /**
-   * Of users who first did `cohortEvent` on `cohortDay` (UTC day),
-   * what fraction did `returnEvent` on cohortDay+offset?
-   */
-  async retention(
-    cohortEvent: string,
-    returnEvent: string,
-    cohortDay: Date,
-    dayOffset: number,
-  ): Promise<RetentionResult> {
-    const dayStart = new Date(cohortDay);
-    dayStart.setUTCHours(0, 0, 0, 0);
-    const dayEnd = new Date(dayStart);
-    dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
-
-    const returnStart = new Date(dayStart);
-    returnStart.setUTCDate(returnStart.getUTCDate() + dayOffset);
-    const returnEnd = new Date(returnStart);
-    returnEnd.setUTCDate(returnEnd.getUTCDate() + 1);
-
-    const cohort = await this.db
-      .selectDistinct({ uid: this.events.userId })
-      .from(this.events)
-      .where(and(
-        eq(this.events.name, cohortEvent),
-        gte(this.events.ts, dayStart),
-        lt(this.events.ts, dayEnd),
-      ));
-
-    const cohortIds = cohort
-      .map((c: { uid: string | null }) => c.uid)
-      .filter((x: string | null): x is string => !!x);
-    const cohortSize = cohortIds.length;
-    if (cohortSize === 0) { return { cohortSize: 0, returned: 0, ratio: 0 }; }
-
-    const returners = await this.db
-      .selectDistinct({ uid: this.events.userId })
-      .from(this.events)
-      .where(and(
-        eq(this.events.name, returnEvent),
-        gte(this.events.ts, returnStart),
-        lt(this.events.ts, returnEnd),
-        inArray(this.events.userId, cohortIds),
-      ));
-
-    const returned = returners.length;
-    return { cohortSize, returned, ratio: returned / cohortSize };
-  }
-
-  /**
-   * For each step name, returns the count of distinct users who completed all
-   * prior steps and this one. Order in the input array defines the funnel.
-   */
-  async funnel(steps: string[]): Promise<FunnelStep[]> {
-    let prevUsers: string[] | null = null;
-    const result: FunnelStep[] = [];
-
-    for (const step of steps) {
-      const conds: SQL[] = [eq(this.events.name, step)];
-      if (prevUsers !== null) {
-        if (prevUsers.length === 0) {
-          result.push({ step, users: 0 });
-          continue;
-        }
-        conds.push(inArray(this.events.userId, prevUsers));
-      }
-
-      const rows = await this.db
-        .selectDistinct({ uid: this.events.userId })
-        .from(this.events)
-        .where(and(...conds));
-
-      prevUsers = rows
-        .map((r: { uid: string | null }) => r.uid)
-        .filter((x: string | null): x is string => !!x);
-      result.push({ step, users: prevUsers!.length });
-    }
-
-    return result;
   }
 }

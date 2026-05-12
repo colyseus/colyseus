@@ -103,7 +103,7 @@ describe('GameDatabaseOptions.connection (sqlite)', () => {
     // First: create the file with the schema by booting normally.
     db = new GameDatabase({ connectionString: dbPath });
     await db.boot();
-    await db.config.set('seed', 1);
+    await db.configs.set('seed', 1);
     await db.shutdown();
 
     // Reopen read-only via the new connection passthrough.
@@ -115,9 +115,9 @@ describe('GameDatabaseOptions.connection (sqlite)', () => {
       migrations: 'skip',
     });
     await db.boot();
-    assert.equal(await db.config.get('seed'), 1);
+    assert.equal(await db.configs.get('seed'), 1);
     await assert.rejects(
-      db.config.set('seed', 2),
+      db.configs.set('seed', 2),
       /readonly|read.only/i,
     );
   });

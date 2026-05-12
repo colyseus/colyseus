@@ -58,28 +58,6 @@ export type LeaderboardEntriesTableShape = Table & {
   createdAt: AnyColumn;
 };
 
-export type ItemsTableShape = Table & {
-  id: AnyColumn;
-  name: AnyColumn;
-  kind: AnyColumn;
-  meta: AnyColumn;
-};
-
-export type PlayerItemsTableShape = Table & {
-  userId: AnyColumn;
-  itemId: AnyColumn;
-  qty: AnyColumn;
-  acquiredAt: AnyColumn;
-};
-
-export type TimedEventsTableShape = Table & {
-  id: AnyColumn;
-  name: AnyColumn;
-  startsAt: AnyColumn;
-  endsAt: AnyColumn;
-  payload: AnyColumn;
-};
-
 export type AnalyticsEventsTableShape = Table & {
   id: AnyColumn;
   userId: AnyColumn;
@@ -88,14 +66,10 @@ export type AnalyticsEventsTableShape = Table & {
   ts: AnyColumn;
 };
 
-export type UserRolesTableShape = Table & {
+export type RolesTableShape = Table & {
   userId: AnyColumn;
   role: AnyColumn;
-};
-
-export type ModAssignmentsTableShape = Table & {
-  userId: AnyColumn;
-  collection: AnyColumn;
+  scopes: AnyColumn;
 };
 
 export type UserNotesTableShape = Table & {
@@ -116,16 +90,6 @@ export type AdminAuditTableShape = Table & {
   createdAt: AnyColumn;
 };
 
-export type BannedAddressesTableShape = Table & {
-  id: AnyColumn;
-  kind: AnyColumn;
-  value: AnyColumn;
-  reason: AnyColumn;
-  until: AnyColumn;
-  createdBy: AnyColumn;
-  createdAt: AnyColumn;
-};
-
 /** All known schema slots — used as the base type for GameDatabaseOptions['schemas']. */
 export interface SchemaSet {
   users: UsersTableShape;
@@ -133,13 +97,8 @@ export interface SchemaSet {
   cloudSaves: CloudSavesTableShape;
   leaderboards: LeaderboardsTableShape;
   leaderboardEntries: LeaderboardEntriesTableShape;
-  items: ItemsTableShape;
-  playerItems: PlayerItemsTableShape;
-  timedEvents: TimedEventsTableShape;
   analyticsEvents: AnalyticsEventsTableShape;
-  userRoles: UserRolesTableShape;
-  modAssignments: ModAssignmentsTableShape;
+  roles: RolesTableShape;
   userNotes: UserNotesTableShape;
   adminAudit: AdminAuditTableShape;
-  bannedAddresses: BannedAddressesTableShape;
 }

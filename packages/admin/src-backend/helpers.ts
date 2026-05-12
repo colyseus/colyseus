@@ -81,7 +81,7 @@ export function isTableColumn(v: unknown): v is TableColumn {
 // 2. Composite-id codec — server-side mirror of the frontend codec in
 //    src/lib/composite-id.ts. Decodes the base64url-of-JSON-array shape
 //    the UI produces for composite-PK tables (cloudSaves,
-//    leaderboardEntries, playerItems, modAssignments).
+//    leaderboardEntries).
 // ---------------------------------------------------------------------------
 
 export function decodeCompositeId(encoded: string): unknown[] {

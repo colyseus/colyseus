@@ -9,12 +9,10 @@ describe('humanize', () => {
     assert.equal(humanize('cloudSaves'), 'Cloud Saves');
     assert.equal(humanize('leaderboards'), 'Leaderboards');
     assert.equal(humanize('leaderboardEntries'), 'Leaderboard Entries');
-    assert.equal(humanize('items'), 'Items');
-    assert.equal(humanize('playerItems'), 'Player Items');
-    assert.equal(humanize('timedEvents'), 'Timed Events');
     assert.equal(humanize('analyticsEvents'), 'Analytics Events');
-    assert.equal(humanize('userRoles'), 'User Roles');
-    assert.equal(humanize('modAssignments'), 'Mod Assignments');
+    assert.equal(humanize('roles'), 'Roles');
+    assert.equal(humanize('userNotes'), 'User Notes');
+    assert.equal(humanize('adminAudit'), 'Admin Audit');
   });
 
   it('handles snake_case', () => {

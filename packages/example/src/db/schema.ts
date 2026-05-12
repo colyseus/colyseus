@@ -34,10 +34,8 @@ export {
   cloudSaves,
   leaderboards,
   leaderboardEntries,
-  items,
-  playerItems,
-  timedEvents,
   analyticsEvents,
-  userRoles,
-  modAssignments,
+  roles,
+  userNotes,
+  adminAudit,
 } from "@colyseus/database/sqlite-defaults";

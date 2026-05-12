@@ -103,23 +103,23 @@ describe('buildRelationsCallback', () => {
   });
 
   it('handles "one" relations where FK lives on target (parent → singleton child)', () => {
-    // userRoles' PK is itself `userId`, mirroring the real schema. The FK
+    // roles' PK is itself `userId`, mirroring the real schema. The FK
     // column lives on the TARGET, not the source — different from the
     // typical child-points-to-parent shape.
     const users     = mkTable({ id: mkCol('id', true) });
-    const userRoles = mkTable({ userId: mkCol('user_id', true), role: mkCol('role') });
-    const tables = { users, userRoles };
+    const roles = mkTable({ userId: mkCol('user_id', true), role: mkCol('role') });
+    const tables = { users, roles };
     const relations: Record<string, RelationDefinition[]> = {
-      users: [{ name: 'role', target: 'userRoles', kind: 'one', fk: 'userId' }],
+      users: [{ name: 'role', target: 'roles', kind: 'one', fk: 'userId' }],
     };
 
     const callback = buildRelationsCallback(tables, relations);
     const config = callback(mockHelpers(tables));
 
     assert.deepStrictEqual(config.users!['role'], {
-      kind: 'one', target: 'userRoles',
+      kind: 'one', target: 'roles',
       from: { _ref: 'users.id' },
-      to:   { _ref: 'userRoles.userId' },
+      to:   { _ref: 'roles.userId' },
     });
   });
 

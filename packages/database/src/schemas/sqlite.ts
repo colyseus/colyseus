@@ -61,32 +61,6 @@ export const leaderboardEntryColumns = {
   createdAt: integer('created_at', { mode: 'timestamp' as const }).notNull().default(sql`(unixepoch())`),
 };
 
-export const itemColumns = {
-  // See leaderboardColumns.id for rationale on the auto-generated default.
-  // `db.items.defineItem(id, name, kind, meta)` still respects an explicit id.
-  id: text('id').primaryKey().$defaultFn(() => generateId(21)),
-  name: text('name').notNull(),
-  kind: text('kind').notNull().default('misc'),
-  meta: text('meta', { mode: 'json' as const }),
-};
-
-export const playerItemColumns = {
-  userId: text('user_id').notNull(),
-  itemId: text('item_id').notNull(),
-  qty: integer('qty').notNull().default(1),
-  acquiredAt: integer('acquired_at', { mode: 'timestamp' as const }).notNull().default(sql`(unixepoch())`),
-};
-
-export const timedEventColumns = {
-  // See leaderboardColumns.id for rationale on the auto-generated default.
-  // `db.events.schedule(id, ...)` still respects an explicit id.
-  id: text('id').primaryKey().$defaultFn(() => generateId(21)),
-  name: text('name').notNull(),
-  startsAt: integer('starts_at', { mode: 'timestamp' as const }).notNull(),
-  endsAt: integer('ends_at', { mode: 'timestamp' as const }).notNull(),
-  payload: text('payload', { mode: 'json' as const }),
-};
-
 export const analyticsEventColumns = {
   id: integer('id').primaryKey({ autoIncrement: true }),
   userId: text('user_id'),
@@ -95,37 +69,22 @@ export const analyticsEventColumns = {
   ts: integer('ts', { mode: 'timestamp' as const }).notNull().default(sql`(unixepoch())`),
 };
 
-export const userRoleColumns = {
+/**
+ * Single-table RBAC: one row per user.
+ *
+ *   role:   'admin' / 'mod' / 'user' — global role.
+ *   scopes: collection names this user can act on. Only meaningful for
+ *           `role = 'mod'` (admins implicitly cover everything; users
+ *           are read-only on whatever the caller passes to `can()`).
+ *
+ * `scopes` is JSON-encoded so the same shape works in pg (jsonb) and
+ * sqlite (text + json mode). Default is the empty array so reads after
+ * INSERT-without-scopes don't need to coalesce.
+ */
+export const roleColumns = {
   userId: text('user_id').primaryKey(),
   role: text('role', { enum: ['admin', 'mod', 'user'] as const }).notNull(),
-};
-
-export const modAssignmentColumns = {
-  userId: text('user_id').notNull(),
-  collection: text('collection').notNull(),
-};
-
-/**
- * IP / device bans, separate from per-user bans. Lets operators block
- * a connection-source identifier (an IP, a device fingerprint, etc.)
- * regardless of which account is signing in. The `kind` column is
- * a free-form tag — `'ip'` and `'device'` are the conventional
- * values, but games can introduce their own (e.g. `'install_id'`).
- *
- * (kind, value) is the lookup key; uniqueness is the caller's
- * responsibility — re-banning the same address overwrites by design,
- * use the service's ban() method.
- */
-export const bannedAddressColumns = {
-  id: text('id').primaryKey().$defaultFn(() => generateId(21)),
-  kind: text('kind').notNull(),
-  value: text('value').notNull(),
-  reason: text('reason'),
-  until: integer('until', { mode: 'timestamp_ms' as const }),
-  createdBy: text('created_by'),
-  createdAt: integer('created_at', { mode: 'timestamp_ms' as const })
-    .notNull()
-    .$defaultFn(() => new Date()),
+  scopes: text('scopes', { mode: 'json' as const }).$type<string[]>().notNull().$defaultFn(() => []),
 };
 
 /**
@@ -193,31 +152,13 @@ export const colyseusLeaderboardEntries = sqliteTable(
   (table) => [primaryKey({ columns: [table.boardId, table.userId, table.season] })],
 );
 
-export const colyseusItems = sqliteTable('colyseus_items', { ...itemColumns });
-
-export const colyseusPlayerItems = sqliteTable(
-  'colyseus_player_items',
-  { ...playerItemColumns },
-  (table) => [primaryKey({ columns: [table.userId, table.itemId] })],
-);
-
-export const colyseusTimedEvents = sqliteTable('colyseus_timed_events', { ...timedEventColumns });
-
 export const colyseusAnalyticsEvents = sqliteTable('colyseus_analytics_events', { ...analyticsEventColumns });
 
-export const colyseusUserRoles = sqliteTable('colyseus_user_roles', { ...userRoleColumns });
-
-export const colyseusModAssignments = sqliteTable(
-  'colyseus_mod_assignments',
-  { ...modAssignmentColumns },
-  (table) => [primaryKey({ columns: [table.userId, table.collection] })],
-);
+export const colyseusRoles = sqliteTable('colyseus_roles', { ...roleColumns });
 
 export const colyseusUserNotes = sqliteTable('colyseus_user_notes', { ...userNoteColumns });
 
 export const colyseusAdminAudit = sqliteTable('colyseus_admin_audit', { ...adminAuditColumns });
-
-export const colyseusBannedAddresses = sqliteTable('colyseus_banned_addresses', { ...bannedAddressColumns });
 
 // ---------------------------------------------------------------------------
 // Registry — single source of truth consumed by GameDatabase.boot() for
@@ -229,15 +170,10 @@ export const SQLITE_TABLES: ReadonlyArray<TableEntry> = [
   { key: 'users',              table: colyseusUsers,              columns: userColumns,            dependsOn: [] },
   { key: 'configs',            table: colyseusConfigs,            columns: configColumns,          dependsOn: [] },
   { key: 'leaderboards',       table: colyseusLeaderboards,       columns: leaderboardColumns,     dependsOn: [] },
-  { key: 'items',              table: colyseusItems,              columns: itemColumns,            dependsOn: [] },
-  { key: 'timedEvents',        table: colyseusTimedEvents,        columns: timedEventColumns,      dependsOn: [] },
   { key: 'analyticsEvents',    table: colyseusAnalyticsEvents,    columns: analyticsEventColumns,  dependsOn: [] },
   { key: 'cloudSaves',         table: colyseusCloudSaves,         columns: cloudSaveColumns,       dependsOn: ['users'] },
   { key: 'leaderboardEntries', table: colyseusLeaderboardEntries, columns: leaderboardEntryColumns, dependsOn: ['users', 'leaderboards'] },
-  { key: 'playerItems',        table: colyseusPlayerItems,        columns: playerItemColumns,      dependsOn: ['users', 'items'] },
-  { key: 'userRoles',          table: colyseusUserRoles,          columns: userRoleColumns,        dependsOn: ['users'] },
-  { key: 'modAssignments',     table: colyseusModAssignments,     columns: modAssignmentColumns,   dependsOn: ['users'] },
+  { key: 'roles',              table: colyseusRoles,              columns: roleColumns,            dependsOn: ['users'] },
   { key: 'userNotes',          table: colyseusUserNotes,          columns: userNoteColumns,        dependsOn: ['users'] },
   { key: 'adminAudit',         table: colyseusAdminAudit,         columns: adminAuditColumns,      dependsOn: [] },
-  { key: 'bannedAddresses',    table: colyseusBannedAddresses,    columns: bannedAddressColumns,   dependsOn: [] },
 ];

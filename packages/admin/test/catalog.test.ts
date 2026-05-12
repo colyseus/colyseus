@@ -76,22 +76,24 @@ describe('buildResourceCatalog', () => {
   });
 
   it('reports composite primary keys', () => {
+    // cloudSaves is a built-in composite-key table — (userId, slot). The
+    // shape here mirrors that, so the catalog should report both keys.
     const userId = col({ name: 'user_id', getSQLType: () => 'text' });
-    const itemId = col({ name: 'item_id', getSQLType: () => 'text' });
+    const slot = col({ name: 'slot', getSQLType: () => 'integer' });
     const { table, cfg } = tableLike(
-      'colyseus_player_items',
-      [userId, itemId, col({ name: 'qty', getSQLType: () => 'integer' })],
-      [{ columns: [userId, itemId] }],
+      'colyseus_cloud_saves',
+      [userId, slot],
+      [{ columns: [userId, slot] }],
     );
     table.__cfg = cfg;
 
     const [r] = buildResourceCatalog({
-      tables: { playerItems: table },
+      tables: { cloudSaves: table },
       resources: {},
       getTableConfig: cfgFor,
       relations: {},
     });
-    assert.deepStrictEqual(r!.primaryKey, ['user_id', 'item_id']);
+    assert.deepStrictEqual(r!.primaryKey, ['user_id', 'slot']);
   });
 
   it('emits relations with SQL fk names (translates from drizzle JS field names)', () => {

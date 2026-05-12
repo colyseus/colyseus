@@ -23,7 +23,7 @@ describe('GameDatabase.relations', () => {
 
     const role = userRels.find((r) => r.name === 'role')!;
     assert.equal(role.kind, 'one');
-    assert.equal(role.target, 'userRoles');
+    assert.equal(role.target, 'roles');
   });
 
   it('declares back-references on the target side too', () => {

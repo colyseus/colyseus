@@ -39,7 +39,7 @@ describe('GameDatabase: migration strategies', () => {
       assert.ok(names.includes('colyseus_users'));
       assert.ok(names.includes('colyseus_configs'));
       assert.ok(names.includes('colyseus_leaderboards'));
-      assert.ok(names.includes('colyseus_user_roles'));
+      assert.ok(names.includes('colyseus_roles'));
     });
   });
 

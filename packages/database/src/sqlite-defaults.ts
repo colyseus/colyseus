@@ -20,8 +20,7 @@
  *   // Defaults — re-exported as-is so drizzle-kit picks them up
  *   export {
  *     configs, cloudSaves, leaderboards, leaderboardEntries,
- *     items, playerItems, timedEvents, analyticsEvents,
- *     userRoles, modAssignments,
+ *     analyticsEvents, roles,
  *   } from '@colyseus/database/sqlite-defaults';
  *
  *   // drizzle.config.ts
@@ -47,13 +46,8 @@ export {
   colyseusCloudSaves as cloudSaves,
   colyseusLeaderboards as leaderboards,
   colyseusLeaderboardEntries as leaderboardEntries,
-  colyseusItems as items,
-  colyseusPlayerItems as playerItems,
-  colyseusTimedEvents as timedEvents,
   colyseusAnalyticsEvents as analyticsEvents,
-  colyseusUserRoles as userRoles,
-  colyseusModAssignments as modAssignments,
+  colyseusRoles as roles,
   colyseusUserNotes as userNotes,
   colyseusAdminAudit as adminAudit,
-  colyseusBannedAddresses as bannedAddresses,
 } from './schemas/sqlite.ts';

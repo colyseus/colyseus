@@ -5,7 +5,7 @@ import type { InferSelectModel } from 'drizzle-orm';
 import { GameDatabase, tables } from '../src/index.ts';
 import type { AuthService } from '../src/services/AuthService.ts';
 import type { ConfigService } from '../src/services/ConfigService.ts';
-import type { ItemsService } from '../src/services/ItemsService.ts';
+import type { LeaderboardsService } from '../src/services/LeaderboardsService.ts';
 
 /**
  * Compile-time tests for the GameDatabase<S> generic. Each declaration is
@@ -54,25 +54,25 @@ describe('GameDatabase<S> generic propagation', () => {
     const db = new GameDatabase({ schemas: { users } });
 
     // configs wasn't overridden — service stays on the loose default
-    type ConfigT = typeof db.config;
+    type ConfigT = typeof db.configs;
     type _ConfigIsDefault = Expect<AssertEqual<ConfigT, ConfigService>>;
 
     assert.ok(db);
   });
 
   it('threads multiple table generics independently', () => {
-    const items = tables.sqlite.items('items', {
-      rarity: text('rarity'),
+    const leaderboards = tables.sqlite.leaderboards('leaderboards', {
+      tier: text('tier'),
     });
-    const playerItems = tables.sqlite.playerItems('player_items', {
-      enchantLevel: integer('enchant_level').default(0),
+    const leaderboardEntries = tables.sqlite.leaderboardEntries('leaderboard_entries', {
+      lastDelta: integer('last_delta').default(0),
     });
 
-    const db = new GameDatabase({ schemas: { items, playerItems } });
+    const db = new GameDatabase({ schemas: { leaderboards, leaderboardEntries } });
 
-    type ItemsT = typeof db.items;
-    type _ItemsHasBothGenerics = Expect<
-      AssertEqual<ItemsT, ItemsService<typeof items, typeof playerItems>>
+    type LeaderboardsT = typeof db.leaderboards;
+    type _LeaderboardsHasBothGenerics = Expect<
+      AssertEqual<LeaderboardsT, LeaderboardsService<typeof leaderboards, typeof leaderboardEntries>>
     >;
 
     assert.ok(db);
@@ -82,7 +82,7 @@ describe('GameDatabase<S> generic propagation', () => {
     const db = new GameDatabase();
 
     type _AuthIsDefault = Expect<AssertEqual<typeof db.auth, AuthService>>;
-    type _ConfigIsDefault = Expect<AssertEqual<typeof db.config, ConfigService>>;
+    type _ConfigIsDefault = Expect<AssertEqual<typeof db.configs, ConfigService>>;
 
     assert.ok(db);
   });

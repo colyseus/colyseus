@@ -85,18 +85,11 @@ describe('GameDatabase with drizzle-kit-generated migrations + custom schemas', 
       'colyseus_analytics_events',
       'colyseus_cloud_saves',
       'colyseus_configs',
-      'colyseus_items',
       'colyseus_leaderboard_entries',
       'colyseus_leaderboards',
-      'colyseus_mod_assignments',
-      'colyseus_player_items',
-      'colyseus_timed_events',
-      'colyseus_user_roles',
-      // Newer built-ins surfaced via sqlite-defaults — verify the
-      // regenerated migration includes them.
+      'colyseus_roles',
       'colyseus_user_notes',
       'colyseus_admin_audit',
-      'colyseus_banned_addresses',
     ]) {
       assert.ok(names.includes(expected), `expected default table ${expected}; got: ${names.join(', ')}`);
     }

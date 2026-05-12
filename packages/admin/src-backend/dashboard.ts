@@ -1,4 +1,4 @@
-import { sql, desc, and, lte, gte } from 'drizzle-orm';
+import { sql, desc } from 'drizzle-orm';
 import type { GameDatabase } from '@colyseus/database';
 
 /**
@@ -63,7 +63,7 @@ function humanize(id: string): string {
 /**
  * Built-in widget ids. Use as the discriminator for `dashboard.builtIns`.
  */
-export type BuiltInWidgetId = 'totals' | 'recentUsers' | 'activeEvents' | 'health' | 'segments';
+export type BuiltInWidgetId = 'totals' | 'recentUsers' | 'health' | 'segments';
 
 /**
  * Factory functions for the built-in widgets. Re-usable as composition
@@ -130,32 +130,6 @@ export const dashboardWidgets = {
     };
   },
 
-  activeEvents(opts: { title?: string; icon?: string; limit?: number } = {}): DashboardWidget {
-    const limit = opts.limit ?? 10;
-    return {
-      id: 'activeEvents',
-      title: opts.title ?? 'Active timed events',
-      icon: opts.icon ?? 'clock-circle',
-      render: 'list',
-      data: async ({ database }) => {
-        const events = database.tables.timedEvents;
-        const now = new Date();
-        const rows = await database.drizzle
-          .select()
-          .from(events)
-          .where(and(
-            lte((events as any).startsAt, now),
-            gte((events as any).endsAt, now),
-          ))
-          .limit(limit);
-        return (rows as Array<{ id: string; name: string; endsAt: Date }>).map((r) => ({
-          title: r.name,
-          description: `id=${r.id} · ends ${new Date(r.endsAt).toISOString()}`,
-        }));
-      },
-    };
-  },
-
   health(opts: { title?: string; icon?: string } = {}): DashboardWidget {
     return {
       id: 'health',
@@ -194,7 +168,7 @@ export const dashboardWidgets = {
   },
 };
 
-const ALL_BUILT_INS: BuiltInWidgetId[] = ['totals', 'recentUsers', 'activeEvents', 'health', 'segments'];
+const ALL_BUILT_INS: BuiltInWidgetId[] = ['totals', 'recentUsers', 'health', 'segments'];
 
 /**
  * Resolve the final widget set for a request.

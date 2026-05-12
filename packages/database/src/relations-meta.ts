@@ -43,22 +43,13 @@ export interface RelationDefinition {
 export const builtInRelations: Record<string, RelationDefinition[]> = {
   users: [
     { name: 'cloudSaves', target: 'cloudSaves', kind: 'many', fk: 'userId' },
-    { name: 'playerItems', target: 'playerItems', kind: 'many', fk: 'userId' },
     { name: 'leaderboardEntries', target: 'leaderboardEntries', kind: 'many', fk: 'userId' },
     { name: 'analyticsEvents', target: 'analyticsEvents', kind: 'many', fk: 'userId' },
-    { name: 'role', target: 'userRoles', kind: 'one', fk: 'userId' },
-    { name: 'modAssignments', target: 'modAssignments', kind: 'many', fk: 'userId' },
+    { name: 'role', target: 'roles', kind: 'one', fk: 'userId' },
     { name: 'notes', target: 'userNotes', kind: 'many', fk: 'userId' },
   ],
   cloudSaves: [
     { name: 'user', target: 'users', kind: 'one', fk: 'userId' },
-  ],
-  playerItems: [
-    { name: 'user', target: 'users', kind: 'one', fk: 'userId' },
-    { name: 'item', target: 'items', kind: 'one', fk: 'itemId' },
-  ],
-  items: [
-    { name: 'playerItems', target: 'playerItems', kind: 'many', fk: 'itemId' },
   ],
   leaderboardEntries: [
     { name: 'user', target: 'users', kind: 'one', fk: 'userId' },
@@ -70,10 +61,7 @@ export const builtInRelations: Record<string, RelationDefinition[]> = {
   analyticsEvents: [
     { name: 'user', target: 'users', kind: 'one', fk: 'userId' },
   ],
-  userRoles: [
-    { name: 'user', target: 'users', kind: 'one', fk: 'userId' },
-  ],
-  modAssignments: [
+  roles: [
     { name: 'user', target: 'users', kind: 'one', fk: 'userId' },
   ],
   userNotes: [
@@ -110,8 +98,8 @@ export function mergeRelations(
  * The `kind` discriminator (one/many) tells us cardinality but NOT which
  * side has the FK column — both shapes exist in our metadata:
  *   - `cloudSaves → user` (one): FK lives on SOURCE (cloudSaves.userId)
- *   - `users → role` (one):      FK lives on TARGET (userRoles.userId,
- *                                  which is itself userRoles' PK)
+ *   - `users → role` (one):      FK lives on TARGET (roles.userId,
+ *                                  which is itself roles' PK)
  *   - `users → cloudSaves` (many): FK lives on TARGET
  *
  * `null` when the FK column doesn't resolve on either side (typo in

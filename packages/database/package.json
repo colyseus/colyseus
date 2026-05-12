@@ -53,6 +53,7 @@
     "test:regen-fixture": "tsx scripts/regen-migration.ts --dialect sqlite --schema ./test/fixtures/custom-schema/schema.ts --out ./test/fixtures/custom-schema/migrations"
   },
   "dependencies": {
+    "@standard-schema/spec": "^1.0.0",
     "drizzle-orm": "1.0.0-rc.2"
   },
   "peerDependencies": {
@@ -74,7 +75,8 @@
     "drizzle-kit": "1.0.0-rc.2",
     "mocha": "^10.2.0",
     "postgres": "^3.4.7",
-    "tsx": "^4.1.2"
+    "tsx": "^4.1.2",
+    "zod": "^4.1.12"
   },
   "publishConfig": {
     "access": "public",

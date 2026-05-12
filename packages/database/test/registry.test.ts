@@ -9,8 +9,8 @@ const e = (key: string, dependsOn: string[] = []): TableEntry =>
 
 describe('topologicalSort', () => {
   it('returns input order when there are no deps', () => {
-    const sorted = topologicalSort([e('users'), e('configs'), e('items')]);
-    assert.deepStrictEqual(sorted.map((x) => x.key), ['users', 'configs', 'items']);
+    const sorted = topologicalSort([e('users'), e('configs'), e('leaderboards')]);
+    assert.deepStrictEqual(sorted.map((x) => x.key), ['users', 'configs', 'leaderboards']);
   });
 
   it('moves dependents after their dependencies', () => {
@@ -65,7 +65,6 @@ describe('built-in registries', () => {
     assert.ok(sorted.indexOf('users') < sorted.indexOf('cloudSaves'));
     assert.ok(sorted.indexOf('users') < sorted.indexOf('leaderboardEntries'));
     assert.ok(sorted.indexOf('leaderboards') < sorted.indexOf('leaderboardEntries'));
-    assert.ok(sorted.indexOf('items') < sorted.indexOf('playerItems'));
     assert.ok(sorted.indexOf('users') < sorted.indexOf('userNotes'));
   });
 });

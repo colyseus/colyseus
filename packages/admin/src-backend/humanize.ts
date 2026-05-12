@@ -4,8 +4,7 @@
  *   users              → "Users"
  *   cloudSaves         → "Cloud Saves"
  *   leaderboardEntries → "Leaderboard Entries"
- *   modAssignments     → "Mod Assignments"
- *   user_roles         → "User Roles"     (snake_case also handled)
+ *   user_notes         → "User Notes"     (snake_case also handled)
  *
  * Used as the catalog `label` fallback when defineAdminResource() didn't
  * supply one explicitly.

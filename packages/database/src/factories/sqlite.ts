@@ -20,9 +20,8 @@
  *     level: integer('level').notNull().default(1),
  *   });
  *
- * Tables with composite primary keys (cloudSaves, leaderboardEntries,
- * playerItems, modAssignments) get the right primaryKey() constraint
- * applied automatically.
+ * Tables with composite primary keys (cloudSaves, leaderboardEntries)
+ * get the right primaryKey() constraint applied automatically.
  */
 import { sqliteTable, primaryKey } from 'drizzle-orm/sqlite-core';
 import {
@@ -31,15 +30,10 @@ import {
   cloudSaveColumns,
   leaderboardColumns,
   leaderboardEntryColumns,
-  itemColumns,
-  playerItemColumns,
-  timedEventColumns,
   analyticsEventColumns,
-  userRoleColumns,
-  modAssignmentColumns,
+  roleColumns,
   userNoteColumns,
   adminAuditColumns,
-  bannedAddressColumns,
 } from '../schemas/sqlite.ts';
 
 export const sqlite = {
@@ -62,34 +56,15 @@ export const sqlite = {
       primaryKey({ columns: [table.boardId, table.userId, table.season] }),
     ]),
 
-  items: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
-    sqliteTable(name, { ...itemColumns, ...(extras as E) }),
-
-  playerItems: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
-    sqliteTable(name, { ...playerItemColumns, ...(extras as E) }, (table) => [
-      primaryKey({ columns: [table.userId, table.itemId] }),
-    ]),
-
-  timedEvents: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
-    sqliteTable(name, { ...timedEventColumns, ...(extras as E) }),
-
   analyticsEvents: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
     sqliteTable(name, { ...analyticsEventColumns, ...(extras as E) }),
 
-  userRoles: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
-    sqliteTable(name, { ...userRoleColumns, ...(extras as E) }),
-
-  modAssignments: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
-    sqliteTable(name, { ...modAssignmentColumns, ...(extras as E) }, (table) => [
-      primaryKey({ columns: [table.userId, table.collection] }),
-    ]),
+  roles: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
+    sqliteTable(name, { ...roleColumns, ...(extras as E) }),
 
   userNotes: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
     sqliteTable(name, { ...userNoteColumns, ...(extras as E) }),
 
   adminAudit: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
     sqliteTable(name, { ...adminAuditColumns, ...(extras as E) }),
-
-  bannedAddresses: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
-    sqliteTable(name, { ...bannedAddressColumns, ...(extras as E) }),
 };

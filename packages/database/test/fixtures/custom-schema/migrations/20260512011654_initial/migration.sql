@@ -16,16 +16,6 @@ CREATE TABLE IF NOT EXISTS "colyseus_analytics_events" (
   "ts" integer NOT NULL DEFAULT (unixepoch())
 );
 --> statement-breakpoint
-CREATE TABLE IF NOT EXISTS "colyseus_banned_addresses" (
-  "id" text PRIMARY KEY NOT NULL,
-  "kind" text NOT NULL,
-  "value" text NOT NULL,
-  "reason" text,
-  "until" integer,
-  "created_by" text,
-  "created_at" integer NOT NULL
-);
---> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "colyseus_cloud_saves" (
   "user_id" text NOT NULL,
   "slot" integer NOT NULL,
@@ -43,13 +33,6 @@ CREATE TABLE IF NOT EXISTS "colyseus_configs" (
   "updated_at" integer NOT NULL DEFAULT (unixepoch())
 );
 --> statement-breakpoint
-CREATE TABLE IF NOT EXISTS "colyseus_items" (
-  "id" text PRIMARY KEY NOT NULL,
-  "name" text NOT NULL,
-  "kind" text NOT NULL DEFAULT 'misc',
-  "meta" text
-);
---> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "colyseus_leaderboard_entries" (
   "board_id" text NOT NULL,
   "user_id" text NOT NULL,
@@ -64,26 +47,10 @@ CREATE TABLE IF NOT EXISTS "colyseus_leaderboards" (
   "name" text NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE IF NOT EXISTS "colyseus_mod_assignments" (
-  "user_id" text NOT NULL,
-  "collection" text NOT NULL,
-  PRIMARY KEY ("user_id", "collection")
-);
---> statement-breakpoint
-CREATE TABLE IF NOT EXISTS "colyseus_player_items" (
-  "user_id" text NOT NULL,
-  "item_id" text NOT NULL,
-  "qty" integer NOT NULL DEFAULT 1,
-  "acquired_at" integer NOT NULL DEFAULT (unixepoch()),
-  PRIMARY KEY ("user_id", "item_id")
-);
---> statement-breakpoint
-CREATE TABLE IF NOT EXISTS "colyseus_timed_events" (
-  "id" text PRIMARY KEY NOT NULL,
-  "name" text NOT NULL,
-  "starts_at" integer NOT NULL,
-  "ends_at" integer NOT NULL,
-  "payload" text
+CREATE TABLE IF NOT EXISTS "colyseus_roles" (
+  "user_id" text PRIMARY KEY NOT NULL,
+  "role" text NOT NULL,
+  "scopes" text NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "colyseus_user_notes" (
@@ -92,11 +59,6 @@ CREATE TABLE IF NOT EXISTS "colyseus_user_notes" (
   "author_id" text,
   "text" text NOT NULL,
   "created_at" integer NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE IF NOT EXISTS "colyseus_user_roles" (
-  "user_id" text PRIMARY KEY NOT NULL,
-  "role" text NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "users" (

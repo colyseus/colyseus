@@ -77,7 +77,7 @@ for (const backend of BACKENDS) {
         assert.ok(db.drizzle, 'drizzle client should be set');
         assert.ok(db.tables, 'tables map should be set');
         const expected = ['users', 'configs', 'cloudSaves', 'leaderboards', 'leaderboardEntries',
-          'items', 'playerItems', 'timedEvents', 'analyticsEvents', 'userRoles', 'modAssignments'];
+          'analyticsEvents', 'roles', 'userNotes', 'adminAudit'];
         for (const name of expected) {
           assert.ok(db.tables[name], `tables.${name} should be defined`);
         }
@@ -85,13 +85,13 @@ for (const backend of BACKENDS) {
 
       it('exposes one service instance per feature', () => {
         assert.ok(db.auth);
-        assert.ok(db.config);
+        assert.ok(db.configs);
         assert.ok(db.saves);
         assert.ok(db.leaderboards);
-        assert.ok(db.items);
-        assert.ok(db.events);
         assert.ok(db.analytics);
         assert.ok(db.moderation);
+        assert.ok(db.notes);
+        assert.ok(db.audit);
       });
     });
 
@@ -190,21 +190,21 @@ for (const backend of BACKENDS) {
       afterEach(async () => { await backend.cleanupOne(db); });
 
       it('round-trips JSON values via get/set', async () => {
-        await db.config.set('xp_multiplier', 2);
-        assert.equal(await db.config.get<number>('xp_multiplier'), 2);
+        await db.configs.set('xp_multiplier', 2);
+        assert.equal(await db.configs.get<number>('xp_multiplier'), 2);
 
-        await db.config.set('flags', { double_xp: true });
-        assert.deepEqual(await db.config.get('flags'), { double_xp: true });
+        await db.configs.set('flags', { double_xp: true });
+        assert.deepEqual(await db.configs.get('flags'), { double_xp: true });
       });
 
       it('returns null for missing keys', async () => {
-        assert.equal(await db.config.get('nonexistent'), null);
+        assert.equal(await db.configs.get('nonexistent'), null);
       });
 
       it('listAll returns every key', async () => {
-        await db.config.set('a', 1);
-        await db.config.set('b', 'two');
-        const all = await db.config.getAll();
+        await db.configs.set('a', 1);
+        await db.configs.set('b', 'two');
+        const all = await db.configs.getAll();
         assert.equal(all.a, 1);
         assert.equal(all.b, 'two');
       });
@@ -288,67 +288,6 @@ for (const backend of BACKENDS) {
       });
     });
 
-    describe('ItemsService', () => {
-      beforeEach(async () => { await fresh(); });
-      afterEach(async () => { await backend.cleanupOne(db); });
-
-      it('grant accumulates qty', async () => {
-        await db.items.defineItem('sword', 'Iron Sword', 'weapon');
-        await db.items.grant('u1', 'sword', 2);
-        await db.items.grant('u1', 'sword', 1);
-        const inv = await db.items.listForUser('u1');
-        assert.equal(inv[0]!.qty, 3);
-      });
-
-      it('revoke decrements; deletes on hitting 0', async () => {
-        await db.items.defineItem('gem', 'Ruby');
-        await db.items.grant('u1', 'gem', 5);
-        await db.items.revoke('u1', 'gem', 2);
-        let inv = await db.items.listForUser('u1');
-        assert.equal(inv[0]!.qty, 3);
-        await db.items.revoke('u1', 'gem', 100); // beyond holding
-        inv = await db.items.listForUser('u1');
-        assert.equal(inv.length, 0);
-      });
-    });
-
-    describe('TimedEventsService', () => {
-      beforeEach(async () => { await fresh(); });
-      afterEach(async () => { await backend.cleanupOne(db); });
-
-      it('isActive returns true only inside the window', async () => {
-        const past = new Date(Date.now() - 60_000);
-        const future = new Date(Date.now() + 60_000);
-        const wayFuture = new Date(Date.now() + 24 * 3600_000);
-
-        await db.events.schedule('double_xp_now', 'Double XP', past, future);
-        await db.events.schedule('double_xp_later', 'Future', future, wayFuture);
-
-        assert.equal(await db.events.isActive('double_xp_now'), true);
-        assert.equal(await db.events.isActive('double_xp_later'), false);
-      });
-
-      it('active() returns currently-running events', async () => {
-        const past = new Date(Date.now() - 60_000);
-        const future = new Date(Date.now() + 60_000);
-        const wayFuture = new Date(Date.now() + 24 * 3600_000);
-
-        await db.events.schedule('on', 'On', past, future);
-        await db.events.schedule('off', 'Off', future, wayFuture);
-        const active = await db.events.active();
-        assert.deepEqual(active.map((e) => e.id), ['on']);
-      });
-
-      it('cancel removes the event', async () => {
-        const past = new Date(Date.now() - 60_000);
-        const future = new Date(Date.now() + 60_000);
-        await db.events.schedule('e1', 'E', past, future);
-        assert.equal(await db.events.isActive('e1'), true);
-        await db.events.cancel('e1');
-        assert.equal(await db.events.isActive('e1'), false);
-      });
-    });
-
     describe('AnalyticsService', () => {
       beforeEach(async () => { await fresh(); });
       afterEach(async () => { await backend.cleanupOne(db); });
@@ -358,17 +297,6 @@ for (const backend of BACKENDS) {
         await db.analytics.track('login', 'u2');
         const rows = await db.drizzle.select().from(db.tables.analyticsEvents);
         assert.equal(rows.length, 2);
-      });
-
-      it('funnel narrows step-by-step', async () => {
-        await db.analytics.track('step_a', 'u1');
-        await db.analytics.track('step_a', 'u2');
-        await db.analytics.track('step_b', 'u1');
-        const f = await db.analytics.funnel(['step_a', 'step_b']);
-        assert.deepEqual(f, [
-          { step: 'step_a', users: 2 },
-          { step: 'step_b', users: 1 },
-        ]);
       });
     });
 
@@ -390,9 +318,24 @@ for (const backend of BACKENDS) {
         assert.equal(await db.moderation.can('mod1', 'update', 'users'), false);
       });
 
-      it('mod cannot touch role tables even if assigned', async () => {
-        await db.moderation.assignMod('mod1', 'colyseus_user_roles');
-        assert.equal(await db.moderation.can('mod1', 'update', 'colyseus_user_roles'), false);
+      it('mod cannot touch the roles table even if scoped to it', async () => {
+        await db.moderation.assignMod('mod1', 'colyseus_roles');
+        assert.equal(await db.moderation.can('mod1', 'update', 'colyseus_roles'), false);
+      });
+
+      it('assignMod is idempotent and tracks scopes', async () => {
+        await db.moderation.assignMod('mod1', 'guilds');
+        await db.moderation.assignMod('mod1', 'guilds'); // dup, no-op
+        await db.moderation.assignMod('mod1', 'leaderboards');
+        const cols = await db.moderation.modCollections('mod1');
+        assert.deepEqual(cols.sort(), ['guilds', 'leaderboards']);
+      });
+
+      it('unassignMod removes one scope without affecting others', async () => {
+        await db.moderation.assignMod('mod1', 'guilds');
+        await db.moderation.assignMod('mod1', 'leaderboards');
+        await db.moderation.unassignMod('mod1', 'guilds');
+        assert.deepEqual(await db.moderation.modCollections('mod1'), ['leaderboards']);
       });
 
       it('default role is user (read-only)', async () => {
@@ -491,55 +434,5 @@ for (const backend of BACKENDS) {
       });
     });
 
-    describe('AddressBansService', () => {
-      beforeEach(async () => { await fresh(); });
-      afterEach(async () => { await backend.cleanupOne(db); });
-
-      it('ban / isBanned / unban round-trip with kind isolation', async () => {
-        assert.equal(await db.addressBans.isBanned('ip', '1.2.3.4'), false);
-
-        await db.addressBans.ban('ip', '1.2.3.4', { reason: 'fraud', createdBy: 'op-1' });
-        assert.equal(await db.addressBans.isBanned('ip', '1.2.3.4'), true);
-        // Different value with the same kind isn't affected
-        assert.equal(await db.addressBans.isBanned('ip', '5.6.7.8'), false);
-        // Same value but different kind isn't affected
-        assert.equal(await db.addressBans.isBanned('device', '1.2.3.4'), false);
-
-        await db.addressBans.unban('ip', '1.2.3.4');
-        assert.equal(await db.addressBans.isBanned('ip', '1.2.3.4'), false);
-      });
-
-      it('expired timed bans report unbanned; pruneExpired drops them', async () => {
-        const past = new Date(Date.now() - 60_000);
-        await db.addressBans.ban('ip', '9.9.9.9', { until: past });
-        assert.equal(await db.addressBans.isBanned('ip', '9.9.9.9'), false);
-
-        const removed = await db.addressBans.pruneExpired();
-        assert.ok(removed >= 1);
-      });
-
-      it('re-banning an existing tuple overwrites instead of duplicating', async () => {
-        await db.addressBans.ban('device', 'fp-1', { reason: 'first' });
-        await db.addressBans.ban('device', 'fp-1', { reason: 'updated' });
-        const all = await db.addressBans.list('device');
-        const matches = all.filter((b) => b.value === 'fp-1');
-        assert.equal(matches.length, 1);
-        assert.equal(matches[0]!.reason, 'updated');
-      });
-
-      it('list filters by kind and excludes expired bans', async () => {
-        await db.addressBans.ban('ip', 'active');
-        await db.addressBans.ban('ip', 'expired', { until: new Date(Date.now() - 60_000) });
-        await db.addressBans.ban('device', 'd1');
-
-        const ips = await db.addressBans.list('ip');
-        const ipValues = ips.map((b) => b.value);
-        assert.ok(ipValues.includes('active'));
-        assert.ok(!ipValues.includes('expired'));
-
-        const devices = await db.addressBans.list('device');
-        assert.equal(devices.length, 1);
-      });
-    });
   });
 }

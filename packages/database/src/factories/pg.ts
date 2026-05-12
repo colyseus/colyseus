@@ -16,15 +16,10 @@ import {
   cloudSaveColumns,
   leaderboardColumns,
   leaderboardEntryColumns,
-  itemColumns,
-  playerItemColumns,
-  timedEventColumns,
   analyticsEventColumns,
-  userRoleColumns,
-  modAssignmentColumns,
+  roleColumns,
   userNoteColumns,
   adminAuditColumns,
-  bannedAddressColumns,
 } from '../schemas/pg.ts';
 
 export const pg = {
@@ -47,34 +42,15 @@ export const pg = {
       primaryKey({ columns: [table.boardId, table.userId, table.season] }),
     ]),
 
-  items: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
-    pgTable(name, { ...itemColumns, ...(extras as E) }),
-
-  playerItems: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
-    pgTable(name, { ...playerItemColumns, ...(extras as E) }, (table) => [
-      primaryKey({ columns: [table.userId, table.itemId] }),
-    ]),
-
-  timedEvents: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
-    pgTable(name, { ...timedEventColumns, ...(extras as E) }),
-
   analyticsEvents: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
     pgTable(name, { ...analyticsEventColumns, ...(extras as E) }),
 
-  userRoles: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
-    pgTable(name, { ...userRoleColumns, ...(extras as E) }),
-
-  modAssignments: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
-    pgTable(name, { ...modAssignmentColumns, ...(extras as E) }, (table) => [
-      primaryKey({ columns: [table.userId, table.collection] }),
-    ]),
+  roles: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
+    pgTable(name, { ...roleColumns, ...(extras as E) }),
 
   userNotes: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
     pgTable(name, { ...userNoteColumns, ...(extras as E) }),
 
   adminAudit: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
     pgTable(name, { ...adminAuditColumns, ...(extras as E) }),
-
-  bannedAddresses: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
-    pgTable(name, { ...bannedAddressColumns, ...(extras as E) }),
 };

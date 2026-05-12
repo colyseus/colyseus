@@ -1,21 +1,20 @@
 import type { DatabaseSyncOptions } from 'node:sqlite';
+import type { Presence } from '@colyseus/core';
 import { generateCreateTableSQL, generateAlterAddColumnSQL } from './utils.ts';
 import { AuthService } from './services/AuthService.ts';
 import { ConfigService } from './services/ConfigService.ts';
 import { CloudSaveService } from './services/CloudSaveService.ts';
 import { LeaderboardsService } from './services/LeaderboardsService.ts';
-import { ItemsService } from './services/ItemsService.ts';
-import { TimedEventsService } from './services/TimedEventsService.ts';
 import { AnalyticsService } from './services/AnalyticsService.ts';
 import { ModerationService } from './services/ModerationService.ts';
 import { NotesService } from './services/NotesService.ts';
 import { AuditService } from './services/AuditService.ts';
-import { AddressBansService } from './services/AddressBansService.ts';
 import { SegmentsService } from './services/SegmentsService.ts';
 import { buildRelationsCallback, mergeRelations, type RelationDefinition } from './relations-meta.ts';
 import type { SchemaSet } from './types.ts';
 import { topologicalSort, type TableEntry } from './schemas/registry.ts';
 import type { SegmentDefinition, DrizzleFor } from './segments.ts';
+import type { ConfigsRegistry } from './configs.ts';
 
 /**
  * Resolve schema slot K to the user's table type if provided, else fall back
@@ -86,7 +85,10 @@ export interface PgliteConnectionOptions {
 export type Dialect = 'sqlite' | 'pg' | 'pglite';
 
 /** Fields shared across every dialect. */
-interface CommonOptions<S extends Partial<SchemaSet> = {}> {
+interface CommonOptions<
+  S extends Partial<SchemaSet> = {},
+  C extends ConfigsRegistry = {},
+> {
   /**
    * Connection string. When `dialect` isn't set, the prefix decides:
    *   - "postgres://..." or "postgresql://..." → PostgreSQL
@@ -138,6 +140,25 @@ interface CommonOptions<S extends Partial<SchemaSet> = {}> {
   segments?: SegmentDefinition[];
 
   /**
+   * Typed config registry — declare config keys + their Standard Schema
+   * validators via `defineConfigs({...})`. The resulting types thread
+   * through `db.configs.get(key)` / `set(key, value)` so room code
+   * gets autocomplete, and the admin panel renders structured forms
+   * from the same schemas.
+   */
+  configsRegistry?: C;
+
+  /**
+   * Colyseus Presence for cross-instance config invalidation. When
+   * `db.configs.set(...)` is called on one server, others sharing
+   * this Presence receive the new value and refresh their caches +
+   * fire subscribers. Without `presence`, the config cache is
+   * per-process (fine for single-process deployments; required for
+   * any multi-process setup where admin edits should propagate).
+   */
+  presence?: Presence;
+
+  /**
    * Foreign-key relations between tables, keyed by source table name. The
    * admin engine reads this metadata to surface related rows on resource
    * detail pages (tabs / badges) and to back the `/admin-api/:resource/:id/
@@ -170,7 +191,10 @@ interface CommonOptions<S extends Partial<SchemaSet> = {}> {
  *   pragmas:    PRAGMA overrides (WAL + foreign_keys=ON applied by default)
  *               → { synchronous: 'NORMAL', cache_size: -64000, ... } | false
  */
-export interface SqliteDatabaseOptions<S extends Partial<SchemaSet> = {}> extends CommonOptions<S> {
+export interface SqliteDatabaseOptions<
+  S extends Partial<SchemaSet> = {},
+  C extends ConfigsRegistry = {},
+> extends CommonOptions<S, C> {
   dialect?: 'sqlite';
   connection?: DatabaseSyncOptions;
   /** SQLite-only PRAGMAs applied after open. `false` skips all defaults. */
@@ -183,7 +207,10 @@ export interface SqliteDatabaseOptions<S extends Partial<SchemaSet> = {}> extend
  *   connection: PostgresJsConnectionOptions
  *               → max, ssl, idle_timeout, prepare, connection.statement_timeout, ...
  */
-export interface PostgresDatabaseOptions<S extends Partial<SchemaSet> = {}> extends CommonOptions<S> {
+export interface PostgresDatabaseOptions<
+  S extends Partial<SchemaSet> = {},
+  C extends ConfigsRegistry = {},
+> extends CommonOptions<S, C> {
   dialect: 'pg';
   connection?: PostgresJsConnectionOptions;
   /** PRAGMAs are SQLite-only — pg has session GUCs in connection.connection.* */
@@ -196,7 +223,10 @@ export interface PostgresDatabaseOptions<S extends Partial<SchemaSet> = {}> exte
  *   connection: PgliteConnectionOptions
  *               → relaxedDurability, extensions, dataDir, ...
  */
-export interface PgliteDatabaseOptions<S extends Partial<SchemaSet> = {}> extends CommonOptions<S> {
+export interface PgliteDatabaseOptions<
+  S extends Partial<SchemaSet> = {},
+  C extends ConfigsRegistry = {},
+> extends CommonOptions<S, C> {
   dialect: 'pglite';
   connection?: PgliteConnectionOptions;
   pragmas?: never;
@@ -215,10 +245,13 @@ export interface PgliteDatabaseOptions<S extends Partial<SchemaSet> = {}> extend
  * env-var-driven runtime configs where the literal type is just `string`,
  * set `dialect` explicitly to get the right `connection` typing.
  */
-export type GameDatabaseOptions<S extends Partial<SchemaSet> = {}> =
-  | SqliteDatabaseOptions<S>
-  | PostgresDatabaseOptions<S>
-  | PgliteDatabaseOptions<S>;
+export type GameDatabaseOptions<
+  S extends Partial<SchemaSet> = {},
+  C extends ConfigsRegistry = {},
+> =
+  | SqliteDatabaseOptions<S, C>
+  | PostgresDatabaseOptions<S, C>
+  | PgliteDatabaseOptions<S, C>;
 
 /**
  * SQL flavor — controls dialect-specific query construction (e.g. GREATEST
@@ -250,18 +283,16 @@ type ResolvedTables<S extends Partial<SchemaSet>> = { [K in keyof SchemaSet]: Re
 export class GameDatabase<
   S extends Partial<SchemaSet> = {},
   Dialect extends 'sqlite' | 'pg' = 'sqlite',
+  C extends ConfigsRegistry = {},
 > {
   auth: AuthService<Resolve<S, 'users'>>;
-  config: ConfigService<Resolve<S, 'configs'>>;
+  configs: ConfigService<Resolve<S, 'configs'>, C>;
   saves: CloudSaveService<Resolve<S, 'cloudSaves'>>;
   leaderboards: LeaderboardsService<Resolve<S, 'leaderboards'>, Resolve<S, 'leaderboardEntries'>>;
-  items: ItemsService<Resolve<S, 'items'>, Resolve<S, 'playerItems'>>;
-  events: TimedEventsService<Resolve<S, 'timedEvents'>>;
   analytics: AnalyticsService<Resolve<S, 'analyticsEvents'>>;
-  moderation: ModerationService<Resolve<S, 'userRoles'>, Resolve<S, 'modAssignments'>>;
+  moderation: ModerationService<Resolve<S, 'roles'>>;
   notes: NotesService<Resolve<S, 'userNotes'>>;
   audit: AuditService<Resolve<S, 'adminAudit'>>;
-  addressBans: AddressBansService<Resolve<S, 'bannedAddresses'>>;
   /**
    * Player segments. Available before boot — `db.segments.define(...)` is
    * typed via this database's schema + dialect generics. Reads (`size`,
@@ -304,10 +335,10 @@ export class GameDatabase<
    */
   readonly dialect: SQLFlavor;
   private subDialect: SubDialect = 'sqlite';
-  private options: GameDatabaseOptions<S>;
+  private options: GameDatabaseOptions<S, C>;
   private ownedConnection: any = null;
 
-  constructor(options: GameDatabaseOptions<S> = {} as GameDatabaseOptions<S>) {
+  constructor(options: GameDatabaseOptions<S, C> = {} as GameDatabaseOptions<S, C>) {
     this.options = options;
     this.relations = mergeRelations(options.relations);
 
@@ -316,7 +347,7 @@ export class GameDatabase<
     // The discriminator narrows `options` to `never` once every dialect literal
     // has been eliminated; access shared CommonOptions fields via a CommonOptions
     // view rather than the dispatched union.
-    const common = options as CommonOptions<S>;
+    const common = options as CommonOptions<S, C>;
     if (options.dialect === 'pg' || options.dialect === 'pglite') {
       this.dialect = 'pg';
     } else if (options.dialect === 'sqlite') {
@@ -376,7 +407,10 @@ export class GameDatabase<
 
     // 4. Instantiate services
     this.auth = new AuthService(this.drizzle, schemas.users);
-    this.config = new ConfigService(this.drizzle, schemas.configs);
+    this.configs = new ConfigService(this.drizzle, schemas.configs, {
+      registry: this.options.configsRegistry,
+      presence: this.options.presence,
+    });
     this.saves = new CloudSaveService(this.drizzle, schemas.cloudSaves);
     this.leaderboards = new LeaderboardsService(
       this.drizzle,
@@ -384,17 +418,10 @@ export class GameDatabase<
       schemas.leaderboardEntries,
       this.dialect,
     );
-    this.items = new ItemsService(this.drizzle, schemas.items, schemas.playerItems);
-    this.events = new TimedEventsService(this.drizzle, schemas.timedEvents);
     this.analytics = new AnalyticsService(this.drizzle, schemas.analyticsEvents);
-    this.moderation = new ModerationService(
-      this.drizzle,
-      schemas.userRoles,
-      schemas.modAssignments,
-    );
+    this.moderation = new ModerationService(this.drizzle, schemas.roles);
     this.notes = new NotesService(this.drizzle, schemas.userNotes);
     this.audit = new AuditService(this.drizzle, schemas.adminAudit);
-    this.addressBans = new AddressBansService(this.drizzle, schemas.bannedAddresses);
     // The segments service was created at construction time so users could
     // call `db.segments.define(...)` pre-boot. Now that drizzle + tables
     // are live, hand them over and merge any segments passed via options.
@@ -406,6 +433,9 @@ export class GameDatabase<
   }
 
   async shutdown() {
+    if (this.configs) {
+      await this.configs.shutdown();
+    }
     if (this.ownedConnection) {
       if (this.subDialect === 'postgres-js') {
         await this.ownedConnection.end();

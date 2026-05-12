@@ -452,14 +452,14 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     }>;
     const usersResource = catalog.find((r) => r.name === 'users')!;
     const relNames = usersResource.relations.map((r) => r.name).sort();
-    // Built-ins users → cloudSaves / playerItems / leaderboardEntries / etc.
-    for (const expected of ['cloudSaves', 'playerItems', 'leaderboardEntries', 'role']) {
+    // Built-ins users → cloudSaves / leaderboardEntries / etc.
+    for (const expected of ['cloudSaves', 'leaderboardEntries', 'role']) {
       assert.ok(relNames.includes(expected),
         `users relations should include ${expected}, got: ${relNames.join(', ')}`);
     }
     const role = usersResource.relations.find((r) => r.name === 'role')!;
     assert.equal(role.kind, 'one');
-    assert.equal(role.target, 'userRoles');
+    assert.equal(role.target, 'roles');
   });
 
   it('counts endpoint returns every many-relation in one request', async () => {
@@ -484,7 +484,7 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     const counts = await res.json() as Record<string, number>;
 
     // Every many-relation declared on `users` shows up in the map.
-    for (const expected of ['cloudSaves', 'playerItems', 'leaderboardEntries', 'analyticsEvents', 'modAssignments']) {
+    for (const expected of ['cloudSaves', 'leaderboardEntries', 'analyticsEvents']) {
       assert.ok(expected in counts, `expected '${expected}' in counts, got: ${Object.keys(counts).join(', ')}`);
       assert.equal(typeof counts[expected], 'number');
     }
@@ -531,7 +531,7 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
   it('relation endpoint resolves "one" relations with FK on SOURCE (cloudSaves → user)', async () => {
     // Regression: the relation endpoint hardcoded `(targetTable)[rel.fk]`
     // for the WHERE column. That works for FK-on-target relations like
-    // `users → role → userRoles.userId`, but breaks for the inverse
+    // `users → role → roles.userId`, but breaks for the inverse
     // direction `cloudSaves → user → users` because `users.userId` doesn't
     // exist (FK lives on cloudSaves). Endpoint used to 500; now uses
     // resolveFkLayout to detect FK position and runs a two-step lookup.
@@ -917,8 +917,7 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     // Regression: leaderboards.id was originally `text('id').primaryKey()`
     // with no default; the admin Create form required the operator to type
     // an id manually. Schema now uses `$defaultFn(() => generateId(21))` so
-    // the server fills in a nanoid when no id is provided. Same fix applied
-    // to items.id and timedEvents.id.
+    // the server fills in a nanoid when no id is provided.
     const loginRes = await fetch(`${BASE}/admin-api/auth/login`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -1238,8 +1237,8 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
 
   it('Show page renders relation tabs with counts and a one-relation link', async () => {
     // Login + navigate to a user's Show page; assert the cloudSaves and
-    // playerItems tabs render, and the `role` one-relation appears as a
-    // clickable Tag in the Profile descriptions.
+    // leaderboardEntries tabs render, and the `role` one-relation appears
+    // as a clickable Tag in the Profile descriptions.
     const loginRes = await fetch(`${BASE}/admin-api/auth/login`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -1265,7 +1264,6 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
 
     // Many-relation tabs present
     await page.waitForSelector('[data-testid="tab-relation-cloudSaves"]', { timeout: 5_000 });
-    await page.waitForSelector('[data-testid="tab-relation-playerItems"]', { timeout: 5_000 });
     await page.waitForSelector('[data-testid="tab-relation-leaderboardEntries"]', { timeout: 5_000 });
 
     // One-relation: bootstrapped admin has role=admin, so the link should appear
