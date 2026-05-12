@@ -16,6 +16,14 @@ export interface AdminSession {
   userId: string;
   /** cached role at session-issue time; refresh by reading moderation.getRole() if stale matters */
   role: 'admin' | 'mod' | 'user';
+  /**
+   * Session revocation generation. Embedded in the JWT at sign time;
+   * the auth guard rejects tokens whose `tv` doesn't match the row's
+   * current `tokenVersion`. Bump the row's column to invalidate all
+   * prior sessions for this user — used by password reset and
+   * "sign out everywhere".
+   */
+  tv?: number;
   /** standard JWT claims */
   iat?: number;
   exp?: number;
@@ -42,7 +50,7 @@ export interface SessionConfig {
 }
 
 export async function signSession(
-  payload: Pick<AdminSession, 'userId' | 'role'>,
+  payload: Pick<AdminSession, 'userId' | 'role' | 'tv'>,
   config: SessionConfig = {},
 ): Promise<string> {
   const ttl = config.ttlSeconds ?? DEFAULT_TTL_SECONDS;

@@ -26,6 +26,8 @@ export const userColumns = {
   // rejects sign-in while bannedUntil > now.
   bannedUntil: timestamp('banned_until'),
   bannedReason: text('banned_reason'),
+  // Session revocation counter — see schemas/sqlite.ts for the design.
+  tokenVersion: integer('token_version').notNull().default(0),
 };
 
 export const configColumns = {

@@ -1,4 +1,4 @@
-import { eq, type InferSelectModel } from 'drizzle-orm';
+import { eq, sql, type InferSelectModel } from 'drizzle-orm';
 import { generateId } from '@colyseus/core';
 import type { AuthSettings } from '@colyseus/auth';
 import type { UsersTableShape } from '../types.ts';
@@ -104,6 +104,42 @@ export class AuthService<T extends UsersTableShape = UsersTableShape> {
       .set({
         bannedUntil: until,
         bannedReason: opts.reason ?? null,
+        updatedAt: new Date(),
+      })
+      .where(eq(this.users.id, userId));
+  }
+
+  /**
+   * Read the current token revocation counter for a user. Returns `0`
+   * for unknown users (and when the column isn't on the schema) so
+   * the auth guard's comparison degrades to "accept" rather than
+   * "reject" — old custom schemas keep authenticating.
+   */
+  async getTokenVersion(userId: string): Promise<number> {
+    const u = this.users as any;
+    if (!u.tokenVersion) { return 0; }
+    const rows = await this.db
+      .select({ tv: u.tokenVersion })
+      .from(this.users)
+      .where(eq(this.users.id, userId))
+      .limit(1);
+    return Number(rows[0]?.tv ?? 0);
+  }
+
+  /**
+   * Increment the user's token version, invalidating every JWT issued
+   * before this call. Use for password changes, "sign out everywhere",
+   * and forced-rotation after suspected compromise. Safe to call on
+   * schemas that don't carry the column — silently no-ops so the
+   * caller doesn't need to feature-detect.
+   */
+  async bumpTokenVersion(userId: string): Promise<void> {
+    const u = this.users as any;
+    if (!u.tokenVersion) { return; }
+    await this.db
+      .update(this.users)
+      .set({
+        tokenVersion: sql`${u.tokenVersion} + 1`,
         updatedAt: new Date(),
       })
       .where(eq(this.users.id, userId));
@@ -223,6 +259,21 @@ export class AuthService<T extends UsersTableShape = UsersTableShape> {
         updatedAt: new Date(),
       })
       .where(eq(this.users.email, email));
+  }
+
+  /**
+   * Set a user's password hash by id (not email — used by the admin
+   * panel's reset flow where the userId is carried in the reset JWT).
+   * Pre-hashed input expected; pair with `@colyseus/auth`'s `Hash.make`.
+   */
+  async setPasswordHash(userId: string, hashedPassword: string): Promise<void> {
+    await this.db
+      .update(this.users)
+      .set({
+        passwordHash: hashedPassword,
+        updatedAt: new Date(),
+      })
+      .where(eq(this.users.id, userId));
   }
 
   /**

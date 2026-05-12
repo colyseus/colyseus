@@ -27,6 +27,11 @@ export type UsersTableShape = Table & {
   // surface a clear error pointing at the spreadable userColumns import.
   bannedUntil?: AnyColumn;
   bannedReason?: AnyColumn;
+  // Session revocation counter — also optional for backward compat with
+  // custom users tables that predate it. ModerationService.bumpTokenVersion
+  // guards at runtime and the admin auth guard skips the check when the
+  // column is missing.
+  tokenVersion?: AnyColumn;
 };
 
 export type ConfigsTableShape = Table & {

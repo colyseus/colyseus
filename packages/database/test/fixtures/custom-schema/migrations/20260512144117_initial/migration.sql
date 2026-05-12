@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS "users" (
   "updated_at" integer NOT NULL DEFAULT (unixepoch()),
   "banned_until" integer,
   "banned_reason" text,
+  "token_version" integer NOT NULL DEFAULT 0,
   "display_name" text,
   "level" integer DEFAULT 1
 );

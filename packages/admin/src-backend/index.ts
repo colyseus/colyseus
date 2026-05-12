@@ -101,6 +101,39 @@ export interface AdminOptions {
   logger?: Logger | null;
 
   /**
+   * Minimum password length accepted by `/auth/bootstrap` and
+   * `/auth/reset`. Default `8`. Anything shorter is rejected with 400
+   * before the password is hashed. Plain length check — caller's
+   * responsibility to layer on stronger rules (zxcvbn, etc.) if needed.
+   */
+  minPasswordLength?: number;
+
+  /**
+   * Deliver a password reset link to the user. Called from
+   * `/auth/request-reset` with the short-lived signed token + the
+   * canonical reset URL (`<uiPath>/reset?token=<token>`). The default
+   * is to log the URL via the admin logger so local dev works without
+   * SMTP — production users plug in their mailer:
+   *
+   *   onResetRequest: async ({ email, url }) => {
+   *     await mailer.send({ to: email, subject: 'Reset password',
+   *                          html: `<a href="${url}">Reset</a>` });
+   *   }
+   *
+   * The function is fire-and-forget — its errors don't propagate to
+   * the client so the endpoint can't be used to probe whether an
+   * email exists (the response is always 200).
+   */
+  onResetRequest?: (ctx: {
+    email: string;
+    userId: string;
+    /** Signed JWT to pass back to `/auth/reset`. */
+    token: string;
+    /** Pre-built URL pointing at the panel's reset page. */
+    url: string;
+  }) => void | Promise<void>;
+
+  /**
    * Rate limiters for the auth endpoints. Defaults to an in-memory token
    * bucket per limiter (10/min for login, 5/min for bootstrap). Pass `false`
    * to disable, or a custom `RateLimiter` to swap in a Redis-backed
@@ -114,6 +147,8 @@ export interface AdminOptions {
   rateLimit?: {
     login?: RateLimiter | false;
     bootstrap?: RateLimiter | false;
+    /** Per-(ip, email) limit on /auth/request-reset. Default ~1/min. */
+    requestReset?: RateLimiter | false;
   };
 
   /**
@@ -235,10 +270,23 @@ function applyBuiltInResourceDefaults(
   }
 }
 
-function makeDefaultResolver(allowDevHeader: boolean) {
+function makeDefaultResolver(allowDevHeader: boolean, database: GameDatabase) {
   return async function defaultResolve(ctx: { getHeader: (k: string) => string | null }): Promise<string | undefined> {
     const session = await readSessionFromHeader(ctx.getHeader('cookie'));
-    if (session) { return session.userId; }
+    if (session) {
+      // Token-version revocation check. The JWT carries the `tv` the
+      // user had at sign time; if the row's current version is higher,
+      // the session was revoked (password reset, "sign out everywhere",
+      // forced rotation) and we reject the cookie as if it were
+      // unauthenticated. Sessions issued before `tv` was added (no
+      // `tv` claim) are accepted — backward compat with cookies still
+      // in flight when the column lands.
+      if (session.tv !== undefined) {
+        const current = await database.auth.getTokenVersion(session.userId);
+        if (current !== session.tv) { return undefined; }
+      }
+      return session.userId;
+    }
     if (allowDevHeader) {
       return ctx.getHeader('x-user-id') ?? undefined;
     }
@@ -258,7 +306,7 @@ function buildContext(opts: AdminOptions): EndpointContext {
   // build.mjs's "dirname" plugin rewrites __dirname to a fileURLToPath call for the ESM build
   const uiDistDir = opts.uiDistDir ?? path.resolve(__dirname, '..', 'build');
   const allowDevHeader = opts.allowDevHeader ?? (process.env.NODE_ENV !== 'production');
-  const resolveUserId = opts.resolveUserId ?? makeDefaultResolver(allowDevHeader);
+  const resolveUserId = opts.resolveUserId ?? makeDefaultResolver(allowDevHeader, database);
   const enforceRbac = opts.enforceRbac !== false;
   const logger = opts.logger === null ? null : (opts.logger ?? defaultLogger);
 
@@ -332,15 +380,23 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
   const bootstrapLimiter = resolveLimiter(opts.rateLimit?.bootstrap, {
     capacity: 5, refillPerSec: 1 / 60, retryAfterSec: 60,
   });
+  const requestResetLimiter = resolveLimiter(opts.rateLimit?.requestReset, {
+    capacity: 3, refillPerSec: 1 / 60, retryAfterSec: 60,
+  });
 
   // Auth endpoints (login/logout/bootstrap/me/status). Spread alongside the
   // CRUD endpoints so consumers get one map to spread into createRouter.
   const auth = authEndpoints({
     database: opts.database,
     apiPath: ctx.apiPath,
+    uiPath: ctx.uiPath,
     session: opts.session ?? {},
     loginLimiter,
     bootstrapLimiter,
+    requestResetLimiter,
+    minPasswordLength: opts.minPasswordLength ?? 8,
+    onResetRequest: opts.onResetRequest,
+    logger: ctx.logger,
   });
 
   return {

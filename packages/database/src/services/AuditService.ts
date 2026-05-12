@@ -16,7 +16,9 @@ export type AuditAction =
   | 'auth.login'
   | 'auth.login_failed'
   | 'auth.logout'
-  | 'auth.bootstrap';
+  | 'auth.bootstrap'
+  | 'auth.password_reset_requested'
+  | 'auth.password_reset_completed';
 
 export interface AuditEntry {
   id: string;

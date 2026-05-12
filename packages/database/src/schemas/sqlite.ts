@@ -27,6 +27,11 @@ export const userColumns = {
   // rejects sign-in while bannedUntil > now.
   bannedUntil: integer('banned_until', { mode: 'timestamp' as const }),
   bannedReason: text('banned_reason'),
+  // Session revocation counter. Bumped on password change or "log out
+  // everywhere"; every issued JWT carries the version it was signed
+  // with. guard() rejects tokens whose version is stale, invalidating
+  // all prior sessions without rotating JWT_SECRET globally.
+  tokenVersion: integer('token_version').notNull().default(0),
 };
 
 export const configColumns = {
