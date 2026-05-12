@@ -79,7 +79,10 @@ describe("Auth", () => {
         }),
       });
 
-      assert.deepStrictEqual({ ["endel@colyseus.io"]: await Hash.make(passwordPlainText) }, fakedb);
+      // Each Hash.make() call uses a fresh random salt, so the stored
+      // value can't be reconstructed by re-hashing — verify() is the
+      // correct primitive.
+      assert.ok(await Hash.verify(passwordPlainText, fakedb["endel@colyseus.io"]!));
       assert.deepStrictEqual({ id: 100, email: "endel@colyseus.io", }, register.data.user);
 
       const token: any = await JWT.verify(register.data.token);
@@ -102,7 +105,7 @@ describe("Auth", () => {
       assert.strictEqual(onRegisterOptions.upgradingToken.id, 50);
       assert.strictEqual(onRegisterOptions.upgradingToken.name, "Anonymous");
 
-      assert.deepStrictEqual({ ["endel@colyseus.io"]: await Hash.make(passwordPlainText) }, fakedb);
+      assert.ok(await Hash.verify(passwordPlainText, fakedb["endel@colyseus.io"]!));
       assert.deepStrictEqual({ id: 100, email: "endel@colyseus.io", }, register.data.user);
 
       const token: any = await JWT.verify(register.data.token);
@@ -153,10 +156,42 @@ describe("Auth", () => {
   });
 
   describe("Hash", () => {
-    it("should allow to use different hashing algorithms", async () => {
-      Hash.algorithm = "sha1";
-      assert.strictEqual(await Hash.make("123456"), crypto.createHash("sha1").update("123456" + "## SALT ##").digest("hex"));
+    it("verify accepts the new salted format and round-trips", async () => {
+      const stored = await Hash.make("123456");
+      // Format is `<algo>$<salt-hex>$<hash-hex>`.
+      const parts = stored.split("$");
+      assert.equal(parts.length, 3);
+      assert.equal(parts[0], "scrypt");
+      assert.ok(parts[1] && parts[1].length === 32, "salt is 16 random bytes (32 hex chars)");
+      assert.ok(await Hash.verify("123456", stored));
+      assert.ok(!(await Hash.verify("wrong", stored)));
+    });
 
+    it("two make() calls for the same password produce different stored values", async () => {
+      const a = await Hash.make("samepass");
+      const b = await Hash.make("samepass");
+      assert.notStrictEqual(a, b);
+      assert.ok(await Hash.verify("samepass", a));
+      assert.ok(await Hash.verify("samepass", b));
+    });
+
+    it("verify falls back to the legacy raw-hex format for backward compat", async () => {
+      // Legacy: scrypt(plain, AUTH_SALT || '## SALT ##') without algo prefix.
+      const legacy = await new Promise<string>((resolve, reject) => {
+        crypto.scrypt("123456", "## SALT ##", 64, (err, derivedKey) => {
+          if (err) { reject(err); } else { resolve(derivedKey.toString("hex")); }
+        });
+      });
+      assert.ok(Hash.isLegacy(legacy));
+      assert.ok(await Hash.verify("123456", legacy));
+      assert.ok(!(await Hash.verify("wrong", legacy)));
+    });
+
+    it("supports switching algorithm for new hashes", async () => {
+      Hash.algorithm = "sha1";
+      const stored = await Hash.make("123456");
+      assert.ok(stored.startsWith("sha1$"));
+      assert.ok(await Hash.verify("123456", stored));
       // revert to default algorithm
       Hash.algorithm = "scrypt";
     });

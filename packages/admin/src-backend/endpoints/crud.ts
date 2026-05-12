@@ -162,13 +162,30 @@ export function createEndpoint_(ctx: EndpointContext): Endpoint {
     if (denied) { return denied; }
     const r = tableOrError(ctx, resource);
     if (r instanceof Response) { return r; }
-    const values = translateBodyKeys((reqCtx.body ?? {}) as Record<string, any>, r.table);
+
+    // Resolve the operator once — used for both `create.defaults(...)` and
+    // the audit record. Resolving before the insert means default factories
+    // and the audit see the same identity for this request.
+    const operatorId = await ctx.resolveUserId({ getHeader: reqCtx.getHeader });
+
+    // Server-side defaults from the resource definition (e.g. autofill
+    // `authorId` from the signed-in admin). Merged BEFORE the body so the
+    // body wins — defaults only fill keys the request didn't set.
+    const definition = ctx.resources[resource];
+    const defaults = definition?.create?.defaults
+      ? await definition.create.defaults({ operatorId, resource })
+      : undefined;
+    const body = (reqCtx.body ?? {}) as Record<string, any>;
+    const merged = defaults
+      ? { ...translateBodyKeys(defaults, r.table), ...translateBodyKeys(body, r.table) }
+      : translateBodyKeys(body, r.table);
+
     const [row] = await ctx.database.drizzle
       .insert(r.table)
-      .values(values)
+      .values(merged)
       .returning(sqlKeyedProjection(r.cfg));
+
     // Audit: capture the created row + the operator behind the creation.
-    const operatorId = await ctx.resolveUserId({ getHeader: reqCtx.getHeader });
     const targetId = (() => {
       const pkCols = pkColumns(r.cfg);
       if (pkCols.length === 1) { return String(row[pkCols[0]!.name]); }

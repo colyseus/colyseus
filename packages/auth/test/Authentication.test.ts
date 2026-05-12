@@ -85,7 +85,9 @@ describe("Auth:onFindUserByEmail", () => {
       }),
     });
     const user = await db.findUserByEmail(email);
-    assert.equal(user.password, await Hash.make(password));
+    // Each Hash.make() call randomizes its salt, so verify is the right
+    // primitive — `===` between two make() results is always false now.
+    assert.ok(await Hash.verify(password, user.password));
     assert.equal(login.data.user.password, undefined);
   });
 
@@ -98,7 +100,7 @@ describe("Auth:onFindUserByEmail", () => {
       }),
     });
     const user = await db.findUserByEmail(email);
-    assert.equal(user.password, await Hash.make(password));
+    assert.ok(await Hash.verify(password, user.password));
     assert.equal(register.data.user.password, undefined);
   });
 });

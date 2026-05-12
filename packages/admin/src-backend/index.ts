@@ -10,9 +10,14 @@ import { getTableConfig as getPgTableConfig } from 'drizzle-orm/pg-core';
 import { getTableConfig as getSqliteTableConfig } from 'drizzle-orm/sqlite-core';
 import type { GameDatabase } from '@colyseus/database';
 import type { ResourceDefinition } from './define-resource.js';
+import { JWT } from '@colyseus/auth';
 import { authEndpoints } from './auth.js';
 import { readSessionFromHeader, type SessionConfig } from './sessions.js';
 import { logger as defaultLogger, type Logger } from './logger.js';
+import {
+  createTokenBucketLimiter,
+  type RateLimiter,
+} from './rate-limit.js';
 import {
   type DashboardWidget,
   type DashboardPayload,
@@ -33,6 +38,12 @@ import {
 export { defineAdminResource } from './define-resource.js';
 export type { ResourceDefinition, ResourceAction, PolicyEntry } from './define-resource.js';
 export type { SessionConfig, AdminSession } from './sessions.js';
+export {
+  createTokenBucketLimiter,
+  ipFromHeaders,
+  type RateLimiter,
+  type TokenBucketOptions,
+} from './rate-limit.js';
 export type { DashboardWidget, DashboardPayload, BuiltInWidgetId } from './dashboard.js';
 export { dashboardWidgets } from './dashboard.js';
 
@@ -90,6 +101,22 @@ export interface AdminOptions {
   logger?: Logger | null;
 
   /**
+   * Rate limiters for the auth endpoints. Defaults to an in-memory token
+   * bucket per limiter (10/min for login, 5/min for bootstrap). Pass `false`
+   * to disable, or a custom `RateLimiter` to swap in a Redis-backed
+   * implementation for multi-node deployments.
+   *
+   *   rateLimit: {
+   *     login: createTokenBucketLimiter({ capacity: 5, refillPerSec: 1/30 }),
+   *     bootstrap: false, // disabled
+   *   }
+   */
+  rateLimit?: {
+    login?: RateLimiter | false;
+    bootstrap?: RateLimiter | false;
+  };
+
+  /**
    * Dashboard customization for the admin home page.
    *
    * Built-in widgets — `totals`, `recentUsers`, `activeEvents`, `health` —
@@ -130,6 +157,84 @@ export interface AdminOptions {
  * when allowDevHeader is true. Cookie-based sessions are the production path;
  * the header is dev-only convenience for puppeteer/curl.
  */
+/**
+ * Verify a JWT signing secret is configured before the admin endpoints
+ * boot. In production this throws; outside production it just warns
+ * once (so dev workflows still work without exporting JWT_SECRET).
+ *
+ * Bootstrapping without a secret would result in unsignable session
+ * tokens — a silent failure at first login. Better to fail loudly at
+ * `adminEndpoints()` setup.
+ */
+let jwtWarnedOnce = false;
+function assertJwtSecretConfigured(): void {
+  const secret = (JWT as any).settings?.secret || process.env.JWT_SECRET;
+  if (secret) { return; }
+
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      '[adminEndpoints] JWT_SECRET is required in production — admin sessions ' +
+      'cannot be signed without it. Set the JWT_SECRET environment variable or ' +
+      'assign JWT.settings.secret before calling adminEndpoints().',
+    );
+  }
+
+  if (!jwtWarnedOnce) {
+    jwtWarnedOnce = true;
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[adminEndpoints] No JWT secret configured. Admin sessions will fail to ' +
+      'sign. Set JWT_SECRET (env) or JWT.settings.secret before deploying.',
+    );
+  }
+}
+
+/**
+ * Resolve a rate-limit option into the actual `RateLimiter` the auth
+ * endpoint should call. `undefined` → use the default token bucket;
+ * `false` → no-op limiter (always allows); a `RateLimiter` instance
+ * → use as-is.
+ */
+function resolveLimiter(
+  override: RateLimiter | false | undefined,
+  defaults: { capacity: number; refillPerSec: number; retryAfterSec?: number },
+): RateLimiter {
+  if (override === false) { return { check: () => null }; }
+  if (override) { return override; }
+  return createTokenBucketLimiter(defaults);
+}
+
+/**
+ * Built-in resource defaults applied at `adminEndpoints()` time. Each entry
+ * is keyed by the canonical table name and runs only when:
+ *   - the GameDatabase has that table (i.e. the user is using the
+ *     built-in `roles`/`userNotes`/etc. schemas), AND
+ *   - the user hasn't already supplied an override via
+ *     `defineAdminResource(<table>, {...})`.
+ *
+ * Today this is just `userNotes` → autofill `authorId` from the signed-in
+ * admin's `operatorId`. Add new entries here when a built-in table has a
+ * convention that should "just work" without user wiring.
+ */
+function applyBuiltInResourceDefaults(
+  resources: Record<string, ResourceDefinition>,
+  tables: Record<string, any>,
+): void {
+  const builtIns: Record<string, () => Partial<ResourceDefinition>> = {
+    userNotes: () => ({
+      create: {
+        defaults: ({ operatorId }) => ({ authorId: operatorId }),
+      },
+    }),
+  };
+  for (const [canonical, factory] of Object.entries(builtIns)) {
+    if (!tables[canonical]) { continue; }   // not on this database
+    if (resources[canonical]) { continue; } // user override wins
+    const sqlName = (tables[canonical] as any)?.[Symbol.for('drizzle:Name')] ?? canonical;
+    resources[canonical] = { __tableName: sqlName, ...factory() };
+  }
+}
+
 function makeDefaultResolver(allowDevHeader: boolean) {
   return async function defaultResolve(ctx: { getHeader: (k: string) => string | null }): Promise<string | undefined> {
     const session = await readSessionFromHeader(ctx.getHeader('cookie'));
@@ -166,10 +271,30 @@ function buildContext(opts: AdminOptions): EndpointContext {
   // a string key.
   const tables = resolvedTables as Record<string, any>;
 
-  // Index resources by their underlying drizzle table name
-  const resources = Object.fromEntries(
-    Object.values(opts.resources ?? {}).map((r) => [r.__tableName, r]),
-  ) as Record<string, ResourceDefinition>;
+  // Index resources by their CANONICAL table name (the key in `tables` —
+  // `userNotes`, not `colyseus_user_notes`) so CRUD/catalog lookups can use
+  // the same key as the URL path param. `defineAdminResource` records the
+  // drizzle SQL name on `__tableName`; reverse-map to the canonical key via
+  // the resolved `tables` record. User resources for tables that aren't
+  // registered fall back to their SQL name (preserving the historical
+  // behavior for user-defined tables where canonical === SQL).
+  const sqlToCanonical: Record<string, string> = {};
+  for (const [canonical, t] of Object.entries(tables)) {
+    const sqlName = (t as any)?.[Symbol.for('drizzle:Name')];
+    if (typeof sqlName === 'string') {
+      sqlToCanonical[sqlName] = canonical;
+    }
+  }
+  const resources: Record<string, ResourceDefinition> = {};
+  for (const r of Object.values(opts.resources ?? {})) {
+    const canonical = sqlToCanonical[r.__tableName] ?? r.__tableName;
+    resources[canonical] = r;
+  }
+
+  // Built-in resource defaults. Applied only when the user hasn't supplied
+  // their own override for the same canonical name, so it's safe to
+  // override by passing `defineAdminResource(userNotes, {...})`.
+  applyBuiltInResourceDefaults(resources, tables);
 
   // pg-core and sqlite-core expose getTableConfig with the same structural
   // shape. Pick once at setup based on the GameDatabase's dialect.
@@ -189,7 +314,24 @@ function buildContext(opts: AdminOptions): EndpointContext {
  * Spread into `createRouter({ ...adminEndpoints({ database }), yourRoutes... })`.
  */
 export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
+  // In production, refuse to boot without a JWT secret — admin sessions
+  // would otherwise be unsignable (and the failure would surface only
+  // at the first login attempt, not at startup). Devs without an env
+  // var get a one-time warning so the workflow still works locally.
+  assertJwtSecretConfigured();
+
   const ctx = buildContext(opts);
+
+  // Resolve rate limiters. Defaults are tuned for "single bad actor"
+  // protection: 10 login attempts per minute per (ip, email) and ~1
+  // bootstrap per minute per ip. Operators can pass `false` to disable
+  // or a custom `RateLimiter` (Redis-backed, etc.).
+  const loginLimiter = resolveLimiter(opts.rateLimit?.login, {
+    capacity: 10, refillPerSec: 1 / 6, retryAfterSec: 6,
+  });
+  const bootstrapLimiter = resolveLimiter(opts.rateLimit?.bootstrap, {
+    capacity: 5, refillPerSec: 1 / 60, retryAfterSec: 60,
+  });
 
   // Auth endpoints (login/logout/bootstrap/me/status). Spread alongside the
   // CRUD endpoints so consumers get one map to spread into createRouter.
@@ -197,6 +339,8 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
     database: opts.database,
     apiPath: ctx.apiPath,
     session: opts.session ?? {},
+    loginLimiter,
+    bootstrapLimiter,
   });
 
   return {

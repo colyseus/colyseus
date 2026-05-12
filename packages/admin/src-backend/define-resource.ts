@@ -56,6 +56,22 @@ export interface RelationOverride {
   label?: string;
 }
 
+/**
+ * Context passed to `create.defaults(...)`. Stays narrow on purpose —
+ * adding fields here is non-breaking, but every field we add lives
+ * forever, so we only surface what's load-bearing.
+ */
+export interface CreateDefaultsContext {
+  /**
+   * The signed-in admin's userId. Undefined only when RBAC is
+   * disabled (dev mode) AND the request didn't carry a session.
+   * Treat as optional in your default function.
+   */
+  operatorId: string | undefined;
+  /** Drizzle table name being created — useful for shared default factories. */
+  resource: string;
+}
+
 export interface ResourceDefinition {
   /** drizzle table name (auto-extracted) */
   __tableName: string;
@@ -72,6 +88,25 @@ export interface ResourceDefinition {
   form?: {
     /** fields to show in create+edit forms; if omitted, all non-defaulted columns */
     fields?: string[];
+  };
+  create?: {
+    /**
+     * Server-side defaults merged into the body before INSERT. The function
+     * runs on every create request with the resolved operator (the signed-in
+     * admin's userId) in scope, so it can fill columns like `authorId`,
+     * `createdBy`, or any audit-style field from the session. The user's
+     * request body wins — defaults only fill keys the request didn't set,
+     * matching how SQL DEFAULTs behave column-by-column.
+     *
+     * Keys can be either SQL column names (`'author_id'`) or drizzle JS
+     * keys (`'authorId'`); the same body-translator the request body
+     * goes through normalizes both forms.
+     *
+     *   create: {
+     *     defaults: ({ operatorId }) => ({ authorId: operatorId }),
+     *   }
+     */
+    defaults?: (ctx: CreateDefaultsContext) => Record<string, any> | Promise<Record<string, any>>;
   };
   show?: {
     /** fields to show on the show page; defaults to all */
