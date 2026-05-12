@@ -3,6 +3,11 @@ import { schema, t, type SchemaType } from "@colyseus/schema";
 import { AnalyticsPlugin, CloudSavesPlugin, LeaderboardsPlugin } from "@colyseus/database";
 import { z } from "zod";
 import { database } from "./db/database.ts";
+// Importing @colyseus/auth installs a JWT-decoding default for
+// Room.onAuth (side-effect import). The example already imports it
+// elsewhere via app.config.ts, but pinning the import here documents
+// the dependency for anyone reading just this room file.
+import "@colyseus/auth";
 
 const VERSION = 5;
 

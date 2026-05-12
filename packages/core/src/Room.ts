@@ -1357,7 +1357,12 @@ export class Room<T extends RoomOptions = RoomOptions> {
       locked: this.#_locked,
       elapsedTime: elapsed,
       metadata: this.metadata ?? null,
-      clientList: (this.clients as ReadonlyArray<ExtractRoomClient<T> & ClientPrivate>).map((c) => ({
+      // Cast through `unknown`: `ExtractRoomClient<T>` vs `Client & ClientPrivate`
+      // don't structurally overlap (the user's `client` generic may carry a
+      // narrower userData/auth shape), but the runtime objects we walk here
+      // always have the private join-time field. The narrow per-property
+      // `(c as any)` reads below keep the cast scoped.
+      clientList: (this.clients as unknown as ReadonlyArray<Client & ClientPrivate>).map((c) => ({
         sessionId: c.sessionId,
         userId: ((c as any).userId ?? (c as any).auth?.id) ?? null,
         elapsedTime: elapsed - ((c as any)._joinedAt ?? elapsed),
@@ -1375,7 +1380,9 @@ export class Room<T extends RoomOptions = RoomOptions> {
    *   `.leave()` on the Client object directly.
    */
   public kickClient(sessionId: string, closeCode: number = CloseCode.CONSENTED): void {
-    for (const client of this.clients as ReadonlyArray<ExtractRoomClient<T> & ClientPrivate>) {
+    // Same `unknown` indirection as in `getInspectorView` above —
+    // ExtractRoomClient<T> doesn't structurally include ClientPrivate.
+    for (const client of this.clients as unknown as ReadonlyArray<Client & ClientPrivate>) {
       if (client.sessionId === sessionId) {
         (client as any).leave(closeCode);
         return;

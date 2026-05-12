@@ -939,13 +939,33 @@ export function buildSeatReservation(room: IRoomCache, sessionId: string) {
 
 async function callOnAuth(roomName: string, clientOptions?: ClientOptions, authContext?: AuthContext) {
   const roomClass = getRoomClass(roomName);
-  if (roomClass && roomClass['onAuth'] && roomClass['onAuth'] !== Room['onAuth']) {
-    const result = await roomClass['onAuth'](authContext.token, clientOptions, authContext)
-    if (!result) {
-      throw new ServerError(ErrorCode.AUTH_FAILED, 'onAuth failed');
-    }
-    return result;
+  const onAuth = roomClass?.['onAuth'];
+  if (!onAuth) { return; }
+
+  // Server-initiated joins (e.g. internal `matchMaker.create()` from
+  // bots/tests/cron) skip auth — there's no transport, no headers, no
+  // token. Treat the absence of authContext as "no auth performed",
+  // which leaves client.auth undefined just like the legacy short-
+  // circuit did.
+  if (!authContext) { return; }
+
+  // Always invoke onAuth when an auth context is present — even when
+  // the room hasn't overridden it. The base `Room.onAuth` returns
+  // `true` (or whatever a side-effect import like @colyseus/auth swapped
+  // it for), and we use the return value to populate `client.auth` when
+  // it's a payload object. Pre-change this call was skipped when the
+  // subclass inherited the default, which made it impossible to install
+  // a workspace-wide token decoder by patching `Room.onAuth` once.
+  const result = await onAuth(authContext.token, clientOptions, authContext);
+
+  // Auth-result semantics:
+  //   false / null / undefined  → AUTH_FAILED
+  //   true                      → succeeded but no payload (don't set client.auth)
+  //   anything else (object)    → succeeded; the value becomes client.auth
+  if (result === false || result === null || result === undefined) {
+    throw new ServerError(ErrorCode.AUTH_FAILED, 'onAuth failed');
   }
+  return result === true ? undefined : result;
 }
 
 /**
