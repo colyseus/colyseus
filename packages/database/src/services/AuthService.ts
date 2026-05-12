@@ -284,7 +284,14 @@ export class AuthService<T extends UsersTableShape = UsersTableShape> {
     const profile = data.profile || data;
     const email = profile.email || profile.email_verified;
 
-    // Try to upgrade anonymous user if token present
+    // Try to upgrade an existing anonymous user if a session token was
+    // forwarded into the OAuth flow. The token might be stale (DB wiped,
+    // user deleted, anon session from another deployment) — in that
+    // case fall THROUGH to the find-by-email / create paths below
+    // rather than returning null. Returning null here used to crash
+    // the OAuth callback handler with jsonwebtoken's "Expected payload
+    // to be a plain object", because @colyseus/auth then tried to sign
+    // a null user.
     if (data.upgradingToken) {
       const tokenData = data.upgradingToken as any;
       const userId = tokenData.id || tokenData.anonymousId;
@@ -305,7 +312,9 @@ export class AuthService<T extends UsersTableShape = UsersTableShape> {
           .where(eq(this.users.id, userId))
           .limit(1);
 
-        return rows[0] || null;
+        if (rows[0]) { return rows[0]; }
+        // No matching row — token was stale. Continue to the fallback
+        // paths so the sign-in still succeeds against the Discord email.
       }
     }
 

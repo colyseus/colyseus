@@ -207,8 +207,20 @@ ${(providerUrl) ? `<hr/><p><small><em>(Get your keys from <a href="${providerUrl
           }
 
           user = await oAuthProviderCallback(data, session.grant.provider as OAuthProviderName);
-          token = await auth.settings.onGenerateToken(user);
-          response = { user, token };
+          if (!user || typeof user !== 'object') {
+            // The supplied onOAuthProviderCallback didn't return a user
+            // record (or returned a primitive). Failing here gives a
+            // readable error in the OAuth response instead of letting
+            // JWT.sign throw the cryptic
+            // 'Expected "payload" to be a plain object'.
+            response = {
+              error: 'OAuth callback returned no user — check onOAuthProviderCallback wiring',
+              user: null, token: null,
+            };
+          } else {
+            token = await auth.settings.onGenerateToken(user);
+            response = { user, token };
+          }
         }
 
         /**
