@@ -1313,6 +1313,98 @@ export class Room<T extends RoomOptions = RoomOptions> {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Operator API — used by @colyseus/admin (and monitor in due course)
+  // through `remoteRoomCall(roomId, methodName)`. Marked `@internal` because
+  // they're framework-tooling primitives, not part of the game-code surface.
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Snapshot the room's live state for an inspector / admin UI. Includes:
+   *
+   *   roomId, name, maxClients, locked, elapsedTime (ms),
+   *   metadata, clients (sessionId + per-client elapsed + userId when set),
+   *   state (the schema/json the SDK would see),
+   *   stateSize (bytes of the encoded full state, or 0 when no serializer).
+   *
+   * The payload is intentionally plain JSON — `remoteRoomCall` serializes
+   * the return value across process boundaries.
+   *
+   * @internal Operator-only. Game code should not call this.
+   */
+  public getInspectorView(): {
+    roomId: string;
+    name: string;
+    clients: number;
+    maxClients: number;
+    locked: boolean;
+    elapsedTime: number;
+    metadata: any;
+    clientList: Array<{
+      sessionId: string;
+      userId: string | null;
+      elapsedTime: number;
+    }>;
+    state: any;
+    stateSize: number;
+  } {
+    const elapsed = this.clock.elapsedTime;
+    return {
+      roomId: this.roomId,
+      name: this.roomName,
+      clients: this.clients.length,
+      maxClients: this.maxClients,
+      locked: this.#_locked,
+      elapsedTime: elapsed,
+      metadata: this.metadata ?? null,
+      clientList: (this.clients as ReadonlyArray<ExtractRoomClient<T> & ClientPrivate>).map((c) => ({
+        sessionId: c.sessionId,
+        userId: ((c as any).userId ?? (c as any).auth?.id) ?? null,
+        elapsedTime: elapsed - ((c as any)._joinedAt ?? elapsed),
+      })),
+      state: this.state ?? null,
+      stateSize: this.#_inspectorStateSize(),
+    };
+  }
+
+  /**
+   * Force-disconnect a single client by sessionId. No-op when the client
+   * isn't connected (idempotent — the caller doesn't need to race-check).
+   *
+   * @internal Operator-only. Game code disconnects clients by calling
+   *   `.leave()` on the Client object directly.
+   */
+  public kickClient(sessionId: string, closeCode: number = CloseCode.CONSENTED): void {
+    for (const client of this.clients as ReadonlyArray<ExtractRoomClient<T> & ClientPrivate>) {
+      if (client.sessionId === sessionId) {
+        (client as any).leave(closeCode);
+        return;
+      }
+    }
+  }
+
+  /**
+   * Best-effort byte size of the current full state. Falls back to `0`
+   * when the room has no serializer or the serializer can't produce a
+   * payload (raw rooms, very-early-onCreate, etc.). The serializer
+   * detection mirrors `@colyseus/monitor`'s — we read whichever buffer
+   * is available across schema v2, v3, and the legacy fossil-delta path.
+   */
+  #_inspectorStateSize(): number {
+    const ser = this._serializer as any;
+    if (!ser) { return 0; }
+    const hasState = ser.encoder || ser.state || ser.previousState;
+    if (!hasState) { return 0; }
+    try {
+      const full = ser.getFullState?.();
+      if (!full) { return 0; }
+      // Buffer / Uint8Array have `byteLength`; raw arrays have `length`.
+      return (full as any).byteLength ?? (full as any).length ?? 0;
+    } catch {
+      return 0;
+    }
+  }
+
   /**
    * Disconnect all connected clients, and then dispose the room.
    *

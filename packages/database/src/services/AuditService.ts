@@ -18,7 +18,9 @@ export type AuditAction =
   | 'auth.logout'
   | 'auth.bootstrap'
   | 'auth.password_reset_requested'
-  | 'auth.password_reset_completed';
+  | 'auth.password_reset_completed'
+  | 'room.kick'
+  | 'room.dispose';
 
 export interface AuditEntry {
   id: string;

@@ -8,6 +8,8 @@ import axios from 'axios';
 import { Toaster } from 'sonner';
 import type { Resource } from './types';
 import { ListPage, ShowPage, EditPage, CreatePage } from './pages';
+import { RoomsListPage } from './pages/rooms/list';
+import { RoomShowPage } from './pages/rooms/show';
 import { Dashboard } from './Dashboard';
 import { iconFor } from './icons';
 import { authProvider } from './authProvider';
@@ -18,7 +20,7 @@ import { SignInGate } from './SignInGate';
 import { UserHeader } from './UserHeader';
 import { ThemeToggle } from './ThemeToggle';
 import { ThemeProvider } from '@/lib/theme-provider';
-import { LayoutDashboard } from 'lucide-react';
+import { LayoutDashboard, Radio } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const API = '/admin-api';
@@ -94,6 +96,12 @@ export function App() {
             }
           >
             <Route path="/" element={<Dashboard />} />
+            {/* Live rooms inspector — routes declared BEFORE the generic
+                `:resource` route so the static `rooms` path wins. Refine
+                never owns this surface; the pages talk to /admin-api/rooms
+                directly. */}
+            <Route path="rooms" element={<RoomsListPage />} />
+            <Route path="rooms/:roomId" element={<RoomShowPage />} />
             <Route path=":resource" element={<ListPage resources={resources} />} />
             <Route path=":resource/show/:id" element={<ShowPage resources={resources} />} />
             <Route path=":resource/edit/:id" element={<EditPage resources={resources} />} />
@@ -141,6 +149,13 @@ function Sidebar({ resources }: { resources: Resource[] }) {
       <nav className="space-y-1 px-2 py-2">
         <SidebarLink to="/" icon={<LayoutDashboard className="size-4" />} active={pathname === '/'}>
           Dashboard
+        </SidebarLink>
+        <SidebarLink
+          to="/rooms"
+          icon={<Radio className="size-4" />}
+          active={pathname === '/rooms' || pathname.startsWith('/rooms/')}
+        >
+          Live rooms
         </SidebarLink>
         <div className="px-3 pt-3 pb-1 text-[11px] uppercase tracking-wide text-muted-foreground">
           Resources

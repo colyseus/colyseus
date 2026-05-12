@@ -32,6 +32,9 @@ import {
 } from './endpoints/crud.js';
 import { countsEndpoint, relationEndpoint } from './endpoints/relations.js';
 import {
+  listRoomsEndpoint, inspectRoomEndpoint, kickClientEndpoint, disposeRoomEndpoint,
+} from './endpoints/rooms.js';
+import {
   healthEndpoint, dashboardEndpoint, uiIndexEndpoint, uiAssetsEndpoint,
 } from './endpoints/system.js';
 
@@ -408,6 +411,16 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
     adminCounts:      countsEndpoint(ctx),
     adminRelation:    relationEndpoint(ctx),
     adminAction:      actionEndpoint(ctx),
+
+    // Live room inspector. The four routes share a synthetic
+    // `rooms` resource for RBAC — guard() against `list` for read,
+    // `update` for kick, `delete` for dispose. Override via
+    // `defineAdminResource(<rooms-table>, { policies: ... })` if
+    // you want a tighter rule (mods who can view but not kick, etc.).
+    adminRoomsList:    listRoomsEndpoint(ctx),
+    adminRoomInspect:  inspectRoomEndpoint(ctx),
+    adminRoomKick:     kickClientEndpoint(ctx),
+    adminRoomDispose:  disposeRoomEndpoint(ctx),
 
     adminList:        listEndpoint(ctx),
     adminGet:         getEndpoint(ctx),
