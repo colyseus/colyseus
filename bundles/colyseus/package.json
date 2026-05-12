@@ -22,6 +22,11 @@
       "types": "./build/plugins/webrtc.d.ts",
       "import": "./build/plugins/webrtc.mjs",
       "require": "./build/plugins/webrtc.cjs"
+    },
+    "./plugins/idle-kick": {
+      "types": "./build/plugins/idle-kick.d.ts",
+      "import": "./build/plugins/idle-kick.mjs",
+      "require": "./build/plugins/idle-kick.cjs"
     }
   },
   "scripts": {

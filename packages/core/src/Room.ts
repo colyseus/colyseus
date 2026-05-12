@@ -1379,12 +1379,12 @@ export class Room<T extends RoomOptions = RoomOptions> {
    * @internal Operator-only. Game code disconnects clients by calling
    *   `.leave()` on the Client object directly.
    */
-  public kickClient(sessionId: string, closeCode: number = CloseCode.CONSENTED): void {
+  public kickClient(sessionId: string, closeCode: number = CloseCode.CONSENTED, reason?: string): void {
     // Same `unknown` indirection as in `getInspectorView` above —
     // ExtractRoomClient<T> doesn't structurally include ClientPrivate.
     for (const client of this.clients as unknown as ReadonlyArray<Client & ClientPrivate>) {
       if (client.sessionId === sessionId) {
-        (client as any).leave(closeCode);
+        this.#_forciblyCloseClient(client as ExtractRoomClient<T> & ClientPrivate, closeCode, reason);
         return;
       }
     }
@@ -2138,7 +2138,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
     }
   }
 
-  #_forciblyCloseClient(client: ExtractRoomClient<T> & ClientPrivate, closeCode: number) {
+  #_forciblyCloseClient(client: ExtractRoomClient<T> & ClientPrivate, closeCode: number, reason?: string) {
     // stop receiving messages from this client
     client.ref.removeAllListeners('message');
 
@@ -2146,7 +2146,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
     client.ref.removeListener('close', client.ref['onleave']);
 
     // only effectively close connection when "onLeave" is fulfilled
-    this._onLeave(client, closeCode).then(() => client.leave(closeCode));
+    this._onLeave(client, closeCode).then(() => (client as any).leave(closeCode, reason));
   }
 
   private async _onLeave(client: ExtractRoomClient<T>, code?: number): Promise<any> {
