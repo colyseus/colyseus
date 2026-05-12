@@ -358,7 +358,16 @@ export const server = config({
     app.use("/", playground());
     app.use("/monitor", monitor());
     app.get("/express", (_, res) => res.json({ message: "Hello World" }));
-    app.use(auth.prefix, auth.routes({}));
+    // `auth.routes(settings)` wires the email/oauth/anon/reset callbacks
+    // into the auth routes. Passing `database.auth.settings` plugs the
+    // GameDatabase-backed implementations in:
+    //   - email/password register/login → users table (passwordHash)
+    //   - OAuth callback (Discord, etc.) → creates / finds user by email
+    //     so client.auth carries the real userId on the next room join.
+    //   - password reset → bumps tokenVersion so old sessions die.
+    // Without this, /auth/register 500s with "not implemented" and OAuth
+    // sign-ins succeed in flight but never persist a user row.
+    app.use(auth.prefix, auth.routes(database.auth.settings));
   },
 
   beforeListen: async () => {

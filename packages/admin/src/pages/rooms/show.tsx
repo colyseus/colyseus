@@ -37,7 +37,15 @@ interface InspectorView {
   locked: boolean;
   elapsedTime: number;
   metadata: any;
-  clientList: Array<{ sessionId: string; userId: string | null; elapsedTime: number }>;
+  clientList: Array<{
+    sessionId: string;
+    userId: string | null;
+    /** Resolved from the users table when present; null when the user has
+     *  no email on file (e.g. anonymous-but-promoted users, OAuth providers
+     *  that didn't supply an email). */
+    userEmail?: string | null;
+    elapsedTime: number;
+  }>;
   state: any;
   stateSize: number;
 }
@@ -202,7 +210,21 @@ export function RoomShowPage() {
                             <Button asChild variant="link" className="h-auto p-0">
                               <a href={`/admin/users/show/${c.userId}`}>
                                 <User className="mr-1 size-3" />
-                                <span className="font-mono text-xs">{c.userId}</span>
+                                {/* Prefer email when the inspector resolved one
+                                    — emails are the recognizable handle for a
+                                    support workflow. The truncated id sits
+                                    next to it as a disambiguator (and a hint
+                                    that the row is in fact a user record). */}
+                                {c.userEmail
+                                  ? (
+                                    <span className="text-xs">
+                                      {c.userEmail}
+                                      <span className="ml-1 font-mono text-muted-foreground">
+                                        ({shortId(c.userId)})
+                                      </span>
+                                    </span>
+                                  )
+                                  : <span className="font-mono text-xs">{c.userId}</span>}
                               </a>
                             </Button>
                           )
@@ -288,6 +310,13 @@ function Section({
       {children}
     </section>
   );
+}
+
+/** First 6 chars of a userId — enough to disambiguate side-by-side rows
+ *  without dominating the cell. The full id is still on the deep-link
+ *  href, and the user's show page is one click away. */
+function shortId(id: string): string {
+  return id.length <= 8 ? id : `${id.slice(0, 6)}…`;
 }
 
 function formatDuration(ms: number): string {

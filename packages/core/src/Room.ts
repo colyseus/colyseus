@@ -1343,6 +1343,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
     clientList: Array<{
       sessionId: string;
       userId: string | null;
+      userEmail: string | null;
       elapsedTime: number;
     }>;
     state: any;
@@ -1362,11 +1363,22 @@ export class Room<T extends RoomOptions = RoomOptions> {
       // narrower userData/auth shape), but the runtime objects we walk here
       // always have the private join-time field. The narrow per-property
       // `(c as any)` reads below keep the cast scoped.
-      clientList: (this.clients as unknown as ReadonlyArray<Client & ClientPrivate>).map((c) => ({
-        sessionId: c.sessionId,
-        userId: ((c as any).userId ?? (c as any).auth?.id) ?? null,
-        elapsedTime: elapsed - ((c as any)._joinedAt ?? elapsed),
-      })),
+      //
+      // userId / userEmail read straight off `client.auth` — the JWT
+      // payload @colyseus/auth's default onAuth decodes carries both
+      // when the user has them on file. Saves the admin a per-client
+      // database round-trip; falls back to null when the client signed
+      // in anonymously (or with a custom onAuth that returns a shape
+      // without those fields).
+      clientList: (this.clients as unknown as ReadonlyArray<Client & ClientPrivate>).map((c) => {
+        const auth = (c as any).auth;
+        return {
+          sessionId: c.sessionId,
+          userId: ((c as any).userId ?? auth?.id) ?? null,
+          userEmail: auth?.email ?? null,
+          elapsedTime: elapsed - ((c as any)._joinedAt ?? elapsed),
+        };
+      }),
       state: this.state ?? null,
       stateSize: this.#_inspectorStateSize(),
     };

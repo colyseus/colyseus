@@ -70,9 +70,12 @@ export function inspectRoomEndpoint(ctx: EndpointContext): Endpoint {
       const { roomId } = reqCtx.params as { roomId: string };
       try {
         // Method name is typed against Room so it resists rename without
-        // a code change here. `remoteRoomCall` returns the resolved value
-        // — plain JSON, safe to send straight to the client.
-        const view = await matchMaker.remoteRoomCall<Room>(roomId, 'getInspectorView' as keyof Room);
+        // a code change here. The view already includes `userEmail` per
+        // client (read from `client.auth.email`) — no extra database
+        // round-trip needed.
+        const view = await matchMaker.remoteRoomCall<Room>(
+          roomId, 'getInspectorView' as keyof Room,
+        );
         return json(view);
       } catch (err: any) {
         ctx.logger?.warn?.({ err, roomId }, '[admin] room inspect failed');
