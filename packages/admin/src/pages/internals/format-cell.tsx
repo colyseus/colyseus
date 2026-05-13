@@ -14,16 +14,8 @@ import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { type Column, type Resource, isBoolean, isDate, isJsonish, isNumeric } from '../../types';
 import { syntheticShowPath, SYNTHETIC_SHOW_PATHS } from './synthetic-resources';
-
-// Lazy-loaded tree view. Two reasons to defer:
-//   1. `json-edit-react` is a CJS module whose named exports break
-//      node's ESM loader. tsx-based unit tests reach this file
-//      transitively (e.g. through show.tsx / form.tsx) and would
-//      otherwise crash at import time. The lazy boundary keeps the
-//      heavy import out of the test-time module graph.
-//   2. List views never render this — only the show-page does.
-//      Code-splits the tree out of the initial JS bundle.
-const JsonTreeLazy = React.lazy(() => import('./json-tree'));
+import { JsonViewer } from './json-viewer';
+import { AuditActionBadge } from './audit-action-badge';
 
 /**
  * Compact relative time for table cells, with absolute fallback for
@@ -132,6 +124,27 @@ export function formatCell(
     // default plain-text renderer below.
   }
 
+  // Categorical action / event name badge — applied to:
+  //   - `action` columns unconditionally (audit log: `user.ban`,
+  //     `update`, etc. — the CRUD-verb case has no dot, so we can't
+  //     pattern-match it),
+  //   - `name` columns whose value matches the dotted-event shape
+  //     (`analyticsEvents.name`: `room.join`, `level.completed`).
+  //
+  // The strict regex (`^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$`) avoids
+  // false positives on emails, file paths, semver, etc. that also
+  // contain dots — only identifier-like dotted lowercase strings
+  // qualify. Custom resources with an `action` column inherit the
+  // styling for free; everyone else is unaffected.
+  if (c && typeof v === 'string') {
+    const isActionColumn = c.name === 'action';
+    const isDottedEventName = c.name === 'name'
+      && /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$/.test(v);
+    if (isActionColumn || isDottedEventName) {
+      return <AuditActionBadge action={v} />;
+    }
+  }
+
   if (c && isBoolean(c)) {
     const b = v === true || v === 1 || v === '1' || v === 'true';
     return <Badge variant={b ? 'success' : 'secondary'}>{b ? 'Yes' : 'No'}</Badge>;
@@ -161,13 +174,7 @@ export function formatCell(
     // List/table cells stay compact: the truncated <code> + tooltip
     // is the right density for a table row.
     if (mode === 'show') {
-      return (
-        <React.Suspense
-          fallback={<span className="text-xs text-muted-foreground">loading…</span>}
-        >
-          <JsonTreeLazy data={obj} />
-        </React.Suspense>
-      );
+      return <JsonViewer data={obj} />;
     }
     const json = JSON.stringify(obj);
     return (

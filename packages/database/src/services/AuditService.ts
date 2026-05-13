@@ -24,7 +24,10 @@ export type AuditAction =
   | 'room.lock'
   | 'room.unlock'
   | 'room.state.edit'
-  | 'room.state.delete';
+  | 'room.state.delete'
+  | 'user.ban'
+  | 'user.unban'
+  | 'user.revoke_sessions';
 
 export interface AuditEntry {
   id: string;

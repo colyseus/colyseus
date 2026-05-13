@@ -3,7 +3,7 @@ import { Authenticated, Refine } from '@refinedev/core';
 import './index.css';
 import dataProvider from '@refinedev/simple-rest';
 import routerProvider from '@refinedev/react-router';
-import { BrowserRouter, Routes, Route, Outlet, NavLink, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Outlet, NavLink, useLocation, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { Toaster } from 'sonner';
 import type { Resource } from './types';
@@ -103,17 +103,24 @@ export function App() {
                 directly. */}
             <Route path="rooms" element={<RoomsListPage />} />
             <Route path="rooms/:roomId" element={<RoomShowPage />} />
-            <Route path=":resource" element={<ListPage resources={resources} />} />
-            <Route path=":resource/show/:id" element={<ShowPage resources={resources} />} />
+            {/* `<KeyedRoute>` forces a fresh ListPage instance per
+                `:resource` so React Query's "keep previous data"
+                behavior (which is the right call inside a single
+                resource — pagination shouldn't blink) can't leak
+                rows from the previously-viewed resource while the
+                new one's fetch is in flight. Same pattern guards
+                Show/Edit against `:id` race conditions. */}
+            <Route path=":resource" element={<KeyedListPage resources={resources} />} />
+            <Route path=":resource/show/:id" element={<KeyedShowPage resources={resources} />} />
             {/* Tab-pinned variant: `/users/show/:id/cloudSaves` keeps the
                 cloudSaves tab active without drilling into a child row.
                 Used by the "Back to Cloud Saves" link inside a nested
                 child panel, and by Edit-page returns. */}
-            <Route path=":resource/show/:id/:relation" element={<ShowPage resources={resources} />} />
+            <Route path=":resource/show/:id/:relation" element={<KeyedShowPage resources={resources} />} />
             {/* Drill-in: `/users/show/:id/cloudSaves/:childId` renders the
                 child's read-only profile INSIDE the cloudSaves tab. */}
-            <Route path=":resource/show/:id/:relation/:childId" element={<ShowPage resources={resources} />} />
-            <Route path=":resource/edit/:id" element={<EditPage resources={resources} />} />
+            <Route path=":resource/show/:id/:relation/:childId" element={<KeyedShowPage resources={resources} />} />
+            <Route path=":resource/edit/:id" element={<KeyedEditPage resources={resources} />} />
             <Route path=":resource/create" element={<CreatePage resources={resources} />} />
           </Route>
         </Routes>
@@ -306,4 +313,34 @@ function SidebarLink({ to, icon, active, children }: {
       <span>{children}</span>
     </NavLink>
   );
+}
+
+/**
+ * Remount the page when route params change so refine's "keep previous
+ * data" (react-query default) can't leak rows from a different
+ * `:resource` / `:id`. React Router reuses the same instance across
+ * param changes by default — the `key` prop is what forces a fresh
+ * mount and clears the stale `tableQuery.data` / `useOne` data.
+ *
+ * Three tiny wrappers (not one generic shim) so each page reads the
+ * URL params it actually cares about — keying on a too-coarse value
+ * (e.g. `pathname`) would over-remount on incidental URL changes like
+ * search params.
+ */
+function KeyedListPage({ resources }: { resources: Resource[] }) {
+  const { resource } = useParams();
+  return <ListPage key={resource ?? ''} resources={resources} />;
+}
+
+function KeyedShowPage({ resources }: { resources: Resource[] }) {
+  // Key on (resource, id) only — switching tabs or drilling into a
+  // child relation changes `:relation` / `:childId` but we don't
+  // want to remount the parent useOne fetch in that case.
+  const { resource, id } = useParams();
+  return <ShowPage key={`${resource}:${id ?? ''}`} resources={resources} />;
+}
+
+function KeyedEditPage({ resources }: { resources: Resource[] }) {
+  const { resource, id } = useParams();
+  return <EditPage key={`${resource}:${id ?? ''}`} resources={resources} />;
 }

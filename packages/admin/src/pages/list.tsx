@@ -1,5 +1,5 @@
 import { useTable } from '@refinedev/core';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Eye, Loader2, Pencil, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Empty } from '@/components/ui/empty';
@@ -15,10 +15,12 @@ import { Pagination } from './internals/pagination';
 import { ColumnHeader } from './internals/column-header';
 import { ActionButton, DeleteRowButton } from './internals/actions';
 import { useFkLabels } from './internals/use-fk-labels';
+import { DataCell } from './internals/data-cell';
 import { cn } from '@/lib/utils';
 
 export function ListPage({ resources }: { resources: Resource[] }) {
   const { resource: resourceName } = useParams();
+  const navigate = useNavigate();
   const def = findResource(resources, resourceName);
   const pk = def && singlePk(def);
 
@@ -138,6 +140,15 @@ export function ListPage({ resources }: { resources: Resource[] }) {
                 // rowId() handles single-PK (bare value) and composite-PK
                 // (base64url JSON tuple) shapes uniformly.
                 const id = rowId(def, row);
+                // Whole-row navigation when there's a resolvable id.
+                // Data cells own the click (handler attached at the
+                // TableCell level) — the sticky action column stays
+                // off the click path so its View/Edit/Delete buttons
+                // and inner FK links work without competing with the
+                // row navigation.
+                const goShow = id
+                  ? () => navigate(`/${resourceName}/show/${encodeURIComponent(id)}`)
+                  : undefined;
                 return (
                   <TableRow
                     key={id ?? i}
@@ -145,13 +156,14 @@ export function ListPage({ resources }: { resources: Resource[] }) {
                     data-row-id={id ?? undefined}
                   >
                     {cols.map((c) => (
-                      // Match the header — w-[1%] + whitespace-nowrap shrinks
-                      // each cell to its content. formatCell already truncates
-                      // long opaque ids and JSON blobs, so nothing legitimate
-                      // wants to wrap inside a cell.
-                      <TableCell key={c.name} className="w-[1%] whitespace-nowrap">
+                      <DataCell
+                        key={c.name}
+                        column={c}
+                        onNavigate={goShow}
+                        className="w-[1%] whitespace-nowrap"
+                      >
                         {formatCell(row[c.name], c, fkLabels.get(c.name)?.get(row[c.name]), row, resources)}
-                      </TableCell>
+                      </DataCell>
                     ))}
                     {id && (
                       <TableCell

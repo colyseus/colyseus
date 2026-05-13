@@ -8,39 +8,24 @@ import { Page } from '@/components/ui/page';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { Resource, ResourceRelation } from '../types';
 import { findResource, visibleColumns } from './internals/helpers';
+import { withReturnTo } from './internals/return-to';
 import { formatCell } from './internals/format-cell';
 import {
   OneRelationLink, Profilerow, RelatedTable, RelationTabLabel, useRelationCounts,
 } from './internals/relations';
 import { CompositePkSubtitle } from './internals/composite-pk-subtitle';
 import { useFkLabels } from './internals/use-fk-labels';
-import { ActiveUserSessionsTab } from './users/active-sessions-tab';
+import { UserActions } from './users/user-actions';
+import { UserSplitLayout } from './users/user-split-layout';
+import { SplitLayout, singularize } from './internals/split-layout';
 import { iconFor } from '../icons';
-
-/**
- * "Active sessions" tab label. Count comes from the bulk `/_counts`
- * payload (no per-render polling); the tab content drives live
- * updates while it's open.
- */
-function ActiveSessionsTabLabel({ count }: { count: number | undefined }) {
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      {iconFor('radio')}
-      <span>
-        Active sessions{count !== undefined && count > 0 && (
-          <span className="ml-1 text-muted-foreground">({count})</span>
-        )}
-      </span>
-    </span>
-  );
-}
 
 export function ShowPage({ resources }: { resources: Resource[] }) {
   const params = useParams<{ resource: string; id: string; relation?: string; childId?: string }>();
   const { resource: name, id, relation: nestedRelation, childId: nestedChildId } = params;
   const navigate = useNavigate();
   const def = findResource(resources, name);
-  const { data, isLoading } = useOne({ resource: name, id });
+  const { data, isLoading, refetch } = useOne({ resource: name, id });
   const record = (data?.data ?? {}) as any;
 
   // Nested mode = the URL carries a `:relation/:childId` tail. The
@@ -52,18 +37,19 @@ export function ShowPage({ resources }: { resources: Resource[] }) {
   // when the child URL is loaded directly or revisited via back/
   // forward). The effect re-syncs whenever the URL changes — without
   // it, switching from a list tab to a nested child wouldn't reflect.
+  //
+  // Default tab differs by layout:
+  //   - split mode (users): no Profile tab; first relation tab opens
+  //     (Active sessions / Audit aren't tabs here — they're collapsible
+  //     sections rendered below the grid).
+  //   - regular: start on Profile.
+  // The default is computed inside the effect below since it depends on
+  // `manyRels`, which is derived from the catalog after the early
+  // returns.
   const [activeTab, setActiveTab] = useState<string>(nestedRelation ?? '__profile');
-  useEffect(() => {
-    setActiveTab(nestedRelation ?? '__profile');
-  }, [nestedRelation]);
   // Single bulk fetch for every many-relation count — replaces N parallel
   // per-tab requests we used to fire from inside <RelationTabLabel>.
   const counts = useRelationCounts(name, id);
-
-  // Override for the Active sessions badge while the tab is open —
-  // keeps the label in sync with the live list instead of the
-  // page-open `_counts` snapshot.
-  const [liveSessionsCount, setLiveSessionsCount] = useState<number | null>(null);
 
   // FK label lookup — same hook the list page uses, fed a single-row
   // "list". Stays at 1 query per FK column on the resource (typically 0–2).
@@ -81,9 +67,26 @@ export function ShowPage({ resources }: { resources: Resource[] }) {
   const manyRels = relations.filter((r) => r.kind === 'many');
   const oneRels = relations.filter((r) => r.kind === 'one');
 
-  // Active sessions tab is bound to the canonical `users` resource —
-  // users who rename their users table lose it.
-  const showActiveSessions = name === 'users' && !!id;
+  // Split layout: profile left, relation tabs right. Applies to ANY
+  // resource that has at least one many-relation AND a resolved id —
+  // makes the chrome consistent across Users / Leaderboards / Cloud
+  // Saves / etc. The users variant additionally renders Active
+  // sessions + Audit collapsibles below the grid via
+  // `<UserSplitLayout>`; every other resource goes through
+  // `<SplitLayout>` directly.
+  const splitLayout = !!id && manyRels.length > 0;
+  const isUsersResource = splitLayout && name === 'users';
+
+  // Default tab when there's no URL-pinned relation. In split mode
+  // there's no Profile tab, so fall back to the first relation; the
+  // effect re-syncs on URL changes and on first paint once `manyRels`
+  // has been derived (it's an empty array on the loading paint).
+  const splitLayoutDefault = splitLayout
+    ? (manyRels[0]?.name ?? '__profile')
+    : '__profile';
+  useEffect(() => {
+    setActiveTab(nestedRelation ?? splitLayoutDefault);
+  }, [nestedRelation, splitLayoutDefault]);
 
   // Relation tab → target icon lookup.
   const iconByResource: Record<string, string | undefined> = {};
@@ -117,6 +120,11 @@ export function ShowPage({ resources }: { resources: Resource[] }) {
   return (
     <Page
       back={`/${name}`}
+      // Split layout takes over framing so the profile and tabs each
+      // get their own card with a visible gap between them. The
+      // default single-card wrapper makes the two halves look like
+      // one giant panel — see ProtectedShell screenshot.
+      bare={splitLayout}
       title={
         <>
           {def.label}
@@ -124,94 +132,102 @@ export function ShowPage({ resources }: { resources: Resource[] }) {
         </>
       }
       actions={id && (
-        <Button asChild size="sm" variant="outline">
-          <Link to={`/${name}/edit/${id}`}><Pencil />Edit</Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* User-targeted operator workflows (Ban/Unban/Revoke
+              sessions) hang off the canonical `users` resource. The
+              same `name === 'users'` gate the Active sessions tab
+              uses — renames lose it, by design. */}
+          {name === 'users' && (
+            <UserActions
+              userId={id}
+              user={record}
+              onChanged={() => { void refetch(); }}
+            />
+          )}
+          <Button asChild size="sm" variant="outline">
+            <Link to={`/${name}/edit/${id}`}><Pencil />Edit</Link>
+          </Button>
+        </div>
       )}
     >
       {isLoading ? (
         <div className="flex items-center justify-center py-10 text-muted-foreground">
           <Loader2 className="size-4 animate-spin mr-2" /> loading…
         </div>
-      ) : (manyRels.length === 0 && !showActiveSessions) || !id ? (
+      ) : !splitLayout ? (
         profile
-      ) : (
-        <Tabs
-          value={activeTab}
-          onValueChange={(v) => {
-            // From nested mode, any tab switch returns the URL to the
-            // parent show so the new tab can render its list. The
-            // local state then re-syncs from the effect above.
-            if (isNested) {
-              navigate(`/${name}/show/${id}`);
-            }
-            setActiveTab(v);
-          }}
-        >
-          <TabsList data-testid={`show-tabs-${name}`}>
-            <TabsTrigger value="__profile">
-              <span className="inline-flex items-center gap-1.5">
-                {iconFor(def.icon)}
-                <span>Profile</span>
-              </span>
-            </TabsTrigger>
+      ) : (() => {
+        // Tab strip is the same on every split-layout page (Users,
+        // Leaderboards, etc.) — relations only. Built once and
+        // handed to whichever shell variant the resource needs.
+        const tabsBlock = (
+          <Tabs
+            value={activeTab}
+            onValueChange={(v) => {
+              if (isNested) { navigate(`/${name}/show/${id}`); }
+              setActiveTab(v);
+            }}
+          >
+            <TabsList data-testid={`show-tabs-${name}`}>
+              {manyRels.map((rel) => (
+                <TabsTrigger key={rel.name} value={rel.name}>
+                  <RelationTabLabel
+                    relation={rel}
+                    count={counts?.[rel.name]}
+                    targetIcon={iconByResource[rel.target]}
+                  />
+                </TabsTrigger>
+              ))}
+            </TabsList>
             {manyRels.map((rel) => (
-              <TabsTrigger key={rel.name} value={rel.name}>
-                <RelationTabLabel
-                  relation={rel}
-                  count={counts?.[rel.name]}
-                  targetIcon={iconByResource[rel.target]}
-                />
-              </TabsTrigger>
+              <TabsContent key={rel.name} value={rel.name}>
+                {isNested && nestedRelation === rel.name && nestedChildId ? (
+                  <NestedChildShowPanel
+                    parentResource={name!}
+                    parentId={id}
+                    relation={rel}
+                    childId={nestedChildId}
+                    resources={resources}
+                  />
+                ) : (
+                  <RelatedTable parentResource={name!} parentId={id} relation={rel} resources={resources} />
+                )}
+              </TabsContent>
             ))}
-            {showActiveSessions && (
-              <TabsTrigger value="__active_sessions" data-testid="tab-active-sessions">
-                <ActiveSessionsTabLabel
-                  count={liveSessionsCount ?? counts?.['__active_sessions']}
-                />
-              </TabsTrigger>
-            )}
-          </TabsList>
-          <TabsContent value="__profile">{profile}</TabsContent>
-          {manyRels.map((rel) => (
-            <TabsContent key={rel.name} value={rel.name}>
-              {isNested && nestedRelation === rel.name && nestedChildId ? (
-                <NestedChildShowPanel
-                  parentResource={name!}
-                  parentId={id}
-                  relation={rel}
-                  childId={nestedChildId}
-                  resources={resources}
-                />
-              ) : (
-                <RelatedTable parentResource={name!} parentId={id} relation={rel} resources={resources} />
-              )}
-            </TabsContent>
-          ))}
-          {showActiveSessions && (
-            <TabsContent value="__active_sessions">
-              <ActiveUserSessionsTab
-                userId={id}
-                onCountChange={setLiveSessionsCount}
-              />
-            </TabsContent>
-          )}
-        </Tabs>
-      )}
+          </Tabs>
+        );
+        // Eyebrow header for the profile card — naive singular of the
+        // resource label so it reads as "Leaderboard" / "User" /
+        // "Cloud Save". Resource owners can override via `label` on
+        // `defineAdminResource` for edge cases (e.g. "Activities").
+        const profileLabel = singularize(def.label);
+        return isUsersResource ? (
+          <UserSplitLayout
+            userId={id}
+            counts={counts}
+            profile={profile}
+            tabs={tabsBlock}
+            profileLabel={profileLabel}
+          />
+        ) : (
+          <SplitLayout
+            profile={profile}
+            tabs={tabsBlock}
+            profileLabel={profileLabel}
+          />
+        );
+      })()}
     </Page>
   );
 }
 
 /**
  * Build a standalone-edit URL with an optional `returnTo` query param.
- * The standalone EditPage reads `returnTo` and uses it for both its
- * top-left back arrow and the post-Save redirect, so a user editing
- * a child row from inside a parent's relation tab returns to that
- * same tab instead of refine's default `/<resource>` list.
+ * Thin wrapper over `withReturnTo` that fixes the `/edit/<id>` shape;
+ * kept here (exported) for tests + clarity at the call site.
  */
 export function editUrl(resource: string, id: string, returnTo?: string): string {
-  const base = `/${resource}/edit/${encodeURIComponent(id)}`;
-  return returnTo ? `${base}?returnTo=${encodeURIComponent(returnTo)}` : base;
+  return withReturnTo(`/${resource}/edit/${encodeURIComponent(id)}`, returnTo);
 }
 
 /**

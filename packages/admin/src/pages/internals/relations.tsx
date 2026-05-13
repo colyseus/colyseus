@@ -7,8 +7,10 @@
  *  - OneRelationLink: small badge linking to the one-relation target
  */
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { cn } from '@/lib/utils';
 import { Eye, Loader2, Pencil, Plus } from 'lucide-react';
+import { DataCell } from './data-cell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Empty } from '@/components/ui/empty';
@@ -142,6 +144,7 @@ export function RelatedTableView({
   pageSize: number;
   onPageChange: (page: number) => void;
 }) {
+  const navigate = useNavigate();
   const cols = visibleColumns(targetDef, targetDef.listColumns);
   const newHref = `/${relation.target}/create?_prefill_${relation.fk}=${encodeURIComponent(parentId)}`;
 
@@ -167,7 +170,11 @@ export function RelatedTableView({
           <Table>
             <TableHeader>
               <TableRow>
-                {cols.map((c) => (<TableHead key={c.name}>{c.name}</TableHead>))}
+                {/* `c.label` is the humanized version the catalog
+                    already computed (`board_id` → `Board id`); matches
+                    the standalone list page's header styling so the
+                    two surfaces don't drift. */}
+                {cols.map((c) => (<TableHead key={c.name}>{c.label}</TableHead>))}
                 {/* Action column for the View + Edit affordances —
                     separate from the data cells so an FK column's own
                     linkTo doesn't fight the row-level navigation
@@ -180,10 +187,19 @@ export function RelatedTableView({
             <TableBody>
               {rows.map((row, i) => {
                 const childId = rowId(targetDef, row);
+                // Whole-row drill-in to the parent-anchored nested
+                // show URL — same target as the eye-icon action.
+                // Skipped for cells that render their own anchor
+                // (FK columns with `linkTo`) so the inner link wins.
+                const drillIn = childId
+                  ? () => navigate(`/${parentResource}/show/${parentId}/${relation.name}/${childId}`)
+                  : undefined;
                 return (
                 <TableRow key={childId ?? i}>
                   {cols.map((c) => (
-                    <TableCell key={c.name}>{formatCell(row[c.name], c)}</TableCell>
+                    <DataCell key={c.name} column={c} onNavigate={drillIn}>
+                      {formatCell(row[c.name], c)}
+                    </DataCell>
                   ))}
                   <TableCell className="w-24 text-right">
                     {childId && (

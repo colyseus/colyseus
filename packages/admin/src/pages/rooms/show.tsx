@@ -13,7 +13,7 @@
  * dispose are irreversible. Failures surface as a toast.
  */
 import * as React from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Loader2, Trash2, User, Lock, Unlock, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { JsonEditor, githubDarkTheme, githubLightTheme } from 'json-edit-react';
@@ -30,6 +30,7 @@ import {
   AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { KickConfirmDialog } from '../internals/kick-confirm-dialog';
+import { safeReturnTo } from '../internals/return-to';
 import { useTheme } from '@/lib/theme-provider';
 import { cn } from '@/lib/utils';
 
@@ -59,7 +60,13 @@ interface InspectorView {
 
 export function RoomShowPage() {
   const { roomId } = useParams<{ roomId: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  // When the inspector is opened from a user's Active sessions tab,
+  // the link carries `?returnTo=/users/show/<id>` so the back-arrow
+  // and the post-dispose redirect return the operator there. Falls
+  // back to `/rooms` (the live-rooms list) for direct navigation.
+  const returnTo = safeReturnTo(searchParams.get('returnTo'), '/rooms');
   const [view, setView] = React.useState<InspectorView | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
@@ -237,7 +244,7 @@ export function RoomShowPage() {
       });
       if (!res.ok) { throw new Error(`dispose failed (HTTP ${res.status})`); }
       toast.success(`Room ${roomId} disposed`);
-      navigate('/rooms');
+      navigate(returnTo);
     } catch (err: any) {
       toast.error(err?.message ?? 'dispose failed');
       setBusy(false);
@@ -271,7 +278,7 @@ export function RoomShowPage() {
 
   if (!view && !error) {
     return (
-      <Page title={`Room ${roomId}`} back="/rooms">
+      <Page title={`Room ${roomId}`} back={returnTo}>
         <div className="flex items-center justify-center py-10 text-muted-foreground">
           <Loader2 className="size-4 animate-spin" />
           <span className="ml-2 text-sm">loading…</span>
@@ -288,7 +295,7 @@ export function RoomShowPage() {
           <span className="font-mono text-sm text-muted-foreground">{view?.roomId}</span>
         </span>
       }
-      back="/rooms"
+      back={returnTo}
       actions={
         view && (
           <div className="flex items-center gap-2">

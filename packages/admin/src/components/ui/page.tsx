@@ -12,9 +12,12 @@ import { cn } from '@/lib/utils';
  *  - `title`   page heading
  *  - `actions` right-aligned content (header buttons, save button, etc.)
  *  - `footer`  bottom row (e.g. save/cancel pair)
+ *  - `bare`    skip the default rounded-border card around `children` so
+ *              the caller can render its own framing (e.g. a 2-column
+ *              split layout where each column gets its own card).
  */
 export function Page({
-  back, title, actions, children, footer, className,
+  back, title, actions, children, footer, className, bare = false,
 }: {
   back?: string;
   title: React.ReactNode;
@@ -22,6 +25,7 @@ export function Page({
   children: React.ReactNode;
   footer?: React.ReactNode;
   className?: string;
+  bare?: boolean;
 }) {
   return (
     <div className={cn('flex flex-col gap-4', className)}>
@@ -40,10 +44,14 @@ export function Page({
         </div>
         {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
       </div>
-      {/* Inner padding tapers on mobile — `p-4` already, kept consistent
-          across breakpoints since 16px is the smallest comfortable
-          content padding regardless of viewport. */}
-      <div className="rounded-lg border bg-background p-4">{children}</div>
+      {/* Default: wrap children in a single rounded-border card.
+          `bare` lets a caller (e.g. ShowPage's split layout) take over
+          framing — used to render two side-by-side cards with a real
+          gap between them, instead of one shared outer card that
+          visually blurs the columns together. */}
+      {bare
+        ? children
+        : <div className="rounded-lg border bg-background p-4">{children}</div>}
       {footer && <div className="flex flex-wrap justify-end gap-2">{footer}</div>}
     </div>
   );

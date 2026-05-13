@@ -36,6 +36,9 @@ import {
   inspectRoomEndpoint, kickClientEndpoint, lockRoomEndpoint,
   editRoomStateEndpoint, deleteRoomStateEndpoint, disposeRoomEndpoint,
 } from './endpoints/rooms.js';
+import {
+  banUserEndpoint, unbanUserEndpoint, revokeSessionsEndpoint,
+} from './endpoints/users.js';
 // Side-effect import: monkey-patches `Room.prototype` with the
 // `_editStateProperty` / `_deleteStateProperty` hooks the inspector's
 // state-editor calls via `matchMaker.remoteRoomCall`. Must run before
@@ -286,7 +289,13 @@ function applyBuiltInResourceDefaults(
         delete: 'deny',
       },
       list: {
-        columns: ['created_at', 'operator_id', 'action', 'resource', 'target_id'],
+        // `payload` is here even though it's not in the generic
+        // list-table's column header order — the projection limits
+        // the API response to these columns, and the user-show
+        // Audit tab needs `payload` to render reason / until / diff.
+        // The standalone /adminAudit list page renders it as a
+        // truncated JSON cell via `formatCell`.
+        columns: ['created_at', 'operator_id', 'action', 'resource', 'target_id', 'payload'],
         defaultSort: { field: 'created_at', order: 'desc' },
       },
       show: {
@@ -466,6 +475,15 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
     adminRoomStateEdit:   editRoomStateEndpoint(ctx),
     adminRoomStateDelete: deleteRoomStateEndpoint(ctx),
     adminRoomDispose:  disposeRoomEndpoint(ctx),
+
+    // User-targeted operator workflows. Each delegates to a
+    // database.auth.* service method and audit-logs as user.*.
+    // The endpoints sit alongside the generic CRUD (which handles
+    // shape-uniform mutations) — these exist for multi-column /
+    // multi-method workflows that don't fit a PATCH.
+    adminUserBan:            banUserEndpoint(ctx),
+    adminUserUnban:          unbanUserEndpoint(ctx),
+    adminUserRevokeSessions: revokeSessionsEndpoint(ctx),
 
     adminList:        listEndpoint(ctx),
     adminGet:         getEndpoint(ctx),

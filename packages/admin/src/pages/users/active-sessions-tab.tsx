@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { KickConfirmDialog } from '../internals/kick-confirm-dialog';
+import { withReturnTo } from '../internals/return-to';
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -141,7 +142,11 @@ export function ActiveUserSessionsTab({
           <TableRow key={`${s.roomId}:${s.sessionId}`} data-testid={`active-session-${s.sessionId}`}>
             <TableCell>
               <Button asChild variant="link" className="h-auto p-0">
-                <Link to={`/rooms/${s.roomId}`}>
+                {/* returnTo points back at the user's show page so the
+                    room inspector's back-arrow and post-dispose redirect
+                    land on the Active sessions tab (split-layout default)
+                    instead of the global /rooms list. */}
+                <Link to={withReturnTo(`/rooms/${s.roomId}`, `/users/show/${userId}`)}>
                   <DoorOpen className="mr-1 size-3" />
                   <span className="text-xs">
                     {s.roomName}
