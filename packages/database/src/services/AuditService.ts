@@ -20,7 +20,11 @@ export type AuditAction =
   | 'auth.password_reset_requested'
   | 'auth.password_reset_completed'
   | 'room.kick'
-  | 'room.dispose';
+  | 'room.dispose'
+  | 'room.lock'
+  | 'room.unlock'
+  | 'room.state.edit'
+  | 'room.state.delete';
 
 export interface AuditEntry {
   id: string;

@@ -32,8 +32,15 @@ import {
 } from './endpoints/crud.js';
 import { countsEndpoint, relationEndpoint } from './endpoints/relations.js';
 import {
-  listRoomsEndpoint, inspectRoomEndpoint, kickClientEndpoint, disposeRoomEndpoint,
+  listRoomsEndpoint, listRoomsByUserEndpoint,
+  inspectRoomEndpoint, kickClientEndpoint, lockRoomEndpoint,
+  editRoomStateEndpoint, deleteRoomStateEndpoint, disposeRoomEndpoint,
 } from './endpoints/rooms.js';
+// Side-effect import: monkey-patches `Room.prototype` with the
+// `_editStateProperty` / `_deleteStateProperty` hooks the inspector's
+// state-editor calls via `matchMaker.remoteRoomCall`. Must run before
+// the endpoints below are wired — they reference the patched methods.
+import './ext/Room.js';
 import {
   healthEndpoint, dashboardEndpoint, uiIndexEndpoint, uiAssetsEndpoint,
 } from './endpoints/system.js';
@@ -250,9 +257,8 @@ function resolveLimiter(
  *   - the user hasn't already supplied an override via
  *     `defineAdminResource(<table>, {...})`.
  *
- * Today this is just `userNotes` → autofill `authorId` from the signed-in
- * admin's `operatorId`. Add new entries here when a built-in table has a
- * convention that should "just work" without user wiring.
+ * Add new entries here when a built-in table has a convention that should
+ * "just work" without user wiring.
  */
 function applyBuiltInResourceDefaults(
   resources: Record<string, ResourceDefinition>,
@@ -262,6 +268,37 @@ function applyBuiltInResourceDefaults(
     userNotes: () => ({
       create: {
         defaults: ({ operatorId }) => ({ authorId: operatorId }),
+      },
+    }),
+    // Audit log — append-only by contract. Writes are denied for
+    // *everyone* (including admin) so a compromised account can't
+    // tamper with the record retroactively; pruning happens out-of-
+    // band (cron / SQL job). Reads are admin-only because the payload
+    // can contain sensitive before/after row data.
+    adminAudit: () => ({
+      label: 'Audit log',
+      icon: 'file-text',
+      policies: {
+        list:   ['admin'],
+        read:   ['admin'],
+        create: 'deny',
+        update: 'deny',
+        delete: 'deny',
+      },
+      list: {
+        columns: ['created_at', 'operator_id', 'action', 'resource', 'target_id'],
+        defaultSort: { field: 'created_at', order: 'desc' },
+      },
+      show: {
+        fields: ['created_at', 'operator_id', 'action', 'resource', 'target_id', 'payload'],
+      },
+      columns: {
+        created_at:  { label: 'When' },
+        operator_id: { label: 'Operator' },
+        // Target table varies per row, so deep-link via the sibling
+        // `resource` column (e.g. resource='users' → /users/show/<id>).
+        // Unknown resources (e.g. 'auth') render as plain text.
+        target_id:   { label: 'Target', linkTo: { resourceFromColumn: 'resource' } },
       },
     }),
   };
@@ -418,8 +455,16 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
     // `defineAdminResource(<rooms-table>, { policies: ... })` if
     // you want a tighter rule (mods who can view but not kick, etc.).
     adminRoomsList:    listRoomsEndpoint(ctx),
+    // `/rooms/by-user/:userId` doesn't conflict with `/rooms/:roomId`
+    // because the underlying rou3 trie router prefers static segments
+    // over parameters — the literal `by-user` wins regardless of
+    // registration order. Listed here for grouping only.
+    adminRoomsByUser:  listRoomsByUserEndpoint(ctx),
     adminRoomInspect:  inspectRoomEndpoint(ctx),
     adminRoomKick:     kickClientEndpoint(ctx),
+    adminRoomLock:     lockRoomEndpoint(ctx),
+    adminRoomStateEdit:   editRoomStateEndpoint(ctx),
+    adminRoomStateDelete: deleteRoomStateEndpoint(ctx),
     adminRoomDispose:  disposeRoomEndpoint(ctx),
 
     adminList:        listEndpoint(ctx),

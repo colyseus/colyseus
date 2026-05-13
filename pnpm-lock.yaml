@@ -227,14 +227,17 @@ importers:
         specifier: ^1.1.1
         version: 1.1.1(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       drizzle-orm:
-        specifier: 1.0.0-beta.20
-        version: 1.0.0-beta.20(@electric-sql/pglite@0.4.5)(@types/mssql@9.1.11(@azure/core-client@1.10.1))(bun-types@1.3.13)(gel@2.2.0)(mssql@11.0.1(@azure/core-client@1.10.1))(postgres@3.4.9)(valibot@1.2.0(typescript@6.0.3))(zod@4.3.6)
+        specifier: 1.0.0-rc.2
+        version: 1.0.0-rc.2(@electric-sql/pglite@0.4.5)(@types/mssql@9.1.11(@azure/core-client@1.10.1))(bun-types@1.3.13)(mssql@11.0.1(@azure/core-client@1.10.1))(postgres@3.4.9)(valibot@1.2.0(typescript@6.0.3))(zod@4.3.6)
       esbuild:
         specifier: ^0.27.2
         version: 0.27.7
       fast-glob:
         specifier: ^3.2.12
         version: 3.3.3
+      json-edit-react:
+        specifier: ^1.17.0
+        version: 1.29.0(react@18.3.1)
       lucide-react:
         specifier: ^0.475.0
         version: 0.475.0(react@18.3.1)
@@ -5522,121 +5525,6 @@ packages:
       sqlite3:
         optional: true
 
-  drizzle-orm@1.0.0-beta.20:
-    resolution: {integrity: sha512-7qiuw+Z6yGr+ywt3PS5dP6UCfdymIuFT/ni6GnPGzLhkBIolNBTo4ByMBWTxJ7dW/Ya6d73GtkeuKfcVcriVHA==}
-    peerDependencies:
-      '@aws-sdk/client-rds-data': '>=3'
-      '@cloudflare/workers-types': '>=4'
-      '@effect/sql': ^0.48.5
-      '@effect/sql-pg': ^0.49.7
-      '@electric-sql/pglite': '>=0.2.0'
-      '@libsql/client': '>=0.10.0'
-      '@libsql/client-wasm': '>=0.10.0'
-      '@neondatabase/serverless': '>=0.10.0'
-      '@op-engineering/op-sqlite': '>=2'
-      '@opentelemetry/api': ^1.4.1
-      '@planetscale/database': '>=1.13'
-      '@sinclair/typebox': '>=0.34.8'
-      '@sqlitecloud/drivers': '>=1.0.653'
-      '@tidbcloud/serverless': '*'
-      '@tursodatabase/database': '>=0.2.1'
-      '@tursodatabase/database-common': '>=0.2.1'
-      '@tursodatabase/database-wasm': '>=0.2.1'
-      '@types/better-sqlite3': '*'
-      '@types/mssql': ^9.1.4
-      '@types/pg': '*'
-      '@types/sql.js': '*'
-      '@upstash/redis': '>=1.34.7'
-      '@vercel/postgres': '>=0.8.0'
-      '@xata.io/client': '*'
-      arktype: '>=2.0.0'
-      better-sqlite3: '>=9.3.0'
-      bun-types: '*'
-      expo-sqlite: '>=14.0.0'
-      gel: '>=2'
-      mssql: ^11.0.1
-      mysql2: '>=2'
-      pg: '>=8'
-      postgres: '>=3'
-      sql.js: '>=1'
-      sqlite3: '>=5'
-      typebox: '>=1.0.0'
-      valibot: '>=1.0.0-beta.7'
-      zod: ^3.25.0 || ^4.0.0
-    peerDependenciesMeta:
-      '@aws-sdk/client-rds-data':
-        optional: true
-      '@cloudflare/workers-types':
-        optional: true
-      '@effect/sql':
-        optional: true
-      '@effect/sql-pg':
-        optional: true
-      '@electric-sql/pglite':
-        optional: true
-      '@libsql/client':
-        optional: true
-      '@libsql/client-wasm':
-        optional: true
-      '@neondatabase/serverless':
-        optional: true
-      '@op-engineering/op-sqlite':
-        optional: true
-      '@opentelemetry/api':
-        optional: true
-      '@planetscale/database':
-        optional: true
-      '@sinclair/typebox':
-        optional: true
-      '@sqlitecloud/drivers':
-        optional: true
-      '@tidbcloud/serverless':
-        optional: true
-      '@tursodatabase/database':
-        optional: true
-      '@tursodatabase/database-common':
-        optional: true
-      '@tursodatabase/database-wasm':
-        optional: true
-      '@types/better-sqlite3':
-        optional: true
-      '@types/pg':
-        optional: true
-      '@types/sql.js':
-        optional: true
-      '@upstash/redis':
-        optional: true
-      '@vercel/postgres':
-        optional: true
-      '@xata.io/client':
-        optional: true
-      arktype:
-        optional: true
-      better-sqlite3:
-        optional: true
-      bun-types:
-        optional: true
-      expo-sqlite:
-        optional: true
-      gel:
-        optional: true
-      mysql2:
-        optional: true
-      pg:
-        optional: true
-      postgres:
-        optional: true
-      sql.js:
-        optional: true
-      sqlite3:
-        optional: true
-      typebox:
-        optional: true
-      valibot:
-        optional: true
-      zod:
-        optional: true
-
   drizzle-orm@1.0.0-rc.2:
     resolution: {integrity: sha512-UXYDkbplF5wX0hwxll+80QhEwUvAJLBu+tAK/d4fna18kLE6VuliAzufF/ieDEIJeSnLRYgtmsXD6x1Xuy1kIg==}
     peerDependencies:
@@ -9529,10 +9417,12 @@ snapshots:
       tslib: 2.8.1
     transitivePeerDependencies:
       - supports-color
+    optional: true
 
   '@azure/abort-controller@2.1.2':
     dependencies:
       tslib: 2.8.1
+    optional: true
 
   '@azure/core-auth@1.10.1':
     dependencies:
@@ -9541,6 +9431,7 @@ snapshots:
       tslib: 2.8.1
     transitivePeerDependencies:
       - supports-color
+    optional: true
 
   '@azure/core-client@1.10.1':
     dependencies:
@@ -9553,12 +9444,14 @@ snapshots:
       tslib: 2.8.1
     transitivePeerDependencies:
       - supports-color
+    optional: true
 
   '@azure/core-http-compat@2.4.0(@azure/core-client@1.10.1)(@azure/core-rest-pipeline@1.23.0)':
     dependencies:
       '@azure/abort-controller': 2.1.2
       '@azure/core-client': 1.10.1
       '@azure/core-rest-pipeline': 1.23.0
+    optional: true
 
   '@azure/core-lro@2.7.2':
     dependencies:
@@ -9568,10 +9461,12 @@ snapshots:
       tslib: 2.8.1
     transitivePeerDependencies:
       - supports-color
+    optional: true
 
   '@azure/core-paging@1.6.2':
     dependencies:
       tslib: 2.8.1
+    optional: true
 
   '@azure/core-rest-pipeline@1.23.0':
     dependencies:
@@ -9584,10 +9479,12 @@ snapshots:
       tslib: 2.8.1
     transitivePeerDependencies:
       - supports-color
+    optional: true
 
   '@azure/core-tracing@1.3.1':
     dependencies:
       tslib: 2.8.1
+    optional: true
 
   '@azure/core-util@1.13.1':
     dependencies:
@@ -9596,6 +9493,7 @@ snapshots:
       tslib: 2.8.1
     transitivePeerDependencies:
       - supports-color
+    optional: true
 
   '@azure/identity@4.13.1':
     dependencies:
@@ -9612,6 +9510,7 @@ snapshots:
       tslib: 2.8.1
     transitivePeerDependencies:
       - supports-color
+    optional: true
 
   '@azure/keyvault-common@2.1.0':
     dependencies:
@@ -9625,6 +9524,7 @@ snapshots:
       tslib: 2.8.1
     transitivePeerDependencies:
       - supports-color
+    optional: true
 
   '@azure/keyvault-keys@4.10.0(@azure/core-client@1.10.1)':
     dependencies:
@@ -9643,6 +9543,7 @@ snapshots:
     transitivePeerDependencies:
       - '@azure/core-client'
       - supports-color
+    optional: true
 
   '@azure/logger@1.3.0':
     dependencies:
@@ -9650,17 +9551,21 @@ snapshots:
       tslib: 2.8.1
     transitivePeerDependencies:
       - supports-color
+    optional: true
 
   '@azure/msal-browser@5.9.0':
     dependencies:
       '@azure/msal-common': 16.5.2
+    optional: true
 
-  '@azure/msal-common@16.5.2': {}
+  '@azure/msal-common@16.5.2':
+    optional: true
 
   '@azure/msal-node@5.1.5':
     dependencies:
       '@azure/msal-common': 16.5.2
       jsonwebtoken: 9.0.3
+    optional: true
 
   '@babel/code-frame@7.29.0':
     dependencies:
@@ -11025,7 +10930,8 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@js-joda/core@5.7.0': {}
+  '@js-joda/core@5.7.0':
+    optional: true
 
   '@js-temporal/polyfill@0.5.1':
     dependencies:
@@ -12124,7 +12030,8 @@ snapshots:
     optionalDependencies:
       react-dom: 18.3.1(react@18.3.1)
 
-  '@tediousjs/connection-string@0.5.0': {}
+  '@tediousjs/connection-string@0.5.0':
+    optional: true
 
   '@tootallnate/quickjs-emscripten@0.23.0': {}
 
@@ -12282,6 +12189,7 @@ snapshots:
     transitivePeerDependencies:
       - '@azure/core-client'
       - supports-color
+    optional: true
 
   '@types/node@16.18.126': {}
 
@@ -12336,6 +12244,7 @@ snapshots:
   '@types/readable-stream@4.0.23':
     dependencies:
       '@types/node': 22.19.17
+    optional: true
 
   '@types/resolve@1.20.2': {}
 
@@ -12409,6 +12318,7 @@ snapshots:
       tslib: 2.8.1
     transitivePeerDependencies:
       - supports-color
+    optional: true
 
   '@uiw/codemirror-extensions-basic-setup@4.25.9(@codemirror/autocomplete@6.20.2)(@codemirror/commands@6.10.3)(@codemirror/language@6.12.3)(@codemirror/lint@6.9.6)(@codemirror/search@6.7.0)(@codemirror/state@6.6.0)(@codemirror/view@6.42.1)':
     dependencies:
@@ -12639,6 +12549,7 @@ snapshots:
   abort-controller@3.0.0:
     dependencies:
       event-target-shim: 5.0.1
+    optional: true
 
   accepts@1.3.8:
     dependencies:
@@ -12944,6 +12855,7 @@ snapshots:
       buffer: 6.0.3
       inherits: 2.0.4
       readable-stream: 4.7.0
+    optional: true
 
   blessed@0.1.81: {}
 
@@ -13017,6 +12929,7 @@ snapshots:
     dependencies:
       base64-js: 1.5.1
       ieee754: 1.2.1
+    optional: true
 
   builtin-modules@1.1.1: {}
 
@@ -13052,6 +12965,7 @@ snapshots:
   bundle-name@4.1.0:
     dependencies:
       run-applescript: 7.1.0
+    optional: true
 
   bytes@3.1.2: {}
 
@@ -13332,7 +13246,8 @@ snapshots:
 
   commander@10.0.1: {}
 
-  commander@11.1.0: {}
+  commander@11.1.0:
+    optional: true
 
   commander@14.0.3: {}
 
@@ -13570,12 +13485,14 @@ snapshots:
 
   deepmerge@4.3.1: {}
 
-  default-browser-id@5.0.1: {}
+  default-browser-id@5.0.1:
+    optional: true
 
   default-browser@5.5.0:
     dependencies:
       bundle-name: 4.1.0
       default-browser-id: 5.0.1
+    optional: true
 
   define-data-property@1.1.4:
     dependencies:
@@ -13583,7 +13500,8 @@ snapshots:
       es-errors: 1.3.0
       gopd: 1.2.0
 
-  define-lazy-prop@3.0.0: {}
+  define-lazy-prop@3.0.0:
+    optional: true
 
   define-properties@1.2.1:
     dependencies:
@@ -13674,18 +13592,6 @@ snapshots:
       bun-types: 1.3.13
       postgres: 3.4.9
       react: 18.3.1
-
-  drizzle-orm@1.0.0-beta.20(@electric-sql/pglite@0.4.5)(@types/mssql@9.1.11(@azure/core-client@1.10.1))(bun-types@1.3.13)(gel@2.2.0)(mssql@11.0.1(@azure/core-client@1.10.1))(postgres@3.4.9)(valibot@1.2.0(typescript@6.0.3))(zod@4.3.6):
-    dependencies:
-      '@types/mssql': 9.1.11(@azure/core-client@1.10.1)
-      mssql: 11.0.1(@azure/core-client@1.10.1)
-    optionalDependencies:
-      '@electric-sql/pglite': 0.4.5
-      bun-types: 1.3.13
-      gel: 2.2.0
-      postgres: 3.4.9
-      valibot: 1.2.0(typescript@6.0.3)
-      zod: 4.3.6
 
   drizzle-orm@1.0.0-rc.2(@electric-sql/pglite@0.4.5)(@types/mssql@9.1.11(@azure/core-client@1.10.1))(bun-types@1.3.13)(mssql@11.0.1(@azure/core-client@1.10.1))(postgres@3.4.9)(valibot@1.2.0(typescript@6.0.3))(zod@4.3.6):
     optionalDependencies:
@@ -14006,7 +13912,8 @@ snapshots:
 
   etag@1.8.1: {}
 
-  event-target-shim@5.0.1: {}
+  event-target-shim@5.0.1:
+    optional: true
 
   eventemitter2@5.0.1: {}
 
@@ -14018,7 +13925,8 @@ snapshots:
     transitivePeerDependencies:
       - bare-abort-controller
 
-  events@3.3.0: {}
+  events@3.3.0:
+    optional: true
 
   execa@5.1.1:
     dependencies:
@@ -14548,6 +14456,7 @@ snapshots:
   iconv-lite@0.6.3:
     dependencies:
       safer-buffer: 2.1.2
+    optional: true
 
   iconv-lite@0.7.2:
     dependencies:
@@ -14648,7 +14557,8 @@ snapshots:
 
   is-decimal@2.0.1: {}
 
-  is-docker@3.0.0: {}
+  is-docker@3.0.0:
+    optional: true
 
   is-extglob@2.1.1: {}
 
@@ -14673,6 +14583,7 @@ snapshots:
   is-inside-container@1.0.0:
     dependencies:
       is-docker: 3.0.0
+    optional: true
 
   is-module@1.0.0: {}
 
@@ -14715,6 +14626,7 @@ snapshots:
   is-wsl@3.1.1:
     dependencies:
       is-inside-container: 1.0.0
+    optional: true
 
   isarray@0.0.1: {}
 
@@ -15100,7 +15012,8 @@ snapshots:
       git-sha1: 0.1.2
       pako: 0.2.9
 
-  js-md4@0.3.2: {}
+  js-md4@0.3.2:
+    optional: true
 
   js-tokens@10.0.0: {}
 
@@ -15638,6 +15551,7 @@ snapshots:
     transitivePeerDependencies:
       - '@azure/core-client'
       - supports-color
+    optional: true
 
   mute-stream@0.0.8: {}
 
@@ -15651,7 +15565,8 @@ snapshots:
 
   napi-build-utils@2.0.0: {}
 
-  native-duplexpair@1.0.0: {}
+  native-duplexpair@1.0.0:
+    optional: true
 
   natural-compare@1.4.0: {}
 
@@ -15781,6 +15696,7 @@ snapshots:
       define-lazy-prop: 3.0.0
       is-inside-container: 1.0.0
       wsl-utils: 0.1.0
+    optional: true
 
   os-tmpdir@1.0.2: {}
 
@@ -16134,7 +16050,8 @@ snapshots:
 
   process-nextick-args@2.0.1: {}
 
-  process@0.11.10: {}
+  process@0.11.10:
+    optional: true
 
   progress@2.0.3: {}
 
@@ -16439,6 +16356,7 @@ snapshots:
       events: 3.3.0
       process: 0.11.10
       string_decoder: 1.3.0
+    optional: true
 
   readdirp@3.6.0:
     dependencies:
@@ -16511,7 +16429,8 @@ snapshots:
 
   reusify@1.1.0: {}
 
-  rfdc@1.4.1: {}
+  rfdc@1.4.1:
+    optional: true
 
   rimraf@2.7.1:
     dependencies:
@@ -16624,7 +16543,8 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  run-applescript@7.1.0: {}
+  run-applescript@7.1.0:
+    optional: true
 
   run-async@2.4.1: {}
 
@@ -16853,7 +16773,8 @@ snapshots:
 
   sprintf-js@1.1.2: {}
 
-  sprintf-js@1.1.3: {}
+  sprintf-js@1.1.3:
+    optional: true
 
   stack-utils@2.0.6:
     dependencies:
@@ -17086,7 +17007,8 @@ snapshots:
       minizlib: 3.1.0
       yallist: 5.0.0
 
-  tarn@3.0.2: {}
+  tarn@3.0.2:
+    optional: true
 
   tedious@18.6.2(@azure/core-client@1.10.1):
     dependencies:
@@ -17103,6 +17025,7 @@ snapshots:
     transitivePeerDependencies:
       - '@azure/core-client'
       - supports-color
+    optional: true
 
   tedious@19.2.1(@azure/core-client@1.10.1):
     dependencies:
@@ -17119,6 +17042,7 @@ snapshots:
     transitivePeerDependencies:
       - '@azure/core-client'
       - supports-color
+    optional: true
 
   teex@1.0.1:
     dependencies:
@@ -17805,6 +17729,7 @@ snapshots:
   wsl-utils@0.1.0:
     dependencies:
       is-wsl: 3.1.1
+    optional: true
 
   xdg-basedir@5.1.0: {}
 
