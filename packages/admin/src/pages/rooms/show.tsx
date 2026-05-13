@@ -83,6 +83,13 @@ export function RoomShowPage() {
   // row. On failure we remove the id from this set; on success the
   // row disappears naturally when the poll refreshes.
   const [pendingKicks, setPendingKicks] = React.useState<ReadonlySet<string>>(() => new Set());
+  // `null` = idle. `true` = locking in flight. `false` = unlocking in
+  // flight. Distinct from the global `busy` flag so the lock button
+  // can render a spinner + intent-aware label ("Locking…") without
+  // changing the Dispose button's UX. The poll lags up to 2s behind
+  // the server's truth — without this immediate visual we'd leave
+  // the operator wondering whether the click registered.
+  const [lockPending, setLockPending] = React.useState<null | boolean>(null);
   // Search query for the state tree. Lifted to the page (not local
   // to StateEditor) so the Clients table can populate it when an
   // operator clicks a sessionId — the common "where is this client
@@ -240,6 +247,7 @@ export function RoomShowPage() {
   async function toggleLock(nextLocked: boolean) {
     if (!roomId) { return; }
     setBusy(true);
+    setLockPending(nextLocked);
     try {
       const res = await fetch(`/admin-api/rooms/${roomId}`, {
         method: 'PATCH', credentials: 'include',
@@ -248,10 +256,16 @@ export function RoomShowPage() {
       });
       if (!res.ok) { throw new Error(`${nextLocked ? 'lock' : 'unlock'} failed (HTTP ${res.status})`); }
       toast.success(`Room ${nextLocked ? 'locked' : 'unlocked'}`);
+      // Pull the new locked state immediately rather than waiting up
+      // to POLL_INTERVAL_MS for the next tick — otherwise the
+      // spinner clears before view.locked updates and the button
+      // briefly flashes back to its previous label.
+      refreshNow();
     } catch (err: any) {
       toast.error(err?.message ?? 'lock toggle failed');
     } finally {
       setBusy(false);
+      setLockPending(null);
     }
   }
 
@@ -278,11 +292,27 @@ export function RoomShowPage() {
       actions={
         view && (
           <div className="flex items-center gap-2">
-            {/* Lock toggle moved into the "Locked status" stat tile —
-                the tile *is* the affordance, so we don't need a
-                duplicate button here. Dispose stays as the only
-                header action so destructive operations are visually
-                distinct from view/toggle controls. */}
+            <Button
+              variant="outline" size="sm" disabled={busy}
+              data-testid={view.locked ? 'unlock-room' : 'lock-room'}
+              onClick={() => toggleLock(!view.locked)}
+            >
+              {/* `lockPending !== null` ⇒ request in flight. Show a
+                  spinner + the intended-state verb ("Locking…" /
+                  "Unlocking…") rather than the current state, so the
+                  operator sees their click registered immediately
+                  instead of waiting for the next poll. */}
+              {lockPending !== null ? (
+                <>
+                  <Loader2 className="mr-1 size-4 animate-spin" />
+                  {lockPending ? 'Locking…' : 'Unlocking…'}
+                </>
+              ) : view.locked ? (
+                <><Unlock className="mr-1 size-4" /> Unlock</>
+              ) : (
+                <><Lock className="mr-1 size-4" /> Lock</>
+              )}
+            </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="destructive" size="sm" disabled={busy} data-testid="dispose-room">
@@ -323,10 +353,6 @@ export function RoomShowPage() {
             <Stat label="Clients" value={`${view.clients} / ${formatMaxClients(view.maxClients)}`} />
             <Stat
               label="Locked status"
-              hint={view.locked ? 'Click to unlock' : 'Click to lock'}
-              testid={view.locked ? 'unlock-room' : 'lock-room'}
-              disabled={busy}
-              onClick={() => toggleLock(!view.locked)}
               value={
                 <span className="inline-flex items-center gap-1.5">
                   {view.locked
@@ -576,52 +602,11 @@ export function RoomShowPage() {
   );
 }
 
-/**
- * Compact stat tile in the top strip. Defaults to a plain `<div>`; when
- * `onClick` is provided it renders as a `<button>` so the tile *is*
- * the action — used for the Locked-status toggle, which is more
- * discoverable than a separate Lock/Unlock button next to Dispose.
- *
- * `hint` shows on hover (native `title` tooltip) so the click target's
- * effect is discoverable without a UI prompt.
- */
-function Stat({
-  label, value, hint, onClick, disabled, testid,
-}: {
-  label: string;
-  value: React.ReactNode;
-  hint?: string;
-  onClick?: () => void;
-  disabled?: boolean;
-  testid?: string;
-}) {
-  const body = (
-    <>
-      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="mt-0.5 text-base font-semibold">{value}</div>
-    </>
-  );
-  if (onClick) {
-    return (
-      <button
-        type="button"
-        title={hint}
-        disabled={disabled}
-        onClick={onClick}
-        data-testid={testid}
-        className={cn(
-          'rounded-md border bg-muted/30 px-3 py-2 text-left transition-colors',
-          'hover:bg-muted/60 focus:outline-none focus:ring-2 focus:ring-ring',
-          'disabled:cursor-not-allowed disabled:opacity-60',
-        )}
-      >
-        {body}
-      </button>
-    );
-  }
+function Stat({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="rounded-md border bg-muted/30 px-3 py-2">
-      {body}
+      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="mt-0.5 text-base font-semibold">{value}</div>
     </div>
   );
 }
