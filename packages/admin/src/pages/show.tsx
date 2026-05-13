@@ -93,7 +93,7 @@ export function ShowPage({ resources }: { resources: Resource[] }) {
     <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-[160px_1fr]" data-testid={`show-${name}`}>
       {cols.map((c) => (
         <Profilerow key={c.name} label={c.label}>
-          {formatCell(record[c.name], c, fkLabels.get(c.name)?.get(record[c.name]), record, resources)}
+          {formatCell(record[c.name], c, fkLabels.get(c.name)?.get(record[c.name]), record, resources, 'show')}
         </Profilerow>
       ))}
       {oneRels.length > 0 && id && (
@@ -285,7 +285,7 @@ function NestedChildShowPanel({
         >
           {cols.map((c) => (
             <Profilerow key={c.name} label={c.label}>
-              {formatCell(record[c.name], c, fkLabels.get(c.name)?.get(record[c.name]), record, resources)}
+              {formatCell(record[c.name], c, fkLabels.get(c.name)?.get(record[c.name]), record, resources, 'show')}
             </Profilerow>
           ))}
         </dl>

@@ -9,10 +9,21 @@
  * the visible text; otherwise the cell falls back to the raw FK value
  * still wrapped in the link.
  */
+import * as React from 'react';
 import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { type Column, type Resource, isBoolean, isDate, isJsonish, isNumeric } from '../../types';
 import { syntheticShowPath, SYNTHETIC_SHOW_PATHS } from './synthetic-resources';
+
+// Lazy-loaded tree view. Two reasons to defer:
+//   1. `json-edit-react` is a CJS module whose named exports break
+//      node's ESM loader. tsx-based unit tests reach this file
+//      transitively (e.g. through show.tsx / form.tsx) and would
+//      otherwise crash at import time. The lazy boundary keeps the
+//      heavy import out of the test-time module graph.
+//   2. List views never render this — only the show-page does.
+//      Code-splits the tree out of the initial JS bundle.
+const JsonTreeLazy = React.lazy(() => import('./json-tree'));
 
 /**
  * Compact relative time for table cells, with absolute fallback for
@@ -52,12 +63,22 @@ export function safeParseJson(raw: string): any {
   try { return JSON.parse(raw); } catch { return raw; }
 }
 
+/**
+ * Rendering mode. `'list'` (default) is the compact table cell — JSON
+ * truncates to ~60 chars, long ids collapse to "xx…yy". `'show'` is
+ * the detail page — JSON expands into a scrollable read-only tree
+ * (audit-log payloads, cloud-saves data, configs value, etc.). Other
+ * column types render identically in both modes.
+ */
+export type FormatMode = 'list' | 'show';
+
 export function formatCell(
   v: any,
   c?: Column,
   linkLabel?: string,
   row?: Record<string, any>,
   resources?: Resource[],
+  mode: FormatMode = 'list',
 ): React.ReactNode {
   if (v == null) { return <span className="text-muted-foreground">—</span>; }
 
@@ -134,6 +155,20 @@ export function formatCell(
 
   if (typeof v === 'object' || (c && isJsonish(c) && typeof v === 'string')) {
     const obj = typeof v === 'string' ? safeParseJson(v) : v;
+    // Show pages use the collapsible tree view — much friendlier than
+    // a 60-char preview when the operator's whole reason to be on
+    // this page is to read the payload (audit log, cloud save, etc.).
+    // List/table cells stay compact: the truncated <code> + tooltip
+    // is the right density for a table row.
+    if (mode === 'show') {
+      return (
+        <React.Suspense
+          fallback={<span className="text-xs text-muted-foreground">loading…</span>}
+        >
+          <JsonTreeLazy data={obj} />
+        </React.Suspense>
+      );
+    }
     const json = JSON.stringify(obj);
     return (
       <code
