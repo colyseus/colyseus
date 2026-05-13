@@ -20,7 +20,8 @@ import { SignInGate } from './SignInGate';
 import { UserHeader } from './UserHeader';
 import { ThemeToggle } from './ThemeToggle';
 import { ThemeProvider } from '@/lib/theme-provider';
-import { LayoutDashboard, Radio } from 'lucide-react';
+import { LayoutDashboard, Menu, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 const API = '/admin-api';
@@ -68,7 +69,7 @@ export function App() {
         routerProvider={routerProvider}
         authProvider={authProvider}
         notificationProvider={notificationProvider}
-        options={{ syncWithLocation: true, warnWhenUnsavedChanges: false }}
+        options={{ syncWithLocation: true, warnWhenUnsavedChanges: false, disableTelemetry: true }}
         resources={resources.map((r) => ({
           name: r.name,
           list: `/${r.name}`,
@@ -104,6 +105,14 @@ export function App() {
             <Route path="rooms/:roomId" element={<RoomShowPage />} />
             <Route path=":resource" element={<ListPage resources={resources} />} />
             <Route path=":resource/show/:id" element={<ShowPage resources={resources} />} />
+            {/* Tab-pinned variant: `/users/show/:id/cloudSaves` keeps the
+                cloudSaves tab active without drilling into a child row.
+                Used by the "Back to Cloud Saves" link inside a nested
+                child panel, and by Edit-page returns. */}
+            <Route path=":resource/show/:id/:relation" element={<ShowPage resources={resources} />} />
+            {/* Drill-in: `/users/show/:id/cloudSaves/:childId` renders the
+                child's read-only profile INSIDE the cloudSaves tab. */}
+            <Route path=":resource/show/:id/:relation/:childId" element={<ShowPage resources={resources} />} />
             <Route path=":resource/edit/:id" element={<EditPage resources={resources} />} />
             <Route path=":resource/create" element={<CreatePage resources={resources} />} />
           </Route>
@@ -122,18 +131,54 @@ export function App() {
  * and pulled in CSS we no longer need.
  */
 function ProtectedShell({ resources }: { resources: Resource[] }) {
+  const [navOpen, setNavOpen] = useState(false);
+  const { pathname } = useLocation();
+
+  // Auto-close the drawer on navigation so picking a destination
+  // dismisses it instead of stranding the overlay over the new page.
+  useEffect(() => { setNavOpen(false); }, [pathname]);
+
+  // Escape closes the drawer — the backdrop covers click-outside.
+  useEffect(() => {
+    if (!navOpen) { return; }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setNavOpen(false); } };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [navOpen]);
+
   return (
     <div className="flex min-h-screen bg-muted/30">
       <Sidebar resources={resources} />
-      {/* min-w-0 + min-w-0 on every flex link in the chain — without this the
-          column expands to fit a wide table and the entire page grows
-          horizontally instead of the table scrolling inside its container. */}
+      {/* Mobile drawer — same nav content, slides in from the left.
+          `md:hidden` so the desktop aside is the only nav above the
+          breakpoint and we don't double-mount. */}
+      <MobileNav
+        open={navOpen}
+        onClose={() => setNavOpen(false)}
+        resources={resources}
+      />
+      {/* min-w-0 propagates so a wide table scrolls inside the main
+          column instead of pushing the whole page horizontally. */}
       <div className="flex flex-1 flex-col min-w-0">
-        <header className="flex h-14 items-center justify-end gap-3 border-b bg-background px-6">
-          <ThemeToggle />
-          <UserHeader />
+        <header className="flex h-14 items-center gap-3 border-b bg-background px-4 sm:px-6">
+          <Button
+            variant="ghost" size="icon" className="md:hidden"
+            aria-label="Open navigation"
+            onClick={() => setNavOpen(true)}
+            data-testid="open-nav"
+          >
+            <Menu className="size-5" />
+          </Button>
+          {/* Brand visible in the header on mobile (the sidebar header
+              that normally shows it is hidden). Hidden on desktop where
+              the sidebar already brands the chrome. */}
+          <div className="text-base font-semibold tracking-tight md:hidden">Colyseus</div>
+          <div className="ml-auto flex items-center gap-3">
+            <ThemeToggle />
+            <UserHeader />
+          </div>
         </header>
-        <main className="flex-1 p-6 min-w-0">
+        <main className="flex-1 p-4 sm:p-6 min-w-0">
           <Outlet />
         </main>
       </div>
@@ -146,32 +191,97 @@ function Sidebar({ resources }: { resources: Resource[] }) {
   return (
     <aside className="hidden w-60 shrink-0 border-r bg-background md:block">
       <div className="px-4 py-4 text-base font-semibold tracking-tight">Colyseus</div>
-      <nav className="space-y-1 px-2 py-2">
-        <SidebarLink to="/" icon={<LayoutDashboard className="size-4" />} active={pathname === '/'}>
-          Dashboard
-        </SidebarLink>
-        <SidebarLink
-          to="/rooms"
-          icon={<Radio className="size-4" />}
-          active={pathname === '/rooms' || pathname.startsWith('/rooms/')}
-        >
-          Live rooms
-        </SidebarLink>
-        <div className="px-3 pt-3 pb-1 text-[11px] uppercase tracking-wide text-muted-foreground">
-          Resources
-        </div>
-        {resources.map((r) => (
-          <SidebarLink
-            key={r.name}
-            to={`/${r.name}`}
-            icon={iconFor(r.icon)}
-            active={pathname.startsWith(`/${r.name}`)}
-          >
-            {r.label}
-          </SidebarLink>
-        ))}
-      </nav>
+      <SidebarNav resources={resources} pathname={pathname} />
     </aside>
+  );
+}
+
+/**
+ * Slide-in nav drawer for mobile. Plain CSS (transform + transition)
+ * keeps us off the @radix-ui/react-dialog dependency — the drawer is
+ * conceptually a dialog but the surface area we need is tiny and the
+ * backdrop / Esc / nav-on-route-change handling lives at the parent.
+ */
+function MobileNav({
+  open, onClose, resources,
+}: {
+  open: boolean;
+  onClose: () => void;
+  resources: Resource[];
+}) {
+  const { pathname } = useLocation();
+  return (
+    <div
+      className={cn(
+        'fixed inset-0 z-50 md:hidden',
+        // pointer-events-none when closed so the underlying page is
+        // interactive even during the backdrop's fade-out frame.
+        open ? 'pointer-events-auto' : 'pointer-events-none',
+      )}
+      aria-hidden={!open}
+    >
+      {/* Backdrop — clickable to close. */}
+      <div
+        className={cn(
+          'absolute inset-0 bg-black/40 transition-opacity',
+          open ? 'opacity-100' : 'opacity-0',
+        )}
+        onClick={onClose}
+      />
+      {/* Panel */}
+      <aside
+        className={cn(
+          'absolute inset-y-0 left-0 flex w-64 flex-col bg-background shadow-xl',
+          'transition-transform duration-200 ease-out',
+          open ? 'translate-x-0' : '-translate-x-full',
+        )}
+        role="dialog"
+        aria-label="Navigation"
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b">
+          <span className="text-base font-semibold tracking-tight">Colyseus</span>
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close navigation">
+            <X className="size-4" />
+          </Button>
+        </div>
+        <SidebarNav resources={resources} pathname={pathname} />
+      </aside>
+    </div>
+  );
+}
+
+/**
+ * The nav list shared between the desktop sidebar and the mobile
+ * drawer. Same routes, same active-link styling — single source of
+ * truth so adding a new top-level link is one edit.
+ */
+function SidebarNav({ resources, pathname }: { resources: Resource[]; pathname: string }) {
+  return (
+    <nav className="space-y-1 px-2 py-2">
+      <SidebarLink to="/" icon={<LayoutDashboard className="size-4" />} active={pathname === '/'}>
+        Dashboard
+      </SidebarLink>
+      <SidebarLink
+        to="/rooms"
+        icon={iconFor('radio')}
+        active={pathname === '/rooms' || pathname.startsWith('/rooms/')}
+      >
+        Live rooms
+      </SidebarLink>
+      <div className="px-3 pt-3 pb-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+        Resources
+      </div>
+      {resources.map((r) => (
+        <SidebarLink
+          key={r.name}
+          to={`/${r.name}`}
+          icon={iconFor(r.icon)}
+          active={pathname.startsWith(`/${r.name}`)}
+        >
+          {r.label}
+        </SidebarLink>
+      ))}
+    </nav>
   );
 }
 

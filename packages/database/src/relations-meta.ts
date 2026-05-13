@@ -47,6 +47,10 @@ export const builtInRelations: Record<string, RelationDefinition[]> = {
     { name: 'analyticsEvents', target: 'analyticsEvents', kind: 'many', fk: 'userId' },
     { name: 'role', target: 'roles', kind: 'one', fk: 'userId' },
     { name: 'notes', target: 'userNotes', kind: 'many', fk: 'userId' },
+    // Reverse of `userNotes.author` — every note an admin wrote ends up
+    // on their own user page under "notes authored", separate from the
+    // notes filed AGAINST them which live under "notes".
+    { name: 'authoredNotes', target: 'userNotes', kind: 'many', fk: 'authorId' },
   ],
   cloudSaves: [
     { name: 'user', target: 'users', kind: 'one', fk: 'userId' },
@@ -66,6 +70,16 @@ export const builtInRelations: Record<string, RelationDefinition[]> = {
   ],
   userNotes: [
     { name: 'user', target: 'users', kind: 'one', fk: 'userId' },
+    // The admin who wrote the note — surfaced so support can spot "who
+    // last touched this account" without an extra join.
+    { name: 'author', target: 'users', kind: 'one', fk: 'authorId' },
+  ],
+  adminAudit: [
+    // The signed-in admin (operator) who triggered the recorded
+    // action. Audit rows themselves stay admin-only by RBAC policy;
+    // this relation just decorates the operator-id column with a
+    // link back to the users table when an admin is viewing the log.
+    { name: 'operator', target: 'users', kind: 'one', fk: 'operatorId' },
   ],
 };
 

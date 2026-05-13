@@ -51,6 +51,11 @@ import {
   installPluginHookWrappers,
   type PluginLayout,
 } from './RoomPlugin.ts';
+import {
+  trackRoomJoin,
+  releaseRoomLeave,
+  sweepRoomDispose,
+} from './utils/UserSessionIndex.ts';
 export {
   RoomPlugin,
   definePlugins,
@@ -231,6 +236,27 @@ export class Room<T extends RoomOptions = RoomOptions> {
    */
   public autoDispose: boolean = true;
   #_autoDispose: boolean;
+
+  /**
+   * Publish this room's joins/leaves into the user → active sessions
+   * index that powers the admin panel's "Active rooms for user X"
+   * lookup (and any other operator tooling that asks the same
+   * question via the same Presence hash).
+   *
+   * Set to `false` on rooms where you don't want per-user tracking
+   * — e.g. a high-volume relay room where the Presence write per
+   * join is a meaningful cost, or a room whose participants you
+   * don't want to surface in the operator UI for privacy reasons.
+   * Anonymous clients (no resolvable `userId` / `client.auth.id`)
+   * are skipped regardless of this flag.
+   *
+   * Class-field default — flip it at class level (`trackUserSessions
+   * = false`) for every instance of a Room subclass, or per-instance
+   * inside `onCreate` for finer control.
+   *
+   * @default true
+   */
+  public trackUserSessions: boolean = true;
 
   /**
    * Frequency to send the room state to connected clients, in milliseconds.
@@ -1656,6 +1682,12 @@ export class Room<T extends RoomOptions = RoomOptions> {
 
           // emit 'join' to room handler
           this._events.emit('join', client);
+
+          // Opt-out via `trackUserSessions = false` (high-volume relay
+          // rooms, privacy-sensitive rooms).
+          if (this.trackUserSessions) {
+            trackRoomJoin(this, client);
+          }
         }
 
       } catch (e: any) {
@@ -1975,6 +2007,10 @@ export class Room<T extends RoomOptions = RoomOptions> {
       await matchMaker.driver.remove(this._listing.roomId);
     }
 
+    // Cover the dispose race where `disconnect()` ran past `_onAfterLeave`
+    // for some sessions; cross-process crash leftovers get reconciled on read.
+    await sweepRoomDispose(this);
+
     let userReturnData;
     if (this.onDispose) {
       userReturnData = this.onDispose();
@@ -2217,6 +2253,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
       this._events.emit('leave', client, willDispose);
     }
 
+    releaseRoomLeave(this, client);
   }
 
   async #_incrementClientCount() {

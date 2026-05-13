@@ -15,6 +15,7 @@ import type { ResourceDefinition } from '../define-resource.js';
 import type { Logger } from '../logger.js';
 import { errorResponse } from '../http.js';
 import { buildPkWhere, type TableConfig } from '../helpers.js';
+import { clearSessionCookie, readSessionFromHeader } from '../sessions.js';
 
 export interface EndpointContext {
   apiPath: string;
@@ -61,7 +62,24 @@ export async function guard(
   }
 
   const ok = await ctx.database.moderation.can(userId, action, resource);
-  if (!ok) { return errorResponse(403, `forbidden: ${action} on ${resource}`); }
+  if (!ok) {
+    // Stale-cookie self-heal: cookie says admin, live DB disagrees
+    // (roles row wiped or demoted). Clear the cookie and tag the
+    // 403 so the frontend can route them back to /login.
+    const session = await readSessionFromHeader(reqCtx.getHeader('cookie'));
+    if (session?.role === 'admin') {
+      ctx.logger?.warn?.(
+        { userId, action, resource, cachedRole: session.role },
+        '[admin] role mismatch — cookie says admin, live DB disagrees; clearing session',
+      );
+      return errorResponse(
+        403,
+        'role_mismatch: your session is stale (DB role no longer admin). Please sign in again.',
+        { 'set-cookie': clearSessionCookie() },
+      );
+    }
+    return errorResponse(403, `forbidden: ${action} on ${resource}`);
+  }
   return null;
 }
 

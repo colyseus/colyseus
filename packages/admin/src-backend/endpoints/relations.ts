@@ -14,12 +14,20 @@
  * and which FK column to compare against. Relations whose target isn't
  * registered as a resource are filtered out — they'd 404 from the UI.
  */
-import { createEndpoint, type Endpoint } from '@colyseus/core';
+import { createEndpoint, matchMaker, userRoomsKey, type Endpoint } from '@colyseus/core';
 import { resolveFkLayout } from '@colyseus/database';
 import { eq, sql } from 'drizzle-orm';
 import { castPk, sqlKeyedProjection } from '../helpers.js';
 import { errorResponse, json } from '../http.js';
 import { guard, pkOrError, tableOrError, type EndpointContext } from './context.js';
+
+/**
+ * Synthetic count key for the user-show page's "Active sessions" tab.
+ * Lives alongside the relation counts in the `/_counts` response so the
+ * frontend can drive the tab badge from a single bulk request, instead
+ * of mounting a per-render polling hook on the label.
+ */
+const ACTIVE_SESSIONS_COUNT_KEY = '__active_sessions';
 
 // ---------------------------------------------------------------------------
 // GET /admin-api/:resource/:id/_counts — counts run in Promise.all so
@@ -58,6 +66,22 @@ export function countsEndpoint(ctx: EndpointContext): Endpoint {
           counts[rel.name] = Number((rows[0] as { c?: number })?.c ?? 0);
         }),
       );
+
+      // Active sessions for users: bolt the user-rooms hash size onto
+      // the response so the show page's tab badge resolves from this
+      // same bulk request. Counts the raw hash entries — no reconcile
+      // against `matchMaker.query` here, because the badge can tolerate
+      // tiny drift from crash-leftover entries (the tab's own fetch
+      // does the full reconcile + hdel sweep when opened).
+      if (resource === 'users') {
+        try {
+          const raw = await matchMaker.presence.hgetall(userRoomsKey(id));
+          counts[ACTIVE_SESSIONS_COUNT_KEY] = Object.keys(raw).length;
+        } catch {
+          // Presence outage shouldn't 500 the entire counts payload.
+          counts[ACTIVE_SESSIONS_COUNT_KEY] = 0;
+        }
+      }
 
       return json(counts);
     },

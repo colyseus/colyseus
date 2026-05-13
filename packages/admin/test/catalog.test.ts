@@ -195,4 +195,108 @@ describe('buildResourceCatalog', () => {
     assert.strictEqual(r!.columns[2]!.hasDefault, true);  // via autoIncrement
     assert.strictEqual(r!.columns[3]!.hasDefault, false); // neither
   });
+
+  describe('linkTo column overrides', () => {
+    it('forwards a static linkTo column override even when no FK relation exists', () => {
+      // The audit-log style — `target_id` is a free-form FK that points
+      // at different tables depending on the row's `resource` value, so
+      // the user supplies the linkTo manually instead of declaring a
+      // static FK relation.
+      const id = col({ name: 'id', primary: true, getSQLType: () => 'text' });
+      const targetId = col({ name: 'target_id', getSQLType: () => 'text' });
+      const { table, cfg } = tableLike('audit', [id, targetId]);
+      table.__cfg = cfg;
+
+      const def: any = {
+        __tableName: 'audit',
+        columns: { target_id: { linkTo: { resource: 'users' } } },
+      };
+
+      const [r] = buildResourceCatalog({
+        tables: { audit: table },
+        resources: { audit: def },
+        getTableConfig: cfgFor,
+        relations: {}, // no FK declared — override is the only source of linkTo
+      });
+      const col_ = r!.columns.find((c) => c.name === 'target_id')!;
+      assert.deepStrictEqual(col_.linkTo, { resource: 'users' });
+    });
+
+    it('forwards a dynamic linkTo (resourceFromColumn) for audit-style tables', () => {
+      // The dynamic case — `resourceFromColumn` tells the renderer to
+      // read the row's value at the named column to pick the target
+      // resource. Used by adminAudit.target_id, where the resource
+      // varies row-to-row.
+      const id = col({ name: 'id', primary: true, getSQLType: () => 'text' });
+      const resource = col({ name: 'resource', getSQLType: () => 'text' });
+      const targetId = col({ name: 'target_id', getSQLType: () => 'text' });
+      const { table, cfg } = tableLike('audit', [id, resource, targetId]);
+      table.__cfg = cfg;
+
+      const def: any = {
+        __tableName: 'audit',
+        columns: {
+          target_id: { linkTo: { resourceFromColumn: 'resource' } },
+        },
+      };
+
+      const [r] = buildResourceCatalog({
+        tables: { audit: table },
+        resources: { audit: def },
+        getTableConfig: cfgFor,
+        relations: {},
+      });
+      const col_ = r!.columns.find((c) => c.name === 'target_id')!;
+      assert.deepStrictEqual(col_.linkTo, { resourceFromColumn: 'resource' });
+    });
+
+    it('column override linkTo wins over the FK-derived linkTo', () => {
+      // If a column has both a declared one-relation AND an explicit
+      // linkTo override, the override takes precedence — gives users
+      // an escape hatch when the FK target shouldn't be the show-page
+      // they actually want to land on.
+      const usersId = col({ name: 'id', primary: true, getSQLType: () => 'text' });
+      const users = tableLike('users', [usersId]);
+      users.table.__cfg = users.cfg;
+
+      const profileId = col({ name: 'id', primary: true, getSQLType: () => 'text' });
+      const userIdCol = col({ name: 'user_id', getSQLType: () => 'text', jsKey: 'userId' });
+      const profiles = tableLike('profiles', [profileId, userIdCol]);
+      profiles.table.__cfg = profiles.cfg;
+
+      // FK-derived linkTo on profiles.user_id would point at 'users'
+      // (the relation target). The override redirects it to a
+      // hypothetical "people" resource instead.
+      const def: any = {
+        __tableName: 'profiles',
+        columns: { user_id: { linkTo: { resource: 'people' } } },
+      };
+
+      const [, profilesResource] = buildResourceCatalog({
+        tables: { users: users.table, profiles: profiles.table },
+        resources: { profiles: def },
+        getTableConfig: cfgFor,
+        relations: {
+          profiles: [{ name: 'user', target: 'users', kind: 'one', fk: 'userId' }],
+        },
+      });
+      const userCol = profilesResource!.columns.find((c) => c.name === 'user_id')!;
+      // Override resource wins; FK-derived `pkColumn`/`labelColumn`
+      // are dropped because the override only declared `resource`.
+      assert.deepStrictEqual(userCol.linkTo, { resource: 'people' });
+    });
+
+    it('emits no linkTo when neither override nor FK relation supplies one', () => {
+      const id = col({ name: 'id', primary: true, getSQLType: () => 'text' });
+      const note = col({ name: 'note', getSQLType: () => 'text' });
+      const { table, cfg } = tableLike('t', [id, note]);
+      table.__cfg = cfg;
+
+      const [r] = buildResourceCatalog({
+        tables: { t: table }, resources: {}, getTableConfig: cfgFor, relations: {},
+      });
+      const noteCol = r!.columns.find((c) => c.name === 'note')!;
+      assert.strictEqual((noteCol as any).linkTo, undefined);
+    });
+  });
 });

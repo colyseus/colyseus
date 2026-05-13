@@ -31,9 +31,22 @@ export interface CatalogColumn {
    * Composite-PK targets are not eligible (FK is single-column by design).
    */
   linkTo?: {
-    resource: string;
-    pkColumn: string;
-    labelColumn: string | null;
+    /** Static target resource (drizzle table canonical name). Omitted
+     *  when the link is fully dynamic (see `resourceFromColumn`). */
+    resource?: string;
+    /** Target's single PK column. Optional in the dynamic case — the
+     *  renderer assumes `id` when it can't resolve the target's PK. */
+    pkColumn?: string;
+    labelColumn?: string | null;
+    /**
+     * Dynamic target resolution: the renderer reads the row's value at
+     * this sibling column to determine the target resource. Used by the
+     * audit log so `target_id` deep-links to the right show page based
+     * on the `resource` column value of that row. When the resolved
+     * resource isn't in the catalog, the cell falls back to plain text
+     * (no broken links).
+     */
+    resourceFromColumn?: string;
   };
   /** Dialect SQL type (e.g. "integer", "text", "varchar(255)"). */
   type: string;

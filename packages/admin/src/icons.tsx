@@ -13,7 +13,7 @@ import {
   Cloud, Save, Settings, Calendar, Clock, LineChart, BarChart3, PieChart,
   LayoutDashboard, FileText, Shield, Key, MessageSquare, Bell, CreditCard,
   Flag, Gift, Smile, MapPin, Hammer, Zap, Ban, AlertTriangle, Shirt,
-  Network, Database, Heart, Boxes,
+  Network, Database, Heart, Boxes, Radio,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -53,6 +53,7 @@ const MAP: Record<string, LucideIcon> = {
   skin: Shirt,
   'node-index': Network,
   database: Database,
+  radio: Radio,
 };
 
 export function iconFor(name: string | undefined): React.ReactElement {

@@ -82,6 +82,19 @@ export const authProvider: AuthProvider = {
       // Session expired or never existed — bounce to login
       return { logout: true, redirectTo: '/login' };
     }
+    if (status === 403) {
+      // The backend tags stale-cookie 403s with `role_mismatch:` so we
+      // can distinguish them from "you actually lack permission". The
+      // server already cleared the cookie on its response; mirror that
+      // by logging out refine state and bouncing to /login.
+      const message =
+        (error as any)?.message ??
+        (error as any)?.response?.data?.error ??
+        '';
+      if (typeof message === 'string' && message.startsWith('role_mismatch:')) {
+        return { logout: true, redirectTo: '/login' };
+      }
+    }
     return {};
   },
 };

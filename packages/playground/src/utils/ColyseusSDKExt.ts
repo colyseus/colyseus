@@ -42,11 +42,20 @@ Room.prototype['connect'] = function(endpoint: string, devModeCloseCallback: () 
   const onclose = events.onclose;
   events.onclose = (event: any) => {
     delete (room as any)[RAW_EVENTS_KEY];
+    // The server can attach a `reason` string to the WebSocket close
+    // frame — e.g. `Room.kickClient(sessionId, code, reason)` and the
+    // admin panel's kick-with-reason flow both surface here. Include
+    // it only when set so the raw-event panel stays compact for the
+    // common no-reason case.
+    const payload: { code: number; reason?: string } = { code: event.code };
+    if (typeof event.reason === 'string' && event.reason.length > 0) {
+      payload.reason = event.reason;
+    }
     if (event.code === CloseCode.MAY_TRY_RECONNECT) {
       room['onMessageHandlers'].emit(DEVMODE_RESTART);
-      room['onMessageHandlers'].emit(RAW_EVENTS_KEY, ['close', 'MAY_TRY_RECONNECT', { code: event.code }]);
+      room['onMessageHandlers'].emit(RAW_EVENTS_KEY, ['close', 'MAY_TRY_RECONNECT', payload]);
     } else {
-      room['onMessageHandlers'].emit(RAW_EVENTS_KEY, ['close', 'CLOSE', { code: event.code }]);
+      room['onMessageHandlers'].emit(RAW_EVENTS_KEY, ['close', 'CLOSE', payload]);
     }
     onclose?.(event);
   };

@@ -150,7 +150,7 @@ export function ListPage({ resources }: { resources: Resource[] }) {
                       // long opaque ids and JSON blobs, so nothing legitimate
                       // wants to wrap inside a cell.
                       <TableCell key={c.name} className="w-[1%] whitespace-nowrap">
-                        {formatCell(row[c.name], c, fkLabels.get(c.name)?.get(row[c.name]))}
+                        {formatCell(row[c.name], c, fkLabels.get(c.name)?.get(row[c.name]), row, resources)}
                       </TableCell>
                     ))}
                     {id && (

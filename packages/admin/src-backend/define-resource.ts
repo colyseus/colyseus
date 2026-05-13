@@ -45,6 +45,22 @@ export type PolicyEntry =
 export interface ColumnOverride {
   /** Override the default humanized header/profile/form label. */
   label?: string;
+  /**
+   * Decorate this column with a link to another resource's show page.
+   * Two flavors:
+   *   - Static: `{ resource: 'users' }` — every cell value is treated
+   *     as the FK to the same target.
+   *   - Dynamic: `{ resourceFromColumn: 'resource' }` — the renderer
+   *     reads the row's value at that sibling column to pick the target.
+   *     Used by the audit log where `target_id` references many tables.
+   *
+   * Static FK columns derived from `database.relations` auto-emit a
+   * linkTo via the catalog and don't need this override.
+   */
+  linkTo?: {
+    resource?: string;
+    resourceFromColumn?: string;
+  };
 }
 
 /**
@@ -84,6 +100,14 @@ export interface ResourceDefinition {
     columns?: string[];
     /** marker — sortable columns */
     sortable?: string[];
+    /**
+     * Default ORDER BY applied when the request didn't pass `_sort` /
+     * `_order`. Useful for append-only tables (audit log, notes) where
+     * insertion order ≠ meaningful order — the random-nanoid PK makes
+     * the natural ordering arbitrary, so a sensible default is needed.
+     * The user can still override by clicking a column header.
+     */
+    defaultSort?: { field: string; order: 'asc' | 'desc' };
   };
   form?: {
     /** fields to show in create+edit forms; if omitted, all non-defaulted columns */

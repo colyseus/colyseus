@@ -295,9 +295,16 @@ export function buildPkWhere(cfg: TableConfig, id: string): BuildPkWhereResult {
  * the column metadata we expose to the UI uses snake_case — every
  * `record[c.name]` lookup misses for any column whose JS and SQL names
  * differ (createdAt / created_at, userId / user_id, etc.).
+ *
+ * Return type is `Record<string, any>` because the runtime values are
+ * real drizzle columns (`SQLWrapper`-conforming), but our deliberately
+ * narrow `TableColumn` interface doesn't declare that — so passing
+ * `Record<string, TableColumn>` to drizzle's `.select()` /
+ * `.returning()` would fail typecheck under drizzle 1.0's stricter
+ * `SelectedFields` constraint.
  */
-export function sqlKeyedProjection(cfg: TableConfig): Record<string, TableColumn> {
-  const out: Record<string, TableColumn> = {};
+export function sqlKeyedProjection(cfg: TableConfig): Record<string, any> {
+  const out: Record<string, any> = {};
   for (const c of cfg.columns) { out[c.name] = c; }
   return out;
 }

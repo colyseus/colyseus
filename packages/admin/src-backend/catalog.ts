@@ -108,7 +108,13 @@ export function buildResourceCatalog(input: BuildCatalogInput): CatalogResource[
       label: def?.label ?? humanize(name),
       icon: def?.icon ?? iconForTableName(cfg.name),
       columns: cfg.columns.map((c) => {
-        const linkTo = linkToBySqlName.get(c.name);
+        // FK-derived linkTo (from `database.relations`) is the default,
+        // but a user-supplied `columns.<name>.linkTo` override wins —
+        // that's what powers the audit log's dynamic `target_id` link
+        // (which has no static FK to derive from). The override is
+        // forwarded as-is so dynamic-resolution metadata
+        // (`resourceFromColumn`) reaches the frontend renderer.
+        const linkTo = def?.columns?.[c.name]?.linkTo ?? linkToBySqlName.get(c.name);
         return {
           name: c.name,
           label: def?.columns?.[c.name]?.label ?? humanize(c.name),

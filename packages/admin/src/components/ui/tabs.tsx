@@ -11,7 +11,16 @@ export const TabsList = React.forwardRef<
   <TabsPrimitive.List
     ref={ref}
     className={cn(
-      'inline-flex h-9 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground',
+      // `max-w-full` + `overflow-x-auto` keeps a many-tab strip from
+      // pushing horizontal scroll on the whole page — the strip
+      // itself scrolls when it can't fit. The scrollbar itself is
+      // suppressed (no Tailwind utility, so the arbitrary values
+      // inline-cover Firefox / IE / webkit) — the visible bar at
+      // the bottom of the strip looked broken on mobile.
+      // `whitespace-nowrap` is belt-and-suspenders so labels never
+      // wrap mid-tab.
+      'inline-flex h-9 max-w-full items-center justify-start whitespace-nowrap overflow-x-auto rounded-lg bg-muted p-1 text-muted-foreground',
+      '[scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden',
       className,
     )}
     {...props}

@@ -8,7 +8,7 @@
  */
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Loader2, Plus } from 'lucide-react';
+import { Eye, Loader2, Pencil, Plus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Empty } from '@/components/ui/empty';
@@ -19,6 +19,7 @@ import { type Resource, type ResourceRelation, singlePk, rowId } from '../../typ
 import { findResource, pickLabelColumn, visibleColumns } from './helpers';
 import { formatCell } from './format-cell';
 import { Pagination } from './pagination';
+import { iconFor } from '../../icons';
 
 export function Profilerow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -52,10 +53,22 @@ export function useRelationCounts(
   return counts;
 }
 
-export function RelationTabLabel({ relation, count }: { relation: ResourceRelation; count: number | undefined }) {
+export function RelationTabLabel({
+  relation, count, targetIcon,
+}: {
+  relation: ResourceRelation;
+  count: number | undefined;
+  /** Lucide icon id from the target resource's catalog entry. When
+   *  omitted the label renders without an icon — same surface as
+   *  before, so non-relation use sites stay opt-in. */
+  targetIcon?: string;
+}) {
   return (
-    <span data-testid={`tab-relation-${relation.name}`}>
-      {relation.label}{count !== undefined ? ` (${count})` : ''}
+    <span className="inline-flex items-center gap-1.5" data-testid={`tab-relation-${relation.name}`}>
+      {targetIcon && iconFor(targetIcon)}
+      <span>
+        {relation.label}{count !== undefined ? ` (${count})` : ''}
+      </span>
     </span>
   );
 }
@@ -90,7 +103,45 @@ export function RelatedTable({
 
   if (!targetDef) { return <Empty title={`unknown target resource '${relation.target}'`} />; }
 
-  const targetPk = singlePk(targetDef);
+  return (
+    <RelatedTableView
+      parentResource={parentResource}
+      parentId={parentId}
+      relation={relation}
+      targetDef={targetDef}
+      rows={rows}
+      loading={loading}
+      total={total}
+      page={page}
+      pageSize={pageSize}
+      onPageChange={setPage}
+    />
+  );
+}
+
+/**
+ * Pure render of the related-rows table. Extracted from `RelatedTable`
+ * so the markup is reachable from `react-dom/server.renderToString`
+ * without driving the data-fetch effect — which keeps the
+ * eye-button / link-href / column-shape behavior covered by node:test
+ * unit tests in `test/related-table.test.tsx` instead of requiring
+ * a jsdom + Testing-Library setup.
+ */
+export function RelatedTableView({
+  parentResource, parentId, relation, targetDef,
+  rows, loading, total, page, pageSize, onPageChange,
+}: {
+  parentResource: string;
+  parentId: string;
+  relation: ResourceRelation;
+  targetDef: Resource;
+  rows: any[];
+  loading: boolean;
+  total: number;
+  page: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+}) {
   const cols = visibleColumns(targetDef, targetDef.listColumns);
   const newHref = `/${relation.target}/create?_prefill_${relation.fk}=${encodeURIComponent(parentId)}`;
 
@@ -117,6 +168,13 @@ export function RelatedTable({
             <TableHeader>
               <TableRow>
                 {cols.map((c) => (<TableHead key={c.name}>{c.name}</TableHead>))}
+                {/* Action column for the View + Edit affordances —
+                    separate from the data cells so an FK column's own
+                    linkTo doesn't fight the row-level navigation
+                    (clicking an inner anchor inside a wrapping anchor
+                    always wins, which previously stole drill-in clicks
+                    on composite-PK rows). */}
+                <TableHead className="w-24" aria-label="" />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -125,19 +183,39 @@ export function RelatedTable({
                 return (
                 <TableRow key={childId ?? i}>
                   {cols.map((c) => (
-                    <TableCell key={c.name}>
-                      {/*
-                        Link to the related row's show page. For single-PK
-                        targets the PK column itself becomes a link; for
-                        composite-PK targets we attach the link to the first
-                        column of the projection so support agents always
-                        have a way to navigate.
-                      */}
-                      {childId && (targetPk ? c.name === targetPk : c.name === cols[0]!.name)
-                        ? <Link to={`/${relation.target}/show/${childId}`} className="text-primary hover:underline">{formatCell(row[c.name], c)}</Link>
-                        : formatCell(row[c.name], c)}
-                    </TableCell>
+                    <TableCell key={c.name}>{formatCell(row[c.name], c)}</TableCell>
                   ))}
+                  <TableCell className="w-24 text-right">
+                    {childId && (
+                      <div className="inline-flex items-center gap-1">
+                        <Button
+                          asChild variant="ghost" size="icon"
+                          data-testid={`related-view-${relation.name}-${childId}`}
+                        >
+                          <Link
+                            to={`/${parentResource}/show/${parentId}/${relation.name}/${childId}`}
+                            aria-label={`View ${targetDef.label}`}
+                          >
+                            <Eye className="size-4" />
+                          </Link>
+                        </Button>
+                        {/* Edit jumps to the standalone form but carries
+                            `returnTo` so Save and the back-arrow both
+                            return the user to this tab. */}
+                        <Button
+                          asChild variant="ghost" size="icon"
+                          data-testid={`related-edit-${relation.name}-${childId}`}
+                        >
+                          <Link
+                            to={`/${relation.target}/edit/${encodeURIComponent(childId)}?returnTo=${encodeURIComponent(`/${parentResource}/show/${parentId}/${relation.name}`)}`}
+                            aria-label={`Edit ${targetDef.label}`}
+                          >
+                            <Pencil className="size-4" />
+                          </Link>
+                        </Button>
+                      </div>
+                    )}
+                  </TableCell>
                 </TableRow>
                 );
               })}
@@ -145,7 +223,7 @@ export function RelatedTable({
           </Table>
         )}
         {total > pageSize && (
-          <Pagination current={page} pageSize={pageSize} total={total} onChange={setPage} />
+          <Pagination current={page} pageSize={pageSize} total={total} onChange={onPageChange} />
         )}
       </div>
     </div>

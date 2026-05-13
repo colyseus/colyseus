@@ -14,11 +14,12 @@
  */
 import * as React from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Loader2, Trash2, User, Lock, Unlock } from 'lucide-react';
+import { Loader2, Trash2, User, Lock, Unlock, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { JsonEditor, githubDarkTheme, githubLightTheme } from 'json-edit-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { Page } from '@/components/ui/page';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -82,6 +83,12 @@ export function RoomShowPage() {
   // row. On failure we remove the id from this set; on success the
   // row disappears naturally when the poll refreshes.
   const [pendingKicks, setPendingKicks] = React.useState<ReadonlySet<string>>(() => new Set());
+  // Search query for the state tree. Lifted to the page (not local
+  // to StateEditor) so the Clients table can populate it when an
+  // operator clicks a sessionId — the common "where is this client
+  // referenced in the room state?" question becomes one click.
+  const [stateSearch, setStateSearch] = React.useState('');
+  const stateSearchInputRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
     if (!roomId) { return; }
@@ -121,6 +128,55 @@ export function RoomShowPage() {
     }, POLL_INTERVAL_MS);
     return () => { cancelled = true; if (timer) { window.clearInterval(timer); } };
   }, [roomId]);
+
+  /**
+   * Set of strings that appear as object keys anywhere in the state
+   * tree. Used to mark sessionIds in the Clients table that are
+   * referenced by state — a quick "this player is tracked in state"
+   * affordance without forcing the operator to search to find out.
+   *
+   * Recomputed only when the state object reference changes (every
+   * poll tick produces a new reference). For pathological state
+   * sizes we bail early; the indicator is non-load-bearing.
+   */
+  const stateKeys = React.useMemo<ReadonlySet<string>>(() => {
+    const out = new Set<string>();
+    const MAX_NODES = 50000; // soft cap — bail on absurdly large trees
+    let visited = 0;
+    function walk(node: unknown): void {
+      if (visited >= MAX_NODES) { return; }
+      if (!node || typeof node !== 'object') { return; }
+      if (Array.isArray(node)) {
+        for (const v of node) { visited++; walk(v); }
+        return;
+      }
+      for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+        visited++;
+        out.add(k);
+        walk(v);
+      }
+    }
+    walk(view?.state);
+    return out;
+  }, [view?.state]);
+
+  /**
+   * Wire the Clients table's sessionId cells to the state-tree search.
+   * Sets the search box value, then scrolls + focuses it so the
+   * operator gets a clear visual confirmation that the query landed.
+   * Wrapped in `requestAnimationFrame` so the focus call runs after
+   * React has rendered the controlled input with the new value.
+   */
+  function findInState(query: string): void {
+    setStateSearch(query);
+    requestAnimationFrame(() => {
+      const el = stateSearchInputRef.current;
+      if (!el) { return; }
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      el.focus();
+      el.select();
+    });
+  }
 
   async function kick(sessionId: string, reason?: string) {
     if (!roomId) { return; }
@@ -300,9 +356,28 @@ export function RoomShowPage() {
             independently inside its own pane (see StateEditor), so a
             big state tree never pushes the Kick controls off-screen.
           */}
-          <div className="mt-6 grid items-start gap-6 lg:grid-cols-[1fr_2fr]">
+          {/* Equal-width columns on wide screens. State values wrap
+              to a new line at narrow widths anyway, so giving it
+              extra horizontal room didn't pay off — and the Clients
+              table desperately needed the breathing room. 50/50
+              keeps both columns balanced and predictable regardless
+              of viewport size above the `lg` breakpoint. */}
+          <div className="mt-6 grid items-start gap-6 lg:grid-cols-2">
             <Section
-              title="Clients"
+              title={
+                <span className="inline-flex items-baseline gap-2">
+                  <span>Clients</span>
+                  {/* Count badge so the operator gets the population
+                      size instantly without scanning rows or
+                      consulting the top stat strip. */}
+                  <span
+                    data-testid="clients-count"
+                    className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-normal tabular-nums text-muted-foreground"
+                  >
+                    {view.clientList.length}
+                  </span>
+                </span>
+              }
               testid="section-clients"
               className="mt-0 min-w-0 lg:sticky lg:top-4 lg:self-start"
             >
@@ -319,8 +394,16 @@ export function RoomShowPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {view.clientList.map((c) => {
+                    {/* Newest-first ordering: lowest elapsedTime
+                        sits at the top. Matches the convention for
+                        live tables — the row most likely to need
+                        attention (a fresh join, a hot session) is
+                        the row a scanning operator sees first. */}
+                    {[...view.clientList]
+                      .sort((a, b) => a.elapsedTime - b.elapsedTime)
+                      .map((c) => {
                       const pending = pendingKicks.has(c.sessionId);
+                      const inState = stateKeys.has(c.sessionId);
                       return (
                       <TableRow
                         key={c.sessionId}
@@ -332,7 +415,52 @@ export function RoomShowPage() {
                         className={cn(pending && 'opacity-50 pointer-events-none transition-opacity')}
                         aria-busy={pending || undefined}
                       >
-                        <TableCell className="font-mono text-xs">{c.sessionId}</TableCell>
+                        <TableCell className="font-mono text-xs">
+                          {/* Click → searches this sessionId in the
+                              state tree. Common operator question:
+                              "where does this client appear in state?"
+                              becomes a single click instead of a
+                              copy-paste-find dance. The magnifier
+                              icon fades in on hover/focus as the
+                              visual affordance that this is the
+                              clickable action (the underline alone
+                              read as a normal text-link). */}
+                          <button
+                            type="button"
+                            onClick={() => findInState(c.sessionId)}
+                            data-testid={`find-in-state-${c.sessionId}`}
+                            title={
+                              inState
+                                ? `Find ${c.sessionId} in the state tree (referenced)`
+                                : `Find ${c.sessionId} in the state tree`
+                            }
+                            className={cn(
+                              'group inline-flex cursor-pointer items-center gap-1 rounded px-0.5',
+                              'underline-offset-2 hover:bg-accent hover:underline',
+                              'focus:outline-none focus:ring-2 focus:ring-ring',
+                            )}
+                          >
+                            {/* Emerald dot when this sessionId
+                                appears as a key anywhere in state.
+                                Reserves the layout slot even when
+                                absent (invisible variant) so rows
+                                stay vertically aligned regardless of
+                                which sessions happen to be tracked. */}
+                            <span
+                              aria-hidden
+                              data-testid={inState ? `session-in-state-${c.sessionId}` : undefined}
+                              className={cn(
+                                'inline-block size-1.5 shrink-0 rounded-full',
+                                inState ? 'bg-emerald-500' : 'bg-transparent',
+                              )}
+                            />
+                            <span>{c.sessionId}</span>
+                            <Search
+                              aria-hidden
+                              className="size-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus:opacity-100"
+                            />
+                          </button>
+                        </TableCell>
                         <TableCell>
                           {c.userId
                             ? (
@@ -357,10 +485,36 @@ export function RoomShowPage() {
                                 </Link>
                               </Button>
                             )
-                            : <span className="text-xs text-muted-foreground">anon</span>}
+                            : (
+                              // Matches the authenticated row's
+                              // visual structure (icon + label) so
+                              // anon and signed-in clients sit on
+                              // the same horizontal baseline. The
+                              // dimmed icon signals "no identity"
+                              // without dropping the column to
+                              // bare text.
+                              <span className="inline-flex items-center text-xs text-muted-foreground">
+                                <User className="mr-1 size-3 opacity-50" />
+                                anon
+                              </span>
+                            )}
                         </TableCell>
-                        <TableCell className="text-right text-muted-foreground tabular-nums">
-                          {formatDuration(c.elapsedTime)} ago
+                        <TableCell
+                          className="whitespace-nowrap text-right text-muted-foreground tabular-nums"
+                          // Absolute join time in the native tooltip
+                          // — relative ("10m ago") is great for
+                          // glanceability, ISO is what an operator
+                          // copies into a log query. Tiny drift (the
+                          // poll tick, not render time) is fine for
+                          // log correlation.
+                          //
+                          // "ago" suffix dropped: the column header
+                          // already conveys directionality, and the
+                          // 3-char savings keeps "6m 34s" from
+                          // wrapping in tight column widths.
+                          title={new Date(Date.now() - c.elapsedTime).toISOString()}
+                        >
+                          {formatDuration(c.elapsedTime)}
                         </TableCell>
                         <TableCell className="text-right">
                           {pending ? (
@@ -401,6 +555,9 @@ export function RoomShowPage() {
                 state={view.state}
                 onChanged={refreshNow}
                 onEditingChange={setIsEditing}
+                searchText={stateSearch}
+                onSearchTextChange={setStateSearch}
+                searchInputRef={stateSearchInputRef}
               />
             </Section>
           </div>
@@ -471,7 +628,12 @@ function Stat({
 
 function Section({
   title, testid, className, children,
-}: { title: string; testid?: string; className?: string; children: React.ReactNode }) {
+}: {
+  title: React.ReactNode;
+  testid?: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
   return (
     <section className={cn('mt-6 first:mt-0', className)} data-testid={testid}>
       <h2 className="mb-2 text-sm font-medium tracking-tight">{title}</h2>
@@ -504,6 +666,35 @@ function Section({
  * field. Array form `[base, overrides]` is the library's documented
  * way to layer styles on top of a preset.
  */
+/**
+ * Display-only rounding for floats with more than 3 fractional
+ * digits. Lots of Colyseus state ships positions/timings as raw
+ * floats (`495.00599215558856`) which is noisy in a scan view.
+ *
+ * `showOnView: true` + `showOnEdit: false` means the rounded display
+ * appears only at rest — clicking the field opens the standard
+ * editor with full precision intact, so edits never lose digits.
+ */
+const NumberPreview: React.FC<{ value: any; nodeData: any; getStyles: any }> = ({
+  value, nodeData, getStyles,
+}) => {
+  if (typeof value !== 'number') { return null; }
+  // 2dp matches the precision an operator actually scans for
+  // (positions, timings, ratios) without showing 16 digits of
+  // floating-point noise. Editing reveals the full precision —
+  // see `showOnEdit: false` on the definition below.
+  const display = Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, '');
+  return <span style={getStyles('number', nodeData)}>{display}</span>;
+};
+
+const numberPreviewDef = {
+  condition: ({ value }: { value: unknown }) =>
+    typeof value === 'number' && !Number.isInteger(value),
+  element: NumberPreview as any,
+  showOnView: true,
+  showOnEdit: false,
+} as const;
+
 const darkInputOverride = {
   input: {
     color: '#e6edf3',
@@ -519,6 +710,7 @@ const darkInputOverride = {
 
 function StateEditor({
   roomId, state, onChanged, onEditingChange,
+  searchText, onSearchTextChange, searchInputRef,
 }: {
   roomId: string;
   state: any;
@@ -528,6 +720,14 @@ function StateEditor({
    *  The parent uses this to pause polling so the input doesn't get
    *  yanked mid-keystroke. */
   onEditingChange: (editing: boolean) => void;
+  /** Search query forwarded to JsonEditor (filters both keys and
+   *  values). Lifted to the parent so the Clients table can
+   *  populate it on sessionId click. */
+  searchText: string;
+  onSearchTextChange: (value: string) => void;
+  /** Ref the parent uses to focus/scroll the search input after a
+   *  cross-link click ("find this sessionId in state"). */
+  searchInputRef: React.RefObject<HTMLInputElement>;
 }) {
   const { resolved: themeMode } = useTheme();
 
@@ -560,16 +760,56 @@ function StateEditor({
   }
 
   return (
-    // max-h + overflow-auto keeps a deep state tree from pushing the
-    // page-scroll past the Clients column on wide layouts — pairs
-    // with the sticky Clients section in the parent grid. 70vh gives
-    // most of the viewport while leaving the global page header
-    // visible.
-    <div className="rounded-md border bg-muted/40 p-2 text-xs max-h-[70vh] overflow-auto">
+    <div className="space-y-2">
+      {/* Search input — searches both keys and values across the
+          tree. The Clients table populates this when a sessionId is
+          clicked; clearing the field (X button) drops the filter.
+          The wrapping div is the scroll container for the editor
+          beneath; the input sits OUTSIDE the scroll so it stays
+          pinned while the operator scans results. */}
+      <div className="relative">
+        <Search
+          aria-hidden
+          className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+        />
+        <Input
+          ref={searchInputRef}
+          value={searchText}
+          onChange={(e) => onSearchTextChange(e.target.value)}
+          placeholder="Search state tree (key or value)…"
+          className="h-8 pl-8 pr-8 text-xs"
+          data-testid="state-search"
+        />
+        {searchText && (
+          <button
+            type="button"
+            onClick={() => onSearchTextChange('')}
+            aria-label="Clear search"
+            data-testid="state-search-clear"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          >
+            ×
+          </button>
+        )}
+      </div>
+
+      {/* max-h + overflow-auto keeps a deep state tree from pushing
+          the page-scroll past the Clients column on wide layouts —
+          pairs with the sticky Clients section in the parent grid.
+          70vh gives most of the viewport while leaving the global
+          page header visible. */}
+      <div className="rounded-md border bg-muted/40 p-2 text-xs max-h-[70vh] overflow-auto">
       <JsonEditor
         data={state}
         rootName=""
         theme={themeMode === 'dark' ? [githubDarkTheme, darkInputOverride] : githubLightTheme}
+        customNodeDefinitions={[numberPreviewDef as any]}
+        searchText={searchText}
+        // 'all' filters on either key or value matches — most natural
+        // when looking up a sessionId that might appear as a key
+        // (`players: { sessionId: ... }`) or as a value
+        // (`turnOrder: ['abc', 'def']`).
+        searchFilter="all"
         // Object/array/map containers shouldn't be replaced wholesale
         // from the panel — Schema-typed state would reject the swap
         // anyway. Returning true here forbids the edit for that node.
@@ -604,6 +844,7 @@ function StateEditor({
           }
         }}
       />
+      </div>
     </div>
   );
 }

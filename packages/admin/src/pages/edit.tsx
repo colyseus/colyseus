@@ -1,5 +1,5 @@
 import { useOne, useUpdate } from '@refinedev/core';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { Page } from '@/components/ui/page';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -9,13 +9,29 @@ import { FormBody } from './internals/form';
 import { CompositePkSubtitle } from './internals/composite-pk-subtitle';
 import { RelatedTable, RelationTabLabel, useRelationCounts } from './internals/relations';
 
+/**
+ * Only accept same-origin paths so a hostile `?returnTo=` link can't
+ * pivot the user offsite. Must start with `/` and not with `//` (the
+ * protocol-relative escape hatch). Exported for tests.
+ */
+export function safeReturnTo(raw: string | null, fallback: string): string {
+  if (!raw) { return fallback; }
+  if (!raw.startsWith('/') || raw.startsWith('//')) { return fallback; }
+  return raw;
+}
+
 export function EditPage({ resources }: { resources: Resource[] }) {
   const { resource: name, id } = useParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const def = findResource(resources, name);
   const { data, isLoading } = useOne({ resource: name, id });
   const { mutate: update, isLoading: saving } = useUpdate();
   const counts = useRelationCounts(name, id);
+
+  // Where to land after Save and what the page's back-arrow points at.
+  // Defaults to the resource list page (refine's original behavior).
+  const returnTo = safeReturnTo(searchParams.get('returnTo'), `/${name}`);
 
   if (!def) { return <div>unknown resource</div>; }
 
@@ -26,7 +42,7 @@ export function EditPage({ resources }: { resources: Resource[] }) {
 
   return (
     <Page
-      back={`/${name}`}
+      back={returnTo}
       title={
         <>
           {def.label}
@@ -48,7 +64,7 @@ export function EditPage({ resources }: { resources: Resource[] }) {
           saving={saving}
           dataTestId={`edit-${name}`}
           onSubmit={(values) => update({ resource: name!, id: id!, values }, {
-            onSuccess: () => navigate(`/${name}`),
+            onSuccess: () => navigate(returnTo),
           })}
         />
       ) : (
@@ -71,7 +87,7 @@ export function EditPage({ resources }: { resources: Resource[] }) {
               saving={saving}
               dataTestId={`edit-${name}`}
               onSubmit={(values) => update({ resource: name!, id, values }, {
-                onSuccess: () => navigate(`/${name}`),
+                onSuccess: () => navigate(returnTo),
               })}
             />
           </TabsContent>

@@ -11,7 +11,8 @@
  */
 import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
-import { type Column, isBoolean, isDate, isJsonish, isNumeric } from '../../types';
+import { type Column, type Resource, isBoolean, isDate, isJsonish, isNumeric } from '../../types';
+import { syntheticShowPath, SYNTHETIC_SHOW_PATHS } from './synthetic-resources';
 
 /**
  * Compact relative time for table cells, with absolute fallback for
@@ -51,29 +52,63 @@ export function safeParseJson(raw: string): any {
   try { return JSON.parse(raw); } catch { return raw; }
 }
 
-export function formatCell(v: any, c?: Column, linkLabel?: string): React.ReactNode {
+export function formatCell(
+  v: any,
+  c?: Column,
+  linkLabel?: string,
+  row?: Record<string, any>,
+  resources?: Resource[],
+): React.ReactNode {
   if (v == null) { return <span className="text-muted-foreground">—</span>; }
 
   // FK columns: render as a clickable link to the target's show page.
-  // The label, if provided, replaces the visible text; without a label we
-  // truncate long opaque ids (`abc123…d4f5`) the same way other long
-  // identifier-like strings get truncated below.
+  // Two flavors of linkTo:
+  //   - Static: `linkTo.resource` is fixed at catalog build time.
+  //   - Dynamic: `linkTo.resourceFromColumn` names a sibling column on
+  //     the row whose VALUE is the target resource (audit-log pattern).
+  //     Falls back to plain text when the resolved resource isn't in
+  //     the catalog (e.g. 'auth' login events have no target page).
   if (c?.linkTo) {
-    const href = `/${c.linkTo.resource}/show/${encodeURIComponent(String(v))}`;
-    const raw = String(v);
-    const text = linkLabel ?? (raw.length > 24 && !/\s/.test(raw)
-      ? `${raw.slice(0, 8)}…${raw.slice(-4)}`
-      : raw);
-    return (
-      <Link
-        to={href}
-        className="text-primary hover:underline"
-        title={linkLabel ? raw : undefined}
-        data-testid={`fk-link-${c.name}`}
-      >
-        {text}
-      </Link>
-    );
+    let targetResource: string | undefined = c.linkTo.resource;
+    if (c.linkTo.resourceFromColumn && row) {
+      const dynamic = row[c.linkTo.resourceFromColumn];
+      if (typeof dynamic === 'string' && dynamic.length > 0) {
+        // Accept the value if it matches a catalog resource OR a
+        // synthetic surface (live-room inspector etc.). Falls back to
+        // plain text when neither lookup hits — that's how `resource='auth'`
+        // audit rows degrade gracefully.
+        const isCatalog = !resources || resources.some((r) => r.name === dynamic);
+        const isSynthetic = dynamic in SYNTHETIC_SHOW_PATHS;
+        targetResource = (isCatalog || isSynthetic) ? dynamic : undefined;
+      } else {
+        targetResource = undefined;
+      }
+    }
+    if (targetResource) {
+      // Synthetic resources have custom show URLs (e.g. /rooms/:id
+      // instead of the default /rooms/show/:id) — consult the
+      // synthetic-resources map first, then fall back to the standard
+      // catalog show route. Keeps the formatCell renderer agnostic to
+      // which kind of resource it's linking to.
+      const href = syntheticShowPath(targetResource, String(v))
+        ?? `/${targetResource}/show/${encodeURIComponent(String(v))}`;
+      const raw = String(v);
+      const text = linkLabel ?? (raw.length > 24 && !/\s/.test(raw)
+        ? `${raw.slice(0, 8)}…${raw.slice(-4)}`
+        : raw);
+      return (
+        <Link
+          to={href}
+          className="text-primary hover:underline"
+          title={linkLabel ? raw : undefined}
+          data-testid={`fk-link-${c.name}`}
+        >
+          {text}
+        </Link>
+      );
+    }
+    // Dynamic linkTo with no resolvable target — fall through to the
+    // default plain-text renderer below.
   }
 
   if (c && isBoolean(c)) {

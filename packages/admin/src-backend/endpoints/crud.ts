@@ -107,9 +107,18 @@ export function listEndpoint(ctx: EndpointContext): Endpoint {
 
     let query = ctx.database.drizzle.select(projection).from(table).limit(end - start).offset(start) as any;
     if (whereClause) { query = query.where(whereClause); }
-    if (sortField) {
-      const col = cfg.columns.find((c) => c.name === sortField);
-      if (col) { query = query.orderBy(sortOrder === 'desc' ? desc(col as any) : asc(col as any)); }
+    // Apply explicit _sort first; fall back to the resource's
+    // configured `defaultSort` so insertion-order-arbitrary tables
+    // (audit log etc.) come out in a meaningful order even on the
+    // first page load. Only one wins — explicit user input takes
+    // precedence over the default.
+    const effectiveSort: { field: string; order: 'asc' | 'desc' } | null =
+      sortField ? { field: sortField, order: sortOrder } :
+      def?.list?.defaultSort ? def.list.defaultSort :
+      null;
+    if (effectiveSort) {
+      const col = cfg.columns.find((c) => c.name === effectiveSort.field);
+      if (col) { query = query.orderBy(effectiveSort.order === 'desc' ? desc(col as any) : asc(col as any)); }
     }
 
     const rows = await query;

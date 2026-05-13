@@ -56,6 +56,13 @@ export { SchemaSerializer } from './serializer/SchemaSerializer.ts';
 export { Clock, Delayed };
 export { generateId, Deferred, spliceOne, getBearerToken, dynamicImport } from './utils/Utils.ts';
 export { isDevMode, setDevMode } from './utils/DevMode.ts';
+export {
+  userRoomsKey,
+  USER_ROOMS_KEY_PREFIX,
+  trackUserSession,
+  releaseUserSession,
+  type UserRoomEntry,
+} from './utils/UserSessionIndex.ts';
 
 // IPC
 export { subscribeIPC, requestFromIPC } from './IPC.ts';

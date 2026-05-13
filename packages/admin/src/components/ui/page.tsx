@@ -25,19 +25,26 @@ export function Page({
 }) {
   return (
     <div className={cn('flex flex-col gap-4', className)}>
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+      {/* Header wraps on narrow viewports so long titles + many actions
+          stack instead of overflowing horizontally. `min-w-0` on the
+          title side lets a long page title shrink with ellipsis when
+          actions occupy the same row. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
           {back && (
             <Button variant="ghost" size="icon" asChild>
               <Link to={back}><ArrowLeft /></Link>
             </Button>
           )}
-          <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+          <h1 className="truncate text-xl font-semibold tracking-tight">{title}</h1>
         </div>
-        {actions && <div className="flex items-center gap-2">{actions}</div>}
+        {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
       </div>
+      {/* Inner padding tapers on mobile — `p-4` already, kept consistent
+          across breakpoints since 16px is the smallest comfortable
+          content padding regardless of viewport. */}
       <div className="rounded-lg border bg-background p-4">{children}</div>
-      {footer && <div className="flex justify-end gap-2">{footer}</div>}
+      {footer && <div className="flex flex-wrap justify-end gap-2">{footer}</div>}
     </div>
   );
 }
