@@ -445,9 +445,15 @@ export class Room<
                 this.serializer = new serializer();
             }
 
-            // apply handshake on first join (no need to do this on reconnect)
-            if (buffer.byteLength > it.offset && this.serializer.handshake) {
-                this.serializer.handshake(buffer, it);
+            // State reflection is length-prefixed (varint). The schema decoder
+            // runs `while (offset < bytes.byteLength)` so without a boundary
+            // it would read past the state reflection into the trailing
+            // tagged-section bytes — see Protocol.ts for the wire layout.
+            const stateReflectionLen = decode.number(buffer as Buffer, it);
+            if (stateReflectionLen > 0 && this.serializer.handshake) {
+                const stateReflectionEnd = it.offset + stateReflectionLen;
+                this.serializer.handshake(buffer.subarray(0, stateReflectionEnd), it);
+                it.offset = stateReflectionEnd;
             }
 
             // Parse trailing tagged sections (forward-compatible: unknown tags

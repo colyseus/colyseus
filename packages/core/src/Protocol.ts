@@ -32,7 +32,13 @@ export const getMessageBytes = {
    * Build the JOIN_ROOM payload.
    *
    * Wire layout:
-   *   [JOIN_ROOM byte][rt-len][rt][sid-len][sid][stateReflection?][...sections]
+   *   [JOIN_ROOM byte][rt-len][rt][sid-len][sid][stateReflectionLen varint][stateReflection][...sections]
+   *
+   * The varint length prefix on `stateReflection` is required because the
+   * schema decoder on the SDK side runs `while (offset < bytes.byteLength)`
+   * — without a boundary it consumes past the state reflection into the
+   * trailing tagged-section bytes, producing "definition mismatch" warnings.
+   * Length is `0` when no state reflection is present.
    *
    * Each trailing section is `[tag (uint8)][length (varint)][payload]`. The
    * SDK skips unknown tags via `length`, so new sections can be added without
@@ -63,12 +69,13 @@ export const getMessageBytes = {
       }
     }
 
-    // check if buffer needs to be resized
-    const requiredCapacity = it.offset + handshakeLength + extraLength;
+    // check if buffer needs to be resized (+9 for the handshake-len varint)
+    const requiredCapacity = it.offset + 9 + handshakeLength + extraLength;
     if (requiredCapacity > packr.buffer.byteLength) {
       packr.useBuffer(Buffer.alloc(requiredCapacity, packr.buffer));
     }
 
+    encode.number(packr.buffer, handshakeLength, it);
     if (handshakeLength > 0) {
       packr.buffer.set(handshake, it.offset);
       it.offset += handshakeLength;

@@ -1,4 +1,4 @@
-import './legacy';
+import './legacy.ts';
 
 export { ColyseusSDK, Client, type JoinOptions, type EndpointSettings, type ClientOptions, type ISeatReservation as SeatReservation } from './Client.ts';
 export { type FetchFn } from './HTTP.ts';
