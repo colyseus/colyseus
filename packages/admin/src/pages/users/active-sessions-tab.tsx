@@ -121,9 +121,24 @@ export function ActiveUserSessionsTab({
 
   if (!sessions || sessions.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">
-        This user has no active sessions right now.
-      </p>
+      <div className="space-y-2 text-sm text-muted-foreground">
+        <p>This user has no active sessions right now.</p>
+        <p className="text-xs">
+          Not seeing sessions you expect? The{' '}
+          <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">
+            TrackUserSessionsPlugin
+          </code>{' '}
+          must be installed on the Room types you want to surface here.{' '}
+          <a
+            href="https://docs.colyseus.io/room/plugins/track-user-sessions"
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary hover:underline"
+          >
+            Docs →
+          </a>
+        </p>
+      </div>
     );
   }
 
