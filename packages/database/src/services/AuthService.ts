@@ -34,6 +34,7 @@ export class AuthService<T extends UsersTableShape = UsersTableShape> {
       onRegisterAnonymously: this.registerAnonymous.bind(this),
       onResetPassword: this.resetPassword.bind(this),
       onOAuthProviderCallback: this.oauthCallback.bind(this),
+      onCheckBanned: this.checkBanned.bind(this),
     };
   }
 
@@ -53,18 +54,14 @@ export class AuthService<T extends UsersTableShape = UsersTableShape> {
 
     if (!rows[0]) { return null; }
 
-    // Reject banned users at the auth boundary so a banned user can't
-    // sign in even if their session expires. The login flow surfaces
-    // this as plain "invalid credentials" today — distinguishing
-    // "you're banned until X" needs upstream @colyseus/auth wiring.
-    const row = rows[0] as any;
-    if (row.bannedUntil && new Date(row.bannedUntil).getTime() > Date.now()) {
-      return null;
-    }
-
     const user = { ...rows[0] };
     // @colyseus/auth checks user.password — map from passwordHash
     user.password = user.passwordHash;
+    // Ban gating is handled by `onCheckBanned` in @colyseus/auth's
+    // /login flow (called after Hash.verify so we can return a
+    // distinct 403 "banned" response). We still return the row here
+    // so /register's `existingUser` check sees the email as taken
+    // and refuses to create a second row.
     return user;
   }
 
@@ -143,6 +140,23 @@ export class AuthService<T extends UsersTableShape = UsersTableShape> {
         updatedAt: new Date(),
       })
       .where(eq(this.users.id, userId));
+  }
+
+  /**
+   * Implementation of `@colyseus/auth`'s `onCheckBanned` hook. Returns
+   * `{ reason, until }` when the user is actively banned, otherwise
+   * `null`. The auth layer surfaces this as a distinct 403 "banned"
+   * response so the client can render the right message instead of
+   * "invalid_credentials".
+   *
+   * Reads `bannedUntil` / `bannedReason` straight off the user row
+   * provided by the auth layer — no extra round-trip.
+   */
+  private checkBanned(user: any): { reason: string | null; until: Date } | null {
+    if (!isBanned(user)) { return null; }
+    const v = user.bannedUntil;
+    const until = v instanceof Date ? v : new Date(v as any);
+    return { reason: user.bannedReason ?? null, until };
   }
 
   /** Lift a ban (clears bannedUntil + bannedReason). Idempotent. */
@@ -343,4 +357,16 @@ export class AuthService<T extends UsersTableShape = UsersTableShape> {
 
     return { ...values };
   }
+}
+
+/**
+ * True when the row carries an active ban — `bannedUntil` is non-null
+ * AND in the future. Tolerates both Date (drizzle pg / sqlite
+ * timestamp_ms) and raw number (custom schemas) shapes.
+ */
+function isBanned(row: { bannedUntil?: Date | number | string | null }): boolean {
+  const v = row.bannedUntil;
+  if (v == null) { return false; }
+  const t = v instanceof Date ? v.getTime() : new Date(v as any).getTime();
+  return Number.isFinite(t) && t > Date.now();
 }

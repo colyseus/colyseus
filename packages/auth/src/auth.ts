@@ -25,6 +25,28 @@ export type ParseTokenCallback = (token: JwtPayload) => Promise<unknown> | unkno
 export type GenerateTokenCallback = (userdata: unknown) => Promise<unknown>;
 export type HashPasswordCallback = (password: string) => Promise<string>;
 
+/**
+ * Info returned by `onCheckBanned` when the user is banned. Both
+ * fields are optional — apps that don't want to expose either keep
+ * the field absent in their response.
+ */
+export interface BannedInfo {
+  reason?: string | null;
+  until?: Date | string | null;
+}
+/**
+ * Optional ban check called after credentials are verified (login)
+ * or after an OAuth profile is matched. Return a `BannedInfo` to
+ * reject the sign-in as banned; return `null` / `false` / `undefined`
+ * to allow.
+ *
+ * Lets the auth layer distinguish "your credentials are valid but
+ * you're banned" from "invalid credentials" — the former needs a
+ * different status code (403) and a clearer message for the client.
+ */
+export type CheckBannedCallback = (user: unknown) =>
+  Promise<BannedInfo | null | false | undefined> | BannedInfo | null | false | undefined;
+
 export interface AuthSettings {
   onFindUserByEmail: FindUserByEmailCallback,
   onRegisterWithEmailAndPassword: RegisterWithEmailAndPasswordCallback,
@@ -40,6 +62,7 @@ export interface AuthSettings {
   onParseToken?: ParseTokenCallback,
   onGenerateToken?: GenerateTokenCallback,
   onHashPassword?: HashPasswordCallback,
+  onCheckBanned?: CheckBannedCallback,
 };
 
 let onFindUserByEmail: FindUserByEmailCallback = (email: string) => { throw new Error('`auth.settings.onFindUserByEmail` not implemented.'); };
@@ -217,6 +240,24 @@ export const auth = {
 
         const user = Object.assign({}, await auth.settings.onFindUserByEmail(email));
         if (user && await Hash.verify(req.body.password, user.password)) {
+          // Credentials are valid — now check for ban so we can return
+          // an explicit "banned" error (with reason/until) instead of
+          // either signing them in or hiding it behind
+          // "invalid_credentials". 403 distinguishes "you are who you
+          // claim to be, but you're not allowed" from a credentials
+          // failure.
+          if (auth.settings.onCheckBanned) {
+            const banned = await auth.settings.onCheckBanned(user);
+            if (banned) {
+              return res.status(403).json({
+                error: 'banned',
+                reason: banned.reason ?? null,
+                until: banned.until instanceof Date
+                  ? banned.until.toISOString()
+                  : banned.until ?? null,
+              });
+            }
+          }
           delete user.password; // remove password from JWT payload
           res.json({ user, token: await auth.settings.onGenerateToken(user) });
 

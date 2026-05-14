@@ -430,6 +430,29 @@ export class GameDatabase<
       this.tables as Record<string, any>,
       this.options.segments ?? [],
     );
+
+    // Install a token-version revocation check on `@colyseus/auth`'s
+    // default `Room.onAuth`. The JWT's `tokenVersion` claim is set
+    // at sign time (login / register); `auth.bumpTokenVersion()`
+    // (called by admin "Revoke sessions" / "Ban") increments the
+    // row's counter. After a bump, the previously-issued JWT's
+    // `tokenVersion` is < the row's current value, so the next
+    // room-join attempt fails AUTH_FAILED.
+    //
+    // Skip when @colyseus/auth isn't installed (custom auth flow).
+    const auth = await import('@colyseus/auth').catch(() => undefined);
+    if (auth) {
+      auth.JWT.settings.revocationCheck = async (payload: any): Promise<boolean> => {
+        const userId = payload?.id;
+        const tv = payload?.tokenVersion;
+        // No `tokenVersion` claim ⇒ legacy / non-database token —
+        // accept (matches the same backward-compat decision the
+        // admin's cookie resolver makes).
+        if (typeof userId !== 'string' || typeof tv !== 'number') { return true; }
+        const current = await this.auth.getTokenVersion(userId);
+        return current === tv;
+      };
+    }
   }
 
   async shutdown() {

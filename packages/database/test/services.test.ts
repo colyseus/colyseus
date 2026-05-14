@@ -143,20 +143,29 @@ for (const backend of BACKENDS) {
         assert.equal(r.banned, false);
       });
 
-      it('findByEmail rejects banned users (login enforcement)', async () => {
+      it('findByEmail keeps banned rows visible; onCheckBanned surfaces ban info', async () => {
         const s = db.auth.settings;
-        // Register the user with email
         await s.onRegisterWithEmailAndPassword!('a@b.com', 'hash', {} as any);
-        // Confirm sign-in works pre-ban
-        const pre = await s.onFindUserByEmail!('a@b.com');
+        const pre = await s.onFindUserByEmail!('a@b.com') as any;
         assert.ok(pre, 'pre-ban findByEmail returns user');
+        assert.equal(pre.password, 'hash', 'pre-ban row carries the password hash');
+        assert.equal(await s.onCheckBanned!(pre), null, 'pre-ban onCheckBanned says not banned');
 
-        // Ban through the public API
-        await db.auth.ban((pre as any).id, { reason: 'TOS' });
+        await db.auth.ban(pre.id, { reason: 'TOS' });
 
-        // Sign-in path now refuses
-        const post = await s.onFindUserByEmail!('a@b.com');
-        assert.equal(post, null, 'banned user no longer signs in');
+        // After ban: the row is STILL returned (so /register's
+        // existence check refuses to create a duplicate) and its
+        // password hash is intact. The dedicated `onCheckBanned`
+        // hook surfaces the ban so /login can return a 403 with
+        // reason/until instead of a generic "invalid_credentials".
+        const post = await s.onFindUserByEmail!('a@b.com') as any;
+        assert.ok(post, 'banned row is still visible to existence checks');
+        assert.equal(post.password, 'hash', 'password hash is NOT blanked — auth handles ban separately');
+
+        const banInfo = await s.onCheckBanned!(post);
+        assert.ok(banInfo, 'onCheckBanned returns truthy for banned user');
+        assert.equal((banInfo as any).reason, 'TOS');
+        assert.ok((banInfo as any).until instanceof Date, 'until is a Date');
       });
 
       it('ban / unban throw a clear error when ban columns are missing', async () => {

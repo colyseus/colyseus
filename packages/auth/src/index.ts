@@ -54,7 +54,19 @@ if ((Room as any).onAuth === __frameworkDefaultOnAuth) {
   (Room as any).onAuth = async function jwtDecodingOnAuth(token: string) {
     if (!token) { return true; }
     try {
-      return await JWT.verify(token);
+      const decoded = await JWT.verify<any>(token);
+      // Optional server-side revocation gate. The JWT itself is
+      // valid (good signature, not expired) but the issuer may
+      // have revoked it (ban, "sign-out everywhere", forced
+      // rotation). `@colyseus/database` registers a default
+      // check that compares the token's `tokenVersion` claim
+      // against the user's row; apps can plug in their own.
+      const check = JWT.settings.revocationCheck;
+      if (check) {
+        const ok = await check(decoded);
+        if (!ok) { return false; }
+      }
+      return decoded;
     } catch {
       return false;
     }

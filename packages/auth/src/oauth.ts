@@ -218,8 +218,29 @@ ${(providerUrl) ? `<hr/><p><small><em>(Get your keys from <a href="${providerUrl
               user: null, token: null,
             };
           } else {
-            token = await auth.settings.onGenerateToken(user);
-            response = { user, token };
+            // Banned-user gate. OAuth providers don't run a password
+            // check, so without this a banned user signing back in
+            // with the same Google/Discord/etc. account would get a
+            // fresh JWT. We surface a `banned` error in the
+            // postMessage payload so the client opener can render the
+            // right message rather than treating it as a generic
+            // OAuth failure.
+            const banned = auth.settings.onCheckBanned
+              ? await auth.settings.onCheckBanned(user)
+              : null;
+            if (banned) {
+              response = {
+                error: 'banned',
+                user: null, token: null,
+                reason: banned.reason ?? null,
+                until: banned.until instanceof Date
+                  ? banned.until.toISOString()
+                  : banned.until ?? null,
+              } as any;
+            } else {
+              token = await auth.settings.onGenerateToken(user);
+              response = { user, token };
+            }
           }
         }
 
