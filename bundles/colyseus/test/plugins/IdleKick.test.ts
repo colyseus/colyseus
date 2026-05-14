@@ -65,8 +65,8 @@ describe('IdleKickPlugin', () => {
     const room = makeRoom([alice]);
     attachToTestRoom(plugin, room as any);
 
-    plugin.onJoin(alice as any);              // seeds _lastMessageTime = 0
-    plugin.onCreate();
+    plugin["onJoin"]!(alice as any);              // seeds _lastMessageTime = 0
+    plugin["onCreate"]!();
 
     room.advance(500);                        // not yet idle
     assert.deepEqual(room.kicked, []);
@@ -81,8 +81,8 @@ describe('IdleKickPlugin', () => {
     const room = makeRoom([alice]);
     attachToTestRoom(plugin, room as any);
 
-    plugin.onJoin(alice as any);
-    plugin.onCreate();
+    plugin["onJoin"]!(alice as any);
+    plugin["onCreate"]!();
 
     room.advance(800);                        // tick at 800
     alice._lastMessageTime = room.clock.currentTime;
@@ -100,9 +100,9 @@ describe('IdleKickPlugin', () => {
     const room = makeRoom([admin, alice]);
     attachToTestRoom(plugin, room as any);
 
-    plugin.onJoin(admin as any);
-    plugin.onJoin(alice as any);
-    plugin.onCreate();
+    plugin["onJoin"]!(admin as any);
+    plugin["onJoin"]!(alice as any);
+    plugin["onCreate"]!();
 
     room.advance(2000);
     assert.deepEqual(room.kicked.map((k) => k.sessionId), ['alice']);
@@ -118,8 +118,8 @@ describe('IdleKickPlugin', () => {
     const room = makeRoom([alice]);
     attachToTestRoom(plugin, room as any);
 
-    plugin.onJoin(alice as any);
-    plugin.onCreate();
+    plugin["onJoin"]!(alice as any);
+    plugin["onCreate"]!();
 
     room.advance(1500);
     assert.equal(calls.length, 1);
@@ -133,8 +133,8 @@ describe('IdleKickPlugin', () => {
     const room = makeRoom([alice]);
     attachToTestRoom(plugin, room as any);
 
-    plugin.onJoin(alice as any);
-    plugin.onCreate();
+    plugin["onJoin"]!(alice as any);
+    plugin["onCreate"]!();
     room.advance(1500);
 
     assert.deepEqual(room.kicked, [{ sessionId: 'alice', closeCode: 4040, reason: 'afk' }]);
@@ -146,9 +146,9 @@ describe('IdleKickPlugin', () => {
     const room = makeRoom([alice]);
     attachToTestRoom(plugin, room as any);
 
-    plugin.onJoin(alice as any);
-    plugin.onCreate();
-    plugin.onDispose();
+    plugin["onJoin"]!(alice as any);
+    plugin["onCreate"]!();
+    plugin["onDispose"]!();
 
     room.advance(2000);                       // scan should be a no-op now
     assert.deepEqual(room.kicked, []);
@@ -158,13 +158,13 @@ describe('IdleKickPlugin', () => {
     const plugin = new IdleKickPlugin({ timeoutMs: 1000 });
     const room = makeRoom([]);
     attachToTestRoom(plugin, room as any);
-    plugin.onCreate();
+    plugin["onCreate"]!();
 
     // simulate the room clock advancing before alice joins
     room.clock.currentTime = 10_000;
     const alice = makeClient('alice', 0);     // _lastMessageTime stays 0 until plugin.onJoin
     room.clients.push(alice);
-    plugin.onJoin(alice as any);
+    plugin["onJoin"]!(alice as any);
 
     assert.equal(alice._lastMessageTime, 10_000);
 

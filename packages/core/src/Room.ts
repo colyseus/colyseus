@@ -47,15 +47,9 @@ import {
 
 import {
   RoomPlugin,
-  computePluginLayout,
-  installPluginHookWrappers,
+  setupRoomPlugins,
   type PluginLayout,
 } from './RoomPlugin.ts';
-import {
-  trackRoomJoin,
-  releaseRoomLeave,
-  sweepRoomDispose,
-} from './utils/UserSessionIndex.ts';
 export {
   RoomPlugin,
   definePlugins,
@@ -238,27 +232,6 @@ export class Room<T extends RoomOptions = RoomOptions> {
   #_autoDispose: boolean;
 
   /**
-   * Publish this room's joins/leaves into the user → active sessions
-   * index that powers the admin panel's "Active rooms for user X"
-   * lookup (and any other operator tooling that asks the same
-   * question via the same Presence hash).
-   *
-   * Set to `false` on rooms where you don't want per-user tracking
-   * — e.g. a high-volume relay room where the Presence write per
-   * join is a meaningful cost, or a room whose participants you
-   * don't want to surface in the operator UI for privacy reasons.
-   * Anonymous clients (no resolvable `userId` / `client.auth.id`)
-   * are skipped regardless of this flag.
-   *
-   * Class-field default — flip it at class level (`trackUserSessions
-   * = false`) for every instance of a Room subclass, or per-instance
-   * inside `onCreate` for finer control.
-   *
-   * @default true
-   */
-  public trackUserSessions: boolean = true;
-
-  /**
    * Frequency to send the room state to connected clients, in milliseconds.
    *
    * @default 50ms (20fps)
@@ -329,7 +302,18 @@ export class Room<T extends RoomOptions = RoomOptions> {
    * Use `definePlugins({...})` so TypeScript preserves each plugin's
    * literal instance type. Frozen after `__init`.
    */
-  public plugins?: Record<string, RoomPlugin<any>>;
+  public plugins?: any;
+
+  /**
+   * Auto-included plugin instances pulled in via `static
+   * dependencies` declarations on user-registered plugins. Kept
+   * separate from `this.plugins` so the user's typed view doesn't
+   * gain framework-managed keys. Sentinel-keyed (`__dep:<ClassName>`)
+   * so the hook wrappers can route lookups to the right map.
+   *
+   * @internal
+   */
+  public _autoPlugins?: Record<string, RoomPlugin<any>>;
 
   /**
    * Layout cache populated on the FIRST construction of each Room
@@ -473,10 +457,10 @@ export class Room<T extends RoomOptions = RoomOptions> {
     // Wire room plugins from the instance-level `this.plugins` record.
     // The heavy lifting (conflict detection, hook participation, hook
     // wrapping on the prototype) runs once per class — see
-    // `#_setupPlugins`. Per-instance: set `plugin.room = this`, copy
-    // plugin handler refs into `this.messages`.
+    // `setupRoomPlugins` in `./RoomPlugin.ts`. Per-instance: set
+    // `plugin.room = this`, instantiate auto-deps, merge messages.
     if (this.plugins !== undefined) {
-      this.#_setupPlugins();
+      setupRoomPlugins(this);
     }
 
     // Bind messages to the room
@@ -505,77 +489,6 @@ export class Room<T extends RoomOptions = RoomOptions> {
     this.clock.start();
   }
 
-  /**
-   * Wire the room's plugins. The plugin record itself was supplied by
-   * the user as the `plugins = definePlugins({...})` instance field —
-   * what this method does is split across "once per class" and "once
-   * per instance":
-   *
-   *   ONCE PER CLASS (the first time any instance of this Room subclass
-   *   is constructed; cached on `ctor.__pluginLayout`):
-   *     - run conflict detection on declared message keys
-   *     - decide which plugins participate before/after the room's own
-   *       hook for each of onCreate / onJoin / onLeave / onDispose
-   *     - install a single wrapper per participating hook on the class
-   *       prototype — the wrapper looks up plugin instances via
-   *       `this.plugins[key]` at call time, so it works across all
-   *       instances of this class without per-instance closure cost
-   *
-   *   ONCE PER INSTANCE:
-   *     - set `plugin.room = this` on each plugin
-   *     - copy plugin handler refs into `this.messages` so the room's
-   *       existing onMessage(...) binding loop picks them up
-   *     - freeze the plugins record
-   *
-   * Defaults (overridable via plugin.order):
-   *   onCreate / onJoin   → plugins before room
-   *   onLeave  / onDispose → plugins after room
-   *
-   * @internal
-   */
-  #_setupPlugins() {
-    const plugins = this.plugins!;
-    const ctor = this.constructor as typeof Room;
-    let layout: PluginLayout | null | undefined;
-
-    // Read the cached layout only if it was set on THIS constructor
-    // (own property — inheriting a parent's layout would let a subclass
-    // that redeclares `plugins` silently reuse the parent's wrapping,
-    // double-running plugins).
-    if (Object.prototype.hasOwnProperty.call(ctor, '__pluginLayout')) {
-      layout = ctor.__pluginLayout;
-    }
-
-    if (layout === undefined) {
-      // First construct for this class — compute layout from this
-      // instance's plugin record, install hook wrappers on the
-      // prototype, cache for all future instances.
-      layout = computePluginLayout(plugins);
-      installPluginHookWrappers(ctor, layout);
-      ctor.__pluginLayout = layout;
-    }
-
-    // Inject `room` reference per plugin so its lifecycle hooks +
-    // public methods can reach the host room via `this.room`.
-    for (const plugin of Object.values(plugins)) {
-      (plugin as any).room = this;
-    }
-
-    // Merge plugin messages into `this.messages`. Conflicts were
-    // already detected when the layout was first computed; here we
-    // just respect the room's own override if it declared the same key.
-    if (layout && layout.messageOwners.size > 0) {
-      for (const [messageKey, pluginKey] of layout.messageOwners) {
-        if (this.messages?.[messageKey]) { continue; }
-        const handler = (plugins[pluginKey].messages as any)?.[messageKey];
-        if (handler !== undefined) {
-          (this.messages ??= {} as any)[messageKey] = handler;
-        }
-      }
-    }
-
-    Object.freeze(plugins);
-  }
 
   /**
    * The name of the room you provided as first argument for `gameServer.define()`.
@@ -1682,12 +1595,6 @@ export class Room<T extends RoomOptions = RoomOptions> {
 
           // emit 'join' to room handler
           this._events.emit('join', client);
-
-          // Opt-out via `trackUserSessions = false` (high-volume relay
-          // rooms, privacy-sensitive rooms).
-          if (this.trackUserSessions) {
-            trackRoomJoin(this, client);
-          }
         }
 
       } catch (e: any) {
@@ -2007,10 +1914,6 @@ export class Room<T extends RoomOptions = RoomOptions> {
       await matchMaker.driver.remove(this._listing.roomId);
     }
 
-    // Cover the dispose race where `disconnect()` ran past `_onAfterLeave`
-    // for some sessions; cross-process crash leftovers get reconciled on read.
-    await sweepRoomDispose(this);
-
     let userReturnData;
     if (this.onDispose) {
       userReturnData = this.onDispose();
@@ -2252,8 +2155,6 @@ export class Room<T extends RoomOptions = RoomOptions> {
     if (this._reservedSeats[client.sessionId] === undefined) {
       this._events.emit('leave', client, willDispose);
     }
-
-    releaseRoomLeave(this, client);
   }
 
   async #_incrementClientCount() {

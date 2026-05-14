@@ -54,6 +54,8 @@ export interface AnalyticsPluginOptions {
 const ALL_LIFECYCLE: ReadonlyArray<AnalyticsLifecycleEvent> = ['create', 'join', 'leave', 'dispose'];
 
 export class AnalyticsPlugin extends RoomPlugin {
+  readonly pluginName = 'analytics' as const;
+
   private readonly database: GameDatabase;
   private readonly prefix: string;
   private readonly trackSet: ReadonlySet<AnalyticsLifecycleEvent>;
@@ -67,7 +69,7 @@ export class AnalyticsPlugin extends RoomPlugin {
     this.resolveUserId = opts.resolveUserId ?? defaultUserId;
   }
 
-  async onCreate(options: any) {
+  protected async onCreate(options: any) {
     if (!this.trackSet.has('create')) { return; }
     await this.database.analytics.track(`${this.prefix}create`, null, {
       roomId: this.room.roomId,
@@ -75,14 +77,14 @@ export class AnalyticsPlugin extends RoomPlugin {
     });
   }
 
-  async onJoin(client: Client) {
+  protected async onJoin(client: Client) {
     if (!this.trackSet.has('join')) { return; }
     await this.database.analytics.track(`${this.prefix}join`, this.resolveUserId(client) ?? null, {
       roomId: this.room.roomId,
     });
   }
 
-  async onLeave(client: Client, code?: number) {
+  protected async onLeave(client: Client, code?: number) {
     if (!this.trackSet.has('leave')) { return; }
     await this.database.analytics.track(`${this.prefix}leave`, this.resolveUserId(client) ?? null, {
       roomId: this.room.roomId,
@@ -90,7 +92,7 @@ export class AnalyticsPlugin extends RoomPlugin {
     });
   }
 
-  async onDispose() {
+  protected async onDispose() {
     if (!this.trackSet.has('dispose')) { return; }
     await this.database.analytics.track(`${this.prefix}dispose`, null, {
       roomId: this.room.roomId,

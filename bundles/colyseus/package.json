@@ -27,10 +27,21 @@
       "types": "./build/plugins/idle-kick.d.ts",
       "import": "./build/plugins/idle-kick.mjs",
       "require": "./build/plugins/idle-kick.cjs"
+    },
+    "./plugins/unique-session": {
+      "types": "./build/plugins/unique-session.d.ts",
+      "import": "./build/plugins/unique-session.mjs",
+      "require": "./build/plugins/unique-session.cjs"
+    },
+    "./plugins/track-user-sessions": {
+      "types": "./build/plugins/track-user-sessions.d.ts",
+      "import": "./build/plugins/track-user-sessions.mjs",
+      "require": "./build/plugins/track-user-sessions.cjs"
     }
   },
   "scripts": {
-    "test": "COLYSEUS_SEAT_RESERVATION_TIME=0.3 COLYSEUS_PRESENCE_SHORT_TIMEOUT=300 mocha test/**.test.ts test/**/**.test.ts --exit --timeout 15000"
+    "test": "COLYSEUS_SEAT_RESERVATION_TIME=0.3 COLYSEUS_PRESENCE_SHORT_TIMEOUT=300 mocha test/**.test.ts test/**/**.test.ts --exit --timeout 15000",
+    "typecheck": "tsc --noEmit -p test/tsconfig.json"
   },
   "author": "Endel Dreyer",
   "license": "MIT",

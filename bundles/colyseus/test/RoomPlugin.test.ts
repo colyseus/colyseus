@@ -30,9 +30,9 @@ describe('RoomPlugin core plumbing', () => {
         plugins = definePlugins({ p });
       }
       const room = new R();
-      assert.equal(p.room, undefined, 'room should not be set before __init');
+      assert.equal(p['room'], undefined, 'room should not be set before __init');
       runInit(room);
-      assert.strictEqual(p.room, room, 'room should point at the host after __init');
+      assert.strictEqual(p['room'], room, 'room should point at the host after __init');
     });
 
     it('exposes attachToTestRoom for isolated unit tests', () => {
@@ -277,6 +277,208 @@ describe('RoomPlugin core plumbing', () => {
         (r2 as any).onJoin,
         'two rooms of the same class share the same prototype-level wrapper',
       );
+    });
+  });
+
+  describe('definePlugins array form', () => {
+    it("derives the record key from each plugin's pluginName", () => {
+      class Alpha extends RoomPlugin {
+        readonly pluginName = 'alpha' as const;
+        ping() { return 'A'; }
+      }
+      class Beta extends RoomPlugin {
+        readonly pluginName = 'beta' as const;
+        pong() { return 'B'; }
+      }
+      class R extends Room {
+        plugins = definePlugins([new Alpha(), new Beta()]);
+      }
+      const room = new R();
+      runInit(room);
+      // Static-typed access — these calls also exercise the
+      // mapped-type result at compile time.
+      assert.equal(room.plugins.alpha.ping(), 'A');
+      assert.equal(room.plugins.beta.pong(), 'B');
+    });
+
+    it('throws when a plugin in the array is missing pluginName', () => {
+      class Nameless extends RoomPlugin {}
+      assert.throws(
+        () => definePlugins([new Nameless()]),
+        /is missing a 'pluginName' field/,
+      );
+    });
+
+    it('throws when two plugins resolve to the same pluginName', () => {
+      class P extends RoomPlugin {
+        readonly pluginName = 'dup' as const;
+      }
+      assert.throws(
+        () => definePlugins([new P(), new P()]),
+        /two plugins resolve to pluginName "dup"/,
+      );
+    });
+
+    it('record form still works without pluginName (back-compat)', () => {
+      class P extends RoomPlugin {}
+      const plugins = definePlugins({ adminChat: new P(), playerChat: new P() });
+      assert.ok(plugins.adminChat instanceof P);
+      assert.ok(plugins.playerChat instanceof P);
+    });
+
+    it('multi-instance via constructor-supplied pluginName', () => {
+      class ChannelPlugin<N extends string> extends RoomPlugin {
+        readonly pluginName: N;
+        constructor(name: N) {
+          super();
+          this.pluginName = name;
+        }
+      }
+      class R extends Room {
+        plugins = definePlugins([
+          new ChannelPlugin('admins'),
+          new ChannelPlugin('players'),
+        ]);
+      }
+      const room = new R();
+      runInit(room);
+      assert.ok(room.plugins.admins instanceof ChannelPlugin);
+      assert.ok(room.plugins.players instanceof ChannelPlugin);
+    });
+  });
+
+  describe('static dependencies (auto-include)', () => {
+    it('auto-instantiates a declared dependency when not present', async () => {
+      const calls: string[] = [];
+      class Dep extends RoomPlugin {
+        onJoin() { calls.push('dep.onJoin'); }
+      }
+      class User extends RoomPlugin {
+        static dependencies = [Dep];
+        onJoin() { calls.push('user.onJoin'); }
+      }
+      class R extends Room {
+        plugins = definePlugins({ user: new User() });
+        onJoin() { calls.push('room.onJoin'); }
+      }
+      const room: any = new R();
+      runInit(room);
+
+      // The auto-dep instance lives under a sentinel key on the
+      // dedicated `_autoPlugins` map — not in `room.plugins` so
+      // the user's typed view stays exactly what they declared.
+      assert.equal(Object.keys(room.plugins), 'user', 'plugins keeps only the user record');
+      assert.ok(room._autoPlugins, '_autoPlugins is populated when deps exist');
+      assert.ok(room._autoPlugins['__dep:Dep'] instanceof Dep, 'Dep was auto-instantiated');
+
+      await (room as any).onJoin({});
+      // user.onJoin runs before room.onJoin (default order).
+      // Dep declares no order override, so it also runs in the
+      // before group — confirming auto-deps participate in
+      // hook composition.
+      assert.deepEqual(calls, ['user.onJoin', 'dep.onJoin', 'room.onJoin']);
+    });
+
+    it('skips auto-instantiation when the dep is already present in user plugins', () => {
+      class Dep extends RoomPlugin {}
+      class User extends RoomPlugin {
+        static dependencies = [Dep];
+      }
+      const explicitDep = new Dep();
+      class R extends Room {
+        plugins = definePlugins({ user: new User(), dep: explicitDep });
+      }
+      const room: any = new R();
+      runInit(room);
+
+      // The explicit instance keeps its user-chosen key; no auto map.
+      assert.strictEqual(room.plugins.dep, explicitDep);
+      assert.equal(room._autoPlugins, undefined, '_autoPlugins absent when nothing was auto-added');
+    });
+
+    it('recursively walks transitive dependencies', async () => {
+      const calls: string[] = [];
+      class Inner extends RoomPlugin {
+        onCreate() { calls.push('inner'); }
+      }
+      class Middle extends RoomPlugin {
+        static dependencies = [Inner];
+        onCreate() { calls.push('middle'); }
+      }
+      class Outer extends RoomPlugin {
+        static dependencies = [Middle];
+        onCreate() { calls.push('outer'); }
+      }
+      class R extends Room {
+        plugins = definePlugins({ outer: new Outer() });
+      }
+      const room: any = new R();
+      runInit(room);
+
+      assert.ok(room._autoPlugins['__dep:Middle'] instanceof Middle);
+      assert.ok(room._autoPlugins['__dep:Inner'] instanceof Inner);
+
+      await (room as any).onCreate({});
+      // All three onCreate hooks ran. Order across the before group
+      // is the order entries were added to the layout (user first,
+      // then deeper deps walked depth-first).
+      assert.deepEqual(calls.sort(), ['inner', 'middle', 'outer']);
+    });
+
+    it('throws on dependency cycles', () => {
+      class A extends RoomPlugin {}
+      class B extends RoomPlugin { static dependencies = [A]; }
+      // Mutate A *after* B is declared so the cycle A↔B is real.
+      // A and B must BOTH be auto-deps (not user-provided) so the
+      // walk visits them — a user-provided plugin is already marked
+      // "present" and never enters the visiting set.
+      (A as any).dependencies = [B];
+      class Root extends RoomPlugin { static dependencies = [A]; }
+      class R extends Room {
+        plugins = definePlugins({ root: new Root() });
+      }
+      assert.throws(() => runInit(new R()), /plugin dependency cycle/);
+    });
+
+    it('throws a readable error when an auto-dep needs constructor args', () => {
+      class NeedsOpts extends RoomPlugin {
+        constructor(opts: { x: number }) {
+          super();
+          if (!opts) { throw new Error('opts required'); }
+        }
+      }
+      class User extends RoomPlugin {
+        static dependencies = [NeedsOpts as any];
+      }
+      class R extends Room {
+        plugins = definePlugins({ user: new User() });
+      }
+      assert.throws(
+        () => runInit(new R()),
+        /auto-included plugin "NeedsOpts" must be constructible with no arguments/,
+      );
+    });
+
+    it('caches the resolved layout per-class (deps walked once at class init)', () => {
+      let depInstances = 0;
+      class Dep extends RoomPlugin {
+        constructor() { super(); depInstances++; }
+      }
+      class User extends RoomPlugin {
+        static dependencies = [Dep];
+      }
+      class R extends Room {
+        plugins = definePlugins({ user: new User() });
+      }
+      runInit(new R());
+      runInit(new R());
+      runInit(new R());
+      // N rooms ⇒ 1 (layout-discovery instantiation, fires on the
+      // first class init to read `order` + hook methods) + N
+      // (per-room instances carrying per-room state).
+      // If the layout cache wasn't working, every room would do a
+      // full re-walk and we'd see 2*N instead of N+1.
+      assert.equal(depInstances, 4);
     });
   });
 

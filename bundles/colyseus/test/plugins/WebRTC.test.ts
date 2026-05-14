@@ -50,7 +50,7 @@ describe('WebRTCPlugin', () => {
     const room = makeRoom([alice]);
     attachToTestRoom(plugin, room as any);
 
-    plugin.messages['webrtc:join'](alice as any);
+    plugin["messages"]!['webrtc:join'](alice as any);
 
     assert.deepEqual(alice.sent, [['webrtc:peers', []]]);
     assert.deepEqual(room.broadcasts, [['webrtc:peer-joined', 'alice', { except: alice }]]);
@@ -63,8 +63,8 @@ describe('WebRTCPlugin', () => {
     const room = makeRoom([alice, bob]);
     attachToTestRoom(plugin, room as any);
 
-    plugin.messages['webrtc:join'](alice as any);
-    plugin.messages['webrtc:join'](bob as any);
+    plugin["messages"]!['webrtc:join'](alice as any);
+    plugin["messages"]!['webrtc:join'](bob as any);
 
     // Bob's peers list should contain alice (already in the mesh)
     assert.deepEqual(bob.sent[0], ['webrtc:peers', ['alice']]);
@@ -76,8 +76,8 @@ describe('WebRTCPlugin', () => {
     const room = makeRoom([alice]);
     attachToTestRoom(plugin, room as any);
 
-    plugin.messages['webrtc:join'](alice as any);
-    plugin.messages['webrtc:join'](alice as any);
+    plugin["messages"]!['webrtc:join'](alice as any);
+    plugin["messages"]!['webrtc:join'](alice as any);
 
     // Only one broadcast in total — the second join just re-reads the peer list.
     assert.equal(room.broadcasts.length, 1);
@@ -92,7 +92,7 @@ describe('WebRTCPlugin', () => {
     attachToTestRoom(plugin, room as any);
 
     const sdp = { type: 'offer', sdp: 'v=0...' };
-    plugin.messages['webrtc:offer'](alice as any, { targetId: 'bob', sdp });
+    plugin["messages"]!['webrtc:offer'](alice as any, { targetId: 'bob', sdp });
 
     assert.deepEqual(bob.sent, [['webrtc:offer', { peerId: 'alice', sdp }]]);
     assert.deepEqual(carol.sent, [], 'unrelated peer should not receive the offer');
@@ -106,11 +106,11 @@ describe('WebRTCPlugin', () => {
     attachToTestRoom(plugin, room as any);
 
     const sdp = { type: 'answer', sdp: 'v=0...' };
-    plugin.messages['webrtc:answer'](bob as any, { targetId: 'alice', sdp });
+    plugin["messages"]!['webrtc:answer'](bob as any, { targetId: 'alice', sdp });
     assert.deepEqual(alice.sent[0], ['webrtc:answer', { peerId: 'bob', sdp }]);
 
     const candidate = { candidate: 'candidate:...', sdpMLineIndex: 0, sdpMid: '0' };
-    plugin.messages['webrtc:ice-candidate'](alice as any, { targetId: 'bob', candidate });
+    plugin["messages"]!['webrtc:ice-candidate'](alice as any, { targetId: 'bob', candidate });
     assert.deepEqual(bob.sent[0], ['webrtc:ice-candidate', { peerId: 'alice', candidate }]);
   });
 
@@ -120,7 +120,7 @@ describe('WebRTCPlugin', () => {
     const room = makeRoom([alice]); // bob is missing
     attachToTestRoom(plugin, room as any);
 
-    plugin.messages['webrtc:offer'](alice as any, {
+    plugin["messages"]!['webrtc:offer'](alice as any, {
       targetId: 'bob',
       sdp: { type: 'offer', sdp: '' },
     });
@@ -137,11 +137,11 @@ describe('WebRTCPlugin', () => {
     const room = makeRoom([alice, bob]);
     attachToTestRoom(plugin, room as any);
 
-    plugin.messages['webrtc:join'](alice as any);
+    plugin["messages"]!['webrtc:join'](alice as any);
     room.broadcasts.length = 0; // drop the peer-joined we just emitted
 
-    plugin.onLeave(alice as any); // joined → peer-left fires
-    plugin.onLeave(bob as any);   // never joined → silent
+    plugin["onLeave"]!(alice as any); // joined → peer-left fires
+    plugin["onLeave"]!(bob as any);   // never joined → silent
 
     assert.deepEqual(room.broadcasts, [['webrtc:peer-left', 'alice', { except: alice }]]);
   });

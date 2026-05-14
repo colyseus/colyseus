@@ -13,7 +13,10 @@ export {
 // Core classes
 export { Server, defineRoom, defineServer, registerRoomDefinitions, unregisterRoomDefinitions, type RoomDefinitions, type ServerOptions, type SDKTypes } from './Server.ts';
 export { Room, room, RoomInternalState, validate, type RoomOptions, type MessageHandlerWithFormat, type Messages, type ExtractRoomState, type ExtractRoomMetadata, type ExtractRoomClient } from './Room.ts';
-export { RoomPlugin, definePlugins, attachToTestRoom, type RoomPluginOrder } from './RoomPlugin.ts';
+export {
+  RoomPlugin, definePlugins, attachToTestRoom,
+  type RoomPluginOrder, type PluginDependencies, type RoomPluginClass,
+} from './RoomPlugin.ts';
 export { getMessageBytes } from './Protocol.ts';
 export { RegisteredHandler } from './matchmaker/RegisteredHandler.ts';
 export { ServerError } from './errors/ServerError.ts';
@@ -61,6 +64,9 @@ export {
   USER_ROOMS_KEY_PREFIX,
   trackUserSession,
   releaseUserSession,
+  trackRoomJoin,
+  releaseRoomLeave,
+  sweepRoomDispose,
   type UserRoomEntry,
 } from './utils/UserSessionIndex.ts';
 

@@ -59,6 +59,8 @@ export interface LeaderboardsPluginOptions<This extends Room> {
 }
 
 export class LeaderboardsPlugin<This extends Room = Room> extends RoomPlugin<This> {
+  readonly pluginName = 'leaderboards' as const;
+
   private readonly database: GameDatabase;
   private readonly boardId: string;
   private readonly boardName: string;
@@ -78,13 +80,13 @@ export class LeaderboardsPlugin<This extends Room = Room> extends RoomPlugin<Thi
     this.resolveUserId = opts.resolveUserId ?? defaultUserId;
   }
 
-  async onCreate() {
+  protected async onCreate() {
     // Idempotent — re-running with the same boardId is a no-op (drizzle
     // .onConflictDoNothing() inside the service).
     await this.database.leaderboards.ensure(this.boardId, this.boardName);
   }
 
-  async onDispose() {
+  protected async onDispose() {
     if (this.submitOn !== 'dispose' || !this.score) { return; }
     // Iterate connected clients and submit each. The service uses
     // keep-best semantics, so partial mid-match submissions (e.g. via

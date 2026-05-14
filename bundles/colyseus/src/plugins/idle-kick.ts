@@ -56,6 +56,8 @@ export interface IdleKickOptions {
 }
 
 export class IdleKickPlugin extends RoomPlugin {
+  readonly pluginName = 'idleKick' as const;
+
   private timeoutMs: number;
   private scanIntervalMs: number;
   private closeCode: number;
@@ -75,11 +77,11 @@ export class IdleKickPlugin extends RoomPlugin {
     this.onKickCb = opts.onKick;
   }
 
-  onCreate() {
+  protected onCreate() {
     this.interval = this.room.clock.setInterval(() => this.scan(), this.scanIntervalMs);
   }
 
-  onJoin(client: Client) {
+  protected onJoin(client: Client) {
     // Seed `_lastMessageTime` so a client that joins and immediately goes
     // silent has a meaningful "last seen" timestamp. Without this it's 0
     // until their first inbound frame, which would look like "infinitely
@@ -87,7 +89,7 @@ export class IdleKickPlugin extends RoomPlugin {
     (client as any)._lastMessageTime = this.room.clock.currentTime;
   }
 
-  onDispose() {
+  protected onDispose() {
     this.interval?.clear();
     this.interval = undefined;
   }

@@ -61,6 +61,8 @@ export interface CloudSavesPluginOptions<This extends Room> {
 }
 
 export class CloudSavesPlugin<This extends Room = Room> extends RoomPlugin<This> {
+  readonly pluginName = 'cloudSaves' as const;
+
   private readonly database: GameDatabase;
   private readonly slot: number;
   private readonly onJoinMode: 'load' | 'none';
@@ -80,12 +82,12 @@ export class CloudSavesPlugin<This extends Room = Room> extends RoomPlugin<This>
     this.resolveUserId = opts.resolveUserId ?? defaultUserId;
   }
 
-  async onJoin(client: Client) {
+  protected async onJoin(client: Client) {
     if (this.onJoinMode !== 'load') { return; }
     await this.loadFor(client);
   }
 
-  async onLeave(client: Client) {
+  protected async onLeave(client: Client) {
     if (this.onLeaveMode !== 'save') { return; }
     await this.saveFor(client);
   }

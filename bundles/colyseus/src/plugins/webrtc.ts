@@ -46,6 +46,8 @@ export interface SignalingIceCandidate {
 }
 
 export class WebRTCPlugin extends RoomPlugin {
+  readonly pluginName = 'webrtc' as const;
+
   /**
    * Session IDs that have explicitly opted into the mesh via
    * `webrtc:join`. Used by `onLeave` so we only emit `webrtc:peer-left`
@@ -53,7 +55,7 @@ export class WebRTCPlugin extends RoomPlugin {
    */
   private peers = new Set<string>();
 
-  messages = {
+  protected messages = {
     /**
      * Client → server. Opt this client into the mesh: reply with the
      * current peer list and notify the other peers that a new one has
@@ -90,7 +92,7 @@ export class WebRTCPlugin extends RoomPlugin {
     },
   };
 
-  onLeave(client: Client) {
+  protected onLeave(client: Client) {
     if (!this.peers.has(client.sessionId)) { return; }
     this.peers.delete(client.sessionId);
     this.room.broadcast('webrtc:peer-left', client.sessionId, { except: client });
