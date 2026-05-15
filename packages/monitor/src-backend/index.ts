@@ -36,7 +36,7 @@ type ExpressMiddleware = (req: IncomingMessage, res: ServerResponse, next: (err?
 type MonitorResult = ExpressMiddleware & Record<string, Endpoint>;
 
 export function monitor(opts: MonitorOptions = {}): MonitorResult {
-  const prefix = opts.prefix ?? '';
+  const prefix = opts.prefix ?? '/monitor';
   const use = opts.use ?? [];
   const columnsOpt = opts.columns;
 
@@ -124,64 +124,56 @@ export function monitor(opts: MonitorOptions = {}): MonitorResult {
     }),
   };
 
-  // Express compatibility — `app.use("/monitor", monitor())` still works.
-  // The catch-all is intentionally excluded from the local router so unknown
-  // paths fall through to express's next() (matches legacy express.static
-  // behavior). The /**:splat SPA fallback is only used in createRouter
-  // spread mode where it's the canonical mount point.
-  const localRouter = createRouter({
+  // Express compatibility — works with either `app.use("/monitor", monitor())`
+  // (express strips `/monitor`) or `app.use("/", monitor())` (no stripping).
+  // We dispatch via the un-stripped request so better-call's getRequest
+  // builds `baseUrl + url` = the full URL, which the prefixed endpoints match.
+  // `specificRouter` (no catch-all) is used for routing decisions so unknown
+  // paths fall through to next() — matches legacy express.static behavior.
+  const specificRouter = createRouter({
     'monitor-api-rooms': endpoints['monitor-api-rooms']!,
     'monitor-api-room': endpoints['monitor-api-room']!,
     'monitor-api-room-call': endpoints['monitor-api-room-call']!,
     'monitor-index': endpoints['monitor-index']!,
   });
-  const localHandler = toNodeHandler(localRouter.handler);
+  const specificHandler = toNodeHandler(specificRouter.handler);
+  const fullRouter = createRouter(endpoints);
+  const fullHandler = toNodeHandler(fullRouter.handler);
   const SPA_DIST_RESOLVED = path.resolve(SPA_DIST);
-
-  // Strip express's `baseUrl` before dispatching to better-call so the local
-  // router sees the request relative to its mount point (otherwise
-  // `baseUrl + url` would yield e.g. `/monitor/api`, which the local router
-  // doesn't have a route for).
-  const dispatch = (req: IncomingMessage, res: ServerResponse, next: (e?: any) => void) => {
-    const stripped = Object.create(req, {
-      baseUrl: { value: '', enumerable: true, configurable: true },
-      originalUrl: { value: req.url, enumerable: true, configurable: true },
-    });
-    localHandler(stripped as any, res as any).catch(next);
-  };
 
   const middleware: ExpressMiddleware = (req, res, next) => {
     if (req.method !== 'GET') { return next(); }
-    let url = (req.url ?? '').split('?')[0]!;
-    // Normalize trailing slash (better-call doesn't auto-match `/api/` against `/api`).
-    if (url.length > 1 && url.endsWith('/')) { url = url.slice(0, -1); }
 
-    if (url === '/' || url === '' || url === '/api' || url === '/api/room' || url === '/api/room/call') {
-      // If the original URL had a trailing slash that we stripped, rewrite
-      // req.url so the inner router sees the normalized form.
-      if (req.url && req.url.split('?')[0] !== url && req.url.split('?')[0]!.length > 1) {
-        const qs = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
-        (req as any).url = (url || '/') + qs;
-      }
-      return dispatch(req, res, next);
+    // Use originalUrl rather than baseUrl+url because better-call's
+    // constructRelativeUrl uses originalUrl to decide whether to include
+    // the trailing slash in the dispatched URL — we must check the same
+    // string it'll route against.
+    const dispatchUrl = ((req as any).originalUrl ?? req.url ?? '').split('?')[0]!;
+
+    // Redirect bare prefix (`/monitor`) to canonical `/monitor/` so users
+    // typing the URL directly land on the SPA.
+    if (prefix && dispatchUrl === prefix) {
+      res.writeHead(301, { location: `${prefix}/` });
+      res.end();
+      return;
     }
 
-    const rel = url.replace(/^\/+/, '');
+    const route = specificRouter.findRoute('GET', dispatchUrl);
+    if (route && route.data?.path === dispatchUrl) {
+      return specificHandler(req as any, res as any).catch(next);
+    }
+
+    // Asset request — only delegate if the file exists on disk.
+    if (!dispatchUrl.startsWith(prefix)) { return next(); }
+    const innerPath = dispatchUrl.slice(prefix.length);
+    const rel = innerPath.replace(/^\/+/, '');
     if (!rel || rel.includes('..')) { return next(); }
     const filePath = path.resolve(SPA_DIST_RESOLVED, rel);
     if (!filePath.startsWith(SPA_DIST_RESOLVED + path.sep)) { return next(); }
 
     fs.stat(filePath).then((stat) => {
       if (stat.isFile()) {
-        // Build a one-off local router with the catch-all included so the
-        // static endpoint can serve this asset.
-        const fullLocal = createRouter(endpoints);
-        const fullHandler = toNodeHandler(fullLocal.handler);
-        const stripped = Object.create(req, {
-          baseUrl: { value: '', enumerable: true, configurable: true },
-          originalUrl: { value: req.url, enumerable: true, configurable: true },
-        });
-        fullHandler(stripped as any, res as any).catch(next);
+        fullHandler(req as any, res as any).catch(next);
       } else {
         next();
       }

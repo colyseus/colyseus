@@ -259,12 +259,11 @@ export const server = config({
   },
 
   routes: createRouter({
-    // Playground UI + /__apidocs + /rooms.
-    // Auto-mounted at root (`/`) — for protection, wrap with `use: [auth.middleware(), ...]`.
+    // Playground UI + /__apidocs + /rooms at root.
     ...playground(),
 
-    // Monitor — mounted at /monitor. Same auth-gating pattern as playground.
-    ...monitor({ prefix: "/monitor" }),
+    // Monitor — defaults to /monitor. Auth-gate via `use: [auth.middleware(), ...]`.
+    ...monitor(),
 
     // Admin panel + REST. Browse to http://localhost:2567/admin/.
     // Send `X-User-Id: <id>` to authenticate; POST /admin-seed to bootstrap one.
@@ -360,7 +359,7 @@ export const server = config({
     // playground / monitor / auth are now better-call endpoints (spread above).
     // The express-mount form is still supported for backwards compat:
     //   app.use("/", playground())
-    //   app.use("/monitor", monitor())
+    //   app.use("/monitor", monitor()) or app.use("/", monitor())
   },
 
   beforeListen: async () => {
