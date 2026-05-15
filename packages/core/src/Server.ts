@@ -15,7 +15,7 @@ import { LocalDriver } from './matchmaker/LocalDriver/LocalDriver.ts';
 import { setTransport, Transport } from './Transport.ts';
 import { logger, setLogger } from './Logger.ts';
 import { setDevMode, isDevMode } from './utils/DevMode.ts';
-import { type Router, bindRouterToTransport } from './router/index.ts';
+import { type Router, bindRouterToTransport, createRouter } from './router/index.ts';
 import { type SDKTypes as SharedSDKTypes } from '@colyseus/shared-types';
 import { getDefaultRouter } from './router/default_routes.ts';
 
@@ -32,6 +32,29 @@ export type ServerOptions = {
    * This is useful for example to connect into a database or other services before the server listens.
    */
   beforeListen?: () => Promise<void> | void,
+
+  /**
+   * Booted before `matchMaker.accept()`. Structural so `@colyseus/core` keeps
+   * no runtime dep on `@colyseus/database` — any `{ boot(): Promise<void> }`
+   * works. The optional `applyRouterDefaults` is invoked after boot with the
+   * user's router so the database can contribute endpoints (e.g. auth routes).
+   */
+  database?: {
+    boot(): Promise<void>;
+    applyRouterDefaults?(router: Router): Router | Promise<Router>;
+  },
+
+  /**
+   * Mount `@colyseus/auth` routes into the router. Pass an options object
+   * (forwarded to `auth.endpoints(...)`) to wire it explicitly — useful when
+   * `database` is not in use. `false` disables auto-mounting even if a
+   * `database` is present and would have provided defaults.
+   */
+  auth?: false | {
+    settings?: Record<string, any>;
+    oauth?: boolean | { cookieSecret?: string };
+    prefix?: string;
+  },
 
   /**
    * Optional callback to configure Express routes.
@@ -104,6 +127,12 @@ export class Server<
 
   private _originalRoomOnMessage: typeof Room.prototype['_onMessage'] | null = null;
 
+  // Implicit default for callers that omit explicit Server reference — e.g.
+  // `playground()` reads `Server.current.router.endpoints` at request time.
+  // Last-construction wins; multi-server setups should reference instances
+  // explicitly.
+  static current: Server<any, any> | undefined;
+
   constructor(options: ServerOptions = {}) {
     const {
       gracefullyShutdown = true,
@@ -116,6 +145,8 @@ export class Server<
     this.driver = options.driver || new LocalDriver();
     this.options = options;
     this.greet = greet;
+
+    (Server as { current: Server<any, any> | undefined }).current = this as Server<any, any>;
 
     this.attach(options);
 
@@ -137,14 +168,8 @@ export class Server<
 
   public async attach(options: ServerOptions) {
     this.transport = options.transport || await this.getDefaultTransport(options);
-
-    // Initialize Express if callback is provided
-    if (options.express && this.transport.getExpressApp) {
-      const expressApp = await this.transport.getExpressApp();
-      await options.express(expressApp);
-    }
-
-    // Resolve the promise when the transport is ready
+    // `options.express` runs in `listen()` after `database.boot()` so user
+    // code reading `database.auth.settings` etc. finds services instantiated.
     this._onTransportReady.resolve(this.transport);
   }
 
@@ -157,8 +182,19 @@ export class Server<
    * @param listeningListener
    */
   public async listen(port: number | string, hostname?: string, backlog?: number, listeningListener?: Function) {
-    if (this.options.beforeListen) {
-      await this.options.beforeListen();
+    const { beforeListen, database, express } = this.options;
+
+    if (beforeListen) { await beforeListen(); }
+    if (database) { await database.boot(); }
+
+    await this._applyRouterDefaults();
+
+    if (express) {
+      await this._onTransportReady;
+      if (this.transport.getExpressApp) {
+        const expressApp = await this.transport.getExpressApp();
+        await express(expressApp);
+      }
     }
 
     //
@@ -349,6 +385,31 @@ export class Server<
 
   public onBeforeShutdown(callback: () => void | Promise<any>) {
     this.onBeforeShutdownCallback = callback;
+  }
+
+  // Extend the user's router with framework-contributed endpoints. An explicit
+  // `auth` option wins over the database's `applyRouterDefaults` so a non-DB
+  // setup can still auto-mount @colyseus/auth, and a DB user can opt out.
+  private async _applyRouterDefaults(): Promise<void> {
+    const { auth, database } = this.options;
+    const wantsAuth = auth !== undefined && auth !== false;
+    const wantsDatabase = auth === undefined && !!database?.applyRouterDefaults;
+    if (!wantsAuth && !wantsDatabase) { return; }
+
+    // Boot an empty router if the user didn't pass `routes` — the framework's
+    // default routes get layered on later in the `transport.listen()` callback.
+    this.router ??= createRouter({}) as unknown as Routes;
+
+    if (wantsAuth) {
+      const authMod: any = await dynamicImport('@colyseus/auth').catch(() => undefined);
+      const endpointsFn = authMod?.auth?.endpoints ?? authMod?.default?.auth?.endpoints;
+      if (typeof endpointsFn === 'function') {
+        this.router = (this.router as Router).extend(endpointsFn(auth)) as Routes;
+      }
+    } else {
+      const updated = await database!.applyRouterDefaults!(this.router as Router);
+      if (updated) { this.router = updated as Routes; }
+    }
   }
 
   protected async getDefaultTransport(options: any): Promise<Transport> {

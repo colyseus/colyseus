@@ -18,14 +18,9 @@ import { PostgresDriver } from "@colyseus/drizzle-driver";
 
 import { adminEndpoints, defineAdminResource } from "@colyseus/admin";
 import { registerSegments } from "./db/segments.ts";
-import { database, databaseBoot } from "./db/database.ts";
+import { database } from "./db/database.ts";
 
-// Database lives in ./db/database.ts so MyRoom can consume the same
-// instance for plugins without forming a circular import via this file.
-// We still register custom segments + await boot here, in the same
-// startup sequence as before.
-registerSegments(database); // typed against the database's schema generic
-await databaseBoot;
+registerSegments(database); // segments must be defined pre-boot
 
 // Tiny test-only seed endpoint — creates an admin + a mod for the panel demo.
 async function seedAdminAndMod() {
@@ -248,6 +243,7 @@ const port = Number((process.env.PORT || 2567)) + Number(process.env.NODE_APP_IN
 export const server = config({
   options: {
     devMode: true,
+    database,
     // driver: new PostgresDriver(),
 
     // driver: new RedisDriver(),
@@ -263,15 +259,18 @@ export const server = config({
   },
 
   routes: createRouter({
+    // Playground UI + /__apidocs + /rooms.
+    // Auto-mounted at root (`/`) — for protection, wrap with `use: [auth.middleware(), ...]`.
+    ...playground(),
+
     // Admin panel + REST. Browse to http://localhost:2567/admin/.
     // Send `X-User-Id: <id>` to authenticate; POST /admin-seed to bootstrap one.
     ...adminEndpoints({
-      database,
       dashboard: {
         // Skip the noisy `totals` widget and `activeEvents` (we don't use timed
         // events here). Keep recentUsers + segments from the built-ins, then
         // override `health` and append a new `rooms` widget.
-        builtIns: ['recentUsers', 'segments'],
+        // builtIns: ['recentUsers', 'segments'],
         widgets: [
           // Re-include `health` via its factory — but with a custom data fn
           // that also reports process uptime.
@@ -354,20 +353,10 @@ export const server = config({
   }),
 
   initializeExpress: (app) => {
-    // app.use("/playground", playground());
-    app.use("/", playground());
     app.use("/monitor", monitor());
     app.get("/express", (_, res) => res.json({ message: "Hello World" }));
-    // `auth.routes(settings)` wires the email/oauth/anon/reset callbacks
-    // into the auth routes. Passing `database.auth.settings` plugs the
-    // GameDatabase-backed implementations in:
-    //   - email/password register/login → users table (passwordHash)
-    //   - OAuth callback (Discord, etc.) → creates / finds user by email
-    //     so client.auth carries the real userId on the next room join.
-    //   - password reset → bumps tokenVersion so old sessions die.
-    // Without this, /auth/register 500s with "not implemented" and OAuth
-    // sign-ins succeed in flight but never persist a user row.
-    app.use(auth.prefix, auth.routes(database.auth.settings));
+    // Playground + /auth/* are now better-call endpoints (mounted via `routes`
+    // and via `database.applyRouterDefaults` respectively).
   },
 
   beforeListen: async () => {

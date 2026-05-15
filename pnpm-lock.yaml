@@ -274,6 +274,12 @@ importers:
       connect-redis:
         specifier: ^7.1.0
         version: 7.1.1(express-session@1.19.0)
+      cookie:
+        specifier: ^0.7.2
+        version: 0.7.2
+      cookie-signature:
+        specifier: ^1.2.2
+        version: 1.2.2
       express:
         specifier: '>=4.16.0'
         version: 5.2.1
@@ -289,6 +295,9 @@ importers:
       jsonwebtoken:
         specifier: ^9.0.0
         version: 9.0.3
+      zod:
+        specifier: ^4.1.12
+        version: 4.3.6
     devDependencies:
       '@colyseus/better-call':
         specifier: workspace:^
@@ -387,6 +396,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@colyseus/auth':
+        specifier: workspace:^
+        version: link:../auth
       '@colyseus/better-call':
         specifier: workspace:^
         version: link:../better-call/packages/better-call
@@ -698,9 +710,6 @@ importers:
       '@colyseus/core':
         specifier: workspace:^
         version: link:../core
-      express:
-        specifier: '>=4.16.0'
-        version: 5.2.1
       zod:
         specifier: ^4.1.12
         version: 4.3.6

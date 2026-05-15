@@ -63,6 +63,7 @@
     "express": "^5.0.0"
   },
   "peerDependencies": {
+    "@colyseus/auth": "workspace:^",
     "@colyseus/better-call": "workspace:^",
     "@colyseus/schema": "^5.0.3",
     "@colyseus/ws-transport": "workspace:^",
@@ -71,6 +72,9 @@
     "zod": "^4.1.12"
   },
   "peerDependenciesMeta": {
+    "@colyseus/auth": {
+      "optional": true
+    },
     "@colyseus/ws-transport": {
       "optional": true
     },

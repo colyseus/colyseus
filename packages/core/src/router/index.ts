@@ -120,19 +120,9 @@ function expressRootRoute(expressApp: express.Application) {
   return stack.find((layer: any) => layer.match('/') && !['query', 'expressInit'].includes(layer.name));
 }
 
-/**
- * Do not use this directly. This is used internally by `@colyseus/playground`.
- * TODO: refactor. Avoid using globals.
- * @internal
- */
-export let __globalEndpoints: Record<string, Endpoint> = {};
-
 export function createRouter<
   E extends Record<string, Endpoint>,
   Config extends RouterConfig
 >(endpoints: E, config: Config = {} as Config) {
-  // TODO: refactor. Avoid using globals.
-  __globalEndpoints = endpoints;
-
   return createBetterCallRouter({ ...endpoints }, config);
 }

@@ -159,6 +159,13 @@ export const auth = {
    */
   middleware: JWT.middleware,
 
+  /**
+   * Better-call endpoint map. Spread into `createRouter({ ...auth.endpoints(...) })`.
+   * Same coverage as `auth.routes()` but no express dependency. Bound below
+   * (after the `endpoints.ts` module loads — avoids circular import).
+   */
+  endpoints: null as unknown as typeof import('./endpoints.ts').endpoints,
+
   routes: function (settings: Partial<AuthSettings> = {}): Router {
     if (process.env.NODE_ENV !== 'production') {
       // do not warn in production
@@ -477,3 +484,7 @@ function isValidEmail(email: string) {
 function isValidPassword(password: string) {
   return password.length >= 6;
 }
+
+// Late binding to avoid a circular import — endpoints.ts imports `auth`.
+import { endpoints as _endpointsImpl } from './endpoints.ts';
+auth.endpoints = _endpointsImpl;

@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url'; // required for ESM build (see build.mjs)
 import type { Endpoint } from '@colyseus/core';
 import { getTableConfig as getPgTableConfig } from 'drizzle-orm/pg-core';
 import { getTableConfig as getSqliteTableConfig } from 'drizzle-orm/sqlite-core';
-import type { GameDatabase } from '@colyseus/database';
+import { GameDatabase } from '@colyseus/database';
 import type { ResourceDefinition } from './define-resource.js';
 import { JWT } from '@colyseus/auth';
 import { authEndpoints } from './auth.js';
@@ -61,8 +61,8 @@ export type { DashboardWidget, DashboardPayload, BuiltInWidgetId } from './dashb
 export { dashboardWidgets } from './dashboard.js';
 
 export interface AdminOptions {
-  /** GameDatabase instance — provides drizzle client + moderation. */
-  database: GameDatabase;
+  /** Defaults to `GameDatabase.current`. Pass explicitly for multi-database setups. */
+  database?: GameDatabase;
 
   /**
    * Map of drizzle tables exposed by the admin, keyed by canonical name.
@@ -349,7 +349,12 @@ function makeDefaultResolver(allowDevHeader: boolean, database: GameDatabase) {
  * to expose this shape externally.
  */
 function buildContext(opts: AdminOptions): EndpointContext {
-  const { database } = opts;
+  const database = opts.database ?? GameDatabase.current;
+  if (!database) {
+    throw new Error(
+      '[adminEndpoints] no GameDatabase available — construct `new GameDatabase(...)` before calling adminEndpoints(), or pass `database:` explicitly',
+    );
+  }
   const apiPath = (opts.apiPath ?? '/admin-api').replace(/\/$/, '');
   const uiPath = (opts.uiPath ?? '/admin').replace(/\/$/, '');
   // build.mjs's "dirname" plugin rewrites __dirname to a fileURLToPath call for the ESM build
@@ -436,7 +441,7 @@ export function adminEndpoints(opts: AdminOptions): Record<string, Endpoint> {
   // Auth endpoints (login/logout/bootstrap/me/status). Spread alongside the
   // CRUD endpoints so consumers get one map to spread into createRouter.
   const auth = authEndpoints({
-    database: opts.database,
+    database: ctx.database,
     apiPath: ctx.apiPath,
     uiPath: ctx.uiPath,
     session: opts.session ?? {},

@@ -13,6 +13,8 @@ import { SegmentsService } from './services/SegmentsService.ts';
 import { buildRelationsCallback, mergeRelations, type RelationDefinition } from './relations-meta.ts';
 import type { SchemaSet } from './types.ts';
 import { topologicalSort, type TableEntry } from './schemas/registry.ts';
+import { SQLITE_TABLES } from './schemas/sqlite.ts';
+import { PG_TABLES } from './schemas/pg.ts';
 import type { SegmentDefinition, DrizzleFor } from './segments.ts';
 import type { ConfigsRegistry } from './configs.ts';
 
@@ -337,6 +339,12 @@ export class GameDatabase<
   private subDialect: SubDialect = 'sqlite';
   private options: GameDatabaseOptions<S, C>;
   private ownedConnection: any = null;
+  // Shared by eager `boot()` callers and Server.listen() so migrations run once.
+  private _bootPromise: Promise<void> | null = null;
+
+  // Implicit default for `adminEndpoints()` etc. — last construction wins;
+  // multi-database setups must pass `database:` explicitly.
+  static current: GameDatabase<any, any> | undefined;
 
   constructor(options: GameDatabaseOptions<S, C> = {} as GameDatabaseOptions<S, C>) {
     this.options = options;
@@ -358,9 +366,19 @@ export class GameDatabase<
     } else {
       this.dialect = detectDialect(common.connectionString);
     }
+
+    // Sync so `adminEndpoints({ database })` can read `database.tables` at
+    // module-eval, before `Server.listen()` awaits boot.
+    this.tables = this.resolveSchemas();
+
+    (GameDatabase as { current: GameDatabase<any, any> | undefined }).current = this as GameDatabase<any, any>;
   }
 
-  async boot() {
+  boot(): Promise<void> {
+    return this._bootPromise ??= this._bootImpl();
+  }
+
+  private async _bootImpl(): Promise<void> {
     // 1. Resolve schemas first — drizzle needs them at construction time so
     //    `db.query.<table>` is wired up (sqlite consumes `schema:` directly;
     //    pg/pglite get the table set via auto-built `defineRelations`).
@@ -453,6 +471,17 @@ export class GameDatabase<
         return current === tv;
       };
     }
+  }
+
+  // Invoked by `Server.listen()` after boot — spreads `@colyseus/auth`'s
+  // endpoint map into the user's router so /auth/* routes light up
+  // automatically. No-op when `@colyseus/auth` isn't installed.
+  async applyRouterDefaults<R extends { extend(endpoints: Record<string, any>): R }>(router: R): Promise<R> {
+    const authMod = await import('@colyseus/auth').catch(() => undefined);
+    if (!authMod?.auth?.endpoints) { return router; }
+    return router.extend(authMod.auth.endpoints({
+      settings: this.auth.settings as any,
+    }));
   }
 
   async shutdown() {
@@ -594,27 +623,15 @@ export class GameDatabase<
   // Private: schema resolution and table creation
   // -------------------------------------------------------------------------
 
-  /**
-   * Load the dialect-specific table registry. Cached per boot so the dynamic
-   * import only runs once across resolveSchemas/createTables/alterTablesForNewColumns.
-   */
-  private async loadRegistry(): Promise<ReadonlyArray<TableEntry>> {
-    if (this._registryCache) { return this._registryCache; }
-    // Branch on dialect so each `await import(...)` returns its own concrete
-    // module type — TS can't narrow `mod.PG_TABLES || mod.SQLITE_TABLES`
-    // off a unioned dynamic-import return.
-    if (this.dialect === 'pg') {
-      this._registryCache = (await import('./schemas/pg.ts')).PG_TABLES;
-    } else {
-      this._registryCache = (await import('./schemas/sqlite.ts')).SQLITE_TABLES;
-    }
-    return this._registryCache;
+  // Sync (statically imported) so the constructor can populate `this.tables`
+  // before boot — admin reads it at module-eval time.
+  private loadRegistry(): ReadonlyArray<TableEntry> {
+    return this.dialect === 'pg' ? PG_TABLES : SQLITE_TABLES;
   }
-  private _registryCache: ReadonlyArray<TableEntry> | null = null;
 
-  private async resolveSchemas(): Promise<{ [K in keyof SchemaSet]: Resolve<S, K> }> {
+  private resolveSchemas(): { [K in keyof SchemaSet]: Resolve<S, K> } {
     const userSchemas = (this.options.schemas ?? {}) as Partial<SchemaSet>;
-    const registry = await this.loadRegistry();
+    const registry = this.loadRegistry();
     const out = {} as { [K in keyof SchemaSet]: Resolve<S, K> };
     for (const entry of registry) {
       // User-supplied table wins over the registry default.
@@ -631,7 +648,7 @@ export class GameDatabase<
    * Drop/type changes are not handled — those are risky and out of scope.
    */
   private async alterTablesForNewColumns(
-    schemas: ReturnType<GameDatabase['resolveSchemas']> extends Promise<infer S> ? S : never,
+    schemas: ReturnType<GameDatabase['resolveSchemas']>,
   ) {
     const getTableConfig: (table: any) => any = this.dialect === 'pg'
       ? (await import('drizzle-orm/pg-core')).getTableConfig
@@ -710,7 +727,7 @@ export class GameDatabase<
     return new Set((rows as Array<{ name: string }>).map((r) => r.name));
   }
 
-  private async createTables(schemas: ReturnType<GameDatabase['resolveSchemas']> extends Promise<infer S> ? S : never) {
+  private async createTables(schemas: ReturnType<GameDatabase['resolveSchemas']>) {
     const getTableConfig: (table: any) => any = this.dialect === 'pg'
       ? (await import('drizzle-orm/pg-core')).getTableConfig
       : (await import('drizzle-orm/sqlite-core')).getTableConfig;
@@ -720,7 +737,7 @@ export class GameDatabase<
     // names break drizzle's `.references()` relinking), but the ordering is
     // preserved as documentation of the dependency graph and so we're ready
     // when FKs land.
-    const registry = await this.loadRegistry();
+    const registry = this.loadRegistry();
     const ordered = topologicalSort(registry);
 
     for (const entry of ordered) {

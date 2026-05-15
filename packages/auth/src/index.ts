@@ -30,6 +30,21 @@ export type {
 
 export { Hash, JWT, auth, };
 
+// Endpoint factories — exported so consumers can call them directly with typed
+// inputs/outputs (test-time contract assertions, custom router composition).
+export {
+  userdataEndpoint,
+  loginEndpoint,
+  registerEndpoint,
+  anonymousEndpoint,
+  forgotPasswordEndpoint,
+  resetPasswordGetEndpoint,
+  resetPasswordPostEndpoint,
+  confirmEmailEndpoint,
+  endpoints,
+  type EndpointsOptions,
+} from './endpoints.ts';
+
 // ---------------------------------------------------------------------------
 // Side-effect: install a JWT-decoding default for `Room.onAuth`.
 //

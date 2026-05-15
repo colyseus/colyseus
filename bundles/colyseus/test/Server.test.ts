@@ -227,6 +227,106 @@ describe("Server", () => {
     });
   });
 
+  describe("options.database", () => {
+    it("awaits database.boot() before accepting; eager pre-boot shares one run", async () => {
+      let bootCalls = 0;
+      let bootResolved = false;
+
+      const stubDatabase = {
+        async boot() {
+          bootCalls += 1;
+          await new Promise((r) => setTimeout(r, 25));
+          bootResolved = true;
+        },
+      };
+
+      let cached: Promise<void> | undefined;
+      const idempotent = {
+        boot() { return cached ??= stubDatabase.boot(); },
+      };
+
+      const orderObserved: string[] = [];
+
+      const localServer = new Server({
+        greet: false,
+        database: idempotent,
+        beforeListen: () => { orderObserved.push("beforeListen"); },
+        express: () => {
+          orderObserved.push("express");
+          assert.ok(bootResolved);
+        },
+      });
+
+      const eager = idempotent.boot();
+      orderObserved.push("eagerFired");
+
+      await localServer.listen(TEST_PORT + 1);
+      await eager;
+
+      assert.strictEqual(bootCalls, 1);
+      assert.deepStrictEqual(orderObserved, ["eagerFired", "beforeListen", "express"]);
+
+      await localServer.transport.shutdown();
+    });
+  });
+
+  describe("options.auth (no database)", () => {
+    it("auto-mounts @colyseus/auth routes when a router is supplied", async () => {
+      const { createRouter } = await import("@colyseus/core");
+      const localServer = new Server({
+        greet: false,
+        gracefullyShutdown: false,
+        auth: {
+          settings: {
+            onFindUserByEmail: async () => null,
+            onRegisterWithEmailAndPassword: async () => ({ id: 1 }),
+          },
+        },
+      });
+      localServer.router = createRouter({}) as any;
+      await localServer.listen(TEST_PORT + 2);
+
+      const response = await fetch(`http://localhost:${TEST_PORT + 2}/auth/anonymous`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
+      assert.strictEqual(response.status, 200);
+      const data = await response.json();
+      assert.ok(data.user?.anonymousId);
+      assert.ok(data.token);
+
+      await localServer.transport.shutdown();
+    });
+
+    it("auto-mounts even when no `routes` was passed to defineServer", async () => {
+      const localServer = new Server({
+        greet: false,
+        gracefullyShutdown: false,
+        auth: {
+          settings: {
+            onFindUserByEmail: async () => null,
+            onRegisterWithEmailAndPassword: async () => ({ id: 1 }),
+          },
+        },
+      });
+      // No localServer.router assignment — listen() must bootstrap one.
+      await localServer.listen(TEST_PORT + 3);
+
+      const response = await fetch(`http://localhost:${TEST_PORT + 3}/auth/anonymous`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
+      assert.strictEqual(response.status, 200);
+      const data = await response.json();
+      assert.ok(data.user?.anonymousId);
+      assert.ok(data.token);
+
+      await localServer.transport.shutdown();
+    });
+  });
+
   describe("CORS headers", () => {
     let originalGetCorsHeaders = matchMaker.controller.getCorsHeaders;
     after(() => matchMaker.controller.getCorsHeaders = originalGetCorsHeaders);

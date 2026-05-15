@@ -97,7 +97,6 @@ export {
   createMiddleware,
   createRouter,
   toNodeHandler,
-  __globalEndpoints,
   type Router,
   type RouterConfig,
   type Endpoint,
