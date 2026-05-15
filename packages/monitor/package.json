@@ -72,8 +72,8 @@
   },
   "dependencies": {
     "@colyseus/core": "workspace:^",
-    "express": ">=4.16.0",
-    "node-os-utils": "^2.0.0"
+    "node-os-utils": "^2.0.0",
+    "zod": "^4.1.12"
   },
   "publishConfig": {
     "tag": "next"

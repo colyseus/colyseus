@@ -631,12 +631,12 @@ importers:
       '@colyseus/core':
         specifier: workspace:^
         version: link:../core
-      express:
-        specifier: '>=4.16.0'
-        version: 5.2.1
       node-os-utils:
         specifier: ^2.0.0
         version: 2.0.3
+      zod:
+        specifier: ^4.1.12
+        version: 4.3.6
     devDependencies:
       '@emotion/react':
         specifier: ^11.11.1

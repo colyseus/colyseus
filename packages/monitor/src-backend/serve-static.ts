@@ -1,0 +1,73 @@
+// Static-file helper. Duplicated from @colyseus/admin / @colyseus/playground.
+import fs from 'fs/promises';
+import path from 'path';
+
+const MIME: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js':   'application/javascript; charset=utf-8',
+  '.mjs':  'application/javascript; charset=utf-8',
+  '.css':  'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.svg':  'image/svg+xml',
+  '.png':  'image/png',
+  '.jpg':  'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif':  'image/gif',
+  '.ico':  'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf':  'font/ttf',
+  '.map':  'application/json; charset=utf-8',
+  '.txt':  'text/plain; charset=utf-8',
+};
+
+export async function serveStatic(root: string, relPath: string | undefined): Promise<Response> {
+  const safe = sanitize(relPath ?? '');
+  const filePath = safe ? path.join(root, safe) : path.join(root, 'index.html');
+
+  const resolved = path.resolve(filePath);
+  const resolvedRoot = path.resolve(root);
+  if (!resolved.startsWith(resolvedRoot + path.sep) && resolved !== resolvedRoot) {
+    return new Response('forbidden', { status: 403 });
+  }
+
+  const data = await tryRead(resolved);
+  if (data) { return fileResponse(data, mimeOf(resolved)); }
+
+  if (!path.extname(safe)) {
+    const index = await tryRead(path.join(resolvedRoot, 'index.html'));
+    if (index) { return fileResponse(index, 'text/html; charset=utf-8'); }
+  }
+
+  return new Response('not found', { status: 404 });
+}
+
+function sanitize(p: string): string {
+  return p.replace(/^\/+/, '').split('/').filter((seg) => seg && seg !== '..' && seg !== '.').join('/');
+}
+
+function mimeOf(filePath: string): string {
+  return MIME[path.extname(filePath).toLowerCase()] ?? 'application/octet-stream';
+}
+
+async function tryRead(filePath: string): Promise<Buffer | null> {
+  try {
+    const stat = await fs.stat(filePath);
+    if (!stat.isFile()) { return null; }
+    return await fs.readFile(filePath);
+  } catch {
+    return null;
+  }
+}
+
+function fileResponse(buf: Buffer, contentType: string): Response {
+  return new Response(new Uint8Array(buf) as any, {
+    status: 200,
+    headers: {
+      'content-type': contentType,
+      'content-length': String(buf.length),
+      'cache-control': 'no-cache',
+      'connection': 'close',
+    },
+  });
+}

@@ -263,6 +263,9 @@ export const server = config({
     // Auto-mounted at root (`/`) — for protection, wrap with `use: [auth.middleware(), ...]`.
     ...playground(),
 
+    // Monitor — mounted at /monitor. Same auth-gating pattern as playground.
+    ...monitor({ prefix: "/monitor" }),
+
     // Admin panel + REST. Browse to http://localhost:2567/admin/.
     // Send `X-User-Id: <id>` to authenticate; POST /admin-seed to bootstrap one.
     ...adminEndpoints({
@@ -353,10 +356,11 @@ export const server = config({
   }),
 
   initializeExpress: (app) => {
-    app.use("/monitor", monitor());
     app.get("/express", (_, res) => res.json({ message: "Hello World" }));
-    // Playground + /auth/* are now better-call endpoints (mounted via `routes`
-    // and via `database.applyRouterDefaults` respectively).
+    // playground / monitor / auth are now better-call endpoints (spread above).
+    // The express-mount form is still supported for backwards compat:
+    //   app.use("/", playground())
+    //   app.use("/monitor", monitor())
   },
 
   beforeListen: async () => {
