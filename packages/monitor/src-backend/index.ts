@@ -1,9 +1,8 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import type { IncomingMessage, ServerResponse } from 'http';
 import { z } from 'zod';
-import { createEndpoint, createRouter, matchMaker, toNodeHandler, type Endpoint } from '@colyseus/core';
+import { createEndpoint, dualModeEndpoints, matchMaker, type Endpoint } from '@colyseus/core';
 import { OSUtils } from 'node-os-utils';
 
 import { serveStatic } from './serve-static.js';
@@ -32,10 +31,7 @@ export interface MonitorOptions {
   >;
 }
 
-type ExpressMiddleware = (req: IncomingMessage, res: ServerResponse, next: (err?: any) => void) => void;
-type MonitorResult = ExpressMiddleware & Record<string, Endpoint>;
-
-export function monitor(opts: MonitorOptions = {}): MonitorResult {
+export function monitor(opts: MonitorOptions = {}) {
   const prefix = opts.prefix ?? '/monitor';
   const use = opts.use ?? [];
   const columnsOpt = opts.columns;
@@ -124,61 +120,45 @@ export function monitor(opts: MonitorOptions = {}): MonitorResult {
     }),
   };
 
-  // Express compatibility — works with either `app.use("/monitor", monitor())`
-  // (express strips `/monitor`) or `app.use("/", monitor())` (no stripping).
-  // We dispatch via the un-stripped request so better-call's getRequest
-  // builds `baseUrl + url` = the full URL, which the prefixed endpoints match.
-  // `specificRouter` (no catch-all) is used for routing decisions so unknown
-  // paths fall through to next() — matches legacy express.static behavior.
-  const specificRouter = createRouter({
-    'monitor-api-rooms': endpoints['monitor-api-rooms']!,
-    'monitor-api-room': endpoints['monitor-api-room']!,
-    'monitor-api-room-call': endpoints['monitor-api-room-call']!,
-    'monitor-index': endpoints['monitor-index']!,
-  });
-  const specificHandler = toNodeHandler(specificRouter.handler);
-  const fullRouter = createRouter(endpoints);
-  const fullHandler = toNodeHandler(fullRouter.handler);
   const SPA_DIST_RESOLVED = path.resolve(SPA_DIST);
 
-  const middleware: ExpressMiddleware = (req, res, next) => {
-    if (req.method !== 'GET') { return next(); }
+  // Express compat — works with either `app.use("/monitor", monitor())` or
+  // `app.use("/", monitor())`. Routing decisions use originalUrl (the same
+  // string better-call's getRequest uses to build the dispatched Request URL),
+  // so the middleware's match check and the actual dispatch always agree.
+  return dualModeEndpoints(endpoints, {
+    catchAllKey: 'monitor-static',
+    buildMiddleware: ({ specificRouter, specificHandler, fullHandler }) => (req, res, next) => {
+      if (req.method !== 'GET') { return next(); }
 
-    // Use originalUrl rather than baseUrl+url because better-call's
-    // constructRelativeUrl uses originalUrl to decide whether to include
-    // the trailing slash in the dispatched URL — we must check the same
-    // string it'll route against.
-    const dispatchUrl = ((req as any).originalUrl ?? req.url ?? '').split('?')[0]!;
+      const dispatchUrl = ((req as any).originalUrl ?? req.url ?? '').split('?')[0]!;
 
-    // Redirect bare prefix (`/monitor`) to canonical `/monitor/` so users
-    // typing the URL directly land on the SPA.
-    if (prefix && dispatchUrl === prefix) {
-      res.writeHead(301, { location: `${prefix}/` });
-      res.end();
-      return;
-    }
-
-    const route = specificRouter.findRoute('GET', dispatchUrl);
-    if (route && route.data?.path === dispatchUrl) {
-      return specificHandler(req as any, res as any).catch(next);
-    }
-
-    // Asset request — only delegate if the file exists on disk.
-    if (!dispatchUrl.startsWith(prefix)) { return next(); }
-    const innerPath = dispatchUrl.slice(prefix.length);
-    const rel = innerPath.replace(/^\/+/, '');
-    if (!rel || rel.includes('..')) { return next(); }
-    const filePath = path.resolve(SPA_DIST_RESOLVED, rel);
-    if (!filePath.startsWith(SPA_DIST_RESOLVED + path.sep)) { return next(); }
-
-    fs.stat(filePath).then((stat) => {
-      if (stat.isFile()) {
-        fullHandler(req as any, res as any).catch(next);
-      } else {
-        next();
+      // Bare prefix (`/monitor`) → 301 to canonical `/monitor/`.
+      if (prefix && dispatchUrl === prefix) {
+        res.writeHead(301, { location: `${prefix}/` });
+        res.end();
+        return;
       }
-    }).catch(() => next());
-  };
 
-  return Object.assign(middleware, endpoints) as MonitorResult;
+      const route = specificRouter.findRoute('GET', dispatchUrl);
+      if (route && route.data?.path === dispatchUrl) {
+        return specificHandler(req as any, res as any).catch(next);
+      }
+
+      // Asset request — only delegate if the file exists on disk.
+      if (!dispatchUrl.startsWith(prefix)) { return next(); }
+      const rel = dispatchUrl.slice(prefix.length).replace(/^\/+/, '');
+      if (!rel || rel.includes('..')) { return next(); }
+      const filePath = path.resolve(SPA_DIST_RESOLVED, rel);
+      if (!filePath.startsWith(SPA_DIST_RESOLVED + path.sep)) { return next(); }
+
+      fs.stat(filePath).then((stat) => {
+        if (stat.isFile()) {
+          fullHandler(req as any, res as any).catch(next);
+        } else {
+          next();
+        }
+      }).catch(() => next());
+    },
+  });
 }

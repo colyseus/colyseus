@@ -97,6 +97,7 @@ export {
   createMiddleware,
   createRouter,
   toNodeHandler,
+  dualModeEndpoints,
   type Router,
   type RouterConfig,
   type Endpoint,
@@ -104,6 +105,9 @@ export {
   type EndpointOptions,
   type EndpointContext,
   type StrictEndpoint,
+  type ExpressMiddleware,
+  type NodeHandler,
+  type DualModeHelpers,
 } from './router/index.ts';
 
 // Abstract logging support

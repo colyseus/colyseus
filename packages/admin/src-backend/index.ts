@@ -5,8 +5,7 @@
  */
 import path from 'path';
 import { fileURLToPath } from 'url'; // required for ESM build (see build.mjs)
-import type { IncomingMessage, ServerResponse } from 'http';
-import { createRouter, toNodeHandler, type Endpoint } from '@colyseus/core';
+import { dualModeEndpoints, type Endpoint } from '@colyseus/core';
 import { getTableConfig as getPgTableConfig } from 'drizzle-orm/pg-core';
 import { getTableConfig as getSqliteTableConfig } from 'drizzle-orm/sqlite-core';
 import { GameDatabase } from '@colyseus/database';
@@ -412,15 +411,12 @@ function buildContext(opts: AdminOptions): EndpointContext {
   };
 }
 
-type ExpressMiddleware = (req: IncomingMessage, res: ServerResponse, next: (err?: any) => void) => void;
-type AdminResult = ExpressMiddleware & Record<string, Endpoint>;
-
 /**
  * Better-call endpoint map for the admin panel — REST API + static UI. Spread
  * into `createRouter({ ...admin({ database }), yourRoutes... })`. The same
  * return value is also a valid express middleware: `app.use("/", admin({...}))`.
  */
-export function admin(opts: AdminOptions): AdminResult {
+export function admin(opts: AdminOptions) {
   // In production, refuse to boot without a JWT secret — admin sessions
   // would otherwise be unsignable (and the failure would surface only
   // at the first login attempt, not at startup). Devs without an env
@@ -508,48 +504,39 @@ export function admin(opts: AdminOptions): AdminResult {
     adminUiAssets:    uiAssetsEndpoint(ctx),
   };
 
-  // Express compatibility — `app.use("/", admin({...}))` works alongside the
-  // canonical `routes: createRouter({ ...admin({...}) })` spread form.
-  // `specificRouter` excludes the SPA catch-all (`adminUiAssets`) so it can
-  // drive routing decisions; `fullRouter` includes it for SPA fallback on
-  // GETs under `uiPath`. Routing decisions key off `req.originalUrl` because
-  // that's the string better-call's getRequest uses to build the dispatched
-  // Request URL.
-  const { adminUiAssets, ...specificEndpoints } = endpoints;
-  const specificRouter = createRouter(specificEndpoints);
-  const specificHandler = toNodeHandler(specificRouter.handler);
-  const fullRouter = createRouter(endpoints);
-  const fullHandler = toNodeHandler(fullRouter.handler);
+  // Express compat — routing decisions key off req.originalUrl (the same
+  // string better-call's getRequest uses to build the dispatched Request URL),
+  // so the middleware's match check and the actual dispatch always agree.
+  return dualModeEndpoints(endpoints, {
+    catchAllKey: 'adminUiAssets',
+    buildMiddleware: ({ specificRouter, specificHandler, fullHandler }) => (req, res, next) => {
+      const dispatchUrl = ((req as any).originalUrl ?? req.url ?? '').split('?')[0]!;
+      const method = req.method ?? 'GET';
 
-  const middleware: ExpressMiddleware = (req, res, next) => {
-    const dispatchUrl = ((req as any).originalUrl ?? req.url ?? '').split('?')[0]!;
-    const method = req.method ?? 'GET';
+      // Bare-uiPath (`/admin`) → 301 to canonical `/admin/`.
+      if (method === 'GET' && dispatchUrl === ctx.uiPath) {
+        res.writeHead(301, { location: `${ctx.uiPath}/` });
+        res.end();
+        return;
+      }
 
-    // Bare-uiPath redirect (`/admin` → `/admin/`) so users land on the SPA.
-    if (method === 'GET' && dispatchUrl === ctx.uiPath) {
-      res.writeHead(301, { location: `${ctx.uiPath}/` });
-      res.end();
-      return;
-    }
+      const route = specificRouter.findRoute(method, dispatchUrl);
+      // route.data.path is the route template (e.g. `/admin-api/:resource`),
+      // so we can't compare it strictly against the dispatched URL. Trust
+      // findRoute for parameterized routes; only skip when the template ends
+      // in `/` and the dispatched URL doesn't (rou3 normalizes trailing
+      // slashes in findRoute but processRequest does exact-match).
+      if (route && (!route.data?.path?.endsWith('/') || dispatchUrl.endsWith('/'))) {
+        return specificHandler(req as any, res as any).catch(next);
+      }
 
-    const route = specificRouter.findRoute(method, dispatchUrl);
-    // route.data.path is the route template (e.g. `/admin-api/:resource`),
-    // so we can't compare it strictly against the dispatched URL. Trust
-    // findRoute for parameterized routes; only skip when the template ends
-    // in `/` and the dispatched URL doesn't (rou3 normalizes trailing
-    // slashes in findRoute but processRequest does exact-match).
-    if (route && (!route.data?.path?.endsWith('/') || dispatchUrl.endsWith('/'))) {
-      return specificHandler(req as any, res as any).catch(next);
-    }
+      // GET under uiPath → SPA fallback via the catch-all so React Router
+      // routes (e.g. `/admin/users/42`) serve index.html on direct visit.
+      if (method === 'GET' && dispatchUrl.startsWith(ctx.uiPath + '/')) {
+        return fullHandler(req as any, res as any).catch(next);
+      }
 
-    // GET under uiPath — SPA fallback via the catch-all so React Router
-    // routes (e.g. `/admin/users/42`) serve index.html on direct visit.
-    if (method === 'GET' && dispatchUrl.startsWith(ctx.uiPath + '/')) {
-      return fullHandler(req as any, res as any).catch(next);
-    }
-
-    next();
-  };
-
-  return Object.assign(middleware, endpoints) as AdminResult;
+      next();
+    },
+  });
 }

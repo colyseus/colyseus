@@ -126,3 +126,52 @@ export function createRouter<
 >(endpoints: E, config: Config = {} as Config) {
   return createBetterCallRouter({ ...endpoints }, config);
 }
+
+// ---------------------------------------------------------------------------
+// dualModeEndpoints — shared express-compat layer for @colyseus/admin,
+// @colyseus/monitor, @colyseus/playground. Builds the two local routers
+// (specific = no catch-all, full = everything) and the matching node
+// handlers, then packages the express middleware so the return value works
+// both as `{...spread}` into createRouter AND as `app.use("/", x)` middleware.
+// ---------------------------------------------------------------------------
+
+export type ExpressMiddleware = (
+  req: IncomingMessage,
+  res: ServerResponse,
+  next: (err?: any) => void,
+) => void;
+
+export type NodeHandler = (req: IncomingMessage, res: ServerResponse) => Promise<void>;
+
+export interface DualModeHelpers {
+  specificRouter: Router;
+  specificHandler: NodeHandler;
+  fullRouter: Router;
+  fullHandler: NodeHandler;
+}
+
+export function dualModeEndpoints<E extends Record<string, Endpoint>>(
+  endpoints: E,
+  opts: {
+    /** Key in `endpoints` whose path is a catch-all. Excluded from `specificRouter` so it doesn't eat fall-through decisions. */
+    catchAllKey?: keyof E;
+    /** Build the express middleware given the pre-built routers + node handlers. */
+    buildMiddleware: (helpers: DualModeHelpers) => ExpressMiddleware;
+  },
+): ExpressMiddleware & E {
+  const fullRouter = createRouter(endpoints);
+  const fullHandler = toNodeHandler(fullRouter.handler) as NodeHandler;
+
+  const specificEndpoints = opts.catchAllKey
+    ? Object.fromEntries(
+        Object.entries(endpoints).filter(([k]) => k !== opts.catchAllKey),
+      ) as Partial<E>
+    : endpoints;
+  const specificRouter = createRouter(specificEndpoints as E);
+  const specificHandler = toNodeHandler(specificRouter.handler) as NodeHandler;
+
+  const middleware = opts.buildMiddleware({
+    specificRouter, specificHandler, fullRouter, fullHandler,
+  });
+  return Object.assign(middleware, endpoints) as ExpressMiddleware & E;
+}
