@@ -113,6 +113,28 @@ for (const backend of BACKENDS) {
         assert.equal(u.anonymous, true);
       });
 
+      it('anonymous/oauth registration returns tokenVersion so bans invalidate the JWT', async () => {
+        // The signed JWT payload is whatever these callbacks return —
+        // if they drop `tokenVersion`, `GameDatabase.revocationCheck`
+        // can't compare it against the row, and admin ban + bump
+        // silently fails to evict the session.
+        const s = db.auth.settings;
+        const anon: any = await s.onRegisterAnonymously!({} as any);
+        assert.equal(anon.tokenVersion, 0, 'fresh anon row exposes tokenVersion');
+
+        const oauth: any = await s.onOAuthProviderCallback!(
+          { profile: { email: 'oauth-new@example.com' } },
+          'discord',
+        );
+        assert.equal(oauth.tokenVersion, 0, 'fresh oauth row exposes tokenVersion');
+
+        // Bumping (what banUserEndpoint does) makes the row's counter
+        // diverge from the JWT's claim — that's the divergence
+        // revocationCheck rejects.
+        await db.auth.bumpTokenVersion(anon.id);
+        assert.equal(await db.auth.getTokenVersion(anon.id), anon.tokenVersion + 1);
+      });
+
       it('ban / unban / isBanned round-trip', async () => {
         // Seed a user via the auth flow so the row has all defaults.
         const u: any = await db.auth.settings.onRegisterAnonymously!({} as any);

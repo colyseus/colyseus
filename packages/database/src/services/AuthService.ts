@@ -66,6 +66,25 @@ export class AuthService<T extends UsersTableShape = UsersTableShape> {
   }
 
   /**
+   * Re-read a row by id. Used by the register/oauth paths to hand the
+   * freshly persisted row back to `@colyseus/auth`'s `onGenerateToken`
+   * — that callback signs whatever it receives, so the JWT payload's
+   * columns are exactly what we return here. Going through a `select()`
+   * (rather than re-using the just-inserted `values` object) means any
+   * column the schema defines flows in automatically. In particular,
+   * `tokenVersion` lands in the claim, which `revocationCheck` uses
+   * to invalidate sessions on ban / "sign out everywhere".
+   */
+  private async findById(userId: string): Promise<InferSelectModel<T> | null> {
+    const rows = await this.db
+      .select()
+      .from(this.users)
+      .where(eq(this.users.id, userId))
+      .limit(1);
+    return (rows[0] as InferSelectModel<T>) ?? null;
+  }
+
+  /**
    * Throw a clear error when a ban-related method is invoked but the
    * user's custom `users` table doesn't include the ban columns.
    * `bannedUntil` / `bannedReason` are optional on UsersTableShape so
@@ -243,23 +262,24 @@ export class AuthService<T extends UsersTableShape = UsersTableShape> {
   }
 
   /**
-   * Register anonymous user. Returns the created user data (included in JWT).
+   * Register anonymous user. Returns the persisted row so the resulting
+   * JWT carries every schema column (see `findById`) — `tokenVersion`
+   * in particular, so admin bans can invalidate anonymous sessions.
    */
   private async registerAnonymous(options?: any) {
     const id = generateId(21);
     const anonymousId = generateId(21);
 
-    const values = {
+    await this.db.insert(this.users).values({
       id,
       anonymousId,
       anonymous: true,
       createdAt: new Date(),
       updatedAt: new Date(),
-    };
+    });
 
-    await this.db.insert(this.users).values(values);
-
-    return { id, anonymousId, anonymous: true, ...options };
+    const row = await this.findById(id);
+    return { ...row, ...options };
   }
 
   /**
@@ -320,13 +340,8 @@ export class AuthService<T extends UsersTableShape = UsersTableShape> {
           })
           .where(eq(this.users.id, userId));
 
-        const rows = await this.db
-          .select()
-          .from(this.users)
-          .where(eq(this.users.id, userId))
-          .limit(1);
-
-        if (rows[0]) { return rows[0]; }
+        const row = await this.findById(userId);
+        if (row) { return row; }
         // No matching row — token was stale. Continue to the fallback
         // paths so the sign-in still succeeds against the Discord email.
       }
@@ -343,19 +358,17 @@ export class AuthService<T extends UsersTableShape = UsersTableShape> {
       if (rows[0]) { return rows[0]; }
     }
 
-    // Create new user from OAuth profile
+    // Create new user from OAuth profile. Re-select after insert so
+    // schema-defined columns (notably `tokenVersion`) end up in the JWT.
     const id = generateId(21);
-    const values = {
+    await this.db.insert(this.users).values({
       id,
       email: email || null,
       anonymous: false,
       createdAt: new Date(),
       updatedAt: new Date(),
-    };
-
-    await this.db.insert(this.users).values(values);
-
-    return { ...values };
+    });
+    return await this.findById(id);
   }
 }
 
