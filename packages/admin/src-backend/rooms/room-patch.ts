@@ -73,11 +73,13 @@ function getChild(parent: any, key: string | number): any {
   if (typeof current.delete === 'function') {
     current.delete(String(property));
   } else {
-    // For plain objects/arrays, `delete` is the right operator. Arrays
-    // get a hole left behind — that matches the monitor's existing
-    // behavior and avoids index shifting that could confuse the path-
-    // based addressing the panel uses for subsequent edits in the
-    // same tick.
-    delete current[property as any];
+    // For top-level Schema fields, `delete state.field` is a no-op —
+    // @colyseus/schema defines fields via getters/setters, so the
+    // `delete` operator can't actually remove them, and the change
+    // tree never sees a deletion. Assigning `undefined` triggers the
+    // field setter, which recognizes the sentinel and emits a DELETE
+    // op to the encoder. Plain objects work either way; this is the
+    // form that also works for Schema instances.
+    current[property as any] = undefined;
   }
 };
