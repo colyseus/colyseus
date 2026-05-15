@@ -14,7 +14,7 @@
  * fetch surface is small enough that the migration is straightforward.
  */
 import * as React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Loader2, Lock, Unlock, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -47,6 +47,7 @@ interface RoomSummary {
 }
 
 export function RoomsListPage() {
+  const navigate = useNavigate();
   const [rooms, setRooms] = React.useState<RoomSummary[] | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [query, setQuery] = React.useState('');
@@ -165,7 +166,12 @@ export function RoomsListPage() {
           </TableHeader>
           <TableBody>
             {pageRooms.map((r) => (
-              <TableRow key={r.roomId} data-testid={`room-row-${r.roomId}`}>
+              <TableRow
+                key={r.roomId}
+                data-testid={`room-row-${r.roomId}`}
+                onClick={() => navigate(`/rooms/${r.roomId}`)}
+                className="cursor-pointer hover:bg-muted/40"
+              >
                 <TableCell className="font-mono text-xs">{r.roomId}</TableCell>
                 <TableCell>{r.name}</TableCell>
                 <TableCell className="text-right tabular-nums">{r.clients}</TableCell>
@@ -193,7 +199,13 @@ export function RoomsListPage() {
                 <TableCell className="font-mono text-xs text-muted-foreground">
                   {r.processId ?? '—'}
                 </TableCell>
-                <TableCell className="text-right">
+                <TableCell
+                  className="text-right"
+                  // Stop click from bubbling to the row handler — the
+                  // inner `<Link>` already navigates to the same place,
+                  // and dual-firing would queue two history entries.
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <Button asChild variant="ghost" size="icon" data-testid={`room-inspect-${r.roomId}`}>
                     <Link to={`/rooms/${r.roomId}`} aria-label="Inspect"><Eye className="size-4" /></Link>
                   </Button>

@@ -7,7 +7,7 @@
  */
 import assert from 'node:assert';
 import { describe, it } from 'node:test';
-import { createTokenBucketLimiter, ipFromHeaders } from '../src-backend/rate-limit.ts';
+import { createTokenBucketLimiter, ipFromHeaders } from '../src-backend/auth/rate-limit.ts';
 
 describe('createTokenBucketLimiter', () => {
   it('allows up to `capacity` calls then blocks with 429', async () => {

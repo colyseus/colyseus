@@ -945,10 +945,10 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     });
   });
 
-  it('dashboard endpoint respects builtIns allowlist + widget overrides', async () => {
-    // app.config.ts: builtIns = ['recentUsers']; widgets override `health`
-    // and append `rooms`. So expected ids are: recentUsers, health, rooms.
-    // `totals` and `activeEvents` are explicitly opted-out.
+  it('dashboard endpoint respects presets config + custom widgets', async () => {
+    // app.config.ts: all presets default-enabled (with recentUsers.limit=5);
+    // plus a custom `System health` widget. Expected ids: the five preset
+    // ids + the slugified custom widget id (`system-health`).
     const loginRes = await fetch(`${BASE}/admin-api/auth/login`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -964,8 +964,11 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
       widgets: Array<{ id: string; render: string; data: any; error?: string }>;
     };
     const ids = payload.widgets.map((w) => w.id);
-    assert.deepEqual(ids.sort(), ['health', 'recentUsers', 'rooms', 'segments'].sort(),
-      `expected only allow-listed + custom widgets, got: ${ids.join(', ')}`);
+    assert.deepEqual(
+      ids.sort(),
+      ['totals', 'recentUsers', 'liveRooms', 'health', 'segments', 'system-health'].sort(),
+      `expected default presets + custom widget, got: ${ids.join(', ')}`,
+    );
 
     // `segments` widget reflects every registered segment as a KPI key
     const segments = payload.widgets.find((w) => w.id === 'segments')!;
@@ -975,13 +978,14 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
       assert.ok(expected in segData, `segments KPI should include '${expected}', got: ${Object.keys(segData).join(', ')}`);
     }
 
-    // overridden built-in (health) carries the user's data shape
-    const health = payload.widgets.find((w) => w.id === 'health')!;
-    assert.equal(health.error, undefined);
-    assert.ok('uptime' in (health.data as any), `health override should expose uptime, got: ${JSON.stringify(health.data)}`);
-    // appended custom widget
-    const rooms = payload.widgets.find((w) => w.id === 'rooms')!;
-    assert.equal(rooms.error, undefined);
+    // Custom widget with auto-derived id ("System health" → "system-health").
+    const sysHealth = payload.widgets.find((w) => w.id === 'system-health')!;
+    assert.equal(sysHealth.error, undefined);
+    assert.ok('uptime' in (sysHealth.data as any),
+      `custom system-health widget should expose uptime, got: ${JSON.stringify(sysHealth.data)}`);
+    // liveRooms preset returns the rooms-summary table with linkTo set.
+    const liveRooms = payload.widgets.find((w) => w.id === 'liveRooms')!;
+    assert.equal(liveRooms.error, undefined);
   });
 
   it('dashboard renders only the configured widget cards in the UI', async () => {
@@ -993,17 +997,13 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     await page.type('input[data-testid="login-password"]', BOOTSTRAP_PASSWORD);
     await page.click('[data-testid="login-submit"]');
 
-    // builtIns allowlist kept recentUsers + segments; widgets override health + add rooms
+    // All default presets render, plus the custom System health widget
     await page.waitForSelector('[data-testid="widget-recentUsers"]', { timeout: 15_000 });
     await page.waitForSelector('[data-testid="widget-segments"]', { timeout: 5_000 });
     await page.waitForSelector('[data-testid="widget-health"]', { timeout: 5_000 });
-    await page.waitForSelector('[data-testid="widget-rooms"]', { timeout: 5_000 });
-
-    // opted-out built-ins must NOT appear
-    const totalsCard = await page.$('[data-testid="widget-totals"]');
-    assert.equal(totalsCard, null, 'totals widget should be opted out via builtIns allowlist');
-    const eventsCard = await page.$('[data-testid="widget-activeEvents"]');
-    assert.equal(eventsCard, null, 'activeEvents widget should be opted out via builtIns allowlist');
+    await page.waitForSelector('[data-testid="widget-totals"]', { timeout: 5_000 });
+    await page.waitForSelector('[data-testid="widget-liveRooms"]', { timeout: 5_000 });
+    await page.waitForSelector('[data-testid="widget-system-health"]', { timeout: 5_000 });
     await page.close();
   });
 

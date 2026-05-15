@@ -11,11 +11,11 @@
  */
 import type { GameDatabase, Action } from '@colyseus/database';
 import { type SQL } from 'drizzle-orm';
-import type { ResourceDefinition } from '../define-resource.js';
-import type { Logger } from '../logger.js';
-import { errorResponse } from '../http.js';
-import { buildPkWhere, type TableConfig } from '../helpers.js';
-import { clearSessionCookie, readSessionFromHeader } from '../sessions.js';
+import type { ResourceDefinition } from '../catalog/define-resource.js';
+import type { Logger } from './logger.js';
+import { errorResponse } from './http.js';
+import { buildPkWhere, type TableConfig } from './helpers.js';
+import { clearSessionCookie, readSessionFromHeader } from '../auth/sessions.js';
 
 export interface EndpointContext {
   apiPath: string;

@@ -1,6 +1,6 @@
 import assert from 'assert';
 import { describe, it } from 'node:test';
-import { tryAudit } from '../src-backend/helpers.ts';
+import { tryAudit } from '../src-backend/internal/helpers.ts';
 
 describe('tryAudit', () => {
   it('runs the work function on success and resolves silently', async () => {

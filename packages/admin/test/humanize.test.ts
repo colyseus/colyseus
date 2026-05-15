@@ -1,6 +1,6 @@
 import assert from 'assert';
 import { describe, it } from 'node:test';
-import { humanize } from '../src-backend/humanize.ts';
+import { humanize } from '../src-backend/display/humanize.ts';
 
 describe('humanize', () => {
   it('matches the spec for built-in GameDatabase tables', () => {

@@ -1,6 +1,6 @@
 import assert from 'assert';
 import { describe, it } from 'node:test';
-import { iconForTableName } from '../src-backend/default-icons.ts';
+import { iconForTableName } from '../src-backend/display/default-icons.ts';
 
 describe('iconForTableName', () => {
   it('identity / social', () => {

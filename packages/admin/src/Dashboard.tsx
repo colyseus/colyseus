@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AlertTriangle } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
+import { humanize } from '../src-backend/display/humanize.js';
 import { iconFor } from './icons';
+import { syntheticShowPath } from './pages/internals/synthetic-resources';
 
 interface Widget {
   id: string;
@@ -11,6 +14,8 @@ interface Widget {
   icon?: string;
   render: 'kpi' | 'table' | 'list' | 'json';
   span: number;
+  /** When > 0, the card self-refreshes from /admin-api/_dashboard/<id> on this cadence. */
+  refreshIntervalMs?: number;
   data: any;
   error?: string;
 }
@@ -36,28 +41,53 @@ function KpiCard({ data }: { data: Record<string, number | string> }) {
   );
 }
 
-function TableCard({ data }: { data: { columns: string[]; rows: any[] } }) {
+interface TableData {
+  columns: string[];
+  rows: Array<Record<string, any>>;
+  /** When present, rows navigate to /{resource}/show/{row[idColumn]}. */
+  linkTo?: { resource: string; idColumn?: string };
+}
+
+function TableCard({ data }: { data: TableData }) {
+  const navigate = useNavigate();
   if (!data || !data.rows || data.rows.length === 0) {
     return <div className="text-sm text-muted-foreground">no rows</div>;
   }
   const cols = data.columns ?? Object.keys(data.rows[0] ?? {});
+  const idColumn = data.linkTo?.idColumn ?? 'id';
+  const resource = data.linkTo?.resource;
   return (
     <Table>
       <TableHeader>
         <TableRow>
           {cols.map((c) => (
-            <TableHead key={c} className="text-xs">{c}</TableHead>
+            <TableHead key={c} className="text-xs">{humanize(c)}</TableHead>
           ))}
         </TableRow>
       </TableHeader>
       <TableBody>
-        {data.rows.map((r, i) => (
-          <TableRow key={i}>
-            {cols.map((c) => (
-              <TableCell key={c} className="text-xs">{formatCell(r[c])}</TableCell>
-            ))}
-          </TableRow>
-        ))}
+        {data.rows.map((r, i) => {
+          const id = resource ? r[idColumn] : undefined;
+          // Synthetic resources (rooms, …) use custom URLs without `/show/`;
+          // fall back to the standard CRUD pattern for catalog resources.
+          const target = (resource && id != null)
+            ? (syntheticShowPath(resource, String(id))
+                ?? `/${resource}/show/${encodeURIComponent(String(id))}`)
+            : undefined;
+          const onClick = target ? () => navigate(target) : undefined;
+          return (
+            <TableRow
+              key={id ?? i}
+              data-row-id={id ?? undefined}
+              onClick={onClick}
+              className={onClick ? 'cursor-pointer hover:bg-muted/40' : undefined}
+            >
+              {cols.map((c) => (
+                <TableCell key={c} className="text-xs">{formatCell(r[c])}</TableCell>
+              ))}
+            </TableRow>
+          );
+        })}
       </TableBody>
     </Table>
   );
@@ -97,7 +127,35 @@ function formatCell(v: any): React.ReactNode {
   return String(v);
 }
 
-function WidgetCard({ widget }: { widget: Widget }) {
+function WidgetCard({ widget: initial }: { widget: Widget }) {
+  // Local state lets widgets with `refreshIntervalMs` swap in fresh
+  // data without re-fetching the whole dashboard. `initial` is the
+  // last server-rendered snapshot; if it changes (e.g. dashboard
+  // re-mount), we adopt it as the new baseline.
+  const [widget, setWidget] = useState(initial);
+  useEffect(() => { setWidget(initial); }, [initial]);
+
+  useEffect(() => {
+    const ms = widget.refreshIntervalMs;
+    if (!ms || ms <= 0) { return; }
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const r = await fetch(
+          `/admin-api/_dashboard/${encodeURIComponent(widget.id)}`,
+          { credentials: 'include' },
+        );
+        if (!r.ok) { return; }
+        const next = await r.json() as Widget;
+        if (!cancelled) { setWidget(next); }
+      } catch {
+        // transient network errors: skip this tick, keep the last good payload
+      }
+    };
+    const handle = setInterval(tick, ms);
+    return () => { cancelled = true; clearInterval(handle); };
+  }, [widget.id, widget.refreshIntervalMs]);
+
   let body: React.ReactNode;
   if (widget.error) {
     body = (

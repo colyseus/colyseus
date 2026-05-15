@@ -1,6 +1,6 @@
 import assert from 'assert';
 import { describe, it } from 'node:test';
-import { sqlKeyedProjection } from '../src-backend/helpers.ts';
+import { sqlKeyedProjection } from '../src-backend/internal/helpers.ts';
 
 describe('sqlKeyedProjection', () => {
   it('keys columns by their SQL name (not the JS field name)', () => {

@@ -7,6 +7,10 @@
  *
  * `iconFor()` returns a React element ready to render — keeps callsites
  * compact: `{iconFor(r.icon)}` instead of `{(() => <Cmp />)()}`.
+ *
+ * The `Record<AdminIconName, LucideIcon>` annotation pairs this map with
+ * the canonical name list in `src-backend/icons.ts`. Adding a name to that
+ * list without a corresponding entry here is a type error.
  */
 import {
   User, UserPlus, Users, ShoppingBag, ShoppingCart, LayoutGrid, Trophy,
@@ -16,8 +20,9 @@ import {
   Network, Database, Heart, Boxes, Radio,
   type LucideIcon,
 } from 'lucide-react';
+import type { AdminIconName } from '../src-backend/display/icons.js';
 
-const MAP: Record<string, LucideIcon> = {
+const MAP: Record<AdminIconName, LucideIcon> = {
   user: User,
   'user-add': UserPlus,
   team: Users,

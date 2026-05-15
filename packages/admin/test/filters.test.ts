@@ -1,6 +1,6 @@
 import assert from 'assert';
 import { describe, it } from 'node:test';
-import { buildFilterCondition, listColumns } from '../src-backend/helpers.ts';
+import { buildFilterCondition, listColumns } from '../src-backend/internal/helpers.ts';
 
 const col = (name: string, dataType: string) => ({ name, dataType });
 

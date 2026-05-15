@@ -23,9 +23,9 @@ import {
   createEndpoint, matchMaker, userRoomsKey, CloseCode,
   type Endpoint, type Room,
 } from '@colyseus/core';
-import { errorResponse, json } from '../http.js';
-import { ipFromHeaders } from '../rate-limit.js';
-import { guard, type EndpointContext } from './context.js';
+import { errorResponse, json } from '../internal/http.js';
+import { ipFromHeaders } from '../auth/rate-limit.js';
+import { guard, type EndpointContext } from '../internal/context.js';
 
 const USERS_RESOURCE = 'users';
 

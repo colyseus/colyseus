@@ -1,4 +1,5 @@
 import type { Action, Role } from '@colyseus/database';
+import type { AdminIconName } from '../display/icons.js';
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 type _ResourceTypeDeps = Action | Role;
@@ -93,8 +94,8 @@ export interface ResourceDefinition {
   __tableName: string;
   /** human label for sidebar/page titles */
   label?: string;
-  /** AntD icon name (e.g. "team", "trophy") for the sidebar */
-  icon?: string;
+  /** Icon name from the admin's icon set (e.g. "team", "trophy") for the sidebar. See `AdminIconName`. */
+  icon?: AdminIconName;
   list?: {
     /** columns to show in the list view; if omitted, all columns are shown */
     columns?: string[];

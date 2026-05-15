@@ -1,16 +1,16 @@
 /**
  * Pure builder for the resource catalog. The endpoint
- * (`endpoints/catalog.ts`) is just `return json(buildResourceCatalog(ctx))`
+ * (`./catalog-endpoint.ts`) is just `return json(buildResourceCatalog(ctx))`
  * — keeping the construction here means we can unit-test it without a
  * Request/Response round-trip.
  */
 import type { GameDatabase } from '@colyseus/database';
 import { resolveFkLayout } from '@colyseus/database';
 import type { ResourceDefinition } from './define-resource.js';
-import { iconForTableName } from './default-icons.js';
-import type { TableColumn, TableConfig } from './helpers.js';
-import { humanize } from './humanize.js';
-import type { CatalogColumn, CatalogResource } from './catalog-types.js';
+import { iconForTableName } from '../display/default-icons.js';
+import type { TableColumn, TableConfig } from '../internal/helpers.js';
+import { humanize } from '../display/humanize.js';
+import type { CatalogColumn, CatalogResource } from './types.js';
 
 export interface BuildCatalogInput {
   tables: Record<string, any>;

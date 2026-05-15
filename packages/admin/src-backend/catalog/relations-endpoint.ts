@@ -17,9 +17,9 @@
 import { createEndpoint, matchMaker, userRoomsKey, type Endpoint } from '@colyseus/core';
 import { resolveFkLayout } from '@colyseus/database';
 import { eq, sql } from 'drizzle-orm';
-import { castPk, sqlKeyedProjection } from '../helpers.js';
-import { errorResponse, json } from '../http.js';
-import { guard, pkOrError, tableOrError, type EndpointContext } from './context.js';
+import { castPk, sqlKeyedProjection } from '../internal/helpers.js';
+import { errorResponse, json } from '../internal/http.js';
+import { guard, pkOrError, tableOrError, type EndpointContext } from '../internal/context.js';
 
 /**
  * Synthetic count key for the user-show page's "Active sessions" tab.

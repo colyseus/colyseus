@@ -1,6 +1,6 @@
 import assert from 'assert';
 import { describe, it } from 'node:test';
-import { translateBodyKeys } from '../src-backend/helpers.ts';
+import { translateBodyKeys } from '../src-backend/internal/helpers.ts';
 
 const col = (name: string, dataType?: string) =>
   ({ name, dataType });

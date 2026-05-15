@@ -14,7 +14,7 @@
  *   7. Audit fire-and-forget wrapper       — tryAudit
  */
 import { and, eq, gt, gte, inArray, like, lt, lte, ne, type SQL } from 'drizzle-orm';
-import type { ResourceDefinition } from './define-resource.js';
+import type { ResourceDefinition } from '../catalog/define-resource.js';
 import type { Logger } from './logger.js';
 
 // ---------------------------------------------------------------------------

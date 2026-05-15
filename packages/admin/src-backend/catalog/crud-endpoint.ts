@@ -23,9 +23,9 @@ import {
   sqlKeyedProjection,
   translateBodyKeys,
   tryAudit,
-} from '../helpers.js';
-import { errorResponse, json } from '../http.js';
-import { guard, pkOrError, tableOrError, type EndpointContext } from './context.js';
+} from '../internal/helpers.js';
+import { errorResponse, json } from '../internal/http.js';
+import { guard, pkOrError, tableOrError, type EndpointContext } from '../internal/context.js';
 
 const RESERVED_QUERY_KEYS = new Set(['_start', '_end', '_sort', '_order', '_q']);
 

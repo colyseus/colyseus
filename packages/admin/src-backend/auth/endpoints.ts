@@ -2,7 +2,7 @@ import { count, eq } from 'drizzle-orm';
 import { Hash, JWT } from '@colyseus/auth';
 import { createEndpoint, type Endpoint } from '@colyseus/core';
 import type { GameDatabase } from '@colyseus/database';
-import { json, errorResponse } from './http.js';
+import { json, errorResponse } from '../internal/http.js';
 import {
   signSession,
   setSessionCookie,
@@ -12,7 +12,7 @@ import {
   type SessionConfig,
 } from './sessions.js';
 import { ipFromHeaders, type RateLimiter } from './rate-limit.js';
-import type { Logger } from './logger.js';
+import type { Logger } from '../internal/logger.js';
 
 /** Claims embedded in a password-reset JWT. */
 interface ResetTokenClaims {

@@ -9,56 +9,65 @@ import { dualModeEndpoints, type Endpoint } from '@colyseus/core';
 import { getTableConfig as getPgTableConfig } from 'drizzle-orm/pg-core';
 import { getTableConfig as getSqliteTableConfig } from 'drizzle-orm/sqlite-core';
 import { GameDatabase } from '@colyseus/database';
-import type { ResourceDefinition } from './define-resource.js';
+import type { ResourceDefinition } from './catalog/define-resource.js';
 import { JWT } from '@colyseus/auth';
-import { authEndpoints } from './auth.js';
-import { readSessionFromHeader, type SessionConfig } from './sessions.js';
-import { logger as defaultLogger, type Logger } from './logger.js';
+import { authEndpoints } from './auth/endpoints.js';
+import { readSessionFromHeader, type SessionConfig } from './auth/sessions.js';
+import { logger as defaultLogger, type Logger } from './internal/logger.js';
 import {
   createTokenBucketLimiter,
   type RateLimiter,
-} from './rate-limit.js';
+} from './auth/rate-limit.js';
 import {
   type DashboardWidget,
   type DashboardPayload,
-  type BuiltInWidgetId,
-} from './dashboard.js';
+  type DashboardPresets,
+} from './dashboard/widgets.js';
 
-import type { EndpointContext } from './endpoints/context.js';
-import { catalogEndpoint } from './endpoints/catalog.js';
-import { actionEndpoint } from './endpoints/action.js';
+import type { EndpointContext } from './internal/context.js';
+import { catalogEndpoint } from './catalog/catalog-endpoint.js';
+import { actionEndpoint } from './catalog/action-endpoint.js';
 import {
   listEndpoint, getEndpoint, createEndpoint_, updateEndpoint, deleteEndpoint,
-} from './endpoints/crud.js';
-import { countsEndpoint, relationEndpoint } from './endpoints/relations.js';
+} from './catalog/crud-endpoint.js';
+import { countsEndpoint, relationEndpoint } from './catalog/relations-endpoint.js';
 import {
   listRoomsEndpoint, listRoomsByUserEndpoint,
   inspectRoomEndpoint, kickClientEndpoint, lockRoomEndpoint,
   editRoomStateEndpoint, deleteRoomStateEndpoint, disposeRoomEndpoint,
-} from './endpoints/rooms.js';
+} from './rooms/endpoint.js';
 import {
   banUserEndpoint, unbanUserEndpoint, revokeSessionsEndpoint,
-} from './endpoints/users.js';
+} from './users/endpoint.js';
 // Side-effect import: monkey-patches `Room.prototype` with the
 // `_editStateProperty` / `_deleteStateProperty` hooks the inspector's
 // state-editor calls via `matchMaker.remoteRoomCall`. Must run before
 // the endpoints below are wired — they reference the patched methods.
-import './ext/Room.js';
+import './rooms/room-patch.js';
 import {
-  healthEndpoint, dashboardEndpoint, uiIndexEndpoint, uiAssetsEndpoint,
-} from './endpoints/system.js';
+  dashboardEndpoint, dashboardWidgetEndpoint, resolveDashboardWidgets,
+} from './dashboard/endpoint.js';
+import {
+  healthEndpoint, uiIndexEndpoint, uiAssetsEndpoint,
+} from './system/endpoint.js';
 
-export { defineAdminResource } from './define-resource.js';
-export type { ResourceDefinition, ResourceAction, PolicyEntry } from './define-resource.js';
-export type { SessionConfig, AdminSession } from './sessions.js';
+export { defineAdminResource } from './catalog/define-resource.js';
+export type { ResourceDefinition, ResourceAction, PolicyEntry } from './catalog/define-resource.js';
+export type { SessionConfig, AdminSession } from './auth/sessions.js';
 export {
   createTokenBucketLimiter,
   ipFromHeaders,
   type RateLimiter,
   type TokenBucketOptions,
-} from './rate-limit.js';
-export type { DashboardWidget, DashboardPayload, BuiltInWidgetId } from './dashboard.js';
-export { dashboardWidgets } from './dashboard.js';
+} from './auth/rate-limit.js';
+export type {
+  DashboardWidget, DashboardPayload, DashboardWidgetEntry,
+  DashboardPresets, WidgetRender,
+  TableWidgetData, UserColumnName, LiveRoomColumnName,
+  TotalsPresetOptions, RecentUsersPresetOptions, LiveRoomsPresetOptions,
+  HealthPresetOptions, SegmentsPresetOptions,
+} from './dashboard/widgets.js';
+export { ADMIN_ICON_NAMES, type AdminIconName } from './display/icons.js';
 
 export interface AdminOptions {
   /** Defaults to `GameDatabase.current`. Pass explicitly for multi-database setups. */
@@ -167,35 +176,36 @@ export interface AdminOptions {
   /**
    * Dashboard customization for the admin home page.
    *
-   * Built-in widgets — `totals`, `recentUsers`, `activeEvents`, `health` —
-   * are auto-included by default and can be tuned three ways:
+   * Two knobs:
    *
-   *   1. **Pick which to keep** with `builtIns`: e.g. `['health', 'recentUsers']`
-   *      drops `totals` (often noisy in real games) and `activeEvents`. Pass
-   *      `[]` to disable all built-ins and ship only your own widgets.
-   *   2. **Override by id** in `widgets`: a widget with `id: 'recentUsers'`
-   *      replaces the built-in's data fn while preserving order.
-   *   3. **Append new ids** in `widgets`: any unrecognized id is added at
-   *      the end — typical for game-specific KPIs.
+   *   - `presets` — built-in widgets (`totals`, `recentUsers`, `liveRooms`,
+   *     `health`, `segments`). All enabled by default; pass `false` to
+   *     disable one, or an options object to customize its title/icon/span
+   *     and the preset-specific knobs (e.g. `recentUsers: { limit: 10 }`).
    *
-   * For composition, the built-ins are also exported as factory functions
-   * via `dashboardWidgets.{totals,recentUsers,activeEvents,health}` — pass
-   * one with custom options into your `widgets` array.
+   *   - `widgets` — user-defined widgets, appended after the presets. `id`
+   *     is optional and defaults to `slugify(title)`. Reusing a preset id
+   *     here throws at setup time — configure presets through `presets`,
+   *     not by shadowing them.
    *
    * @example
-   *   import { dashboardWidgets } from '@colyseus/admin';
    *   dashboard: {
-   *     builtIns: ['health'],            // keep only the health widget
+   *     presets: {
+   *       totals: { only: ['users', 'rooms'] },
+   *       recentUsers: { limit: 10 },
+   *       health: false,
+   *       // segments: omitted → enabled with defaults
+   *     },
    *     widgets: [
-   *       dashboardWidgets.recentUsers({ limit: 10 }),  // re-add, customized
-   *       { id: 'rooms', render: 'kpi', data: async () => ({ active: 5 }) },
+   *       { title: 'Rooms', icon: 'cluster', render: 'kpi',
+   *         data: async () => ({ active: 5 }) },
    *     ],
    *   }
    */
   dashboard?: {
-    /** Built-in widget ids to auto-include. Default: all four. */
-    builtIns?: BuiltInWidgetId[];
-    /** Custom widgets — override built-ins by id, or append new ones. */
+    /** Built-in widget configuration. All enabled by default. */
+    presets?: DashboardPresets;
+    /** User-defined widgets appended after the presets. */
     widgets?: DashboardWidget[];
   };
 }
@@ -454,10 +464,16 @@ export function admin(opts: AdminOptions) {
     logger: ctx.logger,
   });
 
+  // Dashboard widgets are resolved once at setup time; both the full
+  // dashboard endpoint and the per-widget refresh endpoint dispatch
+  // from the same list.
+  const dashboardWidgets = resolveDashboardWidgets(opts.dashboard);
+
   const endpoints: Record<string, Endpoint> = {
     ...auth,
-    adminHealthcheck: healthEndpoint(ctx),
-    adminDashboard:   dashboardEndpoint(ctx, opts.dashboard),
+    adminHealthcheck:    healthEndpoint(ctx),
+    adminDashboard:      dashboardEndpoint(ctx, dashboardWidgets),
+    adminDashboardWidget: dashboardWidgetEndpoint(ctx, dashboardWidgets),
 
     adminResources:   catalogEndpoint(ctx),
     adminCounts:      countsEndpoint(ctx),

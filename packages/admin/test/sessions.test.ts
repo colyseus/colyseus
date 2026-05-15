@@ -8,7 +8,7 @@ import {
   setSessionCookie,
   clearSessionCookie,
   readSessionFromHeader,
-} from '../src-backend/sessions.ts';
+} from '../src-backend/auth/sessions.ts';
 
 before(() => {
   JWT.settings.secret = 'test-secret-do-not-use-in-prod';

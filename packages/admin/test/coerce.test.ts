@@ -1,6 +1,6 @@
 import assert from 'assert';
 import { describe, it } from 'node:test';
-import { castFilterValue, castPk, coerceForColumn } from '../src-backend/helpers.ts';
+import { castFilterValue, castPk, coerceForColumn } from '../src-backend/internal/helpers.ts';
 
 const col = (props: Record<string, any>) => props;
 

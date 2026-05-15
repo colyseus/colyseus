@@ -1,19 +1,19 @@
 /**
- * Heuristic mapping from table-name keywords to AntD icon names.
+ * Heuristic mapping from table-name keywords to icon names.
  *
  * Intent: a fresh Colyseus admin should look meaningful out of the box,
  * without users having to set `icon` on every resource. Users can always
  * override via `defineAdminResource(table, { icon: 'rocket' })`.
  *
- * Icon names are AntD's outlined-icon names without the suffix —
- * "user" → `<UserOutlined />`. The client (src/icons.tsx) is the single
- * source of truth for which names render to what.
+ * Names come from the canonical `AdminIconName` union in `./icons.ts`;
+ * the client (`src/icons.tsx`) maps each to a lucide-react component.
  *
  * Compound names (e.g. analytics_events, cloud_saves) MUST come before
  * generic suffix rules (events, saves) — first match wins.
  */
+import type { AdminIconName } from './icons.js';
 
-const RULES: Array<[RegExp, string]> = [
+const RULES: Array<[RegExp, AdminIconName]> = [
   // moderation/RBAC
   [/(^|_)mod_assignments?$/, 'safety'],
   [/(^|_)moderation$/, 'safety'],
@@ -89,7 +89,7 @@ const RULES: Array<[RegExp, string]> = [
   [/(^|_)skins?$/, 'skin'],
 ];
 
-export function iconForTableName(tableName: string): string {
+export function iconForTableName(tableName: string): AdminIconName {
   const lower = tableName.toLowerCase();
   // Strip the framework's `colyseus_` prefix so built-in tables get the right icon.
   const stripped = lower.replace(/^colyseus_/, '');

@@ -5,9 +5,9 @@
  * + pass it to the handler. Each invocation is audit-logged.
  */
 import { createEndpoint, type Endpoint } from '@colyseus/core';
-import { sqlKeyedProjection, tryAudit } from '../helpers.js';
-import { errorResponse, json } from '../http.js';
-import { pkOrError, tableOrError, type EndpointContext } from './context.js';
+import { sqlKeyedProjection, tryAudit } from '../internal/helpers.js';
+import { errorResponse, json } from '../internal/http.js';
+import { pkOrError, tableOrError, type EndpointContext } from '../internal/context.js';
 
 export function actionEndpoint(ctx: EndpointContext): Endpoint {
   return createEndpoint(

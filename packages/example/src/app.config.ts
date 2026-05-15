@@ -269,27 +269,19 @@ export const server = config({
     // Send `X-User-Id: <id>` to authenticate; POST /admin-seed to bootstrap one.
     ...admin({
       dashboard: {
-        // Skip the noisy `totals` widget and `activeEvents` (we don't use timed
-        // events here). Keep recentUsers + segments from the built-ins, then
-        // override `health` and append a new `rooms` widget.
-        // builtIns: ['recentUsers', 'segments'],
+        presets: {
+          // totals: false,
+          recentUsers: { limit: 5 },
+          // health: false,
+          // segments: false,
+        },
         widgets: [
-          // Re-include `health` via its factory — but with a custom data fn
-          // that also reports process uptime.
+          // Custom replacement for `health` with extra uptime KPI.
           {
-            id: 'health',
             title: 'System health',
             icon: 'heart',
             render: 'kpi',
             data: async () => ({ db: 'ok', uptime: `${Math.round(process.uptime())}s` }),
-          },
-          // New widget — appended after the built-ins.
-          {
-            id: 'rooms',
-            title: 'Rooms',
-            icon: 'cluster',
-            render: 'kpi',
-            data: async () => ({ active: matchMaker.driver.rooms?.length ?? 0 }),
           },
         ],
       },

@@ -1,6 +1,6 @@
 import assert from 'assert';
 import { describe, it } from 'node:test';
-import { buildPkWhere, pkColumns } from '../src-backend/helpers.ts';
+import { buildPkWhere, pkColumns } from '../src-backend/internal/helpers.ts';
 
 const intCol = (props: Record<string, any> = {}) =>
   ({ getSQLType: () => 'integer', ...props });

@@ -6,7 +6,7 @@ import type {
   CatalogResource,
   CatalogResourceAction,
   CatalogResourceRelation,
-} from '../src-backend/catalog-types.ts';
+} from '../src-backend/catalog/types.ts';
 
 export type Column = CatalogColumn;
 export type Resource = CatalogResource;

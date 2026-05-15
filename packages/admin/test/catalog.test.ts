@@ -1,6 +1,6 @@
 import assert from 'assert';
 import { describe, it } from 'node:test';
-import { buildResourceCatalog } from '../src-backend/catalog.ts';
+import { buildResourceCatalog } from '../src-backend/catalog/builder.ts';
 
 const col = (props: Record<string, any>) =>
   ({ primary: false, notNull: false, ...props });
