@@ -342,7 +342,7 @@ export class GameDatabase<
   // Shared by eager `boot()` callers and Server.listen() so migrations run once.
   private _bootPromise: Promise<void> | null = null;
 
-  // Implicit default for `adminEndpoints()` etc. — last construction wins;
+  // Implicit default for `admin()` etc. — last construction wins;
   // multi-database setups must pass `database:` explicitly.
   static current: GameDatabase<any, any> | undefined;
 
@@ -367,7 +367,7 @@ export class GameDatabase<
       this.dialect = detectDialect(common.connectionString);
     }
 
-    // Sync so `adminEndpoints({ database })` can read `database.tables` at
+    // Sync so `admin({ database })` can read `database.tables` at
     // module-eval, before `Server.listen()` awaits boot.
     this.tables = this.resolveSchemas();
 

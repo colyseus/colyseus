@@ -386,7 +386,7 @@ export function authEndpoints(opts: AuthEndpointsOptions): Record<string, Endpoi
     ),
 
     // POST /admin-api/auth/register — self-serve registration.
-    // Defaults to disabled — gated behind enableRegistration: true on adminEndpoints.
+    // Defaults to disabled — gated behind enableRegistration: true on admin.
     // (See index.ts; this endpoint is only mounted when the option is set.)
   };
 }

@@ -166,7 +166,7 @@ const tableNameSymbol = Symbol.for('drizzle:Name');
 
 /**
  * Define UI/UX overrides for a drizzle table in the admin panel.
- * Pass the result into `adminEndpoints({ resources: { ... } })`.
+ * Pass the result into `admin({ resources: { ... } })`.
  *
  * @example
  * ```ts

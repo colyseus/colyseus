@@ -3,7 +3,7 @@
  *
  * No external runtime dep — just JSON-on-stdout. Pino-compatible shape so
  * users can swap in pino/bunyan/winston by passing their own Logger to
- * adminEndpoints({ logger }) and it'll work the same.
+ * admin({ logger }) and it'll work the same.
  *
  * Each log line is a single JSON object (one-line, newline-delimited):
  *   {"level":"info","time":1234567890,"msg":"GET /admin-api/users","ctx":{...}}

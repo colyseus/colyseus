@@ -7,7 +7,7 @@ import type { GameDatabase } from '@colyseus/database';
  *
  * Built-in widgets (totals / recent users / active events / health) are
  * registered by default in `resolveWidgets()`. Pass `dashboard.widgets`
- * to `adminEndpoints({...})` to add new widgets or override defaults by id.
+ * to `admin({...})` to add new widgets or override defaults by id.
  */
 export interface DashboardWidget {
   /** Unique id; reuse a default id (e.g. "totals") to override its data fn. */

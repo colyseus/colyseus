@@ -213,7 +213,7 @@ export interface AdminOptions {
  *
  * Bootstrapping without a secret would result in unsignable session
  * tokens — a silent failure at first login. Better to fail loudly at
- * `adminEndpoints()` setup.
+ * `admin()` setup.
  */
 let jwtWarnedOnce = false;
 function assertJwtSecretConfigured(): void {
@@ -222,9 +222,9 @@ function assertJwtSecretConfigured(): void {
 
   if (process.env.NODE_ENV === 'production') {
     throw new Error(
-      '[adminEndpoints] JWT_SECRET is required in production — admin sessions ' +
+      '[admin] JWT_SECRET is required in production — admin sessions ' +
       'cannot be signed without it. Set the JWT_SECRET environment variable or ' +
-      'assign JWT.settings.secret before calling adminEndpoints().',
+      'assign JWT.settings.secret before calling admin().',
     );
   }
 
@@ -232,7 +232,7 @@ function assertJwtSecretConfigured(): void {
     jwtWarnedOnce = true;
     // eslint-disable-next-line no-console
     console.warn(
-      '[adminEndpoints] No JWT secret configured. Admin sessions will fail to ' +
+      '[admin] No JWT secret configured. Admin sessions will fail to ' +
       'sign. Set JWT_SECRET (env) or JWT.settings.secret before deploying.',
     );
   }
@@ -254,7 +254,7 @@ function resolveLimiter(
 }
 
 /**
- * Built-in resource defaults applied at `adminEndpoints()` time. Each entry
+ * Built-in resource defaults applied at `admin()` time. Each entry
  * is keyed by the canonical table name and runs only when:
  *   - the GameDatabase has that table (i.e. the user is using the
  *     built-in `roles`/`userNotes`/etc. schemas), AND
@@ -353,7 +353,7 @@ function buildContext(opts: AdminOptions): EndpointContext {
   const database = opts.database ?? GameDatabase.current;
   if (!database) {
     throw new Error(
-      '[adminEndpoints] no GameDatabase available — construct `new GameDatabase(...)` before calling adminEndpoints(), or pass `database:` explicitly',
+      '[admin] no GameDatabase available — construct `new GameDatabase(...)` before calling admin(), or pass `database:` explicitly',
     );
   }
   const apiPath = (opts.apiPath ?? '/admin-api').replace(/\/$/, '');
@@ -367,7 +367,7 @@ function buildContext(opts: AdminOptions): EndpointContext {
 
   const resolvedTables = opts.tables ?? database.tables;
   if (!resolvedTables) {
-    throw new Error('[adminEndpoints] no tables provided — pass `tables` or call database.boot() first');
+    throw new Error('[admin] no tables provided — pass `tables` or call database.boot() first');
   }
   // Cast to a string-indexable map: GameDatabase types `tables` as a strict
   // mapped record (no string index signature) but the path-param lookup needs
@@ -553,9 +553,3 @@ export function admin(opts: AdminOptions): AdminResult {
 
   return Object.assign(middleware, endpoints) as AdminResult;
 }
-
-/**
- * @deprecated Renamed to `admin` for consistency with `monitor()` /
- * `playground()`. This alias will be removed in the next major release.
- */
-export const adminEndpoints = admin;

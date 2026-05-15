@@ -94,7 +94,7 @@ export const roleColumns = {
 
 /**
  * Admin audit log. Every Create / Update / Delete / custom action that
- * passes through `adminEndpoints` records a row here so operators can
+ * passes through `admin()` records a row here so operators can
  * answer "who edited this config / banned which player". The table is
  * append-only; deletion is a separate, opt-in operation (e.g. a cron
  * that prunes rows older than N days).

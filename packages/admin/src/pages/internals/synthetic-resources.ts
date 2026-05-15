@@ -1,5 +1,5 @@
 /**
- * Synthetic resources surfaced by `adminEndpoints` that don't live in
+ * Synthetic resources surfaced by `admin` that don't live in
  * the catalog (no drizzle table backs them) but ARE referenced from
  * audit-log rows via the `resource` column.
  *

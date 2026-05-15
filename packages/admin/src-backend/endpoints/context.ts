@@ -1,5 +1,5 @@
 /**
- * Shared state every admin endpoint needs. Built once in `adminEndpoints()`
+ * Shared state every admin endpoint needs. Built once in `admin()`
  * and threaded through each endpoint factory so the endpoint files stay
  * pure functions of `(ctx) => Endpoint` — easy to read, easy to test.
  *
