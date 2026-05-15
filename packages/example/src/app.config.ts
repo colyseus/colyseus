@@ -16,7 +16,7 @@ import { RedisPresence } from "@colyseus/redis-presence";
 import { RedisDriver } from "@colyseus/redis-driver";
 import { PostgresDriver } from "@colyseus/drizzle-driver";
 
-import { adminEndpoints, defineAdminResource } from "@colyseus/admin";
+import { admin, defineAdminResource } from "@colyseus/admin";
 import { registerSegments } from "./db/segments.ts";
 import { database } from "./db/database.ts";
 
@@ -267,7 +267,7 @@ export const server = config({
 
     // Admin panel + REST. Browse to http://localhost:2567/admin/.
     // Send `X-User-Id: <id>` to authenticate; POST /admin-seed to bootstrap one.
-    ...adminEndpoints({
+    ...admin({
       dashboard: {
         // Skip the noisy `totals` widget and `activeEvents` (we don't use timed
         // events here). Keep recentUsers + segments from the built-ins, then
