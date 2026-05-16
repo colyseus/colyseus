@@ -13,6 +13,7 @@ import type { ResourceDefinition } from './catalog/define-resource.js';
 import { JWT } from '@colyseus/auth';
 import { authEndpoints } from './auth/endpoints.js';
 import { readSessionFromHeader, type SessionConfig } from './auth/sessions.js';
+import { sessionGuard } from './auth/guard.js';
 import { logger as defaultLogger, type Logger } from './internal/logger.js';
 import {
   createTokenBucketLimiter,
@@ -54,6 +55,7 @@ import {
 export { defineAdminResource } from './catalog/define-resource.js';
 export type { ResourceDefinition, ResourceAction, PolicyEntry } from './catalog/define-resource.js';
 export type { SessionConfig, AdminSession } from './auth/sessions.js';
+export type { AdminGuardOptions } from './auth/guard.js';
 export {
   createTokenBucketLimiter,
   ipFromHeaders,
@@ -425,8 +427,13 @@ function buildContext(opts: AdminOptions): EndpointContext {
  * Better-call endpoint map for the admin panel — REST API + static UI. Spread
  * into `createRouter({ ...admin({ database }), yourRoutes... })`. The same
  * return value is also a valid express middleware: `app.use("/", admin({...}))`.
+ *
+ * Session guard for sibling apps lives at `admin.guard()` (mirrors
+ * `auth.middleware()`): `playground({ use: [admin.guard()] })`. It's a
+ * static helper — no panel instance needed; `loginUrl` defaults to
+ * `/admin` (pass `admin.guard({ loginUrl })` if you customize uiPath).
  */
-export function admin(opts: AdminOptions) {
+function adminImpl(opts: AdminOptions) {
   // In production, refuse to boot without a JWT secret — admin sessions
   // would otherwise be unsignable (and the failure would surface only
   // at the first login attempt, not at startup). Devs without an env
@@ -556,3 +563,11 @@ export function admin(opts: AdminOptions) {
     },
   });
 }
+
+/**
+ * `admin` is the endpoint-map factory; `admin.guard` is the session
+ * middleware for gating sibling apps (monitor/playground) behind the
+ * same login. Attached as a static (not an instance method) so the
+ * call site stays `admin.guard()` with no panel hoisting.
+ */
+export const admin = Object.assign(adminImpl, { guard: sessionGuard });

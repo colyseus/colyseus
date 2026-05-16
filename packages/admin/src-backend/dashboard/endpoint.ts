@@ -14,7 +14,7 @@ import {
   type DashboardPresets, type DashboardWidget, type ResolvedWidget,
 } from './widgets.js';
 import { errorResponse, json } from '../internal/http.js';
-import type { EndpointContext } from '../internal/context.js';
+import { requireOperator, type EndpointContext } from '../internal/context.js';
 
 export interface DashboardOptions {
   presets?: DashboardPresets;
@@ -40,10 +40,9 @@ export function dashboardEndpoint(
   widgets: ResolvedWidget[],
 ): Endpoint {
   return createEndpoint(`${ctx.apiPath}/_dashboard`, { method: 'GET' }, async (reqCtx) => {
+    const denied = await requireOperator(ctx, reqCtx);
+    if (denied) { return denied; }
     const userId = await ctx.resolveUserId({ getHeader: reqCtx.getHeader });
-    if (ctx.enforceRbac && !userId) {
-      return errorResponse(401, 'not authenticated — sign in at /admin/login');
-    }
     const payload = await runWidgets(widgets, { database: ctx.database, userId: userId ?? '' });
     return json(payload);
   });
@@ -63,10 +62,9 @@ export function dashboardWidgetEndpoint(
     `${ctx.apiPath}/_dashboard/:widgetId`,
     { method: 'GET' },
     async (reqCtx) => {
+      const denied = await requireOperator(ctx, reqCtx);
+      if (denied) { return denied; }
       const userId = await ctx.resolveUserId({ getHeader: reqCtx.getHeader });
-      if (ctx.enforceRbac && !userId) {
-        return errorResponse(401, 'not authenticated — sign in at /admin/login');
-      }
       const id = (reqCtx.params as { widgetId: string }).widgetId;
       const widget = byId.get(id);
       if (!widget) {

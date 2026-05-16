@@ -83,6 +83,38 @@ export async function guard(
   return null;
 }
 
+/**
+ * Operator gate — "is this caller allowed to use the panel at all".
+ * Returns `null` when allowed, a `Response` (401/403) when not.
+ *
+ * Distinct from `guard()`: `guard()` answers "can this user do <action>
+ * on <resource>" via the per-resource RBAC matrix. Some surfaces aren't
+ * resource-scoped — the catalog (`GET /admin-api`, drives every UI page)
+ * and the dashboard (the panel's home screen). Those must be reachable
+ * by any operator (admin OR mod, regardless of a mod's collection
+ * scopes) but NOT by a plain `user`-role account — the auth table is
+ * shared with @colyseus/auth, so a game player with credentials could
+ * otherwise log into the panel and read schema + aggregate widgets.
+ *
+ * `guard()` can't express this for a synthetic resource: its `can()`
+ * fallback only admits a mod for collections they're explicitly scoped
+ * to, so gating the catalog through `guard()` would 403 every mod and
+ * break the whole UI for them.
+ */
+export async function requireOperator(
+  ctx: EndpointContext,
+  reqCtx: any,
+): Promise<Response | null> {
+  if (!ctx.enforceRbac) { return null; }
+  const userId = await ctx.resolveUserId({ getHeader: reqCtx.getHeader });
+  if (!userId) { return errorResponse(401, 'not authenticated — sign in at /admin/login'); }
+  const role = await ctx.database.moderation.getRole(userId);
+  if (role === 'user') {
+    return errorResponse(403, 'forbidden: the admin panel requires an operator role');
+  }
+  return null;
+}
+
 /** Look up a table + cfg by canonical name, or return a 404 Response. */
 export function tableOrError(
   ctx: EndpointContext,

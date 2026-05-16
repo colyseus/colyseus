@@ -8,15 +8,14 @@
  * page is effectively single-use.
  */
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { consumeNextParam } from '@/lib/next-param';
 
 export function SetupPage() {
-  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -33,7 +32,17 @@ export function SetupPage() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
-      if (res.ok) { navigate('/', { replace: true }); return; }
+      if (res.ok) {
+        // Hard-nav (never a Refine SPA redirect): `?next=` points
+        // outside the admin router, and the operator-gated catalog
+        // needs App to remount + refetch it with the freshly-set
+        // session cookie so the sidebar populates.
+        // Prebuilt-bundle mount root is fixed at '/admin/' (see note in
+        // LoginPage). uiPath customization is backend-only for now.
+        const next = consumeNextParam();
+        window.location.replace(next || '/admin/');
+        return;
+      }
       const body = await res.json().catch(() => ({}));
       setError(body.error || `Setup failed (${res.status})`);
     } catch (err: any) {

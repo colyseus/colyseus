@@ -259,11 +259,14 @@ export const server = config({
   },
 
   routes: createRouter({
-    // Playground UI + /__apidocs + /rooms at root.
-    ...playground(),
-
-    // Monitor — defaults to /monitor. Auth-gate via `use: [auth.middleware(), ...]`.
-    ...monitor(),
+    // Both /playground and /monitor sit behind the admin login screen.
+    // admin.guard() reads the same HttpOnly session cookie as the admin
+    // panel, redirects browser visits to /admin/?next=<original-url>,
+    // and answers XHR/fetch with a 401 JSON body. loginUrl defaults to
+    // '/admin' — pass `admin.guard({ loginUrl })` if you customize the
+    // panel's uiPath.
+    ...playground({ use: [admin.guard()] }),
+    ...monitor({    use: [admin.guard()] }),
 
     // Admin panel + REST. Browse to http://localhost:2567/admin/.
     // Send `X-User-Id: <id>` to authenticate; POST /admin-seed to bootstrap one.

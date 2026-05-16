@@ -444,8 +444,19 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     assert.equal(res.status, 403);
   });
 
-  it('catalog includes FK relations per resource', async () => {
+  it('catalog requires an operator session (no anonymous schema disclosure)', async () => {
     const res = await fetch(`${BASE}/admin-api`);
+    assert.equal(res.status, 401, 'GET /admin-api must reject anonymous callers');
+  });
+
+  it('catalog includes FK relations per resource', async () => {
+    const loginRes = await fetch(`${BASE}/admin-api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: BOOTSTRAP_EMAIL, password: BOOTSTRAP_PASSWORD }),
+    });
+    const cookieHeader = loginRes.headers.get('set-cookie')!.split(';')[0];
+    const res = await fetch(`${BASE}/admin-api`, { headers: { cookie: cookieHeader } });
     const catalog = await res.json() as Array<{
       name: string;
       relations: Array<{ name: string; target: string; kind: 'one' | 'many' }>;
@@ -602,7 +613,13 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
   it('catalog reflects custom columns spread onto the users table', async () => {
     // app.config.ts customizes the users table with `display_name` + `level`.
     // The catalog endpoint should surface them so the admin UI can render them.
-    const res = await fetch(`${BASE}/admin-api`);
+    const loginRes = await fetch(`${BASE}/admin-api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: BOOTSTRAP_EMAIL, password: BOOTSTRAP_PASSWORD }),
+    });
+    const cookieHeader = loginRes.headers.get('set-cookie')!.split(';')[0];
+    const res = await fetch(`${BASE}/admin-api`, { headers: { cookie: cookieHeader } });
     assert.equal(res.status, 200);
     const catalog = await res.json() as Array<{ name: string; columns: Array<{ name: string }> }>;
     const usersResource = catalog.find((r) => r.name === 'users');
@@ -621,7 +638,13 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     // single-FKs to another resource. Cell renderer reads `column.linkTo`
     // to decide whether to wrap in a Link and which target to fetch
     // labels from.
-    const res = await fetch(`${BASE}/admin-api`);
+    const loginRes = await fetch(`${BASE}/admin-api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: BOOTSTRAP_EMAIL, password: BOOTSTRAP_PASSWORD }),
+    });
+    const cookieHeader = loginRes.headers.get('set-cookie')!.split(';')[0];
+    const res = await fetch(`${BASE}/admin-api`, { headers: { cookie: cookieHeader } });
     assert.equal(res.status, 200);
     const catalog = await res.json() as Array<{
       name: string;

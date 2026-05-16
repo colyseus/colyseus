@@ -2,6 +2,12 @@
  * Bare-bones login screen. Email + password → POST /admin-api/auth/login.
  * On first run (no admins exist), Refine's authProvider.check() routes the
  * unauthenticated user to /setup instead — see SetupPage.tsx.
+ *
+ * Honors a `?next=<path>` query param so the admin.guard() middleware on
+ * /monitor and /playground can round-trip the user back to where they
+ * started. The next value is sanity-checked for same-origin (must be a
+ * plain path) before we navigate to it, so a tampered link can't bounce
+ * to an external host.
  */
 import { useState } from 'react';
 import { useLogin } from '@refinedev/core';
@@ -10,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { consumeNextParam } from '@/lib/next-param';
 
 export function LoginPage() {
   const { mutate: login, isLoading } = useLogin<{ email: string; password: string }>();
@@ -26,7 +33,22 @@ export function LoginPage() {
         onSuccess: (data) => {
           if (data?.success === false) {
             setError(data.error?.message ?? 'Sign in failed');
+            return;
           }
+          // Always hard-nav, never a Refine SPA redirect. Two reasons:
+          //  - `?next=` (from the guard middleware on /monitor,
+          //    /playground) points outside the admin SPA's router.
+          //  - the catalog (`GET /admin-api`) is now operator-gated, so
+          //    App's mount-time fetch ran while anonymous and returned
+          //    []. A full reload remounts App and refetches it with the
+          //    session cookie, so the sidebar is populated.
+          // NOTE: the shipped bundle is built once at publish time, so the
+          // mount root is fixed at '/admin/'. Customizing admin()'s uiPath
+          // is a backend-only knob today — the prebuilt UI does not support
+          // it (see vite base + App.tsx basename). Keep this literal in
+          // sync with those if that limitation is ever lifted.
+          const next = consumeNextParam();
+          window.location.replace(next || '/admin/');
         },
       },
     );
