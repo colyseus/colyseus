@@ -8,6 +8,7 @@ import { database } from "./db/database.ts";
 // elsewhere via app.config.ts, but pinning the import here documents
 // the dependency for anyone reading just this room file.
 import "@colyseus/auth";
+import { TrackUserSessionsPlugin } from "colyseus/plugins/track-user-sessions";
 
 const VERSION = 5;
 
@@ -79,35 +80,10 @@ export class MyRoom extends Room<{ state: MyRoomState, client: MyClient, input: 
   // the cached layout. Public methods are reachable as
   // `this.plugins.<key>.<method>(...)` with full types.
 
-  // plugins = definePlugins([
-  //   new AnalyticsPlugin({ database, prefix: 'my_room' }),
-  //   new CloudSavesPlugin({
-  //     database,
-  //     slot: 0,
-  //     payload: (room, client) => {
-  //       const player = room.state.players.get(client.sessionId);
-  //       return player ? { x: player.x, y: player.y, score: player.score } : null;
-  //     },
-  //     apply: (room, client, data) => {
-  //       const player = room.state.players.get(client.sessionId);
-  //       if (!player || !data) return;
-  //       const d = data as { x: number; y: number; score: number };
-  //       player.x = d.x;
-  //       player.y = d.y;
-  //       player.score = d.score;
-  //     },
-  //   }),
-  //   new LeaderboardsPlugin({
-  //     database,
-  //     boardId: 'my_room_score',
-  //     boardName: 'MyRoom Score',
-  //     score: (room, client) => room.state.players.get(client.sessionId)?.score ?? null,
-  //   })
-  // ]);
-
-  plugins = definePlugins({
-    analytics: new AnalyticsPlugin({ database, prefix: 'my_room' }),
-    saves: new CloudSavesPlugin<this>({
+  plugins = definePlugins([
+    new TrackUserSessionsPlugin(),
+    new AnalyticsPlugin({ database, prefix: 'my_room' }),
+    new CloudSavesPlugin({
       database,
       slot: 0,
       payload: (room, client) => {
@@ -123,13 +99,13 @@ export class MyRoom extends Room<{ state: MyRoomState, client: MyClient, input: 
         player.score = d.score;
       },
     }),
-    ranked: new LeaderboardsPlugin<this>({
+    new LeaderboardsPlugin({
       database,
       boardId: 'my_room_score',
       boardName: 'MyRoom Score',
       score: (room, client) => room.state.players.get(client.sessionId)?.score ?? null,
-    }),
-  });
+    })
+  ]);
 
   messages = {
     ...thirdPartyMessages,
@@ -160,8 +136,6 @@ export class MyRoom extends Room<{ state: MyRoomState, client: MyClient, input: 
     // map dimensions
     this.state.mapWidth = 800;
     this.state.mapHeight = 600;
-
-    this.plugins.analytics.track()
 
     this.onMessage("__move", (client, message) => {})
     this.onMessage("__dummy", (client, message) => { })
