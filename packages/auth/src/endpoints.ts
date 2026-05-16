@@ -33,6 +33,18 @@ function isValidEmail(email: string) {
   return emailFormat.safeParse(email).success;
 }
 
+// Lazily derive auth.backend_url from the request when it hasn't been set
+// explicitly. Mirrors the OAuth endpoints' originFromContext — needed so
+// confirm-email / reset-password links resolve to a real host now that the
+// express `originDetector` middleware is gone.
+function ensureBackendUrl(ctx: any) {
+  if (auth.backend_url) { return; }
+  const proto = ctx.getHeader('x-forwarded-proto')
+    ?? (ctx.request?.url?.startsWith('https://') ? 'https' : 'http');
+  const host = ctx.getHeader('host') ?? 'localhost';
+  auth.backend_url = `${proto}://${host}`;
+}
+
 const tokenStatusQuery = z.object({
   token: z.string().optional(),
   success: z.string().optional(),
@@ -128,6 +140,7 @@ export function registerEndpoint(prefix: string = auth.prefix) {
       const token = await auth.settings.onGenerateToken(user);
 
       if (typeof auth.settings.onSendEmailConfirmation === 'function') {
+        ensureBackendUrl(ctx);
         const confirmEmailLink = `${auth.backend_url}${prefix}/confirm-email?token=${token}`;
         const filledHtml = (await readTemplate('address-confirmation-email.html'))
           .replace('[LINK]', confirmEmailLink);
@@ -181,6 +194,7 @@ export function forgotPasswordEndpoint(prefix: string = auth.prefix) {
       const user = await auth.settings.onFindUserByEmail(email);
       if (!user) { throw new Error('email_not_found'); }
 
+      ensureBackendUrl(ctx);
       const token = await JWT.sign({ email }, { expiresIn: `${RESET_PASSWORD_TOKEN_EXPIRATION_MINUTES}m` });
       const passwordResetLink = `${auth.backend_url}${prefix}/reset-password?token=${token}`;
       const filledHtml = (await readTemplate('reset-password-email.html')).replace('[LINK]', passwordResetLink);

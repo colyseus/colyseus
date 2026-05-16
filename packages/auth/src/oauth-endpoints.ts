@@ -105,10 +105,6 @@ export interface OAuthEndpointsOptions {
 }
 
 export function oauthEndpoints(opts: OAuthEndpointsOptions = {}): Record<string, Endpoint> {
-  // Hard-code `/provider` here rather than reading `oauth.prefix` — the latter
-  // gets mutated by the legacy `auth.routes()` call (it appends auth.prefix on
-  // every invocation), and we want this endpoint map to be safe to construct
-  // alongside the express version in tests / migration.
   const prefix = (opts.prefix ?? auth.prefix) + '/provider';
 
   function resolveSecret(): string {
