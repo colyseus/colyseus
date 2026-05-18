@@ -184,7 +184,16 @@ export function forgotPasswordEndpoint(prefix: string = auth.prefix) {
   }, async (ctx) => {
     try {
       if (typeof auth.settings.onForgotPassword !== 'function') {
-        throw new Error('auth.settings.onForgotPassword must be implemented.');
+        // Misconfiguration, not a client error: log loudly so an
+        // operator notices, but return a generic success-shaped
+        // response so the endpoint can't be used to probe accounts
+        // (same anti-enumeration posture as a normal request).
+        logger.error(
+          '[@colyseus/auth] /auth/forgot-password was called but ' +
+          'auth.settings.onForgotPassword is not configured — NO email ' +
+          'was sent. Wire it to your email provider to enable password resets.',
+        );
+        return true;
       }
       if (typeof auth.settings.onResetPassword !== 'function') {
         throw new Error('auth.settings.onResetPassword must be implemented.');

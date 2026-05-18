@@ -1,5 +1,5 @@
 import { count, eq } from 'drizzle-orm';
-import { Hash, JWT } from '@colyseus/auth';
+import { Hash, JWT, auth, readTemplate } from '@colyseus/auth';
 import { createEndpoint, type Endpoint } from '@colyseus/core';
 import type { GameDatabase } from '@colyseus/database';
 import { json, errorResponse } from '../internal/http.js';
@@ -69,9 +69,36 @@ export function authEndpoints(opts: AuthEndpointsOptions): Record<string, Endpoi
   const requestResetLimiter = opts.requestResetLimiter;
   const minPasswordLength = opts.minPasswordLength ?? 8;
   const logger = opts.logger;
-  const onResetRequest = opts.onResetRequest ?? (({ email, url }) => {
+  // Resolution order: explicit admin override → shared
+  // `auth.settings.onForgotPassword` (one email sink for player AND
+  // admin resets) → log the link (dev convenience). admin keeps its own
+  // token/tv/audit flow regardless — only the email *sink* is shared.
+  const logResetLink = ({ email, url }: { email: string; url: string }) => {
     logger?.info?.({ event: 'password_reset_link', email, url },
       `[admin] password reset link for ${email}: ${url}`);
+  };
+  const onResetRequest = opts.onResetRequest ?? (async ({ email, url }: { email: string; userId: string; token: string; url: string }) => {
+    const forward = auth.settings.onForgotPassword;
+    if (typeof forward === 'function') {
+      try {
+        // Prefer a consumer-provided admin-specific template; otherwise
+        // reuse the standard reset-password email. Same `[LINK]`
+        // placeholder contract as the other @colyseus/auth templates.
+        const html = (await readTemplate('admin-reset-password-email.html', 'reset-password-email.html'))
+          .replace('[LINK]', url);
+        await forward(email, html, url);
+        return;
+      } catch (err: any) {
+        // Real send failure: stay silent to the caller (request-reset
+        // is anti-enumeration / always-200) but surface it in logs so
+        // an outage isn't invisible.
+        logger?.warn?.({ err: err?.message ?? String(err), email },
+          '[admin] reset email send failed (onForgotPassword bridge)');
+        return;
+      }
+    }
+    // Not configured → log the link so local dev still works.
+    logResetLink({ email, url });
   });
 
   /**

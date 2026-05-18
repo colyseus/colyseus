@@ -61,7 +61,6 @@ export interface AuthSettings {
 
 let onFindUserByEmail: FindUserByEmailCallback = (email: string) => { throw new Error('`auth.settings.onFindUserByEmail` not implemented.'); };
 let onRegisterWithEmailAndPassword: RegisterWithEmailAndPasswordCallback = () => { throw new Error('`auth.settings.onRegisterWithEmailAndPassword` not implemented.'); };
-let onForgotPassword: ForgotPasswordCallback = () => { throw new Error('`auth.settings.onForgotPassword` not implemented.'); };
 let onParseToken: ParseTokenCallback = (jwt: JwtPayload) => jwt;
 let onGenerateToken: GenerateTokenCallback = async (userdata: unknown) => await JWT.sign(userdata);
 let onHashPassword: HashPasswordCallback = async (password: string) => Hash.make(password);
@@ -104,9 +103,12 @@ export const auth = {
     onEmailConfirmed: undefined as EmailConfirmedCallback,
 
     /**
-     * (Optional) Send reset password link via email.
+     * (Optional) Send reset password link via email. Unset by default —
+     * `/auth/forgot-password` logs a loud error and no-ops when it's
+     * missing (no throw), and `@colyseus/admin`'s reset bridge falls
+     * back to logging the link.
      */
-    onForgotPassword,
+    onForgotPassword: undefined as ForgotPasswordCallback,
 
     /**
      * (Optional) Reset password action.

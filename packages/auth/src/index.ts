@@ -30,6 +30,11 @@ export type {
 
 export { Hash, JWT, auth, };
 
+// Email/page HTML template loader — exported so @colyseus/admin (and
+// custom flows) can reuse the same resolver + consumer-override
+// convention (`process.cwd()/html` shadows the bundled templates).
+export { readTemplate, htmlTemplatePath } from './templates.ts';
+
 // Endpoint factories — exported so consumers can call them directly with typed
 // inputs/outputs (test-time contract assertions, custom router composition).
 export {
