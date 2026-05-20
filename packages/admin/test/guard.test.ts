@@ -191,20 +191,54 @@ describe('admin.guard', () => {
   });
 
   describe('insufficient role', () => {
-    it('returns 403 (never redirects) when signed in but role too low', async () => {
+    it('redirects browser visits to login and CLEARS the session cookie when role too low', async () => {
       const db = makeDb({ roles: { 'u1': 'mod' } });
       const guard = adminGuard({ database: db, role: 'admin' });
       const token = await signSession({ userId: 'u1', role: 'admin', tv: 0 });
-      // Even with Accept: text/html, an authenticated user gets 403 — a
-      // redirect would loop them back through the same guard.
+      // Browser navigation: bounce to login with ?next=. Clearing the
+      // cookie is what breaks the redirect loop — without it the visitor
+      // still has a valid (lower-role) session and gets forwarded straight
+      // back through the guard.
+      const result = await invokeGuard(
+        guard,
+        { cookie: `${COOKIE_NAME}=${token}`, accept: 'text/html' },
+        'http://test.local/playground/?x=1',
+      );
+      assert.equal(result.ok, false);
+      const err = (result as any).error as APIError;
+      assert.equal(err.statusCode, 302);
+      const location = (err.headers as any).location;
+      assert.ok(location.startsWith('/admin/?next='), `unexpected location: ${location}`);
+      assert.equal(decodeURIComponent(location.split('next=')[1]), '/playground/?x=1');
+      const setCookie = (err.headers as any)['set-cookie'];
+      assert.match(setCookie ?? '', new RegExp(`^${COOKIE_NAME}=;`));
+      assert.match(setCookie ?? '', /Max-Age=0/);
+    });
+
+    it('returns 403 JSON (no redirect) for XHR-style requests when role too low', async () => {
+      const db = makeDb({ roles: { 'u1': 'mod' } });
+      const guard = adminGuard({ database: db, role: 'admin' });
+      const token = await signSession({ userId: 'u1', role: 'admin', tv: 0 });
       const result = await invokeGuard(guard, {
         cookie: `${COOKIE_NAME}=${token}`,
-        accept: 'text/html',
+        accept: 'application/json',
       });
       assert.equal(result.ok, false);
       const err = (result as any).error as APIError;
       assert.equal(err.statusCode, 403);
       assert.match(err.body?.message ?? '', /you have 'mod'/);
+    });
+
+    it('honors apiOnly: true — 403 even on Accept: text/html when role too low', async () => {
+      const db = makeDb({ roles: { 'u1': 'mod' } });
+      const guard = adminGuard({ database: db, role: 'admin', apiOnly: true });
+      const token = await signSession({ userId: 'u1', role: 'admin', tv: 0 });
+      const result = await invokeGuard(guard, {
+        cookie: `${COOKIE_NAME}=${token}`,
+        accept: 'text/html',
+      });
+      assert.equal(result.ok, false);
+      assert.equal((result as any).error.statusCode, 403);
     });
 
     it('treats the JWT role claim as untrusted — uses live DB role', async () => {

@@ -19,8 +19,11 @@
  * from the Accept header — browser navigations get the redirect, XHR/fetch/curl
  * get the JSON. Pass `apiOnly: true` to force 401 for every reject.
  *
- * On a valid session but insufficient role the guard returns 403 — never a
- * redirect (which would loop the user back through the same guard).
+ * On a valid session but insufficient role the guard redirects browser
+ * navigations to the login screen while clearing the session cookie — so
+ * the visitor can sign in as an account that *does* have access instead of
+ * being bounced straight back through the guard (the cleared cookie is what
+ * breaks that loop). XHR/fetch/curl still get a 403 JSON body.
  *
  * Bumping the user's `tokenVersion` (password reset, "sign out everywhere")
  * invalidates the guard immediately because it shares the same DB check as
@@ -31,7 +34,7 @@
 import { GameDatabase, type Role } from '@colyseus/database';
 import { createMiddleware } from '@colyseus/core';
 import { APIError } from '@colyseus/better-call';
-import { readSessionFromHeader } from './sessions.js';
+import { readSessionFromHeader, clearSessionCookie } from './sessions.js';
 
 const ROLE_RANK: Record<Role, number> = { admin: 3, mod: 2, user: 1 };
 
@@ -81,13 +84,29 @@ export function sessionGuard(opts: AdminGuardOptions = {}) {
     // The JWT's cached role is a stale hint we deliberately don't trust.
     const role = await database.moderation.getRole(session.userId);
     if (ROLE_RANK[role] < ROLE_RANK[requiredRole]) {
-      // Include the user's *actual* role in the error so a 403 on a
+      // Include the user's *actual* role in the message so a reject on a
       // sibling app (/monitor, /playground) is self-diagnosing — the
       // typical confusion is "I can load /admin therefore I'm an admin",
       // but /admin admits mods too (with a restricted view).
-      throw new APIError(403, {
-        message: `requires role '${requiredRole}' or higher (you have '${role}')`,
-      });
+      const message = `requires role '${requiredRole}' or higher (you have '${role}')`;
+
+      // Browser navigation: bounce to the login screen so the visitor can
+      // sign in as an account that *does* have access. Clearing the cookie
+      // is mandatory — without it the visitor still has a valid (lower-role)
+      // session, the login screen treats them as authenticated and forwards
+      // straight back to `?next=`, and the guard rejects again → redirect
+      // loop. Dropping the cookie forces a real re-authentication.
+      if (!apiOnly && wantsHtml(ctx.getHeader('accept'))) {
+        const next = currentPath(ctx);
+        const qs = next ? `?next=${encodeURIComponent(next)}` : '';
+        throw new APIError(
+          302,
+          { message },
+          { location: `${loginUrl}/${qs}`, 'set-cookie': clearSessionCookie() },
+        );
+      }
+
+      throw new APIError(403, { message });
     }
   });
 }
