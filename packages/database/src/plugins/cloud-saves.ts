@@ -123,6 +123,6 @@ export class CloudSavesPlugin<This extends Room = Room> extends RoomPlugin<This>
     const userId = this.resolveUserId(client);
     if (!userId) { return; }
     const data = this.payload(this.room, client);
-    await this.database.saves.save(userId, this.slot, data);
+    await this.database.saves.save(userId, data, this.slot);
   }
 }
