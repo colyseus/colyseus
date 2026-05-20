@@ -96,6 +96,8 @@ export {
   createInternalContext,
   createMiddleware,
   createRouter,
+  basicAuth,
+  type BasicAuthOptions,
   toNodeHandler,
   dualModeEndpoints,
   type Router,

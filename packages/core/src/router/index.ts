@@ -1,6 +1,7 @@
 import type express from "express";
 import type { IncomingMessage, ServerResponse } from "http";
-import { type Endpoint, type Router, type RouterConfig, createRouter as createBetterCallRouter, createEndpoint } from "@colyseus/better-call";
+import { createHash, timingSafeEqual } from "node:crypto";
+import { type Endpoint, type Router, type RouterConfig, createRouter as createBetterCallRouter, createEndpoint, createMiddleware, APIError } from "@colyseus/better-call";
 import { toNodeHandler, getRequest, setResponse } from "@colyseus/better-call/node";
 import { Transport } from "../Transport.ts";
 import { controller } from "../matchmaker/controller.ts";
@@ -125,6 +126,67 @@ export function createRouter<
   Config extends RouterConfig
 >(endpoints: E, config: Config = {} as Config) {
   return createBetterCallRouter({ ...endpoints }, config);
+}
+
+export interface BasicAuthOptions {
+  /** username → password. The common static case. */
+  users?: Record<string, string>;
+  /** Custom validator (e.g. DB-backed). Takes precedence over `users`. */
+  validate?: (username: string, password: string) => boolean | Promise<boolean>;
+  /** Realm shown in the browser prompt. Default 'Restricted'. */
+  realm?: string;
+}
+
+/**
+ * HTTP Basic Auth middleware. Drop into any endpoint's `use:` slot to gate
+ * it behind a browser credentials prompt:
+ *
+ *   playground({ use: [basicAuth({ users: { admin: 's3cret' } })] })
+ */
+export function basicAuth(opts: BasicAuthOptions) {
+  const { users, validate } = opts;
+  if (!users && !validate) {
+    throw new Error('[basicAuth] provide `users` or `validate`');
+  }
+  // Realm is interpolated into a header — strip `"` so it can't break out.
+  const challenge = `Basic realm="${(opts.realm ?? 'Restricted').replace(/"/g, '')}", charset="UTF-8"`;
+
+  return createMiddleware(async (ctx) => {
+    const creds = parseBasicHeader(ctx.getHeader('authorization'));
+    const ok = !!creds && (validate
+      ? await validate(creds.username, creds.password)
+      : staticCheck(users!, creds.username, creds.password));
+    if (!ok) {
+      throw new APIError(401, { message: 'authentication required' }, { 'WWW-Authenticate': challenge });
+    }
+  });
+}
+
+function parseBasicHeader(header: string | null | undefined) {
+  if (!header) { return null; }
+  const sep = header.indexOf(' ');
+  if (sep < 0 || header.slice(0, sep).toLowerCase() !== 'basic') { return null; }
+  let decoded: string;
+  try { decoded = Buffer.from(header.slice(sep + 1), 'base64').toString('utf8'); } catch { return null; }
+  const colon = decoded.indexOf(':');
+  if (colon < 0) { return null; }
+  return { username: decoded.slice(0, colon), password: decoded.slice(colon + 1) };
+}
+
+function staticCheck(users: Record<string, string>, username: string, password: string): boolean {
+  const expected = Object.prototype.hasOwnProperty.call(users, username) ? users[username] : undefined;
+  // Compare even for an unknown user so reject timing doesn't reveal which
+  // usernames exist.
+  return safeEqual(password, expected ?? '\0') && expected !== undefined;
+}
+
+// Hash both sides first: equalizes length (timingSafeEqual throws on a
+// length mismatch, which would itself leak the secret's length).
+function safeEqual(a: string, b: string): boolean {
+  return timingSafeEqual(
+    createHash('sha256').update(a).digest(),
+    createHash('sha256').update(b).digest(),
+  );
 }
 
 // ---------------------------------------------------------------------------
