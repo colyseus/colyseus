@@ -29,18 +29,31 @@ import {
   createEndpoint, matchMaker, userRoomsKey, CloseCode,
   type Endpoint, type Room,
 } from '@colyseus/core';
+import { POSTGRES_MAX_INTEGER } from '@colyseus/database';
 import { errorResponse, json } from '../internal/http.js';
 import { ipFromHeaders } from '../auth/rate-limit.js';
 import { guard, type EndpointContext } from '../internal/context.js';
 
 const ROOMS_RESOURCE = 'rooms';
 
+/**
+ * Database-backed matchmaking drivers cap an `Infinity` maxClients to
+ * `POSTGRES_MAX_INTEGER` (integer columns can't hold Infinity). Map that
+ * sentinel back to `null` so the panel renders it as "∞" — matching the
+ * `null`-arrives-for-Infinity convention the in-memory drivers already
+ * produce over JSON.
+ */
+function normalizeMaxClients(value: number): number | null {
+  return value === POSTGRES_MAX_INTEGER ? null : value;
+}
+
 /** Summary returned by `GET /admin-api/rooms` — flat list for the panel's table view. */
 interface RoomSummary {
   roomId: string;
   name: string;
   clients: number;
-  maxClients: number;
+  /** `null` when uncapped (Infinity, or the DB sentinel for it). */
+  maxClients: number | null;
   locked: boolean;
   private: boolean;
   createdAt: string;
@@ -61,7 +74,7 @@ export function listRoomsEndpoint(ctx: EndpointContext): Endpoint {
       roomId: r.roomId,
       name: r.name,
       clients: r.clients,
-      maxClients: r.maxClients,
+      maxClients: normalizeMaxClients(r.maxClients),
       locked: r.locked ?? false,
       private: r.private ?? false,
       createdAt: new Date(r.createdAt).toISOString(),

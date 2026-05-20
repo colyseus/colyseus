@@ -15,6 +15,7 @@ import { exposeServerToTraefik } from "@colyseus/traefik";
 import { RedisPresence } from "@colyseus/redis-presence";
 import { RedisDriver } from "@colyseus/redis-driver";
 import { PostgresDriver } from "@colyseus/drizzle-driver";
+import { DatabaseDriver } from "@colyseus/database";
 
 import { admin, defineAdminResource } from "@colyseus/admin";
 import { registerSegments } from "./db/segments.ts";
@@ -244,6 +245,12 @@ export const server = config({
   options: {
     devMode: true,
     database,
+
+    // Matchmaking room cache backed by the same GameDatabase connection
+    // (one pool shared with auth / cloud-saves / configs).
+    driver: new DatabaseDriver({ database }),
+
+    // Standalone Postgres-only driver (separate connection):
     // driver: new PostgresDriver(),
 
     // driver: new RedisDriver(),

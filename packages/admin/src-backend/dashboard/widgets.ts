@@ -1,5 +1,6 @@
 import { sql, desc } from 'drizzle-orm';
 import { matchMaker } from '@colyseus/core';
+import { POSTGRES_MAX_INTEGER } from '@colyseus/database';
 import type { GameDatabase, sqliteUserColumns } from '@colyseus/database';
 import type { AdminIconName } from '../display/icons.js';
 
@@ -307,7 +308,13 @@ function liveRoomsWidget(opts: LiveRoomsPresetOptions): ResolvedWidget {
         roomId: r.roomId,
         name: r.name,
         clients: r.clients,
-        maxClients: r.maxClients,
+        // Unlimited rooms: DB drivers store Infinity as
+        // POSTGRES_MAX_INTEGER; in-memory drivers send null over JSON.
+        // The widget table has no per-column formatter, so emit the
+        // display glyph directly (matches the Live rooms page's "∞").
+        maxClients: (r.maxClients == null || r.maxClients === POSTGRES_MAX_INTEGER)
+          ? '∞'
+          : r.maxClients,
         locked: r.locked ?? false,
         private: r.private ?? false,
         createdAt: new Date(r.createdAt).toISOString(),
