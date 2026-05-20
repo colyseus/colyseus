@@ -1,4 +1,4 @@
-import { pgTable, text, boolean, integer, jsonb, serial, timestamp, primaryKey } from 'drizzle-orm/pg-core';
+import { pgTable, text, boolean, integer, jsonb, serial, timestamp, varchar, primaryKey } from 'drizzle-orm/pg-core';
 import { generateId } from '@colyseus/core';
 import type { TableEntry } from './registry.ts';
 
@@ -142,6 +142,30 @@ export const colyseusRoles = pgTable('colyseus_roles', { ...roleColumns });
 export const colyseusUserNotes = pgTable('colyseus_user_notes', { ...userNoteColumns });
 
 export const colyseusAdminAudit = pgTable('colyseus_admin_audit', { ...adminAuditColumns });
+
+/**
+ * Matchmaking room cache. Used by the `@colyseus/database/driver`
+ * MatchMakerDriver. Intentionally NOT registered in PG_TABLES — it's
+ * driver-owned: the table is created on the shared connection only when
+ * the driver is actually used, so auth-only deployments (Redis/Local
+ * matchmaking) don't get an unused table. Column keys mirror `IRoomCache`
+ * so room data maps straight onto the schema with no field renaming.
+ */
+export const roomCacheColumns = {
+  roomId: varchar('room_id', { length: 9 }).primaryKey(),
+  processId: varchar('process_id', { length: 9 }),
+  name: varchar('name', { length: 64 }).notNull(),
+  clients: integer('clients').notNull(),
+  maxClients: integer('max_clients').notNull(),
+  locked: boolean('locked'),
+  private: boolean('private'),
+  metadata: jsonb('metadata'),
+  publicAddress: varchar('public_address', { length: 255 }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  unlisted: boolean('unlisted'),
+};
+
+export const colyseusRoomCaches = pgTable('colyseus_room_caches', { ...roomCacheColumns });
 
 // ---------------------------------------------------------------------------
 // Registry — see ./sqlite.ts SQLITE_TABLES for the design rationale. PG

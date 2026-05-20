@@ -34,6 +34,7 @@ import {
   roleColumns,
   userNoteColumns,
   adminAuditColumns,
+  roomCacheColumns,
 } from '../schemas/sqlite.ts';
 
 export const sqlite = {
@@ -67,4 +68,7 @@ export const sqlite = {
 
   adminAudit: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
     sqliteTable(name, { ...adminAuditColumns, ...(extras as E) }),
+
+  roomCaches: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
+    sqliteTable(name, { ...roomCacheColumns, ...(extras as E) }),
 };

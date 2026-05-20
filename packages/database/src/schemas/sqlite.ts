@@ -165,6 +165,29 @@ export const colyseusUserNotes = sqliteTable('colyseus_user_notes', { ...userNot
 
 export const colyseusAdminAudit = sqliteTable('colyseus_admin_audit', { ...adminAuditColumns });
 
+/**
+ * Matchmaking room cache — sqlite twin of pg's `roomCacheColumns`. See the
+ * pg schema for why this is driver-owned and deliberately absent from
+ * SQLITE_TABLES. `locked`/`private`/`unlisted` are integer-boolean, and
+ * `metadata` is json-mode text so the driver can write/read room metadata
+ * as a plain object while still querying it via `json_extract`.
+ */
+export const roomCacheColumns = {
+  roomId: text('room_id').primaryKey(),
+  processId: text('process_id'),
+  name: text('name').notNull(),
+  clients: integer('clients').notNull(),
+  maxClients: integer('max_clients').notNull(),
+  locked: integer('locked', { mode: 'boolean' as const }),
+  private: integer('private', { mode: 'boolean' as const }),
+  metadata: text('metadata', { mode: 'json' as const }),
+  publicAddress: text('public_address'),
+  createdAt: integer('created_at', { mode: 'timestamp' as const }).notNull().default(sql`(unixepoch())`),
+  unlisted: integer('unlisted', { mode: 'boolean' as const }),
+};
+
+export const colyseusRoomCaches = sqliteTable('colyseus_room_caches', { ...roomCacheColumns });
+
 // ---------------------------------------------------------------------------
 // Registry — single source of truth consumed by GameDatabase.boot() for
 // schema resolution + table creation. Order is enforced via `dependsOn`

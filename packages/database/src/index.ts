@@ -1,5 +1,16 @@
 export { GameDatabase } from './GameDatabase.ts';
 export type { GameDatabaseOptions } from './GameDatabase.ts';
+export { POSTGRES_MAX_INTEGER } from './constants.ts';
+
+// Matchmaking driver — surfaced from the main entry so it can be used as
+// `import { DatabaseDriver } from '@colyseus/database'`. Still available
+// via the `./driver` subpath for bundle-lean setups.
+export { DatabaseDriver } from './driver.ts';
+export type {
+  DatabaseDriverOptions,
+  DatabaseDriverGameDatabaseOptions,
+  DatabaseDriverDrizzleOptions,
+} from './driver.ts';
 export { defineConfigs } from './configs.ts';
 export type { ConfigsRegistry, ConfigValue, AllConfigs } from './configs.ts';
 
@@ -30,6 +41,7 @@ export {
   roleColumns as sqliteRoleColumns,
   userNoteColumns as sqliteUserNoteColumns,
   adminAuditColumns as sqliteAdminAuditColumns,
+  roomCacheColumns as sqliteRoomCacheColumns,
 } from './schemas/sqlite.ts';
 export {
   userColumns as pgUserColumns,
@@ -41,6 +53,7 @@ export {
   roleColumns as pgRoleColumns,
   userNoteColumns as pgUserNoteColumns,
   adminAuditColumns as pgAdminAuditColumns,
+  roomCacheColumns as pgRoomCacheColumns,
 } from './schemas/pg.ts';
 
 // Namespaced columns export: columns.sqlite.users, columns.pg.users, etc.
@@ -54,6 +67,7 @@ import {
   roleColumns as sqliteRoles,
   userNoteColumns as sqliteUserNotes,
   adminAuditColumns as sqliteAdminAudit,
+  roomCacheColumns as sqliteRoomCaches,
 } from './schemas/sqlite.ts';
 import {
   userColumns as pgUsers,
@@ -65,6 +79,7 @@ import {
   roleColumns as pgRoles,
   userNoteColumns as pgUserNotes,
   adminAuditColumns as pgAdminAudit,
+  roomCacheColumns as pgRoomCaches,
 } from './schemas/pg.ts';
 
 export const columns = {
@@ -78,6 +93,7 @@ export const columns = {
     roles: sqliteRoles,
     userNotes: sqliteUserNotes,
     adminAudit: sqliteAdminAudit,
+    roomCaches: sqliteRoomCaches,
   },
   pg: {
     users: pgUsers,
@@ -89,6 +105,7 @@ export const columns = {
     roles: pgRoles,
     userNotes: pgUserNotes,
     adminAudit: pgAdminAudit,
+    roomCaches: pgRoomCaches,
   },
 };
 

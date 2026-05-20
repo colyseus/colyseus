@@ -20,6 +20,7 @@ import {
   roleColumns,
   userNoteColumns,
   adminAuditColumns,
+  roomCacheColumns,
 } from '../schemas/pg.ts';
 
 export const pg = {
@@ -53,4 +54,7 @@ export const pg = {
 
   adminAudit: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
     pgTable(name, { ...adminAuditColumns, ...(extras as E) }),
+
+  roomCaches: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
+    pgTable(name, { ...roomCacheColumns, ...(extras as E) }),
 };
