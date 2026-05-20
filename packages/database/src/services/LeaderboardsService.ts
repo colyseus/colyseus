@@ -108,27 +108,28 @@ export class LeaderboardsService<
     if (!me[0]) { return []; }
     const myScore = me[0].score;
 
-    const above = await this.db
-      .select()
-      .from(this.entries)
-      .where(and(
-        eq(this.entries.boardId, boardId),
-        eq(this.entries.season, season),
-        gt(this.entries.score, myScore),
-      ))
-      .orderBy(asc(this.entries.score))
-      .limit(n);
-
-    const below = await this.db
-      .select()
-      .from(this.entries)
-      .where(and(
-        eq(this.entries.boardId, boardId),
-        eq(this.entries.season, season),
-        lt(this.entries.score, myScore),
-      ))
-      .orderBy(desc(this.entries.score))
-      .limit(n);
+    const [above, below] = await Promise.all([
+      this.db
+        .select()
+        .from(this.entries)
+        .where(and(
+          eq(this.entries.boardId, boardId),
+          eq(this.entries.season, season),
+          gt(this.entries.score, myScore),
+        ))
+        .orderBy(asc(this.entries.score))
+        .limit(n),
+      this.db
+        .select()
+        .from(this.entries)
+        .where(and(
+          eq(this.entries.boardId, boardId),
+          eq(this.entries.season, season),
+          lt(this.entries.score, myScore),
+        ))
+        .orderBy(desc(this.entries.score))
+        .limit(n),
+    ]);
 
     return [...above.reverse(), me[0], ...below];
   }
