@@ -2,7 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import type { IncomingMessage, ServerResponse } from 'http';
-import { createEndpoint, dualModeEndpoints, matchMaker, Server, type IRoomCache, type Endpoint } from '@colyseus/core';
+import { createEndpoint, dualModeEndpoints, isDevMode, matchMaker, Server, type IRoomCache, type Endpoint } from '@colyseus/core';
 import { auth, JWT } from '@colyseus/auth';
 import { applyMonkeyPatch } from './colyseus.ext.js';
 import { serveStatic } from './serve-static.js';
@@ -50,6 +50,14 @@ export function playground(opts: PlaygroundOptions = {}) {
     }),
 
     'playground-apidocs': createEndpoint(`${prefix}/__apidocs`, { method: 'GET', use }, async () => {
+      // Dumps every route + Zod schema, so an unguarded public mount leaks
+      // the whole API surface. Refuse only the accidental case: not devMode
+      // AND no `use:` guard. A guard is the opt-in for prod use. 404 hides
+      // the route's existence.
+      if (!isDevMode && use.length === 0) {
+        return new Response('Not found', { status: 404 });
+      }
+
       let z: any;
       try { z = await import('zod'); } catch { /* zod is an optional peer */ }
       const routerEndpoints: Record<string, any> = (Server.current?.router as any)?.endpoints ?? {};
