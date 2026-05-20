@@ -126,7 +126,8 @@ export const auth = {
     onGenerateToken,
 
     /**
-     * Hash password before storing it. By default, it uses SHA1 + process.env.AUTH_SALT.
+     * Hash password before storing it. By default, it uses scrypt with a
+     * fresh per-password random salt (stored inline as `<algo>$<salt>$<hash>`).
      */
     onHashPassword,
   } as AuthSettings,
