@@ -21,17 +21,15 @@ export type UsersTableShape = Table & {
   anonymousId: AnyColumn;
   createdAt: AnyColumn;
   updatedAt: AnyColumn;
-  // Ban-related columns are optional on the constraint so existing
-  // custom users tables (predating the bans feature) keep type-checking.
-  // AuthService.ban / unban / isBanned guard at runtime when missing and
-  // surface a clear error pointing at the spreadable userColumns import.
-  bannedUntil?: AnyColumn;
-  bannedReason?: AnyColumn;
-  // Session revocation counter — also optional for backward compat with
-  // custom users tables that predate it. ModerationService.bumpTokenVersion
-  // guards at runtime and the admin auth guard skips the check when the
-  // column is missing.
-  tokenVersion?: AnyColumn;
+  // Ban-related columns. Required: AuthService.ban / unban / isBanned
+  // all read or write these. Custom users tables must spread
+  // `userColumns` (or include the columns explicitly).
+  bannedUntil: AnyColumn;
+  bannedReason: AnyColumn;
+  // Session revocation counter. Required: AuthService.ban() and the
+  // JWT revocation check both rely on it; custom users tables must
+  // spread `userColumns` (or include the column explicitly).
+  tokenVersion: AnyColumn;
 };
 
 export type ConfigsTableShape = Table & {

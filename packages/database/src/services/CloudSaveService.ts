@@ -1,6 +1,6 @@
 import { eq, and, sql } from 'drizzle-orm';
 import type { CloudSavesTableShape } from '../types.ts';
-import type { ServiceDb } from './_db.ts';
+import { affectedRows, type ServiceDb } from './_db.ts';
 
 export class VersionConflictError extends Error {
   constructor(userId: string, slot: number, expectedVersion: number) {
@@ -25,8 +25,8 @@ export class CloudSaveService<T extends CloudSavesTableShape = CloudSavesTableSh
    */
   async save(
     userId: string,
-    slot: number,
     data: unknown,
+    slot: number = 0,
     expectedVersion?: number,
   ): Promise<{ version: number }> {
     if (expectedVersion !== undefined) {
@@ -44,16 +44,14 @@ export class CloudSaveService<T extends CloudSavesTableShape = CloudSavesTableSh
           eq(this.cloudSaves.version, expectedVersion),
         ));
 
-      const affected = result.changes ?? result.rowsAffected ?? result.affectedRows ?? result.count ?? 0;
-      if (affected === 0) {
+      if (affectedRows(result) === 0) {
         throw new VersionConflictError(userId, slot, expectedVersion);
       }
 
       return { version: expectedVersion + 1 };
     }
 
-    // Upsert: insert or increment version
-    await this.db
+    const rows = await this.db
       .insert(this.cloudSaves)
       .values({
         userId,
@@ -70,24 +68,15 @@ export class CloudSaveService<T extends CloudSavesTableShape = CloudSavesTableSh
           version: sql`${this.cloudSaves.version} + 1`,
           updatedAt: new Date(),
         },
-      });
-
-    // Read back the current version
-    const rows = await this.db
-      .select({ version: this.cloudSaves.version })
-      .from(this.cloudSaves)
-      .where(and(
-        eq(this.cloudSaves.userId, userId),
-        eq(this.cloudSaves.slot, slot),
-      ))
-      .limit(1);
+      })
+      .returning({ version: this.cloudSaves.version });
 
     return { version: rows[0]?.version ?? 1 };
   }
 
   async load(
     userId: string,
-    slot: number,
+    slot: number = 0,
   ): Promise<{ data: unknown; version: number } | null> {
     const rows = await this.db
       .select({
@@ -117,13 +106,13 @@ export class CloudSaveService<T extends CloudSavesTableShape = CloudSavesTableSh
       .where(eq(this.cloudSaves.userId, userId));
   }
 
-  async delete(userId: string, slot: number): Promise<boolean> {
+  async delete(userId: string, slot: number = 0): Promise<boolean> {
     const result = await this.db
       .delete(this.cloudSaves)
       .where(and(
         eq(this.cloudSaves.userId, userId),
         eq(this.cloudSaves.slot, slot),
       ));
-    return (result.changes ?? result.rowsAffected ?? result.affectedRows ?? result.count ?? 0) > 0;
+    return affectedRows(result) > 0;
   }
 }

@@ -157,6 +157,32 @@ for (const backend of BACKENDS) {
         assert.equal((await db.auth.isBanned(u.id)).banned, false);
       });
 
+      it('ban bumps tokenVersion atomically; unban leaves it alone', async () => {
+        // ban() must invalidate previously-issued JWTs by incrementing
+        // the row's tokenVersion in the same UPDATE as the ban fields.
+        // Without this, a banned user could keep playing on their
+        // existing token until expiry — see comment on AuthService.ban.
+        const u: any = await db.auth.settings.onRegisterAnonymously!({} as any);
+        const tv0 = await db.auth.getTokenVersion(u.id);
+
+        await db.auth.ban(u.id, { reason: 'fraud' });
+        assert.equal(
+          await db.auth.getTokenVersion(u.id),
+          tv0 + 1,
+          'ban() bumps tokenVersion by 1',
+        );
+
+        // unban() must NOT decrement / reset tokenVersion. Once tokens
+        // have been revoked, the user has to log in again — restoring
+        // an old JWT would defeat the revocation.
+        await db.auth.unban(u.id);
+        assert.equal(
+          await db.auth.getTokenVersion(u.id),
+          tv0 + 1,
+          'unban() does not roll tokenVersion back',
+        );
+      });
+
       it('isBanned reports false once the expiry passes', async () => {
         const u: any = await db.auth.settings.onRegisterAnonymously!({} as any);
         const past = new Date(Date.now() - 60_000);
@@ -190,30 +216,6 @@ for (const backend of BACKENDS) {
         assert.ok((banInfo as any).until instanceof Date, 'until is a Date');
       });
 
-      it('ban / unban throw a clear error when ban columns are missing', async () => {
-        // Simulate a custom users table that predates the bans feature —
-        // UsersTableShape's bannedUntil/bannedReason are optional so the
-        // type-check passes; the runtime guard fires on actual ban use.
-        const usersStub = { ...db.tables.users } as any;
-        delete usersStub.bannedUntil;
-        delete usersStub.bannedReason;
-        const { AuthService } = await import('../src/services/AuthService.ts');
-        const auth = new AuthService(db.drizzle, usersStub);
-
-        await assert.rejects(
-          () => auth.ban('user_x'),
-          /missing 'bannedUntil' \/ 'bannedReason' columns/,
-        );
-        await assert.rejects(
-          () => auth.unban('user_x'),
-          /missing 'bannedUntil' \/ 'bannedReason' columns/,
-        );
-
-        // Read path is the safe one — never throws, just reports `not banned`
-        // so probing apps don't have to special-case schema variants.
-        const r = await auth.isBanned('user_x');
-        assert.equal(r.banned, false);
-      });
     });
 
     describe('ConfigService', () => {
@@ -246,28 +248,28 @@ for (const backend of BACKENDS) {
       afterEach(async () => { await backend.cleanupOne(db); });
 
       it('save+load round-trips data and bumps version', async () => {
-        const r1 = await db.saves.save('u1', 0, { hp: 100 });
+        const r1 = await db.saves.save('u1', { hp: 100 });
         assert.equal(r1.version, 1);
-        const r2 = await db.saves.save('u1', 0, { hp: 90 });
+        const r2 = await db.saves.save('u1', { hp: 90 });
         assert.equal(r2.version, 2);
 
-        const loaded = await db.saves.load('u1', 0);
+        const loaded = await db.saves.load('u1');
         assert.deepEqual(loaded?.data, { hp: 90 });
         assert.equal(loaded?.version, 2);
       });
 
       it('rejects stale optimistic writes with VersionConflictError', async () => {
-        await db.saves.save('u1', 0, { hp: 100 });        // v1
-        await db.saves.save('u1', 0, { hp: 90 }, 1);       // v2 — passes
+        await db.saves.save('u1', { hp: 100 });           // v1
+        await db.saves.save('u1', { hp: 90 }, 0, 1);       // v2 — passes
         await assert.rejects(
-          db.saves.save('u1', 0, { hp: 80 }, 1),           // expectedVersion still 1, but row is v2
+          db.saves.save('u1', { hp: 80 }, 0, 1),           // expectedVersion still 1, but row is v2
           VersionConflictError,
         );
       });
 
       it('listSlots returns one row per occupied slot', async () => {
-        await db.saves.save('u1', 0, { a: 1 });
-        await db.saves.save('u1', 1, { b: 2 });
+        await db.saves.save('u1', { a: 1 }, 0);
+        await db.saves.save('u1', { b: 2 }, 1);
         const slots = await db.saves.listSlots('u1');
         assert.equal(slots.length, 2);
         assert.deepEqual(slots.map((s) => s.slot).sort(), [0, 1]);

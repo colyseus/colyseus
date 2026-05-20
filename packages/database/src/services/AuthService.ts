@@ -66,49 +66,14 @@ export class AuthService<T extends UsersTableShape = UsersTableShape> {
   }
 
   /**
-   * Re-read a row by id. Used by the register/oauth paths to hand the
-   * freshly persisted row back to `@colyseus/auth`'s `onGenerateToken`
-   * — that callback signs whatever it receives, so the JWT payload's
-   * columns are exactly what we return here. Going through a `select()`
-   * (rather than re-using the just-inserted `values` object) means any
-   * column the schema defines flows in automatically. In particular,
-   * `tokenVersion` lands in the claim, which `revocationCheck` uses
-   * to invalidate sessions on ban / "sign out everywhere".
-   */
-  private async findById(userId: string): Promise<InferSelectModel<T> | null> {
-    const rows = await this.db
-      .select()
-      .from(this.users)
-      .where(eq(this.users.id, userId))
-      .limit(1);
-    return (rows[0] as InferSelectModel<T>) ?? null;
-  }
-
-  /**
-   * Throw a clear error when a ban-related method is invoked but the
-   * user's custom `users` table doesn't include the ban columns.
-   * `bannedUntil` / `bannedReason` are optional on UsersTableShape so
-   * pre-bans schemas keep type-checking; this is the runtime side of
-   * that contract.
-   */
-  private requireBanColumns(method: string): void {
-    const u = this.users as any;
-    if (!u.bannedUntil || !u.bannedReason) {
-      throw new Error(
-        `[AuthService.${method}] users table is missing 'bannedUntil' / 'bannedReason' columns. ` +
-        `Spread \`...columns.{sqlite|pg}.users\` from '@colyseus/database' into your custom users ` +
-        `table (or include them manually) to enable bans.`,
-      );
-    }
-  }
-
-  /**
    * Ban a user. `until` defaults to a far-future timestamp (effectively
    * permanent). The next sign-in attempt is rejected via findByEmail
-   * while bannedUntil > now.
+   * while bannedUntil > now. The user's `tokenVersion` is incremented
+   * in the same UPDATE so any JWT issued before this call is rejected
+   * on its next verification — without this, a banned user could keep
+   * playing on their previously-issued token until it expired.
    */
   async ban(userId: string, opts: { reason?: string; until?: Date | null } = {}): Promise<void> {
-    this.requireBanColumns('ban');
     // Permanent bans use a far-future sentinel so the same `> now()`
     // check in findByEmail handles both timed and permanent bans. Year
     // 9999 fits inside both PG's TIMESTAMP and sqlite's INTEGER (unix
@@ -120,6 +85,7 @@ export class AuthService<T extends UsersTableShape = UsersTableShape> {
       .set({
         bannedUntil: until,
         bannedReason: opts.reason ?? null,
+        tokenVersion: sql`${this.users.tokenVersion} + 1`,
         updatedAt: new Date(),
       })
       .where(eq(this.users.id, userId));
@@ -127,15 +93,11 @@ export class AuthService<T extends UsersTableShape = UsersTableShape> {
 
   /**
    * Read the current token revocation counter for a user. Returns `0`
-   * for unknown users (and when the column isn't on the schema) so
-   * the auth guard's comparison degrades to "accept" rather than
-   * "reject" — old custom schemas keep authenticating.
+   * for unknown users.
    */
   async getTokenVersion(userId: string): Promise<number> {
-    const u = this.users as any;
-    if (!u.tokenVersion) { return 0; }
     const rows = await this.db
-      .select({ tv: u.tokenVersion })
+      .select({ tv: this.users.tokenVersion })
       .from(this.users)
       .where(eq(this.users.id, userId))
       .limit(1);
@@ -145,17 +107,14 @@ export class AuthService<T extends UsersTableShape = UsersTableShape> {
   /**
    * Increment the user's token version, invalidating every JWT issued
    * before this call. Use for password changes, "sign out everywhere",
-   * and forced-rotation after suspected compromise. Safe to call on
-   * schemas that don't carry the column — silently no-ops so the
-   * caller doesn't need to feature-detect.
+   * and forced-rotation after suspected compromise. (`ban()` bumps the
+   * counter atomically; this method is for non-ban revocation.)
    */
   async bumpTokenVersion(userId: string): Promise<void> {
-    const u = this.users as any;
-    if (!u.tokenVersion) { return; }
     await this.db
       .update(this.users)
       .set({
-        tokenVersion: sql`${u.tokenVersion} + 1`,
+        tokenVersion: sql`${this.users.tokenVersion} + 1`,
         updatedAt: new Date(),
       })
       .where(eq(this.users.id, userId));
@@ -180,7 +139,6 @@ export class AuthService<T extends UsersTableShape = UsersTableShape> {
 
   /** Lift a ban (clears bannedUntil + bannedReason). Idempotent. */
   async unban(userId: string): Promise<void> {
-    this.requireBanColumns('unban');
     await this.db
       .update(this.users)
       .set({
@@ -193,21 +151,16 @@ export class AuthService<T extends UsersTableShape = UsersTableShape> {
 
   /**
    * Current ban state for a user. Returns `{ banned: false }` for
-   * unknown users — callers shouldn't lock-out missing players. Returns
-   * `{ banned: false }` (without throwing) when the users table doesn't
-   * carry ban columns at all — the read path is meant to be safe to
-   * call on any schema, so probing apps don't have to special-case.
+   * unknown users — callers shouldn't lock-out missing players.
    */
   async isBanned(
     userId: string,
     at: Date = new Date(),
   ): Promise<{ banned: true; reason: string | null; until: Date } | { banned: false }> {
-    const u = this.users as any;
-    if (!u.bannedUntil) { return { banned: false }; }
     const rows = await this.db
       .select({
-        bannedUntil: u.bannedUntil,
-        bannedReason: u.bannedReason,
+        bannedUntil: this.users.bannedUntil,
+        bannedReason: this.users.bannedReason,
       })
       .from(this.users)
       .where(eq(this.users.id, userId))
@@ -262,23 +215,22 @@ export class AuthService<T extends UsersTableShape = UsersTableShape> {
   }
 
   /**
-   * Register anonymous user. Returns the persisted row so the resulting
-   * JWT carries every schema column (see `findById`) — `tokenVersion`
-   * in particular, so admin bans can invalidate anonymous sessions.
+   * Register anonymous user. `.returning()` hands back every schema
+   * column so the resulting JWT carries `tokenVersion` (admin bans can
+   * then invalidate anonymous sessions) — no re-select round trip.
    */
   private async registerAnonymous(options?: any) {
     const id = generateId(21);
     const anonymousId = generateId(21);
 
-    await this.db.insert(this.users).values({
+    const [row] = await this.db.insert(this.users).values({
       id,
       anonymousId,
       anonymous: true,
       createdAt: new Date(),
       updatedAt: new Date(),
-    });
+    }).returning();
 
-    const row = await this.findById(id);
     return { ...row, ...options };
   }
 
@@ -331,16 +283,16 @@ export class AuthService<T extends UsersTableShape = UsersTableShape> {
       const userId = tokenData.id || tokenData.anonymousId;
 
       if (userId && email) {
-        await this.db
+        const [row] = await this.db
           .update(this.users)
           .set({
             email,
             anonymous: false,
             updatedAt: new Date(),
           })
-          .where(eq(this.users.id, userId));
+          .where(eq(this.users.id, userId))
+          .returning();
 
-        const row = await this.findById(userId);
         if (row) { return row; }
         // No matching row — token was stale. Continue to the fallback
         // paths so the sign-in still succeeds against the Discord email.
@@ -358,17 +310,17 @@ export class AuthService<T extends UsersTableShape = UsersTableShape> {
       if (rows[0]) { return rows[0]; }
     }
 
-    // Create new user from OAuth profile. Re-select after insert so
-    // schema-defined columns (notably `tokenVersion`) end up in the JWT.
+    // Create new user from OAuth profile. `.returning()` carries
+    // schema-defined columns (notably `tokenVersion`) into the JWT.
     const id = generateId(21);
-    await this.db.insert(this.users).values({
+    const [row] = await this.db.insert(this.users).values({
       id,
       email: email || null,
       anonymous: false,
       createdAt: new Date(),
       updatedAt: new Date(),
-    });
-    return await this.findById(id);
+    }).returning();
+    return row ?? null;
   }
 }
 

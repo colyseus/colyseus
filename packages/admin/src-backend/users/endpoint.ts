@@ -138,12 +138,10 @@ export function banUserEndpoint(ctx: EndpointContext): Endpoint {
       try {
         // `until: null` ⇒ permanent ban (service handles the sentinel
         // year-9999 timestamp). `until: undefined` ⇒ service default
-        // (also permanent).
+        // (also permanent). `ban()` also bumps `tokenVersion` atomically
+        // so any JWT issued before this call is rejected on its next
+        // verification — no separate `bumpTokenVersion` call needed.
         await ctx.database.auth.ban(userId, { reason, until: until ?? undefined });
-        // Bump the token version so any active session signed before
-        // this ban is rejected on its next request — without this,
-        // a banned user could keep playing until their JWT expired.
-        await ctx.database.auth.bumpTokenVersion(userId);
         // Eject the banned user from any rooms they're currently in.
         // Without this, an active WS connection would keep playing
         // until it next re-authed (which could be never on a
@@ -213,16 +211,8 @@ export function revokeSessionsEndpoint(ctx: EndpointContext): Endpoint {
       if (denied) { return denied; }
       const { userId } = reqCtx.params as { userId: string };
       try {
-        // `bumpTokenVersion` silently no-ops on schemas without the
-        // column — that's the safe default for the service so apps
-        // can call it speculatively. We mirror that here: a request
-        // against a schema without the column still returns 200,
-        // but the audit log carries `effective: false` so it's
-        // obvious from the timeline that nothing happened.
-        const before = await ctx.database.auth.getTokenVersion(userId);
         await ctx.database.auth.bumpTokenVersion(userId);
-        const after = await ctx.database.auth.getTokenVersion(userId);
-        const effective = after > before;
+        const tokenVersion = await ctx.database.auth.getTokenVersion(userId);
         // Force-close any in-flight WS sessions. The token-version
         // bump invalidates the JWT on the *next* HTTP request, but
         // an already-open WebSocket would happily keep running
@@ -233,15 +223,13 @@ export function revokeSessionsEndpoint(ctx: EndpointContext): Endpoint {
         await tryRecord(ctx, {
           operatorId, action: 'user.revoke_sessions', resource: USERS_RESOURCE, targetId: userId,
           payload: {
-            tokenVersionBefore: before,
-            tokenVersionAfter: after,
-            effective,
+            tokenVersion,
             sessionsClosed,
             ip: ipFromHeaders(reqCtx.getHeader),
             userAgent: reqCtx.getHeader('user-agent') ?? null,
           },
         });
-        return json({ ok: true, effective, sessionsClosed });
+        return json({ ok: true, sessionsClosed });
       } catch (err: any) {
         ctx.logger?.warn?.({ err, userId }, '[admin] user revoke-sessions failed');
         return errorResponse(500, err?.message ?? 'revoke-sessions failed');
