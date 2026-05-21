@@ -662,6 +662,187 @@ describe("Integration", () => {
 
           });
 
+          describe("request / response", () => {
+            it("should resolve room.request() with the handler's return value", async () => {
+              matchMaker.defineRoomType('req_basic', class _ extends Room {
+                onCreate() {
+                  this.onMessage("sum", (_client, message) => ({ result: message.a + message.b }));
+                }
+              });
+
+              const conn = await client.joinOrCreate('req_basic');
+              const response = await conn.request("sum", { a: 2, b: 3 });
+              assert.deepStrictEqual(response, { result: 5 });
+              await conn.leave();
+            });
+
+            it("should resolve room.send(type, payload, callback) with the handler's return value", async () => {
+              matchMaker.defineRoomType('req_cb', class _ extends Room {
+                onCreate() {
+                  this.onMessage("echo", (_client, message) => message);
+                }
+              });
+
+              const conn = await client.joinOrCreate('req_cb');
+              const response = await new Promise((resolve, reject) => {
+                conn.send("echo", { hello: "world" }, (res, err) => err ? reject(err) : resolve(res));
+              });
+              assert.deepStrictEqual(response, { hello: "world" });
+              await conn.leave();
+            });
+
+            it("should await async handlers (returning a Promise)", async () => {
+              matchMaker.defineRoomType('req_async', class _ extends Room {
+                onCreate() {
+                  this.onMessage("delayed", async (_client, message) => {
+                    await timeout(30);
+                    return message.n * 2;
+                  });
+                }
+              });
+
+              const conn = await client.joinOrCreate('req_async');
+              const response = await conn.request("delayed", { n: 21 });
+              assert.strictEqual(response, 42);
+              await conn.leave();
+            });
+
+            it("should support requests without a payload", async () => {
+              matchMaker.defineRoomType('req_nopayload', class _ extends Room {
+                onCreate() {
+                  this.onMessage("ping", () => "pong");
+                }
+              });
+
+              const conn = await client.joinOrCreate('req_nopayload');
+              const response = await conn.request("ping");
+              assert.strictEqual(response, "pong");
+              await conn.leave();
+            });
+
+            it("should correlate concurrent requests, even when answered out of order", async () => {
+              matchMaker.defineRoomType('req_concurrent', class _ extends Room {
+                onCreate() {
+                  this.onMessage("delay", async (_client, message) => {
+                    await timeout(message.ms);
+                    return message.id;
+                  });
+                }
+              });
+
+              const conn = await client.joinOrCreate('req_concurrent');
+
+              const settleOrder: number[] = [];
+              const slow = conn.request("delay", { id: 1, ms: 80 }).then((id) => { settleOrder.push(id); return id; });
+              const fast = conn.request("delay", { id: 2, ms: 10 }).then((id) => { settleOrder.push(id); return id; });
+
+              const [a, b] = await Promise.all([slow, fast]);
+              assert.strictEqual(a, 1);
+              assert.strictEqual(b, 2);
+              assert.deepStrictEqual(settleOrder, [2, 1]); // the faster handler resolves first
+              await conn.leave();
+            });
+
+            it("should reject when the handler throws (preserving name/message)", async () => {
+              matchMaker.defineRoomType('req_throw', class _ extends Room {
+                onCreate() {
+                  this.onMessage("boom", () => { throw new Error("kaboom"); });
+                }
+              });
+
+              const conn = await client.joinOrCreate('req_throw');
+              await assert.rejects(conn.request("boom", {}), (err: Error) => {
+                assert.strictEqual(err.message, "kaboom");
+                return true;
+              });
+              await conn.leave();
+            });
+
+            it("should reject when an async handler rejects", async () => {
+              matchMaker.defineRoomType('req_reject', class _ extends Room {
+                onCreate() {
+                  this.onMessage("fail", async () => { throw new Error("nope"); });
+                }
+              });
+
+              const conn = await client.joinOrCreate('req_reject');
+              await assert.rejects(conn.request("fail"), (err: Error) => err.message === "nope");
+              await conn.leave();
+            });
+
+            it("should reject with a no_handler error when no handler is registered", async () => {
+              matchMaker.defineRoomType('req_nohandler', class _ extends Room {
+                onCreate() {
+                  this.onMessage("known", () => "ok");
+                }
+              });
+
+              const conn = await client.joinOrCreate('req_nohandler');
+              await assert.rejects(conn.request("unknown", {}), (err: Error) => {
+                assert.strictEqual(err.name, "no_handler");
+                return true;
+              });
+              await conn.leave();
+            });
+
+            it("should reject on timeout and ignore the late response", async () => {
+              matchMaker.defineRoomType('req_timeout', class _ extends Room {
+                onCreate() {
+                  this.onMessage("slow", async () => {
+                    await timeout(120);
+                    return "late";
+                  });
+                }
+              });
+
+              const conn = await client.joinOrCreate('req_timeout');
+              await assert.rejects(conn.request("slow", {}, { timeout: 40 }), (err: Error) => {
+                assert.ok(/timed out/.test(err.message));
+                return true;
+              });
+              // allow the late response to arrive — it must be silently dropped
+              await timeout(120);
+              await conn.leave();
+            });
+
+            it("should reject pending requests when the connection closes", async () => {
+              matchMaker.defineRoomType('req_disconnect', class _ extends Room {
+                onCreate() {
+                  this.onMessage("never", async () => {
+                    await timeout(500);
+                    return "too late";
+                  });
+                }
+              });
+
+              const conn = await client.joinOrCreate('req_disconnect');
+              const rejection = assert.rejects(conn.request("never", {}), (err: Error) => {
+                assert.ok(/connection closed/.test(err.message));
+                return true;
+              });
+              await conn.leave();
+              await rejection;
+            });
+
+            it("should not turn a plain send() into a request (handler return is ignored)", async () => {
+              let received: any;
+              matchMaker.defineRoomType('req_oneway', class _ extends Room {
+                onCreate() {
+                  this.onMessage("fire", (_client, message) => {
+                    received = message;
+                    return { ignored: true }; // returned, but the client used a one-way send
+                  });
+                }
+              });
+
+              const conn = await client.joinOrCreate('req_oneway');
+              conn.send("fire", { x: 1 });
+              await timeout(30);
+              assert.deepStrictEqual(received, { x: 1 });
+              await conn.leave();
+            });
+          });
+
           describe("patchRate", () => {
             const PatchState = schema({
               number: t.number().default(0),

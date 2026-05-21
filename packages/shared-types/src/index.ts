@@ -4,7 +4,7 @@ import type { StandardSchemaV1 } from '@standard-schema/spec';
 export type { StandardSchemaV1 };
 
 // Re-export Protocol types
-export { Protocol, ErrorCode, CloseCode, HandshakeSection } from './Protocol.js';
+export { Protocol, ErrorCode, CloseCode, HandshakeSection, ResponseStatus } from './Protocol.js';
 
 /**
  * Minimal Room-like interface for SDK type inference.
@@ -189,6 +189,26 @@ export type ExtractMessageType<T> =
     ? StandardSchemaV1.InferOutput<Format>
     : T extends (this: any, client: any, message: infer Message) => void
       ? Message
+      : any;
+
+/**
+ * Extract the response payload type for a request/response message handler.
+ *
+ * Mirrors {@link ExtractMessageType} but reads the handler's *return* type
+ * instead of its `message` parameter — this is what `room.request(...)`
+ * resolves to (and what the `room.send(..., callback)` ack receives). The
+ * return is unwrapped through {@link Awaited} so `async` handlers and handlers
+ * that return a `Promise` both surface the resolved value.
+ *
+ * A handler that returns `void` (the fire-and-forget default) yields `void`
+ * here, which is the correct response type for a request that completes
+ * without a payload.
+ */
+export type ExtractResponseType<T> =
+  T extends { format: any; handler: infer Handler }
+    ? Handler extends (this: any, client: any, message: any) => infer R ? Awaited<R> : any
+    : T extends (this: any, client: any, message: any) => infer R
+      ? Awaited<R>
       : any;
 
 /**

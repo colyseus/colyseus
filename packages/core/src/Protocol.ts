@@ -108,6 +108,39 @@ export const getMessageBytes = {
     return [Protocol.ROOM_STATE, ...bytes];
   },
 
+  /**
+   * Reply to a client {@link Protocol.ROOM_REQUEST}.
+   *
+   * Wire layout: `[ROOM_RESPONSE byte][requestId varint][status uint8][msgpack payload?]`
+   *
+   * `requestId` is opaque — echoed back exactly as the SDK sent it so the
+   * pending callback/promise can be correlated. `status` is a
+   * {@link ResponseStatus} (0 = OK, 1 = ERROR). The payload is omitted when a
+   * handler resolves with `undefined`. Returns a fresh Buffer copy for the
+   * same back-pressure reason documented on `raw` below.
+   */
+  [Protocol.ROOM_RESPONSE]: (requestId: number, status: number, message?: any): Buffer => {
+    it.offset = 1;
+    packr.buffer[0] = Protocol.ROOM_RESPONSE;
+
+    encode.number(packr.buffer, requestId, it);
+    packr.buffer[it.offset++] = status;
+
+    if (message !== undefined) {
+      packr.position = 0;
+
+      // see note on the same workaround in `raw` below
+      if (__isDev) {
+        packr.useBuffer(packr.buffer);
+      }
+
+      const endOfBufferOffset = packr.pack(message, 2048 + it.offset).byteLength;
+      return Buffer.from(packr.buffer.subarray(0, endOfBufferOffset));
+    }
+
+    return Buffer.from(packr.buffer.subarray(0, it.offset));
+  },
+
   [Protocol.PING]: () => {
     packr.buffer[0] = Protocol.PING;
     return Buffer.from(packr.buffer.subarray(0, 1));

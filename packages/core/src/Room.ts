@@ -40,6 +40,7 @@ import {
   ErrorCode,
   HandshakeSection,
   Protocol,
+  ResponseStatus,
   type MessageHandlerWithFormat as SharedMessageHandlerWithFormat,
   type MessageHandler as SharedMessageHandler,
   type Messages as SharedMessages,
@@ -60,6 +61,19 @@ export {
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
 const noneSerializer = new NoneSerializer();
+
+// Shape an Error (or thrown value) into a plain, msgpack-friendly object for a
+// ROOM_RESPONSE error payload. Only `name`/`message`/`code` cross the wire —
+// stacks stay on the server.
+function toResponseError(e: any): { name: string; message: string; code?: any } {
+  if (e instanceof Error) {
+    const code = (e as any).code;
+    return (code !== undefined)
+      ? { name: e.name, message: e.message, code }
+      : { name: e.name, message: e.message };
+  }
+  return { name: "Error", message: String(e) };
+}
 
 export const DEFAULT_SEAT_RESERVATION_TIME = Number(process.env.COLYSEUS_SEAT_RESERVATION_TIME || 15);
 
@@ -1794,6 +1808,13 @@ export class Room<T extends RoomOptions = RoomOptions> {
     }
   }
 
+  // Encode and enqueue a ROOM_RESPONSE for a client request. If the client has
+  // already left, `enqueueRaw` is a no-op — no response is needed.
+  #replyToRequest(client: Client, requestId: number, status: ResponseStatus, payload?: any) {
+    debugMessage("response #%d: status=%d -> %j (roomId: %s)", requestId, status, payload, this.roomId);
+    client.enqueueRaw(getMessageBytes[Protocol.ROOM_RESPONSE](requestId, status, payload));
+  }
+
   private sendFullState(client: Client): void {
     client.raw(this._serializer.getFullState(client));
   }
@@ -2012,6 +2033,67 @@ export class Room<T extends RoomOptions = RoomOptions> {
       } else {
         this.onMessageFallbacks['__no_message_handler'](client, messageType, message);
       }
+
+    } else if (code === Protocol.ROOM_REQUEST) {
+      // A request reuses the same `onMessage(type, ...)` handlers as a plain
+      // ROOM_DATA message — the only difference is the client opted in to a
+      // reply (by passing a callback / using `room.request()`), so the wire
+      // carries a `requestId` we must echo back. The handler's return value
+      // (awaited) becomes the response payload.
+      const requestId = decode.number(buffer, it);
+
+      const messageType = (decode.stringCheck(buffer, it))
+        ? decode.string(buffer, it)
+        : decode.number(buffer, it);
+
+      let message;
+      try {
+        message = (buffer.byteLength > it.offset)
+          ? unpack(buffer.subarray(it.offset, buffer.byteLength))
+          : undefined;
+        debugMessage("request #%d: '%s' -> %j (roomId: %s)", requestId, messageType, message, this.roomId);
+
+        // custom message validation (shared with the ROOM_DATA path)
+        if (this.onMessageValidators[messageType] !== undefined) {
+          message = standardValidate(this.onMessageValidators[messageType], message);
+        }
+
+      } catch (e: any) {
+        // Reply with an error so the client's pending request settles instead
+        // of timing out. (A plain ROOM_DATA would drop the client here, but a
+        // request has a caller waiting on the other end.)
+        debugAndPrintError(e);
+        this.#replyToRequest(client, requestId, ResponseStatus.ERROR, toResponseError(e));
+        return;
+      }
+
+      // A request is answered by the FIRST handler registered for its type.
+      // `onMessageEvents.emit` would run every handler and discard returns, so
+      // we invoke directly to capture the value. Wildcard ('*') handlers are
+      // not eligible — their (client, type, message) shape has no response
+      // contract — so a type with only a wildcard handler gets `no_handler`.
+      const handler = this.onMessageEvents.events[messageType as string]?.[0];
+
+      if (handler === undefined) {
+        this.#replyToRequest(client, requestId, ResponseStatus.ERROR, {
+          name: "no_handler",
+          message: `room "${this.roomName}" has no onMessage("${messageType}") handler to answer this request.`,
+        });
+        return;
+      }
+
+      // `Promise.resolve().then(...)` normalizes sync throws and async
+      // rejections into the same rejection path. When `onUncaughtException`
+      // is configured the handler is wrapped (see `onMessage`) and swallows
+      // its own errors, so the request resolves with `undefined` and the
+      // exception is reported there instead of as an ERROR response.
+      Promise.resolve().then(() => handler(client, message)).then(
+        (response) => this.#replyToRequest(client, requestId, ResponseStatus.OK, response),
+        (e) => {
+          debugAndPrintError(e);
+          this.#replyToRequest(client, requestId, ResponseStatus.ERROR, toResponseError(e));
+        },
+      );
 
     } else if (code === Protocol.ROOM_DATA_BYTES) {
       const messageType = (decode.stringCheck(buffer, it))

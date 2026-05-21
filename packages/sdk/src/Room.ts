@@ -1,4 +1,4 @@
-import { CloseCode, HandshakeSection, Protocol, type InferState, type InferInput, type NormalizeRoomType, type ExtractRoomMessages, type ExtractRoomClientMessages, type ExtractMessageType } from '@colyseus/shared-types';
+import { CloseCode, HandshakeSection, Protocol, ResponseStatus, type InferState, type InferInput, type NormalizeRoomType, type ExtractRoomMessages, type ExtractRoomClientMessages, type ExtractMessageType, type ExtractResponseType } from '@colyseus/shared-types';
 import { decode, Decoder, encode, Iterator, Reflection, Schema } from '@colyseus/schema';
 import { InputEncoder } from '@colyseus/schema/input';
 
@@ -143,6 +143,23 @@ export class Room<
     #lastPingTime: number = 0;
     #pingCallback?: (ms: number) => void = undefined;
 
+    /**
+     * Default time (ms) a `room.request()` / `room.send(..., callback)` waits
+     * for a reply before rejecting. Override per-call with the `timeout`
+     * option. Tune globally by assigning to this field after joining.
+     */
+    public requestTimeout: number = 10000;
+
+    /** Monotonic id correlating a {@link Protocol.ROOM_REQUEST} with its reply. @internal */
+    #nextRequestId: number = 0;
+
+    /** In-flight requests awaiting a {@link Protocol.ROOM_RESPONSE}. @internal */
+    #pendingRequests = new Map<number, {
+        resolve: (value: any) => void;
+        reject: (reason: any) => void;
+        timer: ReturnType<typeof setTimeout>;
+    }>();
+
     #inputHandle?: ClientInputHandle<any>;
     /**
      * Schema constructor recovered via Reflection from the server's
@@ -185,6 +202,9 @@ export class Room<
         this.connection = new Connection(options.protocol);
         this.connection.events.onmessage = this.onMessageCallback.bind(this);
         this.connection.events.onclose = (e: CloseEvent) => {
+            // the in-flight requests can't be answered on a closed socket
+            this.#rejectAllPending("connection closed before a response was received.");
+
             if (this.joinedAtTime === 0) {
                 console.warn?.(`Room connection was closed unexpectedly (${e.code}): ${e.reason}`);
                 this.onError.invoke(e.code, e.reason);
@@ -275,12 +295,35 @@ export class Room<
         messageType: MessageType,
         payload?: ExtractMessageType<ExtractRoomMessages<NormalizeRoomType<T>>[MessageType]>
     ): void
+    // Request overload: passing a callback turns this into a request/response —
+    // the callback receives the value the server handler returns (or an Error).
+    public send<MessageType extends keyof ExtractRoomMessages<NormalizeRoomType<T>>>(
+        messageType: MessageType,
+        payload: ExtractMessageType<ExtractRoomMessages<NormalizeRoomType<T>>[MessageType]>,
+        callback: (response: ExtractResponseType<ExtractRoomMessages<NormalizeRoomType<T>>[MessageType]>, error?: Error) => void
+    ): void
     // Fallback overload: only available when no typed messages are defined
     public send<Payload = any>(
         messageType: [keyof ExtractRoomMessages<NormalizeRoomType<T>>] extends [never] ? (string | number) : never,
         payload?: Payload
     ): void
-    public send(messageType: string | number, payload?: any): void {
+    // Fallback request overload
+    public send<Payload = any, Response = any>(
+        messageType: [keyof ExtractRoomMessages<NormalizeRoomType<T>>] extends [never] ? (string | number) : never,
+        payload: Payload,
+        callback: (response: Response, error?: Error) => void
+    ): void
+    public send(messageType: string | number, payload?: any, callback?: (response: any, error?: Error) => void): void {
+        // Request/response form: defer to `request()` and adapt to a
+        // (response, error) callback.
+        if (callback !== undefined) {
+            this.#request(messageType, payload, this.requestTimeout).then(
+                (response) => callback(response, undefined),
+                (error) => callback(undefined, error),
+            );
+            return;
+        }
+
         const it: Iterator = { offset: 1 };
         this.packr.buffer[0] = Protocol.ROOM_DATA;
 
@@ -304,6 +347,78 @@ export class Room<
         } else {
             this.connection.send(data);
         }
+    }
+
+    /**
+     * Send a message and await the server's reply. The server answers by
+     * returning a value from its matching `onMessage(type, ...)` handler.
+     *
+     * Rejects if the handler throws, if no handler is registered, if the
+     * connection closes first, or if no reply arrives within `timeout`
+     * (defaults to {@link Room.requestTimeout}).
+     *
+     * @example
+     * ```typescript
+     * const profile = await room.request("get-profile", { id: 42 });
+     * ```
+     */
+    public request<MessageType extends keyof ExtractRoomMessages<NormalizeRoomType<T>>>(
+        messageType: MessageType,
+        payload?: ExtractMessageType<ExtractRoomMessages<NormalizeRoomType<T>>[MessageType]>,
+        options?: { timeout?: number }
+    ): Promise<ExtractResponseType<ExtractRoomMessages<NormalizeRoomType<T>>[MessageType]>>
+    public request<Payload = any, Response = any>(
+        messageType: [keyof ExtractRoomMessages<NormalizeRoomType<T>>] extends [never] ? (string | number) : never,
+        payload?: Payload,
+        options?: { timeout?: number }
+    ): Promise<Response>
+    public request(messageType: string | number, payload?: any, options?: { timeout?: number }): Promise<any> {
+        return this.#request(messageType, payload, options?.timeout ?? this.requestTimeout);
+    }
+
+    #request(messageType: string | number, payload: any, timeoutMs: number): Promise<any> {
+        return new Promise((resolve, reject) => {
+            if (!this.connection.isOpen) {
+                reject(new Error(`cannot send request "${messageType}": connection is not open.`));
+                return;
+            }
+
+            const requestId = this.#nextRequestId;
+            this.#nextRequestId = (this.#nextRequestId + 1) >>> 0; // keep within uint32
+
+            const it: Iterator = { offset: 1 };
+            this.packr.buffer[0] = Protocol.ROOM_REQUEST;
+            encode.number(this.packr.buffer as Buffer, requestId, it);
+
+            if (typeof(messageType) === "string") {
+                encode.string(this.packr.buffer as Buffer, messageType, it);
+            } else {
+                encode.number(this.packr.buffer as Buffer, messageType, it);
+            }
+
+            this.packr.position = 0;
+            const data = (payload !== undefined)
+                ? this.packr.pack(payload, 2048 + it.offset) // 2048 = RESERVE_START_SPACE
+                : this.packr.buffer.subarray(0, it.offset);
+
+            const timer = setTimeout(() => {
+                this.#pendingRequests.delete(requestId);
+                reject(new Error(`request "${messageType}" timed out after ${timeoutMs}ms.`));
+            }, timeoutMs);
+
+            this.#pendingRequests.set(requestId, { resolve, reject, timer });
+            this.connection.send(data);
+        });
+    }
+
+    #rejectAllPending(reason: string) {
+        if (this.#pendingRequests.size === 0) { return; }
+        const error = new Error(reason);
+        for (const pending of this.#pendingRequests.values()) {
+            clearTimeout(pending.timer);
+            pending.reject(error);
+        }
+        this.#pendingRequests.clear();
     }
 
     public sendUnreliable<T = any>(type: string | number, message?: T): void {
@@ -534,6 +649,32 @@ export class Room<
                 : decode.number(buffer as Buffer, it);
 
             this.dispatchMessage(type, buffer.subarray(it.offset));
+
+        } else if (code === Protocol.ROOM_RESPONSE) {
+            // reply to a pending `request()` / `send(..., callback)`
+            const requestId = decode.number(buffer as Buffer, it);
+            const status = buffer[it.offset++];
+
+            const pending = this.#pendingRequests.get(requestId);
+            // already settled (e.g. timed out) or unknown id — ignore
+            if (pending !== undefined) {
+                this.#pendingRequests.delete(requestId);
+                clearTimeout(pending.timer);
+
+                const payload = (buffer.byteLength > it.offset)
+                    ? unpack(buffer as Buffer, { start: it.offset })
+                    : undefined;
+
+                if (status === ResponseStatus.OK) {
+                    pending.resolve(payload);
+                } else {
+                    // payload carries { name, message, code } from the server
+                    const error: any = new Error(payload?.message ?? "request failed");
+                    if (payload?.name) { error.name = payload.name; }
+                    if (payload?.code !== undefined) { error.code = payload.code; }
+                    pending.reject(error);
+                }
+            }
 
         } else if (code === Protocol.PING) {
             this.#pingCallback?.(Math.round(now() - this.#lastPingTime));

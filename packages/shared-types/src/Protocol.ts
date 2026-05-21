@@ -17,8 +17,22 @@ export const Protocol = {
   // Input-related (19~20)
   ROOM_INPUT_RELIABLE: 19,   // [byte, ...InputEncoder.encode() bytes]               single input
   ROOM_INPUT_UNRELIABLE: 20, // [byte, len|input, len|input, ...]                    length-framed ring
+
+  // Request/response (21~22)
+  ROOM_REQUEST: 21,  // [byte, requestId varint, type(str|num), msgpack payload]     client→server, expects a reply
+  ROOM_RESPONSE: 22, // [byte, requestId varint, status uint8, msgpack payload?]     server→client, reply to a request
 } as const;
 export type Protocol = typeof Protocol[keyof typeof Protocol];
+
+/**
+ * Status byte of a {@link Protocol.ROOM_RESPONSE} reply, correlating to a
+ * pending {@link Protocol.ROOM_REQUEST} on the SDK side.
+ */
+export const ResponseStatus = {
+  OK: 0,
+  ERROR: 1,
+} as const;
+export type ResponseStatus = typeof ResponseStatus[keyof typeof ResponseStatus];
 
 /**
  * Section tags for trailing tagged blobs in the JOIN_ROOM handshake payload.
