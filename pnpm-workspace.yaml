@@ -6,6 +6,7 @@ packages:
   - packages/transport/*
   - packages/presence/*
   - packages/serializer/*
+  - packages/room-plugins/*
 
 onlyBuiltDependencies:
   - '@biomejs/biome'
