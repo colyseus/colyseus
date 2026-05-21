@@ -35,7 +35,7 @@
  *   }
  */
 import type { Room } from './Room.ts';
-import type { Client } from './Transport.ts';
+import type { AuthContext, Client } from './Transport.ts';
 import type { Messages } from '@colyseus/shared-types';
 
 /**
@@ -43,11 +43,12 @@ import type { Messages } from '@colyseus/shared-types';
  * hook. Sensible per-hook defaults are applied when omitted (see
  * `Room.__init` for the exact ordering policy).
  *
- *   onCreate  / onJoin    → plugins run BEFORE room (guards + setup)
- *   onLeave   / onDispose → plugins run AFTER room (capture final state)
+ *   onCreate  / onAuth / onJoin  → plugins run BEFORE room (guards + setup)
+ *   onLeave   / onDispose        → plugins run AFTER room (capture final state)
  */
 export interface RoomPluginOrder {
   onCreate?:  'before' | 'after';
+  onAuth?:    'before' | 'after';
   onJoin?:    'before' | 'after';
   onLeave?:   'before' | 'after';
   onDispose?: 'before' | 'after';
@@ -110,6 +111,7 @@ export abstract class RoomPlugin<This extends Room = Room> {
   // overrides must keep `protected` (TS widens to public silently
   // otherwise).
   protected onCreate?(options: any): void | Promise<void>;
+  protected onAuth?(client: Client, options: any, context: AuthContext): void | Promise<void>;
   protected onJoin?(client: Client, options?: any): void | Promise<void>;
   protected onLeave?(client: Client, code?: number): void | Promise<void>;
   protected onDispose?(): void | Promise<void>;
@@ -220,7 +222,7 @@ export function definePlugins(plugins: any): any {
  * methods" when wiring a plugin into a room. Exported for the test
  * harness; downstream code should not need it.
  */
-export const PLUGIN_LIFECYCLE_KEYS = ['onCreate', 'onJoin', 'onLeave', 'onDispose'] as const;
+export const PLUGIN_LIFECYCLE_KEYS = ['onCreate', 'onAuth', 'onJoin', 'onLeave', 'onDispose'] as const;
 export type PluginLifecycleKey = (typeof PLUGIN_LIFECYCLE_KEYS)[number];
 
 /**
@@ -276,13 +278,14 @@ const DEP_KEY_PREFIX = '__dep:';
  * hook. Plugins can override per-hook via the `order` field on the
  * plugin instance.
  *
- *   onCreate / onJoin    → plugins run BEFORE room (guards + setup)
- *   onLeave  / onDispose → plugins run AFTER room (capture final state)
+ *   onCreate / onAuth / onJoin → plugins run BEFORE room (guards + setup)
+ *   onLeave  / onDispose       → plugins run AFTER room (capture final state)
  *
  * @internal
  */
 export const DEFAULT_PLUGIN_ORDER: Record<PluginLifecycleKey, 'before' | 'after'> = {
   onCreate:  'before',
+  onAuth:    'before',
   onJoin:    'before',
   onLeave:   'after',
   onDispose: 'after',

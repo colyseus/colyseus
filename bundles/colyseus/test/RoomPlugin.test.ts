@@ -100,6 +100,31 @@ describe('RoomPlugin core plumbing', () => {
       assert.deepEqual(order, ['plugin', 'room']);
     });
 
+    it('runs onAuth: plugins before room (default order), receives AuthContext', async () => {
+      const order: string[] = [];
+      let pluginIp: string | string[] | undefined;
+      class P extends RoomPlugin {
+        onAuth(_client: any, _opts: any, ctx: any) {
+          order.push('plugin');
+          pluginIp = ctx.ip;
+        }
+      }
+      class R extends Room {
+        plugins = definePlugins({ p: new P() });
+        onAuth(_client: any, _opts: any, _ctx: any) {
+          order.push('room');
+          return { userId: 'u1' };
+        }
+      }
+      const room = new R();
+      runInit(room);
+      const ctx = { ip: '203.0.113.5', headers: new Headers(), token: undefined } as any;
+      const result = await (room as any).onAuth({} as any, {}, ctx);
+      assert.deepEqual(order, ['plugin', 'room']);
+      assert.equal(pluginIp, '203.0.113.5', 'plugin saw the AuthContext');
+      assert.deepEqual(result, { userId: 'u1' }, 'room return value flows through');
+    });
+
     it('runs onLeave / onDispose: room before plugins (default order)', async () => {
       const order: string[] = [];
       class P extends RoomPlugin {
