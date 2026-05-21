@@ -42,6 +42,14 @@ async function exerciseCrud(driver: DatabaseDriver) {
   assert.equal(found.roomId, 'r2');
   assert.deepEqual(found.metadata, { mode: 'casual', level: 9 });
 
+  // Batch findByIds — one round trip for K roomIds, missing ids absent.
+  const batch = await driver.findByIds(['r1', 'r2', 'r-missing']);
+  assert.equal(batch.size, 2);
+  assert.equal(batch.get('r1')?.roomId, 'r1');
+  assert.equal(batch.get('r2')?.roomId, 'r2');
+  assert.equal(batch.has('r-missing'), false);
+  assert.equal((await driver.findByIds([])).size, 0);
+
   // JSON metadata equality filter
   const ranked = await driver.query({ name: 'battle', mode: 'ranked' } as any);
   assert.deepEqual(ranked.map((r: any) => r.roomId), ['r1']);

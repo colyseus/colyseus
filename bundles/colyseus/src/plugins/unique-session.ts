@@ -14,11 +14,11 @@
  *     });
  *   }
  *
- * The plugin reads the per-user reverse index that Room maintains in
- * Presence (`userRoomsKey(userId)` → hash of `{ roomId, roomName,
- * joinedAt }` per sessionId). Same source the admin's by-user
- * inspector and the new `closeUserSessions` helper use — no new
- * bookkeeping.
+ * The plugin reads the per-user reverse index that
+ * `TrackUserSessionsPlugin` maintains in Presence. Same source the
+ * admin's by-user inspector and the `closeUserSessions` helper use —
+ * no new bookkeeping. (For a generic lookup from your own code,
+ * prefer `TrackUserSessionsPlugin.listUserSessions(userId)`.)
  *
  * Anonymous clients (no `userId`) are NEVER rejected: with no stable
  * identity we have nothing to enforce against. Document this so
@@ -46,9 +46,10 @@
  * themselves.
  */
 import {
-  RoomPlugin, ServerError, matchMaker, userRoomsKey,
-  type Client, type UserRoomEntry, type PluginDependencies,
+  RoomPlugin, ServerError, matchMaker,
+  type Client, type PluginDependencies,
 } from '@colyseus/core';
+import { userRoomsKey, type UserRoomEntry, type UserSessionInfo } from '@colyseus/core/internal';
 import { TrackUserSessionsPlugin } from './track-user-sessions.ts';
 
 export interface UniqueSessionOptions {
@@ -91,11 +92,12 @@ export interface UniqueSessionOptions {
    * is counted. Use this to scope by metadata, e.g.
    * `(entry) => roomNameMatches && metadata.gameMode === current.gameMode`.
    *
-   * Note: the predicate only sees `roomId / roomName / joinedAt`
-   * (what the reverse index stores). If you need richer matching,
-   * fetch the room's metadata yourself via `matchMaker.query`.
+   * Note: the predicate only sees `sessionId / roomId / roomName /
+   * joinedAt` (what the reverse index stores). If you need richer
+   * matching, fetch the room's metadata yourself via
+   * `matchMaker.query`.
    */
-  conflictsWith?: (entry: UserRoomEntry) => boolean;
+  conflictsWith?: (info: UserSessionInfo) => boolean;
 
   /**
    * Extract the user's stable id from `Client`. Return a non-empty
@@ -130,11 +132,11 @@ function defaultResolveUserId(client: Client): string | undefined {
  * the `onJoin` body so the unit tests can drive it in isolation.
  */
 interface ConflictResult {
-  /** Entries that should count against the limit, with their session ids. */
-  conflicts: Array<{ sessionId: string; entry: UserRoomEntry }>;
+  /** Entries that should count against the limit. */
+  conflicts: UserSessionInfo[];
   /** Session ids that point at rooms which no longer exist —
    *  best-effort hdel'd so the next check doesn't re-pay the cost. */
-  stragglers: string[];
+  staleSessions: string[];
 }
 
 export class UniqueSessionPlugin extends RoomPlugin {
@@ -146,7 +148,7 @@ export class UniqueSessionPlugin extends RoomPlugin {
   private mode: 'reject' | 'replace';
   private rejectCode: number;
   private rejectMessage: string;
-  private conflictsWith?: (entry: UserRoomEntry) => boolean;
+  private conflictsWith?: (info: UserSessionInfo) => boolean;
   private resolveUserId: (client: Client) => string | undefined;
 
   constructor(opts: UniqueSessionOptions = {}) {
@@ -166,14 +168,14 @@ export class UniqueSessionPlugin extends RoomPlugin {
     // matchmaking working unchanged.
     if (!userId) { return; }
 
-    const { conflicts, stragglers } = await this.evaluate(userId);
+    const { conflicts, staleSessions } = await this.evaluate(userId);
 
     // Best-effort cleanup of stale entries — don't block the response
     // on it (the user-visible answer doesn't depend on hdel landing).
-    if (stragglers.length > 0) {
+    if (staleSessions.length > 0) {
       const key = userRoomsKey(userId);
       void Promise.all(
-        stragglers.map((s) => matchMaker.presence.hdel(key, s)),
+        staleSessions.map((s) => matchMaker.presence.hdel(key, s)),
       ).catch(() => { /* ignore */ });
     }
 
@@ -184,14 +186,14 @@ export class UniqueSessionPlugin extends RoomPlugin {
       // session survives alongside the new one (or the new one wins
       // outright when max=1). Sort by joinedAt ascending — earliest
       // join time is oldest.
-      const sorted = conflicts.slice().sort((a, b) => a.entry.joinedAt - b.entry.joinedAt);
+      const sorted = conflicts.slice().sort((a, b) => a.joinedAt - b.joinedAt);
       const toKick = sorted.slice(0, conflicts.length - this.max + 1);
       await Promise.all(
-        toKick.map(({ sessionId, entry }) =>
+        toKick.map((info) =>
           matchMaker.remoteRoomCall(
-            entry.roomId,
+            info.roomId,
             'kickClient' as any,
-            [sessionId, 1000, 'replaced'],
+            [info.sessionId, 1000, 'replaced'],
           ).catch(() => { /* room gone — that's fine, the conflict resolves either way */ }),
         ),
       );
@@ -208,62 +210,82 @@ export class UniqueSessionPlugin extends RoomPlugin {
    * live rooms, return the conflict list. Exposed so unit tests can
    * exercise the parsing/reconciliation logic without standing up
    * the full plugin lifecycle.
+   *
+   * Wire-op cap: 2 per call — one HGETALL for the user's hash, plus
+   * one batch lookup for cross-room candidates (skipped when none).
+   * Self-room entries are resolved against `this.room.clients`
+   * locally and never touch the matchmaker.
    */
   async evaluate(userId: string): Promise<ConflictResult> {
+    // Wire op 1: read user's session hash.
     const raw = await matchMaker.presence.hgetall(userRoomsKey(userId));
     const fields = Object.keys(raw);
-    if (fields.length === 0) { return { conflicts: [], stragglers: [] }; }
+    if (fields.length === 0) { return { conflicts: [], staleSessions: [] }; }
 
-    // Build a fast lookup of live rooms — O(entries) reconciliation.
-    const live = new Map<string, any>();
-    for (const r of (await matchMaker.query({})) as any[]) {
-      live.set(r.roomId, r);
-    }
+    const staleSessions: string[] = [];
+    const selfRoomConflicts: UserSessionInfo[] = [];
+    const crossRoomEntries: Array<{ sessionId: string; entry: UserRoomEntry }> = [];
 
-    const conflicts: ConflictResult['conflicts'] = [];
-    const stragglers: string[] = [];
-
+    // Stage 1: classify entries in-memory. No matchmaker calls.
+    //   - corrupt JSON → stale
+    //   - wrong roomName → ignored
+    //   - this.room.roomId → resolved via local clients
+    //   - cross-room → deferred to the batch lookup below
     for (const sessionId of fields) {
       let entry: UserRoomEntry;
-      try {
-        entry = JSON.parse(raw[sessionId]);
-      } catch {
-        // Corrupt index entry — drop it.
-        stragglers.push(sessionId);
+      try { entry = JSON.parse(raw[sessionId]); }
+      catch {
+        staleSessions.push(sessionId);
         continue;
       }
 
       if (entry.roomName !== this.room.roomName) { continue; }
 
       if (entry.roomId === this.room.roomId) {
-        // The entry points at THIS room instance. Two sub-cases:
-        //  - sessionId is still in our local `clients` ⇒ a real
-        //    concurrent session in the same room (count it).
-        //  - sessionId is NOT in `clients` ⇒ stale entry left by
-        //    a previous connection whose `onLeave` didn't run
-        //    (TCP reset, fast disconnect). Drop it so a legitimate
-        //    fresh join isn't rejected by ghost data.
+        // Local clients are the authoritative source for "is this
+        // sessionId still active in our room?" — an entry without a
+        // live client is a leftover from a connection whose onLeave
+        // never ran (TCP reset, fast disconnect). Drop it so a
+        // legitimate fresh join isn't rejected by ghost data.
         const stillHere = this.room.clients?.some(
           (c: any) => c.sessionId === sessionId,
         ) ?? false;
-        if (!stillHere) {
-          stragglers.push(sessionId);
-          continue;
+        if (stillHere) {
+          selfRoomConflicts.push({ sessionId, ...entry });
+        } else {
+          staleSessions.push(sessionId);
         }
-        // Fall through into the conflict-count block below.
-      } else if (!live.has(entry.roomId)) {
-        // Cross-room entry pointing at a room the matchmaker no
-        // longer knows about — index drift from a crashed process.
-        stragglers.push(sessionId);
-        continue;
+      } else {
+        crossRoomEntries.push({ sessionId, entry });
       }
-
-      if (this.conflictsWith && !this.conflictsWith(entry)) { continue; }
-
-      conflicts.push({ sessionId, entry });
     }
 
-    return { conflicts, stragglers };
+    // Wire op 2 (skipped when no cross-room candidates): one batch
+    // lookup verifies that each cross-room candidate's roomId still
+    // exists in the matchmaker. Bounded at K cross-room entries for
+    // *this* user — never the cluster size.
+    const live = crossRoomEntries.length > 0
+      ? await matchMaker.findRoomsByIds(crossRoomEntries.map((c) => c.entry.roomId))
+      : new Map();
+
+    const conflicts: UserSessionInfo[] = [...selfRoomConflicts];
+    for (const { sessionId, entry } of crossRoomEntries) {
+      const room = live.get(entry.roomId);
+      if (!room) {
+        // Cross-room entry pointing at a roomId the matchmaker no
+        // longer knows about — index drift from a crashed process.
+        staleSessions.push(sessionId);
+        continue;
+      }
+      const info: UserSessionInfo = { sessionId, ...entry };
+      if (room.processId !== undefined) { info.processId = room.processId; }
+      conflicts.push(info);
+    }
+
+    const filtered = this.conflictsWith
+      ? conflicts.filter((c) => this.conflictsWith!(c))
+      : conflicts;
+    return { conflicts: filtered, staleSessions };
   }
 
 }

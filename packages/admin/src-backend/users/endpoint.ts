@@ -20,9 +20,10 @@
  * Apps on a custom schema without those columns get a 501.
  */
 import {
-  createEndpoint, matchMaker, userRoomsKey, CloseCode,
+  createEndpoint, matchMaker, CloseCode,
   type Endpoint, type Room,
 } from '@colyseus/core';
+import { listUserSessionsLive } from '@colyseus/core/internal';
 import { errorResponse, json } from '../internal/http.js';
 import { ipFromHeaders } from '../auth/rate-limit.js';
 import { guard, type EndpointContext } from '../internal/context.js';
@@ -64,28 +65,13 @@ async function closeUserSessions(
   userId: string,
   reason: string,
 ): Promise<number> {
-  const presence = matchMaker.presence;
-  let raw: Record<string, string>;
-  try {
-    raw = await presence.hgetall(userRoomsKey(userId));
-  } catch (err) {
-    ctx.logger?.warn?.({ err, userId }, '[admin] presence read failed during session close');
-    return 0;
-  }
-  const fields = Object.keys(raw);
-  if (fields.length === 0) { return 0; }
+  // No reconcile: a dead roomId fails kickClient harmlessly below
+  // (logged at debug). Cheaper than running an extra matchMaker.query.
+  const sessions = await listUserSessionsLive(userId);
+  if (sessions.length === 0) { return 0; }
 
   let closed = 0;
-  await Promise.all(fields.map(async (sessionId) => {
-    let roomId: string;
-    try {
-      const parsed = JSON.parse(raw[sessionId]) as { roomId: string };
-      roomId = parsed.roomId;
-    } catch {
-      // Corrupt index entry — skip it. The by-user inspector cleans
-      // these up on its next call, so we don't bother here.
-      return;
-    }
+  await Promise.all(sessions.map(async ({ sessionId, roomId }) => {
     try {
       // remoteRoomCall round-trips JSON, so `undefined` would become
       // `null`. We always pass a reason, so the 3-arg form is safe.

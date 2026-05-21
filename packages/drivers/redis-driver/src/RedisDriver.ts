@@ -56,6 +56,19 @@ export class RedisDriver implements MatchMakerDriver {
     }
   }
 
+  public async findByIds(roomIds: string[]): Promise<Map<string, IRoomCache>> {
+    const result = new Map<string, IRoomCache>();
+    if (roomIds.length === 0) { return result; }
+    // Single HMGET — N field lookups in one wire op. ioredis returns
+    // an array of `string | null` aligned with the input order.
+    const values = await this._client.hmget(ROOMCACHES_KEY, ...roomIds);
+    for (let i = 0; i < roomIds.length; i++) {
+      const raw = values[i];
+      if (raw) { result.set(roomIds[i], initializeRoomCache(JSON.parse(raw))); }
+    }
+    return result;
+  }
+
   public findOne(conditions: Partial<IRoomCache>, sortOptions?: SortOptions): Promise<IRoomCache> {
     if (typeof conditions.roomId !== 'undefined') {
       // get room by roomId

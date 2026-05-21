@@ -42,10 +42,29 @@ export function userRoomsKey(userId: string): string {
   return USER_ROOMS_KEY_PREFIX + userId;
 }
 
+/**
+ * What's serialized into the Presence hash value (sessionId is the
+ * hash field key, not part of the body). Internal write-side shape.
+ */
 export interface UserRoomEntry {
   roomId: string;
   roomName: string;
   joinedAt: number;
+}
+
+/**
+ * Public read-side shape returned by `listUserSessions`: a parsed
+ * `UserRoomEntry` plus its sessionId, optionally enriched with
+ * `processId` when reconcile against the matchmaker was on.
+ */
+export interface UserSessionInfo extends UserRoomEntry {
+  sessionId: string;
+  /**
+   * Process hosting the room, per the matchmaker. Populated only
+   * when `listUserSessions` was called with `reconcile: true` AND
+   * the room is still in the matchmaker roster.
+   */
+  processId?: string;
 }
 
 /**
@@ -181,4 +200,112 @@ export async function sweepRoomDispose(room: InspectorRoomShape): Promise<void> 
   }
   map.clear();
   await Promise.all(pending);
+}
+
+/**
+ * Minimal shape of a matchmaker room record needed for reconcile —
+ * keeps this module decoupled from the matchmaker / driver types.
+ * `matchMaker.query()`'s actual return (`IRoomCache[]`) is structurally
+ * a supertype of this, so callers can pass `matchMaker.query` directly.
+ */
+interface MatchmakerRoomLike {
+  roomId: string;
+  processId?: string;
+}
+
+export interface ListUserSessionsOptions {
+  /**
+   * Drop entries whose `roomId` is no longer in the matchmaker roster
+   * (the index can lag a crashed process). When `true`, the returned
+   * entries also carry `processId` from the live room record.
+   *
+   * Off by default — most callers (kick everyone, count) don't need it
+   * and the extra `matchMaker.query` round-trip isn't free.
+   */
+  reconcile?: boolean;
+
+  /**
+   * Fire-and-forget `hdel` for stale entries — those dropped by
+   * reconcile (matchmaker doesn't know the room anymore) plus any
+   * with corrupt JSON. Lets read endpoints self-heal the index on
+   * each call. No-op when `reconcile` is `false`.
+   */
+  removeStale?: boolean;
+}
+
+/**
+ * Read the user → active sessions index. Pure helper — the
+ * `Presence` + matchmaker batch lookup are injected so this module
+ * stays free of matchmaker imports (and so unit tests can drive it
+ * with fake deps).
+ *
+ * Wire-op count per call:
+ *   - 1 HGETALL on the user's hash (always).
+ *   - 1 batch room lookup when `reconcile: true` AND there are
+ *     entries to verify; skipped otherwise.
+ *
+ * Bounded at 2 wire ops regardless of the user's session count.
+ */
+export async function listUserSessions(
+  presence: Presence,
+  findRooms: (roomIds: string[]) => Promise<Map<string, MatchmakerRoomLike>>,
+  userId: string,
+  options: ListUserSessionsOptions = {},
+): Promise<UserSessionInfo[]> {
+  const reconcile = options.reconcile === true;
+  const removeStale = reconcile && options.removeStale === true;
+
+  let raw: Record<string, string>;
+  try {
+    raw = await presence.hgetall(userRoomsKey(userId));
+  } catch {
+    // Presence outage — observability shouldn't bring down the caller.
+    return [];
+  }
+  const fields = Object.keys(raw);
+  if (fields.length === 0) { return []; }
+
+  const staleSessions: string[] = [];
+  const parsed: Array<{ sessionId: string; entry: UserRoomEntry }> = [];
+  for (const sessionId of fields) {
+    try {
+      parsed.push({ sessionId, entry: JSON.parse(raw[sessionId]) as UserRoomEntry });
+    } catch {
+      // Corrupt JSON — index drift. Removable even without reconcile.
+      staleSessions.push(sessionId);
+    }
+  }
+
+  if (!reconcile) {
+    return parsed.map(({ sessionId, entry }) => ({ sessionId, ...entry }));
+  }
+
+  // One batch lookup for the K roomIds we care about. K = entries
+  // surviving the JSON.parse stage, not cluster size.
+  const live = parsed.length > 0
+    ? await findRooms(parsed.map((p) => p.entry.roomId))
+    : new Map<string, MatchmakerRoomLike>();
+
+  const result: UserSessionInfo[] = [];
+  for (const { sessionId, entry } of parsed) {
+    const room = live.get(entry.roomId);
+    if (!room) {
+      // Matchmaker doesn't know this roomId anymore — stale entry
+      // from a crashed process. Drop it (and remove if requested).
+      staleSessions.push(sessionId);
+      continue;
+    }
+    const info: UserSessionInfo = { sessionId, ...entry };
+    if (room.processId !== undefined) { info.processId = room.processId; }
+    result.push(info);
+  }
+
+  if (removeStale && staleSessions.length > 0) {
+    const key = userRoomsKey(userId);
+    void Promise.all(
+      staleSessions.map((s) => presence.hdel(key, s)),
+    ).catch(() => { /* presence outage, swallow */ });
+  }
+
+  return result;
 }

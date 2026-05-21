@@ -26,9 +26,10 @@
  * `onLeave` ran) get dropped from the response and best-effort `hdel`d.
  */
 import {
-  createEndpoint, matchMaker, userRoomsKey, CloseCode,
+  createEndpoint, matchMaker, CloseCode,
   type Endpoint, type Room,
 } from '@colyseus/core';
+import { listUserSessionsLive } from '@colyseus/core/internal';
 import { POSTGRES_MAX_INTEGER } from '@colyseus/database';
 import { errorResponse, json } from '../internal/http.js';
 import { ipFromHeaders } from '../auth/rate-limit.js';
@@ -108,7 +109,7 @@ interface ActiveUserRoom {
  * tracking entry?" — but a process crash can leave entries behind. The
  * matchmaker `query()` listing is the source of truth for "does this
  * room still exist?". We intersect both, drop entries that fail the
- * second check, and best-effort `hdel` the stragglers so the next
+ * second check, and best-effort `hdel` the stale entries so the next
  * request doesn't pay for the same reconcile.
  */
 export function listRoomsByUserEndpoint(ctx: EndpointContext): Endpoint {
@@ -119,55 +120,27 @@ export function listRoomsByUserEndpoint(ctx: EndpointContext): Endpoint {
       if (denied) { return denied; }
       const { userId } = reqCtx.params as { userId: string };
 
-      const presence = matchMaker.presence;
-      const raw = await presence.hgetall(userRoomsKey(userId));
-      const fields = Object.keys(raw);
-      if (fields.length === 0) { return json([] as ActiveUserRoom[]); }
-
-      // Build a fast lookup of live rooms so reconcile is O(entries)
-      // instead of O(entries × rooms).
-      const live = new Map<string, any>();
-      for (const r of await matchMaker.query({}) as any[]) {
-        live.set(r.roomId, r);
-      }
-
-      const active: ActiveUserRoom[] = [];
-      const stragglers: string[] = [];
-      for (const sessionId of fields) {
-        let parsed: { roomId: string; roomName: string; joinedAt: number };
-        try { parsed = JSON.parse(raw[sessionId]); }
-        catch {
-          // Corrupt entry — drop it. The hash field will be hdel'd below.
-          stragglers.push(sessionId);
-          continue;
-        }
-        const room = live.get(parsed.roomId);
-        if (!room) {
-          // Room is gone from the matchmaker but its index entry lingers
-          // — that's the crash case we exist to clean up.
-          stragglers.push(sessionId);
-          continue;
-        }
-        active.push({
-          roomId: parsed.roomId,
-          roomName: parsed.roomName,
-          sessionId,
-          joinedAt: parsed.joinedAt,
-          processId: room.processId ?? null,
-        });
-      }
-
-      // Fire-and-forget cleanup. Don't block the response on it — the
-      // user-visible answer is `active` either way.
-      if (stragglers.length > 0) {
-        const key = userRoomsKey(userId);
-        void Promise.all(stragglers.map((s) => presence.hdel(key, s))).catch(() => {});
-      }
+      // `listUserSessionsLive` already does the matchmaker reconcile +
+      // straggler sweep (and swallows Presence outages). It returns
+      // `processId` undefined when the room record didn't carry one;
+      // we normalize to `null` to match the existing JSON shape.
+      const sessions = await listUserSessionsLive(userId, {
+        reconcile: true,
+        removeStale: true,
+      });
 
       // Newest-first ordering matches how the user-show "Active
       // sessions" tab wants to render — recently joined sessions
       // at the top.
-      active.sort((a, b) => b.joinedAt - a.joinedAt);
+      const active: ActiveUserRoom[] = sessions
+        .map((s) => ({
+          roomId: s.roomId,
+          roomName: s.roomName,
+          sessionId: s.sessionId,
+          joinedAt: s.joinedAt,
+          processId: s.processId ?? null,
+        }))
+        .sort((a, b) => b.joinedAt - a.joinedAt);
       return json(active);
     },
   );

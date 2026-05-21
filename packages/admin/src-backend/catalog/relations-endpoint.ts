@@ -14,7 +14,8 @@
  * and which FK column to compare against. Relations whose target isn't
  * registered as a resource are filtered out — they'd 404 from the UI.
  */
-import { createEndpoint, matchMaker, userRoomsKey, type Endpoint } from '@colyseus/core';
+import { createEndpoint, type Endpoint } from '@colyseus/core';
+import { listUserSessionsLive } from '@colyseus/core/internal';
 import { resolveFkLayout } from '@colyseus/database';
 import { eq, sql } from 'drizzle-orm';
 import { castPk, sqlKeyedProjection } from '../internal/helpers.js';
@@ -74,13 +75,12 @@ export function countsEndpoint(ctx: EndpointContext): Endpoint {
       // tiny drift from crash-leftover entries (the tab's own fetch
       // does the full reconcile + hdel sweep when opened).
       if (resource === 'users') {
-        try {
-          const raw = await matchMaker.presence.hgetall(userRoomsKey(id));
-          counts[ACTIVE_SESSIONS_COUNT_KEY] = Object.keys(raw).length;
-        } catch {
-          // Presence outage shouldn't 500 the entire counts payload.
-          counts[ACTIVE_SESSIONS_COUNT_KEY] = 0;
-        }
+        // No reconcile: tiny drift from crash-leftover entries is fine
+        // for the badge — the tab's own fetch does the full reconcile
+        // + hdel sweep when opened. `listUserSessionsLive` swallows
+        // Presence outages internally and returns [].
+        const sessions = await listUserSessionsLive(id);
+        counts[ACTIVE_SESSIONS_COUNT_KEY] = sessions.length;
       }
 
       return json(counts);

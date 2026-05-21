@@ -322,6 +322,20 @@ export async function query<T extends Room = any>(
 }
 
 /**
+ * Batch-resolve room caches by roomId in a single backend round
+ * trip. Returns a Map keyed by roomId; missing roomIds are absent.
+ *
+ * Hot paths (per-join uniqueness checks, by-user reverse-index
+ * lookups) reach for this instead of `query({})` — the latter scans
+ * the whole room cache and grows linearly with cluster size, while
+ * `findRoomsByIds` is O(K) in the caller's input.
+ */
+export async function findRoomsByIds(roomIds: string[]): Promise<Map<string, IRoomCache>> {
+  if (roomIds.length === 0) { return new Map(); }
+  return await driver.findByIds(roomIds);
+}
+
+/**
  * Find for a public and unlocked room available.
  *
  * @param roomName - The Id of the specific room.

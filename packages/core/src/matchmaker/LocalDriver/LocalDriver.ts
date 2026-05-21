@@ -40,6 +40,16 @@ export class LocalDriver implements MatchMakerDriver {
     return query as unknown as Promise<IRoomCache>;
   }
 
+  public async findByIds(roomIds: string[]): Promise<Map<string, IRoomCache>> {
+    const result = new Map<string, IRoomCache>();
+    if (roomIds.length === 0) { return result; }
+    const wanted = new Set(roomIds);
+    for (const room of this.rooms) {
+      if (wanted.has(room.roomId)) { result.set(room.roomId, room); }
+    }
+    return result;
+  }
+
   public update(room: IRoomCache, operations: Partial<{ $set: Partial<IRoomCache>, $inc: Partial<IRoomCache> }>) {
     if (operations.$set) {
       for (const field in operations.$set) {

@@ -24,7 +24,7 @@
  * SQL that differs by dialect (JSON metadata access, integer casts, DROP)
  * is isolated behind the `flavor` seam below.
  */
-import { eq, and, asc, desc, sql, type SQL } from 'drizzle-orm';
+import { eq, and, asc, desc, inArray, sql, type SQL } from 'drizzle-orm';
 import {
   type IRoomCache,
   type MatchMakerDriver,
@@ -234,6 +234,17 @@ export class DatabaseDriver implements MatchMakerDriver {
         .limit(1))[0] as IRoomCache<matchMaker.ExtractRoomCacheMetadata<T>>;
     }
     return (await this.getRooms<T>(conditions, sortOptions, 1))[0];
+  }
+
+  public async findByIds(roomIds: string[]): Promise<Map<string, IRoomCache>> {
+    const result = new Map<string, IRoomCache>();
+    if (roomIds.length === 0) { return result; }
+    const rows = await this.db
+      .select()
+      .from(this.schema)
+      .where(inArray(this.schema.roomId, roomIds));
+    for (const row of rows as any[]) { result.set(row.roomId, row as IRoomCache); }
+    return result;
   }
 
   private getRooms<T extends Room = any>(
