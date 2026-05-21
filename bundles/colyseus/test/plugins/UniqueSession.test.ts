@@ -257,6 +257,37 @@ describe('UniqueSessionPlugin (e2e)', () => {
           await first.leave();
           await second.leave();
         });
+
+        it('conflictsWith receives currentRoom — only counts self-room duplicates', async () => {
+          // Predicate counts an existing session as a conflict ONLY
+          // when it's in the same room instance as the joining
+          // client. For self-room entries `existing.room` is
+          // undefined; for cross-room it carries IRoomCache. This
+          // exercises both branches.
+          matchMaker.defineRoomType('uniqueSelfOnly', uniqueRoom({
+            max: 1,
+            conflictsWith: (existing, currentRoom) => {
+              // `existing.room === undefined` ⇔ same room instance
+              // as `currentRoom`. Returning true here = count it.
+              return existing.room === undefined
+                || existing.room.roomId === currentRoom.roomId;
+            },
+          }));
+
+          // First join creates room A.
+          const first = await client.joinOrCreate('uniqueSelfOnly', { userId: 'alice' });
+          await timeout(50);
+
+          // Second join from the same user goes to room A (joinOrCreate
+          // reuses unlocked rooms). That's a self-room conflict and
+          // should be rejected.
+          await assert.rejects(
+            async () => await client.joinOrCreate('uniqueSelfOnly', { userId: 'alice' }),
+            (err: any) => /already_in_room/.test(err?.message ?? ''),
+          );
+
+          await first.leave();
+        });
       });
     }
   }

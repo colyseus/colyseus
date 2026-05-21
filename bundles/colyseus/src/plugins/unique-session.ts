@@ -47,10 +47,32 @@
  */
 import {
   RoomPlugin, ServerError, matchMaker,
-  type Client, type PluginDependencies,
+  type Client, type Room, type IRoomCache, type PluginDependencies,
 } from '@colyseus/core';
 import { userRoomsKey, type UserRoomEntry, type UserSessionInfo } from '@colyseus/core/internal';
 import { TrackUserSessionsPlugin } from './track-user-sessions.ts';
+
+/**
+ * Per-existing-session context passed to the `conflictsWith`
+ * predicate. The full matchmaker `IRoomCache` (including `metadata`)
+ * is attached for cross-room entries — populated from the same
+ * batch lookup the plugin already runs, so no extra wire ops.
+ *
+ * For entries that point at the CURRENT room (same `Room` instance
+ * the plugin is attached to), `room` is `undefined` — read from
+ * the second arg (`currentRoom`) instead, which is the live `Room`.
+ */
+export interface UniqueSessionConflict {
+  /** The existing session's id. */
+  sessionId: string;
+  /** Unix ms timestamp recorded when the existing session joined. */
+  joinedAt: number;
+  /** Matchmaker's cached `IRoomCache` for the existing session's
+   *  room — `metadata`, `clients`, `locked`, etc. Undefined when the
+   *  existing session is in the same room instance as the joining
+   *  client; use `currentRoom` for that case. */
+  room?: IRoomCache;
+}
 
 export interface UniqueSessionOptions {
   /**
@@ -84,20 +106,31 @@ export interface UniqueSessionOptions {
   rejectMessage?: string;
 
   /**
-   * Predicate to scope the check more narrowly than "same roomName".
-   * Receives each existing entry the user has in Presence; return
-   * `true` when the entry should count against the limit.
+   * Per-existing-session filter applied after the plugin's own
+   * same-`roomName` matching + stale-entry reconcile, but before
+   * counting against `max`. Return `true` to count the existing
+   * session as a conflict, `false` to skip it.
    *
-   * Default: every entry whose `roomName` matches the current room
-   * is counted. Use this to scope by metadata, e.g.
-   * `(entry) => roomNameMatches && metadata.gameMode === current.gameMode`.
+   * Receives:
+   *  - `existing` — `{ sessionId, joinedAt, room? }`. The `room`
+   *    field is the matchmaker's cached `IRoomCache` for the
+   *    existing session's room (carrying `metadata`, `clients`,
+   *    `locked`, etc.), populated for cross-room entries from the
+   *    same batch lookup the plugin already runs. It is `undefined`
+   *    when the existing session is in the SAME `Room` instance as
+   *    the joining client — for those, read state from `currentRoom`.
+   *  - `currentRoom` — the live `Room` instance the join is targeting
+   *    (i.e. `this.room` inside the plugin).
    *
-   * Note: the predicate only sees `sessionId / roomId / roomName /
-   * joinedAt` (what the reverse index stores). If you need richer
-   * matching, fetch the room's metadata yourself via
-   * `matchMaker.query`.
+   * Use this for metadata-based scoping (e.g. "only count
+   * same-game-mode sessions"), per-process exemptions (multi-region
+   * deploys), capacity-aware filtering ("don't count rooms that are
+   * already full"), etc.
    */
-  conflictsWith?: (info: UserSessionInfo) => boolean;
+  conflictsWith?: (
+    existing: UniqueSessionConflict,
+    currentRoom: Room,
+  ) => boolean;
 
   /**
    * Extract the user's stable id from `Client`. Return a non-empty
@@ -148,7 +181,10 @@ export class UniqueSessionPlugin extends RoomPlugin {
   private mode: 'reject' | 'replace';
   private rejectCode: number;
   private rejectMessage: string;
-  private conflictsWith?: (info: UserSessionInfo) => boolean;
+  private conflictsWith?: (
+    existing: UniqueSessionConflict,
+    currentRoom: Room,
+  ) => boolean;
   private resolveUserId: (client: Client) => string | undefined;
 
   constructor(opts: UniqueSessionOptions = {}) {
@@ -282,8 +318,15 @@ export class UniqueSessionPlugin extends RoomPlugin {
       conflicts.push(info);
     }
 
+    // `live.get(c.roomId)` is undefined for self-room conflicts (we
+    // never put them in `live`) and the cross-room `IRoomCache` for
+    // the rest — exactly the predicate's contract.
     const filtered = this.conflictsWith
-      ? conflicts.filter((c) => this.conflictsWith!(c))
+      ? conflicts.filter((c) => this.conflictsWith!({
+          sessionId: c.sessionId,
+          joinedAt: c.joinedAt,
+          room: live.get(c.roomId),
+        }, this.room))
       : conflicts;
     return { conflicts: filtered, staleSessions };
   }
