@@ -2,17 +2,18 @@ import { useEffect, useState } from "react";
 import { type RoomAvailable } from "@colyseus/sdk";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import type { IconProp } from "@fortawesome/fontawesome-svg-core";
-import { faGlobe, faChartLine, faDoorOpen, faChevronLeft, faChevronRight, faBolt } from "@fortawesome/free-solid-svg-icons";
+import { faGlobe, faChartLine, faDoorOpen, faChevronLeft, faChevronRight, faBolt, faStopwatch } from "@fortawesome/free-solid-svg-icons";
 
 import { endpoint, Connection, global } from "../utils/Types";
 import { RealtimeRooms, ServerState } from "./RealtimeRooms";
 import { APIEndpoints } from "./APIEndpoints";
 import { RealtimeStats } from "./RealtimeStats";
 import { PresenceInspector } from "./PresenceInspector";
+import { CPUProfiler, RecordingBadge } from "./CPUProfiler";
 
 import { type AuthConfig } from "../../src-backend";
 
- type TabType = "rooms" | "api" | "presence" | "stats";
+ type TabType = "rooms" | "api" | "presence" | "stats" | "profiling";
 
 interface PlaygroundProps {
 	isMobileMenuOpen: boolean;
@@ -22,6 +23,11 @@ interface PlaygroundProps {
 export function Playground({ isMobileMenuOpen, setIsMobileMenuOpen }: PlaygroundProps) {
 	const [activeTab, setActiveTab] = useState<TabType>("rooms");
 	const [serverState, setServerState] = useState(ServerState.CONNECTING);
+
+	// CPU profiling recording state — lifted here so the sidebar tab can show a
+	// live "recording" badge while the user works in other tabs.
+	const [isProfiling, setIsProfiling] = useState(false);
+	const [profilingStartedAt, setProfilingStartedAt] = useState(0);
 
 	// Desktop sidebar collapse state with localStorage persistence
 	const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(() => {
@@ -97,6 +103,13 @@ export function Playground({ isMobileMenuOpen, setIsMobileMenuOpen }: Playground
  			],
  		},
 
+ 		{
+ 			label: "Debug",
+ 			items: [
+ 				{ id: "profiling", label: "Profiling", icon: faStopwatch },
+ 			],
+ 		},
+
     // // TODO: add backend tabs back in when presence/stats are working
  		// {
  		// 	label: "Backend",
@@ -152,7 +165,7 @@ export function Playground({ isMobileMenuOpen, setIsMobileMenuOpen }: Playground
 											key={tab.id}
 											onClick={() => handleTabChange(tab.id)}
 											title={isDesktopSidebarCollapsed ? tab.label : undefined}
-											className={`w-full flex items-center ${isDesktopSidebarCollapsed ? 'justify-center px-2' : 'px-4'} py-3 text-sm font-medium rounded-lg transition-all ${
+											className={`relative w-full flex items-center ${isDesktopSidebarCollapsed ? 'justify-center px-2' : 'px-4'} py-3 text-sm font-medium rounded-lg transition-all ${
 												activeTab === tab.id
 													? "bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300"
 													: "text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800"
@@ -160,6 +173,11 @@ export function Playground({ isMobileMenuOpen, setIsMobileMenuOpen }: Playground
 										>
 											<FontAwesomeIcon icon={tab.icon} className={isDesktopSidebarCollapsed ? '' : 'mr-3'} size="lg" />
 											{!isDesktopSidebarCollapsed && <span>{tab.label}</span>}
+											{tab.id === "profiling" && isProfiling && (
+												<span className={isDesktopSidebarCollapsed ? 'absolute top-1 right-1' : 'ml-auto'}>
+													<RecordingBadge startedAt={profilingStartedAt} compact={isDesktopSidebarCollapsed} />
+												</span>
+											)}
 										</button>
 									))}
 								</div>
@@ -195,6 +213,14 @@ export function Playground({ isMobileMenuOpen, setIsMobileMenuOpen }: Playground
 					/>
 				)}
 				{activeTab === "api" && <APIEndpoints authConfig={authConfig} />}
+				{activeTab === "profiling" && (
+					<CPUProfiler
+						isRecording={isProfiling}
+						setIsRecording={setIsProfiling}
+						startedAt={profilingStartedAt}
+						setStartedAt={setProfilingStartedAt}
+					/>
+				)}
 				{activeTab === "presence" && <PresenceInspector />}
 				{activeTab === "stats" && <RealtimeStats />}
 			</div>

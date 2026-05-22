@@ -32,9 +32,13 @@
   "peerDependencies": {
     "@colyseus/auth": "workspace:^",
     "@colyseus/core": "workspace:^",
+    "cpupro": "^0.7.0",
     "zod": "^4.1.12"
   },
   "peerDependenciesMeta": {
+    "cpupro": {
+      "optional": true
+    },
     "zod": {
       "optional": true
     }
@@ -65,6 +69,7 @@
     "@types/react-syntax-highlighter": "^15.5.13",
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.16",
+    "cpupro": "^0.7.0",
     "esbuild": "^0.17.19",
     "fast-glob": "^3.2.12",
     "jsoneditor": "^9.10.2",
