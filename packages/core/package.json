@@ -48,8 +48,8 @@
   "dependencies": {
     "@colyseus/better-call": "workspace:^",
     "@colyseus/greeting-banner": "workspace:^",
-    "@colyseus/msgpackr": "^1.11.2",
     "@colyseus/shared-types": "workspace:^",
+    "msgpackr": "^2.0.1",
     "@colyseus/timer": "^2.0.0",
     "@standard-schema/spec": "^1.0.0",
     "debug": "^4.3.4",

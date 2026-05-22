@@ -1,4 +1,4 @@
-import { Packr } from '@colyseus/msgpackr';
+import { Packr, RESERVE_START_SPACE } from 'msgpackr';
 import { encode, type Iterator } from '@colyseus/schema';
 import { Protocol } from '@colyseus/shared-types';
 
@@ -11,20 +11,25 @@ export const IpcProtocol = {
 export type IpcProtocol = typeof IpcProtocol[keyof typeof IpcProtocol];
 
 const packr = new Packr({
-  useRecords: false, // increased compatibility with decoders other than "msgpackr"
+  useRecords: false, // interop with non-msgpackr decoders
 });
 
-// msgpackr workaround: initialize buffer
-packr.encode(undefined);
+// Buffer for assembling outgoing frames; keeps us off msgpackr's internal
+// buffer so `core` can use the upstream package directly.
+let frameBuffer = Buffer.allocUnsafe(8192);
 
-// Cached at module load so the per-send hot path avoids the `process.env`
-// getter. The dev-only `packr.useBuffer` workaround below is gated by this.
-const __isDev = process.env.NODE_ENV !== "production";
+// Grow to `capacity`, preserving written bytes (`rawMessage` writes the header
+// before the payload size is known).
+function ensureFrameCapacity(capacity: number) {
+  if (capacity > frameBuffer.byteLength) {
+    const next = Buffer.allocUnsafe(capacity);
+    frameBuffer.copy(next);
+    frameBuffer = next;
+  }
+}
 
-// Reused across `getMessageBytes` calls to avoid a per-call object allocation
-// on the hot send path. `encode.string`/`encode.number` are leaf functions that
-// mutate `.offset` in place and never call back into this module, so sharing is
-// safe (Node's JS layer is single-threaded).
+// Shared across calls to avoid a per-call allocation on the hot send path.
+// Safe: encode.* mutate `.offset` in place and never re-enter this module.
 const it: Iterator = { offset: 0 };
 
 export const getMessageBytes = {
@@ -50,18 +55,11 @@ export const getMessageBytes = {
     handshake?: Uint8Array,
     extraSections?: Array<{ tag: number; bytes: Uint8Array }>,
   ) => {
-    it.offset = 1;
-    packr.buffer[0] = Protocol.JOIN_ROOM;
-
-    packr.buffer[it.offset++] = Buffer.byteLength(reconnectionToken, "utf8");
-    encode.utf8Write(packr.buffer, reconnectionToken, it);
-
-    packr.buffer[it.offset++] = Buffer.byteLength(serializerId, "utf8");
-    encode.utf8Write(packr.buffer, serializerId, it);
-
+    const reconnectionTokenLength = Buffer.byteLength(reconnectionToken, "utf8");
+    const serializerIdLength = Buffer.byteLength(serializerId, "utf8");
     let handshakeLength = handshake?.byteLength || 0;
 
-    // upper-bound for sections: 1 byte tag + 9 bytes max varint + payload bytes
+    // per section: 1 tag byte + 9 (max varint) + payload
     let extraLength = 0;
     if (extraSections !== undefined) {
       for (let i = 0; i < extraSections.length; i++) {
@@ -69,39 +67,48 @@ export const getMessageBytes = {
       }
     }
 
-    // check if buffer needs to be resized (+9 for the handshake-len varint)
-    const requiredCapacity = it.offset + 9 + handshakeLength + extraLength;
-    if (requiredCapacity > packr.buffer.byteLength) {
-      packr.useBuffer(Buffer.alloc(requiredCapacity, packr.buffer));
-    }
+    // capacity: header + 9 (handshake-len varint) + handshake + sections
+    ensureFrameCapacity(1 + 1 + reconnectionTokenLength + 1 + serializerIdLength + 9 + handshakeLength + extraLength);
 
-    encode.number(packr.buffer, handshakeLength, it);
+    it.offset = 1;
+    frameBuffer[0] = Protocol.JOIN_ROOM;
+
+    frameBuffer[it.offset++] = reconnectionTokenLength;
+    encode.utf8Write(frameBuffer, reconnectionToken, it);
+
+    frameBuffer[it.offset++] = serializerIdLength;
+    encode.utf8Write(frameBuffer, serializerId, it);
+
+    encode.number(frameBuffer, handshakeLength, it);
     if (handshakeLength > 0) {
-      packr.buffer.set(handshake, it.offset);
+      frameBuffer.set(handshake, it.offset);
       it.offset += handshakeLength;
     }
 
     if (extraSections !== undefined) {
       for (let i = 0; i < extraSections.length; i++) {
         const section = extraSections[i];
-        packr.buffer[it.offset++] = section.tag;
-        encode.number(packr.buffer, section.bytes.byteLength, it);
-        packr.buffer.set(section.bytes, it.offset);
+        frameBuffer[it.offset++] = section.tag;
+        encode.number(frameBuffer, section.bytes.byteLength, it);
+        frameBuffer.set(section.bytes, it.offset);
         it.offset += section.bytes.byteLength;
       }
     }
 
-    return Buffer.from(packr.buffer.subarray(0, it.offset));
+    return Buffer.from(frameBuffer.subarray(0, it.offset));
   },
 
   [Protocol.ERROR]: (code: number, message: string = '') => {
+    // capacity: 1 + code varint + length-prefixed message
+    ensureFrameCapacity(1 + 9 + 9 + Buffer.byteLength(message, "utf8"));
+
     it.offset = 1;
-    packr.buffer[0] = Protocol.ERROR;
+    frameBuffer[0] = Protocol.ERROR;
 
-    encode.number(packr.buffer, code, it);
-    encode.string(packr.buffer, message, it);
+    encode.number(frameBuffer, code, it);
+    encode.string(frameBuffer, message, it);
 
-    return Buffer.from(packr.buffer.subarray(0, it.offset));
+    return Buffer.from(frameBuffer.subarray(0, it.offset));
   },
 
   [Protocol.ROOM_STATE]: (bytes: number[]) => {
@@ -121,83 +128,55 @@ export const getMessageBytes = {
    */
   [Protocol.ROOM_RESPONSE]: (requestId: number, status: number, message?: any): Buffer => {
     it.offset = 1;
-    packr.buffer[0] = Protocol.ROOM_RESPONSE;
+    frameBuffer[0] = Protocol.ROOM_RESPONSE;
 
-    encode.number(packr.buffer, requestId, it);
-    packr.buffer[it.offset++] = status;
+    encode.number(frameBuffer, requestId, it);
+    frameBuffer[it.offset++] = status;
+    const headerLength = it.offset;
 
     if (message !== undefined) {
-      packr.position = 0;
-
-      // see note on the same workaround in `raw` below
-      if (__isDev) {
-        packr.useBuffer(packr.buffer);
-      }
-
-      const endOfBufferOffset = packr.pack(message, 2048 + it.offset).byteLength;
-      return Buffer.from(packr.buffer.subarray(0, endOfBufferOffset));
+      // reserve `headerLength` bytes up front in the pack output for the header
+      const packed = packr.pack(message, RESERVE_START_SPACE | headerLength);
+      packed.set(frameBuffer.subarray(0, headerLength), 0);
+      return Buffer.from(packed);
     }
 
-    return Buffer.from(packr.buffer.subarray(0, it.offset));
+    return Buffer.from(frameBuffer.subarray(0, headerLength));
   },
 
   [Protocol.PING]: () => {
-    packr.buffer[0] = Protocol.PING;
-    return Buffer.from(packr.buffer.subarray(0, 1));
+    frameBuffer[0] = Protocol.PING;
+    return Buffer.from(frameBuffer.subarray(0, 1));
   },
 
-  // Each call returns a fresh Buffer copy because `packr.buffer` is shared
-  // and reused on the next pack. Callers (transports / Room.broadcast) hand
-  // the result to async consumers — Node `socket.write` retains it for libuv
-  // writev across event-loop ticks, so a stable allocation is required for
-  // correctness. See benchmark/test-buffer-corruption.ts for a wire-level
-  // reproduction of the corruption that occurs without this copy under
-  // sustained back-pressure (e.g. burst of 1000 × 4KB sends).
+  // Returns a fresh copy: frameBuffer/packr are reused next call, but callers pass
+  // the result to async consumers (Node retains it for libuv writev across ticks).
+  // See benchmark/test-buffer-corruption.ts for the back-pressure repro.
   raw: (code: Protocol, type: string | number, message?: any, rawMessage?: Uint8Array | Buffer): Buffer => {
     it.offset = 1;
-    packr.buffer[0] = code;
+    frameBuffer[0] = code;
 
     if (typeof (type) === 'string') {
-      encode.string(packr.buffer, type, it);
+      encode.string(frameBuffer, type, it);
 
     } else {
-      encode.number(packr.buffer, type, it);
+      encode.number(frameBuffer, type, it);
     }
+    const headerLength = it.offset;
 
     if (message !== undefined) {
-      // force to encode from offset
-      packr.position = 0;
-
-      //
-      // TODO: remove this after issue is fixed https://github.com/kriszyp/msgpackr/issues/139
-      //
-      // - This check is only required when running integration tests.
-      //   (colyseus.js' usage of msgpackr/buffer is conflicting)
-      //
-      if (__isDev) {
-        packr.useBuffer(packr.buffer);
-      }
-
-      // pack message into the same packr.buffer
-      const endOfBufferOffset = packr.pack(message, 2048 + it.offset).byteLength;
-                                                 // 2048 = RESERVE_START_SPACE
-      return Buffer.from(packr.buffer.subarray(0, endOfBufferOffset));
+      // reserve `headerLength` bytes up front in the pack output for the header
+      const packed = packr.pack(message, RESERVE_START_SPACE | headerLength);
+      packed.set(frameBuffer.subarray(0, headerLength), 0);
+      return Buffer.from(packed);
 
     } else if (rawMessage !== undefined) {
-
-      // check if buffer needs to be resized
-      // TODO: can we avoid this?
-      if (rawMessage.length + it.offset > packr.buffer.byteLength) {
-        packr.useBuffer(Buffer.alloc(it.offset + rawMessage.length, packr.buffer));
-      }
-
-      // copy raw message into packr.buffer
-      packr.buffer.set(rawMessage, it.offset);
-
-      return Buffer.from(packr.buffer.subarray(0, it.offset + rawMessage.byteLength));
+      ensureFrameCapacity(headerLength + rawMessage.byteLength);
+      frameBuffer.set(rawMessage, headerLength);
+      return Buffer.from(frameBuffer.subarray(0, headerLength + rawMessage.byteLength));
 
     } else {
-      return Buffer.from(packr.buffer.subarray(0, it.offset));
+      return Buffer.from(frameBuffer.subarray(0, headerLength));
     }
   },
 

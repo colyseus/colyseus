@@ -5,7 +5,7 @@ import { InputEncoder } from '@colyseus/schema/input';
 import { ClientInputHandleImpl, type ClientInputHandle, type ClientInputOptions } from './input/InputHandle.ts';
 export { type ClientInputHandle, type ClientInputOptions } from './input/InputHandle.ts';
 
-import { Packr, unpack } from '@colyseus/msgpackr';
+import { Packr, unpack, RESERVE_START_SPACE } from 'msgpackr';
 
 import { Connection } from './Connection.ts';
 import { getSerializer, Serializer } from './serializer/Serializer.ts';
@@ -139,6 +139,7 @@ export class Room<
     protected onMessageHandlers = createNanoEvents();
 
     protected packr: Packr;
+    protected sharedBuffer: Uint8Array;
 
     #lastPingTime: number = 0;
     #pingCallback?: (ms: number) => void = undefined;
@@ -179,9 +180,7 @@ export class Room<
         this.name = name;
 
         this.packr = new Packr();
-
-        // msgpackr workaround: force buffer to be created.
-        this.packr.encode(undefined);
+        this.sharedBuffer = new Uint8Array(8192);
 
         if (rootSchema) {
             const serializer: SchemaSerializer = new (getSerializer("schema"));
@@ -252,8 +251,8 @@ export class Room<
 
             if (this.connection) {
                 if (consented) {
-                    this.packr.buffer[0] = Protocol.LEAVE_ROOM;
-                    this.connection.send(this.packr.buffer.subarray(0, 1));
+                    this.sharedBuffer[0] = Protocol.LEAVE_ROOM;
+                    this.connection.send(this.sharedBuffer.subarray(0, 1));
 
                 } else {
                     this.connection.close();
@@ -287,8 +286,8 @@ export class Room<
 
         this.#lastPingTime = now();
         this.#pingCallback = callback;
-        this.packr.buffer[0] = Protocol.PING;
-        this.connection.send(this.packr.buffer.subarray(0, 1));
+        this.sharedBuffer[0] = Protocol.PING;
+        this.connection.send(this.sharedBuffer.subarray(0, 1));
     }
 
     public send<MessageType extends keyof ExtractRoomMessages<NormalizeRoomType<T>>>(
@@ -325,21 +324,25 @@ export class Room<
         }
 
         const it: Iterator = { offset: 1 };
-        this.packr.buffer[0] = Protocol.ROOM_DATA;
+        this.sharedBuffer[0] = Protocol.ROOM_DATA;
 
         if (typeof(messageType) === "string") {
-            encode.string(this.packr.buffer as Buffer, messageType, it);
+            encode.string(this.sharedBuffer, messageType, it);
 
         } else {
-            encode.number(this.packr.buffer as Buffer, messageType, it);
+            encode.number(this.sharedBuffer, messageType, it);
         }
+        const headerLength = it.offset;
 
-        // force packr to use beginning of the buffer
-        this.packr.position = 0;
-
-        const data = (payload !== undefined)
-            ? this.packr.pack(payload, 2048 + it.offset) // 2048 = RESERVE_START_SPACE
-            : this.packr.buffer.subarray(0, it.offset);
+        let data: Uint8Array;
+        if (payload !== undefined) {
+            // Reserve `headerLength` writable bytes at the front of msgpackr's
+            // output and prepend the protocol header into them.
+            data = this.packr.pack(payload, RESERVE_START_SPACE | headerLength);
+            data.set(this.sharedBuffer.subarray(0, headerLength), 0);
+        } else {
+            data = this.sharedBuffer.subarray(0, headerLength);
+        }
 
         // If connection is not open, buffer the message
         if (!this.connection.isOpen) {
@@ -387,19 +390,23 @@ export class Room<
             this.#nextRequestId = (this.#nextRequestId + 1) >>> 0; // keep within uint32
 
             const it: Iterator = { offset: 1 };
-            this.packr.buffer[0] = Protocol.ROOM_REQUEST;
-            encode.number(this.packr.buffer as Buffer, requestId, it);
+            this.sharedBuffer[0] = Protocol.ROOM_REQUEST;
+            encode.number(this.sharedBuffer, requestId, it);
 
             if (typeof(messageType) === "string") {
-                encode.string(this.packr.buffer as Buffer, messageType, it);
+                encode.string(this.sharedBuffer, messageType, it);
             } else {
-                encode.number(this.packr.buffer as Buffer, messageType, it);
+                encode.number(this.sharedBuffer, messageType, it);
             }
+            const headerLength = it.offset;
 
-            this.packr.position = 0;
-            const data = (payload !== undefined)
-                ? this.packr.pack(payload, 2048 + it.offset) // 2048 = RESERVE_START_SPACE
-                : this.packr.buffer.subarray(0, it.offset);
+            let data: Uint8Array;
+            if (payload !== undefined) {
+                data = this.packr.pack(payload, RESERVE_START_SPACE | headerLength);
+                data.set(this.sharedBuffer.subarray(0, headerLength), 0);
+            } else {
+                data = this.sharedBuffer.subarray(0, headerLength);
+            }
 
             const timer = setTimeout(() => {
                 this.#pendingRequests.delete(requestId);
@@ -426,51 +433,53 @@ export class Room<
         if (!this.connection.isOpen) { return; }
 
         const it: Iterator = { offset: 1 };
-        this.packr.buffer[0] = Protocol.ROOM_DATA;
+        this.sharedBuffer[0] = Protocol.ROOM_DATA;
 
         if (typeof(type) === "string") {
-            encode.string(this.packr.buffer as Buffer, type, it);
+            encode.string(this.sharedBuffer, type, it);
 
         } else {
-            encode.number(this.packr.buffer as Buffer, type, it);
+            encode.number(this.sharedBuffer, type, it);
         }
+        const headerLength = it.offset;
 
-        // force packr to use beginning of the buffer
-        this.packr.position = 0;
-
-        const data = (message !== undefined)
-            ? this.packr.pack(message, 2048 + it.offset) // 2048 = RESERVE_START_SPACE
-            : this.packr.buffer.subarray(0, it.offset);
+        let data: Uint8Array;
+        if (message !== undefined) {
+            data = this.packr.pack(message, RESERVE_START_SPACE | headerLength);
+            data.set(this.sharedBuffer.subarray(0, headerLength), 0);
+        } else {
+            data = this.sharedBuffer.subarray(0, headerLength);
+        }
 
         this.connection.sendUnreliable(data);
     }
 
     public sendBytes(type: string | number, bytes: Uint8Array) {
         const it: Iterator = { offset: 1 };
-        this.packr.buffer[0] = Protocol.ROOM_DATA_BYTES;
+        this.sharedBuffer[0] = Protocol.ROOM_DATA_BYTES;
 
         if (typeof(type) === "string") {
-            encode.string(this.packr.buffer as Buffer, type, it);
+            encode.string(this.sharedBuffer, type, it);
 
         } else {
-            encode.number(this.packr.buffer as Buffer, type, it);
+            encode.number(this.sharedBuffer, type, it);
+        }
+        const headerLength = it.offset;
+
+        // grow the scratch buffer if needed, preserving the header bytes
+        if (headerLength + bytes.byteLength > this.sharedBuffer.byteLength) {
+            const newBuffer = new Uint8Array(headerLength + bytes.byteLength);
+            newBuffer.set(this.sharedBuffer.subarray(0, headerLength));
+            this.sharedBuffer = newBuffer;
         }
 
-        // check if buffer needs to be resized
-        // TODO: can we avoid this?
-        if (bytes.byteLength + it.offset > this.packr.buffer.byteLength) {
-            const newBuffer = new Uint8Array(it.offset + bytes.byteLength);
-            newBuffer.set(this.packr.buffer);
-            this.packr.useBuffer(newBuffer);
-        }
-
-        this.packr.buffer.set(bytes, it.offset);
+        this.sharedBuffer.set(bytes, headerLength);
 
         // If connection is not open, buffer the message
         if (!this.connection.isOpen) {
-            enqueueMessage(this, this.packr.buffer.subarray(0, it.offset + bytes.byteLength));
+            enqueueMessage(this, this.sharedBuffer.subarray(0, headerLength + bytes.byteLength));
         } else {
-            this.connection.send(this.packr.buffer.subarray(0, it.offset + bytes.byteLength));
+            this.connection.send(this.sharedBuffer.subarray(0, headerLength + bytes.byteLength));
         }
 
     }
@@ -603,8 +612,8 @@ export class Room<
             this.reconnectionToken = `${this.roomId}:${reconnectionToken}`;
 
             // acknowledge successfull JOIN_ROOM
-            this.packr.buffer[0] = Protocol.JOIN_ROOM;
-            this.connection.send(this.packr.buffer.subarray(0, 1));
+            this.sharedBuffer[0] = Protocol.JOIN_ROOM;
+            this.connection.send(this.sharedBuffer.subarray(0, 1));
 
             // Send any enqueued messages that were buffered while disconnected
             if (this.reconnection.enqueuedMessages.length > 0) {

@@ -17,9 +17,6 @@ importers:
       '@types/express':
         specifier: ^5.0.0
         version: 5.0.6
-      '@types/fossil-delta':
-        specifier: ^1.0.0
-        version: 1.0.3
       '@types/ioredis':
         specifier: ^4.27.3
         version: 4.28.10
@@ -123,9 +120,6 @@ importers:
       '@colyseus/drizzle-driver':
         specifier: workspace:^
         version: link:../../packages/drivers/drizzle-driver
-      '@colyseus/msgpackr':
-        specifier: '*'
-        version: 1.11.2
       '@colyseus/schema':
         specifier: ^5.0.3
         version: 5.0.3(typescript@6.0.3)
@@ -141,6 +135,9 @@ importers:
       ioredis:
         specifier: ^5.9.3
         version: 5.10.1
+      msgpackr:
+        specifier: ^2.0.1
+        version: 2.0.1
       ws:
         specifier: ^8.18.0
         version: 8.20.0
@@ -405,9 +402,6 @@ importers:
       '@colyseus/greeting-banner':
         specifier: workspace:^
         version: link:../greeting-banner
-      '@colyseus/msgpackr':
-        specifier: ^1.11.2
-        version: 1.11.2
       '@colyseus/shared-types':
         specifier: workspace:^
         version: link:../shared-types
@@ -426,6 +420,9 @@ importers:
       debug:
         specifier: ^4.3.4
         version: 4.4.3(supports-color@8.1.1)
+      msgpackr:
+        specifier: ^2.0.1
+        version: 2.0.1
       nanoid:
         specifier: ^3.3.11
         version: 3.3.11
@@ -831,15 +828,15 @@ importers:
       '@colyseus/better-call':
         specifier: workspace:^
         version: link:../better-call/packages/better-call
-      '@colyseus/msgpackr':
-        specifier: ^1.11.2
-        version: 1.11.2
       '@colyseus/schema':
         specifier: ^5.0.3
         version: 5.0.3(typescript@6.0.3)
       '@colyseus/shared-types':
         specifier: workspace:^
         version: link:../shared-types
+      msgpackr:
+        specifier: ^2.0.1
+        version: 2.0.1
       tslib:
         specifier: ^2.1.0
         version: 2.8.1
@@ -919,21 +916,6 @@ importers:
       vitest:
         specifier: ^2.1.1
         version: 2.1.9(@types/node@22.19.17)(lightningcss@1.32.0)
-
-  packages/serializer/fossil-delta-serializer:
-    dependencies:
-      '@colyseus/core':
-        specifier: workspace:^
-        version: link:../../core
-      fast-json-patch:
-        specifier: ^2.0.5
-        version: 2.2.1
-      fossil-delta:
-        specifier: ^1.0.1
-        version: 1.0.2
-      msgpackr:
-        specifier: ^1.9.1
-        version: 1.11.10
 
   packages/serializer/legacy-schema-serializer:
     dependencies:
@@ -1504,9 +1486,6 @@ packages:
 
   '@colyseus/clock@2.0.3':
     resolution: {integrity: sha512-kziqG0dcGsvSfcerHLZTY1V2PmGnZAdG5DM0T5BKQDAiYBXYoMqfzA1Wxfe3KSnyeZuP99isffkUQLEwpFYF7A==}
-
-  '@colyseus/msgpackr@1.11.2':
-    resolution: {integrity: sha512-MuwPFhizFKC3zmGfy0fpo+kcnZdNdnQHFVjw81v4WXHCelDeCX8yNRVtuEm8kGlHqq7qiASLC0pu0RPqYOhxXg==}
 
   '@colyseus/schema@5.0.3':
     resolution: {integrity: sha512-yqT2R9A7ItVHG38Dh5fIFW5WxP79RGCBjeMLjvr+C8OzeR7LzD2CGKxHTJK7xk7bSltQGrv6pecWc+dxUP2kQA==}
@@ -4173,9 +4152,6 @@ packages:
   '@types/express@5.0.6':
     resolution: {integrity: sha512-sKYVuV7Sv9fbPIt/442koC7+IIwK5olP1KWeD88e/idgoJqDm3JV/YUiPwkoKK92ylff2MGxSz1CSjsXelx0YA==}
 
-  '@types/fossil-delta@1.0.3':
-    resolution: {integrity: sha512-9l754bq6EivxeYNJ1Q0UFLzwCEJk+PXfMWox+ZHcqLZ5Y4ShNPTVlebqEJ6LekCTD4yKIdMD8zuzf0Mev2eOYg==}
-
   '@types/graceful-fs@4.1.9':
     resolution: {integrity: sha512-olP3sd1qOEe5dXTSaFvQG+02VdRXcdytWLAZsAq1PecU8uqQAhkrnbli7DagjtXKW/Bl7YJbUsa8MPcuc8LHEQ==}
 
@@ -5952,9 +5928,6 @@ packages:
   extrareqp2@1.0.0:
     resolution: {integrity: sha512-Gum0g1QYb6wpPJCVypWP3bbIuaibcFiJcpuPM10YSXp/tzqi84x9PJageob+eN4xVRIOto4wjSGNLyMD54D2xA==}
 
-  fast-deep-equal@2.0.1:
-    resolution: {integrity: sha512-bCK/2Z4zLidyB4ReuIsvALH6w31YfAQDmXMqMx6FyfHqvBxtjC0eRumeSu4Bs3XtXwpyIywtSTrVT99BxY1f9w==}
-
   fast-deep-equal@3.1.3:
     resolution: {integrity: sha512-f3qQ9oQy9j2AhBe/H9VC91wLmKBCCU/gDOnKNAYG5hswO7BLKj09Hc5HYNz9cGI++xlpDCIgDaitVs03ATR84Q==}
 
@@ -5968,10 +5941,6 @@ packages:
   fast-glob@3.3.3:
     resolution: {integrity: sha512-7MptL8U0cqcFdzIzwOTHoilX9x5BrNqye7Z/LuC7kCMRio1EMSyqRK3BEAUD7sXRq4iT4AzTVuZdhgQ2TCvYLg==}
     engines: {node: '>=8.6.0'}
-
-  fast-json-patch@2.2.1:
-    resolution: {integrity: sha512-4j5uBaTnsYAV5ebkidvxiLUYOwjQ+JSFljeqfTxCrH9bDmlCQaOJFS84oDJ2rAXZq2yskmk3ORfoP9DCwqFNig==}
-    engines: {node: '>= 0.4.0'}
 
   fast-json-patch@3.1.1:
     resolution: {integrity: sha512-vf6IHUX2SBcA+5/+4883dsIjpBTqmfBjmYiWK1savxQmFk4JfBMLa7ynTYOs1Rolp/T1betJxHiGD3g1Mn8lUQ==}
@@ -6093,9 +6062,6 @@ packages:
   forwarded@0.2.0:
     resolution: {integrity: sha512-buRG0fpBtRHSTCOASe6hD258tEubFoRLb4ZNA6NxMVHNw2gOcwHo9wyablzMzOA5z9xA9L1KNjk/Nt6MT9aYow==}
     engines: {node: '>= 0.6'}
-
-  fossil-delta@1.0.2:
-    resolution: {integrity: sha512-fkgQUnBaJjhDq0DN1ajBlWWRH99NQgwVoReMEr0oXLqYXAx8X9mD5gGaoTYDdVVbLJYsMNrnkJ028Ld0UgWrGA==}
 
   fraction.js@5.3.4:
     resolution: {integrity: sha512-1X1NTtiJphryn/uLQz3whtY6jK3fTqoE3ohKs0tT+Ujr1W59oopxmoEh7Lu5p6vBaPbgoM0bzveAW4Qi5RyWDQ==}
@@ -7260,8 +7226,8 @@ packages:
     resolution: {integrity: sha512-P0efT1C9jIdVRefqjzOQ9Xml57zpOXnIuS+csaB4MdZbTdmGDLo8XhzBG1N7aO11gKDDkJvBLULeFTo46wwreA==}
     hasBin: true
 
-  msgpackr@1.11.10:
-    resolution: {integrity: sha512-iCZNq+HszvF+fC3anCm4nBmWEnbeIAfpDs6IStAEKhQ2YSgkjzVG2FF9XJqwwQh5bH3N9OUTUt4QwVN6MLMLtA==}
+  msgpackr@2.0.1:
+    resolution: {integrity: sha512-9J+tqTEsbHqY8YohazYgty7LgerFIWxvMLpUjqETSmjHojtJm2WnX2kK/2a1fLI7CO7ERP1YSEUXMucz4j+yBA==}
 
   mssql@11.0.1:
     resolution: {integrity: sha512-KlGNsugoT90enKlR8/G36H0kTxPthDhmtNUCwEHvgRza5Cjpjoj+P2X6eMpFUDN7pFrJZsKadL4x990G8RBE1w==}
@@ -9959,10 +9925,6 @@ snapshots:
 
   '@colyseus/clock@2.0.3': {}
 
-  '@colyseus/msgpackr@1.11.2':
-    optionalDependencies:
-      msgpackr-extract: 3.0.3
-
   '@colyseus/schema@5.0.3(typescript@6.0.3)':
     dependencies:
       typescript: 6.0.3
@@ -12188,10 +12150,6 @@ snapshots:
       '@types/express-serve-static-core': 5.1.1
       '@types/serve-static': 2.2.0
 
-  '@types/fossil-delta@1.0.3':
-    dependencies:
-      '@types/node': 22.19.17
-
   '@types/graceful-fs@4.1.9':
     dependencies:
       '@types/node': 22.19.17
@@ -14127,8 +14085,6 @@ snapshots:
     transitivePeerDependencies:
       - debug
 
-  fast-deep-equal@2.0.1: {}
-
   fast-deep-equal@3.1.3: {}
 
   fast-equals@6.0.0: {}
@@ -14142,10 +14098,6 @@ snapshots:
       glob-parent: 5.1.2
       merge2: 1.4.1
       micromatch: 4.0.8
-
-  fast-json-patch@2.2.1:
-    dependencies:
-      fast-deep-equal: 2.0.1
 
   fast-json-patch@3.1.1: {}
 
@@ -14261,8 +14213,6 @@ snapshots:
       once: 1.4.0
 
   forwarded@0.2.0: {}
-
-  fossil-delta@1.0.2: {}
 
   fraction.js@5.3.4: {}
 
@@ -15632,7 +15582,7 @@ snapshots:
       '@msgpackr-extract/msgpackr-extract-win32-x64': 3.0.3
     optional: true
 
-  msgpackr@1.11.10:
+  msgpackr@2.0.1:
     optionalDependencies:
       msgpackr-extract: 3.0.3
 

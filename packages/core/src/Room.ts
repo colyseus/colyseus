@@ -1,4 +1,4 @@
-import { unpack } from '@colyseus/msgpackr';
+import { unpack } from 'msgpackr';
 import { decode, Encoder, Reflection, type Iterator, $changes } from '@colyseus/schema';
 import { InputDecoder } from '@colyseus/schema/input';
 import { type InputAccessor, type InputAPI, type InputOptions, type NumericFieldsOf, InputAccessorImpl, InputBufferImpl, NO_OP_INPUT_ACCESSOR } from './input/InputBuffer.ts';
@@ -1348,12 +1348,12 @@ export class Room<T extends RoomOptions = RoomOptions> {
    * when the room has no serializer or the serializer can't produce a
    * payload (raw rooms, very-early-onCreate, etc.). The serializer
    * detection mirrors `@colyseus/monitor`'s — we read whichever buffer
-   * is available across schema v2, v3, and the legacy fossil-delta path.
+   * is available across schema v2 and v3.
    */
   #_inspectorStateSize(): number {
     const ser = this._serializer as any;
     if (!ser) { return 0; }
-    const hasState = ser.encoder || ser.state || ser.previousState;
+    const hasState = ser.encoder || ser.state;
     if (!hasState) { return 0; }
     try {
       const full = ser.getFullState?.();

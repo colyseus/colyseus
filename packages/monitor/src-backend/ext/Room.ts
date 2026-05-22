@@ -7,8 +7,7 @@ function getStateSize(room) {
     // TODO: `Serializer<T>` should provide a method for this (e.g. `serializer.hasState()`)
     const hasState = (
       room._serializer.encoder || // schema v3
-      room._serializer.state || // schema v2
-      room._serializer.previousState // legacy-fossil-delta
+      room._serializer.state // schema v2
     );
     const fullState = hasState && room._serializer.getFullState();
     return fullState && (fullState.byteLength || fullState.length) || 0;

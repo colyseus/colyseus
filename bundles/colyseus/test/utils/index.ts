@@ -1,7 +1,7 @@
 import WebSocket from "ws";
 import { EventEmitter } from "events";
 
-import { pack, unpack } from "@colyseus/msgpackr";
+import { pack, unpack } from "msgpackr";
 
 import {
   type Client,
