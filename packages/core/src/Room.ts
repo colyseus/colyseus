@@ -895,21 +895,8 @@ export class Room<T extends RoomOptions = RoomOptions> {
     this._serializer = serializer;
   }
 
-  public async setMetadata(meta: Partial<ExtractRoomMetadata<T>>, persist: boolean = true) {
-    if (!this._listing.metadata) {
-      this._listing.metadata = meta as ExtractRoomMetadata<T>;
-
-    } else {
-      for (const field in meta) {
-        if (!meta.hasOwnProperty(field)) { continue; }
-        this._listing.metadata[field] = meta[field];
-      }
-
-      // `MongooseDriver` workaround: persit metadata mutations
-      if ('markModified' in this._listing) {
-        (this._listing as any).markModified('metadata');
-      }
-    }
+  public async setMetadata(meta: ExtractRoomMetadata<T>, persist: boolean = true) {
+    this._listing.metadata = meta;
 
     if (persist && this._internalState === RoomInternalState.CREATED) {
       await matchMaker.driver.persist(this._listing);
@@ -959,7 +946,8 @@ export class Room<T extends RoomOptions = RoomOptions> {
    *
    * @example
    * ```typescript
-   * // Partial metadata update (merges with existing)
+   * // Merging with existing metadata: spread `this.metadata` yourself.
+   * // `metadata` is always REPLACED (not merged) by setMatchmaking()/setMetadata().
    * await this.setMatchmaking({
    *   metadata: { ...this.metadata, round: this.metadata.round + 1 }
    * });
