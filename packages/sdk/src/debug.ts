@@ -1434,7 +1434,7 @@ function openSendMessagesModal(uniquePanelId) {
                 sendButton.style.cursor = 'pointer';
             }, 800);
 
-        } catch (e) {
+        } catch (e: any) {
             errorContainer.textContent = 'Error: ' + e.message;
             errorContainer.style.display = 'block';
         }
@@ -1740,7 +1740,7 @@ function openStateInspectorModal(uniquePanelId) {
                         html += renderKeyValue(key, value, depth + 1, currentPath, keyStr, typeof key === 'string');
                     }
                 });
-            } catch (e) {
+            } catch (e: any) {
                 var errorIndent = (depth + 1) * 6;
                 html += '<div style="margin-left: ' + errorIndent + 'px; color: #e74856;">Error iterating: ' + escapeHtml(e.message) + '</div>';
             }
@@ -1843,7 +1843,7 @@ function openStateInspectorModal(uniquePanelId) {
             contentContainer.innerHTML = '<div style="font-family: \'Consolas\', \'Monaco\', \'Courier New\', monospace; font-size: 12px; line-height: 1.5; color: #d4d4d4; padding: 8px;">' + renderState(state) + '</div>';
 
             // Event delegation: single click listener handles all expand buttons
-        } catch (e) {
+        } catch (e: any) {
             contentContainer.innerHTML = '<div style="color: #e74856; padding: 20px;">Error accessing room state: ' + escapeHtml(e.message) + '</div>';
         }
     }
@@ -1853,7 +1853,7 @@ function openStateInspectorModal(uniquePanelId) {
     function throttle(func, wait) {
         var timeout;
         var previous = 0;
-        return function executedFunction() {
+        return function executedFunction(this: any) {
             var context = this;
             var args = arguments;
             var now = Date.now();
@@ -2804,7 +2804,7 @@ function applyMonkeyPatches() {
                     originalOnMessage.call(event.target, syntheticEvent);
                 }, preferences.latencySimulation.delay);
             } else {
-                return originalOnMessage.apply(this, arguments);
+                return originalOnMessage.apply(this, arguments as any);
             }
         };
 
@@ -2815,11 +2815,11 @@ function applyMonkeyPatches() {
         const originalOnClose = transport.events.onclose;
         transport.events.onclose = function(event) {
             if (preferences.latencySimulation.enabled && preferences.latencySimulation.delay > 0) {
-                setTimeout(function() {
+                setTimeout(function(this: any) {
                     if (originalOnClose) originalOnClose.call(this, event);
                 }, preferences.latencySimulation.delay + 1);
             } else {
-                if (originalOnClose) return originalOnClose.apply(this, arguments);
+                if (originalOnClose) return originalOnClose.apply(this, arguments as any);
             }
         };
 
@@ -2879,7 +2879,7 @@ function applyMonkeyPatches() {
     // Patch consumeSeatReservation to intercept all room connections
     var originalConsumeSeatReservation = Client.prototype.consumeSeatReservation;
     Client.prototype.consumeSeatReservation = function() {
-        var promise = originalConsumeSeatReservation.apply(this, arguments);
+        var promise = originalConsumeSeatReservation.apply(this, arguments as any);
         return promise.then((room) => patchRoom(room));
     };
 

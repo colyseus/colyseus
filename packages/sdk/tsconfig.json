@@ -7,8 +7,8 @@
 
         "target": "es6",
         "outDir": "build",
+        "rootDir": "src",
         "declaration": true,
-        "downlevelIteration": true, /*only for tests*/
         "allowSyntheticDefaultImports": true,
 
         "strictNullChecks": false,

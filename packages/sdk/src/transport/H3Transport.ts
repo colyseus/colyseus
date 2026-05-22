@@ -124,7 +124,7 @@ export class H3TransportTransport implements ITransport {
                     it.offset += length;
                 } while (it.offset < messages.length);
 
-            } catch (e) {
+            } catch (e: any) {
                 if (e.message.indexOf("session is closed") === -1) {
                     console.error("H3Transport: failed to read incoming data", e);
                 }
@@ -161,7 +161,7 @@ export class H3TransportTransport implements ITransport {
                     it.offset += length;
                 } while (it.offset < messages.length);
 
-            } catch (e) {
+            } catch (e: any) {
                 if (e.message.indexOf("session is closed") === -1) {
                     console.error("H3Transport: failed to read incoming data", e);
                 }

@@ -47,7 +47,7 @@ export function createSignal<CallbackSignature extends (...args: any[]) => void 
   };
 
   register.once = (cb: CallbackSignature) => {
-    const callback: any = function (...args: any[]) {
+    const callback: any = function (this: any, ...args: any[]) {
       cb.apply(this, args);
       emitter.remove(callback);
     }
