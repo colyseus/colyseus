@@ -82,7 +82,19 @@ export default [
     // standalone dist script that patches global Colyseus
     {
         input: 'src/debug.ts',
-        external: (id) => !(id === 'src/debug.ts' || id.endsWith('/src/debug.ts') || id.startsWith('\0')),
+        // Bundle the debug source tree (src/debug.ts + src/debug/**); everything
+        // else (the SDK, schema, …) is provided by the global `Colyseus`.
+        // Resolve relative specifiers against their importer so sibling imports
+        // like "./core.ts" (from src/debug/panel.ts) are recognised as local.
+        external: (id, importer) => {
+            if (id === 'src/debug.ts' || id.startsWith('\0')) { return false; }
+            const abs = (id.startsWith('.') && importer)
+                ? path.resolve(path.dirname(importer), id)
+                : id;
+            const debugEntry = path.resolve('src/debug.ts');
+            const debugDir = path.resolve('src/debug') + path.sep;
+            return !(abs === debugEntry || abs.startsWith(debugDir));
+        },
         treeshake: false,
         output: {
             file: 'dist/debug.js',
