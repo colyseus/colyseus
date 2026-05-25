@@ -29,7 +29,7 @@ export interface InputHandleHost {
  * installs). Runtime calls duck-type via the encoder, so a structural
  * match is enough.
  */
-export interface ClientInputOptions<I = any> extends InputEncoderOptions {
+export interface InputOptions<I = any> extends InputEncoderOptions {
   /**
    * Schema constructor for the input. Required when server-sent reflection
    * isn't available (which is the default today). Once handshake-time input
@@ -51,7 +51,7 @@ export interface ClientInputOptions<I = any> extends InputEncoderOptions {
  * input.send();
  * ```
  */
-export interface ClientInputHandle<I = any> {
+export interface InputHandle<I = any> {
   /** Mutable schema instance — mutate, then call {@link send}. */
   readonly data: I;
   /** Wire mode this handle was constructed with. */
@@ -73,16 +73,28 @@ export interface ClientInputHandle<I = any> {
 }
 
 /** @internal */
-export class ClientInputHandleImpl<I = any> implements ClientInputHandle<I> {
+export class InputHandleImpl<I = any> implements InputHandle<I> {
   public readonly data: I;
   private _host: InputHandleHost;
   private _encoder: InputEncoder<any>;
   private _scratch: Uint8Array = new Uint8Array(2048);
+  private _onReliableSend?: () => void;
 
-  constructor(host: InputHandleHost, data: I, encoder: InputEncoder<any>) {
+  /**
+   * @param onReliableSend Optional callback fired AFTER each successful
+   *   reliable send. The Room passes a closure into its {@link RoomClock}
+   *   so the clock can stamp send times for RTT estimation.
+   */
+  constructor(
+    host: InputHandleHost,
+    data: I,
+    encoder: InputEncoder<any>,
+    onReliableSend?: () => void,
+  ) {
     this._host = host;
     this.data = data;
     this._encoder = encoder;
+    this._onReliableSend = onReliableSend;
   }
 
   get mode(): InputMode { return this._encoder.mode; }
@@ -108,6 +120,9 @@ export class ClientInputHandleImpl<I = any> implements ClientInputHandle<I> {
     const framed = this._scratch.subarray(0, total);
     if (this._encoder.mode === "reliable") {
       conn.send(framed);
+      // Closure over the Room's clock — bumps `recordSend()` so the next
+      // TIMED state-message `lastInputSeq` echo can produce an RTT sample.
+      this._onReliableSend?.();
     } else {
       conn.sendUnreliable(framed);
     }

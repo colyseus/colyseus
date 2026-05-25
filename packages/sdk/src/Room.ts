@@ -1,9 +1,9 @@
-import { CloseCode, HandshakeSection, Protocol, ResponseStatus, type InferState, type InferInput, type NormalizeRoomType, type ExtractRoomMessages, type ExtractRoomClientMessages, type ExtractMessageType, type ExtractResponseType } from '@colyseus/shared-types';
+import { CloseCode, HandshakeSection, Protocol, PROTOCOL_CODE_MASK, PROTOCOL_MODIFIER_MASK, ProtocolModifier, ResponseStatus, type InferState, type InferInput, type NormalizeRoomType, type ExtractRoomMessages, type ExtractRoomClientMessages, type ExtractMessageType, type ExtractResponseType } from '@colyseus/shared-types';
 import { decode, Decoder, encode, Iterator, Reflection, Schema } from '@colyseus/schema';
 import { InputEncoder } from '@colyseus/schema/input';
 
-import { ClientInputHandleImpl, type ClientInputHandle, type ClientInputOptions } from './input/InputHandle.ts';
-export { type ClientInputHandle, type ClientInputOptions } from './input/InputHandle.ts';
+import { InputHandleImpl, type InputHandle, type InputOptions } from './input/InputHandle.ts';
+export { type InputHandle, type InputOptions } from './input/InputHandle.ts';
 
 import { Packr, unpack, RESERVE_START_SPACE } from 'msgpackr';
 
@@ -16,6 +16,8 @@ import { createNanoEvents } from './core/nanoevents.ts';
 import { createSignal } from './core/signal.ts';
 
 import { SchemaConstructor, SchemaSerializer } from './serializer/SchemaSerializer.ts';
+
+import { RoomClock, type RoomClockLike } from './RoomClock.ts';
 
 import { now } from './core/utils.ts';
 
@@ -136,6 +138,24 @@ export class Room<
 
     protected joinedAtTime: number = 0;
 
+    /**
+     * Server-time + RTT estimator, driven by the {@link ProtocolModifier.TIMED}
+     * prefix that servers emit when `defineInput()` was called.
+     *
+     * - `null` until the JOIN_ROOM handshake's `INPUT_REFLECTION` section
+     *   tells us the server has input declared. Rooms that never call
+     *   `defineInput()` stay clock-less for the whole session — zero
+     *   allocation cost for chat / lobby / turn-based rooms.
+     * - After handshake on an input room, a default {@link RoomClock} is
+     *   instantiated. Users can swap their own implementation in via
+     *   `room.clock = new MyClock()` between `await joinOrCreate(...)` and
+     *   the first state message (any state-message arrival is on a future
+     *   microtask, so a synchronous swap is race-free).
+     * - Access timing through `room.clock?.serverNow()` etc. on the
+     *   nullable field directly.
+     */
+    public clock: RoomClockLike | null = null;
+
     protected onMessageHandlers = createNanoEvents();
 
     protected packr: Packr;
@@ -161,7 +181,7 @@ export class Room<
         timer: ReturnType<typeof setTimeout>;
     }>();
 
-    #inputHandle?: ClientInputHandle<any>;
+    #inputHandle?: InputHandle<any>;
     /**
      * Schema constructor recovered via Reflection from the server's
      * handshake (the `INPUT_REFLECTION` tagged section). Populated on JOIN
@@ -515,9 +535,9 @@ export class Room<
      */
     public input<
         I = ([InferInput<T>] extends [never] ? any : InferInput<T>),
-    >(options?: ClientInputOptions<I>): ClientInputHandle<I> {
+    >(options?: InputOptions<I>): InputHandle<I> {
         if (this.#inputHandle) {
-            return this.#inputHandle as ClientInputHandle<I>;
+            return this.#inputHandle as InputHandle<I>;
         }
 
         const Ctor = (options?.type ?? this.#inputCtorFromReflection) as (new () => I) | undefined;
@@ -530,8 +550,21 @@ export class Room<
 
         const instance = new Ctor();
         const encoder = new InputEncoder(instance as any, options);
-        this.#inputHandle = new ClientInputHandleImpl(this, instance, encoder);
-        return this.#inputHandle as ClientInputHandle<I>;
+        this.#inputHandle = new InputHandleImpl(
+            this,
+            instance,
+            encoder,
+            // RTT estimation needs the client send time for each reliable
+            // input. Closure into the clock keeps the dependency explicit
+            // (vs. an `_onReliableInputSent` method on Room's public surface).
+            // RTT estimation needs the client send time for each reliable
+            // input. Read `room.clock` through `this` so a user-replaced
+            // clock is picked up on the next send; tolerates a `null`
+            // clock for the (currently impossible) case where the room
+            // exposes an input handle without timing.
+            () => this.clock?.recordSend(),
+        );
+        return this.#inputHandle as InputHandle<I>;
     }
 
     public get state (): State {
@@ -557,7 +590,26 @@ export class Room<
         const buffer = new Uint8Array(event.data);
 
         const it: Iterator = { offset: 1 };
-        const code = buffer[0];
+        // Strip modifier bits (e.g. ProtocolModifier.TIMED). Consume any
+        // modifier-attached prefix bytes here so the dispatch tree below
+        // stays modifier-agnostic.
+        const rawByte = buffer[0];
+        const code = rawByte & PROTOCOL_CODE_MASK;
+        if (rawByte & ProtocolModifier.TIMED) {
+            // [float64 sNow][float64 lastTReceived][uint32 lastInputSeq]
+            // TIMED arrives only on rooms that advertised CLIENT_TIMING — i.e.
+            // the rooms whose handshake set `this.clock`. The `?.` is
+            // defensive against a misbehaving server.
+            //
+            // `decode.*` advance `it.offset` as a side effect; left-to-right
+            // argument evaluation is spec-mandated, so passing them as args
+            // reads bytes in declared order.
+            this.clock?.sample(
+                decode.float64(buffer as Buffer, it), // sNow
+                decode.float64(buffer as Buffer, it), // lastTReceived
+                decode.uint32(buffer as Buffer, it),  // lastInputSeq
+            );
+        }
 
         if (code === Protocol.JOIN_ROOM) {
             const reconnectionToken = decode.utf8Read(buffer as Buffer, it, buffer[it.offset++]);
@@ -594,6 +646,14 @@ export class Room<
                     // `$values` and emit non-empty packets.
                     Reflection.makeEncodable(inputDecoder.state.constructor as any);
                     this.#inputCtorFromReflection = inputDecoder.state.constructor as new () => any;
+
+                    // INPUT_REFLECTION is the signal that the server called
+                    // `defineInput()` and will emit TIMED-prefixed state
+                    // messages. Allocate the default RoomClock now so it's
+                    // ready before the first state message arrives. Users
+                    // can replace it via `room.clock = new MyClock()` between
+                    // `await joinOrCreate(...)` and the first sample landing.
+                    if (this.clock === null) this.clock = new RoomClock();
                 }
 
                 it.offset = sectionEnd;
@@ -611,7 +671,7 @@ export class Room<
 
             this.reconnectionToken = `${this.roomId}:${reconnectionToken}`;
 
-            // acknowledge successfull JOIN_ROOM
+            // Acknowledge JOIN_ROOM.
             this.sharedBuffer[0] = Protocol.JOIN_ROOM;
             this.connection.send(this.sharedBuffer.subarray(0, 1));
 

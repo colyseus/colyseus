@@ -1,6 +1,14 @@
 /**
- * Colyseus protocol codes range between 0~100
- * Use codes between 0~127 for lesser throughput (1 byte)
+ * Colyseus protocol codes occupy bits 0..6 of the leading message byte
+ * (values 0..127). Bit 7 onward is reserved for {@link ProtocolModifier}
+ * decorations, OR'd onto the base code at send time:
+ *
+ *     buffer[0] = Protocol.ROOM_STATE_PATCH | ProtocolModifier.TIMED;
+ *
+ * Decoders strip the modifier bits before dispatching:
+ *
+ *     const code = buffer[0] & 0x7F;
+ *     const modifiers = buffer[0] & 0x80;
  */
 export const Protocol = {
   // Room-related (10~19)
@@ -23,6 +31,50 @@ export const Protocol = {
   ROOM_RESPONSE: 22, // [byte, requestId varint, status uint8, msgpack payload?]     server→client, reply to a request
 } as const;
 export type Protocol = typeof Protocol[keyof typeof Protocol];
+
+/**
+ * Modifier bits OR'd into the leading protocol byte. Composable — multiple
+ * modifiers can be combined on a single message; the decoder strips them in
+ * a preamble step that precedes the existing protocol-code dispatch.
+ *
+ * Add a new modifier here when a feature wants to decorate the envelope of
+ * an existing message kind rather than mint a new code.
+ */
+export const ProtocolModifier = {
+  /**
+   * Server-time + per-recipient last-input-ack timestamps are prepended to
+   * the message body.
+   *
+   * Layout when set (applied to {@link Protocol.ROOM_STATE} and
+   * {@link Protocol.ROOM_STATE_PATCH}):
+   *
+   *     [code | TIMED][float64 sNow LE][float64 lastTReceived LE][...body]
+   *
+   * - `sNow` is the server's `performance.now()` at encode time (shared
+   *   across all recipients of this tick).
+   * - `lastTReceived` is the server's `performance.now()` recorded when the
+   *   most recent input from *this specific recipient* arrived. `0` if the
+   *   client has never sent an input. Per-recipient — never another client's
+   *   ack.
+   *
+   * The client SDK uses these to estimate RTT, server time, and clock offset
+   * without any application-level schema cooperation.
+   *
+   * Emitted whenever the Room called `defineInput()`. SDK clients that
+   * understand the TIMED bit decode the prefix; older clients that don't
+   * support it would fail to parse — Colyseus 0.18 introduces the feature
+   * alongside the first SDK release that decodes it, so the protocol bump
+   * is implicit in the version.
+   */
+  TIMED: 0x80,
+} as const;
+export type ProtocolModifier = typeof ProtocolModifier[keyof typeof ProtocolModifier];
+
+/** Mask isolating the base protocol code (low 7 bits). */
+export const PROTOCOL_CODE_MASK = 0x7F;
+
+/** Mask isolating modifier bits (high bit, room for 7 future flags). */
+export const PROTOCOL_MODIFIER_MASK = 0x80;
 
 /**
  * Status byte of a {@link Protocol.ROOM_RESPONSE} reply, correlating to a

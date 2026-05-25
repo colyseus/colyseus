@@ -618,7 +618,14 @@ export class Room<T extends RoomOptions = RoomOptions> {
    * Input configuration. Set via {@link defineInput} only.
    * @internal
    */
-  private inputOptions?: InputOptions;
+  private _inputOptions?: InputOptions;
+
+  /**
+   * `true` when the Room called {@link defineInput}. When set, each state
+   * message gets a {@link ProtocolModifier.TIMED} prefix carrying server
+   * time and the per-recipient last-input ack — feeds the SDK's `room.clock`.
+   */
+  private _clientTimingEnabled: boolean = false;
 
   /**
    * Declare the input schema and configuration in a single line. Returns the
@@ -651,11 +658,16 @@ export class Room<T extends RoomOptions = RoomOptions> {
       bufferMaxSize?: number;
     },
   ): InputAPI<InstanceType<C>> {
-    this.inputOptions = {
+    this._inputOptions = {
       ctor: type,
       seqField: opts?.seqField ?? "seq",
       bufferMaxSize: opts?.bufferMaxSize ?? 32,
     };
+    // Enable wire-level timing for clients that advertise CLIENT_TIMING.
+    // Defining inputs is the natural "real-time room" gate — chat / lobby /
+    // turn-based rooms that don't call defineInput continue to send untimed
+    // state and pay zero overhead.
+    this._clientTimingEnabled = true;
     if (!_inputReflectionCache.has(type)) {
       // Reflection.encode walks the schema's TypeContext via a one-shot
       // Encoder around a throwaway instance; the bytes are SDK-deserializable
@@ -1144,7 +1156,14 @@ export class Room<T extends RoomOptions = RoomOptions> {
       return false;
     }
 
-    const hasChanges = this._serializer.applyPatches(this.clients, this.state);
+    // When `defineInput()` was called, hand the serializer a fresh `sNow`
+    // each tick. The per-client `lastTReceived` is read off the client at
+    // encode time inside `applyPatches`.
+    const hasChanges = this._serializer.applyPatches(
+      this.clients,
+      this.state,
+      this._clientTimingEnabled ? { sNow: performance.now() } : undefined,
+    );
 
     // broadcast messages enqueued for "after patch"
     this._dequeueAfterPatchMessages();
@@ -1428,13 +1447,13 @@ export class Room<T extends RoomOptions = RoomOptions> {
 
     // Allocate per-client input instance + decoder if the Room called `defineInput()`.
     // Done early so onJoin can reference room.input(sessionId).latest.
-    if (this.inputOptions !== undefined) {
-      client._input = new this.inputOptions.ctor();
+    if (this._inputOptions !== undefined) {
+      client._input = new this._inputOptions.ctor();
       client._inputDecoder = new InputDecoder(client._input);
       // Buffer is opt-in via bufferMaxSize > 0 (rollback / lockstep).
-      const maxSize = this.inputOptions.bufferMaxSize;
+      const maxSize = this._inputOptions.bufferMaxSize;
       if (maxSize > 0) {
-        client._inputBuffer = new InputBufferImpl(maxSize, this.inputOptions.seqField);
+        client._inputBuffer = new InputBufferImpl(maxSize, this._inputOptions.seqField);
       }
       client._inputAccessor = new InputAccessorImpl(client);
     }
@@ -1629,8 +1648,8 @@ export class Room<T extends RoomOptions = RoomOptions> {
       // input. The SDK uses these bytes to materialize a constructor for
       // `conn.input()` calls that don't pass an explicit `type`.
       let extraSections: Array<{ tag: number; bytes: Uint8Array }> | undefined;
-      if (!connectionOptions?.skipHandshake && this.inputOptions !== undefined) {
-        const inputBytes = _inputReflectionCache.get(this.inputOptions.ctor);
+      if (!connectionOptions?.skipHandshake && this._inputOptions !== undefined) {
+        const inputBytes = _inputReflectionCache.get(this._inputOptions.ctor);
         if (inputBytes !== undefined) {
           extraSections = [{ tag: HandshakeSection.INPUT_REFLECTION, bytes: inputBytes }];
         }
@@ -1804,7 +1823,10 @@ export class Room<T extends RoomOptions = RoomOptions> {
   }
 
   private sendFullState(client: Client): void {
-    client.raw(this._serializer.getFullState(client));
+    client.raw(this._serializer.getFullState(
+      client,
+      this._clientTimingEnabled ? { sNow: performance.now() } : undefined,
+    ));
   }
 
   private _dequeueAfterPatchMessages() {
@@ -1959,7 +1981,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
     const buf = client._inputBuffer;
     if (!buf) { return; } // no consumer registered — skip the clone allocation
     const inst = client._input!;
-    const seqField = this.inputOptions?.seqField;
+    const seqField = this._inputOptions?.seqField;
     if (seqField !== undefined) {
       const value = (inst as any)[seqField] as number;
       if (typeof value === 'number' && !buf.accept(value)) { return; }
@@ -2122,6 +2144,10 @@ export class Room<T extends RoomOptions = RoomOptions> {
           debugAndPrintError(e);
           return;
         }
+        client._lastInputReceivedAt = performance.now();
+        // Counter mirrors the SDK's `#sentInputCount`; echoed in the
+        // TIMED prefix as `lastInputSeq` so the client can compute RTT.
+        client._receivedInputCount = (client._receivedInputCount ?? 0) + 1;
         this.#captureInput(client);
       }
 
@@ -2133,6 +2159,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
           debugAndPrintError(e);
           return;
         }
+        client._lastInputReceivedAt = performance.now();
       }
 
     } else if (code === Protocol.JOIN_ROOM && client.state === ClientState.JOINING) {
@@ -2309,53 +2336,4 @@ export class Room<T extends RoomOptions = RoomOptions> {
     }
   }
 
-}
-
-/**
- * (WIP) Alternative, method-based room definition.
- * We should be able to define
- */
-
-type RoomLifecycleMethods =
-  | 'messages'
-  | 'onCreate'
-  | 'onJoin'
-  | 'onLeave'
-  | 'onDispose'
-  | 'onCacheRoom'
-  | 'onRestoreRoom'
-  | 'onDrop'
-  | 'onReconnect'
-  | 'onUncaughtException'
-  | 'onAuth'
-  | 'onBeforeShutdown'
-  | 'onBeforePatch';
-
-type DefineRoomOptions<T extends RoomOptions = RoomOptions> =
-  Partial<Pick<Room<T>, RoomLifecycleMethods>> &
-  { state?: ExtractRoomState<T> | (() => ExtractRoomState<T>); } &
-  ThisType<Exclude<Room<T>, RoomLifecycleMethods>> &
-  ThisType<Room<T>>
-;
-
-export function room<T>(options: DefineRoomOptions<T>) {
-  class _ extends Room<T> {
-    messages = options.messages;
-
-    constructor() {
-      super();
-      if (options.state && typeof options.state === 'function') {
-        this.state = options.state();
-      }
-    }
-  }
-
-  // Copy all methods to the prototype
-  for (const key in options) {
-    if (typeof options[key] === 'function') {
-      _.prototype[key] = options[key];
-    }
-  }
-
-  return _ as typeof Room<T>;
 }

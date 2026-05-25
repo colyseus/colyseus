@@ -225,6 +225,27 @@ export interface ClientPrivate {
    */
   _numInputsLastSecond?: number;
   _lastInputTime?: number;
+
+  /**
+   * `performance.now()` recorded when the most recent ROOM_INPUT_* packet
+   * from this client was received. Drives the per-recipient `lastTReceived`
+   * field of the {@link ProtocolModifier.TIMED} state prefix.
+   *
+   * `0` until the client has sent its first input.
+   */
+  _lastInputReceivedAt?: number;
+
+  /**
+   * Monotonic count of *reliable* inputs successfully received from this
+   * client. Echoed back in the TIMED prefix as `lastInputSeq` so the
+   * client can correlate to its own send-time table and compute RTT.
+   * Stays at the default `0` until the client sends its first reliable
+   * input.
+   *
+   * Only ROOM_INPUT_RELIABLE bumps this — unreliable's redundant-ring
+   * pattern would double-count.
+   */
+  _receivedInputCount?: number;
 }
 
 export class ClientArray<C extends Client = Client> extends Array<C> {

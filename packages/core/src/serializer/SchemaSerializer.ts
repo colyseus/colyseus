@@ -1,10 +1,56 @@
-import { Protocol } from '@colyseus/shared-types';
+import { Protocol, ProtocolModifier } from '@colyseus/shared-types';
 
-import type { Serializer } from './Serializer.ts';
-import { type Client, ClientState } from '../Transport.ts';
+import type { PatchTimingContext, Serializer } from './Serializer.ts';
+import { type Client, type ClientPrivate, ClientState } from '../Transport.ts';
 
-import { type Iterator, Encoder, dumpChanges, Reflection, Schema, StateView } from '@colyseus/schema';
+import { type Iterator, encode, Encoder, dumpChanges, Reflection, Schema, StateView } from '@colyseus/schema';
 import { debugPatch } from '../Debug.ts';
+
+/**
+ * Size of the {@link ProtocolModifier.TIMED} prefix that follows the
+ * protocol byte:
+ *   `[float64 sNow][float64 lastTReceived][uint32 lastInputSeq]`
+ */
+const TIMED_PREFIX_SIZE = 20;
+
+/**
+ * Construct a per-recipient TIMED buffer:
+ *   `[code|TIMED][sNow][lastTReceived][lastInputSeq][...schema bytes]`
+ *
+ * `encodedBody` is the shared encoded buffer whose byte 0 already holds the
+ * base protocol code (ROOM_STATE or ROOM_STATE_PATCH); bytes 1.. are the
+ * schema payload. We construct a fresh per-client Buffer so the transport
+ * never sees a buffer that might mutate between queue and send.
+ *
+ * Uses the schema `encode.*` helpers to keep the wire layout symmetric with
+ * the SDK's `decode.*`-driven reader — both sides share the same
+ * `_convoBuffer` typed-array trick for float64, and neither allocates on
+ * the hot path beyond the per-client `Buffer.allocUnsafe`.
+ */
+function buildTimedFrame(
+  encodedBody: Uint8Array,
+  sNow: number,
+  lastTReceived: number,
+  lastInputSeq: number,
+): Buffer {
+  const schemaPayload = encodedBody.subarray(1);
+  const out = Buffer.allocUnsafe(1 + TIMED_PREFIX_SIZE + schemaPayload.length);
+  out[0] = encodedBody[0] | ProtocolModifier.TIMED;
+  const it: Iterator = { offset: 1 };
+  encode.float64(out, sNow, it);
+  encode.float64(out, lastTReceived, it);
+  encode.uint32(out, lastInputSeq >>> 0, it);
+  out.set(schemaPayload, it.offset);
+  return out;
+}
+
+function clientLastInputAt(client: Client): number {
+  return (client as Client & ClientPrivate)._lastInputReceivedAt ?? 0;
+}
+
+function clientReceivedInputCount(client: Client): number {
+  return (client as Client & ClientPrivate)._receivedInputCount ?? 0;
+}
 
 const SHARED_VIEW = {};
 
@@ -38,27 +84,29 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
     }
   }
 
-  public getFullState(client?: Client) {
+  public getFullState(client?: Client, timing?: PatchTimingContext) {
     if (this.needFullEncode || this.encoder.root.changes.next !== undefined) {
       this.sharedOffsetCache = { offset: 1 };
       this.fullEncodeCache = this.encoder.encodeAll(this.sharedOffsetCache, this.fullEncodeBuffer);
       this.needFullEncode = false;
     }
 
-    if (this.hasFilters && client?.view) {
-      return this.encoder.encodeAllView(
-        client.view,
-        this.sharedOffsetCache.offset,
-        { ...this.sharedOffsetCache },
-        this.fullEncodeBuffer
-      );
+    const body = (this.hasFilters && client?.view)
+      ? this.encoder.encodeAllView(
+          client.view,
+          this.sharedOffsetCache.offset,
+          { ...this.sharedOffsetCache },
+          this.fullEncodeBuffer
+        )
+      : this.fullEncodeCache;
 
-    } else {
-      return this.fullEncodeCache;
+    if (timing && client) {
+      return buildTimedFrame(body, timing.sNow, clientLastInputAt(client), clientReceivedInputCount(client));
     }
+    return body;
   }
 
-  public applyPatches(clients: Client[]) {
+  public applyPatches(clients: Client[], _state?: unknown, timing?: PatchTimingContext) {
     let numClients = clients.length;
 
     if (numClients === 0) {
@@ -92,8 +140,32 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
           this.encoder.sharedBuffer[0] = Protocol.ROOM_STATE_PATCH;
 
           clientsWithViewChange.forEach((client) => {
-            client.raw(this.encoder.encodeView(client.view, sharedOffset, it));
+            const encodedView = this.encoder.encodeView(client.view, sharedOffset, it);
+            if (timing) {
+              client.raw(buildTimedFrame(encodedView, timing.sNow, clientLastInputAt(client), clientReceivedInputCount(client)));
+            } else {
+              client.raw(encodedView);
+            }
           });
+        }
+      }
+
+      // Heartbeat: clients that advertised CLIENT_TIMING still need
+      // periodic timing samples to keep their clock offset / RTT estimate
+      // fresh during quiet ticks. Emit a TIMED-prefixed ROOM_STATE_PATCH
+      // with an empty schema body — 1 byte protocol + 20 bytes prefix.
+      // No-op for rooms without `defineInput()` (timing is undefined).
+      if (timing) {
+        const heartbeatBody = Buffer.from([Protocol.ROOM_STATE_PATCH]);
+        for (let i = 0; i < clients.length; i++) {
+          const client = clients[i];
+          if (client.state !== ClientState.JOINED) continue;
+          client.raw(buildTimedFrame(
+            heartbeatBody,
+            timing.sNow,
+            clientLastInputAt(client),
+            clientReceivedInputCount(client),
+          ));
         }
       }
 
@@ -129,7 +201,11 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
           continue;
         }
 
-        client.raw(encodedChanges);
+        if (timing) {
+          client.raw(buildTimedFrame(encodedChanges, timing.sNow, clientLastInputAt(client), clientReceivedInputCount(client)));
+        } else {
+          client.raw(encodedChanges);
+        }
       }
 
     } else {
@@ -159,7 +235,11 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
           this.encodedViews.set(view, encodedView);
         }
 
-        client.raw(encodedView);
+        if (timing) {
+          client.raw(buildTimedFrame(encodedView, timing.sNow, clientLastInputAt(client), clientReceivedInputCount(client)));
+        } else {
+          client.raw(encodedView);
+        }
       }
 
       // clear views
