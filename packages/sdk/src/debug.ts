@@ -3,6 +3,11 @@ import type { Room } from "./Room.ts";
 import type { WebSocketTransport } from "./transport/WebSocketTransport.ts";
 import { getDebugRoot, loadPreferences, preferences, repositionDebugPanels, roomDebugInfo } from "./debug/core.ts";
 import { calculateRates, initialize, updateDebugPanel } from "./debug/panel.ts";
+import { installPredictDebug } from "./debug/predict.ts";
+
+// Open the registry consumers depend on — Predict (and any future client-side
+// extension that wants a debug surface) publishes here.
+installPredictDebug();
 
 // Single interval for all panels
 let globalUpdateInterval = null;
