@@ -7,39 +7,21 @@
  * debug shadow root.
  *
  * Stable contract:
- *   - The `predict` channel expects `PredictDebugHandle` (see Predictor.ts)
+ *   - The `predict` channel expects a `PredictCore` (the engine's portable
+ *     introspection handle). `predict-bridge.ts` adapts it into the
+ *     panel-facing `PredictDebugHandle` — deriving panel-only data (the
+ *     per-profile field list) here rather than in the engine.
  *   - Handle methods are queried lazily — never persisted as fields here,
  *     so live Predict mutations stay reflected.
  */
 import { getDebugRoot } from "./core.ts";
-
-// Subset of `Predict`'s `PredictDebugHandle`. Duck-typed — debug.ts has no
-// import dependency on the consumer, so consumer-side changes don't force
-// SDK churn.
-type StepFn = (state: any, dt: number, elapsedMs: number) => void;
-type SmoothMode = "lerp" | "extrapolate" | "damped";
-type PredictMode = SmoothMode | "reckon" | "raw";
-interface ProfileInfo {
-    readonly id: number;
-    readonly isDefault: boolean;
-    readonly mode: PredictMode;
-    readonly delay: number;
-    readonly damping: number;
-    readonly maxExtrapolate: number;
-    readonly tickInterval: number;
-    readonly fields: readonly string[];
-}
-interface PredictDebugHandle {
-    readonly name: string;
-    mode(): PredictMode;
-    smoothingDefaults(): { mode: PredictMode; delay: number; damping: number; maxExtrapolate: number; tickInterval?: number };
-    reckonDefaults(): { step: StepFn | undefined; smoothing: number; substep: number };
-    attachedCount(): number;
-    setDefaults(opts: any): void;
-    profiles(): ProfileInfo[];
-    setProfile(id: number, opts: any): void;
-    onDispose(cb: () => void): () => void;
-}
+import {
+    toDebugHandle,
+    type PredictCore,
+    type PredictDebugHandle,
+    type PredictMode,
+    type ProfileInfo,
+} from "./predict-bridge.ts";
 
 interface ChannelRegistry {
     publish(channel: string, handle: any): void;
@@ -68,7 +50,7 @@ export function installPredictDebug(): void {
         // Wrap any pre-existing publish so other channels still work.
         const prev = existing.publish.bind(existing);
         existing.publish = (channel, handle) => {
-            if (channel === "predict") onPredictPublished(handle as PredictDebugHandle);
+            if (channel === "predict") onPredictPublished(handle as PredictCore);
             else prev(channel, handle);
         };
         return;
@@ -76,14 +58,17 @@ export function installPredictDebug(): void {
 
     g.__colyseusDebug = {
         publish(channel, handle) {
-            if (channel === "predict") onPredictPublished(handle as PredictDebugHandle);
+            if (channel === "predict") onPredictPublished(handle as PredictCore);
             // Future channels: predictedEvents, csp, …
         },
     };
 }
 
-function onPredictPublished(handle: PredictDebugHandle): void {
-    if (panels.has(handle.name)) return; // dedupe
+function onPredictPublished(core: PredictCore): void {
+    if (panels.has(core.name)) return; // dedupe
+    // Adapt the engine's portable core into the panel-facing handle (derives
+    // the per-profile field list from the core's track stream).
+    const handle = toDebugHandle(core);
     const el = renderCard(handle);
     getContainer().appendChild(el);
     const entry: PredictPanelEntry = {
@@ -232,7 +217,10 @@ function buildProfileSubcard(handle: PredictDebugHandle, p: ProfileInfo): HTMLEl
         "border:1px solid #1d2740;border-radius:4px;padding:6px 8px;" +
         "background:rgba(255,255,255,0.02);display:flex;flex-direction:column;gap:4px";
     el.innerHTML = `
-        <div data-role="fields" style="font-size:10px;color:#8aa1c6;font-family:ui-monospace,monospace"></div>
+        <div data-role="fields" style="font-size:10px;display:flex;align-items:baseline;gap:6px;font-family:ui-monospace,monospace">
+            <span data-role="cat" style="color:#6cc3ff;font-weight:600"></span>
+            <span data-role="fieldnames" style="color:#8aa1c6"></span>
+        </div>
         <div data-role="modes" style="display:flex;gap:6px;flex-wrap:wrap;font-size:10px;color:#9fb4d8"></div>
         <div data-role="sliders" style="display:flex;flex-direction:column;gap:3px"></div>
     `;
@@ -266,8 +254,11 @@ function buildProfileSubcard(handle: PredictDebugHandle, p: ProfileInfo): HTMLEl
 }
 
 function refreshProfileSubcard(el: HTMLElement, handle: PredictDebugHandle, p: ProfileInfo): void {
-    const fieldsEl = el.querySelector<HTMLElement>('[data-role="fields"]')!;
-    fieldsEl.textContent = p.fields.length === 0 ? "(no fields)" : p.fields.join(", ");
+    // Category (attach-group label) + the fields it covers, e.g. "enemies · x, y, vx".
+    const catEl = el.querySelector<HTMLElement>('[data-role="cat"]')!;
+    const namesEl = el.querySelector<HTMLElement>('[data-role="fieldnames"]')!;
+    catEl.textContent = p.label ? `${p.label} ·` : "";
+    namesEl.textContent = p.fields.length === 0 ? "(no fields)" : p.fields.join(", ");
 
     const modesEl = el.querySelector<HTMLElement>('[data-role="modes"]')!;
     for (const radio of modesEl.querySelectorAll<HTMLInputElement>('input[type="radio"]')) {
