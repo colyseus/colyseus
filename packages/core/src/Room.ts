@@ -1162,7 +1162,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
     const hasChanges = this._serializer.applyPatches(
       this.clients,
       this.state,
-      this._clientTimingEnabled ? { sNow: performance.now() } : undefined,
+      this._clientTimingEnabled ? { sNow: this.clock.elapsedTime } : undefined,
     );
 
     // broadcast messages enqueued for "after patch"
@@ -1825,7 +1825,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
   private sendFullState(client: Client): void {
     client.raw(this._serializer.getFullState(
       client,
-      this._clientTimingEnabled ? { sNow: performance.now() } : undefined,
+      this._clientTimingEnabled ? { sNow: this.clock.elapsedTime } : undefined,
     ));
   }
 

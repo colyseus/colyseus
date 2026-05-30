@@ -17,7 +17,7 @@ import { createSignal } from './core/signal.ts';
 
 import { SchemaConstructor, SchemaSerializer } from './serializer/SchemaSerializer.ts';
 
-import { RoomClock, type RoomClockLike } from './RoomClock.ts';
+import { NULL_CLOCK, RoomClock, type RoomClockLike } from './RoomClock.ts';
 
 import { now } from './core/utils.ts';
 
@@ -142,19 +142,20 @@ export class Room<
      * Server-time + RTT estimator, driven by the {@link ProtocolModifier.TIMED}
      * prefix that servers emit when `defineInput()` was called.
      *
-     * - `null` until the JOIN_ROOM handshake's `INPUT_REFLECTION` section
-     *   tells us the server has input declared. Rooms that never call
-     *   `defineInput()` stay clock-less for the whole session — zero
-     *   allocation cost for chat / lobby / turn-based rooms.
+     * - Defaults to a shared frozen {@link NULL_CLOCK} so `room.clock.serverNow()`
+     *   always works. The shim returns the client's own `performance.now()` and
+     *   reports `0` for RTT. Rooms that never call `defineInput()` keep this
+     *   stub for the whole session — zero allocation cost for chat / lobby /
+     *   turn-based rooms.
      * - After handshake on an input room, a default {@link RoomClock} is
      *   instantiated. Users can swap their own implementation in via
      *   `room.clock = new MyClock()` between `await joinOrCreate(...)` and
      *   the first state message (any state-message arrival is on a future
      *   microtask, so a synchronous swap is race-free).
-     * - Access timing through `room.clock?.serverNow()` etc. on the
-     *   nullable field directly.
+     * - Access timing through `room.clock.serverNow()` etc. directly — no
+     *   optional chaining or fallback needed.
      */
-    public clock: RoomClockLike | null = null;
+    public clock: RoomClockLike = NULL_CLOCK;
 
     protected onMessageHandlers = createNanoEvents();
 
@@ -181,7 +182,9 @@ export class Room<
         timer: ReturnType<typeof setTimeout>;
     }>();
 
-    #inputHandle?: InputHandle<any>;
+    // Impl type (not the public interface) so the TIMED decode can feed it the
+    // server ack via the internal `ackInput()`.
+    #inputHandle?: InputHandleImpl<any>;
     /**
      * Schema constructor recovered via Reflection from the server's
      * handshake (the `INPUT_REFLECTION` tagged section). Populated on JOIN
@@ -550,20 +553,10 @@ export class Room<
 
         const instance = new Ctor();
         const encoder = new InputEncoder(instance as any, options);
-        this.#inputHandle = new InputHandleImpl(
-            this,
-            instance,
-            encoder,
-            // RTT estimation needs the client send time for each reliable
-            // input. Closure into the clock keeps the dependency explicit
-            // (vs. an `_onReliableInputSent` method on Room's public surface).
-            // RTT estimation needs the client send time for each reliable
-            // input. Read `room.clock` through `this` so a user-replaced
-            // clock is picked up on the next send; tolerates a `null`
-            // clock for the (currently impossible) case where the room
-            // exposes an input handle without timing.
-            () => this.clock?.recordSend(),
-        );
+        // The handle owns the input round-trip (send counter + send-time table
+        // for RTT, and the server-acked count). The TIMED decode feeds it the
+        // server ack; it produces RTT samples for the clock. See onMessage.
+        this.#inputHandle = new InputHandleImpl(this, instance, encoder);
         return this.#inputHandle as InputHandle<I>;
     }
 
@@ -596,19 +589,17 @@ export class Room<
         const rawByte = buffer[0];
         const code = rawByte & PROTOCOL_CODE_MASK;
         if (rawByte & ProtocolModifier.TIMED) {
-            // [float64 sNow][float64 lastTReceived][uint32 lastInputSeq]
-            // TIMED arrives only on rooms that advertised CLIENT_TIMING — i.e.
-            // the rooms whose handshake set `this.clock`. The `?.` is
-            // defensive against a misbehaving server.
+            // [uint32 sNow][uint32 inputSeq]  — sNow = ms since room start
+            // (clock.elapsedTime); inputSeq = last PROCESSED input.
             //
-            // `decode.*` advance `it.offset` as a side effect; left-to-right
-            // argument evaluation is spec-mandated, so passing them as args
-            // reads bytes in declared order.
-            this.clock?.sample(
-                decode.float64(buffer as Buffer, it), // sNow
-                decode.float64(buffer as Buffer, it), // lastTReceived
-                decode.uint32(buffer as Buffer, it),  // lastInputSeq
-            );
+            // Routing: the INPUT ack goes to the input handle (it owns the
+            // round-trip — what you sent, what's acked); it returns an RTT
+            // sample which, with sNow, feeds the time-only clock. `decode.*`
+            // advance `it.offset`; read in declared byte order.
+            const sNow = decode.uint32(buffer as Buffer, it);
+            const inputSeq = decode.uint32(buffer as Buffer, it);
+            const rttSample = this.#inputHandle ? this.#inputHandle.ackInput(inputSeq) : -1;
+            this.clock.sample(sNow, rttSample);
         }
 
         if (code === Protocol.JOIN_ROOM) {
@@ -649,11 +640,12 @@ export class Room<
 
                     // INPUT_REFLECTION is the signal that the server called
                     // `defineInput()` and will emit TIMED-prefixed state
-                    // messages. Allocate the default RoomClock now so it's
-                    // ready before the first state message arrives. Users
-                    // can replace it via `room.clock = new MyClock()` between
-                    // `await joinOrCreate(...)` and the first sample landing.
-                    if (this.clock === null) this.clock = new RoomClock();
+                    // messages. Swap the default stub clock for a real
+                    // {@link RoomClock} so RTT/offset estimation kicks in.
+                    // Skip if the user already replaced `room.clock` with
+                    // their own (e.g. via `room.clock = new MyClock()` after
+                    // `await joinOrCreate(...)`).
+                    if (this.clock === NULL_CLOCK) this.clock = new RoomClock();
                 }
 
                 it.offset = sectionEnd;

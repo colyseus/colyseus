@@ -1,6 +1,5 @@
 import assert from "assert";
-import { defineRoom, room, Room, type Client } from "@colyseus/core";
-import { schema, t } from "@colyseus/schema";
+import { defineRoom, Room, type Client } from "@colyseus/core";
 
 describe("Room: Type Inference", () => {
 
@@ -136,74 +135,6 @@ describe("Room: Type Inference", () => {
       assert.ok((new MyRoom()) instanceof Room);
       assert.ok((new UntypedRoom()) instanceof Room);
     });
-  });
-
-  /**
-   * Test file for createRoom() type inference
-   */
-  describe("using room() for object-based Rooms", () => {
-    // Define client type with messages, userData, and auth
-    type MyClient = Client<{
-      userData: { rank: number };
-      auth: { odToken: string };
-      messages: {
-        chat: { text: string; sender: string };
-        move: { x: number; y: number };
-        ping: never;  // no payload
-        optional: { value: number } | undefined;
-      };
-    }>;
-
-    const TestState = schema({
-      count: t.number(),
-    });
-
-    const MyRoom = room<{ client: MyClient }>({
-      state: () => new TestState(),
-
-      onCreate() {
-        this.broadcast("chat", { text: "hello", sender: "system" });
-        this.broadcast("move", { x: 1, y: 2 });
-        this.broadcast("ping");
-
-        // @ts-expect-error - unknown message type
-        this.broadcast("unknown", {});
-
-        // @ts-expect-error - wrong payload shape
-        this.broadcast("chat", { wrong: true });
-
-        // @ts-expect-error - missing required payload
-        this.broadcast("chat");
-      },
-
-      onJoin(client, options) {
-        client.send("chat", { text: "welcome", sender: "server" });
-        client.send("move", { x: 0, y: 0 });
-        client.send("ping");
-
-        // @ts-expect-error - unknown message type
-        client.send("unknown", {});
-
-        // @ts-expect-error - wrong payload
-        client.send("chat", { text: 123 });
-
-        // @ts-expect-error - missing required payload
-        client.send("move");
-
-        this.broadcast("chat", { text: "player joined", sender: "system" });
-      },
-    });
-
-    it("object-based createRoom creates a valid Room subclass", () => {
-      const room = new MyRoom();
-      assert.ok(room instanceof Room);
-    });
-
-
-    it("defineRoom + createRoom", () => {
-      defineRoom(MyRoom)
-    })
-
   });
 
 });

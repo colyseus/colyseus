@@ -2,6 +2,7 @@ import { InputEncoder, type InputEncoderOptions, type InputMode } from '@colyseu
 import { Protocol } from '@colyseus/shared-types';
 
 import type { Connection } from '../Connection.ts';
+import { now } from '../core/utils.ts';
 
 /**
  * Minimal structural type the input handle needs from its host (Room). Lets
@@ -70,6 +71,22 @@ export interface InputHandle<I = any> {
    * snapshot). Useful on scene transitions or after reconnection.
    */
   reset(): void;
+  /**
+   * Last input the server has acknowledged PROCESSING into its authoritative
+   * state (the server input-buffer's consumed count, echoed via the TIMED
+   * prefix). The canonical server-reconciled-rollback ack — prune your pending
+   * inputs against it (`seq <= lastProcessed`). `0` until the first ack.
+   *
+   * Lives here (not on `room.clock`) because it's an INPUT concern: this is the
+   * channel you send through, so it's the channel that knows what's been acked.
+   */
+  readonly lastProcessed: number;
+  /**
+   * Count of reliable inputs this handle has actually transmitted — equals the
+   * seq the server will ack via {@link lastProcessed}. Key a client-side
+   * prediction/replay buffer by this (read it right AFTER {@link send}).
+   */
+  readonly sentCount: number;
 }
 
 /** @internal */
@@ -78,35 +95,41 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
   private _host: InputHandleHost;
   private _encoder: InputEncoder<any>;
   private _scratch: Uint8Array = new Uint8Array(2048);
-  private _onReliableSend?: () => void;
 
-  /**
-   * @param onReliableSend Optional callback fired AFTER each successful
-   *   reliable send. The Room passes a closure into its {@link RoomClock}
-   *   so the clock can stamp send times for RTT estimation.
-   */
+  // Input round-trip state (per client per room — one handle per room). Owns
+  // the send counter + send-time table for RTT, and the server-acked count.
+  private static readonly SEND_TIME_TABLE_MAX = 256;
+  private _sentCount = 0;                       // reliable inputs transmitted
+  private _lastProcessed = 0;                   // server-acked (consumedCount)
+  private _sentTimes = new Map<number, number>(); // seq → client send time (RTT)
+
   constructor(
     host: InputHandleHost,
     data: I,
     encoder: InputEncoder<any>,
-    onReliableSend?: () => void,
   ) {
     this._host = host;
     this.data = data;
     this._encoder = encoder;
-    this._onReliableSend = onReliableSend;
   }
 
   get mode(): InputMode { return this._encoder.mode; }
+  get lastProcessed(): number { return this._lastProcessed; }
+  get sentCount(): number { return this._sentCount; }
 
-  reset(): void { this._encoder.reset(); }
+  reset(): void {
+    this._encoder.reset();
+    this._sentCount = 0;
+    this._lastProcessed = 0;
+    this._sentTimes.clear();
+  }
 
   send(): void {
     const conn = this._host.connection;
     if (!conn?.isOpen) return;
 
     const bytes = this._encoder.encode();
-    if (bytes.length === 0) return;
+    if (bytes.length === 0) return; // delta no-op — nothing to send, nothing to count
 
     const total = 1 + bytes.length;
     if (total > this._scratch.byteLength) {
@@ -120,11 +143,35 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
     const framed = this._scratch.subarray(0, total);
     if (this._encoder.mode === "reliable") {
       conn.send(framed);
-      // Closure over the Room's clock — bumps `recordSend()` so the next
-      // TIMED state-message `lastInputSeq` echo can produce an RTT sample.
-      this._onReliableSend?.();
+      // Count + stamp this transmit. `_sentCount` mirrors the server's
+      // per-client received/consumed counter, so the next TIMED ack
+      // (`ackInput`) can both prune pending inputs and produce an RTT sample.
+      const seq = ++this._sentCount;
+      if (this._sentTimes.size >= InputHandleImpl.SEND_TIME_TABLE_MAX) {
+        const oldest = this._sentTimes.keys().next().value;
+        if (oldest !== undefined) this._sentTimes.delete(oldest);
+      }
+      this._sentTimes.set(seq, now());
     } else {
       conn.sendUnreliable(framed);
     }
+  }
+
+  /**
+   * @internal Feed the server's last-PROCESSED input seq (decoded from the
+   * TIMED prefix). Advances {@link lastProcessed} (monotonic) and returns the
+   * round-trip time sample for that ack (`now − sendTime(seq)`), or `-1` if the
+   * send time is unknown. The {@link RoomClock} filters/EMA-smooths the sample.
+   */
+  ackInput(seq: number): number {
+    if (seq <= this._lastProcessed) return -1;
+    this._lastProcessed = seq;
+    const sentAt = this._sentTimes.get(seq);
+    // Evict acknowledged send-times (and any older).
+    for (const k of this._sentTimes.keys()) {
+      if (k <= seq) this._sentTimes.delete(k);
+      else break;
+    }
+    return sentAt !== undefined ? now() - sentAt : -1;
   }
 }

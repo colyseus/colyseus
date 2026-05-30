@@ -9,13 +9,28 @@ import { debugPatch } from '../Debug.ts';
 /**
  * Size of the {@link ProtocolModifier.TIMED} prefix that follows the
  * protocol byte:
- *   `[float64 sNow][float64 lastTReceived][uint32 lastInputSeq]`
+ *   `[uint32 sNow][uint32 inputSeq]`
+ *
+ *   - `sNow`     — server clock as **milliseconds since room start**
+ *     (`room.clock.elapsedTime`), NOT raw `performance.now()`. A portable,
+ *     language-agnostic integer (C/C#/Lua have no `performance.now()`); the
+ *     server's own time-keyed logic uses the SAME `clock.elapsedTime` so the
+ *     client's reconstructed `serverNow()` stays in phase. Wraps at u32
+ *     (~49.7 days uptime) — irrelevant per session. Drives the client clock
+ *     offset / `serverNow()`.
+ *   - `inputSeq` — count of the client's inputs CONSUMED into the authoritative
+ *     state (the input buffer's `consumedCount`, i.e. last-PROCESSED input).
+ *     This single number is the canonical reconciliation ack (Gambetta/Valve:
+ *     "the sequence number of the last input it processed"); the client prunes
+ *     its pending-input buffer against it AND derives RTT from its round-trip
+ *     (`now − sendTime(inputSeq)`). No separate received-seq / received-time —
+ *     RTT-from-the-processed-ack is round-trip-inclusive, which is the standard.
  */
-const TIMED_PREFIX_SIZE = 20;
+const TIMED_PREFIX_SIZE = 8;
 
 /**
  * Construct a per-recipient TIMED buffer:
- *   `[code|TIMED][sNow][lastTReceived][lastInputSeq][...schema bytes]`
+ *   `[code|TIMED][sNow][inputSeq][...schema bytes]`
  *
  * `encodedBody` is the shared encoded buffer whose byte 0 already holds the
  * base protocol code (ROOM_STATE or ROOM_STATE_PATCH); bytes 1.. are the
@@ -23,33 +38,28 @@ const TIMED_PREFIX_SIZE = 20;
  * never sees a buffer that might mutate between queue and send.
  *
  * Uses the schema `encode.*` helpers to keep the wire layout symmetric with
- * the SDK's `decode.*`-driven reader — both sides share the same
- * `_convoBuffer` typed-array trick for float64, and neither allocates on
- * the hot path beyond the per-client `Buffer.allocUnsafe`.
+ * the SDK's `decode.*`-driven reader.
  */
 function buildTimedFrame(
   encodedBody: Uint8Array,
   sNow: number,
-  lastTReceived: number,
-  lastInputSeq: number,
+  inputSeq: number,
 ): Buffer {
   const schemaPayload = encodedBody.subarray(1);
   const out = Buffer.allocUnsafe(1 + TIMED_PREFIX_SIZE + schemaPayload.length);
   out[0] = encodedBody[0] | ProtocolModifier.TIMED;
   const it: Iterator = { offset: 1 };
-  encode.float64(out, sNow, it);
-  encode.float64(out, lastTReceived, it);
-  encode.uint32(out, lastInputSeq >>> 0, it);
+  encode.uint32(out, sNow >>> 0, it); // ms since room start (clock.elapsedTime)
+  encode.uint32(out, inputSeq >>> 0, it);
   out.set(schemaPayload, it.offset);
   return out;
 }
 
-function clientLastInputAt(client: Client): number {
-  return (client as Client & ClientPrivate)._lastInputReceivedAt ?? 0;
-}
-
-function clientReceivedInputCount(client: Client): number {
-  return (client as Client & ClientPrivate)._receivedInputCount ?? 0;
+/** Inputs consumed (drained/cleared) from the client's buffer — the last
+ *  PROCESSED input, i.e. the reconciliation ack (and RTT correlation key).
+ *  0 when the room doesn't buffer input. */
+function clientProcessedInputCount(client: Client): number {
+  return (client as Client & ClientPrivate)._inputBuffer?.consumedCount ?? 0;
 }
 
 const SHARED_VIEW = {};
@@ -101,7 +111,7 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
       : this.fullEncodeCache;
 
     if (timing && client) {
-      return buildTimedFrame(body, timing.sNow, clientLastInputAt(client), clientReceivedInputCount(client));
+      return buildTimedFrame(body, timing.sNow, clientProcessedInputCount(client));
     }
     return body;
   }
@@ -142,7 +152,7 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
           clientsWithViewChange.forEach((client) => {
             const encodedView = this.encoder.encodeView(client.view, sharedOffset, it);
             if (timing) {
-              client.raw(buildTimedFrame(encodedView, timing.sNow, clientLastInputAt(client), clientReceivedInputCount(client)));
+              client.raw(buildTimedFrame(encodedView, timing.sNow, clientProcessedInputCount(client)));
             } else {
               client.raw(encodedView);
             }
@@ -153,19 +163,14 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
       // Heartbeat: clients that advertised CLIENT_TIMING still need
       // periodic timing samples to keep their clock offset / RTT estimate
       // fresh during quiet ticks. Emit a TIMED-prefixed ROOM_STATE_PATCH
-      // with an empty schema body — 1 byte protocol + 20 bytes prefix.
+      // with an empty schema body — 1 byte protocol + 12 bytes prefix.
       // No-op for rooms without `defineInput()` (timing is undefined).
       if (timing) {
         const heartbeatBody = Buffer.from([Protocol.ROOM_STATE_PATCH]);
         for (let i = 0; i < clients.length; i++) {
           const client = clients[i];
           if (client.state !== ClientState.JOINED) continue;
-          client.raw(buildTimedFrame(
-            heartbeatBody,
-            timing.sNow,
-            clientLastInputAt(client),
-            clientReceivedInputCount(client),
-          ));
+          client.raw(buildTimedFrame(heartbeatBody, timing.sNow, clientProcessedInputCount(client)));
         }
       }
 
@@ -202,7 +207,7 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
         }
 
         if (timing) {
-          client.raw(buildTimedFrame(encodedChanges, timing.sNow, clientLastInputAt(client), clientReceivedInputCount(client)));
+          client.raw(buildTimedFrame(encodedChanges, timing.sNow, clientProcessedInputCount(client)));
         } else {
           client.raw(encodedChanges);
         }
@@ -236,7 +241,7 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
         }
 
         if (timing) {
-          client.raw(buildTimedFrame(encodedView, timing.sNow, clientLastInputAt(client), clientReceivedInputCount(client)));
+          client.raw(buildTimedFrame(encodedView, timing.sNow, clientProcessedInputCount(client)));
         } else {
           client.raw(encodedView);
         }

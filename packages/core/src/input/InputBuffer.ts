@@ -112,6 +112,17 @@ export class InputBufferImpl<I = any> {
   private readonly _maxSize: number;
   private readonly _seqField: string | undefined;
 
+  /**
+   * Cumulative count of inputs CONSUMED from this buffer (via {@link drain} or
+   * {@link clear}). Consumed = "removed from the pending set" — whether applied
+   * to state or discarded. The server echoes this in the TIMED prefix as the
+   * reconciliation ack: it tracks how many of the client's inputs are reflected
+   * in (or finished influencing) the authoritative state, which lags the
+   * receive counter by inputs still buffered. Distinct from `_receivedInputCount`
+   * (receive-time, for RTT), which leads the state and is wrong for reconcile.
+   */
+  consumedCount = 0;
+
   constructor(maxSize: number, seqField: string | undefined) {
     this._maxSize = maxSize;
     this._seqField = seqField;
@@ -119,7 +130,9 @@ export class InputBufferImpl<I = any> {
 
   push(snapshot: I): void {
     this._items.push(snapshot);
-    if (this._items.length > this._maxSize) { this._items.shift(); }
+    // Overflow drops the oldest UNCONSUMED input. Count it as consumed so the
+    // reconcile ack still advances past it (the server will never apply it).
+    if (this._items.length > this._maxSize) { this._items.shift(); this.consumedCount++; }
   }
 
   /** Returns true if `value` hasn't been seen, and updates the last-seen marker. */
@@ -131,6 +144,7 @@ export class InputBufferImpl<I = any> {
 
   drain(): I[] {
     const out = this._items;
+    this.consumedCount += out.length;
     this._items = [];
     return out;
   }
@@ -152,6 +166,7 @@ export class InputBufferImpl<I = any> {
   }
 
   clear(): void {
+    this.consumedCount += this._items.length;
     this._items.length = 0;
     this._lastSeq = -Infinity;
   }
