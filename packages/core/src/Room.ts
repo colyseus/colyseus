@@ -39,7 +39,10 @@ import {
   CloseCode,
   ErrorCode,
   HandshakeSection,
+  InputFlags,
   Protocol,
+  PROTOCOL_CODE_MASK,
+  PROTOCOL_MODIFIER_MASK,
   ResponseStatus,
   type MessageHandlerWithFormat as SharedMessageHandlerWithFormat,
   type MessageHandler as SharedMessageHandler,
@@ -639,14 +642,16 @@ export class Room<T extends RoomOptions = RoomOptions> {
    *     bufferMaxSize: 64,
    *   });
    *
-   *   // …or without options — defaults to seqField: "seq", bufferMaxSize: 32:
+   *   // …or without options — no seq dedupe, bufferMaxSize: 32:
    *   // input = this.defineInput(MoveInput);
    * }
    * ```
    *
    * **Defaults** when `opts` (or individual fields) are omitted:
-   * - `seqField`: `"seq"` — framework dedupes by `input.seq` if the schema has
-   *   such a field. Schemas without it gracefully skip dedupe.
+   * - `seqField`: unset — dedupe and `room.input(sessionId).at(value)` lookup are
+   *   OPT-IN (lockstep / rollback). Name a monotonic numeric field here to enable
+   *   them; redundant frames (`input[seqField]` ≤ the last seen) are then dropped.
+   *   Leave unset for reliable, in-order channels where every frame is unique.
    * - `bufferMaxSize`: `32` — enables per-client snapshot buffering for
    *   `room.input(sessionId).drain() / .peek() / .at()`. Set to `0` to disable
    *   buffering (the `.latest` read still works).
@@ -656,12 +661,26 @@ export class Room<T extends RoomOptions = RoomOptions> {
     opts?: {
       seqField?: NumericFieldsOf<InstanceType<C>>;
       bufferMaxSize?: number;
+      /**
+       * Enable render-time lag compensation: the client auto-stamps each
+       * reliable input with the server-clock time (ms since room start) it was
+       * rendering the world at, surfaced server-side as
+       * `room.input(sessionId).renderTime`. Rewind other entities to that time
+       * for "what you see is what you hit". Default `false` (+4 bytes/input
+       * when on).
+       */
+      renderTime?: boolean;
     },
   ): InputAPI<InstanceType<C>> {
     this._inputOptions = {
       ctor: type,
-      seqField: opts?.seqField ?? "seq",
+      // No default: dedupe + `.at()` lookup are OPT-IN. A default of "seq"
+      // would silently drop frames for any app that happened to name a numeric
+      // field `seq` — behavior-by-coincidental-naming. Pass `seqField`
+      // explicitly to enable lockstep/rollback ordering.
+      seqField: opts?.seqField,
       bufferMaxSize: opts?.bufferMaxSize ?? 32,
+      renderTime: opts?.renderTime ?? false,
     };
     // Enable wire-level timing for clients that advertise CLIENT_TIMING.
     // Defining inputs is the natural "real-time room" gate — chat / lobby /
@@ -1653,6 +1672,14 @@ export class Room<T extends RoomOptions = RoomOptions> {
         if (inputBytes !== undefined) {
           extraSections = [{ tag: HandshakeSection.INPUT_REFLECTION, bytes: inputBytes }];
         }
+        // Mirror input feature flags the client must honor (render-time lag
+        // comp → the client auto-stamps each reliable input; see InputFlags).
+        if (this._inputOptions.renderTime) {
+          (extraSections ??= []).push({
+            tag: HandshakeSection.INPUT_OPTIONS,
+            bytes: new Uint8Array([InputFlags.RENDER_TIME]),
+          });
+        }
       }
 
       // confirm room id that matches the room name requested to join
@@ -1977,7 +2004,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
    * per-client buffer (when buffering is enabled). Honors
    * `inputOptions.seqField` for dedupe of redundant frames.
    */
-  #captureInput(client: ClientPrivate) {
+  #captureInput(client: ClientPrivate, renderTime: number = 0) {
     const buf = client._inputBuffer;
     if (!buf) { return; } // no consumer registered — skip the clone allocation
     const inst = client._input!;
@@ -1986,7 +2013,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
       const value = (inst as any)[seqField] as number;
       if (typeof value === 'number' && !buf.accept(value)) { return; }
     }
-    buf.push(inst.clone() as any);
+    buf.push(inst.clone() as any, renderTime);
   }
 
   private _onMessage(client: ExtractRoomClient<T> & ClientPrivate, buffer: Buffer) {
@@ -2009,7 +2036,10 @@ export class Room<T extends RoomOptions = RoomOptions> {
     }
 
     const it: Iterator = { offset: 1 };
-    const code = buffer[0];
+    // Strip modifier bits (e.g. ProtocolModifier.TIMED on a render-time input)
+    // before dispatch; existing client→server codes set no modifiers.
+    const code = buffer[0] & PROTOCOL_CODE_MASK;
+    const modifiers = buffer[0] & PROTOCOL_MODIFIER_MASK;
 
     if (code === Protocol.ROOM_DATA) {
       const messageType = (decode.stringCheck(buffer, it))
@@ -2138,8 +2168,16 @@ export class Room<T extends RoomOptions = RoomOptions> {
 
     } else if (code === Protocol.ROOM_INPUT_RELIABLE) {
       if (client._inputDecoder) {
+        // Optional [uint32 renderTime] prefix (TIMED bit) — the server-clock ms
+        // the client was rendering the world at; surfaced as input.renderTime
+        // for lag-compensated hit registration. `it` starts at offset 1, so the
+        // body begins at `it.offset` (1 without the prefix, 5 with it).
+        let renderTime = 0;
+        if (modifiers & PROTOCOL_MODIFIER_MASK) {
+          renderTime = decode.uint32(buffer, it);
+        }
         try {
-          client._inputDecoder.decode(buffer.subarray(1));
+          client._inputDecoder.decode(buffer.subarray(it.offset));
         } catch (e: any) {
           debugAndPrintError(e);
           return;
@@ -2148,7 +2186,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
         // Counter mirrors the SDK's `#sentInputCount`; echoed in the
         // TIMED prefix as `lastInputSeq` so the client can compute RTT.
         client._receivedInputCount = (client._receivedInputCount ?? 0) + 1;
-        this.#captureInput(client);
+        this.#captureInput(client, renderTime);
       }
 
     } else if (code === Protocol.ROOM_INPUT_UNRELIABLE) {

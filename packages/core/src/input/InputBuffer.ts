@@ -29,10 +29,11 @@ export interface InputOptions {
 
   /**
    * Name of a monotonically-increasing numeric field on the input schema used
-   * to order and dedupe incoming frames. When set, the framework:
+   * to order and dedupe incoming frames. Unset by default (opt-in) — dedupe and
+   * `.at()` lookup are off unless you name a field here. When set, the framework:
    * - Drops redundant frames (`input[seqField]` ≤ the last-seen value are
-   *   discarded before they enter the buffer). Matches the unreliable-mode
-   *   ring-redundancy pattern out of the box.
+   *   discarded before they enter the buffer) — the unreliable-mode
+   *   ring-redundancy pattern.
    * - Powers `room.input(sessionId).at(value)` lookups.
    *
    * Despite the name, "seq" here is broader than an integer counter — any
@@ -55,6 +56,14 @@ export interface InputOptions {
    * works).
    */
   bufferMaxSize: number;
+
+  /**
+   * `true` when the Room called `defineInput(..., { renderTime: true })`.
+   * The client then auto-stamps each reliable input with a server-clock render
+   * timestamp (ms since room start), surfaced as {@link InputAccessor.renderTime}
+   * for lag-compensated hit registration. Default `false`.
+   */
+  renderTime?: boolean;
 }
 
 /**
@@ -96,6 +105,16 @@ export interface InputAccessor<I = any> {
 
   /** Drop all buffered snapshots (also resets the dedupe tracker). */
   clear(): void;
+
+  /**
+   * Server-clock render timestamp (ms since room start) of the most recently
+   * drained input — the time the client was rendering the world at when it
+   * issued that input. `0` until the first render-time-stamped input is drained.
+   * Populated only when the Room called `defineInput(..., { renderTime: true })`
+   * with `bufferMaxSize > 0`. Rewind other entities to this time for
+   * lag-compensated "what you see is what you hit" hit registration.
+   */
+  readonly renderTime: number;
 }
 
 /**
@@ -123,16 +142,26 @@ export class InputBufferImpl<I = any> {
    */
   consumedCount = 0;
 
+  /** Render times parallel to `_items` (server-clock ms; `0` when unset). */
+  private _renderTimes: number[] = [];
+  /** Render time of the most recently drained input (see {@link renderTime}). */
+  private _lastRenderTime = 0;
+
   constructor(maxSize: number, seqField: string | undefined) {
     this._maxSize = maxSize;
     this._seqField = seqField;
   }
 
-  push(snapshot: I): void {
+  push(snapshot: I, renderTime: number = 0): void {
     this._items.push(snapshot);
+    this._renderTimes.push(renderTime);
     // Overflow drops the oldest UNCONSUMED input. Count it as consumed so the
     // reconcile ack still advances past it (the server will never apply it).
-    if (this._items.length > this._maxSize) { this._items.shift(); this.consumedCount++; }
+    if (this._items.length > this._maxSize) {
+      this._items.shift();
+      this._renderTimes.shift(); // keep parallel with `_items`
+      this.consumedCount++;
+    }
   }
 
   /** Returns true if `value` hasn't been seen, and updates the last-seen marker. */
@@ -144,8 +173,14 @@ export class InputBufferImpl<I = any> {
 
   drain(): I[] {
     const out = this._items;
+    // Report the newest drained input's render time (matches reading the last
+    // drained frame). Persists across a subsequent empty drain.
+    if (this._renderTimes.length > 0) {
+      this._lastRenderTime = this._renderTimes[this._renderTimes.length - 1];
+    }
     this.consumedCount += out.length;
     this._items = [];
+    this._renderTimes = [];
     return out;
   }
 
@@ -165,9 +200,16 @@ export class InputBufferImpl<I = any> {
     return this._items.length;
   }
 
+  /** Render time (server-clock ms) of the most recently drained input; `0`
+   *  until the first render-time-stamped input is drained. */
+  get renderTime(): number {
+    return this._lastRenderTime;
+  }
+
   clear(): void {
     this.consumedCount += this._items.length;
     this._items.length = 0;
+    this._renderTimes.length = 0;
     this._lastSeq = -Infinity;
   }
 }
@@ -189,6 +231,7 @@ export class InputAccessorImpl<I = any> implements InputAccessor<I> {
   peek(): I[] { return (this._client._inputBuffer?.peek() ?? []) as I[]; }
   get size(): number { return this._client._inputBuffer?.size ?? 0; }
   clear(): void { this._client._inputBuffer?.clear(); }
+  get renderTime(): number { return this._client._inputBuffer?.renderTime ?? 0; }
 }
 
 /**
@@ -204,4 +247,5 @@ export const NO_OP_INPUT_ACCESSOR: InputAccessor<any> = Object.freeze({
   peek: () => [],
   size: 0,
   clear: () => {},
+  renderTime: 0,
 });

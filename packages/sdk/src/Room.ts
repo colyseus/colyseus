@@ -1,4 +1,4 @@
-import { CloseCode, HandshakeSection, Protocol, PROTOCOL_CODE_MASK, PROTOCOL_MODIFIER_MASK, ProtocolModifier, ResponseStatus, type InferState, type InferInput, type NormalizeRoomType, type ExtractRoomMessages, type ExtractRoomClientMessages, type ExtractMessageType, type ExtractResponseType } from '@colyseus/shared-types';
+import { CloseCode, HandshakeSection, InputFlags, Protocol, PROTOCOL_CODE_MASK, PROTOCOL_MODIFIER_MASK, ProtocolModifier, ResponseStatus, type InferState, type InferInput, type NormalizeRoomType, type ExtractRoomMessages, type ExtractRoomClientMessages, type ExtractMessageType, type ExtractResponseType } from '@colyseus/shared-types';
 import { decode, Decoder, encode, Iterator, Reflection, Schema } from '@colyseus/schema';
 import { InputEncoder } from '@colyseus/schema/input';
 
@@ -198,6 +198,14 @@ export class Room<
      * @internal
      */
     #inputCtorFromReflection?: new () => any;
+
+    /**
+     * `true` when the server's handshake advertised render-time lag comp (the
+     * `INPUT_OPTIONS` section, `InputFlags.RENDER_TIME`). The input handle then
+     * auto-stamps each reliable input with a server-clock render timestamp.
+     * @internal
+     */
+    #inputRenderTime = false;
 
     constructor(name: string, rootSchema?: SchemaConstructor<State>) {
         this.name = name;
@@ -556,7 +564,12 @@ export class Room<
         // The handle owns the input round-trip (send counter + send-time table
         // for RTT, and the server-acked count). The TIMED decode feeds it the
         // server ack; it produces RTT samples for the clock. See onMessage.
-        this.#inputHandle = new InputHandleImpl(this, instance, encoder);
+        // `renderTime` is server-driven (the INPUT_OPTIONS handshake flag);
+        // `renderDelay` lets the app subtract its interpolation buffer.
+        this.#inputHandle = new InputHandleImpl(this, instance, encoder, {
+            renderTime: this.#inputRenderTime,
+            renderDelay: options?.renderDelay,
+        });
         return this.#inputHandle as InputHandle<I>;
     }
 
@@ -646,6 +659,13 @@ export class Room<
                     // their own (e.g. via `room.clock = new MyClock()` after
                     // `await joinOrCreate(...)`).
                     if (this.clock === NULL_CLOCK) this.clock = new RoomClock();
+
+                } else if (tag === HandshakeSection.INPUT_OPTIONS) {
+                    // Input feature flags the client must mirror. Currently only
+                    // RENDER_TIME (auto-stamp reliable inputs with a server-clock
+                    // render timestamp for lag-compensated hit registration).
+                    const flags = buffer[it.offset];
+                    this.#inputRenderTime = (flags & InputFlags.RENDER_TIME) !== 0;
                 }
 
                 it.offset = sectionEnd;
