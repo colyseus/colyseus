@@ -64,6 +64,13 @@ export interface InputOptions {
    * for lag-compensated hit registration. Default `false`.
    */
   renderTime?: boolean;
+
+  /**
+   * Fixed step rate (Hz) advertised to clients via the join handshake; they
+   * predict at dt = 1/tickRate. Set explicitly via `defineInput`, or derived
+   * from `setSimulationInterval`. Unset = not advertised.
+   */
+  tickRate?: number;
 }
 
 /**
@@ -155,8 +162,7 @@ export class InputBufferImpl<I = any> {
   push(snapshot: I, renderTime: number = 0): void {
     this._items.push(snapshot);
     this._renderTimes.push(renderTime);
-    // Overflow drops the oldest UNCONSUMED input. Count it as consumed so the
-    // reconcile ack still advances past it (the server will never apply it).
+    // Overflow drops oldest unconsumed input; count it consumed so the reconcile ack still advances past it.
     if (this._items.length > this._maxSize) {
       this._items.shift();
       this._renderTimes.shift(); // keep parallel with `_items`
@@ -173,8 +179,7 @@ export class InputBufferImpl<I = any> {
 
   drain(): I[] {
     const out = this._items;
-    // Report the newest drained input's render time (matches reading the last
-    // drained frame). Persists across a subsequent empty drain.
+    // Report newest drained input's render time; persists across a subsequent empty drain.
     if (this._renderTimes.length > 0) {
       this._lastRenderTime = this._renderTimes[this._renderTimes.length - 1];
     }

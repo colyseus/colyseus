@@ -1,7 +1,8 @@
 import { unpack } from 'msgpackr';
-import { decode, Encoder, Reflection, type Iterator, $changes } from '@colyseus/schema';
+import { decode, encode, Encoder, Reflection, type Iterator, $changes } from '@colyseus/schema';
 import { InputDecoder } from '@colyseus/schema/input';
 import { type InputAccessor, type InputAPI, type InputOptions, type NumericFieldsOf, InputAccessorImpl, InputBufferImpl, NO_OP_INPUT_ACCESSOR } from './input/InputBuffer.ts';
+import { Rewind, type RewindOptions } from './Rewind.ts';
 export { type InputAccessor, type InputAPI, type InputOptions, type NumericFieldsOf } from './input/InputBuffer.ts';
 
 /**
@@ -670,6 +671,13 @@ export class Room<T extends RoomOptions = RoomOptions> {
        * when on).
        */
       renderTime?: boolean;
+      /**
+       * Fixed step rate (Hz) cascaded to the client via the join handshake; it
+       * predicts at dt = 1/tickRate for deterministic rollback. Defaults to the
+       * `setSimulationInterval` rate — pass this only when the prediction step
+       * differs from it.
+       */
+      tickRate?: number;
     },
   ): InputAPI<InstanceType<C>> {
     this._inputOptions = {
@@ -681,6 +689,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
       seqField: opts?.seqField,
       bufferMaxSize: opts?.bufferMaxSize ?? 32,
       renderTime: opts?.renderTime ?? false,
+      tickRate: opts?.tickRate,
     };
     // Enable wire-level timing for clients that advertise CLIENT_TIMING.
     // Defining inputs is the natural "real-time room" gate — chat / lobby /
@@ -851,6 +860,11 @@ export class Room<T extends RoomOptions = RoomOptions> {
     // clear previous interval in case called setSimulationInterval more than once
     if (this._simulationInterval) { clearInterval(this._simulationInterval); }
 
+    // Advertise this loop's rate to predicting clients unless set explicitly.
+    if (onTickCallback && this._inputOptions && this._inputOptions.tickRate === undefined) {
+      this._inputOptions.tickRate = Math.round(1000 / delay);
+    }
+
     if (onTickCallback) {
       if (this.onUncaughtException !== undefined) {
         onTickCallback = wrapTryCatch(onTickCallback, this.onUncaughtException.bind(this), SimulationIntervalException, 'setSimulationInterval');
@@ -859,8 +873,40 @@ export class Room<T extends RoomOptions = RoomOptions> {
       this._simulationInterval = setInterval(() => {
         this.clock.tick();
         onTickCallback(this.clock.deltaTime);
+        // Lag-comp: snapshot tracked entities AFTER the tick. Skipped if the room
+        // recorded this tick manually (its `record()` wins). `delay` sizes the rings.
+        const rw = this.#rewind;
+        if (rw !== undefined && rw.lastRecordedAt !== this.clock.elapsedTime) {
+          rw.record(this.clock.elapsedTime, delay);
+        }
       }, delay);
     }
+  }
+
+  /** Server-side lag compensation, lazily created. @see allowRewindState */
+  #rewind?: Rewind;
+
+  /**
+   * Enable server-side lag compensation: returns a {@link Rewind} that records the
+   * position history of the entities you attach and automatically snapshots them
+   * after each simulation tick. Attach the collections to rewind, then read past
+   * positions (at a client's renderTime) in your hit tests.
+   *
+   * @example
+   * ```ts
+   * const rewind = this.allowRewindState({ maxRewindMs: 500 });
+   * rewind.attachAll(this.state.enemies, { fields: ["x", "y"] });
+   * // in a hit test:
+   * const seenX = rewind.valueAt(enemy, renderTime, "x");
+   * ```
+   *
+   * Needs a simulation loop ({@link setSimulationInterval} / {@link setTickedSimulation})
+   * — that's what drives the recording. Call `rewind.record()` yourself during a
+   * tick to take over its timing for that tick.
+   */
+  public allowRewindState(opts?: RewindOptions): Rewind {
+    this.#rewind = Rewind.get(this, opts);
+    return this.#rewind;
   }
 
   /**
@@ -1672,12 +1718,25 @@ export class Room<T extends RoomOptions = RoomOptions> {
         if (inputBytes !== undefined) {
           extraSections = [{ tag: HandshakeSection.INPUT_REFLECTION, bytes: inputBytes }];
         }
-        // Mirror input feature flags the client must honor (render-time lag
-        // comp → the client auto-stamps each reliable input; see InputFlags).
-        if (this._inputOptions.renderTime) {
+        // [flags uint8][tickRate varint?][patchRate varint?]: renderTime → client
+        // auto-stamps inputs; tickRate (Hz) → predict at dt=1/tickRate; patchRate (ms)
+        // → reconcile cadence for smoothing. Varints in bit order. See InputFlags.
+        const tickRate = this._inputOptions.tickRate;
+        const patchRate = (typeof this.patchRate === "number" && this.patchRate > 0)
+          ? Math.round(this.patchRate) : undefined;
+        if (this._inputOptions.renderTime || tickRate || patchRate) {
+          let flags = 0;
+          if (this._inputOptions.renderTime) { flags |= InputFlags.RENDER_TIME; }
+          if (tickRate) { flags |= InputFlags.FIXED_TIMESTEP; }
+          if (patchRate) { flags |= InputFlags.PATCH_RATE; }
+          const buf = new Uint8Array(16);
+          const sit = { offset: 0 };
+          buf[sit.offset++] = flags;
+          if (tickRate) { encode.number(buf, tickRate, sit); }
+          if (patchRate) { encode.number(buf, patchRate, sit); }
           (extraSections ??= []).push({
             tag: HandshakeSection.INPUT_OPTIONS,
-            bytes: new Uint8Array([InputFlags.RENDER_TIME]),
+            bytes: buf.subarray(0, sit.offset),
           });
         }
       }

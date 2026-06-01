@@ -13,6 +13,7 @@ export {
 // Core classes
 export { Server, defineRoom, defineServer, registerRoomDefinitions, unregisterRoomDefinitions, type RoomDefinitions, type ServerOptions, type SDKTypes } from './Server.ts';
 export { Room, RoomInternalState, validate, type RoomOptions, type MessageHandlerWithFormat, type Messages, type ExtractRoomState, type ExtractRoomMetadata, type ExtractRoomClient } from './Room.ts';
+export { Rewind, type RewindOptions } from './Rewind.ts';
 export {
   RoomPlugin, definePlugins, attachToTestRoom,
   type RoomPluginOrder, type PluginDependencies, type RoomPluginClass,

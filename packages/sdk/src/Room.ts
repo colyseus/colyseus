@@ -207,6 +207,22 @@ export class Room<
      */
     #inputRenderTime = false;
 
+    /**
+     * Server-advertised fixed simulation/input step rate (Hz) from
+     * `defineInput({ tickRate })`, decoded from the INPUT_OPTIONS handshake
+     * section. Surfaced on the input handle as {@link InputHandle.tickRate}.
+     * @internal
+     */
+    #inputTickRate?: number;
+
+    /**
+     * Server-advertised state-patch interval (ms) from the INPUT_OPTIONS
+     * handshake = the reconcile/correction cadence. Surfaced on the input handle
+     * as {@link InputHandle.patchRate}.
+     * @internal
+     */
+    #inputPatchRate?: number;
+
     constructor(name: string, rootSchema?: SchemaConstructor<State>) {
         this.name = name;
 
@@ -561,14 +577,14 @@ export class Room<
 
         const instance = new Ctor();
         const encoder = new InputEncoder(instance as any, options);
-        // The handle owns the input round-trip (send counter + send-time table
-        // for RTT, and the server-acked count). The TIMED decode feeds it the
-        // server ack; it produces RTT samples for the clock. See onMessage.
-        // `renderTime` is server-driven (the INPUT_OPTIONS handshake flag);
-        // `renderDelay` lets the app subtract its interpolation buffer.
+        // The handle owns the input round-trip (send counter, RTT send-times, server-acked count);
+        // the TIMED decode feeds it the ack and it produces RTT samples for the clock (see onMessage).
+        // `renderTime` is server-driven (INPUT_OPTIONS flag); `renderDelay` lets the app subtract its interp buffer.
         this.#inputHandle = new InputHandleImpl(this, instance, encoder, {
             renderTime: this.#inputRenderTime,
             renderDelay: options?.renderDelay,
+            tickRate: this.#inputTickRate,
+            patchRate: this.#inputPatchRate,
         });
         return this.#inputHandle as InputHandle<I>;
     }
@@ -661,11 +677,16 @@ export class Room<
                     if (this.clock === NULL_CLOCK) this.clock = new RoomClock();
 
                 } else if (tag === HandshakeSection.INPUT_OPTIONS) {
-                    // Input feature flags the client must mirror. Currently only
-                    // RENDER_TIME (auto-stamp reliable inputs with a server-clock
-                    // render timestamp for lag-compensated hit registration).
-                    const flags = buffer[it.offset];
+                    // [flags uint8][tickRate varint?][patchRate varint?], varints in bit order.
+                    // RENDER_TIME → auto-stamp inputs; FIXED_TIMESTEP → predict tickRate (Hz); PATCH_RATE → patch interval (ms = reconcile cadence).
+                    const flags = buffer[it.offset++];
                     this.#inputRenderTime = (flags & InputFlags.RENDER_TIME) !== 0;
+                    if (flags & InputFlags.FIXED_TIMESTEP) {
+                        this.#inputTickRate = decode.number(buffer as Buffer, it);
+                    }
+                    if (flags & InputFlags.PATCH_RATE) {
+                        this.#inputPatchRate = decode.number(buffer as Buffer, it);
+                    }
                 }
 
                 it.offset = sectionEnd;

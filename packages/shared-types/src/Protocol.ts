@@ -18,7 +18,7 @@ export const Protocol = {
   ROOM_DATA: 13,
   ROOM_STATE: 14,
   ROOM_STATE_PATCH: 15,
-  ROOM_DATA_SCHEMA: 16, // DEPRECATED: used to send schema instances via room.send()
+  ROOM_DATA_SCHEMA: 16, // DEPRECATED: schema instances via room.send()
   ROOM_DATA_BYTES: 17,
   PING: 18,
 
@@ -65,6 +65,12 @@ export const ProtocolModifier = {
    * support it would fail to parse — Colyseus 0.18 introduces the feature
    * alongside the first SDK release that decodes it, so the protocol bump
    * is implicit in the version.
+   *
+   * Also set on the client→server input opcode
+   * ({@link Protocol.ROOM_INPUT_RELIABLE}) when the Room enabled render-time
+   * lag compensation via `defineInput(..., { renderTime: true })`. In that
+   * direction the prefix is a single `[uint32 renderTime]` (ms since room
+   * start) — see {@link HandshakeSection.INPUT_OPTIONS} / {@link InputFlags}.
    */
   TIMED: 0x80,
 } as const;
@@ -106,8 +112,34 @@ export const HandshakeSection = {
    * don't pass an explicit `type`.
    */
   INPUT_REFLECTION: 1,
+
+  /**
+   * Input feature flags + optional values the client mirrors — present when the
+   * Room called `defineInput()`. Layout:
+   * `[flags uint8][tickRate varint?][patchRate varint?]`, bits per
+   * {@link InputFlags}; trailing varints appear in flag-bit order when set.
+   */
+  INPUT_OPTIONS: 2,
 } as const;
 export type HandshakeSection = typeof HandshakeSection[keyof typeof HandshakeSection];
+
+/**
+ * Bit flags packed into the leading byte of the
+ * {@link HandshakeSection.INPUT_OPTIONS} section. Some flags imply a trailing
+ * varint in the section payload (see each flag), appended in bit order.
+ */
+export const InputFlags = {
+  /** Client auto-stamps reliable inputs with a server-clock render timestamp
+   *  (ms since room start) for lag-compensated hit registration. */
+  RENDER_TIME: 1 << 0,
+  /** A `[tickRate varint]` (Hz) follows — the server's fixed sim/input step
+   *  rate. The client predicts at dt = 1/tickRate. */
+  FIXED_TIMESTEP: 1 << 1,
+  /** A `[patchRate varint]` (ms) follows — the server's state-patch interval =
+   *  the reconcile/correction cadence. The client tunes smoothing to it. */
+  PATCH_RATE: 1 << 2,
+} as const;
+export type InputFlags = typeof InputFlags[keyof typeof InputFlags];
 
 /**
  * HTTP MatchMaking Error Codes

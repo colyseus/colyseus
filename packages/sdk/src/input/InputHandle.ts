@@ -72,6 +72,22 @@ export interface InputHandle<I = any> {
   /** Wire mode this handle was constructed with. */
   readonly mode: InputMode;
   /**
+   * Server-advertised fixed simulation/input step rate in Hz, from
+   * `defineInput({ tickRate })` cascaded through the join handshake. Predict at
+   * this exact rate (dt = 1/tickRate) so client rollback-replay stays
+   * deterministic with the server — the single source of truth for the
+   * timestep. `undefined` when the server didn't advertise one (fall back to
+   * your own constant).
+   */
+  readonly tickRate?: number;
+  /**
+   * Server-advertised state-patch interval (ms) from the join handshake = the
+   * reconcile/correction cadence (acks + authoritative state arrive this often).
+   * A reconciler can tune its correction-smoothing window to it. `undefined`
+   * when not advertised.
+   */
+  readonly patchRate?: number;
+  /**
    * Encode the staged input and send it. Routes to the reliable or
    * unreliable channel based on {@link mode}.
    *
@@ -122,42 +138,61 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
   private _host: InputHandleHost;
   private _encoder: InputEncoder<any>;
   private _scratch: Uint8Array = new Uint8Array(2048);
+  // Cached framed-packet view into `_scratch`; avoids a per-send subarray. Re-made when packet size changes or `_scratch` grows.
+  private _framed: Uint8Array | null = null;
 
-  // Input round-trip state (per client per room — one handle per room). Owns
-  // the send counter + send-time table for RTT, and the server-acked count.
-  private static readonly SEND_TIME_TABLE_MAX = 256;
+  // Input round-trip state (one handle per room).
   private _sentCount = 0;                       // reliable inputs transmitted
   private _lastProcessed = 0;                   // server-acked (consumedCount)
-  private _sentTimes = new Map<number, number>(); // seq → client send time (RTT)
+  // RTT send-time ring (seq % size → send time); avoids per-send Map churn. Sized above realistic in-flight.
+  private static readonly SEND_TIME_SIZE = 256;
+  private _sendTimes = new Float64Array(InputHandleImpl.SEND_TIME_SIZE);
 
-  // Sent-input ring for client-side reconciliation/replay — the mirror of the
-  // server's per-client input buffer. Each reliable send snapshots `data` into a
-  // reused slot keyed by `seq % size` (overwritten in place via Schema#assign —
-  // NO per-send allocation), so a reconciler can replay the unacked inputs
-  // without owning its own copy. Sized well above any realistic in-flight count
-  // (RTT × send-rate); older entries age out (a reconcile that far behind pops).
-  private static readonly INPUT_BUFFER_SIZE = 64;
+  // Sent-input replay ring, mirroring the server's per-client input buffer: each reliable send snapshots
+  // `data` into slot `seq % size` via alloc-free `copyInto` so a reconciler can replay unacked inputs.
+  // Size = worst-case in-flight = (RTT + patch interval) × input rate. tickRate/patchRate from the
+  // handshake (ack rides the patch, so lags up to one interval); RTT is budgeted generously. Floored
+  // at 64; grows for high input rates where 64 would silently overflow (aged-out entries warn once).
+  private static readonly BUFFER_FLOOR = 64;
+  private static readonly BUFFER_RTT_BUDGET_MS = 1000;
+  private static readonly BUFFER_HEADROOM = 1.5;
+  private readonly _inputBufferSize: number;
   private _inputBuffer: I[] | null = null;      // lazily allocated (needs data ctor)
+  private static _warnedBufferOverflow = false;
 
-  // Render-time lag comp — enabled by the server's INPUT_OPTIONS handshake.
-  // When on, each reliable input carries a [uint32 renderTime] prefix.
+  // Render-time lag comp (server INPUT_OPTIONS handshake): each reliable input gets a [uint32 renderTime] prefix.
   private _renderTime = false;
   private _renderDelay = 0;
+  // Server-advertised rates: fixed step (Hz) and patch interval (ms = reconcile cadence).
+  private _tickRate?: number;
+  private _patchRate?: number;
 
   constructor(
     host: InputHandleHost,
     data: I,
     encoder: InputEncoder<any>,
-    opts?: { renderTime?: boolean; renderDelay?: number },
+    opts?: { renderTime?: boolean; renderDelay?: number; tickRate?: number; patchRate?: number },
   ) {
     this._host = host;
     this.data = data;
     this._encoder = encoder;
     this._renderTime = opts?.renderTime ?? false;
     this._renderDelay = opts?.renderDelay ?? 0;
+    this._tickRate = opts?.tickRate;
+    this._patchRate = opts?.patchRate;
+
+    // Size the replay ring to the advertised rates (see field comment).
+    const stepMs = this._tickRate ? 1000 / this._tickRate : (1000 / 60);
+    const window = InputHandleImpl.BUFFER_RTT_BUDGET_MS + (this._patchRate ?? 0);
+    this._inputBufferSize = Math.max(
+      InputHandleImpl.BUFFER_FLOOR,
+      Math.ceil((window / stepMs) * InputHandleImpl.BUFFER_HEADROOM),
+    );
   }
 
   get mode(): InputMode { return this._encoder.mode; }
+  get tickRate(): number | undefined { return this._tickRate; }
+  get patchRate(): number | undefined { return this._patchRate; }
   get lastProcessed(): number { return this._lastProcessed; }
   get sentCount(): number { return this._sentCount; }
   get pendingCount(): number { return this._sentCount - this._lastProcessed; }
@@ -166,15 +201,26 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
     if (this._inputBuffer === null) return undefined;
     // Buffered iff sent, not yet acked, and still within the bounded ring window.
     if (seq <= this._lastProcessed || seq > this._sentCount) return undefined;
-    if (this._sentCount - seq >= InputHandleImpl.INPUT_BUFFER_SIZE) return undefined;
-    return this._inputBuffer[seq % InputHandleImpl.INPUT_BUFFER_SIZE];
+    if (this._sentCount - seq >= this._inputBufferSize) {
+      // Pending input aged out (RTT exceeded the buffer budget); reconcile may drift, so warn once.
+      if (!InputHandleImpl._warnedBufferOverflow) {
+        InputHandleImpl._warnedBufferOverflow = true;
+        console.warn(
+          `@colyseus/sdk: input replay buffer (${this._inputBufferSize}) overflowed — ` +
+          `RTT exceeds its budget at this input rate; reconciliation may drift.`,
+        );
+      }
+      return undefined;
+    }
+    return this._inputBuffer[seq % this._inputBufferSize];
   }
 
   reset(): void {
     this._encoder.reset();
     this._sentCount = 0;
     this._lastProcessed = 0;
-    this._sentTimes.clear();
+    this._framed = null;
+    // _sendTimes / _inputBuffer rings are reused (overwritten by future sends).
   }
 
   send(): void {
@@ -184,15 +230,14 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
     const bytes = this._encoder.encode();
     if (bytes.length === 0) return; // delta no-op — nothing to send, nothing to count
 
-    // Render-time prefix: reliable inputs only (phase 1). When enabled, OR the
-    // TIMED modifier onto the opcode and prepend [uint32 renderTime LE] — the
-    // server-clock ms (minus any interp delay) we're rendering the world at —
-    // so the server can rewind other entities for lag-compensated hits.
+    // Render-time prefix (reliable only): OR the TIMED modifier onto the opcode and prepend
+    // [uint32 renderTime LE] — server-clock ms (minus interp delay) we render at — for lag-comp rewind.
     const stampRender = this._renderTime && this._encoder.mode === "reliable";
     const prefixLen = stampRender ? 4 : 0;
     const total = 1 + prefixLen + bytes.length;
     if (total > this._scratch.byteLength) {
       this._scratch = new Uint8Array(Math.max(total, this._scratch.byteLength * 2));
+      this._framed = null;   // cached view points into the old buffer
     }
     if (stampRender) {
       this._scratch[0] = Protocol.ROOM_INPUT_RELIABLE | ProtocolModifier.TIMED;
@@ -209,25 +254,22 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
       this._scratch.set(bytes, 1);
     }
 
-    const framed = this._scratch.subarray(0, total);
+    if (this._framed === null || this._framed.byteLength !== total) {
+      this._framed = this._scratch.subarray(0, total);   // reused view (size is stable)
+    }
+    const framed = this._framed;
     if (this._encoder.mode === "reliable") {
       conn.send(framed);
-      // Count + stamp this transmit. `_sentCount` mirrors the server's
-      // per-client received/consumed counter, so the next TIMED ack
-      // (`ackInput`) can both prune pending inputs and produce an RTT sample.
+      // `_sentCount` mirrors the server's consumed counter, so the next TIMED ack can prune + sample RTT.
       const seq = ++this._sentCount;
-      // Snapshot into the reused reconciliation ring — overwrite the slot in
-      // place (no allocation after the one-time warm-up).
+      // Snapshot into the replay ring via the codec — alloc-free, no Object.keys. Reliable + delta:false stages every field, so it's a full snapshot.
       if (this._inputBuffer === null) {
         const Ctor = (this.data as any).constructor;
-        this._inputBuffer = Array.from({ length: InputHandleImpl.INPUT_BUFFER_SIZE }, () => new Ctor() as I);
+        this._inputBuffer = Array.from({ length: this._inputBufferSize }, () => new Ctor() as I);
       }
-      (this._inputBuffer[seq % InputHandleImpl.INPUT_BUFFER_SIZE] as any).assign(this.data);
-      if (this._sentTimes.size >= InputHandleImpl.SEND_TIME_TABLE_MAX) {
-        const oldest = this._sentTimes.keys().next().value;
-        if (oldest !== undefined) this._sentTimes.delete(oldest);
-      }
-      this._sentTimes.set(seq, now());
+      this._encoder.copyInto(this._inputBuffer[seq % this._inputBufferSize]);
+      // RTT: stamp send time in the ring.
+      this._sendTimes[seq % InputHandleImpl.SEND_TIME_SIZE] = now();
     } else {
       conn.sendUnreliable(framed);
     }
@@ -241,13 +283,11 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
    */
   ackInput(seq: number): number {
     if (seq <= this._lastProcessed) return -1;
+    // Aged out of the send-time ring → RTT unknown.
+    const aged = this._sentCount - seq >= InputHandleImpl.SEND_TIME_SIZE;
     this._lastProcessed = seq;
-    const sentAt = this._sentTimes.get(seq);
-    // Evict acknowledged send-times (and any older).
-    for (const k of this._sentTimes.keys()) {
-      if (k <= seq) this._sentTimes.delete(k);
-      else break;
-    }
-    return sentAt !== undefined ? now() - sentAt : -1;
+    if (aged) return -1;
+    const sentAt = this._sendTimes[seq % InputHandleImpl.SEND_TIME_SIZE];
+    return sentAt > 0 ? now() - sentAt : -1;
   }
 }
