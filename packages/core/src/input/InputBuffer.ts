@@ -68,7 +68,7 @@ export interface InputOptions {
   /**
    * Fixed step rate (Hz) advertised to clients via the join handshake; they
    * predict at dt = 1/tickRate. Set explicitly via `defineInput`, or derived
-   * from `setSimulationInterval`. Unset = not advertised.
+   * from `setTimestep`. Unset = not advertised.
    */
   tickRate?: number;
 }
@@ -128,8 +128,30 @@ export interface InputAccessor<I = any> {
  * Callable returned by `Room.defineInput()`. Assign it to `this.input` and
  * call `room.input(sessionId)` per tick to read each client's latest input
  * and/or buffered snapshots.
+ *
+ * The fixed-step metadata lives HERE (one per room), not on the per-client
+ * `InputAccessor` — these values are identical for every client, so they'd be
+ * pure duplication per connection.
  */
-export type InputAPI<I = any> = (sessionId: string) => InputAccessor<I>;
+export type InputAPI<I = any> = ((sessionId: string) => InputAccessor<I>) & {
+  /**
+   * Server-advertised fixed step rate in **Hz** — from `defineInput`'s
+   * `tickRate`/`stepMs`/`stepSeconds`, or derived from `setTimestep` —
+   * the same value cascaded to predicting clients. `undefined` when no fixed
+   * step is advertised.
+   */
+  readonly tickRate?: number;
+  /**
+   * The fixed step as **seconds** (`1/tickRate`): the dt to integrate one input
+   * with, bit-identical to the client's prediction dt. Pass it to your physics
+   * step (`applyInput(p, cmd, level, room.input.stepSeconds)`) so server and
+   * client share one timestep instead of each keeping a constant that can drift.
+   * `undefined` when no rate is advertised.
+   */
+  readonly stepSeconds?: number;
+  /** The fixed step as **milliseconds** (`1000/tickRate`). `undefined` when no rate. */
+  readonly stepMs?: number;
+};
 
 /** @internal */
 export class InputBufferImpl<I = any> {

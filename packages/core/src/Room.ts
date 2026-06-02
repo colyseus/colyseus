@@ -83,6 +83,26 @@ export const DEFAULT_SEAT_RESERVATION_TIME = Number(process.env.COLYSEUS_SEAT_RE
 
 export type SimulationCallback = (deltaTime: number) => void;
 
+/**
+ * Per-step context passed to a {@link Room.setFixedTimestep} callback. Carries
+ * ONLY the fixed simulation step — never wall-clock/measured time — so feeding a
+ * jittery delta into deterministic sim math is unrepresentable. The same fixed
+ * `dt` is advertised to clients so prediction integrates identically. (The
+ * client's step context additionally carries an `isReplay` flag for rollback
+ * re-simulation; the server is authoritative and never replays, so it has none.)
+ */
+export interface StepContext {
+  /** Fixed step in SECONDS (`1/tickRate`) — the dt to integrate one step with. */
+  readonly dt: number;
+  /** Fixed step in MILLISECONDS (`1000/tickRate`). */
+  readonly dtMs: number;
+  /** Monotonic index of the fixed step being simulated. */
+  readonly tick: number;
+}
+
+/** Fixed-timestep simulation callback. @see Room.setFixedTimestep */
+export type FixedTimestepCallback = (ctx: StepContext) => void;
+
 export interface RoomOptions {
   state?: object;
   metadata?: any;
@@ -603,7 +623,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
    *   input = this.defineInput(MoveInput);
    *
    *   onCreate() {
-   *     this.setSimulationInterval(() => {
+   *     this.setTimestep(() => {
    *       for (const c of this.clients) {
    *         const input = this.input(c.sessionId);
    *         if (input.latest) this.apply(c, input.latest);
@@ -672,14 +692,44 @@ export class Room<T extends RoomOptions = RoomOptions> {
        */
       renderTime?: boolean;
       /**
-       * Fixed step rate (Hz) cascaded to the client via the join handshake; it
-       * predicts at dt = 1/tickRate for deterministic rollback. Defaults to the
-       * `setSimulationInterval` rate — pass this only when the prediction step
-       * differs from it.
+       * Fixed step rate in **Hz** cascaded to the client via the join handshake;
+       * it predicts at dt = 1/tickRate for deterministic rollback. Defaults to
+       * the `setTimestep` rate — pass this only when the prediction
+       * step differs from it. NOTE: a *rate*, not an interval — `1000/30` is the
+       * step in ms, a classic mistake; use {@link stepMs} for that. Superseded by
+       * {@link stepMs} / {@link stepSeconds} when those are given.
        */
       tickRate?: number;
+      /**
+       * Fixed step as a duration in **milliseconds** — the unit-safe alternative
+       * to {@link tickRate} (`stepMs: 1000/30` is unambiguous where
+       * `tickRate: 1000/30` is a bug). Normalized to the canonical Hz value
+       * (`1000/stepMs`). Takes precedence over `tickRate`.
+       */
+      stepMs?: number;
+      /**
+       * Fixed step as a duration in **seconds** (e.g. `1/30`). Normalized to the
+       * canonical Hz value (`1/stepSeconds`). Highest precedence.
+       */
+      stepSeconds?: number;
     },
   ): InputAPI<InstanceType<C>> {
+    // Normalize the step declaration to the canonical wire form (Hz). stepSeconds
+    // / stepMs are the unit-safe spellings; both sides derive dt = 1/tickRate, so
+    // one declared number drives the server's physics step AND the client's.
+    const tickRate =
+      opts?.stepSeconds !== undefined ? 1 / opts.stepSeconds :
+      opts?.stepMs !== undefined ? 1000 / opts.stepMs :
+      opts?.tickRate;
+    if (
+      opts?.tickRate !== undefined && opts.stepMs === undefined && opts.stepSeconds === undefined &&
+      (!Number.isInteger(opts.tickRate) || opts.tickRate > 240)
+    ) {
+      console.warn(
+        `[defineInput] tickRate is a rate in Hz (got ${opts.tickRate}); a value ` +
+        `like 1000/rate is a step interval in ms — pass { stepMs } instead.`,
+      );
+    }
     this._inputOptions = {
       ctor: type,
       // No default: dedupe + `.at()` lookup are OPT-IN. A default of "seq"
@@ -689,7 +739,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
       seqField: opts?.seqField,
       bufferMaxSize: opts?.bufferMaxSize ?? 32,
       renderTime: opts?.renderTime ?? false,
-      tickRate: opts?.tickRate,
+      tickRate,
     };
     // Enable wire-level timing for clients that advertise CLIENT_TIMING.
     // Defining inputs is the natural "real-time room" gate — chat / lobby /
@@ -702,10 +752,27 @@ export class Room<T extends RoomOptions = RoomOptions> {
       // back into a constructor through Reflection.decode.
       _inputReflectionCache.set(type, Reflection.encode(new Encoder(new type())));
     }
-    return ((sessionId: string): InputAccessor<InstanceType<C>> => {
+    const api = ((sessionId: string): InputAccessor<InstanceType<C>> => {
       const c = this.clients.getById(sessionId) as unknown as ClientPrivate | undefined;
       return (c?._inputAccessor as InputAccessor<InstanceType<C>>) ?? NO_OP_INPUT_ACCESSOR;
+    }) as InputAPI<InstanceType<C>>;
+    // Room-level fixed step (one source, not per-client). Live getters off
+    // _inputOptions so an auto-derived tickRate — set later by
+    // setTimestep — is reflected. dt = 1/tickRate; `1/hz` is
+    // correctly-rounded IEEE-754, so it matches the client's stepSeconds bit-for-bit.
+    Object.defineProperty(api, "tickRate", {
+      enumerable: true,
+      get: () => this._inputOptions?.tickRate,
     });
+    Object.defineProperty(api, "stepSeconds", {
+      enumerable: true,
+      get: () => { const hz = this._inputOptions?.tickRate; return hz ? 1 / hz : undefined; },
+    });
+    Object.defineProperty(api, "stepMs", {
+      enumerable: true,
+      get: () => { const hz = this._inputOptions?.tickRate; return hz ? 1000 / hz : undefined; },
+    });
+    return api;
   }
 
   /**
@@ -721,7 +788,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
    * - `onMessage`
    * - `onAuth` / `onJoin` / `onLeave` / `onCreate` / `onDispose`
    * - `clock.setTimeout` / `clock.setInterval`
-   * - `setSimulationInterval`
+   * - `setTimestep` / `setFixedTimestep`
    *
    * (Experimental: this feature is subject to change in the future - we're currently getting feedback to improve it)
    */
@@ -847,17 +914,19 @@ export class Room<T extends RoomOptions = RoomOptions> {
   }
 
   /**
-   * (Optional) Set a simulation interval that can change the state of the game.
-   * The simulation interval is your game loop.
+   * Set the room's game loop. `onTickCallback` runs every `delay` ms and receives
+   * the MEASURED wall-clock delta since the previous tick (a VARIABLE timestep).
+   * For deterministic, prediction-friendly simulation prefer
+   * {@link Room.setFixedTimestep}, which advances a fixed step via an accumulator.
    *
    * @default 16.6ms (60fps)
    *
-   * @param onTickCallback - You can implement your physics or world updates here!
-   *  This is a good place to update the room state.
-   * @param delay - Interval delay on executing `onTickCallback` in milliseconds.
+   * @param onTickCallback - Your physics / world update — a good place to mutate
+   *  room state. Receives the measured delta (`this.clock.deltaTime`).
+   * @param delay - Interval between ticks in milliseconds.
    */
-  public setSimulationInterval(onTickCallback?: SimulationCallback, delay: number = DEFAULT_SIMULATION_INTERVAL): void {
-    // clear previous interval in case called setSimulationInterval more than once
+  public setTimestep(onTickCallback?: SimulationCallback, delay: number = DEFAULT_SIMULATION_INTERVAL): void {
+    // clear previous loop in case it was set more than once
     if (this._simulationInterval) { clearInterval(this._simulationInterval); }
 
     // Advertise this loop's rate to predicting clients unless set explicitly.
@@ -867,7 +936,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
 
     if (onTickCallback) {
       if (this.onUncaughtException !== undefined) {
-        onTickCallback = wrapTryCatch(onTickCallback, this.onUncaughtException.bind(this), SimulationIntervalException, 'setSimulationInterval');
+        onTickCallback = wrapTryCatch(onTickCallback, this.onUncaughtException.bind(this), SimulationIntervalException, 'setTimestep');
       }
 
       this._simulationInterval = setInterval(() => {
@@ -881,6 +950,87 @@ export class Room<T extends RoomOptions = RoomOptions> {
         }
       }, delay);
     }
+  }
+
+  /**
+   * @deprecated Renamed to {@link Room.setTimestep} (which pairs with
+   * {@link Room.setFixedTimestep}). Kept for backwards compatibility — forwards
+   * to `setTimestep` unchanged.
+   */
+  public setSimulationInterval(onTickCallback?: SimulationCallback, delay: number = DEFAULT_SIMULATION_INTERVAL): void {
+    this.setTimestep(onTickCallback, delay);
+  }
+
+  /**
+   * Fixed-timestep game loop with a framework-owned accumulator — the right
+   * default for prediction/rollback. Unlike {@link setTimestep} (which
+   * hands you the *measured* wall-clock delta), this runs `step` a whole number
+   * of times per real frame so each step advances by the SAME fixed
+   * `dt = 1/tickRate`; the measured delta only decides HOW MANY steps run. The
+   * fixed dt is delivered via {@link StepContext}, so the jittery wall-clock
+   * delta can't leak into deterministic simulation.
+   *
+   * `tickRate` is also the SINGLE SOURCE of the simulation rate: it's advertised
+   * to predicting clients via the join handshake (they predict at the matching
+   * `dt`), so don't also pass `tickRate` to {@link defineInput}.
+   *
+   * On a hitch the accumulator runs at most a few catch-up steps then drops the
+   * backlog (no spiral of death). Lag-comp is recorded once per real frame.
+   *
+   * @param step - Called once per fixed step with a {@link StepContext}.
+   * @param tickRate - Simulation rate in **Hz**. Defaults to 60.
+   *
+   * @example
+   * ```ts
+   * onCreate() {
+   *   this.setFixedTimestep((ctx) => {
+   *     this.stepPlayers(ctx.dt);   // applyInput(p, cmd, level, ctx.dt)
+   *     this.stepWorld(ctx.dt);
+   *   }, 30);
+   * }
+   * ```
+   */
+  public setFixedTimestep(step: FixedTimestepCallback, tickRate: number = Math.round(1000 / DEFAULT_SIMULATION_INTERVAL)): void {
+    if (this._simulationInterval) { clearInterval(this._simulationInterval); }
+
+    const stepMs = 1000 / tickRate;
+    const stepSeconds = 1 / tickRate;
+
+    // Single source of the fixed rate: advertise it to predicting clients.
+    if (this._inputOptions) { this._inputOptions.tickRate = tickRate; }
+
+    let cb = step;
+    if (this.onUncaughtException !== undefined) {
+      cb = wrapTryCatch(step, this.onUncaughtException.bind(this), SimulationIntervalException, 'setFixedTimestep');
+    }
+
+    let acc = 0;
+    let tick = 0;
+    // Reused per-step context — no per-step allocation in the hot loop.
+    const ctx = { dt: stepSeconds, dtMs: stepMs, tick: 0 };
+    const MAX_CATCHUP_STEPS = 5;
+
+    this._simulationInterval = setInterval(() => {
+      this.clock.tick();
+      acc += this.clock.deltaTime;
+
+      // Run a whole number of FIXED steps to consume the measured time.
+      let ran = 0;
+      while (acc >= stepMs && ran < MAX_CATCHUP_STEPS) {
+        acc -= stepMs;
+        ctx.tick = tick++;
+        cb(ctx);
+        ran++;
+      }
+      if (ran === MAX_CATCHUP_STEPS) { acc = 0; } // hitch: drop backlog, don't spiral
+
+      // Lag-comp: snapshot tracked entities once per real frame (real clock),
+      // matching setTimestep. `stepMs` sizes the history rings.
+      const rw = this.#rewind;
+      if (ran > 0 && rw !== undefined && rw.lastRecordedAt !== this.clock.elapsedTime) {
+        rw.record(this.clock.elapsedTime, stepMs);
+      }
+    }, stepMs);
   }
 
   /** Server-side lag compensation, lazily created. @see allowRewindState */
@@ -900,7 +1050,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
    * const seenX = rewind.valueAt(enemy, renderTime, "x");
    * ```
    *
-   * Needs a simulation loop ({@link setSimulationInterval} / {@link setTickedSimulation})
+   * Needs a simulation loop ({@link setTimestep} / {@link setFixedTimestep})
    * — that's what drives the recording. Call `rewind.record()` yourself during a
    * tick to take over its timing for that tick.
    */
@@ -908,51 +1058,6 @@ export class Room<T extends RoomOptions = RoomOptions> {
     this.#rewind = Rewind.get(this, opts);
     return this.#rewind;
   }
-
-  /**
-   * Run a fixed-rate simulation tagged with a monotonic server tick number.
-   * Combine with `room.input(sessionId).at(tick)` to retrieve each client's
-   * input *for a specific tick* — the building block for lockstep / rollback
-   * netcode.
-   *
-   * Replaces any previous {@link setSimulationInterval}. The current tick is
-   * exposed via {@link tick}.
-   *
-   * @example
-   * ```typescript
-   * class LockstepRoom extends Room<{ input: MoveInput }> {
-   *   input = this.defineInput(MoveInput, { seqField: "tick", bufferMaxSize: 64 });
-   *
-   *   onCreate() {
-   *     this.setTickedSimulation((tick, dt) => {
-   *       for (const c of this.clients) {
-   *         const snapshot = this.input(c.sessionId).at(tick);
-   *         if (snapshot) this.apply(c, snapshot);
-   *         // else: predict, freeze, etc. — game-level decision
-   *       }
-   *     }, 1000 / 60);
-   *   }
-   * }
-   * ```
-   */
-  public setTickedSimulation(
-    onTickCallback: (tick: number, deltaTime: number) => void,
-    delay: number = DEFAULT_SIMULATION_INTERVAL,
-    startTick: number = 0,
-  ): void {
-    this.#_tick = startTick;
-    this.setSimulationInterval((dt) => {
-      onTickCallback(this.#_tick, dt);
-      this.#_tick++;
-    }, delay);
-  }
-
-  /**
-   * Current server tick. Incremented by {@link setTickedSimulation} after each
-   * tick callback returns. Returns 0 when no ticked simulation is running.
-   */
-  public get tick(): number { return this.#_tick; }
-  #_tick: number = 0;
 
   /**
    * @deprecated Use `.patchRate=` instead.

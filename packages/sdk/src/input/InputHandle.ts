@@ -81,6 +81,17 @@ export interface InputHandle<I = any> {
    */
   readonly tickRate?: number;
   /**
+   * The fixed step as **seconds** (`1/tickRate`) — the exact dt to predict and
+   * rollback-replay each input with, matching the server's per-input dt. Prefer
+   * this over hand-computing `1/tickRate`. `undefined` when no rate advertised.
+   */
+  readonly stepSeconds?: number;
+  /**
+   * The fixed step as **milliseconds** (`1000/tickRate`), e.g. to drive a
+   * fixed-timestep accumulator. `undefined` when no rate advertised.
+   */
+  readonly stepMs?: number;
+  /**
    * Server-advertised state-patch interval (ms) from the join handshake = the
    * reconcile/correction cadence (acks + authoritative state arrive this often).
    * A reconciler can tune its correction-smoothing window to it. `undefined`
@@ -192,6 +203,9 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
 
   get mode(): InputMode { return this._encoder.mode; }
   get tickRate(): number | undefined { return this._tickRate; }
+  // `1/hz` is correctly-rounded IEEE-754 → bit-identical to the server's stepSeconds.
+  get stepSeconds(): number | undefined { return this._tickRate ? 1 / this._tickRate : undefined; }
+  get stepMs(): number | undefined { return this._tickRate ? 1000 / this._tickRate : undefined; }
   get patchRate(): number | undefined { return this._patchRate; }
   get lastProcessed(): number { return this._lastProcessed; }
   get sentCount(): number { return this._sentCount; }

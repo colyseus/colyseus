@@ -9,7 +9,9 @@ export type RoomMethodName = 'onCreate'
   | 'onReconnect'
   | 'onDispose'
   | 'onMessage'
+  | 'setTimestep'
   | 'setSimulationInterval'
+  | 'setFixedTimestep'
   | 'setInterval'
   | 'setTimeout';
 
