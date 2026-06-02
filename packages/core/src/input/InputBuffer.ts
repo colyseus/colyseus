@@ -79,13 +79,24 @@ export interface InputOptions {
  *
  * - {@link latest} — the bound Schema instance, mutated in place by the
  *   decoder. Cheapest read; use when only the most recent state matters.
- * - {@link drain} / {@link peek} / {@link at} — populated when
- *   `defineInput()` was called with `bufferMaxSize > 0` (default 32).
- *   Use for rollback netcode / lockstep where every frame matters.
+ * - {@link drain} / {@link next} / {@link take} / {@link peek} / {@link at} —
+ *   populated when `defineInput()` was called with `bufferMaxSize > 0`
+ *   (default 32). Use for rollback netcode / lockstep where every frame matters.
+ *
+ * **Per-entity vs shared world** — pick the consume primitive by who integrates:
+ * - **Per-entity** (each body integrates itself): {@link drain} all of a
+ *   player's inputs and sub-integrate one per input — N inputs = N steps for
+ *   that player, ack lands on the newest applied. The clean default.
+ * - **Shared world** (one solver step advances every body together): you can't
+ *   replay N inputs as N world steps without over-stepping everyone else, so
+ *   {@link next} exactly one input per entity per tick (or {@link take} a bounded
+ *   few and sub-step the solver per input). The ack then === inputs actually
+ *   simulated; `drain()`-then-apply-latest would silently jump the ack past
+ *   inputs the server never simulated, snapping the client's reconciler.
  *
  * Returned for unknown sessionIds and rooms without `defineInput()` is a
- * frozen no-op accessor (latest=undefined, drain/peek=[], at=undefined,
- * size=0, clear=no-op).
+ * frozen no-op accessor (latest=undefined, drain/next/take/peek=[]/undefined,
+ * at=undefined, size=0, clear=no-op).
  */
 export interface InputAccessor<I = any> {
   /** Latest decoded input. `undefined` when unknown sessionId or no input declared. */
@@ -104,6 +115,42 @@ export interface InputAccessor<I = any> {
   /** Take everything buffered (oldest → newest) and clear. Snapshots are safe to retain. */
   drain(): I[];
 
+  /**
+   * Consume the single oldest buffered input and advance the reconcile ack by
+   * exactly one — the complement to {@link peek}. Returns `undefined` (hold last)
+   * when the buffer is empty.
+   *
+   * Use this in a **shared-world** loop where one solver step advances every
+   * entity together: you can't apply N-inputs-per-player as N world steps without
+   * over-stepping the others, so consume one input per entity per fixed step
+   * instead. {@link drain} (consume all, ack jumps to newest) is correct only
+   * when each entity integrates ITSELF — see the {@link InputAccessor} docs.
+   *
+   * `consumedCount`/{@link renderTime} stay exact: the ack reflects only the
+   * inputs you actually simulated, and `renderTime` is the stamp of THIS input.
+   *
+   * @example
+   * ```ts
+   * this.setFixedTimestep(() => {
+   *   for (const [sid, body] of bodies) {
+   *     const cmd = this.input(sid).next();   // one input → ack +1
+   *     if (cmd) applyInputToBody(body, cmd); // else hold last
+   *   }
+   *   world.step();                            // one step for everyone
+   * }, 30);
+   * ```
+   */
+  next(): I | undefined;
+
+  /**
+   * Consume up to `n` oldest buffered inputs (oldest → newest) and advance the
+   * reconcile ack by the count actually taken. Returns fewer than `n` (or `[]`)
+   * when the buffer holds fewer. Use for shared-world **sub-stepping** — apply
+   * each taken input as its own solver sub-step within one tick, bounding the
+   * sub-steps per tick. {@link next} is the `take(1)` shorthand.
+   */
+  take(n: number): I[];
+
   /** Read everything buffered without consuming. */
   peek(): I[];
 
@@ -115,11 +162,14 @@ export interface InputAccessor<I = any> {
 
   /**
    * Server-clock render timestamp (ms since room start) of the most recently
-   * drained input — the time the client was rendering the world at when it
-   * issued that input. `0` until the first render-time-stamped input is drained.
-   * Populated only when the Room called `defineInput(..., { renderTime: true })`
-   * with `bufferMaxSize > 0`. Rewind other entities to this time for
-   * lag-compensated "what you see is what you hit" hit registration.
+   * consumed input — the time the client was rendering the world at when it
+   * issued that input. Tracks the consume primitive: {@link drain}/{@link take}
+   * report the NEWEST input they consumed; {@link next} reports THAT one input,
+   * so single-consume loops rewind to the exact instant of the input simulated.
+   * `0` until the first render-time-stamped input is consumed. Populated only
+   * when the Room called `defineInput(..., { renderTime: true })` with
+   * `bufferMaxSize > 0`. Rewind other entities to this time for lag-compensated
+   * "what you see is what you hit" hit registration.
    */
   readonly renderTime: number;
 }
@@ -211,6 +261,25 @@ export class InputBufferImpl<I = any> {
     return out;
   }
 
+  /** Consume the single oldest input (ack advances by one); `undefined` if empty. */
+  next(): I | undefined {
+    if (this._items.length === 0) { return undefined; }
+    this._lastRenderTime = this._renderTimes.shift()!; // render time of THIS input
+    this.consumedCount++;
+    return this._items.shift();
+  }
+
+  /** Consume up to `n` oldest inputs (ack advances by the count actually taken). */
+  take(n: number): I[] {
+    if (n <= 0 || this._items.length === 0) { return []; }
+    const count = Math.min(n, this._items.length);
+    const out = this._items.splice(0, count);
+    const times = this._renderTimes.splice(0, count);
+    this._lastRenderTime = times[times.length - 1]; // newest taken input's render time
+    this.consumedCount += count;
+    return out;
+  }
+
   peek(): I[] {
     return this._items.slice();
   }
@@ -255,6 +324,8 @@ export class InputAccessorImpl<I = any> implements InputAccessor<I> {
   get latest(): I | undefined { return this._client._input as I | undefined; }
   at(value: number): I | undefined { return this._client._inputBuffer?.at(value) as I | undefined; }
   drain(): I[] { return (this._client._inputBuffer?.drain() ?? []) as I[]; }
+  next(): I | undefined { return this._client._inputBuffer?.next() as I | undefined; }
+  take(n: number): I[] { return (this._client._inputBuffer?.take(n) ?? []) as I[]; }
   peek(): I[] { return (this._client._inputBuffer?.peek() ?? []) as I[]; }
   get size(): number { return this._client._inputBuffer?.size ?? 0; }
   clear(): void { this._client._inputBuffer?.clear(); }
@@ -271,6 +342,8 @@ export const NO_OP_INPUT_ACCESSOR: InputAccessor<any> = Object.freeze({
   latest: undefined,
   at: () => undefined,
   drain: () => [],
+  next: () => undefined,
+  take: () => [],
   peek: () => [],
   size: 0,
   clear: () => {},

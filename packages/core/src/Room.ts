@@ -674,8 +674,13 @@ export class Room<T extends RoomOptions = RoomOptions> {
    *   them; redundant frames (`input[seqField]` ≤ the last seen) are then dropped.
    *   Leave unset for reliable, in-order channels where every frame is unique.
    * - `bufferMaxSize`: `32` — enables per-client snapshot buffering for
-   *   `room.input(sessionId).drain() / .peek() / .at()`. Set to `0` to disable
-   *   buffering (the `.latest` read still works).
+   *   `room.input(sessionId).drain() / .next() / .take() / .peek() / .at()`. Set
+   *   to `0` to disable buffering (the `.latest` read still works).
+   *
+   * **Consuming the buffer** — `drain()` (take all) suits per-entity integration;
+   * `next()` (take exactly one, ack +1) suits a shared physics world stepped once
+   * for everyone. See {@link InputAccessor} for the full per-entity-vs-shared-world
+   * guidance and why the choice affects the reconcile ack.
    */
   protected defineInput<C extends new () => any>(
     type: C,
@@ -976,6 +981,16 @@ export class Room<T extends RoomOptions = RoomOptions> {
    *
    * On a hitch the accumulator runs at most a few catch-up steps then drops the
    * backlog (no spiral of death). Lag-comp is recorded once per real frame.
+   *
+   * **Consuming input inside the step** — how you drain each client's buffer
+   * depends on who integrates (see {@link InputAccessor}):
+   * - *Per-entity* (each body integrates itself): `for (const cmd of
+   *   this.input(sid).drain()) applyInput(player, cmd, ctx.dt)` — N inputs =
+   *   N sub-integrations, ack lands on the newest applied.
+   * - *Shared world* (one solver step advances every body): consume exactly one
+   *   input per entity per step with `this.input(sid).next()` (or `take(n)` +
+   *   sub-step), then `world.step()` once. Draining all and applying only the
+   *   latest would jump the reconcile ack past inputs you never simulated.
    *
    * @param step - Called once per fixed step with a {@link StepContext}.
    * @param tickRate - Simulation rate in **Hz**. Defaults to 60.

@@ -4,7 +4,7 @@ import { Client as SDKClient } from "@colyseus/sdk";
 import { InputEncoder } from "@colyseus/schema/input";
 import { schema, t, type SchemaType } from "@colyseus/schema";
 
-import { matchMaker, Room, Server, Transport, Protocol, type Presence, type MatchMakerDriver } from "@colyseus/core";
+import { matchMaker, Room, Server, Transport, Protocol, ProtocolModifier, type Presence, type MatchMakerDriver } from "@colyseus/core";
 import { DRIVERS, PRESENCE_IMPLEMENTATIONS, timeout } from "../utils/index.ts";
 
 import { WebSocketTransport } from "@colyseus/ws-transport";
@@ -27,6 +27,12 @@ const SeqInput = schema({
 });
 type SeqInput = SchemaType<typeof SeqInput>;
 
+// Minimal state — mutated each tick so patches (carrying the consumedCount ack) flow.
+const TickState = schema({
+  tick: t.number().default(0),
+});
+type TickState = SchemaType<typeof TickState>;
+
 /**
  * Build a ROOM_INPUT_UNRELIABLE packet from `mutators`. The final encoder
  * output already contains the framed ring of all snapshots staged so far.
@@ -42,6 +48,30 @@ function unreliableRingPacket<I extends object>(
   const framed = new Uint8Array(1 + last.length);
   framed[0] = Protocol.ROOM_INPUT_UNRELIABLE;
   framed.set(last, 1);
+  return framed;
+}
+
+/**
+ * Build a ROOM_INPUT_RELIABLE packet carrying a KNOWN render-time stamp
+ * (the TIMED modifier + `[uint32 renderTime LE]` prefix the SDK normally
+ * fills from the synced clock). Crafting it directly makes the server-side
+ * `input.renderTime` assertion deterministic — no clock-sync timing.
+ */
+function reliableTimedPacket<I extends object>(
+  Ctor: new () => I,
+  renderTime: number,
+  mutate: (inst: I) => void,
+): Uint8Array {
+  const inst = new Ctor();
+  mutate(inst);
+  const body = new InputEncoder(inst as any).encode();
+  const framed = new Uint8Array(5 + body.length);
+  framed[0] = Protocol.ROOM_INPUT_RELIABLE | ProtocolModifier.TIMED;
+  framed[1] = renderTime & 0xff;
+  framed[2] = (renderTime >>> 8) & 0xff;
+  framed[3] = (renderTime >>> 16) & 0xff;
+  framed[4] = (renderTime >>> 24) & 0xff;
+  framed.set(body, 5);
   return framed;
 }
 
@@ -243,6 +273,147 @@ describe("Input (InputEncoder / InputDecoder integration)", () => {
     await timeout(50);
 
     assert.deepStrictEqual(drainedXs, [3, 4, 5], "buffer should hold the 3 newest after overflow");
+
+    await conn.leave();
+    await timeout(50);
+  });
+
+  it("Tier 2 — next() consumes exactly one (oldest) per call and holds on empty", async () => {
+    // Single-consume for a shared-world room: one input per entity per tick.
+    let probe: { x: number | undefined; size: number } = { x: -1, size: -1 };
+
+    matchMaker.defineRoomType('input_next', class _ extends Room<{ input: MoveInput }> {
+      input = this.defineInput(MoveInput, { bufferMaxSize: 16 });
+      messages = {
+        // No simulation loop — consume on demand so the buffer fills first.
+        consumeOne: function (this: any, c: any) {
+          const acc = this.input(c.sessionId);
+          const inp = acc.next();
+          probe = { x: inp?.x, size: acc.size };
+        },
+      };
+    });
+
+    const conn = await client.joinOrCreate('input_next');
+    const input = conn.input({ type: MoveInput });
+
+    // Three inputs buffered before consuming any.
+    input.data.x = 10; input.send(); await timeout(15);
+    input.data.x = 20; input.send(); await timeout(15);
+    input.data.x = 30; input.send(); await timeout(30);
+
+    conn.send("consumeOne"); await timeout(40);
+    assert.deepStrictEqual(probe, { x: 10, size: 2 }, "first next() → oldest, two remain");
+
+    conn.send("consumeOne"); await timeout(40);
+    assert.deepStrictEqual(probe, { x: 20, size: 1 });
+
+    conn.send("consumeOne"); await timeout(40);
+    assert.deepStrictEqual(probe, { x: 30, size: 0 });
+
+    conn.send("consumeOne"); await timeout(40);
+    assert.deepStrictEqual(probe, { x: undefined, size: 0 }, "empty buffer → undefined (hold last)");
+
+    await conn.leave();
+    await timeout(50);
+  });
+
+  it("Tier 2 — take(n) consumes up to n oldest, returning fewer when the buffer is short", async () => {
+    let probe: { xs: number[]; size: number } = { xs: [-1], size: -1 };
+
+    matchMaker.defineRoomType('input_take', class _ extends Room<{ input: MoveInput }> {
+      input = this.defineInput(MoveInput, { bufferMaxSize: 16 });
+      messages = {
+        takeTwo: function (this: any, c: any) {
+          const acc = this.input(c.sessionId);
+          const taken = acc.take(2);
+          probe = { xs: taken.map((i: any) => i.x), size: acc.size };
+        },
+      };
+    });
+
+    const conn = await client.joinOrCreate('input_take');
+    const input = conn.input({ type: MoveInput });
+
+    for (let i = 1; i <= 5; i++) { input.data.x = i; input.send(); await timeout(15); }
+    await timeout(20);
+
+    conn.send("takeTwo"); await timeout(40);
+    assert.deepStrictEqual(probe, { xs: [1, 2], size: 3 }, "take(2) → two oldest, three remain");
+
+    conn.send("takeTwo"); await timeout(40);
+    assert.deepStrictEqual(probe, { xs: [3, 4], size: 1 });
+
+    conn.send("takeTwo"); await timeout(40);
+    assert.deepStrictEqual(probe, { xs: [5], size: 0 }, "take(2) with one left returns just that one");
+
+    conn.send("takeTwo"); await timeout(40);
+    assert.deepStrictEqual(probe, { xs: [], size: 0 }, "empty buffer → []");
+
+    await conn.leave();
+    await timeout(50);
+  });
+
+  it("Tier 2 — next() reports per-consumed-input renderTime (oldest first), not the newest", async () => {
+    // Distinguishes next() from drain(): drain() would report the NEWEST stamp on
+    // the first call; next() reports the stamp of the one input it consumed.
+    const observed: number[] = [];
+
+    matchMaker.defineRoomType('input_next_rt', class _ extends Room<{ input: MoveInput }> {
+      input = this.defineInput(MoveInput, { renderTime: true, bufferMaxSize: 16 });
+      messages = {
+        consumeOne: function (this: any, c: any) {
+          const acc = this.input(c.sessionId);
+          const inp = acc.next();
+          observed.push(inp ? acc.renderTime : -1);
+        },
+      };
+    });
+
+    const conn = await client.joinOrCreate('input_next_rt');
+
+    // Three reliable inputs with KNOWN, increasing render-time stamps.
+    conn.connection.send(reliableTimedPacket(MoveInput, 100, (i) => { i.x = 1; })); await timeout(15);
+    conn.connection.send(reliableTimedPacket(MoveInput, 200, (i) => { i.x = 2; })); await timeout(15);
+    conn.connection.send(reliableTimedPacket(MoveInput, 300, (i) => { i.x = 3; })); await timeout(40);
+
+    conn.send("consumeOne"); await timeout(40);
+    conn.send("consumeOne"); await timeout(40);
+    conn.send("consumeOne"); await timeout(40);
+
+    assert.deepStrictEqual(observed, [100, 200, 300],
+      "next() must report the consumed input's own renderTime, advancing oldest→newest");
+
+    await conn.leave();
+    await timeout(50);
+  });
+
+  it("Tier 2 — next() advances the reconcile ack echoed to the client as lastProcessed", async () => {
+    // consumedCount accounting end-to-end: each next() bumps the buffer's consumed
+    // counter, which the serializer echoes in the TIMED prefix; the SDK surfaces it
+    // as input.lastProcessed.
+    matchMaker.defineRoomType('input_next_ack', class _ extends Room<{ input: MoveInput; state: TickState }> {
+      state = new TickState();
+      input = this.defineInput(MoveInput, { bufferMaxSize: 64 });
+      onCreate() {
+        this.setFixedTimestep(() => {
+          for (const c of this.clients) { this.input(c.sessionId).next(); } // ack +1 per tick
+          this.state.tick++; // mutate so patches (carrying the ack) flow
+        }, 30);
+      }
+    });
+
+    const conn = await client.joinOrCreate('input_next_ack');
+    const input = conn.input({ type: MoveInput });
+
+    const N = 5;
+    for (let i = 1; i <= N; i++) { input.data.x = i; input.send(); await timeout(15); }
+
+    // Let the fixed-timestep loop consume every buffered input one-per-tick.
+    await timeout(300);
+
+    assert.strictEqual(input.lastProcessed, N,
+      `server should have consumed all ${N} inputs one-per-tick; got lastProcessed=${input.lastProcessed}`);
 
     await conn.leave();
     await timeout(50);

@@ -3,6 +3,7 @@ import { ClockTimer as Clock, Delayed } from '@colyseus/timer';
 // Shared types - re-export from @colyseus/shared-types for convenience
 export {
   Protocol,
+  ProtocolModifier,
   ErrorCode,
   CloseCode,
   type InferState,
