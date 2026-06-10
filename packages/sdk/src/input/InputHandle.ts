@@ -15,8 +15,10 @@ export interface InputHandleHost {
   connection?: Connection;
   /** Room clock — read for the server-clock render timestamp auto-stamped onto
    *  reliable inputs when render-time lag compensation is enabled. Structural
-   *  to stay import-cycle free (the Room's RoomClockLike satisfies it). */
-  clock?: { serverNow(): number };
+   *  to stay import-cycle free (the Room's RoomClockLike satisfies it).
+   *  `lastServerTime`/`smoothedRtt` are optional so a bare `{ serverNow }` clock
+   *  still satisfies it (it just stamps 0 / omits the latency term). */
+  clock?: { serverNow(): number; lastServerTime?(): number; smoothedRtt?(): number };
 }
 
 /**
@@ -43,12 +45,13 @@ export interface InputOptions<I = any> extends InputEncoderOptions {
   type?: new () => I;
 
   /**
-   * Subtract this many ms from `clock.serverNow()` when auto-stamping the
-   * render timestamp for render-time lag compensation. Set it to your
-   * interpolation buffer delay so the stamp matches the server time you were
-   * actually rendering remote entities at. Default `0` — stamp `serverNow()`
-   * directly, correct when you dead-reckon remote entities to current server
-   * time. Has no effect unless the Room enabled render-time via `defineInput()`.
+   * Your interpolation buffer in ms — how far in the PAST you render remote
+   * entities (e.g. a `Predict` lerp `delay`). The auto-stamped render time is
+   * `serverNow() − renderDelay − smoothedRtt()/2`: this term covers the interp
+   * buffer, and the SDK adds the one-way downstream latency itself. So pass ONLY
+   * your interp buffer, never the latency. Default `0` — correct when you
+   * dead-reckon remote entities to current server time (no interp lag). Has no
+   * effect unless the Room enabled render-time via `defineInput({renderTime:true})`.
    */
   renderDelay?: number;
 }
@@ -173,6 +176,10 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
 
   // Render-time lag comp (server INPUT_OPTIONS handshake): each reliable input gets a [uint32 renderTime] prefix.
   private _renderTime = false;
+  // The app's interpolation buffer (ms) — how far in the past it renders remote
+  // entities (e.g. a `Predict` lerp `delay`). The stamp subtracts this AND the
+  // one-way latency (smoothedRtt/2) the SDK already tracks, so callers pass only
+  // the interp buffer, never the latency.
   private _renderDelay = 0;
   // Server-advertised rates: fixed step (Hz) and patch interval (ms = reconcile cadence).
   private _tickRate?: number;
@@ -245,7 +252,7 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
     if (bytes.length === 0) return; // delta no-op — nothing to send, nothing to count
 
     // Render-time prefix (reliable only): OR the TIMED modifier onto the opcode and prepend
-    // [uint32 renderTime LE] — server-clock ms (minus interp delay) we render at — for lag-comp rewind.
+    // [uint32 renderTime LE] — the server-clock ms the client is RENDERING at — for lag-comp rewind.
     const stampRender = this._renderTime && this._encoder.mode === "reliable";
     const prefixLen = stampRender ? 4 : 0;
     const total = 1 + prefixLen + bytes.length;
@@ -255,7 +262,15 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
     }
     if (stampRender) {
       this._scratch[0] = Protocol.ROOM_INPUT_RELIABLE | ProtocolModifier.TIMED;
-      const rt = Math.max(0, Math.round((this._host.clock?.serverNow() ?? 0) - this._renderDelay)) >>> 0;
+      // What the client SEES of remote entities lags current server time by the
+      // interp buffer (`renderDelay`, app-set) PLUS the one-way downstream latency
+      // (≈ smoothedRtt/2, which we own). Subtract both so the server rewinds targets
+      // to exactly the moment shown on screen. 0 until the clock syncs (lastServerTime
+      // is still 0) → the server falls back to live positions instead of a bogus stamp.
+      const clock = this._host.clock;
+      const rt = (clock?.lastServerTime?.() ?? 0) > 0
+        ? Math.max(0, Math.round(clock!.serverNow() - this._renderDelay - (clock!.smoothedRtt?.() ?? 0) / 2)) >>> 0
+        : 0;
       this._scratch[1] = rt & 0xff;
       this._scratch[2] = (rt >>> 8) & 0xff;
       this._scratch[3] = (rt >>> 16) & 0xff;

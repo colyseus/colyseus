@@ -1,9 +1,70 @@
 import { unpack } from 'msgpackr';
 import { decode, encode, Encoder, Reflection, type Iterator, $changes } from '@colyseus/schema';
 import { InputDecoder } from '@colyseus/schema/input';
-import { type InputAccessor, type InputAPI, type InputOptions, type NumericFieldsOf, InputAccessorImpl, InputBufferImpl, NO_OP_INPUT_ACCESSOR } from './input/InputBuffer.ts';
+import { type InputAccessor, type InputAPI, type InputOptions, type IdleInput, type NumericFieldsOf, InputAccessorImpl, InputBufferImpl, NO_OP_INPUT_ACCESSOR } from './input/InputBuffer.ts';
 import { Rewind, type RewindOptions } from './Rewind.ts';
-export { type InputAccessor, type InputAPI, type InputOptions, type NumericFieldsOf } from './input/InputBuffer.ts';
+export { type InputAccessor, type InputAPI, type InputOptions, type ConsumeOptions, type IdleInput, type IdleContext, type NumericFieldsOf } from './input/InputBuffer.ts';
+
+/** Options for {@link Room.defineInput}. */
+export interface DefineInputOptions<I = any> {
+  seqField?: NumericFieldsOf<I>;
+  bufferMaxSize?: number;
+  /**
+   * Enable render-time lag compensation: the client auto-stamps each
+   * reliable input with the server-clock time (ms since room start) it was
+   * rendering the world at — `serverNow() − renderDelay − smoothedRtt()/2`
+   * (the app's interp buffer + the SDK-tracked one-way latency), or `0` until
+   * its clock has synced. Surfaced server-side as
+   * `room.input(sessionId).renderTime`; feed it to `rewind.lastSeenBy(sessionId)`
+   * (or `rewind.at`) to rewind other entities to where that client SAW
+   * them — "what you see is what you hit". Default `false` (+4 bytes/input).
+   */
+  renderTime?: boolean;
+  /**
+   * Room-level absence policy: when a tick has no buffered input, bare
+   * `drain()` / `next()` synthesize ONE "idle" frame from it — the schema's
+   * defaults overlaid with the policy's overrides — so the sim loop needs no
+   * empty-branch. Prefer the callback form, invoked lazily (only on
+   * actually-empty ticks) with an {@link IdleContext} (`latest` + `sessionId`):
+   *
+   * ```ts
+   * idle: ({ latest, sessionId }) => {
+   *   const p = this.state.players.get(sessionId);   // closes over the room
+   *   return p ? { yaw: p.yaw, plant: !!latest?.plant } : true;
+   * }
+   * ```
+   *
+   * Not declaring it keeps the skip behavior (`drain()` → `[]`). Per-call
+   * `{ idle }` overrides this default; `{ idle: false }` suppresses it.
+   * Synthesized frames never advance the reconcile ack or `renderTime`.
+   */
+  idle?: IdleInput<I>;
+  /**
+   * Fixed step rate in **Hz** cascaded to the client via the join handshake;
+   * it predicts at dt = 1/tickRate for deterministic rollback. Defaults to
+   * the `setTimestep` rate — pass this only when the prediction
+   * step differs from it. NOTE: a *rate*, not an interval — `1000/30` is the
+   * step in ms, a classic mistake; use {@link stepMs} for that. Superseded by
+   * {@link stepMs} / {@link stepSeconds} when those are given.
+   */
+  tickRate?: number;
+  /**
+   * Fixed step as a duration in **milliseconds** — the unit-safe alternative
+   * to {@link tickRate} (`stepMs: 1000/30` is unambiguous where
+   * `tickRate: 1000/30` is a bug). Normalized to the canonical Hz value
+   * (`1000/stepMs`). Takes precedence over `tickRate`.
+   */
+  stepMs?: number;
+  /**
+   * Fixed step as a duration in **seconds** (e.g. `1/30`). Normalized to the
+   * canonical Hz value (`1/stepSeconds`). Highest precedence.
+   */
+  stepSeconds?: number;
+}
+
+/** `true` when the defineInput opts declared an `idle` policy — narrows the
+ *  returned {@link InputAPI} so bare `next()` types non-optional `I`. */
+type IdleDeclared<O, I> = O extends { idle: IdleInput<I> } ? true : false;
 
 /**
  * Module-level cache of `Reflection.encode` output keyed by input
@@ -682,43 +743,13 @@ export class Room<T extends RoomOptions = RoomOptions> {
    * for everyone. See {@link InputAccessor} for the full per-entity-vs-shared-world
    * guidance and why the choice affects the reconcile ack.
    */
-  protected defineInput<C extends new () => any>(
+  protected defineInput<
+    C extends new () => any,
+    O extends DefineInputOptions<InstanceType<C>> = DefineInputOptions<InstanceType<C>>,
+  >(
     type: C,
-    opts?: {
-      seqField?: NumericFieldsOf<InstanceType<C>>;
-      bufferMaxSize?: number;
-      /**
-       * Enable render-time lag compensation: the client auto-stamps each
-       * reliable input with the server-clock time (ms since room start) it was
-       * rendering the world at, surfaced server-side as
-       * `room.input(sessionId).renderTime`. Rewind other entities to that time
-       * for "what you see is what you hit". Default `false` (+4 bytes/input
-       * when on).
-       */
-      renderTime?: boolean;
-      /**
-       * Fixed step rate in **Hz** cascaded to the client via the join handshake;
-       * it predicts at dt = 1/tickRate for deterministic rollback. Defaults to
-       * the `setTimestep` rate — pass this only when the prediction
-       * step differs from it. NOTE: a *rate*, not an interval — `1000/30` is the
-       * step in ms, a classic mistake; use {@link stepMs} for that. Superseded by
-       * {@link stepMs} / {@link stepSeconds} when those are given.
-       */
-      tickRate?: number;
-      /**
-       * Fixed step as a duration in **milliseconds** — the unit-safe alternative
-       * to {@link tickRate} (`stepMs: 1000/30` is unambiguous where
-       * `tickRate: 1000/30` is a bug). Normalized to the canonical Hz value
-       * (`1000/stepMs`). Takes precedence over `tickRate`.
-       */
-      stepMs?: number;
-      /**
-       * Fixed step as a duration in **seconds** (e.g. `1/30`). Normalized to the
-       * canonical Hz value (`1/stepSeconds`). Highest precedence.
-       */
-      stepSeconds?: number;
-    },
-  ): InputAPI<InstanceType<C>> {
+    opts?: O,
+  ): InputAPI<InstanceType<C>, IdleDeclared<O, InstanceType<C>>> {
     // Normalize the step declaration to the canonical wire form (Hz). stepSeconds
     // / stepMs are the unit-safe spellings; both sides derive dt = 1/tickRate, so
     // one declared number drives the server's physics step AND the client's.
@@ -744,6 +775,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
       seqField: opts?.seqField,
       bufferMaxSize: opts?.bufferMaxSize ?? 32,
       renderTime: opts?.renderTime ?? false,
+      idle: opts?.idle,
       tickRate,
     };
     // Enable wire-level timing for clients that advertise CLIENT_TIMING.
@@ -760,7 +792,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
     const api = ((sessionId: string): InputAccessor<InstanceType<C>> => {
       const c = this.clients.getById(sessionId) as unknown as ClientPrivate | undefined;
       return (c?._inputAccessor as InputAccessor<InstanceType<C>>) ?? NO_OP_INPUT_ACCESSOR;
-    }) as InputAPI<InstanceType<C>>;
+    }) as InputAPI<InstanceType<C>, IdleDeclared<O, InstanceType<C>>>;
     // Room-level fixed step (one source, not per-client). Live getters off
     // _inputOptions so an auto-derived tickRate — set later by
     // setTimestep — is reflected. dt = 1/tickRate; `1/hz` is
@@ -1061,8 +1093,9 @@ export class Room<T extends RoomOptions = RoomOptions> {
    * ```ts
    * const rewind = this.allowRewindState({ maxRewindMs: 500 });
    * rewind.attachAll(this.state.enemies, { fields: ["x", "y"] });
-   * // in a hit test:
-   * const seenX = rewind.valueAt(enemy, renderTime, "x");
+   * // in a hit test — rewind to where the SHOOTER saw the world:
+   * const seen = rewind.lastSeenBy(shooterSessionId);   // needs defineInput({renderTime:true})
+   * const seenX = seen.value(enemy, "x"), seenY = seen.value(enemy, "y");
    * ```
    *
    * Needs a simulation loop ({@link setTimestep} / {@link setFixedTimestep})
@@ -1071,6 +1104,29 @@ export class Room<T extends RoomOptions = RoomOptions> {
    */
   public allowRewindState(opts?: RewindOptions): Rewind {
     this.#rewind = Rewind.get(this, opts);
+    // Resolve `rewind.lastSeenBy(sid)` through the standard `input` slot
+    // (`input = this.defineInput(..., { renderTime: true })`). Lazy: read at call
+    // time, so field-init order between `input` and `rewind` doesn't matter.
+    // Misconfiguration fails loudly — a silent 0 stamp would read live positions
+    // and quietly disable lag comp. (A client that hasn't stamped yet legitimately
+    // reads 0 → live fallback; that is NOT a config error.)
+    this.#rewind.bindRenderTime((sessionId) => {
+      if (this.input === undefined) {
+        throw new Error(
+          "rewind.lastSeenBy() found no input API on `this.input`. Declare " +
+          "`input = this.defineInput(YourInput, { renderTime: true })`, or use " +
+          "rewind.at(time) with a render time you track yourself.",
+        );
+      }
+      if (!this._inputOptions?.renderTime) {
+        throw new Error(
+          "rewind.lastSeenBy() needs per-client render-time stamps: pass " +
+          "`renderTime: true` to defineInput(), or use rewind.at(time) with " +
+          "a render time you track yourself.",
+        );
+      }
+      return this.input(sessionId).renderTime;
+    });
     return this.#rewind;
   }
 
@@ -1638,7 +1694,10 @@ export class Room<T extends RoomOptions = RoomOptions> {
       // Buffer is opt-in via bufferMaxSize > 0 (rollback / lockstep).
       const maxSize = this._inputOptions.bufferMaxSize;
       if (maxSize > 0) {
-        client._inputBuffer = new InputBufferImpl(maxSize, this._inputOptions.seqField);
+        // ctor powers idle-frame synthesis (defaults + overrides); the client
+        // ref feeds the lazy `idle` callback's ctx; the room-level `idle`
+        // policy makes bare drain()/next() total.
+        client._inputBuffer = new InputBufferImpl(maxSize, this._inputOptions.seqField, this._inputOptions.ctor, client, this._inputOptions.idle);
       }
       client._inputAccessor = new InputAccessorImpl(client);
     }

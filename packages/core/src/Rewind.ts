@@ -36,21 +36,23 @@ function fieldIndexOf(instance: object, field: string): number {
 }
 
 /**
- * Per-entity ring of recent field snapshots. `valueAt(time, col)` linearly
- * interpolates one field's recorded PATH to an arbitrary past time — reproducing
- * what the entity actually did (patrol bounces, a sine bob, teleport snaps),
- * which a velocity back-projection (`x - vx·dt`) can't for non-linear motion.
+ * Per-entity ring of recent field snapshots. `valueAt(time, col)` reconstructs
+ * one field's recorded PATH at an arbitrary past time — `linear` interp for
+ * continuous motion (patrol, a sine bob), or `step` (hold the last value) for
+ * discrete motion (teleport snaps), where a lerp would smear across the jump.
  */
 class EntityHistory {
   readonly fields: readonly string[];
   private readonly cap: number;
   private readonly t: Float64Array;
   private readonly cols: Float64Array[];   // one column per field
+  private readonly step: boolean;           // hold (vs lerp) between samples
   private head = 0;                         // next write slot
   private count = 0;
 
-  constructor(fields: readonly string[], maxRewindMs: number, sampleIntervalMs: number) {
+  constructor(fields: readonly string[], maxRewindMs: number, sampleIntervalMs: number, step: boolean) {
     this.fields = fields;
+    this.step = step;
     this.cap = Math.max(2, Math.ceil(maxRewindMs / sampleIntervalMs) + 4);
     this.t = new Float64Array(this.cap);
     this.cols = fields.map(() => new Float64Array(this.cap));
@@ -76,6 +78,7 @@ class EntityHistory {
     for (let i = 1; i < this.count; i++) {
       const idx = (oldest + i) % this.cap;
       if (this.t[idx] >= time) {
+        if (this.step) return c[prev];   // discrete: hold the value before `time`
         const t0 = this.t[prev], t1 = this.t[idx];
         const a = t1 > t0 ? (time - t0) / (t1 - t0) : 0;
         return c[prev] + (c[idx] - c[prev]) * a;
@@ -86,11 +89,92 @@ class EntityHistory {
   }
 }
 
+/** How `valueAt` reconstructs a value between recorded samples: `linear` interp
+ *  (continuous motion) or `step` = hold the last sample (discrete motion). */
+type Interp = "linear" | "step";
+
+/**
+ * A read-only view of the tracked world at ONE past time — the rewound state a
+ * hit test reads instead of live positions. Created by {@link Rewind.at} /
+ * {@link Rewind.lastSeenBy}, which bake in the `maxRewindMs` clamp and the
+ * live-fallback so callers never re-implement either.
+ *
+ * The view assumes NOTHING about your schema's field names — you name the
+ * fields (and therefore the shape) at the call site:
+ *
+ * ```ts
+ * const seen = rewind.lastSeenBy(shooterSessionId);
+ * // read fields directly…
+ * overlaps(bullet, seen.value(target, "x"), seen.value(target, "y"));
+ * // …or batch them into an object shaped by YOUR field list:
+ * const pos = seen.read(target, ["x", "y"]);        // { x, y }
+ * seen.read(enemy, ["x", "y"], this.seenScratch);   // fill + return a reused scratch
+ * ```
+ *
+ * By default `at`/`lastSeenBy` re-aim and return the Rewind's own internal
+ * view — the usual "one view at a time, read it right away" flow is zero-alloc
+ * AND zero-setup (the server is single-threaded; nothing interleaves a
+ * synchronous read). Need more than one view alive at once (compare two
+ * shooters' perspectives, A/B a rewind window)? Pass your own instance as
+ * their `out` — it is re-aimed and returned instead of the shared one:
+ *
+ * ```ts
+ * const a = rewind.lastSeenBy(shooterA);                      // shared default view
+ * const b = rewind.lastSeenBy(shooterB, new RewindView());    // independent second view
+ * ```
+ *
+ * Don't store a view across calls or ticks: the default is re-aimed by the
+ * next `at`/`lastSeenBy`, and ANY view's clamp was computed against
+ * `lastRecordedAt`, so it goes stale at the next `record()` regardless.
+ */
+export class RewindView {
+  /** Bound (and re-bound) by {@link _retarget} — a bare `new RewindView()` is
+   *  un-aimed scratch until it first passes through at()/lastSeenBy(). */
+  private rewind?: Rewind;
+  private _time = 0;
+
+  /** The clamped server-time (ms) this view reads at — after the maxRewindMs
+   *  clamp and the live (newest-sample) fallback. Mostly for logging/debug. */
+  get time(): number { return this._time; }
+
+  /** @internal Aim at a rewind + clamped time ({@link Rewind.at} owns the clamp). */
+  _retarget(rewind: Rewind, at: number): this {
+    this.rewind = rewind;
+    this._time = at;
+    return this;
+  }
+
+  /** Rewound value of a numeric `field` on `entity` (live if it isn't tracked). */
+  value<T extends object>(entity: T, field: NumericKeys<T>): number {
+    if (this.rewind === undefined) {
+      throw new Error("RewindView is not aimed — obtain it from rewind.at()/lastSeenBy(), or pass it to them as `out`.");
+    }
+    return this.rewind.valueAt(entity, this._time, field);
+  }
+
+  /**
+   * Batch {@link value} reads: the `fields` YOU list define the result's shape
+   * (`Record<field, number>`). Pass `out` to fill (and return) a reused scratch
+   * instead of allocating — its properties beyond `fields` are left untouched,
+   * so a scratch can carry extra context (an `alive` flag, say).
+   */
+  read<T extends object, F extends NumericKeys<T>, O extends Record<F, number> = Record<F, number>>(
+    entity: T,
+    fields: readonly F[],
+    out?: O,
+  ): O {
+    const o = (out ?? {}) as Record<F, number>;
+    for (let i = 0; i < fields.length; i++) o[fields[i]] = this.value(entity, fields[i]);
+    return o as O;
+  }
+}
+
 interface TrackedGroup {
   entities: () => Iterable<object>;
   fields: readonly string[];
   fieldIdx: number[] | null;   // $values indices, resolved on first record
   maxRewindMs: number;
+  interpolate: Interp | ((entity: any) => Interp);
 }
 
 /**
@@ -108,7 +192,7 @@ interface TrackedGroup {
  * onCreate() {
  *   const rewind = this.allowRewindState({ maxRewindMs: 500 });
  *   rewind.attachAll(this.state.enemies, { fields: ["x", "y"] });  // fields ← Enemy's numeric keys
- *   this.setSimulationInterval((dt) => { ...move enemies... }, 1000 / 30);
+ *   this.setTimestep((dt) => { ...move enemies... }, 1000 / 30);
  *   // framework calls rewind.record() after each tick.
  * }
  * // in your hit test, with the client's renderTime:
@@ -134,6 +218,12 @@ export class Rewind {
   private readonly defaultMaxRewindMs: number;
   private _sampleIntervalMs = DEFAULT_SAMPLE_INTERVAL_MS;
   private _lastRecordedAt = -1;
+  /** Resolves a client's auto-stamped render time (set by `Room.allowRewindState`
+   *  when `defineInput({renderTime:true})` is on); powers {@link lastSeenBy}. */
+  private _renderTimeOf?: (sessionId: string) => number;
+  /** Default view returned by at/lastSeenBy when no `out` is given — one per
+   *  Rewind, re-aimed per call (zero alloc, zero userland setup). */
+  private readonly _view = new RewindView();
 
   private constructor(defaultMaxRewindMs: number) { this.defaultMaxRewindMs = defaultMaxRewindMs; }
 
@@ -145,20 +235,22 @@ export class Rewind {
   get lastRecordedAt(): number { return this._lastRecordedAt; }
 
   /** Track every entity in a collection (Map/Array/Set schema). `fields` narrows
-   *  to its element's numeric fields. */
+   *  to its element's numeric fields. `interpolate` (a mode or a per-entity fn,
+   *  default `linear`) picks how `valueAt` reconstructs between samples — use
+   *  `step` for discrete-motion entities (e.g. teleporters). */
   attachAll<E extends object>(
     collection: Collection<E>,
-    opts: { fields: readonly NumericKeys<E>[]; maxRewindMs?: number },
+    opts: { fields: readonly NumericKeys<E>[]; maxRewindMs?: number; interpolate?: Interp | ((entity: E) => Interp) },
   ): this {
     const c = collection as unknown as { values(): Iterable<object> };
-    this.groups.push({ entities: () => c.values(), fields: opts.fields, fieldIdx: null, maxRewindMs: opts.maxRewindMs ?? this.defaultMaxRewindMs });
+    this.groups.push({ entities: () => c.values(), fields: opts.fields, fieldIdx: null, maxRewindMs: opts.maxRewindMs ?? this.defaultMaxRewindMs, interpolate: opts.interpolate ?? "linear" });
     return this;
   }
 
   /** Track a single entity (e.g. a boss). `fields` narrows to its numeric fields. */
-  attach<E extends object>(instance: E, opts: { fields: readonly NumericKeys<E>[]; maxRewindMs?: number }): this {
+  attach<E extends object>(instance: E, opts: { fields: readonly NumericKeys<E>[]; maxRewindMs?: number; interpolate?: Interp | ((entity: E) => Interp) }): this {
     const one: object[] = [instance];   // reused; no per-tick alloc
-    this.groups.push({ entities: () => one, fields: opts.fields, fieldIdx: null, maxRewindMs: opts.maxRewindMs ?? this.defaultMaxRewindMs });
+    this.groups.push({ entities: () => one, fields: opts.fields, fieldIdx: null, maxRewindMs: opts.maxRewindMs ?? this.defaultMaxRewindMs, interpolate: opts.interpolate ?? "linear" });
     return this;
   }
 
@@ -177,7 +269,11 @@ export class Rewind {
         const t = e as any;   // private-symbol access on a foreign schema instance
         if (g.fieldIdx === null) g.fieldIdx = g.fields.map((f) => fieldIndexOf(e, f));   // once
         let h = t[$HISTORY] as EntityHistory | undefined;
-        if (h === undefined) { h = new EntityHistory(g.fields, g.maxRewindMs, this._sampleIntervalMs); t[$HISTORY] = h; }
+        if (h === undefined) {
+          const mode = typeof g.interpolate === "function" ? g.interpolate(e) : g.interpolate;
+          h = new EntityHistory(g.fields, g.maxRewindMs, this._sampleIntervalMs, mode === "step");
+          t[$HISTORY] = h;
+        }
         h.record(now, t[$VALUES] as ArrayLike<number>, g.fieldIdx);
       }
     }
@@ -193,5 +289,73 @@ export class Rewind {
     if (h === undefined) return (instance as Record<string, number>)[field];
     const col = h.fields.indexOf(field);
     return col < 0 ? (instance as Record<string, number>)[field] : h.valueAt(time, col);
+  }
+
+  /**
+   * @internal Wire a resolver from sessionId → that client's auto-stamped render
+   * time. Called by {@link Room.allowRewindState} so {@link lastSeenBy} works; not
+   * for direct use (prefer `defineInput({renderTime:true})` + `lastSeenBy`).
+   */
+  bindRenderTime(resolver: (sessionId: string) => number): void {
+    this._renderTimeOf = resolver;
+  }
+
+  /**
+   * A {@link RewindView} of the tracked world at `time` (an acting client's render
+   * time), with the two things every hit test re-implements baked in:
+   *  - **clamp** to `[lastRecordedAt − maxRewindMs, lastRecordedAt]` — an
+   *    anti-spoof / clock-skew bound (a client can't rewind arbitrarily far), and
+   *  - **live fallback**: `time <= 0` (the client's clock hasn't synced) → the
+   *    newest recorded sample (≈ current position).
+   *
+   * Sugar over {@link valueAt}; pass the render time yourself (e.g. from
+   * `input(sid).renderTime`, or a value stored on the entity). For the common
+   * "rewind to a specific client's view" case use {@link lastSeenBy}.
+   *
+   * Re-aims and returns this Rewind's internal view by default — zero alloc,
+   * nothing to declare. Pass `out` to aim a view of your own instead; needed
+   * only to hold several views at once — see the {@link RewindView} doc.
+   */
+  at(time: number, out?: RewindView): RewindView {
+    const newest = this._lastRecordedAt;
+    const oldest = newest - this.defaultMaxRewindMs;
+    // time<=0 → not synced yet → read live (newest). Else clamp into the window.
+    const at = time <= 0 ? newest : (time < oldest ? oldest : time > newest ? newest : time);
+    return (out ?? this._view)._retarget(this, at);
+  }
+
+  /**
+   * A {@link RewindView} of the world as session `sessionId` LAST saw it —
+   * resolves the render time stamped on that client's most recently CONSUMED
+   * input (hence "last": under a multi-frame `drain()` it is the newest frame's
+   * stamp) and hands off to {@link at}. This is the "what you see is what you
+   * hit" path:
+   *
+   * ```ts
+   * const seen = this.rewind.lastSeenBy(shooterSessionId);
+   * const hit = overlaps(bullet, seen.value(target, "x"), seen.value(target, "y"));
+   * ```
+   *
+   * Requires the room's input on the standard `input` slot with render-time
+   * stamping on — `input = this.defineInput(Input, { renderTime: true })`
+   * (declaration order vs `allowRewindState` doesn't matter). Misconfiguration
+   * throws on first use instead of silently reading live positions; a client
+   * that merely hasn't stamped yet (clock still syncing, unknown sessionId) is
+   * NOT an error — it reads 0 and the view falls back to live. Use
+   * {@link at} with an explicit time if you stamp render times yourself.
+   *
+   * Re-aims and returns this Rewind's internal view by default — zero alloc,
+   * nothing to declare. Pass `out` to aim a view of your own instead; needed
+   * only to hold several views at once — see the {@link RewindView} doc.
+   */
+  lastSeenBy(sessionId: string, out?: RewindView): RewindView {
+    if (this._renderTimeOf === undefined) {
+      throw new Error(
+        "Rewind.lastSeenBy(sessionId) needs per-client render times. Enable them with " +
+        "`defineInput(Input, { renderTime: true })`, or call `at(time)` and pass " +
+        "the render time yourself.",
+      );
+    }
+    return this.at(this._renderTimeOf(sessionId), out);
   }
 }

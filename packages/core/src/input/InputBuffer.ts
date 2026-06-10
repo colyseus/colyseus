@@ -10,6 +10,61 @@ export type NumericFieldsOf<I> = {
 }[keyof I];
 
 /**
+ * Context handed to the `idle` callback form — see {@link IdleInput}. A reused
+ * per-client scratch: read it inside the callback, don't store it. It carries
+ * MECHANISM only — derived judgments (e.g. liveness) stay in userland; look the
+ * client up via `this.clients.getById(ctx.sessionId)` when your policy needs it.
+ */
+export interface IdleContext<I> {
+  /** Last decoded input (`undefined` before the client's first). */
+  latest: I | undefined;
+  sessionId: string;
+}
+
+/**
+ * What to synthesize when the buffer is empty (declared room-wide at
+ * `defineInput({ idle })`, or per-call via {@link ConsumeOptions.idle}):
+ * - `true` — pure schema defaults.
+ * - `Partial<I>` — defaults overlaid with these fields. A full schema instance
+ *   (e.g. {@link InputAccessor.latest}) also works — fields are copied BY NAME,
+ *   so its prototype accessors are read correctly.
+ * - callback — invoked LAZILY (only on an actually-empty tick) with an
+ *   {@link IdleContext}, returning either of the above. The right form when the
+ *   overrides take work to compute (entity lookups, held-button carry-over).
+ *
+ * ⚠ Do NOT build overrides by spreading a schema instance (`{ ...latest, x }`):
+ * schema fields live on the prototype, so the spread copies NOTHING of them.
+ * Return `latest` itself, or name the fields (`{ x, plant: !!latest?.plant }`).
+ */
+export type IdleInput<I> = true | Partial<I> | ((ctx: IdleContext<I>) => true | Partial<I>);
+
+/**
+ * Options for {@link InputAccessor.drain} / {@link InputAccessor.next}.
+ * `idle` overrides the room-level `defineInput({ idle })` policy for this call
+ * (see {@link IdleInput}); pass `false` to suppress it (force skip behavior).
+ */
+export interface ConsumeOptions<I> {
+  idle?: IdleInput<I> | false;
+}
+
+const $METADATA: symbol = (Symbol as { metadata?: symbol }).metadata ?? Symbol.for("Symbol.metadata");
+
+/** Field names of an input schema ctor, in declaration order (indices are dense
+ *  from 0 in the metadata). Resolved ONCE per buffer (cold path). */
+function fieldNamesOf(ctor: new () => any): string[] {
+  const md = (ctor as any)[$METADATA] as Record<number, { name?: string }> | undefined;
+  const names: string[] = [];
+  if (md) {
+    for (let i = 0; ; i++) {
+      const f = md[i];
+      if (!f || typeof f.name !== "string") break;
+      names.push(f.name);
+    }
+  }
+  return names;
+}
+
+/**
  * Internal: input configuration captured by `Room.defineInput()`. The schema
  * constructor is stored here so the runtime doesn't need to know it through
  * the public `room.input` (which is now a callable accessor).
@@ -71,6 +126,12 @@ export interface InputOptions {
    * from `setTimestep`. Unset = not advertised.
    */
   tickRate?: number;
+
+  /**
+   * Room-level absence policy: bare `drain()` / `next()` synthesize one idle
+   * frame from it when a tick has no input. See {@link IdleInput}.
+   */
+  idle?: IdleInput<any>;
 }
 
 /**
@@ -97,8 +158,11 @@ export interface InputOptions {
  * Returned for unknown sessionIds and rooms without `defineInput()` is a
  * frozen no-op accessor (latest=undefined, drain/next/take/peek=[]/undefined,
  * at=undefined, size=0, clear=no-op).
+ *
+ * `Idle` is `true` when the room declared `defineInput({ idle })` — it narrows
+ * {@link next} to non-optional `I` (bare calls always yield a frame).
  */
-export interface InputAccessor<I = any> {
+export interface InputAccessor<I = any, Idle extends boolean = false> {
   /** Latest decoded input. `undefined` when unknown sessionId or no input declared. */
   readonly latest: I | undefined;
 
@@ -112,12 +176,36 @@ export interface InputAccessor<I = any> {
    */
   at(value: number): I | undefined;
 
-  /** Take everything buffered (oldest → newest) and clear. Snapshots are safe to retain. */
-  drain(): I[];
+  /**
+   * Take everything buffered (oldest → newest) and clear. Snapshots are safe to retain.
+   *
+   * With a room-level `defineInput({ idle })` policy the result is TOTAL: an
+   * empty tick yields one synthesized "idle" frame instead of `[]`, so the sim
+   * loop needs no empty-branch (gravity still integrates, action guards
+   * naturally no-op on default values). The synthesized frame is the schema's
+   * DEFAULTS overlaid with the policy's overrides (see {@link IdleInput}):
+   *
+   * ```ts
+   * // declared once at defineInput({ idle: (ctx) => ({ ... }) }); then simply:
+   * for (const f of inputCh.drain()) {
+   *   stepPlayer(p, f, world);          // ≥1 frame, always
+   *   if (f.fire) tryFire(...);         // idle frame: fire=false → no-op
+   * }
+   * ```
+   *
+   * Pass `{ idle }` to override the room policy for this call, or
+   * `{ idle: false }` to suppress it.
+   *
+   * The idle frame is NOT a consumed input: it advances neither the reconcile
+   * ack (`consumedCount`) nor {@link renderTime}. It is ONE reused instance per
+   * client, refilled on each synthesis — read it within the tick, don't store
+   * it. No synthesis for unknown sessionIds or `bufferMaxSize: 0`.
+   */
+  drain(opts?: ConsumeOptions<I>): I[];
 
   /**
    * Consume the single oldest buffered input and advance the reconcile ack by
-   * exactly one — the complement to {@link peek}. Returns `undefined` (hold last)
+   * exactly one — the complement to {@link peek}. Returns `undefined`
    * when the buffer is empty.
    *
    * Use this in a **shared-world** loop where one solver step advances every
@@ -129,18 +217,29 @@ export interface InputAccessor<I = any> {
    * `consumedCount`/{@link renderTime} stay exact: the ack reflects only the
    * inputs you actually simulated, and `renderTime` is the stamp of THIS input.
    *
+   * With a room-level `defineInput({ idle })` policy (or a per-call `{ idle }`
+   * override) an empty tick returns a synthesized frame instead of `undefined`
+   * — same contract as {@link drain}'s. A "held key keeps moving through a
+   * packet gap" loop:
+   *
    * @example
    * ```ts
+   * // declared once:
+   * input = this.defineInput(InputSchema, {
+   *   idle: ({ latest }) => latest ?? true,   // empty tick → last input verbatim
+   * });
+   * // per tick:
    * this.setFixedTimestep(() => {
    *   for (const [sid, body] of bodies) {
-   *     const cmd = this.input(sid).next();   // one input → ack +1
-   *     if (cmd) applyInputToBody(body, cmd); // else hold last
+   *     applyInputToBody(body, this.input(sid).next());   // typed I — never undefined
    *   }
-   *   world.step();                            // one step for everyone
+   *   world.step();                                       // one step for everyone
    * }, 30);
    * ```
    */
-  next(): I | undefined;
+  next(): Idle extends true ? I : I | undefined;
+  next(opts: { idle: IdleInput<I> }): I;
+  next(opts?: ConsumeOptions<I>): I | undefined;
 
   /**
    * Consume up to `n` oldest buffered inputs (oldest → newest) and advance the
@@ -168,8 +267,10 @@ export interface InputAccessor<I = any> {
    * so single-consume loops rewind to the exact instant of the input simulated.
    * `0` until the first render-time-stamped input is consumed. Populated only
    * when the Room called `defineInput(..., { renderTime: true })` with
-   * `bufferMaxSize > 0`. Rewind other entities to this time for lag-compensated
-   * "what you see is what you hit" hit registration.
+   * `bufferMaxSize > 0`. Usually you don't read this directly — pass the
+   * sessionId to `rewind.lastSeenBy(sessionId)` (which resolves this value, clamps
+   * it, and falls back to live) for lag-compensated "what you see is what you
+   * hit" hit registration; use this getter only for a custom rewind time.
    */
   readonly renderTime: number;
 }
@@ -183,7 +284,7 @@ export interface InputAccessor<I = any> {
  * `InputAccessor` — these values are identical for every client, so they'd be
  * pure duplication per connection.
  */
-export type InputAPI<I = any> = ((sessionId: string) => InputAccessor<I>) & {
+export type InputAPI<I = any, Idle extends boolean = false> = ((sessionId: string) => InputAccessor<I, Idle>) & {
   /**
    * Server-advertised fixed step rate in **Hz** — from `defineInput`'s
    * `tickRate`/`stepMs`/`stepSeconds`, or derived from `setTimestep` —
@@ -226,9 +327,68 @@ export class InputBufferImpl<I = any> {
   /** Render time of the most recently drained input (see {@link renderTime}). */
   private _lastRenderTime = 0;
 
-  constructor(maxSize: number, seqField: string | undefined) {
+  /** Input schema ctor — mints the reused idle frame; idle is off without it. */
+  private readonly _ctor?: new () => I;
+  /** Client slice this buffer belongs to (the live object is `Client & ClientPrivate`)
+   *  — feeds the idle callback's ctx (latest + sessionId). */
+  private readonly _client?: Pick<ClientPrivate, '_input'> & { sessionId: string };
+  /** Room-level idle policy (`defineInput({ idle })`) — the bare-call default. */
+  private readonly _roomIdle?: IdleInput<I>;
+  /** Reused synthesized idle frame + the schema's field names/defaults (lazy). */
+  private _idle?: I;
+  private _fieldNames?: string[];
+  private _defaults?: unknown[];
+  /** Reused ctx for the idle callback form (see {@link IdleContext}). */
+  private readonly _idleCtx: IdleContext<I> = { latest: undefined, sessionId: "" };
+
+  constructor(maxSize: number, seqField: string | undefined, ctor?: new () => I, client?: Pick<ClientPrivate, '_input'> & { sessionId: string }, idle?: IdleInput<I>) {
     this._maxSize = maxSize;
     this._seqField = seqField;
+    this._ctor = ctor;
+    this._client = client;
+    this._roomIdle = idle;
+  }
+
+  /** The effective idle policy for one consume call: per-call `false` suppresses,
+   *  per-call value overrides, else the room-level default (or none). */
+  private effectiveIdle(opts?: ConsumeOptions<I>): IdleInput<I> | undefined {
+    return opts?.idle === false ? undefined : (opts?.idle ?? this._roomIdle);
+  }
+
+  /** Resolve an {@link IdleInput} to overrides — invokes the callback form
+   *  LAZILY, here at synthesis time (the buffer is known to be empty). */
+  private resolveIdle(idle: IdleInput<I>): true | Partial<I> {
+    if (typeof idle !== "function") return idle;
+    this._idleCtx.latest = this._client?._input as I | undefined;
+    this._idleCtx.sessionId = this._client?.sessionId ?? "";
+    return idle(this._idleCtx) ?? true;
+  }
+
+  /**
+   * The synthesized "no input this tick" frame: schema defaults overlaid with
+   * `overrides` (`true` = none). Copies BY FIELD NAME from the schema metadata —
+   * schema fields are prototype accessors (no own props), so `Object.assign`
+   * can't source from a schema instance; the name walk reads getters, letting
+   * `overrides` be a plain partial OR a schema instance (e.g. `latest`).
+   * ONE reused instance — refilled per call, never advances the ack.
+   */
+  private idleFrame(overrides: true | Partial<I>): I {
+    if (this._idle === undefined) {
+      // Lazy mint (cold): the fresh instance doubles as the defaults source.
+      this._idle = new this._ctor!();
+      this._fieldNames = fieldNamesOf(this._ctor!);
+      const fresh = this._idle as Record<string, unknown>;
+      this._defaults = this._fieldNames.map((n) => fresh[n]);
+    }
+    const idle = this._idle as Record<string, unknown>;
+    const names = this._fieldNames!;
+    const defaults = this._defaults!;
+    const ov = overrides === true ? undefined : (overrides as Record<string, unknown>);
+    for (let i = 0; i < names.length; i++) {
+      const v = ov?.[names[i]];
+      idle[names[i]] = v !== undefined ? v : defaults[i];
+    }
+    return this._idle;
   }
 
   push(snapshot: I, renderTime: number = 0): void {
@@ -249,7 +409,13 @@ export class InputBufferImpl<I = any> {
     return true;
   }
 
-  drain(): I[] {
+  drain(opts?: ConsumeOptions<I>): I[] {
+    // Idle synthesis (empty + a policy in effect): NOT a consumed input — no ack
+    // bump, renderTime untouched (lastSeenBy keeps resolving the real last stamp).
+    if (this._items.length === 0 && this._ctor !== undefined) {
+      const idle = this.effectiveIdle(opts);
+      if (idle !== undefined) return [this.idleFrame(this.resolveIdle(idle))];
+    }
     const out = this._items;
     // Report newest drained input's render time; persists across a subsequent empty drain.
     if (this._renderTimes.length > 0) {
@@ -261,9 +427,13 @@ export class InputBufferImpl<I = any> {
     return out;
   }
 
-  /** Consume the single oldest input (ack advances by one); `undefined` if empty. */
-  next(): I | undefined {
-    if (this._items.length === 0) { return undefined; }
+  /** Consume the single oldest input (ack advances by one); `undefined` if
+   *  empty — or the synthesized idle frame when `opts.idle` is given. */
+  next(opts?: ConsumeOptions<I>): I | undefined {
+    if (this._items.length === 0) {
+      const idle = this._ctor !== undefined ? this.effectiveIdle(opts) : undefined;
+      return idle !== undefined ? this.idleFrame(this.resolveIdle(idle)) : undefined;
+    }
     this._lastRenderTime = this._renderTimes.shift()!; // render time of THIS input
     this.consumedCount++;
     return this._items.shift();
@@ -323,8 +493,10 @@ export class InputAccessorImpl<I = any> implements InputAccessor<I> {
   constructor(client: ClientPrivate) { this._client = client; }
   get latest(): I | undefined { return this._client._input as I | undefined; }
   at(value: number): I | undefined { return this._client._inputBuffer?.at(value) as I | undefined; }
-  drain(): I[] { return (this._client._inputBuffer?.drain() ?? []) as I[]; }
-  next(): I | undefined { return this._client._inputBuffer?.next() as I | undefined; }
+  drain(opts?: ConsumeOptions<I>): I[] { return (this._client._inputBuffer?.drain(opts) ?? []) as I[]; }
+  next(): I | undefined;
+  next(opts: { idle: IdleInput<I> }): I;
+  next(opts?: ConsumeOptions<I>): I | undefined { return this._client._inputBuffer?.next(opts) as I | undefined; }
   take(n: number): I[] { return (this._client._inputBuffer?.take(n) ?? []) as I[]; }
   peek(): I[] { return (this._client._inputBuffer?.peek() ?? []) as I[]; }
   get size(): number { return this._client._inputBuffer?.size ?? 0; }
