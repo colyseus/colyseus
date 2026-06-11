@@ -139,6 +139,41 @@ describe("Input (InputEncoder / InputDecoder integration)", () => {
     await timeout(50);
   });
 
+  it("Tier 1 — defineInput({ sanitize }) clamps decoded frames before latest/drain", async () => {
+    let observed: { latestX: number; drained: number[] } | undefined;
+
+    matchMaker.defineRoomType('input_sanitize', class _ extends Room<{ input: MoveInput }> {
+      input = this.defineInput(MoveInput, {
+        bufferMaxSize: 16,
+        sanitize: { x: [-1, 1] },   // never trust the wire
+      });
+      onCreate() {
+        this.setSimulationInterval(() => {
+          for (const c of this.clients) {
+            const ch = this.input(c.sessionId);
+            const drained = ch.drain().map((i) => i.x);
+            if (drained.length > 0) {
+              observed = { latestX: ch.latest!.x, drained };
+            }
+          }
+        }, 30);
+      }
+    });
+
+    const conn = await client.joinOrCreate('input_sanitize');
+    const input = conn.input({ type: MoveInput });
+
+    // A "speed hack" value: way outside the declared [-1, 1] domain.
+    input.data.x = 127; input.send();
+    await timeout(80);
+
+    assert.deepStrictEqual(observed, { latestX: 1, drained: [1] },
+      "both the bound `latest` and the buffered clone see the clamped value");
+
+    await conn.leave();
+    await timeout(50);
+  });
+
   it("Tier 2 — room.input(sessionId).drain() returns cloned snapshots in arrival order", async () => {
     const drained: number[][] = [];
 

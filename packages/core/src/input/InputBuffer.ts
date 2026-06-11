@@ -47,6 +47,50 @@ export interface ConsumeOptions<I> {
   idle?: IdleInput<I> | false;
 }
 
+/**
+ * Input sanitization, declared at `defineInput({ sanitize })` — never trust the
+ * wire. Applied to each decoded frame IN PLACE, before anything reads it
+ * (`latest`, the buffer, the `idle` callback's ctx):
+ * - **Map form** — per-field `[min, max]` range clamps with NaN-safe semantics:
+ *   `NaN` (both comparisons false) lands on `min`, closing the classic
+ *   `Math.min(NaN, …)` poisoning hole.
+ * - **Callback form** — arbitrary in-place fix-up (wrap an angle, enforce a
+ *   cross-field rule) for anything beyond ranges.
+ *
+ * Sanitizers MODIFY, they never reject — a malformed value becomes a legal one
+ * instead of dropping the frame. Must not touch the `seqField` (it runs before
+ * dedupe). Semantic validation ("slot must name an owned weapon") stays in
+ * your sim — this handles value domains, not game rules.
+ */
+export type SanitizeInput<I> =
+  | Partial<Record<NumericFieldsOf<I>, readonly [number, number]>>
+  | ((input: I) => void);
+
+/**
+ * @internal Compile a {@link SanitizeInput} spec into the per-frame function the
+ * decode path applies. The map form precompiles to dense min/max arrays walked
+ * with the NaN-safe branch clamp; the callback form passes through.
+ */
+export function compileSanitizer<I>(spec: SanitizeInput<I>): (input: I) => void {
+  if (typeof spec === 'function') { return spec; }
+  const names = Object.keys(spec);
+  const mins = new Float64Array(names.length);
+  const maxs = new Float64Array(names.length);
+  for (let i = 0; i < names.length; i++) {
+    const range = (spec as Record<string, readonly [number, number]>)[names[i]]!;
+    mins[i] = range[0];
+    maxs[i] = range[1];
+  }
+  return (input: I) => {
+    const inst = input as Record<string, number>;
+    for (let i = 0; i < names.length; i++) {
+      const v = inst[names[i]];
+      // NaN-safe: NaN fails both comparisons → clamp floor.
+      inst[names[i]] = v >= mins[i] ? (v <= maxs[i] ? v : maxs[i]) : mins[i];
+    }
+  };
+}
+
 const $METADATA: symbol = (Symbol as { metadata?: symbol }).metadata ?? Symbol.for("Symbol.metadata");
 
 /** Field names of an input schema ctor, in declaration order (indices are dense
@@ -132,6 +176,13 @@ export interface InputOptions {
    * frame from it when a tick has no input. See {@link IdleInput}.
    */
   idle?: IdleInput<any>;
+
+  /**
+   * COMPILED sanitizer (see {@link SanitizeInput} / {@link compileSanitizer}) —
+   * applied in place to each decoded frame before it becomes visible to
+   * `latest` / the buffer / the idle ctx.
+   */
+  sanitize?: (instance: any) => void;
 }
 
 /**

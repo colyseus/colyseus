@@ -83,6 +83,39 @@ class GameRoom extends Room {
   Draining all but simulating only the latest would jump the ack past inputs you
   never ran.
 
+### Never trust the wire: `sanitize`
+
+The wire carries whatever the client encodes — an `int8` movement axis can arrive
+as `127` (a speed hack), a `float32` as `NaN`. Declare each field's legal domain
+once at `defineInput`; every decoded frame is fixed up IN PLACE before anything
+reads it (`latest`, the buffer, the `idle` ctx):
+
+```ts
+input = this.defineInput(MoveInput, {
+  bufferMaxSize: 64, renderTime: true,
+  sanitize: {                               // map form — range clamps
+    moveF: [-1, 1], moveR: [-1, 1],
+    pitch: [-PITCH_LIMIT, PITCH_LIMIT],
+    dt: [0, MAX_DT],
+  },
+  // or a callback for anything beyond ranges:
+  // sanitize: (f) => { f.angle = wrapAngle(f.angle); },
+});
+
+// the sim loop consumes frames directly — no per-frame clamp/copy:
+for (const f of inputCh.drain()) stepPlayer(p, f, world);
+```
+
+- Sanitizers **modify, never reject** — a malformed value becomes a legal one.
+- The map form is **NaN-safe**: NaN lands on the clamp floor (`dt NaN → 0`), closing
+  the classic `Math.min(NaN, …)` poisoning hole that hand-rolled clamps share.
+- Honest clients are unaffected (in-range values are identity) — so client-side
+  prediction never diverges from the server's sanitized values.
+- Pairs with `t.int8<-1 | 0 | 1>()` type refinement: the generic types the field,
+  `sanitize` enforces it at runtime.
+- Semantic validation ("slot must name an owned weapon") stays in your sim — this
+  handles value domains, not game rules.
+
 ### Empty ticks: the `idle` policy
 
 What does "no input this tick" mean? Three policies, all expressible — declared
@@ -309,6 +342,7 @@ breaks the exact match — the rewind then approximates.
 | Side | API | Role |
 |---|---|---|
 | Server | `defineInput(Input, { renderTime, bufferMaxSize })` | Per-client input schema + buffer; render-time stamping |
+| Server | `defineInput({ sanitize })` | Per-field `[min, max]` clamps (NaN-safe) or a fix-up callback, applied to every decoded frame before `latest`/buffer visibility |
 | Server | `defineInput({ idle })` + `input(sid).drain()` / `.next()` | Consume frames; the room's `idle: (ctx) => overrides` policy synthesizes one frame on empty ticks (defaults ⊕ overrides; never advances the ack); per-call `{ idle }` overrides, `{ idle: false }` suppresses |
 | Server | `setFixedTimestep(step, hz)` | Fixed-step loop; advertises the tick rate |
 | Server | `allowRewindState({ maxRewindMs })` + `rewind.attachAll(coll, { fields })` | Record positions per tick |

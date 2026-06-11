@@ -1,9 +1,9 @@
 import { unpack } from 'msgpackr';
 import { decode, encode, Encoder, Reflection, type Iterator, $changes } from '@colyseus/schema';
 import { InputDecoder } from '@colyseus/schema/input';
-import { type InputAccessor, type InputAPI, type InputOptions, type IdleInput, type NumericFieldsOf, InputAccessorImpl, InputBufferImpl, NO_OP_INPUT_ACCESSOR } from './input/InputBuffer.ts';
+import { type InputAccessor, type InputAPI, type InputOptions, type IdleInput, type SanitizeInput, type NumericFieldsOf, InputAccessorImpl, InputBufferImpl, NO_OP_INPUT_ACCESSOR, compileSanitizer } from './input/InputBuffer.ts';
 import { Rewind, type RewindOptions } from './Rewind.ts';
-export { type InputAccessor, type InputAPI, type InputOptions, type ConsumeOptions, type IdleInput, type IdleContext, type NumericFieldsOf } from './input/InputBuffer.ts';
+export { type InputAccessor, type InputAPI, type InputOptions, type ConsumeOptions, type IdleInput, type IdleContext, type SanitizeInput, type NumericFieldsOf } from './input/InputBuffer.ts';
 
 /** Options for {@link Room.defineInput}. */
 export interface DefineInputOptions<I = any> {
@@ -20,6 +20,20 @@ export interface DefineInputOptions<I = any> {
    * them — "what you see is what you hit". Default `false` (+4 bytes/input).
    */
   renderTime?: boolean;
+  /**
+   * Input sanitization — never trust the wire. Applied IN PLACE to every
+   * decoded frame before anything reads it (`latest`, the buffer, the `idle`
+   * ctx). Map form = per-field `[min, max]` clamps with NaN-safe semantics
+   * (NaN → min — closes the `Math.min(NaN, …)` poisoning hole); callback form
+   * = arbitrary in-place fix-up. Sanitizers MODIFY, never reject. See
+   * {@link SanitizeInput}.
+   *
+   * ```ts
+   * sanitize: { moveF: [-1, 1], pitch: [-PITCH_LIMIT, PITCH_LIMIT], dt: [0, MAX_DT] },
+   * // or:  sanitize: (f) => { f.angle = wrapAngle(f.angle); },
+   * ```
+   */
+  sanitize?: SanitizeInput<I>;
   /**
    * Room-level absence policy: when a tick has no buffered input, bare
    * `drain()` / `next()` synthesize ONE "idle" frame from it — the schema's
@@ -776,6 +790,8 @@ export class Room<T extends RoomOptions = RoomOptions> {
       bufferMaxSize: opts?.bufferMaxSize ?? 32,
       renderTime: opts?.renderTime ?? false,
       idle: opts?.idle,
+      // Compiled ONCE here (map → dense min/max walk); applied per decoded frame.
+      sanitize: opts?.sanitize !== undefined ? compileSanitizer(opts.sanitize) : undefined,
       tickRate,
     };
     // Enable wire-level timing for clients that advertise CLIENT_TIMING.
@@ -2238,11 +2254,15 @@ export class Room<T extends RoomOptions = RoomOptions> {
   }
 
   /**
-   * After the decoder has mutated `client._input`, push a clone into the
-   * per-client buffer (when buffering is enabled). Honors
-   * `inputOptions.seqField` for dedupe of redundant frames.
+   * After the decoder has mutated `client._input`, sanitize it in place and
+   * push a clone into the per-client buffer (when buffering is enabled).
+   * Honors `inputOptions.seqField` for dedupe of redundant frames.
    */
   #captureInput(client: ClientPrivate, renderTime: number = 0) {
+    // Sanitize BEFORE any visibility — `latest` (the bound instance itself),
+    // the buffered clone below, and the idle ctx all see in-domain values.
+    // Runs even in latest-only mode (bufferMaxSize: 0). Compiled at defineInput.
+    this._inputOptions?.sanitize?.(client._input);
     const buf = client._inputBuffer;
     if (!buf) { return; } // no consumer registered — skip the clone allocation
     const inst = client._input!;
