@@ -619,6 +619,73 @@ describe("Input (InputEncoder / InputDecoder integration)", () => {
     await timeout(50);
   });
 
+  it("sub-stepping — setFixedTimestep({ subSteps }) cascades N + sub-step dt to the client handle", async () => {
+    let serverCtx: { dt: number; subSteps: number; subDt: number; subDtMs: number } | undefined;
+    let serverApi: { subSteps: number; subStepSeconds?: number; subStepMs?: number } | undefined;
+
+    matchMaker.defineRoomType('input_substeps', class _ extends Room<{ input: MoveInput }> {
+      input = this.defineInput(MoveInput);
+      onCreate() {
+        // 30 inputs/sec on the wire; physics meant to integrate 2 × subDt per step.
+        this.setFixedTimestep((ctx) => {
+          serverCtx = { dt: ctx.dt, subSteps: ctx.subSteps, subDt: ctx.subDt, subDtMs: ctx.subDtMs };
+        }, 30, { subSteps: 2 });
+        serverApi = { subSteps: this.input.subSteps, subStepSeconds: this.input.subStepSeconds, subStepMs: this.input.subStepMs };
+      }
+    });
+
+    const conn = await client.joinOrCreate('input_substeps');
+    const input = conn.input({ type: MoveInput });
+
+    // Client handle mirrors the single server-side declaration.
+    assert.strictEqual(input.tickRate, 30);
+    assert.strictEqual(input.subSteps, 2);
+    assert.strictEqual(input.stepSeconds, 1 / 30);
+    assert.strictEqual(input.subStepSeconds, (1 / 30) / 2);
+    assert.strictEqual(input.subStepMs, (1000 / 30) / 2);
+
+    await timeout(80); // ≥ one fixed step at 30 Hz
+    assert.ok(serverCtx, "fixed step ran");
+    assert.strictEqual(serverCtx!.subSteps, 2);
+    assert.strictEqual(serverCtx!.dt, input.stepSeconds, "per-step dt bit-identical on both sides");
+    assert.strictEqual(serverCtx!.subDt, input.subStepSeconds, "per-SUB-step dt bit-identical on both sides");
+    assert.strictEqual(serverCtx!.subDtMs, input.subStepMs);
+
+    // Server-side InputAPI mirrors the same trio.
+    assert.deepStrictEqual(serverApi, { subSteps: 2, subStepSeconds: (1 / 30) / 2, subStepMs: (1000 / 30) / 2 });
+
+    await conn.leave();
+    await timeout(50);
+  });
+
+  it("sub-stepping — defaults to 1 when not declared (flag stays off the wire)", async () => {
+    matchMaker.defineRoomType('input_substeps_default', class _ extends Room<{ input: MoveInput }> {
+      input = this.defineInput(MoveInput);
+      onCreate() {
+        this.setFixedTimestep(() => {}, 30);
+      }
+    });
+
+    const conn = await client.joinOrCreate('input_substeps_default');
+    const input = conn.input({ type: MoveInput });
+
+    assert.strictEqual(input.tickRate, 30);
+    assert.strictEqual(input.subSteps, 1);
+    assert.strictEqual(input.subStepSeconds, input.stepSeconds, "subDt degenerates to dt when not sub-stepping");
+
+    await conn.leave();
+    await timeout(50);
+  });
+
+  it("sub-stepping — rejects fractional counts loudly", async () => {
+    assert.throws(() => {
+      class _ extends Room<{ input: MoveInput }> {
+        input = this.defineInput(MoveInput, { subSteps: 1.5 });
+      }
+      new _();
+    }, /subSteps must be an integer/);
+  });
+
   it("no input declared on the Room — ROOM_INPUT_* packets are silently ignored", async () => {
     matchMaker.defineRoomType('input_unset', class _ extends Room {});
 

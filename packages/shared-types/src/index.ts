@@ -12,6 +12,7 @@ export {
   ErrorCode,
   CloseCode,
   HandshakeSection,
+  InputFlags,
   ResponseStatus,
 } from './Protocol.js';
 

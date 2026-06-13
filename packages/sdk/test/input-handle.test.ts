@@ -47,6 +47,8 @@ function makeHandle(
         historySize?: number;
         renderTime?: boolean;
         renderDelay?: number;
+        tickRate?: number;
+        subSteps?: number;
         clockNow?: () => number;
         clockRtt?: number;
         clockSynced?: boolean;
@@ -62,6 +64,8 @@ function makeHandle(
     const handle = new InputHandleImpl(host, instance, encoder, {
         renderTime: opts.renderTime,
         renderDelay: opts.renderDelay,
+        tickRate: opts.tickRate,
+        subSteps: opts.subSteps,
     });
     return { handle, conn, instance };
 }
@@ -82,6 +86,21 @@ describe('InputHandle', () => {
             assert.equal(u.handle.mode, 'unreliable');
             assert.equal(u.handle.sentCount, 0);
             assert.equal(u.handle.lastProcessed, 0);
+        });
+
+        test('sub-step getters derive from tickRate/subSteps; default to 1 / step dt', () => {
+            const sub = makeHandle('reliable', { tickRate: 30, subSteps: 2 });
+            assert.equal(sub.handle.subSteps, 2);
+            assert.equal(sub.handle.subStepSeconds, (1 / 30) / 2);
+            assert.equal(sub.handle.subStepMs, (1000 / 30) / 2);
+
+            const plain = makeHandle('reliable', { tickRate: 30 });
+            assert.equal(plain.handle.subSteps, 1);
+            assert.equal(plain.handle.subStepSeconds, plain.handle.stepSeconds, 'degenerates to the full step');
+
+            const noRate = makeHandle('reliable', { subSteps: 2 });
+            assert.isUndefined(noRate.handle.subStepSeconds, 'no advertised rate → no derived dt');
+            assert.equal(noRate.handle.subSteps, 2);
         });
 
         test('send() is a no-op when the connection is closed (both modes)', () => {

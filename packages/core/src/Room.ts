@@ -74,6 +74,19 @@ export interface DefineInputOptions<I = any> {
    * canonical Hz value (`1/stepSeconds`). Highest precedence.
    */
   stepSeconds?: number;
+  /**
+   * Physics sub-steps per input tick (integer ≥ 1, default 1) — decouples the
+   * PHYSICS rate from the input/network rate. One input still drives exactly
+   * one fixed step (the replay invariant), but the simulation integrates
+   * `subSteps` engine steps of `stepSeconds/subSteps` inside it, identically
+   * on client and server — physics at `tickRate * subSteps` Hz while sending
+   * `tickRate` inputs/sec. Cascaded to clients via the join handshake;
+   * both sides read the derived numbers off their step context
+   * (`ctx.subSteps` / `ctx.subDt`) so N and dt can't drift apart.
+   * Usually declared via {@link Room.setFixedTimestep}'s `subSteps` option
+   * instead — pass it here only when the room runs its own loop.
+   */
+  subSteps?: number;
 }
 
 /** `true` when the defineInput opts declared an `idle` policy — narrows the
@@ -156,6 +169,16 @@ function toResponseError(e: any): { name: string; message: string; code?: any } 
 
 export const DEFAULT_SEAT_RESERVATION_TIME = Number(process.env.COLYSEUS_SEAT_RESERVATION_TIME || 15);
 
+// Throws on a fractional/non-positive count: both sides loop `subSteps` times at
+// `dt/subSteps`, so anything but a whole number is a determinism bug, not a tunable.
+function validateSubSteps(subSteps: number | undefined, source: string): number | undefined {
+  if (subSteps === undefined) { return undefined; }
+  if (!Number.isInteger(subSteps) || subSteps < 1) {
+    throw new Error(`[${source}] subSteps must be an integer >= 1 (got ${subSteps}).`);
+  }
+  return subSteps;
+}
+
 export type SimulationCallback = (deltaTime: number) => void;
 
 /**
@@ -173,6 +196,21 @@ export interface StepContext {
   readonly dtMs: number;
   /** Monotonic index of the fixed step being simulated. */
   readonly tick: number;
+  /**
+   * Physics sub-steps per fixed step (≥ 1; `1` unless declared via
+   * `setFixedTimestep(..., { subSteps })`). Run your engine `subSteps` times at
+   * {@link subDt} inside each step — `for (let i = 0; i < ctx.subSteps; i++)
+   * world.step(ctx.subDt)` — to integrate physics at `tickRate * subSteps` Hz
+   * while inputs flow at `tickRate`. The same numbers are cascaded to predicting
+   * clients (their step context carries identical `subSteps`/`subDt`), so the
+   * sub-stepped trajectory replays bit-identically.
+   */
+  readonly subSteps: number;
+  /** Physics sub-step in SECONDS (`dt / subSteps`); equals {@link dt} when
+   *  `subSteps` is 1, so the loop above is valid for every room. */
+  readonly subDt: number;
+  /** Physics sub-step in MILLISECONDS (`dtMs / subSteps`). */
+  readonly subDtMs: number;
 }
 
 /** Fixed-timestep simulation callback. @see Room.setFixedTimestep */
@@ -793,6 +831,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
       // Compiled ONCE here (map → dense min/max walk); applied per decoded frame.
       sanitize: opts?.sanitize !== undefined ? compileSanitizer(opts.sanitize) : undefined,
       tickRate,
+      subSteps: validateSubSteps(opts?.subSteps, 'defineInput'),
     };
     // Enable wire-level timing for clients that advertise CLIENT_TIMING.
     // Defining inputs is the natural "real-time room" gate — chat / lobby /
@@ -824,6 +863,25 @@ export class Room<T extends RoomOptions = RoomOptions> {
     Object.defineProperty(api, "stepMs", {
       enumerable: true,
       get: () => { const hz = this._inputOptions?.tickRate; return hz ? 1000 / hz : undefined; },
+    });
+    // Sub-step trio: same derivation as the client handle ((1/hz)/n) — bit-identical dt.
+    Object.defineProperty(api, "subSteps", {
+      enumerable: true,
+      get: () => this._inputOptions?.subSteps ?? 1,
+    });
+    Object.defineProperty(api, "subStepSeconds", {
+      enumerable: true,
+      get: () => {
+        const hz = this._inputOptions?.tickRate;
+        return hz ? (1 / hz) / (this._inputOptions?.subSteps ?? 1) : undefined;
+      },
+    });
+    Object.defineProperty(api, "subStepMs", {
+      enumerable: true,
+      get: () => {
+        const hz = this._inputOptions?.tickRate;
+        return hz ? (1000 / hz) / (this._inputOptions?.subSteps ?? 1) : undefined;
+      },
     });
     return api;
   }
@@ -1027,6 +1085,18 @@ export class Room<T extends RoomOptions = RoomOptions> {
    * to predicting clients via the join handshake (they predict at the matching
    * `dt`), so don't also pass `tickRate` to {@link defineInput}.
    *
+   * **`tickRate` couples three rates** — by design, one input == one fixed step
+   * == one server tick, so lowering `tickRate` to save bandwidth also lowers
+   * the simulation rate. To keep high-fidelity physics on a lower network rate,
+   * pass `{ subSteps: N }`: one input still drives one fixed step, but you
+   * integrate `N` engine sub-steps of `ctx.subDt` (= `ctx.dt / N`) inside it —
+   * physics at `tickRate * N` Hz, inputs at `tickRate`/sec. The same
+   * `subSteps`/`subDt` are cascaded to predicting clients (via the join
+   * handshake, onto their reconciler's step context), so client replay
+   * reproduces the sub-stepped trajectory exactly. Render interpolation already
+   * smooths above the step rate — most games don't need this; reach for it when
+   * the *simulation* needs the extra Hz (fast projectiles, stacking, tunneling).
+   *
    * On a hitch the accumulator runs at most a few catch-up steps then drops the
    * backlog (no spiral of death). Lag-comp is recorded once per real frame.
    *
@@ -1042,25 +1112,35 @@ export class Room<T extends RoomOptions = RoomOptions> {
    *
    * @param step - Called once per fixed step with a {@link StepContext}.
    * @param tickRate - Simulation rate in **Hz**. Defaults to 60.
+   * @param opts - `subSteps`: physics sub-steps per fixed step (integer ≥ 1,
+   *   default 1) — see above.
    *
    * @example
    * ```ts
    * onCreate() {
+   *   // 30 inputs/sec on the wire, physics integrated at 60 Hz:
    *   this.setFixedTimestep((ctx) => {
-   *     this.stepPlayers(ctx.dt);   // applyInput(p, cmd, level, ctx.dt)
-   *     this.stepWorld(ctx.dt);
-   *   }, 30);
+   *     this.applyInputs(ctx);      // consume ONE input per client per step
+   *     for (let i = 0; i < ctx.subSteps; i++) this.world.step(ctx.subDt);
+   *   }, 30, { subSteps: 2 });
    * }
    * ```
    */
-  public setFixedTimestep(step: FixedTimestepCallback, tickRate: number = Math.round(1000 / DEFAULT_SIMULATION_INTERVAL)): void {
+  public setFixedTimestep(step: FixedTimestepCallback, tickRate: number = Math.round(1000 / DEFAULT_SIMULATION_INTERVAL), opts?: { subSteps?: number }): void {
     if (this._simulationInterval) { clearInterval(this._simulationInterval); }
 
     const stepMs = 1000 / tickRate;
     const stepSeconds = 1 / tickRate;
+    // Explicit option wins; else an earlier defineInput({ subSteps }) declaration.
+    const subSteps = validateSubSteps(opts?.subSteps, 'setFixedTimestep')
+      ?? this._inputOptions?.subSteps ?? 1;
 
-    // Single source of the fixed rate: advertise it to predicting clients.
-    if (this._inputOptions) { this._inputOptions.tickRate = tickRate; }
+    // Single source of the fixed rate (and sub-step count): advertise both to
+    // predicting clients so N and dt can't drift between the two sides.
+    if (this._inputOptions) {
+      this._inputOptions.tickRate = tickRate;
+      this._inputOptions.subSteps = subSteps;
+    }
 
     let cb = step;
     if (this.onUncaughtException !== undefined) {
@@ -1070,7 +1150,12 @@ export class Room<T extends RoomOptions = RoomOptions> {
     let acc = 0;
     let tick = 0;
     // Reused per-step context — no per-step allocation in the hot loop.
-    const ctx = { dt: stepSeconds, dtMs: stepMs, tick: 0 };
+    // subDt = stepSeconds/subSteps: same expression as the client handle's
+    // subStepSeconds, so the per-sub-step dt is bit-identical on both sides.
+    const ctx = {
+      dt: stepSeconds, dtMs: stepMs, tick: 0,
+      subSteps, subDt: stepSeconds / subSteps, subDtMs: stepMs / subSteps,
+    };
     const MAX_CATCHUP_STEPS = 5;
 
     this._simulationInterval = setInterval(() => {
@@ -1907,28 +1992,40 @@ export class Room<T extends RoomOptions = RoomOptions> {
       // Append input reflection as a tagged section when the room declared
       // input. The SDK uses these bytes to materialize a constructor for
       // `conn.input()` calls that don't pass an explicit `type`.
+      // NOT gated by skipHandshake: that flag means "client already has the
+      // STATE schema" (rootSchema join / reconnection) — the input sections
+      // carry runtime config (tickRate/patchRate/renderTime/subSteps + the
+      // input ctor) the client cannot derive locally. Re-parsing them on
+      // reconnect is idempotent.
       let extraSections: Array<{ tag: number; bytes: Uint8Array }> | undefined;
-      if (!connectionOptions?.skipHandshake && this._inputOptions !== undefined) {
+      if (this._inputOptions !== undefined) {
         const inputBytes = _inputReflectionCache.get(this._inputOptions.ctor);
         if (inputBytes !== undefined) {
           extraSections = [{ tag: HandshakeSection.INPUT_REFLECTION, bytes: inputBytes }];
         }
-        // [flags uint8][tickRate varint?][patchRate varint?]: renderTime → client
-        // auto-stamps inputs; tickRate (Hz) → predict at dt=1/tickRate; patchRate (ms)
-        // → reconcile cadence for smoothing. Varints in bit order. See InputFlags.
+        // [flags uint8][tickRate varint?][patchRate varint?][subSteps varint?]:
+        // renderTime → client auto-stamps inputs; tickRate (Hz) → predict at
+        // dt=1/tickRate; patchRate (ms) → reconcile cadence for smoothing;
+        // subSteps → physics sub-steps per input (omitted when 1). Varints in
+        // bit order. See InputFlags.
         const tickRate = this._inputOptions.tickRate;
         const patchRate = (typeof this.patchRate === "number" && this.patchRate > 0)
           ? Math.round(this.patchRate) : undefined;
-        if (this._inputOptions.renderTime || tickRate || patchRate) {
+        const subSteps = (this._inputOptions.subSteps !== undefined && this._inputOptions.subSteps > 1)
+          ? this._inputOptions.subSteps : undefined;
+        if (this._inputOptions.renderTime || tickRate || patchRate || subSteps) {
           let flags = 0;
           if (this._inputOptions.renderTime) { flags |= InputFlags.RENDER_TIME; }
           if (tickRate) { flags |= InputFlags.FIXED_TIMESTEP; }
           if (patchRate) { flags |= InputFlags.PATCH_RATE; }
-          const buf = new Uint8Array(16);
+          if (subSteps) { flags |= InputFlags.SUB_STEPS; }
+          // 24B: worst case = flags + float64 tickRate (9) + uint32 patchRate (5) + subSteps (2).
+          const buf = new Uint8Array(24);
           const sit = { offset: 0 };
           buf[sit.offset++] = flags;
           if (tickRate) { encode.number(buf, tickRate, sit); }
           if (patchRate) { encode.number(buf, patchRate, sit); }
+          if (subSteps) { encode.number(buf, subSteps, sit); }
           (extraSections ??= []).push({
             tag: HandshakeSection.INPUT_OPTIONS,
             bytes: buf.subarray(0, sit.offset),

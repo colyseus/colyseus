@@ -172,6 +172,16 @@ export interface InputOptions {
   tickRate?: number;
 
   /**
+   * Physics sub-steps per input tick (integer ≥ 1) advertised to clients via
+   * the join handshake — the simulation integrates `subSteps` engine steps of
+   * `(1/tickRate)/subSteps` per input on BOTH sides, so physics runs at
+   * `tickRate * subSteps` Hz on a `tickRate` input/network rate. Set via
+   * `setFixedTimestep(..., { subSteps })` (or `defineInput`). Unset/1 = not
+   * advertised (input rate == physics rate).
+   */
+  subSteps?: number;
+
+  /**
    * Room-level absence policy: bare `drain()` / `next()` synthesize one idle
    * frame from it when a tick has no input. See {@link IdleInput}.
    */
@@ -353,6 +363,16 @@ export type InputAPI<I = any, Idle extends boolean = false> = ((sessionId: strin
   readonly stepSeconds?: number;
   /** The fixed step as **milliseconds** (`1000/tickRate`). `undefined` when no rate. */
   readonly stepMs?: number;
+  /** Physics sub-steps per input tick (≥ 1; `1` unless declared via
+   *  `setFixedTimestep(..., { subSteps })` / `defineInput`). */
+  readonly subSteps: number;
+  /** The physics sub-step as **seconds** (`stepSeconds / subSteps`) — the engine
+   *  dt when sub-stepping; equals {@link stepSeconds} when `subSteps` is 1.
+   *  `undefined` when no rate is advertised. */
+  readonly subStepSeconds?: number;
+  /** The physics sub-step as **milliseconds** (`stepMs / subSteps`). `undefined`
+   *  when no rate is advertised. */
+  readonly subStepMs?: number;
 };
 
 /** @internal */

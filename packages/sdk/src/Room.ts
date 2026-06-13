@@ -223,6 +223,15 @@ export class Room<
      */
     #inputPatchRate?: number;
 
+    /**
+     * Server-advertised physics sub-steps per input tick from the INPUT_OPTIONS
+     * handshake (`setFixedTimestep(..., { subSteps })`). Surfaced on the input
+     * handle as {@link InputHandle.subSteps} and defaulted into the reconcilers'
+     * step context, so client prediction sub-steps exactly like the server.
+     * @internal
+     */
+    #inputSubSteps?: number;
+
     constructor(name: string, rootSchema?: SchemaConstructor<State>) {
         this.name = name;
 
@@ -585,6 +594,7 @@ export class Room<
             renderDelay: options?.renderDelay,
             tickRate: this.#inputTickRate,
             patchRate: this.#inputPatchRate,
+            subSteps: this.#inputSubSteps,
         });
         return this.#inputHandle as InputHandle<I>;
     }
@@ -677,8 +687,9 @@ export class Room<
                     if (this.clock === NULL_CLOCK) this.clock = new RoomClock();
 
                 } else if (tag === HandshakeSection.INPUT_OPTIONS) {
-                    // [flags uint8][tickRate varint?][patchRate varint?], varints in bit order.
-                    // RENDER_TIME → auto-stamp inputs; FIXED_TIMESTEP → predict tickRate (Hz); PATCH_RATE → patch interval (ms = reconcile cadence).
+                    // [flags uint8][tickRate varint?][patchRate varint?][subSteps varint?], varints in bit order.
+                    // RENDER_TIME → auto-stamp inputs; FIXED_TIMESTEP → predict tickRate (Hz); PATCH_RATE → patch interval (ms = reconcile cadence);
+                    // SUB_STEPS → physics sub-steps per input tick (absent = 1).
                     const flags = buffer[it.offset++];
                     this.#inputRenderTime = (flags & InputFlags.RENDER_TIME) !== 0;
                     if (flags & InputFlags.FIXED_TIMESTEP) {
@@ -686,6 +697,9 @@ export class Room<
                     }
                     if (flags & InputFlags.PATCH_RATE) {
                         this.#inputPatchRate = decode.number(buffer as Buffer, it);
+                    }
+                    if (flags & InputFlags.SUB_STEPS) {
+                        this.#inputSubSteps = decode.number(buffer as Buffer, it);
                     }
                 }
 

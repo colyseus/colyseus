@@ -202,7 +202,7 @@ export class QueueRoom extends Room {
     /**
      * Redistribute clients into groups at every interval
      */
-    this.setSimulationInterval(() => this.reassignMatchGroups(), this.cycleTickInterval);
+    this.setTimestep(() => this.reassignMatchGroups(), this.cycleTickInterval);
   }
 
   onJoin(client: QueueClient, options: any, auth?: unknown) {

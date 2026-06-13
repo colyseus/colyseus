@@ -102,6 +102,26 @@ export interface InputHandle<I = any> {
    */
   readonly patchRate?: number;
   /**
+   * Server-advertised physics sub-steps per input tick, from
+   * `setFixedTimestep(..., { subSteps })` cascaded through the join handshake.
+   * One input still drives ONE predicted/replayed step, but inside it the
+   * simulation integrates this many engine steps of {@link subStepSeconds} —
+   * physics at `tickRate * subSteps` Hz on a `tickRate` input rate. `1` when
+   * the server didn't sub-step. The reconcilers default their step context's
+   * `subSteps`/`subDt` from this.
+   */
+  readonly subSteps: number;
+  /**
+   * The physics sub-step as **seconds** (`stepSeconds / subSteps`) — the exact
+   * engine dt for each sub-step, bit-identical to the server's `ctx.subDt`.
+   * Equals {@link stepSeconds} when `subSteps` is 1; `undefined` when no rate
+   * advertised.
+   */
+  readonly subStepSeconds?: number;
+  /** The physics sub-step as **milliseconds** (`stepMs / subSteps`). `undefined`
+   *  when no rate advertised. */
+  readonly subStepMs?: number;
+  /**
    * Encode the staged input and send it. Routes to the reliable or
    * unreliable channel based on {@link mode}.
    *
@@ -174,22 +194,24 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
   private _inputBuffer: I[] | null = null;      // lazily allocated (needs data ctor)
   private static _warnedBufferOverflow = false;
 
-  // Render-time lag comp (server INPUT_OPTIONS handshake): each reliable input gets a [uint32 renderTime] prefix.
+  // Render-time lag comp (server INPUT_OPTIONS handshake): each reliable input gets a [uint32 reckonTime][uint16 renderDelta] prefix.
   private _renderTime = false;
   // The app's interpolation buffer (ms) — how far in the past it renders remote
   // entities (e.g. a `Predict` lerp `delay`). The stamp subtracts this AND the
   // one-way latency (smoothedRtt/2) the SDK already tracks, so callers pass only
   // the interp buffer, never the latency.
   private _renderDelay = 0;
-  // Server-advertised rates: fixed step (Hz) and patch interval (ms = reconcile cadence).
+  // Server-advertised rates: fixed step (Hz), patch interval (ms = reconcile
+  // cadence), and physics sub-steps per input tick.
   private _tickRate?: number;
   private _patchRate?: number;
+  private _subSteps = 1;
 
   constructor(
     host: InputHandleHost,
     data: I,
     encoder: InputEncoder<any>,
-    opts?: { renderTime?: boolean; renderDelay?: number; tickRate?: number; patchRate?: number },
+    opts?: { renderTime?: boolean; renderDelay?: number; tickRate?: number; patchRate?: number; subSteps?: number },
   ) {
     this._host = host;
     this.data = data;
@@ -198,6 +220,7 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
     this._renderDelay = opts?.renderDelay ?? 0;
     this._tickRate = opts?.tickRate;
     this._patchRate = opts?.patchRate;
+    this._subSteps = opts?.subSteps ?? 1;
 
     // Size the replay ring to the advertised rates (see field comment).
     const stepMs = this._tickRate ? 1000 / this._tickRate : (1000 / 60);
@@ -214,6 +237,10 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
   get stepSeconds(): number | undefined { return this._tickRate ? 1 / this._tickRate : undefined; }
   get stepMs(): number | undefined { return this._tickRate ? 1000 / this._tickRate : undefined; }
   get patchRate(): number | undefined { return this._patchRate; }
+  get subSteps(): number { return this._subSteps; }
+  // `(1/hz)/n` — the SAME expression the server's ctx.subDt uses → bit-identical dt.
+  get subStepSeconds(): number | undefined { return this._tickRate ? (1 / this._tickRate) / this._subSteps : undefined; }
+  get subStepMs(): number | undefined { return this._tickRate ? (1000 / this._tickRate) / this._subSteps : undefined; }
   get lastProcessed(): number { return this._lastProcessed; }
   get sentCount(): number { return this._sentCount; }
   get pendingCount(): number { return this._sentCount - this._lastProcessed; }

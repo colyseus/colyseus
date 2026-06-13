@@ -116,8 +116,9 @@ export const HandshakeSection = {
   /**
    * Input feature flags + optional values the client mirrors — present when the
    * Room called `defineInput()`. Layout:
-   * `[flags uint8][tickRate varint?][patchRate varint?]`, bits per
-   * {@link InputFlags}; trailing varints appear in flag-bit order when set.
+   * `[flags uint8][tickRate varint?][patchRate varint?][subSteps varint?]`,
+   * bits per {@link InputFlags}; trailing varints appear in flag-bit order
+   * when set.
    */
   INPUT_OPTIONS: 2,
 } as const;
@@ -138,6 +139,12 @@ export const InputFlags = {
   /** A `[patchRate varint]` (ms) follows — the server's state-patch interval =
    *  the reconcile/correction cadence. The client tunes smoothing to it. */
   PATCH_RATE: 1 << 2,
+  /** A `[subSteps varint]` (count ≥ 2) follows — physics sub-steps per input
+   *  tick. The simulation integrates `subSteps` engine steps of
+   *  `(1/tickRate)/subSteps` per input, identically on both sides, so the
+   *  physics rate is `tickRate * subSteps` while the input/network rate stays
+   *  `tickRate`. Absent ⇒ 1 (input rate == physics rate). */
+  SUB_STEPS: 1 << 3,
 } as const;
 export type InputFlags = typeof InputFlags[keyof typeof InputFlags];
 
