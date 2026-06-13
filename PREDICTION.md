@@ -7,7 +7,7 @@ netcode stack.
 
 This guide puts the **server half** (`defineInput` + `setFixedTimestep` +
 `allowRewindState`) next to the **client half** (`room.input` + `Predict` /
-`controller`) with the load-bearing rules in one place.
+`reconciler` / `sim`) with the load-bearing rules in one place.
 
 > **Runnable references**
 > - `test/prediction/` — hand-rolled platformer (no physics engine).
@@ -66,7 +66,7 @@ class GameRoom extends Room {
 ```
 
 - **`defineInput(Input, opts)`** — declares the per-client input schema and buffers
-  inbound frames. `renderTime: true` adds a 4-byte render-time stamp per reliable
+  inbound frames. `renderTime: true` adds a 6-byte display-time stamp per reliable
   input (read it via `input(sid).renderTime`, or — better — `rewind.lastSeenBy(sid)`).
 - **`setFixedTimestep(step, hz)`** — framework-owned accumulator loop; each `step`
   advances by the SAME fixed `dt = 1/hz`, and the rate is advertised to clients so
@@ -180,10 +180,10 @@ predict.attachAll("players", { mode: "lerp", fields: ["x", "y"] });
 // Local player: server-reconciled prediction. delta:false is mandatory (see §4).
 // renderDelay = your interp buffer; the SDK stamps renderTime = serverNow − renderDelay − rtt/2.
 const input = room.input({ mode: "reliable", delta: false, renderDelay: 100 });
-const me = predict.controller(self, {
+const me = predict.reconciler(self, {
   input,
   fields: ["x", "y", "vx", "vy", "grounded"],
-  step: (s, cmd) => applyInput(s, cmd, LEVEL),   // SAME function as the server
+  step: (ctx, s, cmd) => applyInput(s, cmd, LEVEL, ctx.dt),   // SAME function as the server
   smoothing: 15,
 });
 
@@ -201,12 +201,98 @@ function frame(now) {
   `lerp` (interpolate snapshots at `now − delay` — smooth, lagged, faithful),
   `extrapolate` (forecast — live, can overshoot), `damped` (ease toward latest —
   never exact, never jittery), `reckon` (dead-reckon via a step fn).
-- **`controller`/reconciler** — active prediction for the entity you DO control.
-  Read the smoothed render pose with `value(field)`; read raw predicted state with
-  `raw(field)`.
+- **`reconciler`** — active prediction for ONE entity you control (flat `fields`).
+  Read the smoothed render pose with `value(field)`; read the raw predicted state
+  via the `state` getter.
+- **`sim`** — active prediction when your inputs affect MORE than one flat-field
+  entity: COMPOSITE scalar state across several schema instances (a paddle + the
+  puck it strikes, reconciled together), or an opaque physics engine (Rapier,
+  crashcat). Same rollback loop via `step` / `adopt` / `pose` — see below.
 - **`room.clock`** — `serverNow()`, `smoothedRtt()`, `lastServerTime()`. Auto-populated
   from the TIMED prefix that rides input acks — **only when the room called
   `defineInput()`**.
+
+### Composite & engine state: `predict.sim`
+
+`reconciler` mirrors a flat `fields` list off ONE schema instance. When your inputs
+affect more than that, use `predict.sim`: you own a `world` (any object — composite
+scalars or an engine handle) and the SDK runs the same predict → adopt-on-ack →
+replay loop through three callbacks:
+
+- `step(ctx, cmd, world)` — deterministic, **SHARED with the server**; advance `world`
+  by `ctx.dt`. Gate one-shot side effects on `!ctx.isReplay`.
+- `adopt(world)` — seed the server's authoritative scalars into `world` on each ack,
+  before replay. Close over your sources; there is **no bound instance argument**.
+- `pose(world)` — read `world` into a flat render pose (`{ x, y, puckX, … }`);
+  smoothing + interpolation operate on these numbers. Read them with `me.value("puckX")`
+  (a flat key — no string-path eval, portable to C#/C).
+
+Composite scalars — a paddle + the puck it strikes, reconciled as one:
+
+```ts
+const input = room.input(MoveInput, { mode: "reliable", delta: false });
+const world = {
+  paddle: { x: player.x, y: player.y },
+  puck:   { x: s.puck.x, y: s.puck.y, vx: s.puck.vx, vy: s.puck.vy },
+};
+const me = predict.sim({
+  input,
+  world,
+  step:  (ctx, cmd, w) => stepWorld(w, cmd, ctx.dt),     // the SAME fn the server runs
+  adopt: (w) => {                                         // server truth, same decoded patch
+    w.paddle.x = player.x;  w.paddle.y = player.y;
+    w.puck.x = s.puck.x;    w.puck.y = s.puck.y;
+    w.puck.vx = s.puck.vx;  w.puck.vy = s.puck.vy;
+  },
+  pose:  (w) => ({ x: w.paddle.x, y: w.paddle.y, puckX: w.puck.x, puckY: w.puck.y }),
+});
+draw(me.value("x"), me.value("puckX"));                  // flat pose key — no path eval
+```
+
+Opaque engine — Rapier; `world` reaches the solver + body:
+
+```ts
+const me = predict.sim({
+  input,
+  world: { world, body },
+  step:  (ctx, cmd, w) => { applyInput(w.body, cmd); w.world.step(); },  // timestep = ctx.dt
+  adopt: (w) => { w.body.setTranslation({ x: self.x, y: self.y }, true); },
+  pose:  (w) => { const t = w.body.translation(); return { x: t.x, y: t.y }; },
+});
+```
+
+The three callbacks fire keyed to network acks the app never sees directly — the lifecycle:
+
+```
+your render frame:
+                                     ┌─ new ack? ─▶ adopt(world)               adopt server truth
+  predict.tick(now) ─────────────────┤             step(ctx,cmd,world) × pend   replay, isReplay=true
+                                     │             pose(world)                  re-sample pose (once)
+                                     └─ always ──▶ error decay
+  n = me.beginFrame(frameDt)
+  n × me.input(cmd) ─────────────────▶             step(ctx,cmd,world)          live, isReplay=false
+                                                   pose(world)                  sample pose
+  draw(me.value("x"))                ◀── cached pose: interpolate + smooth, NO callbacks
+```
+
+> ⚠️ **`adopt` reseeds SCALARS; replay re-derives the rest.** Engine-internal
+> non-scalar state (contact caches, sleeping islands, solver accumulators) is NOT
+> rolled back across reconcile — only what `adopt` restores plus what replay re-runs.
+> Both shipped consumers (composite scalars; a Rapier shooter reseeding
+> position + velocity) are fully served by this. An engine that depends on internal
+> state surviving reconcile would need a per-tick snapshot ring, which `sim` does
+> not carry.
+
+### Which primitive for which interaction?
+
+| interaction | primitive |
+|---|---|
+| your own movement (one entity, flat fields) | `reconciler` |
+| anything your inputs push / carry / throw (paddle + puck, vehicle + cargo) | `sim` (composite scalars) |
+| your movement inside a physics engine (Rapier/crashcat) | `sim` (engine handle) |
+| hitscan against others (instantaneous, server-owned target) | `allowRewindState` + `rewind.lastSeenBy` |
+| remote players you don't control | `Predict` lerp |
+| server-driven ballistics nobody touches | `Predict` reckon |
 
 ---
 
@@ -223,7 +309,9 @@ function frame(now) {
 > ⚠️ **Inputs must be flat primitives** — no nested schemas/collections in the input.
 
 > ⚠️ **Input rate = fixed-step rate = server tick.** Change one, change all. Send one
-> input per fixed step (not per render frame).
+> input per fixed step (not per render frame). Lowering `tickRate` to save bandwidth
+> therefore also lowers the simulation rate — unless you sub-step (§5): physics can
+> run at `tickRate × subSteps` while the wire stays at `tickRate`.
 
 > ⚠️ **`room.clock` requires `defineInput()`.** Without it the clock is a stub
 > (`serverNow()` falls back to `performance.now()`, `rtt`/`lastServerTime` are 0).
@@ -240,12 +328,50 @@ Prediction matches the server only if both run the **same** simulation:
 - **One shared `step`/`applyInput`** function (single source of truth), imported by
   client and server.
 - **Identical fixed `dt`** on both sides (`setFixedTimestep` advertises it; the
-  controller reads it back).
+  client `reconciler`/`sim` read it back).
 - **Matching engine versions** for physics (e.g. the same Rapier build client/server).
 
 Divergence shows up as constant small corrections (rubber-banding) even on a LAN; jitter
 shows up as occasional corrections that scale with packet loss. See brief 10 for a
 determinism diagnostic.
+
+### Sub-stepping: high-rate physics on a low network rate
+
+By default the input/network rate IS the physics rate (the §4 coupling): asking for
+"30 inputs/sec" used to force 30 Hz simulation. **Sub-stepping** is the escape hatch —
+declare it once on the server:
+
+```ts
+this.setFixedTimestep((ctx) => {
+  this.applyInputs(ctx);                                       // ONE input per client per step
+  for (let i = 0; i < ctx.subSteps; i++) this.world.step(ctx.subDt);
+}, 30, { subSteps: 2 });                                       // 30 inputs/sec, 60 Hz physics
+```
+
+One input still drives exactly one fixed step (the replay invariant is untouched);
+*inside* it the engine integrates `subSteps` sub-steps of `subDt = dt / subSteps`.
+The handshake cascades `subSteps` alongside `tickRate`, so the client reconciler's
+`ctx` carries the **same** `subSteps`/`subDt` — your shared `step` function runs the
+identical loop on both sides:
+
+```ts
+// shared client/server — works for subSteps 1 too (subDt === dt then)
+step: (ctx, cmd, e) => {
+  applyCmd(e.body, cmd);                                       // per-INPUT effect (impulses!)
+  for (let i = 0; i < ctx.subSteps; i++) e.world.step(ctx.subDt);
+},
+```
+
+Rules of thumb:
+
+- Apply the **input once per step**, then integrate N sub-steps — applying an
+  impulse-like input once per *sub*-step would double-fire it.
+- Never hand-derive N or the sub-step dt on either side: read `ctx.subSteps` /
+  `ctx.subDt` (both sides; also `input.subStepSeconds` on the client handle). One
+  declared number, zero drift.
+- Most games don't need this — render interpolation already smooths above the step
+  rate. Reach for it when the *simulation* needs the extra Hz (fast projectiles,
+  stacking, tunneling) on a constrained send rate.
 
 ---
 
@@ -313,8 +439,16 @@ breaks the exact match — the rewind then approximates.
 - **Hand-rolled sim** (`test/prediction` platformer) — `applyInput` is plain math;
   `attachAll(enemies, { interpolate: (e) => e.kind === "teleporter" ? "step" : "linear" })`
   keeps teleport snaps sharp under rewind.
-- **Physics sim** (`2d-shooter`) — bridge Rapier into the controller's scalar step;
-  consume one input per tick with `next()` and `world.step()` once.
+- **Dead-reckoned types** — declare the lag-comp timeline ONCE on the entity type:
+  `schema({...}, "Enemy").with({ lagComp: "reckon" })` (or `@entity({ lagComp: "reckon" })`).
+  The server's rewind then aims those entities at the client's reconstructed send
+  instant (a reckon renderer already cancelled downstream latency — rewinding to
+  the raw stamp would double-compensate), and the client's `Predict.attachAll`
+  infers `mode: "reckon"` for them — one declaration, both sides. `"snapshot"`
+  (default) reads at the raw stamp; `"none"` records no history (reads are live).
+- **Physics sim** (`2d-shooter`) — bridge Rapier into `predict.sim`'s `step` (the
+  engine handle is your `world`); consume one input per tick with `next()` and
+  `world.step()` once.
 - **Remote smoothing** — `lerp` for players (faithful), `reckon` for AI you can
   forward-simulate, `damped` for "never jittery" cosmetic entities.
 - **Projectiles** — predict the shooter's own shot on fire for zero-latency feedback;
@@ -330,6 +464,7 @@ breaks the exact match — the rewind then approximates.
 | Local player rubber-bands constantly | Non-determinism: different `dt`, divergent `step`, or engine-version mismatch (§5). |
 | Remotes stutter / teleport | Interp `delay` too small (buffer underruns); raise it past 1–2 patch intervals, or check patch rate. |
 | "I hit them but no damage" on moving targets | Not rewinding (or rewinding to server-now). Use `rewind.lastSeenBy(shooterId)` (§6). |
+| Hits register *behind* a dead-reckoned target (where it already walked) | The type renders forward-reckoned but rewinds to the raw stamp (double compensation). Declare `schema({...}, "Enemy").with({ lagComp: "reckon" })` on the type. |
 | Hits land slightly ahead of the crosshair | `MAX_REWIND_MS` too small — it truncates the real rewind (`renderDelay + RTT + a tick`); raise it. |
 | `rewind.lastSeenBy` throws | The room didn't enable `defineInput({ renderTime: true })`; or use `at(time)` with your own time. |
 | `room.clock` returns `performance.now()` | The room never called `defineInput()` (the clock rides input acks). |
@@ -344,10 +479,11 @@ breaks the exact match — the rewind then approximates.
 | Server | `defineInput(Input, { renderTime, bufferMaxSize })` | Per-client input schema + buffer; render-time stamping |
 | Server | `defineInput({ sanitize })` | Per-field `[min, max]` clamps (NaN-safe) or a fix-up callback, applied to every decoded frame before `latest`/buffer visibility |
 | Server | `defineInput({ idle })` + `input(sid).drain()` / `.next()` | Consume frames; the room's `idle: (ctx) => overrides` policy synthesizes one frame on empty ticks (defaults ⊕ overrides; never advances the ack); per-call `{ idle }` overrides, `{ idle: false }` suppresses |
-| Server | `setFixedTimestep(step, hz)` | Fixed-step loop; advertises the tick rate |
-| Server | `allowRewindState({ maxRewindMs })` + `rewind.attachAll(coll, { fields })` | Record positions per tick |
+| Server | `setFixedTimestep(step, hz, { subSteps })` | Fixed-step loop; advertises the tick rate (+ optional physics sub-steps per input — §5) |
+| Shared | `schema({...}, "Enemy").with({ lagComp: "reckon" \| "snapshot" \| "none" })` | Per-TYPE lag-comp timeline, declared once: drives the server rewind aim AND the client Predict mode inference |
+| Server | `allowRewindState({ maxRewindMs })` + `rewind.attachAll(coll, { fields })` | Record positions per tick (fields a type lacks read live; `lagComp:"none"` types record nothing) |
 | Server | `rewind.lastSeenBy(sid)` / `rewind.at(time)` | Rewound view (clamp + live-fallback baked in): `view.value(e, field)`, `view.read(e, fields, out?)` |
 | Server | `input(sid).renderTime` | Raw render time of the last consumed input (prefer `lastSeenBy`) |
 | Client | `room.input({ mode, delta:false, renderDelay })` | Input transport; `renderDelay` = your interp buffer |
-| Client | `Predict.get(room, opts)` + `attachAll` / `controller` | Remote smoothing + local reconciliation |
+| Client | `Predict.get(room, opts)` + `attachAll` / `reconciler` / `sim` | Remote smoothing; local rollback for one flat-field entity (`reconciler`) or composite/engine state (`sim`) |
 | Client | `room.clock` | `serverNow()` / `smoothedRtt()` / `lastServerTime()` |

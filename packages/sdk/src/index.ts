@@ -19,3 +19,30 @@ export { Callbacks } from "@colyseus/schema";
 export { registerSerializer, SchemaSerializer, getStateCallbacks };
 registerSerializer('schema', SchemaSerializer);
 registerSerializer('none', NoneSerializer);
+
+/*
+ * Prediction (high-level): Predict + Reconciler + PredictedEvents.
+ * The subpath `@colyseus/sdk/predict` is the tree-shake-friendly entry; this
+ * top-level re-export covers the convenience `import { Predict } from
+ * "@colyseus/sdk"` form and the UMD `Colyseus.Predict` namespace.
+ */
+export {
+    Predict,
+    Reconciler,
+    SimReconciler,
+    PredictedEvents,
+    PredictedSpawns,
+    DEFAULT_TTL_POLICY,
+    type PredictMode,
+    type PredictOptions,
+    type PredictGetOptions,
+    type AttachConfig,
+    type ReconcilerOptions,
+    type SimReconcilerOptions,
+    type StepContext,
+    type PredictedEventsConfig,
+    type PredictedEventsClock,
+    type PredictedSpawnsOptions,
+    type SpawnEntry,
+    type SpawnHandle,
+} from './predict.ts';

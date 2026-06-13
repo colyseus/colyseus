@@ -22,8 +22,12 @@ const replacePlugin = replace({
 export default [
 
     // https://github.com/microsoft/TypeScript/issues/18442#issuecomment-749896695
+    // `src/predict.ts` is listed alongside `src/index.ts` so the barrel emits
+    // as a standalone `build/predict.{mjs,cjs}` (matching the `./*` exports
+    // rule for `@colyseus/sdk/predict`); without a second entry rollup would
+    // inline the thin barrel into `index.mjs` and the subpath would 404.
     {
-        input: ['src/index.ts'],
+        input: ['src/index.ts', 'src/predict.ts'],
         output: [{ preserveModules: true, banner, dir: 'build', format: 'esm', entryFileNames: '[name].mjs', sourcemap: true },],
         external,
         plugins: [
@@ -33,7 +37,7 @@ export default [
     },
 
     {
-        input: ['src/index.ts'],
+        input: ['src/index.ts', 'src/predict.ts'],
         output: [{ preserveModules: true, banner, dir: 'build', format: 'cjs', entryFileNames: '[name].cjs', sourcemap: true },],
         external,
         plugins: [
