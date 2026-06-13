@@ -270,7 +270,8 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
     this._sentCount = 0;
     this._lastProcessed = 0;
     this._framed = null;
-    // _sendTimes / _inputBuffer rings are reused (overwritten by future sends).
+    this._sendTimes.fill(0); // stale acks for pre-reset seqs must read as "unknown" (-1), not a bogus RTT
+    // _inputBuffer is reused as-is: at() gates on _sentCount (0 here), so it can't surface stale snapshots.
   }
 
   send(): void {

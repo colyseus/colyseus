@@ -845,6 +845,14 @@ export class Room<
         if (!this.reconnection.isReconnecting) {
             this.reconnection.retryCount = 0;
             this.reconnection.isReconnecting = true;
+            // The server allocates a FRESH input buffer for the reconnected client
+            // (its consumed counter restarts at 0). Zero ours now so post-reconnect
+            // seqs line up — otherwise every ack echo (≤ the old counter) is
+            // discarded until the new counter catches up past it, and `sentCount`
+            // stays permanently ahead: reconcilers replay an ever-fat pending
+            // backlog every reconcile. Reconcilers must drop their pending inputs
+            // on `onReconnect` (e.g. `Reconciler.reset()`) for the same reason.
+            this.#inputHandle?.reset();
         }
 
         this.retryReconnection();
