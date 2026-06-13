@@ -334,6 +334,21 @@ export interface InputAccessor<I = any, Idle extends boolean = false> {
    * hit" hit registration; use this getter only for a custom rewind time.
    */
   readonly renderTime: number;
+
+  /**
+   * Reckon-display stamp (server-clock ms) of the most recently consumed input
+   * — the client's serverNow ESTIMATE when it sampled that input, i.e. the
+   * exact instant its forward-reckoned (`lagComp:"reckon"`) entities were
+   * displayed at. Stamping the display instant DIRECTLY makes the rewind read
+   * immune to the client's RTT-estimation error: the client displayed
+   * `f(serverNow_est)` and the server reads `f(serverNow_est)` — the same
+   * index into the same recorded timeline, so estimation error cancels (the
+   * `maxRewindMs` clamp still bounds spoofing). Same consume semantics as
+   * {@link renderTime}; consumed automatically by `rewind.lastSeenBy()` —
+   * rarely read directly. `0` until stamped (→ rewind falls back to the
+   * midpoint reconstruction).
+   */
+  readonly reckonTime: number;
 }
 
 /**
@@ -397,6 +412,12 @@ export class InputBufferImpl<I = any> {
   private _renderTimes: number[] = [];
   /** Render time of the most recently drained input (see {@link renderTime}). */
   private _lastRenderTime = 0;
+  /** Reckon-display stamps parallel to `_items` — the client's serverNow
+   *  estimate at input-sample time, i.e. the instant its forward-reckoned
+   *  entities were displayed at (server-clock ms; `0` when unset). */
+  private _reckonTimes: number[] = [];
+  /** Reckon stamp of the most recently consumed input (see {@link reckonTime}). */
+  private _lastReckonTime = 0;
 
   /** Input schema ctor — mints the reused idle frame; idle is off without it. */
   private readonly _ctor?: new () => I;
@@ -462,13 +483,15 @@ export class InputBufferImpl<I = any> {
     return this._idle;
   }
 
-  push(snapshot: I, renderTime: number = 0): void {
+  push(snapshot: I, renderTime: number = 0, reckonTime: number = 0): void {
     this._items.push(snapshot);
     this._renderTimes.push(renderTime);
+    this._reckonTimes.push(reckonTime);
     // Overflow drops oldest unconsumed input; count it consumed so the reconcile ack still advances past it.
     if (this._items.length > this._maxSize) {
       this._items.shift();
       this._renderTimes.shift(); // keep parallel with `_items`
+      this._reckonTimes.shift();
       this.consumedCount++;
     }
   }
@@ -488,13 +511,15 @@ export class InputBufferImpl<I = any> {
       if (idle !== undefined) return [this.idleFrame(this.resolveIdle(idle))];
     }
     const out = this._items;
-    // Report newest drained input's render time; persists across a subsequent empty drain.
+    // Report newest drained input's stamps; persist across a subsequent empty drain.
     if (this._renderTimes.length > 0) {
       this._lastRenderTime = this._renderTimes[this._renderTimes.length - 1];
+      this._lastReckonTime = this._reckonTimes[this._reckonTimes.length - 1];
     }
     this.consumedCount += out.length;
     this._items = [];
     this._renderTimes = [];
+    this._reckonTimes = [];
     return out;
   }
 
@@ -505,7 +530,8 @@ export class InputBufferImpl<I = any> {
       const idle = this._ctor !== undefined ? this.effectiveIdle(opts) : undefined;
       return idle !== undefined ? this.idleFrame(this.resolveIdle(idle)) : undefined;
     }
-    this._lastRenderTime = this._renderTimes.shift()!; // render time of THIS input
+    this._lastRenderTime = this._renderTimes.shift()!; // stamps of THIS input
+    this._lastReckonTime = this._reckonTimes.shift()!;
     this.consumedCount++;
     return this._items.shift();
   }
@@ -516,7 +542,9 @@ export class InputBufferImpl<I = any> {
     const count = Math.min(n, this._items.length);
     const out = this._items.splice(0, count);
     const times = this._renderTimes.splice(0, count);
-    this._lastRenderTime = times[times.length - 1]; // newest taken input's render time
+    const reckons = this._reckonTimes.splice(0, count);
+    this._lastRenderTime = times[times.length - 1]; // newest taken input's stamps
+    this._lastReckonTime = reckons[reckons.length - 1];
     this.consumedCount += count;
     return out;
   }
@@ -543,10 +571,20 @@ export class InputBufferImpl<I = any> {
     return this._lastRenderTime;
   }
 
+  /** Reckon-display stamp of the most recently consumed input — the client's
+   *  serverNow estimate when it sampled that input, i.e. the EXACT instant its
+   *  forward-reckoned entities were displayed at. Same consume semantics as
+   *  {@link renderTime}. Consumed automatically by `rewind.lastSeenBy()` for
+   *  `lagComp:"reckon"` types — rarely read directly. `0` until stamped. */
+  get reckonTime(): number {
+    return this._lastReckonTime;
+  }
+
   clear(): void {
     this.consumedCount += this._items.length;
     this._items.length = 0;
     this._renderTimes.length = 0;
+    this._reckonTimes.length = 0;
     this._lastSeq = -Infinity;
   }
 }
@@ -573,6 +611,7 @@ export class InputAccessorImpl<I = any> implements InputAccessor<I> {
   get size(): number { return this._client._inputBuffer?.size ?? 0; }
   clear(): void { this._client._inputBuffer?.clear(); }
   get renderTime(): number { return this._client._inputBuffer?.renderTime ?? 0; }
+  get reckonTime(): number { return this._client._inputBuffer?.reckonTime ?? 0; }
 }
 
 /**
@@ -591,4 +630,5 @@ export const NO_OP_INPUT_ACCESSOR: InputAccessor<any> = Object.freeze({
   size: 0,
   clear: () => {},
   renderTime: 0,
+  reckonTime: 0,
 });

@@ -46,12 +46,14 @@ export interface InputOptions<I = any> extends InputEncoderOptions {
 
   /**
    * Your interpolation buffer in ms — how far in the PAST you render remote
-   * entities (e.g. a `Predict` lerp `delay`). The auto-stamped render time is
-   * `serverNow() − renderDelay − smoothedRtt()/2`: this term covers the interp
-   * buffer, and the SDK adds the one-way downstream latency itself. So pass ONLY
-   * your interp buffer, never the latency. Default `0` — correct when you
-   * dead-reckon remote entities to current server time (no interp lag). Has no
-   * effect unless the Room enabled render-time via `defineInput({renderTime:true})`.
+   * entities (e.g. a `Predict` lerp `delay`). It feeds the stamped
+   * `renderDelta = renderDelay + smoothedRtt()/2`, from which the server
+   * derives `renderTime = reckonTime − renderDelta`: this term covers the
+   * interp buffer, and the SDK adds the one-way downstream latency itself. So
+   * pass ONLY your interp buffer, never the latency. Default `0` — correct
+   * when you dead-reckon remote entities to current server time (no interp
+   * lag). Has no effect unless the Room enabled render-time via
+   * `defineInput({renderTime:true})`.
    */
   renderDelay?: number;
 }
@@ -279,9 +281,9 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
     if (bytes.length === 0) return; // delta no-op — nothing to send, nothing to count
 
     // Render-time prefix (reliable only): OR the TIMED modifier onto the opcode and prepend
-    // [uint32 renderTime LE] — the server-clock ms the client is RENDERING at — for lag-comp rewind.
+    // [uint32 reckonTime LE][uint16 renderDelta LE] — for lag-comp rewind.
     const stampRender = this._renderTime && this._encoder.mode === "reliable";
-    const prefixLen = stampRender ? 4 : 0;
+    const prefixLen = stampRender ? 6 : 0;
     const total = 1 + prefixLen + bytes.length;
     if (total > this._scratch.byteLength) {
       this._scratch = new Uint8Array(Math.max(total, this._scratch.byteLength * 2));
@@ -289,20 +291,33 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
     }
     if (stampRender) {
       this._scratch[0] = Protocol.ROOM_INPUT_RELIABLE | ProtocolModifier.TIMED;
-      // What the client SEES of remote entities lags current server time by the
-      // interp buffer (`renderDelay`, app-set) PLUS the one-way downstream latency
-      // (≈ smoothedRtt/2, which we own). Subtract both so the server rewinds targets
-      // to exactly the moment shown on screen. 0 until the clock syncs (lastServerTime
-      // is still 0) → the server falls back to live positions instead of a bogus stamp.
+      // reckonTime — the RECKON-timeline instant: forward-reckoned entities
+      // display at the client's serverNow ESTIMATE, so stamp that estimate
+      // DIRECTLY. The server reads its history at this exact index, so clock /
+      // RTT estimation error cancels out (client displayed f(est), server
+      // reads f(est)).
+      // renderDelta — the SNAPSHOT timeline trails reckonTime by the interp
+      // buffer (`renderDelay`, app-set) PLUS the one-way downstream latency
+      // (≈ smoothedRtt/2, which we own); the server derives
+      // `renderTime = reckonTime − renderDelta` = the moment lerped remotes
+      // were on screen. A u16 delta, not a second u32: only the base stamp
+      // needs absolute range — the gap is bounded (≪ 65s even with a
+      // polluted RTT estimate).
+      // Both 0 until the clock syncs (lastServerTime is still 0) → the server
+      // falls back to live positions instead of a bogus stamp.
       const clock = this._host.clock;
-      const rt = (clock?.lastServerTime?.() ?? 0) > 0
-        ? Math.max(0, Math.round(clock!.serverNow() - this._renderDelay - (clock!.smoothedRtt?.() ?? 0) / 2)) >>> 0
+      const synced = (clock?.lastServerTime?.() ?? 0) > 0;
+      const rk = synced ? Math.max(0, Math.round(clock!.serverNow())) >>> 0 : 0;
+      const delta = synced
+        ? Math.min(0xffff, Math.max(0, Math.round(this._renderDelay + (clock!.smoothedRtt?.() ?? 0) / 2)))
         : 0;
-      this._scratch[1] = rt & 0xff;
-      this._scratch[2] = (rt >>> 8) & 0xff;
-      this._scratch[3] = (rt >>> 16) & 0xff;
-      this._scratch[4] = (rt >>> 24) & 0xff;
-      this._scratch.set(bytes, 5);
+      this._scratch[1] = rk & 0xff;
+      this._scratch[2] = (rk >>> 8) & 0xff;
+      this._scratch[3] = (rk >>> 16) & 0xff;
+      this._scratch[4] = (rk >>> 24) & 0xff;
+      this._scratch[5] = delta & 0xff;
+      this._scratch[6] = (delta >>> 8) & 0xff;
+      this._scratch.set(bytes, 7);
     } else {
       this._scratch[0] = this._encoder.mode === "reliable"
         ? Protocol.ROOM_INPUT_RELIABLE

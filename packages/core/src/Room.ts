@@ -1228,6 +1228,14 @@ export class Room<T extends RoomOptions = RoomOptions> {
       }
       return this.input(sessionId).renderTime;
     });
+    // Direct reckon-display stamp: lagComp:"reckon" types read at exactly the
+    // instant the client displayed them — immune to its RTT-estimation error.
+    this.#rewind.bindReckonTime((sessionId) =>
+      this.input !== undefined ? this.input(sessionId).reckonTime : 0,
+    );
+    // Anchor the reckon midpoint FALLBACK at the true processing instant (the
+    // record timestamp is one tick stale by hit-test time — see bindNow).
+    this.#rewind.bindNow(() => this.clock.elapsedTime);
     return this.#rewind;
   }
 
@@ -2355,7 +2363,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
    * push a clone into the per-client buffer (when buffering is enabled).
    * Honors `inputOptions.seqField` for dedupe of redundant frames.
    */
-  #captureInput(client: ClientPrivate, renderTime: number = 0) {
+  #captureInput(client: ClientPrivate, renderTime: number = 0, reckonTime: number = 0) {
     // Sanitize BEFORE any visibility — `latest` (the bound instance itself),
     // the buffered clone below, and the idle ctx all see in-domain values.
     // Runs even in latest-only mode (bufferMaxSize: 0). Compiled at defineInput.
@@ -2368,7 +2376,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
       const value = (inst as any)[seqField] as number;
       if (typeof value === 'number' && !buf.accept(value)) { return; }
     }
-    buf.push(inst.clone() as any, renderTime);
+    buf.push(inst.clone() as any, renderTime, reckonTime);
   }
 
   private _onMessage(client: ExtractRoomClient<T> & ClientPrivate, buffer: Buffer) {
@@ -2523,13 +2531,20 @@ export class Room<T extends RoomOptions = RoomOptions> {
 
     } else if (code === Protocol.ROOM_INPUT_RELIABLE) {
       if (client._inputDecoder) {
-        // Optional [uint32 renderTime] prefix (TIMED bit) — the server-clock ms
-        // the client was rendering the world at; surfaced as input.renderTime
-        // for lag-compensated hit registration. `it` starts at offset 1, so the
-        // body begins at `it.offset` (1 without the prefix, 5 with it).
+        // Optional [uint32 reckonTime][uint16 renderDelta] prefix (TIMED bit):
+        // reckonTime = the client's serverNow estimate at sample time (what
+        // its forward-RECKONED entities displayed at) — read directly by the
+        // rewind so lag comp is immune to the client's RTT-estimation error;
+        // renderTime = reckonTime − renderDelta = the snapshot-timeline
+        // instant the client was rendering (lerp display). `it` starts at
+        // offset 1, so the body begins at `it.offset` (1 without the prefix,
+        // 7 with it).
         let renderTime = 0;
+        let reckonTime = 0;
         if (modifiers & PROTOCOL_MODIFIER_MASK) {
-          renderTime = decode.uint32(buffer, it);
+          reckonTime = decode.uint32(buffer, it);
+          const renderDelta = decode.uint16(buffer, it);
+          renderTime = reckonTime > renderDelta ? reckonTime - renderDelta : 0;
         }
         try {
           client._inputDecoder.decode(buffer.subarray(it.offset));
@@ -2541,7 +2556,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
         // Counter mirrors the SDK's `#sentInputCount`; echoed in the
         // TIMED prefix as `lastInputSeq` so the client can compute RTT.
         client._receivedInputCount = (client._receivedInputCount ?? 0) + 1;
-        this.#captureInput(client, renderTime);
+        this.#captureInput(client, renderTime, reckonTime);
       }
 
     } else if (code === Protocol.ROOM_INPUT_UNRELIABLE) {

@@ -69,8 +69,15 @@ export const ProtocolModifier = {
    * Also set on the client→server input opcode
    * ({@link Protocol.ROOM_INPUT_RELIABLE}) when the Room enabled render-time
    * lag compensation via `defineInput(..., { renderTime: true })`. In that
-   * direction the prefix is a single `[uint32 renderTime]` (ms since room
-   * start) — see {@link HandshakeSection.INPUT_OPTIONS} / {@link InputFlags}.
+   * direction the prefix is `[uint32 reckonTime][uint16 renderDelta]`:
+   * reckonTime (ms since room start) = the client's serverNow estimate at
+   * input-sample time — what its forward-RECKONED entities display at,
+   * stamped directly so the server's rewind read is immune to the client's
+   * RTT-estimation error; the server derives
+   * `renderTime = reckonTime − renderDelta` (≈ `renderDelay + rtt/2`) — the
+   * snapshot-timeline instant on screen (what a LERPING client shows). Only
+   * the base stamp needs u32 range; the delta is bounded ≪ 65 s.
+   * See {@link HandshakeSection.INPUT_OPTIONS} / {@link InputFlags}.
    */
   TIMED: 0x80,
 } as const;

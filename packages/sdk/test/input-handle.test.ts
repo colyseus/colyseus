@@ -74,6 +74,10 @@ function readU32LE(buf: Uint8Array, offset: number): number {
     return (buf[offset] | (buf[offset + 1] << 8) | (buf[offset + 2] << 16) | (buf[offset + 3] << 24)) >>> 0;
 }
 
+function readU16LE(buf: Uint8Array, offset: number): number {
+    return buf[offset] | (buf[offset + 1] << 8);
+}
+
 describe('InputHandle', () => {
     describe('common', () => {
         test('initial state: sentCount and lastProcessed are 0; mode reflects encoder', () => {
@@ -221,12 +225,12 @@ describe('InputHandle', () => {
             assert.equal(handle.lastProcessed, 2);
         });
 
-        test('renderTime: ORs TIMED onto opcode and prepends [u32 LE] (serverNow - renderDelay - rtt/2)', () => {
+        test('renderTime: ORs TIMED onto opcode and prepends [u32 reckonTime][u16 renderDelta]', () => {
             let t = 1234;
             const { handle, conn, instance } = makeHandle('reliable', {
                 renderTime: true,
                 renderDelay: 100,
-                clockRtt: 60,           // one-way ≈ 30, subtracted by the SDK
+                clockRtt: 60,           // one-way ≈ 30, folded into the delta
                 clockNow: () => t,
             });
             instance.x = 1;
@@ -234,13 +238,16 @@ describe('InputHandle', () => {
 
             const buf = conn.reliable[0];
             assert.equal(buf[0], Protocol.ROOM_INPUT_RELIABLE | ProtocolModifier.TIMED);
-            assert.equal(readU32LE(buf, 1), 1104, 'stamp = round(serverNow) - renderDelay - smoothedRtt/2');
+            assert.equal(readU32LE(buf, 1), 1234, 'base stamp = round(serverNow) — the reckon display instant');
+            assert.equal(readU16LE(buf, 5), 130, 'delta = renderDelay + smoothedRtt/2 ⇒ server derives renderTime = 1104');
 
-            // serverNow - renderDelay - rtt/2 < 0 → clamped to 0 (never negative on the wire).
+            // Base stamp stays the raw serverNow even when small; the server's
+            // `renderTime = reckonTime − delta` floors at 0, not the client.
             t = 50;
             instance.x = 2;
             handle.send();
-            assert.equal(readU32LE(conn.reliable[1], 1), 0);
+            assert.equal(readU32LE(conn.reliable[1], 1), 50);
+            assert.equal(readU16LE(conn.reliable[1], 5), 130);
         });
 
         test('renderTime: stamps 0 until the clock has synced (lastServerTime == 0)', () => {
@@ -257,6 +264,7 @@ describe('InputHandle', () => {
             const buf = conn.reliable[0];
             assert.equal(buf[0], Protocol.ROOM_INPUT_RELIABLE | ProtocolModifier.TIMED);
             assert.equal(readU32LE(buf, 1), 0, 'unsynced → 0 ⇒ server uses live positions');
+            assert.equal(readU16LE(buf, 5), 0, 'unsynced → no delta either');
         });
     });
 

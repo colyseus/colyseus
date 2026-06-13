@@ -28,11 +28,31 @@ export interface RewindOptions {
 }
 
 /** Field's `$values` index from the schema metadata (`metadata[name]` = index), or
- *  -1 if unknown. Resolved ONCE per group (cold path), never per tick. */
+ *  -1 if unknown. Resolved ONCE per constructor (cold path), never per tick. */
 function fieldIndexOf(instance: object, field: string): number {
   const md = (instance.constructor as any)[$METADATA] as Record<string, unknown> | undefined;
   const idx = md?.[field];
   return typeof idx === "number" ? idx : -1;
+}
+
+/** = @colyseus/schema `$typeOptionPrefix + "lagComp"` (string metadata key). */
+const $LAGCOMP = "~__opt:lagComp";
+
+/** Schema-declared lag-comp behavior for the entity's TYPE. */
+export type LagCompMode = "snapshot" | "reckon" | "none";
+
+/**
+ * Resolve the type's `lagComp` declaration (`schema({...}, "Enemy")
+ * .with({ lagComp: "reckon" })` / `@entity({ lagComp })`) — `"snapshot"` when
+ * undeclared. Reads purely from `instance.constructor` through the metadata
+ * prototype chain (subclasses inherit), so it works on detached instances —
+ * no state-tree parenting needed. The single extension point for future
+ * modes: new values resolve here and map to a timeline in {@link Rewind.at}.
+ */
+function lagCompOf(instance: object): LagCompMode {
+  const md = (instance.constructor as any)[$METADATA] as Record<string, unknown> | undefined;
+  const mode = md?.[$LAGCOMP];
+  return mode === "reckon" || mode === "none" ? mode : "snapshot";
 }
 
 /**
@@ -43,6 +63,12 @@ function fieldIndexOf(instance: object, field: string): number {
  */
 class EntityHistory {
   readonly fields: readonly string[];
+  /** The TYPE's schema `lagComp: "reckon"` declaration, mirrored here so a view
+   *  can pick its aim time per entity (the entity's history is its only link). */
+  readonly reckoned: boolean;
+  /** Each tracked field's index into the entity's dense `$values` array —
+   *  resolved per CONSTRUCTOR (mixed-type collections differ per type). */
+  private readonly fieldIdx: readonly number[];
   private readonly cap: number;
   private readonly t: Float64Array;
   private readonly cols: Float64Array[];   // one column per field
@@ -50,17 +76,20 @@ class EntityHistory {
   private head = 0;                         // next write slot
   private count = 0;
 
-  constructor(fields: readonly string[], maxRewindMs: number, sampleIntervalMs: number, step: boolean) {
+  constructor(fields: readonly string[], fieldIdx: readonly number[], maxRewindMs: number, sampleIntervalMs: number, step: boolean, reckoned: boolean) {
     this.fields = fields;
+    this.fieldIdx = fieldIdx;
     this.step = step;
+    this.reckoned = reckoned;
     this.cap = Math.max(2, Math.ceil(maxRewindMs / sampleIntervalMs) + 4);
     this.t = new Float64Array(this.cap);
     this.cols = fields.map(() => new Float64Array(this.cap));
   }
 
-  /** `values` = the entity's dense `$values` array; `fieldIdx` = each tracked
-   *  field's index into it. Direct array reads — no per-field megamorphic accessor. */
-  record(time: number, values: ArrayLike<number>, fieldIdx: readonly number[]): void {
+  /** `values` = the entity's dense `$values` array. Direct array reads — no
+   *  per-field megamorphic accessor. */
+  record(time: number, values: ArrayLike<number>): void {
+    const fieldIdx = this.fieldIdx;
     this.t[this.head] = time;
     for (let f = 0; f < fieldIdx.length; f++) this.cols[f][this.head] = values[fieldIdx[f]];
     this.head = (this.head + 1) % this.cap;
@@ -88,6 +117,13 @@ class EntityHistory {
     return c[newest];   // unreachable: `newest` guard above covers it
   }
 }
+
+/** Shared history for `lagComp: "none"` types: zero rings, `record()` no-ops,
+ *  and every `valueAt` read misses the empty field list → live fallback. One
+ *  instance serves all such entities — assigning it (vs leaving `$HISTORY`
+ *  unset) keeps the hot record loop from re-resolving the type every tick. */
+const NONE_HISTORY = new EntityHistory([], [], 1, 1, false, false);
+NONE_HISTORY.record = () => {};   // own no-op shadows the prototype method
 
 /** How `valueAt` reconstructs a value between recorded samples: `linear` interp
  *  (continuous motion) or `step` = hold the last sample (discrete motion). */
@@ -132,15 +168,22 @@ export class RewindView {
    *  un-aimed scratch until it first passes through at()/lastSeenBy(). */
   private rewind?: Rewind;
   private _time = 0;
+  private _reckonTime = 0;
 
   /** The clamped server-time (ms) this view reads at — after the maxRewindMs
    *  clamp and the live (newest-sample) fallback. Mostly for logging/debug. */
   get time(): number { return this._time; }
 
-  /** @internal Aim at a rewind + clamped time ({@link Rewind.at} owns the clamp). */
-  _retarget(rewind: Rewind, at: number): this {
+  /** The clamped server-time (ms) `lagComp: "reckon"` types read at — the
+   *  client's reconstructed simulation instant, not the raw stamp (see
+   *  {@link Rewind.at}). */
+  get reckonTime(): number { return this._reckonTime; }
+
+  /** @internal Aim at a rewind + clamped times ({@link Rewind.at} owns the clamps). */
+  _retarget(rewind: Rewind, at: number, reckonAt: number): this {
     this.rewind = rewind;
     this._time = at;
+    this._reckonTime = reckonAt;
     return this;
   }
 
@@ -149,7 +192,9 @@ export class RewindView {
     if (this.rewind === undefined) {
       throw new Error("RewindView is not aimed — obtain it from rewind.at()/lastSeenBy(), or pass it to them as `out`.");
     }
-    return this.rewind.valueAt(entity, this._time, field);
+    // lagComp:"reckon" types aim at the reconstructed send instant, not the stamp.
+    const h = (entity as any)[$HISTORY] as EntityHistory | undefined;
+    return this.rewind.valueAt(entity, h?.reckoned ? this._reckonTime : this._time, field);
   }
 
   /**
@@ -169,12 +214,38 @@ export class RewindView {
   }
 }
 
+/** Array-form `fields` resolved against one constructor: names with a known
+ *  `$values` index, in lock-step. Fields a type doesn't declare are dropped
+ *  (they read live) instead of recording `values[-1]` garbage. */
+interface ResolvedFields { fields: readonly string[]; idx: readonly number[]; }
+
 interface TrackedGroup {
   entities: () => Iterable<object>;
-  fields: readonly string[];
-  fieldIdx: number[] | null;   // $values indices, resolved on first record
+  fields: readonly string[] | ((entity: any) => readonly string[]);
+  /** Per-constructor resolution of array-form `fields` — one entry per entity
+   *  type seen in the group (mixed-type collections differ per type). */
+  resolvedByCtor: Map<Function, ResolvedFields>;
   maxRewindMs: number;
   interpolate: Interp | ((entity: any) => Interp);
+}
+
+/**
+ * Per-attach options for {@link Rewind.attachAll} / {@link Rewind.attach}.
+ *
+ * The rewind TIMELINE per entity type (snapshot stamp vs reckon send-instant
+ * vs none) is not declared here — it comes from the type's schema metadata:
+ * `schema({...}, "Enemy").with({ lagComp: "reckon" })`. See {@link Rewind.at} for how
+ * reckon-declared types aim differently.
+ */
+interface AttachOptions<E> {
+  /** Numeric fields to record per tick. An array applies to every type in the
+   *  collection (fields a type lacks are skipped — they read live); a per-entity
+   *  fn picks the list per entity, mirroring `interpolate`'s fn form. */
+  fields: readonly NumericKeys<E>[] | ((entity: E) => readonly NumericKeys<E>[]);
+  maxRewindMs?: number;
+  /** How `valueAt` reconstructs between samples (a mode or a per-entity fn,
+   *  default `linear`) — use `step` for discrete motion (e.g. teleporters). */
+  interpolate?: Interp | ((entity: E) => Interp);
 }
 
 /**
@@ -203,6 +274,14 @@ interface TrackedGroup {
  * — and the legal `fields` / `valueAt` field names — are inferred with no
  * state-type generic. Entities are keyed by object identity — removed entities
  * and their history are reclaimed automatically.
+ *
+ * The rewind TIMELINE per entity type is declared ONCE in the shared schema —
+ * `schema({...}, "Enemy").with({ lagComp: "reckon" | "snapshot" | "none" })` — and
+ * resolved per entity from its constructor metadata (subclasses inherit):
+ * `"snapshot"` (default) reads at the client's raw renderTime stamp, `"reckon"`
+ * at the reconstructed send instant (see {@link at}), `"none"` records no
+ * history at all (reads are live). The client SDK's Predict reads the same
+ * declaration to infer its prediction mode — one source, both sides.
  */
 export class Rewind {
   private static readonly byRoom = new WeakMap<object, Rewind>();
@@ -221,6 +300,16 @@ export class Rewind {
   /** Resolves a client's auto-stamped render time (set by `Room.allowRewindState`
    *  when `defineInput({renderTime:true})` is on); powers {@link lastSeenBy}. */
   private _renderTimeOf?: (sessionId: string) => number;
+  /** Resolves a client's auto-stamped reckon-display instant (its serverNow
+   *  estimate at input-sample time). When present (> 0), {@link lastSeenBy}
+   *  reads `lagComp:"reckon"` types AT this stamp directly — exact regardless
+   *  of the client's clock/RTT-estimation error (it displayed f(est), we read
+   *  f(est)) — instead of reconstructing it via the midpoint. */
+  private _reckonTimeOf?: (sessionId: string) => number;
+  /** Resolves the CURRENT server time (set by `Room.allowRewindState`) — the
+   *  reckon midpoint's "now" anchor in {@link at}. Without it, the anchor falls
+   *  back to `lastRecordedAt`, which is one tick stale at hit-test time. */
+  private _nowOf?: () => number;
   /** Default view returned by at/lastSeenBy when no `out` is given — one per
    *  Rewind, re-aimed per call (zero alloc, zero userland setup). */
   private readonly _view = new RewindView();
@@ -240,17 +329,17 @@ export class Rewind {
    *  `step` for discrete-motion entities (e.g. teleporters). */
   attachAll<E extends object>(
     collection: Collection<E>,
-    opts: { fields: readonly NumericKeys<E>[]; maxRewindMs?: number; interpolate?: Interp | ((entity: E) => Interp) },
+    opts: AttachOptions<E>,
   ): this {
     const c = collection as unknown as { values(): Iterable<object> };
-    this.groups.push({ entities: () => c.values(), fields: opts.fields, fieldIdx: null, maxRewindMs: opts.maxRewindMs ?? this.defaultMaxRewindMs, interpolate: opts.interpolate ?? "linear" });
+    this.groups.push({ entities: () => c.values(), fields: opts.fields, resolvedByCtor: new Map(), maxRewindMs: opts.maxRewindMs ?? this.defaultMaxRewindMs, interpolate: opts.interpolate ?? "linear" });
     return this;
   }
 
   /** Track a single entity (e.g. a boss). `fields` narrows to its numeric fields. */
-  attach<E extends object>(instance: E, opts: { fields: readonly NumericKeys<E>[]; maxRewindMs?: number; interpolate?: Interp | ((entity: E) => Interp) }): this {
+  attach<E extends object>(instance: E, opts: AttachOptions<E>): this {
     const one: object[] = [instance];   // reused; no per-tick alloc
-    this.groups.push({ entities: () => one, fields: opts.fields, fieldIdx: null, maxRewindMs: opts.maxRewindMs ?? this.defaultMaxRewindMs, interpolate: opts.interpolate ?? "linear" });
+    this.groups.push({ entities: () => one, fields: opts.fields, resolvedByCtor: new Map(), maxRewindMs: opts.maxRewindMs ?? this.defaultMaxRewindMs, interpolate: opts.interpolate ?? "linear" });
     return this;
   }
 
@@ -267,16 +356,48 @@ export class Rewind {
     for (const g of this.groups) {
       for (const e of g.entities()) {
         const t = e as any;   // private-symbol access on a foreign schema instance
-        if (g.fieldIdx === null) g.fieldIdx = g.fields.map((f) => fieldIndexOf(e, f));   // once
         let h = t[$HISTORY] as EntityHistory | undefined;
-        if (h === undefined) {
-          const mode = typeof g.interpolate === "function" ? g.interpolate(e) : g.interpolate;
-          h = new EntityHistory(g.fields, g.maxRewindMs, this._sampleIntervalMs, mode === "step");
-          t[$HISTORY] = h;
-        }
-        h.record(now, t[$VALUES] as ArrayLike<number>, g.fieldIdx);
+        if (h === undefined) h = this.createHistory(g, e, t);   // cold: once per entity
+        h.record(now, t[$VALUES] as ArrayLike<number>);
       }
     }
+  }
+
+  /** Cold path — first time an entity is seen by `record()`. Resolves the
+   *  type's `lagComp` declaration and the field→`$values` indices (cached per
+   *  constructor for array-form `fields`; fn-form resolves per entity). */
+  private createHistory(g: TrackedGroup, e: object, t: any): EntityHistory {
+    const lagComp = lagCompOf(e);
+    if (lagComp === "none") {
+      t[$HISTORY] = NONE_HISTORY;
+      return NONE_HISTORY;
+    }
+    let rf: ResolvedFields;
+    if (typeof g.fields === "function") {
+      rf = this.resolveFields(e, g.fields(e));
+    } else {
+      let cached = g.resolvedByCtor.get(e.constructor);
+      if (cached === undefined) {
+        cached = this.resolveFields(e, g.fields);
+        g.resolvedByCtor.set(e.constructor, cached);
+      }
+      rf = cached;
+    }
+    const mode = typeof g.interpolate === "function" ? g.interpolate(e) : g.interpolate;
+    const h = new EntityHistory(rf.fields, rf.idx, g.maxRewindMs, this._sampleIntervalMs, mode === "step", lagComp === "reckon");
+    t[$HISTORY] = h;
+    return h;
+  }
+
+  /** Keep only the fields this entity's type declares (unknown → read live). */
+  private resolveFields(e: object, names: readonly string[]): ResolvedFields {
+    const fields: string[] = [];
+    const idx: number[] = [];
+    for (const name of names) {
+      const i = fieldIndexOf(e, name);
+      if (i >= 0) { fields.push(name); idx.push(i); }
+    }
+    return { fields, idx };
   }
 
   /**
@@ -301,6 +422,31 @@ export class Rewind {
   }
 
   /**
+   * @internal Wire a resolver for the CURRENT server time (ms, same epoch as
+   * `record` times). Called by {@link Room.allowRewindState}; standalone users
+   * (tests/harnesses) should bind their own. Anchors the reckon midpoint in
+   * {@link at} at the true processing instant — the `lastRecordedAt` fallback
+   * is one tick stale by hit-test time, biasing the aim ~half a tick early:
+   * imperceptible on slow horizontal motion, but enough to flip knife-edge
+   * stomp/hit verdicts on fast vertical movers (a bobbing jumper).
+   */
+  bindNow(resolver: () => number): void {
+    this._nowOf = resolver;
+  }
+
+  /**
+   * @internal Wire a resolver from sessionId → that client's auto-stamped
+   * reckon-display instant (`input(sid).reckonTime`). Called by
+   * {@link Room.allowRewindState}. With it, {@link lastSeenBy} aims
+   * `lagComp:"reckon"` types at the EXACT instant the client displayed them
+   * (immune to its RTT-estimation error); without it (or while the stamp is
+   * still 0), the midpoint reconstruction in {@link at} is the fallback.
+   */
+  bindReckonTime(resolver: (sessionId: string) => number): void {
+    this._reckonTimeOf = resolver;
+  }
+
+  /**
    * A {@link RewindView} of the tracked world at `time` (an acting client's render
    * time), with the two things every hit test re-implements baked in:
    *  - **clamp** to `[lastRecordedAt − maxRewindMs, lastRecordedAt]` — an
@@ -317,11 +463,44 @@ export class Rewind {
    * only to hold several views at once — see the {@link RewindView} doc.
    */
   at(time: number, out?: RewindView): RewindView {
+    return this._aim(time, 0, out);
+  }
+
+  /**
+   * Shared aiming: clamp the snapshot-timeline `time`, and resolve the reckon
+   * timeline either from the DIRECT `reckonStamp` (the instant the client's
+   * forward-reckoned entities were displayed at — exact, immune to the
+   * client's RTT-estimation error) or, when absent (0), by reconstruction.
+   */
+  private _aim(time: number, reckonStamp: number, out?: RewindView): RewindView {
     const newest = this._lastRecordedAt;
     const oldest = newest - this.defaultMaxRewindMs;
     // time<=0 → not synced yet → read live (newest). Else clamp into the window.
     const at = time <= 0 ? newest : (time < oldest ? oldest : time > newest ? newest : time);
-    return (out ?? this._view)._retarget(this, at);
+    // lagComp:"reckon" types (schema-declared) display forward-extrapolated to
+    // ≈ the client's serverNow — rewinding them to the raw snapshot stamp would
+    // double-compensate (client extrapolates forward + server rewinds back = a
+    // full-RTT ghost in the entity's past).
+    let reckonAt: number;
+    if (reckonStamp > 0) {
+      // Direct stamp: read at exactly what the client displayed. The clamp is
+      // the anti-spoof bound, same as the snapshot timeline's.
+      reckonAt = reckonStamp < oldest ? oldest : reckonStamp > newest ? newest : reckonStamp;
+    } else if (time <= 0) {
+      reckonAt = newest;
+    } else {
+      // Reconstruction fallback (custom `at(time)` users / old clients): with
+      // symmetric latency the client's instant is the midpoint of the stamp
+      // and ARRIVAL — anchored at the bound "now" (the true processing
+      // instant; the lastRecordedAt fallback is one tick stale by hit-test
+      // time and biases the aim ~half a tick early — see bindNow). NOTE: the
+      // stamp itself embeds the client's rtt/2 estimate, so this path inherits
+      // its error — the direct stamp above is the accurate one.
+      const anchor = this._nowOf !== undefined ? this._nowOf() : newest;
+      const mid = (time + anchor) / 2;
+      reckonAt = mid < oldest ? oldest : mid > newest ? newest : mid;
+    }
+    return (out ?? this._view)._retarget(this, at, reckonAt);
   }
 
   /**
@@ -356,6 +535,10 @@ export class Rewind {
         "the render time yourself.",
       );
     }
-    return this.at(this._renderTimeOf(sessionId), out);
+    return this._aim(
+      this._renderTimeOf(sessionId),
+      this._reckonTimeOf !== undefined ? this._reckonTimeOf(sessionId) : 0,
+      out,
+    );
   }
 }
