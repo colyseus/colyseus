@@ -49,16 +49,16 @@
     "@colyseus/better-call": "workspace:^",
     "@colyseus/greeting-banner": "workspace:^",
     "@colyseus/shared-types": "workspace:^",
-    "msgpackr": "^2.0.1",
     "@colyseus/timer": "^2.0.0",
     "@standard-schema/spec": "^1.0.0",
     "debug": "^4.3.4",
+    "msgpackr": "^2.0.1",
     "nanoid": "^3.3.11"
   },
   "devDependencies": {
     "@colyseus/redis-driver": "workspace:^",
     "@colyseus/redis-presence": "workspace:^",
-    "@colyseus/schema": "^5.0.3",
+    "@colyseus/schema": "^5.0.6",
     "@colyseus/tools": "workspace:^",
     "express": "^5.0.0"
   },

@@ -67,9 +67,9 @@
   },
   "dependencies": {
     "@colyseus/better-call": "workspace:^",
-    "@colyseus/schema": "^5.0.3",
-    "msgpackr": "^2.0.1",
+    "@colyseus/schema": "^5.0.6",
     "@colyseus/shared-types": "workspace:^",
+    "msgpackr": "^2.0.1",
     "tslib": "^2.1.0",
     "ws": "^8.13.0"
   },

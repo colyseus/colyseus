@@ -5,6 +5,7 @@ yarn.lock
 .DS_Store
 build/
 .devmode.json
+.claude/
 
 **/README.md
 **/LICENSE
