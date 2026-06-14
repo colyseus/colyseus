@@ -257,6 +257,13 @@ export class ClientArray<C extends Client = Client> extends Array<C> {
    */
   private _byId: Map<string, C> = new Map();
 
+  /** The client for `sessionId`, or `undefined` — O(1). The canonical per-session
+   *  lookup (mirrors `room.inputs.get(sessionId)`). */
+  public get(sessionId: string): C | undefined {
+    return this._byId.get(sessionId);
+  }
+
+  /** @deprecated Use {@link get}. */
   public getById(sessionId: string): C | undefined {
     return this._byId.get(sessionId);
   }

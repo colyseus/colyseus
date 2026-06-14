@@ -17,7 +17,7 @@ interface StubClient {
 }
 
 interface StubRoom {
-  clients: StubClient[] & { getById(id: string): StubClient | undefined };
+  clients: StubClient[] & { get(id: string): StubClient | undefined };
   broadcasts: Array<[string, any, any]>;
   broadcast: (type: string, payload: any, options?: any) => void;
 }
@@ -34,7 +34,7 @@ function makeClient(id: string): StubClient {
 function makeRoom(clients: StubClient[]): StubRoom {
   const broadcasts: StubRoom['broadcasts'] = [];
   const arr = clients as any;
-  arr.getById = (id: string) => clients.find((c) => c.sessionId === id);
+  arr.get = (id: string) => clients.find((c) => c.sessionId === id);
   return {
     clients: arr,
     broadcasts,

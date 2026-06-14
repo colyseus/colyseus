@@ -1667,7 +1667,7 @@ describe("Integration", () => {
                   // client.send("reconnected", "previous");
 
                   // sending message from new client instance
-                  this.clients.getById(client.sessionId)!.send("reconnected", "new");
+                  this.clients.get(client.sessionId)!.send("reconnected", "new");
                 } catch (e) {}
               }
               onDispose() { onRoomDisposed.resolve(); }

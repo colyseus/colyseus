@@ -146,17 +146,17 @@ describe("Rewind: at() / lastSeenBy", () => {
 // Room.allowRewindState through the standard `input` slot, so these construct
 // bare rooms (no transport needed for this path).
 describe("Rewind: lastSeenBy misconfiguration (Room wiring)", () => {
-  it("throws when the room has no input API on `this.input`", () => {
+  it("throws when the room has no input API (never called defineInput)", () => {
     class NoInputRoom extends Room {
       rewind = this.allowRewindState();
     }
     const room = new NoInputRoom();
-    assert.throws(() => room.rewind.lastSeenBy("any"), /this\.input/);
+    assert.throws(() => room.rewind.lastSeenBy("any"), /inputs = this\.defineInput/);
   });
 
   it("throws when defineInput() lacks renderTime:true", () => {
     class NoStampRoom extends Room {
-      input = this.defineInput(Entity);   // ← forgot renderTime: true
+      inputs = this.defineInput(Entity);   // ← forgot renderTime: true
       rewind = this.allowRewindState();
     }
     const room = new NoStampRoom();
@@ -165,7 +165,7 @@ describe("Rewind: lastSeenBy misconfiguration (Room wiring)", () => {
 
   it("configured room: an unknown/unstamped client is NOT an error (live fallback)", () => {
     class OkRoom extends Room {
-      input = this.defineInput(Entity, { renderTime: true });
+      inputs = this.defineInput(Entity, { renderTime: true });
       rewind = this.allowRewindState();
     }
     const room = new OkRoom();

@@ -145,3 +145,142 @@ describe("Input: idle synthesis (room-level policy + per-call)", () => {
     assert.equal(buf.next({ idle: true }), undefined);
   });
 });
+
+describe("Input: consume() / iteration", () => {
+  it("consume() drains all pending oldest→newest, one at a time (ack += N, size → 0)", () => {
+    const { buf } = setup();
+    buf.push(frame({ moveX: 1 }));
+    buf.push(frame({ moveX: 2 }));
+    buf.push(frame({ moveX: 3 }));
+    const xs = [...buf.consume()].map((f) => f.moveX);
+    assert.deepEqual(xs, [1, 2, 3]);
+    assert.equal(buf.size, 0);
+    assert.equal(buf.consumedCount, 3, "ack advances once per yielded input");
+    assert.equal(buf.wasIdle, false);
+  });
+
+  it("for..of (Symbol.iterator) is sugar for consume()", () => {
+    const { buf } = setup();
+    buf.push(frame({ moveX: 7 }));
+    buf.push(frame({ moveX: 8 }));
+    const xs: number[] = [];
+    for (const f of buf) { xs.push(f.moveX); }
+    assert.deepEqual(xs, [7, 8]);
+    assert.equal(buf.size, 0);
+    assert.equal(buf.consumedCount, 2);
+  });
+
+  it("break mid-iteration leaves the remainder buffered (acked only for what was consumed)", () => {
+    const { buf } = setup();
+    for (let i = 1; i <= 4; i++) { buf.push(frame({ moveX: i })); }
+    const seen: number[] = [];
+    for (const f of buf) {
+      seen.push(f.moveX);
+      if (f.moveX === 2) { break; }
+    }
+    assert.deepEqual(seen, [1, 2]);
+    assert.equal(buf.size, 2, "inputs 3 and 4 stay buffered for the next tick");
+    assert.equal(buf.consumedCount, 2, "ack reflects only the two consumed");
+    // The rest are still consumable on a later pass.
+    assert.deepEqual([...buf.consume()].map((f) => f.moveX), [3, 4]);
+    assert.equal(buf.consumedCount, 4);
+  });
+
+  it("iteration reports per-yielded-input renderTime (not the newest, unlike drain)", () => {
+    const { buf } = setup();
+    buf.push(frame({ moveX: 1 }), 100);
+    buf.push(frame({ moveX: 2 }), 200);
+    buf.push(frame({ moveX: 3 }), 300);
+    const stamps: number[] = [];
+    for (const _f of buf) { stamps.push(buf.renderTime); }
+    assert.deepEqual(stamps, [100, 200, 300],
+      "renderTime tracks the input currently being applied — the per-step lag-comp fix");
+  });
+
+  it("empty + idle policy → exactly one idle frame; ack untouched, wasIdle true", () => {
+    const { buf } = setup({ idle: { moveX: 5 } });
+    const frames = [...buf.consume()];
+    assert.equal(frames.length, 1, "one synthesized idle frame, then stop");
+    assert.equal(frames[0].moveX, 5);
+    assert.equal(buf.consumedCount, 0, "idle is not consumption");
+    assert.equal(buf.wasIdle, true);
+  });
+
+  it("empty + no idle policy → zero iterations, wasIdle false", () => {
+    const { buf } = setup();
+    let count = 0;
+    for (const _f of buf) { count++; }
+    assert.equal(count, 0);
+    assert.equal(buf.wasIdle, false);
+  });
+
+  it("real frames present → iterate them, no idle synthesized even with a policy", () => {
+    const { buf } = setup({ idle: { moveX: 9 } });
+    buf.push(frame({ moveX: 1 }));
+    buf.push(frame({ moveX: 2 }));
+    const xs = [...buf.consume()].map((f) => f.moveX);
+    assert.deepEqual(xs, [1, 2], "idle only fills the empty case");
+    assert.equal(buf.wasIdle, false);
+  });
+
+  it("per-call consume({ idle }) overrides; { idle: false } suppresses", () => {
+    const { buf } = setup({ idle: { moveX: 1 } });
+    assert.equal([...buf.consume({ idle: { moveX: 2 } })][0].moveX, 2, "per-call wins");
+    assert.deepEqual([...buf.consume({ idle: false })], [], "suppressed → empty iteration");
+  });
+
+  it("wasIdle: true after an idle next()/consume(), false after a real input or take()", () => {
+    const { buf } = setup({ idle: true });
+    buf.push(frame({ moveX: 1 }));
+    buf.next();
+    assert.equal(buf.wasIdle, false, "real input");
+    buf.next();                       // empty → synthesized idle
+    assert.equal(buf.wasIdle, true, "synthesized idle");
+    buf.take(1);                      // take never synthesizes
+    assert.equal(buf.wasIdle, false, "take() resets the flag");
+  });
+});
+
+describe("Input: read-cursor (no per-item shift)", () => {
+  it("peek()/size/at() respect the cursor after a partial consume", () => {
+    // seqField buffer so at() is active (the cursor must hide consumed inputs).
+    const buf = new InputBufferImpl<MoveInput>(64, "moveX", MoveInput);
+    for (let i = 1; i <= 5; i++) { buf.push(frame({ moveX: i })); }
+    buf.next(); buf.next();           // consume the two oldest
+    assert.equal(buf.size, 3, "two consumed, three remain");
+    assert.deepEqual(buf.peek().map((f) => f.moveX), [3, 4, 5], "peek shows only the unconsumed tail");
+    assert.equal(buf.at(4)?.moveX, 4, "at() finds a remaining input");
+    assert.equal(buf.at(1), undefined, "at() does NOT find a consumed input");
+  });
+
+  it("compacts the consumed prefix once the cursor passes the threshold (semantics intact)", () => {
+    const buf = new InputBufferImpl<MoveInput>(1000, undefined, MoveInput);
+    const N = 40; // > COMPACT_THRESHOLD (32) so an internal splice fires
+    for (let i = 0; i < N; i++) { buf.push(frame({ moveX: i })); }
+    for (let i = 0; i < 35; i++) { buf.next(); } // crosses the threshold mid-way
+    assert.equal(buf.size, 5, "5 remain after consuming 35");
+    assert.equal(buf.consumedCount, 35, "ack counts exactly what was consumed");
+    assert.deepEqual([...buf.consume()].map((f) => f.moveX), [35, 36, 37, 38, 39],
+      "the surviving tail is intact and in order after compaction");
+    assert.equal(buf.size, 0);
+    assert.equal(buf.consumedCount, 40);
+  });
+
+  it("overflow advances the ack via the cursor (oldest dropped, newest kept)", () => {
+    const buf = new InputBufferImpl<MoveInput>(3, undefined, MoveInput); // cap 3
+    for (let i = 1; i <= 5; i++) { buf.push(frame({ moveX: i })); }       // 1,2 overflow out
+    assert.equal(buf.size, 3);
+    assert.equal(buf.consumedCount, 2, "two overflowed → counted consumed (ack moves past them)");
+    assert.deepEqual([...buf.consume()].map((f) => f.moveX), [3, 4, 5]);
+  });
+
+  it("drain() after a partial consume returns only the remaining tail", () => {
+    const buf = new InputBufferImpl<MoveInput>(64, undefined, MoveInput);
+    for (let i = 1; i <= 5; i++) { buf.push(frame({ moveX: i })); }
+    buf.next();                       // consume oldest (cursor → 1)
+    const rest = buf.drain();
+    assert.deepEqual(rest.map((f) => f.moveX), [2, 3, 4, 5]);
+    assert.equal(buf.size, 0);
+    assert.equal(buf.consumedCount, 5);
+  });
+});

@@ -113,16 +113,16 @@ describe("Input (InputEncoder / InputDecoder integration)", () => {
     await server.gracefullyShutdown(false);
   });
 
-  it("Tier 1 — room.input(sessionId).latest returns the latest decoded instance at tick time", async () => {
+  it("Tier 1 — room.inputs.get(sessionId).latest returns the latest decoded instance at tick time", async () => {
     let observedAtTick: { x: number; y: number; jump: boolean } | undefined;
 
     matchMaker.defineRoomType('input_latest', class _ extends Room<{ input: MoveInput }> {
-      input = this.defineInput(MoveInput);
+      inputs = this.defineInput(MoveInput);
 
       onCreate() {
         this.setSimulationInterval(() => {
           for (const c of this.clients) {
-            const latest = this.input(c.sessionId).latest;
+            const latest = this.inputs.get(c.sessionId).latest;
             if (latest) observedAtTick = { x: latest.x, y: latest.y, jump: latest.jump };
           }
         }, 30);
@@ -148,14 +148,14 @@ describe("Input (InputEncoder / InputDecoder integration)", () => {
     let observed: { latestX: number; drained: number[] } | undefined;
 
     matchMaker.defineRoomType('input_sanitize', class _ extends Room<{ input: MoveInput }> {
-      input = this.defineInput(MoveInput, {
+      inputs = this.defineInput(MoveInput, {
         bufferMaxSize: 16,
         sanitize: { x: [-1, 1] },   // never trust the wire
       });
       onCreate() {
         this.setSimulationInterval(() => {
           for (const c of this.clients) {
-            const ch = this.input(c.sessionId);
+            const ch = this.inputs.get(c.sessionId);
             const drained = ch.drain().map((i) => i.x);
             if (drained.length > 0) {
               observed = { latestX: ch.latest!.x, drained };
@@ -179,16 +179,16 @@ describe("Input (InputEncoder / InputDecoder integration)", () => {
     await timeout(50);
   });
 
-  it("Tier 2 — room.input(sessionId).drain() returns cloned snapshots in arrival order", async () => {
+  it("Tier 2 — room.inputs.get(sessionId).drain() returns cloned snapshots in arrival order", async () => {
     const drained: number[][] = [];
 
     matchMaker.defineRoomType('input_drain', class _ extends Room<{ input: MoveInput }> {
-      input = this.defineInput(MoveInput, { bufferMaxSize: 16 });
+      inputs = this.defineInput(MoveInput, { bufferMaxSize: 16 });
       onCreate() {
         // tick after the test sends; just a manual access pattern
         this.setSimulationInterval(() => {
           for (const c of this.clients) {
-            const buf = this.input(c.sessionId).drain();
+            const buf = this.inputs.get(c.sessionId).drain();
             if (buf.length > 0) drained.push(buf.map(i => i.x));
           }
         }, 30);
@@ -216,11 +216,11 @@ describe("Input (InputEncoder / InputDecoder integration)", () => {
     let captured: MoveInput[] = [];
 
     matchMaker.defineRoomType('input_clone', class _ extends Room<{ input: MoveInput }> {
-      input = this.defineInput(MoveInput, { bufferMaxSize: 16 });
+      inputs = this.defineInput(MoveInput, { bufferMaxSize: 16 });
       onCreate() {
         this.setSimulationInterval(() => {
           for (const c of this.clients) {
-            captured = captured.concat(this.input(c.sessionId).drain());
+            captured = captured.concat(this.inputs.get(c.sessionId).drain());
           }
         }, 30);
       }
@@ -248,11 +248,11 @@ describe("Input (InputEncoder / InputDecoder integration)", () => {
     const drained: number[] = [];
 
     matchMaker.defineRoomType('input_dedupe', class _ extends Room<{ input: SeqInput }> {
-      input = this.defineInput(SeqInput, { seqField: 'seq', bufferMaxSize: 16 });
+      inputs = this.defineInput(SeqInput, { seqField: 'seq', bufferMaxSize: 16 });
       onCreate() {
         this.setSimulationInterval(() => {
           for (const c of this.clients) {
-            for (const i of this.input(c.sessionId).drain()) drained.push(i.seq);
+            for (const i of this.inputs.get(c.sessionId).drain()) drained.push(i.seq);
           }
         }, 30);
       }
@@ -289,11 +289,11 @@ describe("Input (InputEncoder / InputDecoder integration)", () => {
     let drainedXs: number[] = [];
 
     matchMaker.defineRoomType('input_overflow', class _ extends Room<{ input: MoveInput }> {
-      input = this.defineInput(MoveInput, { bufferMaxSize: 3 }); // tiny ring; framework allocates eagerly on join
+      inputs = this.defineInput(MoveInput, { bufferMaxSize: 3 }); // tiny ring; framework allocates eagerly on join
       messages = {
         // Test reaches in via a message handler to drain on demand.
         sample: function (this: any, c: any) {
-          drainedXs = this.input(c.sessionId).drain().map((i: any) => i.x);
+          drainedXs = this.inputs.get(c.sessionId).drain().map((i: any) => i.x);
         },
       };
     });
@@ -323,11 +323,11 @@ describe("Input (InputEncoder / InputDecoder integration)", () => {
     let probe: { x: number | undefined; size: number } = { x: -1, size: -1 };
 
     matchMaker.defineRoomType('input_next', class _ extends Room<{ input: MoveInput }> {
-      input = this.defineInput(MoveInput, { bufferMaxSize: 16 });
+      inputs = this.defineInput(MoveInput, { bufferMaxSize: 16 });
       messages = {
         // No simulation loop — consume on demand so the buffer fills first.
         consumeOne: function (this: any, c: any) {
-          const acc = this.input(c.sessionId);
+          const acc = this.inputs.get(c.sessionId);
           const inp = acc.next();
           probe = { x: inp?.x, size: acc.size };
         },
@@ -362,10 +362,10 @@ describe("Input (InputEncoder / InputDecoder integration)", () => {
     let probe: { xs: number[]; size: number } = { xs: [-1], size: -1 };
 
     matchMaker.defineRoomType('input_take', class _ extends Room<{ input: MoveInput }> {
-      input = this.defineInput(MoveInput, { bufferMaxSize: 16 });
+      inputs = this.defineInput(MoveInput, { bufferMaxSize: 16 });
       messages = {
         takeTwo: function (this: any, c: any) {
-          const acc = this.input(c.sessionId);
+          const acc = this.inputs.get(c.sessionId);
           const taken = acc.take(2);
           probe = { xs: taken.map((i: any) => i.x), size: acc.size };
         },
@@ -400,10 +400,10 @@ describe("Input (InputEncoder / InputDecoder integration)", () => {
     const observed: number[] = [];
 
     matchMaker.defineRoomType('input_next_rt', class _ extends Room<{ input: MoveInput }> {
-      input = this.defineInput(MoveInput, { renderTime: true, bufferMaxSize: 16 });
+      inputs = this.defineInput(MoveInput, { renderTime: true, bufferMaxSize: 16 });
       messages = {
         consumeOne: function (this: any, c: any) {
-          const acc = this.input(c.sessionId);
+          const acc = this.inputs.get(c.sessionId);
           const inp = acc.next();
           observed.push(inp ? acc.renderTime : -1);
         },
@@ -434,10 +434,10 @@ describe("Input (InputEncoder / InputDecoder integration)", () => {
     // as input.lastProcessed.
     matchMaker.defineRoomType('input_next_ack', class _ extends Room<{ input: MoveInput; state: TickState }> {
       state = new TickState();
-      input = this.defineInput(MoveInput, { bufferMaxSize: 64 });
+      inputs = this.defineInput(MoveInput, { bufferMaxSize: 64 });
       onCreate() {
         this.setFixedTimestep(() => {
-          for (const c of this.clients) { this.input(c.sessionId).next(); } // ack +1 per tick
+          for (const c of this.clients) { this.inputs.get(c.sessionId).next(); } // ack +1 per tick
           this.state.tick++; // mutate so patches (carrying the ack) flow
         }, 30);
       }
@@ -459,7 +459,63 @@ describe("Input (InputEncoder / InputDecoder integration)", () => {
     await timeout(50);
   });
 
-  it("Tier 2 — setTickedSimulation + room.input(sessionId).at(tick) for tick-aligned retrieval", async () => {
+  it("Tier 2 — iterating room.inputs.get(sessionId) consumes all pending and advances the ack", async () => {
+    // Per-entity standard loop: `for (const inp of this.inputs.get(sid))` consumes the
+    // whole pending set this tick (Array.from drains the iterator), so lastProcessed
+    // reaches N once the inputs land — same wire ack as drain(), per-input internally.
+    matchMaker.defineRoomType('input_consume_ack', class _ extends Room<{ input: MoveInput; state: TickState }> {
+      state = new TickState();
+      inputs = this.defineInput(MoveInput, { bufferMaxSize: 64 });
+      onCreate() {
+        this.setFixedTimestep(() => {
+          for (const c of this.clients) { Array.from(this.inputs.get(c.sessionId)); } // drain via iteration
+          this.state.tick++; // mutate so patches (carrying the ack) flow
+        }, 30);
+      }
+    });
+
+    const conn = await client.joinOrCreate('input_consume_ack');
+    const input = conn.input({ type: MoveInput });
+
+    const N = 5;
+    for (let i = 1; i <= N; i++) { input.data.x = i; input.send(); await timeout(15); }
+    await timeout(200);
+
+    assert.strictEqual(input.lastProcessed, N,
+      `iterating should consume all ${N}; got lastProcessed=${input.lastProcessed}`);
+
+    await conn.leave();
+    await timeout(50);
+  });
+
+  it("Tier 2 — iteration is empty for bufferMaxSize:0 and unknown sessionIds", async () => {
+    let probe: { own: number; unknown: number } = { own: -1, unknown: -1 };
+
+    matchMaker.defineRoomType('input_consume_empty', class _ extends Room<{ input: MoveInput }> {
+      inputs = this.defineInput(MoveInput, { bufferMaxSize: 0 }); // no buffer → .latest only
+      messages = {
+        probe: function (this: any, c: any) {
+          probe = {
+            own: Array.from(this.inputs.get(c.sessionId)).length,
+            unknown: Array.from(this.inputs.get("does-not-exist")).length,
+          };
+        },
+      };
+    });
+
+    const conn = await client.joinOrCreate('input_consume_empty');
+    const input = conn.input({ type: MoveInput });
+    input.data.x = 1; input.send(); await timeout(20);
+
+    conn.send("probe"); await timeout(40);
+    assert.deepStrictEqual(probe, { own: 0, unknown: 0 },
+      "no buffer / unknown sid → zero iterations");
+
+    await conn.leave();
+    await timeout(50);
+  });
+
+  it("Tier 2 — setTickedSimulation + room.inputs.get(sessionId).at(tick) for tick-aligned retrieval", async () => {
     // Lockstep-style: client sends inputs tagged with a tick number; the server's
     // ticked simulation looks up each client's input "for tick N" each step.
     const observed: Array<{ tick: number; x: number | undefined }> = [];
@@ -467,11 +523,11 @@ describe("Input (InputEncoder / InputDecoder integration)", () => {
     matchMaker.defineRoomType('input_ticked', class _ extends Room<{ input: SeqInput }> {
       // Demonstrate the one-line `defineInput` form — `seqField` is type-checked
       // against numeric fields of `SeqInput`.
-      input = this.defineInput(SeqInput, { seqField: "seq", bufferMaxSize: 16 });
+      inputs = this.defineInput(SeqInput, { seqField: "seq", bufferMaxSize: 16 });
       onCreate() {
         this.setTickedSimulation((tick) => {
           for (const c of this.clients) {
-            const snapshot = this.input(c.sessionId).at(tick);
+            const snapshot = this.inputs.get(c.sessionId).at(tick);
             observed.push({ tick, x: snapshot?.x });
           }
         }, 30);
@@ -544,7 +600,7 @@ describe("Input (InputEncoder / InputDecoder integration)", () => {
     let tickAtProbe: number = -1;
 
     matchMaker.defineRoomType('input_late', class _ extends Room<{ input: SeqInput }> {
-      input = this.defineInput(SeqInput, { seqField: 'seq', bufferMaxSize: 16 });
+      inputs = this.defineInput(SeqInput, { seqField: 'seq', bufferMaxSize: 16 });
       onCreate() {
         // Tick without draining — `at(seq)` must still find buffered inputs after the
         // server has advanced past their seq number.
@@ -553,7 +609,7 @@ describe("Input (InputEncoder / InputDecoder integration)", () => {
       messages = {
         probeAtSeq2: function (this: any, c: any) {
           tickAtProbe = this.tick;
-          probeResult = this.input(c.sessionId).at(2)?.x;
+          probeResult = this.inputs.get(c.sessionId).at(2)?.x;
         }
       };
     });
@@ -585,11 +641,11 @@ describe("Input (InputEncoder / InputDecoder integration)", () => {
     let observedAtTick: { x: number; y: number; jump: boolean } | undefined;
 
     matchMaker.defineRoomType('input_reflection', class _ extends Room<{ input: MoveInput }> {
-      input = this.defineInput(MoveInput);
+      inputs = this.defineInput(MoveInput);
       onCreate() {
         this.setSimulationInterval(() => {
           for (const c of this.clients) {
-            const latest = this.input(c.sessionId).latest;
+            const latest = this.inputs.get(c.sessionId).latest;
             if (latest) observedAtTick = { x: latest.x, y: latest.y, jump: latest.jump };
           }
         }, 30);
@@ -629,13 +685,13 @@ describe("Input (InputEncoder / InputDecoder integration)", () => {
     let serverApi: { subSteps: number; subStepSeconds?: number; subStepMs?: number } | undefined;
 
     matchMaker.defineRoomType('input_substeps', class _ extends Room<{ input: MoveInput }> {
-      input = this.defineInput(MoveInput);
+      inputs = this.defineInput(MoveInput);
       onCreate() {
         // 30 inputs/sec on the wire; physics meant to integrate 2 × subDt per step.
         this.setFixedTimestep((ctx) => {
           serverCtx = { dt: ctx.dt, subSteps: ctx.subSteps, subDt: ctx.subDt, subDtMs: ctx.subDtMs };
         }, 30, { subSteps: 2 });
-        serverApi = { subSteps: this.input.subSteps, subStepSeconds: this.input.subStepSeconds, subStepMs: this.input.subStepMs };
+        serverApi = { subSteps: this.inputs.subSteps, subStepSeconds: this.inputs.subStepSeconds, subStepMs: this.inputs.subStepMs };
       }
     });
 
@@ -665,7 +721,7 @@ describe("Input (InputEncoder / InputDecoder integration)", () => {
 
   it("sub-stepping — defaults to 1 when not declared (flag stays off the wire)", async () => {
     matchMaker.defineRoomType('input_substeps_default', class _ extends Room<{ input: MoveInput }> {
-      input = this.defineInput(MoveInput);
+      inputs = this.defineInput(MoveInput);
       onCreate() {
         this.setFixedTimestep(() => {}, 30);
       }
@@ -685,7 +741,7 @@ describe("Input (InputEncoder / InputDecoder integration)", () => {
   it("sub-stepping — rejects fractional counts loudly", async () => {
     assert.throws(() => {
       class _ extends Room<{ input: MoveInput }> {
-        input = this.defineInput(MoveInput, { subSteps: 1.5 });
+        inputs = this.defineInput(MoveInput, { subSteps: 1.5 });
       }
       new _();
     }, /subSteps must be an integer/);

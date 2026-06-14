@@ -13,7 +13,7 @@ export type NumericFieldsOf<I> = {
  * Context handed to the `idle` callback form — see {@link IdleInput}. A reused
  * per-client scratch: read it inside the callback, don't store it. It carries
  * MECHANISM only — derived judgments (e.g. liveness) stay in userland; look the
- * client up via `this.clients.getById(ctx.sessionId)` when your policy needs it.
+ * client up via `this.clients.get(ctx.sessionId)` when your policy needs it.
  */
 export interface IdleContext<I> {
   /** Last decoded input (`undefined` before the client's first). */
@@ -111,7 +111,7 @@ function fieldNamesOf(ctor: new () => any): string[] {
 /**
  * Internal: input configuration captured by `Room.defineInput()`. The schema
  * constructor is stored here so the runtime doesn't need to know it through
- * the public `room.input` (which is now a callable accessor).
+ * the public `room.inputs` (the `.get(sessionId)` accessor).
  *
  * @internal
  */
@@ -133,7 +133,7 @@ export interface InputOptions {
    * - Drops redundant frames (`input[seqField]` ≤ the last-seen value are
    *   discarded before they enter the buffer) — the unreliable-mode
    *   ring-redundancy pattern.
-   * - Powers `room.input(sessionId).at(value)` lookups.
+   * - Powers `room.inputs.get(sessionId).at(value)` lookups.
    *
    * Despite the name, "seq" here is broader than an integer counter — any
    * monotonic numeric field works:
@@ -150,7 +150,7 @@ export interface InputOptions {
 
   /**
    * > 0 enables per-client buffering of cloned snapshots — required for
-   * `room.input(sessionId).drain() / .peek() / .at()` to return populated
+   * `room.inputs.get(sessionId).drain() / .peek() / .at()` to return populated
    * data. Oldest drops on overflow. Set to `0` to disable (`.latest` still
    * works).
    */
@@ -196,19 +196,24 @@ export interface InputOptions {
 }
 
 /**
- * Per-client input accessor returned by `room.input(sessionId)`. Combines the
+ * Per-client input accessor returned by `room.inputs.get(sessionId)`. Combines the
  * latest decoded instance with the (optional) snapshot ring buffer.
  *
  * - {@link latest} — the bound Schema instance, mutated in place by the
  *   decoder. Cheapest read; use when only the most recent state matters.
- * - {@link drain} / {@link next} / {@link take} / {@link peek} / {@link at} —
- *   populated when `defineInput()` was called with `bufferMaxSize > 0`
- *   (default 32). Use for rollback netcode / lockstep where every frame matters.
+ * - {@link consume} / `for (const inp of accessor)` / {@link drain} /
+ *   {@link next} / {@link take} / {@link peek} / {@link at} — populated when
+ *   `defineInput()` was called with `bufferMaxSize > 0` (default 32). Use for
+ *   rollback netcode / lockstep where every frame matters.
  *
  * **Per-entity vs shared world** — pick the consume primitive by who integrates:
- * - **Per-entity** (each body integrates itself): {@link drain} all of a
- *   player's inputs and sub-integrate one per input — N inputs = N steps for
- *   that player, ack lands on the newest applied. The clean default.
+ * - **Per-entity** (each body integrates itself): iterate the accessor —
+ *   `for (const inp of this.inputs.get(sid))` (sugar for {@link consume}) — and
+ *   sub-integrate one per input. N inputs = N steps for that player, ack lands
+ *   on the newest applied. The clean default. Iterating consumes ONE AT A TIME,
+ *   so {@link renderTime} tracks each input (lag comp stays exact per step) and
+ *   `break` leaves the rest buffered. {@link drain} returns the same set as an
+ *   array (retainable), but reports only the newest input's {@link renderTime}.
  * - **Shared world** (one solver step advances every body together): you can't
  *   replay N inputs as N world steps without over-stepping everyone else, so
  *   {@link next} exactly one input per entity per tick (or {@link take} a bounded
@@ -238,6 +243,39 @@ export interface InputAccessor<I = any, Idle extends boolean = false> {
   at(value: number): I | undefined;
 
   /**
+   * The blessed **per-entity** loop: consume each pending input oldest → newest,
+   * ONE AT A TIME. Unlike {@link drain} (which reports only the newest input's
+   * stamps up front), iterating updates {@link renderTime}/{@link reckonTime} and
+   * advances {@link consumedCount} per yielded input — so per-step lag comp
+   * rewinds to the exact instant of the input being applied:
+   *
+   * ```ts
+   * for (const inp of this.inputs.get(sid)) {   // sugar: accessor is iterable
+   *   applyInput(p, inp, dt);
+   *   this.collide(sid, p);                // renderTime === THIS input's stamp
+   *   if (!p.alive) break;                 // break leaves the rest buffered
+   * }
+   * ```
+   *
+   * When the buffer is empty and an `idle` policy is in effect (room-level, or
+   * per-call `opts.idle`), yields EXACTLY ONE idle frame (not consumed: no ack
+   * bump, no {@link renderTime} change, {@link wasIdle} === true) then stops. No
+   * policy + empty → zero iterations. Unknown sessionId / `bufferMaxSize: 0` →
+   * empty. `for (const inp of accessor)` is `consume()` with no opts.
+   *
+   * The returned iterator is POOLED (reused per call, allocation-free). For
+   * `for..of` / spread / `Array.from` this is invisible. If you drive it by hand,
+   * iterate it once to completion (or call `.return()` / `break`) before the next
+   * `consume()`, and read each `.next()` result before the next — don't retain or
+   * compare result objects. (Nesting two `consume()` loops over the SAME channel
+   * is handled safely but is meaningless — both share one cursor.)
+   */
+  consume(opts?: ConsumeOptions<I>): IterableIterator<I>;
+
+  /** Iterate pending (and/or one idle) inputs — sugar for {@link consume}(). */
+  [Symbol.iterator](): IterableIterator<I>;
+
+  /**
    * Take everything buffered (oldest → newest) and clear. Snapshots are safe to retain.
    *
    * With a room-level `defineInput({ idle })` policy the result is TOTAL: an
@@ -248,7 +286,7 @@ export interface InputAccessor<I = any, Idle extends boolean = false> {
    *
    * ```ts
    * // declared once at defineInput({ idle: (ctx) => ({ ... }) }); then simply:
-   * for (const f of inputCh.drain()) {
+   * for (const f of this.inputs.get(sid).drain()) {
    *   stepPlayer(p, f, world);          // ≥1 frame, always
    *   if (f.fire) tryFire(...);         // idle frame: fire=false → no-op
    * }
@@ -286,13 +324,13 @@ export interface InputAccessor<I = any, Idle extends boolean = false> {
    * @example
    * ```ts
    * // declared once:
-   * input = this.defineInput(InputSchema, {
+   * inputs = this.defineInput(InputSchema, {
    *   idle: ({ latest }) => latest ?? true,   // empty tick → last input verbatim
    * });
    * // per tick:
    * this.setFixedTimestep(() => {
    *   for (const [sid, body] of bodies) {
-   *     applyInputToBody(body, this.input(sid).next());   // typed I — never undefined
+   *     applyInputToBody(body, this.inputs.get(sid).next());   // typed I — never undefined
    *   }
    *   world.step();                                       // one step for everyone
    * }, 30);
@@ -317,6 +355,28 @@ export interface InputAccessor<I = any, Idle extends boolean = false> {
   /** Number of snapshots currently buffered. */
   readonly size: number;
 
+  /**
+   * Cumulative count of this client's inputs CONSUMED so far — the reconcile ack
+   * echoed back to the client (its `lastProcessed`). Advances by one per
+   * {@link next}, by the count taken per {@link take}/{@link drain}, by one per
+   * yield while iterating {@link consume}, and on overflow-drop; a synthesized
+   * idle frame NEVER advances it. Monotonic, so it doubles as a server-side input
+   * seq — gate per-input actions off it (e.g. a fire cooldown counted in inputs)
+   * instead of hand-rolling a counter. `0` before the first consume / for the
+   * no-op accessor.
+   */
+  readonly consumedCount: number;
+
+  /**
+   * `true` when the most recently produced frame was a synthesized idle (vs a
+   * real consumed input) — the "skip work on idle" guard. Set per consume
+   * call/yield: `true` after a {@link next}/{@link consume}/{@link drain} that
+   * fell back to the `idle` policy on an empty buffer, `false` after a real
+   * input. Always `false` for {@link take} (never synthesizes) and the no-op
+   * accessor. Reads meaningfully right after the consume that produced the frame.
+   */
+  readonly wasIdle: boolean;
+
   /** Drop all buffered snapshots (also resets the dedupe tracker). */
   clear(): void;
 
@@ -324,8 +384,9 @@ export interface InputAccessor<I = any, Idle extends boolean = false> {
    * Server-clock render timestamp (ms since room start) of the most recently
    * consumed input — the time the client was rendering the world at when it
    * issued that input. Tracks the consume primitive: {@link drain}/{@link take}
-   * report the NEWEST input they consumed; {@link next} reports THAT one input,
-   * so single-consume loops rewind to the exact instant of the input simulated.
+   * report the NEWEST input they consumed; {@link next} and each
+   * {@link consume}/`for..of` yield report THAT one input, so per-input loops
+   * rewind to the exact instant of the input simulated.
    * `0` until the first render-time-stamped input is consumed. Populated only
    * when the Room called `defineInput(..., { renderTime: true })` with
    * `bufferMaxSize > 0`. Usually you don't read this directly — pass the
@@ -352,15 +413,22 @@ export interface InputAccessor<I = any, Idle extends boolean = false> {
 }
 
 /**
- * Callable returned by `Room.defineInput()`. Assign it to `this.input` and
- * call `room.input(sessionId)` per tick to read each client's latest input
- * and/or buffered snapshots.
+ * Returned by `Room.defineInput()`. Assign it to `this.inputs`, then call
+ * `room.inputs.get(sessionId)` per tick to read each client's input stream —
+ * the same per-session lookup verb as `room.clients.get(sessionId)`.
  *
  * The fixed-step metadata lives HERE (one per room), not on the per-client
- * `InputAccessor` — these values are identical for every client, so they'd be
- * pure duplication per connection.
+ * {@link InputAccessor} — these values are identical for every client, so they'd
+ * be pure duplication per connection. `.get()` keeps the accessor and this
+ * metadata cleanly separated.
  */
-export type InputAPI<I = any, Idle extends boolean = false> = ((sessionId: string) => InputAccessor<I, Idle>) & {
+export type InputAPI<I = any, Idle extends boolean = false> = {
+  /**
+   * The input accessor for `sessionId` — the per-client stream you iterate /
+   * `.next()` / `.drain()`. Returns a frozen no-op accessor for unknown sessions.
+   * Mirrors `room.clients.get(sessionId)`.
+   */
+  get(sessionId: string): InputAccessor<I, Idle>;
   /**
    * Server-advertised fixed step rate in **Hz** — from `defineInput`'s
    * `tickRate`/`stepMs`/`stepSeconds`, or derived from `setTimestep` —
@@ -371,7 +439,7 @@ export type InputAPI<I = any, Idle extends boolean = false> = ((sessionId: strin
   /**
    * The fixed step as **seconds** (`1/tickRate`): the dt to integrate one input
    * with, bit-identical to the client's prediction dt. Pass it to your physics
-   * step (`applyInput(p, cmd, level, room.input.stepSeconds)`) so server and
+   * step (`applyInput(p, cmd, level, room.inputs.stepSeconds)`) so server and
    * client share one timestep instead of each keeping a constant that can drift.
    * `undefined` when no rate is advertised.
    */
@@ -390,21 +458,42 @@ export type InputAPI<I = any, Idle extends boolean = false> = ((sessionId: strin
   readonly subStepMs?: number;
 };
 
+/** Reclaim the consumed prefix once the read cursor passes this many items —
+ *  bounds the parallel arrays' slack to O(THRESHOLD) between compactions while
+ *  keeping per-consume work O(1) (no `shift()` re-index on every input). */
+const COMPACT_THRESHOLD = 32;
+
+/** Shared zero-state "already done" iterator — returned by `consume()` on an
+ *  empty buffer with no idle policy, and by the no-op accessor. Frozen + a frozen
+ *  result, so it's allocation-free and safe to share across all callers. */
+const DONE_RESULT: IteratorResult<any> = Object.freeze({ value: undefined, done: true });
+const DONE_ITERATOR: IterableIterator<any> = Object.freeze({
+  [Symbol.iterator]() { return this; },
+  next() { return DONE_RESULT; },
+});
+
 /** @internal */
 export class InputBufferImpl<I = any> {
+  /** Pending snapshots, indexed `[_head, _items.length)`. Consumed inputs are
+   *  NOT spliced off per-read — `_head` advances and the prefix is reclaimed in
+   *  bulk by {@link compact} (a `shift()` per read is O(n), so a burst would be
+   *  O(n²)). `_renderTimes`/`_reckonTimes` stay parallel to `_items`. */
   private _items: I[] = [];
+  /** Read cursor: index of the oldest UNCONSUMED input (== `_items.length` when empty). */
+  private _head = 0;
   private _lastSeq: number = -Infinity;
   private readonly _maxSize: number;
   private readonly _seqField: string | undefined;
 
   /**
-   * Cumulative count of inputs CONSUMED from this buffer (via {@link drain} or
-   * {@link clear}). Consumed = "removed from the pending set" — whether applied
-   * to state or discarded. The server echoes this in the TIMED prefix as the
-   * reconciliation ack: it tracks how many of the client's inputs are reflected
-   * in (or finished influencing) the authoritative state, which lags the
-   * receive counter by inputs still buffered. Distinct from `_receivedInputCount`
-   * (receive-time, for RTT), which leads the state and is wrong for reconcile.
+   * Cumulative count of inputs CONSUMED from this buffer (via any consume
+   * primitive — {@link next}/{@link take}/{@link drain}/{@link consume} — plus
+   * {@link clear} and overflow). Consumed = "removed from the pending set",
+   * whether applied to state or discarded. The server echoes this in the TIMED
+   * prefix as the reconciliation ack: how many of the client's inputs are
+   * reflected in (or finished influencing) the authoritative state, which lags
+   * the receive counter by inputs still buffered. Distinct from
+   * `_receivedInputCount` (receive-time, for RTT), which leads the state.
    */
   consumedCount = 0;
 
@@ -418,6 +507,18 @@ export class InputBufferImpl<I = any> {
   private _reckonTimes: number[] = [];
   /** Reckon stamp of the most recently consumed input (see {@link reckonTime}). */
   private _lastReckonTime = 0;
+  /** Whether the most recently produced frame was a synthesized idle (see {@link wasIdle}). */
+  private _lastWasIdle = false;
+
+  /** Reused {@link consume} iterator (lazily minted) + its per-call state, so a
+   *  per-tick loop allocates no generator frame. `_iterEnd` snapshots the count
+   *  to walk; `_iterIdle` is an optional trailing synthesized frame; `_iterActive`
+   *  guards against a nested consume() clobbering the shared `_iterRes`. */
+  private _iter?: IterableIterator<I>;
+  private _iterEnd = 0;
+  private _iterActive = false;
+  private _iterIdle?: I;
+  private readonly _iterRes: { value: I | undefined; done: boolean } = { value: undefined, done: false };
 
   /** Input schema ctor — mints the reused idle frame; idle is off without it. */
   private readonly _ctor?: new () => I;
@@ -483,16 +584,62 @@ export class InputBufferImpl<I = any> {
     return this._idle;
   }
 
+  /** The idle frame to synthesize on an empty tick (room policy or per-call
+   *  `opts.idle`), or `undefined` when no policy is in effect. Reuses the single
+   *  idle instance; never advances the ack. Callers set {@link wasIdle}. */
+  private idleFrameOnEmpty(opts?: ConsumeOptions<I>): I | undefined {
+    const idle = this._ctor !== undefined ? this.effectiveIdle(opts) : undefined;
+    return idle === undefined ? undefined : this.idleFrame(this.resolveIdle(idle));
+  }
+
+  /** Consume the input at the cursor: advance cursor + ack, stamp THIS input's
+   *  render/reckon times, clear {@link wasIdle}. The shared per-input step behind
+   *  {@link next}, {@link consume}'s iterator, and the re-entrant fallback. */
+  private stepHead(): I {
+    const i = this._head;
+    this._lastWasIdle = false;
+    this._lastRenderTime = this._renderTimes[i];
+    this._lastReckonTime = this._reckonTimes[i];
+    this._head = i + 1;
+    this.consumedCount++;
+    return this._items[i];
+  }
+
+  /** Drop ALL slots, reusing the backing arrays' capacity — the zero-GC reset for
+   *  the consume/next path ({@link compact}/{@link clear}). `drain()` deliberately
+   *  does NOT use this (it returns an array, so fresh `[]` is faster there). */
+  private truncate(): void {
+    this._items.length = 0;
+    this._renderTimes.length = 0;
+    this._reckonTimes.length = 0;
+    this._head = 0;
+  }
+
   push(snapshot: I, renderTime: number = 0, reckonTime: number = 0): void {
     this._items.push(snapshot);
     this._renderTimes.push(renderTime);
     this._reckonTimes.push(reckonTime);
-    // Overflow drops oldest unconsumed input; count it consumed so the reconcile ack still advances past it.
-    if (this._items.length > this._maxSize) {
-      this._items.shift();
-      this._renderTimes.shift(); // keep parallel with `_items`
-      this._reckonTimes.shift();
+    // Overflow drops the oldest unconsumed input; count it consumed so the ack
+    // still advances past it. Advance the cursor (don't shift) — keeps it O(1).
+    if (this.size > this._maxSize) {
+      this._head++;
       this.consumedCount++;
+      this.compact();
+    }
+  }
+
+  /** Reclaim the consumed prefix `[0, _head)`. Free when fully drained (reuse the
+   *  arrays); otherwise splice only once the cursor passes {@link COMPACT_THRESHOLD},
+   *  so the amortized per-input cost stays O(1). */
+  private compact(): void {
+    if (this._head === 0) { return; }
+    if (this._head >= this._items.length) {
+      this.truncate();
+    } else if (this._head >= COMPACT_THRESHOLD) {
+      this._items.splice(0, this._head);
+      this._renderTimes.splice(0, this._head);
+      this._reckonTimes.splice(0, this._head);
+      this._head = 0;
     }
   }
 
@@ -504,65 +651,153 @@ export class InputBufferImpl<I = any> {
   }
 
   drain(opts?: ConsumeOptions<I>): I[] {
-    // Idle synthesis (empty + a policy in effect): NOT a consumed input — no ack
-    // bump, renderTime untouched (lastSeenBy keeps resolving the real last stamp).
-    if (this._items.length === 0 && this._ctor !== undefined) {
-      const idle = this.effectiveIdle(opts);
-      if (idle !== undefined) return [this.idleFrame(this.resolveIdle(idle))];
+    // Empty: synthesize one idle frame (NOT consumed — no ack bump, stamps
+    // untouched) when a policy is in effect, else [].
+    if (this.size === 0) {
+      const idle = this.idleFrameOnEmpty(opts);
+      this._lastWasIdle = idle !== undefined;
+      return idle !== undefined ? [idle] : [];
     }
-    const out = this._items;
-    // Report newest drained input's stamps; persist across a subsequent empty drain.
-    if (this._renderTimes.length > 0) {
-      this._lastRenderTime = this._renderTimes[this._renderTimes.length - 1];
-      this._lastReckonTime = this._reckonTimes[this._reckonTimes.length - 1];
-    }
+    this._lastWasIdle = false;
+    const last = this._items.length - 1;
+    this._lastRenderTime = this._renderTimes[last]; // drain reports the NEWEST stamps
+    this._lastReckonTime = this._reckonTimes[last];
+    // Hand off the backing array untouched when nothing was partially consumed
+    // (O(1) — the caller may retain it); else copy out the unconsumed tail. Fresh
+    // arrays here, NOT truncate(): drain already allocates the returned array, and
+    // V8 makes `= []` + refill cheaper than `length = 0` reuse (~1.8× at small N),
+    // so the speed wins and the 3 tiny empties are negligible next to the return.
+    const out = this._head === 0 ? this._items : this._items.slice(this._head);
     this.consumedCount += out.length;
     this._items = [];
     this._renderTimes = [];
     this._reckonTimes = [];
+    this._head = 0;
     return out;
   }
 
   /** Consume the single oldest input (ack advances by one); `undefined` if
-   *  empty — or the synthesized idle frame when `opts.idle` is given. */
+   *  empty — or the synthesized idle frame when an idle policy is in effect. */
   next(opts?: ConsumeOptions<I>): I | undefined {
-    if (this._items.length === 0) {
-      const idle = this._ctor !== undefined ? this.effectiveIdle(opts) : undefined;
-      return idle !== undefined ? this.idleFrame(this.resolveIdle(idle)) : undefined;
+    if (this.size === 0) {
+      const idle = this.idleFrameOnEmpty(opts);
+      this._lastWasIdle = idle !== undefined;
+      return idle;
     }
-    this._lastRenderTime = this._renderTimes.shift()!; // stamps of THIS input
-    this._lastReckonTime = this._reckonTimes.shift()!;
-    this.consumedCount++;
-    return this._items.shift();
+    const item = this.stepHead();
+    this.compact();
+    return item;
   }
 
   /** Consume up to `n` oldest inputs (ack advances by the count actually taken). */
   take(n: number): I[] {
-    if (n <= 0 || this._items.length === 0) { return []; }
-    const count = Math.min(n, this._items.length);
-    const out = this._items.splice(0, count);
-    const times = this._renderTimes.splice(0, count);
-    const reckons = this._reckonTimes.splice(0, count);
-    this._lastRenderTime = times[times.length - 1]; // newest taken input's stamps
-    this._lastReckonTime = reckons[reckons.length - 1];
+    this._lastWasIdle = false; // take never synthesizes idle
+    const avail = this.size;
+    if (n <= 0 || avail === 0) { return []; }
+    const count = Math.min(n, avail);
+    const start = this._head;
+    const out = this._items.slice(start, start + count);
+    this._lastRenderTime = this._renderTimes[start + count - 1]; // newest taken input's stamps
+    this._lastReckonTime = this._reckonTimes[start + count - 1];
+    this._head += count;
     this.consumedCount += count;
+    this.compact();
     return out;
   }
 
+  /**
+   * Iterate pending inputs one at a time (per-yield ack + stamp updates), or
+   * exactly one synthesized idle frame on an empty buffer with a policy in
+   * effect. See {@link InputAccessor.consume}.
+   *
+   * Returns a POOLED iterator (reused across calls — no generator frame, no
+   * per-call allocation) that walks the cursor `[_head, _iterEnd)` plus one
+   * optional trailing idle frame. The cursor advances per `next()`, so `break`
+   * (which calls `return()`) leaves the rest buffered and compacts. A nested
+   * `consume()` of the SAME buffer while one is live falls back to a fresh
+   * generator so the pooled `_iterRes` isn't clobbered (nesting is meaningless —
+   * both share the cursor — but it must not corrupt).
+   */
+  consume(opts?: ConsumeOptions<I>): IterableIterator<I> {
+    const empty = this.size === 0;
+    const idle = empty ? this.idleFrameOnEmpty(opts) : undefined;
+    if (empty && idle === undefined) { this._lastWasIdle = false; return DONE_ITERATOR as IterableIterator<I>; }
+    // A nested consume() of this same buffer would clobber the pooled iterator's
+    // shared state → hand the rare case a fresh generator instead.
+    if (this._iterActive) { return this.consumeGen(idle); }
+    this._iterActive = true;
+    this._iterIdle = idle;                 // one trailing idle frame, or undefined
+    this._iterEnd = this._items.length;    // snapshot — a (hypothetical) mid-loop push isn't consumed this pass
+    return this.ensureIter();
+  }
+
+  [Symbol.iterator](): IterableIterator<I> {
+    return this.consume();
+  }
+
+  /** Lazily mint the reused iterator. Closures over `this` so it reads the
+   *  private cursor directly; one `_iterRes` is reused — read each result before
+   *  the next `next()`, as `for..of` / spread / `Array.from` all do. */
+  private ensureIter(): IterableIterator<I> {
+    if (this._iter !== undefined) { return this._iter; }
+    const self = this;
+    const res = this._iterRes;
+    const finish = (): IteratorResult<I> => {
+      self.compact();
+      self._iterActive = false;
+      self._iterIdle = undefined;
+      res.value = undefined;
+      res.done = true;
+      return res as IteratorResult<I>;
+    };
+    this._iter = {
+      [Symbol.iterator]() { return this; },
+      next(): IteratorResult<I> {
+        if (self._head < self._iterEnd) {                // a buffered input
+          res.value = self.stepHead();
+          res.done = false;
+          return res as IteratorResult<I>;
+        }
+        if (self._iterIdle !== undefined) {              // one trailing idle frame
+          self._lastWasIdle = true;
+          res.value = self._iterIdle;
+          self._iterIdle = undefined;
+          res.done = false;
+          return res as IteratorResult<I>;
+        }
+        return finish();
+      },
+      return(): IteratorResult<I> { return finish(); },  // `break` → compact + release
+    };
+    return this._iter;
+  }
+
+  /** Re-entrant fallback: a fresh generator for a nested `consume()` of this same
+   *  buffer (the pooled iterator is single-active). Same accounting + compaction. */
+  private *consumeGen(idleFrame: I | undefined): IterableIterator<I> {
+    const end = this._items.length;
+    try {
+      while (this._head < end) { yield this.stepHead(); }
+      if (idleFrame !== undefined) { this._lastWasIdle = true; yield idleFrame; }
+    } finally {
+      this.compact();
+    }
+  }
+
   peek(): I[] {
-    return this._items.slice();
+    return this._items.slice(this._head);
   }
 
   at(value: number): I | undefined {
     if (this._seqField === undefined) { return undefined; }
-    for (let i = 0; i < this._items.length; i++) {
+    for (let i = this._head; i < this._items.length; i++) {
       if ((this._items[i] as any)[this._seqField] === value) { return this._items[i]; }
     }
     return undefined;
   }
 
   get size(): number {
-    return this._items.length;
+    return this._items.length - this._head;
   }
 
   /** Render time (server-clock ms) of the most recently drained input; `0`
@@ -580,12 +815,17 @@ export class InputBufferImpl<I = any> {
     return this._lastReckonTime;
   }
 
+  /** Whether the most recently produced frame was a synthesized idle (see {@link wasIdle}). */
+  get wasIdle(): boolean {
+    return this._lastWasIdle;
+  }
+
   clear(): void {
-    this.consumedCount += this._items.length;
-    this._items.length = 0;
-    this._renderTimes.length = 0;
-    this._reckonTimes.length = 0;
+    this.consumedCount += this.size; // unconsumed inputs count as consumed (ack moves past them)
+    this.truncate();
     this._lastSeq = -Infinity;
+    this._iterActive = false; // recovery hatch if a consume() iterator was abandoned unclosed
+    this._iterIdle = undefined;
   }
 }
 
@@ -593,7 +833,7 @@ export class InputBufferImpl<I = any> {
  * Default per-client accessor. Reads `_input` and `_inputBuffer` off the
  * client at access time — both are nullable until the room declares input
  * via `defineInput()`. Cached as `client._inputAccessor` at join, so
- * `room.input(sessionId)` is a Map lookup + property read.
+ * `room.inputs.get(sessionId)` is a Map lookup + property read.
  *
  * @internal
  */
@@ -602,6 +842,10 @@ export class InputAccessorImpl<I = any> implements InputAccessor<I> {
   constructor(client: ClientPrivate) { this._client = client; }
   get latest(): I | undefined { return this._client._input as I | undefined; }
   at(value: number): I | undefined { return this._client._inputBuffer?.at(value) as I | undefined; }
+  consume(opts?: ConsumeOptions<I>): IterableIterator<I> {
+    return (this._client._inputBuffer?.consume(opts) ?? EMPTY_INPUT_ITERATOR) as IterableIterator<I>;
+  }
+  [Symbol.iterator](): IterableIterator<I> { return this.consume(); }
   drain(opts?: ConsumeOptions<I>): I[] { return (this._client._inputBuffer?.drain(opts) ?? []) as I[]; }
   next(): I | undefined;
   next(opts: { idle: IdleInput<I> }): I;
@@ -609,13 +853,18 @@ export class InputAccessorImpl<I = any> implements InputAccessor<I> {
   take(n: number): I[] { return (this._client._inputBuffer?.take(n) ?? []) as I[]; }
   peek(): I[] { return (this._client._inputBuffer?.peek() ?? []) as I[]; }
   get size(): number { return this._client._inputBuffer?.size ?? 0; }
+  get consumedCount(): number { return this._client._inputBuffer?.consumedCount ?? 0; }
+  get wasIdle(): boolean { return this._client._inputBuffer?.wasIdle ?? false; }
   clear(): void { this._client._inputBuffer?.clear(); }
   get renderTime(): number { return this._client._inputBuffer?.renderTime ?? 0; }
   get reckonTime(): number { return this._client._inputBuffer?.reckonTime ?? 0; }
 }
 
+/** Shared empty iterator for accessors without a buffer (bufferMaxSize: 0). */
+const EMPTY_INPUT_ITERATOR: IterableIterator<any> = DONE_ITERATOR;
+
 /**
- * Returned by `room.input(sessionId)` for unknown sessions and for rooms
+ * Returned by `room.inputs.get(sessionId)` for unknown sessions and for rooms
  * that didn't call `defineInput()`.
  *
  * @internal
@@ -623,11 +872,15 @@ export class InputAccessorImpl<I = any> implements InputAccessor<I> {
 export const NO_OP_INPUT_ACCESSOR: InputAccessor<any> = Object.freeze({
   latest: undefined,
   at: () => undefined,
+  consume: () => EMPTY_INPUT_ITERATOR,
+  [Symbol.iterator]: () => EMPTY_INPUT_ITERATOR,
   drain: () => [],
   next: () => undefined,
   take: () => [],
   peek: () => [],
   size: 0,
+  consumedCount: 0,
+  wasIdle: false,
   clear: () => {},
   renderTime: 0,
   reckonTime: 0,

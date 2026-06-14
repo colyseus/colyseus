@@ -15,7 +15,7 @@ export interface DefineInputOptions<I = any> {
    * rendering the world at — `serverNow() − renderDelay − smoothedRtt()/2`
    * (the app's interp buffer + the SDK-tracked one-way latency), or `0` until
    * its clock has synced. Surfaced server-side as
-   * `room.input(sessionId).renderTime`; feed it to `rewind.lastSeenBy(sessionId)`
+   * `room.inputs.get(sessionId).renderTime`; feed it to `rewind.lastSeenBy(sessionId)`
    * (or `rewind.at`) to rewind other entities to where that client SAW
    * them — "what you see is what you hit". Default `false` (+4 bytes/input).
    */
@@ -726,30 +726,33 @@ export class Room<T extends RoomOptions = RoomOptions> {
   public onLeave?(client: ExtractRoomClient<T>, code?: number): void | Promise<any>;
 
   /**
-   * Per-client input accessor. Set by `defineInput()`. Call `room.input(sessionId)`
-   * each tick to read the latest decoded input and/or the buffered snapshot ring
-   * for that client.
+   * Per-client input accessor. Assign it `= this.defineInput(...)`, then call
+   * `this.inputs.get(sessionId)` each tick to read that client's buffered input
+   * *stream* — iterate it directly, or call `.next()` / `.drain()` / `.latest`.
+   *
+   * (In the `Room<{ input: I }>` generic, `input` is the input *type* of one
+   * frame; `this.inputs` is the per-client accessor over the stream of them.)
    *
    * @example
    * ```typescript
    * class FpsRoom extends Room<{ input: MoveInput }> {
-   *   input = this.defineInput(MoveInput);
+   *   inputs = this.defineInput(MoveInput);
    *
    *   onCreate() {
-   *     this.setTimestep(() => {
-   *       for (const c of this.clients) {
-   *         const input = this.input(c.sessionId);
-   *         if (input.latest) this.apply(c, input.latest);
-   *         // for rollback / lockstep:
-   *         //   const snapshot = input.at(this.clock.ticks);
-   *         //   for (const snapshot of input.drain()) ...
-   *       }
-   *     }, 1000 / 30);
+   *     this.setFixedTimestep((ctx) => {
+   *       for (const [sid, p] of this.state.players)
+   *         for (const input of this.inputs.get(sid))   // consume one-by-one
+   *           applyInput(p, input, ctx.dt);
+   *     }, 30);
    *   }
    * }
    * ```
    */
-  public input?: InputAPI<ExtractRoomInput<T>>;
+  public inputs?: InputAPI<ExtractRoomInput<T>>;
+
+  /** @internal The API from {@link defineInput}, used by the rewind binding
+   *  without depending on the user's `inputs` field being assigned. */
+  private _inputAPI?: InputAPI<any>;
 
   /**
    * Input configuration. Set via {@link defineInput} only.
@@ -766,34 +769,37 @@ export class Room<T extends RoomOptions = RoomOptions> {
 
   /**
    * Declare the input schema and configuration in a single line. Returns the
-   * callable accessor that gets assigned to `this.input` — call
-   * `this.input(sessionId)` per tick to consume.
+   * input API that gets assigned to `this.inputs` — call
+   * `this.inputs.get(sessionId)` per tick to consume.
    *
    * ```typescript
    * class FpsRoom extends Room<{ input: MoveInput }> {
-   *   input = this.defineInput(MoveInput, {
+   *   inputs = this.defineInput(MoveInput, {
    *     seqField: "tick",       // typed: only numeric fields of MoveInput
    *     bufferMaxSize: 64,
    *   });
    *
    *   // …or without options — no seq dedupe, bufferMaxSize: 32:
-   *   // input = this.defineInput(MoveInput);
+   *   // inputs = this.defineInput(MoveInput);
    * }
    * ```
    *
    * **Defaults** when `opts` (or individual fields) are omitted:
-   * - `seqField`: unset — dedupe and `room.input(sessionId).at(value)` lookup are
+   * - `seqField`: unset — dedupe and `this.inputs.get(sessionId).at(value)` lookup are
    *   OPT-IN (lockstep / rollback). Name a monotonic numeric field here to enable
    *   them; redundant frames (`input[seqField]` ≤ the last seen) are then dropped.
    *   Leave unset for reliable, in-order channels where every frame is unique.
    * - `bufferMaxSize`: `32` — enables per-client snapshot buffering for
-   *   `room.input(sessionId).drain() / .next() / .take() / .peek() / .at()`. Set
-   *   to `0` to disable buffering (the `.latest` read still works).
+   *   `this.inputs.get(sessionId)` iteration / `.consume() / .drain() / .next() /
+   *   .take() / .peek() / .at()`. Set to `0` to disable buffering (the `.latest`
+   *   read still works).
    *
-   * **Consuming the buffer** — `drain()` (take all) suits per-entity integration;
-   * `next()` (take exactly one, ack +1) suits a shared physics world stepped once
-   * for everyone. See {@link InputAccessor} for the full per-entity-vs-shared-world
-   * guidance and why the choice affects the reconcile ack.
+   * **Consuming the buffer** — `for (const inp of this.inputs.get(sessionId))` (sugar
+   * for `.consume()`) is the per-entity loop: it consumes one at a time, so
+   * lag-comp `renderTime` tracks each input. `next()` (take exactly one, ack +1)
+   * suits a shared physics world stepped once for everyone; `drain()` returns the
+   * whole pending set as an array. See {@link InputAccessor} for the full
+   * per-entity-vs-shared-world guidance and why the choice affects the reconcile ack.
    */
   protected defineInput<
     C extends new () => any,
@@ -844,10 +850,12 @@ export class Room<T extends RoomOptions = RoomOptions> {
       // back into a constructor through Reflection.decode.
       _inputReflectionCache.set(type, Reflection.encode(new Encoder(new type())));
     }
-    const api = ((sessionId: string): InputAccessor<InstanceType<C>> => {
-      const c = this.clients.getById(sessionId) as unknown as ClientPrivate | undefined;
-      return (c?._inputAccessor as InputAccessor<InstanceType<C>>) ?? NO_OP_INPUT_ACCESSOR;
-    }) as InputAPI<InstanceType<C>, IdleDeclared<O, InstanceType<C>>>;
+    const api = {
+      get: (sessionId: string): InputAccessor<InstanceType<C>> => {
+        const c = this.clients.get(sessionId) as unknown as ClientPrivate | undefined;
+        return (c?._inputAccessor as InputAccessor<InstanceType<C>>) ?? NO_OP_INPUT_ACCESSOR;
+      },
+    } as InputAPI<InstanceType<C>, IdleDeclared<O, InstanceType<C>>>;
     // Room-level fixed step (one source, not per-client). Live getters off
     // _inputOptions so an auto-derived tickRate — set later by
     // setTimestep — is reflected. dt = 1/tickRate; `1/hz` is
@@ -883,6 +891,9 @@ export class Room<T extends RoomOptions = RoomOptions> {
         return hz ? (1000 / hz) / (this._inputOptions?.subSteps ?? 1) : undefined;
       },
     });
+    // Keep a framework-owned reference so internals (the rewind binding) resolve
+    // accessors without depending on which field the user assigned `api` to.
+    this._inputAPI = api;
     return api;
   }
 
@@ -1001,7 +1012,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
 
     } else if (typeof(reconnectionToken) === "string") {
         // potentially a stale client reference, so a reconnection attempt is possible.
-        return this.clients.getById(sessionId)?.reconnectionToken === reconnectionToken;
+        return this.clients.get(sessionId)?.reconnectionToken === reconnectionToken;
     }
 
     return false;
@@ -1100,13 +1111,14 @@ export class Room<T extends RoomOptions = RoomOptions> {
    * On a hitch the accumulator runs at most a few catch-up steps then drops the
    * backlog (no spiral of death). Lag-comp is recorded once per real frame.
    *
-   * **Consuming input inside the step** — how you drain each client's buffer
+   * **Consuming input inside the step** — how you consume each client's buffer
    * depends on who integrates (see {@link InputAccessor}):
    * - *Per-entity* (each body integrates itself): `for (const cmd of
-   *   this.input(sid).drain()) applyInput(player, cmd, ctx.dt)` — N inputs =
-   *   N sub-integrations, ack lands on the newest applied.
+   *   this.inputs.get(sid)) applyInput(player, cmd, ctx.dt)` — N inputs =
+   *   N sub-integrations, ack lands on the newest applied, and `renderTime`
+   *   tracks each input (lag comp stays exact per step).
    * - *Shared world* (one solver step advances every body): consume exactly one
-   *   input per entity per step with `this.input(sid).next()` (or `take(n)` +
+   *   input per entity per step with `this.inputs.get(sid).next()` (or `take(n)` +
    *   sub-step), then `world.step()` once. Draining all and applying only the
    *   latest would jump the reconcile ack past inputs you never simulated.
    *
@@ -1205,17 +1217,17 @@ export class Room<T extends RoomOptions = RoomOptions> {
    */
   public allowRewindState(opts?: RewindOptions): Rewind {
     this.#rewind = Rewind.get(this, opts);
-    // Resolve `rewind.lastSeenBy(sid)` through the standard `input` slot
-    // (`input = this.defineInput(..., { renderTime: true })`). Lazy: read at call
-    // time, so field-init order between `input` and `rewind` doesn't matter.
+    // Resolve `rewind.lastSeenBy(sid)` through the framework-owned input API
+    // (`inputs = this.defineInput(..., { renderTime: true })`). Lazy: read at call
+    // time, so field-init order between `inputs` and `rewind` doesn't matter.
     // Misconfiguration fails loudly — a silent 0 stamp would read live positions
     // and quietly disable lag comp. (A client that hasn't stamped yet legitimately
     // reads 0 → live fallback; that is NOT a config error.)
     this.#rewind.bindRenderTime((sessionId) => {
-      if (this.input === undefined) {
+      if (this._inputAPI === undefined) {
         throw new Error(
-          "rewind.lastSeenBy() found no input API on `this.input`. Declare " +
-          "`input = this.defineInput(YourInput, { renderTime: true })`, or use " +
+          "rewind.lastSeenBy() found no input API. Declare " +
+          "`inputs = this.defineInput(YourInput, { renderTime: true })`, or use " +
           "rewind.at(time) with a render time you track yourself.",
         );
       }
@@ -1226,12 +1238,12 @@ export class Room<T extends RoomOptions = RoomOptions> {
           "a render time you track yourself.",
         );
       }
-      return this.input(sessionId).renderTime;
+      return this._inputAPI.get(sessionId).renderTime;
     });
     // Direct reckon-display stamp: lagComp:"reckon" types read at exactly the
     // instant the client displayed them — immune to its RTT-estimation error.
     this.#rewind.bindReckonTime((sessionId) =>
-      this.input !== undefined ? this.input(sessionId).reckonTime : 0,
+      this._inputAPI !== undefined ? this._inputAPI.get(sessionId).reckonTime : 0,
     );
     // Anchor the reckon midpoint FALLBACK at the true processing instant (the
     // record timestamp is one tick stale by hit-test time — see bindNow).
@@ -1796,7 +1808,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
     client.reconnectionToken = generateId();
 
     // Allocate per-client input instance + decoder if the Room called `defineInput()`.
-    // Done early so onJoin can reference room.input(sessionId).latest.
+    // Done early so onJoin can reference room.inputs.get(sessionId).latest.
     if (this._inputOptions !== undefined) {
       client._input = new this._inputOptions.ctor();
       client._inputDecoder = new InputDecoder(client._input);
@@ -1829,7 +1841,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
     if (
       this._reservedSeats[sessionId] === undefined &&
       connectionOptions?.reconnectionToken &&
-      this.clients.getById(sessionId)?.reconnectionToken === connectionOptions.reconnectionToken
+      this.clients.get(sessionId)?.reconnectionToken === connectionOptions.reconnectionToken
     ) {
       debugMatchMaking('attempting to reconnect client with a stale previous connection - sessionId: \'%s\', roomId: \'%s\'', client.sessionId, this.roomId);
       this._reconnectionAttempts[connectionOptions.reconnectionToken] = new Deferred();

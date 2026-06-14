@@ -75,19 +75,19 @@ export class WebRTCPlugin extends RoomPlugin {
 
     /** Client → server → target client. Relays an SDP offer. */
     'webrtc:offer': (client: Client, message: SignalingOffer) => {
-      const target = this.room.clients.getById(message.targetId);
+      const target = this.room.clients.get(message.targetId);
       target?.send('webrtc:offer', { peerId: client.sessionId, sdp: message.sdp });
     },
 
     /** Client → server → target client. Relays an SDP answer. */
     'webrtc:answer': (client: Client, message: SignalingAnswer) => {
-      const target = this.room.clients.getById(message.targetId);
+      const target = this.room.clients.get(message.targetId);
       target?.send('webrtc:answer', { peerId: client.sessionId, sdp: message.sdp });
     },
 
     /** Client → server → target client. Relays an ICE candidate. */
     'webrtc:ice-candidate': (client: Client, message: SignalingIceCandidate) => {
-      const target = this.room.clients.getById(message.targetId);
+      const target = this.room.clients.get(message.targetId);
       target?.send('webrtc:ice-candidate', { peerId: client.sessionId, candidate: message.candidate });
     },
   };
