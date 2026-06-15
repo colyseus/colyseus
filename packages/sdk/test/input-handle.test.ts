@@ -45,7 +45,8 @@ function makeHandle(
     opts: {
         delta?: boolean;
         historySize?: number;
-        renderTime?: boolean;
+        stampRender?: boolean;
+        stampReckon?: boolean;
         renderDelay?: number;
         tickRate?: number;
         subSteps?: number;
@@ -62,7 +63,8 @@ function makeHandle(
         historySize: opts.historySize,
     });
     const handle = new InputHandleImpl(host, instance, encoder, {
-        renderTime: opts.renderTime,
+        stampRender: opts.stampRender,
+        stampReckon: opts.stampReckon,
         renderDelay: opts.renderDelay,
         tickRate: opts.tickRate,
         subSteps: opts.subSteps,
@@ -225,10 +227,11 @@ describe('InputHandle', () => {
             assert.equal(handle.lastProcessed, 2);
         });
 
-        test('renderTime: ORs TIMED onto opcode and prepends [u32 reckonTime][u16 renderDelta]', () => {
+        test('BOTH stamps: ORs TIMED onto opcode and prepends [u32 reckonTime][u16 renderDelta] (6B)', () => {
             let t = 1234;
             const { handle, conn, instance } = makeHandle('reliable', {
-                renderTime: true,
+                stampRender: true,
+                stampReckon: true,
                 renderDelay: 100,
                 clockRtt: 60,           // one-way ≈ 30, folded into the delta
                 clockNow: () => t,
@@ -238,6 +241,7 @@ describe('InputHandle', () => {
 
             const buf = conn.reliable[0];
             assert.equal(buf[0], Protocol.ROOM_INPUT_RELIABLE | ProtocolModifier.TIMED);
+            assert.equal(buf.length, 1 + 6 + (buf.length - 7), 'TIMED + 6-byte prefix + body');
             assert.equal(readU32LE(buf, 1), 1234, 'base stamp = round(serverNow) — the reckon display instant');
             assert.equal(readU16LE(buf, 5), 130, 'delta = renderDelay + smoothedRtt/2 ⇒ server derives renderTime = 1104');
 
@@ -250,9 +254,63 @@ describe('InputHandle', () => {
             assert.equal(readU16LE(conn.reliable[1], 5), 130);
         });
 
-        test('renderTime: stamps 0 until the clock has synced (lastServerTime == 0)', () => {
+        // Length of the encoded MoveInput body (no opcode, no prefix) for `x`,
+        // so prefix-length assertions don't hard-code schema framing bytes.
+        function bodyLen(x: number): number {
+            const r = makeHandle('reliable', { clockNow: () => 0 });
+            r.instance.x = x;
+            r.handle.send();
+            return r.conn.reliable[0].length - 1;   // minus the opcode byte
+        }
+
+        test('RECKON-only: prepends [u32 reckonTime] (4B), no delta', () => {
             const { handle, conn, instance } = makeHandle('reliable', {
-                renderTime: true,
+                stampReckon: true,
+                renderDelay: 100,
+                clockRtt: 60,
+                clockNow: () => 1234,
+            });
+            instance.x = 1;
+            handle.send();
+
+            const buf = conn.reliable[0];
+            assert.equal(buf[0], Protocol.ROOM_INPUT_RELIABLE | ProtocolModifier.TIMED);
+            assert.equal(readU32LE(buf, 1), 1234, 'reckonTime = round(serverNow), shipped directly (immune to rtt error)');
+            assert.equal(buf.length, 1 + 4 + bodyLen(1), 'opcode + 4-byte stamp + body (no u16 delta)');
+        });
+
+        test('RENDER-only: prepends [u32 renderTime] (4B) = reckonTime − (renderDelay + rtt/2)', () => {
+            const { handle, conn, instance } = makeHandle('reliable', {
+                stampRender: true,
+                renderDelay: 100,
+                clockRtt: 60,           // one-way ≈ 30 → delta 130
+                clockNow: () => 1234,
+            });
+            instance.x = 1;
+            handle.send();
+
+            const buf = conn.reliable[0];
+            assert.equal(buf[0], Protocol.ROOM_INPUT_RELIABLE | ProtocolModifier.TIMED);
+            assert.equal(readU32LE(buf, 1), 1104, 'renderTime = 1234 − 130 shipped directly (server reads it as-is)');
+            assert.equal(buf.length, 1 + 4 + bodyLen(1), 'opcode + 4-byte stamp + body (no u16 delta)');
+        });
+
+        test('RENDER-only: floors at 0 when the delta exceeds the base', () => {
+            const { handle, conn, instance } = makeHandle('reliable', {
+                stampRender: true,
+                renderDelay: 100,
+                clockRtt: 60,
+                clockNow: () => 50,     // 50 − 130 < 0
+            });
+            instance.x = 1;
+            handle.send();
+            assert.equal(readU32LE(conn.reliable[0], 1), 0, 'renderTime floors at 0');
+        });
+
+        test('stamps 0 until the clock has synced (lastServerTime == 0)', () => {
+            const { handle, conn, instance } = makeHandle('reliable', {
+                stampRender: true,
+                stampReckon: true,
                 renderDelay: 100,
                 clockRtt: 60,
                 clockSynced: false,     // no TIMED sample yet
@@ -265,6 +323,15 @@ describe('InputHandle', () => {
             assert.equal(buf[0], Protocol.ROOM_INPUT_RELIABLE | ProtocolModifier.TIMED);
             assert.equal(readU32LE(buf, 1), 0, 'unsynced → 0 ⇒ server uses live positions');
             assert.equal(readU16LE(buf, 5), 0, 'unsynced → no delta either');
+        });
+
+        test('no stamp flags: plain reliable opcode, no TIMED bit, no prefix', () => {
+            const { handle, conn, instance } = makeHandle('reliable', { clockNow: () => 1234 });
+            instance.x = 1;
+            handle.send();
+            const buf = conn.reliable[0];
+            assert.equal(buf[0], Protocol.ROOM_INPUT_RELIABLE, 'no TIMED modifier');
+            assert.equal((buf[0] & ProtocolModifier.TIMED), 0, 'TIMED bit clear ⇒ no stamp prefix');
         });
     });
 
@@ -315,17 +382,18 @@ describe('InputHandle', () => {
             assert.equal(handle.pendingCount, 0);
         });
 
-        test('renderTime flag is ignored on unreliable sends', () => {
+        test('stamp flags are ignored on unreliable sends', () => {
             const { handle, conn, instance } = makeHandle('unreliable', {
                 historySize: 3,
-                renderTime: true,
+                stampRender: true,
+                stampReckon: true,
                 renderDelay: 0,
                 clockNow: () => 1000,
             });
             instance.x = 1;
             handle.send();
 
-            // Plain unreliable opcode, no TIMED bit, no 4-byte prefix.
+            // Plain unreliable opcode, no TIMED bit, no prefix.
             assert.equal(conn.unreliable[0][0], Protocol.ROOM_INPUT_UNRELIABLE);
         });
     });

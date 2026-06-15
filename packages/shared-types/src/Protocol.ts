@@ -67,17 +67,25 @@ export const ProtocolModifier = {
    * is implicit in the version.
    *
    * Also set on the client→server input opcode
-   * ({@link Protocol.ROOM_INPUT_RELIABLE}) when the Room enabled render-time
-   * lag compensation via `defineInput(..., { renderTime: true })`. In that
-   * direction the prefix is `[uint32 reckonTime][uint16 renderDelta]`:
+   * ({@link Protocol.ROOM_INPUT_RELIABLE}) when the Room's lag-comp attachments
+   * require a per-client stamp. The handshake tells the client which timeline(s)
+   * to send via {@link InputFlags.RENDER_TIME} / {@link InputFlags.RECKON_TIME};
+   * the prefix shape follows from which flags are set (server reads the length
+   * from its own derived mode — the two 4-byte shapes need no wire tag):
+   *
+   *   - RECKON_TIME only: `[uint32 reckonTime]` (4 B)
+   *   - RENDER_TIME only: `[uint32 renderTime]` (4 B)
+   *   - BOTH:             `[uint32 reckonTime][uint16 renderDelta]` (6 B)
+   *
    * reckonTime (ms since room start) = the client's serverNow estimate at
-   * input-sample time — what its forward-RECKONED entities display at,
-   * stamped directly so the server's rewind read is immune to the client's
-   * RTT-estimation error; the server derives
-   * `renderTime = reckonTime − renderDelta` (≈ `renderDelay + rtt/2`) — the
-   * snapshot-timeline instant on screen (what a LERPING client shows). Only
-   * the base stamp needs u32 range; the delta is bounded ≪ 65 s.
-   * See {@link HandshakeSection.INPUT_OPTIONS} / {@link InputFlags}.
+   * input-sample time — what its forward-RECKONED entities display at, stamped
+   * directly so the server's rewind read is immune to the client's
+   * RTT-estimation error. renderTime = the snapshot-timeline instant on screen
+   * (what a LERPING client shows) = `reckonTime − renderDelta`
+   * (≈ `renderDelay + rtt/2`). In the BOTH case the gap is shipped as a u16
+   * `renderDelta` (bounded ≪ 65 s) rather than a second u32 and the server
+   * derives renderTime; single-timeline rooms ship the one absolute stamp they
+   * use. See {@link HandshakeSection.INPUT_OPTIONS} / {@link InputFlags}.
    */
   TIMED: 0x80,
 } as const;
@@ -137,8 +145,10 @@ export type HandshakeSection = typeof HandshakeSection[keyof typeof HandshakeSec
  * varint in the section payload (see each flag), appended in bit order.
  */
 export const InputFlags = {
-  /** Client auto-stamps reliable inputs with a server-clock render timestamp
-   *  (ms since room start) for lag-compensated hit registration. */
+  /** Client auto-stamps reliable inputs with the SNAPSHOT-timeline instant it
+   *  was rendering (`renderTime`, ms since room start) for lag-compensated hit
+   *  registration of `mode:"snapshot"` rewind targets. Prefix shape depends on
+   *  whether {@link RECKON_TIME} is also set — see {@link ProtocolModifier.TIMED}. */
   RENDER_TIME: 1 << 0,
   /** A `[tickRate varint]` (Hz) follows — the server's fixed sim/input step
    *  rate. The client predicts at dt = 1/tickRate. */
@@ -152,6 +162,13 @@ export const InputFlags = {
    *  physics rate is `tickRate * subSteps` while the input/network rate stays
    *  `tickRate`. Absent ⇒ 1 (input rate == physics rate). */
   SUB_STEPS: 1 << 3,
+  /** Client auto-stamps reliable inputs with the RECKON-timeline instant
+   *  (`reckonTime` = its serverNow estimate, ms since room start) for
+   *  lag-compensated hit registration of `mode:"reckon"` rewind targets. When
+   *  set together with {@link RENDER_TIME}, the input ships
+   *  `[uint32 reckonTime][uint16 renderDelta]`; alone it ships
+   *  `[uint32 reckonTime]`. See {@link ProtocolModifier.TIMED}. */
+  RECKON_TIME: 1 << 4,
 } as const;
 export type InputFlags = typeof InputFlags[keyof typeof InputFlags];
 

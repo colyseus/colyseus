@@ -126,7 +126,7 @@ describe("Rewind: at() / lastSeenBy", () => {
 
   it("lastSeenBy throws until a render-time resolver is bound", () => {
     const { rewind } = setup();
-    assert.throws(() => rewind.lastSeenBy("a"), /renderTime/);
+    assert.throws(() => rewind.lastSeenBy("a"), /framework input API/);
   });
 
   it("lastSeenBy resolves the bound per-session render time", () => {
@@ -141,10 +141,10 @@ describe("Rewind: at() / lastSeenBy", () => {
   });
 });
 
-// Misconfiguration must FAIL LOUDLY at first use — a silent 0 stamp would read
-// live positions and quietly disable lag comp. The resolver is wired by
-// Room.allowRewindState through the standard `input` slot, so these construct
-// bare rooms (no transport needed for this path).
+// A missing input API still fails loudly at first use — a silent 0 stamp would
+// read live positions and quietly disable lag comp. Stamping itself is now
+// auto-enabled from the rewind attachments (no `renderTime` flag to forget), so
+// the only remaining wiring error is never calling defineInput at all.
 describe("Rewind: lastSeenBy misconfiguration (Room wiring)", () => {
   it("throws when the room has no input API (never called defineInput)", () => {
     class NoInputRoom extends Room {
@@ -154,21 +154,59 @@ describe("Rewind: lastSeenBy misconfiguration (Room wiring)", () => {
     assert.throws(() => room.rewind.lastSeenBy("any"), /inputs = this\.defineInput/);
   });
 
-  it("throws when defineInput() lacks renderTime:true", () => {
-    class NoStampRoom extends Room {
-      inputs = this.defineInput(Entity);   // ← forgot renderTime: true
-      rewind = this.allowRewindState();
-    }
-    const room = new NoStampRoom();
-    assert.throws(() => room.rewind.lastSeenBy("any"), /renderTime: true/);
-  });
-
   it("configured room: an unknown/unstamped client is NOT an error (live fallback)", () => {
     class OkRoom extends Room {
-      inputs = this.defineInput(Entity, { renderTime: true });
+      inputs = this.defineInput(Entity);   // stamping auto-enables when you rewind a group
       rewind = this.allowRewindState();
     }
     const room = new OkRoom();
     assert.doesNotThrow(() => room.rewind.lastSeenBy("nobody"));
+  });
+});
+
+// Per-attach `mode` picks the rewind TIMELINE: snapshot → renderTime stamp,
+// reckon → reckonTime stamp. Both resolvers feed `value()`, which picks per
+// field via the covering attach-group's history.
+const Mob = schema({
+  x: t.number().default(0),
+  hp: t.number().default(0),
+});
+type Mob = SchemaType<typeof Mob>;
+
+describe("Rewind: per-attach mode (timeline)", () => {
+  it("mode:'reckon' group reads at reckonTime; mode:'snapshot' at renderTime", () => {
+    const rewind = Rewind.get({}, { maxRewindMs: 500 });
+    const reckonCol = new MapSchema<Entity>();
+    const snapCol = new MapSchema<Entity>();
+    const re = new Entity(); reckonCol.set("r", re);
+    const se = new Entity(); snapCol.set("s", se);
+    rewind.attachAll(reckonCol, { fields: ["x"], mode: "reckon" });
+    rewind.attachAll(snapCol, { fields: ["x"] });   // default snapshot
+
+    re.x = 0; se.x = 0; rewind.record(100);
+    re.x = 100; se.x = 100; rewind.record(200);
+
+    rewind.bindRenderTime(() => 120);   // snapshot timeline
+    rewind.bindReckonTime(() => 180);   // reckon timeline (≈ closer to "now")
+    const seen = rewind.lastSeenBy("any");
+    assert.ok(Math.abs(seen.value(re, "x") - 80) < 1e-6, `reckon entity @180 → x≈80, got ${seen.value(re, "x")}`);
+    assert.ok(Math.abs(seen.value(se, "x") - 20) < 1e-6, `snapshot entity @120 → x≈20, got ${seen.value(se, "x")}`);
+  });
+
+  it("same collection attached twice (disjoint fields) puts each field on its own timeline", () => {
+    const rewind = Rewind.get({}, { maxRewindMs: 500 });
+    const col = new MapSchema<Mob>();
+    const m = new Mob(); col.set("m", m);
+    rewind.attachAll(col, { fields: ["x"], mode: "reckon" });
+    rewind.attachAll(col, { fields: ["hp"], mode: "snapshot" });
+
+    m.x = 0; m.hp = 0; rewind.record(100);
+    m.x = 100; m.hp = 100; rewind.record(200);
+
+    rewind.bindRenderTime(() => 120);
+    rewind.bindReckonTime(() => 180);
+    const seen = rewind.lastSeenBy("any");
+    assert.ok(Math.abs(seen.value(m, "x") - 80) < 1e-6, `x (reckon group) @180 → 80, got ${seen.value(m, "x")}`);
+    assert.ok(Math.abs(seen.value(m, "hp") - 20) < 1e-6, `hp (snapshot group) @120 → 20, got ${seen.value(m, "hp")}`);
   });
 });

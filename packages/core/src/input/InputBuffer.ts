@@ -157,14 +157,6 @@ export interface InputOptions {
   bufferMaxSize: number;
 
   /**
-   * `true` when the Room called `defineInput(..., { renderTime: true })`.
-   * The client then auto-stamps each reliable input with a server-clock render
-   * timestamp (ms since room start), surfaced as {@link InputAccessor.renderTime}
-   * for lag-compensated hit registration. Default `false`.
-   */
-  renderTime?: boolean;
-
-  /**
    * Fixed step rate (Hz) advertised to clients via the join handshake; they
    * predict at dt = 1/tickRate. Set explicitly via `defineInput`, or derived
    * from `setTimestep`. Unset = not advertised.
@@ -388,8 +380,9 @@ export interface InputAccessor<I = any, Idle extends boolean = false> {
    * {@link consume}/`for..of` yield report THAT one input, so per-input loops
    * rewind to the exact instant of the input simulated.
    * `0` until the first render-time-stamped input is consumed. Populated only
-   * when the Room called `defineInput(..., { renderTime: true })` with
-   * `bufferMaxSize > 0`. Usually you don't read this directly — pass the
+   * when the room rewinds a `mode:"snapshot"` group (which auto-enables the
+   * renderTime stamp) and `bufferMaxSize > 0`. Usually you don't read this
+   * directly — pass the
    * sessionId to `rewind.lastSeenBy(sessionId)` (which resolves this value, clamps
    * it, and falls back to live) for lag-compensated "what you see is what you
    * hit" hit registration; use this getter only for a custom rewind time.
@@ -399,7 +392,7 @@ export interface InputAccessor<I = any, Idle extends boolean = false> {
   /**
    * Reckon-display stamp (server-clock ms) of the most recently consumed input
    * — the client's serverNow ESTIMATE when it sampled that input, i.e. the
-   * exact instant its forward-reckoned (`lagComp:"reckon"`) entities were
+   * exact instant its forward-reckoned (`mode:"reckon"`) entities were
    * displayed at. Stamping the display instant DIRECTLY makes the rewind read
    * immune to the client's RTT-estimation error: the client displayed
    * `f(serverNow_est)` and the server reads `f(serverNow_est)` — the same
@@ -836,7 +829,7 @@ export class InputBufferImpl<I = any> {
    *  serverNow estimate when it sampled that input, i.e. the EXACT instant its
    *  forward-reckoned entities were displayed at. Same consume semantics as
    *  {@link renderTime}. Consumed automatically by `rewind.lastSeenBy()` for
-   *  `lagComp:"reckon"` types — rarely read directly. `0` until stamped. */
+   *  `mode:"reckon"` rewind groups — rarely read directly. `0` until stamped. */
   get reckonTime(): number {
     return this._lastReckonTime;
   }

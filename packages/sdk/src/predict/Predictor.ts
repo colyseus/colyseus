@@ -111,22 +111,6 @@ function fieldIndexOf(instance: object, field: string): number {
     return typeof idx === "number" ? idx : -1;
 }
 
-/** = @colyseus/schema `$typeOptionPrefix + "lagComp"` (string metadata key). */
-const $LAGCOMP = "~__opt:lagComp";
-
-/** Schema-declared lag-comp behavior of an entity TYPE — see `LagCompMode` in
- *  @colyseus/schema. The server's Rewind aims its lag-comp reads by this same
- *  declaration; here it only seeds the attach-time mode DEFAULT (explicit
- *  attach config always wins, with a dev warning on a reckon contradiction). */
-type LagCompMode = "snapshot" | "reckon" | "none";
-
-/** The type's `lagComp` declaration (`schema({...}, "Enemy").with({ lagComp: "reckon" })`),
- *  read through the metadata prototype chain (subclasses inherit). `undefined`
- *  when not declared — including reflection-built and non-schema instances. */
-function lagCompOfType(instance: object): LagCompMode | undefined {
-    const raw = metadataOf(instance)?.[$LAGCOMP];
-    return raw === "reckon" || raw === "snapshot" || raw === "none" ? raw : undefined;
-}
 
 /** PRIMITIVE (scalar) field names in declaration order, read from the schema
  *  metadata. Empty for non-schema objects. Field indices are dense from 0, so
@@ -535,18 +519,15 @@ export type SmoothingConfig<T = any> = Partial<Record<NumericKeys<T>, FieldSmoot
  */
 export interface ReckonAttachConfig<T = any> {
     /**
-     * Per-attach mode override. Resolution priority per child TYPE:
-     *   1. this explicit `mode` — always wins (a contradiction with the type's
-     *      schema declaration logs a dev warning: the server aims lag comp by
-     *      the schema, so overriding it skews hit registration);
-     *   2. the type's schema `lagComp` declaration
-     *      (`schema({...}, "Enemy").with({ lagComp: "reckon" })`) — `"reckon"` infers
-     *      mode "reckon"; `"snapshot"`/`"none"` opt OUT of a reckon default;
-     *   3. the Predict's `defaultMode`.
-     * Common patterns:
+     * Per-attach mode. Falls back to the Predict's `defaultMode` when omitted.
+     * The client's display mode is declared HERE, independently of the server's
+     * rewind `mode` — keep them aligned ("what you see is what you hit"): render
+     * targets the server rewinds `mode:"reckon"` with `mode:"reckon"` here, and
+     * those it rewinds `mode:"snapshot"` with an interpolating mode (`lerp` /
+     * `damped`). Common patterns:
      *   - `mode: "lerp"` → smoothing-only attach (no sim state allocated).
      *   - `mode: "reckon"` → reckon attach (requires `step` here or in Predict).
-     *   - omitted → schema declaration, then the Predict's `defaultMode`.
+     *   - omitted → the Predict's `defaultMode`.
      * Per-attach overrides go through the same profile system as the defaults
      * (the slot's `SLOT_PROFILE` points at a frozen profile encoding the
      * mode + opts), so dispatch is uniform and the panel sub-card can tune
@@ -601,8 +582,8 @@ interface GroupPlan {
 /**
  * One attach()/attachAll() group. The base plan (today's one-plan-per-group)
  * is built eagerly; children whose TYPE resolves identically reuse it, so
- * homogeneous collections behave exactly as before. A child type whose schema
- * `lagComp` declaration (or field set) differs gets its own lazily-built
+ * homogeneous collections behave exactly as before. A child type whose field
+ * set differs (missing some configured fields) gets its own lazily-built
  * sub-plan/profile labeled `label:TypeName` — mixed-type collections resolve
  * per constructor, and each type surfaces as its own debug-panel card.
  */
@@ -610,10 +591,6 @@ interface AttachGroup {
     label: string;
     config: AttachConfig<any>;
     basePlan: GroupPlan;
-    /** Mode the base plan encodes, frozen at group creation (the base profile
-     *  is frozen too — later setDefaults flips don't retarget it). Null for
-     *  smoothing-map configs. */
-    baseMode: PredictMode | null;
     /** Resolved plan per child constructor (lazily filled). */
     planByCtor: Map<Function, GroupPlan>;
 }
@@ -810,16 +787,6 @@ export class Predict<TState = any> {
      * check on a cold path.
      */
     private trackListeners: Array<(profileIdx: number, field: string) => void> = [];
-
-    /** `(group label)|(type name)` pairs already warned for a schema-lagComp /
-     *  attach-mode contradiction — once per pair, not per child. */
-    private warnedMismatch = new Set<string>();
-    /** Type names with a schema `lagComp: "reckon"` declaration feeding each
-     *  profile id — lets {@link setProfile} warn when the debug panel flips a
-     *  schema-reckoned profile off "reckon" (allowed, but desyncs from the
-     *  server's lag-comp aim). Never pruned on detach — bounded by distinct
-     *  (group, type) pairs. */
-    private profileReckonTypes = new Map<number, Set<string>>();
 
     /** Public name (shown in the debug panel and useful for logs). */
     readonly name: string;
@@ -1169,17 +1136,6 @@ export class Predict<TState = any> {
         const p = this.profileBuf;
         if (opts.mode !== undefined) {
             const code = MODE_CODES[opts.mode];
-            // Flipping a profile that serves schema-declared reckon types away
-            // from "reckon" is allowed (the panel's A/B use) but desyncs from
-            // the server's lag-comp aim — say so.
-            const types = this.profileReckonTypes.get(id);
-            if (types !== undefined && (p[base + P_MODE] | 0) === MODE_RECKON && code !== MODE_RECKON) {
-                console.warn(
-                    `[Predict ${this.name}] profile "${this.profileLabels[id] ?? id}" serves schema-declared ` +
-                    `lagComp:"reckon" type(s) ${[...types].join(", ")} — running it as "${opts.mode}" desyncs ` +
-                    `from the server's lag-comp aim (fine for A/B comparison only).`,
-                );
-            }
             p[base + P_MODE] = code;
             this.profileComputers[id] = this.computerForMode(code);
             // Defaults profile's mode also drives the outer routing's
@@ -1578,16 +1534,13 @@ export class Predict<TState = any> {
             label,
             config,
             basePlan: this.buildGroupPlan(config, label),
-            baseMode: isReckonAttachConfig(config)
-                ? ((config.mode ?? this.defaultMode) as PredictMode)
-                : null,
             planByCtor: new Map(),
         };
     }
 
     /** The plan for one child — the group's base plan unless the child's TYPE
-     *  resolves differently (schema `lagComp` declaration or missing fields).
-     *  Cached per constructor: homogeneous collections hit one entry. */
+     *  lacks some of the configured fields (those are dropped). Cached per
+     *  constructor: homogeneous collections hit one entry. */
     private planFor(group: AttachGroup, child: object): GroupPlan {
         const ctor = child.constructor as Function;
         let plan = group.planByCtor.get(ctor);
@@ -1599,25 +1552,19 @@ export class Predict<TState = any> {
     }
 
     /**
-     * Once per (group, constructor): resolve the child type's effective mode —
-     * explicit attach config > schema `lagComp` declaration > group default —
-     * and its field list (fields the type doesn't declare are dropped; they'd
-     * subscribe to nothing and, in reckon scratch, read garbage). Returns the
-     * base plan when nothing differs; otherwise builds a `label:TypeName`
-     * sub-plan with its own profile (its own debug-panel card).
+     * Once per (group, constructor): drop fields the child type doesn't declare
+     * (they'd subscribe to nothing and, in reckon scratch, read garbage). Mode
+     * is the group's — the client's prediction mode is explicit, never inferred
+     * from the schema. Returns the base plan when every field is present;
+     * otherwise builds a `label:TypeName` sub-plan with its own profile.
      */
     private resolveCtorPlan(group: AttachGroup, child: object): GroupPlan {
         const md = metadataOf(child);
-        const declared = lagCompOfType(child);
         const typeName = (child.constructor as Function | undefined)?.name || "?";
         const config = group.config;
 
         if (!isReckonAttachConfig(config)) {
-            // Per-field smoothing map: never reckons — contradiction if the
-            // type is schema-declared reckon.
-            if (declared === "reckon") {
-                this.warnLagCompMismatch(group.label, typeName, declared, "per-field smoothing");
-            }
+            // Per-field smoothing map.
             if (md === undefined) return group.basePlan;   // non-schema fixture
             const keys = Object.keys(config).filter((k) => (config as Record<string, unknown>)[k] !== undefined);
             if (keys.every((k) => typeof md[k] === "number")) return group.basePlan;
@@ -1627,70 +1574,13 @@ export class Predict<TState = any> {
         }
 
         const rcfg = config as ReckonAttachConfig<any>;
-        let mode: PredictMode;
-        if (rcfg.mode !== undefined) {
-            // Explicit attach mode always wins on the client — but the server
-            // aims lag comp by the schema declaration, so contradicting it
-            // earns a warning (hit registration would feel ~RTT off).
-            mode = rcfg.mode;
-            if (declared !== undefined && (declared === "reckon") !== (mode === "reckon")) {
-                this.warnLagCompMismatch(group.label, typeName, declared, mode);
-            }
-        } else if (declared === "reckon") {
-            mode = "reckon";
-        } else if (declared !== undefined && group.baseMode === "reckon") {
-            // "snapshot"/"none" under a reckon-default Predict: the type opted
-            // out of reckoning — lerp is the only mode family needing no step.
-            mode = "lerp";
-        } else {
-            mode = group.baseMode as PredictMode;
-        }
-
         let fields = rcfg.fields as readonly string[];
         if (md !== undefined) {
             const filtered = fields.filter((f) => typeof md[f] === "number");
             if (filtered.length !== fields.length) fields = filtered;
         }
-
-        if (mode === group.baseMode && fields === rcfg.fields) {
-            this.noteReckonTypes(group.basePlan, typeName, declared);
-            return group.basePlan;
-        }
-        const plan = this.buildGroupPlan(
-            { ...rcfg, mode, fields } as AttachConfig<any>,
-            `${group.label}:${typeName}`,
-            rcfg.mode === undefined && declared === "reckon" ? typeName : undefined,
-        );
-        this.noteReckonTypes(plan, typeName, declared);
-        return plan;
-    }
-
-    /** Record which schema-reckoned types feed a plan's profiles — consumed by
-     *  the {@link setProfile} panel-flip warning. */
-    private noteReckonTypes(plan: GroupPlan, typeName: string, declared: LagCompMode | undefined): void {
-        if (declared !== "reckon") return;
-        for (const { profileIdx } of plan.fieldProfiles) {
-            let types = this.profileReckonTypes.get(profileIdx);
-            if (types === undefined) {
-                types = new Set();
-                this.profileReckonTypes.set(profileIdx, types);
-            }
-            types.add(typeName);
-        }
-    }
-
-    /** Once per (group, type): the schema's lagComp declaration and the attach
-     *  config disagree on reckoning. */
-    private warnLagCompMismatch(label: string, typeName: string, declared: LagCompMode, mode: string): void {
-        const key = `${label}|${typeName}`;
-        if (this.warnedMismatch.has(key)) return;
-        this.warnedMismatch.add(key);
-        console.warn(
-            `[Predict ${this.name}] attach "${label}": type '${typeName}' is schema-declared ` +
-            `lagComp: "${declared}", but attached with mode "${mode}". The explicit mode wins on the ` +
-            `client, but the server aims lag comp by the schema declaration — hit registration may ` +
-            `feel ~RTT off. Align the attach config or the schema's .with({ lagComp }).`,
-        );
+        if (fields === rcfg.fields) return group.basePlan;   // all fields present
+        return this.buildGroupPlan({ ...rcfg, fields } as AttachConfig<any>, `${group.label}:${typeName}`);
     }
 
     /**
@@ -1698,11 +1588,8 @@ export class Predict<TState = any> {
      * {@link groupProfile} (labeled, never the mutable default #0), so every
      * child of the group shares the group's own profile and the panel can tune
      * it without bleeding into other groups.
-     *
-     * `reckonedBy` names the schema type whose `lagComp: "reckon"` declaration
-     * selected the mode (no explicit `mode` in the config) — error text only.
      */
-    private buildGroupPlan<T extends object>(config: AttachConfig<T>, label: string, reckonedBy?: string): GroupPlan {
+    private buildGroupPlan<T extends object>(config: AttachConfig<T>, label: string): GroupPlan {
         const fieldProfiles: Array<{ field: string; profileIdx: number }> = [];
         if (isReckonAttachConfig(config)) {
             const rcfg = config as ReckonAttachConfig<T>;
@@ -1716,10 +1603,7 @@ export class Predict<TState = any> {
                 throw new Error(
                     "Predict.attach(): reckon mode requires a 'step' function. " +
                     "Either pass `step` in the attach config OR construct the Predict with " +
-                    "`Predict.get(room, { mode: 'reckon', step: yourStepFn })` so it can be inherited." +
-                    (reckonedBy !== undefined
-                        ? ` Mode "reckon" was selected by type '${reckonedBy}' — schema-declared .with({ lagComp: "reckon" }).`
-                        : ""),
+                    "`Predict.get(room, { mode: 'reckon', step: yourStepFn })` so it can be inherited.",
                 );
             }
             // One profile for the whole group (all fields share it).
@@ -1826,8 +1710,8 @@ export class Predict<TState = any> {
         // Resolve the group's base profile(s) ONCE — labeled by the collection
         // key so this group owns its profile and the panel tunes it in
         // isolation. Each child resolves through planFor: homogeneous
-        // collections reuse the base plan; a type whose schema `lagComp`
-        // declaration (or field set) differs gets its own per-type sub-plan.
+        // collections reuse the base plan; a type whose field set differs
+        // (missing some configured fields) gets its own per-type sub-plan.
         const group = this.makeGroup(key, config);
 
         const tracked = new Set<object>();

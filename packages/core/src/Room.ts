@@ -10,17 +10,6 @@ export interface DefineInputOptions<I = any> {
   seqField?: NumericFieldsOf<I>;
   bufferMaxSize?: number;
   /**
-   * Enable render-time lag compensation: the client auto-stamps each
-   * reliable input with the server-clock time (ms since room start) it was
-   * rendering the world at — `serverNow() − renderDelay − smoothedRtt()/2`
-   * (the app's interp buffer + the SDK-tracked one-way latency), or `0` until
-   * its clock has synced. Surfaced server-side as
-   * `room.inputs.get(sessionId).renderTime`; feed it to `rewind.lastSeenBy(sessionId)`
-   * (or `rewind.at`) to rewind other entities to where that client SAW
-   * them — "what you see is what you hit". Default `false` (+4 bytes/input).
-   */
-  renderTime?: boolean;
-  /**
    * Input sanitization — never trust the wire. Applied IN PLACE to every
    * decoded frame before anything reads it (`latest`, the buffer, the `idle`
    * ctx). Map form = per-field `[min, max]` clamps with NaN-safe semantics
@@ -832,7 +821,6 @@ export class Room<T extends RoomOptions = RoomOptions> {
       // explicitly to enable lockstep/rollback ordering.
       seqField: opts?.seqField,
       bufferMaxSize: opts?.bufferMaxSize ?? 32,
-      renderTime: opts?.renderTime ?? false,
       idle: opts?.idle,
       // Compiled ONCE here (map → dense min/max walk); applied per decoded frame.
       sanitize: opts?.sanitize !== undefined ? compileSanitizer(opts.sanitize) : undefined,
@@ -1196,6 +1184,22 @@ export class Room<T extends RoomOptions = RoomOptions> {
   /** Server-side lag compensation, lazily created. @see allowRewindState */
   #rewind?: Rewind;
 
+  // Per-client input stamp mode — derived ONCE from the rewind attachments'
+  // `mode` (snapshot → renderTime stamp, reckon → reckonTime stamp). Resolved
+  // lazily on the first handshake/decode (attachments are declared in onCreate,
+  // before any join), then frozen. Drives both the handshake flags the client
+  // mirrors and how many prefix bytes the server reads off each input.
+  #inputStampRender = false;
+  #inputStampReckon = false;
+  #inputStampResolved = false;
+  #resolveStampMode(): void {
+    if (this.#inputStampResolved) return;
+    this.#inputStampResolved = true;
+    const tl = this.#rewind?.timelineMode();
+    this.#inputStampRender = tl?.snapshot ?? false;
+    this.#inputStampReckon = tl?.reckon ?? false;
+  }
+
   /**
    * Enable server-side lag compensation: returns a {@link Rewind} that records the
    * position history of the entities you attach and automatically snapshots them
@@ -1207,40 +1211,33 @@ export class Room<T extends RoomOptions = RoomOptions> {
    * const rewind = this.allowRewindState({ maxRewindMs: 500 });
    * rewind.attachAll(this.state.enemies, { fields: ["x", "y"] });
    * // in a hit test — rewind to where the SHOOTER saw the world:
-   * const seen = rewind.lastSeenBy(shooterSessionId);   // needs defineInput({renderTime:true})
+   * const seen = rewind.lastSeenBy(shooterSessionId);   // needs this.defineInput(...)
    * const seenX = seen.value(enemy, "x"), seenY = seen.value(enemy, "y");
    * ```
    *
-   * Needs a simulation loop ({@link setTimestep} / {@link setFixedTimestep})
-   * — that's what drives the recording. Call `rewind.record()` yourself during a
-   * tick to take over its timing for that tick.
+   * Per-client stamps auto-enable from the `attachAll` `mode` of the groups you
+   * rewind — no `renderTime` flag. Needs a simulation loop
+   * ({@link setTimestep} / {@link setFixedTimestep}) — that's what drives the
+   * recording. Call `rewind.record()` yourself during a tick to take over its
+   * timing for that tick.
    */
   public allowRewindState(opts?: RewindOptions): Rewind {
     this.#rewind = Rewind.get(this, opts);
-    // Resolve `rewind.lastSeenBy(sid)` through the framework-owned input API
-    // (`inputs = this.defineInput(..., { renderTime: true })`). Lazy: read at call
-    // time, so field-init order between `inputs` and `rewind` doesn't matter.
-    // Misconfiguration fails loudly — a silent 0 stamp would read live positions
-    // and quietly disable lag comp. (A client that hasn't stamped yet legitimately
-    // reads 0 → live fallback; that is NOT a config error.)
+    // Resolve `rewind.lastSeenBy(sid)` through the framework-owned input API.
+    // Lazy: read at call time, so field-init order between `inputs` and `rewind`
+    // doesn't matter. A missing input API fails loudly; a client that hasn't
+    // stamped yet legitimately reads 0 → live fallback (NOT a config error).
     this.#rewind.bindRenderTime((sessionId) => {
       if (this._inputAPI === undefined) {
         throw new Error(
           "rewind.lastSeenBy() found no input API. Declare " +
-          "`inputs = this.defineInput(YourInput, { renderTime: true })`, or use " +
+          "`inputs = this.defineInput(YourInput)`, or use " +
           "rewind.at(time) with a render time you track yourself.",
-        );
-      }
-      if (!this._inputOptions?.renderTime) {
-        throw new Error(
-          "rewind.lastSeenBy() needs per-client render-time stamps: pass " +
-          "`renderTime: true` to defineInput(), or use rewind.at(time) with " +
-          "a render time you track yourself.",
         );
       }
       return this._inputAPI.get(sessionId).renderTime;
     });
-    // Direct reckon-display stamp: lagComp:"reckon" types read at exactly the
+    // Direct reckon-display stamp: mode:"reckon" groups read at exactly the
     // instant the client displayed them — immune to its RTT-estimation error.
     this.#rewind.bindReckonTime((sessionId) =>
       this._inputAPI !== undefined ? this._inputAPI.get(sessionId).reckonTime : 0,
@@ -2014,7 +2011,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
       // `conn.input()` calls that don't pass an explicit `type`.
       // NOT gated by skipHandshake: that flag means "client already has the
       // STATE schema" (rootSchema join / reconnection) — the input sections
-      // carry runtime config (tickRate/patchRate/renderTime/subSteps + the
+      // carry runtime config (tickRate/patchRate/stamp flags/subSteps + the
       // input ctor) the client cannot derive locally. Re-parsing them on
       // reconnect is idempotent.
       let extraSections: Array<{ tag: number; bytes: Uint8Array }> | undefined;
@@ -2024,18 +2021,23 @@ export class Room<T extends RoomOptions = RoomOptions> {
           extraSections = [{ tag: HandshakeSection.INPUT_REFLECTION, bytes: inputBytes }];
         }
         // [flags uint8][tickRate varint?][patchRate varint?][subSteps varint?]:
-        // renderTime → client auto-stamps inputs; tickRate (Hz) → predict at
-        // dt=1/tickRate; patchRate (ms) → reconcile cadence for smoothing;
-        // subSteps → physics sub-steps per input (omitted when 1). Varints in
-        // bit order. See InputFlags.
+        // RENDER_TIME/RECKON_TIME → client auto-stamps inputs with that
+        // timeline (derived from the rewind attachments' `mode`); tickRate (Hz)
+        // → predict at dt=1/tickRate; patchRate (ms) → reconcile cadence for
+        // smoothing; subSteps → physics sub-steps per input (omitted when 1).
+        // Varints in bit order. See InputFlags.
+        this.#resolveStampMode();
+        const stampRender = this.#inputStampRender;
+        const stampReckon = this.#inputStampReckon;
         const tickRate = this._inputOptions.tickRate;
         const patchRate = (typeof this.patchRate === "number" && this.patchRate > 0)
           ? Math.round(this.patchRate) : undefined;
         const subSteps = (this._inputOptions.subSteps !== undefined && this._inputOptions.subSteps > 1)
           ? this._inputOptions.subSteps : undefined;
-        if (this._inputOptions.renderTime || tickRate || patchRate || subSteps) {
+        if (stampRender || stampReckon || tickRate || patchRate || subSteps) {
           let flags = 0;
-          if (this._inputOptions.renderTime) { flags |= InputFlags.RENDER_TIME; }
+          if (stampRender) { flags |= InputFlags.RENDER_TIME; }
+          if (stampReckon) { flags |= InputFlags.RECKON_TIME; }
           if (tickRate) { flags |= InputFlags.FIXED_TIMESTEP; }
           if (patchRate) { flags |= InputFlags.PATCH_RATE; }
           if (subSteps) { flags |= InputFlags.SUB_STEPS; }
@@ -2551,20 +2553,29 @@ export class Room<T extends RoomOptions = RoomOptions> {
 
     } else if (code === Protocol.ROOM_INPUT_RELIABLE) {
       if (client._inputDecoder) {
-        // Optional [uint32 reckonTime][uint16 renderDelta] prefix (TIMED bit):
-        // reckonTime = the client's serverNow estimate at sample time (what
-        // its forward-RECKONED entities displayed at) — read directly by the
-        // rewind so lag comp is immune to the client's RTT-estimation error;
-        // renderTime = reckonTime − renderDelta = the snapshot-timeline
-        // instant the client was rendering (lerp display). `it` starts at
-        // offset 1, so the body begins at `it.offset` (1 without the prefix,
-        // 7 with it).
+        // Optional stamp prefix (TIMED bit) — shape set by THIS room's derived
+        // stamp mode (the same flags it advertised in the handshake), so the
+        // length is unambiguous without a wire tag:
+        //   both:        [uint32 reckonTime][uint16 renderDelta] → renderTime = reckonTime − renderDelta
+        //   reckon-only: [uint32 reckonTime]
+        //   render-only: [uint32 renderTime]
+        // reckonTime = the client's serverNow estimate at sample time (what its
+        // forward-RECKONED entities displayed at); renderTime = the snapshot-
+        // timeline instant it was rendering (lerp display). `it` starts at
+        // offset 1, so the body begins at `it.offset`.
         let renderTime = 0;
         let reckonTime = 0;
         if (modifiers & PROTOCOL_MODIFIER_MASK) {
-          reckonTime = decode.uint32(buffer, it);
-          const renderDelta = decode.uint16(buffer, it);
-          renderTime = reckonTime > renderDelta ? reckonTime - renderDelta : 0;
+          this.#resolveStampMode();
+          if (this.#inputStampReckon && this.#inputStampRender) {
+            reckonTime = decode.uint32(buffer, it);
+            const renderDelta = decode.uint16(buffer, it);
+            renderTime = reckonTime > renderDelta ? reckonTime - renderDelta : 0;
+          } else if (this.#inputStampReckon) {
+            reckonTime = decode.uint32(buffer, it);
+          } else {
+            renderTime = decode.uint32(buffer, it);
+          }
         }
         try {
           client._inputDecoder.decode(buffer.subarray(it.offset));

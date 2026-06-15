@@ -2,7 +2,7 @@ import assert from "assert";
 
 import { Client as SDKClient } from "@colyseus/sdk";
 import { InputEncoder } from "@colyseus/schema/input";
-import { schema, t, type SchemaType } from "@colyseus/schema";
+import { schema, t, MapSchema, type SchemaType } from "@colyseus/schema";
 
 import { matchMaker, Room, Server, Transport, Protocol, ProtocolModifier, type Presence, type MatchMakerDriver } from "@colyseus/core";
 import { DRIVERS, PRESENCE_IMPLEMENTATIONS, timeout } from "../utils/index.ts";
@@ -52,13 +52,12 @@ function unreliableRingPacket<I extends object>(
 }
 
 /**
- * Build a ROOM_INPUT_RELIABLE packet carrying a KNOWN render-time stamp
- * (the TIMED modifier + `[uint32 reckonTime LE][uint16 renderDelta LE]`
- * prefix the SDK normally fills from the synced clock). Crafted with a
- * non-zero delta so the server-side `renderTime = reckonTime − renderDelta`
- * derivation is exercised, deterministically — no clock-sync timing.
+ * Build a ROOM_INPUT_RELIABLE packet carrying a KNOWN render-time stamp for a
+ * RENDER-ONLY room (a `mode:"snapshot"` rewind target): the TIMED modifier + a
+ * `[uint32 renderTime LE]` prefix the SDK normally fills from the synced clock.
+ * Render-only ships renderTime directly (no u16 delta), so the server reads it
+ * back verbatim — deterministic, no clock-sync timing.
  */
-const TIMED_TEST_DELTA = 130;   // ≈ renderDelay + rtt/2 in a real client
 function reliableTimedPacket<I extends object>(
   Ctor: new () => I,
   renderTime: number,
@@ -67,16 +66,13 @@ function reliableTimedPacket<I extends object>(
   const inst = new Ctor();
   mutate(inst);
   const body = new InputEncoder(inst as any).encode();
-  const reckonTime = renderTime + TIMED_TEST_DELTA;
-  const framed = new Uint8Array(7 + body.length);
+  const framed = new Uint8Array(5 + body.length);
   framed[0] = Protocol.ROOM_INPUT_RELIABLE | ProtocolModifier.TIMED;
-  framed[1] = reckonTime & 0xff;
-  framed[2] = (reckonTime >>> 8) & 0xff;
-  framed[3] = (reckonTime >>> 16) & 0xff;
-  framed[4] = (reckonTime >>> 24) & 0xff;
-  framed[5] = TIMED_TEST_DELTA & 0xff;
-  framed[6] = (TIMED_TEST_DELTA >>> 8) & 0xff;
-  framed.set(body, 7);
+  framed[1] = renderTime & 0xff;
+  framed[2] = (renderTime >>> 8) & 0xff;
+  framed[3] = (renderTime >>> 16) & 0xff;
+  framed[4] = (renderTime >>> 24) & 0xff;
+  framed.set(body, 5);
   return framed;
 }
 
@@ -400,7 +396,13 @@ describe("Input (InputEncoder / InputDecoder integration)", () => {
     const observed: number[] = [];
 
     matchMaker.defineRoomType('input_next_rt', class _ extends Room<{ input: MoveInput }> {
-      inputs = this.defineInput(MoveInput, { renderTime: true, bufferMaxSize: 16 });
+      inputs = this.defineInput(MoveInput, { bufferMaxSize: 16 });
+      // A mode:"snapshot" rewind target auto-enables the renderTime stamp
+      // (render-only mode) — the empty collection only sets the timeline.
+      rewind = this.allowRewindState();
+      onCreate() {
+        this.rewind.attachAll(new MapSchema<MoveInput>(), { fields: ["x"], mode: "snapshot" });
+      }
       messages = {
         consumeOne: function (this: any, c: any) {
           const acc = this.inputs.get(c.sessionId);

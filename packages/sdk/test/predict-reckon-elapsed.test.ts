@@ -25,7 +25,7 @@ const Bobber = schema({
     x: t.number(),
     y: t.number(),
     vx: t.number(),
-}, "ElapsedBobber").with({ lagComp: "reckon" });
+}, "ElapsedBobber");
 
 const BobState = schema({
     enemies: t.map(Bobber),

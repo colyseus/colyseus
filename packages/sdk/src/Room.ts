@@ -200,12 +200,21 @@ export class Room<
     #inputCtorFromReflection?: new () => any;
 
     /**
-     * `true` when the server's handshake advertised render-time lag comp (the
-     * `INPUT_OPTIONS` section, `InputFlags.RENDER_TIME`). The input handle then
-     * auto-stamps each reliable input with a server-clock render timestamp.
+     * `true` when the server's handshake advertised the SNAPSHOT-timeline stamp
+     * (`INPUT_OPTIONS`, `InputFlags.RENDER_TIME`) — the input handle then stamps
+     * each reliable input with `renderTime`.
      * @internal
      */
-    #inputRenderTime = false;
+    #inputStampRender = false;
+
+    /**
+     * `true` when the server's handshake advertised the RECKON-timeline stamp
+     * (`INPUT_OPTIONS`, `InputFlags.RECKON_TIME`) — the input handle then stamps
+     * each reliable input with `reckonTime`. Set together with
+     * {@link #inputStampRender} ⇒ the 6-byte `[reckonTime][renderDelta]` prefix.
+     * @internal
+     */
+    #inputStampReckon = false;
 
     /**
      * Server-advertised fixed simulation/input step rate (Hz) from
@@ -588,9 +597,10 @@ export class Room<
         const encoder = new InputEncoder(instance as any, options);
         // The handle owns the input round-trip (send counter, RTT send-times, server-acked count);
         // the TIMED decode feeds it the ack and it produces RTT samples for the clock (see onMessage).
-        // `renderTime` is server-driven (INPUT_OPTIONS flag); `renderDelay` lets the app subtract its interp buffer.
+        // `stampRender`/`stampReckon` are server-driven (INPUT_OPTIONS flags); `renderDelay` lets the app subtract its interp buffer.
         this.#inputHandle = new InputHandleImpl(this, instance, encoder, {
-            renderTime: this.#inputRenderTime,
+            stampRender: this.#inputStampRender,
+            stampReckon: this.#inputStampReckon,
             renderDelay: options?.renderDelay,
             tickRate: this.#inputTickRate,
             patchRate: this.#inputPatchRate,
@@ -688,10 +698,11 @@ export class Room<
 
                 } else if (tag === HandshakeSection.INPUT_OPTIONS) {
                     // [flags uint8][tickRate varint?][patchRate varint?][subSteps varint?], varints in bit order.
-                    // RENDER_TIME → auto-stamp inputs; FIXED_TIMESTEP → predict tickRate (Hz); PATCH_RATE → patch interval (ms = reconcile cadence);
+                    // RENDER_TIME / RECKON_TIME → auto-stamp inputs with that timeline; FIXED_TIMESTEP → predict tickRate (Hz); PATCH_RATE → patch interval (ms = reconcile cadence);
                     // SUB_STEPS → physics sub-steps per input tick (absent = 1).
                     const flags = buffer[it.offset++];
-                    this.#inputRenderTime = (flags & InputFlags.RENDER_TIME) !== 0;
+                    this.#inputStampRender = (flags & InputFlags.RENDER_TIME) !== 0;
+                    this.#inputStampReckon = (flags & InputFlags.RECKON_TIME) !== 0;
                     if (flags & InputFlags.FIXED_TIMESTEP) {
                         this.#inputTickRate = decode.number(buffer as Buffer, it);
                     }
