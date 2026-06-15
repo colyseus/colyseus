@@ -18,11 +18,14 @@ import { debugPatch } from '../Debug.ts';
  *     client's reconstructed `serverNow()` stays in phase. Wraps at u32
  *     (~49.7 days uptime) — irrelevant per session. Drives the client clock
  *     offset / `serverNow()`.
- *   - `inputSeq` — count of the client's inputs CONSUMED into the authoritative
- *     state (the input buffer's `consumedCount`, i.e. last-PROCESSED input).
- *     This single number is the canonical reconciliation ack (Gambetta/Valve:
- *     "the sequence number of the last input it processed"); the client prunes
- *     its pending-input buffer against it AND derives RTT from its round-trip
+ *   - `inputSeq` — seq VALUE of the last input CONSUMED into the authoritative
+ *     state (the input buffer's `ackSeq`, i.e. last-PROCESSED input). Reliable:
+ *     equals the consumed count (inputs are sequenced implicitly by receive
+ *     order). Unreliable: the framework wire seq, so a fully-dropped input
+ *     doesn't make the ack lag the client's sent seq by the lost count. This
+ *     single number is the canonical reconciliation ack (Gambetta/Valve: "the
+ *     sequence number of the last input it processed"); the client prunes its
+ *     pending-input buffer against it AND derives RTT from its round-trip
  *     (`now − sendTime(inputSeq)`). No separate received-seq / received-time —
  *     RTT-from-the-processed-ack is round-trip-inclusive, which is the standard.
  */
@@ -55,11 +58,12 @@ function buildTimedFrame(
   return out;
 }
 
-/** Inputs consumed (drained/cleared) from the client's buffer — the last
- *  PROCESSED input, i.e. the reconciliation ack (and RTT correlation key).
+/** Seq VALUE of the last input consumed from the client's buffer — the
+ *  reconciliation ack (and RTT correlation key). Reliable: equals the consumed
+ *  count; unreliable: the framework wire seq (so packet loss doesn't skew it).
  *  0 when the room doesn't buffer input. */
-function clientProcessedInputCount(client: Client): number {
-  return (client as Client & ClientPrivate)._inputBuffer?.consumedCount ?? 0;
+function clientProcessedInputSeq(client: Client): number {
+  return (client as Client & ClientPrivate)._inputBuffer?.ackSeq ?? 0;
 }
 
 const SHARED_VIEW = {};
@@ -111,7 +115,7 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
       : this.fullEncodeCache;
 
     if (timing && client) {
-      return buildTimedFrame(body, timing.sNow, clientProcessedInputCount(client));
+      return buildTimedFrame(body, timing.sNow, clientProcessedInputSeq(client));
     }
     return body;
   }
@@ -152,7 +156,7 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
           clientsWithViewChange.forEach((client) => {
             const encodedView = this.encoder.encodeView(client.view, sharedOffset, it);
             if (timing) {
-              client.raw(buildTimedFrame(encodedView, timing.sNow, clientProcessedInputCount(client)));
+              client.raw(buildTimedFrame(encodedView, timing.sNow, clientProcessedInputSeq(client)));
             } else {
               client.raw(encodedView);
             }
@@ -170,7 +174,7 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
         for (let i = 0; i < clients.length; i++) {
           const client = clients[i];
           if (client.state !== ClientState.JOINED) continue;
-          client.raw(buildTimedFrame(heartbeatBody, timing.sNow, clientProcessedInputCount(client)));
+          client.raw(buildTimedFrame(heartbeatBody, timing.sNow, clientProcessedInputSeq(client)));
         }
       }
 
@@ -207,7 +211,7 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
         }
 
         if (timing) {
-          client.raw(buildTimedFrame(encodedChanges, timing.sNow, clientProcessedInputCount(client)));
+          client.raw(buildTimedFrame(encodedChanges, timing.sNow, clientProcessedInputSeq(client)));
         } else {
           client.raw(encodedChanges);
         }
@@ -241,7 +245,7 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
         }
 
         if (timing) {
-          client.raw(buildTimedFrame(encodedView, timing.sNow, clientProcessedInputCount(client)));
+          client.raw(buildTimedFrame(encodedView, timing.sNow, clientProcessedInputSeq(client)));
         } else {
           client.raw(encodedView);
         }

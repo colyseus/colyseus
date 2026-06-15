@@ -19,6 +19,11 @@ export function getTransport() { return _transport; }
 
 export abstract class Transport {
     public protocol?: string;
+    /** Self-signed cert SHA-256 hash (byte array), surfaced to clients in the
+     *  matchmake response so a WebTransport client can pin it via
+     *  `serverCertificateHashes`. Set by transports that generate their own cert
+     *  (h3). Undefined for transports using a CA-trusted cert. */
+    public fingerprint?: number[];
     public server?: http.Server | https.Server;
 
     public abstract listen(port?: number | string, hostname?: string, backlog?: number, listeningListener?: Function): this;

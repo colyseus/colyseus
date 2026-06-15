@@ -1,6 +1,5 @@
 import { Client } from "./Client.ts";
 import type { Room } from "./Room.ts";
-import type { WebSocketTransport } from "./transport/WebSocketTransport.ts";
 import { getDebugRoot, loadPreferences, preferences, repositionDebugPanels, roomDebugInfo } from "./debug/core.ts";
 import { calculateRates, initialize, updateDebugPanel } from "./debug/panel.ts";
 import { installPredictDebug } from "./debug/predict.ts";
@@ -49,8 +48,11 @@ function applyMonkeyPatches() {
             ? sessionId
             : Date.now() + '-' + Math.random().toString(36).substring(2, 9));
 
-        const transport = room.connection?.transport as WebSocketTransport;
-        const endpoint = transport.ws?.url || 'N/A';
+        const transport = room.connection?.transport as any;
+        // WebSocket transports expose `ws.url`; h3/WebTransport exposes `url`.
+        const endpoint = transport?.ws?.url ?? transport?.url ?? 'N/A';
+        let host = 'N/A';
+        try { host = new URL(endpoint).host; } catch { /* non-URL endpoint (h3 / 'N/A') */ }
 
         const debugInfo = {
             uniquePanelId: uniquePanelId,
@@ -58,7 +60,7 @@ function applyMonkeyPatches() {
             roomName: room.name || 'N/A',
             sessionId: sessionId || 'N/A',
             endpoint,
-            host: new URL(endpoint).host,
+            host,
             room, // Store room reference for state inspector
             bytesSent: 0,
             bytesReceived: 0,

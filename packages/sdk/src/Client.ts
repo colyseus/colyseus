@@ -296,7 +296,9 @@ export class ColyseusSDK<ServerType extends SDKTypes = any, UserData = any> {
 
         room.connect(
             this.buildEndpoint(response, options),
-            response,
+            // `protocol` lives on client settings, not the matchmake response — inject it so
+            // Room.connect picks the right transport. Without this it silently falls back to ws.
+            { ...response, protocol: this.settings.protocol },
             this.http.options.headers
         );
 

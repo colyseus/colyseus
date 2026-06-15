@@ -6,7 +6,7 @@ import { decode, type Iterator } from '@colyseus/schema';
 
 import { matchMaker, Protocol, Transport, debugAndPrintError, spliceOne, getBearerToken, CloseCode, connectClientToRoom, isDevMode } from '@colyseus/core';
 import { H3Client } from './H3Client.ts';
-import { generateWebTransportCertificate } from './utils/mkcert.ts';
+import { resolveDevCertificate } from './utils/devCert.ts';
 import type { Application, Request, Response } from 'express';
 
 export type CertLike = string;
@@ -105,20 +105,14 @@ export class H3Transport extends Transport {
     };
 
     if (!this.options.cert || !this.options.key) {
-      //
-      // TODO: cache certificate on filesystem for 10 days
-      //
-      generateWebTransportCertificate([
-        { shortName: 'C', value: 'BR' },
-        { shortName: 'ST', value: 'Rio Grande do Sul' },
-        { shortName: 'L', value: 'Sapiranga' },
-        { shortName: 'O', value: 'Colyseus WebTransport' },
-        { shortName: 'CN', value: hostname },
-      ], {
-        days: 10,
-      }).then((generated) => {
-        const fingerprint = generated.fingerprint.split(":").map((hex) => parseInt(hex, 16));
-        createServers(generated.cert, generated.private, fingerprint);
+      // Dev: prefer a browser-TRUSTED cert via mkcert (seamless — no flags, no
+      // fingerprint), falling back to a self-signed cert pinned by fingerprint.
+      resolveDevCertificate(hostname).then(({ cert, key, fingerprint }) => {
+        // Surface the fingerprint ONLY for the self-signed fallback, so the core
+        // matchmake route hands it to clients for serverCertificateHashes pinning.
+        // A trusted (mkcert) cert needs none — the browser validates it normally.
+        if (fingerprint) { this.fingerprint = fingerprint; }
+        createServers(cert, key, fingerprint);
       });
 
     } else {

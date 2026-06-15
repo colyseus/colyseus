@@ -36,6 +36,10 @@ export const postMatchmakeMethod = createEndpoint("/matchmake/:method/:roomName"
     if (transport.protocol !== undefined) {
       response.protocol = transport.protocol;
     }
+    // WebTransport (h3): client pins the self-signed cert via serverCertificateHashes.
+    if (transport.fingerprint !== undefined) {
+      response.fingerprint = transport.fingerprint;
+    }
 
     const json = JSON.stringify(response);
 

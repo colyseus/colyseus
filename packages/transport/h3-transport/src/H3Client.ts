@@ -8,6 +8,11 @@ import { type Iterator, decode, encode } from '@colyseus/schema';
 
 const lengthPrefixBuffer = Buffer.alloc(9); // 9 bytes is the maximum length of a length prefix
 
+// Test-only datagram loss injector: drop this fraction [0..1] of INCOMING
+// unreliable datagrams (whole packet = all ring slots in it), to measure how
+// well the redundancy ring recovers. Set via H3_DATAGRAM_LOSS. 0 = off.
+const DATAGRAM_LOSS = Number(process.env.H3_DATAGRAM_LOSS ?? 0);
+
 export class H3Client implements Client, ClientPrivate {
   '~messages': any;
 
@@ -88,7 +93,10 @@ export class H3Client implements Client, ClientPrivate {
 
   public sendDatagram(data: Uint8Array | Buffer) {
     if (!this._datagramWriter) {
-      this._datagramWriter = this._wtSession.datagrams.writable.getWriter();
+      // Prefer `createWritable()` (non-deprecated in @fails-components 1.6); fall
+      // back to the standard `datagrams.writable` property for other runtimes.
+      const datagrams = this._wtSession.datagrams as any;
+      this._datagramWriter = (datagrams.createWritable ? datagrams.createWritable() : datagrams.writable).getWriter();
 
       this._datagramWriter.closed
         .then(() => console.log("datagram writer closed successfully!"))
@@ -145,6 +153,9 @@ export class H3Client implements Client, ClientPrivate {
     while (this.readyState === 1) {
       try {
         read = await this._datagramReader.read();
+
+        // Test-only: drop the whole datagram to simulate packet loss.
+        if (DATAGRAM_LOSS > 0 && read.value && Math.random() < DATAGRAM_LOSS) { continue; }
 
         //
         // a single read may contain multiple messages

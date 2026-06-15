@@ -507,6 +507,17 @@ export class InputBufferImpl<I = any> {
   private _reckonTimes: number[] = [];
   /** Reckon stamp of the most recently consumed input (see {@link reckonTime}). */
   private _lastReckonTime = 0;
+  /** Framework wire seq per buffered input (parallel to `_items`) — UNRELIABLE
+   *  ONLY, lazily created on the first seq-carrying push. Reliable inputs are
+   *  contiguous, so their consumed-seq-value is always exactly {@link consumedCount}
+   *  and needs no parallel array; `undefined` here marks that (the common, default
+   *  path pays nothing). A buffer is single-mode, so this is either never created
+   *  (reliable) or created once and kept parallel (unreliable). */
+  private _seqs?: number[];
+  /** Seq VALUE of the last consumed input — the reconciliation ack echoed to the
+   *  client (see {@link ackSeq}). Only meaningful when {@link _seqs} is tracked
+   *  (unreliable); reliable's ack falls back to {@link consumedCount}. */
+  private _lastConsumedSeq = 0;
   /** Whether the most recently produced frame was a synthesized idle (see {@link wasIdle}). */
   private _lastWasIdle = false;
 
@@ -600,6 +611,7 @@ export class InputBufferImpl<I = any> {
     this._lastWasIdle = false;
     this._lastRenderTime = this._renderTimes[i];
     this._lastReckonTime = this._reckonTimes[i];
+    if (this._seqs !== undefined) { this._lastConsumedSeq = this._seqs[i]; }
     this._head = i + 1;
     this.consumedCount++;
     return this._items[i];
@@ -612,16 +624,26 @@ export class InputBufferImpl<I = any> {
     this._items.length = 0;
     this._renderTimes.length = 0;
     this._reckonTimes.length = 0;
+    if (this._seqs !== undefined) { this._seqs.length = 0; }
     this._head = 0;
   }
 
-  push(snapshot: I, renderTime: number = 0, reckonTime: number = 0): void {
+  /**
+   * Append a decoded input snapshot. `seq` is the framework wire seq (unreliable);
+   * omit it for reliable inputs, which get an implicit monotonic receive count so
+   * {@link ackSeq} stays well-defined in both modes.
+   */
+  push(snapshot: I, renderTime: number = 0, reckonTime: number = 0, seq?: number): void {
     this._items.push(snapshot);
     this._renderTimes.push(renderTime);
     this._reckonTimes.push(reckonTime);
+    // Track the wire seq only for unreliable (seq provided); reliable derives its
+    // ack from consumedCount, so it never allocates/maintains this array.
+    if (seq !== undefined) { (this._seqs ??= []).push(seq); }
     // Overflow drops the oldest unconsumed input; count it consumed so the ack
     // still advances past it. Advance the cursor (don't shift) — keeps it O(1).
     if (this.size > this._maxSize) {
+      if (this._seqs !== undefined) { this._lastConsumedSeq = this._seqs[this._head]; } // dropped oldest counts as acked
       this._head++;
       this.consumedCount++;
       this.compact();
@@ -639,6 +661,7 @@ export class InputBufferImpl<I = any> {
       this._items.splice(0, this._head);
       this._renderTimes.splice(0, this._head);
       this._reckonTimes.splice(0, this._head);
+      if (this._seqs !== undefined) { this._seqs.splice(0, this._head); }
       this._head = 0;
     }
   }
@@ -662,6 +685,7 @@ export class InputBufferImpl<I = any> {
     const last = this._items.length - 1;
     this._lastRenderTime = this._renderTimes[last]; // drain reports the NEWEST stamps
     this._lastReckonTime = this._reckonTimes[last];
+    if (this._seqs !== undefined) { this._lastConsumedSeq = this._seqs[last]; }
     // Hand off the backing array untouched when nothing was partially consumed
     // (O(1) — the caller may retain it); else copy out the unconsumed tail. Fresh
     // arrays here, NOT truncate(): drain already allocates the returned array, and
@@ -672,6 +696,7 @@ export class InputBufferImpl<I = any> {
     this._items = [];
     this._renderTimes = [];
     this._reckonTimes = [];
+    if (this._seqs !== undefined) { this._seqs = []; }
     this._head = 0;
     return out;
   }
@@ -699,6 +724,7 @@ export class InputBufferImpl<I = any> {
     const out = this._items.slice(start, start + count);
     this._lastRenderTime = this._renderTimes[start + count - 1]; // newest taken input's stamps
     this._lastReckonTime = this._reckonTimes[start + count - 1];
+    if (this._seqs !== undefined) { this._lastConsumedSeq = this._seqs[start + count - 1]; }
     this._head += count;
     this.consumedCount += count;
     this.compact();
@@ -815,13 +841,25 @@ export class InputBufferImpl<I = any> {
     return this._lastReckonTime;
   }
 
+  /** Seq VALUE of the last consumed input — the reconciliation ack sent to the
+   *  client. Reliable (no wire seq tracked): falls back to {@link consumedCount}
+   *  for free. Unreliable: the framework wire seq, so a fully-dropped input doesn't
+   *  make the ack lag the client's sent seq by the lost count. `0` before the first
+   *  consume. */
+  get ackSeq(): number {
+    return this._seqs !== undefined ? this._lastConsumedSeq : this.consumedCount;
+  }
+
   /** Whether the most recently produced frame was a synthesized idle (see {@link wasIdle}). */
   get wasIdle(): boolean {
     return this._lastWasIdle;
   }
 
   clear(): void {
-    this.consumedCount += this.size; // unconsumed inputs count as consumed (ack moves past them)
+    // Cleared inputs count as consumed: advance both the count and the seq-value ack
+    // past them so the client's pending set drains (capture the newest seq before truncate).
+    if (this._seqs !== undefined && this._items.length > 0) { this._lastConsumedSeq = this._seqs[this._items.length - 1]; }
+    this.consumedCount += this.size;
     this.truncate();
     this._lastSeq = -Infinity;
     this._iterActive = false; // recovery hatch if a consume() iterator was abandoned unclosed

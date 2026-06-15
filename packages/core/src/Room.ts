@@ -2375,7 +2375,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
    * push a clone into the per-client buffer (when buffering is enabled).
    * Honors `inputOptions.seqField` for dedupe of redundant frames.
    */
-  #captureInput(client: ClientPrivate, renderTime: number = 0, reckonTime: number = 0) {
+  #captureInput(client: ClientPrivate, renderTime: number = 0, reckonTime: number = 0, seq?: number) {
     // Sanitize BEFORE any visibility — `latest` (the bound instance itself),
     // the buffered clone below, and the idle ctx all see in-domain values.
     // Runs even in latest-only mode (bufferMaxSize: 0). Compiled at defineInput.
@@ -2383,12 +2383,20 @@ export class Room<T extends RoomOptions = RoomOptions> {
     const buf = client._inputBuffer;
     if (!buf) { return; } // no consumer registered — skip the clone allocation
     const inst = client._input!;
-    const seqField = this._inputOptions?.seqField;
-    if (seqField !== undefined) {
-      const value = (inst as any)[seqField] as number;
-      if (typeof value === 'number' && !buf.accept(value)) { return; }
+    if (seq !== undefined) {
+      // Unreliable: dedup the redundancy ring by the FRAMEWORK seq stamped on the
+      // wire (monotonic, framework-owned) — independent of any user `seqField`,
+      // which is now for `.at()` lookups only. No user seq field/ceremony needed.
+      if (!buf.accept(seq)) { return; }
+    } else {
+      // Reliable: no framework seq (implicit count). Honor a user `seqField` if set.
+      const seqField = this._inputOptions?.seqField;
+      if (seqField !== undefined) {
+        const value = (inst as any)[seqField] as number;
+        if (typeof value === 'number' && !buf.accept(value)) { return; }
+      }
     }
-    buf.push(inst.clone() as any, renderTime, reckonTime);
+    buf.push(inst.clone() as any, renderTime, reckonTime, seq);
   }
 
   private _onMessage(client: ExtractRoomClient<T> & ClientPrivate, buffer: Buffer) {
@@ -2574,7 +2582,9 @@ export class Room<T extends RoomOptions = RoomOptions> {
     } else if (code === Protocol.ROOM_INPUT_UNRELIABLE) {
       if (client._inputDecoder) {
         try {
-          client._inputDecoder.decodeAll(buffer.subarray(1), () => this.#captureInput(client));
+          // Each slot carries its framework seq (base seq + position) — dedup the
+          // redundancy ring on it, no user seqField required.
+          client._inputDecoder.decodeAll(buffer.subarray(1), (_inst, seq) => this.#captureInput(client, 0, 0, seq));
         } catch (e: any) {
           debugAndPrintError(e);
           return;

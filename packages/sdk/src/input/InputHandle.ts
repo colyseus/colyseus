@@ -267,11 +267,14 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
 
   reset(): void {
     this._encoder.reset();
-    this._sentCount = 0;
-    this._lastProcessed = 0;
+    // Adopt the encoder's monotonic seq as the baseline: 0 for reliable, the current
+    // framework seq for unreliable (the encoder keeps `_seq` across its reset). pending
+    // starts at 0 so a reconnect doesn't replay already-acked inputs, and unreliable
+    // seqs continue past the server's last-seen seq if the buffer was reused.
+    this._sentCount = this._lastProcessed = this._encoder.seq;
     this._framed = null;
     this._sendTimes.fill(0); // stale acks for pre-reset seqs must read as "unknown" (-1), not a bogus RTT
-    // _inputBuffer is reused as-is: at() gates on _sentCount (0 here), so it can't surface stale snapshots.
+    // _inputBuffer is reused as-is: at() gates on _sentCount/_lastProcessed, so it can't surface stale snapshots.
   }
 
   send(): void {
@@ -332,19 +335,31 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
     const framed = this._framed;
     if (this._encoder.mode === "reliable") {
       conn.send(framed);
-      // `_sentCount` mirrors the server's consumed counter, so the next TIMED ack can prune + sample RTT.
-      const seq = ++this._sentCount;
-      // Snapshot into the replay ring via the codec — alloc-free, no Object.keys. Reliable + delta:false stages every field, so it's a full snapshot.
-      if (this._inputBuffer === null) {
-        const Ctor = (this.data as any).constructor;
-        this._inputBuffer = Array.from({ length: this._inputBufferSize }, () => new Ctor() as I);
-      }
-      this._encoder.copyInto(this._inputBuffer[seq % this._inputBufferSize]);
-      // RTT: stamp send time in the ring.
-      this._sendTimes[seq % InputHandleImpl.SEND_TIME_SIZE] = now();
+      // Reliable: implicit count seq — the server counts received messages, so
+      // `_sentCount` mirrors its consumed counter for the next TIMED ack.
+      this._recordSent(++this._sentCount);
     } else {
       conn.sendUnreliable(framed);
+      // Unreliable: adopt the encoder's framework seq (stamped on the wire) so the
+      // server's seq-value ack and this replay ring line up across packet loss.
+      this._recordSent(this._sentCount = this._encoder.seq);
     }
+  }
+
+  /**
+   * @internal Snapshot the just-sent input into the replay ring and stamp its
+   * send time, keyed by `seq`. Lets a reconciler replay unacked inputs via
+   * {@link at} and the TIMED ack sample RTT. The snapshot is alloc-free through
+   * the codec's `copyInto` (no `Object.keys`); `delta:false` stages every field,
+   * so each slot is a full snapshot.
+   */
+  private _recordSent(seq: number): void {
+    if (this._inputBuffer === null) {
+      const Ctor = (this.data as any).constructor;
+      this._inputBuffer = Array.from({ length: this._inputBufferSize }, () => new Ctor() as I);
+    }
+    this._encoder.copyInto(this._inputBuffer[seq % this._inputBufferSize]);
+    this._sendTimes[seq % InputHandleImpl.SEND_TIME_SIZE] = now();
   }
 
   /**

@@ -66,6 +66,15 @@ export class Connection implements ITransport {
     }
 
     reconnect(queryParams: { reconnectionToken: string, skipHandshake?: boolean }): void {
+        // h3/WebTransport carries the session params (roomId/sessionId/reconnectionToken/
+        // skipHandshake) in the bidi seat-reservation message, NOT the URL — appending
+        // them as query params yields an invalid WebTransport path (ERR_METHOD_NOT_SUPPORTED).
+        // So reconnect to the same origin and merge the params into the connect options.
+        if (this.transport instanceof H3TransportTransport) {
+            this.transport.connect(this.url, { ...this.options, ...queryParams });
+            return;
+        }
+
         const url = new URL(this.url);
 
         // override query params

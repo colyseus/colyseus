@@ -280,20 +280,39 @@ describe('InputHandle', () => {
             assert.equal(conn.unreliable[1][0], Protocol.ROOM_INPUT_UNRELIABLE);
         });
 
-        test('does NOT bump sentCount and does NOT record send-times', () => {
+        test('bumps sentCount to the framework seq and populates the replay ring + send-times', () => {
             const { handle, instance } = makeHandle('unreliable', { historySize: 3 });
             instance.x = 1; handle.send();
             instance.x = 2; handle.send();
             instance.x = 3; handle.send();
 
-            // Per InputHandle: the redundant ring would double-count and break
-            // the seq↔send-time correlation, so unreliable sends are skipped.
-            assert.equal(handle.sentCount, 0);
+            // Unreliable now mirrors reliable's reconciler state, keyed by the
+            // encoder's framework seq (one per tick — push-every-tick).
+            assert.equal(handle.sentCount, 3);
 
-            // No matching send-time exists → ackInput returns -1.
-            assert.equal(handle.ackInput(1), -1);
-            // ...but lastProcessed still advances (server is authoritative).
-            assert.equal(handle.lastProcessed, 1);
+            // Replay ring is populated — at() returns the buffered snapshot for an
+            // unacked seq, so a reconciler can replay it.
+            assert.isDefined(handle.at(3));
+            assert.equal((handle.at(3) as any).x, 3);
+
+            // Send-times recorded → ackInput finds them and returns a real RTT.
+            const rtt = handle.ackInput(2);
+            assert.isAtLeast(rtt, 0);
+            assert.equal(handle.lastProcessed, 2);
+            assert.equal(handle.pendingCount, 1); // sentCount 3 − lastProcessed 2
+        });
+
+        test('seq-value ack prunes straight past lost-then-recovered seqs (pending stays exact)', () => {
+            const { handle, instance } = makeHandle('unreliable', { historySize: 3 });
+            for (let i = 1; i <= 5; i++) { instance.x = i; handle.send(); }
+            assert.equal(handle.sentCount, 5);
+
+            // The server acks the seq VALUE of the last consumed input. Even if seq 4's
+            // own packet dropped (recovered via the ring), the ack jumps to 5 — pending
+            // drains to 0 rather than lagging by the lost count (the count-vs-value fix).
+            handle.ackInput(5);
+            assert.equal(handle.lastProcessed, 5);
+            assert.equal(handle.pendingCount, 0);
         });
 
         test('renderTime flag is ignored on unreliable sends', () => {
