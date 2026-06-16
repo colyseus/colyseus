@@ -1,7 +1,7 @@
-import { unpack } from 'msgpackr';
-import { decode, encode, Encoder, Reflection, type Iterator, $changes } from '@colyseus/schema';
-import { InputDecoder } from '@colyseus/schema/input';
-import { type InputAccessor, type InputAPI, type InputOptions, type IdleInput, type SanitizeInput, type NumericFieldsOf, InputAccessorImpl, InputBufferImpl, NO_OP_INPUT_ACCESSOR, compileSanitizer } from './input/InputBuffer.ts';
+import { decode, type Iterator, $changes } from '@colyseus/schema';
+import { validateSubSteps, type InputAPI, type IdleInput, type SanitizeInput, type NumericFieldsOf } from './input/InputBuffer.ts';
+import { RoomInput } from './input/RoomInput.ts';
+import { RoomMessages } from './RoomMessages.ts';
 import { Rewind, type RewindOptions } from './Rewind.ts';
 export { type InputAccessor, type InputAPI, type InputOptions, type ConsumeOptions, type IdleInput, type IdleContext, type SanitizeInput, type NumericFieldsOf } from './input/InputBuffer.ts';
 
@@ -79,15 +79,10 @@ export interface DefineInputOptions<I = any> {
 }
 
 /** `true` when the defineInput opts declared an `idle` policy — narrows the
- *  returned {@link InputAPI} so bare `next()` types non-optional `I`. */
-type IdleDeclared<O, I> = O extends { idle: IdleInput<I> } ? true : false;
+ *  returned {@link InputAPI} so bare `next()` types non-optional `I`.
+ *  @internal — exported for {@link RoomInput.define}. */
+export type IdleDeclared<O, I> = O extends { idle: IdleInput<I> } ? true : false;
 
-/**
- * Module-level cache of `Reflection.encode` output keyed by input
- * constructor — pays the encoding cost once per Room class regardless of
- * room instance count. WeakMap so unused classes can be GC'd.
- */
-const _inputReflectionCache = new WeakMap<Function, Uint8Array>();
 import { ClockTimer as Clock } from '@colyseus/timer';
 
 import { EventEmitter } from 'events';
@@ -102,26 +97,22 @@ import { SchemaSerializer } from './serializer/SchemaSerializer.ts';
 
 import { getMessageBytes } from './Protocol.ts';
 import { type Type, Deferred, generateId, wrapTryCatch } from './utils/Utils.ts';
-import { createNanoEvents } from './utils/nanoevents.ts';
 import { isDevMode } from './utils/DevMode.ts';
 
 import { debugAndPrintError, debugMatchMaking, debugMessage } from './Debug.ts';
 import { ServerError } from './errors/ServerError.ts';
 import { ClientState, type AuthContext, type Client, type ClientPrivate, ClientArray, type ISendOptions, type MessageArgs } from './Transport.ts';
-import { type RoomMethodName, OnAuthException, OnCreateException, OnDisposeException, OnDropException, OnJoinException, OnLeaveException, OnMessageException, OnReconnectException, type RoomException, SimulationIntervalException, TimedEventException } from './errors/RoomExceptions.ts';
+import { type RoomMethodName, OnAuthException, OnCreateException, OnDisposeException, OnDropException, OnJoinException, OnLeaveException, OnReconnectException, type RoomException, SimulationIntervalException, TimedEventException } from './errors/RoomExceptions.ts';
 
-import { standardValidate, type StandardSchemaV1 } from './utils/StandardSchema.ts';
+import { type StandardSchemaV1 } from './utils/StandardSchema.ts';
 import * as matchMaker from './MatchMaker.ts';
 
 import {
   CloseCode,
   ErrorCode,
-  HandshakeSection,
-  InputFlags,
   Protocol,
   PROTOCOL_CODE_MASK,
   PROTOCOL_MODIFIER_MASK,
-  ResponseStatus,
   type MessageHandlerWithFormat as SharedMessageHandlerWithFormat,
   type MessageHandler as SharedMessageHandler,
   type Messages as SharedMessages,
@@ -143,30 +134,7 @@ const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
 const noneSerializer = new NoneSerializer();
 
-// Shape an Error (or thrown value) into a plain, msgpack-friendly object for a
-// ROOM_RESPONSE error payload. Only `name`/`message`/`code` cross the wire —
-// stacks stay on the server.
-function toResponseError(e: any): { name: string; message: string; code?: any } {
-  if (e instanceof Error) {
-    const code = (e as any).code;
-    return (code !== undefined)
-      ? { name: e.name, message: e.message, code }
-      : { name: e.name, message: e.message };
-  }
-  return { name: "Error", message: String(e) };
-}
-
 export const DEFAULT_SEAT_RESERVATION_TIME = Number(process.env.COLYSEUS_SEAT_RESERVATION_TIME || 15);
-
-// Throws on a fractional/non-positive count: both sides loop `subSteps` times at
-// `dt/subSteps`, so anything but a whole number is a determinism bug, not a tunable.
-function validateSubSteps(subSteps: number | undefined, source: string): number | undefined {
-  if (subSteps === undefined) { return undefined; }
-  if (!Number.isInteger(subSteps) || subSteps < 1) {
-    throw new Error(`[${source}] subSteps must be an integer >= 1 (got ${subSteps}).`);
-  }
-  return subSteps;
-}
 
 export type SimulationCallback = (deltaTime: number) => void;
 
@@ -427,6 +395,8 @@ export class Room<T extends RoomOptions = RoomOptions> {
   private _reconnectionAttempts: { [reconnectionToken: string]: Deferred } = {};
 
   public messages?: Messages<any>;
+  /** @internal Message-routing layer: handler registry + user-message decode/dispatch. */
+  #_messages = new RoomMessages(this);
 
   /**
    * Room plugins, keyed by an operator-chosen handle. Each plugin
@@ -469,24 +439,10 @@ export class Room<T extends RoomOptions = RoomOptions> {
    */
   static __pluginLayout?: PluginLayout | null;
 
-  private onMessageEvents = createNanoEvents();
-  private onMessageValidators: {[message: string]: StandardSchemaV1} = {};
-
-  private onMessageFallbacks = {
-    '__no_message_handler': (client: ExtractRoomClient<T>, messageType: string | number, _: unknown) => {
-      const errorMessage = `room onMessage for "${messageType}" not registered.`;
-      debugMessage(`${errorMessage} (roomId: ${this.roomId})`);
-
-      if (isDevMode) {
-        // send error code to client in development mode
-        client.error(ErrorCode.INVALID_PAYLOAD, errorMessage);
-
-      } else {
-        // immediately close the connection in production
-        client.leave(CloseCode.WITH_ERROR, errorMessage);
-      }
-    }
-  };
+  // Re-expose the registry for @colyseus/playground introspection and
+  // @colyseus/testing handler-swapping (both reach in via bracket access).
+  private get onMessageEvents() { return this.#_messages.events; }
+  private get onMessageValidators() { return this.#_messages.validators; }
 
   private _serializer: Serializer<ExtractRoomState<T>> = noneSerializer;
   private _afterNextPatchQueue: Array<[string | number | ExtractRoomClient<T>, ArrayLike<any>]> = [];
@@ -739,22 +695,13 @@ export class Room<T extends RoomOptions = RoomOptions> {
    */
   public inputs?: InputAPI<ExtractRoomInput<T>>;
 
-  /** @internal The API from {@link defineInput}, used by the rewind binding
-   *  without depending on the user's `inputs` field being assigned. */
-  private _inputAPI?: InputAPI<any>;
-
   /**
-   * Input configuration. Set via {@link defineInput} only.
-   * @internal
+   * @internal The per-room input subsystem (options, accessor registry, wire
+   * stamp mode, encode/decode/handshake). Created lazily on the first
+   * {@link defineInput} call — rooms without inputs allocate none of it, and its
+   * presence is what enables client-timed state messages. See {@link RoomInput}.
    */
-  private _inputOptions?: InputOptions;
-
-  /**
-   * `true` when the Room called {@link defineInput}. When set, each state
-   * message gets a {@link ProtocolModifier.TIMED} prefix carrying server
-   * time and the per-recipient last-input ack — feeds the SDK's `room.clock`.
-   */
-  private _clientTimingEnabled: boolean = false;
+  private _inputController?: RoomInput;
 
   /**
    * Declare the input schema and configuration in a single line. Returns the
@@ -797,92 +744,10 @@ export class Room<T extends RoomOptions = RoomOptions> {
     type: C,
     opts?: O,
   ): InputAPI<InstanceType<C>, IdleDeclared<O, InstanceType<C>>> {
-    // Normalize the step declaration to the canonical wire form (Hz). stepSeconds
-    // / stepMs are the unit-safe spellings; both sides derive dt = 1/tickRate, so
-    // one declared number drives the server's physics step AND the client's.
-    const tickRate =
-      opts?.stepSeconds !== undefined ? 1 / opts.stepSeconds :
-      opts?.stepMs !== undefined ? 1000 / opts.stepMs :
-      opts?.tickRate;
-    if (
-      opts?.tickRate !== undefined && opts.stepMs === undefined && opts.stepSeconds === undefined &&
-      (!Number.isInteger(opts.tickRate) || opts.tickRate > 240)
-    ) {
-      console.warn(
-        `[defineInput] tickRate is a rate in Hz (got ${opts.tickRate}); a value ` +
-        `like 1000/rate is a step interval in ms — pass { stepMs } instead.`,
-      );
-    }
-    this._inputOptions = {
-      ctor: type,
-      // No default: dedupe + `.at()` lookup are OPT-IN. A default of "seq"
-      // would silently drop frames for any app that happened to name a numeric
-      // field `seq` — behavior-by-coincidental-naming. Pass `seqField`
-      // explicitly to enable lockstep/rollback ordering.
-      seqField: opts?.seqField,
-      bufferMaxSize: opts?.bufferMaxSize ?? 32,
-      idle: opts?.idle,
-      // Compiled ONCE here (map → dense min/max walk); applied per decoded frame.
-      sanitize: opts?.sanitize !== undefined ? compileSanitizer(opts.sanitize) : undefined,
-      tickRate,
-      subSteps: validateSubSteps(opts?.subSteps, 'defineInput'),
-    };
-    // Enable wire-level timing for clients that advertise CLIENT_TIMING.
-    // Defining inputs is the natural "real-time room" gate — chat / lobby /
-    // turn-based rooms that don't call defineInput continue to send untimed
-    // state and pay zero overhead.
-    this._clientTimingEnabled = true;
-    if (!_inputReflectionCache.has(type)) {
-      // Reflection.encode walks the schema's TypeContext via a one-shot
-      // Encoder around a throwaway instance; the bytes are SDK-deserializable
-      // back into a constructor through Reflection.decode.
-      _inputReflectionCache.set(type, Reflection.encode(new Encoder(new type())));
-    }
-    const api = {
-      get: (sessionId: string): InputAccessor<InstanceType<C>> => {
-        const c = this.clients.get(sessionId) as unknown as ClientPrivate | undefined;
-        return (c?._inputAccessor as InputAccessor<InstanceType<C>>) ?? NO_OP_INPUT_ACCESSOR;
-      },
-    } as InputAPI<InstanceType<C>, IdleDeclared<O, InstanceType<C>>>;
-    // Room-level fixed step (one source, not per-client). Live getters off
-    // _inputOptions so an auto-derived tickRate — set later by
-    // setTimestep — is reflected. dt = 1/tickRate; `1/hz` is
-    // correctly-rounded IEEE-754, so it matches the client's stepSeconds bit-for-bit.
-    Object.defineProperty(api, "tickRate", {
-      enumerable: true,
-      get: () => this._inputOptions?.tickRate,
-    });
-    Object.defineProperty(api, "stepSeconds", {
-      enumerable: true,
-      get: () => { const hz = this._inputOptions?.tickRate; return hz ? 1 / hz : undefined; },
-    });
-    Object.defineProperty(api, "stepMs", {
-      enumerable: true,
-      get: () => { const hz = this._inputOptions?.tickRate; return hz ? 1000 / hz : undefined; },
-    });
-    // Sub-step trio: same derivation as the client handle ((1/hz)/n) — bit-identical dt.
-    Object.defineProperty(api, "subSteps", {
-      enumerable: true,
-      get: () => this._inputOptions?.subSteps ?? 1,
-    });
-    Object.defineProperty(api, "subStepSeconds", {
-      enumerable: true,
-      get: () => {
-        const hz = this._inputOptions?.tickRate;
-        return hz ? (1 / hz) / (this._inputOptions?.subSteps ?? 1) : undefined;
-      },
-    });
-    Object.defineProperty(api, "subStepMs", {
-      enumerable: true,
-      get: () => {
-        const hz = this._inputOptions?.tickRate;
-        return hz ? (1000 / hz) / (this._inputOptions?.subSteps ?? 1) : undefined;
-      },
-    });
-    // Keep a framework-owned reference so internals (the rewind binding) resolve
-    // accessors without depending on which field the user assigned `api` to.
-    this._inputAPI = api;
-    return api;
+    // Lazily spun up on first call; its presence is the "real-time room" gate
+    // (enables client-timed state). Rooms that never call this pay nothing.
+    this._inputController ??= new RoomInput(this);
+    return this._inputController.define<C, O>(type, opts);
   }
 
   /**
@@ -1040,8 +905,8 @@ export class Room<T extends RoomOptions = RoomOptions> {
     if (this._simulationInterval) { clearInterval(this._simulationInterval); }
 
     // Advertise this loop's rate to predicting clients unless set explicitly.
-    if (onTickCallback && this._inputOptions && this._inputOptions.tickRate === undefined) {
-      this._inputOptions.tickRate = Math.round(1000 / delay);
+    if (onTickCallback && this._inputController && this._inputController.options.tickRate === undefined) {
+      this._inputController.options.tickRate = Math.round(1000 / delay);
     }
 
     if (onTickCallback) {
@@ -1133,13 +998,13 @@ export class Room<T extends RoomOptions = RoomOptions> {
     const stepSeconds = 1 / tickRate;
     // Explicit option wins; else an earlier defineInput({ subSteps }) declaration.
     const subSteps = validateSubSteps(opts?.subSteps, 'setFixedTimestep')
-      ?? this._inputOptions?.subSteps ?? 1;
+      ?? this._inputController?.options.subSteps ?? 1;
 
     // Single source of the fixed rate (and sub-step count): advertise both to
     // predicting clients so N and dt can't drift between the two sides.
-    if (this._inputOptions) {
-      this._inputOptions.tickRate = tickRate;
-      this._inputOptions.subSteps = subSteps;
+    if (this._inputController) {
+      this._inputController.options.tickRate = tickRate;
+      this._inputController.options.subSteps = subSteps;
     }
 
     let cb = step;
@@ -1184,20 +1049,11 @@ export class Room<T extends RoomOptions = RoomOptions> {
   /** Server-side lag compensation, lazily created. @see allowRewindState */
   #rewind?: Rewind;
 
-  // Per-client input stamp mode — derived ONCE from the rewind attachments'
-  // `mode` (snapshot → renderTime stamp, reckon → reckonTime stamp). Resolved
-  // lazily on the first handshake/decode (attachments are declared in onCreate,
-  // before any join), then frozen. Drives both the handshake flags the client
-  // mirrors and how many prefix bytes the server reads off each input.
-  #inputStampRender = false;
-  #inputStampReckon = false;
-  #inputStampResolved = false;
-  #resolveStampMode(): void {
-    if (this.#inputStampResolved) return;
-    this.#inputStampResolved = true;
-    const tl = this.#rewind?.timelineMode();
-    this.#inputStampRender = tl?.snapshot ?? false;
-    this.#inputStampReckon = tl?.reckon ?? false;
+  /** @internal The rewind attachments' timeline mode (snapshot/reckon), or
+   *  `undefined` when no rewind is configured. {@link RoomInput} reads it to
+   *  derive the wire input stamp mode (snapshot → renderTime, reckon → reckonTime). */
+  _timelineMode(): { snapshot?: boolean; reckon?: boolean } | undefined {
+    return this.#rewind?.timelineMode();
   }
 
   /**
@@ -1228,19 +1084,20 @@ export class Room<T extends RoomOptions = RoomOptions> {
     // doesn't matter. A missing input API fails loudly; a client that hasn't
     // stamped yet legitimately reads 0 → live fallback (NOT a config error).
     this.#rewind.bindRenderTime((sessionId) => {
-      if (this._inputAPI === undefined) {
+      const api = this._inputController?.api;
+      if (api === undefined) {
         throw new Error(
           "rewind.lastSeenBy() found no input API. Declare " +
           "`inputs = this.defineInput(YourInput)`, or use " +
           "rewind.at(time) with a render time you track yourself.",
         );
       }
-      return this._inputAPI.get(sessionId).renderTime;
+      return api.get(sessionId).renderTime;
     });
     // Direct reckon-display stamp: mode:"reckon" groups read at exactly the
     // instant the client displayed them — immune to its RTT-estimation error.
     this.#rewind.bindReckonTime((sessionId) =>
-      this._inputAPI !== undefined ? this._inputAPI.get(sessionId).reckonTime : 0,
+      this._inputController?.api.get(sessionId).reckonTime ?? 0,
     );
     // Anchor the reckon midpoint FALLBACK at the true processing instant (the
     // record timestamp is one tick stale by hit-test time — see bindNow).
@@ -1521,7 +1378,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
     const hasChanges = this._serializer.applyPatches(
       this.clients,
       this.state,
-      this._clientTimingEnabled ? { sNow: this.clock.elapsedTime } : undefined,
+      this._inputController !== undefined ? { sNow: this.clock.elapsedTime } : undefined,
     );
 
     // broadcast messages enqueued for "after patch"
@@ -1572,31 +1429,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
     _validationSchema: StandardSchemaV1<T> | ((...args: any[]) => void),
     _callback?: (...args: any[]) => void,
   ) {
-    const messageType = _messageType.toString();
-
-    const validationSchema = (typeof _callback === 'function')
-      ? _validationSchema as StandardSchemaV1<T>
-      : undefined;
-
-    const callback = (validationSchema === undefined)
-      ? _validationSchema as (...args: any[]) => void
-      : _callback;
-
-    const removeListener = this.onMessageEvents.on(messageType, (this.onUncaughtException !== undefined)
-      ? wrapTryCatch(callback, this.onUncaughtException.bind(this), OnMessageException, 'onMessage', false, _messageType)
-      : callback);
-
-    if (validationSchema !== undefined) {
-      this.onMessageValidators[messageType] = validationSchema;
-    }
-
-    // returns a method to unbind the callback
-    return () => {
-      removeListener();
-      if (this.onMessageEvents.events[messageType].length === 0) {
-        delete this.onMessageValidators[messageType];
-      }
-    };
+    return this.#_messages.on(_messageType, _validationSchema as any, _callback);
   }
 
   public onMessageBytes<T = any, C extends Client = ExtractRoomClient<T>>(
@@ -1615,21 +1448,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
     _validationSchema: StandardSchemaV1<T> | ((...args: any[]) => void),
     _callback?: (...args: any[]) => void,
   ) {
-    const messageType = `_$b${_messageType}`;
-
-    const validationSchema = (typeof _callback === 'function')
-      ? _validationSchema as StandardSchemaV1<T>
-      : undefined;
-
-    const callback = (validationSchema === undefined)
-      ? _validationSchema as (...args: any[]) => void
-      : _callback;
-
-    if (validationSchema !== undefined) {
-      return this.onMessage(messageType, validationSchema as any, callback as any);
-    } else {
-      return this.onMessage(messageType, callback as any);
-    }
+    return this.#_messages.on(`_$b${_messageType}`, _validationSchema as any, _callback);
   }
 
   // ---------------------------------------------------------------------------
@@ -1804,21 +1623,8 @@ export class Room<T extends RoomOptions = RoomOptions> {
     // (each new reconnection receives a new reconnection token)
     client.reconnectionToken = generateId();
 
-    // Allocate per-client input instance + decoder if the Room called `defineInput()`.
-    // Done early so onJoin can reference room.inputs.get(sessionId).latest.
-    if (this._inputOptions !== undefined) {
-      client._input = new this._inputOptions.ctor();
-      client._inputDecoder = new InputDecoder(client._input);
-      // Buffer is opt-in via bufferMaxSize > 0 (rollback / lockstep).
-      const maxSize = this._inputOptions.bufferMaxSize;
-      if (maxSize > 0) {
-        // ctor powers idle-frame synthesis (defaults + overrides); the client
-        // ref feeds the lazy `idle` callback's ctx; the room-level `idle`
-        // policy makes bare drain()/next() total.
-        client._inputBuffer = new InputBufferImpl(maxSize, this._inputOptions.seqField, this._inputOptions.ctor, client, this._inputOptions.idle);
-      }
-      client._inputAccessor = new InputAccessorImpl(client);
-    }
+    // Allocate per-client input state early so onJoin can read inputs.get(sid).latest.
+    this._inputController?.allocate(client);
 
     if (this._reservedSeatTimeouts[sessionId]) {
       clearTimeout(this._reservedSeatTimeouts[sessionId]);
@@ -1888,6 +1694,9 @@ export class Room<T extends RoomOptions = RoomOptions> {
       const reconnectionToken = connectionOptions?.reconnectionToken;
       if (reconnectionToken && this._reconnections[reconnectionToken]?.[0] === sessionId) {
         this.clients.push(client);
+        // After push (no leak on a failed join), before onReconnect; overwrites
+        // the dropped session's stale entry.
+        this._inputController?.register(sessionId, client);
 
         //
         // await for reconnection:
@@ -1953,6 +1762,8 @@ export class Room<T extends RoomOptions = RoomOptions> {
         }
 
         this.clients.push(client);
+        // After push (no leak on a failed join), before onJoin (resolves inputs.get there).
+        this._inputController?.register(sessionId, client);
 
         //
         // Flag sessionId as non-enumarable so hasReachedMaxClients() doesn't count it
@@ -2006,54 +1817,10 @@ export class Room<T extends RoomOptions = RoomOptions> {
       // allow client to send messages after onJoin has succeeded.
       client.ref.on('message', this._onMessage.bind(this, client));
 
-      // Append input reflection as a tagged section when the room declared
-      // input. The SDK uses these bytes to materialize a constructor for
-      // `conn.input()` calls that don't pass an explicit `type`.
-      // NOT gated by skipHandshake: that flag means "client already has the
-      // STATE schema" (rootSchema join / reconnection) — the input sections
-      // carry runtime config (tickRate/patchRate/stamp flags/subSteps + the
-      // input ctor) the client cannot derive locally. Re-parsing them on
-      // reconnect is idempotent.
-      let extraSections: Array<{ tag: number; bytes: Uint8Array }> | undefined;
-      if (this._inputOptions !== undefined) {
-        const inputBytes = _inputReflectionCache.get(this._inputOptions.ctor);
-        if (inputBytes !== undefined) {
-          extraSections = [{ tag: HandshakeSection.INPUT_REFLECTION, bytes: inputBytes }];
-        }
-        // [flags uint8][tickRate varint?][patchRate varint?][subSteps varint?]:
-        // RENDER_TIME/RECKON_TIME → client auto-stamps inputs with that
-        // timeline (derived from the rewind attachments' `mode`); tickRate (Hz)
-        // → predict at dt=1/tickRate; patchRate (ms) → reconcile cadence for
-        // smoothing; subSteps → physics sub-steps per input (omitted when 1).
-        // Varints in bit order. See InputFlags.
-        this.#resolveStampMode();
-        const stampRender = this.#inputStampRender;
-        const stampReckon = this.#inputStampReckon;
-        const tickRate = this._inputOptions.tickRate;
-        const patchRate = (typeof this.patchRate === "number" && this.patchRate > 0)
-          ? Math.round(this.patchRate) : undefined;
-        const subSteps = (this._inputOptions.subSteps !== undefined && this._inputOptions.subSteps > 1)
-          ? this._inputOptions.subSteps : undefined;
-        if (stampRender || stampReckon || tickRate || patchRate || subSteps) {
-          let flags = 0;
-          if (stampRender) { flags |= InputFlags.RENDER_TIME; }
-          if (stampReckon) { flags |= InputFlags.RECKON_TIME; }
-          if (tickRate) { flags |= InputFlags.FIXED_TIMESTEP; }
-          if (patchRate) { flags |= InputFlags.PATCH_RATE; }
-          if (subSteps) { flags |= InputFlags.SUB_STEPS; }
-          // 24B: worst case = flags + float64 tickRate (9) + uint32 patchRate (5) + subSteps (2).
-          const buf = new Uint8Array(24);
-          const sit = { offset: 0 };
-          buf[sit.offset++] = flags;
-          if (tickRate) { encode.number(buf, tickRate, sit); }
-          if (patchRate) { encode.number(buf, patchRate, sit); }
-          if (subSteps) { encode.number(buf, subSteps, sit); }
-          (extraSections ??= []).push({
-            tag: HandshakeSection.INPUT_OPTIONS,
-            bytes: buf.subarray(0, sit.offset),
-          });
-        }
-      }
+      // NOT gated by skipHandshake: that flag means "client already has the STATE
+      // schema", but these carry input config the client can't derive locally
+      // (re-parsing on reconnect is idempotent).
+      const extraSections = this._inputController?.handshakeSections();
 
       // confirm room id that matches the room name requested to join
       client.raw(getMessageBytes[Protocol.JOIN_ROOM](
@@ -2215,17 +1982,10 @@ export class Room<T extends RoomOptions = RoomOptions> {
     }
   }
 
-  // Encode and enqueue a ROOM_RESPONSE for a client request. If the client has
-  // already left, `enqueueRaw` is a no-op — no response is needed.
-  #replyToRequest(client: Client, requestId: number, status: ResponseStatus, payload?: any) {
-    debugMessage("response #%d: status=%d -> %j (roomId: %s)", requestId, status, payload, this.roomId);
-    client.enqueueRaw(getMessageBytes[Protocol.ROOM_RESPONSE](requestId, status, payload));
-  }
-
   private sendFullState(client: Client): void {
     client.raw(this._serializer.getFullState(
       client,
-      this._clientTimingEnabled ? { sNow: this.clock.elapsedTime } : undefined,
+      this._inputController !== undefined ? { sNow: this.clock.elapsedTime } : undefined,
     ));
   }
 
@@ -2294,6 +2054,8 @@ export class Room<T extends RoomOptions = RoomOptions> {
         delete this._reconnections[devModeReconnectionToken];
         delete this._reservedSeats[sessionId];
         delete this._reservedSeatTimeouts[sessionId];
+        // devMode reconnection bypasses #_onAfterLeave — drop the input accessor here.
+        this._inputController?.release(sessionId);
 
         if (!allowReconnection) {
           await this.#_decrementClientCount();
@@ -2369,36 +2131,10 @@ export class Room<T extends RoomOptions = RoomOptions> {
     this.clock.clear();
     this.clock.stop();
 
-    return await (userReturnData || Promise.resolve());
-  }
+    // drop any input accessors still held for in-flight reconnections
+    this._inputController?.dispose();
 
-  /**
-   * After the decoder has mutated `client._input`, sanitize it in place and
-   * push a clone into the per-client buffer (when buffering is enabled).
-   * Honors `inputOptions.seqField` for dedupe of redundant frames.
-   */
-  #captureInput(client: ClientPrivate, renderTime: number = 0, reckonTime: number = 0, seq?: number) {
-    // Sanitize BEFORE any visibility — `latest` (the bound instance itself),
-    // the buffered clone below, and the idle ctx all see in-domain values.
-    // Runs even in latest-only mode (bufferMaxSize: 0). Compiled at defineInput.
-    this._inputOptions?.sanitize?.(client._input);
-    const buf = client._inputBuffer;
-    if (!buf) { return; } // no consumer registered — skip the clone allocation
-    const inst = client._input!;
-    if (seq !== undefined) {
-      // Unreliable: dedup the redundancy ring by the FRAMEWORK seq stamped on the
-      // wire (monotonic, framework-owned) — independent of any user `seqField`,
-      // which is now for `.at()` lookups only. No user seq field/ceremony needed.
-      if (!buf.accept(seq)) { return; }
-    } else {
-      // Reliable: no framework seq (implicit count). Honor a user `seqField` if set.
-      const seqField = this._inputOptions?.seqField;
-      if (seqField !== undefined) {
-        const value = (inst as any)[seqField] as number;
-        if (typeof value === 'number' && !buf.accept(value)) { return; }
-      }
-    }
-    buf.push(inst.clone() as any, renderTime, reckonTime, seq);
+    return await (userReturnData || Promise.resolve());
   }
 
   private _onMessage(client: ExtractRoomClient<T> & ClientPrivate, buffer: Buffer) {
@@ -2427,181 +2163,19 @@ export class Room<T extends RoomOptions = RoomOptions> {
     const modifiers = buffer[0] & PROTOCOL_MODIFIER_MASK;
 
     if (code === Protocol.ROOM_DATA) {
-      const messageType = (decode.stringCheck(buffer, it))
-        ? decode.string(buffer, it)
-        : decode.number(buffer, it);
-
-      let message;
-      try {
-        message = (buffer.byteLength > it.offset)
-          ? unpack(buffer.subarray(it.offset, buffer.byteLength))
-          : undefined;
-        debugMessage("received: '%s' -> %j (roomId: %s)", messageType, message, this.roomId);
-
-        // custom message validation
-        if (this.onMessageValidators[messageType] !== undefined) {
-          message = standardValidate(this.onMessageValidators[messageType], message);
-        }
-
-      } catch (e: any) {
-        debugAndPrintError(e);
-        client.leave(CloseCode.WITH_ERROR);
-        return;
-      }
-
-      if (this.onMessageEvents.events[messageType]) {
-        this.onMessageEvents.emit(messageType as string, client, message);
-
-      } else if (this.onMessageEvents.events['*']) {
-        this.onMessageEvents.emit('*', client, messageType, message);
-
-      } else {
-        this.onMessageFallbacks['__no_message_handler'](client, messageType, message);
-      }
+      this.#_messages.onData(client, buffer, it);
 
     } else if (code === Protocol.ROOM_REQUEST) {
-      // A request reuses the same `onMessage(type, ...)` handlers as a plain
-      // ROOM_DATA message — the only difference is the client opted in to a
-      // reply (by passing a callback / using `room.request()`), so the wire
-      // carries a `requestId` we must echo back. The handler's return value
-      // (awaited) becomes the response payload.
-      const requestId = decode.number(buffer, it);
-
-      const messageType = (decode.stringCheck(buffer, it))
-        ? decode.string(buffer, it)
-        : decode.number(buffer, it);
-
-      let message;
-      try {
-        message = (buffer.byteLength > it.offset)
-          ? unpack(buffer.subarray(it.offset, buffer.byteLength))
-          : undefined;
-        debugMessage("request #%d: '%s' -> %j (roomId: %s)", requestId, messageType, message, this.roomId);
-
-        // custom message validation (shared with the ROOM_DATA path)
-        if (this.onMessageValidators[messageType] !== undefined) {
-          message = standardValidate(this.onMessageValidators[messageType], message);
-        }
-
-      } catch (e: any) {
-        // Reply with an error so the client's pending request settles instead
-        // of timing out. (A plain ROOM_DATA would drop the client here, but a
-        // request has a caller waiting on the other end.)
-        debugAndPrintError(e);
-        this.#replyToRequest(client, requestId, ResponseStatus.ERROR, toResponseError(e));
-        return;
-      }
-
-      // A request is answered by the FIRST handler registered for its type.
-      // `onMessageEvents.emit` would run every handler and discard returns, so
-      // we invoke directly to capture the value. Wildcard ('*') handlers are
-      // not eligible — their (client, type, message) shape has no response
-      // contract — so a type with only a wildcard handler gets `no_handler`.
-      const handler = this.onMessageEvents.events[messageType as string]?.[0];
-
-      if (handler === undefined) {
-        this.#replyToRequest(client, requestId, ResponseStatus.ERROR, {
-          name: "no_handler",
-          message: `room "${this.roomName}" has no onMessage("${messageType}") handler to answer this request.`,
-        });
-        return;
-      }
-
-      // `Promise.resolve().then(...)` normalizes sync throws and async
-      // rejections into the same rejection path. When `onUncaughtException`
-      // is configured the handler is wrapped (see `onMessage`) and swallows
-      // its own errors, so the request resolves with `undefined` and the
-      // exception is reported there instead of as an ERROR response.
-      Promise.resolve().then(() => handler(client, message)).then(
-        (response) => this.#replyToRequest(client, requestId, ResponseStatus.OK, response),
-        (e) => {
-          debugAndPrintError(e);
-          this.#replyToRequest(client, requestId, ResponseStatus.ERROR, toResponseError(e));
-        },
-      );
+      this.#_messages.onRequest(client, buffer, it);
 
     } else if (code === Protocol.ROOM_DATA_BYTES) {
-      const messageType = (decode.stringCheck(buffer, it))
-        ? decode.string(buffer, it)
-        : decode.number(buffer, it);
-
-      let message: any = buffer.subarray(it.offset, buffer.byteLength);
-      debugMessage("received: '%s' -> %j (roomId: %s)", messageType, message, this.roomId);
-
-      const bytesMessageType = `_$b${messageType}`;
-
-      // custom message validation
-      try {
-        if (this.onMessageValidators[bytesMessageType] !== undefined) {
-          message = standardValidate(this.onMessageValidators[bytesMessageType], message);
-        }
-      } catch (e: any) {
-        debugAndPrintError(e);
-        client.leave(CloseCode.WITH_ERROR);
-        return;
-      }
-
-      if (this.onMessageEvents.events[bytesMessageType]) {
-        this.onMessageEvents.emit(bytesMessageType, client, message);
-
-      } else if (this.onMessageEvents.events['*']) {
-        this.onMessageEvents.emit('*', client, messageType, message);
-
-      } else {
-        this.onMessageFallbacks['__no_message_handler'](client, messageType, message);
-      }
+      this.#_messages.onDataBytes(client, buffer, it);
 
     } else if (code === Protocol.ROOM_INPUT_RELIABLE) {
-      if (client._inputDecoder) {
-        // Optional stamp prefix (TIMED bit) — shape set by THIS room's derived
-        // stamp mode (the same flags it advertised in the handshake), so the
-        // length is unambiguous without a wire tag:
-        //   both:        [uint32 reckonTime][uint16 renderDelta] → renderTime = reckonTime − renderDelta
-        //   reckon-only: [uint32 reckonTime]
-        //   render-only: [uint32 renderTime]
-        // reckonTime = the client's serverNow estimate at sample time (what its
-        // forward-RECKONED entities displayed at); renderTime = the snapshot-
-        // timeline instant it was rendering (lerp display). `it` starts at
-        // offset 1, so the body begins at `it.offset`.
-        let renderTime = 0;
-        let reckonTime = 0;
-        if (modifiers & PROTOCOL_MODIFIER_MASK) {
-          this.#resolveStampMode();
-          if (this.#inputStampReckon && this.#inputStampRender) {
-            reckonTime = decode.uint32(buffer, it);
-            const renderDelta = decode.uint16(buffer, it);
-            renderTime = reckonTime > renderDelta ? reckonTime - renderDelta : 0;
-          } else if (this.#inputStampReckon) {
-            reckonTime = decode.uint32(buffer, it);
-          } else {
-            renderTime = decode.uint32(buffer, it);
-          }
-        }
-        try {
-          client._inputDecoder.decode(buffer.subarray(it.offset));
-        } catch (e: any) {
-          debugAndPrintError(e);
-          return;
-        }
-        client._lastInputReceivedAt = performance.now();
-        // Counter mirrors the SDK's `#sentInputCount`; echoed in the
-        // TIMED prefix as `lastInputSeq` so the client can compute RTT.
-        client._receivedInputCount = (client._receivedInputCount ?? 0) + 1;
-        this.#captureInput(client, renderTime, reckonTime);
-      }
+      this._inputController?.decodeReliable(client, buffer, it, modifiers);
 
     } else if (code === Protocol.ROOM_INPUT_UNRELIABLE) {
-      if (client._inputDecoder) {
-        try {
-          // Each slot carries its framework seq (base seq + position) — dedup the
-          // redundancy ring on it, no user seqField required.
-          client._inputDecoder.decodeAll(buffer.subarray(1), (_inst, seq) => this.#captureInput(client, 0, 0, seq));
-        } catch (e: any) {
-          debugAndPrintError(e);
-          return;
-        }
-        client._lastInputReceivedAt = performance.now();
-      }
+      this._inputController?.decodeUnreliable(client, buffer);
 
     } else if (code === Protocol.JOIN_ROOM && client.state === ClientState.JOINING) {
       // join room has been acknowledged by the client
@@ -2651,6 +2225,10 @@ export class Room<T extends RoomOptions = RoomOptions> {
       return;
     }
 
+    // Freeze the seat: a held (reconnecting) session idles from the first tick
+    // instead of replaying last-known moves.
+    this._inputController?.freeze(client as unknown as ClientPrivate);
+
     if (method) {
       debugMatchMaking(`${method.name}, sessionId: \'%s\' (close code: %d, roomId: %s)`, client.sessionId, code, this.roomId);
 
@@ -2691,6 +2269,9 @@ export class Room<T extends RoomOptions = RoomOptions> {
 
     // trigger 'leave' only if seat reservation has been fully consumed
     if (this._reservedSeats[client.sessionId] === undefined) {
+      // Session fully gone — drop its accessor. No identity check needed: a
+      // successful reconnect skips this finalizer, so the entry is always this client's.
+      this._inputController?.release(client.sessionId);
       this._events.emit('leave', client, willDispose);
     }
   }

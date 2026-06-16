@@ -154,6 +154,15 @@ What does "no input this tick" mean? Three policies, all expressible — declare
   const cmd = this.input(sid).next();   // typed I — never undefined
   ```
 
+The policy also covers **absent sessions** — a player that dropped but is still
+inside its `allowReconnection` window, so its entity lingers in `state` while it's
+out of `this.clients`. `inputs.get(sessionId)` resolves through an input-owned
+registry that outlives the connection, so the loop keeps synthesizing idle for the
+dropped seat with no `if (!cmd) continue` — the entity holds at rest (or coasts on
+the hold-everything policy) until it reconnects or `onLeave` deletes it. Liveness
+stays a userland check inside the callback (`this.clients.get(sessionId)?.state ===
+ClientState.JOINED`), so held intents naturally gate off while disconnected.
+
 Per-call `{ idle }` overrides the room policy for that call; `{ idle: false }`
 suppresses it. When `idle` is declared, `next()` types non-optional `I`.
 

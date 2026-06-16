@@ -144,6 +144,25 @@ describe("Input: idle synthesis (room-level policy + per-call)", () => {
     assert.deepEqual(buf.drain({ idle: true }), []);
     assert.equal(buf.next({ idle: true }), undefined);
   });
+
+  it("freeze-on-drop: clear() drops pending inputs → idle synthesizes from the next tick, latest preserved", () => {
+    // Mirrors the Room's `_onLeave` clear(): a dropped seat must idle immediately,
+    // not replay its last-known buffered moves, while ctx.latest stays readable.
+    const { buf, client } = setup({ idle: ({ latest }) => ({ yaw: latest?.yaw ?? 0 }) });
+    client._input = frame({ moveX: 1, yaw: 0.5 });   // the decoder-bound "latest"
+
+    buf.push(frame({ moveX: 9 }), 1000);              // a couple of unconsumed real inputs
+    buf.push(frame({ moveX: 8 }), 1100);
+    assert.equal(buf.size, 2);
+
+    buf.clear();                                       // drop (freeze)
+    assert.equal(buf.size, 0, "pending real inputs discarded");
+
+    const [f] = buf.drain();
+    assert.equal(f.moveX, 0, "no stale real input replayed — pure idle");
+    assert.ok(Math.abs(f.yaw - 0.5) < 1e-6, "idle ctx.latest survives clear()");
+    assert.equal(buf.next()!.moveX, 0, "keeps synthesizing idle while empty");
+  });
 });
 
 describe("Input: consume() / iteration", () => {

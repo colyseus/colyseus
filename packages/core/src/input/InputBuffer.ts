@@ -67,6 +67,20 @@ export type SanitizeInput<I> =
   | ((input: I) => void);
 
 /**
+ * @internal Validate a `subSteps` count. Throws on a fractional/non-positive
+ * value: both sides loop `subSteps` times at `dt/subSteps`, so anything but a
+ * whole number is a determinism bug, not a tunable. Shared by `defineInput`
+ * and `setFixedTimestep`.
+ */
+export function validateSubSteps(subSteps: number | undefined, source: string): number | undefined {
+  if (subSteps === undefined) { return undefined; }
+  if (!Number.isInteger(subSteps) || subSteps < 1) {
+    throw new Error(`[${source}] subSteps must be an integer >= 1 (got ${subSteps}).`);
+  }
+  return subSteps;
+}
+
+/**
  * @internal Compile a {@link SanitizeInput} spec into the per-frame function the
  * decode path applies. The map form precompiles to dense min/max arrays walked
  * with the NaN-safe branch clamp; the callback form passes through.
