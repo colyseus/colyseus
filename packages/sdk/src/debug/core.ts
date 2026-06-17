@@ -152,6 +152,7 @@ export function hidePanelsForSession() {
     var logoContainer = root.getElementById('debug-logo-container');
     var menu = root.getElementById('debug-menu');
     var panels = root.querySelectorAll('[id^="debug-panel-"]') as NodeListOf<HTMLElement>;
+    var predictContainer = root.getElementById('colyseus-debug-predict-container');
 
     if (logoContainer) {
         logoContainer.style.display = 'none';
@@ -162,6 +163,10 @@ export function hidePanelsForSession() {
     panels.forEach(function(panel) {
         panel.style.display = 'none';
     });
+    // Predict panel is a sibling overlay (own id) — hide it alongside the rest.
+    if (predictContainer) {
+        predictContainer.style.display = 'none';
+    }
 }
 
 

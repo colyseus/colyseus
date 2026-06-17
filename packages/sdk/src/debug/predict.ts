@@ -13,8 +13,11 @@
  *     per-profile field list) here rather than in the engine.
  *   - Handle methods are queried lazily — never persisted as fields here,
  *     so live Predict mutations stay reflected.
+ *
+ * Styling mirrors the room debug-panels (`debug/panel.ts`): black translucent
+ * card, white/grey monospace text, action-button-style mode pills.
  */
-import { getDebugRoot } from "./core.ts";
+import { getDebugRoot, isPanelsHidden } from "./core.ts";
 import {
     toDebugHandle,
     type PredictCore,
@@ -37,6 +40,34 @@ const panels = new Map<string, PredictPanelEntry>();
 let container: HTMLElement | null = null;
 let pollInterval: any = null;
 const POLL_MS = 250; // refresh attached count at 4 Hz
+
+// Style tokens — match the room debug-panels (debug/panel.ts).
+const SECONDARY = "#888";
+const DIVIDER = "rgba(255,255,255,0.15)";
+const PILL_BORDER = "rgba(255,255,255,0.2)";
+const PILL_BG = "rgba(255,255,255,0.05)";
+const PILL_HOVER = "rgba(255,255,255,0.15)";
+const PILL_ACTIVE_BG = "rgba(255,255,255,0.18)";
+const PILL_ACTIVE_BORDER = "rgba(255,255,255,0.4)";
+
+const ALL_MODES: PredictMode[] = ["lerp", "extrapolate", "damped", "reckon", "raw"];
+
+// Compact glyphs so all five modes fit on one line; the mode name is the tooltip.
+const ICON_ATTRS =
+    'width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" ' +
+    'stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"';
+const MODE_ICONS: Record<string, string> = {
+    // lerp — linear interpolation between two snapshots
+    lerp: `<svg ${ICON_ATTRS}><circle cx="3.5" cy="12.5" r="1.4" fill="currentColor" stroke="none"/><circle cx="12.5" cy="3.5" r="1.4" fill="currentColor" stroke="none"/><line x1="4.6" y1="11.4" x2="11.4" y2="4.6"/></svg>`,
+    // extrapolate — project the trajectory forward past the last point
+    extrapolate: `<svg ${ICON_ATTRS}><circle cx="2.5" cy="8" r="1.4" fill="currentColor" stroke="none"/><line x1="3.8" y1="8" x2="13" y2="8"/><polyline points="9.5,4.5 13,8 9.5,11.5"/></svg>`,
+    // damped — oscillation settling to the target
+    damped: `<svg ${ICON_ATTRS}><path d="M2 8 C 3 3 5 3 6 8 C 6.8 11 7.8 11 8.6 8 C 9.2 6.2 10 6.2 13 7.6"/></svg>`,
+    // reckon — re-runs the simulation function forward (dead reckoning), so "fn"
+    reckon: `<span style="font:italic 700 11px/1 ui-monospace,monospace">fn</span>`,
+    // raw — snap straight to server values (discrete steps)
+    raw: `<svg ${ICON_ATTRS}><polyline points="2,13 5.5,13 5.5,9 9,9 9,5 13,5"/></svg>`,
+};
 
 // -----------------------------------------------------------------------------
 // Registry installation
@@ -99,17 +130,126 @@ function getContainer(): HTMLElement {
         position: "fixed",
         top: "12px",
         left: "12px",
-        display: "flex",
+        // Honor a session that hid the whole debug overlay before Predict mounted.
+        display: isPanelsHidden() ? "none" : "flex",
         flexDirection: "column",
         gap: "8px",
         zIndex: "2147483645",
-        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
+        fontFamily: "monospace",
         fontSize: "11px",
-        color: "#d8e2f0",
+        color: "#fff",
         pointerEvents: "auto",
     });
     root.appendChild(container);
     return container;
+}
+
+// -----------------------------------------------------------------------------
+// Collapse state — persisted per instance for the session (like the hidden flag)
+// -----------------------------------------------------------------------------
+
+const COLLAPSE_KEY = "colyseus-debug-predict-collapsed";
+
+function readCollapsed(): Set<string> {
+    try {
+        const arr = JSON.parse(sessionStorage.getItem(COLLAPSE_KEY) || "[]");
+        return new Set(Array.isArray(arr) ? arr : []);
+    } catch {
+        return new Set();
+    }
+}
+
+function setCollapsed(name: string, collapsed: boolean): void {
+    const set = readCollapsed();
+    if (collapsed) set.add(name);
+    else set.delete(name);
+    try {
+        sessionStorage.setItem(COLLAPSE_KEY, JSON.stringify([...set]));
+    } catch {
+        // storage unavailable — ignore
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Mode pills (segmented buttons, styled like panel.ts action buttons)
+// -----------------------------------------------------------------------------
+
+// Instant tooltip — the native `title` attribute waits ~1s before showing.
+let tooltipEl: HTMLElement | null = null;
+
+function getTooltip(): HTMLElement {
+    if (tooltipEl) return tooltipEl;
+    tooltipEl = document.createElement("div");
+    tooltipEl.style.cssText =
+        "position:fixed;z-index:2147483646;pointer-events:none;display:none;white-space:nowrap;" +
+        "background:rgba(0,0,0,0.95);color:#fff;font-family:monospace;font-size:10px;" +
+        "padding:3px 6px;border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,0.5)";
+    getDebugRoot().appendChild(tooltipEl);
+    return tooltipEl;
+}
+
+function showTooltip(text: string, anchor: HTMLElement): void {
+    const tip = getTooltip();
+    tip.textContent = text;
+    tip.style.display = "block";
+    const r = anchor.getBoundingClientRect(); // viewport coords — matches position:fixed
+    tip.style.left = `${r.left}px`;
+    tip.style.top = `${r.bottom + 4}px`;
+}
+
+function hideTooltip(): void {
+    if (tooltipEl) tooltipEl.style.display = "none";
+}
+
+function applyPillState(btn: HTMLElement, active: boolean): void {
+    btn.dataset.active = active ? "true" : "false";
+    btn.style.background = active ? PILL_ACTIVE_BG : PILL_BG;
+    btn.style.border = "1px solid " + (active ? PILL_ACTIVE_BORDER : PILL_BORDER);
+    btn.style.color = active ? "#fff" : "#9aa0a6"; // dim inactive glyphs so the active one reads
+}
+
+function createPill(value: string, active: boolean, onClick: () => void): HTMLButtonElement {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.dataset.value = value;
+    btn.setAttribute("aria-label", value);
+    btn.innerHTML = MODE_ICONS[value] ?? value;
+    btn.style.cssText =
+        "display:inline-flex;align-items:center;justify-content:center;padding:4px 6px;line-height:0;" +
+        "border-radius:4px;cursor:pointer;transition:background .2s,border-color .2s";
+    applyPillState(btn, active);
+    btn.addEventListener("mouseenter", () => {
+        if (btn.dataset.active !== "true") btn.style.background = PILL_HOVER;
+        showTooltip(value, btn); // instant — names the icon on hover
+    });
+    btn.addEventListener("mouseleave", () => {
+        if (btn.dataset.active !== "true") btn.style.background = PILL_BG;
+        hideTooltip();
+    });
+    btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        onClick();
+    });
+    return btn;
+}
+
+/** Build a fresh row of mode pills; selecting one restyles its siblings then fires `onSelect`. */
+function renderModePills(host: HTMLElement, current: PredictMode, onSelect: (m: PredictMode) => void): void {
+    host.innerHTML = "";
+    for (const m of ALL_MODES) {
+        host.appendChild(createPill(m, m === current, () => {
+            for (const sib of host.querySelectorAll<HTMLElement>("button")) {
+                applyPillState(sib, sib.dataset.value === m);
+            }
+            onSelect(m);
+        }));
+    }
+}
+
+function syncModePills(host: HTMLElement, current: PredictMode): void {
+    for (const pill of host.querySelectorAll<HTMLElement>("button")) {
+        applyPillState(pill, pill.dataset.value === current);
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -118,63 +258,54 @@ function getContainer(): HTMLElement {
 
 function renderCard(handle: PredictDebugHandle): HTMLElement {
     const card = document.createElement("div");
-    Object.assign(card.style, {
-        width: "260px",
-        background: "rgba(10, 15, 26, 0.92)",
-        border: "1px solid #24304a",
-        borderRadius: "6px",
-        padding: "8px 10px",
-        backdropFilter: "blur(6px)",
-    });
+    card.dataset.name = handle.name;
+    card.style.cssText =
+        "width:240px;background:rgba(0,0,0,0.85);color:#fff;font-family:monospace;" +
+        "font-size:11px;border-radius:6px;padding:8px;box-shadow:0 4px 12px rgba(0,0,0,0.5)";
 
+    const collapsed = readCollapsed().has(handle.name);
+
+    // header (attached count + collapse chevron, stays visible when collapsed) / body
     card.innerHTML = `
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-            <span style="font-weight:600;color:#9fb4d8">Predict</span>
-            <span data-role="name" style="color:#6cc3ff;font-family:ui-monospace,monospace"></span>
+        <div data-role="header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:bold;border-bottom:1px solid ${DIVIDER};padding-bottom:4px;cursor:pointer;user-select:none">
+            <span>Predict <span data-role="name" style="color:${SECONDARY};font-weight:normal"></span></span>
+            <span style="display:flex;align-items:center;gap:8px;font-weight:normal">
+                <span data-role="attached" title="attached instances" style="color:${SECONDARY};font-variant-numeric:tabular-nums"></span>
+                <span data-role="chevron" style="color:${SECONDARY}">${collapsed ? "▸" : "▾"}</span>
+            </span>
         </div>
-
-        <div data-role="modes" style="display:flex;gap:8px;margin-bottom:6px;flex-wrap:wrap"></div>
-
-        <div data-role="sliders" style="display:flex;flex-direction:column;gap:4px;margin-bottom:6px"></div>
-
-        <div data-role="profiles" style="display:flex;flex-direction:column;gap:6px;margin-bottom:6px"></div>
-
-        <div style="display:grid;grid-template-columns:1fr auto;gap:4px;font-size:10px;line-height:1.4;color:#9fb4d8">
-            <span>attached</span><span data-role="attached" style="font-variant-numeric:tabular-nums;color:#d8e2f0"></span>
+        <div data-role="body" style="display:${collapsed ? "none" : "flex"};flex-direction:column;gap:8px;margin-top:6px">
+            <div data-role="modes" style="display:flex;gap:4px;flex-wrap:wrap"></div>
+            <div data-role="sliders" style="display:flex;flex-direction:column;gap:6px"></div>
+            <div data-role="profiles" style="display:none;flex-direction:column;gap:6px"></div>
         </div>
     `;
 
     card.querySelector<HTMLElement>('[data-role="name"]')!.textContent = handle.name;
+    card.querySelector<HTMLElement>('[data-role="attached"]')!.textContent = String(handle.attachedCount());
 
-    // All four modes are selectable. Reckon-only attaches still render under
-    // a smoothing mode (slots are dual-allocated by the SDK's Predict.attach
-    // for reckon configs); smoothing-only attaches still fall through under
-    // reckon mode because they have no simulated state.
+    const header = card.querySelector<HTMLElement>('[data-role="header"]')!;
+    const body = card.querySelector<HTMLElement>('[data-role="body"]')!;
+    const chevron = card.querySelector<HTMLElement>('[data-role="chevron"]')!;
+    header.addEventListener("click", () => {
+        const nowCollapsed = body.style.display !== "none";
+        body.style.display = nowCollapsed ? "none" : "flex";
+        chevron.textContent = nowCollapsed ? "▸" : "▾";
+        setCollapsed(handle.name, nowCollapsed);
+    });
+
+    // Defaults: mode picker + mode-specific sliders. All five modes stay
+    // selectable — reckon attaches dual-allocate smoothing slots, so flips
+    // between families never strand slot state.
     const modesEl = card.querySelector<HTMLElement>('[data-role="modes"]')!;
-    const allModes: Array<"lerp" | "extrapolate" | "damped" | "reckon" | "raw"> =
-        ["lerp", "extrapolate", "damped", "reckon", "raw"];
-    const currentMode = handle.mode();
-    for (const m of allModes) {
-        const label = document.createElement("label");
-        label.style.cssText = "display:flex;align-items:center;gap:3px;cursor:pointer";
-        const radio = document.createElement("input");
-        radio.type = "radio";
-        radio.name = `predict-${handle.name}-mode`;
-        radio.value = m;
-        radio.checked = m === currentMode;
-        radio.addEventListener("change", () => {
-            if (!radio.checked) return;
-            try {
-                handle.setDefaults({ mode: m } as any);
-                renderSliders(card, handle);
-            } catch (err) {
-                console.error("[predict-debug] setDefaults failed:", err);
-            }
-        });
-        label.appendChild(radio);
-        label.appendChild(document.createTextNode(m));
-        modesEl.appendChild(label);
-    }
+    renderModePills(modesEl, handle.mode(), (m) => {
+        try {
+            handle.setDefaults({ mode: m } as any);
+            renderSliders(card, handle);
+        } catch (err) {
+            console.error("[predict-debug] setDefaults failed:", err);
+        }
+    });
 
     renderSliders(card, handle);
     renderProfileSubcards(card, handle);
@@ -191,6 +322,7 @@ function renderCard(handle: PredictDebugHandle): HTMLElement {
 function renderProfileSubcards(card: HTMLElement, handle: PredictDebugHandle): void {
     const host = card.querySelector<HTMLElement>('[data-role="profiles"]')!;
     const profiles = handle.profiles().filter((p) => !p.isDefault);
+    host.style.display = profiles.length ? "flex" : "none"; // no empty gap when none
 
     const key = profiles.map((p) => p.id).join(",");
     if (host.dataset.key !== key) {
@@ -201,7 +333,7 @@ function renderProfileSubcards(card: HTMLElement, handle: PredictDebugHandle): v
         }
     } else {
         // Same profile set — refresh per-profile sub-card state so slider
-        // values + mode radios reflect any mutations (e.g. another panel
+        // values + mode pills reflect any mutations (e.g. another panel
         // tweaking the same profile, or `setProfile` calls from code).
         const nodes = host.children;
         for (let i = 0; i < profiles.length; i++) {
@@ -214,40 +346,26 @@ function buildProfileSubcard(handle: PredictDebugHandle, p: ProfileInfo): HTMLEl
     const el = document.createElement("div");
     el.dataset.profileId = String(p.id);
     el.style.cssText =
-        "border:1px solid #1d2740;border-radius:4px;padding:6px 8px;" +
-        "background:rgba(255,255,255,0.02);display:flex;flex-direction:column;gap:4px";
+        "border-top:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);" +
+        "border-radius:4px;padding:6px;display:flex;flex-direction:column;gap:4px";
     el.innerHTML = `
-        <div data-role="fields" style="font-size:10px;display:flex;align-items:baseline;gap:6px;font-family:ui-monospace,monospace">
-            <span data-role="cat" style="color:#6cc3ff;font-weight:600"></span>
-            <span data-role="fieldnames" style="color:#8aa1c6"></span>
+        <div data-role="fields" style="font-size:10px;display:flex;align-items:baseline;gap:6px">
+            <span data-role="cat" style="color:#fff;font-weight:bold"></span>
+            <span data-role="fieldnames" style="color:${SECONDARY}"></span>
         </div>
-        <div data-role="modes" style="display:flex;gap:6px;flex-wrap:wrap;font-size:10px;color:#9fb4d8"></div>
+        <div data-role="modes" style="display:flex;gap:4px;flex-wrap:wrap"></div>
         <div data-role="sliders" style="display:flex;flex-direction:column;gap:3px"></div>
     `;
 
     const modesEl = el.querySelector<HTMLElement>('[data-role="modes"]')!;
-    const modes: PredictMode[] = ["lerp", "extrapolate", "damped", "reckon", "raw"];
-    for (const m of modes) {
-        const label = document.createElement("label");
-        label.style.cssText = "display:flex;align-items:center;gap:3px;cursor:pointer";
-        const radio = document.createElement("input");
-        radio.type = "radio";
-        radio.name = `predict-${handle.name}-profile-${p.id}-mode`;
-        radio.value = m;
-        radio.dataset.mode = m;
-        radio.addEventListener("change", () => {
-            if (!radio.checked) return;
-            try {
-                handle.setProfile(p.id, { mode: m });
-                renderProfileSliders(el, handle, p.id, m);
-            } catch (err) {
-                console.error("[predict-debug] setProfile failed:", err);
-            }
-        });
-        label.appendChild(radio);
-        label.appendChild(document.createTextNode(m));
-        modesEl.appendChild(label);
-    }
+    renderModePills(modesEl, p.mode, (m) => {
+        try {
+            handle.setProfile(p.id, { mode: m });
+            renderProfileSliders(el, handle, p.id, m);
+        } catch (err) {
+            console.error("[predict-debug] setProfile failed:", err);
+        }
+    });
 
     refreshProfileSubcard(el, handle, p);
     return el;
@@ -260,10 +378,7 @@ function refreshProfileSubcard(el: HTMLElement, handle: PredictDebugHandle, p: P
     catEl.textContent = p.label ? `${p.label} ·` : "";
     namesEl.textContent = p.fields.length === 0 ? "(no fields)" : p.fields.join(", ");
 
-    const modesEl = el.querySelector<HTMLElement>('[data-role="modes"]')!;
-    for (const radio of modesEl.querySelectorAll<HTMLInputElement>('input[type="radio"]')) {
-        radio.checked = radio.dataset.mode === p.mode;
-    }
+    syncModePills(el.querySelector<HTMLElement>('[data-role="modes"]')!, p.mode);
 
     // Re-render sliders only when the mode changed, otherwise patch in place
     // so user-dragged sliders don't snap back on the poll cycle.
@@ -335,15 +450,19 @@ function addSlider(
     initial: number,
     onChange: (value: number) => void,
 ): void {
+    // Two lines: label + value on top, full-width track below — long labels can
+    // never push the value readout past the card edge.
     const row = document.createElement("label");
-    row.style.cssText = "display:flex;align-items:center;gap:6px;font-size:10px;color:#9fb4d8";
+    row.style.cssText = `display:flex;flex-direction:column;gap:2px;font-size:10px;color:${SECONDARY}`;
     row.innerHTML = `
-        <span style="flex:1 0 100px">${label}</span>
-        <input type="range" min="${min}" max="${max}" value="${initial}" style="flex:1;accent-color:#6cc3ff"/>
-        <span style="width:34px;text-align:right;font-variant-numeric:tabular-nums;color:#d8e2f0"></span>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:6px">
+            <span>${label}</span>
+            <span data-role="val" style="color:#fff;font-variant-numeric:tabular-nums"></span>
+        </div>
+        <input type="range" min="${min}" max="${max}" value="${initial}" style="width:100%;margin:0;accent-color:#fff"/>
     `;
     const input = row.querySelector<HTMLInputElement>("input")!;
-    const num = row.querySelector<HTMLElement>("span:last-child")!;
+    const num = row.querySelector<HTMLElement>('[data-role="val"]')!;
     num.textContent = String(initial);
     input.addEventListener("input", () => {
         const v = Number(input.value);
