@@ -275,8 +275,6 @@ function renderCard(handle: PredictDebugHandle): HTMLElement {
             </span>
         </div>
         <div data-role="body" style="display:${collapsed ? "none" : "flex"};flex-direction:column;gap:8px;margin-top:6px">
-            <div data-role="modes" style="display:flex;gap:4px;flex-wrap:wrap"></div>
-            <div data-role="sliders" style="display:flex;flex-direction:column;gap:6px"></div>
             <div data-role="profiles" style="display:none;flex-direction:column;gap:6px"></div>
         </div>
     `;
@@ -294,34 +292,26 @@ function renderCard(handle: PredictDebugHandle): HTMLElement {
         setCollapsed(handle.name, nowCollapsed);
     });
 
-    // Defaults: mode picker + mode-specific sliders. All five modes stay
-    // selectable — reckon attaches dual-allocate smoothing slots, so flips
-    // between families never strand slot state.
-    const modesEl = card.querySelector<HTMLElement>('[data-role="modes"]')!;
-    renderModePills(modesEl, handle.mode(), (m) => {
-        try {
-            handle.setDefaults({ mode: m } as any);
-            renderSliders(card, handle);
-        } catch (err) {
-            console.error("[predict-debug] setDefaults failed:", err);
-        }
-    });
-
-    renderSliders(card, handle);
+    // No card-level "defaults" picker: per-attach-group profiles own every
+    // slot, so editing the defaults is inert for the common case. The defaults
+    // surface only as a sub-card, and only when something actually tracks it
+    // (see renderProfileSubcards).
     renderProfileSubcards(card, handle);
     return card;
 }
 
 /**
- * Render one sub-card per non-default profile. The defaults profile is
- * already exposed via the main card's mode picker + sliders, so it's elided
- * here to avoid duplication. Sticky DOM: only rebuilds when the set of
- * profile IDs changes, otherwise patches text/value in place — keeps slider
- * focus and avoids reflow churn on the 4 Hz poll.
+ * Render one sub-card per profile. Per-attach-group profiles always show; the
+ * mutable defaults profile (#0) shows ONLY when something actually tracks it
+ * (`fields.length > 0`) — i.e. only when editing it has an effect. With the
+ * common `attachAll` usage every slot is group-owned, so the defaults stay
+ * hidden. Sticky DOM: only rebuilds when the set of profile IDs changes,
+ * otherwise patches text/value in place — keeps slider focus and avoids reflow
+ * churn on the 4 Hz poll.
  */
 function renderProfileSubcards(card: HTMLElement, handle: PredictDebugHandle): void {
     const host = card.querySelector<HTMLElement>('[data-role="profiles"]')!;
-    const profiles = handle.profiles().filter((p) => !p.isDefault);
+    const profiles = handle.profiles().filter((p) => !p.isDefault || p.fields.length > 0);
     host.style.display = profiles.length ? "flex" : "none"; // no empty gap when none
 
     const key = profiles.map((p) => p.id).join(",");
@@ -375,7 +365,7 @@ function refreshProfileSubcard(el: HTMLElement, handle: PredictDebugHandle, p: P
     // Category (attach-group label) + the fields it covers, e.g. "enemies · x, y, vx".
     const catEl = el.querySelector<HTMLElement>('[data-role="cat"]')!;
     const namesEl = el.querySelector<HTMLElement>('[data-role="fieldnames"]')!;
-    catEl.textContent = p.label ? `${p.label} ·` : "";
+    catEl.textContent = p.label ? `${p.label} ·` : (p.isDefault ? "default ·" : "");
     namesEl.textContent = p.fields.length === 0 ? "(no fields)" : p.fields.join(", ");
 
     syncModePills(el.querySelector<HTMLElement>('[data-role="modes"]')!, p.mode);
@@ -415,32 +405,6 @@ function renderProfileSliders(subcard: HTMLElement, handle: PredictDebugHandle, 
 // -----------------------------------------------------------------------------
 // Mode-specific slider rendering
 // -----------------------------------------------------------------------------
-
-function renderSliders(card: HTMLElement, handle: PredictDebugHandle): void {
-    const slidersEl = card.querySelector<HTMLElement>('[data-role="sliders"]')!;
-    slidersEl.innerHTML = "";
-    const mode = handle.mode();
-
-    if (mode === "lerp") {
-        addSlider(slidersEl, "delay (ms)", 0, 300, handle.smoothingDefaults().delay, (v) =>
-            handle.setDefaults({ mode: "lerp", delay: v } as any));
-        addSlider(slidersEl, "tickInterval (ms, 0=off)", 0, 100, handle.smoothingDefaults().tickInterval ?? 0, (v) =>
-            handle.setDefaults({ mode: "lerp", tickInterval: v } as any));
-    } else if (mode === "extrapolate") {
-        addSlider(slidersEl, "maxExtrapolate (ms)", 0, 300, handle.smoothingDefaults().maxExtrapolate, (v) =>
-            handle.setDefaults({ mode: "extrapolate", maxExtrapolate: v } as any));
-        addSlider(slidersEl, "tickInterval (ms, 0=off)", 0, 100, handle.smoothingDefaults().tickInterval ?? 0, (v) =>
-            handle.setDefaults({ mode: "extrapolate", tickInterval: v } as any));
-    } else if (mode === "damped") {
-        addSlider(slidersEl, "damping", 2, 40, handle.smoothingDefaults().damping, (v) =>
-            handle.setDefaults({ mode: "damped", damping: v } as any));
-    } else if (mode === "reckon") {
-        addSlider(slidersEl, "smoothing", 0, 40, handle.reckonDefaults().smoothing, (v) =>
-            handle.setDefaults({ mode: "reckon", smoothing: v } as any));
-        addSlider(slidersEl, "substep (ms)", 1, 64, handle.reckonDefaults().substep, (v) =>
-            handle.setDefaults({ mode: "reckon", substep: v } as any));
-    }
-}
 
 function addSlider(
     parent: HTMLElement,
