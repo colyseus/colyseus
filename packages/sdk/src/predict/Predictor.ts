@@ -249,6 +249,15 @@ export interface SmoothingOptions {
      * sample arrivals).
      */
     tickInterval?: number;
+    /**
+     * Treat the field as an ANGLE in radians. Samples are stored unwrapped
+     * (continuous) — each new value is folded onto the previous over the
+     * SHORTEST arc — so `lerp` / `damped` / `extrapolate` interpolate correctly
+     * across the ±π seam instead of spinning the long way round. Applies to every
+     * field in the attach config, so attach angular fields (yaw, pitch) in a
+     * SEPARATE call from linear ones (x, y, z). Default false.
+     */
+    angle?: boolean;
 }
 
 /**
@@ -470,6 +479,7 @@ const SMOOTHING_DEFAULTS: Required<SmoothingOptions> = {
     damping: 15,
     maxExtrapolate: 200,
     tickInterval: 0,
+    angle: false,
 };
 
 /** Reckon-mode defaults. `step` stays undefined — must be supplied at construct time
@@ -542,6 +552,9 @@ export interface ReckonAttachConfig<T = any> {
     smoothing?: number;
     /** Substep length in ms. Defaults to the Predict's setting (or 16). */
     substep?: number;
+    /** Treat every field here as a radian ANGLE — see {@link SmoothingOptions.angle}.
+     *  Use only on smoothing-mode attaches (lerp/damped/extrapolate), not reckon. */
+    angle?: boolean;
     /**
      * Override how the per-frame reckon scratch is built. Leave unset for the
      * default fast path (a pooled schema instance refilled via `$values` by
@@ -575,8 +588,8 @@ interface GroupPlan {
     reckonSmoothing?: number;
     reckonSubstep?: number;
     reckonSnapshot?: (state: any) => any;
-    /** Field → profile id. All children of the group share these ids. */
-    fieldProfiles: Array<{ field: string; profileIdx: number }>;
+    /** Field → profile id (+ angle flag). All children of the group share these. */
+    fieldProfiles: Array<{ field: string; profileIdx: number; angle?: boolean }>;
 }
 
 /**
@@ -743,6 +756,9 @@ export class Predict<TState = any> {
     private slotBuf: Float64Array = new Float64Array(64 * SLOT_STRIDE);
     private slotCount: number = 0;
     private slotDetach: Array<(() => void) | undefined> = [];
+    // Per-slot angle flag (parallel to slotDetach). Marks slots whose samples are
+    // stored unwrapped so the interpolators handle the ±π seam — see `angle` option.
+    private slotAngle: boolean[] = [];
     private freeSlots: number[] = [];
     private slotByRef = new Map<number, Map<string, number>>();
     private simByRef = new Map<number, SimState>();
@@ -822,6 +838,7 @@ export class Predict<TState = any> {
                     damping: s.damping ?? SMOOTHING_DEFAULTS.damping,
                     maxExtrapolate: s.maxExtrapolate ?? SMOOTHING_DEFAULTS.maxExtrapolate,
                     tickInterval: s.tickInterval ?? SMOOTHING_DEFAULTS.tickInterval,
+                    angle: s.angle ?? SMOOTHING_DEFAULTS.angle,
                 };
             })()
             : { ...SMOOTHING_DEFAULTS };
@@ -1179,7 +1196,7 @@ export class Predict<TState = any> {
         // non-empty → frozen, value-deduped). The mode encoded in the
         // profile drives dispatch — including reckon and raw — so this
         // primitive accepts any `PredictMode` in `opts.mode`.
-        return this.trackWithProfile(instance, field, this.profileFromOpts(opts));
+        return this.trackWithProfile(instance, field, this.profileFromOpts(opts), opts.angle ?? false);
     }
 
     /**
@@ -1193,6 +1210,7 @@ export class Predict<TState = any> {
         instance: T,
         field: NumericKeys<T>,
         profileIdx: number,
+        angle: boolean = false,
     ): () => void {
         // Resolve the schema-native identity once, here at the API boundary.
         // The hot path (samples + reads) operates purely on these integers.
@@ -1224,6 +1242,7 @@ export class Predict<TState = any> {
         // makes the ring logically empty (entry floats are masked by count).
         buf[base + SLOT_RING_HEAD] = 0;
         buf[base + SLOT_RING_COUNT] = 0;
+        this.slotAngle[slotIdx] = angle;
 
         let perRef = this.slotByRef.get(refId);
         if (perRef === undefined) { perRef = new Map(); this.slotByRef.set(refId, perRef); }
@@ -1246,6 +1265,10 @@ export class Predict<TState = any> {
                 const now = performance.now();
                 const b = this.slotBuf;
                 const i = slotIdx * SLOT_STRIDE;
+                // Angle field: fold the new wrapped value onto the last stored (continuous)
+                // one over the shortest arc, so the ring stays monotonic across ±π and the
+                // interpolators never spin the long way. sin/cos make the delta period-2π.
+                if (angle) { const prev = b[i + SLOT_V1]; current = prev + Math.atan2(Math.sin(current - prev), Math.cos(current - prev)); }
                 const pBase = (b[i + SLOT_PROFILE] | 0) * PROFILE_STRIDE;
                 const tickInterval = this.profileBuf[pBase + P_TICK_INTERVAL];
 
@@ -1590,7 +1613,7 @@ export class Predict<TState = any> {
      * it without bleeding into other groups.
      */
     private buildGroupPlan<T extends object>(config: AttachConfig<T>, label: string): GroupPlan {
-        const fieldProfiles: Array<{ field: string; profileIdx: number }> = [];
+        const fieldProfiles: Array<{ field: string; profileIdx: number; angle?: boolean }> = [];
         if (isReckonAttachConfig(config)) {
             const rcfg = config as ReckonAttachConfig<T>;
             if (!Array.isArray(rcfg.fields)) {
@@ -1608,7 +1631,7 @@ export class Predict<TState = any> {
             }
             // One profile for the whole group (all fields share it).
             const profileIdx = this.groupProfile({ mode: effectiveMode }, label);
-            for (const f of rcfg.fields) fieldProfiles.push({ field: f as string, profileIdx });
+            for (const f of rcfg.fields) fieldProfiles.push({ field: f as string, profileIdx, angle: rcfg.angle });
             return {
                 label,
                 isReckon,
@@ -1628,7 +1651,7 @@ export class Predict<TState = any> {
             const value = smoothing[key];
             if (value === undefined) continue;
             const o: SmoothingOptions = typeof value === "string" ? { mode: value } : value;
-            fieldProfiles.push({ field: key as string, profileIdx: this.groupProfile(o, label) });
+            fieldProfiles.push({ field: key as string, profileIdx: this.groupProfile(o, label), angle: o.angle });
         }
         return { label, isReckon: false, fieldProfiles };
     }
@@ -1645,8 +1668,8 @@ export class Predict<TState = any> {
                 snapshot: plan.reckonSnapshot as ((s: T) => T) | undefined,
             }));
         }
-        for (const { field, profileIdx } of plan.fieldProfiles) {
-            offs.push(this.trackWithProfile(instance, field as NumericKeys<T>, profileIdx));
+        for (const { field, profileIdx, angle } of plan.fieldProfiles) {
+            offs.push(this.trackWithProfile(instance, field as NumericKeys<T>, profileIdx, !!angle));
         }
         return () => { for (const f of offs) f(); };
     }
