@@ -39,7 +39,10 @@ export function loadPreferences() {
         // Load jitter
         if (prefs.jitter !== undefined && prefs.jitter !== null) {
             const jitterValue = parseInt(prefs.jitter, 10);
-            if (!isNaN(jitterValue) && jitterValue >= 0) preferences.latencySimulation.jitter = jitterValue;
+            if (!isNaN(jitterValue) && jitterValue >= 0) {
+                preferences.latencySimulation.jitter = jitterValue;
+                if (jitterValue > 0) preferences.latencySimulation.enabled = true;
+            }
         }
 
         // Load hidden state from sessionStorage

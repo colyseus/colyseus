@@ -19,7 +19,7 @@ loadPreferences();
 // previous+0.5ms), so jitter perturbs message SPACING without reordering — the reliable
 // schema decoder never sees an out-of-order patch (which would corrupt the delta stream).
 function jitteredDelay(base: number, jit: number, cursor: { t: number }): number {
-    if (!preferences.latencySimulation.enabled || base <= 0) return -1;
+    if (!preferences.latencySimulation.enabled || (base <= 0 && jit <= 0)) return -1;
     const j = jit > 0 ? (Math.random() * 2 - 1) * jit : 0;
     const now = performance.now();
     const at = Math.max(now + base + j, cursor.t + 0.5);
@@ -32,7 +32,7 @@ function jitteredDelay(base: number, jit: number, cursor: { t: number }): number
 (globalThis as { __net?: (delay?: number, jitter?: number) => void }).__net = (delay = 0, jitter = 0) => {
     preferences.latencySimulation.delay = delay;
     preferences.latencySimulation.jitter = jitter;
-    preferences.latencySimulation.enabled = delay > 0;
+    preferences.latencySimulation.enabled = delay > 0 || jitter > 0;
     savePreferences();
     console.log(`[net] inbound ${delay}±${jitter}ms (outbound half) — ${delay > 0 ? "ON" : "OFF"}`);
 };

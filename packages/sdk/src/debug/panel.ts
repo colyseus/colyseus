@@ -279,7 +279,7 @@ export function createMenu(logoContainer) {
         var value = parseInt(latencySlider.value);
         latencyValueSpan.textContent = value + 'ms';
         preferences.latencySimulation.delay = value;
-        preferences.latencySimulation.enabled = value > 0;
+        preferences.latencySimulation.enabled = value > 0 || preferences.latencySimulation.jitter > 0;
         updateSliderColor(value);
         updateContainerBackgroundColor();
         savePreferences();
@@ -288,6 +288,72 @@ export function createMenu(logoContainer) {
     latencyContainer.appendChild(latencyLabel);
     latencyContainer.appendChild(latencySlider);
     menu.appendChild(latencyContainer);
+
+    // Simulate jitter option — mirrors the latency slider; applied as ±jitter around
+    // the latency per message (order-preserving). Reuses the in-scope getSliderColor.
+    var jitterContainer = document.createElement('div');
+    jitterContainer.style.padding = '8px 12px';
+    jitterContainer.style.cursor = 'default';
+    var jitterLabel = document.createElement('div');
+    jitterLabel.style.cssText = 'margin-bottom:8px;display:flex;align-items:center;justify-content:space-between';
+    var jitterValueSpan = document.createElement('span');
+    jitterValueSpan.id = 'jitter-value';
+    jitterValueSpan.style.cssText = 'color:#888;font-size:11px';
+    jitterValueSpan.textContent = preferences.latencySimulation.jitter + 'ms';
+    var jitterTextSpan = document.createElement('span');
+    jitterTextSpan.textContent = 'Simulate jitter';
+    jitterLabel.appendChild(jitterTextSpan);
+    jitterLabel.appendChild(jitterValueSpan);
+
+    var jitterSlider = document.createElement('input');
+    jitterSlider.type = 'range';
+    jitterSlider.min = '0';
+    jitterSlider.max = preferences.maxLatency.toString();
+    jitterSlider.value = preferences.latencySimulation.jitter.toString();
+    jitterSlider.id = 'jitter-slider';
+    jitterSlider.style.cssText = 'border:none;width:100%;height:20px;padding:0;margin:0;outline:none;cursor:pointer;-webkit-appearance:none;appearance:none;background:transparent';
+
+    function updateJitterColor(value) {
+        var color = getSliderColor(value, 0, preferences.maxLatency);
+        var valuePercent = (value / preferences.maxLatency) * 100;
+        var yellowColor = getSliderColor(preferences.maxLatency / 2, 0, preferences.maxLatency);
+        var gradient = value <= preferences.maxLatency / 2
+            ? `linear-gradient(to right, #00c800 0%, ${yellowColor} ${valuePercent}%, #333 ${valuePercent}%, #333 100%)`
+            : `linear-gradient(to right, #00c800 0%, ${yellowColor} 50%, ${color} ${valuePercent}%, #333 ${valuePercent}%, #333 100%)`;
+        var root = getDebugRoot();
+        var ex = root.getElementById('jitter-slider-style');
+        if (ex) ex.remove();
+        var style = document.createElement('style');
+        style.id = 'jitter-slider-style';
+        style.textContent = `
+            #jitter-slider::-webkit-slider-runnable-track { background: ${gradient}; height: 6px; border-radius: 3px; border: none; }
+            #jitter-slider::-moz-range-track { background: ${gradient}; height: 6px; border-radius: 3px; border: none; }
+        `;
+        root.appendChild(style);
+    }
+    updateJitterColor(parseInt(jitterSlider.value));
+
+    var jitterThumbStyle = document.createElement('style');
+    jitterThumbStyle.textContent = `
+        #jitter-slider { background: transparent !important; }
+        #jitter-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #fff; cursor: pointer; border: 2px solid #888; box-shadow: 0 2px 4px rgba(0,0,0,0.2); transition: transform 0.1s ease; margin-top: -5px; }
+        #jitter-slider::-webkit-slider-thumb:hover { transform: scale(1.1); }
+        #jitter-slider::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: #fff; cursor: pointer; border: 2px solid #888; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+    `;
+    getDebugRoot().appendChild(jitterThumbStyle);
+
+    jitterSlider.addEventListener('input', function() {
+        var value = parseInt(jitterSlider.value);
+        jitterValueSpan.textContent = value + 'ms';
+        preferences.latencySimulation.jitter = value;
+        preferences.latencySimulation.enabled = preferences.latencySimulation.delay > 0 || value > 0;
+        updateJitterColor(value);
+        savePreferences();
+    });
+
+    jitterContainer.appendChild(jitterLabel);
+    jitterContainer.appendChild(jitterSlider);
+    menu.appendChild(jitterContainer);
 
     // Separator
     var separator = document.createElement('div');
