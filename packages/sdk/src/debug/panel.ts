@@ -136,7 +136,7 @@ export function createMenu(logoContainer) {
     latencyValueSpan.textContent = preferences.latencySimulation.delay + 'ms';
 
     var latencyTextSpan = document.createElement('span');
-    latencyTextSpan.textContent = 'Simulate latency';
+    latencyTextSpan.textContent = 'Latency';
 
     latencyLabel.appendChild(latencyTextSpan);
     latencyLabel.appendChild(latencyValueSpan);
@@ -283,6 +283,7 @@ export function createMenu(logoContainer) {
         updateSliderColor(value);
         updateContainerBackgroundColor();
         savePreferences();
+        syncPresetButtons(); // a manual drag → "Custom" (no preset highlighted)
     });
 
     latencyContainer.appendChild(latencyLabel);
@@ -301,7 +302,7 @@ export function createMenu(logoContainer) {
     jitterValueSpan.style.cssText = 'color:#888;font-size:11px';
     jitterValueSpan.textContent = preferences.latencySimulation.jitter + 'ms';
     var jitterTextSpan = document.createElement('span');
-    jitterTextSpan.textContent = 'Simulate jitter';
+    jitterTextSpan.textContent = 'Jitter';
     jitterLabel.appendChild(jitterTextSpan);
     jitterLabel.appendChild(jitterValueSpan);
 
@@ -349,11 +350,97 @@ export function createMenu(logoContainer) {
         preferences.latencySimulation.enabled = preferences.latencySimulation.delay > 0 || value > 0;
         updateJitterColor(value);
         savePreferences();
+        syncPresetButtons(); // a manual drag → "Custom" (no preset highlighted)
     });
 
     jitterContainer.appendChild(jitterLabel);
     jitterContainer.appendChild(jitterSlider);
     menu.appendChild(jitterContainer);
+
+    // Network presets — one tap sets both sliders. The active preset is derived
+    // by matching the saved delay/jitter (no extra persisted state), so it stays
+    // in sync with manual drags and the __net() console API.
+    var NET_PRESETS = [
+        { label: 'Off',   title: 'No simulated latency',                   delay: 0,   jitter: 0  },
+        { label: 'Low',   title: 'Low latency · 60ms, no jitter',          delay: 60,  jitter: 0  },
+        { label: 'Med',   title: 'Medium latency + jitter · 150ms ± 30ms', delay: 150, jitter: 30 },
+        { label: 'Large', title: 'Large latency + jitter · 300ms ± 60ms',  delay: 300, jitter: 60 },
+    ];
+
+    // Reflect a chosen (delay, jitter) onto BOTH sliders + their gradients/labels,
+    // persist, and re-highlight. Preset-click path only — slider handlers move one.
+    function applyLatencySim(delay, jitter) {
+        preferences.latencySimulation.delay = delay;
+        preferences.latencySimulation.jitter = jitter;
+        preferences.latencySimulation.enabled = delay > 0 || jitter > 0;
+        latencySlider.value = delay.toString();
+        jitterSlider.value = jitter.toString();
+        latencyValueSpan.textContent = delay + 'ms';
+        jitterValueSpan.textContent = jitter + 'ms';
+        updateSliderColor(delay);
+        updateJitterColor(jitter);
+        updateContainerBackgroundColor();
+        savePreferences();
+        syncPresetButtons();
+    }
+
+    function activePresetIndex() {
+        var d = preferences.latencySimulation.delay;
+        var j = preferences.latencySimulation.jitter;
+        for (var i = 0; i < NET_PRESETS.length; i++) {
+            if (NET_PRESETS[i].delay === d && NET_PRESETS[i].jitter === j) return i;
+        }
+        return -1; // custom
+    }
+
+    function applyPresetStyle(btn, active) {
+        btn.style.background = active ? 'rgba(255, 255, 255, 0.18)' : 'rgba(255, 255, 255, 0.05)';
+        btn.style.borderColor = active ? 'rgba(255, 255, 255, 0.4)' : 'rgba(255, 255, 255, 0.2)';
+        btn.style.color = active ? '#fff' : '#bbb';
+        btn.dataset.active = active ? 'true' : 'false';
+    }
+
+    var presetButtons = [];
+    function syncPresetButtons() {
+        var active = activePresetIndex();
+        for (var i = 0; i < presetButtons.length; i++) {
+            applyPresetStyle(presetButtons[i], i === active);
+        }
+    }
+
+    var presetContainer = document.createElement('div');
+    presetContainer.style.padding = '8px 12px 0';
+    presetContainer.style.cursor = 'default';
+    var presetLabel = document.createElement('div');
+    presetLabel.textContent = 'Network conditions simulator';
+    presetLabel.style.cssText = 'color:#888;font-size:11px;margin-bottom:8px';
+    var presetRow = document.createElement('div');
+    presetRow.style.cssText = 'display:flex;gap:4px';
+    NET_PRESETS.forEach(function(preset) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = preset.label;
+        btn.title = preset.title;
+        btn.style.cssText = 'flex:1;padding:4px 6px;border:1px solid;border-radius:4px;' +
+            'cursor:pointer;font-size:10px;font-family:inherit;transition:background 0.2s,border-color 0.2s';
+        applyPresetStyle(btn, false);
+        btn.addEventListener('mouseenter', function() {
+            if (btn.dataset.active !== 'true') btn.style.background = 'rgba(255, 255, 255, 0.12)';
+        });
+        btn.addEventListener('mouseleave', function() {
+            if (btn.dataset.active !== 'true') btn.style.background = 'rgba(255, 255, 255, 0.05)';
+        });
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            applyLatencySim(preset.delay, preset.jitter);
+        });
+        presetButtons.push(btn);
+        presetRow.appendChild(btn);
+    });
+    presetContainer.appendChild(presetLabel);
+    presetContainer.appendChild(presetRow);
+    menu.insertBefore(presetContainer, latencyContainer); // above the latency slider
+    syncPresetButtons(); // highlight the saved preset on first open
 
     // Separator
     var separator = document.createElement('div');
