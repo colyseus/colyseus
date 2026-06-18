@@ -1267,7 +1267,10 @@ export class Predict<TState = any> {
             instance,
             field,
             (current: number) => {
-                const now = performance.now();
+                // Server-time axis: stamp samples with the patch's server-encode time
+                // (jitter-free, server-stamped) when a clock is present, so interpolation
+                // is immune to network arrival jitter. No clock → client arrival (perf.now).
+                const now = (this.clock && this.clock.lastServerTime() > 0) ? this.clock.lastServerTime() : performance.now();
                 const b = this.slotBuf;
                 const i = slotIdx * SLOT_STRIDE;
                 // Angle field: fold the new wrapped value onto the last stored (continuous)
@@ -1989,7 +1992,15 @@ export class Predict<TState = any> {
         const newestOff = ringBase + newestPhys * 2;
         if (count === 1) return buf[newestOff + 1];
 
-        const target = now - pBuf[pBase + P_DELAY];
+        // Render at the SAME instant the server's lag-comp rewinds to — the input's
+        // renderTime = serverNow − renderDelay − rtt/2. On the server-time axis (clock
+        // present) that `− rtt/2` must be explicit; the arrival axis got it implicitly from
+        // transit. delay == renderDelay, so display == rewind → exact "what you see is what
+        // you hit", AND jitter-immune (off the jitter-free server-stamped sample times).
+        const delay = pBuf[pBase + P_DELAY];
+        const target = (this.clock && this.clock.lastServerTime() > 0)
+            ? this.clock.serverNow() - delay - this.clock.smoothedRtt() / 2
+            : now - delay;
         const oldestOff = ringBase + start * 2;
         if (target <= buf[oldestOff]) return buf[oldestOff + 1];
         if (target >= buf[newestOff]) return buf[newestOff + 1];
