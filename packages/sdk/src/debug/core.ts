@@ -7,7 +7,8 @@ export const preferences = {
     maxLatency: 350, // milliseconds
     latencySimulation: {
         enabled: false,
-        delay: 0 // milliseconds
+        delay: 0, // milliseconds (one-way inbound; outbound uses half)
+        jitter: 0 // milliseconds — per-message delay varies by ±jitter (order-preserving)
     },
     panelPosition: {
         position: 'top-right' // 'bottom-right', 'bottom-left', 'top-left', 'top-right'
@@ -35,6 +36,12 @@ export function loadPreferences() {
             }
         }
 
+        // Load jitter
+        if (prefs.jitter !== undefined && prefs.jitter !== null) {
+            const jitterValue = parseInt(prefs.jitter, 10);
+            if (!isNaN(jitterValue) && jitterValue >= 0) preferences.latencySimulation.jitter = jitterValue;
+        }
+
         // Load hidden state from sessionStorage
         if (sessionStorage.getItem('colyseus-debug-hidden') === 'true') {
             panelsHidden = true;
@@ -51,6 +58,7 @@ export function savePreferences() {
         localStorage.setItem('colyseus-debug-preferences', JSON.stringify({
             position: preferences.panelPosition.position,
             latency: preferences.latencySimulation.delay,
+            jitter: preferences.latencySimulation.jitter,
         }));
         sessionStorage.setItem('colyseus-debug-hidden', panelsHidden ? 'true' : 'false');
     } catch (e) {

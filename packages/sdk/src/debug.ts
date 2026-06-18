@@ -1,6 +1,6 @@
 import { Client } from "./Client.ts";
 import type { Room } from "./Room.ts";
-import { getDebugRoot, loadPreferences, preferences, repositionDebugPanels, roomDebugInfo } from "./debug/core.ts";
+import { getDebugRoot, loadPreferences, preferences, repositionDebugPanels, roomDebugInfo, savePreferences } from "./debug/core.ts";
 import { calculateRates, initialize, updateDebugPanel } from "./debug/panel.ts";
 import { installPredictDebug } from "./debug/predict.ts";
 
@@ -13,6 +13,29 @@ let globalUpdateInterval = null;
 
 // Load preferences on script load
 loadPreferences();
+
+// Order-preserving jittered delay. Returns the setTimeout ms, or -1 when sim is off.
+// `cursor.t` is a monotonic delivery clock: each message lands at max(now+base±jitter,
+// previous+0.5ms), so jitter perturbs message SPACING without reordering — the reliable
+// schema decoder never sees an out-of-order patch (which would corrupt the delta stream).
+function jitteredDelay(base: number, jit: number, cursor: { t: number }): number {
+    if (!preferences.latencySimulation.enabled || base <= 0) return -1;
+    const j = jit > 0 ? (Math.random() * 2 - 1) * jit : 0;
+    const now = performance.now();
+    const at = Math.max(now + base + j, cursor.t + 0.5);
+    cursor.t = at;
+    return at - now;
+}
+
+// Console API to drive the network simulator: `__net(80, 40)` = 80ms inbound latency
+// ± 40ms jitter (outbound uses half of each). `__net()` clears it.
+(globalThis as { __net?: (delay?: number, jitter?: number) => void }).__net = (delay = 0, jitter = 0) => {
+    preferences.latencySimulation.delay = delay;
+    preferences.latencySimulation.jitter = jitter;
+    preferences.latencySimulation.enabled = delay > 0;
+    savePreferences();
+    console.log(`[net] inbound ${delay}±${jitter}ms (outbound half) — ${delay > 0 ? "ON" : "OFF"}`);
+};
 
 // Start global update interval if not already running
 function ensureGlobalUpdateInterval() {
@@ -151,6 +174,9 @@ function applyMonkeyPatches() {
             debugInfo.bytesSentDelta += data.length;
         }
 
+        // Per-connection delivery cursors so jittered messages stay in arrival order.
+        const inCursor = { t: 0 }, outCursor = { t: 0 };
+
         // Monkey-patch: track received messages through onmessage event
         const originalOnMessage = transport.events.onmessage;
         transport.events.onmessage = function(event) {
@@ -166,8 +192,9 @@ function applyMonkeyPatches() {
 
             trackReceivedMessage(eventData);
 
-            // Apply latency simulation for received messages
-            if (preferences.latencySimulation.enabled && preferences.latencySimulation.delay > 0) {
+            // Apply latency simulation (order-preserving jitter) for received messages
+            const wait = jitteredDelay(preferences.latencySimulation.delay, preferences.latencySimulation.jitter, inCursor);
+            if (wait >= 0) {
                 setTimeout(function() {
                     // Create a synthetic event-like object
                     var syntheticEvent = {
@@ -177,7 +204,7 @@ function applyMonkeyPatches() {
                         type: 'message'
                     };
                     originalOnMessage.call(event.target, syntheticEvent);
-                }, preferences.latencySimulation.delay);
+                }, wait);
             } else {
                 return originalOnMessage.apply(this, arguments as any);
             }
@@ -192,7 +219,7 @@ function applyMonkeyPatches() {
             if (preferences.latencySimulation.enabled && preferences.latencySimulation.delay > 0) {
                 setTimeout(function(this: any) {
                     if (originalOnClose) originalOnClose.call(this, event);
-                }, preferences.latencySimulation.delay + 1);
+                }, preferences.latencySimulation.delay + preferences.latencySimulation.jitter + 1);
             } else {
                 if (originalOnClose) return originalOnClose.apply(this, arguments as any);
             }
@@ -203,8 +230,9 @@ function applyMonkeyPatches() {
         room.connection.send = function(data: any) {
             trackSentMessage(data);
 
-            // Apply latency simulation for sent messages
-            if (preferences.latencySimulation.enabled && preferences.latencySimulation.delay > 0) {
+            // Apply latency simulation (order-preserving jitter) for sent messages
+            const wait = jitteredDelay(preferences.latencySimulation.delay / 2, preferences.latencySimulation.jitter / 2, outCursor);
+            if (wait >= 0) {
                 var clonedData = data;
                 if (data instanceof ArrayBuffer) {
                     clonedData = data.slice(0);
@@ -216,7 +244,7 @@ function applyMonkeyPatches() {
 
                 setTimeout(function() {
                     originalSend(clonedData);
-                }, preferences.latencySimulation.delay / 2);
+                }, wait);
             } else {
                 return originalSend(data);
             }
