@@ -766,7 +766,6 @@ export class Predict<TState = any> {
     private defaultMode: PredictMode;
     private reckonDefaults: ReckonDefaults;
     private clock: RoomClockLike | undefined;
-    private attachDetachers = new Map<number, () => void>();
 
     // Profile table. Profile 0 is the defaults (mutable via setDefaults).
     // Subsequent indices are frozen, value-deduped via `profileKeys`.
@@ -907,9 +906,9 @@ export class Predict<TState = any> {
             mode: () => this.defaultMode,
             smoothingDefaults: () => this.readSmoothingDefaults(),
             reckonDefaults: () => ({ ...this.reckonDefaults }),
-            // Attached instances are already tracked in `attachDetachers`
-            // (a real engine map) — no separate debug-only count needed.
-            attachedCount: () => this.attachDetachers.size,
+            // Every attached instance owns ≥1 smoothing slot, so the slot map's key
+            // count IS the attached-instance count — no separate bookkeeping needed.
+            attachedCount: () => this.slotByRef.size,
             setDefaults: (opts) => this.setDefaults(opts),
             profiles: () => this.snapshotProfiles(),
             setProfile: (id, opts) => this.setProfile(id, opts),
@@ -1171,7 +1170,7 @@ export class Predict<TState = any> {
      * invokes onDispose listeners.
      */
     dispose(): void {
-        for (const refId of [...this.attachDetachers.keys()]) this.detachByRef(refId);
+        for (const refId of new Set([...this.slotByRef.keys(), ...this.simByRef.keys()])) this.detachByRef(refId);
         this.trackListeners.length = 0;
         for (const d of this.driven.splice(0)) (d as { dispose?(): void }).dispose?.();
         for (const cb of this.disposeListeners.splice(0)) cb();
@@ -1227,6 +1226,12 @@ export class Predict<TState = any> {
         // the `?? 0` only covers the case where the schema field hasn't
         // been hydrated by the decoder yet.
         const initial: number = (instance[field] as number) ?? 0;
+
+        // Idempotent per field: re-tracking the SAME field frees + replaces its slot,
+        // leaving OTHER fields on the instance untouched — so a 2nd attach()/attachAll()
+        // COMPOSES additively instead of leaking the old slot. This is what lets
+        // attachWithPlan skip the blanket detach that used to clobber sibling attaches.
+        if (this.slotByRef.get(refId)?.get(field) !== undefined) this.untrackSlot(refId, field);
 
         const slotIdx = this.allocSlot();
         const buf = this.slotBuf;
@@ -1675,7 +1680,6 @@ export class Predict<TState = any> {
     }
 
     private attachWithPlan<T extends object>(instance: T, plan: GroupPlan): () => void {
-        this.detach(instance);
         const refId = refIdOf(instance);
         if (refId === undefined) {
             throw new Error(
@@ -1683,8 +1687,10 @@ export class Predict<TState = any> {
                 "the decoder delivers the instance (e.g. inside onAdd).",
             );
         }
-        const detachInner = this.attachToGroup(instance, plan);
-        this.attachDetachers.set(refId, detachInner);
+        // No blanket detach: attachToGroup tracks each field idempotently (see
+        // trackWithProfile), so this ADDS to whatever is already tracked on the
+        // instance — a 2nd attachAll for other fields composes instead of clobbering.
+        this.attachToGroup(instance, plan);
         return () => this.detachByRef(refId);
     }
 
@@ -1695,10 +1701,13 @@ export class Predict<TState = any> {
     }
 
     private detachByRef(refId: number): void {
-        const off = this.attachDetachers.get(refId);
-        if (!off) return;
-        this.attachDetachers.delete(refId);
-        off();
+        // Data-driven teardown — no stored closures. slotByRef already maps the
+        // instance to every field tracked on it (across however many attach calls),
+        // so walk it and free each slot, then drop any reckon SimState. Snapshot the
+        // keys: untrackSlot mutates perRef (and deletes the slotByRef entry when empty).
+        const perRef = this.slotByRef.get(refId);
+        if (perRef) for (const field of [...perRef.keys()]) this.untrackSlot(refId, field);
+        this.simByRef.delete(refId);
     }
 
     /**
