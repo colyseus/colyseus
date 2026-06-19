@@ -4,11 +4,12 @@ import { HandshakeSection, InputFlags, PROTOCOL_MODIFIER_MASK } from '@colyseus/
 
 import {
   type InputAccessor, type InputAPI, type InputOptions,
+  type DefineInputOptions, type IdleDeclared,
   InputAccessorImpl, InputBufferImpl, NO_OP_INPUT_ACCESSOR,
   compileSanitizer, validateSubSteps,
 } from './InputBuffer.ts';
 import type { Client, ClientPrivate } from '../Transport.ts';
-import type { Room, DefineInputOptions, IdleDeclared } from '../Room.ts';
+import type { Room } from '../Room.ts';
 import { debugAndPrintError } from '../Debug.ts';
 
 /**

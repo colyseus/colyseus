@@ -355,7 +355,14 @@ const SLOT_STRIDE = SLOT_RING_BASE + RING_CAP * 2; // 8 + 32 = 40
 // sparse-but-regular streams are NOT collapsed) and pull the previous sample's
 // timestamp forward to one normal interval before the resume, so playback
 // continues at the real cadence with no crawl.
-const GAP_RESUME_MULT = 3;      // collapse when gap > MULT × recent interval
+const GAP_RESUME_MULT = 3;      // collapse when gap > MULT × recent interval (cadence unknown)
+// When the server's patch cadence is known (clock.patchInterval), collapse a
+// gap past ~1.5 patches: on the jitter-free server-time axis a moving field
+// gets a sample EVERY patch, so a longer gap means it went idle. This catches
+// short pauses that MULT × the (rate-scaled) measured interval misses when
+// patchRate ≠ tickRate — the rewind records every patch, so the client must
+// HOLD across an idle gap to match it (lag-comp "what you see is what you hit").
+const GAP_RESUME_PATCH_MULT = 1.5;
 const GAP_RESUME_MAX_MS = 250;  // cap the synthesized resume span (safety)
 
 // Profile table — packed Float64Array, stride 5. Profile 0 is the Predict's
@@ -1321,8 +1328,14 @@ export class Predict<TState = any> {
                     const h1 = head === 0 ? RING_CAP - 1 : head - 1;       // previous newest
                     const h2 = h1 === 0 ? RING_CAP - 1 : h1 - 1;           // one before it
                     const lastInterval = lastT1 - b[ringBase + h2 * 2];
-                    if (lastInterval > 0 && (snapT - lastT1) > GAP_RESUME_MULT * lastInterval) {
-                        const resumeSpan = lastInterval < GAP_RESUME_MAX_MS ? lastInterval : GAP_RESUME_MAX_MS;
+                    // Prefer the server-advertised patch cadence (stable, immune to
+                    // the measured interval drifting after a prior collapse); fall
+                    // back to MULT × the measured interval when it's unknown.
+                    const patchMs = this.clock?.patchInterval ? this.clock.patchInterval() : 0;
+                    const span = patchMs > 0 ? patchMs : lastInterval;
+                    const trigger = patchMs > 0 ? GAP_RESUME_PATCH_MULT * patchMs : GAP_RESUME_MULT * lastInterval;
+                    if (span > 0 && (snapT - lastT1) > trigger) {
+                        const resumeSpan = span < GAP_RESUME_MAX_MS ? span : GAP_RESUME_MAX_MS;
                         const sOff = ringBase + head * 2;
                         b[sOff] = snapT - resumeSpan;
                         b[sOff + 1] = b[ringBase + h1 * 2 + 1]; // previous (held) value

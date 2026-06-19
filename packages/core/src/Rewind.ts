@@ -1,4 +1,5 @@
 import type { MapSchema, ArraySchema, SetSchema } from "@colyseus/schema";
+import { $METADATA } from "./utils/Utils.ts";
 
 const DEFAULT_MAX_REWIND_MS = 500;
 /** Ring-sizing fallback when the record cadence isn't supplied (manual `record(now)`
@@ -8,7 +9,6 @@ const DEFAULT_SAMPLE_INTERVAL_MS = 1000 / 60;
 
 // Hot record() path: dense `$values[index]` is ~15× faster than `inst[fieldName]`; entity symbol prop ~8× faster than a WeakMap.
 const $VALUES: symbol = Symbol.for("$values");
-const $METADATA: symbol = (Symbol as { metadata?: symbol }).metadata ?? Symbol.for("Symbol.metadata");
 /** Per-entity history, under this private symbol ON the entity. Symbol-keyed so it's
  *  invisible to Object.keys / `assign` / `clone`, and GC'd with the entity. */
 const $HISTORY = Symbol("rewind.history");

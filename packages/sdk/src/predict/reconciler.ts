@@ -201,6 +201,19 @@ export class Reconciler<S extends object = any, I = any> {
     private prev: Record<string, number> = {};
     /** Per-field visual offset (numeric fields only) decaying toward 0. */
     private error: Record<string, number> = {};
+
+    // --- Debug telemetry (no effect on prediction) ---------------------------
+    /** Per-numeric-field correction injected by the most recent reconcile — the
+     *  raw pop (rendered-before − corrected), nonzero even in snap mode. Reused
+     *  object, overwritten each reconcile; read it right after, don't retain. */
+    readonly lastCorrection: Record<string, number> = {};
+    /** Max |{@link lastCorrection}| across fields (world units). ~0 ⇒ the
+     *  prediction matched the server at the acked input. */
+    lastCorrectionMag = 0;
+    /** Increments once per reconcile — lets a consumer detect a fresh one
+     *  (compare against a stored value) without a callback. */
+    reconcileSeq = 0;
+
     private lastTick = -1;
     private lastAcked = 0;
     /** Seq floor for replay: inputs sent at/before this aren't replayed (they
@@ -381,10 +394,19 @@ export class Reconciler<S extends object = any, I = any> {
 
         // Re-base `error` so the smoothed value is unchanged at this instant,
         // then decays out via tick(). `prev` untouched (interpolation keeps flowing).
+        // The raw correction (pre-smoothing pop) doubles as a debug gauge —
+        // recorded regardless of snap mode so telemetry sees it either way.
         const snap = this.smoothing <= 0;
+        let mag = 0;
         for (const f of this.numericFields) {
-            this.error[f] = snap ? 0 : renderedBefore[f] - (this.local[f] as number);
+            const correction = renderedBefore[f] - (this.local[f] as number);
+            this.lastCorrection[f] = correction;
+            this.error[f] = snap ? 0 : correction;
+            const a = correction < 0 ? -correction : correction;
+            if (a > mag) mag = a;
         }
+        this.lastCorrectionMag = mag;
+        this.reconcileSeq++;
 
         this.onReconcile?.(acked);
     }

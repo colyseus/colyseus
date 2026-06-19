@@ -1,87 +1,9 @@
 import { decode, type Iterator, $changes } from '@colyseus/schema';
-import { validateSubSteps, type InputAPI, type IdleInput, type SanitizeInput, type NumericFieldsOf } from './input/InputBuffer.ts';
+import { validateSubSteps, type InputAPI, type DefineInputOptions, type IdleDeclared } from './input/InputBuffer.ts';
 import { RoomInput } from './input/RoomInput.ts';
 import { RoomMessages } from './RoomMessages.ts';
 import { Rewind, type RewindOptions } from './Rewind.ts';
-export { type InputAccessor, type InputAPI, type InputOptions, type ConsumeOptions, type IdleInput, type IdleContext, type SanitizeInput, type NumericFieldsOf } from './input/InputBuffer.ts';
-
-/** Options for {@link Room.defineInput}. */
-export interface DefineInputOptions<I = any> {
-  seqField?: NumericFieldsOf<I>;
-  bufferMaxSize?: number;
-  /**
-   * Input sanitization — never trust the wire. Applied IN PLACE to every
-   * decoded frame before anything reads it (`latest`, the buffer, the `idle`
-   * ctx). Map form = per-field `[min, max]` clamps with NaN-safe semantics
-   * (NaN → min — closes the `Math.min(NaN, …)` poisoning hole); callback form
-   * = arbitrary in-place fix-up. Sanitizers MODIFY, never reject. See
-   * {@link SanitizeInput}.
-   *
-   * ```ts
-   * sanitize: { moveF: [-1, 1], pitch: [-PITCH_LIMIT, PITCH_LIMIT], dt: [0, MAX_DT] },
-   * // or:  sanitize: (f) => { f.angle = wrapAngle(f.angle); },
-   * ```
-   */
-  sanitize?: SanitizeInput<I>;
-  /**
-   * Room-level absence policy: when a tick has no buffered input, bare
-   * `drain()` / `next()` synthesize ONE "idle" frame from it — the schema's
-   * defaults overlaid with the policy's overrides — so the sim loop needs no
-   * empty-branch. Prefer the callback form, invoked lazily (only on
-   * actually-empty ticks) with an {@link IdleContext} (`latest` + `sessionId`):
-   *
-   * ```ts
-   * idle: ({ latest, sessionId }) => {
-   *   const p = this.state.players.get(sessionId);   // closes over the room
-   *   return p ? { yaw: p.yaw, plant: !!latest?.plant } : true;
-   * }
-   * ```
-   *
-   * Not declaring it keeps the skip behavior (`drain()` → `[]`). Per-call
-   * `{ idle }` overrides this default; `{ idle: false }` suppresses it.
-   * Synthesized frames never advance the reconcile ack or `renderTime`.
-   */
-  idle?: IdleInput<I>;
-  /**
-   * Fixed step rate in **Hz** cascaded to the client via the join handshake;
-   * it predicts at dt = 1/tickRate for deterministic rollback. Defaults to
-   * the `setTimestep` rate — pass this only when the prediction
-   * step differs from it. NOTE: a *rate*, not an interval — `1000/30` is the
-   * step in ms, a classic mistake; use {@link stepMs} for that. Superseded by
-   * {@link stepMs} / {@link stepSeconds} when those are given.
-   */
-  tickRate?: number;
-  /**
-   * Fixed step as a duration in **milliseconds** — the unit-safe alternative
-   * to {@link tickRate} (`stepMs: 1000/30` is unambiguous where
-   * `tickRate: 1000/30` is a bug). Normalized to the canonical Hz value
-   * (`1000/stepMs`). Takes precedence over `tickRate`.
-   */
-  stepMs?: number;
-  /**
-   * Fixed step as a duration in **seconds** (e.g. `1/30`). Normalized to the
-   * canonical Hz value (`1/stepSeconds`). Highest precedence.
-   */
-  stepSeconds?: number;
-  /**
-   * Physics sub-steps per input tick (integer ≥ 1, default 1) — decouples the
-   * PHYSICS rate from the input/network rate. One input still drives exactly
-   * one fixed step (the replay invariant), but the simulation integrates
-   * `subSteps` engine steps of `stepSeconds/subSteps` inside it, identically
-   * on client and server — physics at `tickRate * subSteps` Hz while sending
-   * `tickRate` inputs/sec. Cascaded to clients via the join handshake;
-   * both sides read the derived numbers off their step context
-   * (`ctx.subSteps` / `ctx.subDt`) so N and dt can't drift apart.
-   * Usually declared via {@link Room.setFixedTimestep}'s `subSteps` option
-   * instead — pass it here only when the room runs its own loop.
-   */
-  subSteps?: number;
-}
-
-/** `true` when the defineInput opts declared an `idle` policy — narrows the
- *  returned {@link InputAPI} so bare `next()` types non-optional `I`.
- *  @internal — exported for {@link RoomInput.define}. */
-export type IdleDeclared<O, I> = O extends { idle: IdleInput<I> } ? true : false;
+export { type InputAccessor, type InputAPI, type InputOptions, type ConsumeOptions, type IdleInput, type IdleContext, type SanitizeInput, type NumericFieldsOf, type DefineInputOptions, type IdleDeclared } from './input/InputBuffer.ts';
 
 import { ClockTimer as Clock } from '@colyseus/timer';
 
@@ -917,12 +839,6 @@ export class Room<T extends RoomOptions = RoomOptions> {
       this._simulationInterval = setInterval(() => {
         this.clock.tick();
         onTickCallback(this.clock.deltaTime);
-        // Lag-comp: snapshot tracked entities AFTER the tick. Skipped if the room
-        // recorded this tick manually (its `record()` wins). `delay` sizes the rings.
-        const rw = this.#rewind;
-        if (rw !== undefined && rw.lastRecordedAt !== this.clock.elapsedTime) {
-          rw.record(this.clock.elapsedTime, delay);
-        }
       }, delay);
     }
   }
@@ -1036,13 +952,6 @@ export class Room<T extends RoomOptions = RoomOptions> {
         ran++;
       }
       if (ran === MAX_CATCHUP_STEPS) { acc = 0; } // hitch: drop backlog, don't spiral
-
-      // Lag-comp: snapshot tracked entities once per real frame (real clock),
-      // matching setTimestep. `stepMs` sizes the history rings.
-      const rw = this.#rewind;
-      if (ran > 0 && rw !== undefined && rw.lastRecordedAt !== this.clock.elapsedTime) {
-        rw.record(this.clock.elapsedTime, stepMs);
-      }
     }, stepMs);
   }
 
@@ -1059,8 +968,8 @@ export class Room<T extends RoomOptions = RoomOptions> {
   /**
    * Enable server-side lag compensation: returns a {@link Rewind} that records the
    * position history of the entities you attach and automatically snapshots them
-   * after each simulation tick. Attach the collections to rewind, then read past
-   * positions (at a client's renderTime) in your hit tests.
+   * on each broadcast (the patchRate cadence). Attach the collections to rewind,
+   * then read past positions (at a client's renderTime) in your hit tests.
    *
    * @example
    * ```ts
@@ -1072,10 +981,12 @@ export class Room<T extends RoomOptions = RoomOptions> {
    * ```
    *
    * Per-client stamps auto-enable from the `attachAll` `mode` of the groups you
-   * rewind — no `renderTime` flag. Needs a simulation loop
-   * ({@link setTimestep} / {@link setFixedTimestep}) — that's what drives the
-   * recording. Call `rewind.record()` yourself during a tick to take over its
-   * timing for that tick.
+   * rewind — no `renderTime` flag. The default auto-record fires on each
+   * broadcast, snapshotting exactly what the client receives — so the rewind
+   * reproduces the client's interpolation and hits stay exact even when the
+   * broadcast rate differs from the sim rate (`patchRate ≠ timestep`). Call
+   * `rewind.record()` yourself during a tick to take over that cadence (you then
+   * own correctness against your own broadcast rate).
    */
   public allowRewindState(opts?: RewindOptions): Rewind {
     this.#rewind = Rewind.get(this, opts);
@@ -1375,11 +1286,22 @@ export class Room<T extends RoomOptions = RoomOptions> {
     // When `defineInput()` was called, hand the serializer a fresh `sNow`
     // each tick. The per-client `lastTReceived` is read off the client at
     // encode time inside `applyPatches`.
+    const sNow = this.clock.elapsedTime;
     const hasChanges = this._serializer.applyPatches(
       this.clients,
       this.state,
-      this._inputController !== undefined ? { sNow: this.clock.elapsedTime } : undefined,
+      this._inputController !== undefined ? { sNow } : undefined,
     );
+
+    // Lag-comp: record the snapshot the client just received, on the broadcast
+    // cadence and stamped with the SAME `sNow` the frame carries — so valueAt()
+    // reproduces the client's interpolation over the IDENTICAL pair (exact hits
+    // at any patchRate). Idempotent per `sNow`: a manual record() this tick wins,
+    // and a patchRate faster than the sim simply dedups back to per-tick.
+    const rw = this.#rewind;
+    if (rw !== undefined && rw.lastRecordedAt !== sNow) {
+      rw.record(sNow, this.#_patchRate || undefined);
+    }
 
     // broadcast messages enqueued for "after patch"
     this._dequeueAfterPatchMessages();
@@ -2123,7 +2045,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
     }
 
     if (this._autoDisposeTimeout) {
-      clearInterval(this._autoDisposeTimeout);
+      clearTimeout(this._autoDisposeTimeout);
       this._autoDisposeTimeout = undefined;
     }
 

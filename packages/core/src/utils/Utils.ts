@@ -26,6 +26,15 @@ export type ExtractMethodOrPropertyType<
 export const REMOTE_ROOM_SHORT_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_SHORT_TIMEOUT || 2000);
 export const MAX_CONCURRENT_CREATE_ROOM_WAIT_TIME = Number(process.env.COLYSEUS_MAX_CONCURRENT_CREATE_ROOM_WAIT_TIME || 0.5);
 
+/**
+ * The well-known `Symbol.metadata` (TC39 decorator metadata), falling back to the
+ * registered symbol on runtimes that don't expose it globally yet. `@colyseus/schema`
+ * stores each class's field metadata under this key — read it via
+ * `instance.constructor[$METADATA]`. Shared so every reader resolves the IDENTICAL
+ * symbol (InputBuffer's field-name walk, Rewind's field-index lookup).
+ */
+export const $METADATA: symbol = (Symbol as { metadata?: symbol }).metadata ?? Symbol.for("Symbol.metadata");
+
 export function generateId(length: number = 9) {
   return nanoid(length);
 }

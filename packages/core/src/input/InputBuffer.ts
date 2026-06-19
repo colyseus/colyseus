@@ -1,4 +1,5 @@
 import type { ClientPrivate } from '../Transport.ts';
+import { $METADATA } from '../utils/Utils.ts';
 
 /**
  * Names of fields on `I` whose values are `number` — used by
@@ -66,6 +67,85 @@ export type SanitizeInput<I> =
   | Partial<Record<NumericFieldsOf<I>, readonly [number, number]>>
   | ((input: I) => void);
 
+/** Options for `Room.defineInput()`. The user-facing twin of the internal
+ *  normalized {@link InputOptions}. */
+export interface DefineInputOptions<I = any> {
+  seqField?: NumericFieldsOf<I>;
+  bufferMaxSize?: number;
+  /**
+   * Input sanitization — never trust the wire. Applied IN PLACE to every
+   * decoded frame before anything reads it (`latest`, the buffer, the `idle`
+   * ctx). Map form = per-field `[min, max]` clamps with NaN-safe semantics
+   * (NaN → min — closes the `Math.min(NaN, …)` poisoning hole); callback form
+   * = arbitrary in-place fix-up. Sanitizers MODIFY, never reject. See
+   * {@link SanitizeInput}.
+   *
+   * ```ts
+   * sanitize: { moveF: [-1, 1], pitch: [-PITCH_LIMIT, PITCH_LIMIT], dt: [0, MAX_DT] },
+   * // or:  sanitize: (f) => { f.angle = wrapAngle(f.angle); },
+   * ```
+   */
+  sanitize?: SanitizeInput<I>;
+  /**
+   * Room-level absence policy: when a tick has no buffered input, bare
+   * `drain()` / `next()` synthesize ONE "idle" frame from it — the schema's
+   * defaults overlaid with the policy's overrides — so the sim loop needs no
+   * empty-branch. Prefer the callback form, invoked lazily (only on
+   * actually-empty ticks) with an {@link IdleContext} (`latest` + `sessionId`):
+   *
+   * ```ts
+   * idle: ({ latest, sessionId }) => {
+   *   const p = this.state.players.get(sessionId);   // closes over the room
+   *   return p ? { yaw: p.yaw, plant: !!latest?.plant } : true;
+   * }
+   * ```
+   *
+   * Not declaring it keeps the skip behavior (`drain()` → `[]`). Per-call
+   * `{ idle }` overrides this default; `{ idle: false }` suppresses it.
+   * Synthesized frames never advance the reconcile ack or `renderTime`.
+   */
+  idle?: IdleInput<I>;
+  /**
+   * Fixed step rate in **Hz** cascaded to the client via the join handshake;
+   * it predicts at dt = 1/tickRate for deterministic rollback. Defaults to
+   * the `setTimestep` rate — pass this only when the prediction
+   * step differs from it. NOTE: a *rate*, not an interval — `1000/30` is the
+   * step in ms, a classic mistake; use {@link stepMs} for that. Superseded by
+   * {@link stepMs} / {@link stepSeconds} when those are given.
+   */
+  tickRate?: number;
+  /**
+   * Fixed step as a duration in **milliseconds** — the unit-safe alternative
+   * to {@link tickRate} (`stepMs: 1000/30` is unambiguous where
+   * `tickRate: 1000/30` is a bug). Normalized to the canonical Hz value
+   * (`1000/stepMs`). Takes precedence over `tickRate`.
+   */
+  stepMs?: number;
+  /**
+   * Fixed step as a duration in **seconds** (e.g. `1/30`). Normalized to the
+   * canonical Hz value (`1/stepSeconds`). Highest precedence.
+   */
+  stepSeconds?: number;
+  /**
+   * Physics sub-steps per input tick (integer ≥ 1, default 1) — decouples the
+   * PHYSICS rate from the input/network rate. One input still drives exactly
+   * one fixed step (the replay invariant), but the simulation integrates
+   * `subSteps` engine steps of `stepSeconds/subSteps` inside it, identically
+   * on client and server — physics at `tickRate * subSteps` Hz while sending
+   * `tickRate` inputs/sec. Cascaded to clients via the join handshake;
+   * both sides read the derived numbers off their step context
+   * (`ctx.subSteps` / `ctx.subDt`) so N and dt can't drift apart.
+   * Usually declared via {@link Room.setFixedTimestep}'s `subSteps` option
+   * instead — pass it here only when the room runs its own loop.
+   */
+  subSteps?: number;
+}
+
+/** `true` when the defineInput opts declared an `idle` policy — narrows the
+ *  returned {@link InputAPI} so bare `next()` types non-optional `I`.
+ *  @internal — exported for {@link RoomInput.define}. */
+export type IdleDeclared<O, I> = O extends { idle: IdleInput<I> } ? true : false;
+
 /**
  * @internal Validate a `subSteps` count. Throws on a fractional/non-positive
  * value: both sides loop `subSteps` times at `dt/subSteps`, so anything but a
@@ -104,8 +184,6 @@ export function compileSanitizer<I>(spec: SanitizeInput<I>): (input: I) => void 
     }
   };
 }
-
-const $METADATA: symbol = (Symbol as { metadata?: symbol }).metadata ?? Symbol.for("Symbol.metadata");
 
 /** Field names of an input schema ctor, in declaration order (indices are dense
  *  from 0 in the metadata). Resolved ONCE per buffer (cold path). */
@@ -888,7 +966,7 @@ export class InputAccessorImpl<I = any> implements InputAccessor<I> {
   get latest(): I | undefined { return this._client._input as I | undefined; }
   at(value: number): I | undefined { return this._client._inputBuffer?.at(value) as I | undefined; }
   consume(opts?: ConsumeOptions<I>): IterableIterator<I> {
-    return (this._client._inputBuffer?.consume(opts) ?? EMPTY_INPUT_ITERATOR) as IterableIterator<I>;
+    return (this._client._inputBuffer?.consume(opts) ?? DONE_ITERATOR) as IterableIterator<I>;
   }
   [Symbol.iterator](): IterableIterator<I> { return this.consume(); }
   drain(opts?: ConsumeOptions<I>): I[] { return (this._client._inputBuffer?.drain(opts) ?? []) as I[]; }
@@ -905,9 +983,6 @@ export class InputAccessorImpl<I = any> implements InputAccessor<I> {
   get reckonTime(): number { return this._client._inputBuffer?.reckonTime ?? 0; }
 }
 
-/** Shared empty iterator for accessors without a buffer (bufferMaxSize: 0). */
-const EMPTY_INPUT_ITERATOR: IterableIterator<any> = DONE_ITERATOR;
-
 /**
  * Returned by `room.inputs.get(sessionId)` for unknown sessions and for rooms
  * that didn't call `defineInput()`.
@@ -917,8 +992,8 @@ const EMPTY_INPUT_ITERATOR: IterableIterator<any> = DONE_ITERATOR;
 export const NO_OP_INPUT_ACCESSOR: InputAccessor<any> = Object.freeze({
   latest: undefined,
   at: () => undefined,
-  consume: () => EMPTY_INPUT_ITERATOR,
-  [Symbol.iterator]: () => EMPTY_INPUT_ITERATOR,
+  consume: () => DONE_ITERATOR,
+  [Symbol.iterator]: () => DONE_ITERATOR,
   drain: () => [],
   next: () => undefined,
   take: () => [],

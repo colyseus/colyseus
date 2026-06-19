@@ -717,6 +717,14 @@ export class Room<
                 it.offset = sectionEnd;
             }
 
+            // Hand the snapshot cadence to the clock (sections decode in any
+            // order, so do it once the loop has both the clock and patchRate) —
+            // interpolation reads it to tell an idle delta-encoded gap from the
+            // normal patch interval.
+            if (this.#inputPatchRate !== undefined) {
+                this.clock.setPatchInterval?.(this.#inputPatchRate);
+            }
+
             if (this.joinedAtTime === 0) {
                 this.joinedAtTime = Date.now();
                 this.onJoin.invoke();

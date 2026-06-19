@@ -24,6 +24,17 @@ export interface RoomClockLike {
      *  forward horizon for dead-reckoning a remote entity to "now". `0` until
      *  the first sample. */
     lastServerTime(): number;
+    /** Server snapshot cadence (`patchRate`, ms) — the interval at which the
+     *  server broadcasts state, advertised in the input handshake. On the
+     *  jitter-free server-time axis a MOVING field gets a sample every patch, so
+     *  interpolation uses this to tell a delta-encoded IDLE gap (collapse it)
+     *  from the normal cadence. `0` when unknown (no input room / not advertised). */
+    patchInterval?(): number;
+    /** Feed the server's snapshot cadence (`patchRate`, ms), decoded once from
+     *  the input handshake — the producer side of {@link patchInterval}, and a
+     *  Room→clock feed like {@link sample}. Optional: a custom clock that doesn't
+     *  drive interpolation idle-gap detection need not implement it. */
+    setPatchInterval?(milliseconds: number): void;
     /** Feed a decoded TIMED sample: `sNow` (ms since room start) updates the
      *  clock offset; `rttSample` (ms round-trip from the input ack, or `<0` if
      *  none this packet) updates the RTT estimate. */
@@ -49,6 +60,8 @@ export const NULL_CLOCK: RoomClockLike = Object.freeze({
     rtt: () => 0,
     smoothedRtt: () => 0,
     lastServerTime: () => 0,
+    patchInterval: () => 0,
+    setPatchInterval: (_ms?: number) => { /* no-op */ },
     sample: (_sNow?: number, _rttSample?: number) => { /* no-op */ },
 });
 
@@ -95,6 +108,7 @@ export class RoomClock implements RoomClockLike {
     private _rttHasSample = false;
 
     private _lastServerTime = 0;    // raw sNow of the last patch (snapshot stamp)
+    private _patchInterval = 0;     // server patchRate (ms); 0 until advertised
 
     /** Estimated server clock: **milliseconds since room start** (the server's
      *  `clock.elapsedTime`, reconstructed via the wire `sNow` + local offset).
@@ -120,6 +134,18 @@ export class RoomClock implements RoomClockLike {
      *  `0` until the first sample. */
     public lastServerTime(): number {
         return this._lastServerTime;
+    }
+
+    /** Server snapshot cadence (`patchRate`, ms); `0` until the handshake
+     *  advertises it. @see RoomClockLike.patchInterval */
+    public patchInterval(): number {
+        return this._patchInterval;
+    }
+
+    /** Set the server snapshot cadence (ms), from the input handshake's
+     *  advertised `patchRate`. Non-positive values clear it back to `0`. */
+    public setPatchInterval(milliseconds: number): void {
+        this._patchInterval = milliseconds > 0 ? milliseconds : 0;
     }
 
     /**
