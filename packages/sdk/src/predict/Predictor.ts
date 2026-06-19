@@ -1952,6 +1952,38 @@ export class Predict<TState = any> {
         return this.profileComputers[profileIdx](slotIdx);
     }
 
+    /**
+     * RAW forward-projected value — the reckoned position WITHOUT the decaying
+     * smooth-correction offset that {@link value} adds for rendering.
+     *
+     * Use this for GAME LOGIC (collision / hit tests), and {@link value} for
+     * RENDERING. The offset exists only to hide snapshot-rebase pops on screen;
+     * feeding it into a hit test makes the client judge an overlap against a
+     * position a few cm off the physical prediction, which flips knife-edge
+     * stomp/hit verdicts vs the server (the server reads the exact timeline, no
+     * offset). For every non-reckon field this equals {@link value}.
+     */
+    valueRaw<T extends object>(instance: T, field: NumericKeys<T>): number {
+        const refId = refIdOf(instance);
+        const slotIdx = refId === undefined ? undefined : this.slotByRef.get(refId)?.get(field);
+        if (slotIdx === undefined) return instance[field] as number;
+        const i = slotIdx * SLOT_STRIDE;
+        const profileIdx = this.slotBuf[i + SLOT_PROFILE] | 0;
+        // Only reckon has a raw-vs-smoothed split; other modes carry no offset.
+        if (this.profileComputers[profileIdx] !== this.computeReckon) {
+            return this.profileComputers[profileIdx](slotIdx);
+        }
+        const sim = this.simByRef.get(this.slotBuf[i + SLOT_REF]);
+        if (sim !== undefined) {
+            const fieldId = this.slotBuf[i + SLOT_FIELD] | 0;
+            const pos = fieldId < sim.posOf.length ? sim.posOf[fieldId] : -1;
+            // applySimulation refreshes out[]+smoothed[] for this frame (guarded);
+            // we return the pre-offset `out`.
+            if (pos >= 0) { this.applySimulation(sim, pos); return sim.out[pos]; }
+        }
+        return this.slotBuf[i + SLOT_V1];
+    }
+
 
     /**
      * Exponential smoothing toward the latest server value (`v1`). Reads
