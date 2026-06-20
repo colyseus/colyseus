@@ -18,12 +18,14 @@
  * card, white/grey monospace text, action-button-style mode pills.
  */
 import { getDebugRoot, isPanelsHidden } from "./core.ts";
+import { drawGraph } from "./panel.ts";
 import {
     toDebugHandle,
     type PredictCore,
     type PredictDebugHandle,
     type PredictMode,
     type ProfileInfo,
+    type ReconcilerStat,
 } from "./predict-bridge.ts";
 
 interface ChannelRegistry {
@@ -34,6 +36,8 @@ interface PredictPanelEntry {
     handle: PredictDebugHandle;
     el: HTMLElement;
     refresh: () => void;
+    /** Per-reconciler drift-peak history (by label) backing the canvas graph. */
+    histories: Map<string, number[]>;
 }
 
 const panels = new Map<string, PredictPanelEntry>();
@@ -105,6 +109,7 @@ function onPredictPublished(core: PredictCore): void {
     const entry: PredictPanelEntry = {
         handle, el,
         refresh: () => updateCardLive(handle, entry),
+        histories: new Map(),
     };
     panels.set(handle.name, entry);
     handle.onDispose(() => {
@@ -275,6 +280,7 @@ function renderCard(handle: PredictDebugHandle): HTMLElement {
             </span>
         </div>
         <div data-role="body" style="display:${collapsed ? "none" : "flex"};flex-direction:column;gap:8px;margin-top:6px">
+            <div data-role="reconcilers" style="display:none;flex-direction:column;gap:6px"></div>
             <div data-role="profiles" style="display:none;flex-direction:column;gap:6px"></div>
         </div>
     `;
@@ -447,7 +453,108 @@ function addSlider(
 function updateCardLive(handle: PredictDebugHandle, entry: PredictPanelEntry): void {
     entry.el.querySelector<HTMLElement>('[data-role="attached"]')!.textContent =
         String(handle.attachedCount());
+    renderReconcilers(entry, handle);
     renderProfileSubcards(entry.el, handle);
+}
+
+// -----------------------------------------------------------------------------
+// Reconciler drift (divergence vs jitter)
+// -----------------------------------------------------------------------------
+
+/** Drift-EMA samples kept per reconciler for the canvas graph (4 Hz poll). */
+const GRAPH_LEN = 64;
+const GRAPH_W = 200;
+const GRAPH_H = 30;
+
+function fmtDrift(v: number): string {
+    if (v < 1e-3) { return "0"; }            // below any verdict floor — float noise
+    if (v < 1) { return v.toFixed(3); }      // keep small REAL drift legible (0.003)
+    if (v < 10) { return v.toFixed(2); }
+    return v.toFixed(1);
+}
+
+// Verdict → glanceable word, colour, and the one-line action a developer takes.
+// The whole point of the panel: not "drift 0.42" but "here's what it means and
+// what to do". (Mirrors classifyDrift + the warnOnDivergence message.)
+const VERDICT: Record<string, { word: string; color: string; action: string }> = {
+    matched:   { word: "✓ matched",   color: "#6c9", action: "" },
+    jitter:    { word: "~ jitter",    color: "#dc7", action: "transient spikes (packet loss / reorder) — raise smoothing or ignore; not a bug" },
+    diverging: { word: "✗ diverging", color: "#e66", action: "client/server sim disagree — check dt · shared step · constants · skipped inputs" },
+};
+
+/** Stable canvas id per reconciler row (Predict name + index), so `drawGraph`'s
+ *  `getElementById` resolves it within the debug shadow root. */
+function graphId(name: string, i: number): string {
+    return `predict-rc-graph-${name.replace(/[^a-z0-9]/gi, "-")}-${i}`;
+}
+
+function renderReconcilers(entry: PredictPanelEntry, handle: PredictDebugHandle): void {
+    const host = entry.el.querySelector<HTMLElement>('[data-role="reconcilers"]')!;
+    const stats = handle.reconcilers();
+    if (stats.length === 0) { host.style.display = "none"; return; }
+    host.style.display = "flex";
+    // Rebuild rows only when the reconciler count changes (cheap steady state).
+    if (host.childElementCount !== stats.length) {
+        host.innerHTML = "";
+        for (let i = 0; i < stats.length; i++) { host.appendChild(buildReconcilerRow(graphId(handle.name, i))); }
+    }
+    for (let i = 0; i < stats.length; i++) {
+        refreshReconcilerRow(host.children[i] as HTMLElement, stats[i], entry, graphId(handle.name, i));
+    }
+}
+
+function buildReconcilerRow(canvasId: string): HTMLElement {
+    const row = document.createElement("div");
+    // Distinct from the smoothing-profile sub-cards: a verdict-coloured LEFT
+    // accent (recoloured each refresh) marks this as the prediction-health card,
+    // not another smoothing profile.
+    row.style.cssText =
+        `border:1px solid ${DIVIDER};border-left:3px solid ${SECONDARY};` +
+        "background:rgba(255,255,255,0.04);border-radius:4px;padding:6px;" +
+        "display:flex;flex-direction:column;gap:4px";
+    row.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+            <span data-role="rc-label" style="color:#fff;font-weight:bold"></span>
+            <span data-role="rc-verdict" style="font-weight:bold;white-space:nowrap"></span>
+        </div>
+        <canvas id="${canvasId}" width="${GRAPH_W}" height="${GRAPH_H}" title="drift peak over time (auto-scaled; flat when matched)" style="display:block;width:100%;height:${GRAPH_H}px"></canvas>
+        <div data-role="rc-action" style="font-size:10px;line-height:1.3"></div>
+        <div data-role="rc-stats" style="color:${SECONDARY};font-size:10px;font-variant-numeric:tabular-nums"></div>
+    `;
+    return row;
+}
+
+function refreshReconcilerRow(row: HTMLElement, stat: ReconcilerStat, entry: PredictPanelEntry, canvasId: string): void {
+    let hist = entry.histories.get(stat.label);
+    if (!hist) { hist = []; entry.histories.set(stat.label, hist); }
+    // Plot the drift PEAK (spikes for jitter, level for divergence), pinned to 0
+    // when matched. `drawGraph` auto-scales to its own min/max, so feeding it the
+    // matched-state EMA amplified float-noise into wild oscillation while the
+    // numbers read "0". Pinning to 0 keeps the line flat at rest — and non-matched
+    // peaks are always ≥ the verdict floor, so they're real, not noise.
+    hist.push(stat.verdict === "matched" ? 0 : stat.peak);
+    if (hist.length > GRAPH_LEN) { hist.shift(); }
+
+    const v = VERDICT[stat.verdict] ?? VERDICT.matched;
+    const sev = stat.verdict === "diverging" && stat.severity !== undefined
+        ? `  ${stat.severity.toFixed(1)}× tol` : "";
+
+    row.style.borderLeftColor = v.color;
+    row.querySelector<HTMLElement>('[data-role="rc-label"]')!.textContent = stat.label;
+    const verdictEl = row.querySelector<HTMLElement>('[data-role="rc-verdict"]')!;
+    verdictEl.style.color = v.color;
+    verdictEl.textContent = `${v.word}${sev}`;
+
+    // Reuse the shared canvas line-graph renderer (same as bytes/messages-per-sec).
+    drawGraph(canvasId, hist, v.color);
+
+    const action = row.querySelector<HTMLElement>('[data-role="rc-action"]')!;
+    action.style.display = v.action ? "block" : "none";   // matched ⇒ no action line
+    action.style.color = v.color;
+    action.textContent = v.action;
+
+    row.querySelector<HTMLElement>('[data-role="rc-stats"]')!.textContent =
+        `drift ${fmtDrift(stat.ema)} · pk ${fmtDrift(stat.peak)} · Δ ${fmtDrift(stat.lastCorrectionMag)}`;
 }
 
 function startPolling(): void {

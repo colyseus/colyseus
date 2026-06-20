@@ -186,9 +186,10 @@ const predict = Predict.get(room, { mode: "lerp", delay: 100, name: "players" })
 // Remote players: render 100ms in the past, interpolated between snapshots.
 predict.attachAll("players", { mode: "lerp", fields: ["x", "y"] });
 
-// Local player: server-reconciled prediction. delta:false is mandatory (see §4).
-// renderDelay = your interp buffer; the SDK stamps renderTime = serverNow − renderDelay − rtt/2.
-const input = room.input({ mode: "reliable", delta: false, renderDelay: 100 });
+// Local player: server-reconciled prediction. Wiring this input through
+// predict.reconciler binds lag-comp's renderDelay to the lerp `delay` above —
+// you set the interp buffer ONCE (on Predict), nothing to keep in sync here.
+const input = room.input({ mode: "reliable" });
 const me = predict.reconciler(self, {
   input,
   fields: ["x", "y", "vx", "vy", "grounded"],
@@ -239,7 +240,7 @@ replay loop through three callbacks:
 Composite scalars — a paddle + the puck it strikes, reconciled as one:
 
 ```ts
-const input = room.input(MoveInput, { mode: "reliable", delta: false });
+const input = room.input(MoveInput, { mode: "reliable" });
 const world = {
   paddle: { x: player.x, y: player.y },
   puck:   { x: s.puck.x, y: s.puck.y, vx: s.puck.vx, vy: s.puck.vy },
@@ -307,10 +308,6 @@ your render frame:
 
 ## 4. The contract — rules that are load-bearing (and easy to miss)
 
-> ⚠️ **`delta:false` is mandatory for the predicted input channel.** The reconciler
-> replays *sent* inputs; with `delta:true` unchanged inputs are dropped, so the
-> predicted set ≠ the server-applied set → backward drift.
-
 > ⚠️ **`lastProcessed` is the server's consumed count**, echoed via the TIMED prefix
 > — it advances when the server `drain()`s/`next()`s/`clear()`s. Reconcile triggers
 > when it advances; there's no seq field to manage.
@@ -340,9 +337,48 @@ Prediction matches the server only if both run the **same** simulation:
   client `reconciler`/`sim` read it back).
 - **Matching engine versions** for physics (e.g. the same Rapier build client/server).
 
-Divergence shows up as constant small corrections (rubber-banding) even on a LAN; jitter
-shows up as occasional corrections that scale with packet loss. See brief 10 for a
-determinism diagnostic.
+### Diagnosing divergence vs jitter
+
+Mispredictions are otherwise silent — you just see rubber-banding and guess. The
+reconciler turns the per-reconcile correction into a rolling **drift** readout so
+you can tell the two apart without guessing. It's **opt-in, so production pays
+nothing**: the drift bookkeeping runs only when something is watching — you load
+`@colyseus/sdk/debug`, or you set `warnOnDivergence`. Otherwise `me.drift` stays
+zeroed and the reconcile loop does no telemetry work.
+
+- **`me.drift.ema`** — EMA of the correction magnitude, the *persistent* component.
+  A steady nonzero value is genuine **divergence** (different `dt`, a non-shared
+  `step`, mismatched constants, an engine-version skew, or an input the server
+  skipped) — i.e. constant rubber-banding even on a LAN.
+- **`me.drift.peak`** — a decaying max, *recent spikes*. A peak well above a low
+  `ema` is network **jitter** (occasional rollbacks that scale with packet loss),
+  not divergence.
+- **`me.lastCorrectionMag`** / **`me.lastCorrection`** — the most recent reconcile's
+  max |correction| and the per-field breakdown, for a HUD.
+
+Both `ema` and `peak` ~0 ⇒ the prediction matches the server. Same fields on `sim`.
+
+```ts
+// HUD: are we diverging, and by how much? (set warnOnDivergence — or load
+// @colyseus/sdk/debug — to populate me.drift; it's zeroed otherwise.)
+hud.textContent = `drift ${me.drift.ema.toFixed(2)}  peak ${me.drift.peak.toFixed(2)}`;
+
+// Dev-only: warn (throttled ~1/s) once the PERSISTENT drift crosses a tolerance
+// — i.e. real divergence, not a one-off jitter spike — naming the seq + worst
+// field + likely cause. Costs no extra wire traffic. Leave unset in production.
+const me = predict.reconciler(self, { input, fields, step, warnOnDivergence: 0.1 });
+// → "@colyseus/sdk predict: prediction is diverging at input seq 412 —
+//    rolling drift 0.420 ≥ tolerance 0.1; "x" currently off by 3.700 …"
+```
+
+Raw numbers alone don't tell you what to *do*, so the `@colyseus/sdk/debug` panel
+turns them into a **verdict + action** per reconciler — `✓ matched` (nothing to
+do), `~ jitter` (network, raise smoothing or ignore), or `✗ diverging` (a
+determinism bug — check `dt` / shared `step` / constants / skipped inputs), with
+the `warnOnDivergence` tolerance scaling the severity (`4.2× tol`). The verdict,
+the panel colour, and the warning all run through one `classifyDrift`, so they
+never disagree. Set a `warnOnDivergence` tolerance to anchor "matched vs
+diverging" to *your* game's scale rather than a default float-noise floor.
 
 ### Sub-stepping: high-rate physics on a low network rate
 
@@ -392,11 +428,14 @@ moment. Two pieces:
 
 **Client** — tell the server the render time. With `renderTime: true` on the server,
 the SDK auto-stamps every reliable input with `serverNow() − renderDelay − rtt/2`
-(0 until the clock syncs). Set `renderDelay` to your remote **interp buffer** (the
-`Predict` `lerp` delay) — the SDK adds the latency term itself:
+(0 until the clock syncs). You normally set nothing: wiring the input through
+`predict.reconciler`/`predict.sim` binds `renderDelay` to the `Predict` lerp `delay`,
+so the interp buffer and the rewind instant are one value. The SDK adds the latency
+term itself. Override only to decouple them:
 
 ```ts
-room.input({ mode: "reliable", delta: false, renderDelay: 100 });   // 100 = lerp delay
+room.input({ mode: "reliable" });                  // renderDelay ← Predict lerp delay (auto)
+room.input({ mode: "reliable", renderDelay: 80 }); // explicit override (rarely needed)
 ```
 
 **Server** — rewind targets to where the shooter saw them:
@@ -438,10 +477,12 @@ seen.read(enemy, ENEMY_POS, this.seenScratch);       // zero-alloc: fills + retu
 > If you stamp render time yourself (or store it on the entity), use
 > `rewind.at(time)` — the same view, but you supply the time.
 
-**Keep the two delays equal.** The `Predict` lerp `delay` and the input `renderDelay`
-must be the same value (a single shared constant), or the server rewinds to a different
-instant than the one on screen. Reverting remotes to `damped` (no fixed delay) silently
-breaks the exact match — the rewind then approximates.
+**One delay, not two.** The input `renderDelay` is bound to the `Predict` lerp `delay`
+when you wire the input through `predict.reconciler`/`predict.sim`, so the server rewinds
+to the same instant that's on screen by construction — set the interp buffer once on
+`Predict`. (If you pass `renderDelay` explicitly you own keeping them equal again.)
+Reverting remotes to `damped` (no fixed delay) silently breaks the exact match — the
+rewind then approximates.
 
 ### Other recipes
 
@@ -470,7 +511,7 @@ breaks the exact match — the rewind then approximates.
 
 | Symptom | Likely cause |
 |---|---|
-| Local player rubber-bands constantly | Non-determinism: different `dt`, divergent `step`, or engine-version mismatch (§5). |
+| Local player rubber-bands constantly | Non-determinism: different `dt`, divergent `step`, or engine-version mismatch. Confirm with `me.drift.ema` (steady nonzero ⇒ divergence, not jitter) or `warnOnDivergence` (§5). |
 | Remotes stutter / teleport | Interp `delay` too small (buffer underruns); raise it past 1–2 patch intervals, or check patch rate. |
 | "I hit them but no damage" on moving targets | Not rewinding (or rewinding to server-now). Use `rewind.lastSeenBy(shooterId)` (§6). |
 | Hits register *behind* a dead-reckoned target (where it already walked) | The type renders forward-reckoned but rewinds to the raw stamp (double compensation). Declare `schema({...}, "Enemy").with({ lagComp: "reckon" })` on the type. |
@@ -493,6 +534,6 @@ breaks the exact match — the rewind then approximates.
 | Server | `allowRewindState({ maxRewindMs })` + `rewind.attachAll(coll, { fields })` | Record positions per tick (fields a type lacks read live; `lagComp:"none"` types record nothing) |
 | Server | `rewind.lastSeenBy(sid)` / `rewind.at(time)` | Rewound view (clamp + live-fallback baked in): `view.value(e, field)`, `view.read(e, fields, out?)` |
 | Server | `input(sid).renderTime` | Raw render time of the last consumed input (prefer `lastSeenBy`) |
-| Client | `room.input({ mode, delta:false, renderDelay })` | Input transport; `renderDelay` = your interp buffer |
+| Client | `room.input({ mode })` | Input transport; lag-comp `renderDelay` auto-binds to the `Predict` lerp `delay` when wired through `reconciler`/`sim` (pass `renderDelay` to override) |
 | Client | `Predict.get(room, opts)` + `attachAll` / `reconciler` / `sim` | Remote smoothing; local rollback for one flat-field entity (`reconciler`) or composite/engine state (`sim`) |
 | Client | `room.clock` | `serverNow()` / `smoothedRtt()` / `lastServerTime()` |

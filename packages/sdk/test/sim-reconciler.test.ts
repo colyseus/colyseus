@@ -4,6 +4,25 @@ import { assert } from 'chai';
 
 import { SimReconciler, type SimReconcilerOptions } from '../src/predict.ts';
 import type { InputHandle } from '../src/input/InputHandle.ts';
+import { resetDivergenceThrottle } from '../src/predict/divergence.ts';
+
+/** Run `fn` with `console.warn` captured; returns the joined warning strings. */
+function captureWarn(fn: () => void): string[] {
+    const warns: string[] = [];
+    const orig = console.warn;
+    console.warn = (...args: any[]) => { warns.push(args.join(' ')); };
+    try { fn(); } finally { console.warn = orig; }
+    return warns;
+}
+
+/** Run `fn` with drift telemetry enabled (simulates the `@colyseus/sdk/debug`
+ *  bundle being loaded), restoring the prior global afterward. */
+function withDiagnostics(fn: () => void): void {
+    const g = globalThis as { __colyseusDebug?: unknown };
+    const prev = g.__colyseusDebug;
+    g.__colyseusDebug = { publish() {} };
+    try { fn(); } finally { g.__colyseusDebug = prev; }
+}
 
 // -----------------------------------------------------------------------------
 // A minimal fake of the subset of InputHandle the controller touches: stage onto
@@ -200,5 +219,102 @@ describe('SimReconciler', () => {
         input.lastProcessed = 2;
         ctl.tick(0);
         assert.equal(ctl.world.x, 0, 'pre-reset inputs are not replayed after reset');
+    });
+
+    test('drift: a clean reconcile (prediction matched) leaves drift ~0 but bumps reconcileSeq', () => withDiagnostics(() => {
+        const input = new FakeInput();
+        const engine = makeEngine();
+        const { ctl, instance } = make(engine, input);
+        for (let i = 0; i < 3; i++) ctl.input({ ax: 1 });   // predicted x: 1, 3, 6
+        // Server agrees at seq 1 (x=1, vx=1); replaying 2,3 reproduces x=6 → zero correction.
+        instance.x = 1; instance.vx = 1;
+        input.lastProcessed = 1;
+        ctl.tick(0);
+        assert.equal(ctl.reconcileSeq, 1);
+        assert.equal(ctl.lastCorrectionMag, 0);
+        assert.equal(ctl.drift.ema, 0);
+        assert.equal(ctl.drift.peak, 0);
+    }));
+
+    test('drift: a mispredict raises lastCorrectionMag, the EMA, and the peak', () => withDiagnostics(() => {
+        const input = new FakeInput();
+        const engine = makeEngine();
+        const { ctl, instance } = make(engine, input);
+        for (let i = 0; i < 3; i++) ctl.input({ ax: 1 });   // predicted x: 1, 3, 6
+        // Server DISAGREES at seq 1 (x=10 vs predicted 1); replay 2,3 → x=15.
+        instance.x = 10; instance.vx = 1;
+        input.lastProcessed = 1;
+        ctl.tick(0);
+        assert.equal(ctl.lastCorrectionMag, 9, 'rendered-before 6 vs reconciled 15');
+        assert.closeTo(ctl.drift.ema, 0.9, 1e-9, 'EMA = 0 + (9-0)*0.1');
+        assert.equal(ctl.drift.peak, 9, 'peak tracks the spike');
+        ctl.reset();
+        assert.equal(ctl.drift.ema, 0, 'reset clears drift for the new life');
+        assert.equal(ctl.drift.peak, 0);
+    }));
+
+    test('drift: telemetry is NOT computed by default (no warnOnDivergence, no debug bundle)', () => {
+        const input = new FakeInput();
+        const engine = makeEngine();
+        const { ctl, instance } = make(engine, input);     // production default — nothing watching
+        for (let i = 0; i < 3; i++) ctl.input({ ax: 1 });
+        instance.x = 10; instance.vx = 1;                  // a real mispredict…
+        input.lastProcessed = 1;
+        ctl.tick(0);
+        assert.equal(ctl.lastCorrectionMag, 0, '…but telemetry stays zero — nobody is watching');
+        assert.equal(ctl.drift.ema, 0);
+        // The reconciliation itself still happened (error rebase is unconditional).
+        assert.equal(ctl.world.x, 15, 'reconcile still ran — only the telemetry was skipped');
+    });
+
+    test('divergence: warns once, naming the seq and worst field, when correction exceeds tolerance', () => {
+        resetDivergenceThrottle();
+        const input = new FakeInput();
+        const engine = makeEngine();
+        const { ctl, instance } = make(engine, input, { warnOnDivergence: 0.5 });
+        for (let i = 0; i < 3; i++) ctl.input({ ax: 1 });   // predicted x: 1, 3, 6
+        instance.x = 10; instance.vx = 1;                   // mispredict at seq 1 → x=15
+        input.lastProcessed = 1;
+        const warns = captureWarn(() => ctl.tick(0));
+        assert.equal(warns.length, 1);
+        assert.include(warns[0], 'seq 1');
+        assert.include(warns[0], '"x"');
+        assert.include(warns[0], '-9.000');
+    });
+
+    test('divergence: silent when the correction is within tolerance', () => {
+        resetDivergenceThrottle();
+        const input = new FakeInput();
+        const engine = makeEngine();
+        const { ctl, instance } = make(engine, input, { warnOnDivergence: 20 }); // 20 > mag 9
+        for (let i = 0; i < 3; i++) ctl.input({ ax: 1 });
+        instance.x = 10; instance.vx = 1;
+        input.lastProcessed = 1;
+        assert.equal(captureWarn(() => ctl.tick(0)).length, 0);
+    });
+
+    test('divergence: silent when warnOnDivergence is unset (opt-in)', () => {
+        resetDivergenceThrottle();
+        const input = new FakeInput();
+        const engine = makeEngine();
+        const { ctl, instance } = make(engine, input);   // no warnOnDivergence
+        for (let i = 0; i < 3; i++) ctl.input({ ax: 1 });
+        instance.x = 10; instance.vx = 1;
+        input.lastProcessed = 1;
+        assert.equal(captureWarn(() => ctl.tick(0)).length, 0);
+    });
+
+    test('divergence: rapid repeats are throttled to one warning', () => {
+        resetDivergenceThrottle();
+        const input = new FakeInput();
+        const engine = makeEngine();
+        const { ctl, instance } = make(engine, input, { warnOnDivergence: 0.5 });
+        const warns = captureWarn(() => {
+            for (let i = 0; i < 3; i++) ctl.input({ ax: 1 });
+            instance.x = 10; input.lastProcessed = 1; ctl.tick(0);   // warns
+            for (let i = 0; i < 3; i++) ctl.input({ ax: 1 });
+            instance.x = 50; input.lastProcessed = 4; ctl.tick(0);   // throttled (within 1s)
+        });
+        assert.equal(warns.length, 1, 'the second divergence within 1s is throttled');
     });
 });

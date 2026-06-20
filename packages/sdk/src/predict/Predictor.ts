@@ -65,125 +65,13 @@ import { PredictedEvents, type PredictedEventsGetOptions } from "./predictedEven
 import { PredictedSpawns, type PredictedSpawnsOptions } from "./predictedSpawns.ts";
 import { Reconciler, type ReconcilerOptions } from "./reconciler.ts";
 import { SimReconciler, type SimReconcilerOptions } from "./simReconciler.ts";
-import type { InputHandle } from "../input/InputHandle.ts";
-import type { RoomClockLike } from "../RoomClock.ts";
-
-// -----------------------------------------------------------------------------
-// Schema-native identity. The decoder assigns every instance a stable integer
-// `refId` (own, non-enumerable `Symbol.for("$refId")` property) and exposes a
-// field-name → field-index map on `constructor[Symbol.metadata]`. These two
-// integers — refId and field index — are the SAME identity the wire protocol
-// and any C / C# port use, so Predict keys all of its runtime state on them
-// rather than on JS object identity (WeakMap) or field-name strings. The
-// instance object and the field-name string never reach the engine's hot path;
-// they're resolved to `(refId, fieldId)` once at the API boundary below.
-// -----------------------------------------------------------------------------
-
-const $REF_ID: symbol = Symbol.for("$refId");
-const $METADATA: symbol = (Symbol as { metadata?: symbol }).metadata ?? Symbol.for("Symbol.metadata");
-/** Schema's own SoA: a dense array of a decoded instance's field values, indexed
- *  by field index. Reading/writing it bypasses the per-field accessor and the
- *  megamorphic dynamic-key path — reckon's scratch refill + extract use it. */
-const $VALUES: symbol = Symbol.for("$values");
-
-/** Stable integer id the decoder assigned this instance, or undefined if it
- *  hasn't been decoded yet (attach/track called too early — see file header). */
-function refIdOf(instance: object): number | undefined {
-    return (instance as Record<symbol, number | undefined>)[$REF_ID];
-}
-
-/** The schema metadata object: maps `name -> index` (number) and
- *  `index -> { name, index, type }` (MetadataField). Undefined for non-schema
- *  objects (e.g. plain test fixtures). */
-type SchemaMetadata = Record<string | number, unknown>;
-function metadataOf(instance: object): SchemaMetadata | undefined {
-    return (instance.constructor as unknown as Record<symbol, SchemaMetadata | undefined>)[$METADATA];
-}
-
-/**
- * Field's declaration index from the schema's metadata, or -1 if unknown.
- * `metadata[name]` is the index. Only used on the COLD attach path (to stamp a
- * slot's SLOT_FIELD and seed reckon sim fields) — the hot `value()` read keys
- * its slot map by field NAME, so it never resolves an index per frame.
- */
-function fieldIndexOf(instance: object, field: string): number {
-    const idx = metadataOf(instance)?.[field];
-    return typeof idx === "number" ? idx : -1;
-}
-
-
-/** PRIMITIVE (scalar) field names in declaration order, read from the schema
- *  metadata. Empty for non-schema objects. Field indices are dense from 0, so
- *  walk until the first gap.
- *
- *  Only number / string / boolean (and the other primitive encodings — int8,
- *  float32, …) are returned: in the metadata a primitive's `type` is a STRING
- *  ("number", "string", …) whereas a collection (Map/Array/Set) or a nested
- *  Schema carries an OBJECT `type`. The reckon snapshot uses this to clone the
- *  SCALAR state a `step` reads — including string/enum discriminators (`kind`)
- *  and booleans (`grounded`), which steps routinely branch on — while skipping
- *  reference-typed fields. Those are structural, not forward-simulated, and
- *  shallow-copying their reference into a scratch that `step` mutates could
- *  corrupt the live tree; for the rare step that needs one, pass an explicit
- *  `snapshot`. (Schema fields live behind getters over `$values`, so a plain
- *  `{...instance}` spread copies nothing — hence the metadata walk.) */
-function scalarFieldNamesOf(instance: object): string[] {
-    const meta = metadataOf(instance);
-    if (!meta) return [];
-    const names: string[] = [];
-    for (let i = 0; ; i++) {
-        const f = meta[i] as { name?: string; type?: unknown } | undefined;
-        if (!f || typeof f.name !== "string") break;
-        if (typeof f.type === "string") names.push(f.name); // skip collections / child schemas (object type)
-    }
-    return names;
-}
-
-/**
- * Build a snapshot fn that clones `fieldNames` from a live instance into a fresh
- * plain object. Used by reckon's GENERIC advance path — schema versions whose
- * decoded instances expose values as own properties / accessors rather than a
- * dense `$values` SoA (e.g. esbuild's class-field transform in the real browser,
- * where the `$values` fast path is unavailable and this is the path production
- * actually runs).
- *
- * Why not a plain `for` loop? A single `o[names[i]] = src[names[i]]` store site
- * sees every field name across one call, so V8 demotes it to
- * `KeyedStoreIC_Megamorphic` — the profiler put ~33% of reckon time there.
- * Unrolling gives each field its OWN store site; with a fixed field layout each
- * site sees exactly one key and stays MONOMORPHIC (no eval; ~2.4× faster
- * snapshot in isolation, ~+19% on the full reckon read). Names are captured as
- * locals so the `!== undefined` guard is a predictable branch. Field sets wider
- * than the unroll fall back to the megamorphic loop (rare — most schemas have
- * < 16 numeric+scalar fields).
- */
-const SNAPSHOT_UNROLL_WIDTH = 16;
-function makeUnrolledSnapshot(fieldNames: readonly string[]): (e: any) => any {
-    if (fieldNames.length > SNAPSHOT_UNROLL_WIDTH) {
-        const names = fieldNames;
-        return (e: Record<string, unknown>) => {
-            const o: Record<string, unknown> = {};
-            for (let i = 0; i < names.length; i++) o[names[i]] = e[names[i]];
-            return o;
-        };
-    }
-    const n0 = fieldNames[0], n1 = fieldNames[1], n2 = fieldNames[2], n3 = fieldNames[3],
-        n4 = fieldNames[4], n5 = fieldNames[5], n6 = fieldNames[6], n7 = fieldNames[7],
-        n8 = fieldNames[8], n9 = fieldNames[9], n10 = fieldNames[10], n11 = fieldNames[11],
-        n12 = fieldNames[12], n13 = fieldNames[13], n14 = fieldNames[14], n15 = fieldNames[15];
-    return (e: Record<string, unknown>) => {
-        const o: Record<string, unknown> = {};
-        if (n0 !== undefined) o[n0] = e[n0]; if (n1 !== undefined) o[n1] = e[n1];
-        if (n2 !== undefined) o[n2] = e[n2]; if (n3 !== undefined) o[n3] = e[n3];
-        if (n4 !== undefined) o[n4] = e[n4]; if (n5 !== undefined) o[n5] = e[n5];
-        if (n6 !== undefined) o[n6] = e[n6]; if (n7 !== undefined) o[n7] = e[n7];
-        if (n8 !== undefined) o[n8] = e[n8]; if (n9 !== undefined) o[n9] = e[n9];
-        if (n10 !== undefined) o[n10] = e[n10]; if (n11 !== undefined) o[n11] = e[n11];
-        if (n12 !== undefined) o[n12] = e[n12]; if (n13 !== undefined) o[n13] = e[n13];
-        if (n14 !== undefined) o[n14] = e[n14]; if (n15 !== undefined) o[n15] = e[n15];
-        return o;
-    };
-}
+import { InputHandleImpl, type InputHandle } from "../input/InputHandle.ts";
+import { classifyDrift, type Drift, type DriftVerdict } from "./drift.ts";
+import { NULL_CLOCK, type RoomClockLike } from "../RoomClock.ts";
+import {
+    $VALUES,
+    refIdOf, metadataOf, fieldIndexOf, scalarFieldNamesOf, makeUnrolledSnapshot,
+} from "./schema.ts";
 
 // -----------------------------------------------------------------------------
 // Type helpers for narrow inference on Predict.{attach,attachAll,value}.
@@ -663,6 +551,25 @@ export type PredictGetOptions<T = any> = PredictOptions<T> & {
  * the debug *panel* shape (per-profile field labels etc.) is assembled in
  * `@colyseus/sdk/debug` from this core, not here.
  */
+/** Per-reconciler drift snapshot published to the debug panel. */
+export interface ReconcilerStat {
+    /** Display label (index-based — most games drive a single reconciler). */
+    readonly label: string;
+    /** The actionable read: matched / jitter / diverging (see classifyDrift). */
+    readonly verdict: DriftVerdict;
+    /** `ema / tolerance` when a `warnOnDivergence` tolerance is set — how far past
+     *  the dev's own threshold the persistent drift sits. `undefined` otherwise. */
+    readonly severity?: number;
+    /** Rolling drift EMA — the persistent/divergence component. */
+    readonly ema: number;
+    /** Rolling drift peak — recent jitter spikes. */
+    readonly peak: number;
+    /** Most recent reconcile's max |correction| (world/pose units). */
+    readonly lastCorrectionMag: number;
+    /** Reconcile counter — advances once per reconcile. */
+    readonly reconcileSeq: number;
+}
+
 export interface PredictCore {
     readonly name: string;
     readonly mode: () => PredictMode;
@@ -676,6 +583,10 @@ export interface PredictCore {
     readonly reckonDefaults: () => Readonly<ReckonDefaults>;
     /** Number of instances currently attached. */
     readonly attachedCount: () => number;
+    /** Drift telemetry for each driven reconciler/sim — the panel renders a
+     *  per-reconciler divergence-vs-jitter readout. Empty when this Predict
+     *  drives only passive smoothing. */
+    readonly reconcilers: () => ReconcilerStat[];
     /** Mutate defaults. Mode flips across families freely. */
     readonly setDefaults: (opts: PredictOptions) => void;
     /**
@@ -726,6 +637,21 @@ function getDebugRegistry(): ColyseusDebugRegistry | undefined {
 }
 
 let __predictAutoId = 0;
+
+let __warnedNoInputClock = false;
+/** Warn once when a {@link Predict} inherits the inert {@link NULL_CLOCK} — the
+ *  server room never called `defineInput()`, so server-time interpolation and
+ *  lag compensation silently fall back to local time. */
+function warnNoInputClock(): void {
+    if (__warnedNoInputClock) { return; }
+    __warnedNoInputClock = true;
+    console.warn(
+        "@colyseus/sdk Predict: room.clock isn't server-synced because the server " +
+        "room didn't call defineInput(). Server-time interpolation and lag " +
+        "compensation fall back to local time. Add defineInput() on the server " +
+        "room to enable them — or ignore this if you only need local smoothing.",
+    );
+}
 
 export class Predict<TState = any> {
     /**
@@ -883,6 +809,10 @@ export class Predict<TState = any> {
         // for rooms without a clock — `trackStepped` then requires explicit
         // forwardMs/elapsedMs.
         this.clock = clock ?? (room as { clock?: RoomClockLike | null }).clock ?? undefined;
+        // Prediction wants a server-synced clock (server-time interpolation,
+        // lag-comp render stamps). It only exists once the room called
+        // defineInput(); inheriting the inert stub means that didn't happen.
+        if (this.clock === NULL_CLOCK) { warnNoInputClock(); }
 
         this.name = (rest as { name?: string }).name ?? `predict#${++__predictAutoId}`;
 
@@ -913,6 +843,7 @@ export class Predict<TState = any> {
             mode: () => this.defaultMode,
             smoothingDefaults: () => this.readSmoothingDefaults(),
             reckonDefaults: () => ({ ...this.reckonDefaults }),
+            reconcilers: () => this.snapshotReconcilers(),
             // Every attached instance owns ≥1 smoothing slot, so the slot map's key
             // count IS the attached-instance count — no separate bookkeeping needed.
             attachedCount: () => this.slotByRef.size,
@@ -934,6 +865,29 @@ export class Predict<TState = any> {
                 };
             },
         };
+    }
+
+    /** Drift telemetry for each driven Reconciler/SimReconciler (duck-typed by
+     *  the presence of `drift`), for the debug panel. Event/spawn stores in the
+     *  same `driven` list have no `drift` and are skipped. */
+    private snapshotReconcilers(): ReconcilerStat[] {
+        const out: ReconcilerStat[] = [];
+        let i = 0;
+        for (const d of this.driven) {
+            const r = d as Partial<{ drift: Drift; lastCorrectionMag: number; reconcileSeq: number; warnTolerance?: number }>;
+            if (!r.drift) { continue; }
+            const tol = r.warnTolerance;
+            out.push({
+                label: `reconciler ${i++}`,
+                verdict: classifyDrift(r.drift, tol),
+                severity: tol !== undefined && tol > 0 ? r.drift.ema / tol : undefined,
+                ema: r.drift.ema,
+                peak: r.drift.peak,
+                lastCorrectionMag: r.lastCorrectionMag ?? 0,
+                reconcileSeq: r.reconcileSeq ?? 0,
+            });
+        }
+        return out;
     }
 
     private readSmoothingDefaults(): { mode: PredictMode; delay: number; damping: number; maxExtrapolate: number; tickInterval: number } {
@@ -1895,6 +1849,31 @@ export class Predict<TState = any> {
      * each frame (reconcile + smooth-correction decay) — no separate `tick()`
      * call needed, which is exactly the drive that's easy to forget.
      */
+    /**
+     * The canonical interpolation `delay` (the default profile's `delay`, from
+     * `Predict.get(room, { delay })` / {@link setDefaults}). Lag compensation's
+     * `renderDelay` is bound to this by {@link reconciler}/{@link sim} so the
+     * interp buffer the remotes render at and the server's rewind instant are
+     * derived from ONE number — they can't drift out of sync.
+     */
+    private canonicalDelay(): number {
+        return this.profileBuf[DEFAULTS_PROFILE * PROFILE_STRIDE + P_DELAY];
+    }
+
+    /**
+     * Bind lag-comp's `renderDelay` on the input handle to this Predict's lerp
+     * `delay` (see {@link InputHandleImpl.bindRenderDelay}) so the remote interp
+     * buffer and the server's rewind instant stay one value — no "keep the two
+     * delays equal" footgun. `instanceof`-narrowed (not cast), so a non-impl
+     * input (a test mock) is a no-op; an explicit `room.input({ renderDelay })`
+     * still wins inside `bindRenderDelay`.
+     */
+    private bindInputRenderDelay(input: InputHandle<any>): void {
+        if (input instanceof InputHandleImpl) {
+            input.bindRenderDelay(() => this.canonicalDelay());
+        }
+    }
+
     reconciler<S extends object, W>(
         instance: S,
         opts: Omit<ReconcilerOptions<S, Data<W>>, "input"> & { input: InputHandle<W> },
@@ -1905,6 +1884,7 @@ export class Predict<TState = any> {
         // type argument needs to be written at the call site, and `step`'s `cmd`
         // is contextually typed.
         const recon = new Reconciler<S, Data<W>>(instance, opts);
+        this.bindInputRenderDelay(opts.input);
         this.driven.push(recon as { tick?(now: number): void; dead?: boolean });
         return recon;
     }
@@ -1929,6 +1909,7 @@ export class Predict<TState = any> {
         // `E` from `opts.world` — none written at the call site, and `step`'s `cmd`
         // is contextually typed `Data<W>`.
         const ctl = new SimReconciler<Data<W>, P, E>(opts as SimReconcilerOptions<Data<W>, P, E>);
+        this.bindInputRenderDelay(opts.input);
         this.driven.push(ctl as { tick?(now: number): void; dead?: boolean });
         return ctl;
     }

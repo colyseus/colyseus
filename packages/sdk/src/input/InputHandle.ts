@@ -23,12 +23,14 @@ export interface InputHandleHost {
 
 /**
  * Options accepted by `Room.input()`. Extends {@link InputEncoderOptions}
- * (mode / historySize / delta / buffer) with a `type` field for the schema
- * constructor.
+ * (mode / historySize) with a `type` field for the schema constructor.
+ * Inputs are ALWAYS delta-encoded (the codec has no full-snapshot mode):
+ * each send carries only changed fields, or a body-less frame on a no-change
+ * tick. Every `send()` transmits one input; to skip a tick, just don't call
+ * `send()`.
  *
- * Recommended for rollback netcode: `{ mode: "unreliable", delta: true,
- * historySize: 4 }` — small redundant deltas, idempotent across drops via
- * absolute-value wire ops.
+ * Recommended for rollback netcode: `{ mode: "unreliable", historySize: 4 }`
+ * — small redundant deltas, idempotent across drops via absolute-value wire ops.
  *
  * `I` is intentionally unconstrained: pinning it to `Schema` from this
  * SDK's copy of `@colyseus/schema` would reject user-side schemas coming
@@ -50,10 +52,18 @@ export interface InputOptions<I = any> extends InputEncoderOptions {
    * `renderDelta = renderDelay + smoothedRtt()/2`, from which the server
    * derives `renderTime = reckonTime − renderDelta`: this term covers the
    * interp buffer, and the SDK adds the one-way downstream latency itself. So
-   * pass ONLY your interp buffer, never the latency. Default `0` — correct
-   * when you dead-reckon remote entities to current server time (no interp
-   * lag). Has no effect unless the Room rewinds a `mode:"snapshot"` group (which
-   * auto-enables the renderTime stamp).
+   * pass ONLY your interp buffer, never the latency.
+   *
+   * **Usually omit this.** When you wire the handle through
+   * `predict.reconciler(self, { input })` or `predict.sim({ input })`, the SDK
+   * binds this to the Predict's lerp `delay` automatically, so the interp buffer
+   * the remotes render at and the server's rewind instant are derived from ONE
+   * number and can't drift out of sync. Set it explicitly only to override that
+   * (e.g. you smooth remotes some other way) — an explicit value always wins.
+   *
+   * Default `0` — correct when you dead-reckon remote entities to current server
+   * time (no interp lag). Has no effect unless the Room rewinds a
+   * `mode:"snapshot"` group (which auto-enables the renderTime stamp).
    */
   renderDelay?: number;
 }
@@ -127,14 +137,17 @@ export interface InputHandle<I = any> {
    * Encode the staged input and send it. Routes to the reliable or
    * unreliable channel based on {@link mode}.
    *
-   * No-op when the connection isn't open, or — in reliable + delta mode —
-   * when nothing changed since the last send.
+   * A no-op ONLY when the connection isn't open. Otherwise it always
+   * transmits one input — a **body-less** frame when nothing changed since the
+   * last send (the server decodes it as a no-op, holding the last values), so
+   * the server receives exactly one input per `send()` and its consumed/ack
+   * count tracks yours 1:1. To skip a tick entirely, simply don't call `send()`.
    */
   send(): void;
   /**
    * Reset encoder state. Drops the unreliable ring buffer; re-marks every
-   * populated field as dirty in delta mode (next send emits a full
-   * snapshot). Useful on scene transitions or after reconnection.
+   * populated field as dirty so the next send emits a full snapshot. Useful
+   * on scene transitions or after reconnection.
    */
   reset(): void;
   /**
@@ -205,8 +218,13 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
   // The app's interpolation buffer (ms) — how far in the past it renders remote
   // entities (e.g. a `Predict` lerp `delay`). The stamp subtracts this AND the
   // one-way latency (smoothedRtt/2) the SDK already tracks, so callers pass only
-  // the interp buffer, never the latency.
+  // the interp buffer, never the latency. When the app doesn't set it explicitly,
+  // `predict.reconciler`/`sim` bind `_renderDelayProvider` to the Predict lerp
+  // `delay` (see bindRenderDelay) so the interp buffer and the server's rewind
+  // instant stay ONE value — no two-number "keep these equal" footgun.
   private _renderDelay = 0;
+  private _renderDelayExplicit = false;
+  private _renderDelayProvider: (() => number) | undefined;
   // Server-advertised rates: fixed step (Hz), patch interval (ms = reconcile
   // cadence), and physics sub-steps per input tick.
   private _tickRate?: number;
@@ -225,6 +243,7 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
     this._stampRender = opts?.stampRender ?? false;
     this._stampReckon = opts?.stampReckon ?? false;
     this._renderDelay = opts?.renderDelay ?? 0;
+    this._renderDelayExplicit = opts?.renderDelay !== undefined;
     this._tickRate = opts?.tickRate;
     this._patchRate = opts?.patchRate;
     this._subSteps = opts?.subSteps ?? 1;
@@ -282,12 +301,32 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
     // _inputBuffer is reused as-is: at() gates on _sentCount/_lastProcessed, so it can't surface stale snapshots.
   }
 
+  /**
+   * @internal Bind lag-comp's `renderDelay` to a live provider — the owning
+   * Predict's lerp `delay`. Called by `predict.reconciler`/`predict.sim` when
+   * they wire this handle, so the remote interp buffer and the server's rewind
+   * instant are derived from ONE number and can't drift apart. No-op if the app
+   * passed an explicit `renderDelay` to `room.input()` — an explicit value wins.
+   */
+  bindRenderDelay(provider: () => number): void {
+    if (this._renderDelayExplicit) return;
+    this._renderDelayProvider = provider;
+  }
+
+  /** Effective interp buffer (ms): a bound provider (the Predict lerp `delay`)
+   *  when present, else the static value from `room.input()`. */
+  private _resolveRenderDelay(): number {
+    return this._renderDelayProvider ? this._renderDelayProvider() : this._renderDelay;
+  }
+
   send(): void {
     const conn = this._host.connection;
     if (!conn?.isOpen) return;
 
+    // May be 0-length on a no-change delta tick → we still frame + send a
+    // body-less input (server decodes it as a no-op, holding the last values).
+    // Callers skip a tick by not calling send(), not by relying on suppression.
     const bytes = this._encoder.encode();
-    if (bytes.length === 0) return; // delta no-op — nothing to send, nothing to count
 
     // Lag-comp stamp prefix (reliable only): OR the TIMED modifier onto the
     // opcode and prepend the timeline stamp(s) the server advertised. BOTH ships
@@ -320,7 +359,7 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
       const synced = (clock?.lastServerTime?.() ?? 0) > 0;
       const rk = synced ? Math.max(0, Math.round(clock!.serverNow())) >>> 0 : 0;
       const delta = synced
-        ? Math.min(0xffff, Math.max(0, Math.round(this._renderDelay + (clock!.smoothedRtt?.() ?? 0) / 2)))
+        ? Math.min(0xffff, Math.max(0, Math.round(this._resolveRenderDelay() + (clock!.smoothedRtt?.() ?? 0) / 2)))
         : 0;
       if (both) {
         this._scratch[1] = rk & 0xff;
@@ -368,8 +407,8 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
    * @internal Snapshot the just-sent input into the replay ring and stamp its
    * send time, keyed by `seq`. Lets a reconciler replay unacked inputs via
    * {@link at} and the TIMED ack sample RTT. The snapshot is alloc-free through
-   * the codec's `copyInto` (no `Object.keys`); `delta:false` stages every field,
-   * so each slot is a full snapshot.
+   * the codec's `copyInto` (no `Object.keys`), which stages every field, so
+   * each slot is a full snapshot independent of the wire delta encoding.
    */
   private _recordSent(seq: number): void {
     if (this._inputBuffer === null) {

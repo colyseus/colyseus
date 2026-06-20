@@ -148,17 +148,21 @@ describe('InputHandle', () => {
             assert.equal(handle.sentCount, 3);
         });
 
-        test('delta no-change emits nothing and does NOT bump sentCount', () => {
+        test('delta no-change emits a body-less frame and bumps sentCount', () => {
             const { handle, conn, instance } = makeHandle('reliable', { delta: true });
             instance.x = 1;
-            handle.send(); // first emits a baseline
+            handle.send(); // first emits a baseline (has body)
             assert.equal(handle.sentCount, 1);
             assert.equal(conn.reliable.length, 1);
+            assert.isAbove(conn.reliable[0].length, 1, 'baseline carries payload bytes');
 
-            // No mutations between sends — encoder returns empty.
+            // No mutations between sends — encoder returns empty, but we still
+            // transmit a body-less frame so the server gets one input per send().
             handle.send();
-            assert.equal(handle.sentCount, 1, 'no-op send must not advance the seq counter');
-            assert.equal(conn.reliable.length, 1);
+            assert.equal(handle.sentCount, 2, 'every send advances the seq counter');
+            assert.equal(conn.reliable.length, 2);
+            assert.equal(conn.reliable[1].length, 1, 'body-less: opcode only, no payload');
+            assert.equal(conn.reliable[1][0], Protocol.ROOM_INPUT_RELIABLE);
         });
 
         test('ackInput advances lastProcessed monotonically and returns RTT >= 0', () => {
@@ -252,6 +256,52 @@ describe('InputHandle', () => {
             handle.send();
             assert.equal(readU32LE(conn.reliable[1], 1), 50);
             assert.equal(readU16LE(conn.reliable[1], 5), 130);
+        });
+
+        test('bindRenderDelay: an unset renderDelay is driven by the bound provider (the Predict lerp delay)', () => {
+            const { handle, conn, instance } = makeHandle('reliable', {
+                stampRender: true,
+                stampReckon: true,
+                // no renderDelay → not explicit, so the binding takes effect
+                clockRtt: 60,           // one-way ≈ 30
+                clockNow: () => 1234,
+            });
+            handle.bindRenderDelay(() => 100);
+            instance.x = 1;
+            handle.send();
+            assert.equal(readU16LE(conn.reliable[0], 5), 130, 'delta = boundDelay(100) + rtt/2(30)');
+        });
+
+        test('bindRenderDelay: an explicit room.input({ renderDelay }) wins over the binding', () => {
+            const { handle, conn, instance } = makeHandle('reliable', {
+                stampRender: true,
+                stampReckon: true,
+                renderDelay: 100,       // explicit
+                clockRtt: 60,
+                clockNow: () => 1234,
+            });
+            handle.bindRenderDelay(() => 999);   // ignored — explicit wins
+            instance.x = 1;
+            handle.send();
+            assert.equal(readU16LE(conn.reliable[0], 5), 130, 'still 100 + rtt/2, binding ignored');
+        });
+
+        test('bindRenderDelay: provider is read each send, so a live delay change tracks (no drift)', () => {
+            let delay = 100;
+            const { handle, conn, instance } = makeHandle('reliable', {
+                stampRender: true,
+                stampReckon: true,
+                clockRtt: 60,
+                clockNow: () => 1234,
+            });
+            handle.bindRenderDelay(() => delay);
+            instance.x = 1;
+            handle.send();
+            assert.equal(readU16LE(conn.reliable[0], 5), 130, '100 + 30');
+            delay = 40;
+            instance.x = 2;
+            handle.send();
+            assert.equal(readU16LE(conn.reliable[1], 5), 70, 'tracks the live change: 40 + 30');
         });
 
         // Length of the encoded MoveInput body (no opcode, no prefix) for `x`,

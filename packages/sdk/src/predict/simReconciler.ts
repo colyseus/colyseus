@@ -59,7 +59,7 @@
  *
  * Composite-scalar example (no engine — the common case):
  *
- *     const input = room.input(MoveInput, { mode: "reliable", delta: false });
+ *     const input = room.input({ type: MoveInput, mode: "reliable" });
  *     const world = {
  *         paddle: { x: player.x, y: player.y },
  *         puck:   { x: s.puck.x, y: s.puck.y, vx: s.puck.vx, vy: s.puck.vy },
@@ -94,13 +94,16 @@
 import type { InputHandle } from "../input/InputHandle.ts";
 // Shared fixed-step context — ONE `dt` drives both sides of the rollback.
 import type { StepContext } from "./reconciler.ts";
+import { newDrift, updateDrift, resetDrift, classifyDrift, type Drift } from "./drift.ts";
+import { warnDivergence, diagnosticsActive } from "./divergence.ts";
 
 export interface SimReconcilerOptions<I, P extends Record<string, number>, E> {
     /**
      * The input channel (`room.input(...)`). The controller stages each cmd onto
      * `input.data`, calls `input.send()`, and reads the server ack from
-     * `input.lastProcessed` / `input.sentCount`. Use `{ delta: false }` so EVERY
-     * predicted step transmits (predicted set == server-applied set).
+     * `input.lastProcessed` / `input.sentCount`. Every `send()` transmits one
+     * input (body-less when unchanged), so EVERY predicted step is delivered
+     * (predicted set == server-applied set) — no configuration needed.
      */
     input: InputHandle<I>;
     /**
@@ -173,6 +176,13 @@ export interface SimReconcilerOptions<I, P extends Record<string, number>, E> {
     writeInput?: (data: any, cmd: I) => void;
     /** Called at the end of each reconcile with the just-acked seq. */
     onReconcile?: (acked: number) => void;
+    /**
+     * Dev diagnostic: when set, `console.warn` (throttled to ~1/s) whenever a
+     * reconcile's max |pose correction| exceeds this tolerance (pose units),
+     * naming the input seq, the worst pose field + its delta, and the usual
+     * cause. Costs no extra wire traffic. Leave unset in production.
+     */
+    warnOnDivergence?: number;
 }
 
 export class SimReconciler<I = any, P extends Record<string, number> = any, E = any> {
@@ -190,6 +200,22 @@ export class SimReconciler<I = any, P extends Record<string, number> = any, E = 
     /** Pose field names, captured from the first {@link readPose}. */
     private poseFields: readonly string[] = [];
     private fieldsReady = false;
+
+    // --- Debug telemetry (no effect on prediction) ---------------------------
+    /** Per-pose-field correction injected by the most recent reconcile (rendered
+     *  -before − reconciled). Reused object, overwritten each reconcile. */
+    readonly lastCorrection: Record<string, number> = {};
+    /** Max |correction| across pose fields injected by the most recent reconcile
+     *  (pose units). ~0 ⇒ the prediction matched the server at the acked input. */
+    lastCorrectionMag = 0;
+    /** Increments once per reconcile — detect a fresh one (compare a stored value)
+     *  without a callback. */
+    reconcileSeq = 0;
+    /** Rolling reconcile drift (pose units). `ema` = persistent component (steady
+     *  nonzero ⇒ divergence / rubber-banding); `peak` = recent decaying max (a
+     *  spike over a low `ema` ⇒ network jitter, not divergence). Both ~0 ⇒ the
+     *  prediction matched the server. @see Drift */
+    readonly drift: Drift = newDrift();
 
     private lastTick = -1;
     private lastAcked = 0;
@@ -221,6 +247,8 @@ export class SimReconciler<I = any, P extends Record<string, number> = any, E = 
     private readonly smoothing: number;
     private readonly stepMs: number;
     private readonly onReconcile?: (acked: number) => void;
+    /** Divergence-warning tolerance (pose units); `undefined` ⇒ off. @see warnOnDivergence */
+    private readonly warnTolerance?: number;
     private readonly input_: InputHandle<I>;
     private readonly writeInput: (data: any, cmd: I) => void;
 
@@ -247,6 +275,7 @@ export class SimReconciler<I = any, P extends Record<string, number> = any, E = 
             subSteps, subDt: dt / subSteps, subDtMs: this.stepMs / subSteps,
         };
         this.onReconcile = opts.onReconcile;
+        this.warnTolerance = opts.warnOnDivergence;
         this.writeInput = opts.writeInput ?? ((data, cmd) => Object.assign(data as object, cmd as object));
         this.lastAcked = this.input_.lastProcessed;
 
@@ -356,9 +385,28 @@ export class SimReconciler<I = any, P extends Record<string, number> = any, E = 
         this.refreshPose();
         // Re-base `error` so the smoothed pose is unchanged at this instant, then
         // decays via tick(). `prevPose` untouched (interpolation keeps flowing).
+        // Drift telemetry runs only when watched — `warnOnDivergence` set or the
+        // debug bundle loaded — so production that uses neither pays nothing. The
+        // `error` rebase below is the REAL reconciliation and always runs.
+        const diag = this.warnTolerance !== undefined || diagnosticsActive();
         const snap = this.smoothing <= 0;
+        let mag = 0;
         for (const f of this.poseFields) {
-            this.error[f] = snap ? 0 : renderedBefore[f] - this.curPose[f];
+            const correction = renderedBefore[f] - this.curPose[f];
+            this.error[f] = snap ? 0 : correction;
+            if (diag) {
+                this.lastCorrection[f] = correction;
+                const a = correction < 0 ? -correction : correction;
+                if (a > mag) mag = a;
+            }
+        }
+        this.reconcileSeq++;
+        if (diag) {
+            this.lastCorrectionMag = mag;
+            updateDrift(this.drift, mag);
+            if (this.warnTolerance !== undefined && classifyDrift(this.drift, this.warnTolerance) === "diverging") {
+                warnDivergence(acked, this.lastCorrection, this.drift.ema, this.warnTolerance);
+            }
         }
 
         this.onReconcile?.(acked);
@@ -409,6 +457,7 @@ export class SimReconciler<I = any, P extends Record<string, number> = any, E = 
         for (const f of this.poseFields) { this.prevPose[f] = this.curPose[f]; this.error[f] = 0; }
         this.acc = 0;
         this.alpha = 0;
+        resetDrift(this.drift);   // fresh life — don't carry the prior life's drift
         // Forget in-flight inputs from the prior life — don't replay them.
         this.replayFrom = this.input_.sentCount;
         this.lastAcked = this.input_.lastProcessed;

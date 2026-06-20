@@ -52,6 +52,12 @@ export {
 } from './predict/reconciler.ts';
 
 export {
+    classifyDrift,
+    type Drift,
+    type DriftVerdict,
+} from './predict/drift.ts';
+
+export {
     SimReconciler,
     type SimReconcilerOptions,
 } from './predict/simReconciler.ts';

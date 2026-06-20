@@ -563,9 +563,10 @@ export class Room<
      *
      * Throws if neither source has produced a constructor.
      *
-     * For rollback netcode, prefer `{ mode: "unreliable", delta: true,
-     * historySize: 4 }`: tiny per-tick payloads, redundancy across drops,
-     * idempotent under reordering.
+     * Inputs are always delta-encoded; every `send()` transmits one input
+     * (a body-less frame when nothing changed). For rollback netcode, prefer
+     * `{ mode: "unreliable", historySize: 4 }`: tiny per-tick payloads,
+     * redundancy across drops, idempotent under reordering.
      *
      * @example
      * ```typescript
@@ -594,6 +595,8 @@ export class Room<
         }
 
         const instance = new Ctor();
+        // The InputEncoder always delta-encodes (no full-snapshot mode), so
+        // there's nothing to configure here beyond mode/historySize.
         const encoder = new InputEncoder(instance as any, options);
         // The handle owns the input round-trip (send counter, RTT send-times, server-acked count);
         // the TIMED decode feeds it the ack and it produces RTT samples for the clock (see onMessage).

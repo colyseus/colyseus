@@ -32,9 +32,9 @@
  * to marshal); only the loop, input sampling, and transport live in the
  * per-language shell.
  *
- *     // delta:false so EVERY predicted step transmits (predicted set ==
- *     // server-applied set); delta would drop unchanged steps → backdrift.
- *     const input = room.input(MoveInput, { mode: "reliable", delta: false });
+ *     // Every send() transmits one input (body-less when unchanged), so each
+ *     // predicted step is delivered — predicted set == server-applied set.
+ *     const input = room.input({ type: MoveInput, mode: "reliable" });
  *     const me = predict.reconciler(player, {
  *         input,
  *         step: (ctx, state, command) => applyInput(state, command, LEVEL, ctx.dt), // ctx.dt shared w/ server
@@ -56,6 +56,8 @@
 // Drives + reads acks through `room.input(...)`'s handle: the input channel +
 // input-state owner (staged data, sent buffer, ack). Type-only (erased).
 import type { InputHandle } from "../input/InputHandle.ts";
+import { newDrift, updateDrift, resetDrift, classifyDrift, type Drift } from "./drift.ts";
+import { warnDivergence, diagnosticsActive } from "./divergence.ts";
 
 /**
  * Per-step context handed to {@link ReconcilerOptions.step}. Mirrors the
@@ -115,10 +117,11 @@ export interface ReconcilerOptions<S extends object, I> {
      * `input.data`, calls `input.send()`, and reads the server ack from
      * `input.lastProcessed` / `input.sentCount`.
      *
-     * Use `{ delta: false }` for continuous per-frame controls: the reconciler
-     * predicts one input per `input()`, so every one MUST transmit. `delta: true`
-     * suppresses unchanged frames → the client predicts inputs the server never
-     * applies → the entity over-predicts and drifts backward on correction.
+     * The reconciler predicts one input per `input()` and `send()`s each, so
+     * every step MUST transmit — and it does: inputs are delta-encoded and a
+     * no-change tick sends a body-less frame (never suppressed), so the
+     * predicted set always equals the server-applied set (no backdrift).
+     * Nothing to configure — this is the default `room.input()` behavior.
      *
      * Typed `InputHandle<I>`: the reconciler's command type `I` is the handle's
      * data shape (the controller sets `I = Data<wire>`), so `input.data` and
@@ -189,6 +192,14 @@ export interface ReconcilerOptions<S extends object, I> {
      * side-effect records, etc.
      */
     onReconcile?: (acked: number) => void;
+    /**
+     * Dev diagnostic: when set, `console.warn` (throttled to ~1/s) whenever a
+     * reconcile's max |correction| exceeds this tolerance (world units), naming
+     * the input seq, the worst field + its delta, and the usual cause. The
+     * reconcile correction already IS the client-vs-server divergence, so this
+     * costs no extra wire traffic. Leave unset (the default) in production.
+     */
+    warnOnDivergence?: number;
 }
 
 export class Reconciler<S extends object = any, I = any> {
@@ -213,6 +224,12 @@ export class Reconciler<S extends object = any, I = any> {
     /** Increments once per reconcile — lets a consumer detect a fresh one
      *  (compare against a stored value) without a callback. */
     reconcileSeq = 0;
+    /** Rolling reconcile drift (world units). `ema` = persistent component
+     *  (steady nonzero ⇒ divergence / rubber-banding); `peak` = recent decaying
+     *  max (a spike over a low `ema` ⇒ network jitter, not divergence). Both ~0 ⇒
+     *  the prediction matched the server. Updated once per reconcile — read it for
+     *  a HUD or the debug panel. @see Drift */
+    readonly drift: Drift = newDrift();
 
     private lastTick = -1;
     private lastAcked = 0;
@@ -238,6 +255,8 @@ export class Reconciler<S extends object = any, I = any> {
     private readonly smoothing: number;
     private readonly stepMs: number;
     private readonly onReconcile?: (acked: number) => void;
+    /** Divergence-warning tolerance (world units); `undefined` ⇒ off. @see warnOnDivergence */
+    private readonly warnTolerance?: number;
     private readonly input_: InputHandle<I>;
     private readonly writeInput: (data: any, cmd: I) => void;
     private readonly instance: any;
@@ -269,6 +288,7 @@ export class Reconciler<S extends object = any, I = any> {
             subSteps, subDt: dt / subSteps, subDtMs: this.stepMs / subSteps,
         };
         this.onReconcile = opts.onReconcile;
+        this.warnTolerance = opts.warnOnDivergence;
         this.writeInput = opts.writeInput ?? ((data, cmd) => Object.assign(data as object, cmd as object));
         this.lastAcked = this.input_.lastProcessed;
 
@@ -396,17 +416,29 @@ export class Reconciler<S extends object = any, I = any> {
         // then decays out via tick(). `prev` untouched (interpolation keeps flowing).
         // The raw correction (pre-smoothing pop) doubles as a debug gauge —
         // recorded regardless of snap mode so telemetry sees it either way.
+        // Drift telemetry runs only when watched — `warnOnDivergence` set or the
+        // debug bundle loaded — so production that uses neither pays nothing. The
+        // `error` rebase below is the REAL reconciliation and always runs.
+        const diag = this.warnTolerance !== undefined || diagnosticsActive();
         const snap = this.smoothing <= 0;
         let mag = 0;
         for (const f of this.numericFields) {
             const correction = renderedBefore[f] - (this.local[f] as number);
-            this.lastCorrection[f] = correction;
             this.error[f] = snap ? 0 : correction;
-            const a = correction < 0 ? -correction : correction;
-            if (a > mag) mag = a;
+            if (diag) {
+                this.lastCorrection[f] = correction;
+                const a = correction < 0 ? -correction : correction;
+                if (a > mag) mag = a;
+            }
         }
-        this.lastCorrectionMag = mag;
         this.reconcileSeq++;
+        if (diag) {
+            this.lastCorrectionMag = mag;
+            updateDrift(this.drift, mag);
+            if (this.warnTolerance !== undefined && classifyDrift(this.drift, this.warnTolerance) === "diverging") {
+                warnDivergence(acked, this.lastCorrection, this.drift.ema, this.warnTolerance);
+            }
+        }
 
         this.onReconcile?.(acked);
     }
@@ -438,6 +470,7 @@ export class Reconciler<S extends object = any, I = any> {
         for (const f of this.numericFields) { this.prev[f] = this.local[f] as number; this.error[f] = 0; }
         this.acc = 0;
         this.alpha = 0;
+        resetDrift(this.drift);   // fresh life — don't carry the prior life's drift
         // Forget in-flight inputs from the prior life — don't replay them.
         this.replayFrom = this.input_.sentCount;
         this.lastAcked = this.input_.lastProcessed;

@@ -35,12 +35,28 @@ export interface ProfileCore {
  * portable state plus an `onTrack` subscription the bridge uses to reconstruct
  * the per-profile field list.
  */
+/** The actionable read of a reconciler's drift. */
+export type DriftVerdict = "matched" | "jitter" | "diverging";
+
+/** Per-reconciler drift snapshot — mirrors the engine's `ReconcilerStat`
+ *  (duck-typed; no engine import). */
+export interface ReconcilerStat {
+    readonly label: string;
+    readonly verdict: DriftVerdict;
+    readonly severity?: number;
+    readonly ema: number;
+    readonly peak: number;
+    readonly lastCorrectionMag: number;
+    readonly reconcileSeq: number;
+}
+
 export interface PredictCore {
     readonly name: string;
     mode(): PredictMode;
     smoothingDefaults(): { mode: PredictMode; delay: number; damping: number; maxExtrapolate: number; tickInterval?: number };
     reckonDefaults(): { step: StepFn | undefined; smoothing: number; substep: number };
     attachedCount(): number;
+    reconcilers(): ReconcilerStat[];
     setDefaults(opts: any): void;
     profiles(): ProfileCore[];
     setProfile(id: number, opts: any): void;
@@ -64,6 +80,7 @@ export interface PredictDebugHandle {
     smoothingDefaults(): { mode: PredictMode; delay: number; damping: number; maxExtrapolate: number; tickInterval?: number };
     reckonDefaults(): { step: StepFn | undefined; smoothing: number; substep: number };
     attachedCount(): number;
+    reconcilers(): ReconcilerStat[];
     setDefaults(opts: any): void;
     profiles(): ProfileInfo[];
     setProfile(id: number, opts: any): void;
@@ -93,6 +110,7 @@ export function toDebugHandle(core: PredictCore): PredictDebugHandle {
         smoothingDefaults: () => core.smoothingDefaults(),
         reckonDefaults: () => core.reckonDefaults(),
         attachedCount: () => core.attachedCount(),
+        reconcilers: () => core.reconcilers(),
         setDefaults: (opts) => core.setDefaults(opts),
         setProfile: (id, opts) => core.setProfile(id, opts),
         onDispose: (cb) => core.onDispose(cb),

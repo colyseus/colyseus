@@ -9,13 +9,14 @@
 - New: `conn.input(options?)` returns a cached per-room `ClientInputHandle<I>`:
   - `.data` — mutable schema instance; mutate, then call `.send()`
   - `.send()` — encodes via `InputEncoder` and routes to reliable or unreliable channel based on `mode`
-  - `.reset()` — drops the unreliable ring buffer; re-marks every populated field as dirty in delta mode
+  - `.reset()` — drops the unreliable ring buffer; re-marks every populated field as dirty so the next send is a full snapshot
   - `.mode` — read-only wire mode
 
   Schema discovery, in order:
   1. `options.type` — explicit constructor (always works).
   2. Server-sent reflection from the JOIN handshake — the SDK reconstructs the input class via `Reflection.decode` and `Reflection.makeEncodable` (requires `@colyseus/schema@^5.0.3`). The synthesized class has the same fields as the server's input schema; `instanceof YourInput` won't pass on it.
-- Recommended for rollback netcode: `{ mode: "unreliable", delta: true, historySize: 4 }` — small redundant deltas, idempotent across drops via absolute-value wire ops.
+- Inputs are always delta-encoded — `delta` is not an option. Every `.send()` transmits one input (a body-less frame when nothing changed, decoded server-side as a no-op holding the last values), so the server receives exactly one input per `send()`; to skip a tick, just don't call `.send()`.
+- Recommended for rollback netcode: `{ mode: "unreliable", historySize: 4 }` — small redundant deltas, idempotent across drops via absolute-value wire ops.
 - Generics intentionally unconstrained (`<I = any>`) so user input classes coming from a different copy of `@colyseus/schema` (multi-version installs) still type-check. Runtime is duck-typed via the encoder.
 - Handshake: SDK now parses tagged sections trailing the existing JOIN_ROOM payload (`[tag (uint8)][length (varint)][payload]`); unknown tags are skipped via length, so future sections are forward-compatible.
 - **Breaking:** the previously unreleased `room.setInput(instance, options?)` / `room.flushInput()` / `get input()` API is gone. Migrate to `conn.input(...)`.
