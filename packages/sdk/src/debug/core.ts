@@ -247,4 +247,3 @@ export function repositionDebugPanels() {
 }
 
 export function isPanelsHidden(): boolean { return panelsHidden; }
-export function setPanelsHidden(value: boolean): void { panelsHidden = value; }
