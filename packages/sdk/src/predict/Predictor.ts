@@ -878,7 +878,7 @@ export class Predict<TState = any> {
             if (!r.drift) { continue; }
             const tol = r.warnTolerance;
             out.push({
-                label: `reconciler ${i++}`,
+                label: `reconciler #${i++}`,
                 verdict: classifyDrift(r.drift, tol),
                 severity: tol !== undefined && tol > 0 ? r.drift.ema / tol : undefined,
                 ema: r.drift.ema,

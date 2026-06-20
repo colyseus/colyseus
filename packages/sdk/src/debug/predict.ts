@@ -118,8 +118,26 @@ function onPredictPublished(core: PredictCore): void {
         e.el.remove();
         panels.delete(handle.name);
         if (panels.size === 0) stopPolling();
+        syncHeaderNames(); // name may now be redundant (back to a lone panel)
     });
     startPolling();
+    syncHeaderNames(); // name is now a disambiguator if this made it 2+
+}
+
+/**
+ * Show each panel's instance name in its header ONLY when more than one Predict
+ * panel is mounted. The name is a disambiguator between cards — with a single
+ * instance it carries no information and is often a stale/misleading artifact
+ * (e.g. an instance named after one of its own attach-groups). The name still
+ * lives on the handle (keys the panel map, collapse state, and graph ids); this
+ * only governs whether the header renders it.
+ */
+function syncHeaderNames(): void {
+    const show = panels.size > 1;
+    for (const entry of panels.values()) {
+        const nameEl = entry.el.querySelector<HTMLElement>('[data-role="name"]');
+        if (nameEl) nameEl.textContent = show ? ` ${entry.handle.name}` : "";
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -273,7 +291,7 @@ function renderCard(handle: PredictDebugHandle): HTMLElement {
     // header (attached count + collapse chevron, stays visible when collapsed) / body
     card.innerHTML = `
         <div data-role="header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:bold;border-bottom:1px solid ${DIVIDER};padding-bottom:4px;cursor:pointer;user-select:none">
-            <span>Predict <span data-role="name" style="color:${SECONDARY};font-weight:normal"></span></span>
+            <span>Predict<span data-role="name" style="color:${SECONDARY};font-weight:normal"></span></span>
             <span style="display:flex;align-items:center;gap:8px;font-weight:normal">
                 <span data-role="attached" title="attached instances" style="color:${SECONDARY};font-variant-numeric:tabular-nums"></span>
                 <span data-role="chevron" style="color:${SECONDARY}">${collapsed ? "▸" : "▾"}</span>
@@ -285,7 +303,7 @@ function renderCard(handle: PredictDebugHandle): HTMLElement {
         </div>
     `;
 
-    card.querySelector<HTMLElement>('[data-role="name"]')!.textContent = handle.name;
+    // Header name is set by syncHeaderNames() — shown only when >1 panel exists.
     card.querySelector<HTMLElement>('[data-role="attached"]')!.textContent = String(handle.attachedCount());
 
     const header = card.querySelector<HTMLElement>('[data-role="header"]')!;
