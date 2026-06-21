@@ -242,8 +242,8 @@ export class SimReconciler<I = any, P extends Record<string, number> = any, E = 
      *  shadow the public {@link pose} method. */
     private readonly readPose: (world: E) => P;
     private readonly interpolate?: (a: P, b: P, t: number) => P;
-    /** Reused per-step context — `dt`/`dtMs`/sub-step trio constant; only `tick`/`isReplay` change. */
-    private readonly stepCtx: { dt: number; dtMs: number; tick: number; isReplay: boolean; subSteps: number; subDt: number; subDtMs: number };
+    /** Reused per-step context — `dt`/`dtMs`/sub-step trio constant; `tick`/`isReplay`/`reckonTime` change. */
+    private readonly stepCtx: { dt: number; dtMs: number; tick: number; isReplay: boolean; reckonTime: number; subSteps: number; subDt: number; subDtMs: number };
     private readonly smoothing: number;
     private readonly stepMs: number;
     private readonly onReconcile?: (acked: number) => void;
@@ -271,7 +271,7 @@ export class SimReconciler<I = any, P extends Record<string, number> = any, E = 
         // subDt = dt/subSteps: same expression as the server's ctx → bit-identical.
         const subSteps = opts.subSteps ?? this.input_.subSteps ?? 1;
         this.stepCtx = {
-            dt, dtMs: this.stepMs, tick: 0, isReplay: false,
+            dt, dtMs: this.stepMs, tick: 0, isReplay: false, reckonTime: 0,
             subSteps, subDt: dt / subSteps, subDtMs: this.stepMs / subSteps,
         };
         this.onReconcile = opts.onReconcile;
@@ -333,6 +333,7 @@ export class SimReconciler<I = any, P extends Record<string, number> = any, E = 
         const seq = this.input_.sentCount;
         this.stepCtx.tick = seq;
         this.stepCtx.isReplay = false;           // live forward step
+        this.stepCtx.reckonTime = this.input_.reckonTimeAt(seq); // = the value just stamped
         this.step(this.stepCtx, cmd, this.worldHandle);
         this.refreshPose();
         return seq;
@@ -378,6 +379,7 @@ export class SimReconciler<I = any, P extends Record<string, number> = any, E = 
             const inp = this.input_.at(seq);
             if (inp !== undefined) {
                 this.stepCtx.tick = seq;
+                this.stepCtx.reckonTime = this.input_.reckonTimeAt(seq); // same per-seq value as live
                 this.step(this.stepCtx, inp, this.worldHandle);
             }
         }

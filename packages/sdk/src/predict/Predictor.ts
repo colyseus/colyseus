@@ -330,8 +330,18 @@ export interface SimulateOptions<T = any> {
      * predicted value of `fields[k]` into `out[k]` (SoA — indexed by field
      * position, NOT keyed by name, so the predict-then-smooth path stays
      * monomorphic). `out` is a reused buffer; fill every slot each call.
+     *
+     * `endElapsed` is the absolute server-time (ms) the prediction window ends
+     * at (`serverNow()` for the per-frame reckon; an arbitrary instant when read
+     * via {@link Predictor.valueAt}); the window spans `[endElapsed − forwardMs,
+     * endElapsed]`. Ignore it for purely forward, time-independent motion.
      */
-    advance: (instance: T, forwardMs: number, out: Float64Array) => void;
+    advance: (instance: T, forwardMs: number, out: Float64Array, endElapsed: number) => void;
+    /**
+     * Absolute server-time (ms) provider for the prediction window end. Defaults
+     * to `clock.serverNow()`. Only matters for `valueAt` / time-sampled motion.
+     */
+    elapsedMs?: () => number;
     /**
      * Damping for predict-then-smooth (spring constant, same units as the
      * `damped` mode). Default 20 (~50 ms half-life). Set to 0 to snap directly
@@ -352,12 +362,21 @@ interface SimState {
      *  array index instead of `fieldIds.indexOf(...)`. */
     posOf: Int8Array;
     forwardMs: () => number;
-    advance: (instance: any, forwardMs: number, out: Float64Array) => void;
+    /** Absolute server-time (ms) the prediction window ENDS at — `serverNow()`
+     *  for the per-frame render reckon, an arbitrary instant for `valueAt`. */
+    elapsedMs: () => number;
+    /** `endElapsed` is the absolute time of the window end (the last substep
+     *  lands on it) so time-sampled step fns read the right instant; the window
+     *  spans `[endElapsed − forwardMs, endElapsed]`. */
+    advance: (instance: any, forwardMs: number, out: Float64Array, endElapsed: number) => void;
     smoothing: number;
     /** Displayed values (= `out + offset`), indexed by field position. */
     smoothed: Float64Array;
     /** Reused per-frame `advance` output, indexed by field position. */
     out: Float64Array;
+    /** Reused scratch for `valueAt` — a one-off reckon to an arbitrary instant
+     *  that must NOT clobber the per-frame render reckon in `out`/`smoothed`. */
+    valueOut: Float64Array;
     /** Pop-hiding correction offset, decaying toward 0 (see applySimulation). */
     offset: Float64Array;
     /** Snapshot identity (`clock.lastServerTime()`) at the last apply — a
@@ -1401,7 +1420,7 @@ export class Predict<TState = any> {
             opts.snapshot === undefined &&
             Array.isArray(liveValues) &&
             fieldIds.every((id) => id >= 0 && id < (liveValues as unknown[]).length);
-        let advance: (live: T, fwd: number, out: Float64Array) => void;
+        let advance: (live: T, fwd: number, out: Float64Array, endElapsed: number) => void;
         if (fastPathOk) {
             // SoA fast path (decoded schema instances). The scratch is a pooled
             // instance of the same type; each frame we refill its `$values`
@@ -1411,18 +1430,18 @@ export class Predict<TState = any> {
             // predicted fields BY INDEX. Fully monomorphic + zero allocation.
             const scratch = new (instance.constructor as new () => T)();
             const sv = (scratch as Record<symbol, number[]>)[$VALUES];
-            advance = (live, fwd, out) => {
+            advance = (live, fwd, out, endElapsed) => {
                 const lv = (live as Record<symbol, number[]>)[$VALUES];
                 for (let i = 0; i < lv.length; i++) sv[i] = lv[i];
                 let remaining = fwd;
                 // The scratch is the SNAPSHOT state (age `fwd` ago), so absolute
-                // time runs from `elapsedMs() − fwd` and the LAST substep lands
-                // exactly on elapsedMs() — time-SAMPLED fields (sinusoids,
+                // time runs from `endElapsed − fwd` and the LAST substep lands
+                // exactly on `endElapsed` — time-SAMPLED fields (sinusoids,
                 // cooldown snaps) then read the same instant the input stamp
-                // claims. Starting at elapsedMs() instead would evaluate them
+                // claims. Starting at `endElapsed` instead would evaluate them
                 // `fwd` ms (≈ one-way latency) in the future — a latency-scaled
                 // desync the server's lag-comp read can't cancel.
-                let elapsed = elapsedMs() - fwd;
+                let elapsed = endElapsed - fwd;
                 while (remaining > 0) {
                     const stepMs = remaining < substep ? remaining : substep;
                     elapsed += stepMs;
@@ -1446,11 +1465,11 @@ export class Predict<TState = any> {
                 ? (makeUnrolledSnapshot(fieldNames) as (e: T) => T)
                 : (e: T) => ({ ...e } as T));
             const names = [...fields] as string[];
-            advance = (live, fwd, out) => {
+            advance = (live, fwd, out, endElapsed) => {
                 const scratch = snapshotFn(live) as Record<string, unknown>;
                 let remaining = fwd;
                 // Snapshot-relative absolute time — see the fast path above.
-                let elapsed = elapsedMs() - fwd;
+                let elapsed = endElapsed - fwd;
                 while (remaining > 0) {
                     const stepMs = remaining < substep ? remaining : substep;
                     elapsed += stepMs;
@@ -1464,6 +1483,7 @@ export class Predict<TState = any> {
         return this.trackSimulated(instance, {
             fields,
             forwardMs,
+            elapsedMs,
             smoothing: opts.smoothing,
             advance,
         });
@@ -1486,15 +1506,23 @@ export class Predict<TState = any> {
         for (let k = 0; k < n; k++) if (fieldIds[k] >= 0) posOf[fieldIds[k]] = k;
         const smoothed = new Float64Array(n);
         for (let k = 0; k < n; k++) smoothed[k] = (instance as any)[fields[k]] ?? 0;
+        // Default the absolute-time provider to serverNow (matches the per-frame
+        // reckon); `valueAt` overrides the end instant per call.
+        const clock = this.clock;
+        const elapsedMs = opts.elapsedMs ?? (clock
+            ? () => clock.serverNow()
+            : () => performance.now());
         const state: SimState = {
             instance,
             fieldIds,
             posOf,
             forwardMs: opts.forwardMs,
+            elapsedMs,
             advance: opts.advance as SimState["advance"],
             smoothing: opts.smoothing ?? 20,
             smoothed,
             out: new Float64Array(n),
+            valueOut: new Float64Array(n),
             offset: new Float64Array(n),
             lastBaseT: NaN,
             lastApplyTime: -Infinity,
@@ -1965,6 +1993,52 @@ export class Predict<TState = any> {
         return this.slotBuf[i + SLOT_V1];
     }
 
+    /**
+     * RAW reckoned value at an ARBITRARY server-time instant — the {@link valueRaw}
+     * analog at a chosen `time` (server-clock ms). `valueRaw(e, f)` ≡
+     * `valueAt(e, f, serverNow())`.
+     *
+     * For client-side collision/hit prediction, sample remote entities at the
+     * input's `ctx.reckonTime` (the instant the server rewinds to) so the client
+     * verdict matches the server's lag-comp read BY CONSTRUCTION — on the live
+     * step AND deterministically on rollback replay (same `time` per seq).
+     *
+     * Reckons FORWARD from the latest server snapshot to `time`: integrates the
+     * tracked `step` from `lastServerTime()` to `time`, evaluating time-sampled
+     * formulas (sinusoids, cooldown snaps) at `time`. The SDK keeps no per-entity
+     * history, so `time ≤ lastServerTime()` CLAMPS to the snapshot (reckoning
+     * into the past is the server rewind buffer's job — a non-reckonable discrete
+     * motion you replay backward must be reconstructed from its own schedule). On
+     * the live step `time = reckonTime ≈ serverNow() > lastServerTime()`, so it's
+     * exact. Non-reckon / untracked fields ignore `time` and return {@link value}.
+     */
+    valueAt<T extends object>(instance: T, field: NumericKeys<T>, time: number): number {
+        const refId = refIdOf(instance);
+        const slotIdx = refId === undefined ? undefined : this.slotByRef.get(refId)?.get(field);
+        if (slotIdx === undefined) return instance[field] as number;
+        const i = slotIdx * SLOT_STRIDE;
+        const profileIdx = this.slotBuf[i + SLOT_PROFILE] | 0;
+        // Only reckon depends on the instant; lerp/damped/extrapolate/raw don't.
+        if (this.profileComputers[profileIdx] !== this.computeReckon) {
+            return this.profileComputers[profileIdx](slotIdx);
+        }
+        const sim = this.simByRef.get(this.slotBuf[i + SLOT_REF]);
+        if (sim !== undefined) {
+            const fieldId = this.slotBuf[i + SLOT_FIELD] | 0;
+            const pos = fieldId < sim.posOf.length ? sim.posOf[fieldId] : -1;
+            if (pos >= 0) {
+                // Forward from the latest snapshot to `time` (clamped ≥ 0), absolute
+                // end = `time`. Into `valueOut` so the per-frame render reckon
+                // (out/smoothed/offset) is untouched. Raw — no smooth offset.
+                const base = this.clock?.lastServerTime?.() ?? NaN;
+                const fwd = Number.isNaN(base) ? 0 : Math.max(0, time - base);
+                sim.advance(sim.instance, fwd, sim.valueOut, time);
+                return sim.valueOut[pos];
+            }
+        }
+        return this.slotBuf[i + SLOT_V1];
+    }
+
 
     /**
      * Exponential smoothing toward the latest server value (`v1`). Reads
@@ -2180,7 +2254,7 @@ export class Predict<TState = any> {
             const off = sim.offset;
             const n = sm.length;
             const baseT = this.clock?.lastServerTime?.() ?? NaN;
-            sim.advance(sim.instance, sim.forwardMs(), out);
+            sim.advance(sim.instance, sim.forwardMs(), out, sim.elapsedMs());
             if (sim.lastApplyTime === -Infinity || sim.smoothing <= 0) {
                 for (let k = 0; k < n; k++) { off[k] = 0; sm[k] = out[k]; }
             } else if (!Number.isNaN(baseT)) {

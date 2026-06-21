@@ -179,6 +179,16 @@ export interface InputHandle<I = any> {
    * synchronously during replay, don't retain it.
    */
   at(seq: number): I | undefined;
+  /**
+   * The reckon instant (server-clock ms) stamped onto reliable input `seq` — the
+   * client's `serverNow()` estimate at send, the SAME value the server reads as
+   * `channel.reckonTime` (and `rewind.lastSeenBy(sid)`). The reconciler surfaces
+   * it as `ctx.reckonTime` so a prediction step hit-tests remote entities at the
+   * exact instant the server rewinds to (live AND replay). `0` when reckon
+   * lag-comp isn't enabled (the room never rewinds to it — fall back to
+   * `serverNow()`), or if `seq` is unsent, acked, aged out, or pre-clock-sync.
+   */
+  reckonTimeAt(seq: number): number;
 }
 
 /** @internal */
@@ -207,6 +217,17 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
   private static readonly BUFFER_HEADROOM = 1.5;
   private readonly _inputBufferSize: number;
   private _inputBuffer: I[] | null = null;      // lazily allocated (needs data ctor)
+  // Per-seq reckonTime stamp (server-clock ms), parallel to _inputBuffer — the
+  // reconciler reads it back as ctx.reckonTime on the live step AND on replay, so
+  // both hit-test at the exact instant the server rewinds to. Sized = replay ring.
+  // Lazily allocated AND only when reckon stamping is on (`_stampReckon`): a room
+  // without reckon lag-comp never rewinds to it, so we don't track it (ctx.reckonTime
+  // then reads 0 and callers fall back to serverNow()).
+  private _reckonTimes: Float64Array | null = null;
+  // Reckon instant of the in-flight send() — computed in send() when stamping,
+  // stamped on the wire AND recorded into _reckonTimes by _recordSent (same value
+  // both). 0 when not stamping.
+  private _pendingReckon = 0;
   private static _warnedBufferOverflow = false;
 
   // Lag-comp stamp (server INPUT_OPTIONS handshake): which timeline(s) each
@@ -289,6 +310,16 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
     return this._inputBuffer[seq % this._inputBufferSize];
   }
 
+  reckonTimeAt(seq: number): number {
+    // 0 when reckon stamping is off (no ring) — callers fall back to serverNow().
+    if (this._reckonTimes === null) return 0;
+    // Same validity window as at(): sent, unacked, still in the ring. Live reads
+    // it for the just-sent seq (== sentCount); replay reads each unacked seq.
+    if (seq <= this._lastProcessed || seq > this._sentCount) return 0;
+    if (this._sentCount - seq >= this._inputBufferSize) return 0;
+    return this._reckonTimes[seq % this._inputBufferSize];
+  }
+
   reset(): void {
     this._encoder.reset();
     // Adopt the encoder's monotonic seq as the baseline: 0 for reliable, the current
@@ -342,6 +373,15 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
     }
     if (wantStamp) {
       this._scratch[0] = Protocol.ROOM_INPUT_RELIABLE | ProtocolModifier.TIMED;
+      // The reckon instant for THIS send: the client's serverNow() estimate
+      // (rounded u32 ms), 0 until the clock syncs. Stamped on the wire below AND
+      // recorded per-seq by _recordSent (when reckon is on) so the reconciler
+      // reads it back as ctx.reckonTime on the live step and on replay — one
+      // value, so client display, wire stamp, and replay can't drift.
+      const clock = this._host.clock;
+      const synced = (clock?.lastServerTime?.() ?? 0) > 0;
+      const rk = synced ? Math.max(0, Math.round(clock!.serverNow())) >>> 0 : 0;
+      this._pendingReckon = rk;
       // reckonTime — the RECKON-timeline instant: forward-reckoned entities
       // display at the client's serverNow ESTIMATE, so stamp that estimate
       // DIRECTLY. The server reads its history at this exact index, so clock /
@@ -354,10 +394,8 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
       // (only the base needs u32 range; the gap is bounded ≪ 65s) and the server
       // derives renderTime; single-timeline modes ship the one absolute u32 they
       // use. All 0 until the clock syncs (lastServerTime still 0) → the server
-      // falls back to live positions instead of a bogus stamp.
-      const clock = this._host.clock;
-      const synced = (clock?.lastServerTime?.() ?? 0) > 0;
-      const rk = synced ? Math.max(0, Math.round(clock!.serverNow())) >>> 0 : 0;
+      // falls back to live positions instead of a bogus stamp. `delta`
+      // (renderDelta) is stamp-specific; `rk` (reckonTime) is shared above.
       const delta = synced
         ? Math.min(0xffff, Math.max(0, Math.round(this._resolveRenderDelay() + (clock!.smoothedRtt?.() ?? 0) / 2)))
         : 0;
@@ -380,6 +418,7 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
         this._scratch.set(bytes, 5);
       }
     } else {
+      this._pendingReckon = 0; // not stamping → no reckon instant to record
       this._scratch[0] = this._encoder.mode === "reliable"
         ? Protocol.ROOM_INPUT_RELIABLE
         : Protocol.ROOM_INPUT_UNRELIABLE;
@@ -417,6 +456,13 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
     }
     this._encoder.copyInto(this._inputBuffer[seq % this._inputBufferSize]);
     this._sendTimes[seq % InputHandleImpl.SEND_TIME_SIZE] = now();
+    // Record the reckon instant only when reckon stamping is on — the same value
+    // stamped on the wire this send, read back as ctx.reckonTime during replay
+    // (see {@link reckonTimeAt}). A room without reckon lag-comp never rewinds to
+    // it, so the ring (and its allocation) is skipped entirely.
+    if (this._stampReckon) {
+      (this._reckonTimes ??= new Float64Array(this._inputBufferSize))[seq % this._inputBufferSize] = this._pendingReckon;
+    }
   }
 
   /**

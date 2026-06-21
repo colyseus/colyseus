@@ -109,6 +109,25 @@ export interface StepContext {
    * prediction — then you never touch this flag.
    */
   readonly isReplay: boolean;
+  /**
+   * The input's reckon instant (server-clock ms) — the client's `serverNow()`
+   * estimate when this input was sent, the SAME value the server reads as
+   * `channel.reckonTime` / `rewind.lastSeenBy(sid)`. Buffered per-seq on the
+   * input handle, so it's identical on the live step and on every replay of
+   * that seq.
+   *
+   * Hit-test remote entities at this instant — sample moving solids at
+   * `reckonTime`, reckon other entities with `predict.valueAt(e, field,
+   * reckonTime)` — and your client verdict matches the server's lag-comp rewind
+   * BY CONSTRUCTION ("what you see is what you hit"), including for discrete
+   * motion. Because it's the same value per seq across rollbacks, collision in
+   * the step replays deterministically.
+   *
+   * `0` when reckon lag-comp isn't enabled (the room never rewinds to it) or
+   * before the clock syncs — fall back to `serverNow()` then, mirroring the
+   * server's `reckonTime > 0 ? reckonTime : now`.
+   */
+  readonly reckonTime: number;
 }
 
 export interface ReconcilerOptions<S extends object, I> {
@@ -250,8 +269,8 @@ export class Reconciler<S extends object = any, I = any> {
     private readonly numericFields: string[] = [];
     private readonly step: (ctx: StepContext, state: S, command: I) => void;
     /** Reused per-step context — mutated in place each step, no per-step alloc.
-     *  `dt`/`dtMs`/sub-step trio are constant; only `tick`/`isReplay` change. */
-    private readonly stepCtx: { dt: number; dtMs: number; tick: number; isReplay: boolean; subSteps: number; subDt: number; subDtMs: number };
+     *  `dt`/`dtMs`/sub-step trio are constant; `tick`/`isReplay`/`reckonTime` change. */
+    private readonly stepCtx: { dt: number; dtMs: number; tick: number; isReplay: boolean; reckonTime: number; subSteps: number; subDt: number; subDtMs: number };
     private readonly smoothing: number;
     private readonly stepMs: number;
     private readonly onReconcile?: (acked: number) => void;
@@ -284,7 +303,7 @@ export class Reconciler<S extends object = any, I = any> {
         // subDt = dt/subSteps: same expression as the server's ctx → bit-identical.
         const subSteps = opts.subSteps ?? this.input_.subSteps ?? 1;
         this.stepCtx = {
-            dt, dtMs: this.stepMs, tick: 0, isReplay: false,
+            dt, dtMs: this.stepMs, tick: 0, isReplay: false, reckonTime: 0,
             subSteps, subDt: dt / subSteps, subDtMs: this.stepMs / subSteps,
         };
         this.onReconcile = opts.onReconcile;
@@ -344,6 +363,7 @@ export class Reconciler<S extends object = any, I = any> {
         const seq = this.input_.sentCount;
         this.stepCtx.tick = seq;
         this.stepCtx.isReplay = false;           // live forward step
+        this.stepCtx.reckonTime = this.input_.reckonTimeAt(seq); // = the value just stamped
         this.step(this.stepCtx, this.local as S, cmd);  // predict (the handle holds the replay copy)
         return seq;
     }
@@ -408,6 +428,7 @@ export class Reconciler<S extends object = any, I = any> {
             const inp = this.input_.at(seq);
             if (inp !== undefined) {
                 this.stepCtx.tick = seq;
+                this.stepCtx.reckonTime = this.input_.reckonTimeAt(seq); // same per-seq value as live
                 this.step(this.stepCtx, this.local as S, inp);
             }
         }
