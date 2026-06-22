@@ -86,6 +86,7 @@
     "benchmark": "^2.1.4",
     "chai": "^3.5.0",
     "dts-bundle-generator": "^9.5.1",
+    "esbuild": "^0.27.7",
     "install": "^0.12.2",
     "mocha": "^5.1.1",
     "nanoid": "^3.3.11",

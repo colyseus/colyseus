@@ -4,6 +4,7 @@ import commonjs from '@rollup/plugin-commonjs';
 import { nodeResolve } from '@rollup/plugin-node-resolve';
 import alias from '@rollup/plugin-alias';
 import replace from '@rollup/plugin-replace';
+import { transform } from 'esbuild';
 
 // import as json
 import pkg from "./package.json" with { type: "json" };
@@ -17,6 +18,21 @@ const bannerStatic = `${banner} - @colyseus/schema ${schemapkg.version}`;
 const replacePlugin = replace({
     'process.env.VERSION': JSON.stringify(pkg.version),
     preventAssignment: true,
+});
+
+/**
+ * Minify a standalone browser chunk via esbuild (already in the toolchain).
+ * Only applied to the `dist/` CDN bundles — the `build/` ESM/CJS outputs stay
+ * readable for bundler consumers, who minify on their own. esbuild strips the
+ * plain `//` license header, so we re-prepend it here (and drop `output.banner`
+ * on these outputs to avoid duplicating it).
+ */
+const minifyPlugin = (bannerText) => ({
+    name: 'esbuild-minify',
+    async renderChunk(code) {
+        const out = await transform(code, { minify: true, sourcemap: true });
+        return { code: `${bannerText}\n${out.code}`, map: out.map };
+    },
 });
 
 export default [
@@ -52,7 +68,6 @@ export default [
         output: [
             {
                 preserveModules: false,
-                banner: bannerStatic,
                 dir: 'dist',
                 name: "Colyseus",
                 format: 'umd',
@@ -72,11 +87,14 @@ export default [
                     // @colyseus/schema: force browser version.
                     // Subpath /input is matched first to avoid the bare alias swallowing it.
                     { find: '@colyseus/schema/input', replacement: path.resolve('./node_modules/@colyseus/schema/build/input/index.mjs') },
-                    { find: '@colyseus/schema', replacement: path.resolve('./node_modules/@colyseus/schema/build/index.js') },
+                    // ESM entry (not the UMD build/index.js) so rollup tree-shakes
+                    // the server-only exports (Encoder/StateView/builder DSL) the SDK never imports.
+                    { find: '@colyseus/schema', replacement: path.resolve('./node_modules/@colyseus/schema/build/index.mjs') },
                 ]
             }),
             commonjs(),
             nodeResolve({ browser: true }),
+            minifyPlugin(bannerStatic),
         ],
     },
 
@@ -104,11 +122,11 @@ export default [
             file: 'dist/debug.js',
             format: 'iife',
             sourcemap: true,
-            banner,
             globals: (id) => "Colyseus",
         },
         plugins: [
             typescript({ tsconfig: './tsconfig/tsconfig.cjs.json' }),
+            minifyPlugin(banner),
         ],
     },
     // Debug ESM build
