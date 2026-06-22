@@ -1,4 +1,4 @@
-import type { DataChange } from "@colyseus/schema";
+import { type DataChange, Metadata, Schema } from "@colyseus/schema";
 
 /**
  * Renders a Colyseus room state tree into a DOM container and keeps it in sync
@@ -301,7 +301,7 @@ export class StateTreeView {
         }
 
         if (type === 'object') {
-            const keys = Object.keys(obj);
+            const keys = schemaFieldKeys(obj);
             const ownerId = this.localIdFor(obj);
             const displayState = getDisplayState(depth, isPathExpanded);
             const displayLabel = fieldName !== null ? fieldName : (displayState.isRoot ? 'state' : '');
@@ -380,6 +380,23 @@ function escapeAttr(text: string): string {
         .replace(/"/g, '&quot;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
+}
+
+/**
+ * Field names to render for an object node.
+ *
+ * A Colyseus Schema exposes its synced fields as enumerable accessors on the
+ * *prototype*, so `Object.keys` (own-enumerable only) returns `[]`. Worse, a
+ * `.noSync()` field is stored as an *own* property, so `Object.keys` would
+ * surface precisely the local-only fields we must hide. The schema metadata
+ * lists exactly the synced fields in declaration order — use it for Schema
+ * instances and fall back to `Object.keys` for plain objects.
+ */
+function schemaFieldKeys(obj: any): string[] {
+    if (Schema.isSchema(obj)) {
+        return Object.keys(Metadata.getFields(obj.constructor));
+    }
+    return Object.keys(obj);
 }
 
 function isExpandable(value: any): boolean {
