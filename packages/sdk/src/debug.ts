@@ -20,21 +20,26 @@ loadPreferences();
 // schema decoder never sees an out-of-order patch (which would corrupt the delta stream).
 function jitteredDelay(base: number, jit: number, cursor: { t: number }): number {
     if (!preferences.latencySimulation.enabled || (base <= 0 && jit <= 0)) return -1;
-    const j = jit > 0 ? (Math.random() * 2 - 1) * jit : 0;
+    // Symmetric U[-jit,jit] by default; one-sided U[0,jit] models real-network
+    // queuing (delay only ever grows), the regime where min-RTT filtering wins.
+    const j = jit > 0
+        ? (preferences.latencySimulation.oneSided ? Math.random() * jit : (Math.random() * 2 - 1) * jit)
+        : 0;
     const now = performance.now();
     const at = Math.max(now + base + j, cursor.t + 0.5);
     cursor.t = at;
     return at - now;
 }
 
-// Console API to drive the network simulator: `__net(80, 40)` = 80ms inbound latency
-// ± 40ms jitter (outbound uses half of each). `__net()` clears it.
-(globalThis as { __net?: (delay?: number, jitter?: number) => void }).__net = (delay = 0, jitter = 0) => {
+// Console API to drive the network simulator: `__net(80, 40)` = 80ms round-trip
+// latency ± 40ms jitter, split evenly across both directions. `__net()` clears it.
+(globalThis as { __net?: (delay?: number, jitter?: number, oneSided?: boolean) => void }).__net = (delay = 0, jitter = 0, oneSided = false) => {
     preferences.latencySimulation.delay = delay;
     preferences.latencySimulation.jitter = jitter;
+    preferences.latencySimulation.oneSided = oneSided;
     preferences.latencySimulation.enabled = delay > 0 || jitter > 0;
     savePreferences();
-    console.log(`[net] inbound ${delay}±${jitter}ms (outbound half) — ${delay > 0 ? "ON" : "OFF"}`);
+    console.log(`[net] RTT ${delay}${oneSided ? "+" : "±"}${jitter}ms (split both ways) — ${delay > 0 || jitter > 0 ? "ON" : "OFF"}`);
 };
 
 // Start global update interval if not already running
@@ -100,6 +105,7 @@ function applyMonkeyPatches() {
             lastUpdate: Date.now(),
             bytesSentHistory: [],
             bytesReceivedHistory: [],
+            jitterHistory: [] as number[], // per-second snapshots of room.clock.jitter() for the sparkline
             // historyTimestamps: [],
             maxHistoryLength: 60, // Keep last 60 data points (1 minute at 1 second intervals)
             messageTypes: null, // Will store message types from __playground_message_types
@@ -192,8 +198,10 @@ function applyMonkeyPatches() {
 
             trackReceivedMessage(eventData);
 
-            // Apply latency simulation (order-preserving jitter) for received messages
-            const wait = jitteredDelay(preferences.latencySimulation.delay, preferences.latencySimulation.jitter, inCursor);
+            // Apply latency simulation (order-preserving jitter) for received messages.
+            // The `delay`/`jitter` sliders are ROUND-TRIP values, split evenly across
+            // the two directions — so each path applies half (send path mirrors this).
+            const wait = jitteredDelay(preferences.latencySimulation.delay / 2, preferences.latencySimulation.jitter / 2, inCursor);
             if (wait >= 0) {
                 setTimeout(function() {
                     // Create a synthetic event-like object
@@ -230,7 +238,8 @@ function applyMonkeyPatches() {
         room.connection.send = function(data: any) {
             trackSentMessage(data);
 
-            // Apply latency simulation (order-preserving jitter) for sent messages
+            // Apply latency simulation (order-preserving jitter) for sent messages —
+            // half the round-trip slider value, mirroring the receive path above.
             const wait = jitteredDelay(preferences.latencySimulation.delay / 2, preferences.latencySimulation.jitter / 2, outCursor);
             if (wait >= 0) {
                 var clonedData = data;

@@ -1,5 +1,5 @@
 import { CloseCode } from "@colyseus/shared-types";
-import { disconnectIcon, envelopeDown, envelopeUp, infoIcon, logoIcon, messageIcon, settingsIcon, treeViewIcon } from "./icons.ts";
+import { disconnectIcon, envelopeDown, envelopeUp, infoIcon, jitterIcon, logoIcon, messageIcon, settingsIcon, treeViewIcon } from "./icons.ts";
 import { applyPanelPosition, formatBytes, getBorderColor, getDebugRoot, isPanelsHidden, preferences, repositionDebugPanels, roomDebugInfo, savePreferences } from "./core.ts";
 import { openSettingsModal } from "./settings.ts";
 import { openSendMessagesModal } from "./send-message.ts";
@@ -136,7 +136,7 @@ export function createMenu(logoContainer) {
     latencyValueSpan.textContent = preferences.latencySimulation.delay + 'ms';
 
     var latencyTextSpan = document.createElement('span');
-    latencyTextSpan.textContent = 'Latency';
+    latencyTextSpan.textContent = 'Latency (RTT)';
 
     latencyLabel.appendChild(latencyTextSpan);
     latencyLabel.appendChild(latencyValueSpan);
@@ -809,15 +809,32 @@ export function updateDebugPanel(uniquePanelId, debugInfo) {
         pingElement.style.color = pingColor;
     }
 
+    // Connection jitter (RoomClock.jitter) — only TIMED rooms advertise a patch
+    // cadence, so non-input/NULL_CLOCK rooms (patchInterval 0) hide the row. Rendered
+    // as its own stat row below — not in the header, which stays latency-only.
+    var clock = debugInfo.room && debugInfo.room.clock;
+    var hasJitter = !!(clock && typeof clock.jitter === 'function' && typeof clock.patchInterval === 'function' && clock.patchInterval() > 0);
+    var jitterMs = hasJitter ? clock.jitter() : 0;
+    var jitterText = (jitterMs < 10 ? jitterMs.toFixed(1) : jitterMs.toFixed(0)) + 'ms';
+
+    var jitterAccent = '#a78bfa'; // violet — signature color for the jitter stat (icon + graph)
+
     var html = '<div style="line-height: 1.3;">';
     html += '<div style="font-size: 10px; display: flex; gap: 8px;">';
     html += '<div style="flex: 1;">';
     html += '<div style="margin-bottom: 4px;"><div style="display: flex; align-items: center; gap: 6px;"><span style="display: inline-flex; align-items: center; width: 18px; height: 18px; color: #FF9800;">' + envelopeUp + '</span><span style="color: #FF9800;">' + formatBytes(debugInfo.bytesSentPerSec) + '/s</span></div><div style="margin-left: 24px; opacity: 0.7; font-size: 9px;">' + debugInfo.messagesSentPerSec.toFixed(0) + ' messages</div></div>';
-    html += '<div><div style="display: flex; align-items: center; gap: 6px;"><span style="display: inline-flex; align-items: center; width: 18px; height: 18px; color: #2196F3;">' + envelopeDown + '</span><span style="color: #2196F3;">' + formatBytes(debugInfo.bytesReceivedPerSec) + '/s</span></div><div style="margin-left: 24px; opacity: 0.7; font-size: 9px;">' + debugInfo.messagesReceivedPerSec.toFixed(0) + ' messages</div></div>';
+    html += '<div' + (hasJitter ? ' style="margin-bottom: 4px;"' : '') + '><div style="display: flex; align-items: center; gap: 6px;"><span style="display: inline-flex; align-items: center; width: 18px; height: 18px; color: #2196F3;">' + envelopeDown + '</span><span style="color: #2196F3;">' + formatBytes(debugInfo.bytesReceivedPerSec) + '/s</span></div><div style="margin-left: 24px; opacity: 0.7; font-size: 9px;">' + debugInfo.messagesReceivedPerSec.toFixed(0) + ' messages</div></div>';
+    // Jitter: third stat row, same shape as sent/received (icon + label, value below).
+    if (hasJitter) {
+        html += '<div><div style="display: flex; align-items: center; gap: 6px;"><span style="display: inline-flex; align-items: center; width: 18px; height: 18px; color: ' + jitterAccent + ';">' + jitterIcon + '</span><span style="color: ' + jitterAccent + ';">jitter</span></div><div style="margin-left: 24px; opacity: 0.7; font-size: 9px;">±' + jitterText + '</div></div>';
+    }
     html += '</div>';
     html += '<div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-end;">';
     html += '<canvas id="graph-sent-' + uniquePanelId + '" width="80" height="30" style="display: block;"></canvas>';
     html += '<canvas id="graph-received-' + uniquePanelId + '" width="80" height="30" style="display: block;"></canvas>';
+    if (hasJitter) {
+        html += '<canvas id="graph-jitter-' + uniquePanelId + '" width="80" height="30" style="display: block;"></canvas>';
+    }
     html += '</div>';
     html += '</div>';
     html += '</div>';
@@ -828,6 +845,7 @@ export function updateDebugPanel(uniquePanelId, debugInfo) {
     setTimeout(function() {
         drawGraph('graph-sent-' + uniquePanelId, debugInfo.bytesSentHistory, '#FF9800');
         drawGraph('graph-received-' + uniquePanelId, debugInfo.bytesReceivedHistory, '#2196F3');
+        if (hasJitter) drawGraph('graph-jitter-' + uniquePanelId, debugInfo.jitterHistory, jitterAccent);
     }, 10);
 }
 
@@ -915,12 +933,21 @@ export function calculateRates(debugInfo) {
         debugInfo.bytesReceivedHistory.push(debugInfo.bytesReceivedPerSec);
         // debugInfo.historyTimestamps.push(now);
 
+        // Snapshot the clock's jitter EMA into the history ring (TIMED rooms only).
+        var jitterClock = debugInfo.room && debugInfo.room.clock;
+        if (jitterClock && typeof jitterClock.jitter === 'function' && typeof jitterClock.patchInterval === 'function' && jitterClock.patchInterval() > 0) {
+            debugInfo.jitterHistory.push(jitterClock.jitter());
+        }
+
         // Limit history length
         var maxLen = debugInfo.maxHistoryLength || 60;
         if (debugInfo.bytesSentHistory.length > maxLen) {
             debugInfo.bytesSentHistory.shift();
             debugInfo.bytesReceivedHistory.shift();
             // debugInfo.historyTimestamps.shift();
+        }
+        if (debugInfo.jitterHistory.length > maxLen) {
+            debugInfo.jitterHistory.shift();
         }
 
         // Reset deltas
