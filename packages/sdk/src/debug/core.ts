@@ -8,7 +8,7 @@ export const preferences = {
     latencySimulation: {
         enabled: false,
         delay: 0, // milliseconds (one-way inbound; outbound uses half)
-        jitter: 0 // milliseconds — per-message delay varies by ±jitter (order-preserving)
+        jitter: 0, // milliseconds — per-message delay varies by ±jitter (order-preserving)
     },
     panelPosition: {
         position: 'top-right' // 'bottom-right', 'bottom-left', 'top-left', 'top-right'

@@ -20,11 +20,8 @@ loadPreferences();
 // schema decoder never sees an out-of-order patch (which would corrupt the delta stream).
 function jitteredDelay(base: number, jit: number, cursor: { t: number }): number {
     if (!preferences.latencySimulation.enabled || (base <= 0 && jit <= 0)) return -1;
-    // Symmetric U[-jit,jit] by default; one-sided U[0,jit] models real-network
-    // queuing (delay only ever grows), the regime where min-RTT filtering wins.
-    const j = jit > 0
-        ? (preferences.latencySimulation.oneSided ? Math.random() * jit : (Math.random() * 2 - 1) * jit)
-        : 0;
+    // Symmetric U[-jit,jit] jitter — perturbs message SPACING without reordering.
+    const j = jit > 0 ? (Math.random() * 2 - 1) * jit : 0;
     const now = performance.now();
     const at = Math.max(now + base + j, cursor.t + 0.5);
     cursor.t = at;
@@ -33,13 +30,12 @@ function jitteredDelay(base: number, jit: number, cursor: { t: number }): number
 
 // Console API to drive the network simulator: `__net(80, 40)` = 80ms round-trip
 // latency ± 40ms jitter, split evenly across both directions. `__net()` clears it.
-(globalThis as { __net?: (delay?: number, jitter?: number, oneSided?: boolean) => void }).__net = (delay = 0, jitter = 0, oneSided = false) => {
+(globalThis as { __net?: (delay?: number, jitter?: number) => void }).__net = (delay = 0, jitter = 0) => {
     preferences.latencySimulation.delay = delay;
     preferences.latencySimulation.jitter = jitter;
-    preferences.latencySimulation.oneSided = oneSided;
     preferences.latencySimulation.enabled = delay > 0 || jitter > 0;
     savePreferences();
-    console.log(`[net] RTT ${delay}${oneSided ? "+" : "±"}${jitter}ms (split both ways) — ${delay > 0 || jitter > 0 ? "ON" : "OFF"}`);
+    console.log(`[net] RTT ${delay}±${jitter}ms (split both ways) — ${delay > 0 || jitter > 0 ? "ON" : "OFF"}`);
 };
 
 // Start global update interval if not already running
