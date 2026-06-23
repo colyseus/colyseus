@@ -25,6 +25,50 @@ function readBody(req: http.IncomingMessage): Promise<any> {
   });
 }
 
+/**
+ * Buffer incoming request bodies and expose them as `req.body` before the
+ * server's existing "request" listeners run.
+ *
+ * Needed when the HTTP server is consumed via `export default` (e.g. on Vercel)
+ * rather than `listen()`: the matchmaking router reads the body from `req.body`
+ * when present, otherwise from a lazy request stream that does not drain in that
+ * mode — which would stall matchmaking POSTs.
+ */
+export function prereadRequestBodies(server: http.Server) {
+  type WithBody = http.IncomingMessage & { body?: unknown };
+  const listeners = server.listeners('request') as Array<(req: http.IncomingMessage, res: http.ServerResponse) => void>;
+  const run = (req: http.IncomingMessage, res: http.ServerResponse) => {
+    for (const listener of listeners) { listener.call(server, req, res); }
+  };
+
+  server.removeAllListeners('request');
+  server.on('request', (req: WithBody, res) => {
+    const method = req.method ?? 'GET';
+    const needsBody =
+      method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS' &&
+      req.body === undefined &&
+      Number(req.headers['content-length']) > 0;
+
+    if (!needsBody) {
+      run(req, res);
+      return;
+    }
+
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk: Buffer) => chunks.push(chunk));
+    req.on('end', () => {
+      const raw = Buffer.concat(chunks).toString('utf8');
+      if ((req.headers['content-type'] || '').includes('application/json')) {
+        try { req.body = JSON.parse(raw || '{}'); } catch { req.body = raw; }
+      } else {
+        req.body = raw;
+      }
+      run(req, res);
+    });
+    req.on('error', () => run(req, res));
+  });
+}
+
 function getCorsHeaders(req: http.IncomingMessage, headers?: Headers): Record<string, string> {
   return {
     ...matchMaker.controller.DEFAULT_CORS_HEADERS,

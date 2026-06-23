@@ -1,5 +1,6 @@
 import { greet } from "@colyseus/greeting-banner";
 import type express from 'express';
+import type { Server as HttpServer } from 'node:http';
 
 import { debugAndPrintError } from './Debug.ts';
 import * as matchMaker from './MatchMaker.ts';
@@ -9,13 +10,12 @@ import { type OnCreateOptions, Room } from './Room.ts';
 import { Deferred, registerGracefulShutdown, dynamicImport, type Type } from './utils/Utils.ts';
 
 import type { Presence } from "./presence/Presence.ts";
-import { LocalPresence } from './presence/LocalPresence.ts';
-import { LocalDriver } from './matchmaker/LocalDriver/LocalDriver.ts';
 
 import { setTransport, Transport } from './Transport.ts';
 import { logger, setLogger } from './Logger.ts';
 import { setDevMode, isDevMode } from './utils/DevMode.ts';
 import { type Router, bindRouterToTransport, createRouter } from './router/index.ts';
+import { prereadRequestBodies } from './router/node.ts';
 import { type SDKTypes as SharedSDKTypes } from '@colyseus/shared-types';
 import { getDefaultRouter } from './router/default_routes.ts';
 
@@ -141,8 +141,6 @@ export class Server<
 
     setDevMode(options.devMode === true);
 
-    this.presence = options.presence || new LocalPresence();
-    this.driver = options.driver || new LocalDriver();
     this.options = options;
     this.greet = greet;
 
@@ -150,12 +148,18 @@ export class Server<
 
     this.attach(options);
 
+    // Pass options.presence/driver through as-is (possibly undefined).
+    // matchMaker.setup() falls back to getDefaultPresence/getDefaultDriver,
+    // which auto-select RedisPresence/RedisDriver on Colyseus Cloud.
     matchMaker.setup(
-      this.presence,
-      this.driver,
+      options.presence,
+      options.driver,
       options.publicAddress,
       options.selectProcessIdToCreateRoom,
-    );
+    ).then(() => {
+      this.presence = matchMaker.presence;
+      this.driver = matchMaker.driver;
+    });
 
     if (gracefullyShutdown) {
       registerGracefulShutdown((err) => this.gracefullyShutdown(true, err));
@@ -182,20 +186,7 @@ export class Server<
    * @param listeningListener
    */
   public async listen(port: number | string, hostname?: string, backlog?: number, listeningListener?: Function) {
-    const { beforeListen, database, express } = this.options;
-
-    if (beforeListen) { await beforeListen(); }
-    if (database) { await database.boot(); }
-
-    await this._applyRouterDefaults();
-
-    if (express) {
-      await this._onTransportReady;
-      if (this.transport.getExpressApp) {
-        const expressApp = await this.transport.getExpressApp();
-        await express(expressApp);
-      }
-    }
+    await this._bootServices();
 
     //
     // if Colyseus Cloud is detected, use @colyseus/tools to listen
@@ -240,26 +231,12 @@ export class Server<
     await this._onTransportReady;
 
     return new Promise<void>((resolve, reject) => {
-      // TODO: refactor me!
-      // set transport globally, to be used by matchmaking route
-      setTransport(this.transport);
-
       this.transport.listen(port, hostname, backlog, (err) => {
         if (this.transport.server) {
           this.transport.server.on('error', (err) => reject(err));
         }
 
-        // default router is used if no router is provided
-        if (!this.router) {
-          this.router = getDefaultRouter() as unknown as Routes;
-
-        } else {
-          // make sure default routes are included
-          // https://github.com/Bekacru/better-call/pull/67
-          this.router = this.router.extend({ ...getDefaultRouter().endpoints }) as unknown as Routes;
-        }
-
-        bindRouterToTransport(this.transport, this.router, this.options.express !== undefined);
+        this.bindRoutes();
 
         if (listeningListener) {
           listeningListener(err);
@@ -273,6 +250,82 @@ export class Server<
         }
       });
     });
+  }
+
+  /**
+   * Prepare matchmaking and HTTP routes, then return the underlying
+   * `http.Server` *without* binding to a port.
+   *
+   * Use this on serverless platforms that consume an exported HTTP server
+   * instead of a listening one. Vercel, for example, drives the request handler
+   * of a default-exported server (its Express/Hono WebSocket examples use
+   * `export default server`), whereas calling `listen()` there selects Vercel's
+   * "captured server" path, which does not invoke Express-style app handlers.
+   *
+   * The transport must be created with an `http.Server` so it can be exported.
+   * Vercel additionally needs `package.json` `"main"` pointing at the entrypoint:
+   *
+   * ```ts
+   * import { createServer } from "node:http";
+   * const httpServer = createServer();
+   * const server = new Server({
+   *   transport: new WebSocketTransport({ server: httpServer }),
+   *   express: (app) => { app.get("/hello", (req, res) => res.json({ ok: true })); },
+   * });
+   * server.define("my_room", MyRoom);
+   * export default await server.serverless(); // no listen()
+   * ```
+   */
+  public async serverless(): Promise<HttpServer> {
+    await this._bootServices();
+
+    // transport (and its HTTP server) must be ready before binding routes
+    await this._onTransportReady;
+
+    const server = this.transport.server as HttpServer | undefined;
+    if (!server) {
+      throw new Error("serverless() requires a transport backed by an http.Server (pass `{ server }` to the transport).");
+    }
+
+    this.bindRoutes();
+
+    // When the server is consumed via `export default` (rather than listen()),
+    // the request body must be available synchronously — buffer it up-front so
+    // `req.body` is set before the router runs.
+    prereadRequestBodies(server);
+
+    await matchMaker.accept(this.options.isStandaloneMatchMaker);
+
+    if (this.greet) {
+      greet();
+    }
+
+    return server;
+  }
+
+  /**
+   * Set the active transport globally and bind the matchmaking/HTTP routes.
+   * Shared by {@link listen} and {@link serverless}.
+   *
+   * `setTransport()` runs here rather than before `transport.listen()`: the
+   * global transport is only read by the matchmaking route handler, which can't
+   * run until `bindRouterToTransport()` below registers the route.
+   */
+  private bindRoutes() {
+    // set transport globally, to be used by the matchmaking route
+    setTransport(this.transport);
+
+    // default router is used if no router is provided
+    if (!this.router) {
+      this.router = getDefaultRouter() as unknown as Routes;
+
+    } else {
+      // make sure default routes are included
+      // https://github.com/Bekacru/better-call/pull/67
+      this.router = this.router.extend({ ...getDefaultRouter().endpoints }) as unknown as Routes;
+    }
+
+    bindRouterToTransport(this.transport, this.router, this.options.express !== undefined);
   }
 
   /**
@@ -332,8 +385,8 @@ export class Server<
       await matchMaker.gracefullyShutdown();
 
       this.transport.shutdown();
-      this.presence.shutdown();
-      await this.driver.shutdown();
+      this.presence?.shutdown();
+      await this.driver?.shutdown();
 
       // custom "after shutdown" method
       await this.onShutdownCallback();
@@ -385,6 +438,27 @@ export class Server<
 
   public onBeforeShutdown(callback: () => void | Promise<any>) {
     this.onBeforeShutdownCallback = callback;
+  }
+
+  // Boot sequence shared by listen() and serverless(): user `beforeListen`
+  // hook, database boot, framework router defaults (auth/db endpoints), then
+  // the express app. serverless() needs this too — its exported server still
+  // serves the express callback and auth/database routes.
+  private async _bootServices(): Promise<void> {
+    const { beforeListen, database, express } = this.options;
+
+    if (beforeListen) { await beforeListen(); }
+    if (database) { await database.boot(); }
+
+    await this._applyRouterDefaults();
+
+    if (express) {
+      await this._onTransportReady;
+      if (this.transport.getExpressApp) {
+        const expressApp = await this.transport.getExpressApp();
+        await express(expressApp);
+      }
+    }
   }
 
   // Extend the user's router with framework-contributed endpoints. An explicit

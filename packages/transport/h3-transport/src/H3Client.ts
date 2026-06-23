@@ -13,6 +13,69 @@ const lengthPrefixBuffer = Buffer.alloc(9); // 9 bytes is the maximum length of 
 // well the redundancy ring recovers. Set via H3_DATAGRAM_LOSS. 0 = off.
 const DATAGRAM_LOSS = Number(process.env.H3_DATAGRAM_LOSS ?? 0);
 
+// 9 bytes is the maximum length of a variable-length integer prefix
+const MAX_LENGTH_PREFIX_BYTES = 9;
+
+/**
+ * Reassembles length-prefixed frames from arbitrary byte chunks.
+ *
+ * A single WebTransport `reader.read()` may:
+ *   - deliver multiple whole frames in one chunk
+ *   - split a frame (or its length prefix) across multiple chunks
+ *
+ * This reassembler buffers partial data across reads so each dispatched
+ * frame is exactly one complete message.
+ */
+export class FrameReassembler {
+  private pending: Uint8Array = new Uint8Array(0);
+
+  push(chunk: Uint8Array | undefined): Uint8Array[] {
+    if (!chunk || chunk.byteLength === 0) { return []; }
+
+    const bytes = (this.pending.byteLength === 0)
+      ? chunk
+      : concatBytes(this.pending, chunk);
+
+    const frames: Uint8Array[] = [];
+    let offset = 0;
+
+    while (offset < bytes.byteLength) {
+      const it: Iterator = { offset };
+      let length: number;
+
+      try {
+        length = decode.number(bytes as any, it);
+      } catch (e) {
+        // length prefix is incomplete — wait for more bytes
+        if (bytes.byteLength - offset <= MAX_LENGTH_PREFIX_BYTES) { break; }
+        throw e;
+      }
+
+      const frameEnd = it.offset + length;
+      if (frameEnd > bytes.byteLength) {
+        // payload is incomplete — wait for more bytes
+        break;
+      }
+
+      frames.push(bytes.subarray(it.offset, frameEnd));
+      offset = frameEnd;
+    }
+
+    this.pending = (offset < bytes.byteLength)
+      ? bytes.slice(offset)
+      : new Uint8Array(0);
+
+    return frames;
+  }
+}
+
+function concatBytes(a: Uint8Array, b: Uint8Array): Uint8Array {
+  const out = new Uint8Array(a.byteLength + b.byteLength);
+  out.set(a, 0);
+  out.set(b, a.byteLength);
+  return out;
+}
+
 export class H3Client implements Client, ClientPrivate {
   '~messages': any;
 
@@ -36,6 +99,9 @@ export class H3Client implements Client, ClientPrivate {
 
   private _datagramReader: ReadableStreamDefaultReader<Uint8Array>;
   private _datagramWriter: WritableStreamDefaultWriter<Uint8Array>;
+
+  private _bidiReassembler = new FrameReassembler();
+  private _datagramReassembler = new FrameReassembler();
 
   constructor(
     _wtSession: WebTransportSession,
@@ -122,19 +188,11 @@ export class H3Client implements Client, ClientPrivate {
         //
         // a single read may contain multiple messages
         // each message is prefixed with its length
+        // a read may also deliver a partial frame; buffer across reads
         //
-
-        const messages = read.value;
-        const it: Iterator = { offset: 0 };
-        do {
-          //
-          // QUESTION: should we buffer the message in case it's not fully read?
-          //
-
-          const length = decode.number(messages, it);
-          this.ref.emit('message', messages.subarray(it.offset, it.offset + length));
-          it.offset += length;
-        } while (it.offset < messages.length);
+        for (const frame of this._bidiReassembler.push(read.value)) {
+          this.ref.emit('message', frame);
+        }
 
       } catch (e) {
         return;
@@ -160,19 +218,11 @@ export class H3Client implements Client, ClientPrivate {
         //
         // a single read may contain multiple messages
         // each message is prefixed with its length
+        // a read may also deliver a partial frame; buffer across reads
         //
-
-        const messages = read.value;
-        const it: Iterator = { offset: 0 };
-        do {
-          //
-          // QUESTION: should we buffer the message in case it's not fully read?
-          //
-
-          const length = decode.number(messages, it);
-          this.ref.emit('message', messages.subarray(it.offset, it.offset + length));
-          it.offset += length;
-        } while (it.offset < messages.length);
+        for (const frame of this._datagramReassembler.push(read.value)) {
+          this.ref.emit('message', frame);
+        }
 
       } catch (e) {
         return;

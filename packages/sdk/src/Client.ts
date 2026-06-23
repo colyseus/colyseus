@@ -38,6 +38,11 @@ export interface LatencyOptions {
     protocol?: "ws" | "h3";
     /** Number of pings to send (default: 1). Returns the average latency when > 1. */
     pingCount?: number;
+    /**
+     * Milliseconds to wait for the measurement before rejecting (default: 1500).
+     * Bounds unreachable/blackholed endpoints so they can't stall selection.
+     */
+    timeout?: number;
 }
 
 export class ColyseusSDK<ServerType extends SDKTypes = any, UserData = any> {
@@ -131,7 +136,7 @@ export class ColyseusSDK<ServerType extends SDKTypes = any, UserData = any> {
      * Select the endpoint with the lowest latency.
      * @param endpoints Array of endpoints to select from.
      * @param options Client options.
-     * @param latencyOptions Latency measurement options (protocol, pingCount).
+     * @param latencyOptions Latency measurement options (protocol, pingCount, timeout) — forwarded to each {@link getLatency} call.
      * @returns The client with the lowest latency.
      */
     static async selectByLatency<ServerType extends SDKTypes = any, UserData = any>(
@@ -315,16 +320,39 @@ export class ColyseusSDK<ServerType extends SDKTypes = any, UserData = any> {
 
     /**
      * Create a new connection with the server, and measure the latency.
-     * @param options Latency measurement options (protocol, pingCount).
+     *
+     * Always settles: resolves with the (average) round-trip time, or rejects on
+     * connection error, server-side close before all pongs arrive, or timeout.
+     *
+     * @param options Latency measurement options (protocol, pingCount, timeout).
      */
     public getLatency(options: LatencyOptions = {}): Promise<number> {
         const protocol = options.protocol ?? "ws";
         const pingCount = options.pingCount ?? 1;
+        const timeout = options.timeout ?? 1500;
 
         return new Promise<number>((resolve, reject) => {
             const conn = new Connection(protocol);
             const latencies: number[] = [];
             let pingStart = 0;
+            let settled = false;
+            let timeoutId: ReturnType<typeof setTimeout>;
+
+            // run exactly once — guards against late events after resolve/reject
+            // (e.g. our own conn.close() firing onclose, or a stray onclose/onerror pair)
+            const settle = (run: () => void) => {
+                if (settled) { return; }
+                settled = true;
+                clearTimeout(timeoutId);
+                try { conn.close(); } catch (e) { /* socket may never have opened */ }
+                run();
+            };
+
+            const fail = (message: string) =>
+                settle(() => reject(new ServerError(CloseCode.ABNORMAL_CLOSURE, `Failed to get latency: ${message}`)));
+
+            // bound blackholed/filtered hosts that never fire onopen/onerror within the OS TCP timeout
+            timeoutId = setTimeout(() => fail(`timed out after ${timeout}ms`), timeout);
 
             conn.events.onopen = () => {
                 pingStart = Date.now();
@@ -340,17 +368,22 @@ export class ColyseusSDK<ServerType extends SDKTypes = any, UserData = any> {
                     conn.send(new Uint8Array([Protocol.PING]));
                 } else {
                     // Done, calculate average and close
-                    conn.close();
                     const average = latencies.reduce((sum, l) => sum + l, 0) / latencies.length;
-                    resolve(average);
+                    settle(() => resolve(average));
                 }
             };
 
-            conn.events.onerror = (event: ErrorEvent) => {
-                reject(new ServerError(CloseCode.ABNORMAL_CLOSURE, `Failed to get latency: ${event.message}`));
-            };
+            // server closed the socket before all pongs arrived — fires without onerror on a clean close
+            conn.events.onclose = (event: any) =>
+                fail(`connection closed${event?.code ? ` (${event.code})` : ""}${event?.reason ? `: ${event.reason}` : ""}`);
 
-            conn.connect(this.getHttpEndpoint());
+            conn.events.onerror = (event: ErrorEvent) => fail(event.message);
+
+            try {
+                conn.connect(this.getHttpEndpoint());
+            } catch (e: any) {
+                fail(e?.message ?? "failed to connect");
+            }
         });
     }
 
