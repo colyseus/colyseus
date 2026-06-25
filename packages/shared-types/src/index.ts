@@ -167,6 +167,53 @@ export type ExtractRoomClientMessages<T> = Instantiate<T> extends { '~client': {
  */
 export type InferInput<T> = Instantiate<T> extends { input?: new () => infer I } ? I : never;
 
+// -----------------------------------------------------------------------------
+// Request/response reply arms. A `messages` handler picks its reply by what it
+// returns: a plain value is request-data (the `room.request` path), while
+// `ctx.reject(reason)` / `ctx.resolve(entity)` are typed reply arms the SDK's
+// `predict.action(...)` reads to roll back or correlate an optimistic prediction.
+// Branded with unique symbols so the response-data type can subtract them — a
+// reply arm is never mistaken for request-data.
+// -----------------------------------------------------------------------------
+
+declare const REJECT: unique symbol;
+declare const RESOLVE: unique symbol;
+
+/** A deliberate, typed rejection produced by `ctx.reject(reason)`. The SDK
+ *  surfaces `R` to the originating client and rolls the prediction back. */
+export interface Rejection<R = unknown> { readonly [REJECT]: R }
+
+/** An acceptance produced by `ctx.resolve(entity)`. When `entity` is given, the
+ *  framework privately echoes its `refId` to the originating client so a
+ *  predicted spawn correlates to its authoritative copy. */
+export interface Resolution<S = unknown> { readonly [RESOLVE]: S }
+
+/**
+ * Per-dispatch context, passed as the optional 3rd argument to every `messages`
+ * handler (backward-compatible: `(client, message)` handlers ignore it).
+ *
+ * `id` is `undefined` for fire-and-forget `room.send`, and the request/action id
+ * for `room.request` / `predict.action`.
+ */
+export interface MessageContext {
+  readonly id: number | undefined;
+  /**
+   * Reject this dispatch. For `room.request` → a rejected promise; for an action
+   * → a `REJECTED` reply carrying `reason`. `return ctx.reject(r)` so the
+   * reason type is inferred; a bare `ctx.reject(r)` (no return) also rejects,
+   * with the reason typed `any`.
+   */
+  reject<R>(reason?: R): Rejection<R>;
+  /**
+   * Resolve (accept) this dispatch — symmetric with {@link reject}. Optional: a
+   * clean return already resolves. Pass the spawned schema `entity` to correlate
+   * a predicted spawn — the framework resolves its `refId` at reply-send and
+   * echoes it privately to the originating client. `return ctx.resolve(entity)`,
+   * or a bare side-effecting call.
+   */
+  resolve<S extends object>(entity?: S): Resolution<S>;
+}
+
 /**
  * Message handler with automatic type inference from format schema.
  * When a format is provided, the message type is automatically inferred from the schema.
@@ -177,17 +224,22 @@ export type InferInput<T> = Instantiate<T> extends { input?: new () => infer I }
  */
 export type MessageHandlerWithFormat<T extends StandardSchemaV1 = any, Client = any, This = any> = {
   format: T;
-  handler: (this: This, client: Client, message: StandardSchemaV1.InferOutput<T>) => void;
+  handler: (this: This, client: Client, message: StandardSchemaV1.InferOutput<T>, ctx: MessageContext) => void;
 };
 
 /**
  * Message handler type that can be either a function or a format handler with validation.
  *
+ * The optional `ctx` 3rd param ({@link MessageContext}) is backward-compatible —
+ * existing `(client, message)` handlers simply omit it. The return is `unknown`
+ * (not `void`) so request/response data and `ctx.resolve`/`ctx.reject` replies
+ * type-check; {@link ExtractResponseType} / {@link ExtractRejectReason} read it.
+ *
  * @template Client - The client type (from @colyseus/core Transport)
  * @template This - The Room class context
  */
 export type MessageHandler<Client = any, This = any> =
-  | ((this: This, client: Client, message: any) => void)
+  | ((this: This, client: Client, message: any, ctx: MessageContext) => unknown)
   | MessageHandlerWithFormat<any, Client, This>;
 
 /**
@@ -197,29 +249,43 @@ export type MessageHandler<Client = any, This = any> =
 export type ExtractMessageType<T> =
   T extends { format: infer Format extends StandardSchemaV1; handler: any }
     ? StandardSchemaV1.InferOutput<Format>
-    : T extends (this: any, client: any, message: infer Message) => void
+    : T extends (this: any, client: any, message: infer Message, ...args: any[]) => any
       ? Message
       : any;
 
 /**
- * Extract the response payload type for a request/response message handler.
- *
- * Mirrors {@link ExtractMessageType} but reads the handler's *return* type
- * instead of its `message` parameter — this is what `room.request(...)`
- * resolves to (and what the `room.send(..., callback)` ack receives). The
- * return is unwrapped through {@link Awaited} so `async` handlers and handlers
- * that return a `Promise` both surface the resolved value.
- *
- * A handler that returns `void` (the fire-and-forget default) yields `void`
- * here, which is the correct response type for a request that completes
- * without a payload.
+ * The awaited return type of a message handler (function or format handler).
+ * The trailing `...args` tolerates the optional `ctx` 3rd param so a handler
+ * written as `(client, message, ctx) => …` still matches.
  */
-export type ExtractResponseType<T> =
+type AwaitedReturnOf<T> =
   T extends { format: any; handler: infer Handler }
-    ? Handler extends (this: any, client: any, message: any) => infer R ? Awaited<R> : any
-    : T extends (this: any, client: any, message: any) => infer R
+    ? Handler extends (this: any, client: any, message: any, ...args: any[]) => infer R ? Awaited<R> : any
+    : T extends (this: any, client: any, message: any, ...args: any[]) => infer R
       ? Awaited<R>
       : any;
+
+/**
+ * Extract the response payload type for a request/response message handler —
+ * what `room.request(...)` resolves to (and what `room.send(..., callback)`
+ * receives). Reads the handler's *return* type, unwrapped through {@link Awaited}.
+ *
+ * Both reply arms ({@link Rejection} / {@link Resolution}) are subtracted: a
+ * `ctx.resolve`/`ctx.reject` return is a reply arm, not request-data, so an
+ * action handler's data-response type collapses away. A handler that returns
+ * `void` yields `void` — the correct response type for a request with no payload.
+ */
+export type ExtractResponseType<T> =
+  Exclude<AwaitedReturnOf<T>, Rejection<any> | Resolution<any>>;
+
+/**
+ * Extract the typed reject reason `R` from a handler that can `return
+ * ctx.reject(reason)` — the complement of {@link ExtractResponseType}. This is
+ * what `predict.action(...)`'s `rollback(handle, reason)` receives. `never` when
+ * the handler never rejects.
+ */
+export type ExtractRejectReason<T> =
+  Extract<AwaitedReturnOf<T>, Rejection<any>> extends Rejection<infer X> ? X : never;
 
 /**
  * Fallback message handler that receives the message type as an additional parameter.

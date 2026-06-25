@@ -1,8 +1,9 @@
 import './legacy.ts';
 
-export { ColyseusSDK, Client, type JoinOptions, type EndpointSettings, type ClientOptions, type ISeatReservation as SeatReservation } from './Client.ts';
+export { ColyseusSDK, Client, type JoinOptions, type EndpointSettings, type ClientOptions, type RoomAvailable, type ISeatReservation as SeatReservation } from './Client.ts';
 export { type FetchFn } from './HTTP.ts';
-export { Room, type RoomAvailable, type InputHandle, type InputOptions } from './Room.ts';
+export { Room, type InputHandle, type InputOptions } from './Room.ts';
+export { type RequestOptions } from './RoomRequest.ts';
 export { Auth, type AuthSettings, type PopupSettings, type AuthResponse, type UserDataResponse, type ForgotPasswordResponse, type AuthData } from "./Auth.ts";
 export { ServerError, AbortError, MatchMakeError } from './errors/Errors.ts';
 export { CloseCode, ErrorCode, Protocol } from '@colyseus/shared-types'; // convenience re-export / backwards compatibility
@@ -36,12 +37,14 @@ export {
     type PredictMode,
     type PredictOptions,
     type PredictGetOptions,
+    type PredictActionOptions,
     type AttachConfig,
     type ReconcilerOptions,
     type SimReconcilerOptions,
     type StepContext,
     type PredictedEventsConfig,
     type PredictedEventsClock,
+    type PredictedEventHandle,
     type PredictedSpawnsOptions,
     type SpawnEntry,
     type SpawnHandle,

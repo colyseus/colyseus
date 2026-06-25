@@ -33,6 +33,15 @@ export interface ClientOptions {
     fetchFn?: FetchFn;
 }
 
+/** A room listing entry returned by matchmaking queries. */
+export interface RoomAvailable<Metadata = any> {
+    name: string;
+    roomId: string;
+    clients: number;
+    maxClients: number;
+    metadata?: Metadata;
+}
+
 export interface LatencyOptions {
     /** "ws" for WebSocket, "h3" for WebTransport (default: "ws") */
     protocol?: "ws" | "h3";

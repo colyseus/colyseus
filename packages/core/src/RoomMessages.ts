@@ -1,7 +1,7 @@
-import { decode, type Iterator } from '@colyseus/schema';
+import { decode, $refId, type Iterator } from '@colyseus/schema';
 import { unpack } from 'msgpackr';
 
-import { CloseCode, ErrorCode, Protocol, ResponseStatus } from '@colyseus/shared-types';
+import { CloseCode, ErrorCode, Protocol, ResponseStatus, type MessageContext } from '@colyseus/shared-types';
 import { getMessageBytes } from './Protocol.ts';
 import { createNanoEvents } from './utils/nanoevents.ts';
 import { standardValidate, type StandardSchemaV1 } from './utils/StandardSchema.ts';
@@ -23,6 +23,59 @@ function toResponseError(e: any): { name: string; message: string; code?: any } 
   }
   return { name: "Error", message: String(e) };
 }
+
+/** The refId the encoder assigned `entity`, or `undefined` if it isn't attached
+ *  to the rooted state tree (so it has no wire identity to echo). `$refId` is the
+ *  same global registered symbol the encoder stamps on every attached instance;
+ *  schema shares it via the process-wide Symbol Registry (`Symbol.for`), so the
+ *  import resolves to one identical value even across duplicate installs. */
+function refIdOf(entity: any): number | undefined {
+  return (entity == null) ? undefined : (entity as Record<symbol, number | undefined>)[$refId];
+}
+
+// The handler's terminal action — NOT the wire ResponseStatus: `none` and
+// `resolved` both reply OK (return value vs the entity's `{ref}`), a distinction
+// a single OK can't carry; ERROR is never a handler decision (thrown/no-handler).
+// Projected onto ResponseStatus once, in onRequest's reply.
+const OUTCOME_NONE = 0, OUTCOME_REJECTED = 1, OUTCOME_RESOLVED = 2;
+
+/**
+ * Runtime {@link MessageContext} for a {@link Protocol.ROOM_REQUEST} dispatch.
+ * `reject`/`resolve` record the decision on the ctx; `onRequest` reads it after the
+ * handler settles, so a bare side-effecting call works as well as `return
+ * ctx.reject(r)` (the branded return is compile-time only — the runtime return is
+ * unused).
+ */
+class DispatchContext implements MessageContext {
+  readonly id: number | undefined;
+  _outcome = OUTCOME_NONE;
+  _reason: any = undefined;
+  _entity: any = undefined;
+
+  constructor(id: number | undefined) {
+    this.id = id;
+  }
+
+  reject(reason?: any): any {
+    this._outcome = OUTCOME_REJECTED;
+    this._reason = reason;
+    return undefined;
+  }
+
+  resolve(entity?: any): any {
+    this._outcome = OUTCOME_RESOLVED;
+    this._entity = entity;
+    return undefined;
+  }
+}
+
+/** Shared no-op context for fire-and-forget `ROOM_DATA` (no reply channel, so
+ *  `reject`/`resolve` go nowhere). `id` is `undefined`; zero per-message allocation. */
+const SEND_CONTEXT: MessageContext = Object.freeze({
+  id: undefined,
+  reject: () => undefined as any,
+  resolve: () => undefined as any,
+});
 
 /**
  * Per-room message-routing layer, owned by {@link Room}. Owns the user-message
@@ -113,7 +166,7 @@ export class RoomMessages {
     }
 
     if (this.events.events[messageType]) {
-      this.events.emit(messageType as string, client, message);
+      this.events.emit(messageType as string, client, message, SEND_CONTEXT);
 
     } else if (this.events.events['*']) {
       this.events.emit('*', client, messageType, message);
@@ -124,7 +177,11 @@ export class RoomMessages {
   }
 
   /** Dispatch a `ROOM_REQUEST` frame: same handlers as ROOM_DATA, but the client
-   *  opted into a reply, so echo the `requestId` with the (awaited) handler return. */
+   *  opted into a reply, so echo the `requestId` with the outcome. The handler's
+   *  reply is decided by what it returns / does to `ctx`: `ctx.reject(reason)` →
+   *  `REJECTED(reason)`, `ctx.resolve(entity)` → `OK { ref }` (entity's refId,
+   *  resolved here at reply-send), a thrown error or missing handler → `ERROR`,
+   *  else `OK(return)`. */
   onRequest(client: Client & ClientPrivate, buffer: Buffer, it: Iterator): void {
     const requestId = decode.number(buffer, it);
 
@@ -163,11 +220,22 @@ export class RoomMessages {
       return;
     }
 
+    const ctx = new DispatchContext(requestId);
+
     // Promise.resolve().then normalizes sync throws + async rejections into one
     // rejection path. With onUncaughtException set the handler is wrapped (swallows
     // its own errors), so the request resolves undefined and the error reports there.
-    Promise.resolve().then(() => handler(client, message)).then(
-      (response) => this.#replyToRequest(client, requestId, ResponseStatus.OK, response),
+    Promise.resolve().then(() => handler(client, message, ctx)).then(
+      (response) => {
+        if (ctx._outcome === OUTCOME_REJECTED) {
+          this.#replyToRequest(client, requestId, ResponseStatus.REJECTED, ctx._reason);
+        } else if (ctx._outcome === OUTCOME_RESOLVED) {
+          const ref = refIdOf(ctx._entity);
+          this.#replyToRequest(client, requestId, ResponseStatus.OK, ref !== undefined ? { ref } : undefined);
+        } else {
+          this.#replyToRequest(client, requestId, ResponseStatus.OK, response);
+        }
+      },
       (e) => {
         debugAndPrintError(e);
         this.#replyToRequest(client, requestId, ResponseStatus.ERROR, toResponseError(e));

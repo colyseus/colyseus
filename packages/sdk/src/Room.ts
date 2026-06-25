@@ -1,8 +1,8 @@
-import { CloseCode, HandshakeSection, InputFlags, Protocol, PROTOCOL_CODE_MASK, PROTOCOL_MODIFIER_MASK, ProtocolModifier, ResponseStatus, type InferState, type InferInput, type NormalizeRoomType, type ExtractRoomMessages, type ExtractRoomClientMessages, type ExtractMessageType, type ExtractResponseType } from '@colyseus/shared-types';
-import { decode, Decoder, encode, Iterator, Reflection, Schema } from '@colyseus/schema';
-import { InputEncoder } from '@colyseus/schema/input';
+import { CloseCode, HandshakeSection, Protocol, PROTOCOL_CODE_MASK, PROTOCOL_MODIFIER_MASK, ProtocolModifier, ResponseStatus, type InferState, type InferInput, type NormalizeRoomType, type ExtractRoomMessages, type ExtractRoomClientMessages, type ExtractMessageType, type ExtractResponseType } from '@colyseus/shared-types';
+import { decode, Decoder, encode, Iterator, Schema } from '@colyseus/schema';
 
-import { InputHandleImpl, type InputHandle, type InputOptions } from './input/InputHandle.ts';
+import { RoomInput } from './input/RoomInput.ts';
+import type { InputHandle, InputOptions } from './input/InputHandle.ts';
 export { type InputHandle, type InputOptions } from './input/InputHandle.ts';
 
 import { Packr, unpack, RESERVE_START_SPACE } from 'msgpackr';
@@ -17,7 +17,10 @@ import { createSignal } from './core/signal.ts';
 
 import { SchemaConstructor, SchemaSerializer } from './serializer/SchemaSerializer.ts';
 
-import { NULL_CLOCK, RoomClock, type RoomClockLike } from './RoomClock.ts';
+import { NULL_CLOCK, type RoomClockLike } from './RoomClock.ts';
+
+import { type ReconnectionOptions, createReconnection, enqueueMessage } from './Reconnection.ts';
+import { type OnReply, type RequestOptions, toRequestError } from './RoomRequest.ts';
 
 import { now } from './core/utils.ts';
 
@@ -25,77 +28,6 @@ import { now } from './core/utils.ts';
 export type InferSerializer<State> = [State] extends [Schema]
     ? SchemaSerializer<State>
     : Serializer<State>;
-
-export interface RoomAvailable<Metadata = any> {
-    name: string;
-    roomId: string;
-    clients: number;
-    maxClients: number;
-    metadata?: Metadata;
-}
-
-export interface ReconnectionOptions {
-    /**
-     * Whether automatic reconnection is enabled.
-     * Set to `false` to disable automatic reconnection entirely.
-     * @default true
-     */
-    enabled: boolean;
-
-    /**
-     * The maximum number of reconnection attempts.
-     */
-    maxRetries: number;
-
-    /**
-     * The minimum delay between reconnection attempts.
-     */
-    minDelay: number;
-
-    /**
-     * The maximum delay between reconnection attempts.
-     */
-    maxDelay: number;
-
-    /**
-     * The minimum uptime of the room before reconnection attempts can be made.
-     */
-    minUptime: number;
-
-    /**
-     * The current number of reconnection attempts.
-     */
-    retryCount: number;
-
-    /**
-     * The initial delay between reconnection attempts.
-     */
-    delay: number;
-
-    /**
-     * The function to calculate the delay between reconnection attempts.
-     * @param attempt - The current attempt number.
-     * @param delay - The initial delay between reconnection attempts.
-     * @returns The delay between reconnection attempts.
-     */
-    backoff: (attempt: number, delay: number) => number;
-
-    /**
-     * The maximum number of enqueued messages to buffer.
-     */
-    maxEnqueuedMessages: number;
-
-    /**
-     * Buffer for messages sent while connection is not open.
-     * These messages will be sent once the connection is re-established.
-     */
-    enqueuedMessages: Array<{ data: Uint8Array }>;
-
-    /**
-     * Whether the room is currently reconnecting.
-     */
-    isReconnecting: boolean;
-}
 
 export class Room<
     T = any,
@@ -122,19 +54,7 @@ export class Room<
     public serializer: InferSerializer<State>;
 
     // reconnection logic
-    public reconnection: ReconnectionOptions = {
-        enabled: true,
-        retryCount: 0,
-        maxRetries: 15,
-        delay: 100,
-        minDelay: 100,
-        maxDelay: 5000,
-        minUptime: 5000,
-        backoff: exponentialBackoff,
-        maxEnqueuedMessages: 10,
-        enqueuedMessages: [],
-        isReconnecting: false,
-    };
+    public reconnection: ReconnectionOptions = createReconnection();
 
     protected joinedAtTime: number = 0;
 
@@ -167,79 +87,35 @@ export class Room<
 
     /**
      * Default time (ms) a `room.request()` / `room.send(..., callback)` waits
-     * for a reply before rejecting. Override per-call with the `timeout`
-     * option. Tune globally by assigning to this field after joining.
+     * for a reply before rejecting. Class-level default — tune globally via
+     * `Room.defaultRequestTimeout = ms`; override per-call with the `timeout` option.
      */
-    public requestTimeout: number = 10000;
+    static defaultRequestTimeout = 10000;
 
     /** Monotonic id correlating a {@link Protocol.ROOM_REQUEST} with its reply. @internal */
     #nextRequestId: number = 0;
 
-    /** In-flight requests awaiting a {@link Protocol.ROOM_RESPONSE}. @internal */
-    #pendingRequests = new Map<number, {
-        resolve: (value: any) => void;
-        reject: (reason: any) => void;
-        timer: ReturnType<typeof setTimeout>;
+    /**
+     * In-flight round-trips awaiting a {@link Protocol.ROOM_RESPONSE}, keyed by the
+     * monotonic request id. `onReply` receives the decoded outcome `(ok, payload,
+     * faulted)`; `onClose` (request only) rejects on disconnect — its absence
+     * (`predict.action`) drops the registration silently, leaving the optimistic
+     * handle to the store's mispredict-TTL. @internal
+     */
+    #pending = new Map<number, {
+        onReply: OnReply;
+        onClose?: (reason: string) => void;
     }>();
 
-    // Impl type (not the public interface) so the TIMED decode can feed it the
-    // server ack via the internal `ackInput()`.
-    #inputHandle?: InputHandleImpl<any>;
     /**
-     * Schema constructor recovered via Reflection from the server's
-     * handshake (the `INPUT_REFLECTION` tagged section). Populated on JOIN
-     * when the server room called `defineInput()`; falls back to `undefined`
-     * otherwise. Survives reconnects that skip the handshake — the field is
-     * set on the original join and never cleared.
-     *
-     * Typed as `new () => any` (not `Schema`) on purpose — pinning to this
-     * SDK's Schema type would clash with user instances coming from a
-     * different copy of `@colyseus/schema` under multi-version installs.
+     * Per-room input state — schema ctor, server-advertised stamp/rate flags,
+     * and the cached {@link InputHandle} — all grouped in {@link RoomInput}.
+     * Lazily created only when the room declares input (an `INPUT_*` handshake
+     * section arrives) or `input()` is called; stays `undefined` for chat /
+     * lobby / turn-based rooms — zero allocation.
      * @internal
      */
-    #inputCtorFromReflection?: new () => any;
-
-    /**
-     * `true` when the server's handshake advertised the SNAPSHOT-timeline stamp
-     * (`INPUT_OPTIONS`, `InputFlags.RENDER_TIME`) — the input handle then stamps
-     * each reliable input with `renderTime`.
-     * @internal
-     */
-    #inputStampRender = false;
-
-    /**
-     * `true` when the server's handshake advertised the RECKON-timeline stamp
-     * (`INPUT_OPTIONS`, `InputFlags.RECKON_TIME`) — the input handle then stamps
-     * each reliable input with `reckonTime`. Set together with
-     * {@link #inputStampRender} ⇒ the 6-byte `[reckonTime][renderDelta]` prefix.
-     * @internal
-     */
-    #inputStampReckon = false;
-
-    /**
-     * Server-advertised fixed simulation/input step rate (Hz) from
-     * `defineInput({ tickRate })`, decoded from the INPUT_OPTIONS handshake
-     * section. Surfaced on the input handle as {@link InputHandle.tickRate}.
-     * @internal
-     */
-    #inputTickRate?: number;
-
-    /**
-     * Server-advertised state-patch interval (ms) from the INPUT_OPTIONS
-     * handshake = the reconcile/correction cadence. Surfaced on the input handle
-     * as {@link InputHandle.patchRate}.
-     * @internal
-     */
-    #inputPatchRate?: number;
-
-    /**
-     * Server-advertised physics sub-steps per input tick from the INPUT_OPTIONS
-     * handshake (`setFixedTimestep(..., { subSteps })`). Surfaced on the input
-     * handle as {@link InputHandle.subSteps} and defaulted into the reconcilers'
-     * step context, so client prediction sub-steps exactly like the server.
-     * @internal
-     */
-    #inputSubSteps?: number;
+    #input?: RoomInput;
 
     constructor(name: string, rootSchema?: SchemaConstructor<State>) {
         this.name = name;
@@ -381,7 +257,7 @@ export class Room<
         // Request/response form: defer to `request()` and adapt to a
         // (response, error) callback.
         if (callback !== undefined) {
-            this.#request(messageType, payload, this.requestTimeout).then(
+            this.request(messageType as any, payload).then(
                 (response) => callback(response, undefined),
                 (error) => callback(undefined, error),
             );
@@ -423,7 +299,7 @@ export class Room<
      *
      * Rejects if the handler throws, if no handler is registered, if the
      * connection closes first, or if no reply arrives within `timeout`
-     * (defaults to {@link Room.requestTimeout}).
+     * (defaults to {@link Room.defaultRequestTimeout}).
      *
      * @example
      * ```typescript
@@ -433,64 +309,118 @@ export class Room<
     public request<MessageType extends keyof ExtractRoomMessages<NormalizeRoomType<T>>>(
         messageType: MessageType,
         payload?: ExtractMessageType<ExtractRoomMessages<NormalizeRoomType<T>>[MessageType]>,
-        options?: { timeout?: number }
+        options?: RequestOptions
     ): Promise<ExtractResponseType<ExtractRoomMessages<NormalizeRoomType<T>>[MessageType]>>
     public request<Payload = any, Response = any>(
         messageType: [keyof ExtractRoomMessages<NormalizeRoomType<T>>] extends [never] ? (string | number) : never,
         payload?: Payload,
-        options?: { timeout?: number }
+        options?: RequestOptions
     ): Promise<Response>
-    public request(messageType: string | number, payload?: any, options?: { timeout?: number }): Promise<any> {
-        return this.#request(messageType, payload, options?.timeout ?? this.requestTimeout);
-    }
-
-    #request(messageType: string | number, payload: any, timeoutMs: number): Promise<any> {
+    public request(messageType: string | number, payload?: any, options?: RequestOptions): Promise<any> {
+        if (!this.connection.isOpen) {
+            return Promise.reject(new Error(`cannot send request "${messageType}": connection is not open.`));
+        }
+        const timeoutMs = options?.timeout ?? Room.defaultRequestTimeout;
+        // request = sendRequest + fail-fast-offline (above) + promise + timeout. The
+        // timer lives in this closure, so the shared #pending registry stays unaware
+        // of timeouts (a request-only concern); settle/onClose both clear it.
         return new Promise((resolve, reject) => {
-            if (!this.connection.isOpen) {
-                reject(new Error(`cannot send request "${messageType}": connection is not open.`));
-                return;
-            }
-
-            const requestId = this.#nextRequestId;
-            this.#nextRequestId = (this.#nextRequestId + 1) >>> 0; // keep within uint32
-
-            const it: Iterator = { offset: 1 };
-            this.sharedBuffer[0] = Protocol.ROOM_REQUEST;
-            encode.number(this.sharedBuffer, requestId, it);
-
-            if (typeof(messageType) === "string") {
-                encode.string(this.sharedBuffer, messageType, it);
-            } else {
-                encode.number(this.sharedBuffer, messageType, it);
-            }
-            const headerLength = it.offset;
-
-            let data: Uint8Array;
-            if (payload !== undefined) {
-                data = this.packr.pack(payload, RESERVE_START_SPACE | headerLength);
-                data.set(this.sharedBuffer.subarray(0, headerLength), 0);
-            } else {
-                data = this.sharedBuffer.subarray(0, headerLength);
-            }
-
-            const timer = setTimeout(() => {
-                this.#pendingRequests.delete(requestId);
+            let timer: ReturnType<typeof setTimeout>;
+            const id = this.sendRequest(
+                messageType, payload, { mode: options?.mode },
+                (ok, replyPayload, faulted) => {
+                    clearTimeout(timer);
+                    if (ok) { resolve(replyPayload); }
+                    else { reject(toRequestError(replyPayload, faulted)); }
+                },
+                (reason) => { clearTimeout(timer); reject(new Error(reason)); },
+            );
+            timer = setTimeout(() => {
+                this.cancelRequest(id);
                 reject(new Error(`request "${messageType}" timed out after ${timeoutMs}ms.`));
             }, timeoutMs);
-
-            this.#pendingRequests.set(requestId, { resolve, reject, timer });
-            this.connection.send(data);
         });
     }
 
-    #rejectAllPending(reason: string) {
-        if (this.#pendingRequests.size === 0) { return; }
-        const error = new Error(reason);
-        for (const pending of this.#pendingRequests.values()) {
-            clearTimeout(pending.timer);
-            pending.reject(error);
+    /** Next correlation id (uint32) for a round-trip. @internal */
+    #mintRequestId(): number {
+        const id = this.#nextRequestId;
+        this.#nextRequestId = (this.#nextRequestId + 1) >>> 0; // keep within uint32
+        return id;
+    }
+
+    /** Encode a {@link Protocol.ROOM_REQUEST} frame (shared by `request` + `sendRequest`).
+     *  The returned buffer aliases `sharedBuffer` for the payload-less case, so
+     *  it must be transmitted (or copied) before the next encode. @internal */
+    #encodeRequestFrame(requestId: number, messageType: string | number, payload: any): Uint8Array {
+        const it: Iterator = { offset: 1 };
+        this.sharedBuffer[0] = Protocol.ROOM_REQUEST;
+        encode.number(this.sharedBuffer, requestId, it);
+
+        if (typeof(messageType) === "string") {
+            encode.string(this.sharedBuffer, messageType, it);
+        } else {
+            encode.number(this.sharedBuffer, messageType, it);
         }
-        this.#pendingRequests.clear();
+        const headerLength = it.offset;
+
+        if (payload !== undefined) {
+            const data = this.packr.pack(payload, RESERVE_START_SPACE | headerLength);
+            data.set(this.sharedBuffer.subarray(0, headerLength), 0);
+            return data;
+        }
+        return this.sharedBuffer.subarray(0, headerLength);
+    }
+
+    /**
+     * Low-level round-trip primitive: encode + transmit a {@link Protocol.ROOM_REQUEST}
+     * and register `onReply` (called once with the decoded outcome when the server
+     * replies). The transport seam for `predict.action`; {@link request} wraps it
+     * with a promise + timeout. `onClose` (optional) is invoked on disconnect — omit
+     * it to drop the registration silently (the predict layer's TTL governs the
+     * optimistic handle). Returns the request id, or `-1` if an unreliable send
+     * couldn't be transmitted (offline). @internal
+     */
+    public sendRequest(
+        messageType: string | number,
+        payload: any,
+        opts: { mode?: "reliable" | "unreliable" },
+        onReply: OnReply,
+        onClose?: (reason: string) => void,
+    ): number {
+        const requestId = this.#mintRequestId();
+        const data = this.#encodeRequestFrame(requestId, messageType, payload);
+
+        if (opts.mode === "unreliable") {
+            if (!this.connection.isOpen) { return -1; }
+            // Sent once — no unreliable channel falls back to reliable inside the
+            // transport; a genuine drop falls to the predict-layer TTL.
+            this.connection.sendUnreliable(data);
+        } else if (this.connection.isOpen) {
+            this.connection.send(data);
+        } else {
+            // Reliable + offline: buffer so it flushes on (re)connect. Reachable only
+            // via predict.action — `request` fails fast before calling.
+            enqueueMessage(this, new Uint8Array(data));
+        }
+
+        this.#pending.set(requestId, { onReply, onClose });
+        return requestId;
+    }
+
+    /** Drop a pending round-trip (request timeout, or the predict layer's TTL/cancel
+     *  path). Idempotent. @internal */
+    public cancelRequest(id: number): void {
+        this.#pending.delete(id);
+    }
+
+    #rejectAllPending(reason: string) {
+        if (this.#pending.size === 0) { return; }
+        // request entries reject (their `onClose` clears the timer); predict.action
+        // entries have no `onClose`, so they drop silently — the store's
+        // mispredict-TTL rolls the optimistic effect back.
+        for (const entry of this.#pending.values()) { entry.onClose?.(reason); }
+        this.#pending.clear();
     }
 
     public sendUnreliable<T = any>(type: string | number, message?: T): void {
@@ -582,34 +512,7 @@ export class Room<
     public input<
         I = ([InferInput<T>] extends [never] ? any : InferInput<T>),
     >(options?: InputOptions<I>): InputHandle<I> {
-        if (this.#inputHandle) {
-            return this.#inputHandle as InputHandle<I>;
-        }
-
-        const Ctor = (options?.type ?? this.#inputCtorFromReflection) as (new () => I) | undefined;
-        if (!Ctor) {
-            throw new Error(
-                "conn.input(): no input schema available. The server room must call " +
-                "`defineInput(YourInput)`, or you can pass `{ type: YourInput }` explicitly."
-            );
-        }
-
-        const instance = new Ctor();
-        // The InputEncoder always delta-encodes (no full-snapshot mode), so
-        // there's nothing to configure here beyond mode/historySize.
-        const encoder = new InputEncoder(instance as any, options);
-        // The handle owns the input round-trip (send counter, RTT send-times, server-acked count);
-        // the TIMED decode feeds it the ack and it produces RTT samples for the clock (see onMessage).
-        // `stampRender`/`stampReckon` are server-driven (INPUT_OPTIONS flags); `renderDelay` lets the app subtract its interp buffer.
-        this.#inputHandle = new InputHandleImpl(this, instance, encoder, {
-            stampRender: this.#inputStampRender,
-            stampReckon: this.#inputStampReckon,
-            renderDelay: options?.renderDelay,
-            tickRate: this.#inputTickRate,
-            patchRate: this.#inputPatchRate,
-            subSteps: this.#inputSubSteps,
-        });
-        return this.#inputHandle as InputHandle<I>;
+        return (this.#input ??= new RoomInput(this)).handle(options);
     }
 
     public get state (): State {
@@ -650,7 +553,7 @@ export class Room<
             // advance `it.offset`; read in declared byte order.
             const sNow = decode.uint32(buffer as Buffer, it);
             const inputSeq = decode.uint32(buffer as Buffer, it);
-            const rttSample = this.#inputHandle ? this.#inputHandle.ackInput(inputSeq) : -1;
+            const rttSample = this.#input ? this.#input.ackInput(inputSeq) : -1;
             this.clock.sample(sNow, rttSample);
         }
 
@@ -683,38 +586,10 @@ export class Room<
                 const sectionEnd = it.offset + sectionLen;
 
                 if (tag === HandshakeSection.INPUT_REFLECTION) {
-                    const inputDecoder = Reflection.decode(buffer.subarray(0, sectionEnd) as any, it);
-                    // Install schema-builder field descriptors on the
-                    // reconstructed class so `InputEncoder` can read its
-                    // `$values` and emit non-empty packets.
-                    Reflection.makeEncodable(inputDecoder.state.constructor as any);
-                    this.#inputCtorFromReflection = inputDecoder.state.constructor as new () => any;
-
-                    // INPUT_REFLECTION is the signal that the server called
-                    // `defineInput()` and will emit TIMED-prefixed state
-                    // messages. Swap the default stub clock for a real
-                    // {@link RoomClock} so RTT/offset estimation kicks in.
-                    // Skip if the user already replaced `room.clock` with
-                    // their own (e.g. via `room.clock = new MyClock()` after
-                    // `await joinOrCreate(...)`).
-                    if (this.clock === NULL_CLOCK) this.clock = new RoomClock();
+                    (this.#input ??= new RoomInput(this)).applyReflection(buffer, it, sectionEnd);
 
                 } else if (tag === HandshakeSection.INPUT_OPTIONS) {
-                    // [flags uint8][tickRate varint?][patchRate varint?][subSteps varint?], varints in bit order.
-                    // RENDER_TIME / RECKON_TIME → auto-stamp inputs with that timeline; FIXED_TIMESTEP → predict tickRate (Hz); PATCH_RATE → patch interval (ms = reconcile cadence);
-                    // SUB_STEPS → physics sub-steps per input tick (absent = 1).
-                    const flags = buffer[it.offset++];
-                    this.#inputStampRender = (flags & InputFlags.RENDER_TIME) !== 0;
-                    this.#inputStampReckon = (flags & InputFlags.RECKON_TIME) !== 0;
-                    if (flags & InputFlags.FIXED_TIMESTEP) {
-                        this.#inputTickRate = decode.number(buffer as Buffer, it);
-                    }
-                    if (flags & InputFlags.PATCH_RATE) {
-                        this.#inputPatchRate = decode.number(buffer as Buffer, it);
-                    }
-                    if (flags & InputFlags.SUB_STEPS) {
-                        this.#inputSubSteps = decode.number(buffer as Buffer, it);
-                    }
+                    (this.#input ??= new RoomInput(this)).applyOptions(buffer, it);
                 }
 
                 it.offset = sectionEnd;
@@ -724,8 +599,9 @@ export class Room<
             // order, so do it once the loop has both the clock and patchRate) —
             // interpolation reads it to tell an idle delta-encoded gap from the
             // normal patch interval.
-            if (this.#inputPatchRate !== undefined) {
-                this.clock.setPatchInterval?.(this.#inputPatchRate);
+            const patchRate = this.#input?.patchRate;
+            if (patchRate !== undefined) {
+                this.clock.setPatchInterval?.(patchRate);
             }
 
             if (this.joinedAtTime === 0) {
@@ -789,29 +665,19 @@ export class Room<
             this.dispatchMessage(type, buffer.subarray(it.offset));
 
         } else if (code === Protocol.ROOM_RESPONSE) {
-            // reply to a pending `request()` / `send(..., callback)`
+            // reply to a pending `request()` / `send(..., callback)` / `predict.action()`.
             const requestId = decode.number(buffer as Buffer, it);
             const status = buffer[it.offset++];
+            const payload = (buffer.byteLength > it.offset)
+                ? unpack(buffer as Buffer, { start: it.offset })
+                : undefined;
 
-            const pending = this.#pendingRequests.get(requestId);
-            // already settled (e.g. timed out) or unknown id — ignore
-            if (pending !== undefined) {
-                this.#pendingRequests.delete(requestId);
-                clearTimeout(pending.timer);
-
-                const payload = (buffer.byteLength > it.offset)
-                    ? unpack(buffer as Buffer, { start: it.offset })
-                    : undefined;
-
-                if (status === ResponseStatus.OK) {
-                    pending.resolve(payload);
-                } else {
-                    // payload carries { name, message, code } from the server
-                    const error: any = new Error(payload?.message ?? "request failed");
-                    if (payload?.name) { error.name = payload.name; }
-                    if (payload?.code !== undefined) { error.code = payload.code; }
-                    pending.reject(error);
-                }
+            const entry = this.#pending.get(requestId);
+            // already settled (e.g. timed out / cancelled) or unknown id — ignore
+            if (entry !== undefined) {
+                this.#pending.delete(requestId);
+                // the ONE place the wire's three statuses collapse to (ok, payload, faulted):
+                entry.onReply(status === ResponseStatus.OK, payload, status === ResponseStatus.ERROR);
             }
 
         } else if (code === Protocol.PING) {
@@ -874,7 +740,7 @@ export class Room<
             // stays permanently ahead: reconcilers replay an ever-fat pending
             // backlog every reconcile. Reconcilers must drop their pending inputs
             // on `onReconnect` (e.g. `Reconciler.reset()`) for the same reason.
-            this.#inputHandle?.reset();
+            this.#input?.reset();
         }
 
         this.retryReconnection();
@@ -909,16 +775,3 @@ export class Room<
         }, delay);
     }
 }
-
-const exponentialBackoff = (attempt: number, delay: number) => {
-    return Math.floor(Math.pow(2, attempt) * delay);
-}
-
-function enqueueMessage(room: Room, message: Uint8Array) {
-    room.reconnection.enqueuedMessages.push({ data: message });
-    if (room.reconnection.enqueuedMessages.length > room.reconnection.maxEnqueuedMessages) {
-        room.reconnection.enqueuedMessages.shift();
-    }
-}
-
-
