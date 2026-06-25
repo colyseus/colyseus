@@ -1,6 +1,6 @@
 import assert from "assert";
 
-import { schema, t, type SchemaType } from "@colyseus/schema";
+import { schema, t, type SchemaType, type Data } from "@colyseus/schema";
 import { compileSanitizer, type SanitizeInput } from "@colyseus/core";
 
 const MoveInput = schema({
@@ -12,7 +12,9 @@ const MoveInput = schema({
 });
 type MoveInput = SchemaType<typeof MoveInput>;
 
-function frame(props: Partial<MoveInput>): MoveInput {
+// `Data<T>` strips the Schema machinery — `Partial<MoveInput>` would map over
+// the `this`-polymorphic toJSON/restore and trip TS2615 (circular mapped type).
+function frame(props: Partial<Data<MoveInput>>): MoveInput {
   return Object.assign(new MoveInput(), props);
 }
 

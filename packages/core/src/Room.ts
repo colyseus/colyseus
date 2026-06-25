@@ -38,6 +38,7 @@ import {
   type MessageHandlerWithFormat as SharedMessageHandlerWithFormat,
   type MessageHandler as SharedMessageHandler,
   type Messages as SharedMessages,
+  type MessageContext,
 } from '@colyseus/shared-types';
 
 import {
@@ -150,7 +151,7 @@ export type Messages<This extends Room> = SharedMessages<This, Client>;
  */
 export function validate<T extends StandardSchemaV1, This = any>(
   format: T,
-  handler: (this: This, client: Client, message: StandardSchemaV1.InferOutput<T>) => void
+  handler: (this: This, client: Client, message: StandardSchemaV1.InferOutput<T>, ctx: MessageContext) => unknown
 ): MessageHandlerWithFormat<T, This> {
   return { format, handler };
 }
@@ -1339,12 +1340,12 @@ export class Room<T extends RoomOptions = RoomOptions> {
   );
   public onMessage<T = any, C extends Client = ExtractRoomClient<T>>(
     messageType: string | number,
-    callback: (client: C, message: T) => void,
+    callback: (client: C, message: T, ctx: MessageContext) => unknown,
   );
   public onMessage<T = any, C extends Client = ExtractRoomClient<T>>(
     messageType: string | number,
     validationSchema: StandardSchemaV1<T>,
-    callback: (client: C, message: T) => void,
+    callback: (client: C, message: T, ctx: MessageContext) => unknown,
   );
   public onMessage<T = any>(
     _messageType: '*' | string | number,

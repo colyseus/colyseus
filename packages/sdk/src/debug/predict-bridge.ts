@@ -36,13 +36,13 @@ export interface ProfileCore {
  * the per-profile field list.
  */
 /** The actionable read of a reconciler's drift. */
-export type DriftVerdict = "matched" | "jitter" | "diverging";
+export type DriftStatus = "matched" | "jitter" | "diverging";
 
 /** Per-reconciler drift snapshot — mirrors the engine's `ReconcilerStat`
  *  (duck-typed; no engine import). */
 export interface ReconcilerStat {
     readonly label: string;
-    readonly verdict: DriftVerdict;
+    readonly status: DriftStatus;
     readonly severity?: number;
     readonly ema: number;
     readonly peak: number;

@@ -52,6 +52,26 @@ function unreliableRingPacket<I extends object>(
 }
 
 /**
+ * Successive ROOM_INPUT_UNRELIABLE packets from a SINGLE encoder, so the
+ * framework wire seq (which drives ring dedupe — NOT the user `seqField`) stays
+ * continuous across packets, exactly as a real client's redundancy ring slides.
+ * Each returned `tick(mutator)` encodes one tick; the bytes carry the last
+ * `historySize` slots (overlapping consecutive packets).
+ */
+function unreliableRing<I extends object>(Ctor: new () => I, historySize: number) {
+  const inst = new Ctor();
+  const encoder = new InputEncoder(inst as any, { mode: "unreliable", historySize });
+  return (mutator: (inst: I) => void): Uint8Array => {
+    mutator(inst);
+    const last = encoder.encode();
+    const framed = new Uint8Array(1 + last.length);
+    framed[0] = Protocol.ROOM_INPUT_UNRELIABLE;
+    framed.set(last, 1);
+    return framed;
+  };
+}
+
+/**
  * Build a ROOM_INPUT_RELIABLE packet carrying a KNOWN render-time stamp for a
  * RENDER-ONLY room (a `mode:"snapshot"` rewind target): the TIMED modifier + a
  * `[uint32 renderTime LE]` prefix the SDK normally fills from the synced clock.
@@ -240,7 +260,7 @@ describe("Input (InputEncoder / InputDecoder integration)", () => {
     await timeout(50);
   });
 
-  it("Tier 2 — inputOptions.seqField dedupes redundant unreliable frames", async () => {
+  it("Tier 2 — the framework wire seq dedupes redundant unreliable ring frames", async () => {
     const drained: number[] = [];
 
     matchMaker.defineRoomType('input_dedupe', class _ extends Room<{ input: SeqInput }> {
@@ -256,26 +276,26 @@ describe("Input (InputEncoder / InputDecoder integration)", () => {
 
     const conn = await client.joinOrCreate('input_dedupe');
 
-    // First packet: seqs [1, 2, 3]
-    conn.connection.send(unreliableRingPacket(SeqInput, [
-      (i) => { i.seq = 1; i.x = 11; },
-      (i) => { i.seq = 2; i.x = 22; },
-      (i) => { i.seq = 3; i.x = 33; },
-    ]));
+    // ONE encoder = one continuous framework wire seq, so the redundancy ring
+    // overlaps across packets the way a real client's does. Dedupe keys on that
+    // wire seq (not the user `seqField`, which here just mirrors it for a
+    // readable assertion).
+    const tick = unreliableRing(SeqInput, 3);
+    tick((i) => { i.seq = 1; i.x = 11; });
+    tick((i) => { i.seq = 2; i.x = 22; });
+    const first = tick((i) => { i.seq = 3; i.x = 33; }); // ring carries wire [1,2,3]
+    conn.connection.send(first);
 
     await timeout(50);
 
-    // Second packet (simulating client's ring resend): [2, 3, 4]
-    // 2 and 3 are duplicates and should be dropped.
-    conn.connection.send(unreliableRingPacket(SeqInput, [
-      (i) => { i.seq = 2; i.x = 22; },
-      (i) => { i.seq = 3; i.x = 33; },
-      (i) => { i.seq = 4; i.x = 44; },
-    ]));
+    // Sliding the ring one tick resends wire [2,3,4] — 2 and 3 were already seen
+    // and are dropped; only seq=4 is new.
+    const second = tick((i) => { i.seq = 4; i.x = 44; });
+    conn.connection.send(second);
 
     await timeout(80);
 
-    assert.deepStrictEqual(drained, [1, 2, 3, 4], "framework should dedupe seqs already seen");
+    assert.deepStrictEqual(drained, [1, 2, 3, 4], "framework should dedupe wire seqs already seen");
 
     await conn.leave();
     await timeout(50);
@@ -517,9 +537,9 @@ describe("Input (InputEncoder / InputDecoder integration)", () => {
     await timeout(50);
   });
 
-  it("Tier 2 — setTickedSimulation + room.inputs.get(sessionId).at(tick) for tick-aligned retrieval", async () => {
+  it("Tier 2 — setFixedTimestep + room.inputs.get(sessionId).at(tick) for tick-aligned retrieval", async () => {
     // Lockstep-style: client sends inputs tagged with a tick number; the server's
-    // ticked simulation looks up each client's input "for tick N" each step.
+    // fixed-timestep simulation looks up each client's input "for tick N" each step.
     const observed: Array<{ tick: number; x: number | undefined }> = [];
 
     matchMaker.defineRoomType('input_ticked', class _ extends Room<{ input: SeqInput }> {
@@ -527,10 +547,10 @@ describe("Input (InputEncoder / InputDecoder integration)", () => {
       // against numeric fields of `SeqInput`.
       inputs = this.defineInput(SeqInput, { seqField: "seq", bufferMaxSize: 16 });
       onCreate() {
-        this.setTickedSimulation((tick) => {
+        this.setFixedTimestep((ctx) => {
           for (const c of this.clients) {
-            const snapshot = this.inputs.get(c.sessionId).at(tick);
-            observed.push({ tick, x: snapshot?.x });
+            const snapshot = this.inputs.get(c.sessionId).at(ctx.tick);
+            observed.push({ tick: ctx.tick, x: snapshot?.x });
           }
         }, 30);
       }
@@ -563,54 +583,21 @@ describe("Input (InputEncoder / InputDecoder integration)", () => {
     await timeout(50);
   });
 
-  it("Tier 2 — room.tick getter is readable from outside the ticked-simulation callback", async () => {
-    let tickFromCallback: number = -1;
-    let tickFromMessage: number = -1;
-
-    matchMaker.defineRoomType('input_tick_getter', class _ extends Room {
-      onCreate() {
-        this.setTickedSimulation((tick) => {
-          tickFromCallback = tick;
-        }, 30);
-      }
-      messages = {
-        readTick: function (this: any) { tickFromMessage = this.tick; }
-      };
-    });
-
-    const conn = await client.joinOrCreate('input_tick_getter');
-
-    // Let the simulation tick several times (30ms × ~5 = 150ms).
-    await timeout(150);
-
-    // Read room.tick from a message handler (outside the callback's scope).
-    conn.send("readTick");
-    await timeout(50);
-
-    assert.ok(tickFromCallback >= 3, `expected tick >= 3 in callback, got ${tickFromCallback}`);
-    assert.ok(tickFromMessage  >= 3, `expected tick >= 3 from message, got ${tickFromMessage}`);
-    // (Don't compare the two against each other — the simulation keeps ticking
-    // between when the message handler runs and the test resumes, so tickFromCallback
-    // races ahead of the value tickFromMessage captured.)
-
-    await conn.leave();
-    await timeout(50);
-  });
-
   it("Tier 2 — at(seq) still resolves after the simulation has ticked past — rollback-friendly", async () => {
     let probeResult: number | undefined;
     let tickAtProbe: number = -1;
+    let serverTick: number = -1; // latest ctx.tick, captured for the message probe
 
     matchMaker.defineRoomType('input_late', class _ extends Room<{ input: SeqInput }> {
       inputs = this.defineInput(SeqInput, { seqField: 'seq', bufferMaxSize: 16 });
       onCreate() {
         // Tick without draining — `at(seq)` must still find buffered inputs after the
         // server has advanced past their seq number.
-        this.setTickedSimulation(() => {}, 30);
+        this.setFixedTimestep((ctx) => { serverTick = ctx.tick; }, 30);
       }
       messages = {
         probeAtSeq2: function (this: any, c: any) {
-          tickAtProbe = this.tick;
+          tickAtProbe = serverTick;
           probeResult = this.inputs.get(c.sessionId).at(2)?.x;
         }
       };

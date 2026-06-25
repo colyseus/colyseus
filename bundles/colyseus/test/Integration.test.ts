@@ -720,6 +720,23 @@ describe("Integration", () => {
               await conn.leave();
             });
 
+            it("should accept mode: 'unreliable' and still honor `timeout`", async () => {
+              matchMaker.defineRoomType('req_unreliable', class _ extends Room {
+                onCreate() {
+                  this.onMessage("echo", (_client, message) => message);
+                }
+              });
+
+              const conn = await client.joinOrCreate('req_unreliable');
+              // WebSocket has no unreliable channel: the send is dropped, so the
+              // unreliable request must still settle — via its timeout.
+              await assert.rejects(
+                conn.request("echo", { n: 7 }, { mode: "unreliable", timeout: 200 }),
+                (err: Error) => /timed out/.test(err.message),
+              );
+              await conn.leave();
+            });
+
             it("should correlate concurrent requests, even when answered out of order", async () => {
               matchMaker.defineRoomType('req_concurrent', class _ extends Room {
                 onCreate() {

@@ -28,7 +28,7 @@ importers:
         version: 10.0.10
       '@types/node':
         specifier: ^22.13.14
-        version: 22.19.17
+        version: 22.19.19
       '@types/sinon':
         specifier: ^10.0.2
         version: 10.0.20
@@ -76,7 +76,7 @@ importers:
         version: 11.1.2
       ts-jest:
         specifier: ^28.0.3
-        version: 28.0.8(@babel/core@7.29.7)(@jest/types@28.1.3)(babel-jest@28.1.3(@babel/core@7.29.7))(esbuild@0.27.7)(jest@28.1.3(@types/node@22.19.17))(typescript@6.0.3)
+        version: 28.0.8(@babel/core@7.29.7)(@jest/types@28.1.3)(babel-jest@28.1.3(@babel/core@7.29.7))(esbuild@0.27.7)(jest@28.1.3(@types/node@22.19.19))(typescript@6.0.3)
       tsx:
         specifier: ^4.1.2
         version: 4.21.0
@@ -469,7 +469,7 @@ importers:
         version: 10.0.10
       '@types/node':
         specifier: ^22.13.14
-        version: 22.19.17
+        version: 22.19.19
       drizzle-kit:
         specifier: 1.0.0-rc.2
         version: 1.0.0-rc.2
@@ -870,7 +870,7 @@ importers:
         version: 2.2.48
       '@types/node':
         specifier: ^22.13.13
-        version: 22.19.17
+        version: 22.19.19
       benchmark:
         specifier: ^2.1.4
         version: 2.1.4
@@ -880,6 +880,9 @@ importers:
       dts-bundle-generator:
         specifier: ^9.5.1
         version: 9.5.1
+      esbuild:
+        specifier: ^0.27.7
+        version: 0.27.7
       install:
         specifier: ^0.12.2
         version: 0.12.2
@@ -912,10 +915,10 @@ importers:
         version: 6.0.3
       vite:
         specifier: ^5.0.11
-        version: 5.4.21(@types/node@22.19.17)(lightningcss@1.32.0)
+        version: 5.4.21(@types/node@22.19.19)(lightningcss@1.32.0)
       vitest:
         specifier: ^2.1.1
-        version: 2.1.9(@types/node@22.19.17)(lightningcss@1.32.0)
+        version: 2.1.9(@types/node@22.19.19)(lightningcss@1.32.0)
 
   packages/serializer/legacy-schema-serializer:
     dependencies:
@@ -1043,12 +1046,12 @@ importers:
         version: link:../../core
       '@colyseus/schema':
         specifier: ^5.0.0
-        version: 5.0.3(typescript@6.0.3)
+        version: 5.0.6(typescript@6.0.3)
       '@fails-components/webtransport':
-        specifier: ^1.3.1
+        specifier: ^1.6.2
         version: 1.6.2
       '@fails-components/webtransport-transport-http3-quiche':
-        specifier: ^1.3.1
+        specifier: ^1.6.2
         version: 1.6.2
       node-forge:
         specifier: ^1.3.1
@@ -1082,25 +1085,6 @@ importers:
       '@colyseus/core':
         specifier: workspace:^
         version: link:../../core
-
-  packages/yjs:
-    dependencies:
-      lib0:
-        specifier: ^0.2.99
-        version: 0.2.117
-      y-protocols:
-        specifier: ^1.0.6
-        version: 1.0.7(yjs@13.6.30)
-      yjs:
-        specifier: ^13.6.20
-        version: 13.6.30
-    devDependencies:
-      '@colyseus/core':
-        specifier: workspace:^
-        version: link:../core
-      '@colyseus/sdk':
-        specifier: workspace:^
-        version: link:../sdk
 
 packages:
 
@@ -1557,12 +1541,6 @@ packages:
 
   '@colyseus/clock@2.0.3':
     resolution: {integrity: sha512-kziqG0dcGsvSfcerHLZTY1V2PmGnZAdG5DM0T5BKQDAiYBXYoMqfzA1Wxfe3KSnyeZuP99isffkUQLEwpFYF7A==}
-
-  '@colyseus/schema@5.0.3':
-    resolution: {integrity: sha512-yqT2R9A7ItVHG38Dh5fIFW5WxP79RGCBjeMLjvr+C8OzeR7LzD2CGKxHTJK7xk7bSltQGrv6pecWc+dxUP2kQA==}
-    hasBin: true
-    peerDependencies:
-      typescript: ^5.9.3
 
   '@colyseus/schema@5.0.6':
     resolution: {integrity: sha512-/poMVsvJjCY5piC0KeG/PU1xJ5+I8TQFGtg0XpDl+hmJ85Y7bTGllpiAMTqHXjMR536rd/edOiUdz/tw7+3bHw==}
@@ -4290,9 +4268,6 @@ packages:
   '@types/node@16.18.126':
     resolution: {integrity: sha512-OTcgaiwfGFBKacvfwuHzzn1KLxH/er8mluiy8/uM3sGXHaRe73RrSIj01jow9t4kJEW633Ov+cOexXeiApTyAw==}
 
-  '@types/node@22.19.17':
-    resolution: {integrity: sha512-wGdMcf+vPYM6jikpS/qhg6WiqSV/OhG+jeeHT/KlVqxYfD40iYJf9/AE1uQxVWFvU7MipKRkRv8NSHiCGgPr8Q==}
-
   '@types/node@22.19.19':
     resolution: {integrity: sha512-dyh/xO2Fh5bYrfWaaqGrRQQGkNdmYw6AmaAUvYeUMNTWQtvb796ikLdmTchRmOlOiIJ1TDXfWgVx1QkUlQ6Hew==}
 
@@ -6600,9 +6575,6 @@ packages:
     resolution: {integrity: sha512-FFUtZMpoZ8RqHS3XeXEmHWLA4thH+ZxCv2lOiPIn1Xc7CxrqhWzNSDzD+/chS/zbYezmiwWLdQC09JdQKmthOw==}
     engines: {node: '>=20'}
 
-  isomorphic.js@0.2.5:
-    resolution: {integrity: sha512-PIeMbHqMt4DnUP3MA/Flc0HElYjMXArsw1qwJZcm9sqR8mq3l8NYizFMty0pWwE/tzIGH3EKK5+jes5mAr85yw==}
-
   istanbul-lib-coverage@3.2.2:
     resolution: {integrity: sha512-O8dpsF+r0WV/8MNRKfnmrtCWhuKjxrq2w+jpzBL5UZKTi2LeVWnWOmWRxFlesJONmc+wLAGvKQZEOanko0LFTg==}
     engines: {node: '>=8'}
@@ -6891,11 +6863,6 @@ packages:
   leven@3.1.0:
     resolution: {integrity: sha512-qsda+H8jTaUaN/x5vzW2rzc+8Rw4TAQ/4KjB46IwK5VH+IlVeeeje/EoZRpiXvIqjFgK84QffqPztGI3VBLG1A==}
     engines: {node: '>=6'}
-
-  lib0@0.2.117:
-    resolution: {integrity: sha512-DeXj9X5xDCjgKLU/7RR+/HQEVzuuEUiwldwOGsHK/sfAfELGWEyTcf0x+uOvCvK3O2zPmZePXWL85vtia6GyZw==}
-    engines: {node: '>=16'}
-    hasBin: true
 
   lightningcss-android-arm64@1.32.0:
     resolution: {integrity: sha512-YK7/ClTt4kAK0vo6w3X+Pnm0D2cf2vPHbhOXdoNti1Ga0al1P4TBZhwjATvjNwLEBCnKvjJc2jQgHXH0NEwlAg==}
@@ -9040,6 +9007,7 @@ packages:
 
   uuid@8.3.2:
     resolution: {integrity: sha512-+NYs2QeMWy+GWFOEm9xnn6HCDp0l7QBD7ml8zLUmJ+93Q5NF0NocErnwkTkXVFNiX3/fpC6afS8Dhb/gz7R7eg==}
+    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
     hasBin: true
 
   uwebsockets-express@2.0.2:
@@ -9414,12 +9382,6 @@ packages:
     resolution: {integrity: sha512-GCPAHLvrIH13+c0SuacwvRYj2SxJXQ4kaVTT5xgL3kPrz56XxkF21IGhjSE1+W0aw7gpBWRGXLCPnPby6lSpmQ==}
     engines: {node: '>=12'}
 
-  y-protocols@1.0.7:
-    resolution: {integrity: sha512-YSVsLoXxO67J6eE/nV4AtFtT3QEotZf5sK5BHxFBXso7VDUT3Tx07IfA6hsu5Q5OmBdMkQVmFZ9QOA7fikWvnw==}
-    engines: {node: '>=16.0.0', npm: '>=8.0.0'}
-    peerDependencies:
-      yjs: ^13.0.0
-
   y18n@4.0.3:
     resolution: {integrity: sha512-JKhqTOwSrqNA1NY5lSztJ1GrBiUodLMmIZuLiDaMRJ+itFd+ABVE8XBjOvIWL+rSqNDC74LCSFmlb/U4UZ4hJQ==}
 
@@ -9476,10 +9438,6 @@ packages:
 
   yauzl@2.10.0:
     resolution: {integrity: sha512-p4a9I6X6nu6IhoGmBqAcbJy1mlC4j27vEPZX9F4L4/vZT3Lyq1VkFHw/V/PUcB9Buo+DG3iHkT0x3Qya58zc3g==}
-
-  yjs@13.6.30:
-    resolution: {integrity: sha512-vv/9h42eCMC81ZHDFswuu/MKzkl/vyq1BhaNGfHyOonwlG4CJbQF4oiBBJPvfdeCt/PlVDWh7Nov9D34YY09uQ==}
-    engines: {node: '>=16.0.0', npm: '>=8.0.0'}
 
   yn@2.0.0:
     resolution: {integrity: sha512-uTv8J/wiWTgUTg+9vLTi//leUl5vDQS6uii/emeTb2ssY7vl6QWf2fFbIIGjnhjvbdKlU0ed7QPgY1htTC86jQ==}
@@ -10111,10 +10069,6 @@ snapshots:
     optional: true
 
   '@colyseus/clock@2.0.3': {}
-
-  '@colyseus/schema@5.0.3(typescript@6.0.3)':
-    dependencies:
-      typescript: 6.0.3
 
   '@colyseus/schema@5.0.6(typescript@6.0.3)':
     dependencies:
@@ -11130,7 +11084,7 @@ snapshots:
       '@jest/schemas': 28.1.3
       '@types/istanbul-lib-coverage': 2.0.6
       '@types/istanbul-reports': 3.0.4
-      '@types/node': 22.19.17
+      '@types/node': 22.19.19
       '@types/yargs': 17.0.35
       chalk: 4.1.2
 
@@ -12288,12 +12242,12 @@ snapshots:
 
   '@types/blessed@0.1.27':
     dependencies:
-      '@types/node': 22.19.17
+      '@types/node': 22.19.19
 
   '@types/body-parser@1.19.6':
     dependencies:
       '@types/connect': 3.4.38
-      '@types/node': 22.19.17
+      '@types/node': 22.19.19
 
   '@types/braces@3.0.5': {}
 
@@ -12310,7 +12264,7 @@ snapshots:
 
   '@types/connect@3.4.38':
     dependencies:
-      '@types/node': 22.19.17
+      '@types/node': 22.19.19
 
   '@types/cookiejar@2.1.5': {}
 
@@ -12330,7 +12284,7 @@ snapshots:
 
   '@types/express-serve-static-core@5.1.1':
     dependencies:
-      '@types/node': 22.19.17
+      '@types/node': 22.19.19
       '@types/qs': 6.15.0
       '@types/range-parser': 1.2.7
       '@types/send': 1.2.1
@@ -12359,7 +12313,7 @@ snapshots:
 
   '@types/ioredis@4.28.10':
     dependencies:
-      '@types/node': 22.19.17
+      '@types/node': 22.19.19
 
   '@types/istanbul-lib-coverage@2.0.6': {}
 
@@ -12386,7 +12340,7 @@ snapshots:
   '@types/jsonwebtoken@9.0.10':
     dependencies:
       '@types/ms': 2.1.0
-      '@types/node': 22.19.17
+      '@types/node': 22.19.19
 
   '@types/methods@1.1.4': {}
 
@@ -12402,7 +12356,7 @@ snapshots:
 
   '@types/mssql@9.1.11(@azure/core-client@1.10.1)':
     dependencies:
-      '@types/node': 25.6.0
+      '@types/node': 22.19.19
       tarn: 3.0.2
       tedious: 19.2.1(@azure/core-client@1.10.1)
     transitivePeerDependencies:
@@ -12411,10 +12365,6 @@ snapshots:
     optional: true
 
   '@types/node@16.18.126': {}
-
-  '@types/node@22.19.17':
-    dependencies:
-      undici-types: 6.21.0
 
   '@types/node@22.19.19':
     dependencies:
@@ -12466,23 +12416,23 @@ snapshots:
 
   '@types/readable-stream@4.0.23':
     dependencies:
-      '@types/node': 25.6.0
+      '@types/node': 22.19.19
     optional: true
 
   '@types/resolve@1.20.2': {}
 
   '@types/send@1.2.1':
     dependencies:
-      '@types/node': 22.19.17
+      '@types/node': 22.19.19
 
   '@types/serve-static@2.2.0':
     dependencies:
       '@types/http-errors': 2.0.5
-      '@types/node': 22.19.17
+      '@types/node': 22.19.19
 
   '@types/set-cookie-parser@2.4.10':
     dependencies:
-      '@types/node': 22.19.17
+      '@types/node': 22.19.19
 
   '@types/sinon@10.0.20':
     dependencies:
@@ -12495,13 +12445,13 @@ snapshots:
   '@types/superagent@3.8.7':
     dependencies:
       '@types/cookiejar': 2.1.5
-      '@types/node': 22.19.17
+      '@types/node': 22.19.19
 
   '@types/superagent@8.1.9':
     dependencies:
       '@types/cookiejar': 2.1.5
       '@types/methods': 1.1.4
-      '@types/node': 22.19.17
+      '@types/node': 22.19.19
       form-data: 4.0.5
 
   '@types/supertest@6.0.3':
@@ -12521,7 +12471,7 @@ snapshots:
 
   '@types/ws@8.18.1':
     dependencies:
-      '@types/node': 22.19.17
+      '@types/node': 22.19.19
 
   '@types/yargs-parser@21.0.3': {}
 
@@ -12531,7 +12481,7 @@ snapshots:
 
   '@types/yauzl@2.10.3':
     dependencies:
-      '@types/node': 22.19.17
+      '@types/node': 22.19.19
     optional: true
 
   '@typespec/ts-http-runtime@0.3.5':
@@ -12638,13 +12588,13 @@ snapshots:
       chai: 6.2.2
       tinyrainbow: 3.1.0
 
-  '@vitest/mocker@2.1.9(vite@5.4.21(@types/node@22.19.17)(lightningcss@1.32.0))':
+  '@vitest/mocker@2.1.9(vite@5.4.21(@types/node@22.19.19)(lightningcss@1.32.0))':
     dependencies:
       '@vitest/spy': 2.1.9
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 5.4.21(@types/node@22.19.17)(lightningcss@1.32.0)
+      vite: 5.4.21(@types/node@22.19.19)(lightningcss@1.32.0)
 
   '@vitest/mocker@3.2.4(vite@5.4.21(@types/node@25.6.0)(lightningcss@1.32.0))':
     dependencies:
@@ -13183,7 +13133,7 @@ snapshots:
 
   bun-types@1.3.13:
     dependencies:
-      '@types/node': 22.19.17
+      '@types/node': 22.19.19
 
   bundle-name@4.1.0:
     dependencies:
@@ -13419,7 +13369,7 @@ snapshots:
       fs-extra: 11.3.4
       node-api-headers: 1.8.0
       rc: 1.2.8
-      semver: 7.7.4
+      semver: 7.8.1
       tar: 7.5.13
       url-join: 4.0.1
       which: 6.0.1
@@ -14872,8 +14822,6 @@ snapshots:
 
   isexe@4.0.0: {}
 
-  isomorphic.js@0.2.5: {}
-
   istanbul-lib-coverage@3.2.2: {}
 
   istanbul-lib-instrument@5.2.1:
@@ -14942,7 +14890,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  jest-cli@28.1.3(@types/node@22.19.17):
+  jest-cli@28.1.3(@types/node@22.19.19):
     dependencies:
       '@jest/core': 28.1.3
       '@jest/test-result': 28.1.3
@@ -14951,7 +14899,7 @@ snapshots:
       exit: 0.1.2
       graceful-fs: 4.2.11
       import-local: 3.2.0
-      jest-config: 28.1.3(@types/node@22.19.17)
+      jest-config: 28.1.3(@types/node@22.19.19)
       jest-util: 28.1.3
       jest-validate: 28.1.3
       prompts: 2.4.2
@@ -14960,35 +14908,6 @@ snapshots:
       - '@types/node'
       - supports-color
       - ts-node
-
-  jest-config@28.1.3(@types/node@22.19.17):
-    dependencies:
-      '@babel/core': 7.29.7
-      '@jest/test-sequencer': 28.1.3
-      '@jest/types': 28.1.3
-      babel-jest: 28.1.3(@babel/core@7.29.7)
-      chalk: 4.1.2
-      ci-info: 3.9.0
-      deepmerge: 4.3.1
-      glob: 7.2.3
-      graceful-fs: 4.2.11
-      jest-circus: 28.1.3
-      jest-environment-node: 28.1.3
-      jest-get-type: 28.0.2
-      jest-regex-util: 28.0.2
-      jest-resolve: 28.1.3
-      jest-runner: 28.1.3
-      jest-util: 28.1.3
-      jest-validate: 28.1.3
-      micromatch: 4.0.8
-      parse-json: 5.2.0
-      pretty-format: 28.1.3
-      slash: 3.0.0
-      strip-json-comments: 3.1.1
-    optionalDependencies:
-      '@types/node': 22.19.17
-    transitivePeerDependencies:
-      - supports-color
 
   jest-config@28.1.3(@types/node@22.19.19):
     dependencies:
@@ -15219,7 +15138,7 @@ snapshots:
   jest-util@28.1.3:
     dependencies:
       '@jest/types': 28.1.3
-      '@types/node': 22.19.17
+      '@types/node': 22.19.19
       chalk: 4.1.2
       ci-info: 3.9.0
       graceful-fs: 4.2.11
@@ -15251,12 +15170,12 @@ snapshots:
       merge-stream: 2.0.0
       supports-color: 8.1.1
 
-  jest@28.1.3(@types/node@22.19.17):
+  jest@28.1.3(@types/node@22.19.19):
     dependencies:
       '@jest/core': 28.1.3
       '@jest/types': 28.1.3
       import-local: 3.2.0
-      jest-cli: 28.1.3(@types/node@22.19.17)
+      jest-cli: 28.1.3(@types/node@22.19.19)
     transitivePeerDependencies:
       - '@types/node'
       - supports-color
@@ -15406,10 +15325,6 @@ snapshots:
 
   leven@3.1.0: {}
 
-  lib0@0.2.117:
-    dependencies:
-      isomorphic.js: 0.2.5
-
   lightningcss-android-arm64@1.32.0:
     optional: true
 
@@ -15558,7 +15473,7 @@ snapshots:
 
   make-dir@4.0.0:
     dependencies:
-      semver: 7.7.4
+      semver: 7.8.1
 
   make-error@1.3.6: {}
 
@@ -15866,7 +15781,7 @@ snapshots:
 
   node-abi@3.89.0:
     dependencies:
-      semver: 7.7.4
+      semver: 7.8.1
 
   node-addon-api@7.1.1: {}
 
@@ -17296,7 +17211,7 @@ snapshots:
       '@azure/identity': 4.13.1
       '@azure/keyvault-keys': 4.10.0(@azure/core-client@1.10.1)
       '@js-joda/core': 5.7.0
-      '@types/node': 25.6.0
+      '@types/node': 22.19.19
       bl: 6.1.6
       iconv-lite: 0.6.3
       js-md4: 0.3.2
@@ -17313,7 +17228,7 @@ snapshots:
       '@azure/identity': 4.13.1
       '@azure/keyvault-keys': 4.10.0(@azure/core-client@1.10.1)
       '@js-joda/core': 5.7.0
-      '@types/node': 25.6.0
+      '@types/node': 22.19.19
       bl: 6.1.6
       iconv-lite: 0.7.2
       js-md4: 0.3.2
@@ -17413,11 +17328,11 @@ snapshots:
 
   ts-interface-checker@0.1.13: {}
 
-  ts-jest@28.0.8(@babel/core@7.29.7)(@jest/types@28.1.3)(babel-jest@28.1.3(@babel/core@7.29.7))(esbuild@0.27.7)(jest@28.1.3(@types/node@22.19.17))(typescript@6.0.3):
+  ts-jest@28.0.8(@babel/core@7.29.7)(@jest/types@28.1.3)(babel-jest@28.1.3(@babel/core@7.29.7))(esbuild@0.27.7)(jest@28.1.3(@types/node@22.19.19))(typescript@6.0.3):
     dependencies:
       bs-logger: 0.2.6
       fast-json-stable-stringify: 2.1.0
-      jest: 28.1.3(@types/node@22.19.17)
+      jest: 28.1.3(@types/node@22.19.19)
       jest-util: 28.1.3
       json5: 2.2.3
       lodash.memoize: 4.1.2
@@ -17686,13 +17601,13 @@ snapshots:
       - supports-color
       - terser
 
-  vite-node@2.1.9(@types/node@22.19.17)(lightningcss@1.32.0):
+  vite-node@2.1.9(@types/node@22.19.19)(lightningcss@1.32.0):
     dependencies:
       cac: 6.7.14
       debug: 4.4.3(supports-color@8.1.1)
       es-module-lexer: 1.7.0
       pathe: 1.1.2
-      vite: 5.4.21(@types/node@22.19.17)(lightningcss@1.32.0)
+      vite: 5.4.21(@types/node@22.19.19)(lightningcss@1.32.0)
     transitivePeerDependencies:
       - '@types/node'
       - less
@@ -17732,13 +17647,13 @@ snapshots:
       fsevents: 2.3.3
       lightningcss: 1.32.0
 
-  vite@5.4.21(@types/node@22.19.17)(lightningcss@1.32.0):
+  vite@5.4.21(@types/node@22.19.19)(lightningcss@1.32.0):
     dependencies:
       esbuild: 0.21.5
       postcss: 8.5.10
       rollup: 4.60.2
     optionalDependencies:
-      '@types/node': 22.19.17
+      '@types/node': 22.19.19
       fsevents: 2.3.3
       lightningcss: 1.32.0
 
@@ -17801,10 +17716,10 @@ snapshots:
       - supports-color
       - terser
 
-  vitest@2.1.9(@types/node@22.19.17)(lightningcss@1.32.0):
+  vitest@2.1.9(@types/node@22.19.19)(lightningcss@1.32.0):
     dependencies:
       '@vitest/expect': 2.1.9
-      '@vitest/mocker': 2.1.9(vite@5.4.21(@types/node@22.19.17)(lightningcss@1.32.0))
+      '@vitest/mocker': 2.1.9(vite@5.4.21(@types/node@22.19.19)(lightningcss@1.32.0))
       '@vitest/pretty-format': 2.1.9
       '@vitest/runner': 2.1.9
       '@vitest/snapshot': 2.1.9
@@ -17820,11 +17735,11 @@ snapshots:
       tinyexec: 0.3.2
       tinypool: 1.1.1
       tinyrainbow: 1.2.0
-      vite: 5.4.21(@types/node@22.19.17)(lightningcss@1.32.0)
-      vite-node: 2.1.9(@types/node@22.19.17)(lightningcss@1.32.0)
+      vite: 5.4.21(@types/node@22.19.19)(lightningcss@1.32.0)
+      vite-node: 2.1.9(@types/node@22.19.19)(lightningcss@1.32.0)
       why-is-node-running: 2.3.0
     optionalDependencies:
-      '@types/node': 22.19.17
+      '@types/node': 22.19.19
     transitivePeerDependencies:
       - less
       - lightningcss
@@ -18019,11 +17934,6 @@ snapshots:
 
   xdg-basedir@5.1.0: {}
 
-  y-protocols@1.0.7(yjs@13.6.30):
-    dependencies:
-      lib0: 0.2.117
-      yjs: 13.6.30
-
   y18n@4.0.3: {}
 
   y18n@5.0.8: {}
@@ -18092,10 +18002,6 @@ snapshots:
     dependencies:
       buffer-crc32: 0.2.13
       fd-slicer: 1.1.0
-
-  yjs@13.6.30:
-    dependencies:
-      lib0: 0.2.117
 
   yn@2.0.0: {}
 

@@ -99,11 +99,24 @@ export const PROTOCOL_MODIFIER_MASK = 0x80;
 
 /**
  * Status byte of a {@link Protocol.ROOM_RESPONSE} reply, correlating to a
- * pending {@link Protocol.ROOM_REQUEST} on the SDK side.
+ * pending {@link Protocol.ROOM_REQUEST} on the SDK side. The SDK decodes it into
+ * the outcome model `(ok, payload, faulted)`:
+ *
+ * - `OK` → a `ctx.resolve(value)` (or a plain handler return); payload is the
+ *   value, or `{ ref }` when an entity was resolved for a predicted-spawn handoff.
+ * - `REJECTED` → a deliberate, typed `ctx.reject(reason)`; the authored reason
+ *   rides as the payload, surfaced verbatim and typed.
+ * - `ERROR` → a *fault* (handler threw, or no handler registered): `faulted` on
+ *   the client. Payload is a sanitized `{ name, message, code? }`, never a raw
+ *   reason — so a crash can't masquerade as a typed reject.
+ *
+ * Byte values freeze at the first 0.18 release; add statuses by appending, never
+ * by renumbering.
  */
 export const ResponseStatus = {
   OK: 0,
-  ERROR: 1,
+  REJECTED: 1,
+  ERROR: 2,
 } as const;
 export type ResponseStatus = typeof ResponseStatus[keyof typeof ResponseStatus];
 

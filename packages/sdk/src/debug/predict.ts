@@ -485,16 +485,16 @@ const GRAPH_W = 200;
 const GRAPH_H = 30;
 
 function fmtDrift(v: number): string {
-    if (v < 1e-3) { return "0"; }            // below any verdict floor — float noise
+    if (v < 1e-3) { return "0"; }            // below any status floor — float noise
     if (v < 1) { return v.toFixed(3); }      // keep small REAL drift legible (0.003)
     if (v < 10) { return v.toFixed(2); }
     return v.toFixed(1);
 }
 
-// Verdict → glanceable word, colour, and the one-line action a developer takes.
+// Status → glanceable word, colour, and the one-line action a developer takes.
 // The whole point of the panel: not "drift 0.42" but "here's what it means and
 // what to do". (Mirrors classifyDrift + the warnOnDivergence message.)
-const VERDICT: Record<string, { word: string; color: string; action: string }> = {
+const STATUS: Record<string, { word: string; color: string; action: string }> = {
     matched:   { word: "✓ matched",   color: "#6c9", action: "" },
     jitter:    { word: "~ jitter",    color: "#dc7", action: "transient spikes (packet loss / reorder) — raise smoothing or ignore; not a bug" },
     diverging: { word: "✗ diverging", color: "#e66", action: "client/server sim disagree — check dt · shared step · constants · skipped inputs" },
@@ -523,7 +523,7 @@ function renderReconcilers(entry: PredictPanelEntry, handle: PredictDebugHandle)
 
 function buildReconcilerRow(canvasId: string): HTMLElement {
     const row = document.createElement("div");
-    // Distinct from the smoothing-profile sub-cards: a verdict-coloured LEFT
+    // Distinct from the smoothing-profile sub-cards: a status-coloured LEFT
     // accent (recoloured each refresh) marks this as the prediction-health card,
     // not another smoothing profile.
     row.style.cssText =
@@ -533,7 +533,7 @@ function buildReconcilerRow(canvasId: string): HTMLElement {
     row.innerHTML = `
         <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
             <span data-role="rc-label" style="color:#fff;font-weight:bold"></span>
-            <span data-role="rc-verdict" style="font-weight:bold;white-space:nowrap"></span>
+            <span data-role="rc-status" style="font-weight:bold;white-space:nowrap"></span>
         </div>
         <canvas id="${canvasId}" width="${GRAPH_W}" height="${GRAPH_H}" title="drift peak over time (auto-scaled; flat when matched)" style="display:block;width:100%;height:${GRAPH_H}px"></canvas>
         <div data-role="rc-action" style="font-size:10px;line-height:1.3"></div>
@@ -549,19 +549,19 @@ function refreshReconcilerRow(row: HTMLElement, stat: ReconcilerStat, entry: Pre
     // when matched. `drawGraph` auto-scales to its own min/max, so feeding it the
     // matched-state EMA amplified float-noise into wild oscillation while the
     // numbers read "0". Pinning to 0 keeps the line flat at rest — and non-matched
-    // peaks are always ≥ the verdict floor, so they're real, not noise.
-    hist.push(stat.verdict === "matched" ? 0 : stat.peak);
+    // peaks are always ≥ the status floor, so they're real, not noise.
+    hist.push(stat.status === "matched" ? 0 : stat.peak);
     if (hist.length > GRAPH_LEN) { hist.shift(); }
 
-    const v = VERDICT[stat.verdict] ?? VERDICT.matched;
-    const sev = stat.verdict === "diverging" && stat.severity !== undefined
+    const v = STATUS[stat.status] ?? STATUS.matched;
+    const sev = stat.status === "diverging" && stat.severity !== undefined
         ? `  ${stat.severity.toFixed(1)}× tol` : "";
 
     row.style.borderLeftColor = v.color;
     row.querySelector<HTMLElement>('[data-role="rc-label"]')!.textContent = stat.label;
-    const verdictEl = row.querySelector<HTMLElement>('[data-role="rc-verdict"]')!;
-    verdictEl.style.color = v.color;
-    verdictEl.textContent = `${v.word}${sev}`;
+    const statusEl = row.querySelector<HTMLElement>('[data-role="rc-status"]')!;
+    statusEl.style.color = v.color;
+    statusEl.textContent = `${v.word}${sev}`;
 
     // Reuse the shared canvas line-graph renderer (same as bytes/messages-per-sec).
     drawGraph(canvasId, hist, v.color);

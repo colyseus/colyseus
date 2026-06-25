@@ -24,3 +24,15 @@ dump.rdb
 # drizzle-kit generated migrations land here when developers run db:generate
 # locally; consumers commit their own migration folders into their own repos.
 packages/database/drizzle/
+
+# Local scratch notes, WIP design briefs, porting drafts, benchmarks —
+# personal working files, not part of the tracked source.
+/benchmark/
+/TODO/
+/PORTING/
+/NENGI.md
+/SESSION.md
+/RELEASE.txt
+/SCHEMA.md
+/TODO_0.18.md
+/test.sh

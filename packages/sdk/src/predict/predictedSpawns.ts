@@ -39,6 +39,7 @@
  * subscribe function and drive `tick`/`prune` yourself.
  */
 import { DEFAULT_TTL_POLICY } from "./predictedEvents.ts";
+import { refIdOf } from "./schema.ts";
 
 /**
  * Minimal clock shape consumed by the store — a strict subset of
@@ -60,8 +61,17 @@ export interface PredictedSpawnsClock {
  *   - predicate: match the first pending local for which it returns true —
  *     e.g. `(local, server) => Math.abs(server.spawnTime - local.spawnTime) <
  *     TOL`. Robust to out-of-order without any extra wire field.
+ *   - `"refId"`: exact correlation by the schema `refId` the server echoed via
+ *     `ctx.resolve(entity)` (delivered to {@link PredictedSpawns.bindServerRef}
+ *     by an accepted `predict.action`). Owned adds wait for their binding, so
+ *     it's robust to out-of-order verdict/`onAdd` with zero broadcast bytes.
+ *     Use it when every owned spawn goes through `predict.action` + `ctx.resolve`.
+ *
+ * An exact refId binding always takes priority in `"fifo"`/predicate modes too
+ * (a free upgrade); `"refId"` additionally *defers* unbound owned adds rather
+ * than guessing by order.
  */
-export type SpawnCorrelation<S, L> = "fifo" | ((local: L, server: S) => boolean);
+export type SpawnCorrelation<S, L> = "fifo" | "refId" | ((local: L, server: S) => boolean);
 
 /** Options for {@link PredictedSpawns}. `S` is the server element type; `L` the
  *  predicted-local shape (defaults to `Partial<S>` — annotate a callback param
@@ -139,8 +149,15 @@ export interface SpawnHandle<L = unknown, D = undefined> {
     readonly local: L;
     /** This entry's render scratch (same object as `entry.data`). */
     readonly data: D;
-    /** Drop this prediction immediately (e.g. a local cancel before any reply). */
+    /** Drop this prediction (e.g. a local cancel, or a `predict.action` rollback).
+     *  No-op once the entry has been confirmed by its authoritative `onAdd`, so a
+     *  late/duplicate rollback can't nuke a legitimate entity. */
     cancel(): void;
+    /** Mark the action accepted: exempt the still-pending entry from TTL eviction
+     *  (its authoritative patch may land a tick after the verdict), and — when a
+     *  `ref` is given (the server's `ctx.resolve(entity)` echo) — bind it for exact
+     *  refId handoff at `onAdd`. Driven by `predict.action`'s accept verdict. */
+    accept(ref?: number): void;
 }
 
 /** Internal entry — the live object reused across handoff. Carries `at` for
@@ -152,6 +169,9 @@ interface InternalEntry<S, L, D> {
     state: "pending" | "confirmed";
     /** Spawn time (`serverNow`) — undefined for entries with no prediction. */
     at: number | undefined;
+    /** Set by `accept()` — a confirmed-but-slow spawn exempt from TTL eviction
+     *  while its authoritative `onAdd` is still in flight. */
+    accepted: boolean;
     data: D;
 }
 
@@ -167,6 +187,14 @@ export class PredictedSpawns<S = unknown, L = Partial<S>, D = undefined> {
     private byId = new Map<number, InternalEntry<S, L, D>>();
     /** Secondary index: authoritative instance → entry, for `onRemove`. */
     private byServer = new Map<S, InternalEntry<S, L, D>>();
+    /** refId → pending local id, set by {@link bindServerRef} (an accepted
+     *  action's `ctx.resolve(entity)` echo). Checked first in `handleAdd` for
+     *  exact correlation; consumed on match. */
+    private refBindings = new Map<number, number>();
+    /** refId → owned server entity whose `onAdd` arrived before its binding
+     *  (out-of-order). Only populated in `"refId"` correlation mode; drained by
+     *  {@link bindServerRef}. */
+    private unboundByRef = new Map<number, S>();
 
     private nextId = 1;
     private lastTickAt: number | undefined;
@@ -211,14 +239,42 @@ export class PredictedSpawns<S = unknown, L = Partial<S>, D = undefined> {
     spawn(local: L): SpawnHandle<L, D> {
         const id = this.nextId++;
         const data = this.makeData();
-        const entry: InternalEntry<S, L, D> = { id, server: undefined, local, state: "pending", at: this.now(), data };
+        const entry: InternalEntry<S, L, D> = { id, server: undefined, local, state: "pending", at: this.now(), accepted: false, data };
         this.byId.set(id, entry);
         return {
             id,
             local,
             data,
-            cancel: () => { this.byId.delete(id); },
+            // Pending-safe: a confirmed entry is owned by the authoritative entity,
+            // so a late rollback must not delete it.
+            cancel: () => {
+                const e = this.byId.get(id);
+                if (e && e.state === "pending") { this.byId.delete(id); }
+            },
+            accept: (ref?: number) => {
+                const e = this.byId.get(id);
+                if (e) { e.accepted = true; }
+                if (ref !== undefined) { this.bindServerRef(id, ref); }
+            },
         };
+    }
+
+    /**
+     * Bind a pending local to the authoritative entity's schema `refId` (the
+     * private echo from an accepted `predict.action` whose handler called
+     * `ctx.resolve(entity)`). If that entity's `onAdd` already arrived
+     * out-of-order, correlate immediately; otherwise record the binding for
+     * `handleAdd` to consume. Idempotent for a gone/confirmed local.
+     */
+    bindServerRef(localId: number, refId: number): void {
+        const server = this.unboundByRef.get(refId);
+        if (server !== undefined) {
+            this.unboundByRef.delete(refId);
+            const entry = this.byId.get(localId);
+            if (entry && entry.state === "pending") { this.confirmEntry(entry, server); }
+            return;
+        }
+        this.refBindings.set(refId, localId);
     }
 
     private handleAdd = (server: S, _key: string | number): void => {
@@ -226,33 +282,67 @@ export class PredictedSpawns<S = unknown, L = Partial<S>, D = undefined> {
         // + a later op); ignore the second sighting.
         if (this.byServer.has(server)) { return; }
 
+        const ref = refIdOf(server as object);
+
+        // 1. Exact refId binding (from an accepted action's ctx.resolve echo).
+        //    Takes priority in every correlation mode.
+        if (ref !== undefined) {
+            const localId = this.refBindings.get(ref);
+            if (localId !== undefined) {
+                this.refBindings.delete(ref);
+                const entry = this.byId.get(localId);
+                if (entry && entry.state === "pending") { this.confirmEntry(entry, server); return; }
+                // bound local already gone (cancelled) → fall through to foreign.
+            }
+        }
+
+        // 2. "refId" mode: an owned add with no binding yet is deferred (the
+        //    verdict is still in flight) for exact, order-independent correlation.
+        if (this.correlate === "refId" && this.isOwned(server)) {
+            if (ref !== undefined) { this.unboundByRef.set(ref, server); }
+            return;
+        }
+
+        // 3. fifo / predicate, or a foreign (server-only) entity.
         const matched = this.isOwned(server) ? this.takeMatch(server) : undefined;
         if (matched) {
-            matched.server = server;
-            matched.state = "confirmed";
-            this.byServer.set(server, matched);
+            this.confirmEntry(matched, server);
         } else {
             // Foreign entity, or mine-without-a-prediction (joined late / the
             // server spawned it on my behalf) — surfaced as server-only.
-            const entry: InternalEntry<S, L, D> = { id: this.nextId++, server, local: undefined, state: "confirmed", at: undefined, data: this.makeData() };
+            const entry: InternalEntry<S, L, D> = { id: this.nextId++, server, local: undefined, state: "confirmed", at: undefined, accepted: false, data: this.makeData() };
             this.byId.set(entry.id, entry);
             this.byServer.set(server, entry);
         }
     };
+
+    /** Transition a matched pending entry to confirmed in place (the live object
+     *  is reused across handoff — same `id`). */
+    private confirmEntry(entry: InternalEntry<S, L, D>, server: S): void {
+        entry.server = server;
+        entry.state = "confirmed";
+        this.byServer.set(server, entry);
+    }
 
     private handleRemove = (server: S, _key: string | number): void => {
         const entry = this.byServer.get(server);
         if (entry) {
             this.byServer.delete(server);
             this.byId.delete(entry.id);
+            return;
         }
+        // A deferred (unbound) owned entity can despawn before its binding lands.
+        const ref = refIdOf(server as object);
+        if (ref !== undefined) { this.unboundByRef.delete(ref); }
     };
 
     /** Find a pending local to pair with `server`, per the correlation
      *  strategy. The matched entry transitions in place (not removed). */
     private takeMatch(server: S): InternalEntry<S, L, D> | undefined {
         const corr = this.correlate;
-        if (corr === "fifo") {
+        // Both string modes ("fifo", and the defensive "refId" fallthrough) claim
+        // the oldest pending; "refId" is normally handled in handleAdd before here.
+        if (typeof corr !== "function") {
             for (const entry of this.byId.values()) {
                 if (entry.state === "pending") { return entry; } // oldest pending
             }
@@ -297,7 +387,9 @@ export class PredictedSpawns<S = unknown, L = Partial<S>, D = undefined> {
         const now = this.now();
         const ttl = this.ttl(this.clock?.smoothedRtt() ?? 0);
         for (const entry of this.byId.values()) {
-            if (entry.state === "pending" && entry.at !== undefined && now - entry.at > ttl) {
+            // `accepted` entries are server-confirmed and awaiting their (slightly
+            // late) authoritative patch — never a mispredict, so skip eviction.
+            if (entry.state === "pending" && !entry.accepted && entry.at !== undefined && now - entry.at > ttl) {
                 this.byId.delete(entry.id);
                 this.opts.onReject?.(entry.local as L, entry.id);
             }
@@ -323,6 +415,8 @@ export class PredictedSpawns<S = unknown, L = Partial<S>, D = undefined> {
     clear(): void {
         this.byId.clear();
         this.byServer.clear();
+        this.refBindings.clear();
+        this.unboundByRef.clear();
     }
 
     /** Detach from the collection, drop everything, and mark dead so the owning

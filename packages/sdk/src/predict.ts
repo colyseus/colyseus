@@ -32,6 +32,7 @@ export {
     type PredictMode,
     type PredictOptions,
     type PredictGetOptions,
+    type PredictActionOptions,
     type AttachConfig,
     type SmoothingOptions,
     type SmoothingConfig,
@@ -54,7 +55,7 @@ export {
 export {
     classifyDrift,
     type Drift,
-    type DriftVerdict,
+    type DriftStatus,
 } from './predict/drift.ts';
 
 export {
@@ -68,6 +69,7 @@ export {
     type PredictedEventsConfig,
     type PredictedEventsClock,
     type PredictedEventsGetOptions,
+    type PredictedEventHandle,
 } from './predict/predictedEvents.ts';
 
 export {

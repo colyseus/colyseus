@@ -43,7 +43,7 @@ export function resetDrift(d: Drift): void {
 }
 
 /** The actionable read of the rolling drift — see {@link classifyDrift}. */
-export type DriftVerdict = "matched" | "jitter" | "diverging";
+export type DriftStatus = "matched" | "jitter" | "diverging";
 
 /** Drift (world/pose units) at or below this is treated as float-noise:
  *  deterministic replay reproduces the server *exactly* (correction 0), so
@@ -52,7 +52,7 @@ export type DriftVerdict = "matched" | "jitter" | "diverging";
 const FLOAT_NOISE = 1e-3;
 
 /**
- * Turn the rolling {@link Drift} into an actionable verdict. The debug panel and
+ * Turn the rolling {@link Drift} into an actionable status. The debug panel and
  * the `warnOnDivergence` warning both classify through here, so they can never
  * disagree about what the numbers mean:
  *
@@ -70,7 +70,7 @@ const FLOAT_NOISE = 1e-3;
  * no game-specific magic number — and falls back to {@link FLOAT_NOISE} ("is it
  * ~0") when it isn't.
  */
-export function classifyDrift(d: Drift, tolerance?: number): DriftVerdict {
+export function classifyDrift(d: Drift, tolerance?: number): DriftStatus {
     const floor = tolerance !== undefined && tolerance > FLOAT_NOISE ? tolerance : FLOAT_NOISE;
     if (d.ema >= floor) { return "diverging"; }
     if (d.peak >= floor) { return "jitter"; }

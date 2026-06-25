@@ -122,9 +122,9 @@ export const getMessageBytes = {
    *
    * `requestId` is opaque — echoed back exactly as the SDK sent it so the
    * pending callback/promise can be correlated. `status` is a
-   * {@link ResponseStatus} (0 = OK, 1 = ERROR). The payload is omitted when a
-   * handler resolves with `undefined`. Returns a fresh Buffer copy for the
-   * same back-pressure reason documented on `raw` below.
+   * {@link ResponseStatus} (0 = OK, 1 = REJECTED, 2 = ERROR). The payload is
+   * omitted when a handler resolves with `undefined`. Returns a fresh Buffer copy
+   * for the same back-pressure reason documented on `raw` below.
    */
   [Protocol.ROOM_RESPONSE]: (requestId: number, status: number, message?: any): Buffer => {
     it.offset = 1;

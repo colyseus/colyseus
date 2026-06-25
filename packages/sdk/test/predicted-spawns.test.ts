@@ -1,5 +1,6 @@
 import './util';
 import { describe, test, expect, vi } from 'vitest';
+import { $refId } from '@colyseus/schema';
 import { PredictedSpawns, type SpawnEntry } from '../src/predict/predictedSpawns.ts';
 
 interface Bullet { ownerId: string; x: number; y: number; vx: number; vy: number; spawnTime: number; }
@@ -232,5 +233,124 @@ describe('PredictedSpawns', () => {
         const h = s.spawn({ x: 0, y: 0, vx: 0, vy: 0, spawnTime: 0 });
         expect(h.data).toBeUndefined();
         expect(list(s)[0].data).toBeUndefined();
+    });
+});
+
+// Stamp the schema-native refId (the global registered symbol, imported so it's
+// identical to the decoder's) onto a plain test object, exactly as the decoder
+// does on a real entity.
+const withRefId = <T extends object>(o: T, refId: number): T => {
+    (o as any)[$refId] = refId;
+    return o;
+};
+
+describe('PredictedSpawns — refId correlation (predict.action handoff)', () => {
+    test('binding before onAdd: exact handoff via the echoed refId (verdict-first, the norm)', () => {
+        const { clock } = makeClock();
+        const s = new PredictedSpawns<Bullet>({ owned: mine, correlate: 'refId' }, clock);
+        const coll = makeCollection<Bullet>();
+        s.attach(coll.subscribe);
+
+        const a = s.spawn({ ownerId: 'me', x: 0, y: 0, vx: 0, vy: 0, spawnTime: 10 });
+        const b = s.spawn({ ownerId: 'me', x: 0, y: 0, vx: 0, vy: 0, spawnTime: 20 });
+
+        // verdict arrives first (ROOM_RESPONSE precedes the next state patch): bind b ↔ refId 42
+        s.bindServerRef(b.id, 42);
+
+        // the authoritative entity (refId 42) arrives — must correlate to b, NOT fifo's oldest (a)
+        coll.add(withRefId({ ownerId: 'me', x: 5, y: 5, vx: 0, vy: 0, spawnTime: 20 }, 42));
+
+        expect(s.size).toBe(2);
+        const confirmed = list(s).find(e => e.state === 'confirmed')!;
+        expect(confirmed.id).toBe(b.id);       // exact, not the oldest
+        expect(list(s).find(e => e.id === a.id)!.state).toBe('pending');
+    });
+
+    test('onAdd before binding: deferred, then correlated out-of-order', () => {
+        const { clock } = makeClock();
+        const s = new PredictedSpawns<Bullet>({ owned: mine, correlate: 'refId' }, clock);
+        const coll = makeCollection<Bullet>();
+        s.attach(coll.subscribe);
+
+        const a = s.spawn({ ownerId: 'me', x: 0, y: 0, vx: 0, vy: 0, spawnTime: 10 });
+
+        // the entity ADD arrives before its verdict — must be held, NOT fifo-matched
+        coll.add(withRefId({ ownerId: 'me', x: 5, y: 5, vx: 0, vy: 0, spawnTime: 10 }, 7));
+        expect(s.size).toBe(1);
+        expect(list(s)[0].state).toBe('pending');   // a still pending, server deferred
+
+        // the verdict lands → exact correlation
+        s.bindServerRef(a.id, 7);
+        const confirmed = list(s).find(e => e.state === 'confirmed')!;
+        expect(confirmed.id).toBe(a.id);
+        expect(confirmed.server).toBeDefined();
+    });
+
+    test('refId binding takes priority even in fifo mode', () => {
+        const { clock } = makeClock();
+        const s = new PredictedSpawns<Bullet>({ owned: mine, correlate: 'fifo' }, clock);
+        const coll = makeCollection<Bullet>();
+        s.attach(coll.subscribe);
+
+        const a = s.spawn({ ownerId: 'me', x: 0, y: 0, vx: 0, vy: 0, spawnTime: 10 }); // oldest
+        const b = s.spawn({ ownerId: 'me', x: 0, y: 0, vx: 0, vy: 0, spawnTime: 20 });
+        s.bindServerRef(b.id, 99);
+
+        coll.add(withRefId({ ownerId: 'me', x: 5, y: 5, vx: 0, vy: 0, spawnTime: 20 }, 99));
+        const confirmed = list(s).find(e => e.state === 'confirmed')!;
+        expect(confirmed.id).toBe(b.id);       // binding beats fifo's oldest (a)
+    });
+
+    test('accept() disarms the mispredict-TTL while the authoritative patch is in flight', () => {
+        const onReject = vi.fn();
+        const { clock, advance } = makeClock();
+        const s = new PredictedSpawns<Bullet>({ owned: mine, correlate: 'refId', onReject }, clock);
+        const coll = makeCollection<Bullet>();
+        s.attach(coll.subscribe);
+
+        const h = s.spawn({ ownerId: 'me', x: 0, y: 0, vx: 0, vy: 0, spawnTime: 0 });
+        h.accept(55);                          // server accepted (+bound refId 55), onAdd not yet here
+
+        advance(5000);                         // way past the 600ms TTL
+        s.prune();
+        expect(s.alive(h.id)).toBe(true);      // accepted ⇒ never pruned
+        expect(onReject).not.toHaveBeenCalled();
+
+        // the slow authoritative entity finally arrives and correlates
+        coll.add(withRefId({ ownerId: 'me', x: 9, y: 9, vx: 0, vy: 0, spawnTime: 0 }, 55));
+        const confirmed = list(s).find(e => e.state === 'confirmed')!;
+        expect(confirmed.id).toBe(h.id);
+    });
+
+    test('cancel() is pending-safe — a late rollback cannot nuke a confirmed entity', () => {
+        const { clock } = makeClock();
+        const s = new PredictedSpawns<Bullet>({ owned: mine, correlate: 'fifo' }, clock);
+        const coll = makeCollection<Bullet>();
+        s.attach(coll.subscribe);
+
+        const h = s.spawn({ ownerId: 'me', x: 0, y: 0, vx: 0, vy: 0, spawnTime: 0 });
+        coll.add({ ownerId: 'me', x: 5, y: 5, vx: 0, vy: 0, spawnTime: 0 }); // confirms via fifo
+        expect(list(s)[0].state).toBe('confirmed');
+
+        h.cancel();                            // a late/duplicate rollback
+        expect(s.alive(h.id)).toBe(true);      // confirmed entity survives
+        expect(list(s)[0].state).toBe('confirmed');
+    });
+
+    test('despawn of a deferred (unbound) entity is cleaned up', () => {
+        const { clock } = makeClock();
+        const s = new PredictedSpawns<Bullet>({ owned: mine, correlate: 'refId' }, clock);
+        const coll = makeCollection<Bullet>();
+        s.attach(coll.subscribe);
+
+        s.spawn({ ownerId: 'me', x: 0, y: 0, vx: 0, vy: 0, spawnTime: 0 });
+        const server = withRefId({ ownerId: 'me', x: 5, y: 5, vx: 0, vy: 0, spawnTime: 0 }, 13);
+        coll.add(server);                      // deferred (no binding yet)
+        coll.remove(server);                   // despawns before binding
+
+        // a late binding for the gone refId must not crash / mis-correlate
+        s.bindServerRef(1, 13);
+        expect(s.alive(1)).toBe(true);         // local 1 still pending (no server)
+        expect(list(s).find(e => e.id === 1)!.state).toBe('pending');
     });
 });

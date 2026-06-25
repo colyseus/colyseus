@@ -31,6 +31,11 @@ export interface PredictedEventsConfig {
      *  a dynamic policy (e.g. `() => Math.max(rtt * 2, 600)`). Re-evaluated
      *  each `prune()` call so RTT-derived policies stay current. */
     ttlMs?: number | (() => number);
+    /** Invoked when a prediction is dropped as a mispredict — by {@link
+     *  PredictedEvents.reject} (explicit) or by {@link PredictedEvents.prune}
+     *  (TTL expiry). NOT fired by `confirm` (correct) or `cancel` (deliberate
+     *  local undo). The render layer reads this to learn an event was undone. */
+    onReject?: (key: any) => void;
 }
 
 /**
@@ -57,11 +62,31 @@ export interface PredictedEventsClock {
 export const DEFAULT_TTL_POLICY = (rtt: number): number => Math.max(rtt * 2, 600);
 
 /** Options for the room-aware factory {@link PredictedEvents.get}. */
-export interface PredictedEventsGetOptions {
+export interface PredictedEventsGetOptions<K = string> {
     /** Eviction window. Number for a static TTL; function receives the current
      *  RTT (from `room.clock.smoothedRtt()`) and returns the TTL in ms.
      *  Defaults to {@link DEFAULT_TTL_POLICY}. */
     ttlMs?: number | ((rtt: number) => number);
+    /** See {@link PredictedEventsConfig.onReject}. */
+    onReject?: (key: K) => void;
+}
+
+/**
+ * Handle returned by {@link PredictedEvents.predict} — the discrete-event
+ * counterpart to {@link import('./predictedSpawns.ts').SpawnHandle}. Lets
+ * `predict.action(...)` roll back ({@link cancel}) or protect ({@link accept})
+ * an optimistic event by its verdict, without the caller tracking the key.
+ */
+export interface PredictedEventHandle<K = string> {
+    /** The predicted key. */
+    readonly key: K;
+    /** Drop the prediction now (rollback). No `onReject` — a deliberate undo. */
+    cancel(): void;
+    /** Server-confirmed: keep the predicted effect but exempt it from TTL
+     *  eviction. Await the authoritative schema change, then call {@link
+     *  PredictedEvents.confirm}. (The `ref` arg is ignored — events have no
+     *  spawn identity; it's accepted so the handle is uniform with spawns.) */
+    accept(ref?: number): void;
 }
 
 export class PredictedEvents<K = string> {
@@ -79,14 +104,18 @@ export class PredictedEvents<K = string> {
      */
     static get<K = string>(
         room: { clock?: PredictedEventsClock | null },
-        opts: PredictedEventsGetOptions = {},
+        opts: PredictedEventsGetOptions<K> = {},
     ): PredictedEvents<K> {
         const pe = new PredictedEvents<K>();
         pe.configure(buildClockConfig(room.clock ?? null, opts.ttlMs ?? DEFAULT_TTL_POLICY));
+        if (opts.onReject) { pe.configure({ onReject: opts.onReject as (key: any) => void }); }
         return pe;
     }
 
     private entries = new Map<K, number>();
+    /** Keys marked server-confirmed via a handle's `accept()` — exempt from TTL
+     *  eviction while the authoritative schema change is still in flight. */
+    private accepted = new Set<K>();
     private cfg: PredictedEventsConfig = {};
 
     /** Bind/override default providers for `predict()` and `prune()`. Call
@@ -97,9 +126,15 @@ export class PredictedEvents<K = string> {
     }
 
     /** Record an optimistic prediction. `at` defaults to the configured
-     *  `now()` provider, falling back to `performance.now()`. */
-    predict(key: K, at?: number): void {
+     *  `now()` provider, falling back to `performance.now()`. Returns a handle so
+     *  `predict.action(...)` can roll it back / protect it by the server verdict. */
+    predict(key: K, at?: number): PredictedEventHandle<K> {
         this.entries.set(key, at ?? this.cfg.now?.() ?? performance.now());
+        return {
+            key,
+            cancel: () => { this.entries.delete(key); this.accepted.delete(key); },
+            accept: () => { if (this.entries.has(key)) { this.accepted.add(key); } },
+        };
     }
 
     /** Is there an unconfirmed prediction for this key? */
@@ -110,6 +145,16 @@ export class PredictedEvents<K = string> {
     /** The server confirmed the prediction (or the caller wants to drop it). */
     confirm(key: K): void {
         this.entries.delete(key);
+        this.accepted.delete(key);
+    }
+
+    /** The server overruled this prediction — drop it now and fire `onReject`
+     *  (immediate mispredict, vs `confirm`'s silent correct-prediction drop). */
+    reject(key: K): void {
+        if (this.entries.delete(key)) {
+            this.accepted.delete(key);
+            this.cfg.onReject?.(key);
+        }
     }
 
     /** Drop entries older than `ttlMs` — they're mispredictions the server
@@ -120,13 +165,18 @@ export class PredictedEvents<K = string> {
         const policy = this.cfg.ttlMs;
         const ttl = ttlMs ?? (typeof policy === "function" ? policy() : policy) ?? Infinity;
         for (const [k, at] of this.entries) {
-            if (t - at > ttl) this.entries.delete(k);
+            if (this.accepted.has(k)) { continue; } // server-confirmed — exempt from TTL
+            if (t - at > ttl) {
+                this.entries.delete(k);
+                this.cfg.onReject?.(k);
+            }
         }
     }
 
     /** Drop everything. */
     clear(): void {
         this.entries.clear();
+        this.accepted.clear();
     }
 
     get size(): number {
@@ -141,6 +191,7 @@ export class PredictedEvents<K = string> {
     dispose(): void {
         this.dead = true;
         this.entries.clear();
+        this.accepted.clear();
     }
 }
 

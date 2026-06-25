@@ -61,12 +61,16 @@
  */
 
 import { Callbacks, MapSchema, ArraySchema, SetSchema, type Data } from "@colyseus/schema";
+import type {
+    ExtractRoomMessages, ExtractMessageType, ExtractRejectReason, NormalizeRoomType,
+} from "@colyseus/shared-types";
 import { PredictedEvents, type PredictedEventsGetOptions } from "./predictedEvents.ts";
 import { PredictedSpawns, type PredictedSpawnsOptions } from "./predictedSpawns.ts";
 import { Reconciler, type ReconcilerOptions } from "./reconciler.ts";
 import { SimReconciler, type SimReconcilerOptions } from "./simReconciler.ts";
 import { InputHandleImpl, type InputHandle } from "../input/InputHandle.ts";
-import { classifyDrift, type Drift, type DriftVerdict } from "./drift.ts";
+import type { Room } from "../Room.ts";
+import { classifyDrift, type Drift, type DriftStatus } from "./drift.ts";
 import { NULL_CLOCK, type RoomClockLike } from "../RoomClock.ts";
 import {
     $VALUES,
@@ -575,7 +579,7 @@ export interface ReconcilerStat {
     /** Display label (index-based — most games drive a single reconciler). */
     readonly label: string;
     /** The actionable read: matched / jitter / diverging (see classifyDrift). */
-    readonly verdict: DriftVerdict;
+    readonly status: DriftStatus;
     /** `ema / tolerance` when a `warnOnDivergence` tolerance is set — how far past
      *  the dev's own threshold the persistent drift sits. `undefined` otherwise. */
     readonly severity?: number;
@@ -653,6 +657,121 @@ interface ColyseusDebugRegistry {
 
 function getDebugRegistry(): ColyseusDebugRegistry | undefined {
     return (globalThis as { __colyseusDebug?: ColyseusDebugRegistry }).__colyseusDebug;
+}
+
+// -----------------------------------------------------------------------------
+// predict.action — optimistic discrete actions with server-driven rollback
+// -----------------------------------------------------------------------------
+
+/** The cancelable/acceptable handle `predict()` returns — what {@link
+ *  Predict.action} rolls back or accepts by the server outcome. {@link
+ *  import('./predictedSpawns.ts').SpawnHandle} and {@link
+ *  import('./predictedEvents.ts').PredictedEventHandle} both satisfy it; a `void`
+ *  (effect-less) handle is tolerated via optional chaining. */
+interface ActionHandleLike {
+    cancel?(): void;
+    accept?(ref?: number): void;
+}
+
+/** Options for {@link Predict.action}. */
+export interface PredictActionOptions<Payload, Reason, H> {
+    /** Runs immediately at `fire()` for instant local feedback. Returns a
+     *  cancelable handle (e.g. `bullets.spawn(...)` / `events.predict(...)`), or
+     *  `void` for an effect-less action (a cosmetic emote the server validates). */
+    predict: (payload: Payload) => H;
+    /** Custom undo on REJECTED/ERROR. Absent → the handle's `cancel()`. The fast
+     *  outcome is preserved either way (request/response always replies). */
+    rollback?: (handle: H, reason: Reason) => void;
+    /** Standalone transport delivery. Defaults to `"reliable"`. */
+    mode?: "reliable" | "unreliable";
+}
+
+interface ActionEntry {
+    room: Room<any>;
+    handle: any;
+    rollback?: (handle: any, reason: any) => void;
+    id: number;
+    at: number;
+    applied: boolean;
+}
+
+/** GC backstop (ms floor) for an action whose outcome was lost (unreliable). The
+ *  underlying store's mispredict-TTL is the real cleanup; this only frees the
+ *  outcome registration so the pending map can't grow unbounded. */
+const ACTION_OUTCOME_GC_MS = 1500;
+
+/** Outcome of a `predict.action` dispatch, derived from the server's reply.
+ *  `ok` = resolved (`ref` = the resolved entity's refId, for a predicted-spawn
+ *  handoff). `!ok` = rollback: `reason` is the raw typed reject reason or the
+ *  sanitized fault payload; `faulted` flags a server fault (handler threw / no
+ *  handler) vs a deliberate `ctx.reject`. */
+interface ActionOutcome {
+    ok: boolean;
+    ref?: number;
+    reason?: any;
+    faulted?: boolean;
+}
+
+/** Map a decoded room reply `(ok, payload, faulted)` to an {@link ActionOutcome}. */
+function replyToOutcome(ok: boolean, payload: any, faulted: boolean): ActionOutcome {
+    return ok
+        ? { ok: true, ref: payload?.ref }
+        : { ok: false, reason: payload, faulted };
+}
+
+/**
+ * Tracks in-flight {@link Predict.action} dispatches and applies the server
+ * outcome: resolve → `handle.accept(ref)` (disarm the store's mispredict-TTL +
+ * bind the spawn refId for handoff), reject/fault → `rollback(handle, reason)`
+ * (default `handle.cancel()`). All transitions are idempotent. Pruned by the
+ * owning Predict's `tick`.
+ */
+class ActionManager {
+    private pending = new Set<ActionEntry>();
+    private clock: RoomClockLike | undefined;
+
+    constructor(clock: RoomClockLike | undefined) {
+        this.clock = clock;
+    }
+
+    track(id: number, room: Room<any>, handle: any, rollback?: (handle: any, reason: any) => void): ActionEntry {
+        const entry: ActionEntry = { room, handle, rollback, id, at: this.now(), applied: false };
+        this.pending.add(entry);
+        return entry;
+    }
+
+    apply(entry: ActionEntry, outcome: ActionOutcome): void {
+        if (entry.applied || !this.pending.has(entry)) { return; } // idempotent
+        entry.applied = true;
+        this.pending.delete(entry);
+        const handle = entry.handle as ActionHandleLike | undefined;
+        if (outcome.ok) {
+            handle?.accept?.(outcome.ref);
+        } else if (entry.rollback) {
+            entry.rollback(entry.handle, outcome.reason);
+        } else {
+            handle?.cancel?.();
+        }
+    }
+
+    /** Free mappings whose outcome was lost (unreliable). No rollback fired here —
+     *  the store's own mispredict-TTL governs the handle (spawns/events), and a
+     *  `void` handle has nothing to undo; this just frees the registration. */
+    prune(): void {
+        if (this.pending.size === 0) { return; }
+        const now = this.now();
+        const ttl = Math.max((this.clock?.smoothedRtt?.() ?? 0) * 4, ACTION_OUTCOME_GC_MS);
+        for (const entry of this.pending) {
+            if (now - entry.at > ttl) {
+                this.pending.delete(entry);
+                entry.room.cancelRequest(entry.id);
+            }
+        }
+    }
+
+    private now(): number {
+        return this.clock?.serverNow?.() ?? performance.now();
+    }
 }
 
 let __predictAutoId = 0;
@@ -768,6 +887,10 @@ export class Predict<TState = any> {
      * a `dead` child is dropped on the next tick.
      */
     private driven: Array<{ tick?(now: number): void; prune?(): void; dead?: boolean }> = [];
+
+    /** Lazily created on the first {@link action} call — one per Predict, shared
+     *  across action types; pruned by {@link tick}. */
+    private actionManager?: ActionManager;
 
     private constructor(room: CallbacksInput, opts: PredictGetOptions) {
         this.callbacks = Callbacks.get(room as any) as any;
@@ -898,7 +1021,7 @@ export class Predict<TState = any> {
             const tol = r.warnTolerance;
             out.push({
                 label: `reconciler #${i++}`,
-                verdict: classifyDrift(r.drift, tol),
+                status: classifyDrift(r.drift, tol),
                 severity: tol !== undefined && tol > 0 ? r.drift.ema / tol : undefined,
                 ema: r.drift.ema,
                 peak: r.drift.peak,
@@ -1395,7 +1518,7 @@ export class Predict<TState = any> {
         // IS serverNow — which is exactly what the input prefix stamps as
         // reckonTime. Any extra lead here desyncs display from stamp and the
         // server's lag-comp reads mis-aim by lead × velocity (enough to flip
-        // knife-edge hit verdicts). Override `forwardMs` for a different
+        // knife-edge hit calls). Override `forwardMs` for a different
         // horizon (e.g. a collision read wanting extra look-ahead).
         const smoothing = opts.smoothing ?? 20;
         const forwardMs = opts.forwardMs ?? (clock
@@ -1807,7 +1930,7 @@ export class Predict<TState = any> {
      * The returned store is auto-pruned by this Predict's {@link tick} each
      * frame — no separate `prune()` call needed.
      */
-    events<K = string>(opts: PredictedEventsGetOptions = {}): PredictedEvents<K> {
+    events<K = string>(opts: PredictedEventsGetOptions<K> = {}): PredictedEvents<K> {
         const store = PredictedEvents.get<K>({ clock: this.clock }, opts);
         this.driven.push(store as { prune?(): void });
         return store;
@@ -1860,6 +1983,70 @@ export class Predict<TState = any> {
         });
         this.driven.push(store as { tick?(now: number): void; prune?(): void; dead?: boolean });
         return store;
+    }
+
+    /**
+     * Optimistic discrete action with server-driven rollback. `predict` runs
+     * immediately at `fire()` for instant local feedback; the server's outcome on
+     * the matching `messages` handler then ACCEPTS (disarming the mispredict-TTL,
+     * and — when the handler called `ctx.resolve(entity)` — correlating a
+     * predicted spawn by the privately-echoed `refId`) or ROLLS BACK immediately
+     * on REJECTED/ERROR, instead of waiting ~2×RTT for a TTL to expire.
+     *
+     * `room` is the explicit type source: `payload` is inferred from the named
+     * `messages` handler and the `rollback` `reason` from its `ctx.reject(...)`
+     * returns. The returned `fire(payload)` predicts + sends per call.
+     *
+     * ```ts
+     * const bullets = predict.spawns("bullets", {
+     *   correlate: "refId",                       // exact handoff via the echoed refId
+     *   owned: b => b.ownerId === room.sessionId,
+     * });
+     * const fire = predict.action(room, "fire", {
+     *   predict: (p) => bullets.spawn({ x: p.x, y: p.y }),   // p inferred from messages.fire
+     *   // rollback?: (h, reason) => …,                       // optional — default is h.cancel()
+     * });
+     * fire({ x, y });                                         // predicts NOW, sends, awaits the outcome
+     * ```
+     *
+     * Standalone transport only (reuses the request/response wire — no new
+     * opcode; old servers still accept). The in-frame transport is brief 19.
+     */
+    action<
+        R,
+        K extends keyof ExtractRoomMessages<NormalizeRoomType<R>>,
+        H,
+    >(
+        room: Room<R>,
+        type: K,
+        opts: PredictActionOptions<
+            ExtractMessageType<ExtractRoomMessages<NormalizeRoomType<R>>[K]>,
+            ExtractRejectReason<ExtractRoomMessages<NormalizeRoomType<R>>[K]>,
+            H
+        >,
+    ): (payload: ExtractMessageType<ExtractRoomMessages<NormalizeRoomType<R>>[K]>) => void {
+        const manager = this.ensureActionManager();
+        const mode = opts.mode;
+        return (payload) => {
+            const handle = opts.predict(payload);
+            // `entry` is assigned synchronously below before any outcome can arrive
+            // (outcomes ride a future network message), so the callback sees it.
+            let entry: ActionEntry | undefined;
+            const id = room.sendRequest(type as string | number, payload, { mode }, (ok, replyPayload, faulted) => {
+                if (entry !== undefined) { manager.apply(entry, replyToOutcome(ok, replyPayload, faulted)); }
+            });
+            // id < 0 ⇒ not transmitted (unreliable + offline): the optimistic
+            // predict still ran; the store's mispredict-TTL is the backstop.
+            if (id >= 0) { entry = manager.track(id, room as Room<any>, handle, opts.rollback as any); }
+        };
+    }
+
+    private ensureActionManager(): ActionManager {
+        if (this.actionManager === undefined) {
+            this.actionManager = new ActionManager(this.clock);
+            this.driven.push(this.actionManager as { prune?(): void });
+        }
+        return this.actionManager;
     }
 
     /**
@@ -1969,7 +2156,7 @@ export class Predict<TState = any> {
      * RENDERING. The offset exists only to hide snapshot-rebase pops on screen;
      * feeding it into a hit test makes the client judge an overlap against a
      * position a few cm off the physical prediction, which flips knife-edge
-     * stomp/hit verdicts vs the server (the server reads the exact timeline, no
+     * stomp/hit calls vs the server (the server reads the exact timeline, no
      * offset). For every non-reckon field this equals {@link value}.
      */
     valueRaw<T extends object>(instance: T, field: NumericKeys<T>): number {
@@ -1999,8 +2186,8 @@ export class Predict<TState = any> {
      * `valueAt(e, f, serverNow())`.
      *
      * For client-side collision/hit prediction, sample remote entities at the
-     * input's `ctx.reckonTime` (the instant the server rewinds to) so the client
-     * verdict matches the server's lag-comp read BY CONSTRUCTION — on the live
+     * input's `ctx.reckonTime` (the instant the server rewinds to) so the client's
+     * hit call matches the server's lag-comp read BY CONSTRUCTION — on the live
      * step AND deterministically on rollback replay (same `time` per seq).
      *
      * Reckons FORWARD from the latest server snapshot to `time`: integrates the
@@ -2234,7 +2421,7 @@ export class Predict<TState = any> {
      * `out + offset`. Between snapshots the forward sim is continuous, so the
      * display moves at the target's full velocity — STEADY-STATE EXACT, no
      * systematic lag on a moving entity (an EMA chasing a mover lags it by
-     * ~v/smoothing forever — enough to flip knife-edge hit verdicts vs the
+     * ~v/smoothing forever — enough to flip knife-edge hit calls vs the
      * server, which always reads the exact timeline). When a new SNAPSHOT
      * rebases the sim and the trajectory jumps (a real misprediction), the
      * discontinuity is captured into `offset` and decays out — the pop-hiding

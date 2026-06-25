@@ -93,6 +93,7 @@ describe("Server", () => {
         const LATENCY = 300;
         const HALF_LATENCY = LATENCY / 2; // that's how simulateLatency works
         const timeout = 30;
+        const TOLERANCE = 5; // setTimeout can fire a hair early under load
 
         let startedAt = 0;
         let receivedOnServerAt = 0;
@@ -101,7 +102,7 @@ describe("Server", () => {
         let elapsedTimeForRequest = 0;
         let elapsedTimeForResponse = 0;
 
-        matchMaker.defineRoomType('onmessage', class _ extends Room {
+        matchMaker.defineRoomType('onmessage_recv', class _ extends Room {
           onCreate() {
             this.onMessage("request", (client) => {
               receivedOnServerAt = Date.now();
@@ -112,7 +113,7 @@ describe("Server", () => {
 
         server.simulateLatency(LATENCY);
 
-        const connection = await client.joinOrCreate('onmessage');
+        const connection = await client.joinOrCreate('onmessage_recv');
         connection.onMessage('response', () => {
           receivedOnClientAt = Date.now();
           running.resolve(true);
@@ -126,10 +127,10 @@ describe("Server", () => {
         elapsedTimeForRequest = receivedOnServerAt - startedAt;
         elapsedTimeForResponse = receivedOnClientAt - receivedOnServerAt;
 
-        assert.ok(elapsedTimeForRequest >= HALF_LATENCY, `latency for outgoing messages should be at least ${HALF_LATENCY}ms, got: ${elapsedTimeForRequest}ms`);
+        assert.ok(elapsedTimeForRequest >= HALF_LATENCY - TOLERANCE, `latency for outgoing messages should be at least ${HALF_LATENCY}ms, got: ${elapsedTimeForRequest}ms`);
         assert.ok(elapsedTimeForRequest < (HALF_LATENCY + timeout), `latency for outgoing messages should be at most ${HALF_LATENCY + timeout}ms, got: ${elapsedTimeForRequest}ms`);
 
-        assert.ok(elapsedTimeForResponse >= HALF_LATENCY, `latency for incoming messages should be at least ${HALF_LATENCY}ms, got: ${elapsedTimeForResponse}ms`);
+        assert.ok(elapsedTimeForResponse >= HALF_LATENCY - TOLERANCE, `latency for incoming messages should be at least ${HALF_LATENCY}ms, got: ${elapsedTimeForResponse}ms`);
         assert.ok(elapsedTimeForResponse < (HALF_LATENCY + timeout), `latency for incoming messages should be at most ${HALF_LATENCY + timeout}ms, got: ${elapsedTimeForResponse}ms`);
 
         await connection.leave();
@@ -139,6 +140,7 @@ describe("Server", () => {
         const LATENCY = 300;
         const HALF_LATENCY = LATENCY / 2; // that's how simulateLatency works
         const timeout = 30;
+        const TOLERANCE = 5; // setTimeout can fire a hair early under load
 
         let startedAt = 0;
         let receivedOnServerAt = 0;
@@ -147,7 +149,7 @@ describe("Server", () => {
         let elapsedTimeForRequest = 0;
         let elapsedTimeForResponse = 0;
 
-        matchMaker.defineRoomType('onmessage', class _ extends Room {
+        matchMaker.defineRoomType('onmessage_latest', class _ extends Room {
           onCreate() {
             this.onMessage("request", (client) => {
               receivedOnServerAt = Date.now();
@@ -159,7 +161,7 @@ describe("Server", () => {
         server.simulateLatency(1500); // first call
         server.simulateLatency(LATENCY); // last call
 
-        const connection = await client.joinOrCreate('onmessage');
+        const connection = await client.joinOrCreate('onmessage_latest');
         connection.onMessage('response', () => {
           receivedOnClientAt = Date.now();
           running.resolve(true);
@@ -173,10 +175,10 @@ describe("Server", () => {
         elapsedTimeForRequest = receivedOnServerAt - startedAt;
         elapsedTimeForResponse = receivedOnClientAt - receivedOnServerAt;
 
-        assert.ok(elapsedTimeForRequest >= HALF_LATENCY, `latency for outgoing messages should be at least ${HALF_LATENCY}ms, got: ${elapsedTimeForRequest}ms`);
+        assert.ok(elapsedTimeForRequest >= HALF_LATENCY - TOLERANCE, `latency for outgoing messages should be at least ${HALF_LATENCY}ms, got: ${elapsedTimeForRequest}ms`);
         assert.ok(elapsedTimeForRequest < (HALF_LATENCY + timeout), `latency for outgoing messages should be at most ${HALF_LATENCY + timeout}ms, got: ${elapsedTimeForRequest}ms`);
 
-        assert.ok(elapsedTimeForResponse >= HALF_LATENCY, `latency for incoming messages should be at least ${HALF_LATENCY}ms, got: ${elapsedTimeForResponse}ms`);
+        assert.ok(elapsedTimeForResponse >= HALF_LATENCY - TOLERANCE, `latency for incoming messages should be at least ${HALF_LATENCY}ms, got: ${elapsedTimeForResponse}ms`);
         assert.ok(elapsedTimeForResponse < (HALF_LATENCY + timeout), `latency for incoming messages should be at most ${HALF_LATENCY + timeout}ms, got: ${elapsedTimeForResponse}ms`);
 
         await connection.leave();
@@ -193,7 +195,7 @@ describe("Server", () => {
         let elapsedTimeForRequest = 0;
         let elapsedTimeForResponse = 0;
 
-        matchMaker.defineRoomType('onmessage', class _ extends Room {
+        matchMaker.defineRoomType('onmessage_disable', class _ extends Room {
           onCreate() {
             this.onMessage("request", (client) => {
               receivedOnServerAt = Date.now();
@@ -205,7 +207,7 @@ describe("Server", () => {
         server.simulateLatency(LATENCY); // enable
         server.simulateLatency(0); // disable
 
-        const connection = await client.joinOrCreate('onmessage');
+        const connection = await client.joinOrCreate('onmessage_disable');
         connection.onMessage('response', () => {
           receivedOnClientAt = Date.now();
           running.resolve(true);

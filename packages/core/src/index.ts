@@ -6,9 +6,15 @@ export {
   ProtocolModifier,
   ErrorCode,
   CloseCode,
+  ResponseStatus,
   type InferState,
   type ExtractRoomMessages,
   type ExtractRoomClientMessages,
+  type MessageContext,
+  type Rejection,
+  type Resolution,
+  type ExtractRejectReason,
+  type ExtractResponseType,
 } from '@colyseus/shared-types';
 
 // Core classes

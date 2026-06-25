@@ -1,4 +1,4 @@
-import type { MapSchema, ArraySchema, SetSchema } from "@colyseus/schema";
+import { $values, type MapSchema, type ArraySchema, type SetSchema } from "@colyseus/schema";
 import { $METADATA } from "./utils/Utils.ts";
 
 const DEFAULT_MAX_REWIND_MS = 500;
@@ -8,7 +8,6 @@ const DEFAULT_MAX_REWIND_MS = 500;
 const DEFAULT_SAMPLE_INTERVAL_MS = 1000 / 60;
 
 // Hot record() path: dense `$values[index]` is ~15× faster than `inst[fieldName]`; entity symbol prop ~8× faster than a WeakMap.
-const $VALUES: symbol = Symbol.for("$values");
 /** Per-entity history, under this private symbol ON the entity. Symbol-keyed so it's
  *  invisible to Object.keys / `assign` / `clone`, and GC'd with the entity. */
 const $HISTORY = Symbol("rewind.history");
@@ -379,7 +378,7 @@ export class Rewind {
         let h: EntityHistory | undefined;
         for (let i = 0; i < arr.length; i++) { if (arr[i].groupId === g.groupId) { h = arr[i]; break; } }
         if (h === undefined) { h = this.createHistory(g, e); arr.push(h); }   // cold: once per (entity, group)
-        h.record(now, t[$VALUES] as ArrayLike<number>);
+        h.record(now, t[$values] as ArrayLike<number>);
       }
     }
   }

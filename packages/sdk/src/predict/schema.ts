@@ -9,18 +9,23 @@
 // they're resolved to `(refId, fieldId)` once at the API boundary.
 // -----------------------------------------------------------------------------
 
-const $REF_ID: symbol = Symbol.for("$refId");
+// `$refId`/`$values` are imported (not re-declared) so they stay identical to the
+// decoder's symbols; schema shares them via the process-wide Symbol Registry
+// (`Symbol.for`), so the import is one value even across duplicate installs.
+// `Symbol.metadata` is the TC39 decorator-metadata symbol, not a schema export.
+import { $refId, $values } from "@colyseus/schema";
+
 const $METADATA: symbol = (Symbol as { metadata?: symbol }).metadata ?? Symbol.for("Symbol.metadata");
 /** Schema's own SoA: a dense array of a decoded instance's field values, indexed
  *  by field index. Reading/writing it bypasses the per-field accessor and the
  *  megamorphic dynamic-key path — reckon's scratch refill + extract use it. */
-export const $VALUES: symbol = Symbol.for("$values");
+export const $VALUES = $values;
 
 /** Stable integer id the decoder assigned this instance, or undefined if it
  *  hasn't been decoded yet (attach/track called too early — see the Predictor
  *  file header). */
 export function refIdOf(instance: object): number | undefined {
-    return (instance as Record<symbol, number | undefined>)[$REF_ID];
+    return (instance as Record<symbol, number | undefined>)[$refId];
 }
 
 /** The schema metadata object: maps `name -> index` (number) and
