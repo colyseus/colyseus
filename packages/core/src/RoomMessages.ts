@@ -222,25 +222,44 @@ export class RoomMessages {
 
     const ctx = new DispatchContext(requestId);
 
-    // Promise.resolve().then normalizes sync throws + async rejections into one
-    // rejection path. With onUncaughtException set the handler is wrapped (swallows
-    // its own errors), so the request resolves undefined and the error reports there.
-    Promise.resolve().then(() => handler(client, message, ctx)).then(
-      (response) => {
-        if (ctx._outcome === OUTCOME_REJECTED) {
-          this.#replyToRequest(client, requestId, ResponseStatus.REJECTED, ctx._reason);
-        } else if (ctx._outcome === OUTCOME_RESOLVED) {
-          const ref = refIdOf(ctx._entity);
-          this.#replyToRequest(client, requestId, ResponseStatus.OK, ref !== undefined ? { ref } : undefined);
-        } else {
-          this.#replyToRequest(client, requestId, ResponseStatus.OK, response);
-        }
-      },
-      (e) => {
-        debugAndPrintError(e);
-        this.#replyToRequest(client, requestId, ResponseStatus.ERROR, toResponseError(e));
-      },
-    );
+    // Sync handlers reply in this tick with no promise machinery; only a thenable
+    // return defers to the microtask queue. A sync throw (unwrapped handler) and an
+    // async rejection both fall to the ERROR reply. With onUncaughtException set the
+    // handler is wrapped (swallows its own errors), so it never throws / its promise
+    // resolves undefined, and the error reports there.
+    let response: any;
+    try {
+      response = handler(client, message, ctx);
+      if (response !== null && typeof response === 'object' && typeof response.then === 'function') {
+        response.then(
+          (resolved: any) => this.#settleRequest(client, requestId, ctx, resolved),
+          (e: any) => {
+            debugAndPrintError(e);
+            this.#replyToRequest(client, requestId, ResponseStatus.ERROR, toResponseError(e));
+          },
+        );
+        return;
+      }
+    } catch (e: any) {
+      debugAndPrintError(e);
+      this.#replyToRequest(client, requestId, ResponseStatus.ERROR, toResponseError(e));
+      return;
+    }
+
+    this.#settleRequest(client, requestId, ctx, response);
+  }
+
+  /** Project a settled handler outcome onto a ROOM_RESPONSE reply: `ctx.reject` →
+   *  REJECTED(reason), `ctx.resolve` → OK { ref } (refId resolved here), else OK(return). */
+  #settleRequest(client: Client, requestId: number, ctx: DispatchContext, response: any): void {
+    if (ctx._outcome === OUTCOME_REJECTED) {
+      this.#replyToRequest(client, requestId, ResponseStatus.REJECTED, ctx._reason);
+    } else if (ctx._outcome === OUTCOME_RESOLVED) {
+      const ref = refIdOf(ctx._entity);
+      this.#replyToRequest(client, requestId, ResponseStatus.OK, ref !== undefined ? { ref } : undefined);
+    } else {
+      this.#replyToRequest(client, requestId, ResponseStatus.OK, response);
+    }
   }
 
   /** Dispatch a `ROOM_DATA_BYTES` frame: raw bytes routed to `_$b`-prefixed handlers. */
