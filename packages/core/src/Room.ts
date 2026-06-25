@@ -24,7 +24,7 @@ import { isDevMode } from './utils/DevMode.ts';
 import { debugAndPrintError, debugMatchMaking, debugMessage } from './Debug.ts';
 import { ServerError } from './errors/ServerError.ts';
 import { ClientState, type AuthContext, type Client, type ClientPrivate, ClientArray, type ISendOptions, type MessageArgs } from './Transport.ts';
-import { type RoomMethodName, OnAuthException, OnCreateException, OnDisposeException, OnDropException, OnJoinException, OnLeaveException, OnReconnectException, type RoomException, SimulationIntervalException, TimedEventException } from './errors/RoomExceptions.ts';
+import { type RoomMethodName, OnAuthException, OnCreateException, OnDisposeException, OnDropException, OnJoinException, OnLeaveException, OnReconnectException, type RoomException, TimestepException, TimedEventException } from './errors/RoomExceptions.ts';
 
 import { type StandardSchemaV1 } from './utils/StandardSchema.ts';
 import * as matchMaker from './MatchMaker.ts';
@@ -833,7 +833,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
 
     if (onTickCallback) {
       if (this.onUncaughtException !== undefined) {
-        onTickCallback = wrapTryCatch(onTickCallback, this.onUncaughtException.bind(this), SimulationIntervalException, 'setTimestep');
+        onTickCallback = wrapTryCatch(onTickCallback, this.onUncaughtException.bind(this), TimestepException, 'setTimestep');
       }
 
       this._simulationInterval = setInterval(() => {
@@ -925,7 +925,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
 
     let cb = step;
     if (this.onUncaughtException !== undefined) {
-      cb = wrapTryCatch(step, this.onUncaughtException.bind(this), SimulationIntervalException, 'setFixedTimestep');
+      cb = wrapTryCatch(step, this.onUncaughtException.bind(this), TimestepException, 'setFixedTimestep');
     }
 
     let acc = 0;

@@ -33,6 +33,7 @@ export {
   OnLeaveException,
   OnDisposeException,
   OnMessageException,
+  TimestepException,
   SimulationIntervalException,
   TimedEventException,
 } from './errors/RoomExceptions.ts';
