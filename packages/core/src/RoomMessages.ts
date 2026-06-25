@@ -5,7 +5,6 @@ import { CloseCode, ErrorCode, Protocol, ResponseStatus, type MessageContext } f
 import { getMessageBytes } from './Protocol.ts';
 import { createNanoEvents } from './utils/nanoevents.ts';
 import { standardValidate, type StandardSchemaV1 } from './utils/StandardSchema.ts';
-import { wrapTryCatch } from './utils/Utils.ts';
 import { isDevMode } from './utils/DevMode.ts';
 import { debugMessage, debugAndPrintError } from './Debug.ts';
 import { OnMessageException } from './errors/RoomExceptions.ts';
@@ -125,7 +124,7 @@ export class RoomMessages {
       : _callback;
 
     const removeListener = this.events.on(messageType, (this.room.onUncaughtException !== undefined)
-      ? wrapTryCatch(callback, this.room.onUncaughtException.bind(this.room), OnMessageException, 'onMessage', false, _messageType)
+      ? this.#wrapMessageHandler(callback, _messageType)
       : callback);
 
     if (validationSchema !== undefined) {
@@ -137,6 +136,46 @@ export class RoomMessages {
       removeListener();
       if (this.events.events[messageType].length === 0) {
         delete this.validators[messageType];
+      }
+    };
+  }
+
+  /**
+   * Wrap a user message handler so a sync throw or async rejection is reported to
+   * `room.onUncaughtException` as an {@link OnMessageException} carrying the correct
+   * `client` / `payload` / `type`. The handler is invoked with a different argument
+   * shape per dispatch path, so those fields are normalized here rather than relying
+   * on positional forwarding (which silently mis-mapped `type` once a context arg was
+   * added — see ROOM_DATA/ROOM_REQUEST passing `SEND_CONTEXT`/`ctx`):
+   *
+   *   - typed handler (DATA / REQUEST / BYTES): `(client, payload, ctx?)` → `type` is
+   *     the registered `_messageType`.
+   *   - wildcard `'*'` handler:                 `(client, type, payload)` → `type` is
+   *     the received message type.
+   *
+   * The error is swallowed (never rethrown) so a faulty handler can't break dispatch;
+   * the handler's return value (or promise) is passed through for the REQUEST path.
+   */
+  #wrapMessageHandler(callback: (...args: any[]) => any, registeredType: '*' | string | number) {
+    const onError = this.room.onUncaughtException!.bind(this.room);
+    const isWildcard = (registeredType === '*');
+
+    return (...args: any[]): any => {
+      const report = (e: Error) => onError(
+        new OnMessageException(
+          e, e.message,
+          args[0],                                  // client
+          isWildcard ? args[2] : args[1],           // payload
+          isWildcard ? args[1] : registeredType,    // type
+        ),
+        'onMessage',
+      );
+
+      try {
+        const result = callback(...args);
+        return (typeof result?.catch === 'function') ? result.catch(report) : result;
+      } catch (e: any) {
+        report(e);
       }
     };
   }

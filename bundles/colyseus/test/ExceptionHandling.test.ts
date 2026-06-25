@@ -447,6 +447,63 @@ describe("Exception Handling", () => {
     assert.deepStrictEqual(caught.error.payload, onMessageArgs[1]);
   });
 
+  it("request onMessage: handler throw should be caught with correct type/payload", async () => {
+    let caught: any = { error: undefined, methodName: undefined };
+
+    matchMaker.defineRoomType("my_room", class extends Room {
+      onCreate() {
+        this.onMessage("req", (_client, _message) => {
+          throw new Error("request onMessage Error");
+        });
+      }
+      onUncaughtException(error: Error, methodName: string): void {
+        caught.error = error;
+        caught.methodName = methodName;
+      }
+    });
+
+    const conn = await client.joinOrCreate("my_room", { arg0: "arg0" });
+    // onUncaughtException swallows the throw, so the request settles (OK/undefined)
+    // rather than rejecting — but the exception is still reported with the right type.
+    await conn.request("req", { n: 1 });
+    await conn.leave();
+
+    assert.ok(caught.error instanceof OnMessageException);
+    assert.strictEqual(caught.error.message, "request onMessage Error");
+    assert.strictEqual(caught.methodName, "onMessage");
+    assert.strictEqual(caught.error.type, "req");
+    assert.ok(caught.error.isType("req"));
+    assert.deepStrictEqual(caught.error.payload, { n: 1 });
+  });
+
+  it("wildcard onMessage('*'): error should be caught with the RECEIVED type/payload", async () => {
+    let caught: any = { error: undefined, methodName: undefined };
+
+    matchMaker.defineRoomType("my_room", class extends Room {
+      onCreate() {
+        // wildcard handler signature is (client, type, message)
+        this.onMessage("*", (_client, _type, _message) => {
+          throw new Error("wildcard onMessage Error");
+        });
+      }
+      onUncaughtException(error: Error, methodName: string): void {
+        caught.error = error;
+        caught.methodName = methodName;
+      }
+    });
+
+    const conn = await client.joinOrCreate("my_room", { arg0: "arg0" });
+    await conn.send("some_type", { hello: "world" });
+    await conn.leave();
+
+    assert.ok(caught.error instanceof OnMessageException);
+    assert.strictEqual(caught.error.message, "wildcard onMessage Error");
+    assert.strictEqual(caught.methodName, "onMessage");
+    assert.strictEqual(caught.error.type, "some_type"); // the received type, not '*'
+    assert.ok(caught.error.isType("some_type"));
+    assert.deepStrictEqual(caught.error.payload, { hello: "world" });
+  });
+
   it("setSimulationInterval: error should be caught", async () => {
     let caught: any = [];
 
