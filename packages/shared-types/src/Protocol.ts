@@ -1,14 +1,14 @@
 /**
- * Colyseus protocol codes occupy bits 0..6 of the leading message byte
- * (values 0..127). Bit 7 onward is reserved for {@link ProtocolModifier}
- * decorations, OR'd onto the base code at send time:
+ * Colyseus protocol codes occupy bits 0..4 of the leading message byte
+ * (values 0..31). Bits 5..7 are reserved for {@link ProtocolModifier}
+ * decorations, OR'd onto the base code at send time (composable):
  *
- *     buffer[0] = Protocol.ROOM_STATE_PATCH | ProtocolModifier.TIMED;
+ *     buffer[0] = Protocol.ROOM_INPUT_RELIABLE | ProtocolModifier.TIMED | ProtocolModifier.ACTIONS;
  *
  * Decoders strip the modifier bits before dispatching:
  *
- *     const code = buffer[0] & 0x7F;
- *     const modifiers = buffer[0] & 0x80;
+ *     const code = buffer[0] & 0x1F;
+ *     const modifiers = buffer[0] & 0xE0;
  */
 export const Protocol = {
   // Room-related (10~19)
@@ -22,7 +22,10 @@ export const Protocol = {
   ROOM_DATA_BYTES: 17,
   PING: 18,
 
-  // Input-related (19~20)
+  // Input-related (19~20). In-frame rooms ({@link InputFlags.IN_FRAME_ACTIONS})
+  // length-prefix the body so a trailing actions section can ride the packet:
+  //   reliable:   [byte, stamp?, inputLen varint, input bytes, actions?]
+  //   unreliable: [byte, ringLen varint, len|input…, actions?]
   ROOM_INPUT_RELIABLE: 19,   // [byte, ...InputEncoder.encode() bytes]               single input
   ROOM_INPUT_UNRELIABLE: 20, // [byte, len|input, len|input, ...]                    length-framed ring
 
@@ -88,14 +91,48 @@ export const ProtocolModifier = {
    * use. See {@link HandshakeSection.INPUT_OPTIONS} / {@link InputFlags}.
    */
   TIMED: 0x80,
+
+  /**
+   * The input packet carries a **trailing actions section** after a
+   * length-prefixed body — `predict.action`s riding the input frame (see
+   * {@link Protocol.ROOM_INPUT_RELIABLE}). Set per-frame, only when an action
+   * rides, and only against a server that advertised
+   * {@link InputFlags.IN_FRAME_ACTIONS}; action-less frames stay the legacy
+   * body-to-end format (this bit unset). The decoder reads the body length from
+   * the prefix, then dispatches the trailing actions tick-aligned.
+   */
+  ACTIONS: 0x40,
+
+  /**
+   * The server→client {@link Protocol.ROOM_STATE_PATCH} carries a **trailing
+   * per-recipient frames section** after a length-prefixed patch body — the
+   * mirror of {@link ACTIONS} (client→server). Each "frame" is a complete,
+   * self-contained message (its own leading opcode, e.g. a
+   * {@link Protocol.ROOM_RESPONSE} verdict or a {@link Protocol.ROOM_DATA}),
+   * coalesced into the patch so an in-frame `predict.action`'s verdict + its
+   * resulting state + the input-ack arrive in ONE frame (brief 21, Design B).
+   *
+   * Layout when set (after the optional TIMED prefix):
+   *
+   *     [code | TIMED? | FRAMES][TIMED prefix?]
+   *     [varint patchBodyLen][...schema body]
+   *     [varint frameCount]([varint frameLen][frame bytes])…
+   *
+   * The `patchBodyLen` lets the patch decoder stop before the section; the SDK
+   * then re-dispatches each frame through the ordinary per-message path. Set
+   * per-tick, only when a frame rides — action-less patches leave this bit unset
+   * and stay byte-identical (no length prefix), so the hot path pays nothing.
+   */
+  FRAMES: 0x20,
 } as const;
 export type ProtocolModifier = typeof ProtocolModifier[keyof typeof ProtocolModifier];
 
-/** Mask isolating the base protocol code (low 7 bits). */
-export const PROTOCOL_CODE_MASK = 0x7F;
+/** Mask isolating the base protocol code (low 5 bits, values 0..31). */
+export const PROTOCOL_CODE_MASK = 0x1F;
 
-/** Mask isolating modifier bits (high bit, room for 7 future flags). */
-export const PROTOCOL_MODIFIER_MASK = 0x80;
+/** Mask isolating modifier bits (high 3 bits — {@link ProtocolModifier.TIMED} +
+ *  {@link ProtocolModifier.ACTIONS} + {@link ProtocolModifier.FRAMES}). */
+export const PROTOCOL_MODIFIER_MASK = 0xE0;
 
 /**
  * Status byte of a {@link Protocol.ROOM_RESPONSE} reply, correlating to a
@@ -182,6 +219,14 @@ export const InputFlags = {
    *  `[uint32 reckonTime][uint16 renderDelta]`; alone it ships
    *  `[uint32 reckonTime]`. See {@link ProtocolModifier.TIMED}. */
   RECKON_TIME: 1 << 4,
+  /** The room reads **in-frame actions**: the input wire format is
+   *  length-prefixed (`[inputLen varint][input body]`) so a trailing actions
+   *  section can ride the same packet ({@link Protocol.ROOM_INPUT_RELIABLE} /
+   *  {@link Protocol.ROOM_INPUT_UNRELIABLE}). Advertised when the server has an
+   *  input subsystem that dispatches `predict.action`s tick-aligned. Absent ⇒
+   *  the SDK sends the legacy body-to-end format and `predict.action` falls back
+   *  to the standalone request/response transport. Carries no trailing varint. */
+  IN_FRAME_ACTIONS: 1 << 5,
 } as const;
 export type InputFlags = typeof InputFlags[keyof typeof InputFlags];
 

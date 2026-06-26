@@ -251,6 +251,26 @@ export interface ClientPrivate {
    * pattern would double-count.
    */
   _receivedInputCount?: number;
+
+  /**
+   * @internal High-water mark of the highest in-frame actionId dispatched for this
+   * client — the dup/reorder guard. Action ids are client-monotonic, so an
+   * unreliable redelivery (UDP dup) or a reordered older frame carries an id at or
+   * below this and is dropped, mirroring the input ring's monotonic seq dedup.
+   */
+  _lastActionId?: number;
+
+  /**
+   * @internal Per-client raw frames staged to ride INTO this client's next
+   * state patch — in-frame `predict.action` verdicts + per-client
+   * `afterNextPatch` messages (brief 21, Design B). Lazily allocated. Populated
+   * by {@link Room} from the after-patch queue right before each
+   * `broadcastPatch`, then drained by the serializer when it builds the client's
+   * patch frame (or flushed as standalone frames if no patch carries them this
+   * tick). Distinct from the room-shared {@link _afterNextPatchQueue}, which now
+   * holds only room-level broadcasts.
+   */
+  _pendingFrames?: Uint8Array[];
 }
 
 export class ClientArray<C extends Client = Client> extends Array<C> {

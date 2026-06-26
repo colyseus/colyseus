@@ -370,6 +370,11 @@ export class Room<T extends RoomOptions = RoomOptions> {
   private _serializer: Serializer<ExtractRoomState<T>> = noneSerializer;
   private _afterNextPatchQueue: Array<[string | number | ExtractRoomClient<T>, ArrayLike<any>]> = [];
 
+  /** Reused scratch: clients that had frames staged onto `_pendingFrames` this
+   *  patch, so the post-patch leftover-flush only scans those (not all clients).
+   *  Cleared and refilled by {@link _stagePendingClientFrames} each tick. */
+  #stagedFrameClients: Array<Client & ClientPrivate> = [];
+
   private _simulationInterval: NodeJS.Timeout;
 
   private _internalState: RoomInternalState = RoomInternalState.CREATING;
@@ -950,6 +955,9 @@ export class Room<T extends RoomOptions = RoomOptions> {
         acc -= stepMs;
         ctx.tick = tick++;
         cb(ctx);
+        // Dispatch this step's in-frame actions HERE: post-movement, tick-aligned.
+        // `hasActions` keeps movement-only rooms from touching the client list.
+        if (this._inputController?.hasActions) { this._flushAllInputActions(); }
         ran++;
       }
       if (ran === MAX_CATCHUP_STEPS) { acc = 0; } // hitch: drop backlog, don't spiral
@@ -964,6 +972,35 @@ export class Room<T extends RoomOptions = RoomOptions> {
    *  derive the wire input stamp mode (snapshot → renderTime, reckon → reckonTime). */
   _timelineMode(): { snapshot?: boolean; reckon?: boolean } | undefined {
     return this.#rewind?.timelineMode();
+  }
+
+  /** @internal Whether a simulation loop (`setFixedTimestep`/`setSimulationInterval`)
+   *  is running. {@link RoomInput} reads it to gate the in-frame-actions wire format:
+   *  a consume loop is what dispatches in-frame actions tick-aligned, so a loop-less
+   *  (`.latest`-only) room stays on the legacy format and `predict.action` falls back
+   *  to the standalone transport. */
+  _hasSimulationLoop(): boolean {
+    return this._simulationInterval !== undefined;
+  }
+
+  /** @internal Dispatch one client's consumed-but-pending in-frame actions to their
+   *  `messages` handlers (post-input). Called automatically after each
+   *  `setFixedTimestep` step and from `inputs(.get(sid)).dispatchActions()`. */
+  _flushInputActions(client: ClientPrivate): void {
+    const actions = client._inputBuffer?.takeDispatch();
+    if (actions === undefined) { return; }
+    for (let i = 0; i < actions.length; i++) {
+      this.#_messages.dispatchAction(client as Client & ClientPrivate, actions[i]);
+    }
+  }
+
+  /** @internal Flush every client's pending in-frame actions (room-wide) — the
+   *  `setFixedTimestep` auto-flush and `inputs.dispatchActions()`. */
+  _flushAllInputActions(): void {
+    const clients = this.clients;
+    for (let i = 0; i < clients.length; i++) {
+      this._flushInputActions(clients[i] as unknown as ClientPrivate);
+    }
   }
 
   /**
@@ -1284,6 +1321,12 @@ export class Room<T extends RoomOptions = RoomOptions> {
       return false;
     }
 
+    // Move per-client after-patch frames (in-frame verdicts + per-client
+    // `afterNextPatch` sends) onto `client._pendingFrames` so the serializer can
+    // ride them INTO each client's patch frame (brief 21, Design B). Room-level
+    // broadcasts stay in the queue for `_dequeueAfterPatchMessages` below.
+    this._stagePendingClientFrames();
+
     // When `defineInput()` was called, hand the serializer a fresh `sNow`
     // each tick. The per-client `lastTReceived` is read off the client at
     // encode time inside `applyPatches`.
@@ -1293,6 +1336,11 @@ export class Room<T extends RoomOptions = RoomOptions> {
       this.state,
       this._inputController !== undefined ? { sNow } : undefined,
     );
+
+    // Any staged frames the serializer didn't carry (a client that received no
+    // patch this tick — e.g. a no-change tick in a room without `defineInput()`)
+    // go out as standalone frames, never stranded.
+    this._flushLeftoverClientFrames();
 
     // Lag-comp: record the snapshot the client just received, on the broadcast
     // cadence and stamped with the SAME `sNow` the frame carries — so valueAt()
@@ -1912,6 +1960,47 @@ export class Room<T extends RoomOptions = RoomOptions> {
     ));
   }
 
+  /** Drain per-client entries out of `_afterNextPatchQueue` onto each client's
+   *  `_pendingFrames` (so they ride INTO that client's patch frame), compacting
+   *  the queue down to the room-level broadcast entries. Records which clients
+   *  were staged for the post-patch leftover-flush. */
+  private _stagePendingClientFrames() {
+    const queue = this._afterNextPatchQueue;
+    const staged = this.#stagedFrameClients;
+    staged.length = 0;
+    if (queue.length === 0) { return; }
+
+    let write = 0;
+    for (let i = 0; i < queue.length; i++) {
+      const entry = queue[i];
+      const target = entry[0];
+      if (typeof target === 'string') {
+        queue[write++] = entry; // 'broadcast' / 'broadcastBytes' — stays for the post-patch dequeue
+      } else {
+        const client = target as unknown as Client & ClientPrivate;
+        const frames = (client._pendingFrames ??= []);
+        if (frames.length === 0) { staged.push(client); } // first frame this tick → track once
+        frames.push(entry[1][0] as Uint8Array);
+      }
+    }
+    queue.length = write;
+  }
+
+  /** Send any frames the serializer left undrained on a staged client (it got no
+   *  patch this tick) as standalone frames, so a verdict/message is never
+   *  stranded until the next changed tick. */
+  private _flushLeftoverClientFrames() {
+    const staged = this.#stagedFrameClients;
+    for (let i = 0; i < staged.length; i++) {
+      const frames = staged[i]._pendingFrames;
+      if (frames !== undefined && frames.length > 0) {
+        for (let j = 0; j < frames.length; j++) { staged[i].raw(frames[j]); }
+        frames.length = 0;
+      }
+    }
+    staged.length = 0;
+  }
+
   private _dequeueAfterPatchMessages() {
     const length = this._afterNextPatchQueue.length;
 
@@ -2098,7 +2187,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
       this._inputController?.decodeReliable(client, buffer, it, modifiers);
 
     } else if (code === Protocol.ROOM_INPUT_UNRELIABLE) {
-      this._inputController?.decodeUnreliable(client, buffer);
+      this._inputController?.decodeUnreliable(client, buffer, modifiers);
 
     } else if (code === Protocol.JOIN_ROOM && client.state === ClientState.JOINING) {
       // join room has been acknowledged by the client

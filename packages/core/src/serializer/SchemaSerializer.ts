@@ -66,6 +66,73 @@ function clientProcessedInputSeq(client: Client): number {
   return (client as Client & ClientPrivate)._inputBuffer?.ackSeq ?? 0;
 }
 
+/** Worst-case width of a schema `encode.number` length/count field. We
+ *  over-reserve by this per varint field, then `subarray` to the real written
+ *  length — avoids precomputing each varint's size. */
+const MAX_NUMBER_BYTES = 9;
+
+/**
+ * Construct a per-recipient patch frame carrying a trailing per-client frames
+ * section ({@link ProtocolModifier.FRAMES}) — in-frame `predict.action` verdicts
+ * + `afterNextPatch` messages coalesced INTO the patch (brief 21, Design B):
+ *
+ *   `[code | TIMED? | FRAMES][TIMED prefix?][patchBodyLen][...body][count]([len][bytes])…`
+ *
+ * `frames` is non-empty (callers only reach here when a frame rides). Each frame
+ * is a complete, self-contained message (its own opcode) the SDK re-dispatches.
+ * One fresh, over-reserved Buffer sliced to the written length — the schema
+ * `encode.*` helpers keep the layout symmetric with the SDK's `decode.*` reader.
+ */
+function buildFramedPatch(
+  encodedBody: Uint8Array,
+  timing: PatchTimingContext | undefined,
+  client: Client,
+  frames: Uint8Array[],
+): Buffer {
+  const schemaPayload = encodedBody.subarray(1);
+  const timed = timing !== undefined;
+
+  let framesBytes = MAX_NUMBER_BYTES; // frameCount varint
+  for (let i = 0; i < frames.length; i++) framesBytes += MAX_NUMBER_BYTES + frames[i].length;
+
+  const out = Buffer.allocUnsafe(
+    1 + (timed ? TIMED_PREFIX_SIZE : 0) + MAX_NUMBER_BYTES + schemaPayload.length + framesBytes,
+  );
+  out[0] = encodedBody[0] | ProtocolModifier.FRAMES | (timed ? ProtocolModifier.TIMED : 0);
+
+  const it: Iterator = { offset: 1 };
+  if (timed) {
+    encode.uint32(out, timing!.sNow >>> 0, it);
+    encode.uint32(out, clientProcessedInputSeq(client) >>> 0, it);
+  }
+  encode.number(out, schemaPayload.length, it); // patch body length → SDK stops here
+  out.set(schemaPayload, it.offset); it.offset += schemaPayload.length;
+  encode.number(out, frames.length, it);
+  for (let i = 0; i < frames.length; i++) {
+    encode.number(out, frames[i].length, it);
+    out.set(frames[i], it.offset); it.offset += frames[i].length;
+  }
+  return out.subarray(0, it.offset) as Buffer;
+}
+
+/**
+ * Send a per-recipient patch frame, bundling any frames staged on
+ * `client._pendingFrames` INTO it (and draining them). With none pending it is
+ * byte-identical to the legacy path: a TIMED-prefixed buffer when `timing` is
+ * set, else the shared `encodedBody` passed straight through (no per-client copy).
+ */
+function sendClientFrame(client: Client, encodedBody: Uint8Array, timing?: PatchTimingContext): void {
+  const pending = (client as Client & ClientPrivate)._pendingFrames;
+  if (pending !== undefined && pending.length > 0) {
+    client.raw(buildFramedPatch(encodedBody, timing, client, pending));
+    pending.length = 0;
+  } else if (timing) {
+    client.raw(buildTimedFrame(encodedBody, timing.sNow, clientProcessedInputSeq(client)));
+  } else {
+    client.raw(encodedBody);
+  }
+}
+
 const SHARED_VIEW = {};
 
 export class SchemaSerializer<T extends Schema> implements Serializer<T> {
@@ -155,11 +222,7 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
 
           clientsWithViewChange.forEach((client) => {
             const encodedView = this.encoder.encodeView(client.view, sharedOffset, it);
-            if (timing) {
-              client.raw(buildTimedFrame(encodedView, timing.sNow, clientProcessedInputSeq(client)));
-            } else {
-              client.raw(encodedView);
-            }
+            sendClientFrame(client, encodedView, timing);
           });
         }
       }
@@ -174,7 +237,7 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
         for (let i = 0; i < clients.length; i++) {
           const client = clients[i];
           if (client.state !== ClientState.JOINED) continue;
-          client.raw(buildTimedFrame(heartbeatBody, timing.sNow, clientProcessedInputSeq(client)));
+          sendClientFrame(client, heartbeatBody, timing);
         }
       }
 
@@ -210,11 +273,7 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
           continue;
         }
 
-        if (timing) {
-          client.raw(buildTimedFrame(encodedChanges, timing.sNow, clientProcessedInputSeq(client)));
-        } else {
-          client.raw(encodedChanges);
-        }
+        sendClientFrame(client, encodedChanges, timing);
       }
 
     } else {
@@ -244,11 +303,7 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
           this.encodedViews.set(view, encodedView);
         }
 
-        if (timing) {
-          client.raw(buildTimedFrame(encodedView, timing.sNow, clientProcessedInputSeq(client)));
-        } else {
-          client.raw(encodedView);
-        }
+        sendClientFrame(client, encodedView, timing);
       }
 
       // clear views
