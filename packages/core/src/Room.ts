@@ -368,7 +368,11 @@ export class Room<T extends RoomOptions = RoomOptions> {
   private get onMessageValidators() { return this.#_messages.validators; }
 
   private _serializer: Serializer<ExtractRoomState<T>> = noneSerializer;
-  private _afterNextPatchQueue: Array<[string | number | ExtractRoomClient<T>, ArrayLike<any>]> = [];
+
+  /** Room-level `broadcast`/`broadcastBytes` deferred to ride after the next
+   *  patch. Per-client `afterNextPatch` sends go to `client._pendingFrames`, not
+   *  here — so this only ever holds the two broadcast variants. */
+  private _afterNextPatchQueue: Array<['broadcast' | 'broadcastBytes', ArrayLike<any>]> = [];
 
   private _simulationInterval: NodeJS.Timeout;
 
@@ -1648,9 +1652,6 @@ export class Room<T extends RoomOptions = RoomOptions> {
     this._reservedSeats[sessionId][2] = true; // flag seat reservation as "consumed"
     debugMatchMaking('consuming seat reservation, sessionId: \'%s\' (roomId: %s)', client.sessionId, this.roomId);
 
-    // share "after next patch queue" reference with every client.
-    client._afterNextPatchQueue = this._afterNextPatchQueue;
-
     // add temporary callback to keep track of disconnections during `onJoin`.
     client.ref['onleave'] = (_) => client.state = ClientState.LEAVING;
     client.ref.once('close', client.ref['onleave']);
@@ -1969,6 +1970,9 @@ export class Room<T extends RoomOptions = RoomOptions> {
     }
   }
 
+  /** Flush room-level `afterNextPatch` broadcasts after the patch. Per-client
+   *  `afterNextPatch` sends ride the patch frame via `_pendingFrames` and never
+   *  reach this queue, so only the two broadcast variants are dispatched here. */
   private _dequeueAfterPatchMessages() {
     const length = this._afterNextPatchQueue.length;
 
@@ -1976,11 +1980,10 @@ export class Room<T extends RoomOptions = RoomOptions> {
       for (let i = 0; i < length; i++) {
         const [target, args] = this._afterNextPatchQueue[i];
 
-        if (target === "broadcast") {
-          this.broadcast.apply(this, args as any);
-
+        if (target === "broadcastBytes") {
+          this.broadcastBytes.apply(this, args as any);
         } else {
-          (target as Client).raw.apply(target, args as any);
+          this.broadcast.apply(this, args as any);
         }
       }
 

@@ -191,7 +191,6 @@ export interface Client<T extends { userData?: any, auth?: any, messages?: Recor
 export interface ClientPrivate {
   readyState: number; // TODO: remove readyState on version 1.0.0. Use only "state" instead.
   _enqueuedMessages?: any[];
-  _afterNextPatchQueue: Array<[string | number | Client, ArrayLike<any>]>;
   _joinedAt: number; // "elapsedTime" when the client joined the room.
 
   /**
@@ -263,12 +262,11 @@ export interface ClientPrivate {
   /**
    * @internal Per-client raw frames staged to ride INTO this client's next
    * state patch — in-frame `predict.action` verdicts + per-client
-   * `afterNextPatch` messages (brief 21, Design B). Lazily allocated. Populated
-   * by {@link Room} from the after-patch queue right before each
-   * `broadcastPatch`, then drained by the serializer when it builds the client's
-   * patch frame (or flushed as standalone frames if no patch carries them this
-   * tick). Distinct from the room-shared {@link _afterNextPatchQueue}, which now
-   * holds only room-level broadcasts.
+   * `afterNextPatch` messages (brief 21, Design B). Lazily allocated. Pushed by
+   * {@link enqueueClientRaw} (the `afterNextPatch` path), drained by the
+   * serializer when it builds the client's patch frame — or flushed as standalone
+   * frames if no patch carries them this tick. Room-level `broadcast`
+   * `afterNextPatch` uses the Room's own queue instead, not this buffer.
    */
   _pendingFrames?: Uint8Array[];
 }

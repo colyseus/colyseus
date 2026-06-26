@@ -86,7 +86,6 @@ export class H3Client implements Client, ClientPrivate {
   public state: ClientState = ClientState.JOINING;
   public reconnectionToken: string;
   public _enqueuedMessages: any[] = [];
-  public _afterNextPatchQueue;
   public _joinedAt;
 
   // TODO: remove readyState

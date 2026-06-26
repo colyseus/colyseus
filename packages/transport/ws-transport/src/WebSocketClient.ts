@@ -18,7 +18,6 @@ export class WebSocketClient implements Client, ClientPrivate {
   public reconnectionToken: string;
 
   public _enqueuedMessages: any[] = [];
-  public _afterNextPatchQueue;
   public _reconnectionToken: string;
   public _joinedAt;
   public _numMessagesLastSecond: number = 0;
