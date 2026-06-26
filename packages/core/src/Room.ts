@@ -374,6 +374,13 @@ export class Room<T extends RoomOptions = RoomOptions> {
    *  here — so this only ever holds the two broadcast variants. */
   private _afterNextPatchQueue: Array<['broadcast' | 'broadcastBytes', ArrayLike<any>]> = [];
 
+  /** Clients that staged `afterNextPatch` frames since the last patch, so the
+   *  post-patch flush iterates only these — never the full client list. Shared by
+   *  reference onto each client at join, but ONLY in rooms without `defineInput()`:
+   *  input rooms drain `_pendingFrames` via the serializer heartbeat, so this stays
+   *  empty for them. Reset each `broadcastPatch`. */
+  #pendingFrameClients: Array<Client & ClientPrivate> = [];
+
   private _simulationInterval: NodeJS.Timeout;
 
   private _internalState: RoomInternalState = RoomInternalState.CREATING;
@@ -1332,13 +1339,11 @@ export class Room<T extends RoomOptions = RoomOptions> {
       this._inputController !== undefined ? { sNow } : undefined,
     );
 
-    // The serializer drains `_pendingFrames` for every client it sends a patch
-    // to. The only gap: a room WITHOUT `defineInput()` on a no-change tick sends
-    // no patch (no heartbeat), so flush any staged frames standalone — never
-    // stranded. Input rooms always heartbeat, so they skip this scan.
-    if (this._inputController === undefined && !hasChanges) {
-      this._flushPendingClientFrames();
-    }
+    // The serializer drains `_pendingFrames` for every client it sends a patch to.
+    // The only gap: a room WITHOUT `defineInput()` on a no-change tick sends no
+    // patch (no heartbeat), so flush any still-staged frames standalone — never
+    // stranded. Iterates only `#pendingFrameClients` (empty for input rooms → O(1)).
+    this._flushPendingClientFrames();
 
     // Lag-comp: record the snapshot the client just received, on the broadcast
     // cadence and stamped with the SAME `sNow` the frame carries — so valueAt()
@@ -1652,6 +1657,14 @@ export class Room<T extends RoomOptions = RoomOptions> {
     this._reservedSeats[sessionId][2] = true; // flag seat reservation as "consumed"
     debugMatchMaking('consuming seat reservation, sessionId: \'%s\' (roomId: %s)', client.sessionId, this.roomId);
 
+    // Non-input rooms: share the after-patch flush list so a client can announce
+    // staged frames without the flush scanning every client. Input rooms drain via
+    // the serializer heartbeat — they don't track (and `_inputController` is set in
+    // `defineInput`, before any client joins).
+    if (this._inputController === undefined) {
+      (client as Client & ClientPrivate)._pendingFrameClients = this.#pendingFrameClients;
+    }
+
     // add temporary callback to keep track of disconnections during `onJoin`.
     client.ref['onleave'] = (_) => client.state = ClientState.LEAVING;
     client.ref.once('close', client.ref['onleave']);
@@ -1955,19 +1968,23 @@ export class Room<T extends RoomOptions = RoomOptions> {
     ));
   }
 
-  /** Flush any per-client `_pendingFrames` the serializer didn't carry this tick
-   *  as standalone frames, so a verdict/message is never stranded. Only reached on
-   *  a no-change tick of a room without `defineInput()` (no patch, no heartbeat);
-   *  input rooms always heartbeat, draining `_pendingFrames` in the serializer. */
+  /** Send any `afterNextPatch` frames the serializer didn't carry this tick (a
+   *  no-change tick in a room without `defineInput()`) as standalone frames, so a
+   *  message is never stranded — then reset the tracker. Iterates only the clients
+   *  that staged frames this cycle (`#pendingFrameClients`), never the full client
+   *  list; empty (→ O(1)) for input rooms and idle non-input rooms. A client whose
+   *  frames a patch already carried is skipped (its buffer is empty). */
   private _flushPendingClientFrames() {
-    for (let i = 0; i < this.clients.length; i++) {
-      const client = this.clients[i] as unknown as Client & ClientPrivate;
-      const frames = client._pendingFrames;
+    const dirty = this.#pendingFrameClients;
+    if (dirty.length === 0) { return; }
+    for (let i = 0; i < dirty.length; i++) {
+      const frames = dirty[i]._pendingFrames;
       if (frames !== undefined && frames.length > 0) {
-        for (let j = 0; j < frames.length; j++) { client.raw(frames[j]); }
+        for (let j = 0; j < frames.length; j++) { dirty[i].raw(frames[j]); }
         frames.length = 0;
       }
     }
+    dirty.length = 0;
   }
 
   /** Flush room-level `afterNextPatch` broadcasts after the patch. Per-client

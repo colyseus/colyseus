@@ -1096,6 +1096,33 @@ describe("Integration", () => {
 
               conn.leave();
             });
+
+            it("should send after patch with NO state change (post-patch flush)", async () => {
+              const DummyState = schema({ number: t.number().default(0) });
+              type DummyState = SchemaType<typeof DummyState>;
+
+              // State exists (so broadcastPatch runs) but is never mutated → the
+              // patch carries nothing, so the deferred message can't ride it; it
+              // must go out via the post-patch flush that iterates
+              // `#pendingFrameClients` (the path a coalesced patch never reaches).
+              matchMaker.defineRoomType('send_afterpatch_nochange', class _ extends Room {
+                state = new DummyState();
+                patchRate = 50;
+                onJoin(client: Client) {
+                  client.send("deferred", "world", { afterNextPatch: true });
+                }
+              });
+
+              const conn = await client.joinOrCreate('send_afterpatch_nochange');
+
+              let message: any;
+              conn.onMessage("deferred", (_message) => { message = _message; });
+
+              await timeout(150); // a few patch intervals
+              assert.strictEqual("world", message);
+
+              conn.leave();
+            });
           });
 
           describe("lock / unlock", () => {

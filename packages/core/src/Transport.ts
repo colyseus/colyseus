@@ -269,6 +269,17 @@ export interface ClientPrivate {
    * `afterNextPatch` uses the Room's own queue instead, not this buffer.
    */
   _pendingFrames?: Uint8Array[];
+
+  /**
+   * @internal Back-reference to the Room's "clients with staged frames" list,
+   * shared by reference at join ONLY for rooms without `defineInput()`.
+   * {@link enqueueClientRaw} pushes the client here on its first staged frame of a
+   * cycle, so the after-patch flush iterates just those clients rather than
+   * scanning every client. Input rooms leave this `undefined` — their
+   * `_pendingFrames` always drain via the serializer's heartbeat, so no tracking
+   * is needed and the push short-circuits.
+   */
+  _pendingFrameClients?: Array<Client & ClientPrivate>;
 }
 
 /**
@@ -278,7 +289,9 @@ export interface ClientPrivate {
  *
  *  - `afterNextPatch` → stage onto the per-client {@link ClientPrivate._pendingFrames}
  *    buffer, ridden INTO the next state patch (brief 21); a no-allocation push into a
- *    reused array.
+ *    reused array. The client announces itself to the Room's
+ *    {@link ClientPrivate._pendingFrameClients} list on its first staged frame of a
+ *    cycle (no-op for input rooms — they drain via the serializer heartbeat).
  *  - before JOIN → buffer in `_enqueuedMessages` until the JOIN_ROOM handshake flushes.
  *  - otherwise → send now via the transport's `raw`.
  *
@@ -290,7 +303,10 @@ export function enqueueClientRaw(
   options?: ISendOptions,
 ): void {
   if (options?.afterNextPatch) {
-    (client._pendingFrames ??= []).push(data);
+    let frames = client._pendingFrames;
+    if (frames === undefined) { frames = client._pendingFrames = []; }
+    if (frames.length === 0) { client._pendingFrameClients?.push(client); } // first frame this cycle
+    frames.push(data);
     return;
   }
   if (client.state !== ClientState.JOINED) {
