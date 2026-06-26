@@ -55,7 +55,7 @@ export * from './matchmaker/LocalDriver/LocalDriver.ts';
 export { initializeRoomCache } from './matchmaker/driver.ts';
 
 // Transport
-export { type Client, type ClientPrivate, type AuthContext, ClientState, ClientArray, Transport, type ISendOptions, connectClientToRoom } from './Transport.ts';
+export { type Client, type ClientPrivate, type AuthContext, ClientState, ClientArray, Transport, type ISendOptions, connectClientToRoom, enqueueClientRaw } from './Transport.ts';
 
 // Presence
 export { type Presence } from './presence/Presence.ts';

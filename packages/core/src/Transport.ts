@@ -273,6 +273,37 @@ export interface ClientPrivate {
   _pendingFrames?: Uint8Array[];
 }
 
+/**
+ * The framework-level send path shared by every transport's `enqueueRaw` — the
+ * single source of truth so each transport implements only the wire-level `raw`.
+ * Routes a raw frame by where it should go:
+ *
+ *  - `afterNextPatch` → stage onto the per-client {@link ClientPrivate._pendingFrames}
+ *    buffer, ridden INTO the next state patch (brief 21); a no-allocation push into a
+ *    reused array.
+ *  - before JOIN → buffer in `_enqueuedMessages` until the JOIN_ROOM handshake flushes.
+ *  - otherwise → send now via the transport's `raw`.
+ *
+ * @internal
+ */
+export function enqueueClientRaw(
+  client: Client & ClientPrivate,
+  data: Uint8Array | Buffer,
+  options?: ISendOptions,
+): void {
+  if (options?.afterNextPatch) {
+    (client._pendingFrames ??= []).push(data);
+    return;
+  }
+  if (client.state !== ClientState.JOINED) {
+    // During `onJoin` / `onReconnect` the client can't register onMessage
+    // handlers yet — buffer until JOIN_ROOM has been sent.
+    client._enqueuedMessages?.push(data);
+    return;
+  }
+  client.raw(data, options);
+}
+
 export class ClientArray<C extends Client = Client> extends Array<C> {
   /**
    * Secondary index for O(1) lookup by sessionId. Kept in sync by the

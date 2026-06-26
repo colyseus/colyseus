@@ -370,11 +370,6 @@ export class Room<T extends RoomOptions = RoomOptions> {
   private _serializer: Serializer<ExtractRoomState<T>> = noneSerializer;
   private _afterNextPatchQueue: Array<[string | number | ExtractRoomClient<T>, ArrayLike<any>]> = [];
 
-  /** Reused scratch: clients that had frames staged onto `_pendingFrames` this
-   *  patch, so the post-patch leftover-flush only scans those (not all clients).
-   *  Cleared and refilled by {@link _stagePendingClientFrames} each tick. */
-  #stagedFrameClients: Array<Client & ClientPrivate> = [];
-
   private _simulationInterval: NodeJS.Timeout;
 
   private _internalState: RoomInternalState = RoomInternalState.CREATING;
@@ -1321,15 +1316,11 @@ export class Room<T extends RoomOptions = RoomOptions> {
       return false;
     }
 
-    // Move per-client after-patch frames (in-frame verdicts + per-client
-    // `afterNextPatch` sends) onto `client._pendingFrames` so the serializer can
-    // ride them INTO each client's patch frame (brief 21, Design B). Room-level
-    // broadcasts stay in the queue for `_dequeueAfterPatchMessages` below.
-    this._stagePendingClientFrames();
-
     // When `defineInput()` was called, hand the serializer a fresh `sNow`
     // each tick. The per-client `lastTReceived` is read off the client at
-    // encode time inside `applyPatches`.
+    // encode time inside `applyPatches`. Per-client `afterNextPatch` frames
+    // (in-frame verdicts + sends) live on `client._pendingFrames` and ride
+    // INTO each client's patch frame here (brief 21, Design B).
     const sNow = this.clock.elapsedTime;
     const hasChanges = this._serializer.applyPatches(
       this.clients,
@@ -1337,10 +1328,13 @@ export class Room<T extends RoomOptions = RoomOptions> {
       this._inputController !== undefined ? { sNow } : undefined,
     );
 
-    // Any staged frames the serializer didn't carry (a client that received no
-    // patch this tick — e.g. a no-change tick in a room without `defineInput()`)
-    // go out as standalone frames, never stranded.
-    this._flushLeftoverClientFrames();
+    // The serializer drains `_pendingFrames` for every client it sends a patch
+    // to. The only gap: a room WITHOUT `defineInput()` on a no-change tick sends
+    // no patch (no heartbeat), so flush any staged frames standalone — never
+    // stranded. Input rooms always heartbeat, so they skip this scan.
+    if (this._inputController === undefined && !hasChanges) {
+      this._flushPendingClientFrames();
+    }
 
     // Lag-comp: record the snapshot the client just received, on the broadcast
     // cadence and stamped with the SAME `sNow` the frame carries — so valueAt()
@@ -1960,45 +1954,19 @@ export class Room<T extends RoomOptions = RoomOptions> {
     ));
   }
 
-  /** Drain per-client entries out of `_afterNextPatchQueue` onto each client's
-   *  `_pendingFrames` (so they ride INTO that client's patch frame), compacting
-   *  the queue down to the room-level broadcast entries. Records which clients
-   *  were staged for the post-patch leftover-flush. */
-  private _stagePendingClientFrames() {
-    const queue = this._afterNextPatchQueue;
-    const staged = this.#stagedFrameClients;
-    staged.length = 0;
-    if (queue.length === 0) { return; }
-
-    let write = 0;
-    for (let i = 0; i < queue.length; i++) {
-      const entry = queue[i];
-      const target = entry[0];
-      if (typeof target === 'string') {
-        queue[write++] = entry; // 'broadcast' / 'broadcastBytes' — stays for the post-patch dequeue
-      } else {
-        const client = target as unknown as Client & ClientPrivate;
-        const frames = (client._pendingFrames ??= []);
-        if (frames.length === 0) { staged.push(client); } // first frame this tick → track once
-        frames.push(entry[1][0] as Uint8Array);
-      }
-    }
-    queue.length = write;
-  }
-
-  /** Send any frames the serializer left undrained on a staged client (it got no
-   *  patch this tick) as standalone frames, so a verdict/message is never
-   *  stranded until the next changed tick. */
-  private _flushLeftoverClientFrames() {
-    const staged = this.#stagedFrameClients;
-    for (let i = 0; i < staged.length; i++) {
-      const frames = staged[i]._pendingFrames;
+  /** Flush any per-client `_pendingFrames` the serializer didn't carry this tick
+   *  as standalone frames, so a verdict/message is never stranded. Only reached on
+   *  a no-change tick of a room without `defineInput()` (no patch, no heartbeat);
+   *  input rooms always heartbeat, draining `_pendingFrames` in the serializer. */
+  private _flushPendingClientFrames() {
+    for (let i = 0; i < this.clients.length; i++) {
+      const client = this.clients[i] as unknown as Client & ClientPrivate;
+      const frames = client._pendingFrames;
       if (frames !== undefined && frames.length > 0) {
-        for (let j = 0; j < frames.length; j++) { staged[i].raw(frames[j]); }
+        for (let j = 0; j < frames.length; j++) { client.raw(frames[j]); }
         frames.length = 0;
       }
     }
-    staged.length = 0;
   }
 
   private _dequeueAfterPatchMessages() {
