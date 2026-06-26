@@ -1,7 +1,7 @@
 // import WebSocket from 'ws';
 
 import type { ReadableStreamDefaultReader, WritableStreamDefaultWriter } from 'stream/web';
-import { Protocol, type Client, ClientState, type ISendOptions, getMessageBytes, logger, debugMessage, type ClientPrivate, CloseCode } from '@colyseus/core';
+import { Protocol, type Client, ClientState, type ISendOptions, getMessageBytes, logger, debugMessage, type ClientPrivate, CloseCode, enqueueClientRaw } from '@colyseus/core';
 import { type WebTransportSession } from '@fails-components/webtransport';
 import { EventEmitter } from 'events';
 import { type Iterator, decode, encode } from '@colyseus/schema';
@@ -244,21 +244,7 @@ export class H3Client implements Client, ClientPrivate {
   }
 
   public enqueueRaw(data: Buffer | Uint8Array, options?: ISendOptions) {
-    // use room's afterNextPatch queue
-    if (options?.afterNextPatch) {
-      this._afterNextPatchQueue.push([this, arguments]);
-      return;
-    }
-
-    if (this.state !== ClientState.JOINED) {
-      // sending messages during `onJoin` or `onReconnect`.
-      // - the client-side cannot register "onMessage" callbacks at this point.
-      // - enqueue the messages to be send after JOIN_ROOM message has been sent
-      this._enqueuedMessages?.push(data);
-      return;
-    }
-
-    this.raw(data, options);
+    enqueueClientRaw(this, data, options);
   }
 
   public raw(data: Buffer | Uint8Array, options?: ISendOptions, cb?: (err?: Error) => void) {

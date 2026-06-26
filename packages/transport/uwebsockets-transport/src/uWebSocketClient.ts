@@ -1,7 +1,7 @@
 import EventEmitter from 'events';
 import uWebSockets from 'uWebSockets.js';
 
-import { getMessageBytes, Protocol, type Client, type ClientPrivate, ClientState, type ISendOptions, logger, debugMessage } from '@colyseus/core';
+import { getMessageBytes, Protocol, type Client, type ClientPrivate, ClientState, type ISendOptions, logger, debugMessage, enqueueClientRaw } from '@colyseus/core';
 
 export class uWebSocketWrapper extends EventEmitter {
   public ws: uWebSockets.WebSocket<any>;
@@ -66,22 +66,7 @@ export class uWebSocketClient implements Client, ClientPrivate {
   }
 
   public enqueueRaw(data: Uint8Array | Buffer, options?: ISendOptions) {
-    // use room's afterNextPatch queue
-    if (options?.afterNextPatch) {
-      this._afterNextPatchQueue.push([this, [data]]);
-      return;
-    }
-
-    if (this.state !== ClientState.JOINED) {
-      // sending messages during `onJoin` or `onReconnect`.
-      // - the client-side cannot register "onMessage" callbacks at this point.
-      // - enqueue the messages to be send after JOIN_ROOM message has been sent
-      // - create a new buffer for enqueued messages, as the underlying buffer might be modified
-      this._enqueuedMessages?.push(data);
-      return;
-    }
-
-    this.raw(data, options);
+    enqueueClientRaw(this, data, options);
   }
 
   public raw(data: Uint8Array | Buffer, options?: ISendOptions, cb?: (err?: Error) => void) {
