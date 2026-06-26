@@ -8,6 +8,7 @@ import { standardValidate, type StandardSchemaV1 } from './utils/StandardSchema.
 import { isDevMode } from './utils/DevMode.ts';
 import { debugMessage, debugAndPrintError } from './Debug.ts';
 import { OnMessageException } from './errors/RoomExceptions.ts';
+import type { PendingAction } from './input/InputBuffer.ts';
 import type { Client, ClientPrivate } from './Transport.ts';
 import type { Room } from './Room.ts';
 
@@ -41,18 +42,22 @@ const OUTCOME_NONE = 0, OUTCOME_REJECTED = 1, OUTCOME_RESOLVED = 2;
 /**
  * Runtime {@link MessageContext} for a {@link Protocol.ROOM_REQUEST} dispatch.
  * `reject`/`resolve` record the decision on the ctx; `onRequest` reads it after the
- * handler settles, so a bare side-effecting call works as well as `return
+ * handler returns, so a bare side-effecting call works as well as `return
  * ctx.reject(r)` (the branded return is compile-time only — the runtime return is
  * unused).
  */
 class DispatchContext implements MessageContext {
   readonly id: number | undefined;
+  readonly reckonTime: number | undefined;
+  readonly renderTime: number | undefined;
   _outcome = OUTCOME_NONE;
   _reason: any = undefined;
   _entity: any = undefined;
 
-  constructor(id: number | undefined) {
+  constructor(id: number | undefined, reckonTime?: number, renderTime?: number) {
     this.id = id;
+    this.reckonTime = reckonTime;
+    this.renderTime = renderTime;
   }
 
   reject(reason?: any): any {
@@ -75,6 +80,12 @@ const SEND_CONTEXT: MessageContext = Object.freeze({
   reject: () => undefined as any,
   resolve: () => undefined as any,
 });
+
+/** Shared `enqueueRaw` options that defer a reply into the room's after-patch queue
+ *  (in-frame action verdicts ride right after this tick's patch). Frozen + shared:
+ *  `enqueueRaw` only reads `afterNextPatch`, never mutates options, so zero per-reply
+ *  allocation. */
+const AFTER_PATCH_OPTS = Object.freeze({ afterNextPatch: true });
 
 /**
  * Per-room message-routing layer, owned by {@link Room}. Owns the user-message
@@ -241,7 +252,7 @@ export class RoomMessages {
       }
 
     } catch (e: any) {
-      // Reply with an error so the caller's pending request settles instead of timing out.
+      // Reply with an error so the caller's pending request resolves instead of timing out.
       debugAndPrintError(e);
       this.#replyToRequest(client, requestId, ResponseStatus.ERROR, toResponseError(e));
       return;
@@ -271,7 +282,7 @@ export class RoomMessages {
       response = handler(client, message, ctx);
       if (response !== null && typeof response === 'object' && typeof response.then === 'function') {
         response.then(
-          (resolved: any) => this.#settleRequest(client, requestId, ctx, resolved),
+          (resolved: any) => this.#finalizeRequest(client, requestId, ctx, resolved),
           (e: any) => {
             debugAndPrintError(e);
             this.#replyToRequest(client, requestId, ResponseStatus.ERROR, toResponseError(e));
@@ -285,20 +296,84 @@ export class RoomMessages {
       return;
     }
 
-    this.#settleRequest(client, requestId, ctx, response);
+    this.#finalizeRequest(client, requestId, ctx, response);
   }
 
-  /** Project a settled handler outcome onto a ROOM_RESPONSE reply: `ctx.reject` →
-   *  REJECTED(reason), `ctx.resolve` → OK { ref } (refId resolved here), else OK(return). */
-  #settleRequest(client: Client, requestId: number, ctx: DispatchContext, response: any): void {
+  /** Finalize a request: project the handler's outcome onto a ROOM_RESPONSE reply —
+   *  `ctx.reject` → REJECTED(reason), `ctx.resolve` → OK { ref } (refId resolved here),
+   *  else OK(return). `afterPatch` defers the reply to ride after the next patch (in-frame
+   *  `dispatchAction` verdicts); standalone `onRequest` replies stay immediate. */
+  #finalizeRequest(client: Client, requestId: number, ctx: DispatchContext, response: any, afterPatch = false): void {
     if (ctx._outcome === OUTCOME_REJECTED) {
-      this.#replyToRequest(client, requestId, ResponseStatus.REJECTED, ctx._reason);
+      this.#replyToRequest(client, requestId, ResponseStatus.REJECTED, ctx._reason, afterPatch);
     } else if (ctx._outcome === OUTCOME_RESOLVED) {
       const ref = refIdOf(ctx._entity);
-      this.#replyToRequest(client, requestId, ResponseStatus.OK, ref !== undefined ? { ref } : undefined);
+      this.#replyToRequest(client, requestId, ResponseStatus.OK, ref !== undefined ? { ref } : undefined, afterPatch);
     } else {
-      this.#replyToRequest(client, requestId, ResponseStatus.OK, response);
+      this.#replyToRequest(client, requestId, ResponseStatus.OK, response, afterPatch);
     }
+  }
+
+  /**
+   * Dispatch an in-frame action (decoded from an input packet, flushed
+   * tick-aligned by {@link Room} after the carrying input is applied) to its
+   * `messages` handler — the SAME registry, `ctx`, and reply path as
+   * {@link onRequest}; only two things differ: the payload is already decoded
+   * (it rode the input frame, not a ROOM_REQUEST), and the frame's
+   * `reckonTime`/`renderTime` ride the `ctx` so the handler can lag-comp with
+   * `rewind.at(ctx.reckonTime)`. The verdict (OK / OK{ref} / REJECTED / ERROR)
+   * is always replied, exactly like a request — `predict.action` correlates it
+   * by `actionId`.
+   *
+   * The verdict is deferred into the room's after-patch queue (`afterPatch=true`),
+   * so it lands ordered right after this tick's patch — the action's *effect*
+   * (spawned entity, input-ack) and its verdict arrive adjacent, not interleaved
+   * (brief 21, Design A). The dispatch is tick-aligned and a patch follows on its
+   * cadence, so the verdict waits at most until the next `broadcastPatch`.
+   */
+  dispatchAction(client: Client & ClientPrivate, action: PendingAction): void {
+    const { id, type } = action;
+    let payload = action.payload;
+    try {
+      // Same per-type validation as ROOM_DATA / ROOM_REQUEST.
+      if (this.validators[type as string] !== undefined) {
+        payload = standardValidate(this.validators[type as string], payload);
+      }
+    } catch (e: any) {
+      debugAndPrintError(e);
+      this.#replyToRequest(client, id, ResponseStatus.ERROR, toResponseError(e), true);
+      return;
+    }
+
+    const handler = this.events.events[type as string]?.[0];
+    if (handler === undefined) {
+      this.#replyToRequest(client, id, ResponseStatus.ERROR, {
+        name: "no_handler",
+        message: `room "${this.room.roomName}" has no onMessage("${type}") handler to dispatch this action.`,
+      }, true);
+      return;
+    }
+
+    const ctx = new DispatchContext(id, action.reckonTime, action.renderTime);
+    let response: any;
+    try {
+      response = handler(client, payload, ctx);
+      if (response !== null && typeof response === 'object' && typeof response.then === 'function') {
+        response.then(
+          (resolved: any) => this.#finalizeRequest(client, id, ctx, resolved, true),
+          (e: any) => {
+            debugAndPrintError(e);
+            this.#replyToRequest(client, id, ResponseStatus.ERROR, toResponseError(e), true);
+          },
+        );
+        return;
+      }
+    } catch (e: any) {
+      debugAndPrintError(e);
+      this.#replyToRequest(client, id, ResponseStatus.ERROR, toResponseError(e), true);
+      return;
+    }
+    this.#finalizeRequest(client, id, ctx, response, true);
   }
 
   /** Dispatch a `ROOM_DATA_BYTES` frame: raw bytes routed to `_$b`-prefixed handlers. */
@@ -334,9 +409,15 @@ export class RoomMessages {
     }
   }
 
-  #replyToRequest(client: Client, requestId: number, status: ResponseStatus, payload?: any): void {
+  /** Emit a ROOM_RESPONSE reply. `afterPatch` routes it through the room's after-patch
+   *  queue so an in-frame action verdict lands ordered right after this tick's patch
+   *  (Design A of brief 21); otherwise it sends immediately (standalone `onRequest`). */
+  #replyToRequest(client: Client, requestId: number, status: ResponseStatus, payload?: any, afterPatch = false): void {
     debugMessage("response #%d: status=%d -> %j (roomId: %s)", requestId, status, payload, this.room.roomId);
-    client.enqueueRaw(getMessageBytes[Protocol.ROOM_RESPONSE](requestId, status, payload));
+    client.enqueueRaw(
+      getMessageBytes[Protocol.ROOM_RESPONSE](requestId, status, payload),
+      afterPatch ? AFTER_PATCH_OPTS : undefined,
+    );
   }
 
   /** No handler for the type: error the client in dev, drop it in production. */
