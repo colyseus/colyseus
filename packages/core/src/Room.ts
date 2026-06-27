@@ -369,11 +369,6 @@ export class Room<T extends RoomOptions = RoomOptions> {
 
   private _serializer: Serializer<ExtractRoomState<T>> = noneSerializer;
 
-  /** Room-level `broadcast`/`broadcastBytes` deferred to ride after the next
-   *  patch. Per-client `afterNextPatch` sends go to `client._pendingFrames`, not
-   *  here — so this only ever holds the two broadcast variants. */
-  private _afterNextPatchQueue: Array<['broadcast' | 'broadcastBytes', ArrayLike<any>]> = [];
-
   /** Clients that staged `afterNextPatch` frames since the last patch, so the
    *  post-patch flush iterates only these — never the full client list. Shared by
    *  reference onto each client at join, but ONLY in rooms without `defineInput()`:
@@ -1289,12 +1284,6 @@ export class Room<T extends RoomOptions = RoomOptions> {
     ...args: MessageArgs<ExtractRoomClient<T>['~messages'][K], IBroadcastOptions>
   ) {
     const [message, options] = args;
-    if (options && options.afterNextPatch) {
-      delete options.afterNextPatch;
-      this._afterNextPatchQueue.push(['broadcast', [type, ...args]]);
-      return;
-    }
-
     this.broadcastMessageType(type, message, options);
   }
 
@@ -1302,12 +1291,6 @@ export class Room<T extends RoomOptions = RoomOptions> {
    * Broadcast bytes (UInt8Arrays) to a particular room
    */
   public broadcastBytes(type: string | number, message: Uint8Array, options: IBroadcastOptions) {
-    if (options && options.afterNextPatch) {
-      delete options.afterNextPatch;
-      this._afterNextPatchQueue.push(['broadcastBytes', arguments]);
-      return;
-    }
-
     this.broadcastMessageType(type as string, message, options);
   }
 
@@ -1354,9 +1337,6 @@ export class Room<T extends RoomOptions = RoomOptions> {
     if (rw !== undefined && rw.lastRecordedAt !== sNow) {
       rw.record(sNow, this.#_patchRate || undefined);
     }
-
-    // broadcast messages enqueued for "after patch"
-    this._dequeueAfterPatchMessages();
 
     return hasChanges;
   }
@@ -1955,8 +1935,11 @@ export class Room<T extends RoomOptions = RoomOptions> {
     while (numClients--) {
       const client = this.clients[numClients];
 
+      // `options` carries `afterNextPatch` straight through to enqueueRaw → it
+      // rides each recipient's next state patch via `_pendingFrames` (brief 21),
+      // the same coalescing path as a per-client send. (`except` is ignored there.)
       if (!except || !except.includes(client)) {
-        client.enqueueRaw(encodedMessage);
+        client.enqueueRaw(encodedMessage, options);
       }
     }
   }
@@ -1985,29 +1968,6 @@ export class Room<T extends RoomOptions = RoomOptions> {
       }
     }
     dirty.length = 0;
-  }
-
-  /** Flush room-level `afterNextPatch` broadcasts after the patch. Per-client
-   *  `afterNextPatch` sends ride the patch frame via `_pendingFrames` and never
-   *  reach this queue, so only the two broadcast variants are dispatched here. */
-  private _dequeueAfterPatchMessages() {
-    const length = this._afterNextPatchQueue.length;
-
-    if (length > 0) {
-      for (let i = 0; i < length; i++) {
-        const [target, args] = this._afterNextPatchQueue[i];
-
-        if (target === "broadcastBytes") {
-          this.broadcastBytes.apply(this, args as any);
-        } else {
-          this.broadcast.apply(this, args as any);
-        }
-      }
-
-      // new messages may have been added in the meantime,
-      // let's splice the ones that have been processed
-      this._afterNextPatchQueue.splice(0, length);
-    }
   }
 
   private async _reserveSeat(
