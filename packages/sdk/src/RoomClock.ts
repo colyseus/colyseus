@@ -11,6 +11,13 @@ import { now } from './core/utils.ts';
  * {@link InputHandle}; the Room feeds the clock a pre-computed RTT sample.
  */
 export interface RoomClockLike {
+    /** Local monotonic clock (ms) — the un-offset base {@link serverNow} is built on.
+     *  For SELF-IMPOSED relative gates (a cooldown / fire-rate you started locally):
+     *  `now() - lastAction >= COOLDOWN_MS`. A relative measure cancels the clock offset,
+     *  so this needs no clock sync and dodges the offset-EMA jitter. Contrast
+     *  {@link serverNow}, which you want for server-STAMPED absolute deadlines
+     *  (invuln / respawn / buy-phase windows you compare an absolute instant against). */
+    now(): number;
     /** Estimated server clock (ms since room start — see {@link RoomClock.serverNow}). */
     serverNow(): number;
     /** Last RTT sample (ms). */
@@ -61,6 +68,7 @@ export interface RoomClockLike {
  * {@link RoomClock} during handshake when input is declared.
  */
 export const NULL_CLOCK: RoomClockLike = Object.freeze({
+    now: () => now(),
     serverNow: () => now(),
     rtt: () => 0,
     smoothedRtt: () => 0,
@@ -163,6 +171,15 @@ export class RoomClock implements RoomClockLike {
      *  Returns the local clock until the first sample lands. */
     public serverNow(): number {
         return now() + this._clockOffset;
+    }
+
+    /** Local monotonic clock (ms): the client's own reading WITHOUT the server
+     *  offset — the base {@link serverNow} adds the offset to. Use it for
+     *  self-imposed relative cooldowns (`now() - lastAction >= COOLDOWN_MS`): they
+     *  need only a steady rate, not clock sync, so this avoids the offset-EMA
+     *  jitter `serverNow()` carries. @see RoomClockLike.now */
+    public now(): number {
+        return now();
     }
 
     /** Most recent RTT sample (ms). `0` until the first RTT-valid sample lands. */
