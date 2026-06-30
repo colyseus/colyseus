@@ -376,6 +376,14 @@ export class Room<T extends RoomOptions = RoomOptions> {
    *  empty for them. Reset each `broadcastPatch`. */
   #pendingFrameClients: Array<Client & ClientPrivate> = [];
 
+  /** `broadcast(..., { afterNextPatch })` messages, sent as a SHARED frame right
+   *  after the next patch. Broadcast data is "same bytes to every client", so it
+   *  rides ONE buffer (one encode, N sends) rather than being copied into each
+   *  client's patch — which would be N× the allocation in large rooms. (Per-client
+   *  `afterNextPatch` sends still coalesce into the patch via `_pendingFrames`;
+   *  the two mechanisms match the two data shapes.) Drained each `broadcastPatch`. */
+  #afterPatchBroadcasts: Array<{ bytes: Uint8Array; except: Client[] | undefined }> = [];
+
   private _simulationInterval: NodeJS.Timeout;
 
   private _internalState: RoomInternalState = RoomInternalState.CREATING;
@@ -1328,6 +1336,9 @@ export class Room<T extends RoomOptions = RoomOptions> {
     // stranded. Iterates only `#pendingFrameClients` (empty for input rooms → O(1)).
     this._flushPendingClientFrames();
 
+    // After-patch broadcasts ride here as shared frames (one buffer → N sends).
+    this._flushAfterPatchBroadcasts();
+
     // Lag-comp: record the snapshot the client just received, on the broadcast
     // cadence and stamped with the SAME `sNow` the frame carries — so valueAt()
     // reproduces the client's interpolation over the IDENTICAL pair (exact hits
@@ -1931,17 +1942,38 @@ export class Room<T extends RoomOptions = RoomOptions> {
         : [options.except]
       : undefined;
 
+    // `afterNextPatch`: defer this one shared buffer to ride right after the next
+    // patch (see #afterPatchBroadcasts) instead of copying it into every client's
+    // frame. `except` is captured now; recipients are resolved at drain time.
+    if (options.afterNextPatch) {
+      this.#afterPatchBroadcasts.push({ bytes: encodedMessage, except });
+      return;
+    }
+
     let numClients = this.clients.length;
     while (numClients--) {
       const client = this.clients[numClients];
-
-      // `options` carries `afterNextPatch` straight through to enqueueRaw → it
-      // rides each recipient's next state patch via `_pendingFrames` (brief 21),
-      // the same coalescing path as a per-client send. (`except` is ignored there.)
       if (!except || !except.includes(client)) {
-        client.enqueueRaw(encodedMessage, options);
+        client.enqueueRaw(encodedMessage);
       }
     }
+  }
+
+  /** Drain `#afterPatchBroadcasts` right after the patch — each as ONE shared
+   *  buffer fanned out to its (non-excepted) recipients. `enqueueRaw` handles
+   *  JOINED (send now) vs still-joining (buffer until JOIN) per client. */
+  private _flushAfterPatchBroadcasts() {
+    const queued = this.#afterPatchBroadcasts;
+    if (queued.length === 0) { return; }
+    for (let i = 0; i < queued.length; i++) {
+      const { bytes, except } = queued[i];
+      let numClients = this.clients.length;
+      while (numClients--) {
+        const client = this.clients[numClients];
+        if (!except || !except.includes(client)) { client.enqueueRaw(bytes); }
+      }
+    }
+    queued.length = 0;
   }
 
   private sendFullState(client: Client): void {
