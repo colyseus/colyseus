@@ -7,6 +7,7 @@ import { WebSocketTransport } from "@colyseus/ws-transport";
 // Wire constants (brief 21, Design B) — kept local so the test pins the bytes.
 const PROTOCOL_CODE_MASK = 0x1F;
 const MODIFIER_FRAMES = 0x20;
+const ROOM_DATA = 13;
 const ROOM_STATE_PATCH = 15;
 const ROOM_RESPONSE = 22;
 
@@ -66,6 +67,8 @@ describe("In-frame verdict rides the patch (brief 21, Design B)", () => {
         return ctx.resolve(b);                            // OK { ref } verdict rides the patch
       },
       blocked: (_client: Client, _p: unknown, ctx: MessageContext) => ctx.reject("nope" as const),
+      // trigger a room-wide afterNextPatch broadcast (TIMED room → should coalesce)
+      bcastReq: (_client: Client) => this.broadcast("bcast", { v: 7 }, { afterNextPatch: true }),
     } satisfies Record<string, any>;
 
     onCreate() {
@@ -140,6 +143,26 @@ describe("In-frame verdict rides the patch (brief 21, Design B)", () => {
     const standaloneResponses = frameBytes.filter((b) => (b & PROTOCOL_CODE_MASK) === ROOM_RESPONSE);
     assert.strictEqual(standaloneResponses.length, 0,
       "the REJECTED verdict rode the patch — no standalone ROOM_RESPONSE frame");
+    await conn.leave();
+  });
+
+  it("a TIMED-room broadcast(afterNextPatch) coalesces into the patch — no standalone ROOM_DATA", async () => {
+    const conn = await client.create<VRPRoom>("vrp");
+    const frameBytes = captureFrameBytes(conn);
+
+    let got: any;
+    conn.onMessage("bcast", (m) => { got = m; });
+    conn.send("bcastReq");                                  // server broadcasts afterNextPatch
+
+    await waitUntil(() => got !== undefined);
+    assert.deepStrictEqual(got, { v: 7 });                 // delivered
+
+    const framedPatches = frameBytes.filter((b) =>
+      (b & PROTOCOL_CODE_MASK) === ROOM_STATE_PATCH && (b & MODIFIER_FRAMES) !== 0);
+    const standaloneData = frameBytes.filter((b) => (b & PROTOCOL_CODE_MASK) === ROOM_DATA);
+    assert.ok(framedPatches.length >= 1, "broadcast must ride a FRAMES patch");
+    assert.strictEqual(standaloneData.length, 0,
+      "in a TIMED room the broadcast coalesced into the patch — no standalone ROOM_DATA frame");
     await conn.leave();
   });
 });

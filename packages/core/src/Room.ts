@@ -57,6 +57,10 @@ const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
 const noneSerializer = new NoneSerializer();
 
+/** Shared `enqueueRaw` options routing a frame onto `_pendingFrames` to ride the
+ *  next patch. Frozen + shared (read-only) → zero per-call allocation. */
+const AFTER_PATCH_OPTS = Object.freeze({ afterNextPatch: true });
+
 export const DEFAULT_SEAT_RESERVATION_TIME = Number(process.env.COLYSEUS_SEAT_RESERVATION_TIME || 15);
 
 export type SimulationCallback = (deltaTime: number) => void;
@@ -376,12 +380,13 @@ export class Room<T extends RoomOptions = RoomOptions> {
    *  empty for them. Reset each `broadcastPatch`. */
   #pendingFrameClients: Array<Client & ClientPrivate> = [];
 
-  /** `broadcast(..., { afterNextPatch })` messages, sent as a SHARED frame right
-   *  after the next patch. Broadcast data is "same bytes to every client", so it
-   *  rides ONE buffer (one encode, N sends) rather than being copied into each
-   *  client's patch — which would be N× the allocation in large rooms. (Per-client
-   *  `afterNextPatch` sends still coalesce into the patch via `_pendingFrames`;
-   *  the two mechanisms match the two data shapes.) Drained each `broadcastPatch`. */
+  /** `broadcast(..., { afterNextPatch })` in NON-timed rooms, sent as a SHARED
+   *  frame right after the next patch (one encode, N sends). Non-timed patches are
+   *  themselves a shared buffer, so coalescing the broadcast in would force N
+   *  per-client copies (N× allocation in large rooms) — sharing avoids that. TIMED
+   *  rooms instead coalesce the broadcast into each client's (already per-client)
+   *  patch via `_pendingFrames` — 1 frame, no extra send. Drained each
+   *  `broadcastPatch`. */
   #afterPatchBroadcasts: Array<{ bytes: Uint8Array; except: Client[] | undefined }> = [];
 
   private _simulationInterval: NodeJS.Timeout;
@@ -1942,19 +1947,24 @@ export class Room<T extends RoomOptions = RoomOptions> {
         : [options.except]
       : undefined;
 
-    // `afterNextPatch`: defer this one shared buffer to ride right after the next
-    // patch (see #afterPatchBroadcasts) instead of copying it into every client's
-    // frame. `except` is captured now; recipients are resolved at drain time.
-    if (options.afterNextPatch) {
+    // `afterNextPatch` in a NON-timed room: the patch is a SHARED buffer, so
+    // coalescing would force N per-client copies. Keep this one shared buffer and
+    // ride it right after the patch (see #afterPatchBroadcasts). `except` is
+    // captured now; recipients resolve at drain time.
+    if (options.afterNextPatch && this._inputController === undefined) {
       this.#afterPatchBroadcasts.push({ bytes: encodedMessage, except });
       return;
     }
 
+    // Otherwise one loop: a TIMED-room `afterNextPatch` broadcast coalesces into
+    // each recipient's (already per-client) patch via `_pendingFrames` — 1 frame,
+    // no extra send; an immediate broadcast sends now.
+    const sendOpts = options.afterNextPatch ? AFTER_PATCH_OPTS : undefined;
     let numClients = this.clients.length;
     while (numClients--) {
       const client = this.clients[numClients];
       if (!except || !except.includes(client)) {
-        client.enqueueRaw(encodedMessage);
+        client.enqueueRaw(encodedMessage, sendOpts);
       }
     }
   }
