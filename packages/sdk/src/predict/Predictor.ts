@@ -1797,6 +1797,17 @@ export class Predict<TState = any> {
      * (no fixed rate known) or for passive-smoothing-only Predicts — ignore the
      * return then.
      *
+     * ORDER WITHIN THE FRAME MATTERS: send the returned steps FIRST, then read
+     * render values (`value()`/`pose()`). A read between this call and the frame's
+     * sends is one fixed step stale — the interpolation clamps at the latest
+     * applied step (never extrapolates), so late frames flat-top and fast objects
+     * visibly stutter. The reconciler warns once when it detects that pattern.
+     * Game logic that wants the exact predicted state (hit-reg, zone checks)
+     * should read `.state`/`.world` instead, which this ordering doesn't affect.
+     * In engines that run per-object update callbacks (rather than one frame
+     * function), do BOTH tick and the sends in the earliest callback so every
+     * object's update reads post-send values.
+     *
      * `now` defaults to `performance.now()`. When you drive from
      * `requestAnimationFrame`, pass ITS timestamp argument — not `performance.now()`
      * (or `room.clock.now()`) sampled inside the callback: the rAF timestamp is

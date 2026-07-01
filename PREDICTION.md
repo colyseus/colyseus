@@ -325,6 +325,18 @@ your render frame:
 > ⚠️ **Lag comp rewinds to the *acting client's* render time, not the server's now.**
 > `rewind.lastSeenBy(shooterId)` gets the direction right for you.
 
+> ⚠️ **Frame order: `tick` → send → read.** Each frame, call `predict.tick(now)`,
+> send the returned number of inputs, and only then read render values
+> (`value()`/`pose()`). A read between `tick()` and the sends is one fixed step
+> stale — the interpolation clamps at the latest applied step (it never
+> extrapolates), so late frames flat-top and **fast objects visibly stutter**
+> while slow ones look fine. The reconciler warns once when it detects the
+> pattern. Two corollaries: in engines with per-object update callbacks (rather
+> than one frame function), do the tick AND the sends in the earliest callback,
+> so every object's update reads post-send values; and game logic (zone checks,
+> hit-reg) should read the exact predicted `.state`/`.world`, not `value()` —
+> those reads are order-independent and aren't render-smoothed.
+
 ---
 
 ## 5. Determinism
@@ -512,6 +524,7 @@ rewind then approximates.
 | Symptom | Likely cause |
 |---|---|
 | Local player rubber-bands constantly | Non-determinism: different `dt`, divergent `step`, or engine-version mismatch. Confirm with `me.drift.ema` (steady nonzero ⇒ divergence, not jitter) or `warnOnDivergence` (§5). |
+| A fast predicted object stutters "sometimes", but corrections are ~0 and `smoothing` changes nothing | `value()`/`pose()` read between `predict.tick()` and the frame's `input.send()` calls — one step stale, flat-tops on late frames (§4 frame order). Move the sends before any reads; the reconciler warns once when it sees this. |
 | Remotes stutter / teleport | Interp `delay` too small (buffer underruns); raise it past 1–2 patch intervals, or check patch rate. |
 | "I hit them but no damage" on moving targets | Not rewinding (or rewinding to server-now). Use `rewind.lastSeenBy(shooterId)` (§6). |
 | Hits register *behind* a dead-reckoned target (where it already walked) | The type renders forward-reckoned but rewinds to the raw stamp (double compensation). Declare `schema({...}, "Enemy").with({ lagComp: "reckon" })` on the type. |

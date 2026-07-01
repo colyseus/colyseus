@@ -193,6 +193,7 @@ export class SimReconciler<I = any, P extends Record<string, number> = any, E = 
      * set, reads it off the interpolated {@link pose}.
      */
     value(field: keyof P & string): number {
+        this.noteRenderRead();
         if (this.interpolate) return (this.pose() as Record<string, number>)[field];
         const c = this.curPose[field] + (this.error[field] ?? 0);
         const p = this.prev[field] ?? c;
@@ -205,6 +206,7 @@ export class SimReconciler<I = any, P extends Record<string, number> = any, E = 
      * per frame and memoized. The returned record is REUSED — read it synchronously.
      */
     pose(): P {
+        this.noteRenderRead();
         if (!this.poseDirty) return this.renderPose as unknown as P;
         const t = this.renderAlpha();
         const a = this.poseA, b = this.poseB;

@@ -131,6 +131,7 @@ export class Reconciler<S extends object = any, I = any> extends RollbackControl
      * fields only; non-numeric fields return the current value verbatim.
      */
     value(field: keyof S & string): number {
+        this.noteRenderRead();
         const c = this.local[field as string];
         if (typeof c !== "number") return c as unknown as number;
         const smoothed = c + (this.error[field as string] ?? 0);

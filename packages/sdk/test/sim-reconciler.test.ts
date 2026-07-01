@@ -385,3 +385,92 @@ describe('SimReconciler', () => {
         assert.equal(computeCount, 3, 'no recompute either');
     });
 });
+
+// -----------------------------------------------------------------------------
+// Frame-order (read-before-pump) warning: a render read between tick() and the
+// frame's sends is one step stale — the controller warns once when the sends
+// then arrive after such a read. Correct wiring, pauses, and controller-driven
+// reads must all stay silent.
+// -----------------------------------------------------------------------------
+
+describe('read-before-pump warning', () => {
+    test('warns once when a render value is read between tick() and the frame\'s sends', () => {
+        const input = new FakeInput();
+        const engine = makeEngine();
+        const { ctl } = make(engine, input);
+
+        ctl.tick(0);                    // prime (dt 0)
+        step(ctl, input, { ax: 1 });    // frame 0: correct order
+
+        const warns = captureWarn(() => {
+            ctl.tick(1000);             // a full step is due
+            ctl.value('x');             // ← read BEFORE the frame's send (the bug)
+            step(ctl, input, { ax: 1 }); // pump lands after the read → warn
+            // same pattern again — once per controller, stays silent
+            ctl.tick(2000);
+            ctl.value('x');
+            step(ctl, input, { ax: 1 });
+        });
+        assert.lengthOf(warns.filter(w => w.includes('read BEFORE')), 1);
+    });
+
+    test('silent when the frame sends before reading (correct order)', () => {
+        const input = new FakeInput();
+        const engine = makeEngine();
+        const { ctl } = make(engine, input);
+
+        const warns = captureWarn(() => {
+            ctl.tick(0);
+            for (let f = 1; f <= 5; f++) {
+                ctl.tick(f * 1000);
+                step(ctl, input, { ax: 1 }); // pump first
+                ctl.value('x');              // read after
+                ctl.pose();
+            }
+        });
+        assert.lengthOf(warns, 0);
+    });
+
+    test('silent while stepping is paused (reads hold at clamped alpha, no sends)', () => {
+        const input = new FakeInput();
+        const engine = makeEngine();
+        const { ctl } = make(engine, input);
+
+        const warns = captureWarn(() => {
+            ctl.tick(0);
+            step(ctl, input, { ax: 1 });
+            // menu/death: ticks + reads continue, inputs are gated off
+            for (let f = 1; f <= 5; f++) { ctl.tick(f * 1000); ctl.value('x'); }
+            // resume in correct order — the armed read belongs to an old frame
+            ctl.tick(6000);
+            step(ctl, input, { ax: 1 });
+            ctl.value('x');
+        });
+        assert.lengthOf(warns, 0);
+    });
+
+    test('reads from inside a step callback never arm the warning (live or replay)', () => {
+        const input = new FakeInput();
+        const engine = makeEngine();
+        const instance: Self = { x: 0, vx: 0 };
+        // step reads back a render value — controller-driven, not the app's render pass
+        let ctl!: SimReconciler<Cmd, Pose, Engine>;
+        ctl = new SimReconciler<Cmd, Pose, Engine>(baseOpts(input, engine, instance, {
+            step: (ctx, cmd, w) => { w.vx += cmd.ax * ctx.dt; w.x += w.vx * ctx.dt; ctl.value('x'); },
+        }));
+
+        const warns = captureWarn(() => {
+            ctl.tick(0);
+            step(ctl, input, { ax: 1 });    // live catch-up: step reads value()
+            ctl.tick(1000);
+            step(ctl, input, { ax: 1 });
+            // ack seq 1 → next tick reconciles → REPLAY of seq 2 reads value()
+            input.lastProcessed = 1;
+            instance.x = 1; instance.vx = 1;
+            ctl.tick(2000);
+            step(ctl, input, { ax: 1 });    // pump after the reconcile — must not warn
+            ctl.value('x');
+        });
+        assert.lengthOf(warns, 0);
+    });
+});

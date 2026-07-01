@@ -24,6 +24,25 @@ export function resetDivergenceThrottle(): void {
 }
 
 /**
+ * Wiring warning, fired (once per controller) when a render value was read
+ * BETWEEN `predict.tick()` and the frame's `input.send()` calls. Such a read is
+ * one fixed step stale — the render interpolation clamps at the latest applied
+ * step (it never extrapolates), so on late step-boundary frames the read
+ * flat-tops, and frame jitter renders as visible stutter on fast objects.
+ * Default-on (like the input replay-buffer overflow warning): this is a frame-
+ * order bug with an established fix, not tuning telemetry.
+ */
+export function warnReadBeforePump(): void {
+    console.warn(
+        `@colyseus/sdk predict: a predicted value was read BEFORE this frame's input.send() calls. ` +
+        `Reads between predict.tick() and the frame's sends are one fixed step stale and stutter on ` +
+        `late frames. Send the frame's due inputs right after predict.tick(now), before anything reads ` +
+        `value()/pose(); for game logic (zone checks, hit-reg) read .state/.world instead. ` +
+        `See PREDICTION.md §4 (frame order).`,
+    );
+}
+
+/**
  * Dev-only divergence warning, wired by the opt-in `warnOnDivergence` tolerance
  * on a {@link Reconciler}/{@link SimReconciler}. Fired when the reconciler's
  * verdict is `diverging` (the *persistent* drift `ema` crossed the tolerance —

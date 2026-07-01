@@ -44,7 +44,7 @@
 // Drives + reads acks through `room.input(...)`'s handle (type-only, erased).
 import type { InputHandle } from "../input/InputHandle.ts";
 import { newDrift, updateDrift, resetDrift, classifyDrift, type Drift } from "./drift.ts";
-import { warnDivergence, diagnosticsActive } from "./divergence.ts";
+import { warnDivergence, warnReadBeforePump, diagnosticsActive } from "./divergence.ts";
 
 /**
  * Per-seq memo backing {@link StepContext.effect}: run a closure ONCE on the
@@ -334,6 +334,17 @@ export abstract class RollbackController<I = any> {
      *  resume, and hitch all render smooth. */
     private renderAcc = 0;
 
+    /** Frame counter (one bump per {@link tick}) — pairs with
+     *  {@link clampedReadTick} to catch render reads that precede the frame's
+     *  sends (see {@link noteRenderRead}). */
+    private tickSeq = 0;
+    /** `tickSeq` of the last render read taken while a full step was due but
+     *  unapplied (alpha clamped at 1) — armed by {@link noteRenderRead},
+     *  checked against the current frame by {@link catchUp}. */
+    private clampedReadTick = -1;
+    /** One-shot: the read-before-pump warning already fired for this controller. */
+    private warnedStaleRead = false;
+
     protected readonly stepCtx: MutableStepContext;
     /** Per-seq memo backing `ctx.effect` — recorded live, replayed verbatim, pruned on ack. */
     protected readonly effects = new EffectStore();
@@ -403,6 +414,7 @@ export abstract class RollbackController<I = any> {
      * so it holds steady at the latest step when stepping pauses.
      */
     tick(now: number): void {
+        this.tickSeq++;   // new frame — see noteRenderRead/catchUp
         const dt = this.lastTick < 0 ? 0 : now - this.lastTick;
         this.lastTick = now;
         // Advance the render interpolation clock by real frame time. Consumed per
@@ -438,6 +450,23 @@ export abstract class RollbackController<I = any> {
     }
 
     /**
+     * Record a render read (`value`/`pose` — the subclasses call this at the top
+     * of theirs). A read taken while a full fixed step is DUE but not yet applied
+     * (`renderAcc ≥ stepMs`, alpha clamped at 1) returns a one-step-stale pose; if
+     * this frame's `input.send()` calls then arrive AFTER it, the app rendered
+     * stale motion — the read-before-pump wiring bug ({@link catchUp} warns once).
+     * The correct frame order is: `predict.tick(now)` → send the due inputs →
+     * read `value()`/`pose()`. Raw `state`/`world` reads (game logic, hit-reg)
+     * don't come through here and are order-independent. Reads made from inside
+     * controller-driven user code (a `step` or effect during catch-up/replay) are
+     * skipped — they aren't the app's render pass.
+     */
+    protected noteRenderRead(): void {
+        if (this.catching || this.stepMs <= 0 || this.renderAcc < this.stepMs) return;
+        this.clampedReadTick = this.tickSeq;
+    }
+
+    /**
      * Step every input sent since the last catch-up (predict each, zero-latency).
      * Driven by the input handle's `onSend` hook (subscribed in the constructor),
      * so it runs synchronously at the end of each `input.send()` — normally
@@ -447,6 +476,13 @@ export abstract class RollbackController<I = any> {
     protected catchUp(): void {
         const sent = this.input_.sentCount;
         if (this.predictedSeq >= sent || this.catching) return;
+        // A render value was read earlier THIS frame at clamped alpha, and the
+        // frame's sends are only arriving now — the app rendered a one-step-stale
+        // pose (frame jitter becomes visible stutter on fast objects). Warn once.
+        if (this.clampedReadTick === this.tickSeq && !this.warnedStaleRead) {
+            this.warnedStaleRead = true;
+            warnReadBeforePump();
+        }
         this.catching = true;
         this.stepCtx.isReplay = false;           // live forward steps
         for (let seq = this.predictedSeq + 1; seq <= sent; seq++) {
@@ -509,10 +545,12 @@ export abstract class RollbackController<I = any> {
         // a prior life (respawn) and must not re-run.
         const from = Math.max(acked, this.replayFrom);
         this.stepCtx.isReplay = true;            // rollback re-sim of buffered inputs
+        this.catching = true;   // guard: replay-driven user code isn't a render pass, and must not recurse
         for (let seq = from + 1; seq <= this.input_.sentCount; seq++) {
             const inp = this.input_.at(seq);
             if (inp !== undefined) this.runStep(seq, inp);
         }
+        this.catching = false;
         this.refreshRender();
         // Replay reconstructed the predicted state up to the latest send, so the
         // live cursor is now current — subsequent catch-up has nothing to do.
