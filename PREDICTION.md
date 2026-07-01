@@ -326,18 +326,20 @@ your render frame:
 > `rewind.lastSeenBy(shooterId)` gets the direction right for you.
 
 > ⚠️ **Frame order: `tick` → send → read.** Each frame, call `predict.tick(now)`,
-> send the due inputs, and only then read render values (`value()`/`pose()`).
-> A read between `tick()` and the sends is one fixed step stale — the
-> interpolation clamps at the latest applied step (it never extrapolates), so
-> late frames flat-top and **fast objects visibly stutter** while slow ones look
-> fine. The reconciler warns once when it detects the pattern. Two ways to get
-> the order right: a single frame function does `const n = predict.tick(now)`
-> and sends `n` inputs inline; engines with per-object update callbacks register
-> the send loop where the input lives — `predict.onStep(() => { input.data.dx = …;
-> input.send(); })` — and `tick()` runs it at the right moment, so every object's
-> update reads post-send values. Corollary: game logic (zone checks, hit-reg)
-> should read the exact predicted `.state`/`.world`, not `value()` — those reads
-> are order-independent and aren't render-smoothed.
+> send the returned number of inputs, and only then read render values
+> (`value()`/`pose()`). A read between `tick()` and the sends is one fixed step
+> stale — the interpolation clamps at the latest applied step (it never
+> extrapolates), so late frames flat-top and **fast objects visibly stutter**
+> while slow ones look fine. The reconciler warns once when it detects the
+> pattern. The idiom is the same everywhere: THE FRAME DRIVER OWNS INPUT —
+> `const n = predict.tick(now); for (n) { input.data.… = …; input.send(); }` —
+> and everything downstream only reads. In engines with per-object update
+> callbacks, that driver is the earliest registered callback; `room.input()`
+> returns the same handle everywhere, so the driver and the entity that predicts
+> through it need no shared plumbing, and `tick()` returns 0 until a reconciler
+> exists, so the loop self-gates before spawn. Corollary: game logic (zone
+> checks, hit-reg) should read the exact predicted `.state`/`.world`, not
+> `value()` — those reads are order-independent and aren't render-smoothed.
 
 ---
 
@@ -551,5 +553,5 @@ rewind then approximates.
 | Server | `input(sid).renderTime` | Raw render time of the last consumed input (prefer `lastSeenBy`) |
 | Client | `room.input({ mode })` | Input transport; lag-comp `renderDelay` auto-binds to the `Predict` lerp `delay` when wired through `reconciler`/`sim` (pass `renderDelay` to override) |
 | Client | `Predict.get(room, opts)` + `attachAll` / `reconciler` / `sim` | Remote smoothing; local rollback for one flat-field entity (`reconciler`) or composite/engine state (`sim`) |
-| Client | `predict.tick(now)` / `predict.onStep(cb)` | Per-frame driver: returns the due fixed-step count for an inline send loop, or runs a registered send loop at the right moment (§4 frame order) |
+| Client | `predict.tick(now)` | Per-frame driver: reconcile + decay + smoothing, returns the due fixed-step count for the frame driver's send loop (§4 frame order) |
 | Client | `room.clock` | `serverNow()` / `smoothedRtt()` / `lastServerTime()` |

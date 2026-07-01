@@ -731,9 +731,6 @@ export class Predict<TState = any> {
     private fixedStepMs: number | undefined;
     private stepAcc = 0;
     private lastFrameNow = -1;
-    /** Input pumps registered via {@link onStep} — run once per due fixed step,
-     *  inside {@link tick}, after the reconcile/decay pass. */
-    private stepPumps: Array<() => void> = [];
     /** Spiral-of-death guard: cap fixed steps emitted per frame (after a hitch,
      *  drop the backlog rather than chase it). */
     private static readonly MAX_STEPS_PER_FRAME = 5;
@@ -1808,8 +1805,10 @@ export class Predict<TState = any> {
      * Game logic that wants the exact predicted state (hit-reg, zone checks)
      * should read `.state`/`.world` instead, which this ordering doesn't affect.
      * In engines that run per-object update callbacks (rather than one frame
-     * function), register your send loop via {@link onStep} — tick runs it at the
-     * right moment, so every object's update reads post-send values.
+     * function), tick AND pump in the earliest registered callback — the frame
+     * driver owns input; objects only read. `room.input()` returns the same
+     * handle everywhere, so the driver and the entity that predicts through it
+     * don't need to share plumbing.
      *
      * `now` defaults to `performance.now()`. When you drive from
      * `requestAnimationFrame`, pass ITS timestamp argument — not `performance.now()`
@@ -1854,53 +1853,7 @@ export class Predict<TState = any> {
         }
         if (live !== driven.length) driven.length = live;
 
-        // Run registered input pumps (see onStep) — after the reconcile/decay pass
-        // (their sends step on top of reconciled state, exactly like a manual send
-        // loop placed after tick) and before anything downstream reads render values.
-        if (steps > 0 && this.stepPumps.length > 0) {
-            for (let i = 0; i < steps; i++) {
-                for (const pump of this.stepPumps) pump();
-            }
-        }
-
         return steps;
-    }
-
-    /**
-     * Register the frame's input pump: `cb` runs once per due fixed step, INSIDE
-     * {@link tick} — after the reconcile/decay pass, before tick returns — so its
-     * `input.send()` calls land at the protocol-correct moment: after the clock
-     * advance, before anything downstream of tick can read render values.
-     *
-     * This is the ergonomic home for engines that run per-object update callbacks
-     * (rather than one frame function), where the code that fills inputs lives far
-     * from the single earliest callback that ticks: tick where the frame starts,
-     * register the pump where the input lives.
-     *
-     * ```ts
-     * // scene setup — the earliest per-frame callback just ticks:
-     * onFrame(() => predict.tick(now));
-     * // wherever the local entity spawns — same body a manual send loop would have:
-     * const off = predict.onStep(() => {
-     *   input.data.dx = …;
-     *   input.send();
-     * });
-     * // on despawn:
-     * off();
-     * ```
-     *
-     * Inside `cb`, mutate `input.data` and call `input.send()` exactly like a
-     * manual send loop — the reconcilers observe the handle either way. Drive
-     * sends with EITHER a registered pump OR tick's returned step count, not both
-     * (both run, doubling the input rate). Multiple pumps run in registration
-     * order, once each per step. Returns an unsubscribe function.
-     */
-    onStep(cb: () => void): () => void {
-        this.stepPumps.push(cb);
-        return () => {
-            const i = this.stepPumps.indexOf(cb);
-            if (i !== -1) this.stepPumps.splice(i, 1);
-        };
     }
 
     // --- Sibling-store factory -------------------------------------------------

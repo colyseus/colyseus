@@ -36,10 +36,9 @@ export function warnReadBeforePump(): void {
     console.warn(
         `@colyseus/sdk predict: a predicted value was read BEFORE this frame's input.send() calls. ` +
         `Reads between predict.tick() and the frame's sends are one fixed step stale and stutter on ` +
-        `late frames. Register your send loop with predict.onStep(cb) — tick() then runs it at the ` +
-        `right moment — or send the due inputs right after predict.tick(now), before anything reads ` +
-        `value()/pose(). For game logic (zone checks, hit-reg) read .state/.world instead. ` +
-        `See PREDICTION.md §4 (frame order).`,
+        `late frames. Send the frame's due inputs right after predict.tick(now) — tick and pump in ` +
+        `your earliest per-frame callback, before anything reads value()/pose(). For game logic ` +
+        `(zone checks, hit-reg) read .state/.world instead. See PREDICTION.md §4 (frame order).`,
     );
 }
 
