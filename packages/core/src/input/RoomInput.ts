@@ -1,6 +1,6 @@
 import { decode, encode, Encoder, Reflection, type Iterator } from '@colyseus/schema';
 import { InputDecoder } from '@colyseus/schema/input';
-import { HandshakeSection, InputFlags, PROTOCOL_MODIFIER_MASK } from '@colyseus/shared-types';
+import { HandshakeSection, InputFlags, ProtocolModifier } from '@colyseus/shared-types';
 
 import {
   type InputAccessor, type InputAPI, type InputOptions,
@@ -49,8 +49,9 @@ export class RoomInput {
    *  leave → idle). Set on join, deleted on full leave. */
   private accessors: Map<string, InputAccessor<any>> = new Map();
 
-  // Wire stamp mode (renderTime/reckonTime prefix per input) — derived from the
-  // rewind timeline, resolved once on first handshake/decode then frozen.
+  // Wire stamp mode derived from the rewind timeline, resolved once on first
+  // handshake/decode then frozen so advertise + decode never disagree mid-session:
+  // the renderTime/reckonTime prefix per input.
   #stampRender = false;
   #stampReckon = false;
   #stampResolved = false;
@@ -152,6 +153,7 @@ export class RoomInput {
   allocate(client: Client & ClientPrivate): void {
     client._input = new this.options.ctor();
     client._inputDecoder = new InputDecoder(client._input);
+    client._reckonBaseline = 0; // mirrors the SDK's delta-coded stamp baseline (reset together on (re)connect)
     const maxSize = this.options.bufferMaxSize;
     if (maxSize > 0) {
       // ctor → idle synthesis; client ref → idle ctx; idle policy → total drain()/next().
@@ -218,26 +220,32 @@ export class RoomInput {
    *  offset 1, so the body begins at `it.offset`. */
   decodeReliable(client: ClientPrivate, buffer: Buffer, it: Iterator, modifiers: number): void {
     if (!client._inputDecoder) { return; }
-    // Optional stamp prefix (TIMED bit), length set by this room's stamp mode:
-    //   both:        [uint32 reckonTime][uint16 renderDelta] → renderTime = reckonTime − renderDelta
-    //   reckon-only: [uint32 reckonTime]
-    //   render-only: [uint32 renderTime]
+    // Optional stamp prefix (TIMED bit), DELTA-CODED, length set by this room's
+    // stamp mode (the timeline value is reconstructed against the per-client
+    // baseline; the wire carries only the signed change from the previous frame):
+    //   both:        [varint Δreckon][uint16 renderDelta] → renderTime = reckon − renderDelta
+    //   reckon-only: [varint Δreckon]
+    //   render-only: [varint Δrender]
     let renderTime = 0;
     let reckonTime = 0;
-    if (modifiers & PROTOCOL_MODIFIER_MASK) {
-      this.#resolveStampMode();
+    if (modifiers & ProtocolModifier.TIMED) {
+      this.#resolveWireModes();
+      // Reconstruct the absolute timeline value: baseline += signed delta. Both
+      // sides start at 0 (so the first delta is absolute) and re-zero together on
+      // (re)connect; reliable+in-order keeps the mirror locked.
+      const stamp = client._reckonBaseline! += decode.number(buffer, it);
       if (this.#stampReckon && this.#stampRender) {
-        reckonTime = decode.uint32(buffer, it);
+        reckonTime = stamp;
         const renderDelta = decode.uint16(buffer, it);
-        renderTime = reckonTime > renderDelta ? reckonTime - renderDelta : 0;
+        renderTime = stamp > renderDelta ? stamp - renderDelta : 0;
       } else if (this.#stampReckon) {
-        reckonTime = decode.uint32(buffer, it);
+        reckonTime = stamp;
       } else {
-        renderTime = decode.uint32(buffer, it);
+        renderTime = stamp;
       }
     }
     try {
-      client._inputDecoder.decode(buffer.subarray(it.offset));
+      client._inputDecoder.decode(buffer.subarray(it.offset, buffer.byteLength));
     } catch (e: any) {
       debugAndPrintError(e);
       return;
@@ -250,7 +258,7 @@ export class RoomInput {
 
   /** Decode a `ROOM_INPUT_UNRELIABLE` redundancy ring — each slot carries its
    *  framework seq (base seq + position) for ring dedupe, no user seqField. */
-  decodeUnreliable(client: ClientPrivate, buffer: Buffer): void {
+  decodeUnreliable(client: ClientPrivate, buffer: Buffer, _modifiers: number): void {
     if (!client._inputDecoder) { return; }
     try {
       client._inputDecoder.decodeAll(buffer.subarray(1), (_inst, seq) => this.capture(client, 0, 0, seq));
@@ -264,7 +272,7 @@ export class RoomInput {
   // --- handshake + stamp mode ---
 
   /** Resolve the wire stamp mode from the rewind timeline (once, then frozen). */
-  #resolveStampMode(): void {
+  #resolveWireModes(): void {
     if (this.#stampResolved) return;
     this.#stampResolved = true;
     const tl = this.room._timelineMode();
@@ -287,7 +295,7 @@ export class RoomInput {
     if (inputBytes !== undefined) {
       sections = [{ tag: HandshakeSection.INPUT_REFLECTION, bytes: inputBytes }];
     }
-    this.#resolveStampMode();
+    this.#resolveWireModes();
     const stampRender = this.#stampRender;
     const stampReckon = this.#stampReckon;
     const tickRate = this.options.tickRate;

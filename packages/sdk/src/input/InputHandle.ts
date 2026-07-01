@@ -1,3 +1,4 @@
+import { encode } from '@colyseus/schema';
 import { InputEncoder, type InputEncoderOptions, type InputMode } from '@colyseus/schema/input';
 import { Protocol, ProtocolModifier } from '@colyseus/shared-types';
 
@@ -66,6 +67,32 @@ export interface InputOptions<I = any> extends InputEncoderOptions {
    * `mode:"snapshot"` group (which auto-enables the renderTime stamp).
    */
   renderDelay?: number;
+
+  /**
+   * Predicate selecting which of this client's inputs the server may REWIND to —
+   * i.e. which inputs carry their lag-comp timestamp on the wire. The client-side
+   * mirror of the server room's `allowRewindState`: there the room records history
+   * to rewind into; here you say which inputs are worth rewinding to. Omitted (the
+   * default) stamps EVERY reliable input.
+   *
+   * Return `true` only for inputs the server lag-compensates — e.g. a firing input
+   * that triggers a rewound hit-test — to drop the ~1-byte timestamp on the rest
+   * (typically the majority of frames: moving/aiming without shooting). Evaluated
+   * against the staged {@link InputHandle.data} on each {@link InputHandle.send}.
+   *
+   * A pure client-side bandwidth trim: the server already tolerates mixed
+   * stamped/unstamped reliable inputs (an unstamped one reads `renderTime` 0 and
+   * falls back to live), and the delta-coded stamp baseline self-syncs across the
+   * gaps — no server change. Per-input ONLY: it gates the timestamp, not rewind
+   * itself (that's the room's `allowRewindState`), so `() => false` just keeps the
+   * server live for this client — it never disables rewind.
+   *
+   * ⚠ ONLY safe when the timestamp is consumed SERVER-side (a `mode:"snapshot"`
+   * renderTime rewind for hit registration). If the CLIENT reads the stamp for its
+   * OWN prediction — a `mode:"reckon"` room whose reconciler hit-tests at
+   * `ctx.reckonTime` every step — every input needs it; do NOT set this there.
+   */
+  allowRewind?: (data: I) => boolean;
 }
 
 /**
@@ -228,14 +255,27 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
   // stamped on the wire AND recorded into _reckonTimes by _recordSent (same value
   // both). 0 when not stamping.
   private _pendingReckon = 0;
+  // Running baseline for the DELTA-CODED reliable stamp: the last timeline u32
+  // sent. Each stamped send transmits `stamp − _lastStamp` (signed, ≈ one fixed
+  // step per tick → ~1 byte vs a raw 4-byte u32); the server mirrors this baseline
+  // and reliable+in-order keeps the two locked. reset() re-zeros it so the first
+  // delta after a (re)connect carries the absolute, re-syncing with the server's
+  // freshly-allocated baseline.
+  private _lastStamp = 0;
   private static _warnedBufferOverflow = false;
 
   // Lag-comp stamp (server INPUT_OPTIONS handshake): which timeline(s) each
-  // reliable input is prefixed with. Both → [u32 reckonTime][u16 renderDelta]
-  // (6B); reckon-only → [u32 reckonTime] (4B); render-only → [u32 renderTime]
-  // (4B); neither → no prefix.
+  // reliable input is prefixed with, DELTA-CODED on the wire (see _lastStamp).
+  // Both → [varint Δreckon][u16 renderDelta]; reckon-only → [varint Δreckon];
+  // render-only → [varint Δrender]; neither → no prefix.
   private _stampRender = false;
   private _stampReckon = false;
+  // Optional per-send gate (app `allowRewind`): when set, only inputs it returns
+  // true for carry the stamp — the rest skip it (and the TIMED bit), trimming the
+  // timestamp on frames the server won't rewind (e.g. non-firing inputs). The
+  // delta baseline (`_lastStamp`) only advances on stamped sends, so it stays
+  // locked with the server across the gaps. Absent ⇒ stamp every reliable input.
+  private _allowRewind?: (data: I) => boolean;
   // The app's interpolation buffer (ms) — how far in the past it renders remote
   // entities (e.g. a `Predict` lerp `delay`). The stamp subtracts this AND the
   // one-way latency (smoothedRtt/2) the SDK already tracks, so callers pass only
@@ -256,13 +296,14 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
     host: InputHandleHost,
     data: I,
     encoder: InputEncoder<any>,
-    opts?: { stampRender?: boolean; stampReckon?: boolean; renderDelay?: number; tickRate?: number; patchRate?: number; subSteps?: number },
+    opts?: { stampRender?: boolean; stampReckon?: boolean; renderDelay?: number; tickRate?: number; patchRate?: number; subSteps?: number; allowRewind?: (data: I) => boolean },
   ) {
     this._host = host;
     this.data = data;
     this._encoder = encoder;
     this._stampRender = opts?.stampRender ?? false;
     this._stampReckon = opts?.stampReckon ?? false;
+    this._allowRewind = opts?.allowRewind;
     this._renderDelay = opts?.renderDelay ?? 0;
     this._renderDelayExplicit = opts?.renderDelay !== undefined;
     this._tickRate = opts?.tickRate;
@@ -328,6 +369,7 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
     // seqs continue past the server's last-seen seq if the buffer was reused.
     this._sentCount = this._lastProcessed = this._encoder.seq;
     this._framed = null;
+    this._lastStamp = 0; // next stamped send ships an absolute delta — re-syncs the server's re-zeroed baseline
     this._sendTimes.fill(0); // stale acks for pre-reset seqs must read as "unknown" (-1), not a bogus RTT
     // _inputBuffer is reused as-is: at() gates on _sentCount/_lastProcessed, so it can't surface stale snapshots.
   }
@@ -358,21 +400,32 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
     // body-less input (server decodes it as a no-op, holding the last values).
     // Callers skip a tick by not calling send(), not by relying on suppression.
     const bytes = this._encoder.encode();
+    const reliable = this._encoder.mode === "reliable";
 
     // Lag-comp stamp prefix (reliable only): OR the TIMED modifier onto the
-    // opcode and prepend the timeline stamp(s) the server advertised. BOTH ships
-    // [u32 reckonTime][u16 renderDelta] (6B); a single timeline ships its one
-    // [u32] (4B). The server reads the length from its own derived mode.
-    const wantStamp = (this._stampReckon || this._stampRender) && this._encoder.mode === "reliable";
+    // opcode and prepend the timeline stamp the server advertised, DELTA-CODED.
+    // The wire carries the signed change from the previous stamp via the
+    // self-describing number codec — ≈ one fixed step per tick, so ~1 byte where
+    // a raw u32 was 4 (the first send / post-reset frame ships the absolute as a
+    // one-off larger delta). BOTH also trails a [u16 renderDelta]; the server
+    // mirrors the baseline, so reliable+in-order keeps them locked.
+    // `allowRewind` (when present) skips the stamp on inputs the server won't
+    // rewind — the baseline below only advances when we actually stamp, gap-free.
+    const wantStamp = (this._stampReckon || this._stampRender) && reliable
+      && (this._allowRewind === undefined || this._allowRewind(this.data));
     const both = this._stampReckon && this._stampRender;
-    const prefixLen = wantStamp ? (both ? 6 : 4) : 0;
-    const total = 1 + prefixLen + bytes.length;
-    if (total > this._scratch.byteLength) {
-      this._scratch = new Uint8Array(Math.max(total, this._scratch.byteLength * 2));
+    // Upper bound: opcode + stamp (number codec ≤9B for Δ, +2B u16 renderDelta) + body.
+    const stampMax = wantStamp ? (both ? 9 + 2 : 9) : 0;
+    const totalMax = 1 + stampMax + bytes.length;
+    if (totalMax > this._scratch.byteLength) {
+      this._scratch = new Uint8Array(Math.max(totalMax, this._scratch.byteLength * 2));
       this._framed = null;   // cached view points into the old buffer
     }
+    this._scratch[0] = (reliable ? Protocol.ROOM_INPUT_RELIABLE : Protocol.ROOM_INPUT_UNRELIABLE)
+      | (wantStamp ? ProtocolModifier.TIMED : 0);
+
+    const it = { offset: 1 };
     if (wantStamp) {
-      this._scratch[0] = Protocol.ROOM_INPUT_RELIABLE | ProtocolModifier.TIMED;
       // The reckon instant for THIS send: the client's serverNow() estimate
       // (rounded u32 ms), 0 until the clock syncs. Stamped on the wire below AND
       // recorded per-seq by _recordSent (when reckon is on) so the reconciler
@@ -392,44 +445,32 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
       // (`renderDelay`, app-set) PLUS the one-way downstream latency
       // (≈ smoothedRtt/2, ours). BOTH mode ships reckonTime + a u16 renderDelta
       // (only the base needs u32 range; the gap is bounded ≪ 65s) and the server
-      // derives renderTime; single-timeline modes ship the one absolute u32 they
-      // use. All 0 until the clock syncs (lastServerTime still 0) → the server
-      // falls back to live positions instead of a bogus stamp. `delta`
-      // (renderDelta) is stamp-specific; `rk` (reckonTime) is shared above.
-      const delta = synced
+      // derives renderTime; single-timeline modes ship the one timeline they use.
+      // All 0 until the clock syncs (lastServerTime still 0) → the server falls
+      // back to live positions instead of a bogus stamp.
+      const renderDelta = synced
         ? Math.min(0xffff, Math.max(0, Math.round(this._resolveRenderDelay() + (clock!.smoothedRtt?.() ?? 0) / 2)))
         : 0;
-      if (both) {
-        this._scratch[1] = rk & 0xff;
-        this._scratch[2] = (rk >>> 8) & 0xff;
-        this._scratch[3] = (rk >>> 16) & 0xff;
-        this._scratch[4] = (rk >>> 24) & 0xff;
-        this._scratch[5] = delta & 0xff;
-        this._scratch[6] = (delta >>> 8) & 0xff;
-        this._scratch.set(bytes, 7);
-      } else {
-        // Single u32: reckonTime for reckon-only, renderTime (= reckon − delta)
-        // for render-only.
-        const stamp = (this._stampReckon ? rk : (rk > delta ? rk - delta : 0)) >>> 0;
-        this._scratch[1] = stamp & 0xff;
-        this._scratch[2] = (stamp >>> 8) & 0xff;
-        this._scratch[3] = (stamp >>> 16) & 0xff;
-        this._scratch[4] = (stamp >>> 24) & 0xff;
-        this._scratch.set(bytes, 5);
-      }
+      // The single u32 timeline this mode emits: reckonTime for reckon/both,
+      // renderTime (= reckon − delta) for render-only. Delta-code it against the
+      // running baseline; BOTH then trails the absolute u16 renderDelta.
+      const stamp = this._stampReckon ? rk : (rk > renderDelta ? rk - renderDelta : 0);
+      encode.number(this._scratch, stamp - this._lastStamp, it);
+      this._lastStamp = stamp;
+      if (both) { encode.uint16(this._scratch, renderDelta, it); }
     } else {
       this._pendingReckon = 0; // not stamping → no reckon instant to record
-      this._scratch[0] = this._encoder.mode === "reliable"
-        ? Protocol.ROOM_INPUT_RELIABLE
-        : Protocol.ROOM_INPUT_UNRELIABLE;
-      this._scratch.set(bytes, 1);
     }
 
+    // [stamp?][body] — body continues from the stamp's end offset.
+    this._scratch.set(bytes, it.offset);
+    const total = it.offset + bytes.length;
+
     if (this._framed === null || this._framed.byteLength !== total) {
-      this._framed = this._scratch.subarray(0, total);   // reused view (size is stable)
+      this._framed = this._scratch.subarray(0, total);   // reused view (size varies only with the stamp prefix)
     }
     const framed = this._framed;
-    if (this._encoder.mode === "reliable") {
+    if (reliable) {
       conn.send(framed);
       // Reliable: implicit count seq — the server counts received messages, so
       // `_sentCount` mirrors its consumed counter for the next TIMED ack.

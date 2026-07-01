@@ -4,7 +4,7 @@ import { assert } from 'chai';
 
 import { Protocol, ProtocolModifier } from '@colyseus/shared-types';
 import { InputEncoder } from '@colyseus/schema/input';
-import { schema, t, type SchemaType } from '@colyseus/schema';
+import { schema, t, decode, type SchemaType } from '@colyseus/schema';
 
 import { InputHandleImpl, type InputHandleHost } from '../src/input/InputHandle.ts';
 
@@ -50,6 +50,7 @@ function makeHandle(
         renderDelay?: number;
         tickRate?: number;
         subSteps?: number;
+        allowRewind?: (data: MoveInput) => boolean;
         clockNow?: () => number;
         clockRtt?: number;
         clockSynced?: boolean;
@@ -68,16 +69,19 @@ function makeHandle(
         renderDelay: opts.renderDelay,
         tickRate: opts.tickRate,
         subSteps: opts.subSteps,
+        allowRewind: opts.allowRewind,
     });
     return { handle, conn, instance };
 }
 
-function readU32LE(buf: Uint8Array, offset: number): number {
-    return (buf[offset] | (buf[offset + 1] << 8) | (buf[offset + 2] << 16) | (buf[offset + 3] << 24)) >>> 0;
-}
-
-function readU16LE(buf: Uint8Array, offset: number): number {
-    return buf[offset] | (buf[offset + 1] << 8);
+// Mirror the server's reconstruction of the DELTA-CODED stamp: add the signed
+// wire delta (self-describing number codec) to the running baseline. `both` ⇒ a
+// trailing absolute u16 renderDelta. `bodyAt` is where the input body begins.
+function readStamp(buf: Uint8Array, baseline: number, both = false): { value: number; renderDelta: number; bodyAt: number } {
+    const it = { offset: 1 };
+    const value = baseline + decode.number(buf as any, it);
+    const renderDelta = both ? decode.uint16(buf as any, it) : 0;
+    return { value, renderDelta, bodyAt: it.offset };
 }
 
 describe('InputHandle', () => {
@@ -231,7 +235,7 @@ describe('InputHandle', () => {
             assert.equal(handle.lastProcessed, 2);
         });
 
-        test('BOTH stamps: ORs TIMED onto opcode and prepends [u32 reckonTime][u16 renderDelta] (6B)', () => {
+        test('BOTH stamps: ORs TIMED onto opcode and prepends [varint Δreckon][u16 renderDelta], reconstructed against the baseline', () => {
             let t = 1234;
             const { handle, conn, instance } = makeHandle('reliable', {
                 stampRender: true,
@@ -245,17 +249,19 @@ describe('InputHandle', () => {
 
             const buf = conn.reliable[0];
             assert.equal(buf[0], Protocol.ROOM_INPUT_RELIABLE | ProtocolModifier.TIMED);
-            assert.equal(buf.length, 1 + 6 + (buf.length - 7), 'TIMED + 6-byte prefix + body');
-            assert.equal(readU32LE(buf, 1), 1234, 'base stamp = round(serverNow) — the reckon display instant');
-            assert.equal(readU16LE(buf, 5), 130, 'delta = renderDelay + smoothedRtt/2 ⇒ server derives renderTime = 1104');
+            const s0 = readStamp(buf, 0, true);   // baseline 0 → first delta is absolute
+            assert.equal(s0.value, 1234, 'reckonTime = round(serverNow) — the reckon display instant');
+            assert.equal(s0.renderDelta, 130, 'delta = renderDelay + smoothedRtt/2 ⇒ server derives renderTime = 1104');
+            assert.equal(buf.length, s0.bodyAt + bodyLen(1), 'opcode + varint stamp + u16 delta + body');
 
-            // Base stamp stays the raw serverNow even when small; the server's
-            // `renderTime = reckonTime − delta` floors at 0, not the client.
+            // A backward jump in serverNow ships a NEGATIVE delta; the baseline still
+            // reconstructs the raw value (the server floors renderTime, not the client).
             t = 50;
             instance.x = 2;
             handle.send();
-            assert.equal(readU32LE(conn.reliable[1], 1), 50);
-            assert.equal(readU16LE(conn.reliable[1], 5), 130);
+            const s1 = readStamp(conn.reliable[1], 1234, true);   // baseline = the previous stamp
+            assert.equal(s1.value, 50);
+            assert.equal(s1.renderDelta, 130);
         });
 
         test('bindRenderDelay: an unset renderDelay is driven by the bound provider (the Predict lerp delay)', () => {
@@ -269,7 +275,7 @@ describe('InputHandle', () => {
             handle.bindRenderDelay(() => 100);
             instance.x = 1;
             handle.send();
-            assert.equal(readU16LE(conn.reliable[0], 5), 130, 'delta = boundDelay(100) + rtt/2(30)');
+            assert.equal(readStamp(conn.reliable[0], 0, true).renderDelta, 130, 'delta = boundDelay(100) + rtt/2(30)');
         });
 
         test('bindRenderDelay: an explicit room.input({ renderDelay }) wins over the binding', () => {
@@ -283,7 +289,7 @@ describe('InputHandle', () => {
             handle.bindRenderDelay(() => 999);   // ignored — explicit wins
             instance.x = 1;
             handle.send();
-            assert.equal(readU16LE(conn.reliable[0], 5), 130, 'still 100 + rtt/2, binding ignored');
+            assert.equal(readStamp(conn.reliable[0], 0, true).renderDelta, 130, 'still 100 + rtt/2, binding ignored');
         });
 
         test('bindRenderDelay: provider is read each send, so a live delay change tracks (no drift)', () => {
@@ -297,11 +303,12 @@ describe('InputHandle', () => {
             handle.bindRenderDelay(() => delay);
             instance.x = 1;
             handle.send();
-            assert.equal(readU16LE(conn.reliable[0], 5), 130, '100 + 30');
+            assert.equal(readStamp(conn.reliable[0], 0, true).renderDelta, 130, '100 + 30');
             delay = 40;
             instance.x = 2;
             handle.send();
-            assert.equal(readU16LE(conn.reliable[1], 5), 70, 'tracks the live change: 40 + 30');
+            // baseline = the previous stamp (serverNow is constant → a 0 delta this send).
+            assert.equal(readStamp(conn.reliable[1], 1234, true).renderDelta, 70, 'tracks the live change: 40 + 30');
         });
 
         // Length of the encoded MoveInput body (no opcode, no prefix) for `x`,
@@ -313,7 +320,7 @@ describe('InputHandle', () => {
             return r.conn.reliable[0].length - 1;   // minus the opcode byte
         }
 
-        test('RECKON-only: prepends [u32 reckonTime] (4B), no delta', () => {
+        test('RECKON-only: prepends [varint Δreckon], reconstructed (no renderDelta)', () => {
             const { handle, conn, instance } = makeHandle('reliable', {
                 stampReckon: true,
                 renderDelay: 100,
@@ -325,11 +332,12 @@ describe('InputHandle', () => {
 
             const buf = conn.reliable[0];
             assert.equal(buf[0], Protocol.ROOM_INPUT_RELIABLE | ProtocolModifier.TIMED);
-            assert.equal(readU32LE(buf, 1), 1234, 'reckonTime = round(serverNow), shipped directly (immune to rtt error)');
-            assert.equal(buf.length, 1 + 4 + bodyLen(1), 'opcode + 4-byte stamp + body (no u16 delta)');
+            const s = readStamp(buf, 0);
+            assert.equal(s.value, 1234, 'reckonTime = round(serverNow), shipped directly (immune to rtt error)');
+            assert.equal(buf.length, s.bodyAt + bodyLen(1), 'opcode + varint stamp + body (no u16 delta)');
         });
 
-        test('RENDER-only: prepends [u32 renderTime] (4B) = reckonTime − (renderDelay + rtt/2)', () => {
+        test('RENDER-only: prepends [varint Δrender] = reckonTime − (renderDelay + rtt/2)', () => {
             const { handle, conn, instance } = makeHandle('reliable', {
                 stampRender: true,
                 renderDelay: 100,
@@ -341,8 +349,9 @@ describe('InputHandle', () => {
 
             const buf = conn.reliable[0];
             assert.equal(buf[0], Protocol.ROOM_INPUT_RELIABLE | ProtocolModifier.TIMED);
-            assert.equal(readU32LE(buf, 1), 1104, 'renderTime = 1234 − 130 shipped directly (server reads it as-is)');
-            assert.equal(buf.length, 1 + 4 + bodyLen(1), 'opcode + 4-byte stamp + body (no u16 delta)');
+            const s = readStamp(buf, 0);
+            assert.equal(s.value, 1104, 'renderTime = 1234 − 130 shipped directly (server reads it as-is)');
+            assert.equal(buf.length, s.bodyAt + bodyLen(1), 'opcode + varint stamp + body (no u16 delta)');
         });
 
         test('RENDER-only: floors at 0 when the delta exceeds the base', () => {
@@ -354,7 +363,7 @@ describe('InputHandle', () => {
             });
             instance.x = 1;
             handle.send();
-            assert.equal(readU32LE(conn.reliable[0], 1), 0, 'renderTime floors at 0');
+            assert.equal(readStamp(conn.reliable[0], 0).value, 0, 'renderTime floors at 0');
         });
 
         test('stamps 0 until the clock has synced (lastServerTime == 0)', () => {
@@ -371,8 +380,64 @@ describe('InputHandle', () => {
 
             const buf = conn.reliable[0];
             assert.equal(buf[0], Protocol.ROOM_INPUT_RELIABLE | ProtocolModifier.TIMED);
-            assert.equal(readU32LE(buf, 1), 0, 'unsynced → 0 ⇒ server uses live positions');
-            assert.equal(readU16LE(buf, 5), 0, 'unsynced → no delta either');
+            const s = readStamp(buf, 0, true);
+            assert.equal(s.value, 0, 'unsynced → 0 ⇒ server uses live positions');
+            assert.equal(s.renderDelta, 0, 'unsynced → no delta either');
+        });
+
+        test('reckon stamp is delta-coded: first send carries the absolute, steady sends ship a 1-byte delta', () => {
+            let t = 10_000;
+            const { handle, conn, instance } = makeHandle('reliable', {
+                stampReckon: true,
+                clockNow: () => t,
+            });
+
+            instance.x = 1;
+            handle.send();
+            const first = readStamp(conn.reliable[0], 0);   // baseline 0 → absolute
+            assert.equal(first.value, 10_000, 'first stamp is the absolute reckonTime');
+            assert.isAbove(first.bodyAt, 2, 'absolute needs a multi-byte varint');
+
+            // Each ~one-step advance ships a single signed byte that reconstructs
+            // the absolute against the running baseline — the idle-bandwidth win.
+            let baseline = first.value;
+            for (let i = 1; i <= 3; i++) {
+                t += 42;                            // ≈ one 24 Hz step
+                instance.x = i + 1;
+                handle.send();
+                const s = readStamp(conn.reliable[i], baseline);
+                assert.equal(s.value, t, 'reconstructs the absolute reckonTime');
+                assert.equal(s.bodyAt, 2, 'steady-state stamp is one byte (opcode + 1)');
+                baseline = s.value;
+            }
+        });
+
+        test('allowRewind: gates the stamp per send — unstamped frames drop TIMED, baseline reconstructs across the gap', () => {
+            let t = 1000;
+            const { handle, conn, instance } = makeHandle('reliable', {
+                stampRender: true,
+                clockNow: () => t,
+                allowRewind: (d) => d.x >= 10,   // "firing" frames only
+            });
+
+            // x < 10 → no stamp: plain opcode, no TIMED, no prefix.
+            instance.x = 5; handle.send();
+            assert.equal(conn.reliable[0][0], Protocol.ROOM_INPUT_RELIABLE, 'unstamped: plain opcode');
+            assert.equal(conn.reliable[0][0] & ProtocolModifier.TIMED, 0, 'unstamped: TIMED clear');
+
+            // x ≥ 10 → stamp at t=1000: TIMED set, baseline 0 → absolute renderTime.
+            instance.x = 10; handle.send();
+            assert.equal(conn.reliable[1][0], Protocol.ROOM_INPUT_RELIABLE | ProtocolModifier.TIMED, 'stamped: TIMED set');
+            assert.equal(readStamp(conn.reliable[1], 0).value, 1000, 'first stamp = absolute renderTime');
+
+            // Clock advances while UNSTAMPED — the baseline must stay frozen at 1000.
+            t = 1050; instance.x = 5; handle.send();
+            assert.equal(conn.reliable[2][0] & ProtocolModifier.TIMED, 0, 'still unstamped across the gap');
+
+            // Next stamped frame at t=1100: its delta is from the last STAMPED (1000),
+            // not the skipped 1050 — so the server (baseline 1000) reconstructs 1100.
+            t = 1100; instance.x = 20; handle.send();
+            assert.equal(readStamp(conn.reliable[3], 1000).value, 1100, 'reconstructs across the unstamped gap');
         });
 
         test('no stamp flags: plain reliable opcode, no TIMED bit, no prefix', () => {

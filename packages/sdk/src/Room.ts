@@ -98,9 +98,8 @@ export class Room<
     /**
      * In-flight round-trips awaiting a {@link Protocol.ROOM_RESPONSE}, keyed by the
      * monotonic request id. `onReply` receives the decoded outcome `(ok, payload,
-     * faulted)`; `onClose` (request only) rejects on disconnect — its absence
-     * (`predict.action`) drops the registration silently, leaving the optimistic
-     * handle to the store's mispredict-TTL. @internal
+     * faulted)`; `onClose` (optional) rejects on disconnect — its absence drops the
+     * registration silently. @internal
      */
     #pending = new Map<number, {
         onReply: OnReply;
@@ -374,45 +373,32 @@ export class Room<
 
     /**
      * Low-level round-trip primitive: register `onReply` (called once with the
-     * decoded outcome when the server replies) and transmit the round-trip. The
-     * transport seam for `predict.action`; {@link request} wraps it with a promise
-     * + timeout. Two transports:
-     *  - default: encode + send a {@link Protocol.ROOM_REQUEST} now (`mode` picks
-     *    the channel).
-     *  - `opts.input`: ride the **input frame** — enqueue onto the handle (sent at
-     *    the next `input.send()`, dispatched tick-aligned); no ROOM_REQUEST is sent.
-     * `onClose` (optional) is invoked on disconnect — omit it to drop the
-     * registration silently (the predict layer's TTL governs the optimistic handle).
-     * Returns the request id, or `-1` if an unreliable send couldn't be transmitted
-     * (offline). @internal
+     * decoded outcome when the server replies) and transmit a
+     * {@link Protocol.ROOM_REQUEST} (`mode` picks the channel). {@link request}
+     * wraps it with a promise + timeout. `onClose` (optional) is invoked on
+     * disconnect — omit it to drop the registration silently. Returns the request
+     * id, or `-1` if an unreliable send couldn't be transmitted (offline). @internal
      */
     protected sendRequest(
         messageType: string | number,
         payload: any,
-        opts: { mode?: "reliable" | "unreliable"; input?: { enqueueAction(id: number, type: string | number, payload: any): void } },
+        opts: { mode?: "reliable" | "unreliable" },
         onReply: OnReply,
         onClose?: (reason: string) => void,
     ): number {
         const requestId = this.#mintRequestId();
 
-        if (opts.input !== undefined) {
-            // In-frame: the action rides the input packet — enqueue now (transmitted
-            // at the next input.send()). Only the id→verdict correlation is set up here.
-            opts.input.enqueueAction(requestId, messageType, payload);
+        const data = this.#encodeRequestFrame(requestId, messageType, payload);
+        if (opts.mode === "unreliable") {
+            if (!this.connection.isOpen) { return -1; }
+            // Sent once — no unreliable channel falls back to reliable inside the
+            // transport.
+            this.connection.sendUnreliable(data);
+        } else if (this.connection.isOpen) {
+            this.connection.send(data);
         } else {
-            const data = this.#encodeRequestFrame(requestId, messageType, payload);
-            if (opts.mode === "unreliable") {
-                if (!this.connection.isOpen) { return -1; }
-                // Sent once — no unreliable channel falls back to reliable inside the
-                // transport; a genuine drop falls to the predict-layer TTL.
-                this.connection.sendUnreliable(data);
-            } else if (this.connection.isOpen) {
-                this.connection.send(data);
-            } else {
-                // Reliable + offline: buffer so it flushes on (re)connect. Reachable only
-                // via predict.action — `request` fails fast before calling.
-                enqueueMessage(this, new Uint8Array(data));
-            }
+            // Reliable + offline: buffer so it flushes on (re)connect.
+            enqueueMessage(this, new Uint8Array(data));
         }
 
         this.#pending.set(requestId, { onReply, onClose });
@@ -427,9 +413,8 @@ export class Room<
 
     #rejectAllPending(reason: string) {
         if (this.#pending.size === 0) { return; }
-        // request entries reject (their `onClose` clears the timer); predict.action
-        // entries have no `onClose`, so they drop silently — the store's
-        // mispredict-TTL rolls the optimistic effect back.
+        // request entries reject (their `onClose` clears the timer); entries with no
+        // `onClose` drop silently.
         for (const entry of this.#pending.values()) { entry.onClose?.(reason); }
         this.#pending.clear();
     }
@@ -549,12 +534,7 @@ export class Room<
         this.#dispatchFrame(new Uint8Array(event.data));
     }
 
-    /**
-     * Decode + dispatch a single protocol frame. A {@link ProtocolModifier.FRAMES}
-     * patch (server→client coalescing — brief 21) re-enters this once per trailing
-     * message, after the length-delimited patch body has been applied — so e.g. a
-     * spawned entity exists in state before its `OK { ref }` verdict re-dispatches.
-     */
+    /** Decode + dispatch a single protocol frame. */
     #dispatchFrame(buffer: Uint8Array) {
         const it: Iterator = { offset: 1 };
         // Strip modifier bits (e.g. ProtocolModifier.TIMED). Consume any
@@ -662,29 +642,8 @@ export class Room<
             this.onStateChange.invoke(this.serializer.getState());
 
         } else if (code === Protocol.ROOM_STATE_PATCH) {
-            if (rawByte & ProtocolModifier.FRAMES) {
-                // Coalesced frame: `[varint patchBodyLen][...body][varint count]([varint len][frame])…`.
-                // Bound the patch decode to the body, then re-dispatch each trailing
-                // message (a ROOM_RESPONSE verdict resolves its pending request; a
-                // ROOM_DATA fires onMessage) — after onStateChange, so resulting state
-                // is already applied when a verdict correlates.
-                const patchBodyLen = decode.number(buffer as Buffer, it);
-                const bodyEnd = it.offset + patchBodyLen; // it.offset is now PAST the varint
-                this.serializer.patch(buffer.subarray(0, bodyEnd), it);
-                it.offset = bodyEnd;
-                this.onStateChange.invoke(this.serializer.getState());
-
-                const frameCount = decode.number(buffer as Buffer, it);
-                for (let i = 0; i < frameCount && it.offset < buffer.byteLength; i++) {
-                    const frameLen = decode.number(buffer as Buffer, it);
-                    const end = it.offset + frameLen; // again, after the len varint
-                    this.#dispatchFrame(buffer.subarray(it.offset, end));
-                    it.offset = end;
-                }
-            } else {
-                this.serializer.patch(buffer, it);
-                this.onStateChange.invoke(this.serializer.getState());
-            }
+            this.serializer.patch(buffer, it);
+            this.onStateChange.invoke(this.serializer.getState());
 
         } else if (code === Protocol.ROOM_DATA) {
             const type = (decode.stringCheck(buffer as Buffer, it))
@@ -705,7 +664,7 @@ export class Room<
             this.dispatchMessage(type, buffer.subarray(it.offset));
 
         } else if (code === Protocol.ROOM_RESPONSE) {
-            // reply to a pending `request()` / `send(..., callback)` / `predict.action()`.
+            // reply to a pending `request()` / `send(..., callback)`.
             const requestId = decode.number(buffer as Buffer, it);
             const status = buffer[it.offset++];
             const payload = (buffer.byteLength > it.offset)

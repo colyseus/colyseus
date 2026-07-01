@@ -42,6 +42,7 @@ class FakeInput {
         this.buffer.set(this.sentCount, { ...this.data });
     }
     at(seq: number): Cmd | undefined { return this.buffer.get(seq); }
+    reckonTimeAt(_seq: number): number { return 0; } // no reckon lag-comp in tests
     get pendingCount(): number { return this.sentCount - this.lastProcessed; }
 }
 

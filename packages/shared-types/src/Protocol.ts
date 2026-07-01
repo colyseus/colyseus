@@ -3,7 +3,7 @@
  * (values 0..31). Bits 5..7 are reserved for {@link ProtocolModifier}
  * decorations, OR'd onto the base code at send time (composable):
  *
- *     buffer[0] = Protocol.ROOM_INPUT_RELIABLE | ProtocolModifier.TIMED | ProtocolModifier.ACTIONS;
+ *     buffer[0] = Protocol.ROOM_INPUT_RELIABLE | ProtocolModifier.TIMED;
  *
  * Decoders strip the modifier bits before dispatching:
  *
@@ -22,11 +22,8 @@ export const Protocol = {
   ROOM_DATA_BYTES: 17,
   PING: 18,
 
-  // Input-related (19~20). In-frame rooms ({@link InputFlags.IN_FRAME_ACTIONS})
-  // length-prefix the body so a trailing actions section can ride the packet:
-  //   reliable:   [byte, stamp?, inputLen varint, input bytes, actions?]
-  //   unreliable: [byte, ringLen varint, len|input…, actions?]
-  ROOM_INPUT_RELIABLE: 19,   // [byte, ...InputEncoder.encode() bytes]               single input
+  // Input-related (19~20).
+  ROOM_INPUT_RELIABLE: 19,   // [byte, stamp?, ...InputEncoder.encode() bytes]       single input
   ROOM_INPUT_UNRELIABLE: 20, // [byte, len|input, len|input, ...]                    length-framed ring
 
   // Request/response (21~22)
@@ -73,12 +70,16 @@ export const ProtocolModifier = {
    * ({@link Protocol.ROOM_INPUT_RELIABLE}) when the Room's lag-comp attachments
    * require a per-client stamp. The handshake tells the client which timeline(s)
    * to send via {@link InputFlags.RENDER_TIME} / {@link InputFlags.RECKON_TIME};
-   * the prefix shape follows from which flags are set (server reads the length
-   * from its own derived mode — the two 4-byte shapes need no wire tag):
+   * the prefix shape follows from which flags are set. The timeline value is
+   * DELTA-CODED on the wire — each frame carries the signed change from the
+   * previous stamp via the self-describing number codec (≈ one fixed step per
+   * tick → ~1 byte vs a raw 4-byte u32; the first frame / post-reset ships the
+   * absolute as a one-off larger delta). The server reconstructs it against a
+   * per-client baseline both sides re-zero together on (re)connect:
    *
-   *   - RECKON_TIME only: `[uint32 reckonTime]` (4 B)
-   *   - RENDER_TIME only: `[uint32 renderTime]` (4 B)
-   *   - BOTH:             `[uint32 reckonTime][uint16 renderDelta]` (6 B)
+   *   - RECKON_TIME only: `[varint Δreckon]`
+   *   - RENDER_TIME only: `[varint Δrender]`
+   *   - BOTH:             `[varint Δreckon][uint16 renderDelta]`
    *
    * reckonTime (ms since room start) = the client's serverNow estimate at
    * input-sample time — what its forward-RECKONED entities display at, stamped
@@ -86,52 +87,19 @@ export const ProtocolModifier = {
    * RTT-estimation error. renderTime = the snapshot-timeline instant on screen
    * (what a LERPING client shows) = `reckonTime − renderDelta`
    * (≈ `renderDelay + rtt/2`). In the BOTH case the gap is shipped as a u16
-   * `renderDelta` (bounded ≪ 65 s) rather than a second u32 and the server
-   * derives renderTime; single-timeline rooms ship the one absolute stamp they
-   * use. See {@link HandshakeSection.INPUT_OPTIONS} / {@link InputFlags}.
+   * `renderDelta` (bounded ≪ 65 s) rather than a second delta and the server
+   * derives renderTime; single-timeline rooms ship the one timeline they use.
+   * See {@link HandshakeSection.INPUT_OPTIONS} / {@link InputFlags}.
    */
   TIMED: 0x80,
-
-  /**
-   * The input packet carries a **trailing actions section** after a
-   * length-prefixed body — `predict.action`s riding the input frame (see
-   * {@link Protocol.ROOM_INPUT_RELIABLE}). Set per-frame, only when an action
-   * rides, and only against a server that advertised
-   * {@link InputFlags.IN_FRAME_ACTIONS}; action-less frames stay the legacy
-   * body-to-end format (this bit unset). The decoder reads the body length from
-   * the prefix, then dispatches the trailing actions tick-aligned.
-   */
-  ACTIONS: 0x40,
-
-  /**
-   * The server→client {@link Protocol.ROOM_STATE_PATCH} carries a **trailing
-   * per-recipient frames section** after a length-prefixed patch body — the
-   * mirror of {@link ACTIONS} (client→server). Each "frame" is a complete,
-   * self-contained message (its own leading opcode, e.g. a
-   * {@link Protocol.ROOM_RESPONSE} verdict or a {@link Protocol.ROOM_DATA}),
-   * coalesced into the patch so an in-frame `predict.action`'s verdict + its
-   * resulting state + the input-ack arrive in ONE frame (brief 21, Design B).
-   *
-   * Layout when set (after the optional TIMED prefix):
-   *
-   *     [code | TIMED? | FRAMES][TIMED prefix?]
-   *     [varint patchBodyLen][...schema body]
-   *     [varint frameCount]([varint frameLen][frame bytes])…
-   *
-   * The `patchBodyLen` lets the patch decoder stop before the section; the SDK
-   * then re-dispatches each frame through the ordinary per-message path. Set
-   * per-tick, only when a frame rides — action-less patches leave this bit unset
-   * and stay byte-identical (no length prefix), so the hot path pays nothing.
-   */
-  FRAMES: 0x20,
 } as const;
 export type ProtocolModifier = typeof ProtocolModifier[keyof typeof ProtocolModifier];
 
 /** Mask isolating the base protocol code (low 5 bits, values 0..31). */
 export const PROTOCOL_CODE_MASK = 0x1F;
 
-/** Mask isolating modifier bits (high 3 bits — {@link ProtocolModifier.TIMED} +
- *  {@link ProtocolModifier.ACTIONS} + {@link ProtocolModifier.FRAMES}). */
+/** Mask isolating modifier bits (high 3 bits; only {@link ProtocolModifier.TIMED}
+ *  is assigned today, the other two are reserved). */
 export const PROTOCOL_MODIFIER_MASK = 0xE0;
 
 /**
@@ -139,8 +107,7 @@ export const PROTOCOL_MODIFIER_MASK = 0xE0;
  * pending {@link Protocol.ROOM_REQUEST} on the SDK side. The SDK decodes it into
  * the outcome model `(ok, payload, faulted)`:
  *
- * - `OK` → a `ctx.resolve(value)` (or a plain handler return); payload is the
- *   value, or `{ ref }` when an entity was resolved for a predicted-spawn handoff.
+ * - `OK` → a `ctx.resolve(value)` (or a plain handler return); payload is the value.
  * - `REJECTED` → a deliberate, typed `ctx.reject(reason)`; the authored reason
  *   rides as the payload, surfaced verbatim and typed.
  * - `ERROR` → a *fault* (handler threw, or no handler registered): `faulted` on
@@ -219,14 +186,6 @@ export const InputFlags = {
    *  `[uint32 reckonTime][uint16 renderDelta]`; alone it ships
    *  `[uint32 reckonTime]`. See {@link ProtocolModifier.TIMED}. */
   RECKON_TIME: 1 << 4,
-  /** The room reads **in-frame actions**: the input wire format is
-   *  length-prefixed (`[inputLen varint][input body]`) so a trailing actions
-   *  section can ride the same packet ({@link Protocol.ROOM_INPUT_RELIABLE} /
-   *  {@link Protocol.ROOM_INPUT_UNRELIABLE}). Advertised when the server has an
-   *  input subsystem that dispatches `predict.action`s tick-aligned. Absent ⇒
-   *  the SDK sends the legacy body-to-end format and `predict.action` falls back
-   *  to the standalone request/response transport. Carries no trailing varint. */
-  IN_FRAME_ACTIONS: 1 << 5,
 } as const;
 export type InputFlags = typeof InputFlags[keyof typeof InputFlags];
 

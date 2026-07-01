@@ -252,32 +252,29 @@ export interface ClientPrivate {
   _receivedInputCount?: number;
 
   /**
-   * @internal High-water mark of the highest in-frame actionId dispatched for this
-   * client — the dup/reorder guard. Action ids are client-monotonic, so an
-   * unreliable redelivery (UDP dup) or a reordered older frame carries an id at or
-   * below this and is dropped, mirroring the input ring's monotonic seq dedup.
+   * Running baseline for the DELTA-CODED lag-comp stamp on ROOM_INPUT_RELIABLE
+   * frames (the {@link ProtocolModifier.TIMED} prefix). Each frame carries only
+   * the signed change from the previous stamp; this accumulates them back into
+   * the absolute timeline value. Zeroed on (re)connect alongside the SDK's own
+   * baseline so the first delta after a reset is absolute. `0` until allocated.
    */
-  _lastActionId?: number;
+  _reckonBaseline?: number;
 
   /**
-   * @internal Per-client raw frames staged to ride INTO this client's next
-   * state patch — in-frame `predict.action` verdicts + per-client
-   * `afterNextPatch` messages (brief 21, Design B). Lazily allocated. Pushed by
-   * {@link enqueueClientRaw} (the `afterNextPatch` path), drained by the
-   * serializer when it builds the client's patch frame — or flushed as standalone
-   * frames if no patch carries them this tick. Room-level `broadcast`
-   * `afterNextPatch` uses the Room's own queue instead, not this buffer.
+   * @internal Per-client raw frames staged to ride out right AFTER this client's
+   * next state patch — per-client `afterNextPatch` messages. Lazily allocated.
+   * Pushed by {@link enqueueClientRaw} (the `afterNextPatch` path), flushed as
+   * standalone frames after the patch by {@link Room._flushPendingClientFrames}.
+   * Room-level `broadcast` `afterNextPatch` uses the Room's own queue instead, not
+   * this buffer.
    */
   _pendingFrames?: Uint8Array[];
 
   /**
    * @internal Back-reference to the Room's "clients with staged frames" list,
-   * shared by reference at join ONLY for rooms without `defineInput()`.
-   * {@link enqueueClientRaw} pushes the client here on its first staged frame of a
-   * cycle, so the after-patch flush iterates just those clients rather than
-   * scanning every client. Input rooms leave this `undefined` — their
-   * `_pendingFrames` always drain via the serializer's heartbeat, so no tracking
-   * is needed and the push short-circuits.
+   * shared by reference at join. {@link enqueueClientRaw} pushes the client here
+   * on its first staged frame of a cycle, so the after-patch flush iterates just
+   * those clients rather than scanning every client.
    */
   _pendingFrameClients?: Array<Client & ClientPrivate>;
 }
@@ -288,10 +285,10 @@ export interface ClientPrivate {
  * Routes a raw frame by where it should go:
  *
  *  - `afterNextPatch` → stage onto the per-client {@link ClientPrivate._pendingFrames}
- *    buffer, ridden INTO the next state patch (brief 21); a no-allocation push into a
- *    reused array. The client announces itself to the Room's
- *    {@link ClientPrivate._pendingFrameClients} list on its first staged frame of a
- *    cycle (no-op for input rooms — they drain via the serializer heartbeat).
+ *    buffer, sent as a standalone frame right AFTER the next state patch; a
+ *    no-allocation push into a reused array. The client announces itself to the
+ *    Room's {@link ClientPrivate._pendingFrameClients} list on its first staged
+ *    frame of a cycle.
  *  - before JOIN → buffer in `_enqueuedMessages` until the JOIN_ROOM handshake flushes.
  *  - otherwise → send now via the transport's `raw`.
  *

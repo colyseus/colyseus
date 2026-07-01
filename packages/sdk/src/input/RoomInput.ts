@@ -137,6 +137,7 @@ export class RoomInput {
             stampRender: this.#stampRender,
             stampReckon: this.#stampReckon,
             renderDelay: options?.renderDelay,
+            allowRewind: options?.allowRewind,   // app gate: skip the stamp on inputs the server won't rewind
             tickRate: this.#tickRate,
             patchRate: this.#patchRate,
             subSteps: this.#subSteps,

@@ -170,48 +170,42 @@ export type InferInput<T> = Instantiate<T> extends { input?: new () => infer I }
 // -----------------------------------------------------------------------------
 // Request/response reply arms. A `messages` handler picks its reply by what it
 // returns: a plain value is request-data (the `room.request` path), while
-// `ctx.reject(reason)` / `ctx.resolve(entity)` are typed reply arms the SDK's
-// `predict.action(...)` reads to roll back or correlate an optimistic prediction.
-// Branded with unique symbols so the response-data type can subtract them — a
-// reply arm is never mistaken for request-data.
+// `ctx.reject(reason)` / `ctx.resolve(value)` are typed reply arms. Branded with
+// unique symbols so the response-data type can subtract them — a reply arm is
+// never mistaken for request-data.
 // -----------------------------------------------------------------------------
 
 declare const REJECT: unique symbol;
 declare const RESOLVE: unique symbol;
 
 /** A deliberate, typed rejection produced by `ctx.reject(reason)`. The SDK
- *  surfaces `R` to the originating client and rolls the prediction back. */
+ *  surfaces `R` to the originating client. */
 export interface Rejection<R = unknown> { readonly [REJECT]: R }
 
-/** An acceptance produced by `ctx.resolve(entity)`. When `entity` is given, the
- *  framework privately echoes its `refId` to the originating client so a
- *  predicted spawn correlates to its authoritative copy. */
+/** An acceptance produced by `ctx.resolve(value)` — replies `OK` with `value`. */
 export interface Resolution<S = unknown> { readonly [RESOLVE]: S }
 
 /**
  * Per-dispatch context, passed as the optional 3rd argument to every `messages`
  * handler (backward-compatible: `(client, message)` handlers ignore it).
  *
- * `id` is `undefined` for fire-and-forget `room.send`, and the request/action id
- * for `room.request` / `predict.action`.
+ * `id` is `undefined` for fire-and-forget `room.send`, and the request id for
+ * `room.request`.
  */
 export interface MessageContext {
   readonly id: number | undefined;
   /**
-   * Reject this dispatch. For `room.request` → a rejected promise; for an action
-   * → a `REJECTED` reply carrying `reason`. `return ctx.reject(r)` so the
-   * reason type is inferred; a bare `ctx.reject(r)` (no return) also rejects,
-   * with the reason typed `any`.
+   * Reject this dispatch. For `room.request` → a rejected promise carrying
+   * `reason`. `return ctx.reject(r)` so the reason type is inferred; a bare
+   * `ctx.reject(r)` (no return) also rejects, with the reason typed `any`.
    */
   reject<R>(reason?: R): Rejection<R>;
   /**
    * Resolve (accept) this dispatch — symmetric with {@link reject}. Optional: a
-   * clean return already resolves. Pass the spawned schema `entity` to correlate
-   * a predicted spawn — the framework resolves its `refId` at reply-send and
-   * echoes it privately to the originating client. `return ctx.resolve(entity)`,
-   * or a bare side-effecting call.
+   * clean return already resolves. Pass a `value` to reply `OK` with it.
+   * `return ctx.resolve(value)`, or a bare side-effecting call.
    */
-  resolve<S extends object>(entity?: S): Resolution<S>;
+  resolve<S>(value?: S): Resolution<S>;
 }
 
 /**
@@ -280,9 +274,8 @@ export type ExtractResponseType<T> =
 
 /**
  * Extract the typed reject reason `R` from a handler that can `return
- * ctx.reject(reason)` — the complement of {@link ExtractResponseType}. This is
- * what `predict.action(...)`'s `rollback(handle, reason)` receives. `never` when
- * the handler never rejects.
+ * ctx.reject(reason)` — the complement of {@link ExtractResponseType}. `never`
+ * when the handler never rejects.
  */
 export type ExtractRejectReason<T> =
   Extract<AwaitedReturnOf<T>, Rejection<any>> extends Rejection<infer X> ? X : never;

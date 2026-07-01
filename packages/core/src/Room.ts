@@ -375,18 +375,14 @@ export class Room<T extends RoomOptions = RoomOptions> {
 
   /** Clients that staged `afterNextPatch` frames since the last patch, so the
    *  post-patch flush iterates only these — never the full client list. Shared by
-   *  reference onto each client at join, but ONLY in rooms without `defineInput()`:
-   *  input rooms drain `_pendingFrames` via the serializer heartbeat, so this stays
-   *  empty for them. Reset each `broadcastPatch`. */
+   *  reference onto each client at join. Reset each `broadcastPatch`. */
   #pendingFrameClients: Array<Client & ClientPrivate> = [];
 
   /** `broadcast(..., { afterNextPatch })` in NON-timed rooms, sent as a SHARED
    *  frame right after the next patch (one encode, N sends). Non-timed patches are
-   *  themselves a shared buffer, so coalescing the broadcast in would force N
-   *  per-client copies (N× allocation in large rooms) — sharing avoids that. TIMED
-   *  rooms instead coalesce the broadcast into each client's (already per-client)
-   *  patch via `_pendingFrames` — 1 frame, no extra send. Drained each
-   *  `broadcastPatch`. */
+   *  themselves a shared buffer, so a per-client copy would force N× allocation in
+   *  large rooms — sharing avoids that. TIMED rooms instead stage the broadcast onto
+   *  each client's `_pendingFrames`. Drained each `broadcastPatch`. */
   #afterPatchBroadcasts: Array<{ bytes: Uint8Array; except: Client[] | undefined }> = [];
 
   private _simulationInterval: NodeJS.Timeout;
@@ -969,9 +965,6 @@ export class Room<T extends RoomOptions = RoomOptions> {
         acc -= stepMs;
         ctx.tick = tick++;
         cb(ctx);
-        // Dispatch this step's in-frame actions HERE: post-movement, tick-aligned.
-        // `hasActions` keeps movement-only rooms from touching the client list.
-        if (this._inputController?.hasActions) { this._flushAllInputActions(); }
         ran++;
       }
       if (ran === MAX_CATCHUP_STEPS) { acc = 0; } // hitch: drop backlog, don't spiral
@@ -986,35 +979,6 @@ export class Room<T extends RoomOptions = RoomOptions> {
    *  derive the wire input stamp mode (snapshot → renderTime, reckon → reckonTime). */
   _timelineMode(): { snapshot?: boolean; reckon?: boolean } | undefined {
     return this.#rewind?.timelineMode();
-  }
-
-  /** @internal Whether a simulation loop (`setFixedTimestep`/`setSimulationInterval`)
-   *  is running. {@link RoomInput} reads it to gate the in-frame-actions wire format:
-   *  a consume loop is what dispatches in-frame actions tick-aligned, so a loop-less
-   *  (`.latest`-only) room stays on the legacy format and `predict.action` falls back
-   *  to the standalone transport. */
-  _hasSimulationLoop(): boolean {
-    return this._simulationInterval !== undefined;
-  }
-
-  /** @internal Dispatch one client's consumed-but-pending in-frame actions to their
-   *  `messages` handlers (post-input). Called automatically after each
-   *  `setFixedTimestep` step and from `inputs(.get(sid)).dispatchActions()`. */
-  _flushInputActions(client: ClientPrivate): void {
-    const actions = client._inputBuffer?.takeDispatch();
-    if (actions === undefined) { return; }
-    for (let i = 0; i < actions.length; i++) {
-      this.#_messages.dispatchAction(client as Client & ClientPrivate, actions[i]);
-    }
-  }
-
-  /** @internal Flush every client's pending in-frame actions (room-wide) — the
-   *  `setFixedTimestep` auto-flush and `inputs.dispatchActions()`. */
-  _flushAllInputActions(): void {
-    const clients = this.clients;
-    for (let i = 0; i < clients.length; i++) {
-      this._flushInputActions(clients[i] as unknown as ClientPrivate);
-    }
   }
 
   /**
@@ -1325,9 +1289,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
 
     // When `defineInput()` was called, hand the serializer a fresh `sNow`
     // each tick. The per-client `lastTReceived` is read off the client at
-    // encode time inside `applyPatches`. Per-client `afterNextPatch` frames
-    // (in-frame verdicts + sends) live on `client._pendingFrames` and ride
-    // INTO each client's patch frame here (brief 21, Design B).
+    // encode time inside `applyPatches`.
     const sNow = this.clock.elapsedTime;
     const hasChanges = this._serializer.applyPatches(
       this.clients,
@@ -1335,10 +1297,9 @@ export class Room<T extends RoomOptions = RoomOptions> {
       this._inputController !== undefined ? { sNow } : undefined,
     );
 
-    // The serializer drains `_pendingFrames` for every client it sends a patch to.
-    // The only gap: a room WITHOUT `defineInput()` on a no-change tick sends no
-    // patch (no heartbeat), so flush any still-staged frames standalone — never
-    // stranded. Iterates only `#pendingFrameClients` (empty for input rooms → O(1)).
+    // Deliver any per-client `afterNextPatch` frames as standalone frames right
+    // after the patch (never coalesced into it). Iterates only the clients that
+    // staged frames this cycle (`#pendingFrameClients`), never the full list.
     this._flushPendingClientFrames();
 
     // After-patch broadcasts ride here as shared frames (one buffer → N sends).
@@ -1653,13 +1614,10 @@ export class Room<T extends RoomOptions = RoomOptions> {
     this._reservedSeats[sessionId][2] = true; // flag seat reservation as "consumed"
     debugMatchMaking('consuming seat reservation, sessionId: \'%s\' (roomId: %s)', client.sessionId, this.roomId);
 
-    // Non-input rooms: share the after-patch flush list so a client can announce
-    // staged frames without the flush scanning every client. Input rooms drain via
-    // the serializer heartbeat — they don't track (and `_inputController` is set in
-    // `defineInput`, before any client joins).
-    if (this._inputController === undefined) {
-      (client as Client & ClientPrivate)._pendingFrameClients = this.#pendingFrameClients;
-    }
+    // Share the after-patch flush list so a client can announce staged frames
+    // without the flush scanning every client. `_pendingFrames` are delivered as
+    // standalone frames right after the patch by `_flushPendingClientFrames`.
+    (client as Client & ClientPrivate)._pendingFrameClients = this.#pendingFrameClients;
 
     // add temporary callback to keep track of disconnections during `onJoin`.
     client.ref['onleave'] = (_) => client.state = ClientState.LEAVING;
@@ -1956,9 +1914,9 @@ export class Room<T extends RoomOptions = RoomOptions> {
       return;
     }
 
-    // Otherwise one loop: a TIMED-room `afterNextPatch` broadcast coalesces into
-    // each recipient's (already per-client) patch via `_pendingFrames` — 1 frame,
-    // no extra send; an immediate broadcast sends now.
+    // Otherwise one loop: a TIMED-room `afterNextPatch` broadcast stages onto each
+    // recipient's `_pendingFrames` (flushed right after the patch); an immediate
+    // broadcast sends now.
     const sendOpts = options.afterNextPatch ? AFTER_PATCH_OPTS : undefined;
     let numClients = this.clients.length;
     while (numClients--) {
@@ -1993,12 +1951,10 @@ export class Room<T extends RoomOptions = RoomOptions> {
     ));
   }
 
-  /** Send any `afterNextPatch` frames the serializer didn't carry this tick (a
-   *  no-change tick in a room without `defineInput()`) as standalone frames, so a
-   *  message is never stranded — then reset the tracker. Iterates only the clients
-   *  that staged frames this cycle (`#pendingFrameClients`), never the full client
-   *  list; empty (→ O(1)) for input rooms and idle non-input rooms. A client whose
-   *  frames a patch already carried is skipped (its buffer is empty). */
+  /** Send each client's staged `afterNextPatch` frames as standalone frames right
+   *  after the patch, then reset the tracker. Iterates only the clients that staged
+   *  frames this cycle (`#pendingFrameClients`), never the full client list; empty
+   *  (→ O(1)) on a tick where nothing was staged. */
   private _flushPendingClientFrames() {
     const dirty = this.#pendingFrameClients;
     if (dirty.length === 0) { return; }

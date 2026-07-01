@@ -230,10 +230,10 @@ export interface InputOptions {
    * Despite the name, "seq" here is broader than an integer counter — any
    * monotonic numeric field works:
    * - **Sequence counter** (`"seq"`, `"tick"`, `"frame"`) — typical for
-   *   lockstep / rollback netcode (Photon Quantum, GGPO).
+   *   lockstep / rollback netcode.
    * - **Timestamp** (`"timestamp"`, milliseconds or seconds) — useful for
-   *   variable-rate clients, lag compensation, hit registration (Unreal CMC
-   *   uses float-seconds timestamps via `FSavedMove_Character.TimeStamp`).
+   *   variable-rate clients, lag compensation, hit registration (a float-seconds
+   *   timestamp stamped on each saved move is the common shape).
    *
    * Whichever you use, the field must increase monotonically across frames
    * for dedupe to work.

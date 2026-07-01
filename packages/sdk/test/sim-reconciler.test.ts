@@ -52,6 +52,7 @@ class FakeInput {
         this.buffer.set(this.sentCount, { ...this.data }); // snapshot for replay
     }
     at(seq: number): Cmd | undefined { return this.buffer.get(seq); }
+    reckonTimeAt(_seq: number): number { return 0; } // no reckon lag-comp in tests
     get pendingCount(): number { return this.sentCount - this.lastProcessed; }
 }
 
@@ -316,5 +317,56 @@ describe('SimReconciler', () => {
             instance.x = 50; input.lastProcessed = 4; ctl.tick(0);   // throttled (within 1s)
         });
         assert.equal(warns.length, 1, 'the second divergence within 1s is throttled');
+    });
+
+    // ctx.effect: run-once-on-live, replay-the-memo, cleared on reset. The compute
+    // returns a value that would DIFFER if recomputed (a climbing counter), so a
+    // replay that re-ran it would corrupt both the count AND the trajectory — making
+    // "compute is not re-run" assertable from outside.
+    test('ctx.effect runs compute once on the live step and replays the frozen value (never recomputes)', () => {
+        const input = new FakeInput();
+        const engine = makeEngine();
+        let computeCount = 0;
+        // ax=0 → the base sim leaves x alone; ctx.effect is the only thing moving x.
+        const { ctl, instance } = make(engine, input, {
+            step: (ctx, _cmd, w) => {
+                const v = ctx.effect('bump', () => { computeCount++; return computeCount * 100; });
+                w.x += v ?? 0;
+            },
+        });
+
+        for (let i = 0; i < 3; i++) ctl.input({ ax: 0 }); // memos: seq1=100, seq2=200, seq3=300
+        assert.equal(computeCount, 3, 'compute ran exactly once per live step');
+        assert.equal(engine.x, 600, '100 + 200 + 300');
+
+        // Ack seq 1 at its authoritative post-step state (x=100) → adopt + replay 2,3.
+        instance.x = 100; instance.vx = 0;
+        input.lastProcessed = 1;
+        ctl.tick(0);
+
+        assert.equal(computeCount, 3, 'replay returned the memo — compute was NOT re-run');
+        assert.equal(engine.x, 600, 'frozen 200 + 300 re-applied on top of adopted 100');
+    });
+
+    test('ctx.effect memos are cleared on reset (a prior life\'s effect never replays)', () => {
+        const input = new FakeInput();
+        const engine = makeEngine();
+        let computeCount = 0;
+        const { ctl, instance } = make(engine, input, {
+            step: (ctx, _cmd, w) => { w.x += ctx.effect('bump', () => { computeCount++; return 100; }) ?? 0; },
+        });
+
+        for (let i = 0; i < 3; i++) ctl.input({ ax: 0 }); // 3 unacked effects recorded
+        assert.equal(computeCount, 3);
+
+        instance.x = 0; instance.vx = 0; // respawn at origin
+        ctl.reset();
+        assert.equal(engine.x, 0, 'reset adopts origin');
+
+        // A late ack for a pre-reset seq must not replay the old life's effects.
+        input.lastProcessed = 2;
+        ctl.tick(0);
+        assert.equal(engine.x, 0, 'cleared effects are not replayed after reset');
+        assert.equal(computeCount, 3, 'no recompute either');
     });
 });

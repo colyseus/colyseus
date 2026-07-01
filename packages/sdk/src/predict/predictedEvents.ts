@@ -73,9 +73,9 @@ export interface PredictedEventsGetOptions<K = string> {
 
 /**
  * Handle returned by {@link PredictedEvents.predict} — the discrete-event
- * counterpart to {@link import('./predictedSpawns.ts').SpawnHandle}. Lets
- * `predict.action(...)` roll back ({@link cancel}) or protect ({@link accept})
- * an optimistic event by its verdict, without the caller tracking the key.
+ * counterpart to {@link import('./predictedSpawns.ts').SpawnHandle}. Lets a
+ * caller roll back ({@link cancel}) or protect ({@link accept}) an optimistic
+ * event, without tracking the key.
  */
 export interface PredictedEventHandle<K = string> {
     /** The predicted key. */
@@ -84,9 +84,8 @@ export interface PredictedEventHandle<K = string> {
     cancel(): void;
     /** Server-confirmed: keep the predicted effect but exempt it from TTL
      *  eviction. Await the authoritative schema change, then call {@link
-     *  PredictedEvents.confirm}. (The `ref` arg is ignored — events have no
-     *  spawn identity; it's accepted so the handle is uniform with spawns.) */
-    accept(ref?: number): void;
+     *  PredictedEvents.confirm}. */
+    accept(): void;
 }
 
 export class PredictedEvents<K = string> {
@@ -126,8 +125,9 @@ export class PredictedEvents<K = string> {
     }
 
     /** Record an optimistic prediction. `at` defaults to the configured
-     *  `now()` provider, falling back to `performance.now()`. Returns a handle so
-     *  `predict.action(...)` can roll it back / protect it by the server verdict. */
+     *  `now()` provider, falling back to `performance.now()`. Returns a handle to
+     *  roll it back ({@link PredictedEventHandle.cancel}) or protect it
+     *  ({@link PredictedEventHandle.accept}). */
     predict(key: K, at?: number): PredictedEventHandle<K> {
         this.entries.set(key, at ?? this.cfg.now?.() ?? performance.now());
         return {

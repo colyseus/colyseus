@@ -6,8 +6,8 @@
  * owns the predicted simulation of the entity you DO control. It applies your
  * inputs immediately (zero-latency local feel), buffers the unacknowledged
  * ones, and when the server's authoritative state arrives it rewinds to that
- * truth and replays the still-unacked inputs — the same loop as a GGPO
- * rollback, but the *server* is the authority that provides the restore point.
+ * truth and replays the still-unacked inputs — the standard rewind-and-replay
+ * rollback loop, but the *server* is the authority that provides the restore point.
  *
  * The acknowledgement lives on the INPUT HANDLE, not the clock: you send inputs
  * through `room.input(...)`, so that handle is what knows the server ack
@@ -60,6 +60,44 @@ import { newDrift, updateDrift, resetDrift, classifyDrift, type Drift } from "./
 import { warnDivergence, diagnosticsActive } from "./divergence.ts";
 
 /**
+ * Per-seq memo backing {@link StepContext.effect}: run a closure ONCE on the
+ * live step, freeze its result keyed by `(seq, key)`, and on every rollback
+ * REPLAY of that seq return the frozen value WITHOUT re-running it. Pruned when
+ * the seq is acked, cleared on reset. Shared by {@link Reconciler} and
+ * `SimReconciler` (both replay the same per-seq input buffer the same way).
+ *
+ * Storage is sparse — only seqs that recorded ≥1 effect get an entry — so it
+ * stays as small as the hand-rolled per-seq Maps it replaces.
+ */
+export class EffectStore {
+    /** seq → (key → memoized value). */
+    private byTick = new Map<number, Map<string, any>>();
+
+    /**
+     * LIVE (`isReplay=false`): run `compute`, memoize a non-`undefined` result
+     * under `(tick, key)`, return it. REPLAY (`isReplay=true`): return the memo
+     * (or `undefined` if the live step recorded none) WITHOUT running `compute`.
+     */
+    run<T>(tick: number, isReplay: boolean, key: string, compute: () => T): T | undefined {
+        if (isReplay) return this.byTick.get(tick)?.get(key) as T | undefined;
+        const v = compute();
+        if (v !== undefined) {
+            let m = this.byTick.get(tick);
+            if (m === undefined) { m = new Map(); this.byTick.set(tick, m); }
+            m.set(key, v);
+        }
+        return v;
+    }
+
+    /** Drop memos for seqs the server has acked (they'll never replay again). */
+    prune(acked: number): void {
+        for (const tick of this.byTick.keys()) if (tick <= acked) this.byTick.delete(tick);
+    }
+
+    clear(): void { this.byTick.clear(); }
+}
+
+/**
  * Per-step context handed to {@link ReconcilerOptions.step}. Mirrors the
  * server's `StepContext` (@colyseus/core) so ONE fixed `dt` drives both sides of
  * the rollback. Carries only the fixed step — never wall-clock time.
@@ -101,8 +139,9 @@ export interface StepContext {
    * `applyInput`) MUST re-run every time, or replay won't reproduce the server.
    * But one-shot SIDE EFFECTS — a sound, a particle/VFX, haptics, analytics, a
    * sent message — must fire exactly once: gate them on `!ctx.isReplay`, else
-   * they re-fire on every rollback. (Same role as Photon Fusion's
-   * `IsResimulation` / Quantum's verified-frame flag.)
+   * they re-fire on every rollback. (This is the standard re-simulation flag
+   * rollback netcode exposes so one-shot effects fire only on the first,
+   * authoritative pass — but prefer `ctx.effect` below, which handles it for you.)
    *
    * Alternative: keep side effects out of `step` entirely and run them on the
    * live path (in your per-frame loop), as this project does with collision
@@ -128,6 +167,34 @@ export interface StepContext {
    * server's `reckonTime > 0 ? reckonTime : now`.
    */
   readonly reckonTime: number;
+  /**
+   * Record a non-derivable effect on the rollback timeline. `compute` runs
+   * exactly ONCE — on the LIVE step for this seq — and its result is memoized
+   * under `key`; on every rollback REPLAY of this seq the memo is returned and
+   * `compute` is NOT re-run. Auto-pruned when the seq is acked, cleared on
+   * `reset()`.
+   *
+   * The blessed alternative to hand-branching on {@link isReplay}. Two shapes:
+   *   - **Recorded value** — USE the return (re-applied every replay). For an
+   *     outcome replay can't recompute: a lag-comp'd collision velocity, an RNG
+   *     roll, a server-assigned id. `const hit = ctx.effect("collide", () =>
+   *     collide(state, ctx.reckonTime)); if (hit) state.vx = hit.vx;`
+   *   - **Fire-once side-effect** — IGNORE the return; `compute` simply doesn't
+   *     re-run on replay. For a sound, particle, flag, analytics ping:
+   *     `ctx.effect("bounce", () => { sound.play(); });`
+   *
+   * `compute` should return `undefined` for "no effect this seq" (stored
+   * sparsely — costs nothing). `key` disambiguates >1 effect in one step; call
+   * `effect(key, …)` for a given key on EVERY step (let `compute` decide the
+   * value) rather than conditionally, so replay sees the same call shape.
+   *
+   * Prefer reconciled `fields` when the value IS derivable by re-running the
+   * step (sync it, both sides simulate it) — that replays AND self-corrects for
+   * free. Reach for `effect` only when it genuinely can't be re-derived, and
+   * NEVER reconstruct such a value via an `input.at(seq)` lookback (it ages out
+   * the moment the seq is acked — the snap-back this primitive exists to prevent).
+   */
+  effect<T>(key: string, compute: () => T): T | undefined;
 }
 
 export interface ReconcilerOptions<S extends object, I> {
@@ -150,12 +217,19 @@ export interface ReconcilerOptions<S extends object, I> {
     input: InputHandle<I>;
     /**
      * Deterministic input-application step, SHARED with the server. Mutates
-     * `state` in place by applying `command` over `ctx.dt`. `ctx` leads (matches
-     * Quantum/Unreal's step-context-first convention): it carries the fixed `dt`
+     * `state` in place by applying `command` over `ctx.dt`. `ctx` leads (the
+     * step-context-first argument convention): it carries the fixed `dt`
      * (matches the server's, so replay reproduces the server's result),
      * `ctx.tick` (the input's seq — key per-input side-effects like a collision
      * bounce on it), and `ctx.isReplay` (true during rollback re-sim — gate
      * non-deterministic side effects on `!ctx.isReplay`).
+     *
+     * `command` is the STAGED wire input (`input.data` after `writeInput`), NOT
+     * the raw object you passed to {@link Reconciler.input} — both live and replay
+     * steps simulate the exact input the server decodes, so lossy wire fields (a
+     * `t.quantized` angle) reconcile by construction. Keep everything the step
+     * reads on the input schema; a cmd-only field the schema doesn't carry won't
+     * reach `step` (stage it via `writeInput` if you need it).
      */
     step: (ctx: StepContext, state: S, command: I) => void;
     /**
@@ -269,8 +343,11 @@ export class Reconciler<S extends object = any, I = any> {
     private readonly numericFields: string[] = [];
     private readonly step: (ctx: StepContext, state: S, command: I) => void;
     /** Reused per-step context — mutated in place each step, no per-step alloc.
-     *  `dt`/`dtMs`/sub-step trio are constant; `tick`/`isReplay`/`reckonTime` change. */
-    private readonly stepCtx: { dt: number; dtMs: number; tick: number; isReplay: boolean; reckonTime: number; subSteps: number; subDt: number; subDtMs: number };
+     *  `dt`/`dtMs`/sub-step trio are constant; `tick`/`isReplay`/`reckonTime` change.
+     *  `effect` is bound once and reads the live `tick`/`isReplay` at call time. */
+    private readonly stepCtx: { dt: number; dtMs: number; tick: number; isReplay: boolean; reckonTime: number; subSteps: number; subDt: number; subDtMs: number; effect: <T>(key: string, compute: () => T) => T | undefined };
+    /** Per-seq memo backing `ctx.effect` — recorded live, replayed verbatim, pruned on ack. */
+    private readonly effects = new EffectStore();
     private readonly smoothing: number;
     private readonly stepMs: number;
     private readonly onReconcile?: (acked: number) => void;
@@ -305,6 +382,7 @@ export class Reconciler<S extends object = any, I = any> {
         this.stepCtx = {
             dt, dtMs: this.stepMs, tick: 0, isReplay: false, reckonTime: 0,
             subSteps, subDt: dt / subSteps, subDtMs: this.stepMs / subSteps,
+            effect: (key, compute) => this.effects.run(this.stepCtx.tick, this.stepCtx.isReplay, key, compute),
         };
         this.onReconcile = opts.onReconcile;
         this.warnTolerance = opts.warnOnDivergence;
@@ -358,13 +436,19 @@ export class Reconciler<S extends object = any, I = any> {
         // Snapshot pre-step SMOOTHED value so `value()` lerps prev → current
         // across this step by `alpha`.
         for (const f of this.numericFields) this.prev[f] = (this.local[f] as number) + this.error[f];
-        this.writeInput(this.input_.data, cmd); // stage cmd → wire
+        this.writeInput(this.input_.data, cmd); // stage cmd → wire (lossy fields quantize here)
         this.input_.send();                      // transmit + buffer for replay → sentCount++
         const seq = this.input_.sentCount;
         this.stepCtx.tick = seq;
         this.stepCtx.isReplay = false;           // live forward step
         this.stepCtx.reckonTime = this.input_.reckonTimeAt(seq); // = the value just stamped
-        this.step(this.stepCtx, this.local as S, cmd);  // predict (the handle holds the replay copy)
+        // Predict from the ROUND-TRIPPED staged input (`input.data`), NOT the raw
+        // `cmd`: the live step must simulate the input the server receives — i.e.
+        // the wire input — so any lossy wire transform (e.g. a `t.quantized` field)
+        // replays identically on the live step, on rollback (`input.at(seq)`), and
+        // on the server. Stepping from `cmd` would feed full-precision values the
+        // server never sees → reconcile pops + shot misprediction.
+        this.step(this.stepCtx, this.local as S, this.input_.data as I);
         return seq;
     }
 
@@ -461,6 +545,10 @@ export class Reconciler<S extends object = any, I = any> {
             }
         }
 
+        // Drop ctx.effect memos for acked seqs (they won't replay again) BEFORE
+        // user code — replay only touches seqs > acked, so this never removes a
+        // memo a still-pending replay needs.
+        this.effects.prune(acked);
         this.onReconcile?.(acked);
     }
 
@@ -495,6 +583,7 @@ export class Reconciler<S extends object = any, I = any> {
         // Forget in-flight inputs from the prior life — don't replay them.
         this.replayFrom = this.input_.sentCount;
         this.lastAcked = this.input_.lastProcessed;
+        this.effects.clear();   // prior life's recorded effects must not replay
     }
 
     /** Set when {@link dispose} is called — the owning Predict drops a `dead`

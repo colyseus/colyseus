@@ -93,7 +93,7 @@
 // Drives + reads acks through `room.input(...)`'s handle (type-only, erased).
 import type { InputHandle } from "../input/InputHandle.ts";
 // Shared fixed-step context — ONE `dt` drives both sides of the rollback.
-import type { StepContext } from "./reconciler.ts";
+import { EffectStore, type StepContext } from "./reconciler.ts";
 import { newDrift, updateDrift, resetDrift, classifyDrift, type Drift } from "./drift.ts";
 import { warnDivergence, diagnosticsActive } from "./divergence.ts";
 
@@ -242,8 +242,11 @@ export class SimReconciler<I = any, P extends Record<string, number> = any, E = 
      *  shadow the public {@link pose} method. */
     private readonly readPose: (world: E) => P;
     private readonly interpolate?: (a: P, b: P, t: number) => P;
-    /** Reused per-step context — `dt`/`dtMs`/sub-step trio constant; `tick`/`isReplay`/`reckonTime` change. */
-    private readonly stepCtx: { dt: number; dtMs: number; tick: number; isReplay: boolean; reckonTime: number; subSteps: number; subDt: number; subDtMs: number };
+    /** Reused per-step context — `dt`/`dtMs`/sub-step trio constant; `tick`/`isReplay`/`reckonTime` change.
+     *  `effect` is bound once and reads the live `tick`/`isReplay` at call time. */
+    private readonly stepCtx: { dt: number; dtMs: number; tick: number; isReplay: boolean; reckonTime: number; subSteps: number; subDt: number; subDtMs: number; effect: <T>(key: string, compute: () => T) => T | undefined };
+    /** Per-seq memo backing `ctx.effect` — recorded live, replayed verbatim, pruned on ack. */
+    private readonly effects = new EffectStore();
     private readonly smoothing: number;
     private readonly stepMs: number;
     private readonly onReconcile?: (acked: number) => void;
@@ -273,6 +276,7 @@ export class SimReconciler<I = any, P extends Record<string, number> = any, E = 
         this.stepCtx = {
             dt, dtMs: this.stepMs, tick: 0, isReplay: false, reckonTime: 0,
             subSteps, subDt: dt / subSteps, subDtMs: this.stepMs / subSteps,
+            effect: (key, compute) => this.effects.run(this.stepCtx.tick, this.stepCtx.isReplay, key, compute),
         };
         this.onReconcile = opts.onReconcile;
         this.warnTolerance = opts.warnOnDivergence;
@@ -328,13 +332,17 @@ export class SimReconciler<I = any, P extends Record<string, number> = any, E = 
     input(cmd: I): number {
         // Snapshot pre-step SMOOTHED pose so `value()` lerps prev → current.
         for (const f of this.poseFields) this.prevPose[f] = this.curPose[f] + this.error[f];
-        this.writeInput(this.input_.data, cmd); // stage cmd → wire
+        this.writeInput(this.input_.data, cmd); // stage cmd → wire (lossy fields quantize here)
         this.input_.send();                      // transmit + buffer for replay → sentCount++
         const seq = this.input_.sentCount;
         this.stepCtx.tick = seq;
         this.stepCtx.isReplay = false;           // live forward step
         this.stepCtx.reckonTime = this.input_.reckonTimeAt(seq); // = the value just stamped
-        this.step(this.stepCtx, cmd, this.worldHandle);
+        // Predict from the ROUND-TRIPPED staged input (`input.data`), NOT the raw
+        // `cmd` — the live step must simulate the WIRE input so any lossy transform
+        // (e.g. a `t.quantized` field) replays identically live, on rollback
+        // (`input.at(seq)`), and on the server. See the matching note in Reconciler.
+        this.step(this.stepCtx, this.input_.data as I, this.worldHandle);
         this.refreshPose();
         return seq;
     }
@@ -411,6 +419,9 @@ export class SimReconciler<I = any, P extends Record<string, number> = any, E = 
             }
         }
 
+        // Drop ctx.effect memos for acked seqs BEFORE user code — replay only
+        // touches seqs > acked, so this never removes a still-needed memo.
+        this.effects.prune(acked);
         this.onReconcile?.(acked);
     }
 
@@ -463,6 +474,7 @@ export class SimReconciler<I = any, P extends Record<string, number> = any, E = 
         // Forget in-flight inputs from the prior life — don't replay them.
         this.replayFrom = this.input_.sentCount;
         this.lastAcked = this.input_.lastProcessed;
+        this.effects.clear();   // prior life's recorded effects must not replay
         this.poseDirty = true;
     }
 

@@ -32,7 +32,6 @@ export {
     type PredictMode,
     type PredictOptions,
     type PredictGetOptions,
-    type PredictActionOptions,
     type AttachConfig,
     type SmoothingOptions,
     type SmoothingConfig,
