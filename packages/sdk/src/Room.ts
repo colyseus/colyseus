@@ -478,7 +478,7 @@ export class Room<
     /**
      * Get the per-room input handle. Lazily created on first call and cached;
      * subsequent calls return the same handle (options on later calls are
-     * ignored).
+     * ignored — a warning fires once if they differ from the handle's config).
      *
      * Schema discovery, in order:
      * 1. `options.type` — explicit constructor (overrides everything).
@@ -496,8 +496,8 @@ export class Room<
      *
      * @example
      * ```typescript
-     * const conn = await client.joinOrCreate<typeof FpsRoom>("fps");
-     * const input = conn.input({ mode: "unreliable" });   // type from server
+     * const room = await client.joinOrCreate<typeof FpsRoom>("fps");
+     * const input = room.input({ mode: "unreliable" });   // type from server
      * // each simulation tick:
      * input.data.seq++;
      * input.data.vx = vx;

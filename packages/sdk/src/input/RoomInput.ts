@@ -25,6 +25,12 @@ export class RoomInput {
     // server ack via the internal `ackInput()`.
     #handle?: InputHandleImpl<any>;
 
+    // First-call context, kept only to diagnose later room.input(options) calls
+    // whose options are ignored (the handle is created once — first call wins).
+    #options?: InputOptions<any>;
+    #encoder?: InputEncoder<any>;
+    #warnedIgnoredOptions = false;
+
     /**
      * Schema constructor recovered via Reflection from the server's handshake
      * (the `INPUT_REFLECTION` tagged section). Falls back to `undefined` when
@@ -110,18 +116,20 @@ export class RoomInput {
 
     /**
      * Lazily create and cache the per-room {@link InputHandle}; subsequent calls
-     * return the same handle (options on later calls are ignored). Backs
+     * return the same handle (options on later calls are ignored — a warning
+     * fires once if they differ from the constructed handle's). Backs
      * `room.input(...)` — see that method for the full discovery/usage docs.
      */
     handle<I>(options?: InputOptions<I>): InputHandle<I> {
         if (this.#handle) {
+            if (options !== undefined) this.#warnIfIgnored(options);
             return this.#handle as InputHandle<I>;
         }
 
         const Ctor = (options?.type ?? this.#ctorFromReflection) as (new () => I) | undefined;
         if (!Ctor) {
             throw new Error(
-                "conn.input(): no input schema available. The server room must call " +
+                "room.input(): no input schema available. The server room must call " +
                 "`defineInput(YourInput)`, or you can pass `{ type: YourInput }` explicitly."
             );
         }
@@ -142,6 +150,33 @@ export class RoomInput {
             patchRate: this.#patchRate,
             subSteps: this.#subSteps,
         });
+        this.#options = options;
+        this.#encoder = encoder;
         return this.#handle as InputHandle<I>;
+    }
+
+    /** Warn (once) when a later `room.input(options)` call would have produced a
+     *  different handle — those options are silently ignored (first call wins),
+     *  which is invisible without this. Value fields compare against the RESOLVED
+     *  config (ctor/mode/historySize), not the first call's raw options, so a
+     *  textually identical second call stays silent. */
+    #warnIfIgnored(later: InputOptions<any>): void {
+        if (this.#warnedIgnoredOptions) return;
+        const handle = this.#handle!;
+        const diffs: string[] = [];
+        if (later.type !== undefined && later.type !== (handle.data as any)?.constructor) diffs.push("type");
+        if (later.mode !== undefined && later.mode !== handle.mode) diffs.push("mode");
+        // historySize is inert in reliable mode (for BOTH calls) — only compare when unreliable.
+        if (later.historySize !== undefined && handle.mode === "unreliable"
+            && later.historySize !== this.#encoder!.historySize) diffs.push("historySize");
+        if (later.renderDelay !== undefined && later.renderDelay !== this.#options?.renderDelay) diffs.push("renderDelay");
+        // Function identity is meaningless across call sites — compare presence only.
+        if ((later.allowRewind !== undefined) !== (this.#options?.allowRewind !== undefined)) diffs.push("allowRewind");
+        if (diffs.length === 0) return;
+        this.#warnedIgnoredOptions = true;
+        console.warn(
+            "@colyseus/sdk: room.input() options ignored — the input handle was already " +
+            `created by an earlier call (first call wins). Differing: ${diffs.join(", ")}.`
+        );
     }
 }

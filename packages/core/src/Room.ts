@@ -1,9 +1,10 @@
 import { decode, type Iterator, $changes } from '@colyseus/schema';
-import { validateSubSteps, type InputAPI, type DefineInputOptions, type IdleDeclared } from './input/InputBuffer.ts';
+import { validateSubSteps } from './input/InputBuffer.ts';
+import type { InputAPI, DefineInputOptions, IdleDeclared } from './input/types.ts';
 import { RoomInput } from './input/RoomInput.ts';
 import { RoomMessages } from './RoomMessages.ts';
 import { Rewind, type RewindOptions } from './Rewind.ts';
-export { type InputAccessor, type InputAPI, type InputOptions, type ConsumeOptions, type IdleInput, type IdleContext, type SanitizeInput, type NumericFieldsOf, type DefineInputOptions, type IdleDeclared } from './input/InputBuffer.ts';
+export { type InputAccessor, type InputAPI, type NormalizedInputOptions, type ConsumeOptions, type IdleInput, type IdleContext, type SanitizeInput, type NumericFieldsOf, type DefineInputOptions, type IdleDeclared } from './input/types.ts';
 
 import { ClockTimer as Clock } from '@colyseus/timer';
 

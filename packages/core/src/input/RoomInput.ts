@@ -3,11 +3,13 @@ import { InputDecoder } from '@colyseus/schema/input';
 import { HandshakeSection, InputFlags, ProtocolModifier } from '@colyseus/shared-types';
 
 import {
-  type InputAccessor, type InputAPI, type InputOptions,
-  type DefineInputOptions, type IdleDeclared,
   InputAccessorImpl, InputBufferImpl, NO_OP_INPUT_ACCESSOR,
   compileSanitizer, validateSubSteps,
 } from './InputBuffer.ts';
+import type {
+  InputAccessor, InputAPI, NormalizedInputOptions,
+  DefineInputOptions, IdleDeclared,
+} from './types.ts';
 import type { Client, ClientPrivate } from '../Transport.ts';
 import type { Room } from '../Room.ts';
 import { debugAndPrintError } from '../Debug.ts';
@@ -18,6 +20,37 @@ import { debugAndPrintError } from '../Debug.ts';
  * room instance count. WeakMap so unused classes can be GC'd.
  */
 const _inputReflectionCache = new WeakMap<Function, Uint8Array>();
+
+/**
+ * Runtime behind {@link InputAPI}. A class, not a per-`define()` object literal:
+ * literal (and `defineProperty`) accessors carry their closure identity in the
+ * hidden class, so every room instance would get a UNIQUE map — sending shared
+ * `this.inputs.*` call sites megamorphic. Prototype getters are created once,
+ * every instance shares one hidden class (reads stay monomorphic), and
+ * `define()` allocates a single 1-field object instead of 7 closures + a map
+ * lineage per room.
+ *
+ * @internal
+ */
+class InputAPIImpl {
+  private input: RoomInput;
+  constructor(input: RoomInput) { this.input = input; }
+  /** Registry, not room.clients: an accessor outlives its client through the
+   *  reconnection window, so a dropped seat still synthesizes the idle policy. */
+  get(sessionId: string): InputAccessor<any> {
+    return this.input.accessors.get(sessionId) ?? NO_OP_INPUT_ACCESSOR;
+  }
+  // Live reads off `options` (mutated in place by a later setTimestep/
+  // setFixedTimestep back-fill, so a derived tickRate is reflected); 1/hz is
+  // correctly-rounded IEEE-754 → bit-identical to the client's stepSeconds.
+  get tickRate(): number | undefined { return this.input.options.tickRate; }
+  get stepSeconds(): number | undefined { const hz = this.input.options.tickRate; return hz ? 1 / hz : undefined; }
+  get stepMs(): number | undefined { const hz = this.input.options.tickRate; return hz ? 1000 / hz : undefined; }
+  // Sub-step trio: same derivation as the client handle ((1/hz)/n) — bit-identical dt.
+  get subSteps(): number { return this.input.options.subSteps ?? 1; }
+  get subStepSeconds(): number | undefined { const hz = this.input.options.tickRate; return hz ? (1 / hz) / (this.input.options.subSteps ?? 1) : undefined; }
+  get subStepMs(): number | undefined { const hz = this.input.options.tickRate; return hz ? (1000 / hz) / (this.input.options.subSteps ?? 1) : undefined; }
+}
 
 /**
  * Per-room input subsystem, owned by {@link Room} and created lazily on the
@@ -37,7 +70,7 @@ export class RoomInput {
   /** Input configuration (ctor, seqField, bufferMaxSize, idle, sanitize,
    *  tickRate, subSteps). `tickRate`/`subSteps` may be back-filled by
    *  `setTimestep`/`setFixedTimestep`. Set in {@link define}. */
-  options!: InputOptions;
+  options!: NormalizedInputOptions;
 
   /** The `InputAPI` returned to userland from `defineInput`, also the
    *  framework-owned handle the rewind binding resolves accessors through. */
@@ -46,8 +79,9 @@ export class RoomInput {
   /** sessionId → accessor. Decoupled from `this.clients`: an entry outlives its
    *  client across the reconnection window, so {@link InputAPI.get} keeps
    *  synthesizing the idle policy for an absent seat (its buffer was cleared on
-   *  leave → idle). Set on join, deleted on full leave. */
-  private accessors: Map<string, InputAccessor<any>> = new Map();
+   *  leave → idle). Set on join, deleted on full leave. Read by
+   *  {@link InputAPIImpl.get} (hence not `private`). */
+  readonly accessors: Map<string, InputAccessor<any>> = new Map();
 
   // Wire stamp mode derived from the rewind timeline, resolved once on first
   // handshake/decode then frozen so advertise + decode never disagree mid-session:
@@ -103,45 +137,7 @@ export class RoomInput {
       // SDK-deserializable ctor bytes (Reflection.decode rebuilds the ctor client-side).
       _inputReflectionCache.set(type, Reflection.encode(new Encoder(new type())));
     }
-    const api = {
-      // Registry, not this.clients: an accessor outlives its client through the
-      // reconnection window, so a dropped seat still synthesizes the idle policy.
-      get: (sessionId: string): InputAccessor<InstanceType<C>> =>
-        (this.accessors.get(sessionId) as InputAccessor<InstanceType<C>>) ?? NO_OP_INPUT_ACCESSOR,
-    } as InputAPI<InstanceType<C>, IdleDeclared<O, InstanceType<C>>>;
-    // Live getters off `options` so a setTimestep-derived tickRate is reflected;
-    // 1/hz is correctly-rounded IEEE-754 → bit-identical to the client's stepSeconds.
-    Object.defineProperty(api, "tickRate", {
-      enumerable: true,
-      get: () => this.options.tickRate,
-    });
-    Object.defineProperty(api, "stepSeconds", {
-      enumerable: true,
-      get: () => { const hz = this.options.tickRate; return hz ? 1 / hz : undefined; },
-    });
-    Object.defineProperty(api, "stepMs", {
-      enumerable: true,
-      get: () => { const hz = this.options.tickRate; return hz ? 1000 / hz : undefined; },
-    });
-    // Sub-step trio: same derivation as the client handle ((1/hz)/n) — bit-identical dt.
-    Object.defineProperty(api, "subSteps", {
-      enumerable: true,
-      get: () => this.options.subSteps ?? 1,
-    });
-    Object.defineProperty(api, "subStepSeconds", {
-      enumerable: true,
-      get: () => {
-        const hz = this.options.tickRate;
-        return hz ? (1 / hz) / (this.options.subSteps ?? 1) : undefined;
-      },
-    });
-    Object.defineProperty(api, "subStepMs", {
-      enumerable: true,
-      get: () => {
-        const hz = this.options.tickRate;
-        return hz ? (1000 / hz) / (this.options.subSteps ?? 1) : undefined;
-      },
-    });
+    const api = new InputAPIImpl(this) as InputAPI<InstanceType<C>, IdleDeclared<O, InstanceType<C>>>;
     this.api = api;
     return api;
   }

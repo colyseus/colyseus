@@ -20,7 +20,8 @@ export {
 // Core classes
 export { Server, defineRoom, defineServer, registerRoomDefinitions, unregisterRoomDefinitions, type RoomDefinitions, type ServerOptions, type SDKTypes } from './Server.ts';
 export { Room, RoomInternalState, validate, type RoomOptions, type DefineInputOptions, type SimulationCallback, type FixedTimestepCallback, type StepContext, type MessageHandlerWithFormat, type Messages, type ExtractRoomState, type ExtractRoomMetadata, type ExtractRoomClient } from './Room.ts';
-export { InputBufferImpl, compileSanitizer, type InputAccessor, type InputAPI, type InputOptions, type ConsumeOptions, type IdleInput, type IdleContext, type SanitizeInput, type NumericFieldsOf } from './input/InputBuffer.ts';
+export { InputBufferImpl, compileSanitizer } from './input/InputBuffer.ts';
+export { type InputAccessor, type InputAPI, type NormalizedInputOptions, type ConsumeOptions, type IdleInput, type IdleContext, type SanitizeInput, type NumericFieldsOf } from './input/types.ts';
 export { Rewind, RewindView, type RewindOptions, type RewindMode } from './Rewind.ts';
 export {
   RoomPlugin, definePlugins, attachToTestRoom,

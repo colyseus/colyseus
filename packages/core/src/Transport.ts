@@ -221,7 +221,7 @@ export interface ClientPrivate {
    * once at join (when the Room called `defineInput()`), so the public API
    * call is a Map lookup + property read with no per-call allocation.
    */
-  _inputAccessor?: import('./input/InputBuffer.ts').InputAccessor;
+  _inputAccessor?: import('./input/types.ts').InputAccessor;
 
   /**
    * Used for rate limiting ROOM_INPUT_* packets via maxInputsPerSecond,

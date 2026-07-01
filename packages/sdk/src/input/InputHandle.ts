@@ -41,9 +41,12 @@ export interface InputHandleHost {
  */
 export interface InputOptions<I = any> extends InputEncoderOptions {
   /**
-   * Schema constructor for the input. Required when server-sent reflection
-   * isn't available (which is the default today). Once handshake-time input
-   * reflection lands, `type` becomes optional.
+   * Schema constructor for the input. Optional when the server room called
+   * `defineInput()` — the schema then arrives via the JOIN handshake's input
+   * reflection and is used automatically (the synthesized class mirrors the
+   * server's fields, but `instanceof YourInput` won't pass on it). An explicit
+   * ctor always wins over reflection — pass one to use your own class.
+   * `room.input()` throws when neither source yields a constructor.
    */
   type?: new () => I;
 
@@ -102,7 +105,7 @@ export interface InputOptions<I = any> extends InputEncoderOptions {
  *
  * @example
  * ```typescript
- * const input = conn.input({ type: MoveInput, mode: "unreliable" });
+ * const input = room.input({ type: MoveInput, mode: "unreliable" });
  * input.data.vx = 10;
  * input.data.vy = 20;
  * input.send();
@@ -241,16 +244,21 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
   public readonly data: I;
   private _host: InputHandleHost;
   private _encoder: InputEncoder<any>;
+  // Reused frame buffer — safe ONLY because every transport copies synchronously
+  // on send (browser ws.send snapshots; H3 frame() copies before write). A
+  // transport that queued the view uncopied would see it overwritten next send.
   private _scratch: Uint8Array = new Uint8Array(2048);
-  // Cached framed-packet view into `_scratch`; avoids a per-send subarray. Re-made when packet size changes or `_scratch` grows.
+  // Cached framed-packet view into `_scratch`; re-made when the packet size
+  // changes (delta bodies vary) or `_scratch` grows — so it mostly pays off on
+  // steady no-change frames.
   private _framed: Uint8Array | null = null;
 
   // Input round-trip state (one handle per room).
   private _sentCount = 0;                       // reliable inputs transmitted
   private _lastProcessed = 0;                   // server-acked (consumedCount)
-  // RTT send-time ring (seq % size → send time); avoids per-send Map churn. Sized above realistic in-flight.
-  private static readonly SEND_TIME_SIZE = 256;
-  private _sendTimes = new Float64Array(InputHandleImpl.SEND_TIME_SIZE);
+  // RTT send-time ring (seq % size → send time); avoids per-send Map churn.
+  // Sized WITH the replay ring (one seq window — replay and RTT age out together).
+  private _sendTimes: Float64Array;
 
   // Sent-input replay ring, mirroring the server's per-client input buffer: each reliable send snapshots
   // `data` into slot `seq % size` via alloc-free `copyInto` so a reconciler can replay unacked inputs.
@@ -297,6 +305,9 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
   // Send observers (the prediction layer subscribes here to step its simulation
   // on each send — see onSend). null until the first subscribe, so a handle used
   // without prediction pays nothing (no allocation, no per-send dispatch).
+  // COPY-ON-WRITE: subscribe/unsubscribe replace the array (cold path), so the
+  // dispatch loop's captured ref can't skip or double-fire when a listener
+  // mutates the list mid-dispatch.
   private _sendListeners: Array<(seq: number) => void> | null = null;
   // The app's interpolation buffer (ms) — how far in the past it renders remote
   // entities (e.g. a `Predict` lerp `delay`). The stamp subtracts this AND the
@@ -339,6 +350,7 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
       InputHandleImpl.BUFFER_FLOOR,
       Math.ceil((window / stepMs) * InputHandleImpl.BUFFER_HEADROOM),
     );
+    this._sendTimes = new Float64Array(this._inputBufferSize);
   }
 
   get mode(): InputMode { return this._encoder.mode; }
@@ -425,14 +437,10 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
     const reliable = this._encoder.mode === "reliable";
 
     // Lag-comp stamp prefix (reliable only): OR the TIMED modifier onto the
-    // opcode and prepend the timeline stamp the server advertised, DELTA-CODED.
-    // The wire carries the signed change from the previous stamp via the
-    // self-describing number codec — ≈ one fixed step per tick, so ~1 byte where
-    // a raw u32 was 4 (the first send / post-reset frame ships the absolute as a
-    // one-off larger delta). BOTH also trails a [u16 renderDelta]; the server
-    // mirrors the baseline, so reliable+in-order keeps them locked.
-    // `allowRewind` (when present) skips the stamp on inputs the server won't
-    // rewind — the baseline below only advances when we actually stamp, gap-free.
+    // opcode and prepend the delta-coded timeline stamp (wire shape + baseline
+    // story: see _stampRender/_lastStamp). `allowRewind` (when present) skips the
+    // stamp on inputs the server won't rewind — the baseline only advances on
+    // stamped sends, so it stays locked across the gaps.
     const wantStamp = (this._stampReckon || this._stampRender) && reliable
       && (this._allowRewind === undefined || this._allowRewind(this.data));
     const both = this._stampReckon && this._stampRender;
@@ -449,33 +457,27 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
     const it = { offset: 1 };
     if (wantStamp) {
       // The reckon instant for THIS send: the client's serverNow() estimate
-      // (rounded u32 ms), 0 until the clock syncs. Stamped on the wire below AND
-      // recorded per-seq by _recordSent (when reckon is on) so the reconciler
-      // reads it back as ctx.reckonTime on the live step and on replay — one
-      // value, so client display, wire stamp, and replay can't drift.
+      // (rounded u32 ms), 0 until the clock syncs. Wire-stamped below AND
+      // recorded per-seq (read-back story: see _pendingReckon/_reckonTimes).
       const clock = this._host.clock;
       const synced = (clock?.lastServerTime?.() ?? 0) > 0;
       const rk = synced ? Math.max(0, Math.round(clock!.serverNow())) >>> 0 : 0;
       this._pendingReckon = rk;
-      // reckonTime — the RECKON-timeline instant: forward-reckoned entities
-      // display at the client's serverNow ESTIMATE, so stamp that estimate
-      // DIRECTLY. The server reads its history at this exact index, so clock /
-      // RTT estimation error cancels out (client displayed f(est), server reads
-      // f(est)).
+      // reckonTime stamps the display ESTIMATE directly: the server reads its
+      // history at this exact index, so clock/RTT estimation error cancels
+      // (client displayed f(est), server reads f(est)).
       // renderTime = reckonTime − renderDelta — the SNAPSHOT timeline (what
-      // lerped remotes were on screen); renderDelta trails by the interp buffer
-      // (`renderDelay`, app-set) PLUS the one-way downstream latency
-      // (≈ smoothedRtt/2, ours). BOTH mode ships reckonTime + a u16 renderDelta
-      // (only the base needs u32 range; the gap is bounded ≪ 65s) and the server
-      // derives renderTime; single-timeline modes ship the one timeline they use.
-      // All 0 until the clock syncs (lastServerTime still 0) → the server falls
-      // back to live positions instead of a bogus stamp.
+      // lerped remotes were on screen): renderDelta = the interp buffer
+      // (`renderDelay`, app-set) + the one-way downstream latency (≈ smoothedRtt/2,
+      // ours). BOTH mode ships reckonTime + a u16 renderDelta (the gap is bounded
+      // ≪ 65s) and the server derives renderTime; single-timeline modes ship the
+      // one they use. All 0 until the clock syncs → the server falls back to
+      // live positions instead of a bogus stamp.
       const renderDelta = synced
         ? Math.min(0xffff, Math.max(0, Math.round(this._resolveRenderDelay() + (clock!.smoothedRtt?.() ?? 0) / 2)))
         : 0;
-      // The single u32 timeline this mode emits: reckonTime for reckon/both,
-      // renderTime (= reckon − delta) for render-only. Delta-code it against the
-      // running baseline; BOTH then trails the absolute u16 renderDelta.
+      // Emit the mode's single u32 timeline, delta-coded against the baseline;
+      // BOTH then trails the absolute u16 renderDelta.
       const stamp = this._stampReckon ? rk : (rk > renderDelta ? rk - renderDelta : 0);
       encode.number(this._scratch, stamp - this._lastStamp, it);
       this._lastStamp = stamp;
@@ -492,18 +494,22 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
       this._framed = this._scratch.subarray(0, total);   // reused view (size varies only with the stamp prefix)
     }
     const framed = this._framed;
+    let seq: number;
     if (reliable) {
       conn.send(framed);
       // Reliable: implicit count seq — the server counts received messages, so
       // `_sentCount` mirrors its consumed counter for the next TIMED ack.
-      this._recordSent(++this._sentCount);
+      seq = ++this._sentCount;
     } else {
       conn.sendUnreliable(framed);
       // Unreliable: adopt the encoder's framework seq (stamped on the wire) so the
       // server's seq-value ack and this replay ring line up across packet loss.
-      this._recordSent(this._sentCount = this._encoder.seq);
+      seq = this._sentCount = this._encoder.seq;
     }
-    return this._sentCount;   // the seq just assigned to this input
+    this._recordSent(seq);
+    // Local, not _sentCount: a re-entrant send() from an onSend listener would
+    // have advanced the field before this returns.
+    return seq;
   }
 
   /**
@@ -519,11 +525,9 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
       this._inputBuffer = Array.from({ length: this._inputBufferSize }, () => new Ctor() as I);
     }
     this._encoder.copyInto(this._inputBuffer[seq % this._inputBufferSize]);
-    this._sendTimes[seq % InputHandleImpl.SEND_TIME_SIZE] = now();
-    // Record the reckon instant only when reckon stamping is on — the same value
-    // stamped on the wire this send, read back as ctx.reckonTime during replay
-    // (see {@link reckonTimeAt}). A room without reckon lag-comp never rewinds to
-    // it, so the ring (and its allocation) is skipped entirely.
+    this._sendTimes[seq % this._inputBufferSize] = now();
+    // Reckon ring only when reckon stamping is on (see _reckonTimes) — a room
+    // without reckon lag-comp never rewinds to it, so the allocation is skipped.
     if (this._stampReckon) {
       (this._reckonTimes ??= new Float64Array(this._inputBufferSize))[seq % this._inputBufferSize] = this._pendingReckon;
     }
@@ -534,12 +538,16 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
   }
 
   onSend(listener: (seq: number) => void): () => void {
-    (this._sendListeners ??= []).push(listener);
+    const ls = this._sendListeners;
+    this._sendListeners = ls !== null ? [...ls, listener] : [listener];
     return () => {
-      const ls = this._sendListeners;
-      if (ls === null) return;
-      const i = ls.indexOf(listener);
-      if (i >= 0) ls.splice(i, 1);
+      const cur = this._sendListeners;
+      if (cur === null) return;
+      const i = cur.indexOf(listener);
+      if (i < 0) return;
+      const next = cur.slice();
+      next.splice(i, 1);
+      this._sendListeners = next.length > 0 ? next : null;
     };
   }
 
@@ -551,11 +559,11 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
    */
   ackInput(seq: number): number {
     if (seq <= this._lastProcessed) return -1;
-    // Aged out of the send-time ring → RTT unknown.
-    const aged = this._sentCount - seq >= InputHandleImpl.SEND_TIME_SIZE;
+    // Aged out of the seq ring window → RTT unknown.
+    const aged = this._sentCount - seq >= this._inputBufferSize;
     this._lastProcessed = seq;
     if (aged) return -1;
-    const sentAt = this._sendTimes[seq % InputHandleImpl.SEND_TIME_SIZE];
+    const sentAt = this._sendTimes[seq % this._inputBufferSize];
     return sentAt > 0 ? now() - sentAt : -1;
   }
 }

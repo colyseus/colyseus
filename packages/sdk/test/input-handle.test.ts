@@ -200,14 +200,15 @@ describe('InputHandle', () => {
             assert.equal(handle.lastProcessed, 99);
         });
 
-        test('send-time table evicts oldest entries past the cap (256)', () => {
+        test('send-time ring evicts oldest entries past the seq window', () => {
             const { handle, instance } = makeHandle('reliable');
-            // Drive past the 256-entry cap. Full-mode reliable emits a snapshot
-            // every call, so each loop iteration produces a real send.
+            // Drive well past the ring size (shared with the replay ring; 90
+            // slots when no rates are advertised). Full-mode reliable emits a
+            // snapshot every call, so each loop iteration produces a real send.
             for (let i = 0; i < 260; i++) { instance.x = i; handle.send(); }
             assert.equal(handle.sentCount, 260);
 
-            // seq 1 was pushed out when the cap was hit → no send-time → -1.
+            // seq 1 aged out of the window → no send-time → -1.
             assert.equal(handle.ackInput(1), -1);
             assert.equal(handle.lastProcessed, 1);
 
