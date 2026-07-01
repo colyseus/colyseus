@@ -4,7 +4,7 @@ import { Client as SDKClient } from "@colyseus/sdk";
 import { InputEncoder } from "@colyseus/schema/input";
 import { schema, t, MapSchema, type SchemaType } from "@colyseus/schema";
 
-import { matchMaker, Room, Server, Transport, Protocol, ProtocolModifier, type Presence, type MatchMakerDriver } from "@colyseus/core";
+import { matchMaker, Room, Server, Transport, Protocol, type Presence, type MatchMakerDriver } from "@colyseus/core";
 import { DRIVERS, PRESENCE_IMPLEMENTATIONS, timeout } from "../utils/index.ts";
 
 import { WebSocketTransport } from "@colyseus/ws-transport";
@@ -78,24 +78,6 @@ function unreliableRing<I extends object>(Ctor: new () => I, historySize: number
  * Render-only ships renderTime directly (no u16 delta), so the server reads it
  * back verbatim — deterministic, no clock-sync timing.
  */
-function reliableTimedPacket<I extends object>(
-  Ctor: new () => I,
-  renderTime: number,
-  mutate: (inst: I) => void,
-): Uint8Array {
-  const inst = new Ctor();
-  mutate(inst);
-  const body = new InputEncoder(inst as any).encode();
-  const framed = new Uint8Array(5 + body.length);
-  framed[0] = Protocol.ROOM_INPUT_RELIABLE | ProtocolModifier.TIMED;
-  framed[1] = renderTime & 0xff;
-  framed[2] = (renderTime >>> 8) & 0xff;
-  framed[3] = (renderTime >>> 16) & 0xff;
-  framed[4] = (renderTime >>> 24) & 0xff;
-  framed.set(body, 5);
-  return framed;
-}
-
 describe("Input (InputEncoder / InputDecoder integration)", () => {
   let driver: MatchMakerDriver;
   let server: Server;
@@ -433,11 +415,27 @@ describe("Input (InputEncoder / InputDecoder integration)", () => {
     });
 
     const conn = await client.joinOrCreate('input_next_rt');
+    const input = conn.input({ type: MoveInput }); // render-only stamping (server advertised it via the snapshot rewind)
+
+    // Drive the SDK's REAL reliable-input encoder so the wire stamp (delta-coded)
+    // comes from production code, not a hand-framed packet. A controllable clock
+    // feeds exact render stamps: renderTime = round(serverNow()) − renderDelta, and
+    // here renderDelay/rtt are 0 so the stamp equals `now`. lastServerTime() > 0
+    // marks the clock "synced" so the SDK actually stamps (vs 0 before sync).
+    let now = 0;
+    conn.clock = {
+      now: () => now, serverNow: () => now, rtt: () => 0, smoothedRtt: () => 0,
+      lastServerTime: () => 1, setPatchInterval: () => {}, sample: () => {},
+    } as any;
 
     // Three reliable inputs with KNOWN, increasing render-time stamps.
-    conn.connection.send(reliableTimedPacket(MoveInput, 100, (i) => { i.x = 1; })); await timeout(15);
-    conn.connection.send(reliableTimedPacket(MoveInput, 200, (i) => { i.x = 2; })); await timeout(15);
-    conn.connection.send(reliableTimedPacket(MoveInput, 300, (i) => { i.x = 3; })); await timeout(40);
+    for (const stamp of [100, 200, 300]) {
+      now = stamp;
+      input.data.x = stamp / 100;
+      input.send();
+      await timeout(20);
+    }
+    await timeout(20);
 
     conn.send("consumeOne"); await timeout(40);
     conn.send("consumeOne"); await timeout(40);

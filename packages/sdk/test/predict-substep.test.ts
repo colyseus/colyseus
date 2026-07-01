@@ -28,6 +28,7 @@ class FakeInput {
     lastProcessed = 0;
     sentCount = 0;
     private buffer = new Map<number, Cmd>();
+    private sendCb?: (seq: number) => void;
 
     constructor(opts: { stepMs?: number; stepSeconds?: number; subSteps?: number } = {}) {
         // dt = 1s keeps the math integer-friendly; 30 Hz wire / 60 Hz physics is
@@ -37,10 +38,13 @@ class FakeInput {
         this.subSteps = opts.subSteps;
     }
 
-    send(): void {
+    send(): number {
         this.sentCount++;
         this.buffer.set(this.sentCount, { ...this.data });
+        this.sendCb?.(this.sentCount);                     // notify the observing controller
+        return this.sentCount;
     }
+    onSend(cb: (seq: number) => void): () => void { this.sendCb = cb; return () => { this.sendCb = undefined; }; }
     at(seq: number): Cmd | undefined { return this.buffer.get(seq); }
     reckonTimeAt(_seq: number): number { return 0; } // no reckon lag-comp in tests
     get pendingCount(): number { return this.sentCount - this.lastProcessed; }
@@ -64,6 +68,15 @@ function subSteppedStep(ctx: { subSteps: number; subDt: number }, state: Self, c
     }
 }
 
+// Observer-model drive helpers: mutate + send through the handle. The controller
+// observes the send (via `onSend`) and steps it — reads are pure.
+function stepR(_ctl: Reconciler<Self, Cmd>, input: FakeInput, cmd: Cmd): void {
+    Object.assign(input.data, cmd); input.send();
+}
+function stepS(_ctl: SimReconciler<Cmd, { x: number }, any>, input: FakeInput, cmd: Cmd): void {
+    Object.assign(input.data, cmd); input.send();
+}
+
 describe('sub-stepping (network rate ÷ physics rate decoupling)', () => {
     test('Reconciler: ctx carries subSteps/subDt defaulted from the input handle', () => {
         const input = new FakeInput({ subSteps: 2 });
@@ -73,39 +86,42 @@ describe('sub-stepping (network rate ÷ physics rate decoupling)', () => {
             step: (ctx) => { seen = { dt: ctx.dt, subSteps: ctx.subSteps, subDt: ctx.subDt, subDtMs: ctx.subDtMs }; },
             fields: ['x', 'vx'],
         });
-        ctl.input({ ax: 1 });
+        stepR(ctl, input, { ax: 1 });
         assert.deepEqual(seen, { dt: 1, subSteps: 2, subDt: 0.5, subDtMs: 500 });
     });
 
     test('Reconciler: explicit opts.subSteps overrides the handle; defaults to 1', () => {
         const sawSubSteps: number[] = [];
+        const inputA = new FakeInput({ subSteps: 2 });
         const ctl = new Reconciler<Self, Cmd>({ x: 0, vx: 0 }, {
-            input: asHandle(new FakeInput({ subSteps: 2 })),
+            input: asHandle(inputA),
             step: (ctx) => { sawSubSteps.push(ctx.subSteps); },
             fields: ['x', 'vx'],
             subSteps: 4,
         });
-        ctl.input({ ax: 1 });
+        stepR(ctl, inputA, { ax: 1 });
 
+        const inputB = new FakeInput();
         const plain = new Reconciler<Self, Cmd>({ x: 0, vx: 0 }, {
-            input: asHandle(new FakeInput()),
+            input: asHandle(inputB),
             step: (ctx) => { sawSubSteps.push(ctx.subSteps); assert.equal(ctx.subDt, ctx.dt); },
             fields: ['x', 'vx'],
         });
-        plain.input({ ax: 1 });
+        stepR(plain, inputB, { ax: 1 });
 
         assert.deepEqual(sawSubSteps, [4, 1]);
     });
 
     test('Reconciler: reconcile+replay reproduces the live sub-stepped trajectory (no drift)', () => {
         // Live reference run, recording authoritative state after each input.
+        const refInput = new FakeInput({ subSteps: 2 });
         const ref = new Reconciler<Self, Cmd>({ x: 0, vx: 0 }, {
-            input: asHandle(new FakeInput({ subSteps: 2 })),
+            input: asHandle(refInput),
             step: subSteppedStep,
             fields: ['x', 'vx'],
         });
         const states: Self[] = [];
-        for (let i = 0; i < 6; i++) { ref.input({ ax: 1 }); states.push({ ...ref.state }); }
+        for (let i = 0; i < 6; i++) { stepR(ref, refInput, { ax: 1 }); states.push({ ...ref.state }); }
 
         // Reconciling run: server acks seq 2 with its authoritative state → the
         // reconciler rewinds and replays seqs 3..6 (each = 2 sub-steps).
@@ -117,7 +133,7 @@ describe('sub-stepping (network rate ÷ physics rate decoupling)', () => {
             fields: ['x', 'vx'],
             smoothing: 0,
         });
-        for (let i = 0; i < 6; i++) ctl.input({ ax: 1 });
+        for (let i = 0; i < 6; i++) stepR(ctl, input, { ax: 1 });
         instance.x = states[1].x; instance.vx = states[1].vx;
         input.lastProcessed = 2;
         ctl.tick(0);
@@ -138,15 +154,16 @@ describe('sub-stepping (network rate ÷ physics rate decoupling)', () => {
         });
 
         const refEngine: Engine = { x: 0, vx: 0 };
-        const ref = new SimReconciler(mkOpts(new FakeInput({ subSteps: 2 }), refEngine, { x: 0, vx: 0 }));
+        const refInput = new FakeInput({ subSteps: 2 });
+        const ref = new SimReconciler(mkOpts(refInput, refEngine, { x: 0, vx: 0 }));
         const states: Engine[] = [];
-        for (let i = 0; i < 5; i++) { ref.input({ ax: 1 }); states.push({ ...refEngine }); }
+        for (let i = 0; i < 5; i++) { stepS(ref, refInput, { ax: 1 }); states.push({ ...refEngine }); }
 
         const input = new FakeInput({ subSteps: 2 });
         const engine: Engine = { x: 0, vx: 0 };
         const instance: Self = { x: 0, vx: 0 };
         const ctl = new SimReconciler(mkOpts(input, engine, instance));
-        for (let i = 0; i < 5; i++) ctl.input({ ax: 1 });
+        for (let i = 0; i < 5; i++) stepS(ctl, input, { ax: 1 });
         instance.x = states[0].x; instance.vx = states[0].vx;
         input.lastProcessed = 1;
         ctl.tick(0);
@@ -166,7 +183,7 @@ describe('sub-stepping (network rate ÷ physics rate decoupling)', () => {
             step: (ctx) => { subDt = ctx.subDt; },
             fields: ['x', 'vx'],
         });
-        ctl.input({ ax: 0 });
+        stepR(ctl, input, { ax: 0 });
         assert.strictEqual(subDt, (1 / 30) / 2);
     });
 });

@@ -719,6 +719,22 @@ export class Predict<TState = any> {
     private reckonDefaults: ReckonDefaults;
     private clock: RoomClockLike | undefined;
 
+    // --- Room-wide fixed-step accumulator (drives reconciler input pacing) ------
+    // The server's tick rate is one value per room, so one accumulator here is the
+    // single source of truth: `tick(now)` converts elapsed render time into the
+    // whole number of fixed input ticks due (returned to the caller's send loop).
+    // `stepMs` is adopted from the first reconciler spawned (its input handle
+    // advertises the server rate); until then no fixed step is known and `tick`
+    // returns 0. (Render interpolation is NOT derived here — each reconciler eases
+    // it off its own last-step time, so it holds correctly when that entity's input
+    // pauses; see RollbackController.renderAlpha.)
+    private fixedStepMs: number | undefined;
+    private stepAcc = 0;
+    private lastFrameNow = -1;
+    /** Spiral-of-death guard: cap fixed steps emitted per frame (after a hitch,
+     *  drop the backlog rather than chase it). */
+    private static readonly MAX_STEPS_PER_FRAME = 5;
+
     // Profile table. Profile 0 is the defaults (mutable via setDefaults).
     // Subsequent indices are frozen, value-deduped via `profileKeys`.
     private profileBuf: Float64Array = new Float64Array(8 * PROFILE_STRIDE);
@@ -1771,15 +1787,47 @@ export class Predict<TState = any> {
 
     /**
      * Call once per render frame — the single per-frame driver for the whole
-     * prediction stack. Advances smoothing (lerp/extrapolate/damped/reckon),
-     * ticks every {@link controller} spawned from this Predict, and prunes every
-     * {@link events} store. `now` defaults to `performance.now()`; pass it
-     * explicitly when ticking multiple Predicts in the same frame so they share
-     * one frame-time reference.
+     * prediction stack. Advances the room-wide fixed-step clock, reconciles + steps
+     * + decays every {@link reconciler}/{@link sim} spawned here, advances smoothing,
+     * and prunes every {@link events} store.
+     *
+     * Returns HOW MANY fixed input steps are due this frame: mutate + send that many
+     * inputs through your input handle (`input.data.x = …; input.send()`), and the
+     * reconcilers observe + predict them. Returns 0 until a reconciler is spawned
+     * (no fixed rate known) or for passive-smoothing-only Predicts — ignore the
+     * return then.
+     *
+     * `now` defaults to `performance.now()`. When you drive from
+     * `requestAnimationFrame`, pass ITS timestamp argument — not `performance.now()`
+     * (or `room.clock.now()`) sampled inside the callback: the rAF timestamp is
+     * vsync-aligned and evenly spaced, whereas an in-callback reading folds JS
+     * scheduling jitter into the frame `dt`, which makes render interpolation advance
+     * unevenly (motion looks "not smooth" though it never stutters). Pass it
+     * explicitly, too, when ticking multiple Predicts in one frame so they share one
+     * frame-time reference.
      */
-    tick(now: number = performance.now()): void {
+    tick(now: number = performance.now()): number {
         this.renderTime = now;
-        // Drive children; compact out any disposed ones in the same pass.
+
+        // Advance the room-wide fixed-step accumulator: elapsed render time → the
+        // whole number of fixed input steps due this frame (returned to the caller).
+        let steps = 0;
+        const stepMs = this.fixedStepMs;
+        if (stepMs !== undefined && stepMs > 0) {
+            const dt = this.lastFrameNow < 0 ? 0 : now - this.lastFrameNow;
+            this.stepAcc += dt;
+            steps = Math.floor(this.stepAcc / stepMs);
+            if (steps > Predict.MAX_STEPS_PER_FRAME) {
+                this.stepAcc = 0;   // hitch: emit a bounded count, drop the backlog
+                steps = Predict.MAX_STEPS_PER_FRAME;
+            } else {
+                this.stepAcc -= steps * stepMs;
+            }
+        }
+        this.lastFrameNow = now;
+
+        // Drive children (reconcile + decay); each derives its own render
+        // interpolation from `now`. Compact out any disposed ones in the same pass.
         const driven = this.driven;
         let live = 0;
         for (let i = 0; i < driven.length; i++) {
@@ -1791,6 +1839,8 @@ export class Predict<TState = any> {
             live++;
         }
         if (live !== driven.length) driven.length = live;
+
+        return steps;
     }
 
     // --- Sibling-store factory -------------------------------------------------
@@ -1863,21 +1913,6 @@ export class Predict<TState = any> {
     }
 
     /**
-     * Spawn a {@link Reconciler} for a locally-controlled entity — server-
-     * reconciled rollback (predict your inputs immediately, rewind to the
-     * server's authoritative state + replay unacked inputs, smoothly correcting
-     * mispredictions). The active counterpart to this Predict's passive modes:
-     * use `reconciler()` for the entity you control, lerp/reckon for the rest.
-     *
-     * Driven by the `opts.input` handle (`room.input(...)`): it predicts +
-     * transmits through it and reads the server ack (`input.lastProcessed`) off
-     * it — the channel you send on is the channel that knows what's acked.
-     *
-     * The returned controller is auto-ticked by this Predict's {@link tick}
-     * each frame (reconcile + smooth-correction decay) — no separate `tick()`
-     * call needed, which is exactly the drive that's easy to forget.
-     */
-    /**
      * The canonical interpolation `delay` (the default profile's `delay`, from
      * `Predict.get(room, { delay })` / {@link setDefaults}). Lag compensation's
      * `renderDelay` is bound to this by {@link reconciler}/{@link sim} so the
@@ -1902,6 +1937,22 @@ export class Predict<TState = any> {
         }
     }
 
+    /**
+     * Spawn a {@link Reconciler} for a locally-controlled entity — server-
+     * reconciled rollback (predict your inputs immediately, rewind to the server's
+     * authoritative state + replay unacked inputs, smoothly correcting
+     * mispredictions). The active counterpart to this Predict's passive modes: use
+     * `reconciler()` for the entity you control, lerp/reckon for the rest.
+     *
+     * A pure OBSERVER of `opts.input` (`room.input(...)`): you mutate + send through
+     * the handle (`input.data.x = …; input.send()`) and the reconciler steps each
+     * send + reads the server ack (`input.lastProcessed`) off it — the channel you
+     * send on is the channel that knows what's acked. `predict.tick(now)` returns
+     * how many fixed input steps are due this frame.
+     *
+     * Auto-ticked by this Predict's {@link tick} each frame (reconcile + smooth-
+     * correction decay) — no separate `tick()` call to forget.
+     */
     reconciler<S extends object, W>(
         instance: S,
         opts: Omit<ReconcilerOptions<S, Data<W>>, "input"> & { input: InputHandle<W> },
@@ -1912,6 +1963,7 @@ export class Predict<TState = any> {
         // type argument needs to be written at the call site, and `step`'s `cmd`
         // is contextually typed.
         const recon = new Reconciler<S, Data<W>>(instance, opts);
+        this.adoptFixedStep(recon.stepMs);
         this.bindInputRenderDelay(opts.input);
         this.driven.push(recon as { tick?(now: number): void; dead?: boolean });
         return recon;
@@ -1923,12 +1975,13 @@ export class Predict<TState = any> {
      * server's authoritative state + replay unacked inputs, smoothly correcting
      * mispredictions) — when their truth isn't a single flat scalar `fields` list:
      * composite scalar state across several schema instances (a paddle + the puck
-     * it strikes, reconciled together), or an opaque engine handle (Rapier,
-     * crashcat). Your `world` owns the state via `step` / `adopt` / `pose`
-     * callbacks; the controller runs the loop and passes the world handle to each.
+     * it strikes, reconciled together), or an opaque physics-engine handle. Your
+     * `world` owns the state via `step` / `adopt` / `pose` callbacks; the controller
+     * runs the rollback loop and passes the world handle to each.
      *
-     * Like {@link reconciler}, the returned controller is auto-ticked by this
-     * Predict's {@link tick} each frame (reconcile + smooth-correction decay).
+     * Like {@link reconciler}, it OBSERVES `opts.input` (you mutate + send through
+     * the handle; `predict.tick(now)` returns the fixed-step count) and is
+     * auto-ticked by this Predict's {@link tick} each frame (reconcile + decay).
      */
     sim<W, P extends Record<string, number>, E>(
         opts: Omit<SimReconcilerOptions<Data<W>, P, E>, "input"> & { input: InputHandle<W> },
@@ -1937,9 +1990,38 @@ export class Predict<TState = any> {
         // `E` from `opts.world` — none written at the call site, and `step`'s `cmd`
         // is contextually typed `Data<W>`.
         const ctl = new SimReconciler<Data<W>, P, E>(opts as SimReconcilerOptions<Data<W>, P, E>);
+        this.adoptFixedStep(ctl.stepMs);
         this.bindInputRenderDelay(opts.input);
         this.driven.push(ctl as { tick?(now: number): void; dead?: boolean });
         return ctl;
+    }
+
+    /**
+     * Adopt a spawned reconciler's fixed step as this Predict's room-wide pacing
+     * rate (the first one wins — the server has a single tick rate). Warns if a
+     * later reconciler advertises a different step, since one accumulator can't
+     * pace two rates.
+     */
+    private adoptFixedStep(stepMs: number): void {
+        if (this.fixedStepMs === undefined) {
+            this.fixedStepMs = stepMs;
+            // Start the count accumulator fresh with the reconciler just created:
+            // if this accumulator had been advancing since Predict.get, the first
+            // tick after spawn would emit a BURST of steps (all the time elapsed
+            // before there was anything to predict), which the app would send at
+            // once. (The render clock itself self-corrects any phase offset — see
+            // RollbackController.catchUp — so this is about the burst, not smoothness.)
+            this.stepAcc = 0;
+            this.lastFrameNow = -1;
+            return;
+        }
+        if (Math.abs(this.fixedStepMs - stepMs) > 1e-6) {
+            console.warn(
+                `@colyseus/sdk Predict: a reconciler's fixed step (${stepMs}ms) differs from ` +
+                `this Predict's (${this.fixedStepMs}ms). tick() paces one rate for the whole room; ` +
+                `use a separate Predict per rate.`,
+            );
+        }
     }
 
     // --- Reads -----------------------------------------------------------------

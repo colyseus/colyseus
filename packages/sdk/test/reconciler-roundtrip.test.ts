@@ -5,16 +5,17 @@ import { assert } from 'chai';
 import { Reconciler } from '../src/predict.ts';
 
 // -----------------------------------------------------------------------------
-// The linchpin: the reconciler's LIVE step must predict from the ROUND-TRIPPED
-// staged input (`input.data`), not the raw cmd — so a lossy wire transform (a
-// `t.quantized` field) is applied identically on the live step, on rollback
-// replay (`input.at(seq)`), and on the server.
+// The linchpin: the reconciler predicts from the ROUND-TRIPPED wire input the
+// handle buffered at `send()` (`input.at(seq)`), not any raw cmd — so a lossy wire
+// transform (a `t.quantized` field) is applied identically on the live catch-up
+// step, on rollback replay, and on the server. In the observer model this is
+// structural: there is no raw-cmd path at all.
 //
 // This fake `data` SNAPS `q` to the nearest integer on write (a stand-in for
-// quantization). The default writeInput (`Object.assign(data, cmd)`) runs that
-// setter; `send()` snapshots the SNAPPED value for replay. If the live step read
-// the raw cmd instead, `state.x` would accumulate the un-snapped fractions and
-// diverge from what replay/server reproduce.
+// quantization). Staging `input.data.q = …` runs that setter; `send()` snapshots
+// the SNAPPED value, and both live catch-up and replay read it back via
+// `input.at(seq)` — so `state.x` accumulates the snapped integers, never the raw
+// fractions.
 // -----------------------------------------------------------------------------
 
 interface Cmd { q: number; }
@@ -34,14 +35,26 @@ class FakeInput {
     lastProcessed = 0;
     sentCount = 0;
     private buffer = new Map<number, Cmd>();
+    private sendCb?: (seq: number) => void;
 
-    send(): void {
+    send(): number {
         this.sentCount++;
         this.buffer.set(this.sentCount, { q: this.data.q }); // snapshot the SNAPPED value
+        this.sendCb?.(this.sentCount);                        // notify the observing reconciler
+        return this.sentCount;
     }
+    onSend(cb: (seq: number) => void): () => void { this.sendCb = cb; return () => { this.sendCb = undefined; }; }
     at(seq: number): Cmd | undefined { return this.buffer.get(seq); }
     reckonTimeAt(_seq: number): number { return 0; }
     get pendingCount(): number { return this.sentCount - this.lastProcessed; }
+}
+
+/** Emulate one LIVE input step in the observer model: mutate + send through the
+ *  handle (the `q` setter snaps, like quantization). The reconciler observes the
+ *  send and steps it — reads (`state`) are pure. */
+function step(_recon: Reconciler<{ x: number }, Cmd>, input: FakeInput, q: number): void {
+    input.data.q = q;   // SnappingData setter snaps on write
+    input.send();       // → onSend → reconciler steps the input
 }
 
 describe('Reconciler predicts from the round-tripped input', () => {
@@ -56,9 +69,9 @@ describe('Reconciler predicts from the round-tripped input', () => {
         });
 
         // Each cmd's fraction snaps to the nearest integer before the step sees it.
-        recon.input({ q: 0.7 }); // → 1
-        recon.input({ q: 2.4 }); // → 2
-        recon.input({ q: 1.5 }); // → 2 (round half up)
+        step(recon, input, 0.7); // → 1
+        step(recon, input, 2.4); // → 2
+        step(recon, input, 1.5); // → 2 (round half up)
 
         // 1 + 2 + 2 = 5. If the live step read the raw cmd it'd be 0.7+2.4+1.5 = 4.6.
         assert.strictEqual(recon.state.x, 5, 'live step must integrate the snapped wire value');
@@ -75,8 +88,8 @@ describe('Reconciler predicts from the round-tripped input', () => {
             step: (_ctx, s, cmd) => { s.x += cmd.q; },
         });
 
-        recon.input({ q: 0.7 }); // → 1
-        recon.input({ q: 2.4 }); // → 2 ; live prediction = 3
+        step(recon, input, 0.7); // → 1
+        step(recon, input, 2.4); // → 2 ; live prediction = 3
 
         // Server acked seq 1 (snapped q=1 → authoritative x=1).
         self.x = 1;

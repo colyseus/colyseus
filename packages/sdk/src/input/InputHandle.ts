@@ -169,8 +169,26 @@ export interface InputHandle<I = any> {
    * last send (the server decodes it as a no-op, holding the last values), so
    * the server receives exactly one input per `send()` and its consumed/ack
    * count tracks yours 1:1. To skip a tick entirely, simply don't call `send()`.
+   *
+   * Returns the seq assigned to this input — the same value the reconciler steps,
+   * that {@link at}/{@link reckonTimeAt} key on, and that {@link sentCount} now
+   * reads. It is `0` when nothing was sent (connection closed); seqs are 1-based,
+   * so `const seq = input.send(); if (seq) …` doubles as a "did it transmit?" check.
    */
-  send(): void;
+  send(): number;
+  /**
+   * Subscribe to sends: `listener(seq)` fires synchronously at the END of each
+   * {@link send} (after the input is buffered for replay and its reckon instant
+   * stamped), with the just-sent seq. Returns an unsubscribe fn.
+   *
+   * This is how the prediction layer OBSERVES your input stream without owning the
+   * send: `predict.reconciler(...)` / `predict.sim(...)` subscribe here and step
+   * their predicted simulation for the sent input — so you mutate + send through
+   * the handle (`input.data.x = …; input.send()`) and prediction stays current
+   * with zero extra calls on your side. `at(seq)` / `reckonTimeAt(seq)` are valid
+   * inside the listener. Empty (no allocation, no dispatch) when nothing subscribes.
+   */
+  onSend(listener: (seq: number) => void): () => void;
   /**
    * Reset encoder state. Drops the unreliable ring buffer; re-marks every
    * populated field as dirty so the next send emits a full snapshot. Useful
@@ -276,6 +294,10 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
   // delta baseline (`_lastStamp`) only advances on stamped sends, so it stays
   // locked with the server across the gaps. Absent ⇒ stamp every reliable input.
   private _allowRewind?: (data: I) => boolean;
+  // Send observers (the prediction layer subscribes here to step its simulation
+  // on each send — see onSend). null until the first subscribe, so a handle used
+  // without prediction pays nothing (no allocation, no per-send dispatch).
+  private _sendListeners: Array<(seq: number) => void> | null = null;
   // The app's interpolation buffer (ms) — how far in the past it renders remote
   // entities (e.g. a `Predict` lerp `delay`). The stamp subtracts this AND the
   // one-way latency (smoothedRtt/2) the SDK already tracks, so callers pass only
@@ -392,9 +414,9 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
     return this._renderDelayProvider ? this._renderDelayProvider() : this._renderDelay;
   }
 
-  send(): void {
+  send(): number {
     const conn = this._host.connection;
-    if (!conn?.isOpen) return;
+    if (!conn?.isOpen) return 0;   // nothing transmitted → seq 0 (seqs are 1-based)
 
     // May be 0-length on a no-change delta tick → we still frame + send a
     // body-less input (server decodes it as a no-op, holding the last values).
@@ -481,6 +503,7 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
       // server's seq-value ack and this replay ring line up across packet loss.
       this._recordSent(this._sentCount = this._encoder.seq);
     }
+    return this._sentCount;   // the seq just assigned to this input
   }
 
   /**
@@ -504,6 +527,20 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
     if (this._stampReckon) {
       (this._reckonTimes ??= new Float64Array(this._inputBufferSize))[seq % this._inputBufferSize] = this._pendingReckon;
     }
+    // Notify send observers LAST — the replay ring + reckon instant are now
+    // recorded, so a listener can read `at(seq)` / `reckonTimeAt(seq)`.
+    const ls = this._sendListeners;
+    if (ls !== null) for (let i = 0; i < ls.length; i++) ls[i](seq);
+  }
+
+  onSend(listener: (seq: number) => void): () => void {
+    (this._sendListeners ??= []).push(listener);
+    return () => {
+      const ls = this._sendListeners;
+      if (ls === null) return;
+      const i = ls.indexOf(listener);
+      if (i >= 0) ls.splice(i, 1);
+    };
   }
 
   /**

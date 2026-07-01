@@ -1,36 +1,34 @@
 /**
- * Reconciler — server-reconciled rollback for a locally-controlled entity.
+ * Reconciler — server-reconciled rollback for a locally-controlled entity whose
+ * authoritative truth is a flat list of scalar `fields` on ONE schema instance.
  *
  * The active counterpart to {@link Predict}: where Predict passively smooths the
  * server stream for entities you DON'T control (lerp/reckon), the Reconciler
  * owns the predicted simulation of the entity you DO control. It applies your
- * inputs immediately (zero-latency local feel), buffers the unacknowledged
- * ones, and when the server's authoritative state arrives it rewinds to that
- * truth and replays the still-unacked inputs — the standard rewind-and-replay
- * rollback loop, but the *server* is the authority that provides the restore point.
+ * inputs immediately (zero-latency local feel), buffers the unacknowledged ones,
+ * and when the server's authoritative state arrives rewinds to that truth and
+ * replays the still-unacked inputs — the standard rewind-and-replay rollback loop
+ * (shared with `SimReconciler` via {@link RollbackController}), with the *server*
+ * as the authority that provides the restore point.
  *
- * The acknowledgement lives on the INPUT HANDLE, not the clock: you send inputs
- * through `room.input(...)`, so that handle is what knows the server ack
- * (`input.lastProcessed`) and the seq you've sent (`input.sentCount`). The
- * reconciler predicts + transmits through the handle and reads the ack off it —
- * send and ack on one object. Reconcile is driven by polling `lastProcessed` in
- * {@link Reconciler.tick} — no schema field, no per-field subscription.
+ * This is the flat-`fields` face of the shared engine: it mirrors a declared
+ * `fields` list off one authoritative schema instance (adopt = copy those fields;
+ * pose = read them back). For composite state across several instances, or an
+ * opaque physics-engine handle, reach for `SimReconciler` (`predict.sim`).
+ *
+ * The acknowledgement lives on the INPUT HANDLE, not a clock: you send inputs
+ * through `room.input(...)`, so that handle knows the server ack
+ * (`input.lastProcessed`) and the seq you've sent (`input.sentCount`).
  *
  * Smooth error correction: a misprediction is absorbed into a per-field visual
- * offset (error = renderedBefore − correctedLocal) that decays to 0 over a few
- * frames, so corrections never pop. Correct predictions ⇒ ~zero offset.
+ * offset that decays to 0 over a few frames, so corrections never pop.
  *
- * Input is FIXED-TIMESTEP: {@link beginFrame} accumulates real frame time and
- * returns HOW MANY `stepMs` steps to run now; the caller loops that many times,
- * sampling one input per step into {@link input}. So the input/send rate is tied
- * to the step rate, not the frame rate (a 120fps and a 60fps client emit the
- * same inputs). Render reads ({@link value}) interpolate between the two latest
- * steps so motion stays smooth above the step rate.
- *
- * The step loop is CALLBACK-FREE — a count plus a caller-side loop — so this
- * engine ports to C# / C / Lua by transcription (no closures/function-pointers
- * to marshal); only the loop, input sampling, and transport live in the
- * per-language shell.
+ * Input is FIXED-TIMESTEP and the reconciler is a pure OBSERVER: you mutate + send
+ * through the input handle directly, and `predict.tick(now)` returns how many fixed
+ * steps are due this frame. The reconciler watches the handle's `sentCount` and
+ * predicts each new send (see {@link RollbackController}); render reads
+ * ({@link value}) interpolate between the two latest steps so motion stays smooth
+ * above the step rate.
  *
  *     // Every send() transmits one input (body-less when unchanged), so each
  *     // predicted step is delivered — predicted set == server-applied set.
@@ -43,178 +41,25 @@
  *         // stepMs / stepSeconds default from `input`'s server-advertised rate.
  *     });
  *
- *     // per frame: how many fixed steps to run, then loop in the shell:
- *     const n = me.beginFrame(frameDtMs);
- *     for (let i = 0; i < n; i++) me.input({ moveX, jump }); // predict + buffer + send
- *     // (predict.tick(now) drives reconcile + decay)
+ *     // per frame: predict.tick returns how many fixed input steps are due; mutate
+ *     // + send each through the handle — the reconciler observes and predicts them:
+ *     const n = predict.tick(now);
+ *     for (let i = 0; i < n; i++) {
+ *         input.data.moveX = moveX; input.data.jump = jump; // stage the wire input
+ *         input.send();                                     // transmit + buffer for replay
+ *     }
  *     draw(me.value("x"), me.value("y"));                   // interpolated render pose
  *
  * Hot path (`value`) is plain-number only; reconcile (cold, ~server-tick rate)
  * reads the authoritative instance.
  */
 
-// Drives + reads acks through `room.input(...)`'s handle: the input channel +
-// input-state owner (staged data, sent buffer, ack). Type-only (erased).
-import type { InputHandle } from "../input/InputHandle.ts";
-import { newDrift, updateDrift, resetDrift, classifyDrift, type Drift } from "./drift.ts";
-import { warnDivergence, diagnosticsActive } from "./divergence.ts";
+import { RollbackController, type RollbackOptions, type StepContext } from "./rollback.ts";
 
-/**
- * Per-seq memo backing {@link StepContext.effect}: run a closure ONCE on the
- * live step, freeze its result keyed by `(seq, key)`, and on every rollback
- * REPLAY of that seq return the frozen value WITHOUT re-running it. Pruned when
- * the seq is acked, cleared on reset. Shared by {@link Reconciler} and
- * `SimReconciler` (both replay the same per-seq input buffer the same way).
- *
- * Storage is sparse — only seqs that recorded ≥1 effect get an entry — so it
- * stays as small as the hand-rolled per-seq Maps it replaces.
- */
-export class EffectStore {
-    /** seq → (key → memoized value). */
-    private byTick = new Map<number, Map<string, any>>();
+// Re-export StepContext so the `@colyseus/sdk/predict` barrel resolves it here.
+export type { StepContext } from "./rollback.ts";
 
-    /**
-     * LIVE (`isReplay=false`): run `compute`, memoize a non-`undefined` result
-     * under `(tick, key)`, return it. REPLAY (`isReplay=true`): return the memo
-     * (or `undefined` if the live step recorded none) WITHOUT running `compute`.
-     */
-    run<T>(tick: number, isReplay: boolean, key: string, compute: () => T): T | undefined {
-        if (isReplay) return this.byTick.get(tick)?.get(key) as T | undefined;
-        const v = compute();
-        if (v !== undefined) {
-            let m = this.byTick.get(tick);
-            if (m === undefined) { m = new Map(); this.byTick.set(tick, m); }
-            m.set(key, v);
-        }
-        return v;
-    }
-
-    /** Drop memos for seqs the server has acked (they'll never replay again). */
-    prune(acked: number): void {
-        for (const tick of this.byTick.keys()) if (tick <= acked) this.byTick.delete(tick);
-    }
-
-    clear(): void { this.byTick.clear(); }
-}
-
-/**
- * Per-step context handed to {@link ReconcilerOptions.step}. Mirrors the
- * server's `StepContext` (@colyseus/core) so ONE fixed `dt` drives both sides of
- * the rollback. Carries only the fixed step — never wall-clock time.
- */
-export interface StepContext {
-  /** Fixed step in SECONDS (`1/tickRate`) — the dt to integrate this step with. */
-  readonly dt: number;
-  /** Fixed step in MILLISECONDS (`1000/tickRate`). */
-  readonly dtMs: number;
-  /** The input's sequence (= `input.sentCount`), which IS the index of the step
-   *  being simulated — during replay it's the historical seq, not a fresh count. */
-  readonly tick: number;
-  /**
-   * Physics sub-steps per fixed step (≥ 1) — mirrors the server's
-   * `setFixedTimestep(..., { subSteps })`, cascaded through the join handshake.
-   * One input still drives ONE `step` call (live and replayed alike — the
-   * replay invariant is untouched); inside it, integrate your engine
-   * `subSteps` times at {@link subDt}:
-   * `for (let i = 0; i < ctx.subSteps; i++) world.step(ctx.subDt)` —
-   * the same loop the server runs, so physics can run at `tickRate * subSteps`
-   * Hz while only `tickRate` inputs/sec cross the wire. `1` when the server
-   * doesn't sub-step, in which case `subDt === dt` and the loop above
-   * degenerates to a single full step — one shared `step` fn covers both.
-   */
-  readonly subSteps: number;
-  /** Physics sub-step in SECONDS (`dt / subSteps`) — bit-identical to the
-   *  server's `ctx.subDt`. Equals {@link dt} when `subSteps` is 1. */
-  readonly subDt: number;
-  /** Physics sub-step in MILLISECONDS (`dtMs / subSteps`). */
-  readonly subDtMs: number;
-  /**
-   * `false` on the live, first-time step of a fresh input; `true` while the
-   * reconciler RE-simulates an already-applied input during rollback (it rewinds
-   * to the server's authoritative state, then replays every still-unacked input
-   * on top to catch back up — see {@link Reconciler}).
-   *
-   * Why it matters: one input is replayed 0..N times — once per reconcile until
-   * the server acks it (often several frames). Deterministic simulation (your
-   * `applyInput`) MUST re-run every time, or replay won't reproduce the server.
-   * But one-shot SIDE EFFECTS — a sound, a particle/VFX, haptics, analytics, a
-   * sent message — must fire exactly once: gate them on `!ctx.isReplay`, else
-   * they re-fire on every rollback. (This is the standard re-simulation flag
-   * rollback netcode exposes so one-shot effects fire only on the first,
-   * authoritative pass — but prefer `ctx.effect` below, which handles it for you.)
-   *
-   * Alternative: keep side effects out of `step` entirely and run them on the
-   * live path (in your per-frame loop), as this project does with collision
-   * prediction — then you never touch this flag.
-   */
-  readonly isReplay: boolean;
-  /**
-   * The input's reckon instant (server-clock ms) — the client's `serverNow()`
-   * estimate when this input was sent, the SAME value the server reads as
-   * `channel.reckonTime` / `rewind.lastSeenBy(sid)`. Buffered per-seq on the
-   * input handle, so it's identical on the live step and on every replay of
-   * that seq.
-   *
-   * Hit-test remote entities at this instant — sample moving solids at
-   * `reckonTime`, reckon other entities with `predict.valueAt(e, field,
-   * reckonTime)` — and your client verdict matches the server's lag-comp rewind
-   * BY CONSTRUCTION ("what you see is what you hit"), including for discrete
-   * motion. Because it's the same value per seq across rollbacks, collision in
-   * the step replays deterministically.
-   *
-   * `0` when reckon lag-comp isn't enabled (the room never rewinds to it) or
-   * before the clock syncs — fall back to `serverNow()` then, mirroring the
-   * server's `reckonTime > 0 ? reckonTime : now`.
-   */
-  readonly reckonTime: number;
-  /**
-   * Record a non-derivable effect on the rollback timeline. `compute` runs
-   * exactly ONCE — on the LIVE step for this seq — and its result is memoized
-   * under `key`; on every rollback REPLAY of this seq the memo is returned and
-   * `compute` is NOT re-run. Auto-pruned when the seq is acked, cleared on
-   * `reset()`.
-   *
-   * The blessed alternative to hand-branching on {@link isReplay}. Two shapes:
-   *   - **Recorded value** — USE the return (re-applied every replay). For an
-   *     outcome replay can't recompute: a lag-comp'd collision velocity, an RNG
-   *     roll, a server-assigned id. `const hit = ctx.effect("collide", () =>
-   *     collide(state, ctx.reckonTime)); if (hit) state.vx = hit.vx;`
-   *   - **Fire-once side-effect** — IGNORE the return; `compute` simply doesn't
-   *     re-run on replay. For a sound, particle, flag, analytics ping:
-   *     `ctx.effect("bounce", () => { sound.play(); });`
-   *
-   * `compute` should return `undefined` for "no effect this seq" (stored
-   * sparsely — costs nothing). `key` disambiguates >1 effect in one step; call
-   * `effect(key, …)` for a given key on EVERY step (let `compute` decide the
-   * value) rather than conditionally, so replay sees the same call shape.
-   *
-   * Prefer reconciled `fields` when the value IS derivable by re-running the
-   * step (sync it, both sides simulate it) — that replays AND self-corrects for
-   * free. Reach for `effect` only when it genuinely can't be re-derived, and
-   * NEVER reconstruct such a value via an `input.at(seq)` lookback (it ages out
-   * the moment the seq is acked — the snap-back this primitive exists to prevent).
-   */
-  effect<T>(key: string, compute: () => T): T | undefined;
-}
-
-export interface ReconcilerOptions<S extends object, I> {
-    /**
-     * The input channel (`room.input(...)`). The reconciler stages each cmd onto
-     * `input.data`, calls `input.send()`, and reads the server ack from
-     * `input.lastProcessed` / `input.sentCount`.
-     *
-     * The reconciler predicts one input per `input()` and `send()`s each, so
-     * every step MUST transmit — and it does: inputs are delta-encoded and a
-     * no-change tick sends a body-less frame (never suppressed), so the
-     * predicted set always equals the server-applied set (no backdrift).
-     * Nothing to configure — this is the default `room.input()` behavior.
-     *
-     * Typed `InputHandle<I>`: the reconciler's command type `I` is the handle's
-     * data shape (the controller sets `I = Data<wire>`), so `input.data` and
-     * `input.at(seq)` surface as `I` — no `any`. The real `InputHandle<Wire>`
-     * assigns covariantly (`Wire` <: `Data<Wire>`).
-     */
-    input: InputHandle<I>;
+export interface ReconcilerOptions<S extends object, I> extends RollbackOptions<I> {
     /**
      * Deterministic input-application step, SHARED with the server. Mutates
      * `state` in place by applying `command` over `ctx.dt`. `ctx` leads (the
@@ -224,12 +69,12 @@ export interface ReconcilerOptions<S extends object, I> {
      * bounce on it), and `ctx.isReplay` (true during rollback re-sim — gate
      * non-deterministic side effects on `!ctx.isReplay`).
      *
-     * `command` is the STAGED wire input (`input.data` after `writeInput`), NOT
-     * the raw object you passed to {@link Reconciler.input} — both live and replay
-     * steps simulate the exact input the server decodes, so lossy wire fields (a
+     * `command` is the buffered wire input the handle recorded at `send()`
+     * (`input.at(seq)`) — the exact value the server decodes, read the same way on
+     * the live catch-up step and on rollback replay, so lossy wire fields (a
      * `t.quantized` angle) reconcile by construction. Keep everything the step
-     * reads on the input schema; a cmd-only field the schema doesn't carry won't
-     * reach `step` (stage it via `writeInput` if you need it).
+     * reads on the input schema; anything you don't stage on `input.data` before
+     * `send()` won't reach `step`.
      */
     step: (ctx: StepContext, state: S, command: I) => void;
     /**
@@ -238,218 +83,28 @@ export interface ReconcilerOptions<S extends object, I> {
      * non-numeric fields (e.g. `grounded`) are copied verbatim.
      */
     fields: readonly (keyof S & string)[];
-    /**
-     * Error-decay rate (spring constant 1/s; higher = snappier). The reconcile
-     * delta eases to zero at this rate. 0 = hard snap. Defaults to the server's
-     * correction cadence (`input.patchRate`) so the error decays over ~one patch
-     * interval — else 20.
-     */
-    smoothing?: number;
-    /**
-     * Fixed simulation timestep (ms) for {@link Reconciler.beginFrame}. One input
-     * is produced + predicted per step, so the input rate is tied to this, NOT the
-     * frame rate — a 120fps and a 60fps client emit the same number of inputs.
-     * Render reads ({@link Reconciler.value}) interpolate between the two latest
-     * steps by the leftover-accumulator fraction, so motion stays smooth above
-     * the step rate (at ~one step of render latency). Defaults to the input
-     * handle's server-advertised `stepMs` (`1000/tickRate`), else `1000 / 60`.
-     * Pass explicitly only when the prediction step differs from the input rate.
-     */
-    stepMs?: number;
-    /**
-     * The fixed step in SECONDS used for {@link StepContext.dt} — the dt your
-     * `step` integrates with. MUST equal the server's per-step dt (`1/tickRate`)
-     * for rollback-replay to reproduce the server. Defaults to the input handle's
-     * `input.stepSeconds` (the server's exact `1/tickRate`); else `stepMs / 1000`
-     * (which can be 1 ULP off at some rates). Pass explicitly only to override.
-     */
-    stepSeconds?: number;
-    /**
-     * Physics sub-steps per fixed step for {@link StepContext.subSteps} /
-     * {@link StepContext.subDt} (integer ≥ 1). MUST equal the server's count for
-     * replay to reproduce its trajectory. Defaults to the input handle's
-     * server-advertised `input.subSteps` (from `setFixedTimestep(...,
-     * { subSteps })`) — pass explicitly only to override.
-     */
-    subSteps?: number;
-    /**
-     * Stage a cmd onto the wire `input.data` before sending. Default copies
-     * matching fields (`Object.assign(input.data, cmd)`) — fine when the cmd and
-     * wire schema share field names. Override for a custom mapping.
-     */
-    writeInput?: (data: any, cmd: I) => void;
-    /**
-     * Called at the end of each reconcile with the just-acked seq, after the
-     * authoritative state is adopted and unacked inputs replayed. For state the
-     * reconciler doesn't own — adopting server hit/invuln, pruning per-seq
-     * side-effect records, etc.
-     */
-    onReconcile?: (acked: number) => void;
-    /**
-     * Dev diagnostic: when set, `console.warn` (throttled to ~1/s) whenever a
-     * reconcile's max |correction| exceeds this tolerance (world units), naming
-     * the input seq, the worst field + its delta, and the usual cause. The
-     * reconcile correction already IS the client-vs-server divergence, so this
-     * costs no extra wire traffic. Leave unset (the default) in production.
-     */
-    warnOnDivergence?: number;
 }
 
-export class Reconciler<S extends object = any, I = any> {
+export class Reconciler<S extends object = any, I = any> extends RollbackController<I> {
     /** The current predicted step state (the "true" state, advanced one fixed
      *  step per input). Read raw for logic; rendered via interpolation. */
     private local: Record<string, number | boolean> = {};
-    /** The previous step's SMOOTHED value (`local + error`) — render interpolates
-     *  the current smoothed value from this by {@link alpha} so motion is smooth
-     *  above the step rate. */
-    private prev: Record<string, number> = {};
-    /** Per-field visual offset (numeric fields only) decaying toward 0. */
-    private error: Record<string, number> = {};
-
-    // --- Debug telemetry (no effect on prediction) ---------------------------
-    /** Per-numeric-field correction injected by the most recent reconcile — the
-     *  raw pop (rendered-before − corrected), nonzero even in snap mode. Reused
-     *  object, overwritten each reconcile; read it right after, don't retain. */
-    readonly lastCorrection: Record<string, number> = {};
-    /** Max |{@link lastCorrection}| across fields (world units). ~0 ⇒ the
-     *  prediction matched the server at the acked input. */
-    lastCorrectionMag = 0;
-    /** Increments once per reconcile — lets a consumer detect a fresh one
-     *  (compare against a stored value) without a callback. */
-    reconcileSeq = 0;
-    /** Rolling reconcile drift (world units). `ema` = persistent component
-     *  (steady nonzero ⇒ divergence / rubber-banding); `peak` = recent decaying
-     *  max (a spike over a low `ema` ⇒ network jitter, not divergence). Both ~0 ⇒
-     *  the prediction matched the server. Updated once per reconcile — read it for
-     *  a HUD or the debug panel. @see Drift */
-    readonly drift: Drift = newDrift();
-
-    private lastTick = -1;
-    private lastAcked = 0;
-    /** Seq floor for replay: inputs sent at/before this aren't replayed (they
-     *  applied to a prior life — set to the sent count on {@link reset}). The
-     *  unacked INPUTS themselves live on the input handle, not here. */
-    private replayFrom = 0;
-
-    /** Leftover real time (ms) not yet consumed by a fixed step. */
-    private acc = 0;
-    /** Interpolation fraction into the current step, `acc / stepMs` ∈ [0, 1]. */
-    private alpha = 0;
-    /** Reused scratch for reconcile's pre-snap rendered values — overwritten each
-     *  reconcile, so no per-reconcile object allocation. */
-    private readonly renderedBefore: Record<string, number> = {};
 
     private readonly fields: readonly string[];
     private readonly numericFields: string[] = [];
     private readonly step: (ctx: StepContext, state: S, command: I) => void;
-    /** Reused per-step context — mutated in place each step, no per-step alloc.
-     *  `dt`/`dtMs`/sub-step trio are constant; `tick`/`isReplay`/`reckonTime` change.
-     *  `effect` is bound once and reads the live `tick`/`isReplay` at call time. */
-    private readonly stepCtx: { dt: number; dtMs: number; tick: number; isReplay: boolean; reckonTime: number; subSteps: number; subDt: number; subDtMs: number; effect: <T>(key: string, compute: () => T) => T | undefined };
-    /** Per-seq memo backing `ctx.effect` — recorded live, replayed verbatim, pruned on ack. */
-    private readonly effects = new EffectStore();
-    private readonly smoothing: number;
-    private readonly stepMs: number;
-    private readonly onReconcile?: (acked: number) => void;
-    /** Divergence-warning tolerance (world units); `undefined` ⇒ off. @see warnOnDivergence */
-    private readonly warnTolerance?: number;
-    private readonly input_: InputHandle<I>;
-    private readonly writeInput: (data: any, cmd: I) => void;
     private readonly instance: any;
 
-    /** Spiral-of-death guard: never run more than this many steps per
-     *  {@link update} (after a hitch, drop the backlog rather than chasing it). */
-    private static readonly MAX_STEPS_PER_UPDATE = 5;
-
     constructor(instance: object, opts: ReconcilerOptions<S, I>) {
+        super(opts);
         this.instance = instance;
-        this.input_ = opts.input;
         this.fields = opts.fields as readonly string[];
         this.step = opts.step;
-        // Default decay rate to the server's correction cadence (τ = one patch
-        // interval) so corrections ease out before the next one — no stacking.
-        this.smoothing = opts.smoothing
-            ?? (this.input_.patchRate ? 1000 / this.input_.patchRate : 20);
-        // Default the fixed step from the input handle's server-advertised rate
-        // (same pattern as smoothing ← patchRate above) — the handle already
-        // carries it, so callers don't pass it twice.
-        this.stepMs = opts.stepMs ?? this.input_.stepMs ?? (1000 / 60);
-        // ctx.dt: authoritative seconds. Prefer the handle's stepSeconds (server's
-        // exact 1/tickRate); fall back to stepMs/1000 (1-ULP off at some rates).
-        const dt = opts.stepSeconds ?? this.input_.stepSeconds ?? (this.stepMs / 1000);
-        // subDt = dt/subSteps: same expression as the server's ctx → bit-identical.
-        const subSteps = opts.subSteps ?? this.input_.subSteps ?? 1;
-        this.stepCtx = {
-            dt, dtMs: this.stepMs, tick: 0, isReplay: false, reckonTime: 0,
-            subSteps, subDt: dt / subSteps, subDtMs: this.stepMs / subSteps,
-            effect: (key, compute) => this.effects.run(this.stepCtx.tick, this.stepCtx.isReplay, key, compute),
-        };
-        this.onReconcile = opts.onReconcile;
-        this.warnTolerance = opts.warnOnDivergence;
-        this.writeInput = opts.writeInput ?? ((data, cmd) => Object.assign(data as object, cmd as object));
-        this.lastAcked = this.input_.lastProcessed;
-
         for (const f of this.fields) {
             const v = (instance as Record<string, unknown>)[f];
             this.local[f] = v as number | boolean;
             if (typeof v === "number") { this.numericFields.push(f); this.prev[f] = v; this.error[f] = 0; }
         }
-    }
-
-    /**
-     * Begin a render frame: accumulate the elapsed frame time and return HOW MANY
-     * fixed `stepMs` steps to simulate now (input rate is tied to `stepMs`, NOT
-     * the frame rate). The caller (shell) then loops that many times, sampling one
-     * input per step and calling {@link input}, plus any per-step game logic. Sets
-     * the interpolation {@link alpha} from the leftover accumulator for {@link value}.
-     *
-     * Callback-FREE by design — returns a count; the loop lives in the caller — so
-     * the engine ports to C# / C / Lua by transcription (see the file header).
-     */
-    beginFrame(frameDtMs: number): number {
-        this.acc += frameDtMs;
-        const want = this.stepMs > 0 ? Math.floor(this.acc / this.stepMs) : 0;
-        if (want > Reconciler.MAX_STEPS_PER_UPDATE) {
-            // Hitch: run a bounded count and DROP the backlog rather than spiral;
-            // snap interpolation to the latest step (alpha = 0).
-            this.acc = 0;
-            this.alpha = 0;
-            return Reconciler.MAX_STEPS_PER_UPDATE;
-        }
-        this.acc -= want * this.stepMs;
-        this.alpha = this.stepMs > 0 ? this.acc / this.stepMs : 1;
-        return want;
-    }
-
-    /** The wire input to stage (`input.data`) — exposed so callers can mutate
-     *  fields directly instead of building a cmd object. */
-    get data(): any { return this.input_.data; }
-
-    /**
-     * Apply ONE fixed step: stage the cmd onto the input handle + transmit (which
-     * advances the handle's `sentCount` → this input's seq), apply it to the
-     * local state NOW (zero-latency), and buffer it for replay until the server
-     * acks that seq. Returns the seq. Called once per fixed step by the caller's
-     * loop (after {@link beginFrame}).
-     */
-    input(cmd: I): number {
-        // Snapshot pre-step SMOOTHED value so `value()` lerps prev → current
-        // across this step by `alpha`.
-        for (const f of this.numericFields) this.prev[f] = (this.local[f] as number) + this.error[f];
-        this.writeInput(this.input_.data, cmd); // stage cmd → wire (lossy fields quantize here)
-        this.input_.send();                      // transmit + buffer for replay → sentCount++
-        const seq = this.input_.sentCount;
-        this.stepCtx.tick = seq;
-        this.stepCtx.isReplay = false;           // live forward step
-        this.stepCtx.reckonTime = this.input_.reckonTimeAt(seq); // = the value just stamped
-        // Predict from the ROUND-TRIPPED staged input (`input.data`), NOT the raw
-        // `cmd`: the live step must simulate the input the server receives — i.e.
-        // the wire input — so any lossy wire transform (e.g. a `t.quantized` field)
-        // replays identically on the live step, on rollback (`input.at(seq)`), and
-        // on the server. Stepping from `cmd` would feed full-precision values the
-        // server never sees → reconcile pops + shot misprediction.
-        this.step(this.stepCtx, this.local as S, this.input_.data as I);
-        return seq;
     }
 
     /**
@@ -459,138 +114,48 @@ export class Reconciler<S extends object = any, I = any> {
      * for rendering). To survive a reconcile, a mutation must be reproducible by
      * `step` during replay — record it per-seq and re-apply it inside `step`.
      *
-     * Plain object access — no string-keyed get/set, no mutator closure (cf. the
-     * old `patch(mutator)` / `raw()`+`set()`). The reconciler tracks ONE entity,
-     * so its state is naturally a single struct; this ports to `state.vy = …` in
-     * C# / Lua and `state->vy = …` in C (the port exposes it by reference).
+     * Always current — inputs are stepped eagerly as you `send()` them (the
+     * reconciler observes the handle). Plain object access — no string-keyed
+     * get/set, no mutator closure. The reconciler tracks ONE entity, so its state
+     * is naturally a single struct; this ports to `state.vy = …` in C# / Lua and
+     * `state->vy = …` in C.
      */
     get state(): S {
         return this.local as S;
     }
 
     /**
-     * Advance the render clock: reconcile if the server acked new input, then
-     * decay the smooth-correction error. MUST be called once per render frame —
-     * it's what drives both reconciliation and the error decay.
-     */
-    tick(now: number): void {
-        const acked = this.input_.lastProcessed;
-        if (acked > this.lastAcked) {
-            this.lastAcked = acked;
-            this.reconcile(acked);
-        }
-
-        const dt = this.lastTick < 0 ? 0 : now - this.lastTick;
-        this.lastTick = now;
-        if (dt <= 0) return;
-        const k = this.smoothing <= 0 ? 1 : 1 - Math.exp(-this.smoothing * dt / 1000);
-        for (const f of this.numericFields) this.error[f] -= this.error[f] * k;
-    }
-
-    /**
-     * Adopt the authoritative state and replay unacked inputs. Captures the
-     * rendered pose first, recomputes the predicted pose, then sets the error
-     * offset so the rendered pose is UNCHANGED at this instant — the correction
-     * then decays out via {@link tick}, hiding the pop.
-     */
-    private reconcile(acked: number): void {
-        // Smoothed value before reconcile (NON-interpolated): keeping `prev`
-        // intact lets step-smoothing continue, and a prediction that MATCHED the
-        // server induces ZERO new correction (error stays 0).
-        const renderedBefore = this.renderedBefore;   // reused scratch (no per-reconcile alloc)
-        for (const f of this.numericFields) renderedBefore[f] = (this.local[f] as number) + this.error[f];
-
-        const inst = this.instance as Record<string, number | boolean>;
-        for (const f of this.fields) this.local[f] = inst[f];
-
-        // Replay still-unacked inputs from the handle's buffer (reconciler keeps
-        // no copies). Skip anything sent at/before the last reset — it applied to
-        // a prior life (respawn) and must not re-run.
-        const from = Math.max(acked, this.replayFrom);
-        this.stepCtx.isReplay = true;            // rollback re-sim of buffered inputs
-        for (let seq = from + 1; seq <= this.input_.sentCount; seq++) {
-            const inp = this.input_.at(seq);
-            if (inp !== undefined) {
-                this.stepCtx.tick = seq;
-                this.stepCtx.reckonTime = this.input_.reckonTimeAt(seq); // same per-seq value as live
-                this.step(this.stepCtx, this.local as S, inp);
-            }
-        }
-
-        // Re-base `error` so the smoothed value is unchanged at this instant,
-        // then decays out via tick(). `prev` untouched (interpolation keeps flowing).
-        // The raw correction (pre-smoothing pop) doubles as a debug gauge —
-        // recorded regardless of snap mode so telemetry sees it either way.
-        // Drift telemetry runs only when watched — `warnOnDivergence` set or the
-        // debug bundle loaded — so production that uses neither pays nothing. The
-        // `error` rebase below is the REAL reconciliation and always runs.
-        const diag = this.warnTolerance !== undefined || diagnosticsActive();
-        const snap = this.smoothing <= 0;
-        let mag = 0;
-        for (const f of this.numericFields) {
-            const correction = renderedBefore[f] - (this.local[f] as number);
-            this.error[f] = snap ? 0 : correction;
-            if (diag) {
-                this.lastCorrection[f] = correction;
-                const a = correction < 0 ? -correction : correction;
-                if (a > mag) mag = a;
-            }
-        }
-        this.reconcileSeq++;
-        if (diag) {
-            this.lastCorrectionMag = mag;
-            updateDrift(this.drift, mag);
-            if (this.warnTolerance !== undefined && classifyDrift(this.drift, this.warnTolerance) === "diverging") {
-                warnDivergence(acked, this.lastCorrection, this.drift.ema, this.warnTolerance);
-            }
-        }
-
-        // Drop ctx.effect memos for acked seqs (they won't replay again) BEFORE
-        // user code — replay only touches seqs > acked, so this never removes a
-        // memo a still-pending replay needs.
-        this.effects.prune(acked);
-        this.onReconcile?.(acked);
-    }
-
-    /**
      * Rendered value: the predicted state interpolated between the previous and
-     * current fixed step by {@link alpha}, plus the decaying correction offset.
-     * Smooth above the step rate (at ~one step of render latency). Numeric fields
-     * only; non-numeric fields return the current value verbatim.
+     * current fixed step by {@link renderAlpha}, plus the decaying correction
+     * offset. Smooth above the step rate (at ~one step of render latency). Numeric
+     * fields only; non-numeric fields return the current value verbatim.
      */
     value(field: keyof S & string): number {
         const c = this.local[field as string];
         if (typeof c !== "number") return c as unknown as number;
         const smoothed = c + (this.error[field as string] ?? 0);
         const p = this.prev[field as string] ?? smoothed;
-        return p + (smoothed - p) * this.alpha;
+        return p + (smoothed - p) * this.renderAlpha();
     }
 
-    /** Number of unacknowledged inputs currently buffered. */
-    get pendingCount(): number {
-        return this.input_.pendingCount;
+    // --- RollbackController hooks ----------------------------------------------
+
+    protected smoothedFields(): readonly string[] { return this.numericFields; }
+    protected readCurrent(field: string): number { return this.local[field] as number; }
+    protected applyStep(input: I): void { this.step(this.stepCtx, this.local as S, input); }
+
+    protected snapshotPrev(): void {
+        for (const f of this.numericFields) this.prev[f] = (this.local[f] as number) + this.error[f];
     }
 
-    /** Re-seed the local state from the authoritative instance and clear the
-     *  error offset + input buffer. For respawns / hard resyncs. */
-    reset(): void {
+    protected adoptTruth(): void {
+        const inst = this.instance as Record<string, number | boolean>;
+        for (const f of this.fields) this.local[f] = inst[f];
+    }
+
+    protected reseedState(): void {
         const inst = this.instance as Record<string, number | boolean>;
         for (const f of this.fields) this.local[f] = inst[f];
         for (const f of this.numericFields) { this.prev[f] = this.local[f] as number; this.error[f] = 0; }
-        this.acc = 0;
-        this.alpha = 0;
-        resetDrift(this.drift);   // fresh life — don't carry the prior life's drift
-        // Forget in-flight inputs from the prior life — don't replay them.
-        this.replayFrom = this.input_.sentCount;
-        this.lastAcked = this.input_.lastProcessed;
-        this.effects.clear();   // prior life's recorded effects must not replay
     }
-
-    /** Set when {@link dispose} is called — the owning Predict drops a `dead`
-     *  child from its drive list on the next tick. */
-    dead = false;
-
-    /** Stop being driven by the owning Predict. No subscriptions to tear down
-     *  (clock-polled), so this just flags the controller dead. */
-    dispose(): void { this.dead = true; }
 }
