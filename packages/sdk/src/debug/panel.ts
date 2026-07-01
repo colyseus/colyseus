@@ -1,6 +1,6 @@
 import { CloseCode } from "@colyseus/shared-types";
-import { disconnectIcon, envelopeDown, envelopeUp, infoIcon, jitterIcon, logoIcon, messageIcon, settingsIcon, treeViewIcon } from "./icons.ts";
-import { applyPanelPosition, formatBytes, getBorderColor, getDebugRoot, isPanelsHidden, preferences, repositionDebugPanels, roomDebugInfo, savePreferences } from "./core.ts";
+import { copyIcon, disconnectIcon, envelopeDown, envelopeUp, infoIcon, jitterIcon, keyIcon, logoIcon, messageIcon, networkIcon, settingsIcon, treeViewIcon } from "./icons.ts";
+import { applyPanelPosition, authInstances, formatBytes, getBorderColor, getDebugRoot, isPanelsHidden, preferences, repositionDebugPanels, roomDebugInfo, savePreferences } from "./core.ts";
 import { openSettingsModal } from "./settings.ts";
 import { openSendMessagesModal } from "./send-message.ts";
 import { openStateInspectorModal } from "./state-inspector.ts";
@@ -67,43 +67,50 @@ export function createMenu(logoContainer) {
     menu.id = 'debug-menu';
     menu.style.position = 'fixed';
     // Position will be set by applyPanelPosition
-    menu.style.backgroundColor = 'rgba(0, 0, 0, 0.95)';
+    menu.style.backgroundColor = 'rgba(18, 18, 20, 0.97)';
     menu.style.color = '#fff';
-    menu.style.padding = '0 0 8px 0';
-    menu.style.borderRadius = '6px';
+    menu.style.padding = '0 0 4px 0';
+    menu.style.borderRadius = '8px';
+    menu.style.border = '1px solid rgba(255, 255, 255, 0.08)';
     menu.style.fontFamily = 'system-ui, -apple-system, sans-serif';
     menu.style.fontSize = '12px';
     menu.style.zIndex = '1001';
-    menu.style.minWidth = '200px';
-    menu.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.5)';
+    menu.style.minWidth = '224px';
+    menu.style.boxShadow = '0 8px 28px rgba(0, 0, 0, 0.55)';
     menu.style.display = 'none';
     menu.style.overflow = 'hidden';
 
-    // Host name display
+    // Shared section header: a small leading icon + an uppercase, muted label.
+    // Used by the Network + Auth sections so every group reads the same way.
+    function makeSectionHeader(iconSvg, text) {
+        var h = document.createElement('div');
+        h.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:10px;font-weight:600;' +
+            'letter-spacing:0.6px;text-transform:uppercase;color:#8a8a8a;margin-bottom:8px';
+        h.innerHTML = '<span style="display:inline-flex;align-items:center;width:12px;height:12px;">' +
+            iconSvg.replace('height="200px" width="200px"', 'height="12" width="12"') + '</span><span>' + text + '</span>';
+        return h;
+    }
+
+    // Host title bar: a connection status dot + the server host.
     var hostContainer = document.createElement('div');
-    hostContainer.style.padding = '6px 12px';
-    hostContainer.style.cursor = 'default';
-    hostContainer.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-    hostContainer.style.borderBottom = '1px solid rgba(255, 255, 255, 0.15)';
-    hostContainer.style.marginBottom = '4px';
-    hostContainer.style.borderTopLeftRadius = '6px';
-    hostContainer.style.borderTopRightRadius = '6px';
+    hostContainer.style.cssText = 'display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:default;' +
+        'background:rgba(255,255,255,0.04);border-bottom:1px solid rgba(255,255,255,0.08);' +
+        'border-top-left-radius:8px;border-top-right-radius:8px';
+
+    var hostDot = document.createElement('span');
+    hostDot.style.cssText = 'flex-shrink:0;width:7px;height:7px;border-radius:50%;background:#666;' +
+        'box-shadow:0 0 0 3px rgba(255,255,255,0.04)';
 
     var hostValue = document.createElement('div');
     hostValue.id = 'debug-menu-host';
-    hostValue.style.fontSize = '11px';
-    hostValue.style.color = '#fff';
-    hostValue.style.fontFamily = 'monospace';
-    hostValue.style.whiteSpace = 'nowrap';
-    hostValue.style.overflow = 'hidden';
-    hostValue.style.textOverflow = 'ellipsis';
-    hostValue.style.textAlign = 'center';
-    hostValue.style.fontWeight = '500';
+    hostValue.style.cssText = 'flex:1;min-width:0;font-size:11px;color:#eee;font-family:monospace;' +
+        'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500';
 
-    // Function to update host display
+    // Function to update host display (text + green/grey status dot)
     function updateHostDisplay() {
         var hostText = 'N/A';
-        if (roomDebugInfo.size > 0) {
+        var connected = roomDebugInfo.size > 0;
+        if (connected) {
             // Get host from first room
             var firstRoom = roomDebugInfo.values().next().value;
             if (firstRoom && firstRoom.host) {
@@ -111,11 +118,13 @@ export function createMenu(logoContainer) {
             }
         }
         hostValue.textContent = hostText;
+        hostDot.style.background = connected ? '#22c55e' : '#666';
     }
 
     // Update host display initially
     updateHostDisplay();
 
+    hostContainer.appendChild(hostDot);
     hostContainer.appendChild(hostValue);
     menu.appendChild(hostContainer);
 
@@ -137,6 +146,7 @@ export function createMenu(logoContainer) {
 
     var latencyTextSpan = document.createElement('span');
     latencyTextSpan.textContent = 'Latency (RTT)';
+    latencyTextSpan.style.cssText = 'font-size:11px;color:#ccc';
 
     latencyLabel.appendChild(latencyTextSpan);
     latencyLabel.appendChild(latencyValueSpan);
@@ -303,6 +313,7 @@ export function createMenu(logoContainer) {
     jitterValueSpan.textContent = preferences.latencySimulation.jitter + 'ms';
     var jitterTextSpan = document.createElement('span');
     jitterTextSpan.textContent = 'Jitter';
+    jitterTextSpan.style.cssText = 'font-size:11px;color:#ccc';
     jitterLabel.appendChild(jitterTextSpan);
     jitterLabel.appendChild(jitterValueSpan);
 
@@ -409,11 +420,9 @@ export function createMenu(logoContainer) {
     }
 
     var presetContainer = document.createElement('div');
-    presetContainer.style.padding = '8px 12px 0';
+    presetContainer.style.padding = '10px 12px 0';
     presetContainer.style.cursor = 'default';
-    var presetLabel = document.createElement('div');
-    presetLabel.textContent = 'Network conditions simulator';
-    presetLabel.style.cssText = 'color:#888;font-size:11px;margin-bottom:8px';
+    var presetLabel = makeSectionHeader(networkIcon, 'Network simulation');
     var presetRow = document.createElement('div');
     presetRow.style.cssText = 'display:flex;gap:4px';
     NET_PRESETS.forEach(function(preset) {
@@ -442,16 +451,14 @@ export function createMenu(logoContainer) {
     menu.insertBefore(presetContainer, latencyContainer); // above the latency slider
     syncPresetButtons(); // highlight the saved preset on first open
 
-    // Separator
+    // Divider (network → auth)
     var separator = document.createElement('div');
-    separator.style.height = '1px';
-    separator.style.backgroundColor = 'rgba(255, 255, 255, 0.15)';
-    separator.style.margin = '4px 0';
+    separator.style.cssText = 'height:1px;background:rgba(255,255,255,0.08);margin:8px 0 0';
     menu.appendChild(separator);
 
     // Settings option
     var settingsOption = document.createElement('div');
-    settingsOption.style.padding = '8px 12px';
+    settingsOption.style.padding = '10px 12px';
     settingsOption.style.cursor = 'pointer';
     settingsOption.style.transition = 'background-color 0.2s';
     settingsOption.style.display = 'flex';
@@ -489,6 +496,129 @@ export function createMenu(logoContainer) {
     });
     menu.appendChild(settingsOption);
 
+    // Auth token section — preview + copy the current token, or clear a stale one
+    // that fails onAuth when switching between projects on the same origin.
+    var authSection = document.createElement('div');
+    authSection.style.padding = '10px 12px';
+    authSection.style.cursor = 'default';
+
+    var authLabel = makeSectionHeader(keyIcon, 'Auth token');
+
+    // Empty state (no token present)
+    var authEmpty = document.createElement('div');
+    authEmpty.textContent = 'None';
+    authEmpty.style.cssText = 'color:#666;font-size:11px;font-style:italic';
+
+    // Token preview + copy row
+    var tokenRow = document.createElement('div');
+    tokenRow.style.cssText = 'display:flex;gap:4px;align-items:center;margin-bottom:6px';
+
+    var tokenPreview = document.createElement('div');
+    tokenPreview.style.cssText = 'flex:1;min-width:0;font-family:monospace;font-size:10px;color:#ddd;' +
+        'background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:4px;' +
+        'padding:4px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer';
+
+    var copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.title = 'Copy token';
+    copyBtn.style.cssText = 'flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;' +
+        'width:26px;height:26px;padding:0;border:1px solid rgba(255,255,255,0.2);border-radius:4px;' +
+        'background:rgba(255,255,255,0.05);color:#fff;cursor:pointer;transition:background 0.2s,border-color 0.2s';
+    var copyBtnIcon = '<span style="display:inline-flex;align-items:center;width:13px;height:13px;">' +
+        copyIcon.replace('height="200px" width="200px"', 'height="13" width="13"') + '</span>';
+    copyBtn.innerHTML = copyBtnIcon;
+
+    tokenRow.appendChild(tokenPreview);
+    tokenRow.appendChild(copyBtn);
+
+    // Clear button (red)
+    var clearBtn = document.createElement('button');
+    clearBtn.type = 'button';
+    clearBtn.textContent = 'Clear token';
+    clearBtn.style.cssText = 'width:100%;padding:5px 8px;border:1px solid rgba(239,68,68,0.5);border-radius:4px;' +
+        'background:rgba(239,68,68,0.2);color:#ef4444;font-size:11px;font-family:inherit;cursor:pointer;' +
+        'transition:background 0.2s,border-color 0.2s';
+
+    authSection.appendChild(authLabel);
+    authSection.appendChild(authEmpty);
+    authSection.appendChild(tokenRow);
+    authSection.appendChild(clearBtn);
+
+    // Current token = first live client's in-memory token, else the persisted one
+    // (present in storage but not yet loaded into an Auth instance).
+    var currentToken: string | null = null;
+    function getAuthToken() {
+        var t: string | null = null;
+        authInstances.forEach(function(a) { if (!t && a.token) { t = a.token; } });
+        if (t) { return t; }
+        try { return localStorage.getItem('colyseus-auth-token'); } catch (e) { return null; }
+    }
+    // Middle-truncate so both ends stay legible; full value lives in the title.
+    function truncateToken(t) {
+        return (t.length > 22) ? (t.slice(0, 12) + '…' + t.slice(-8)) : t;
+    }
+
+    // Reflect presence on (re)open: show preview/copy/clear, or the "None" line.
+    function syncAuthOption() {
+        var token = getAuthToken();
+        currentToken = token;
+        var present = !!token;
+        authEmpty.style.display = present ? 'none' : 'block';
+        tokenRow.style.display = present ? 'flex' : 'none';
+        clearBtn.style.display = present ? 'block' : 'none';
+        if (token) {
+            tokenPreview.textContent = truncateToken(token);
+            tokenPreview.title = token; // full token on hover
+        }
+    }
+    syncAuthOption();
+
+    // Copy the full token to the clipboard, flashing a green check on the button.
+    var copyResetTimer: any = null;
+    function flashCopied() {
+        copyBtn.innerHTML = '<span style="display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;color:#22c55e;font-size:12px;">✓</span>';
+        copyBtn.style.borderColor = 'rgba(34,197,94,0.6)';
+        if (copyResetTimer) { clearTimeout(copyResetTimer); }
+        copyResetTimer = setTimeout(function() {
+            copyBtn.innerHTML = copyBtnIcon;
+            copyBtn.style.borderColor = 'rgba(255,255,255,0.2)';
+        }, 1000);
+    }
+    function copyToken() {
+        if (!currentToken) { return; }
+        try {
+            var p = navigator.clipboard && navigator.clipboard.writeText(currentToken);
+            if (p && p.then) { p.then(flashCopied, flashCopied); } else { flashCopied(); }
+        } catch (e) { flashCopied(); }
+    }
+    copyBtn.addEventListener('mouseenter', function() { copyBtn.style.background = 'rgba(255,255,255,0.15)'; });
+    copyBtn.addEventListener('mouseleave', function() { copyBtn.style.background = 'rgba(255,255,255,0.05)'; });
+    copyBtn.addEventListener('click', function(e) { e.stopPropagation(); copyToken(); });
+    tokenPreview.addEventListener('click', function(e) { e.stopPropagation(); copyToken(); });
+
+    clearBtn.addEventListener('mouseenter', function() {
+        clearBtn.style.background = 'rgba(239,68,68,0.35)';
+        clearBtn.style.borderColor = 'rgba(239,68,68,0.7)';
+    });
+    clearBtn.addEventListener('mouseleave', function() {
+        clearBtn.style.background = 'rgba(239,68,68,0.2)';
+        clearBtn.style.borderColor = 'rgba(239,68,68,0.5)';
+    });
+    clearBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        // Live instances: signOut() nulls the in-memory token + removes storage (real key).
+        authInstances.forEach(function(a) { if (a.token) { void a.signOut(); } });
+        try { localStorage.removeItem('colyseus-auth-token'); } catch (e) {} // default-key fallback
+        syncAuthOption();
+    });
+
+    // Place the section BELOW the network group (after its divider), above
+    // Preferences, with its own divider separating it from the footer.
+    var authDivider = document.createElement('div');
+    authDivider.style.cssText = 'height:1px;background:rgba(255,255,255,0.08);margin:0';
+    menu.insertBefore(authSection, settingsOption);
+    menu.insertBefore(authDivider, settingsOption);
+
     getDebugRoot().appendChild(menu);
 
     // Toggle menu on logo click
@@ -501,6 +631,7 @@ export function createMenu(logoContainer) {
 
         if (menuVisible) {
             updateHostDisplay();
+            syncAuthOption(); // refresh enabled/greyed state on each open
             // Update host every second while menu is visible
             hostUpdateInterval = setInterval(updateHostDisplay, 1000);
         } else {

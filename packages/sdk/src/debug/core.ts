@@ -1,5 +1,11 @@
+import type { Auth } from "../Auth.ts";
+
 // Store debug info per room
 export const roomDebugInfo = new Map();
+
+// Live `client.auth` instances seen via matchmake calls (see debug.ts). Lets the
+// "Clear auth token" menu action null the in-memory token, not just storage.
+export const authInstances = new Set<Auth>();
 
 
 // Preferences state

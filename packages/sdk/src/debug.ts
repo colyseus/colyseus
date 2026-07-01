@@ -1,6 +1,6 @@
 import { Client } from "./Client.ts";
 import type { Room } from "./Room.ts";
-import { getDebugRoot, loadPreferences, preferences, repositionDebugPanels, roomDebugInfo, savePreferences } from "./debug/core.ts";
+import { authInstances, getDebugRoot, loadPreferences, preferences, repositionDebugPanels, roomDebugInfo, savePreferences } from "./debug/core.ts";
 import { calculateRates, initialize, updateDebugPanel } from "./debug/panel.ts";
 import { installPredictDebug } from "./debug/predict.ts";
 
@@ -290,6 +290,19 @@ function applyMonkeyPatches() {
         var promise = originalConsumeSeatReservation.apply(this, arguments as any);
         return promise.then((room) => patchRoom(room));
     };
+
+    // Capture live `client.auth` on every matchmake attempt so the "Clear auth
+    // token" dev-tool can null the in-memory token (not just storage). These run
+    // BEFORE the server responds, so a token rejected by onAuth is still captured
+    // — consumeSeatReservation is too late (it never runs when onAuth fails).
+    ['joinOrCreate', 'join', 'create', 'joinById', 'reconnect'].forEach((method) => {
+        const original = (Client.prototype as any)[method];
+        if (typeof original !== 'function') { return; }
+        (Client.prototype as any)[method] = function(this: any, ...args: any[]) {
+            if (this.auth) { authInstances.add(this.auth); }
+            return original.apply(this, args);
+        };
+    });
 
 }
 
