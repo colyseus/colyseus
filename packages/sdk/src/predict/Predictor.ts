@@ -13,8 +13,11 @@
  *     reconciled rollback for the entity you DO control: apply input now,
  *     rewind to server truth + replay, smoothly correcting. Read with
  *     `controller.value(field)` (rendered) / `controller.state` (logic + mutate).
- *   - `predict.events(…)` → a {@link PredictedEvents} — optimistic DISCRETE
- *     events (a kill, a pickup) with confirm/TTL cleanup.
+ *   - `predict.defineEvent(…)` → a {@link PredictedEventChannel} — a typed
+ *     optimistic DISCRETE event (a goal, a kill, a pickup): predicted from the
+ *     sim via `ctx.predict(channel, payload)` (replay-safe) or from UI, with
+ *     confirm / rejectWhen / TTL settlement against server truth.
+ *     (`predict.events(…)` is its low-level string-keyed store.)
  * One `predict.tick(now)` per frame drives all three — controllers and event
  * stores spawned here are ticked/pruned automatically (see {@link tick}).
  *
@@ -62,6 +65,7 @@
 
 import { Callbacks, MapSchema, ArraySchema, SetSchema, type Data } from "@colyseus/schema";
 import { PredictedEvents, type PredictedEventsGetOptions } from "./predictedEvents.ts";
+import { PredictedEventChannel, type PredictedEventChannelOptions } from "./predictedEventChannel.ts";
 import { PredictedSpawns, type PredictedSpawnsOptions } from "./predictedSpawns.ts";
 import { Reconciler, type ReconcilerOptions } from "./reconciler.ts";
 import { SimReconciler, type SimReconcilerOptions } from "./simReconciler.ts";
@@ -1859,21 +1863,60 @@ export class Predict<TState = any> {
     // --- Sibling-store factory -------------------------------------------------
 
     /**
-     * Spawn a {@link PredictedEvents} store bound to this Predict's clock.
-     * Convenience for callers that already have a Predict — equivalent to
-     * `PredictedEvents.get(room, opts)` but reuses the cached clock so the
-     * `room` reference doesn't need to be reached for again.
+     * Spawn a raw {@link PredictedEvents} store bound to this Predict's clock —
+     * the low-level, FLAG-SHAPED sibling of {@link defineEvent}.
      *
-     * For applications without a Predict, use `PredictedEvents.get(room)`
-     * directly — it doesn't require constructing a Predict you won't use.
+     * Pick by consumption shape:
+     *   - **{@link defineEvent}** — callback-shaped: "a discrete thing
+     *     happened → fire feedback once → settle" (a goal, a kill sound).
+     *     Typed payloads, replay-safe `ctx.predict`, ack-anchored auto-settle.
+     *   - **`events()`** — flag-shaped: a queryable set of optimistic FACTS
+     *     that render/logic POLL and derive from each frame, OR'd with
+     *     authoritative state (`!enemy.alive || deaths.has(id)`). No
+     *     callbacks; mispredicts recover implicitly when the entry prunes and
+     *     the derived view snaps back. Per-entry handles (cancel/accept) and
+     *     arbitrary key types.
      *
-     * The returned store is auto-pruned by this Predict's {@link tick} each
-     * frame — no separate `prune()` call needed.
+     * Equivalent to `PredictedEvents.get(room, opts)` but reuses the cached
+     * clock; for applications without a Predict, use `PredictedEvents.get`
+     * directly. The returned store is auto-pruned by this Predict's
+     * {@link tick} each frame — no separate `prune()` call needed.
      */
     events<K = string>(opts: PredictedEventsGetOptions<K> = {}): PredictedEvents<K> {
         const store = PredictedEvents.get<K>({ clock: this.clock }, opts);
         this.driven.push(store as { prune?(): void });
         return store;
+    }
+
+    /**
+     * Declare a typed optimistic-event CHANNEL — one logical event type
+     * (a goal, a kill, a pickup) owned end-to-end: predicted from the sim
+     * (`ctx.predict(channel, payload)` inside a reconciler `step`, replay-safe
+     * by construction) or from UI (`channel.predict(payload)`), optimistic
+     * feedback via `onPredict`, and settlement against the server:
+     * `channel.confirm()` on the authoritative signal, or auto-reject once
+     * the server has processed past the prediction without confirming (see
+     * the channel header's SETTLEMENT notes).
+     *
+     * The channel OBJECT is the identity — no string key; call sites hold the
+     * binding. Auto-driven by this Predict's {@link tick} — no manual
+     * `prune()`.
+     *
+     *     const goals = predict.defineEvent<Team>({
+     *         onPredict: (team) => { celebrate(team); hidePuck(); },
+     *         onReject:  ()     => showPuck(),
+     *     });
+     *     // in the reconciler step:      if (crossed) ctx.predict(goals, team);
+     *     // on the server's broadcast:   room.onMessage("score", () => goals.confirm());
+     *
+     * For unkeyed/low-level needs (string-keyed store, per-entry handles) use
+     * {@link events} instead — this channel delegates its settlement timing to
+     * the same machinery.
+     */
+    defineEvent<T>(opts: PredictedEventChannelOptions<T>): PredictedEventChannel<T> {
+        const channel = new PredictedEventChannel<T>(opts, this.clock ?? null);
+        this.driven.push(channel);
+        return channel;
     }
 
     /**

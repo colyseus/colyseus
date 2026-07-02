@@ -10,7 +10,7 @@
  * with the *server* as the authority that provides the restore point. They differ
  * only in WHERE the predicted state lives and how truth is adopted / read back for
  * rendering; everything else — the ack poll, the reconcile scaffold, smooth error
- * correction, `ctx.effect` memoization, drift telemetry — is identical and lives here.
+ * correction, `ctx.record` memoization, drift telemetry — is identical and lives here.
  *
  * The acknowledgement lives on the INPUT HANDLE, not a clock: inputs go through
  * `room.input(...)`, so that handle knows the server ack (`input.lastProcessed`)
@@ -47,16 +47,16 @@ import { newDrift, updateDrift, resetDrift, classifyDrift, type Drift } from "./
 import { warnDivergence, warnReadBeforePump, diagnosticsActive } from "./divergence.ts";
 
 /**
- * Per-seq memo backing {@link StepContext.effect}: run a closure ONCE on the
+ * Per-seq memo backing {@link StepContext.record}: run a closure ONCE on the
  * live step, freeze its result keyed by `(seq, key)`, and on every rollback
  * REPLAY of that seq return the frozen value WITHOUT re-running it. Pruned when
  * the seq is acked, cleared on reset. Shared by {@link Reconciler} and
  * `SimReconciler` (both replay the same per-seq input buffer the same way).
  *
- * Storage is sparse — only seqs that recorded ≥1 effect get an entry — so it
+ * Storage is sparse — only seqs that recorded ≥1 value get an entry — so it
  * stays as small as the hand-rolled per-seq Maps it replaces.
  */
-class EffectStore {
+class RecordStore {
     /** seq → (key → memoized value). */
     private byTick = new Map<number, Map<string, any>>();
 
@@ -124,15 +124,10 @@ export interface StepContext {
    * Why it matters: one input is replayed 0..N times — once per reconcile until
    * the server acks it (often several frames). Deterministic simulation (your
    * `applyInput`) MUST re-run every time, or replay won't reproduce the server.
-   * But one-shot SIDE EFFECTS — a sound, a particle/VFX, haptics, analytics, a
-   * sent message — must fire exactly once: gate them on `!ctx.isReplay`, else
-   * they re-fire on every rollback. (This is the standard re-simulation flag
-   * rollback netcode exposes so one-shot effects fire only on the first,
-   * authoritative pass — but prefer `ctx.effect` below, which handles it for you.)
-   *
-   * Alternative: keep side effects out of `step` entirely and run them on the
-   * live path (in your per-frame loop), as this project does with collision
-   * prediction — then you never touch this flag.
+   * But anything one-shot must not: this is the standard re-simulation flag
+   * rollback netcode exposes. You rarely branch on it directly — {@link record}
+   * (frozen values) and {@link predict} (optimistic events) handle the two
+   * one-shot shapes for you.
    */
   readonly isReplay: boolean;
   /**
@@ -155,34 +150,75 @@ export interface StepContext {
    */
   readonly reckonTime: number;
   /**
-   * Record a non-derivable effect on the rollback timeline. `compute` runs
-   * exactly ONCE — on the LIVE step for this seq — and its result is memoized
-   * under `key`; on every rollback REPLAY of this seq the memo is returned and
-   * `compute` is NOT re-run. Auto-pruned when the seq is acked, cleared on
-   * `reset()`.
+   * Record a VALUE on the rollback timeline that replay can't re-derive: a
+   * lag-comp'd collision outcome (its `reckonTime` interp samples age out), an
+   * RNG roll, a server-assigned id. `compute` runs exactly ONCE — on the LIVE
+   * step for this seq — and its result is memoized under `key`; every rollback
+   * REPLAY of this seq gets the frozen value back WITHOUT re-running
+   * `compute`, so re-simulation stays deterministic. Auto-pruned when the seq
+   * is acked, cleared on `reset()`.
    *
-   * The blessed alternative to hand-branching on {@link isReplay}. Two shapes:
-   *   - **Recorded value** — USE the return (re-applied every replay). For an
-   *     outcome replay can't recompute: a lag-comp'd collision velocity, an RNG
-   *     roll, a server-assigned id. `const hit = ctx.effect("collide", () =>
-   *     collide(state, ctx.reckonTime)); if (hit) state.vx = hit.vx;`
-   *   - **Fire-once side-effect** — IGNORE the return; `compute` simply doesn't
-   *     re-run on replay. For a sound, particle, flag, analytics ping:
-   *     `ctx.effect("bounce", () => { sound.play(); });`
+   *     const hit = ctx.record("collide", () => collide(state, ctx.reckonTime));
+   *     if (hit) state.vx = hit.vx;   // re-applied identically on every replay
    *
-   * `compute` should return `undefined` for "no effect this seq" (stored
-   * sparsely — costs nothing). `key` disambiguates >1 effect in one step; call
-   * `effect(key, …)` for a given key on EVERY step (let `compute` decide the
+   * `compute` should return `undefined` for "nothing this seq" (stored
+   * sparsely — costs nothing). `key` disambiguates >1 record in one step; call
+   * `record(key, …)` for a given key on EVERY step (let `compute` decide the
    * value) rather than conditionally, so replay sees the same call shape.
    *
    * Prefer reconciled `fields` when the value IS derivable by re-running the
    * step (sync it, both sides simulate it) — that replays AND self-corrects for
-   * free. Reach for `effect` only when it genuinely can't be re-derived, and
+   * free. Reach for `record` only when it genuinely can't be re-derived, and
    * NEVER reconstruct such a value via an `input.at(seq)` lookback (it ages out
    * the moment the seq is acked — the snap-back this primitive exists to prevent).
+   * For one-shot EVENTS (a sound, a celebration, a spawn) use {@link predict} —
+   * events belong to a channel with settlement, not to the sim's memo.
    */
-  effect<T>(key: string, compute: () => T): T | undefined;
+  record<T>(key: string, compute: () => T): T | undefined;
+  /**
+   * Declare an optimistic discrete EVENT the timeline just produced (a goal, a
+   * kill, a pickup) into an event channel (`predict.defineEvent(...)`). Fires
+   * only on the LIVE step — silently skipped on every rollback replay, so a
+   * re-simulated crossing never re-fires feedback. The channel handles the
+   * rest of the event's lifecycle: pending-dedupe, cooldown, server
+   * confirm / ack-anchored auto-reject.
+   *
+   * The sibling of {@link record}, split by shape: `record` freezes a VALUE
+   * the replay consumes (use the return); `predict` declares an EVENT for the
+   * world outside the sim (no return — the channel's `onPredict` callback is
+   * the consumer).
+   */
+  predict<T>(sink: PredictSink<T>, payload: T): void;
 }
+
+/**
+ * Minimal shape {@link StepContext.predict} emits into — implemented by
+ * `PredictedEventChannel` (see `predict.defineEvent(...)`). Declared here,
+ * structurally, so this module never imports the channel (no cycle); anything
+ * with a `_predictFromSim` can receive sim-born predictions.
+ */
+export interface PredictSink<T> {
+  /**
+   * Receive one sim-born prediction from the LIVE step at `seq`. `acked`
+   * reports the emitting controller's server-ack watermark
+   * (`input.lastProcessed`) — the receiver anchors the entry's settlement to
+   * it: once the server has processed past `seq` without confirming, the
+   * predicted event didn't happen (the event channel's auto-reject).
+   */
+  _predictFromSim(seq: number, payload: T, acked?: () => number): void;
+}
+
+/**
+ * Depth of rollback replay currently executing (module-wide). Replay loops are
+ * synchronous and never interleave across controllers, so a simple counter is
+ * exact. Backstop for event channels: `channel.predict(...)` called from inside
+ * a replayed step (instead of the blessed `ctx.predict`) can detect the replay
+ * and no-op rather than re-fire feedback.
+ */
+let replayDepth = 0;
+
+/** Is a rollback replay executing right now? @see replayDepth */
+export function isReplaying(): boolean { return replayDepth > 0; }
 
 /**
  * Options shared by every rollback controller ({@link Reconciler},
@@ -258,16 +294,17 @@ export interface RollbackOptions<I> {
 
 /** Reused per-step context — mutated in place each step, no per-step alloc.
  *  `dt`/`dtMs`/sub-step trio are constant; `tick`/`isReplay`/`reckonTime` change.
- *  `effect` is bound once and reads the live `tick`/`isReplay` at call time. */
+ *  `record` is bound once and reads the live `tick`/`isReplay` at call time. */
 interface MutableStepContext {
     dt: number; dtMs: number; tick: number; isReplay: boolean; reckonTime: number;
     subSteps: number; subDt: number; subDtMs: number;
-    effect: <T>(key: string, compute: () => T) => T | undefined;
+    record: <T>(key: string, compute: () => T) => T | undefined;
+    predict: <T>(sink: PredictSink<T>, payload: T) => void;
 }
 
 /**
  * Shared rollback engine — a pure OBSERVER of an input handle. Owns the ack poll,
- * the reconcile scaffold, smooth error correction, `ctx.effect` memoization, and
+ * the reconcile scaffold, smooth error correction, `ctx.record` memoization, and
  * drift telemetry; subclasses fill the state-shape hooks (see the class header).
  *
  * It never stages or sends: you mutate + send through the handle directly
@@ -346,8 +383,11 @@ export abstract class RollbackController<I = any> {
     private warnedStaleRead = false;
 
     protected readonly stepCtx: MutableStepContext;
-    /** Per-seq memo backing `ctx.effect` — recorded live, replayed verbatim, pruned on ack. */
-    protected readonly effects = new EffectStore();
+    /** Ack watermark handed to event sinks with each `ctx.predict` (one shared
+     *  closure — no per-emit alloc). @see PredictSink._predictFromSim */
+    private readonly ackWatermark = () => this.input_.lastProcessed;
+    /** Per-seq memo backing `ctx.record` — recorded live, replayed verbatim, pruned on ack. */
+    protected readonly records = new RecordStore();
     protected readonly smoothing: number;
     /** The fixed simulation step (ms) this controller predicts at — read by the
      *  owning `Predict` to pace `predict.tick(now)`. */
@@ -387,7 +427,9 @@ export abstract class RollbackController<I = any> {
         this.stepCtx = {
             dt, dtMs: stepMs, tick: 0, isReplay: false, reckonTime: 0,
             subSteps, subDt: dt / subSteps, subDtMs: stepMs / subSteps,
-            effect: (key, compute) => this.effects.run(this.stepCtx.tick, this.stepCtx.isReplay, key, compute),
+            record: (key, compute) => this.records.run(this.stepCtx.tick, this.stepCtx.isReplay, key, compute),
+            // live-only by construction: replayed steps re-run the physics, never the event
+            predict: (sink, payload) => { if (!this.stepCtx.isReplay) sink._predictFromSim(this.stepCtx.tick, payload, this.ackWatermark); },
         };
         this.onReconcile = opts.onReconcile;
         this.warnTolerance = opts.warnOnDivergence;
@@ -546,9 +588,14 @@ export abstract class RollbackController<I = any> {
         const from = Math.max(acked, this.replayFrom);
         this.stepCtx.isReplay = true;            // rollback re-sim of buffered inputs
         this.catching = true;   // guard: replay-driven user code isn't a render pass, and must not recurse
-        for (let seq = from + 1; seq <= this.input_.sentCount; seq++) {
-            const inp = this.input_.at(seq);
-            if (inp !== undefined) this.runStep(seq, inp);
+        replayDepth++;          // backstop for channel.predict() called without ctx (see isReplaying)
+        try {
+            for (let seq = from + 1; seq <= this.input_.sentCount; seq++) {
+                const inp = this.input_.at(seq);
+                if (inp !== undefined) this.runStep(seq, inp);
+            }
+        } finally {
+            replayDepth--;
         }
         this.catching = false;
         this.refreshRender();
@@ -584,10 +631,10 @@ export abstract class RollbackController<I = any> {
             }
         }
 
-        // Drop ctx.effect memos for acked seqs (they won't replay again) BEFORE
+        // Drop ctx.record memos for acked seqs (they won't replay again) BEFORE
         // user code — replay only touches seqs > acked, so this never removes a
         // memo a still-pending replay needs.
-        this.effects.prune(acked);
+        this.records.prune(acked);
         this.onReconcile?.(acked);
     }
 
@@ -606,7 +653,7 @@ export abstract class RollbackController<I = any> {
         this.predictedSeq = this.input_.sentCount;
         this.lastAcked = this.input_.lastProcessed;
         this.renderAcc = 0;   // fresh life renders at the reseeded state (alpha 0)
-        this.effects.clear();   // prior life's recorded effects must not replay
+        this.records.clear();   // prior life's recorded values must not replay
         this.markDirty();
     }
 

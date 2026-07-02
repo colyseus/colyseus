@@ -49,6 +49,7 @@ export {
     Reconciler,
     type ReconcilerOptions,
     type StepContext,
+    type PredictSink,
 } from './predict/reconciler.ts';
 
 export {
@@ -70,6 +71,12 @@ export {
     type PredictedEventsGetOptions,
     type PredictedEventHandle,
 } from './predict/predictedEvents.ts';
+
+export {
+    PredictedEventChannel,
+    DEFAULT_GRACE_TICKS,
+    type PredictedEventChannelOptions,
+} from './predict/predictedEventChannel.ts';
 
 export {
     PredictedSpawns,

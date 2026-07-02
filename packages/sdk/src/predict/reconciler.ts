@@ -56,8 +56,9 @@
 
 import { RollbackController, type RollbackOptions, type StepContext } from "./rollback.ts";
 
-// Re-export StepContext so the `@colyseus/sdk/predict` barrel resolves it here.
-export type { StepContext } from "./rollback.ts";
+// Re-export StepContext (+ the sink shape its `predict` emits into) so the
+// `@colyseus/sdk/predict` barrel resolves them here.
+export type { StepContext, PredictSink } from "./rollback.ts";
 
 export interface ReconcilerOptions<S extends object, I> extends RollbackOptions<I> {
     /**
@@ -65,9 +66,8 @@ export interface ReconcilerOptions<S extends object, I> extends RollbackOptions<
      * `state` in place by applying `command` over `ctx.dt`. `ctx` leads (the
      * step-context-first argument convention): it carries the fixed `dt`
      * (matches the server's, so replay reproduces the server's result),
-     * `ctx.tick` (the input's seq — key per-input side-effects like a collision
-     * bounce on it), and `ctx.isReplay` (true during rollback re-sim — gate
-     * non-deterministic side effects on `!ctx.isReplay`).
+     * `ctx.record` (freeze a value replay can't re-derive) and `ctx.predict`
+     * (declare an optimistic event — live steps only, replay-safe).
      *
      * `command` is the buffered wire input the handle recorded at `send()`
      * (`input.at(seq)`) — the exact value the server decodes, read the same way on

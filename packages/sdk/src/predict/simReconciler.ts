@@ -103,8 +103,9 @@ export interface SimReconcilerOptions<I, P extends Record<string, number>, E> ex
     /**
      * Deterministic input-application step, SHARED with the server. Apply `command`
      * to `world` and advance it by `ctx.dt` (the engine's internal timestep MUST
-     * equal `ctx.dt` for replay to reproduce the server). `ctx.isReplay` is `true`
-     * during rollback re-sim — gate one-shot side effects on `!ctx.isReplay`.
+     * equal `ctx.dt` for replay to reproduce the server). One-shot concerns go
+     * through `ctx.record` (freeze a value replay can't re-derive) and
+     * `ctx.predict` (optimistic events — live steps only, replay-safe).
      *
      * `command` is the buffered wire input the handle recorded at `send()`
      * (`input.at(seq)`) — the round-tripped value the server decodes, read the same
