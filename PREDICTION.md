@@ -179,28 +179,37 @@ suppresses it. When `idle` is declared, `next()` types non-optional `I`.
 ## 3. Client
 
 ```ts
-import { Predict } from "@colyseus/sdk";  // (or the reference predictor)
+import { Predict } from "@colyseus/sdk/predict";
 
 const predict = Predict.get(room, { mode: "lerp", delay: 100, name: "players" });
 
 // Remote players: render 100ms in the past, interpolated between snapshots.
-predict.attachAll("players", { mode: "lerp", fields: ["x", "y"] });
+// `snap`: a per-sample jump beyond this many UNITS is a teleport (respawn,
+// blink, warp) — the smoother resets and renders it as a cut instead of
+// gliding across the gap. Value-space and time-free, so latency bursts can't
+// false-trigger it; size it ≫ maxSpeed × patchInterval and < the smallest
+// legitimate teleport. Applies per field — attach velocity-like fields (which
+// legitimately jump, e.g. a dash start) in a separate call without it.
+predict.attachAll("players", { mode: "lerp", fields: ["x", "y"], snap: 4 });
 
 // Local player: server-reconciled prediction. Wiring this input through
 // predict.reconciler binds lag-comp's renderDelay to the lerp `delay` above —
 // you set the interp buffer ONCE (on Predict), nothing to keep in sync here.
 const input = room.input({ mode: "reliable" });
 const me = predict.reconciler(self, {
-  input,
+  input,                              // OBSERVED: each input.send() below is predicted
   fields: ["x", "y", "vx", "vy", "grounded"],
   step: (ctx, s, cmd) => applyInput(s, cmd, LEVEL, ctx.dt),   // SAME function as the server
   smoothing: 15,
 });
 
-function frame(now) {
-  predict.tick(now);                  // single driver: reconcile + decay + smooth remotes
-  const n = me.beginFrame(dtMs);      // how many fixed steps to run now
-  for (let i = 0; i < n; i++) me.input(sampleInput());   // predict + buffer + send
+function frame(now) {                 // `now` = the rAF timestamp — pass it through
+  const n = predict.tick(now);        // single driver; returns the SEND BUDGET (fixed steps due)
+  for (let i = 0; i < n; i++) {       // one input per fixed step, not per frame
+    input.data.moveX = readMoveX();   // stage the wire input…
+    input.data.jump = takeJump();     // …edges latched — see "Buttons between steps"
+    input.send();                     // transmit + predict + buffer for replay
+  }
   draw(me.value("x"), me.value("y"));                    // smoothed local pose
   for (const [, p] of room.state.players) draw(predict.value(p, "x"), predict.value(p, "y"));
   requestAnimationFrame(frame);
@@ -221,6 +230,44 @@ function frame(now) {
 - **`room.clock`** — `serverNow()`, `smoothedRtt()`, `lastServerTime()`. Auto-populated
   from the TIMED prefix that rides input acks — **only when the room called
   `defineInput()`**.
+
+### Buttons between steps: latch, then consume
+
+Input is sampled once per FIXED step, not per render frame — and frames and steps
+don't line up: a 120 Hz display on a 30 Hz tick runs a step every ~4th frame, and a
+hitchy frame can run several. Two traps follow: a press on a **0-step frame** must
+not be lost (it belongs to the next step), and a press spanning a **multi-step
+frame** must not fire twice. "Is the key down right now?" sampling gets both wrong.
+
+The pattern is always the same — **LATCH the press when it happens, CONSUME it
+inside the step loop on exactly one step**:
+
+```ts
+let jumpLatched = false;
+onKeyDown("Space", () => jumpLatched = true);   // latch: the tap happened
+
+function frame(now) {
+  const n = predict.tick(now);
+  for (let i = 0; i < n; i++) {
+    input.data.moveX = readAxis();    // held state: sample live, no latch
+    input.data.jump = jumpLatched;
+    jumpLatched = false;              // consume: fires on exactly one step
+    input.send();
+  }
+}
+```
+
+Variants of the same shape:
+
+- **Held buttons** (movement, auto-fire) sample the live state directly — no latch.
+- **Buffered presses** (a jump buffer): latch with a timestamp; the consuming step
+  decides whether it's still fresh.
+- **Analog deltas** (pointer aim, mouselook): accumulate into a pending total and
+  let each step consume its budget (`pending -= taken`) — fast motion carries over
+  to later steps instead of clipping.
+
+Latch OUTSIDE the loop, consume INSIDE it. Draining an edge anywhere else either
+drops taps (0-step frames) or double-fires them (multi-step frames).
 
 ### Composite & engine state: `predict.sim`
 
@@ -276,11 +323,11 @@ The three callbacks fire keyed to network acks the app never sees directly — t
 ```
 your render frame:
                                      ┌─ new ack? ─▶ adopt(world)               adopt server truth
-  predict.tick(now) ─────────────────┤             step(ctx,cmd,world) × pend   replay, isReplay=true
+  n = predict.tick(now) ─────────────┤             step(ctx,cmd,world) × pend   replay, isReplay=true
                                      │             pose(world)                  re-sample pose (once)
                                      └─ always ──▶ error decay
-  n = me.beginFrame(frameDt)
-  n × me.input(cmd) ─────────────────▶             step(ctx,cmd,world)          live, isReplay=false
+  n × { input.data.… = …;
+        input.send()   } ────────────▶             step(ctx,cmd,world)          live, isReplay=false
                                                    pose(world)                  sample pose
   draw(me.value("x"))                ◀── cached pose: interpolate + smooth, NO callbacks
 ```
@@ -352,6 +399,18 @@ Prediction matches the server only if both run the **same** simulation:
 - **Identical fixed `dt`** on both sides (`setFixedTimestep` advertises it; the
   client `reconciler`/`sim` read it back).
 - **Matching engine versions** for physics (e.g. the same Rapier build client/server).
+- **Wire precision on reconciled fields.** Lossy wire types (`float32`; auto
+  `number`, which rides float32 when the loss is < 1e-4) round the truth the
+  client adopts. The `reconciler` defuses the direct hit automatically: it
+  compares its prediction at the acked seq against the truth **at wire
+  precision** and only adopts on a difference the wire can actually express (a
+  real mispredict) — rounding noise never enters the rollback restore point.
+  For full bit-exactness through a lossy wire, ALSO commit the shared step's
+  state to wire precision at step end (`k.x = Math.fround(k.x)` for `float32`
+  fields — both sides run the shared step, so both land on the same lattice
+  and the authoritative state IS the wire state). Without that second half the
+  two float64 sims sit a rounding-epsilon apart and knife-edge branches (a
+  grounded check, a step-up test) can still occasionally flip.
 
 ### Diagnosing divergence vs jitter
 
@@ -530,6 +589,7 @@ rewind then approximates.
 | Local player rubber-bands constantly | Non-determinism: different `dt`, divergent `step`, or engine-version mismatch. Confirm with `me.drift.ema` (steady nonzero ⇒ divergence, not jitter) or `warnOnDivergence` (§5). |
 | A fast predicted object stutters "sometimes", but corrections are ~0 and `smoothing` changes nothing | `value()`/`pose()` read between `predict.tick()` and the frame's `input.send()` calls — one step stale, flat-tops on late frames (§4 frame order). Move the sends before any reads; the reconciler warns once when it sees this. |
 | Remotes stutter / teleport | Interp `delay` too small (buffer underruns); raise it past 1–2 patch intervals, or check patch rate. |
+| A respawn/teleport GLIDES or streaks across the map | The smoother interpolates the position jump like any motion. Set `snap` (value-space teleport threshold) on the attach: `attachAll("players", { fields: ["x","y"], snap: 4 })` — beyond-threshold sample deltas reset the smoother (all modes, reckon rebases included) and render as a cut. |
 | "I hit them but no damage" on moving targets | Not rewinding (or rewinding to server-now). Use `rewind.lastSeenBy(shooterId)` (§6). |
 | Hits register *behind* a dead-reckoned target (where it already walked) | The type renders forward-reckoned but rewinds to the raw stamp (double compensation). Declare `schema({...}, "Enemy").with({ lagComp: "reckon" })` on the type. |
 | Hits land slightly ahead of the crosshair | `MAX_REWIND_MS` too small — it truncates the real rewind (`renderDelay + RTT + a tick`); raise it. |

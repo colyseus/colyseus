@@ -1,7 +1,8 @@
 import { CloseCode } from "@colyseus/shared-types";
-import { copyIcon, disconnectIcon, envelopeDown, envelopeUp, infoIcon, jitterIcon, keyIcon, logoIcon, messageIcon, networkIcon, settingsIcon, treeViewIcon } from "./icons.ts";
-import { applyPanelPosition, authInstances, formatBytes, getBorderColor, getDebugRoot, isPanelsHidden, preferences, repositionDebugPanels, roomDebugInfo, savePreferences } from "./core.ts";
-import { openSettingsModal } from "./settings.ts";
+import { disconnectIcon, envelopeDown, envelopeUp, infoIcon, jitterIcon, logoIcon, messageIcon, resizeIcon, sizedIcon, treeViewIcon } from "./icons.ts";
+import { applyPanelPosition, formatBytes, getBorderColor, getDebugRoot, getPanelStack, isPanelsHidden, preferences, PREDICT_CONTAINER_ID, repositionDebugPanels, roomDebugInfo, setCompactRevealed } from "./core.ts";
+import { isCoarsePointer, isCompact, onReflow } from "./layout.ts";
+import { createMenu } from "./menu.ts";
 import { openSendMessagesModal } from "./send-message.ts";
 import { openStateInspectorModal } from "./state-inspector.ts";
 
@@ -11,6 +12,7 @@ export function initialize() {
 
     var container = document.createElement('div');
     container.id = 'debug-logo-container';
+    container.className = 'cds-surface';
     container.style.position = 'fixed';
     container.style.zIndex = '1000';
     container.style.width = '21px';
@@ -24,7 +26,7 @@ export function initialize() {
     container.style.justifyContent = 'center';
     container.style.alignItems = 'center';
     container.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.3)';
-    container.style.transition = 'border-color 0.3s ease, background-color 0.3s ease';
+    container.style.transition = 'border-color 0.3s ease, background-color 0.3s ease, transform 0.12s ease';
     container.style.cursor = 'pointer';
 
     // Apply initial position
@@ -58,608 +60,11 @@ export function initialize() {
 
     // Apply initial position after menu is created
     applyPanelPosition();
+
+    watchPanelShape();
+    bindTooltipDismiss();
 }
 
-
-// Create menu that opens on logo click
-export function createMenu(logoContainer) {
-    var menu = document.createElement('div');
-    menu.id = 'debug-menu';
-    menu.style.position = 'fixed';
-    // Position will be set by applyPanelPosition
-    menu.style.backgroundColor = 'rgba(18, 18, 20, 0.97)';
-    menu.style.color = '#fff';
-    menu.style.padding = '0 0 4px 0';
-    menu.style.borderRadius = '8px';
-    menu.style.border = '1px solid rgba(255, 255, 255, 0.08)';
-    menu.style.fontFamily = 'system-ui, -apple-system, sans-serif';
-    menu.style.fontSize = '12px';
-    menu.style.zIndex = '1001';
-    menu.style.minWidth = '224px';
-    menu.style.boxShadow = '0 8px 28px rgba(0, 0, 0, 0.55)';
-    menu.style.display = 'none';
-    menu.style.overflow = 'hidden';
-
-    // Shared section header: a small leading icon + an uppercase, muted label.
-    // Used by the Network + Auth sections so every group reads the same way.
-    function makeSectionHeader(iconSvg, text) {
-        var h = document.createElement('div');
-        h.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:10px;font-weight:600;' +
-            'letter-spacing:0.6px;text-transform:uppercase;color:#8a8a8a;margin-bottom:8px';
-        h.innerHTML = '<span style="display:inline-flex;align-items:center;width:12px;height:12px;">' +
-            iconSvg.replace('height="200px" width="200px"', 'height="12" width="12"') + '</span><span>' + text + '</span>';
-        return h;
-    }
-
-    // Host title bar: a connection status dot + the server host.
-    var hostContainer = document.createElement('div');
-    hostContainer.style.cssText = 'display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:default;' +
-        'background:rgba(255,255,255,0.04);border-bottom:1px solid rgba(255,255,255,0.08);' +
-        'border-top-left-radius:8px;border-top-right-radius:8px';
-
-    var hostDot = document.createElement('span');
-    hostDot.style.cssText = 'flex-shrink:0;width:7px;height:7px;border-radius:50%;background:#666;' +
-        'box-shadow:0 0 0 3px rgba(255,255,255,0.04)';
-
-    var hostValue = document.createElement('div');
-    hostValue.id = 'debug-menu-host';
-    hostValue.style.cssText = 'flex:1;min-width:0;font-size:11px;color:#eee;font-family:monospace;' +
-        'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500';
-
-    // Function to update host display (text + green/grey status dot)
-    function updateHostDisplay() {
-        var hostText = 'N/A';
-        var connected = roomDebugInfo.size > 0;
-        if (connected) {
-            // Get host from first room
-            var firstRoom = roomDebugInfo.values().next().value;
-            if (firstRoom && firstRoom.host) {
-                hostText = firstRoom.host;
-            }
-        }
-        hostValue.textContent = hostText;
-        hostDot.style.background = connected ? '#22c55e' : '#666';
-    }
-
-    // Update host display initially
-    updateHostDisplay();
-
-    hostContainer.appendChild(hostDot);
-    hostContainer.appendChild(hostValue);
-    menu.appendChild(hostContainer);
-
-    // Simulate latency option
-    var latencyContainer = document.createElement('div');
-    latencyContainer.style.padding = '8px 12px';
-    latencyContainer.style.cursor = 'default';
-
-    var latencyLabel = document.createElement('div');
-    latencyLabel.style.marginBottom = '8px';
-    latencyLabel.style.display = 'flex';
-    latencyLabel.style.alignItems = 'center';
-    latencyLabel.style.justifyContent = 'space-between';
-    var latencyValueSpan = document.createElement('span');
-    latencyValueSpan.id = 'latency-value';
-    latencyValueSpan.style.color = '#888';
-    latencyValueSpan.style.fontSize = '11px';
-    latencyValueSpan.textContent = preferences.latencySimulation.delay + 'ms';
-
-    var latencyTextSpan = document.createElement('span');
-    latencyTextSpan.textContent = 'Latency (RTT)';
-    latencyTextSpan.style.cssText = 'font-size:11px;color:#ccc';
-
-    latencyLabel.appendChild(latencyTextSpan);
-    latencyLabel.appendChild(latencyValueSpan);
-
-    var latencySlider = document.createElement('input');
-    latencySlider.type = 'range';
-    latencySlider.min = '0';
-    latencySlider.max = preferences.maxLatency.toString();
-    latencySlider.value = preferences.latencySimulation.delay.toString();
-    latencySlider.style.border = 'none';
-    latencySlider.style.width = '100%';
-    latencySlider.style.height = '20px';
-    latencySlider.style.padding = '0';
-    latencySlider.style.margin = '0';
-    latencySlider.style.outline = 'none';
-    latencySlider.style.cursor = 'pointer';
-    latencySlider.style.webkitAppearance = 'none';
-    latencySlider.style.appearance = 'none';
-    latencySlider.style.background = 'transparent';
-    latencySlider.id = 'latency-slider';
-
-    // Function to calculate color from green (0) -> yellow (250) -> red (500)
-    function getSliderColor(value, min, max) {
-        var percentage = (value - min) / (max - min);
-        var r, g, b = 0;
-
-        if (percentage <= 0.5) {
-            // Green to Yellow: (0, 200, 0) -> (200, 200, 0)
-            var segmentPercent = percentage * 2; // 0 to 1 for this segment
-            r = Math.round(segmentPercent * 200);
-            g = 200;
-        } else {
-            // Yellow to Red: (200, 200, 0) -> (200, 0, 0)
-            var segmentPercent = (percentage - 0.5) * 2; // 0 to 1 for this segment
-            r = 200;
-            g = Math.round((1 - segmentPercent) * 200);
-        }
-
-        return 'rgb(' + r + ', ' + g + ', ' + b + ')';
-    }
-
-    // Function to update slider track color
-    function updateSliderColor(value) {
-        var color = getSliderColor(value, 0, preferences.maxLatency);
-        var valuePercent = (value / preferences.maxLatency) * 100;
-        var yellowPercent = 50; // Yellow at 250ms (50% of 500ms)
-        var gradient;
-
-        if (value <= preferences.maxLatency / 2) {
-            // Value is in green->yellow range: show green -> yellow
-            var yellowColor = getSliderColor(preferences.maxLatency / 2, 0, preferences.maxLatency);
-            gradient = `linear-gradient(to right, #00c800 0%, ${yellowColor} ${valuePercent}%, #333 ${valuePercent}%, #333 100%)`;
-        } else {
-            // Value is in yellow->red range: show green -> yellow -> current color
-            var yellowColor = getSliderColor(preferences.maxLatency / 2, 0, preferences.maxLatency);
-            gradient = `linear-gradient(to right, #00c800 0%, ${yellowColor} ${yellowPercent}%, ${color} ${valuePercent}%, #333 ${valuePercent}%, #333 100%)`;
-        }
-
-        var styleId = 'latency-slider-style';
-        var root = getDebugRoot();
-        var existingStyle = root.getElementById(styleId);
-        if (existingStyle) {
-            existingStyle.remove();
-        }
-        var style = document.createElement('style');
-        style.id = styleId;
-        style.textContent = `
-            #latency-slider::-webkit-slider-runnable-track {
-                background: ${gradient};
-                height: 6px;
-                border-radius: 3px;
-                border: none;
-            }
-            #latency-slider::-moz-range-track {
-                background: ${gradient};
-                height: 6px;
-                border-radius: 3px;
-                border: none;
-            }
-        `;
-        root.appendChild(style);
-    }
-
-    // Initialize slider color
-    updateSliderColor(parseInt(latencySlider.value));
-
-    // Add custom styling via CSS (inline style limitations)
-    var style = document.createElement('style');
-    style.textContent = `
-        #latency-slider {
-            background: transparent !important;
-            background-color: transparent !important;
-        }
-        #latency-slider::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 16px;
-            height: 16px;
-            border-radius: 50%;
-            background: #fff;
-            background-color: #fff;
-            cursor: pointer;
-            border: 2px solid #888;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-            transition: transform 0.1s ease, box-shadow 0.1s ease;
-            margin-top: -5px;
-        }
-        #latency-slider::-webkit-slider-thumb:hover {
-            transform: scale(1.1);
-            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
-        }
-        #latency-slider::-moz-range-thumb {
-            width: 16px;
-            height: 16px;
-            border-radius: 50%;
-            background: #fff;
-            cursor: pointer;
-            border: 2px solid #888;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-            transition: transform 0.1s ease, box-shadow 0.1s ease;
-        }
-        #latency-slider::-moz-range-thumb:hover {
-            transform: scale(1.1);
-            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
-        }
-    `;
-    getDebugRoot().appendChild(style);
-
-    // Function to update container border color
-    function updateContainerBackgroundColor() {
-        var container = getDebugRoot().getElementById('debug-logo-container');
-        if (container) {
-            // Update to normal state (hover handlers will update on hover)
-            container.style.borderColor = getBorderColor(preferences.latencySimulation.delay, 0.7);
-        }
-    }
-
-    // Update latency value display
-    latencySlider.addEventListener('input', function() {
-        var value = parseInt(latencySlider.value);
-        latencyValueSpan.textContent = value + 'ms';
-        preferences.latencySimulation.delay = value;
-        preferences.latencySimulation.enabled = value > 0 || preferences.latencySimulation.jitter > 0;
-        updateSliderColor(value);
-        updateContainerBackgroundColor();
-        savePreferences();
-        syncPresetButtons(); // a manual drag → "Custom" (no preset highlighted)
-    });
-
-    latencyContainer.appendChild(latencyLabel);
-    latencyContainer.appendChild(latencySlider);
-    menu.appendChild(latencyContainer);
-
-    // Simulate jitter option — mirrors the latency slider; applied as ±jitter around
-    // the latency per message (order-preserving). Reuses the in-scope getSliderColor.
-    var jitterContainer = document.createElement('div');
-    jitterContainer.style.padding = '8px 12px';
-    jitterContainer.style.cursor = 'default';
-    var jitterLabel = document.createElement('div');
-    jitterLabel.style.cssText = 'margin-bottom:8px;display:flex;align-items:center;justify-content:space-between';
-    var jitterValueSpan = document.createElement('span');
-    jitterValueSpan.id = 'jitter-value';
-    jitterValueSpan.style.cssText = 'color:#888;font-size:11px';
-    jitterValueSpan.textContent = preferences.latencySimulation.jitter + 'ms';
-    var jitterTextSpan = document.createElement('span');
-    jitterTextSpan.textContent = 'Jitter';
-    jitterTextSpan.style.cssText = 'font-size:11px;color:#ccc';
-    jitterLabel.appendChild(jitterTextSpan);
-    jitterLabel.appendChild(jitterValueSpan);
-
-    var jitterSlider = document.createElement('input');
-    jitterSlider.type = 'range';
-    jitterSlider.min = '0';
-    jitterSlider.max = preferences.maxLatency.toString();
-    jitterSlider.value = preferences.latencySimulation.jitter.toString();
-    jitterSlider.id = 'jitter-slider';
-    jitterSlider.style.cssText = 'border:none;width:100%;height:20px;padding:0;margin:0;outline:none;cursor:pointer;-webkit-appearance:none;appearance:none;background:transparent';
-
-    function updateJitterColor(value) {
-        var color = getSliderColor(value, 0, preferences.maxLatency);
-        var valuePercent = (value / preferences.maxLatency) * 100;
-        var yellowColor = getSliderColor(preferences.maxLatency / 2, 0, preferences.maxLatency);
-        var gradient = value <= preferences.maxLatency / 2
-            ? `linear-gradient(to right, #00c800 0%, ${yellowColor} ${valuePercent}%, #333 ${valuePercent}%, #333 100%)`
-            : `linear-gradient(to right, #00c800 0%, ${yellowColor} 50%, ${color} ${valuePercent}%, #333 ${valuePercent}%, #333 100%)`;
-        var root = getDebugRoot();
-        var ex = root.getElementById('jitter-slider-style');
-        if (ex) ex.remove();
-        var style = document.createElement('style');
-        style.id = 'jitter-slider-style';
-        style.textContent = `
-            #jitter-slider::-webkit-slider-runnable-track { background: ${gradient}; height: 6px; border-radius: 3px; border: none; }
-            #jitter-slider::-moz-range-track { background: ${gradient}; height: 6px; border-radius: 3px; border: none; }
-        `;
-        root.appendChild(style);
-    }
-    updateJitterColor(parseInt(jitterSlider.value));
-
-    var jitterThumbStyle = document.createElement('style');
-    jitterThumbStyle.textContent = `
-        #jitter-slider { background: transparent !important; }
-        #jitter-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #fff; cursor: pointer; border: 2px solid #888; box-shadow: 0 2px 4px rgba(0,0,0,0.2); transition: transform 0.1s ease; margin-top: -5px; }
-        #jitter-slider::-webkit-slider-thumb:hover { transform: scale(1.1); }
-        #jitter-slider::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: #fff; cursor: pointer; border: 2px solid #888; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
-    `;
-    getDebugRoot().appendChild(jitterThumbStyle);
-
-    jitterSlider.addEventListener('input', function() {
-        var value = parseInt(jitterSlider.value);
-        jitterValueSpan.textContent = value + 'ms';
-        preferences.latencySimulation.jitter = value;
-        preferences.latencySimulation.enabled = preferences.latencySimulation.delay > 0 || value > 0;
-        updateJitterColor(value);
-        savePreferences();
-        syncPresetButtons(); // a manual drag → "Custom" (no preset highlighted)
-    });
-
-    jitterContainer.appendChild(jitterLabel);
-    jitterContainer.appendChild(jitterSlider);
-    menu.appendChild(jitterContainer);
-
-    // Network presets — one tap sets both sliders. The active preset is derived
-    // by matching the saved delay/jitter (no extra persisted state), so it stays
-    // in sync with manual drags and the __net() console API.
-    var NET_PRESETS = [
-        { label: 'Off',   title: 'No simulated latency',                   delay: 0,   jitter: 0  },
-        { label: 'Low',   title: 'Low latency · 60ms, no jitter',          delay: 60,  jitter: 0  },
-        { label: 'Med',   title: 'Medium latency + jitter · 150ms ± 30ms', delay: 150, jitter: 30 },
-        { label: 'Large', title: 'Large latency + jitter · 300ms ± 60ms',  delay: 300, jitter: 60 },
-    ];
-
-    // Reflect a chosen (delay, jitter) onto BOTH sliders + their gradients/labels,
-    // persist, and re-highlight. Preset-click path only — slider handlers move one.
-    function applyLatencySim(delay, jitter) {
-        preferences.latencySimulation.delay = delay;
-        preferences.latencySimulation.jitter = jitter;
-        preferences.latencySimulation.enabled = delay > 0 || jitter > 0;
-        latencySlider.value = delay.toString();
-        jitterSlider.value = jitter.toString();
-        latencyValueSpan.textContent = delay + 'ms';
-        jitterValueSpan.textContent = jitter + 'ms';
-        updateSliderColor(delay);
-        updateJitterColor(jitter);
-        updateContainerBackgroundColor();
-        savePreferences();
-        syncPresetButtons();
-    }
-
-    function activePresetIndex() {
-        var d = preferences.latencySimulation.delay;
-        var j = preferences.latencySimulation.jitter;
-        for (var i = 0; i < NET_PRESETS.length; i++) {
-            if (NET_PRESETS[i].delay === d && NET_PRESETS[i].jitter === j) return i;
-        }
-        return -1; // custom
-    }
-
-    function applyPresetStyle(btn, active) {
-        btn.style.background = active ? 'rgba(255, 255, 255, 0.18)' : 'rgba(255, 255, 255, 0.05)';
-        btn.style.borderColor = active ? 'rgba(255, 255, 255, 0.4)' : 'rgba(255, 255, 255, 0.2)';
-        btn.style.color = active ? '#fff' : '#bbb';
-        btn.dataset.active = active ? 'true' : 'false';
-    }
-
-    var presetButtons = [];
-    function syncPresetButtons() {
-        var active = activePresetIndex();
-        for (var i = 0; i < presetButtons.length; i++) {
-            applyPresetStyle(presetButtons[i], i === active);
-        }
-    }
-
-    var presetContainer = document.createElement('div');
-    presetContainer.style.padding = '10px 12px 0';
-    presetContainer.style.cursor = 'default';
-    var presetLabel = makeSectionHeader(networkIcon, 'Network simulation');
-    var presetRow = document.createElement('div');
-    presetRow.style.cssText = 'display:flex;gap:4px';
-    NET_PRESETS.forEach(function(preset) {
-        var btn = document.createElement('button');
-        btn.type = 'button';
-        btn.textContent = preset.label;
-        btn.title = preset.title;
-        btn.style.cssText = 'flex:1;padding:4px 6px;border:1px solid;border-radius:4px;' +
-            'cursor:pointer;font-size:10px;font-family:inherit;transition:background 0.2s,border-color 0.2s';
-        applyPresetStyle(btn, false);
-        btn.addEventListener('mouseenter', function() {
-            if (btn.dataset.active !== 'true') btn.style.background = 'rgba(255, 255, 255, 0.12)';
-        });
-        btn.addEventListener('mouseleave', function() {
-            if (btn.dataset.active !== 'true') btn.style.background = 'rgba(255, 255, 255, 0.05)';
-        });
-        btn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            applyLatencySim(preset.delay, preset.jitter);
-        });
-        presetButtons.push(btn);
-        presetRow.appendChild(btn);
-    });
-    presetContainer.appendChild(presetLabel);
-    presetContainer.appendChild(presetRow);
-    menu.insertBefore(presetContainer, latencyContainer); // above the latency slider
-    syncPresetButtons(); // highlight the saved preset on first open
-
-    // Divider (network → auth)
-    var separator = document.createElement('div');
-    separator.style.cssText = 'height:1px;background:rgba(255,255,255,0.08);margin:8px 0 0';
-    menu.appendChild(separator);
-
-    // Settings option
-    var settingsOption = document.createElement('div');
-    settingsOption.style.padding = '10px 12px';
-    settingsOption.style.cursor = 'pointer';
-    settingsOption.style.transition = 'background-color 0.2s';
-    settingsOption.style.display = 'flex';
-    settingsOption.style.alignItems = 'center';
-    settingsOption.style.gap = '8px';
-
-    var settingsIconWrapper = document.createElement('span');
-    settingsIconWrapper.style.display = 'inline-flex';
-    settingsIconWrapper.style.alignItems = 'center';
-    settingsIconWrapper.style.width = '16px';
-    settingsIconWrapper.style.height = '16px';
-    settingsIconWrapper.innerHTML = settingsIcon.replace('height="200px" width="200px"', 'height="16" width="16"');
-
-    var settingsText = document.createElement('span');
-    settingsText.textContent = 'Preferences';
-
-    settingsOption.appendChild(settingsIconWrapper);
-    settingsOption.appendChild(settingsText);
-
-    settingsOption.addEventListener('mouseenter', function() {
-        settingsOption.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-    });
-    settingsOption.addEventListener('mouseleave', function() {
-        settingsOption.style.backgroundColor = 'transparent';
-    });
-    settingsOption.addEventListener('click', function(e) {
-        e.stopPropagation();
-        menuVisible = false;
-        menu.style.display = 'none';
-        if (hostUpdateInterval) {
-            clearInterval(hostUpdateInterval);
-            hostUpdateInterval = null;
-        }
-        openSettingsModal();
-    });
-    menu.appendChild(settingsOption);
-
-    // Auth token section — preview + copy the current token, or clear a stale one
-    // that fails onAuth when switching between projects on the same origin.
-    var authSection = document.createElement('div');
-    authSection.style.padding = '10px 12px';
-    authSection.style.cursor = 'default';
-
-    var authLabel = makeSectionHeader(keyIcon, 'Auth token');
-
-    // Empty state (no token present)
-    var authEmpty = document.createElement('div');
-    authEmpty.textContent = 'None';
-    authEmpty.style.cssText = 'color:#666;font-size:11px;font-style:italic';
-
-    // Token preview + copy row
-    var tokenRow = document.createElement('div');
-    tokenRow.style.cssText = 'display:flex;gap:4px;align-items:center;margin-bottom:6px';
-
-    var tokenPreview = document.createElement('div');
-    tokenPreview.style.cssText = 'flex:1;min-width:0;font-family:monospace;font-size:10px;color:#ddd;' +
-        'background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:4px;' +
-        'padding:4px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer';
-
-    var copyBtn = document.createElement('button');
-    copyBtn.type = 'button';
-    copyBtn.title = 'Copy token';
-    copyBtn.style.cssText = 'flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;' +
-        'width:26px;height:26px;padding:0;border:1px solid rgba(255,255,255,0.2);border-radius:4px;' +
-        'background:rgba(255,255,255,0.05);color:#fff;cursor:pointer;transition:background 0.2s,border-color 0.2s';
-    var copyBtnIcon = '<span style="display:inline-flex;align-items:center;width:13px;height:13px;">' +
-        copyIcon.replace('height="200px" width="200px"', 'height="13" width="13"') + '</span>';
-    copyBtn.innerHTML = copyBtnIcon;
-
-    tokenRow.appendChild(tokenPreview);
-    tokenRow.appendChild(copyBtn);
-
-    // Clear button (red)
-    var clearBtn = document.createElement('button');
-    clearBtn.type = 'button';
-    clearBtn.textContent = 'Clear token';
-    clearBtn.style.cssText = 'width:100%;padding:5px 8px;border:1px solid rgba(239,68,68,0.5);border-radius:4px;' +
-        'background:rgba(239,68,68,0.2);color:#ef4444;font-size:11px;font-family:inherit;cursor:pointer;' +
-        'transition:background 0.2s,border-color 0.2s';
-
-    authSection.appendChild(authLabel);
-    authSection.appendChild(authEmpty);
-    authSection.appendChild(tokenRow);
-    authSection.appendChild(clearBtn);
-
-    // Current token = first live client's in-memory token, else the persisted one
-    // (present in storage but not yet loaded into an Auth instance).
-    var currentToken: string | null = null;
-    function getAuthToken() {
-        var t: string | null = null;
-        authInstances.forEach(function(a) { if (!t && a.token) { t = a.token; } });
-        if (t) { return t; }
-        try { return localStorage.getItem('colyseus-auth-token'); } catch (e) { return null; }
-    }
-    // Middle-truncate so both ends stay legible; full value lives in the title.
-    function truncateToken(t) {
-        return (t.length > 22) ? (t.slice(0, 12) + '…' + t.slice(-8)) : t;
-    }
-
-    // Reflect presence on (re)open: show preview/copy/clear, or the "None" line.
-    function syncAuthOption() {
-        var token = getAuthToken();
-        currentToken = token;
-        var present = !!token;
-        authEmpty.style.display = present ? 'none' : 'block';
-        tokenRow.style.display = present ? 'flex' : 'none';
-        clearBtn.style.display = present ? 'block' : 'none';
-        if (token) {
-            tokenPreview.textContent = truncateToken(token);
-            tokenPreview.title = token; // full token on hover
-        }
-    }
-    syncAuthOption();
-
-    // Copy the full token to the clipboard, flashing a green check on the button.
-    var copyResetTimer: any = null;
-    function flashCopied() {
-        copyBtn.innerHTML = '<span style="display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;color:#22c55e;font-size:12px;">✓</span>';
-        copyBtn.style.borderColor = 'rgba(34,197,94,0.6)';
-        if (copyResetTimer) { clearTimeout(copyResetTimer); }
-        copyResetTimer = setTimeout(function() {
-            copyBtn.innerHTML = copyBtnIcon;
-            copyBtn.style.borderColor = 'rgba(255,255,255,0.2)';
-        }, 1000);
-    }
-    function copyToken() {
-        if (!currentToken) { return; }
-        try {
-            var p = navigator.clipboard && navigator.clipboard.writeText(currentToken);
-            if (p && p.then) { p.then(flashCopied, flashCopied); } else { flashCopied(); }
-        } catch (e) { flashCopied(); }
-    }
-    copyBtn.addEventListener('mouseenter', function() { copyBtn.style.background = 'rgba(255,255,255,0.15)'; });
-    copyBtn.addEventListener('mouseleave', function() { copyBtn.style.background = 'rgba(255,255,255,0.05)'; });
-    copyBtn.addEventListener('click', function(e) { e.stopPropagation(); copyToken(); });
-    tokenPreview.addEventListener('click', function(e) { e.stopPropagation(); copyToken(); });
-
-    clearBtn.addEventListener('mouseenter', function() {
-        clearBtn.style.background = 'rgba(239,68,68,0.35)';
-        clearBtn.style.borderColor = 'rgba(239,68,68,0.7)';
-    });
-    clearBtn.addEventListener('mouseleave', function() {
-        clearBtn.style.background = 'rgba(239,68,68,0.2)';
-        clearBtn.style.borderColor = 'rgba(239,68,68,0.5)';
-    });
-    clearBtn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        // Live instances: signOut() nulls the in-memory token + removes storage (real key).
-        authInstances.forEach(function(a) { if (a.token) { void a.signOut(); } });
-        try { localStorage.removeItem('colyseus-auth-token'); } catch (e) {} // default-key fallback
-        syncAuthOption();
-    });
-
-    // Place the section BELOW the network group (after its divider), above
-    // Preferences, with its own divider separating it from the footer.
-    var authDivider = document.createElement('div');
-    authDivider.style.cssText = 'height:1px;background:rgba(255,255,255,0.08);margin:0';
-    menu.insertBefore(authSection, settingsOption);
-    menu.insertBefore(authDivider, settingsOption);
-
-    getDebugRoot().appendChild(menu);
-
-    // Toggle menu on logo click
-    var menuVisible = false;
-    var hostUpdateInterval = null;
-    logoContainer.addEventListener('click', function(e) {
-        e.stopPropagation();
-        menuVisible = !menuVisible;
-        menu.style.display = menuVisible ? 'block' : 'none';
-
-        if (menuVisible) {
-            updateHostDisplay();
-            syncAuthOption(); // refresh enabled/greyed state on each open
-            // Update host every second while menu is visible
-            hostUpdateInterval = setInterval(updateHostDisplay, 1000);
-        } else {
-            if (hostUpdateInterval) {
-                clearInterval(hostUpdateInterval);
-                hostUpdateInterval = null;
-            }
-        }
-    });
-
-    // Close menu when clicking outside.
-    // Because menu/logo live inside a shadow root, event.target is retargeted
-    // to the shadow host for document-level listeners, so we walk the composed
-    // path to see whether the real click target was inside the menu or logo.
-    document.addEventListener('click', function(e) {
-        var path = typeof e.composedPath === 'function' ? e.composedPath() : [e.target as EventTarget];
-        var clickedInsideMenu = path.indexOf(menu) !== -1;
-        var clickedInsideLogo = path.indexOf(logoContainer) !== -1;
-        if (menuVisible && !clickedInsideMenu && !clickedInsideLogo) {
-            menuVisible = false;
-            menu.style.display = 'none';
-            if (hostUpdateInterval) {
-                clearInterval(hostUpdateInterval);
-                hostUpdateInterval = null;
-            }
-        }
-    });
-}
 
 
 // Helper function to create debug panel for a room
@@ -672,24 +77,24 @@ export function createDebugPanel(uniquePanelId, debugInfo) {
 
     var panel = document.createElement('div');
     panel.id = 'debug-panel-' + uniquePanelId;
-    panel.style.position = 'fixed';
-    // Position will be set by repositionDebugPanels
+    panel.className = 'cds-surface';
+    // A flex child of the panel stack — the stack owns position and z-index.
     panel.style.backgroundColor = 'rgba(0, 0, 0, 0.85)';
     panel.style.color = '#fff';
     panel.style.padding = '8px';
     panel.style.borderRadius = '6px';
     panel.style.fontFamily = 'monospace';
     panel.style.fontSize = '11px';
-    panel.style.zIndex = '999';
     panel.style.minWidth = '180px';
-    panel.style.marginRight = '6px';
+    panel.style.pointerEvents = 'auto'; // the desktop stack is pointer-events:none
+    panel.style.flexShrink = '0'; // never squash inside the scrollable compact drawer
     panel.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.5)';
     panel.style.display = isPanelsHidden() ? 'none' : 'block';
 
     var title = document.createElement('div');
     title.id = 'debug-title-' + uniquePanelId;
+    title.className = 'debug-title'; // `[id^="debug-title-"]` would also catch debug-title-text-*
     title.style.fontWeight = 'bold';
-    title.style.marginBottom = '6px';
     title.style.borderBottom = '1px solid rgba(255, 255, 255, 0.15)';
     title.style.paddingBottom = '4px';
     title.style.display = 'flex';
@@ -697,7 +102,7 @@ export function createDebugPanel(uniquePanelId, debugInfo) {
     title.style.justifyContent = 'space-between';
     title.style.gap = '8px';
     title.style.position = 'relative';
-    title.innerHTML = '<span id="debug-title-text-' + uniquePanelId + '"><span class="debug-room-name"></span><span class="debug-info-icon" style="display: inline-flex; align-items: center; margin-left: 4px; cursor: pointer; opacity: 0.6; vertical-align: middle;">' + infoIcon.replace('height="200px" width="200px"', 'height="10" width="10"') + '</span></span><span id="debug-ping-' + uniquePanelId + '" style="font-size: 10px; font-weight: normal; color: #888;" title="Ping time">--</span>';
+    title.innerHTML = '<span id="debug-title-text-' + uniquePanelId + '"><span class="debug-room-name"></span><span class="debug-info-icon" style="display: inline-flex; align-items: center; margin-left: 4px; cursor: pointer; opacity: 0.6; vertical-align: middle;">' + resizeIcon(infoIcon, 10) + '</span></span><span style="display:flex;align-items:center;gap:8px;font-weight:normal"><span id="debug-ping-' + uniquePanelId + '" style="font-size: 10px; color: #888;" title="Ping time">--</span><span class="debug-chevron" style="color:#888;display:none">▾</span></span>';
 
     // Create tooltip for info button (will be shown on hover)
     var tooltip = document.createElement('div');
@@ -735,8 +140,10 @@ export function createDebugPanel(uniquePanelId, debugInfo) {
     function createActionButton(id, icon, label, onClick) {
         var btn = document.createElement('button');
         btn.id = id;
+        btn.className = 'cds-hit';
         btn.style.display = 'flex';
         btn.style.alignItems = 'center';
+        btn.style.justifyContent = 'center';
         btn.style.gap = '4px';
         btn.style.padding = '4px 8px';
         btn.style.border = '1px solid rgba(255, 255, 255, 0.2)';
@@ -746,7 +153,7 @@ export function createDebugPanel(uniquePanelId, debugInfo) {
         btn.style.fontSize = '9px';
         btn.style.cursor = 'pointer';
         btn.style.transition = 'background 0.2s, border-color 0.2s';
-        btn.innerHTML = '<span style="display: inline-flex; align-items: center; width: 12px; height: 12px;">' + icon + '</span><span>' + label + '</span>';
+        btn.innerHTML = sizedIcon(icon, 12) + '<span>' + label + '</span>';
 
         btn.addEventListener('mouseenter', function() {
             btn.style.background = 'rgba(255, 255, 255, 0.15)';
@@ -767,14 +174,14 @@ export function createDebugPanel(uniquePanelId, debugInfo) {
     // Create action buttons
     var stateBtn = createActionButton(
         'debug-state-btn-' + uniquePanelId,
-        treeViewIcon.replace('height="200px" width="200px"', 'height="12" width="12"'),
+        treeViewIcon,
         'State',
         function() { openStateInspectorModal(uniquePanelId); }
     );
 
     var messageBtn = createActionButton(
         'debug-message-btn-' + uniquePanelId,
-        messageIcon.replace('height="200px" width="200px"', 'height="12" width="12"'),
+        messageIcon,
         'Send',
         function() { openSendMessagesModal(uniquePanelId); }
     );
@@ -783,7 +190,7 @@ export function createDebugPanel(uniquePanelId, debugInfo) {
     // Create disconnect button (red, simulates abnormal websocket close)
     var disconnectBtn = createActionButton(
         'debug-disconnect-btn-' + uniquePanelId,
-        disconnectIcon.replace('height="200px" width="200px"', 'height="12" width="12"'),
+        disconnectIcon,
         'Drop',
         function() {
             var info = roomDebugInfo.get(uniquePanelId);
@@ -821,16 +228,7 @@ export function createDebugPanel(uniquePanelId, debugInfo) {
         if (labelSpan) labelSpan.textContent = 'Reconnecting...';
     }
 
-    // Inject CSS animation if not already present
-    var pulseRoot = getDebugRoot();
-    if (!pulseRoot.getElementById('debug-pulse-animation')) {
-        var style = document.createElement('style');
-        style.id = 'debug-pulse-animation';
-        style.textContent = '@keyframes debug-pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }';
-        pulseRoot.appendChild(style);
-    }
-
-    // Apply initial style
+    // Apply initial style (the debug-pulse keyframes live in the base sheet)
     applyNormalStyle();
 
     // Register onDrop callback to show reconnecting state
@@ -861,7 +259,6 @@ export function createDebugPanel(uniquePanelId, debugInfo) {
         }
     });
 
-    // Add tooltip hover handlers to info icon in title
     title.appendChild(tooltip);
     var infoIconEl = title.querySelector('.debug-info-icon') as HTMLElement;
     var tooltipTimeout: any = null;
@@ -874,31 +271,111 @@ export function createDebugPanel(uniquePanelId, debugInfo) {
             tooltip.style.display = 'none';
         }, 100);
     };
-    if (infoIconEl) {
-        infoIconEl.addEventListener('mouseenter', showTooltip);
-        infoIconEl.addEventListener('mouseleave', hideTooltip);
-    }
     tooltip.style.pointerEvents = 'auto';
-    tooltip.addEventListener('mouseenter', showTooltip);
-    tooltip.addEventListener('mouseleave', hideTooltip);
+
+    if (infoIconEl) {
+        // On touch, `mouseenter` fires on tap and no `mouseleave` ever follows, so a
+        // hover tooltip sticks open forever. Room/session ids are worth surfacing on
+        // a phone, so tap toggles it rather than suppressing it. The click stops here
+        // — that is what keeps the outside-tap dismissal from immediately undoing it.
+        infoIconEl.addEventListener('click', function(e) {
+            e.stopPropagation();
+            if (!isCoarsePointer()) { return; }
+            tooltip.style.display = (tooltip.style.display === 'block') ? 'none' : 'block';
+        });
+        infoIconEl.addEventListener('mouseenter', function() {
+            if (!isCoarsePointer()) { showTooltip(); }
+        });
+        infoIconEl.addEventListener('mouseleave', function() {
+            if (!isCoarsePointer()) { hideTooltip(); }
+        });
+        tooltip.addEventListener('mouseenter', showTooltip);
+        tooltip.addEventListener('mouseleave', function() {
+            if (!isCoarsePointer()) { hideTooltip(); }
+        });
+    }
 
     actionsContainer.appendChild(stateBtn);
     actionsContainer.appendChild(messageBtn);
     actionsContainer.appendChild(disconnectBtn);
 
-    panel.appendChild(title);
-    panel.appendChild(content);
-    panel.appendChild(actionsContainer);
+    // Collapsible body: on a phone each room reduces to its title row (a chip) and
+    // opens on tap. `content` stays the same element, so updateDebugPanel()'s
+    // per-second innerHTML rewrite is unaffected.
+    var body = document.createElement('div');
+    body.id = 'debug-body-' + uniquePanelId;
+    body.style.marginTop = '6px';
+    body.appendChild(content);
+    body.appendChild(actionsContainer);
 
-    // Prepend panel inside the shadow root so new panels appear first
-    var root = getDebugRoot();
-    if (root.firstChild) {
-        root.insertBefore(panel, root.firstChild);
-    } else {
-        root.appendChild(panel);
-    }
+    panel.appendChild(title);
+    panel.appendChild(body);
+
+    // Deliberately does not stop propagation: the click still needs to reach the
+    // document listeners that close the menu and dismiss open tooltips.
+    title.addEventListener('click', function() {
+        if (!isCompact()) { return; } // desktop: always expanded, header inert
+        setPanelExpanded(panel, panel.dataset.expanded !== '1');
+    });
+
+    setPanelExpanded(panel, true);
+
+    // Creation order — oldest nearest the logo. In compact the Predict card is the
+    // drawer's last child, so rooms have to go in ahead of it.
+    var stack = getPanelStack();
+    stack.insertBefore(panel, stack.querySelector('#' + PREDICT_CONTAINER_ID));
 
     return panel;
+}
+
+
+// Chip ⇄ full panel. The chevron only makes sense where the header is tappable.
+function setPanelExpanded(panel: HTMLElement, expanded: boolean) {
+    var body = panel.querySelector('[id^="debug-body-"]') as HTMLElement;
+    var title = panel.querySelector('.debug-title') as HTMLElement;
+    var chevron = panel.querySelector('.debug-chevron') as HTMLElement;
+    var compact = isCompact();
+
+    panel.dataset.expanded = expanded ? '1' : '0';
+    if (body) { body.style.display = expanded ? 'block' : 'none'; }
+    if (title) {
+        title.style.cursor = compact ? 'pointer' : 'default';
+        title.style.borderBottomColor = expanded ? 'rgba(255, 255, 255, 0.15)' : 'transparent';
+        title.style.paddingBottom = expanded ? '4px' : '0';
+    }
+    if (chevron) {
+        chevron.style.display = compact ? 'inline' : 'none';
+        chevron.textContent = expanded ? '▾' : '▸';
+    }
+}
+
+
+// Any tap outside an open info tooltip closes it. The icon that opens one stops the
+// click there, so this never fires for the very tap that opened the tooltip.
+function bindTooltipDismiss() {
+    document.addEventListener('click', function() {
+        var tooltips = getDebugRoot().querySelectorAll('[id^="debug-tooltip-"]') as NodeListOf<HTMLElement>;
+        tooltips.forEach(function(tooltip) { tooltip.style.display = 'none'; });
+    });
+}
+
+
+// Reshape the panels only when the breakpoint actually flips. reflow() also fires on
+// every plain resize — including the mobile URL bar sliding away mid-scroll — and
+// re-running this each time would reopen a panel the user just collapsed, or re-hide
+// the drawer they just revealed.
+function watchPanelShape() {
+    var wasCompact = isCompact();
+    onReflow(function(state) {
+        if (state.compact === wasCompact) { return; }
+        wasCompact = state.compact;
+        // Entering compact hands the screen back to the game until the logo is tapped.
+        if (state.compact) { setCompactRevealed(false); }
+        // Reopen everything: the chevron only exists in compact, so a panel collapsed
+        // there would have no way back once the header goes inert on desktop.
+        var panels = getDebugRoot().querySelectorAll('[id^="debug-panel-"]') as NodeListOf<HTMLElement>;
+        panels.forEach(function(panel) { setPanelExpanded(panel, true); });
+    });
 }
 
 

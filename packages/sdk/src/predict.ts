@@ -41,6 +41,7 @@ export {
     type RawOptions,
     type SteppedOptions,
     type SimulateOptions,
+    type PredictSpawnsOptions,
     type PredictCore,
     type ProfileCore,
 } from './predict/Predictor.ts';

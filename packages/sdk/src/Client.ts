@@ -7,6 +7,7 @@ import { HTTP, type FetchFn } from './HTTP.ts';
 import { Auth } from './Auth.ts';
 import { Connection } from './Connection.ts';
 import { discordURLBuilder } from './3rd_party/discord.ts';
+import { publishDebug } from './debug-channel.ts';
 
 export type JoinOptions = any;
 export type { ISeatReservation };
@@ -322,6 +323,12 @@ export class ColyseusSDK<ServerType extends SDKTypes = any, UserData = any> {
 
             room['onJoin'].once(() => {
                 room.onError.remove(onError);
+                // Surface the connected room to `@colyseus/sdk/debug` (buffered
+                // until the overlay loads). This is the single choke point for
+                // join/create/joinById/reconnect, so every room gets a panel —
+                // and one joined before a late debug import is adopted on replay,
+                // not missed like the old consumeSeatReservation monkey-patch.
+                publishDebug("room", room);
                 resolve(room);
             });
         });

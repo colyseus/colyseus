@@ -140,7 +140,7 @@ describe('PredictedSpawns', () => {
     });
 
     test('tick() dead-reckons pending locals; confirmed entries are left to the server', () => {
-        const { clock } = makeClock();
+        const { clock, advance } = makeClock();
         const s = new PredictedSpawns<Bullet, Bullet>({
             owned: mine,
             step: (b, dt) => { b.x += b.vx * dt; b.y += b.vy * dt; },
@@ -150,16 +150,38 @@ describe('PredictedSpawns', () => {
 
         const h = s.spawn({ ownerId: 'me', x: 0, y: 0, vx: 10, vy: 0, spawnTime: 0 });
 
-        // first tick only seeds lastTickAt (no dt yet); second advances 1s ⇒ x += 10
-        s.tick(0);
-        s.tick(1000);
+        // first tick only seeds lastTickAt (no dt yet); with a clock, dt rides
+        // the clock's serverNow axis — advance it 1s ⇒ x += 10
+        s.tick();
+        advance(1000);
+        s.tick();
         expect(h.local.x).toBeCloseTo(10);
 
         // confirm it (single pending ⇒ fifo claims it), then tick — now frozen
         coll.add({ ownerId: 'me', x: 0, y: 0, vx: 10, vy: 0, spawnTime: 0 });
         const frozen = h.local.x;
-        s.tick(2000);
+        advance(1000);
+        s.tick();
         expect(h.local.x).toBe(frozen);            // confirmed local no longer stepped
+    });
+
+    test('tick() paces pending locals on the clock axis — the axis the input lead is measured on', () => {
+        const { clock, advance } = makeClock(500);
+        const s = new PredictedSpawns<Bullet, Bullet>({
+            owned: mine,
+            step: (b, dt) => { b.x += b.vx * dt; },
+        }, clock);
+        const h = s.spawn({ ownerId: 'me', x: 0, y: 0, vx: 10, vy: 0, spawnTime: 0 });
+
+        // wall-clock `now` params are IGNORED when a clock is present: only
+        // serverNow() advances the flight (pending step ≡ confirmed lead-reckon
+        // by construction — the handoff cannot jump on estimate drift).
+        s.tick(0);
+        s.tick(99999);
+        expect(h.local.x).toBeCloseTo(0);
+        advance(500);
+        s.tick(99999);
+        expect(h.local.x).toBeCloseTo(5);
     });
 
     test('cancel() drops a pending prediction', () => {
@@ -232,6 +254,89 @@ describe('PredictedSpawns', () => {
         const h = s.spawn({ x: 0, y: 0, vx: 0, vy: 0, spawnTime: 0 });
         expect(h.data).toBeUndefined();
         expect(list(s)[0].data).toBeUndefined();
+    });
+});
+
+describe('PredictedSpawns — input-lead timeline (spawnTime)', () => {
+    test('confirmation measures leadMs = spawnTime(server) − entry.at, per spawn', () => {
+        const { clock, advance } = makeClock(1000);
+        const s = new PredictedSpawns<Bullet>({
+            owned: mine,
+            spawnTime: (b) => b.spawnTime,
+        }, clock);
+        const coll = makeCollection<Bullet>();
+        s.attach(coll.subscribe);
+
+        const h = s.spawn({ x: 0, y: 0, vx: 0, vy: 0, spawnTime: 0 }); // at = 1000
+        advance(300);                                                   // add arrives ~RTT later
+        coll.add({ ownerId: 'me', x: 5, y: 0, vx: 10, vy: 0, spawnTime: 1140 }); // server ran it 140ms after we predicted
+
+        const e = list(s).find(x => x.id === h.id)!;
+        expect(e.state).toBe('confirmed');
+        expect(e.leadMs).toBe(140);
+    });
+
+    test('foreign entries carry no lead; without spawnTime lead stays 0', () => {
+        const { clock } = makeClock(1000);
+        const s = new PredictedSpawns<Bullet>({ owned: mine, spawnTime: (b) => b.spawnTime }, clock);
+        const coll = makeCollection<Bullet>();
+        s.attach(coll.subscribe);
+
+        const foreign: Bullet = { ownerId: 'them', x: 0, y: 0, vx: 0, vy: 0, spawnTime: 1200 };
+        coll.add(foreign);
+        expect(s.entryFor(foreign)!.leadMs).toBe(0);
+
+        const plain = new PredictedSpawns<Bullet>({ owned: mine }, clock);
+        const coll2 = makeCollection<Bullet>();
+        plain.attach(coll2.subscribe);
+        plain.spawn({ x: 0, y: 0, vx: 0, vy: 0, spawnTime: 0 });
+        const server: Bullet = { ownerId: 'me', x: 0, y: 0, vx: 0, vy: 0, spawnTime: 1300 };
+        coll2.add(server);
+        expect(plain.entryFor(server)!.leadMs).toBe(0);
+    });
+
+    test('entryFor() resolves the entry a server instance collapsed onto', () => {
+        const { clock } = makeClock();
+        const s = new PredictedSpawns<Bullet>({ owned: mine }, clock);
+        const coll = makeCollection<Bullet>();
+        s.attach(coll.subscribe);
+
+        const h = s.spawn({ x: 0, y: 0, vx: 0, vy: 0, spawnTime: 0 });
+        const server: Bullet = { ownerId: 'me', x: 5, y: 5, vx: 0, vy: 0, spawnTime: 0 };
+        coll.add(server);
+        expect(s.entryFor(server)!.id).toBe(h.id);
+        expect(s.entryFor({ ...server })).toBeUndefined(); // identity, not equality
+    });
+
+    test('value() reads the stepped local while pending, the server via the bound reader once confirmed', () => {
+        const { clock, advance } = makeClock();
+        const s = new PredictedSpawns<Bullet, Bullet>({
+            owned: mine,
+            step: (b, dt) => { b.x += b.vx * dt; },
+        }, clock);
+        const coll = makeCollection<Bullet>();
+        s.attach(coll.subscribe);
+        s.bindReader((server, field) => (server[field] as number) + 1000); // stand-in for predict.value
+
+        const h = s.spawn({ ownerId: 'me', x: 0, y: 0, vx: 10, vy: 0, spawnTime: 0 });
+        s.tick();
+        advance(500);
+        s.tick();
+        const e = list(s).find(x => x.id === h.id)!;
+        expect(s.value(e, 'x')).toBeCloseTo(5);      // pending → local, stepped
+
+        coll.add({ ownerId: 'me', x: 7, y: 0, vx: 10, vy: 0, spawnTime: 0 });
+        expect(s.value(e, 'x')).toBe(1007);          // confirmed → routed through the reader
+    });
+
+    test('value() falls back to raw server fields when no reader is bound', () => {
+        const { clock } = makeClock();
+        const s = new PredictedSpawns<Bullet>({ owned: mine }, clock);
+        const coll = makeCollection<Bullet>();
+        s.attach(coll.subscribe);
+        const foreign: Bullet = { ownerId: 'them', x: 42, y: 0, vx: 0, vy: 0, spawnTime: 0 };
+        coll.add(foreign);
+        expect(s.value(s.entryFor(foreign)!, 'x')).toBe(42);
     });
 });
 

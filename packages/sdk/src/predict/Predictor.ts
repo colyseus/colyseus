@@ -72,6 +72,7 @@ import { SimReconciler, type SimReconcilerOptions } from "./simReconciler.ts";
 import { InputHandleImpl, type InputHandle } from "../input/InputHandle.ts";
 import { classifyDrift, type Drift, type DriftStatus } from "./drift.ts";
 import { NULL_CLOCK, type RoomClockLike } from "../RoomClock.ts";
+import { publishDebug } from "../debug-channel.ts";
 import {
     $VALUES,
     refIdOf, metadataOf, fieldIndexOf, scalarFieldNamesOf, makeUnrolledSnapshot,
@@ -142,6 +143,23 @@ export interface SmoothingOptions {
      */
     tickInterval?: number;
     /**
+     * Value-space discontinuity threshold. When a new sample's value differs
+     * from the previous one by MORE than this, the change is treated as a
+     * TELEPORT (respawn, blink, warp) instead of motion: the smoothing state
+     * resets to the new value and every mode renders it immediately — no
+     * glide across the gap. 0 disables (default).
+     *
+     * Deliberately time-free: latency/jitter shift when samples arrive, not
+     * what they carry, so bursty delivery can't false-trigger it. Size it
+     * well above `maxSpeed × patchInterval` (per-sample motion) and below the
+     * smallest legitimate teleport. Note the server encodes only the LATEST
+     * value per patch — a long server stall coalesces real movement into one
+     * sample, so leave headroom for the stalls you'd rather glide through.
+     * For `angle` fields the delta is measured after the shortest-arc fold
+     * (≤ π), so thresholds above π never trip.
+     */
+    snap?: number;
+    /**
      * Treat the field as an ANGLE in radians. Samples are stored unwrapped
      * (continuous) — each new value is folded onto the previous over the
      * SHORTEST arc — so `lerp` / `damped` / `extrapolate` interpolate correctly
@@ -170,6 +188,9 @@ export interface ReckonOptions<T = any> {
     smoothing?: number;
     /** Substep length in ms. Smaller = more accurate bounces / collisions. Default 16. */
     substep?: number;
+    /** Rebase discontinuities larger than this pop instead of decaying out —
+     *  see {@link SmoothingOptions.snap}. 0 disables (default). */
+    snap?: number;
 }
 
 /**
@@ -263,12 +284,13 @@ const GAP_RESUME_MAX_MS = 250;  // cap the synthesized resume span (safety)
 // Frozen profiles are value-deduplicated via `profileKeys` so that an
 // attachAll on a thousand entities sharing the same override still allocates
 // just one extra profile, not a thousand.
-const PROFILE_STRIDE = 5;
+const PROFILE_STRIDE = 6;
 const P_MODE = 0;
 const P_DELAY = 1;
 const P_DAMPING = 2;
 const P_MAX_EXTRAPOLATE = 3;
 const P_TICK_INTERVAL = 4;
+const P_SNAP = 5;
 const DEFAULTS_PROFILE = 0;
 
 const MODE_LERP = 0;
@@ -313,10 +335,37 @@ export interface SteppedOptions<T = any> {
     smoothing?: number;
     /** Substep length in ms. Smaller = more accurate bounces / collisions. Default 16. */
     substep?: number;
+    /** Rebase discontinuities larger than this pop instead of decaying out —
+     *  see {@link SmoothingOptions.snap}. 0 disables (default). */
+    snap?: number;
     /** Override how the per-frame scratch is built. Defaults to copying every
      *  schema field through its accessor (or a plain spread for non-schema
      *  objects). Override only for exotic instances the default can't clone. */
     snapshot?: (instance: T) => T;
+}
+
+/**
+ * Options for {@link Predict.spawns} — the {@link PredictedSpawnsOptions}
+ * store options plus optional dead-reckoning of the collection's confirmed
+ * entities, replacing a separate `attachAll(key, { mode: "reckon", … })` for
+ * spawn-style collections.
+ */
+export interface PredictSpawnsOptions<S = unknown, L = Partial<S>, D = undefined>
+    extends PredictedSpawnsOptions<S, L, D> {
+    /**
+     * Dead-reckon confirmed entities on these fields, using the same `step`
+     * that advances pending locals. Each confirmed entity gets a reckon slot
+     * (readable via `predict.value()` or, uniformly across the handoff, the
+     * store's `value()`): foreign entities forward to server-present
+     * (snapshot age); owned ones additionally forward by the entry's measured
+     * input lead when {@link PredictedSpawnsOptions.spawnTime} is set.
+     */
+    fields?: readonly (keyof S & string)[];
+    /** Reckon smoothing for confirmed entities. Default 0 — a deterministic
+     *  constant-step projectile rebases exactly, so smoothing only adds lag. */
+    smoothing?: number;
+    /** Reckon substep in ms (see {@link SteppedOptions.substep}). */
+    substep?: number;
 }
 
 /**
@@ -352,6 +401,9 @@ export interface SimulateOptions<T = any> {
      * to the `advance` output every frame.
      */
     smoothing?: number;
+    /** Rebase discontinuities larger than this pop instead of decaying out —
+     *  see {@link SmoothingOptions.snap}. 0 disables (default). */
+    snap?: number;
 }
 
 interface SimState {
@@ -374,6 +426,9 @@ interface SimState {
      *  spans `[endElapsed − forwardMs, endElapsed]`. */
     advance: (instance: any, forwardMs: number, out: Float64Array, endElapsed: number) => void;
     smoothing: number;
+    /** Value-space discontinuity threshold — rebase jumps beyond it skip the
+     *  offset capture (pop, don't glide). 0 = off. */
+    snap: number;
     /** Displayed values (= `out + offset`), indexed by field position. */
     smoothed: Float64Array;
     /** Reused per-frame `advance` output, indexed by field position. */
@@ -383,6 +438,13 @@ interface SimState {
     valueOut: Float64Array;
     /** Pop-hiding correction offset, decaying toward 0 (see applySimulation). */
     offset: Float64Array;
+    /** Previous frame's `out` — lets a clean frame measure per-field motion so a
+     *  rebase can subtract the expected motion from its offset capture. */
+    outPrev: Float64Array;
+    /** Per-ms field velocity from the last CLEAN (non-rebase) frame — the
+     *  expected-motion term a rebase multiplies by the frame dt so one frame of
+     *  genuine motion isn't mis-captured as a discontinuity. */
+    frameVel: Float64Array;
     /** Snapshot identity (`clock.lastServerTime()`) at the last apply — a
      *  change marks a REBASE: the forward sim now starts from new data, so any
      *  discontinuity is captured into `offset`. NaN = no clock → EMA fallback. */
@@ -397,6 +459,7 @@ const SMOOTHING_DEFAULTS: Required<SmoothingOptions> = {
     damping: 15,
     maxExtrapolate: 200,
     tickInterval: 0,
+    snap: 0,
     angle: false,
 };
 
@@ -406,11 +469,13 @@ interface ReckonDefaults {
     step: ((state: any, dt: number, elapsedMs: number) => void) | undefined;
     smoothing: number;
     substep: number;
+    snap: number;
 }
 const RECKON_DEFAULTS: ReckonDefaults = {
     step: undefined,
     smoothing: 20,
     substep: 16,
+    snap: 0,
 };
 
 
@@ -470,6 +535,10 @@ export interface ReckonAttachConfig<T = any> {
     smoothing?: number;
     /** Substep length in ms. Defaults to the Predict's setting (or 16). */
     substep?: number;
+    /** Value-space discontinuity threshold, applied to every field here — a
+     *  per-sample jump beyond it snaps instead of smoothing (teleports:
+     *  respawn, blink, warp). See {@link SmoothingOptions.snap}. Default 0 (off). */
+    snap?: number;
     /** Treat every field here as a radian ANGLE — see {@link SmoothingOptions.angle}.
      *  Use only on smoothing-mode attaches (lerp/damped/extrapolate), not reckon. */
     angle?: boolean;
@@ -505,6 +574,7 @@ interface GroupPlan {
     reckonStep?: (state: any, dt: number, elapsedMs: number) => void;
     reckonSmoothing?: number;
     reckonSubstep?: number;
+    reckonSnap?: number;
     reckonSnapshot?: (state: any) => any;
     /** Field → profile id (+ angle flag). All children of the group share these. */
     fieldProfiles: Array<{ field: string; profileIdx: number; angle?: boolean }>;
@@ -549,6 +619,27 @@ export type PredictGetOptions<T = any> = PredictOptions<T> & {
      * pass explicit `forwardMs` / `elapsedMs`.
      */
     clock?: RoomClockLike;
+    /**
+     * Draw dead-reckoned (`mode:"reckon"`) entities on the clock's SLEW-LIMITED
+     * **render** timeline ({@link RoomClockLike.renderNow}) instead of the raw
+     * {@link RoomClockLike.serverNow}. Both the reckon horizon (snapshot age)
+     * and the time-sampled absolute clock (`elapsedMs`, for closed-form motion
+     * like sinusoids) then read `renderNow()`, so the per-patch offset-EMA
+     * wobble stops showing as `v·Δclock` stutter on remote entities.
+     *
+     * **ON by default** (when the clock implements `renderNow()`; falls back to
+     * `serverNow()` otherwise). It affects ONLY what you SEE: the lag-comp hit
+     * path (`valueAt(when)` with an explicit instant) bypasses it and keeps
+     * stamping on accurate `serverNow()`, so "what you see is what you hit"
+     * holds in steady state — the render timeline just smooths the draw.
+     *
+     * Pass `false` to force the raw `serverNow()` horizon. The one reason to:
+     * strict draw==hit WYSIWYG on a fast twitch game, where you want the drawn
+     * position to equal the hit position even DURING an offset correction (the
+     * slew briefly lags the draw behind the `serverNow()`-stamped hit; racing /
+     * platformer don't care, a competitive shooter might).
+     */
+    renderPresent?: boolean;
     /**
      * Human-friendly identifier shown in `@colyseus/sdk/debug` panels and
      * useful for logging. Falls back to `predict#N` (incremented per process).
@@ -649,14 +740,7 @@ export interface ProfileCore {
     readonly damping: number;
     readonly maxExtrapolate: number;
     readonly tickInterval: number;
-}
-
-interface ColyseusDebugRegistry {
-    publish(channel: "predict", handle: PredictCore): void;
-}
-
-function getDebugRegistry(): ColyseusDebugRegistry | undefined {
-    return (globalThis as { __colyseusDebug?: ColyseusDebugRegistry }).__colyseusDebug;
+    readonly snap: number;
 }
 
 let __predictAutoId = 0;
@@ -722,6 +806,9 @@ export class Predict<TState = any> {
     private defaultMode: PredictMode;
     private reckonDefaults: ReckonDefaults;
     private clock: RoomClockLike | undefined;
+    /** Draw reckon entities on the clock's render timeline — see the
+     *  `renderPresent` option on {@link PredictGetOptions}. */
+    private useRenderClock = false;
 
     // --- Room-wide fixed-step accumulator (drives reconciler input pacing) ------
     // The server's tick rate is one value per room, so one accumulator here is the
@@ -809,6 +896,7 @@ export class Predict<TState = any> {
                     damping: s.damping ?? SMOOTHING_DEFAULTS.damping,
                     maxExtrapolate: s.maxExtrapolate ?? SMOOTHING_DEFAULTS.maxExtrapolate,
                     tickInterval: s.tickInterval ?? SMOOTHING_DEFAULTS.tickInterval,
+                    snap: s.snap ?? SMOOTHING_DEFAULTS.snap,
                     angle: s.angle ?? SMOOTHING_DEFAULTS.angle,
                 };
             })()
@@ -826,6 +914,7 @@ export class Predict<TState = any> {
             initial.damping,
             initial.maxExtrapolate,
             initial.tickInterval,
+            initial.snap,
             false,
         );
         // The first allocProfile is guaranteed to land at index 0 — invariant
@@ -839,6 +928,7 @@ export class Predict<TState = any> {
                 step: r.step,
                 smoothing: r.smoothing ?? RECKON_DEFAULTS.smoothing,
                 substep: r.substep ?? RECKON_DEFAULTS.substep,
+                snap: r.snap ?? RECKON_DEFAULTS.snap,
             };
         } else {
             this.reckonDefaults = { ...RECKON_DEFAULTS };
@@ -848,6 +938,9 @@ export class Predict<TState = any> {
         // for rooms without a clock — `trackStepped` then requires explicit
         // forwardMs/elapsedMs.
         this.clock = clock ?? (room as { clock?: RoomClockLike | null }).clock ?? undefined;
+        // Default ON: reckon draws on renderNow() when the clock offers it
+        // (presentFn falls back to serverNow otherwise). `false` forces raw.
+        this.useRenderClock = (rest as { renderPresent?: boolean }).renderPresent !== false;
         // Prediction wants a server-synced clock (server-time interpolation,
         // lag-comp render stamps). It only exists once the room called
         // defineInput(); inheriting the inert stub means that didn't happen.
@@ -855,14 +948,13 @@ export class Predict<TState = any> {
 
         this.name = (rest as { name?: string }).name ?? `predict#${++__predictAutoId}`;
 
-        // Publish a core handle to the debug registry only when
-        // `@colyseus/sdk/debug` is loaded — keeps the production path
-        // zero-bookkeeping (no listeners ⇒ `trackWithProfile`'s notify is a
-        // length check, and `attachedCount` reads an already-maintained map).
-        const registry = getDebugRegistry();
-        if (registry) {
-            registry.publish("predict", this.makeCoreHandle());
-        }
+        // Publish a core handle to the debug channel. `publishDebug` renders it
+        // now if `@colyseus/sdk/debug` is loaded, else BUFFERS it for replay when
+        // the overlay's (dev-only, dynamic) import lands — so a Predict created
+        // before that import still shows up. Prod pays nothing: no overlay ⇒ a
+        // bounded WeakRef buffer nothing ever reads (and `trackWithProfile`'s
+        // notify stays a length check, `attachedCount` an already-maintained map).
+        publishDebug("predict", this.makeCoreHandle());
     }
 
     /**
@@ -872,6 +964,26 @@ export class Predict<TState = any> {
      */
     get mode(): PredictMode {
         return this.defaultMode;
+    }
+
+    /**
+     * The "present" instant provider for reckon horizons + time-sampling (the
+     * `forwardMs` snapshot-age and the `elapsedMs` absolute clock). Unless
+     * {@link PredictGetOptions.renderPresent} was set `false`, and when the clock
+     * implements {@link RoomClockLike.renderNow}, it's the slew-smoothed render
+     * timeline; otherwise the raw {@link RoomClockLike.serverNow}. `undefined`
+     * with no clock — {@link trackStepped} then requires explicit
+     * forwardMs/elapsedMs. Resolved once on the cold attach path.
+     *
+     * The lag-comp read (`valueAt` with an explicit `when`) never goes through
+     * here, so hit stamps stay on `serverNow()` even with render-present on.
+     */
+    private presentFn(): (() => number) | undefined {
+        const clock = this.clock;
+        if (!clock) { return undefined; }
+        return this.useRenderClock && clock.renderNow
+            ? clock.renderNow.bind(clock)
+            : clock.serverNow.bind(clock);
     }
 
     // --- Core introspection handle ---------------------------------------------
@@ -929,7 +1041,7 @@ export class Predict<TState = any> {
         return out;
     }
 
-    private readSmoothingDefaults(): { mode: PredictMode; delay: number; damping: number; maxExtrapolate: number; tickInterval: number } {
+    private readSmoothingDefaults(): { mode: PredictMode; delay: number; damping: number; maxExtrapolate: number; tickInterval: number; snap: number } {
         const p = this.profileBuf;
         const b = DEFAULTS_PROFILE * PROFILE_STRIDE;
         const m = p[b + P_MODE] | 0;
@@ -944,6 +1056,7 @@ export class Predict<TState = any> {
             damping: p[b + P_DAMPING],
             maxExtrapolate: p[b + P_MAX_EXTRAPOLATE],
             tickInterval: p[b + P_TICK_INTERVAL],
+            snap: p[b + P_SNAP],
         };
     }
 
@@ -959,6 +1072,7 @@ export class Predict<TState = any> {
         damping: number,
         maxExtrapolate: number,
         tickInterval: number,
+        snap: number,
         dedup: boolean,
         label?: string,
     ): number {
@@ -967,7 +1081,7 @@ export class Predict<TState = any> {
         if (dedup) {
             // Label is part of the key: two groups never share a profile, so
             // their panel cards stay independent.
-            key = `${label ?? ""}|${modeCode}|${delay}|${damping}|${maxExtrapolate}|${tickInterval}`;
+            key = `${label ?? ""}|${modeCode}|${delay}|${damping}|${maxExtrapolate}|${tickInterval}|${snap}`;
             const existing = this.profileKeys.get(key);
             if (existing !== undefined) return existing;
         }
@@ -984,6 +1098,7 @@ export class Predict<TState = any> {
         this.profileBuf[base + P_DAMPING] = damping;
         this.profileBuf[base + P_MAX_EXTRAPOLATE] = maxExtrapolate;
         this.profileBuf[base + P_TICK_INTERVAL] = tickInterval;
+        this.profileBuf[base + P_SNAP] = snap;
         this.profileLabels[idx] = label;
         // Resolve the compute function once, here at registration — slot
         // reads then invoke it directly instead of branching on mode.
@@ -1017,7 +1132,8 @@ export class Predict<TState = any> {
             opts.delay === undefined &&
             opts.damping === undefined &&
             opts.maxExtrapolate === undefined &&
-            opts.tickInterval === undefined
+            opts.tickInterval === undefined &&
+            opts.snap === undefined
         ) {
             return DEFAULTS_PROFILE;
         }
@@ -1027,17 +1143,19 @@ export class Predict<TState = any> {
         const damping = opts.damping ?? d.damping;
         const maxExtrapolate = opts.maxExtrapolate ?? d.maxExtrapolate;
         const tickInterval = opts.tickInterval ?? d.tickInterval;
+        const snap = opts.snap ?? d.snap;
         // Collapse to defaults profile when the merged values match it. This
         // unifies homogeneous per-attach configs (e.g. `{ mode: "lerp" }` on
         // a Predict already at lerp) with the implicit no-override case —
         // ensuring there's exactly one internal state for any given intent.
         if (
             mode === d.mode && delay === d.delay && damping === d.damping &&
-            maxExtrapolate === d.maxExtrapolate && tickInterval === d.tickInterval
+            maxExtrapolate === d.maxExtrapolate && tickInterval === d.tickInterval &&
+            snap === d.snap
         ) {
             return DEFAULTS_PROFILE;
         }
-        return this.allocProfile(mode, delay, damping, maxExtrapolate, tickInterval, true);
+        return this.allocProfile(mode, delay, damping, maxExtrapolate, tickInterval, snap, true);
     }
 
     /**
@@ -1050,7 +1168,7 @@ export class Predict<TState = any> {
      * groups never do.
      */
     private groupProfile(
-        opts: { mode?: PredictMode; delay?: number; damping?: number; maxExtrapolate?: number; tickInterval?: number },
+        opts: { mode?: PredictMode; delay?: number; damping?: number; maxExtrapolate?: number; tickInterval?: number; snap?: number },
         label: string,
     ): number {
         const d = this.readSmoothingDefaults();
@@ -1061,6 +1179,7 @@ export class Predict<TState = any> {
             opts.damping ?? d.damping,
             opts.maxExtrapolate ?? d.maxExtrapolate,
             opts.tickInterval ?? d.tickInterval,
+            opts.snap ?? d.snap,
             true,
             label,
         );
@@ -1102,6 +1221,7 @@ export class Predict<TState = any> {
         if (s.damping !== undefined) p[base + P_DAMPING] = s.damping;
         if (s.maxExtrapolate !== undefined) p[base + P_MAX_EXTRAPOLATE] = s.maxExtrapolate;
         if (s.tickInterval !== undefined) p[base + P_TICK_INTERVAL] = s.tickInterval;
+        if (s.snap !== undefined) { p[base + P_SNAP] = s.snap; this.reckonDefaults.snap = s.snap; }
 
         // Reckon-mode fields → reckonDefaults.
         const r = opts as ReckonOptions;
@@ -1136,6 +1256,7 @@ export class Predict<TState = any> {
                 damping: this.profileBuf[base + P_DAMPING],
                 maxExtrapolate: this.profileBuf[base + P_MAX_EXTRAPOLATE],
                 tickInterval: this.profileBuf[base + P_TICK_INTERVAL],
+                snap: this.profileBuf[base + P_SNAP],
             });
         }
         return out;
@@ -1162,6 +1283,7 @@ export class Predict<TState = any> {
         if (opts.damping !== undefined) p[base + P_DAMPING] = opts.damping;
         if (opts.maxExtrapolate !== undefined) p[base + P_MAX_EXTRAPOLATE] = opts.maxExtrapolate;
         if (opts.tickInterval !== undefined) p[base + P_TICK_INTERVAL] = opts.tickInterval;
+        if (opts.snap !== undefined) p[base + P_SNAP] = opts.snap;
     }
 
     /**
@@ -1280,10 +1402,25 @@ export class Predict<TState = any> {
                 const pBase = (b[i + SLOT_PROFILE] | 0) * PROFILE_STRIDE;
                 const tickInterval = this.profileBuf[pBase + P_TICK_INTERVAL];
 
-                // Derive lastT1 (timestamp of the previous newest snapshot)
-                // straight from the ring — no per-slot t1 field needed.
                 let head = b[i + SLOT_RING_HEAD] | 0;
                 let count = b[i + SLOT_RING_COUNT] | 0;
+
+                // Value-space discontinuity (`snap` option): a per-sample jump
+                // beyond the threshold is a TELEPORT, not motion — empty the
+                // ring and snap the damped/extrapolate output state, so every
+                // mode renders the new value immediately instead of gliding
+                // across the gap. SLOT_V1 still holds the PREVIOUS sample here
+                // (mirrored below). The zeroed count also disables the
+                // gap-collapse inject for this sample (count >= 2 guard).
+                const snapDelta = this.profileBuf[pBase + P_SNAP];
+                if (snapDelta > 0 && count > 0 && Math.abs(current - b[i + SLOT_V1]) > snapDelta) {
+                    head = 0;
+                    count = 0;
+                    b[i + SLOT_AUX_V] = current;
+                }
+
+                // Derive lastT1 (timestamp of the previous newest snapshot)
+                // straight from the ring — no per-slot t1 field needed.
                 const lastT1 = count === 0
                     ? Number.NEGATIVE_INFINITY
                     : b[i + SLOT_RING_BASE + (head === 0 ? RING_CAP - 1 : head - 1) * 2];
@@ -1418,12 +1555,11 @@ export class Predict<TState = any> {
         // knife-edge hit calls). Override `forwardMs` for a different
         // horizon (e.g. a collision read wanting extra look-ahead).
         const smoothing = opts.smoothing ?? 20;
-        const forwardMs = opts.forwardMs ?? (clock
-            ? () => { const stamp = clock.lastServerTime(); return stamp > 0 ? Math.max(0, clock.serverNow() - stamp) : 0; }
+        const present = this.presentFn(); // serverNow(), or renderNow() under renderPresent
+        const forwardMs = opts.forwardMs ?? (present
+            ? () => { const stamp = clock!.lastServerTime(); return stamp > 0 ? Math.max(0, present() - stamp) : 0; }
             : () => 0);
-        const elapsedMs = opts.elapsedMs ?? (clock
-            ? () => clock.serverNow()
-            : () => performance.now());
+        const elapsedMs = opts.elapsedMs ?? (present ?? (() => performance.now()));
 
         // Build `advance` once. It writes predicted fields into the SoA `out`
         // buffer (indexed by field position) — never a name-keyed object.
@@ -1505,6 +1641,7 @@ export class Predict<TState = any> {
             forwardMs,
             elapsedMs,
             smoothing: opts.smoothing,
+            snap: opts.snap,
             advance,
         });
     }
@@ -1526,12 +1663,11 @@ export class Predict<TState = any> {
         for (let k = 0; k < n; k++) if (fieldIds[k] >= 0) posOf[fieldIds[k]] = k;
         const smoothed = new Float64Array(n);
         for (let k = 0; k < n; k++) smoothed[k] = (instance as any)[fields[k]] ?? 0;
-        // Default the absolute-time provider to serverNow (matches the per-frame
-        // reckon); `valueAt` overrides the end instant per call.
-        const clock = this.clock;
-        const elapsedMs = opts.elapsedMs ?? (clock
-            ? () => clock.serverNow()
-            : () => performance.now());
+        // Default the absolute-time provider to the reckon present — serverNow,
+        // or renderNow under renderPresent (matches the per-frame reckon).
+        // `valueAt` overrides the end instant per call, so hit reads stay exact.
+        const present = this.presentFn();
+        const elapsedMs = opts.elapsedMs ?? (present ?? (() => performance.now()));
         const state: SimState = {
             instance,
             fieldIds,
@@ -1540,10 +1676,13 @@ export class Predict<TState = any> {
             elapsedMs,
             advance: opts.advance as SimState["advance"],
             smoothing: opts.smoothing ?? 20,
+            snap: opts.snap ?? 0,
             smoothed,
             out: new Float64Array(n),
             valueOut: new Float64Array(n),
             offset: new Float64Array(n),
+            outPrev: new Float64Array(n),
+            frameVel: new Float64Array(n),
             lastBaseT: NaN,
             lastApplyTime: -Infinity,
         };
@@ -1653,7 +1792,7 @@ export class Predict<TState = any> {
                 );
             }
             // One profile for the whole group (all fields share it).
-            const profileIdx = this.groupProfile({ mode: effectiveMode }, label);
+            const profileIdx = this.groupProfile({ mode: effectiveMode, snap: rcfg.snap }, label);
             for (const f of rcfg.fields) fieldProfiles.push({ field: f as string, profileIdx, angle: rcfg.angle });
             return {
                 label,
@@ -1662,6 +1801,7 @@ export class Predict<TState = any> {
                 reckonStep: isReckon ? step : undefined,
                 reckonSmoothing: rcfg.smoothing ?? this.reckonDefaults.smoothing,
                 reckonSubstep: rcfg.substep ?? this.reckonDefaults.substep,
+                reckonSnap: rcfg.snap ?? this.reckonDefaults.snap,
                 reckonSnapshot: rcfg.snapshot,
                 fieldProfiles,
             };
@@ -1679,8 +1819,10 @@ export class Predict<TState = any> {
         return { label, isReckon: false, fieldProfiles };
     }
 
-    /** Attach one child using a pre-resolved {@link GroupPlan}. */
-    private attachToGroup<T extends object>(instance: T, plan: GroupPlan): () => void {
+    /** Attach one child using a pre-resolved {@link GroupPlan}. `forwardMs`
+     *  overrides the reckon horizon for THIS instance only (e.g. the spawns
+     *  store's per-entity input lead); omitted → snapshot age, as usual. */
+    private attachToGroup<T extends object>(instance: T, plan: GroupPlan, forwardMs?: () => number): () => void {
         const offs: Array<() => void> = [];
         if (plan.isReckon) {
             offs.push(this.trackStepped<T>(instance, {
@@ -1688,7 +1830,9 @@ export class Predict<TState = any> {
                 step: plan.reckonStep as (s: T, dt: number, e: number) => void,
                 smoothing: plan.reckonSmoothing,
                 substep: plan.reckonSubstep,
+                snap: plan.reckonSnap,
                 snapshot: plan.reckonSnapshot as ((s: T) => T) | undefined,
+                forwardMs,
             }));
         }
         for (const { field, profileIdx, angle } of plan.fieldProfiles) {
@@ -1791,15 +1935,18 @@ export class Predict<TState = any> {
 
     /**
      * Call once per render frame — the single per-frame driver for the whole
-     * prediction stack. Advances the room-wide fixed-step clock, reconciles + steps
-     * + decays every {@link reconciler}/{@link sim} spawned here, advances smoothing,
-     * and prunes every {@link events} store.
+     * prediction stack. Returns your SEND BUDGET: how many fixed input steps are
+     * due this frame — mutate + send exactly that many inputs through your input
+     * handle (`for (n) { input.data.x = …; input.send(); }`), and the reconcilers
+     * observe + predict each send. Besides pacing, the call reconciles + steps +
+     * decays every {@link reconciler}/{@link sim} spawned here, advances
+     * smoothing, and prunes every {@link events} store.
      *
-     * Returns HOW MANY fixed input steps are due this frame: mutate + send that many
-     * inputs through your input handle (`input.data.x = …; input.send()`), and the
-     * reconcilers observe + predict them. Returns 0 until a reconciler is spawned
-     * (no fixed rate known) or for passive-smoothing-only Predicts — ignore the
-     * return then.
+     * Returns 0 while the fixed step is UNKNOWN: the rate is adopted from the
+     * first {@link reconciler}/{@link sim} spawned here, so pre-spawn frames —
+     * and passive smoothing-only Predicts — pace nothing. That is the send loop
+     * self-gating before the local player exists, not an error; keep calling
+     * `tick()` and the budget starts flowing the frame the controller spawns.
      *
      * ORDER WITHIN THE FRAME MATTERS: send the returned steps FIRST, then read
      * render values (`value()`/`pose()`). A read between this call and the frame's
@@ -1929,6 +2076,16 @@ export class Predict<TState = any> {
      * with a stable `id`. Wires the collection's `onAdd`/`onRemove` and is
      * auto-ticked + pruned by this Predict's {@link tick} — no separate drive.
      *
+     * With `fields`, the store also owns the collection's **motion** (no
+     * separate `attachAll` needed): confirmed entities are dead-reckoned with
+     * the same `step` that advances pending locals, and `store.value(entry,
+     * field)` is one read path across the whole life of the entity. Foreign
+     * entities reckon to server-present; with `spawnTime`, owned ones reckon
+     * to server-present *plus the measured input lead*, so the authoritative
+     * entity continues the prediction's flight on the shooter's timeline —
+     * no snap-back at the handoff, and the rendered trajectory is the one a
+     * favor-the-shooter lag-comp hit test actually judges.
+     *
      * The server element type `S` is inferred from `key`; the predicted-local
      * shape defaults to `Partial<S>`, so `spawn()` is type-checked against the
      * server fields with no annotations. To carry client-only fields, annotate
@@ -1938,32 +2095,80 @@ export class Predict<TState = any> {
      * return.
      *
      * ```ts
-     * const bullets = predict.spawns("bullets", {
-     *   owned:     b => b.ownerId === room.sessionId,   // b: Bullet
-     *   correlate: "fifo",
-     *   step:      (b, dt) => {                          // b: Partial<Bullet>, inferred
-     *     b.x += Math.cos(b.angle!) * SPEED * dt;
-     *     b.y += Math.sin(b.angle!) * SPEED * dt;
-     *   },
-     *   data:      () => ({ catchup: 0, hidden: false }), // per-entry scratch
+     * const rockets = predict.spawns("rockets", {
+     *   owned:     r => r.owner === room.sessionId,      // r: Rocket
+     *   spawnTime: r => r.bornMs,                        // exact per-shot lead
+     *   step:      stepRocket,                           // shared client/server sim
+     *   fields:    ["x", "z"],                           // reckon confirmed entities
      * });
-     * const h = bullets.spawn({ x, y, angle, spawnTime: room.clock.serverNow() });
-     * // render: for (const e of bullets.entries()) {
-     * //   if (e.data.hidden) continue;
-     * //   draw(e.id, e.server ?? e.local);
-     * // }
+     * // on the predicted fire (live input step):
+     * rockets.spawn({ x, z, heading });
+     * // render — one path, handoff-invisible, keyed on the stable entry id:
+     * for (const e of rockets.entries()) {
+     *   draw(e.id, rockets.value(e, "x"), rockets.value(e, "z"));
+     * }
      * ```
      */
     spawns<K extends CollectionKeys<TState>, L = Partial<ChildOf<TState[K]>>, D = undefined>(
         key: K,
-        opts: PredictedSpawnsOptions<ChildOf<TState[K]>, L, D> = {},
+        opts: PredictSpawnsOptions<ChildOf<TState[K]>, L, D> = {},
     ): PredictedSpawns<ChildOf<TState[K]>, L, D> {
-        const store = new PredictedSpawns<ChildOf<TState[K]>, L, D>(opts, this.clock ?? null);
+        type S = ChildOf<TState[K]>;
+        const store = new PredictedSpawns<S, L, D>(opts, this.clock ?? null);
+
+        // Reckon wiring (`fields` + `step`): every confirmed entity gets a
+        // regular reckon attach (group-labeled by the collection key, like
+        // attachAll) whose forward horizon is snapshot age plus the entry's
+        // measured input lead — 0 for foreign entities (server-present, same
+        // as an attachAll reckon), the exact per-spawn uplink for owned ones
+        // (see PredictedSpawnsOptions.spawnTime). An owned projectile thus
+        // keeps flying the shooter's timeline through the handoff — the view
+        // the server's lag-comp rewind judges.
+        const fields = opts.fields as readonly NumericKeys<S>[] | undefined;
+        const step = opts.step;
+        const group = fields !== undefined && step !== undefined
+            ? this.makeGroup(String(key), {
+                mode: "reckon",
+                fields,
+                step: step as unknown as (state: S, dt: number, elapsedMs: number) => void,
+                smoothing: opts.smoothing ?? 0,
+                substep: opts.substep,
+            } as ReckonAttachConfig<S>)
+            : undefined;
+        const untrack = group !== undefined ? new Map<S, () => void>() : undefined;
+        const clock = this.clock;
+
         store.attach((onAdd, onRemove) => {
-            const addOff = this.callbacks.onAdd(key, onAdd);
-            const removeOff = this.callbacks.onRemove(key, onRemove);
-            return () => { addOff?.(); removeOff?.(); };
+            const addOff = this.callbacks.onAdd(key, (server: S, k: string | number) => {
+                onAdd(server, k);
+                if (group === undefined || untrack!.has(server)) return; // decoder re-fire
+                const lead = store.entryFor(server)?.leadMs ?? 0;
+                const forwardMs = clock
+                    ? () => {
+                        const stamp = clock.lastServerTime();
+                        const age = stamp > 0 ? Math.max(0, clock.serverNow() - stamp) : 0;
+                        return Math.max(0, age + lead);
+                    }
+                    : () => Math.max(0, lead);
+                untrack!.set(server, this.attachToGroup(server as object, this.planFor(group, server as object), forwardMs));
+            });
+            const removeOff = this.callbacks.onRemove(key, (server: S, k: string | number) => {
+                untrack?.get(server)?.();
+                untrack?.delete(server);
+                onRemove(server, k);
+            });
+            return () => {
+                addOff?.(); removeOff?.();
+                if (untrack !== undefined) {
+                    for (const off of untrack.values()) off();
+                    untrack.clear();
+                }
+            };
         });
+        if (group !== undefined) {
+            // route store.value() confirmed reads through the reckon slots
+            store.bindReader((server, field) => this.value(server as object, field as never));
+        }
         this.driven.push(store as { tick?(now: number): void; prune?(): void; dead?: boolean });
         return store;
     }
@@ -2393,15 +2598,32 @@ export class Predict<TState = any> {
             const n = sm.length;
             const baseT = this.clock?.lastServerTime?.() ?? NaN;
             sim.advance(sim.instance, sim.forwardMs(), out, sim.elapsedMs());
-            if (sim.lastApplyTime === -Infinity || sim.smoothing <= 0) {
+            const first = sim.lastApplyTime === -Infinity;
+            if (first || sim.smoothing <= 0) {
                 for (let k = 0; k < n; k++) { off[k] = 0; sm[k] = out[k]; }
             } else if (!Number.isNaN(baseT)) {
-                if (baseT !== sim.lastBaseT && !Number.isNaN(sim.lastBaseT)) {
-                    // REBASE: a new snapshot re-seeded the forward sim — keep the
-                    // display continuous by absorbing the jump into the offset.
-                    for (let k = 0; k < n; k++) off[k] = sm[k] - out[k];
-                }
                 const dtMs = Math.max(0, Math.min(now - sim.lastApplyTime, 100));
+                if (baseT !== sim.lastBaseT && !Number.isNaN(sim.lastBaseT)) {
+                    // REBASE: a new snapshot re-seeded the forward sim. `out`
+                    // forwards by SNAPSHOT AGE, so across a clean patch it's
+                    // already continuous — it just advanced one frame of REAL
+                    // motion (≈ frameVel·dt). Subtract that expected motion so
+                    // ONLY a genuine snapshot correction lands in the offset;
+                    // without it every patch mis-reads v·dt of motion as a
+                    // discontinuity (a per-patch sawtooth, amplitude independent
+                    // of the decay rate). Past `snap` it's a teleport: pop.
+                    const snap = sim.snap;
+                    const vel = sim.frameVel;
+                    for (let k = 0; k < n; k++) {
+                        const d = sm[k] + vel[k] * dtMs - out[k];
+                        off[k] = (snap > 0 && Math.abs(d) > snap) ? 0 : d;
+                    }
+                } else if (dtMs > 0) {
+                    // Clean frame: record per-ms motion for the next rebase's
+                    // expected-motion term.
+                    const outPrev = sim.outPrev, vel = sim.frameVel;
+                    for (let k = 0; k < n; k++) vel[k] = (out[k] - outPrev[k]) / dtMs;
+                }
                 const decay = Math.exp(-sim.smoothing * dtMs / 1000);
                 for (let k = 0; k < n; k++) { off[k] *= decay; sm[k] = out[k] + off[k]; }
             } else {
@@ -2410,6 +2632,8 @@ export class Predict<TState = any> {
                 const kk = 1 - Math.exp(-sim.smoothing * dtMs / 1000);
                 for (let k = 0; k < n; k++) sm[k] += (out[k] - sm[k]) * kk;
             }
+            const outPrev = sim.outPrev;
+            for (let k = 0; k < n; k++) outPrev[k] = out[k];
             sim.lastBaseT = baseT;
             sim.lastApplyTime = now;
         }

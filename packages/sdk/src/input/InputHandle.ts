@@ -220,6 +220,12 @@ export interface InputHandle<I = any> {
    */
   readonly pendingCount: number;
   /**
+   * Capacity (in seqs) of the replay ring backing {@link at} — the in-flight
+   * window this handle can serve. A reconciler sizes its own per-seq state to
+   * this, so both rings cover the same window and age out together.
+   */
+  readonly replayBufferSize: number;
+  /**
    * The buffered snapshot of the reliable input sent as `seq`, for
    * reconciliation replay — the client-side mirror of the server's input
    * buffer. Returns `undefined` if `seq` is already acked, was never sent, or
@@ -366,6 +372,7 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
   get lastProcessed(): number { return this._lastProcessed; }
   get sentCount(): number { return this._sentCount; }
   get pendingCount(): number { return this._sentCount - this._lastProcessed; }
+  get replayBufferSize(): number { return this._inputBufferSize; }
 
   at(seq: number): I | undefined {
     if (this._inputBuffer === null) return undefined;

@@ -1,16 +1,19 @@
 import { now } from "../core/utils.ts";
+import { debugOverlayActive } from "../debug-channel.ts";
 
 /**
- * True when drift telemetry is being watched — the `@colyseus/sdk/debug` bundle
- * is loaded (it installs `globalThis.__colyseusDebug`, which the panel reads).
- * Reconcilers skip ALL drift/correction bookkeeping when this is false and no
- * `warnOnDivergence` tolerance is set, so a production build that imports neither
- * pays nothing for the diagnostic. Same global the engine's `getDebugRegistry`
- * checks, by reference — no import coupling to the debug module.
+ * True when drift telemetry is being watched — the `@colyseus/sdk/debug` overlay
+ * is loaded (its live receiver on `globalThis.__colyseusDebug` is what the panel
+ * reads). Reconcilers skip ALL drift/correction bookkeeping when this is false
+ * and no `warnOnDivergence` tolerance is set, so a production build that imports
+ * neither pays nothing for the diagnostic.
+ *
+ * Delegates to {@link debugOverlayActive} so the pre-load PUBLISH BUFFER (which a
+ * plain `Predict`/room publish now installs even without the overlay) doesn't
+ * read as active — only the overlay's live receiver flips this on.
  */
 export function diagnosticsActive(): boolean {
-    return typeof globalThis !== "undefined"
-        && (globalThis as { __colyseusDebug?: unknown }).__colyseusDebug != null;
+    return debugOverlayActive();
 }
 
 // -Infinity (not 0) so the FIRST warning always fires: `now()` can be < the

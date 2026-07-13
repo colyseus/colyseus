@@ -1,18 +1,21 @@
 import { Client } from "./Client.ts";
 import type { Room } from "./Room.ts";
-import { authInstances, getDebugRoot, loadPreferences, preferences, repositionDebugPanels, roomDebugInfo, savePreferences } from "./debug/core.ts";
+import { applyPanelPosition, authInstances, getDebugRoot, loadPreferences, preferences, repositionDebugPanels, roomDebugInfo, savePreferences } from "./debug/core.ts";
+import { initLayout, onReflow } from "./debug/layout.ts";
 import { calculateRates, initialize, updateDebugPanel } from "./debug/panel.ts";
-import { installPredictDebug } from "./debug/predict.ts";
-
-// Open the registry consumers depend on — Predict (and any future client-side
-// extension that wants a debug surface) publishes here.
-installPredictDebug();
+import { onPredictPublished, positionPredictContainer } from "./debug/predict.ts";
+import type { PredictCore } from "./debug/predict-bridge.ts";
 
 // Single interval for all panels
 let globalUpdateInterval = null;
 
 // Load preferences on script load
 loadPreferences();
+
+// Every overlay surface re-anchors from one rAF-coalesced viewport signal.
+initLayout();
+onReflow(applyPanelPosition);       // logo + menu + room-panel stack
+onReflow(positionPredictContainer); // predict overlay (its own corner)
 
 // Order-preserving jittered delay. Returns the setTimeout ms, or -1 when sim is off.
 // `cursor.t` is a monotonic delivery clock: each message lands at max(now+base±jitter,
@@ -284,12 +287,32 @@ function applyMonkeyPatches() {
         return room;
     }
 
-    // Patch consumeSeatReservation to intercept all room connections
-    var originalConsumeSeatReservation = Client.prototype.consumeSeatReservation;
-    Client.prototype.consumeSeatReservation = function() {
-        var promise = originalConsumeSeatReservation.apply(this, arguments as any);
-        return promise.then((room) => patchRoom(room));
+    // Install the shared debug registry: route published handles to their panels
+    // and REPLAY anything a publisher buffered before this bundle loaded (the room
+    // panel's old failure mode — a fast join beat the dev-only dynamic import).
+    // Rooms now arrive on the "room" channel from Client.consumeSeatReservation,
+    // so one joined before this loaded is adopted on drain instead of missed
+    // forever — no consumeSeatReservation monkey-patch needed.
+    const debugGlobal = globalThis as {
+        __colyseusDebug?: {
+            publish(channel: string, handle: object): void;
+            __buffer?: Array<[string, { deref(): object | undefined }]>;
+        };
     };
+    const buffered = debugGlobal.__colyseusDebug?.__buffer;
+    const registry = {
+        publish(channel: string, handle: object) {
+            if (channel === "predict") { onPredictPublished(handle as PredictCore); }
+            else if (channel === "room") { patchRoom(handle as Room); }
+        },
+    };
+    debugGlobal.__colyseusDebug = registry;
+    if (buffered) {
+        for (const [channel, ref] of buffered) {
+            const handle = ref.deref();
+            if (handle) { registry.publish(channel, handle); }
+        }
+    }
 
     // Capture live `client.auth` on every matchmake attempt so the "Clear auth
     // token" dev-tool can null the in-memory token (not just storage). These run

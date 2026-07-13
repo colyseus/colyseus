@@ -55,6 +55,13 @@
  */
 
 import { RollbackController, type RollbackOptions, type StepContext } from "./rollback.ts";
+import { wireQuantizerOf } from "./schema.ts";
+
+/** Ring/compare encoding of a predicted field value: numbers pass through,
+ *  booleans become 0/1, anything else NaN (never matches → safe adopt). The
+ *  recording and comparing sides MUST encode identically — hence one helper. */
+const asScalar = (v: unknown): number =>
+    typeof v === "number" ? v : typeof v === "boolean" ? (v ? 1 : 0) : NaN;
 
 // Re-export StepContext (+ the sink shape its `predict` emits into) so the
 // `@colyseus/sdk/predict` barrel resolves them here.
@@ -66,7 +73,7 @@ export interface ReconcilerOptions<S extends object, I> extends RollbackOptions<
      * `state` in place by applying `command` over `ctx.dt`. `ctx` leads (the
      * step-context-first argument convention): it carries the fixed `dt`
      * (matches the server's, so replay reproduces the server's result),
-     * `ctx.record` (freeze a value replay can't re-derive) and `ctx.predict`
+     * `ctx.memo` (freeze a value replay can't re-derive) and `ctx.predict`
      * (declare an optimistic event — live steps only, replay-safe).
      *
      * `command` is the buffered wire input the handle recorded at `send()`
@@ -95,16 +102,42 @@ export class Reconciler<S extends object = any, I = any> extends RollbackControl
     private readonly step: (ctx: StepContext, state: S, command: I) => void;
     private readonly instance: any;
 
+    // --- Wire-precision-aware reconcile (see RollbackController.truthMatchesAt) --
+    /** Per-field wire quantizer, parallel to `fields`: maps a predicted float64
+     *  to the exact value the wire would deliver (fround for `float32`, the
+     *  codec's dynamic rule for auto `number`, identity for exact types). */
+    private readonly wireRound: Array<(v: number) => number> = [];
+    /** Per-seq predicted-state ring (values via {@link asScalar}): slot
+     *  `seq % size` holds the post-step field values for that seq; `historySeq`
+     *  validates the slot (-1 = empty). Written on every applied step — live AND
+     *  replay, so after a rollback the ring tracks the post-rollback trajectory.
+     *  Sized to the input handle's replay ring: same seq window, ages out together. */
+    private readonly history: Float64Array;
+    private readonly historySeq: Float64Array;
+    private readonly historySize: number;
+    /** False when a declared field isn't a number/boolean at construction (the
+     *  ring can't represent it) — the short-circuit is then disabled and every
+     *  reconcile adopts, exactly the pre-history behavior. */
+    private readonly historyOn: boolean;
+
     constructor(instance: object, opts: ReconcilerOptions<S, I>) {
         super(opts);
         this.instance = instance;
         this.fields = opts.fields as readonly string[];
         this.step = opts.step;
+        let scalarOnly = this.fields.length > 0;
         for (const f of this.fields) {
             const v = (instance as Record<string, unknown>)[f];
             this.local[f] = v as number | boolean;
             if (typeof v === "number") { this.numericFields.push(f); this.prev[f] = v; this.error[f] = 0; }
+            else if (typeof v !== "boolean") scalarOnly = false;
+            this.wireRound.push(wireQuantizerOf(instance, f));
         }
+        this.historyOn = scalarOnly;
+        // The 64 fallback covers bare test fakes without a ring.
+        this.historySize = this.input_.replayBufferSize ?? 64;
+        this.history = new Float64Array(this.historyOn ? this.historySize * this.fields.length : 0);
+        this.historySeq = new Float64Array(this.historyOn ? this.historySize : 0).fill(-1);
     }
 
     /**
@@ -143,7 +176,41 @@ export class Reconciler<S extends object = any, I = any> extends RollbackControl
 
     protected smoothedFields(): readonly string[] { return this.numericFields; }
     protected readCurrent(field: string): number { return this.local[field] as number; }
-    protected applyStep(input: I): void { this.step(this.stepCtx, this.local as S, input); }
+
+    protected applyStep(input: I): void {
+        this.step(this.stepCtx, this.local as S, input);
+        // Record this seq's predicted state (live and replay alike — after a
+        // rollback the replayed values are the canonical prediction).
+        if (this.historyOn) {
+            const seq = this.stepCtx.tick;
+            const slot = seq % this.historySize;
+            const base = slot * this.fields.length;
+            for (let i = 0; i < this.fields.length; i++) {
+                this.history[base + i] = asScalar(this.local[this.fields[i]]);
+            }
+            this.historySeq[slot] = seq;
+        }
+    }
+
+    /**
+     * Wire-precision compare: the prediction at `acked` (from the history ring)
+     * against the decoded truth on the instance, each predicted value passed
+     * through its field's wire quantizer. All fields indistinguishable ⇒ the
+     * wire could not have told the server anything different ⇒ skip adopt+replay
+     * (see {@link RollbackController.reconcile}). Any miss — ring slot aged out
+     * or pre-reset, NaN, a genuine mismatch — falls back to a full adopt.
+     */
+    protected truthMatchesAt(acked: number): boolean {
+        if (!this.historyOn) return false;
+        const slot = acked % this.historySize;
+        if (this.historySeq[slot] !== acked) return false;
+        const base = slot * this.fields.length;
+        const inst = this.instance as Record<string, unknown>;
+        for (let i = 0; i < this.fields.length; i++) {
+            if (this.wireRound[i](this.history[base + i]) !== asScalar(inst[this.fields[i]])) return false;
+        }
+        return true;
+    }
 
     protected snapshotPrev(): void {
         for (const f of this.numericFields) this.prev[f] = (this.local[f] as number) + this.error[f];
@@ -158,5 +225,7 @@ export class Reconciler<S extends object = any, I = any> extends RollbackControl
         const inst = this.instance as Record<string, number | boolean>;
         for (const f of this.fields) this.local[f] = inst[f];
         for (const f of this.numericFields) { this.prev[f] = this.local[f] as number; this.error[f] = 0; }
+        // Prior life's predictions must not certify a post-reset ack as matching.
+        this.historySeq.fill(-1);
     }
 }

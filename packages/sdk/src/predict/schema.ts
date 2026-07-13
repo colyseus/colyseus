@@ -75,6 +75,56 @@ export function scalarFieldNamesOf(instance: object): string[] {
     return names;
 }
 
+// -----------------------------------------------------------------------------
+// Wire quantizers — "what value would the wire deliver for this float64?"
+// Backs the reconciler's wire-precision-aware reconcile: a prediction is
+// indistinguishable from the decoded truth iff `quantizer(predicted) === truth`,
+// so lossy wire types (float32, auto `number`) stop injecting rounding noise
+// into the rollback restore point (the noise flips knife-edge sim branches).
+// -----------------------------------------------------------------------------
+
+const identityQuantizer = (v: number) => v;
+
+/**
+ * Mirror of the codec's dynamic `number` encoding (`encode.number` in
+ * @colyseus/schema): NaN encodes as 0, ±Infinity as ±MAX_SAFE_INTEGER,
+ * non-int32 values ride float32 when the ABSOLUTE precision loss is < 1e-4
+ * (else float64 — exact), and int32-range integers ride exact int encodings.
+ * Must track the codec's rule exactly — including the `(v | 0)` integer test
+ * and the abs-of-abs loss check — or the compare misclassifies.
+ */
+function quantizeAutoNumber(v: number): number {
+    if (Number.isNaN(v)) return 0;
+    if (!Number.isFinite(v)) return v > 0 ? Number.MAX_SAFE_INTEGER : -Number.MAX_SAFE_INTEGER;
+    if (v !== (v | 0)) {
+        if (Math.abs(v) <= 3.4028235e+38) {
+            const f = Math.fround(v);
+            if (Math.abs(Math.abs(f) - Math.abs(v)) < 1e-4) return f;
+        }
+    }
+    return v;
+}
+
+/**
+ * The wire quantizer for one declared field: maps a predicted float64 to the
+ * EXACT value the wire would deliver for it. `"float32"` → `Math.fround`;
+ * `"number"` → the codec's dynamic rule ({@link quantizeAutoNumber}); every
+ * type the wire round-trips exactly (ints, float64, boolean) — and any type
+ * this doesn't model (e.g. `quantized`) — gets the identity, which degrades to
+ * a bit-exact compare: conservative, never worse than always-adopting.
+ * Identity for non-schema instances (no metadata — plain test fixtures).
+ */
+export function wireQuantizerOf(instance: object, field: string): (v: number) => number {
+    const meta = metadataOf(instance);
+    const idx = meta?.[field];
+    const decl = typeof idx === "number" ? (meta![idx] as { type?: unknown } | undefined) : undefined;
+    switch (decl?.type) {
+        case "float32": return Math.fround;
+        case "number": return quantizeAutoNumber;
+        default: return identityQuantizer;
+    }
+}
+
 /**
  * Build a snapshot fn that clones `fieldNames` from a live instance into a fresh
  * plain object. Used by reckon's GENERIC advance path — schema versions whose

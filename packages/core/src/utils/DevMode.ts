@@ -31,11 +31,24 @@ export async function reloadFromCache() {
   debugDevMode("rooms to restore: %i", roomHistoryList.length);
 
   for (const [roomId, value] of roomHistoryList) {
-    const roomHistory = JSON.parse(value);
-    debugDevMode("restoring room %s (%s)", roomHistory.roomName, roomId);
+    let roomHistory: any;
+    let recreatedRoom: Room;
+    let recreatedRoomListing: any;
 
-    const recreatedRoomListing = await handleCreateRoom(roomHistory.roomName, roomHistory.clientOptions, roomId);
-    const recreatedRoom = getLocalRoomById(recreatedRoomListing.roomId);
+    try {
+      roomHistory = JSON.parse(value);
+      debugDevMode("restoring room %s (%s)", roomHistory.roomName, roomId);
+
+      recreatedRoomListing = await handleCreateRoom(roomHistory.roomName, roomHistory.clientOptions, roomId);
+      recreatedRoom = getLocalRoomById(recreatedRoomListing.roomId);
+
+    } catch (e: any) {
+      // unrestorable entry (e.g. room type renamed/removed) — drop it
+      // instead of wedging the boot
+      debugAndPrintError(`❌ couldn't restore room '${roomId}':\n${e.stack}`);
+      await presence.hdel(getRoomRestoreListKey(), roomId);
+      continue;
+    }
 
     // Restore previous state
     if (roomHistory.hasOwnProperty("state")) {
@@ -144,14 +157,6 @@ export async function cacheRoomHistory(rooms: { [roomId: string]: Room }) {
   }
 }
 
-export async function getPreviousProcessId(hostname: string = '') {
-  return await presence.hget(getProcessRestoreKey(), hostname);
-}
-
 export function getRoomRestoreListKey() {
   return 'roomhistory';
-}
-
-export function getProcessRestoreKey() {
-  return 'processhistory';
 }

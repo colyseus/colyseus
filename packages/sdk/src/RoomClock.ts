@@ -20,6 +20,17 @@ export interface RoomClockLike {
     now(): number;
     /** Estimated server clock (ms since room start — see {@link RoomClock.serverNow}). */
     serverNow(): number;
+    /** Server clock like {@link serverNow}, but on a SLEW-LIMITED **render**
+     *  timeline: a clock advanced at 1 ms/ms and servoed gently toward
+     *  `serverNow()` (τ ≈ 250 ms). It strips the per-patch offset-EMA wobble
+     *  `serverNow()` carries, so DRAWING / dead-reckoning remote entities off
+     *  this avoids the `v·Δclock` jitter the raw estimate shows at speed (the
+     *  dominant remote-entity stutter). Optional — a clock with no offset noise
+     *  (or that doesn't care) may omit it, and Predict falls back to
+     *  {@link serverNow}. Do NOT use it for hit stamps / server-stamped
+     *  deadlines: those must match the server's rewind target, which the render
+     *  timeline deliberately lags during an offset correction. */
+    renderNow?(): number;
     /** Last RTT sample (ms). */
     rtt(): number;
     /** EMA-smoothed RTT (ms). Preferred for forward-prediction. */
@@ -70,6 +81,7 @@ export interface RoomClockLike {
 export const NULL_CLOCK: RoomClockLike = Object.freeze({
     now: () => now(),
     serverNow: () => now(),
+    renderNow: () => now(),
     rtt: () => 0,
     smoothedRtt: () => 0,
     jitter: () => 0,
@@ -105,6 +117,16 @@ export const NULL_CLOCK: RoomClockLike = Object.freeze({
 export class RoomClock implements RoomClockLike {
     /** Default exponential-smoothing weight for offset + RTT EMA. */
     private static readonly EMA_ALPHA = 0.1;
+
+    /** Default slew time-constant (ms) for {@link renderNow}. ~250 ms: offset
+     *  corrections smear over a few frames instead of popping, while the render
+     *  timeline still tracks `serverNow()` closely in steady state. */
+    private static readonly RENDER_TAU = 250;
+    /** Gap (ms) past which {@link renderNow} SNAPS to `serverNow()` instead of
+     *  slewing. Slewing a large gap (join warmup while the offset EMA is still
+     *  converging, a route-change offset jump, a tab-resume stall) would render
+     *  a visible standing lag; only wobble-scale gaps get smoothed. */
+    private static readonly RENDER_SNAP = 250;
 
     /**
      * RTT samples greater than `outlierFactor × smoothedRtt` are rejected.
@@ -164,6 +186,10 @@ export class RoomClock implements RoomClockLike {
     private _lastServerTime = 0;    // raw sNow of the last patch (snapshot stamp)
     private _patchInterval = 0;     // server patchRate (ms); 0 until advertised
 
+    private _renderTau = RoomClock.RENDER_TAU; // slew time-constant (ms); 0 disables
+    private _renderSn = 0;          // slew-limited render-clock reading (ms since room start)
+    private _renderSnAt = 0;        // local time (now()) the render clock last advanced
+
     /** Estimated server clock: **milliseconds since room start** (the server's
      *  `clock.elapsedTime`, reconstructed via the wire `sNow` + local offset).
      *  NOT raw `performance.now()` — a portable integer-ms timeline the server's
@@ -171,6 +197,37 @@ export class RoomClock implements RoomClockLike {
      *  Returns the local clock until the first sample lands. */
     public serverNow(): number {
         return now() + this._clockOffset;
+    }
+
+    /** Slew-limited render timeline — see {@link RoomClockLike.renderNow}.
+     *  Free-runs at 1 ms/ms and servos toward {@link serverNow} with the
+     *  time-constant set by {@link setRenderTau} (default {@link RENDER_TAU});
+     *  `τ ≤ 0` disables the slew and returns `serverNow()` verbatim. Idempotent
+     *  within a frame: it advances only on the first call each frame (guarded on
+     *  the local clock), so reading it once per tracked entity doesn't over-step
+     *  it. */
+    public renderNow(): number {
+        const target = this.serverNow();
+        if (this._renderTau <= 0) { return target; }
+        const t = now();
+        // Seed on first use — jump straight to the current server-present.
+        if (this._renderSn === 0) { this._renderSn = target; this._renderSnAt = t; return this._renderSn; }
+        const dt = Math.min(t - this._renderSnAt, 100); // clamp tab-resume stalls
+        if (dt < 0.5) { return this._renderSn; }         // same frame — advance once
+        this._renderSnAt = t;
+        this._renderSn += dt;                            // free-run at 1 ms/ms
+        // Snap past large gaps rather than slew them (see RENDER_SNAP) — a
+        // standing lag reads worse than one clean jump.
+        if (Math.abs(target - this._renderSn) > RoomClock.RENDER_SNAP) { this._renderSn = target; return this._renderSn; }
+        this._renderSn += (target - this._renderSn) * (1 - Math.exp(-dt / this._renderTau)); // servo toward server-present
+        return this._renderSn;
+    }
+
+    /** Set the {@link renderNow} slew time-constant (ms). `≤ 0` disables slewing
+     *  (renderNow == serverNow). Larger = smoother, but offset corrections lag
+     *  longer. */
+    public setRenderTau(milliseconds: number): void {
+        this._renderTau = milliseconds > 0 ? milliseconds : 0;
     }
 
     /** Local monotonic clock (ms): the client's own reading WITHOUT the server
@@ -320,5 +377,7 @@ export class RoomClock implements RoomClockLike {
         this._lastServerTime = 0;
         this._rttFloorT.length = 0;
         this._rttFloorV.length = 0;
+        this._renderSn = 0;        // τ is config, not state — it survives reset
+        this._renderSnAt = 0;
     }
 }

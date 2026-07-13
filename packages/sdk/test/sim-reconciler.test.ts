@@ -334,18 +334,19 @@ describe('SimReconciler', () => {
         assert.equal(warns.length, 1, 'the second divergence within 1s is throttled');
     });
 
-    // ctx.record: run-once-on-live, replay-the-memo, cleared on reset. The compute
+    // ctx.memo: run-once-on-live, replay-the-memo, cleared on reset. The compute
     // returns a value that would DIFFER if recomputed (a climbing counter), so a
     // replay that re-ran it would corrupt both the count AND the trajectory — making
     // "compute is not re-run" assertable from outside.
-    test('ctx.record runs compute once on the live step and replays the frozen value (never recomputes)', () => {
+    test('ctx.memo runs compute once on the live step and replays the frozen value (never recomputes)', () => {
         const input = new FakeInput();
         const engine = makeEngine();
         let computeCount = 0;
-        // ax=0 → the base sim leaves x alone; ctx.record is the only thing moving x.
+        // ax=0 → the base sim leaves x alone; ctx.memo is the only thing moving x.
+        // Key-less form: one memo per step shares the default slot.
         const { ctl, instance } = make(engine, input, {
             step: (ctx, _cmd, w) => {
-                const v = ctx.record('bump', () => { computeCount++; return computeCount * 100; });
+                const v = ctx.memo(() => { computeCount++; return computeCount * 100; });
                 w.x += v ?? 0;
             },
         });
@@ -363,15 +364,16 @@ describe('SimReconciler', () => {
         assert.equal(engine.x, 600, 'frozen 200 + 300 re-applied on top of adopted 100');
     });
 
-    test('ctx.record memos are cleared on reset (a prior life\'s effect never replays)', () => {
+    test('ctx.memo entries are cleared on reset (a prior life\'s effect never replays)', () => {
         const input = new FakeInput();
         const engine = makeEngine();
         let computeCount = 0;
+        // keyed form — the >1-memos-per-step overload
         const { ctl, instance } = make(engine, input, {
-            step: (ctx, _cmd, w) => { w.x += ctx.record('bump', () => { computeCount++; return 100; }) ?? 0; },
+            step: (ctx, _cmd, w) => { w.x += ctx.memo('bump', () => { computeCount++; return 100; }) ?? 0; },
         });
 
-        for (let i = 0; i < 3; i++) step(ctl, input, { ax: 0 }); // 3 unacked values recorded
+        for (let i = 0; i < 3; i++) step(ctl, input, { ax: 0 }); // 3 unacked values memoized
         assert.equal(computeCount, 3);
 
         instance.x = 0; instance.vx = 0; // respawn at origin
@@ -381,7 +383,7 @@ describe('SimReconciler', () => {
         // A late ack for a pre-reset seq must not replay the old life's effects.
         input.lastProcessed = 2;
         ctl.tick(0);
-        assert.equal(engine.x, 0, 'cleared records are not replayed after reset');
+        assert.equal(engine.x, 0, 'cleared memos are not replayed after reset');
         assert.equal(computeCount, 3, 'no recompute either');
     });
 });

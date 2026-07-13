@@ -1,5 +1,6 @@
 import { getDebugRoot, preferences, roomDebugInfo } from "./core.ts";
-import { createModal, createModalHeader } from "./modal.ts";
+import { isCoarsePointer, isCompact } from "./layout.ts";
+import { applyModalLayout, createModal, createModalHeader } from "./modal.ts";
 import { StateTreeView } from "./state-tree.ts";
 
 
@@ -89,7 +90,7 @@ export function openStateInspectorModal(uniquePanelId) {
     room.onLeave(updateStateViewerStatusDot);
 
     // Create modal using shared utility with automatic onLeave tracking
-    const modal = createModal({
+    const modalOpts = {
         id: 'debug-state-inspector-modal',
         width: defaultWidth + 'px',
         height: defaultHeight + 'px',
@@ -103,7 +104,8 @@ export function openStateInspectorModal(uniquePanelId) {
         room: room,
         trackOnLeave: true,
         onLeaveCallback: updateStateViewerStatusDot
-    });
+    };
+    const modal = createModal(modalOpts);
 
     // Create header using shared utility
     const headerComponents = createModalHeader({
@@ -161,7 +163,12 @@ export function openStateInspectorModal(uniquePanelId) {
     var resizeStartLeft = 0;
     var resizeStartTop = 0;
 
-    header.addEventListener('mousedown', function(e) {
+    // Pointer Events so drag and resize work under touch as well as a mouse.
+    // setPointerCapture keeps the stream flowing to the grabbed element; the events
+    // still bubble on to the document listeners below, which own the shared math.
+    header.setAttribute('data-drag', ''); // touch-action:none
+    header.addEventListener('pointerdown', function(e: PointerEvent) {
+        if (isCompact()) { return; } // full-screen sheet: nothing to drag
         const target = e.target as HTMLElement;
         // Don't drag if clicking on a resize handle
         if (target.classList && target.classList.contains('resize-handle')) {
@@ -177,6 +184,7 @@ export function openStateInspectorModal(uniquePanelId) {
         modalStartX = rect.left;
         modalStartY = rect.top;
         modal.style.cursor = 'move';
+        header.setPointerCapture(e.pointerId);
         e.preventDefault();
     });
 
@@ -233,7 +241,7 @@ export function openStateInspectorModal(uniquePanelId) {
         }
     };
 
-    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('pointermove', handleMouseMove);
 
     var handleMouseUp = function() {
         if (isDragging) {
@@ -248,11 +256,14 @@ export function openStateInspectorModal(uniquePanelId) {
         }
     };
 
-    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('pointerup', handleMouseUp);
+    document.addEventListener('pointercancel', handleMouseUp);
 
-    // Resize functionality
-    var resizeHandleSize = 8;
-    var cornerHandleSize = 12; // Larger handles for corners to make them easier to grab
+    // Resize functionality. A finger needs a bigger grab zone, but the north edge
+    // handle sits on top of the ~32px drag header — grow it too much and there is
+    // nothing left to drag by. Corners have no such neighbour, so they grow more.
+    var resizeHandleSize = isCoarsePointer() ? 12 : 8;
+    var cornerHandleSize = isCoarsePointer() ? 20 : 12; // Larger handles for corners to make them easier to grab
 
     // Create edge handles first, then corner handles (so corners are on top)
     var edgeHandles = ['n', 's', 'e', 'w'];
@@ -291,7 +302,7 @@ export function openStateInspectorModal(uniquePanelId) {
             }
         }
 
-        handleEl.addEventListener('mousedown', function(e) {
+        handleEl.addEventListener('pointerdown', function(e: PointerEvent) {
             e.stopPropagation();
             e.preventDefault();
             isResizing = true;
@@ -303,6 +314,7 @@ export function openStateInspectorModal(uniquePanelId) {
             resizeStartHeight = rect.height;
             resizeStartLeft = rect.left;
             resizeStartTop = rect.top;
+            handleEl.setPointerCapture(e.pointerId);
         });
 
         modal.appendChild(handleEl);
@@ -337,7 +349,7 @@ export function openStateInspectorModal(uniquePanelId) {
             handleEl.style.cursor = 'se-resize';
         }
 
-        handleEl.addEventListener('mousedown', function(e) {
+        handleEl.addEventListener('pointerdown', function(e: PointerEvent) {
             e.stopPropagation();
             e.preventDefault();
             isResizing = true;
@@ -349,10 +361,14 @@ export function openStateInspectorModal(uniquePanelId) {
             resizeStartHeight = rect.height;
             resizeStartLeft = rect.left;
             resizeStartTop = rect.top;
+            handleEl.setPointerCapture(e.pointerId);
         });
 
         modal.appendChild(handleEl);
     });
+
+    // createModal ran before the handles existed, so it couldn't hide them.
+    applyModalLayout(modal, modalOpts);
 
 
     // Remove state change listener when modal is closed
@@ -362,6 +378,9 @@ export function openStateInspectorModal(uniquePanelId) {
         // detach the view's document-level listeners.
         room.serializer.decoder.triggerChanges = originalTriggerChanges;
         stateView.dispose();
+        document.removeEventListener('pointermove', handleMouseMove);
+        document.removeEventListener('pointerup', handleMouseUp);
+        document.removeEventListener('pointercancel', handleMouseUp);
         originalRemove.call(this);
     };
 }

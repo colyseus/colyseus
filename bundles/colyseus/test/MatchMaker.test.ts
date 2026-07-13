@@ -1,5 +1,5 @@
 import assert, { match } from "assert";
-import { generateId, matchMaker, Room, type MatchMakerDriver, type IRoomCache, initializeRoomCache } from "@colyseus/core";
+import { generateId, matchMaker, Room, setDevMode, type MatchMakerDriver, type IRoomCache, initializeRoomCache } from "@colyseus/core";
 import { DummyRoom, Room2Clients, createDummyClient, timeout, ReconnectRoom, Room3Clients, DRIVERS, ReconnectTokenRoom } from "./utils/index.ts";
 
 const DEFAULT_SEAT_RESERVATION_TIME = Number(process.env.COLYSEUS_SEAT_RESERVATION_TIME);
@@ -670,6 +670,42 @@ describe("MatchMaker", () => {
 
           assert.strictEqual(room.processId, matchMaker.processId);
           assert.strictEqual(1, (await driver.query({})).length);
+        });
+
+        it("devMode: auto-heal when trying to reserve seat on stale processId", async () => {
+          setDevMode(true);
+
+          try {
+            assert.strictEqual(0, (await driver.query({})).length);
+
+            matchMaker.defineRoomType("one", class extends Room { });
+            matchMaker.presence.hset('roomcount', "dummy1", "1,1");
+            await createDummyRoomCache({
+              processId: "dummy1",
+              roomId: 'BadRoomId',
+              name: "one",
+              locked: false,
+              clients: 1,
+              maxClients: 4,
+            });
+
+            assert.strictEqual(1, (await driver.query({})).length);
+
+            let room!: matchMaker.ISeatReservation;
+            await assert.doesNotReject(async () => {
+              room = await matchMaker.joinOrCreate("one");
+            });
+
+            assert.strictEqual(room.processId, matchMaker.processId);
+
+            // stale 'BadRoomId' row must be gone; only the fresh room remains
+            const rooms = await driver.query({});
+            assert.strictEqual(1, rooms.length);
+            assert.notStrictEqual('BadRoomId', rooms[0].roomId);
+
+          } finally {
+            setDevMode(false);
+          }
         });
 
       });

@@ -28,6 +28,8 @@ export interface ProfileCore {
     readonly damping: number;
     readonly maxExtrapolate: number;
     readonly tickInterval: number;
+    /** Value-space teleport threshold (0 = off). */
+    readonly snap: number;
 }
 
 /**

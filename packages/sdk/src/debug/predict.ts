@@ -14,10 +14,13 @@
  *   - Handle methods are queried lazily — never persisted as fields here,
  *     so live Predict mutations stay reflected.
  *
- * Styling mirrors the room debug-panels (`debug/panel.ts`): black translucent
- * card, white/grey monospace text, action-button-style mode pills.
+ * Styling comes from `tokens.ts`, so the mode pills and the room panels' segmented
+ * buttons stay in step by construction rather than by convention.
  */
-import { getDebugRoot, isPanelsHidden } from "./core.ts";
+import { getDebugRoot, getPanelStack, isOverlayVisible, preferences, PREDICT_CONTAINER_ID } from "./core.ts";
+import { clearEdges, horizontalEdge, setInset, setMaxViewportHeight, verticalEdge } from "./geometry.ts";
+import { applySegmentedState, bindSegmentedHover, RULE, SECONDARY, SEGMENT } from "./tokens.ts";
+import { isCoarsePointer, isCompact } from "./layout.ts";
 import { drawGraph } from "./panel.ts";
 import {
     toDebugHandle,
@@ -27,10 +30,6 @@ import {
     type ProfileInfo,
     type ReconcilerStat,
 } from "./predict-bridge.ts";
-
-interface ChannelRegistry {
-    publish(channel: string, handle: any): void;
-}
 
 interface PredictPanelEntry {
     handle: PredictDebugHandle;
@@ -45,14 +44,8 @@ let container: HTMLElement | null = null;
 let pollInterval: any = null;
 const POLL_MS = 250; // refresh attached count at 4 Hz
 
-// Style tokens — match the room debug-panels (debug/panel.ts).
-const SECONDARY = "#888";
-const DIVIDER = "rgba(255,255,255,0.15)";
-const PILL_BORDER = "rgba(255,255,255,0.2)";
-const PILL_BG = "rgba(255,255,255,0.05)";
-const PILL_HOVER = "rgba(255,255,255,0.15)";
-const PILL_ACTIVE_BG = "rgba(255,255,255,0.18)";
-const PILL_ACTIVE_BORDER = "rgba(255,255,255,0.4)";
+
+const CARD_WIDTH = "240px";
 
 const ALL_MODES: PredictMode[] = ["lerp", "extrapolate", "damped", "reckon", "raw"];
 
@@ -77,29 +70,13 @@ const MODE_ICONS: Record<string, string> = {
 // Registry installation
 // -----------------------------------------------------------------------------
 
-export function installPredictDebug(): void {
-    const g = globalThis as { __colyseusDebug?: ChannelRegistry };
-    const existing = g.__colyseusDebug;
-
-    if (existing) {
-        // Wrap any pre-existing publish so other channels still work.
-        const prev = existing.publish.bind(existing);
-        existing.publish = (channel, handle) => {
-            if (channel === "predict") onPredictPublished(handle as PredictCore);
-            else prev(channel, handle);
-        };
-        return;
-    }
-
-    g.__colyseusDebug = {
-        publish(channel, handle) {
-            if (channel === "predict") onPredictPublished(handle as PredictCore);
-            // Future channels: predictedEvents, csp, …
-        },
-    };
-}
-
-function onPredictPublished(core: PredictCore): void {
+/**
+ * Render (or dedupe) a Predict card for a published core handle. The debug
+ * entry (`debug.ts`) routes the `"predict"` channel of the shared
+ * `globalThis.__colyseusDebug` registry here — including buffered publishes it
+ * replays on install.
+ */
+export function onPredictPublished(core: PredictCore): void {
     if (panels.has(core.name)) return; // dedupe
     // Adapt the engine's portable core into the panel-facing handle (derives
     // the per-profile field list from the core's track stream).
@@ -144,27 +121,86 @@ function syncHeaderNames(): void {
 // Container
 // -----------------------------------------------------------------------------
 
+// Deliberately tighter than the room panels' 14px EDGE_INSET: the Predict card
+// floats in the opposite corner, so the extra 2px of breathing room buys nothing.
+const PREDICT_INSET = 12;
+
 function getContainer(): HTMLElement {
     if (container) return container;
-    const root = getDebugRoot();
     container = document.createElement("div");
-    container.id = "colyseus-debug-predict-container";
+    container.id = PREDICT_CONTAINER_ID;
+    container.className = "cds-surface";
     Object.assign(container.style, {
-        position: "fixed",
-        top: "12px",
-        left: "12px",
-        // Honor a session that hid the whole debug overlay before Predict mounted.
-        display: isPanelsHidden() ? "none" : "flex",
+        // Honor a session that hid the overlay — or a phone that hasn't revealed it —
+        // before Predict mounted.
+        display: isOverlayVisible() ? "flex" : "none",
         flexDirection: "column",
         gap: "8px",
-        zIndex: "2147483645",
         fontFamily: "monospace",
         fontSize: "11px",
         color: "#fff",
         pointerEvents: "auto",
     });
-    root.appendChild(container);
+    positionPredictContainer(); // parents it, and owns everything positional
     return container;
+}
+
+
+/**
+ * Place the Predict overlay relative to the room panels, which own the corner
+ * named by the `panelPosition` preference.
+ *
+ * Desktop floats it in the horizontally-opposite corner — two corners on the same
+ * edge can't collide on a wide screen, and it preserves the historical top-left
+ * look. Compact instead *reparents* it into the room-panel drawer as the last card,
+ * so one scroll container holds everything. Anchoring it to the opposite edge only
+ * worked while both stacks were collapsed; expanded, they meet in the middle.
+ */
+export function positionPredictContainer(): void {
+    if (!container) return;
+
+    const style = container.style;
+    const cards = container.querySelectorAll<HTMLElement>("[data-name]");
+
+    if (isCompact()) {
+        const stack = getPanelStack();
+        if (container.parentNode !== stack) { stack.appendChild(container); }
+
+        // A flow child of the drawer: the drawer scrolls, anchors, and clips.
+        style.position = "static";
+        clearEdges(container);
+        style.width = "auto";
+        style.maxHeight = "none";
+        style.zIndex = "";
+        style.flexShrink = "0";
+        container.classList.remove("cds-scroll");
+        for (const card of cards) { card.style.width = "auto"; }
+        return;
+    }
+
+    // parentNode, not parentElement: a ShadowRoot is not an Element, so a direct
+    // child of one reports a null parentElement and we'd re-append every reflow.
+    const root = getDebugRoot();
+    if (container.parentNode !== root) { root.appendChild(container); }
+
+    const position = preferences.panelPosition.position;
+    const vertical = verticalEdge(position);
+    const oppositeHorizontal = horizontalEdge(position) === "right" ? "left" : "right";
+
+    // Above any game HUD — the room panels settle for z-index 999, but Predict is
+    // read continuously while playing.
+    style.position = "fixed";
+    style.zIndex = "2147483645";
+    style.width = "";
+    style.flexShrink = "";
+    container.classList.add("cds-scroll");
+
+    clearEdges(container);
+    setInset(container, vertical, PREDICT_INSET);
+    setInset(container, oppositeHorizontal, PREDICT_INSET);
+    setMaxViewportHeight(container, "80vh");
+
+    for (const card of cards) { card.style.width = CARD_WIDTH; }
 }
 
 // -----------------------------------------------------------------------------
@@ -172,26 +208,32 @@ function getContainer(): HTMLElement {
 // -----------------------------------------------------------------------------
 
 const COLLAPSE_KEY = "colyseus-debug-predict-collapsed";
+// Which profiles have their tuning sliders open. Sub-cards are rebuilt whenever the
+// profile set changes, so an in-memory flag would evaporate under the 4 Hz poll.
+const TUNING_KEY = "colyseus-debug-predict-tuning";
 
-function readCollapsed(): Set<string> {
+function readSessionSet(storageKey: string): Set<string> {
     try {
-        const arr = JSON.parse(sessionStorage.getItem(COLLAPSE_KEY) || "[]");
+        const arr = JSON.parse(sessionStorage.getItem(storageKey) || "[]");
         return new Set(Array.isArray(arr) ? arr : []);
     } catch {
         return new Set();
     }
 }
 
-function setCollapsed(name: string, collapsed: boolean): void {
-    const set = readCollapsed();
-    if (collapsed) set.add(name);
-    else set.delete(name);
+function updateSessionSet(storageKey: string, member: string, present: boolean): void {
+    const set = readSessionSet(storageKey);
+    if (present) set.add(member);
+    else set.delete(member);
     try {
-        sessionStorage.setItem(COLLAPSE_KEY, JSON.stringify([...set]));
+        sessionStorage.setItem(storageKey, JSON.stringify([...set]));
     } catch {
         // storage unavailable — ignore
     }
 }
+
+const readCollapsed = () => readSessionSet(COLLAPSE_KEY);
+const setCollapsed = (name: string, collapsed: boolean) => updateSessionSet(COLLAPSE_KEY, name, collapsed);
 
 // -----------------------------------------------------------------------------
 // Mode pills (segmented buttons, styled like panel.ts action buttons)
@@ -224,31 +266,23 @@ function hideTooltip(): void {
     if (tooltipEl) tooltipEl.style.display = "none";
 }
 
-function applyPillState(btn: HTMLElement, active: boolean): void {
-    btn.dataset.active = active ? "true" : "false";
-    btn.style.background = active ? PILL_ACTIVE_BG : PILL_BG;
-    btn.style.border = "1px solid " + (active ? PILL_ACTIVE_BORDER : PILL_BORDER);
-    btn.style.color = active ? "#fff" : "#9aa0a6"; // dim inactive glyphs so the active one reads
-}
-
 function createPill(value: string, active: boolean, onClick: () => void): HTMLButtonElement {
     const btn = document.createElement("button");
     btn.type = "button";
+    // Height-only target + flex share: five 44px-wide pills would wrap out of the card.
+    btn.className = "cds-hit-y";
     btn.dataset.value = value;
     btn.setAttribute("aria-label", value);
     btn.innerHTML = MODE_ICONS[value] ?? value;
     btn.style.cssText =
-        "display:inline-flex;align-items:center;justify-content:center;padding:4px 6px;line-height:0;" +
-        "border-radius:4px;cursor:pointer;transition:background .2s,border-color .2s";
-    applyPillState(btn, active);
-    btn.addEventListener("mouseenter", () => {
-        if (btn.dataset.active !== "true") btn.style.background = PILL_HOVER;
-        showTooltip(value, btn); // instant — names the icon on hover
-    });
-    btn.addEventListener("mouseleave", () => {
-        if (btn.dataset.active !== "true") btn.style.background = PILL_BG;
-        hideTooltip();
-    });
+        "flex:1;display:inline-flex;align-items:center;justify-content:center;padding:4px 6px;line-height:0;" +
+        "border:1px solid;border-radius:4px;cursor:pointer;transition:background .2s,border-color .2s";
+    applySegmentedState(btn, active);
+    bindSegmentedHover(btn, () => {
+        // A tap fires mouseenter with no matching mouseleave, stranding the tooltip.
+        // It only names the icon — the pill's real job is selecting the mode.
+        if (!isCoarsePointer()) showTooltip(value, btn); // instant — names the icon on hover
+    }, hideTooltip);
     btn.addEventListener("click", (e) => {
         e.stopPropagation();
         onClick();
@@ -262,7 +296,7 @@ function renderModePills(host: HTMLElement, current: PredictMode, onSelect: (m: 
     for (const m of ALL_MODES) {
         host.appendChild(createPill(m, m === current, () => {
             for (const sib of host.querySelectorAll<HTMLElement>("button")) {
-                applyPillState(sib, sib.dataset.value === m);
+                applySegmentedState(sib, sib.dataset.value === m);
             }
             onSelect(m);
         }));
@@ -271,7 +305,7 @@ function renderModePills(host: HTMLElement, current: PredictMode, onSelect: (m: 
 
 function syncModePills(host: HTMLElement, current: PredictMode): void {
     for (const pill of host.querySelectorAll<HTMLElement>("button")) {
-        applyPillState(pill, pill.dataset.value === current);
+        applySegmentedState(pill, pill.dataset.value === current);
     }
 }
 
@@ -283,14 +317,15 @@ function renderCard(handle: PredictDebugHandle): HTMLElement {
     const card = document.createElement("div");
     card.dataset.name = handle.name;
     card.style.cssText =
-        "width:240px;background:rgba(0,0,0,0.85);color:#fff;font-family:monospace;" +
+        `width:${CARD_WIDTH};background:rgba(0,0,0,0.85);color:#fff;font-family:monospace;` +
         "font-size:11px;border-radius:6px;padding:8px;box-shadow:0 4px 12px rgba(0,0,0,0.5)";
+    if (isCompact()) { card.style.width = "auto"; }
 
     const collapsed = readCollapsed().has(handle.name);
 
     // header (attached count + collapse chevron, stays visible when collapsed) / body
     card.innerHTML = `
-        <div data-role="header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:bold;border-bottom:1px solid ${DIVIDER};padding-bottom:4px;cursor:pointer;user-select:none">
+        <div data-role="header" class="cds-hit-y" style="display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:bold;border-bottom:1px solid ${RULE};padding-bottom:4px;cursor:pointer;user-select:none">
             <span>Predict<span data-role="name" style="color:${SECONDARY};font-weight:normal"></span></span>
             <span style="display:flex;align-items:center;gap:8px;font-weight:normal">
                 <span data-role="attached" title="attached instances" style="color:${SECONDARY};font-variant-numeric:tabular-nums"></span>
@@ -359,6 +394,7 @@ function renderProfileSubcards(card: HTMLElement, handle: PredictDebugHandle): v
 function buildProfileSubcard(handle: PredictDebugHandle, p: ProfileInfo): HTMLElement {
     const el = document.createElement("div");
     el.dataset.profileId = String(p.id);
+    el.dataset.tuneKey = `${handle.name}#${p.id}`;
     el.style.cssText =
         "border-top:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);" +
         "border-radius:4px;padding:6px;display:flex;flex-direction:column;gap:4px";
@@ -368,7 +404,13 @@ function buildProfileSubcard(handle: PredictDebugHandle, p: ProfileInfo): HTMLEl
             <span data-role="fieldnames" style="color:${SECONDARY}"></span>
         </div>
         <div data-role="modes" style="display:flex;gap:4px;flex-wrap:wrap"></div>
-        <div data-role="sliders" style="display:flex;flex-direction:column;gap:3px"></div>
+        <button data-role="tune" type="button" class="cds-hit-y" style="display:none;align-items:center;gap:5px;
+            width:100%;padding:3px 2px;border:none;border-radius:3px;background:none;color:${SECONDARY};
+            font-family:inherit;font-size:10px;text-align:left;cursor:pointer;
+            transition:background .15s,color .15s">
+            <span data-role="tune-chevron">▸</span><span data-role="tune-label"></span>
+        </button>
+        <div data-role="sliders" style="display:none;flex-direction:column;gap:3px"></div>
     `;
 
     const modesEl = el.querySelector<HTMLElement>('[data-role="modes"]')!;
@@ -381,8 +423,45 @@ function buildProfileSubcard(handle: PredictDebugHandle, p: ProfileInfo): HTMLEl
         }
     });
 
+    const tune = el.querySelector<HTMLElement>('[data-role="tune"]')!;
+    tune.addEventListener("mouseenter", () => { tune.style.background = SEGMENT.background; tune.style.color = "#fff"; });
+    tune.addEventListener("mouseleave", () => { tune.style.background = "none"; tune.style.color = SECONDARY; });
+    tune.addEventListener("click", (e) => {
+        e.stopPropagation(); // never reaches the card header, which would collapse the card
+        const key = el.dataset.tuneKey!;
+        updateSessionSet(TUNING_KEY, key, !readSessionSet(TUNING_KEY).has(key));
+        syncTuning(el);
+    });
+
     refreshProfileSubcard(el, handle, p);
     return el;
+}
+
+
+/**
+ * Show the sliders only when the profile has any, and only when the user asked.
+ * Tuning is a rare, deliberate act; the sliders would otherwise triple the height of
+ * every sub-card just to sit untouched.
+ */
+function syncTuning(subcard: HTMLElement): void {
+    const sliders = subcard.querySelector<HTMLElement>('[data-role="sliders"]')!;
+    const tune = subcard.querySelector<HTMLElement>('[data-role="tune"]')!;
+    const chevron = subcard.querySelector<HTMLElement>('[data-role="tune-chevron"]')!;
+    const label = subcard.querySelector<HTMLElement>('[data-role="tune-label"]')!;
+
+    const count = sliders.children.length;
+    if (count === 0) {
+        // `reckon` and `raw` take no parameters — no affordance for an empty drawer.
+        tune.style.display = "none";
+        sliders.style.display = "none";
+        return;
+    }
+
+    const expanded = readSessionSet(TUNING_KEY).has(subcard.dataset.tuneKey!);
+    tune.style.display = "flex";
+    chevron.textContent = expanded ? "▾" : "▸";
+    label.textContent = `${count} parameter${count === 1 ? "" : "s"}`;
+    sliders.style.display = expanded ? "flex" : "none";
 }
 
 function refreshProfileSubcard(el: HTMLElement, handle: PredictDebugHandle, p: ProfileInfo): void {
@@ -407,7 +486,7 @@ function renderProfileSliders(subcard: HTMLElement, handle: PredictDebugHandle, 
     slidersEl.dataset.mode = mode;
     slidersEl.innerHTML = "";
     const p = handle.profiles().find((x) => x.id === id);
-    if (!p) return;
+    if (!p) { syncTuning(subcard); return; }
     if (mode === "lerp") {
         addSlider(slidersEl, "delay (ms)", 0, 300, p.delay, (v) =>
             handle.setProfile(id, { delay: v }));
@@ -424,6 +503,15 @@ function renderProfileSliders(subcard: HTMLElement, handle: PredictDebugHandle, 
         addSlider(slidersEl, "damping", 2, 40, p.damping, (v) =>
             handle.setProfile(id, { damping: v }));
     }
+    if (mode === "lerp" || mode === "extrapolate" || mode === "damped") {
+        // Value units are game-specific — widen the range to fit the config.
+        const snap = p.snap ?? 0;
+        addSlider(slidersEl, "snap (units, 0=off)", 0, Math.max(20, Math.ceil(snap * 2)), snap, (v) =>
+            handle.setProfile(id, { snap: v }));
+    }
+
+    // The parameter count is mode-specific, so the toggle re-labels on every switch.
+    syncTuning(subcard);
 }
 
 // -----------------------------------------------------------------------------
@@ -527,7 +615,7 @@ function buildReconcilerRow(canvasId: string): HTMLElement {
     // accent (recoloured each refresh) marks this as the prediction-health card,
     // not another smoothing profile.
     row.style.cssText =
-        `border:1px solid ${DIVIDER};border-left:3px solid ${SECONDARY};` +
+        `border:1px solid ${RULE};border-left:3px solid ${SECONDARY};` +
         "background:rgba(255,255,255,0.04);border-radius:4px;padding:6px;" +
         "display:flex;flex-direction:column;gap:4px";
     row.innerHTML = `

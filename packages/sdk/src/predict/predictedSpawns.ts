@@ -80,6 +80,24 @@ export interface PredictedSpawnsOptions<S = unknown, L = Partial<S>, D = undefin
     correlate?: SpawnCorrelation<S, L>;
 
     /**
+     * Server-clock spawn instant of an authoritative entity (e.g. `r =>
+     * r.bornMs`). When set, confirmation measures the entry's **input lead**
+     * — `spawnTime(server) − entry.at` — the exact uplink + input-buffering
+     * delay between the client predicting the spawn and the server executing
+     * it. Measured per spawn; no RTT/2 estimating.
+     *
+     * Why: a lag-compensated projectile is hit-tested through the *shooter's*
+     * rewound view, so the trajectory the shooter predicted at fire time is
+     * the one the server judges. Rendering the confirmed entity at reckoned
+     * server-present would snap it back by `lead × velocity` and re-fly that
+     * stretch. `predict.spawns(..., { fields })` reckons owned entities with
+     * this lead so the confirmed entity continues the prediction's flight
+     * seamlessly; foreign entities (never predicted, `lead = 0`) render at
+     * server-present as usual.
+     */
+    spawnTime?: (server: S) => number;
+
+    /**
      * Advance a *pending* (not-yet-confirmed) local each frame. `dt` is seconds
      * since the previous {@link tick}. Confirmed entries read from the server
      * entity and are never stepped.
@@ -125,6 +143,10 @@ export interface SpawnEntry<S = unknown, L = Partial<S>, D = undefined> {
     local?: L;
     /** `"pending"` = local only; `"confirmed"` = authoritative entity present. */
     readonly state: "pending" | "confirmed";
+    /** Measured input lead (ms) — `spawnTime(server) − at`, set at confirmation
+     *  when {@link PredictedSpawnsOptions.spawnTime} is configured. 0 for
+     *  foreign entries and while pending. */
+    readonly leadMs: number;
     /** Per-entry render scratch from {@link PredictedSpawnsOptions.data}; the
      *  reference is stable for the entry's life (mutate its fields freely) and
      *  dropped with the entry. `undefined` when no `data` factory was given. */
@@ -157,6 +179,8 @@ interface InternalEntry<S, L, D> {
     state: "pending" | "confirmed";
     /** Spawn time (`serverNow`) — undefined for entries with no prediction. */
     at: number | undefined;
+    /** Measured input lead (ms) — see {@link PredictedSpawnsOptions.spawnTime}. */
+    leadMs: number;
     /** Set by `accept()` — a confirmed-but-slow spawn exempt from TTL eviction
      *  while its authoritative `onAdd` is still in flight. */
     accepted: boolean;
@@ -219,7 +243,7 @@ export class PredictedSpawns<S = unknown, L = Partial<S>, D = undefined> {
     spawn(local: L): SpawnHandle<L, D> {
         const id = this.nextId++;
         const data = this.makeData();
-        const entry: InternalEntry<S, L, D> = { id, server: undefined, local, state: "pending", at: this.now(), accepted: false, data };
+        const entry: InternalEntry<S, L, D> = { id, server: undefined, local, state: "pending", at: this.now(), leadMs: 0, accepted: false, data };
         this.byId.set(id, entry);
         return {
             id,
@@ -250,7 +274,7 @@ export class PredictedSpawns<S = unknown, L = Partial<S>, D = undefined> {
         } else {
             // Foreign entity, or mine-without-a-prediction (joined late / the
             // server spawned it on my behalf) — surfaced as server-only.
-            const entry: InternalEntry<S, L, D> = { id: this.nextId++, server, local: undefined, state: "confirmed", at: undefined, accepted: false, data: this.makeData() };
+            const entry: InternalEntry<S, L, D> = { id: this.nextId++, server, local: undefined, state: "confirmed", at: undefined, leadMs: 0, accepted: false, data: this.makeData() };
             this.byId.set(entry.id, entry);
             this.byServer.set(server, entry);
         }
@@ -261,6 +285,10 @@ export class PredictedSpawns<S = unknown, L = Partial<S>, D = undefined> {
     private confirmEntry(entry: InternalEntry<S, L, D>, server: S): void {
         entry.server = server;
         entry.state = "confirmed";
+        const spawnTime = this.opts.spawnTime;
+        if (spawnTime !== undefined && entry.at !== undefined) {
+            entry.leadMs = spawnTime(server) - entry.at;
+        }
         this.byServer.set(server, entry);
     }
 
@@ -298,21 +326,28 @@ export class PredictedSpawns<S = unknown, L = Partial<S>, D = undefined> {
     }
 
     /**
-     * Advance pending locals via {@link PredictedSpawnsOptions.step}. `now` is
-     * the render clock (typically `performance.now()`); `dt` is derived in
-     * seconds. Confirmed/foreign entries are left to the authoritative state.
+     * Advance pending locals via {@link PredictedSpawnsOptions.step}.
+     * Confirmed/foreign entries are left to the authoritative state.
+     *
+     * With a clock, `dt` is derived on the clock's `serverNow()` axis — the
+     * SAME axis `at` (and thus the measured input lead) live on — so a pending
+     * local's flight and the confirmed entity's lead-reckon are the same
+     * expression by construction: the handoff cannot jump, no matter how
+     * biased or drifty the client's server-clock estimate is. Without a
+     * clock, `now` (typically `performance.now()`) paces the step.
      */
     tick(now: number = performance.now()): void {
         const step = this.opts.step;
+        const t = this.clock !== null ? this.clock.serverNow() : now;
         if (step !== undefined && this.lastTickAt !== undefined) {
-            const dt = Math.max(0, (now - this.lastTickAt) / 1000);
+            const dt = Math.max(0, (t - this.lastTickAt) / 1000);
             if (dt > 0) {
                 for (const entry of this.byId.values()) {
                     if (entry.state === "pending") { step(entry.local as L, dt); }
                 }
             }
         }
-        this.lastTickAt = now;
+        this.lastTickAt = t;
     }
 
     /** Drop pending locals older than the TTL policy — mispredicts the server
@@ -335,6 +370,35 @@ export class PredictedSpawns<S = unknown, L = Partial<S>, D = undefined> {
     entries(): IterableIterator<SpawnEntry<S, L, D>> {
         return this.byId.values() as IterableIterator<SpawnEntry<S, L, D>>;
     }
+
+    /** The entry an authoritative instance collapsed onto (or was surfaced as,
+     *  for foreign entities) — e.g. to reach `leadMs`/`data` from a collection
+     *  callback that only has the server instance. */
+    entryFor(server: S): SpawnEntry<S, L, D> | undefined {
+        return this.byServer.get(server) as SpawnEntry<S, L, D> | undefined;
+    }
+
+    /**
+     * Unified field read across the predicted → authoritative handoff:
+     * pending entries read the stepped local; confirmed entries read the
+     * authoritative instance through the bound reader — `predict.value()`
+     * (reckoned, lead-aware) when created via `predict.spawns(...)` with
+     * `fields`, a raw field read otherwise. Render from this and the handoff
+     * is invisible: same `id`, same timeline, one code path.
+     */
+    value(entry: SpawnEntry<S, L, D>, field: keyof S & string): number {
+        if (entry.server !== undefined) { return this.readServer(entry.server, field); }
+        return (entry.local as Record<string, number>)[field];
+    }
+
+    /** Route confirmed-entry `value()` reads (wired by `predict.spawns` to its
+     *  reckon slots; standalone stores keep the raw default). */
+    bindReader(read: (server: S, field: keyof S & string) => number): void {
+        this.readServer = read;
+    }
+
+    private readServer: (server: S, field: keyof S & string) => number =
+        (server, field) => (server as Record<string, number>)[field as string];
 
     /** Is `id` still live this frame? Useful for despawning stale sprites. */
     alive(id: number): boolean {

@@ -1,5 +1,7 @@
 import { closeIcon } from "./icons.ts";
 import { getDebugRoot } from "./core.ts";
+import { setInset, setMaxViewportHeight } from "./geometry.ts";
+import { isCompact, onReflow } from "./layout.ts";
 
 
 // Track open modals as an ordered stack (most recent at end)
@@ -9,7 +11,7 @@ const BASE_MODAL_ZINDEX = 10000;
 
 
 // Function to select a modal (bring to front)
-export function selectModal(modal) {
+function selectModal(modal) {
     if (!modal) return;
 
     // Remove modal from stack if already present
@@ -32,7 +34,7 @@ export function selectModal(modal) {
 
 
 // Function to remove modal from stack
-export function removeModalFromStack(modal) {
+function removeModalFromStack(modal) {
     const index = modalStack.indexOf(modal);
     if (index > -1) {
         modalStack.splice(index, 1);
@@ -52,20 +54,47 @@ document.addEventListener('keydown', function(e) {
 });
 
 
-// Shared modal creation utilities
-export function createModalOverlay() {
-    var overlay = document.createElement('div');
-    overlay.style.position = 'fixed';
-    overlay.style.top = '0';
-    overlay.style.left = '0';
-    overlay.style.right = '0';
-    overlay.style.bottom = '0';
-    overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-    overlay.style.zIndex = BASE_MODAL_ZINDEX.toString();
-    overlay.style.display = 'flex';
-    overlay.style.justifyContent = 'center';
-    overlay.style.alignItems = 'center';
-    return overlay;
+/**
+ * Size and place a modal for the current breakpoint.
+ *
+ * Compact turns it into a full-screen sheet: there is no useful "centered 600px
+ * window" on a phone, and it sidesteps the `90vh` trap (mobile Safari counts the
+ * collapsible URL bar inside `vh`). Drag and resize are meaningless there, so the
+ * handles hide and `makeDraggable` no-ops.
+ */
+export function applyModalLayout(modal, opts) {
+    var handles = modal.querySelectorAll('.resize-handle') as NodeListOf<HTMLElement>;
+
+    if (isCompact()) {
+        // Flush to the safe area on all four edges — setInset carries the px fallback
+        // for engines that can't parse max()/env().
+        (['top', 'right', 'bottom', 'left'] as const).forEach(function(side) { setInset(modal, side, 0); });
+        modal.style.width = 'auto';
+        modal.style.height = 'auto';
+        modal.style.minWidth = '0';
+        modal.style.minHeight = '0';
+        modal.style.maxWidth = 'none';
+        modal.style.maxHeight = 'none';
+        modal.style.transform = 'none';
+        modal.style.borderRadius = '0';
+        handles.forEach(function(handle) { handle.style.display = 'none'; });
+        return;
+    }
+
+    modal.style.right = 'auto';
+    modal.style.bottom = 'auto';
+    modal.style.borderRadius = '8px';
+    modal.style.width = opts.width || '';
+    modal.style.height = opts.height || '';
+    modal.style.minWidth = opts.minWidth || '';
+    modal.style.minHeight = opts.minHeight || '';
+    modal.style.maxWidth = opts.maxWidth || '';
+    if (opts.maxHeight) { setMaxViewportHeight(modal, opts.maxHeight); }
+    else { modal.style.maxHeight = ''; }
+    modal.style.top = opts.top || '50%';
+    modal.style.left = opts.left || '50%';
+    modal.style.transform = opts.transform || 'translate(-50%, -50%)';
+    handles.forEach(function(handle) { handle.style.display = ''; });
 }
 
 
@@ -79,9 +108,9 @@ export function createModal(options) {
     }
 
     // Base styles
+    modal.className = 'cds-surface';
     modal.style.position = 'fixed';
     modal.style.backgroundColor = opts.backgroundColor || '#1e1e1e';
-    modal.style.borderRadius = '8px';
     modal.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.5)';
     modal.style.color = '#fff';
     modal.style.fontFamily = 'system-ui, -apple-system, sans-serif';
@@ -90,21 +119,20 @@ export function createModal(options) {
     modal.style.flexDirection = 'column';
     modal.style.overflow = 'hidden';
 
-    // Size
-    if (opts.width) modal.style.width = opts.width;
-    if (opts.height) modal.style.height = opts.height;
-    if (opts.minWidth) modal.style.minWidth = opts.minWidth;
-    if (opts.minHeight) modal.style.minHeight = opts.minHeight;
-    if (opts.maxWidth) modal.style.maxWidth = opts.maxWidth;
-    if (opts.maxHeight) modal.style.maxHeight = opts.maxHeight;
+    applyModalLayout(modal, opts);
 
-    // Position
-    modal.style.top = opts.top || '50%';
-    modal.style.left = opts.left || '50%';
-    modal.style.transform = opts.transform || 'translate(-50%, -50%)';
+    // Re-shape only when the breakpoint flips — a modal that outlives it would keep a
+    // 600px frame on a 390px screen. Reacting to every reflow would instead snap a
+    // dragged or resized modal back to its opening geometry on any window resize.
+    var wasCompact = isCompact();
+    var stopReflow = onReflow(function(state) {
+        if (state.compact === wasCompact) { return; }
+        wasCompact = state.compact;
+        applyModalLayout(modal, opts);
+    });
 
     // Mark modal as selected when clicked
-    modal.addEventListener('mousedown', function(e) {
+    modal.addEventListener('pointerdown', function(e) {
         selectModal(modal);
     });
 
@@ -116,6 +144,7 @@ export function createModal(options) {
     modal.remove = function() {
         // Remove from modal stack
         removeModalFromStack(modal);
+        stopReflow();
 
         // Auto-cleanup room onLeave listener
         if (opts.room && opts.trackOnLeave && opts.onLeaveCallback) {
@@ -144,7 +173,7 @@ export function createModalHeader(options) {
     header.style.borderBottom = '1px solid rgba(255, 255, 255, 0.15)';
     header.style.paddingBottom = opts.paddingBottom || '4px';
     header.style.marginBottom = opts.marginBottom || '6px';
-    header.style.cursor = opts.draggable !== false ? 'move' : 'default';
+    header.style.cursor = (opts.draggable !== false && !isCompact()) ? 'move' : 'default';
     header.style.userSelect = 'none';
     header.style.flexShrink = '0';
     header.style.position = 'relative';
@@ -180,6 +209,7 @@ export function createModalHeader(options) {
 
     // Close button
     var closeButton = document.createElement('button');
+    closeButton.className = 'cds-hit';
     closeButton.innerHTML = closeIcon;
     closeButton.style.background = 'none';
     closeButton.style.border = 'none';
@@ -221,13 +251,21 @@ export function createModalHeader(options) {
 }
 
 
+// Pointer Events cover mouse, touch and pen in one path, and setPointerCapture
+// keeps the stream on the handle once the drag starts — so no document listeners,
+// and letting go outside the window can't strand the drag.
 export function makeDraggable(modal, dragHandle) {
-    var isDragging = false;
+    var activePointer: number | null = null;
     var dragOffsetX = 0;
     var dragOffsetY = 0;
 
-    dragHandle.addEventListener('mousedown', function(e) {
-        isDragging = true;
+    dragHandle.setAttribute('data-drag', ''); // touch-action:none — the gesture is ours
+
+    var onPointerDown = function(e: PointerEvent) {
+        if (activePointer !== null) { return; }
+        if (e.pointerType === 'mouse' && e.button !== 0) { return; }
+        if (isCompact()) { return; } // full-screen sheet has nowhere to go
+
         var rect = modal.getBoundingClientRect();
         dragOffsetX = e.clientX - rect.left;
         dragOffsetY = e.clientY - rect.top;
@@ -236,28 +274,34 @@ export function makeDraggable(modal, dragHandle) {
         modal.style.left = rect.left + 'px';
         modal.style.top = rect.top + 'px';
         modal.style.transform = 'none';
+
+        activePointer = e.pointerId;
+        dragHandle.setPointerCapture(e.pointerId);
         e.preventDefault();
-    });
-
-    var onMouseMove = function(e) {
-        if (isDragging) {
-            var newLeft = e.clientX - dragOffsetX;
-            var newTop = e.clientY - dragOffsetY;
-            modal.style.left = newLeft + 'px';
-            modal.style.top = newTop + 'px';
-        }
     };
 
-    var onMouseUp = function() {
-        isDragging = false;
+    var onPointerMove = function(e: PointerEvent) {
+        if (e.pointerId !== activePointer) { return; }
+        modal.style.left = (e.clientX - dragOffsetX) + 'px';
+        modal.style.top = (e.clientY - dragOffsetY) + 'px';
     };
 
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
+    var onPointerUp = function(e: PointerEvent) {
+        if (e.pointerId !== activePointer) { return; }
+        if (dragHandle.hasPointerCapture(e.pointerId)) { dragHandle.releasePointerCapture(e.pointerId); }
+        activePointer = null;
+    };
+
+    dragHandle.addEventListener('pointerdown', onPointerDown);
+    dragHandle.addEventListener('pointermove', onPointerMove);
+    dragHandle.addEventListener('pointerup', onPointerUp);
+    dragHandle.addEventListener('pointercancel', onPointerUp);
 
     // Return cleanup function
     return function cleanup() {
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
+        dragHandle.removeEventListener('pointerdown', onPointerDown);
+        dragHandle.removeEventListener('pointermove', onPointerMove);
+        dragHandle.removeEventListener('pointerup', onPointerUp);
+        dragHandle.removeEventListener('pointercancel', onPointerUp);
     };
 }

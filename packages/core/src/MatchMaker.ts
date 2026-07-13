@@ -3,7 +3,7 @@ import { EventEmitter } from 'events';
 import { requestFromIPC, subscribeIPC, subscribeWithTimeout } from './IPC.ts';
 
 import { type Type, Deferred, generateId, merge, retry, MAX_CONCURRENT_CREATE_ROOM_WAIT_TIME, REMOTE_ROOM_SHORT_TIMEOUT, type MethodName, type ExtractMethodOrPropertyType } from './utils/Utils.ts';
-import { isDevMode, cacheRoomHistory, getPreviousProcessId, getRoomRestoreListKey, reloadFromCache } from './utils/DevMode.ts';
+import { isDevMode, cacheRoomHistory, getRoomRestoreListKey, reloadFromCache } from './utils/DevMode.ts';
 
 import { RegisteredHandler } from './matchmaker/RegisteredHandler.ts';
 import { type OnCreateOptions, Room, RoomInternalState } from './Room.ts';
@@ -102,9 +102,6 @@ export async function setup(
   publicAddress = _publicAddress || getDefaultPublicAddress();
 
   stats.reset(false);
-
-  // devMode: try to retrieve previous processId
-  if (isDevMode) { processId = await getPreviousProcessId(); }
 
   // ensure processId is set
   if (!processId) { processId = generateId(); }
@@ -252,7 +249,7 @@ export async function join(roomName: string, clientOptions: ClientOptions = {}, 
     }
 
     return reserveSeatFor(room, clientOptions, authData);
-  });
+  }, 5, [SeatReservationError]);
 }
 
 /**
@@ -551,6 +548,8 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
 
   // set room public attributes
   if (restoringRoomId && isDevMode) {
+    // an ungraceful exit may have left a stale cache row for this roomId
+    await driver.remove(restoringRoomId);
     room.roomId = restoringRoomId;
 
   } else {
@@ -1039,10 +1038,9 @@ export function healthCheckProcessId(processId: string) {
       logger.debug(`❌ Process '${processId}' failed to respond. Cleaning it up.`);
       await stats.excludeProcess(processId);
 
-      // clean-up possibly stale room ids
-      if (!isDevMode) {
-        await removeRoomsByProcessId(processId);
-      }
+      // clean-up stale room ids — a dead process never comes back;
+      // devMode restore reads 'roomhistory' (presence), never these rows
+      await removeRoomsByProcessId(processId);
 
       resolve(false);
     } finally {

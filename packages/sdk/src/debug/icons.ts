@@ -21,3 +21,18 @@ export const copyIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentCol
 export const networkIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" height="200px" width="200px" xmlns="http://www.w3.org/2000/svg"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>`;
 export const closeIcon = `<svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><path d="M400 145.49 366.51 112 256 222.51 145.49 112 112 145.49 222.51 256 112 366.51 145.49 400 256 289.49 366.51 400 400 366.51 289.49 256 400 145.49z"></path></svg>`;
 export const disconnectIcon = `<svg fill="currentColor" viewBox="0 0 36 36" height="200px" width="200px"><path fill="currentColor" d="M18 24.42a4 4 0 1 0 4 4a4 4 0 0 0-4-4m0 6a2 2 0 1 1 2-2a2 2 0 0 1-2 2" class="clr-i-outline clr-i-outline-path-1"></path><path fill="currentColor" d="M26.21 21.85a1 1 0 0 0-.23-1.4a13.6 13.6 0 0 0-5-2.23l3.87 3.87a1 1 0 0 0 1.36-.24" class="clr-i-outline clr-i-outline-path-2"></path><path fill="currentColor" d="M18.05 10.72a21 21 0 0 0-4.16.43l1.74 1.74a19 19 0 0 1 2.42-.17A18.76 18.76 0 0 1 28.64 16a1 1 0 0 0 1.12-1.65a20.75 20.75 0 0 0-11.71-3.63" class="clr-i-outline clr-i-outline-path-3"></path><path fill="currentColor" d="M33.55 8.2A28.11 28.11 0 0 0 8.11 5.36l1.58 1.57a26 26 0 0 1 22.76 2.94a1 1 0 0 0 1.1-1.67" class="clr-i-outline clr-i-outline-path-4"></path><path fill="currentColor" d="m1.84 4.75l2.43 2.43c-.62.34-1.23.7-1.83 1.1a1 1 0 1 0 1.12 1.66C4.26 9.47 5 9 5.74 8.65l3.87 3.87a20.6 20.6 0 0 0-3.38 1.88A1 1 0 0 0 7.36 16a18.8 18.8 0 0 1 3.77-2l4.16 4.16A13.5 13.5 0 0 0 10 20.55a1 1 0 0 0 1.18 1.61A11.5 11.5 0 0 1 17 20l10.8 10.8l1.41-1.41l-26-26Z" class="clr-i-outline clr-i-outline-path-5"></path><path fill="none" d="M0 0h36v36H0z"></path></svg>`;
+
+
+/**
+ * Icons ship at two natural sizes (`200px` placeholders and `16`), so the size
+ * attributes are rewritten by pattern rather than by matching one literal.
+ */
+export function resizeIcon(svg: string, px: number): string {
+    return svg.replace(/height="[^"]*" width="[^"]*"/, `height="${px}" width="${px}"`);
+}
+
+/** `resizeIcon` plus the inline-flex box that keeps it centered in a text row. */
+export function sizedIcon(svg: string, px: number): string {
+    return `<span style="display:inline-flex;align-items:center;width:${px}px;height:${px}px;">` +
+        resizeIcon(svg, px) + '</span>';
+}

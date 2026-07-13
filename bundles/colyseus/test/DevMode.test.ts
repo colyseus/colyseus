@@ -15,8 +15,6 @@ import {
   cacheRoomHistory,
   reloadFromCache,
   getRoomRestoreListKey,
-  getProcessRestoreKey,
-  getPreviousProcessId,
 } from "@colyseus/core/utils/DevMode";
 import { Client as SDKClient, Callbacks } from "@colyseus/sdk";
 import { WebSocketTransport } from "@colyseus/ws-transport";
@@ -163,32 +161,9 @@ describe("DevMode", () => {
     });
   });
 
-  describe("getRoomRestoreListKey / getProcessRestoreKey", () => {
+  describe("getRoomRestoreListKey", () => {
     it("getRoomRestoreListKey should return 'roomhistory'", () => {
       assert.strictEqual(getRoomRestoreListKey(), "roomhistory");
-    });
-
-    it("getProcessRestoreKey should return 'processhistory'", () => {
-      assert.strictEqual(getProcessRestoreKey(), "processhistory");
-    });
-  });
-
-  describe("getPreviousProcessId", () => {
-    it("should return null when no previous process exists", async () => {
-      const processId = await getPreviousProcessId("hostname");
-      assert.strictEqual(processId, null);
-    });
-
-    it("should return the previous process id", async () => {
-      await presence.hset(getProcessRestoreKey(), "hostname", "process-123");
-      const processId = await getPreviousProcessId("hostname");
-      assert.strictEqual(processId, "process-123");
-    });
-
-    it("should use empty string as default hostname", async () => {
-      await presence.hset(getProcessRestoreKey(), "", "process-456");
-      const processId = await getPreviousProcessId();
-      assert.strictEqual(processId, "process-456");
     });
   });
 
