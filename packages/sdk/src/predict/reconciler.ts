@@ -48,7 +48,12 @@
  *         input.data.moveX = moveX; input.data.jump = jump; // stage the wire input
  *         input.send();                                     // transmit + buffer for replay
  *     }
- *     draw(me.value("x"), me.value("y"));                   // interpolated render pose
+ *     draw(predict.value(player, "x"), predict.value(player, "y")); // one read idiom
+ *
+ * The reconciler registers its numeric `fields` into the owning Predict's
+ * `predict.value(instance, field)` — the SAME render read as every passively-
+ * smoothed entity (raw fallback before spawn / after dispose). `me.value(f)`
+ * remains for direct handle reads.
  *
  * Hot path (`value`) is plain-number only; reconcile (cold, ~server-tick rate)
  * reads the authoritative instance.
@@ -155,6 +160,14 @@ export class Reconciler<S extends object = any, I = any> extends RollbackControl
      */
     get state(): S {
         return this.local as S;
+    }
+
+    /** @internal Bound registrations for the owning Predict's `value()` overlay:
+     *  this reconciler's numeric fields on its one instance, pose key = field
+     *  name ({@link value} already reads by field). Empty source refId (plain
+     *  test fixtures) is skipped by the overlay installer. */
+    get boundRegistrations(): ReadonlyArray<{ source: object; fields: readonly string[]; poseKeys: readonly string[] }> {
+        return [{ source: this.instance as object, fields: this.numericFields, poseKeys: this.numericFields }];
     }
 
     /**

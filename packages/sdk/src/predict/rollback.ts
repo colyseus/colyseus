@@ -692,9 +692,22 @@ export abstract class RollbackController<I = any> {
      *  child from its drive list on the next tick. */
     dead = false;
 
+    /** Teardown hooks run synchronously by {@link dispose} (after `dead` is
+     *  set) — the owning Predict restores its `value()` overlay here, so bound
+     *  reads fall back the instant the controller dies, not a tick later. */
+    private disposedHooks: Array<() => void> = [];
+
+    /** Register a teardown hook for {@link dispose}. Idempotent-safe: hooks run
+     *  once (the list is drained). */
+    onDisposed(hook: () => void): void { this.disposedHooks.push(hook); }
+
     /** Stop being driven by the owning Predict and unsubscribe from the input
-     *  handle's sends. */
-    dispose(): void { this.dead = true; this.unsubscribeSend(); }
+     *  handle's sends. Runs {@link onDisposed} hooks synchronously. */
+    dispose(): void {
+        this.dead = true;
+        this.unsubscribeSend();
+        for (const hook of this.disposedHooks.splice(0)) hook();
+    }
 
     // --- Subclass hooks --------------------------------------------------------
 

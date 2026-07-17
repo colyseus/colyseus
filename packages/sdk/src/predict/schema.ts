@@ -75,6 +75,37 @@ export function scalarFieldNamesOf(instance: object): string[] {
     return names;
 }
 
+/** Scalar type strings that are NOT numbers on the decoded instance ("string",
+ *  "boolean", and the bigint encodings, which decode to BigInt). Everything
+ *  else — "number", the sized ints/floats, custom numeric encodings — is
+ *  numeric and eligible for pose smoothing. */
+const NON_NUMERIC_SCALAR: Record<string, true> = {
+    string: true, boolean: true, bigint64: true, biguint64: true,
+};
+
+/**
+ * One metadata walk returning BOTH scalar sets a world binding needs:
+ * `fields` — every primitive field, in declaration order (the adopt set,
+ * same rule as {@link scalarFieldNamesOf}); `numeric` — the subset whose
+ * decoded value is a number (the pose/smoothing set). Both empty for
+ * non-schema objects.
+ */
+export function scalarFieldsOf(instance: object): { fields: string[]; numeric: string[] } {
+    const meta = metadataOf(instance);
+    const fields: string[] = [];
+    const numeric: string[] = [];
+    if (meta) {
+        for (let i = 0; ; i++) {
+            const f = meta[i] as { name?: string; type?: unknown } | undefined;
+            if (!f || typeof f.name !== "string") break;
+            if (typeof f.type !== "string") continue; // skip collections / child schemas
+            fields.push(f.name);
+            if (NON_NUMERIC_SCALAR[f.type] === undefined) numeric.push(f.name);
+        }
+    }
+    return { fields, numeric };
+}
+
 // -----------------------------------------------------------------------------
 // Wire quantizers — "what value would the wire deliver for this float64?"
 // Backs the reconciler's wire-precision-aware reconcile: a prediction is

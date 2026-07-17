@@ -11,13 +11,25 @@
  *     with `predict.value(instance, field)`.
  *   - `predict.reconciler(self, …)` → a {@link Reconciler} — ACTIVE server-
  *     reconciled rollback for the entity you DO control: apply input now,
- *     rewind to server truth + replay, smoothly correcting. Read with
- *     `controller.value(field)` (rendered) / `controller.state` (logic + mutate).
+ *     rewind to server truth + replay, smoothly correcting. Read state for
+ *     logic via `controller.state` (exact, mutable).
+ *   - `predict.sim(…)` → a {@link SimReconciler} — the same rollback over a
+ *     COMPOSITE or engine-backed world. Decoded schema instances placed in
+ *     its `world` are AUTO-BOUND (seeding/adopt/pose derive from the schema).
  *   - `predict.defineEvent(…)` → a {@link PredictedEventChannel} — a typed
  *     optimistic DISCRETE event (a goal, a kill, a pickup): predicted from the
  *     sim via `ctx.predict(channel, payload)` (replay-safe) or from UI, with
  *     confirm / rejectWhen / TTL settlement against server truth.
  *     (`predict.events(…)` is its low-level string-keyed store.)
+ *
+ * ONE READ IDIOM for rendering: `predict.value(instance, field)` covers every
+ * entity — passively-smoothed remotes AND the instances a reconciler/sim
+ * binds (the controllers register their bound fields here, overlaying any
+ * passive slot while they live and restoring it on dispose). Consumers get
+ * the full lifecycle for free: raw state before the controller spawns →
+ * reconciled pose while it's alive → raw again after `dispose()`. Game logic
+ * (hit-reg, zone checks) keeps reading EXACT state via `controller.state` /
+ * `controller.world` — never the smoothed render read.
  * One `predict.tick(now)` per frame drives all three — controllers and event
  * stores spawned here are ticked/pruned automatically (see {@link tick}).
  *
@@ -298,6 +310,11 @@ const MODE_EXTRAPOLATE = 1;
 const MODE_DAMPED = 2;
 const MODE_RECKON = 3;
 const MODE_RAW = 4;
+/** Internal-only: the slot's value is a rollback controller's pose read (the
+ *  bound overlay `predict.sim`/`predict.reconciler` install for their bound
+ *  instances). Not a user-selectable {@link PredictMode} — absent from
+ *  MODE_CODES; profiles carrying it are allocated by `installBoundOverlay`. */
+const MODE_BOUND = 5;
 /** Subset that's purely slot-driven (vs. reckon which also reads `simByRef`). */
 type SmoothingMode = "lerp" | "extrapolate" | "damped";
 const MODE_CODES: Record<PredictMode, number> = {
@@ -554,6 +571,28 @@ export interface ReckonAttachConfig<T = any> {
 
 export type AttachConfig<T = any> = SmoothingConfig<T> | ReckonAttachConfig<T>;
 
+/** One MODE_BOUND overlay slot's backing: the controller pose read
+ *  (`ctrl.value(key)`) plus the stashed passive slot it displaced (-1 = none),
+ *  restored when the controller disposes. */
+interface BoundSlotEntry {
+    ctrl: { value(field: string): number };
+    key: string;
+    stash: number;
+}
+
+/** The controller face the bound overlay consumes — implemented by both
+ *  {@link Reconciler} and {@link SimReconciler}. `boundRegistrations` lists the
+ *  decoded instances the controller predicts (one entry per bound world part;
+ *  `fields`/`poseKeys` parallel — the overlay maps `predict.value(source,
+ *  fields[i])` to `ctrl.value(poseKeys[i])`). */
+interface BoundController {
+    value(field: string): number;
+    onDisposed(hook: () => void): void;
+    readonly boundRegistrations: ReadonlyArray<{
+        source: object; fields: readonly string[]; poseKeys: readonly string[];
+    }>;
+}
+
 function isReckonAttachConfig<T>(cfg: AttachConfig<T>): cfg is ReckonAttachConfig<T> {
     if (cfg === null || typeof cfg !== "object") return false;
     return Array.isArray((cfg as Partial<ReckonAttachConfig<T>>).fields);
@@ -802,6 +841,15 @@ export class Predict<TState = any> {
     private freeSlots: number[] = [];
     private slotByRef = new Map<number, Map<string, number>>();
     private simByRef = new Map<number, SimState>();
+    /** MODE_BOUND side table: overlay slot → its {@link BoundSlotEntry}. An
+     *  entry here marks the slot as a controller overlay; teardown paths branch
+     *  on membership (see untrackSlot / detachByRef / registerBound). */
+    private boundBySlot = new Map<number, BoundSlotEntry>();
+    /** The one shared MODE_BOUND profile (lazily allocated). Bound slots carry
+     *  no tunable params and the panel's per-controller cards come from
+     *  {@link snapshotReconcilers}, so per-controller profiles would only
+     *  accumulate (profiles are never freed — a respawn loop would leak them). */
+    private boundProfileIdx = -1;
     private renderTime = 0;
     private defaultMode: PredictMode;
     private reckonDefaults: ReckonDefaults;
@@ -1067,7 +1115,7 @@ export class Predict<TState = any> {
      * profile, not 1000.
      */
     private allocProfile(
-        mode: PredictMode,
+        mode: PredictMode | number,
         delay: number,
         damping: number,
         maxExtrapolate: number,
@@ -1076,7 +1124,8 @@ export class Predict<TState = any> {
         dedup: boolean,
         label?: string,
     ): number {
-        const modeCode = MODE_CODES[mode];
+        // A numeric mode is an internal code (MODE_BOUND) with no PredictMode name.
+        const modeCode = typeof mode === "number" ? mode : MODE_CODES[mode];
         let key = "";
         if (dedup) {
             // Label is part of the key: two groups never share a profile, so
@@ -1112,6 +1161,7 @@ export class Predict<TState = any> {
         if (modeCode === MODE_EXTRAPOLATE) return this.computeExtrapolate;
         if (modeCode === MODE_DAMPED) return this.computeDamped;
         if (modeCode === MODE_RECKON) return this.computeReckon;
+        if (modeCode === MODE_BOUND) return this.computeBound;
         return this.computeRaw; // MODE_RAW
     }
 
@@ -1242,6 +1292,8 @@ export class Predict<TState = any> {
         for (let i = 0; i < this.profileCount; i++) {
             const base = i * PROFILE_STRIDE;
             const m = this.profileBuf[base + P_MODE] | 0;
+            if (m === MODE_BOUND) continue;   // controller-owned — nothing tunable
+
             const mode: PredictMode =
                 m === MODE_LERP ? "lerp" :
                 m === MODE_EXTRAPOLATE ? "extrapolate" :
@@ -1271,6 +1323,7 @@ export class Predict<TState = any> {
         if (id < 0 || id >= this.profileCount) return;
         const base = id * PROFILE_STRIDE;
         const p = this.profileBuf;
+        if ((p[base + P_MODE] | 0) === MODE_BOUND) return;   // controller-owned — not tunable
         if (opts.mode !== undefined) {
             const code = MODE_CODES[opts.mode];
             p[base + P_MODE] = code;
@@ -1353,7 +1406,16 @@ export class Predict<TState = any> {
         // leaving OTHER fields on the instance untouched — so a 2nd attach()/attachAll()
         // COMPOSES additively instead of leaking the old slot. This is what lets
         // attachWithPlan skip the blanket detach that used to clobber sibling attaches.
-        if (this.slotByRef.get(refId)?.get(field) !== undefined) this.untrackSlot(refId, field);
+        // When the current mapping is a controller overlay (MODE_BOUND), the overlay
+        // wins: the new passive slot installs UNDERNEATH it as the stash (replacing
+        // any previous understudy) and keeps sampling until the controller disposes.
+        let boundOver: BoundSlotEntry | undefined;
+        const existingIdx = this.slotByRef.get(refId)?.get(field);
+        if (existingIdx !== undefined) {
+            boundOver = this.boundBySlot.get(existingIdx);
+            if (boundOver !== undefined) this.freeStash(boundOver);
+            else this.untrackSlot(refId, field);
+        }
 
         const slotIdx = this.allocSlot();
         const buf = this.slotBuf;
@@ -1371,9 +1433,13 @@ export class Predict<TState = any> {
         buf[base + SLOT_RING_COUNT] = 0;
         this.slotAngle[slotIdx] = angle;
 
-        let perRef = this.slotByRef.get(refId);
-        if (perRef === undefined) { perRef = new Map(); this.slotByRef.set(refId, perRef); }
-        perRef.set(field, slotIdx);
+        if (boundOver !== undefined) {
+            boundOver.stash = slotIdx;
+        } else {
+            let perRef = this.slotByRef.get(refId);
+            if (perRef === undefined) { perRef = new Map(); this.slotByRef.set(refId, perRef); }
+            perRef.set(field, slotIdx);
+        }
 
         // Notify track listeners (the debug bridge, when present) so it can
         // build its profile → field-names view outside the engine. Empty in
@@ -1504,11 +1570,29 @@ export class Predict<TState = any> {
         const perRef = this.slotByRef.get(refId);
         const slotIdx = perRef?.get(field);
         if (slotIdx === undefined) return;
+        const bound = this.boundBySlot.get(slotIdx);
+        if (bound !== undefined) {
+            // The mapping is a controller overlay: untrack removes the PASSIVE
+            // registration underneath (the stash). The overlay itself is torn
+            // down only by its controller's dispose (or by detachByRef when the
+            // entity itself is removed).
+            this.freeStash(bound);
+            return;
+        }
         this.slotDetach[slotIdx]?.();
         this.slotDetach[slotIdx] = undefined;
         this.freeSlots.push(slotIdx);
         perRef!.delete(field);
         if (perRef!.size === 0) this.slotByRef.delete(refId);
+    }
+
+    /** Free a bound entry's stashed passive slot (detach its listener). */
+    private freeStash(entry: BoundSlotEntry): void {
+        if (entry.stash < 0) return;
+        this.slotDetach[entry.stash]?.();
+        this.slotDetach[entry.stash] = undefined;
+        this.freeSlots.push(entry.stash);
+        entry.stash = -1;
     }
 
     private allocSlot(): number {
@@ -1521,6 +1605,117 @@ export class Predict<TState = any> {
             this.slotBuf = grown;
         }
         return idx;
+    }
+
+    // --- Bound overlay (predict.value ← rollback controllers) -------------------
+
+    /**
+     * Install a MODE_BOUND overlay slot for each (source, numeric field) a
+     * rollback controller predicts, so `predict.value(source, field)` reads the
+     * controller's interpolated + smooth-corrected pose — the same idiom as
+     * every passively-smoothed entity. A pre-existing passive slot (e.g. the
+     * local player inside an `attachAll` lerp group) is STASHED — its field
+     * listener stays subscribed and samples keep landing in its ring — and
+     * restored when the controller disposes, so lerp resumes seamlessly.
+     *
+     * Returns the unregister (run on the controller's dispose): frees the
+     * overlay slots and restores (or deletes) each mapping.
+     */
+    private registerBound(
+        ctrl: { value(field: string): number },
+        source: object,
+        fields: readonly string[],
+        poseKeys: readonly string[],
+        profileIdx: number,
+    ): () => void {
+        const refId = refIdOf(source)!;   // callers pre-check (bound sources are decoded)
+        let perRef = this.slotByRef.get(refId);
+        if (perRef === undefined) { perRef = new Map(); this.slotByRef.set(refId, perRef); }
+        const slots: number[] = [];
+        for (let k = 0; k < fields.length; k++) {
+            const field = fields[k];
+            const existing = perRef.get(field);
+            let stash = -1;
+            if (existing !== undefined) {
+                const prior = this.boundBySlot.get(existing);
+                if (prior !== undefined) {
+                    // Same (instance, field) claimed twice (two controllers, or one
+                    // instance in two world parts): last registration wins — mirrors
+                    // the "one accumulator can't pace two rates" posture. The
+                    // ORIGINAL passive stash is inherited by the winner.
+                    console.warn(
+                        `@colyseus/sdk Predict: "${field}" (refId ${refId}) is already bound ` +
+                        "to a controller — the newer registration wins.",
+                    );
+                    stash = prior.stash;
+                    this.boundBySlot.delete(existing);
+                    this.freeSlots.push(existing);
+                } else {
+                    stash = existing;   // passive slot: stashed, its listener keeps sampling
+                }
+            }
+            const slotIdx = this.allocSlot();
+            const buf = this.slotBuf;
+            const base = slotIdx * SLOT_STRIDE;
+            // Self-describing like any slot, but NO listener — the computer reads
+            // the controller, not the sample ring (slotDetach stays undefined;
+            // teardown paths use `?.()`).
+            const initial = (source as Record<string, number>)[field] ?? 0;
+            buf[base + SLOT_V1] = initial;
+            buf[base + SLOT_AUX_V] = initial;
+            buf[base + SLOT_AUX_T] = 0;
+            buf[base + SLOT_PROFILE] = profileIdx;
+            buf[base + SLOT_REF] = refId;
+            buf[base + SLOT_FIELD] = fieldIndexOf(source, field);
+            buf[base + SLOT_RING_HEAD] = 0;
+            buf[base + SLOT_RING_COUNT] = 0;
+            this.slotAngle[slotIdx] = false;
+            this.boundBySlot.set(slotIdx, { ctrl, key: poseKeys[k], stash });
+            perRef.set(field, slotIdx);
+            slots.push(slotIdx);
+            for (let li = 0; li < this.trackListeners.length; li++) {
+                this.trackListeners[li](profileIdx, field);
+            }
+        }
+        return () => {
+            for (let k = 0; k < slots.length; k++) {
+                const slotIdx = slots[k];
+                const entry = this.boundBySlot.get(slotIdx);
+                // Identity check, not just presence: a freed slot index is recycled
+                // by the free-list, so after a duplicate-claim (or entity removal)
+                // this index may now back ANOTHER controller's overlay — which this
+                // stale unregister must not tear down.
+                if (entry === undefined || entry.ctrl !== ctrl) continue;
+                this.boundBySlot.delete(slotIdx);
+                this.freeSlots.push(slotIdx);
+                const pr = this.slotByRef.get(refId);
+                if (pr?.get(fields[k]) === slotIdx) {
+                    if (entry.stash >= 0) {
+                        pr.set(fields[k], entry.stash);   // resume the passive slot
+                    } else {
+                        pr.delete(fields[k]);
+                        if (pr.size === 0) this.slotByRef.delete(refId);
+                    }
+                }
+            }
+        };
+    }
+
+    /** Wire a just-spawned controller's bound instances into the `value()`
+     *  overlay (all controllers share the one MODE_BOUND profile — the side
+     *  table, not the profile, carries the per-slot backing) and arrange the
+     *  restore on its dispose. No-op for controllers with nothing bound (opaque
+     *  sim worlds, plain-fixture reconcilers). */
+    private installBoundOverlay(ctrl: BoundController): void {
+        const offs: Array<() => void> = [];
+        for (const reg of ctrl.boundRegistrations) {
+            if (reg.fields.length === 0 || refIdOf(reg.source) === undefined) continue;
+            if (this.boundProfileIdx < 0) {
+                this.boundProfileIdx = this.allocProfile(MODE_BOUND, 0, 0, 0, 0, 0, false, "bound");
+            }
+            offs.push(this.registerBound(ctrl, reg.source, reg.fields, reg.poseKeys, this.boundProfileIdx));
+        }
+        if (offs.length > 0) ctrl.onDisposed(() => { for (const off of offs) off(); });
     }
 
     /**
@@ -1868,7 +2063,27 @@ export class Predict<TState = any> {
         // so walk it and free each slot, then drop any reckon SimState. Snapshot the
         // keys: untrackSlot mutates perRef (and deletes the slotByRef entry when empty).
         const perRef = this.slotByRef.get(refId);
-        if (perRef) for (const field of [...perRef.keys()]) this.untrackSlot(refId, field);
+        if (perRef) {
+            for (const field of [...perRef.keys()]) {
+                const slotIdx = perRef.get(field);
+                if (slotIdx === undefined) continue;
+                const bound = this.boundBySlot.get(slotIdx);
+                if (bound !== undefined) {
+                    // The ENTITY died while a controller overlay was live: tear down
+                    // the overlay AND its stash — a recycled refId must not collide
+                    // with a stale mapping. The controller's own dispose then finds
+                    // the side entry gone and skips (its logic reads keep working
+                    // off `me.world` until it's disposed).
+                    this.freeStash(bound);
+                    this.boundBySlot.delete(slotIdx);
+                    this.freeSlots.push(slotIdx);
+                    perRef.delete(field);
+                } else {
+                    this.untrackSlot(refId, field);
+                }
+            }
+            if (perRef.size === 0) this.slotByRef.delete(refId);
+        }
         this.simByRef.delete(refId);
     }
 
@@ -2226,6 +2441,9 @@ export class Predict<TState = any> {
         const recon = new Reconciler<S, Data<W>>(instance, opts);
         this.adoptFixedStep(recon.stepMs);
         this.bindInputRenderDelay(opts.input);
+        // One read idiom: predict.value(instance, field) reads THIS controller's
+        // pose while it's alive (raw fallback before spawn / after dispose).
+        this.installBoundOverlay(recon as unknown as BoundController);
         this.driven.push(recon as { tick?(now: number): void; dead?: boolean });
         return recon;
     }
@@ -2244,15 +2462,19 @@ export class Predict<TState = any> {
      * the handle; `predict.tick(now)` returns the fixed-step count) and is
      * auto-ticked by this Predict's {@link tick} each frame (reconcile + decay).
      */
-    sim<W, P extends Record<string, number>, E>(
+    sim<W, P extends Record<string, number> = {}, E = any>(
         opts: Omit<SimReconcilerOptions<Data<W>, P, E>, "input"> & { input: InputHandle<W> },
     ): SimReconciler<Data<W>, P, E> {
-        // wire input `W` from `opts.input`, pose `P` from `opts.pose`, world handle
-        // `E` from `opts.world` — none written at the call site, and `step`'s `cmd`
-        // is contextually typed `Data<W>`.
+        // wire input `W` from `opts.input`, pose `P` from `opts.pose` ({} when the
+        // world is fully bound and no custom pose exists), world handle `E` from
+        // `opts.world` — none written at the call site, and `step`'s `cmd` is
+        // contextually typed `Data<W>`.
         const ctl = new SimReconciler<Data<W>, P, E>(opts as SimReconcilerOptions<Data<W>, P, E>);
         this.adoptFixedStep(ctl.stepMs);
         this.bindInputRenderDelay(opts.input);
+        // One read idiom: bound world entries register into predict.value(instance,
+        // field) — the render layer stops caring which strategy backs an entity.
+        this.installBoundOverlay(ctl as unknown as BoundController);
         this.driven.push(ctl as { tick?(now: number): void; dead?: boolean });
         return ctl;
     }
@@ -2288,8 +2510,14 @@ export class Predict<TState = any> {
     // --- Reads -----------------------------------------------------------------
 
     /**
-     * Smoothed/predicted value for a numeric field. Falls through to raw
-     * `instance[field]` if the field isn't being tracked.
+     * Smoothed/predicted RENDER value for a numeric field — the one read idiom:
+     * passively-smoothed entities (lerp/reckon/…) and instances bound by a
+     * live `reconciler()`/`sim()` controller all resolve here (the controller
+     * overlays the slot while it lives; dispose restores the passive slot or
+     * the raw fallback). Falls through to raw `instance[field]` if the field
+     * isn't being tracked — so the read is valid across the entity's whole
+     * lifecycle. For game logic on a controlled entity read the controller's
+     * `.state`/`.world` instead (exact, no smoothing offset).
      */
     value<T extends object>(instance: T, field: NumericKeys<T>): number {
         // Hot read: refId (one symbol load) + two Map.gets (refId → field name →
@@ -2313,7 +2541,9 @@ export class Predict<TState = any> {
      * feeding it into a hit test makes the client judge an overlap against a
      * position a few cm off the physical prediction, which flips knife-edge
      * stomp/hit calls vs the server (the server reads the exact timeline, no
-     * offset). For every non-reckon field this equals {@link value}.
+     * offset). For every non-reckon field this equals {@link value} — including
+     * controller-bound fields: their exact predicted state lives on the
+     * controller (`me.state` / `me.world`), not behind this read.
      */
     valueRaw<T extends object>(instance: T, field: NumericKeys<T>): number {
         const refId = refIdOf(instance);
@@ -2566,6 +2796,18 @@ export class Predict<TState = any> {
      */
     private computeRaw = (slotIdx: number): number => {
         return this.slotBuf[slotIdx * SLOT_STRIDE + SLOT_V1];
+    };
+
+    /**
+     * Bound-overlay dispatch — the slot's value is a rollback controller's
+     * interpolated + smooth-corrected pose read (`ctrl.value(poseKey)`). Same
+     * dispatch class as reckon's `simByRef` read: one side-table lookup, then
+     * the controller read — which also runs the read-before-pump bookkeeping,
+     * so `predict.value(entity, f)` and `me.value(f)` warn identically.
+     */
+    private computeBound = (slotIdx: number): number => {
+        const e = this.boundBySlot.get(slotIdx);
+        return e !== undefined ? e.ctrl.value(e.key) : this.slotBuf[slotIdx * SLOT_STRIDE + SLOT_V1];
     };
 
 

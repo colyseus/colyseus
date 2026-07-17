@@ -210,7 +210,8 @@ function frame(now) {                 // `now` = the rAF timestamp — pass it t
     input.data.jump = takeJump();     // …edges latched — see "Buttons between steps"
     input.send();                     // transmit + predict + buffer for replay
   }
-  draw(me.value("x"), me.value("y"));                    // smoothed local pose
+  // ONE read idiom — local and remote alike (`self` is backed by the
+  // reconciler while it lives; raw state before spawn / after dispose):
   for (const [, p] of room.state.players) draw(predict.value(p, "x"), predict.value(p, "y"));
   requestAnimationFrame(frame);
 }
@@ -221,12 +222,13 @@ function frame(now) {                 // `now` = the rAF timestamp — pass it t
   `extrapolate` (forecast — live, can overshoot), `damped` (ease toward latest —
   never exact, never jittery), `reckon` (dead-reckon via a step fn).
 - **`reconciler`** — active prediction for ONE entity you control (flat `fields`).
-  Read the smoothed render pose with `value(field)`; read the raw predicted state
+  Render with `predict.value(instance, field)` — the same idiom as the remotes
+  (the reconciler backs the read while it lives); read the raw predicted state
   via the `state` getter.
 - **`sim`** — active prediction when your inputs affect MORE than one flat-field
   entity: COMPOSITE scalar state across several schema instances (a paddle + the
-  puck it strikes, reconciled together), or an opaque physics engine (Rapier,
-  crashcat). Same rollback loop via `step` / `adopt` / `pose` — see below.
+  puck it strikes, reconciled together), or an opaque physics engine. Decoded
+  schema instances placed in its `world` are AUTO-BOUND — see below.
 - **`room.clock`** — `serverNow()`, `smoothedRtt()`, `lastServerTime()`. Auto-populated
   from the TIMED prefix that rides input acks — **only when the room called
   `defineInput()`**.
@@ -272,73 +274,85 @@ drops taps (0-step frames) or double-fires them (multi-step frames).
 ### Composite & engine state: `predict.sim`
 
 `reconciler` mirrors a flat `fields` list off ONE schema instance. When your inputs
-affect more than that, use `predict.sim`: you own a `world` (any object — composite
-scalars or an engine handle) and the SDK runs the same predict → adopt-on-ack →
-replay loop through three callbacks:
+affect more than that, use `predict.sim`: you own a `world` and the SDK runs the
+same predict → adopt-on-ack → replay loop over it.
 
-- `step(ctx, cmd, world)` — deterministic, **SHARED with the server**; advance `world`
-  by `ctx.dt`. Gate one-shot side effects on `!ctx.isReplay`.
-- `adopt(world)` — seed the server's authoritative scalars into `world` on each ack,
-  before replay. Close over your sources; there is **no bound instance argument**.
-- `pose(world)` — read `world` into a flat render pose (`{ x, y, puckX, … }`);
-  smoothing + interpolation operate on these numbers. Read them with `me.value("puckX")`
-  (a flat key — no string-path eval, portable to C#/C).
-
-Composite scalars — a paddle + the puck it strikes, reconciled as one:
+**Composite scalars — the declarative case.** Put the DECODED schema instances
+themselves in `world` and they are **auto-bound**: each entry is replaced in place
+by a plain scratch **mirror** seeded from its scalar fields (`step` mutates the
+mirror, never the decoded tree); on every ack the mirror is re-copied from the
+instance — unconditionally, changed or not — before replay; and every numeric
+field becomes a render-pose field, registered into `predict.value(instance,
+field)` so bound entities render through the same idiom as everything else:
 
 ```ts
 const input = room.input(MoveInput, { mode: "reliable" });
-const world = {
-  paddle: { x: player.x, y: player.y },
-  puck:   { x: s.puck.x, y: s.puck.y, vx: s.puck.vx, vy: s.puck.vy },
-};
 const me = predict.sim({
   input,
-  world,
-  step:  (ctx, cmd, w) => stepWorld(w, cmd, ctx.dt),     // the SAME fn the server runs
-  adopt: (w) => {                                         // server truth, same decoded patch
-    w.paddle.x = player.x;  w.paddle.y = player.y;
-    w.puck.x = s.puck.x;    w.puck.y = s.puck.y;
-    w.puck.vx = s.puck.vx;  w.puck.vy = s.puck.vy;
+  world: {
+    paddle: player,            // decoded schema instance ⇒ auto-bound (x, y, …)
+    puck:   room.state.puck,   // ⇒ auto-bound (x, y, vx, vy)
   },
-  pose:  (w) => ({ x: w.paddle.x, y: w.paddle.y, puckX: w.puck.x, puckY: w.puck.y }),
+  step: (ctx, cmd, w) => stepWorld(w, cmd, ctx.dt),      // the SAME fn the server runs
 });
-draw(me.value("x"), me.value("puckX"));                  // flat pose key — no path eval
+draw(predict.value(player, "x"), predict.value(room.state.puck, "x")); // one idiom
+chase(me.world.paddle);        // RAW predicted state for logic — never the render read
 ```
 
-Opaque engine — Rapier; `world` reaches the solver + body:
+Detection is by decode identity (an entry with a decoder-assigned refId is a truth
+source), top-level entries only. A schema instance that ISN'T decoded throws (pass
+the one from `room.state`, or a plain object for scratch); to keep a decoded
+instance opaque on purpose, nest it below a plain wrapper. Bound sources are
+pinned at construction — a server-side ref swap (`state.puck = new Puck()`) is not
+followed. Capture bound parts via `me.world` AFTER construction (the mirror
+replaces the instance on the world object itself).
+
+**Opaque engine state.** Anything without a refId passes through untouched, and
+the `adopt` / `pose` callbacks own it — a physics solver's `world` handle + body:
+
+- `step(ctx, cmd, world)` — deterministic, **SHARED with the server**; advance `world`
+  by `ctx.dt`. One-shot concerns go through `ctx.memo` / `ctx.predict`.
+- `adopt(world)` — seed the server's authoritative scalars into the opaque entries
+  on each ack, before replay. Runs AFTER the bound entries' auto-adopt, so it may
+  derive from just-adopted mirrors. Required when nothing is bound.
+- `pose(world)` — read the opaque entries into a flat render pose (`{ x, y, … }`);
+  its fields compose with the bound entries' auto keys (`"paddle.x"`, `"puck.vx"`;
+  custom keys win on collision). Read handle-side with `me.value("paddle.x")`
+  (a flat key — no string-path eval, portable to C#/C).
 
 ```ts
 const me = predict.sim({
   input,
-  world: { world, body },
+  world: { world, body },      // engine handles — no refId ⇒ opaque
   step:  (ctx, cmd, w) => { applyInput(w.body, cmd); w.world.step(); },  // timestep = ctx.dt
   adopt: (w) => { w.body.setTranslation({ x: self.x, y: self.y }, true); },
   pose:  (w) => { const t = w.body.translation(); return { x: t.x, y: t.y }; },
 });
 ```
 
-The three callbacks fire keyed to network acks the app never sees directly — the lifecycle:
+The loop, keyed to network acks the app never sees directly — the lifecycle:
 
 ```
 your render frame:
-                                     ┌─ new ack? ─▶ adopt(world)               adopt server truth
+                                     ┌─ new ack? ─▶ bound pulls + adopt(world)  adopt server truth
   n = predict.tick(now) ─────────────┤             step(ctx,cmd,world) × pend   replay, isReplay=true
-                                     │             pose(world)                  re-sample pose (once)
+                                     │             refresh pose (once)
                                      └─ always ──▶ error decay
   n × { input.data.… = …;
         input.send()   } ────────────▶             step(ctx,cmd,world)          live, isReplay=false
-                                                   pose(world)                  sample pose
-  draw(me.value("x"))                ◀── cached pose: interpolate + smooth, NO callbacks
+                                                   refresh pose
+  draw(predict.value(puck, "x"))     ◀── cached pose: interpolate + smooth, NO callbacks
 ```
 
-> ⚠️ **`adopt` reseeds SCALARS; replay re-derives the rest.** Engine-internal
-> non-scalar state (contact caches, sleeping islands, solver accumulators) is NOT
-> rolled back across reconcile — only what `adopt` restores plus what replay re-runs.
-> Both shipped consumers (composite scalars; a Rapier shooter reseeding
-> position + velocity) are fully served by this. An engine that depends on internal
-> state surviving reconcile would need a per-tick snapshot ring, which `sim` does
-> not carry.
+> ⚠️ **Adopt reseeds SCALARS; replay re-derives the rest.** Bound fields are pulled
+> unconditionally every ack (a frozen entity emits no delta, but replay has mutated
+> the mirror — skipping the copy would double-apply inputs on the stale value).
+> Engine-internal non-scalar state (contact caches, sleeping islands, solver
+> accumulators) is NOT rolled back across reconcile — only what adopt restores plus
+> what replay re-runs. Both shipped consumers (composite scalars; a physics-engine
+> shooter reseeding position + velocity) are fully served by this. An engine that
+> depends on internal state surviving reconcile would need a per-tick snapshot
+> ring, which `sim` does not carry.
 
 ### Which primitive for which interaction?
 
