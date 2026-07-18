@@ -125,7 +125,12 @@ export function createRouter<
   E extends Record<string, Endpoint>,
   Config extends RouterConfig
 >(endpoints: E, config: Config = {} as Config) {
-  return createBetterCallRouter({ ...endpoints }, config);
+  return createBetterCallRouter({ ...endpoints }, {
+    // better-call's /api/reference page dumps the full API surface
+    // unauthenticated — opt back in by passing `openapi` explicitly.
+    openapi: { disabled: true },
+    ...config,
+  });
 }
 
 export interface BasicAuthOptions {

@@ -61,5 +61,6 @@ export const postMatchmakeMethod = createEndpoint("/matchmake/:method/:roomName"
 });
 
 export function getDefaultRouter() {
-  return createRouter({ postMatchmakeMethod });
+  // no public docs page — the docs surface is playground's gated /__apidocs
+  return createRouter({ postMatchmakeMethod }, { openapi: { disabled: true } });
 }

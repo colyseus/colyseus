@@ -22,7 +22,7 @@
     "start": "vite",
     "build": "vite build && node build.mjs",
     "preview": "vite preview",
-    "test-todo": "vitest",
+    "test": "vitest run",
     "prepublishOnly": "pnpm --filter @colyseus/sdk run build && npm run build"
   },
   "files": [

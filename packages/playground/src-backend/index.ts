@@ -6,7 +6,7 @@ import { spawn } from 'node:child_process';
 import os from 'node:os';
 import { createRequire } from 'node:module';
 import type { IncomingMessage, ServerResponse } from 'http';
-import { createEndpoint, dualModeEndpoints, isDevMode, matchMaker, Server, type IRoomCache, type Endpoint } from '@colyseus/core';
+import { createEndpoint, dualModeEndpoints, isDevMode, logger, matchMaker, Server, type IRoomCache, type Endpoint } from '@colyseus/core';
 import { auth, JWT } from '@colyseus/auth';
 import { applyMonkeyPatch } from './colyseus.ext.js';
 import { serveStatic } from './serve-static.js';
@@ -93,14 +93,24 @@ export function playground(opts: PlaygroundOptions = {}) {
   const prefix = opts.prefix ?? '';
   const use = opts.use ?? [];
 
-  // Same opt-in rule as `playground-apidocs`: profiling adds runtime overhead
-  // and leaks internal stack frames, so refuse outside devMode unless an
-  // explicit `use:` auth guard is configured. 404 hides the route's existence.
-  const profilingDenied = () =>
-    (!isDevMode && use.length === 0) ? new Response('Not found', { status: 404 }) : null;
+  // Data endpoints leak internals (room listing + auth config, API schemas,
+  // CPU profiles/stack frames). Open during local dev (devMode or a
+  // non-production NODE_ENV); on production mounts require a `use:` guard —
+  // the guard is the opt-in. 404 hides the routes' existence.
+  let warnedGuardedProd = false;
+  const guardedDenied = () => {
+    if (isDevMode || process.env.NODE_ENV !== 'production') { return null; }
+    if (use.length === 0) { return new Response('Not found', { status: 404 }); }
+    if (!warnedGuardedProd) {
+      warnedGuardedProd = true;
+      logger.warn('@colyseus/playground: serving in production behind `use:` middleware — make sure at least one enforces authentication.');
+    }
+    return null;
+  };
 
   const endpoints: Record<string, Endpoint> = {
     'playground-rooms': createEndpoint(`${prefix}/rooms`, { method: 'GET', use }, async () => {
+      const denied = guardedDenied(); if (denied) { return denied; }
       const rooms = await matchMaker.driver.query({});
       const roomsByType: Record<string, number> = {};
       const roomsById: Record<string, IRoomCache> = {};
@@ -121,29 +131,26 @@ export function playground(opts: PlaygroundOptions = {}) {
     }),
 
     'playground-apidocs': createEndpoint(`${prefix}/__apidocs`, { method: 'GET', use }, async () => {
-      // Dumps every route + Zod schema, so an unguarded public mount leaks
-      // the whole API surface. Refuse only the accidental case: not devMode
-      // AND no `use:` guard. A guard is the opt-in for prod use. 404 hides
-      // the route's existence.
-      if (!isDevMode && use.length === 0) {
-        return new Response('Not found', { status: 404 });
-      }
+      const denied = guardedDenied(); if (denied) { return denied; }
 
       let z: any;
       try { z = await import('zod'); } catch { /* zod is an optional peer */ }
       const routerEndpoints: Record<string, any> = (Server.current?.router as any)?.endpoints ?? {};
-      return Object.values(routerEndpoints).map((endpoint: any) => ({
-        method: endpoint.options.method,
-        path: endpoint.path,
-        body: z && endpoint.options.body && z.toJSONSchema(endpoint.options.body),
-        query: z && endpoint.options.query && z.toJSONSchema(endpoint.options.query),
-        metadata: endpoint.options.metadata,
-        description: endpoint.options.metadata?.openapi?.description,
-      }));
+      return Object.values(routerEndpoints)
+        // SERVER_ONLY endpoints aren't routable — don't list them either
+        .filter((endpoint: any) => !endpoint.options.metadata?.SERVER_ONLY)
+        .map((endpoint: any) => ({
+          method: endpoint.options.method,
+          path: endpoint.path,
+          body: z && endpoint.options.body && z.toJSONSchema(endpoint.options.body),
+          query: z && endpoint.options.query && z.toJSONSchema(endpoint.options.query),
+          metadata: endpoint.options.metadata,
+          description: endpoint.options.metadata?.openapi?.description,
+        }));
     }),
 
     'profiling-start': createEndpoint(`${prefix}/profiling/start`, { method: 'POST', use }, async (ctx) => {
-      const denied = profilingDenied(); if (denied) { return denied; }
+      const denied = guardedDenied(); if (denied) { return denied; }
       if (profilingSession) {
         return { status: 'running', startedAt: profilingStartedAt, error: 'already running' };
       }
@@ -162,7 +169,7 @@ export function playground(opts: PlaygroundOptions = {}) {
     }),
 
     'profiling-stop': createEndpoint(`${prefix}/profiling/stop`, { method: 'POST', use }, async () => {
-      const denied = profilingDenied(); if (denied) { return denied; }
+      const denied = guardedDenied(); if (denied) { return denied; }
       if (!profilingSession) {
         return { status: 'idle', error: 'not running' };
       }
@@ -189,7 +196,7 @@ export function playground(opts: PlaygroundOptions = {}) {
     }),
 
     'profiling-status': createEndpoint(`${prefix}/profiling/status`, { method: 'GET', use }, async () => {
-      const denied = profilingDenied(); if (denied) { return denied; }
+      const denied = guardedDenied(); if (denied) { return denied; }
       return {
         running: !!profilingSession,
         startedAt: profilingSession ? profilingStartedAt : 0,
@@ -203,7 +210,7 @@ export function playground(opts: PlaygroundOptions = {}) {
     }),
 
     'profiling-profile': createEndpoint(`${prefix}/profiling/profile.cpuprofile`, { method: 'GET', use }, async () => {
-      const denied = profilingDenied(); if (denied) { return denied; }
+      const denied = guardedDenied(); if (denied) { return denied; }
       if (!lastProfile) { return new Response('No profile captured', { status: 404 }); }
       const buf = Buffer.from(lastProfile, 'utf8');
       return new Response(new Uint8Array(buf) as any, {
@@ -223,7 +230,7 @@ export function playground(opts: PlaygroundOptions = {}) {
     }),
 
     'profiling-report': createEndpoint(`${prefix}/profiling/report.html`, { method: 'GET', use }, async () => {
-      const denied = profilingDenied(); if (denied) { return denied; }
+      const denied = guardedDenied(); if (denied) { return denied; }
       if (!lastReportHtml) { return new Response('No report available', { status: 404 }); }
       const buf = Buffer.from(lastReportHtml, 'utf8');
       return new Response(new Uint8Array(buf) as any, {
