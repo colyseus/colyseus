@@ -223,7 +223,8 @@ function applyMonkeyPatches() {
         // decoded, causing "refId not found" schema decoder errors.
         const originalOnClose = transport.events.onclose;
         transport.events.onclose = function(event) {
-            if (preferences.latencySimulation.enabled && preferences.latencySimulation.delay > 0) {
+            // jitter-only sim (delay=0) also schedules delayed messages
+            if (preferences.latencySimulation.enabled && (preferences.latencySimulation.delay > 0 || preferences.latencySimulation.jitter > 0)) {
                 setTimeout(function(this: any) {
                     if (originalOnClose) originalOnClose.call(this, event);
                 }, preferences.latencySimulation.delay + preferences.latencySimulation.jitter + 1);
