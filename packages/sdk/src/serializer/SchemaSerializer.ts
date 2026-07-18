@@ -28,7 +28,18 @@ export class SchemaSerializer<T extends Schema = any> implements Serializer<T> {
     decoder: Decoder<T>;
 
     setState(encodedState: Uint8Array, it?: Iterator) {
-        this.decoder.decode(encodedState, it);
+        // A full snapshot is authoritative: on a rejoin (decoder already
+        // holds refs beyond the root) reconcile — entries the snapshot
+        // doesn't contain were deleted/hidden while this client was off the
+        // wire. A first join decodes onto a fresh tree — nothing to
+        // reconcile, skip the bookkeeping (measured +10-25% on large
+        // states). Patches stay additive. Older @colyseus/schema
+        // resolutions lack decodeResync — degrade to the additive decode.
+        if (this.decoder.root.refs.size > 1 && typeof this.decoder.decodeResync === "function") {
+            this.decoder.decodeResync(encodedState, it);
+        } else {
+            this.decoder.decode(encodedState, it);
+        }
     }
 
     getState() {
