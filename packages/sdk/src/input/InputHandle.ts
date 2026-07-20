@@ -4,6 +4,8 @@ import { Protocol, ProtocolModifier } from '@colyseus/shared-types';
 
 import type { Connection } from '../Connection.ts';
 import { now } from '../core/utils.ts';
+import { debugOverlayActive } from '../debug-channel.ts';
+import { metadataOf } from '../predict/schema.ts';
 
 /**
  * Minimal structural type the input handle needs from its host (Room). Lets
@@ -308,6 +310,8 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
   // freshly-allocated baseline.
   private _lastStamp = 0;
   private static _warnedBufferOverflow = false;
+  // Dev diagnostic (see _warnUnknownFields): unknown data keys already warned.
+  private _warnedUnknownKeys: Set<string> | null = null;
 
   // Lag-comp stamp (server INPUT_OPTIONS handshake): which timeline(s) each
   // reliable input is prefixed with, DELTA-CODED on the wire (see _lastStamp).
@@ -448,9 +452,30 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
     return this._renderDelayProvider ? this._renderDelayProvider() : this._renderDelay;
   }
 
+  /** Dev diagnostic (debug overlay only). An assignment to an UNDECLARED field
+   *  lands as a plain own property — declared fields live behind prototype
+   *  setters in the dense `$values` array and never create own keys — so any
+   *  own enumerable string key missing from the schema metadata is a write
+   *  that will never be encoded. Warn once per key. */
+  private _warnUnknownFields(): void {
+    const meta = metadataOf(this.data as object);
+    if (!meta) return;
+    for (const key of Object.keys(this.data as object)) {
+      if (meta[key] !== undefined || this._warnedUnknownKeys?.has(key)) continue;
+      (this._warnedUnknownKeys ??= new Set()).add(key);
+      console.warn(
+        `@colyseus/sdk input: "${key}" is not a declared field on ` +
+        `${(this.data as object).constructor.name} — the write is never encoded or sent. ` +
+        `Declare it with @type(...) on the input schema, or remove the write.`,
+      );
+    }
+  }
+
   send(): number {
     const conn = this._host.connection;
     if (!conn?.isOpen) return 0;   // nothing transmitted → seq 0 (seqs are 1-based)
+
+    if (debugOverlayActive()) this._warnUnknownFields();
 
     // May be 0-length on a no-change delta tick → we still frame + send a
     // body-less input (server decodes it as a no-op, holding the last values).
