@@ -76,7 +76,7 @@ describe('#1 unknown fixed step guard', () => {
             () => new SimReconciler<Cmd, { x: number }, { x: number }>({
                 input: input as any,
                 world: { x: 0 },
-                step: (_c, cmd, w) => { w.x += cmd.q; },
+                step: (_c, w, cmd) => { w.x += cmd.q; },
                 adopt: () => {},
                 pose: (w) => ({ x: w.x }),
             }),
@@ -250,7 +250,7 @@ describe('#2 the reconciler observes the input handle (single mutate + send surf
             input: input as any,
             world: { x: 0 },
             smoothing: 0,
-            step: (_c, cmd, w) => { w.x += cmd.q; },
+            step: (_c, w, cmd) => { w.x += cmd.q; },
             adopt: () => {},
             pose: (w) => ({ x: w.x }),
         });

@@ -115,7 +115,7 @@ describe('@colyseus/sdk/predict — public barrel', () => {
             const ctl = p.sim({
                 input: handle,
                 world: { world: 1 },
-                step: (_ctx, cmd, w) => {
+                step: (_ctx, w, cmd) => {
                     expectTypeOf(cmd).toEqualTypeOf<Data<MoveInputT>>();
                     expectTypeOf(w).toEqualTypeOf<{ world: number }>();
                 },

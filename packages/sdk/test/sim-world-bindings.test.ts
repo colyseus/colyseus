@@ -101,7 +101,7 @@ describe('SimReconciler auto-bound world entries', () => {
         const me = new SimReconciler({
             input: asHandle(new FakeInput()),
             world,
-            step: (_ctx, cmd: Cmd, w) => { w.paddle.x += cmd.ax; },
+            step: (_ctx, w, cmd: Cmd) => { w.paddle.x += cmd.ax; },
         });
         assert.notStrictEqual(me.world.paddle as object, player, 'the entry was replaced by a plain mirror');
         assert.strictEqual(me.world as object, world, 'replacement happened IN PLACE on the caller\'s world');
@@ -121,7 +121,7 @@ describe('SimReconciler auto-bound world entries', () => {
         const me = new SimReconciler({
             input: asHandle(input),
             world: { puck },
-            step: (_ctx, cmd: Cmd, w) => { w.puck.x += cmd.ax; },
+            step: (_ctx, w, cmd: Cmd) => { w.puck.x += cmd.ax; },
         });
         for (let i = 0; i < 3; i++) { input.data.ax = 1; input.send(); }
         assert.equal(me.world.puck.x, 103, 'three pushes predicted');
@@ -137,7 +137,7 @@ describe('SimReconciler auto-bound world entries', () => {
         const me = new SimReconciler({
             input: asHandle(input),
             world: { paddle: player, engine },
-            step: (_ctx, cmd: Cmd, w) => { w.paddle.x += cmd.ax; w.engine.pos += cmd.ax; },
+            step: (_ctx, w, cmd: Cmd) => { w.paddle.x += cmd.ax; w.engine.pos += cmd.ax; },
             adopt: (w) => { w.engine.pos = w.paddle.x; },   // derives from the just-adopted mirror
             pose: (w) => ({ enginePos: w.engine.pos }),
         });
@@ -189,7 +189,7 @@ describe('SimReconciler auto-bound world entries', () => {
         const me = new SimReconciler({
             input: asHandle(input),
             world: { puck },
-            step: (_ctx, cmd: Cmd, w) => { w.puck.x += cmd.ax; },
+            step: (_ctx, w, cmd: Cmd) => { w.puck.x += cmd.ax; },
         });
         for (let i = 0; i < 3; i++) { input.data.ax = 1; input.send(); }
         me.reset();
@@ -247,7 +247,7 @@ describe('predict.value bound overlay', () => {
         const me = p.sim({
             input: asHandle(input),
             world: { paddle: player },
-            step: (_ctx, cmd, w) => { w.paddle.x += cmd.ax; },
+            step: (_ctx, w, cmd) => { w.paddle.x += cmd.ax; },
         });
         assert.equal(p.value(player, 'x'), 10, 'bound read (pose seed) right after spawn');
 
@@ -275,7 +275,7 @@ describe('predict.value bound overlay', () => {
         const me = p.sim({
             input: asHandle(input),
             world: { paddle: player },
-            step: (_ctx, cmd, w) => { w.paddle.x += cmd.ax; },
+            step: (_ctx, w, cmd) => { w.paddle.x += cmd.ax; },
         });
         assert.equal(p.value(player, 'x'), 20, 'overlay took over (pose seeded from current truth)');
 
@@ -295,7 +295,7 @@ describe('predict.value bound overlay', () => {
         const me = p.sim({
             input: asHandle(input),
             world: { paddle: player },
-            step: (_ctx, cmd, w) => { w.paddle.x += cmd.ax; },
+            step: (_ctx, w, cmd) => { w.paddle.x += cmd.ax; },
         });
         p.attachAll('players', { x: 'lerp' });       // fires for the existing child → stash (sample (1000, 10))
         assert.equal(p.value(player, 'x'), 10, 'controller pose still wins after the later attach');
@@ -317,7 +317,7 @@ describe('predict.value bound overlay', () => {
         const me = p.sim({
             input: asHandle(input),
             world: { paddle: player },
-            step: (_ctx, cmd, w) => { w.paddle.x += cmd.ax; },
+            step: (_ctx, w, cmd) => { w.paddle.x += cmd.ax; },
         });
         p.untrack(player, 'x');                      // frees the stash, keeps the overlay
         assert.equal(p.value(player, 'x'), 10, 'overlay survives untrack');
@@ -336,7 +336,7 @@ describe('predict.value bound overlay', () => {
         const me = p.sim({
             input: asHandle(input),
             world: { paddle: player },
-            step: (_ctx, cmd, w) => { w.paddle.x += cmd.ax; },
+            step: (_ctx, w, cmd) => { w.paddle.x += cmd.ax; },
         });
         p.tick(1000);
         input.data.ax = 5; input.send();
@@ -354,11 +354,11 @@ describe('predict.value bound overlay', () => {
         const p = Predict.get(decoder, { mode: 'lerp', delay: 100 });
 
         const a = new FakeInput();
-        p.sim({ input: asHandle(a), world: { puck }, step: (_ctx, cmd, w) => { w.puck.x += cmd.ax; } });
+        p.sim({ input: asHandle(a), world: { puck }, step: (_ctx, w, cmd) => { w.puck.x += cmd.ax; } });
         const b = new FakeInput();
         let second!: SimReconciler<Cmd, {}, { puck: PuckT }>;
         const warns = captureWarn(() => {
-            second = p.sim({ input: asHandle(b), world: { puck }, step: (_ctx, cmd, w) => { w.puck.x += 10 * cmd.ax; } });
+            second = p.sim({ input: asHandle(b), world: { puck }, step: (_ctx, w, cmd) => { w.puck.x += 10 * cmd.ax; } });
         });
         assert.isAbove(warns.filter(w => w.includes('already bound')).length, 0, 'duplicate claim warns');
 
@@ -376,11 +376,11 @@ describe('predict.value bound overlay', () => {
         const p = Predict.get(decoder, { mode: 'lerp', delay: 100 });
 
         const a = new FakeInput();
-        const first = p.sim({ input: asHandle(a), world: { puck }, step: (_ctx, cmd, w) => { w.puck.x += cmd.ax; } });
+        const first = p.sim({ input: asHandle(a), world: { puck }, step: (_ctx, w, cmd) => { w.puck.x += cmd.ax; } });
         const b = new FakeInput();
         let winner!: SimReconciler<Cmd, {}, { puck: PuckT }>;
         captureWarn(() => {
-            winner = p.sim({ input: asHandle(b), world: { puck }, step: (_ctx, cmd, w) => { w.puck.x += 10 * cmd.ax; } });
+            winner = p.sim({ input: asHandle(b), world: { puck }, step: (_ctx, w, cmd) => { w.puck.x += 10 * cmd.ax; } });
         });
 
         first.dispose();                             // stale unregister — must be a no-op
@@ -418,7 +418,7 @@ describe('predict.value bound overlay', () => {
         p.sim({
             input: asHandle(input),
             world: { paddle: player, puck },
-            step: (_ctx, cmd, w) => {
+            step: (_ctx, w, cmd) => {
                 w.paddle.x += cmd.ax;
                 w.puck.x += w.puck.vx;
                 if (w.paddle.x >= w.puck.x) w.puck.vx = 2;   // "hit" imparts velocity

@@ -236,7 +236,7 @@ function makeSim(channel: PredictedEventChannel<string>, opts: {
     const simOpts: SimReconcilerOptions<Cmd, { x: number }, World> = {
         input: input as unknown as InputHandle<Cmd>,
         world,
-        step: (ctx, cmd, w) => {
+        step: (ctx, w, cmd) => {
             const was = w.x >= threshold;
             w.x += cmd.ax * ctx.dt;
             if (w.x >= threshold && !was) {

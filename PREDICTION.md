@@ -301,7 +301,7 @@ const me = predict.sim({
     paddle: player,            // decoded schema instance ⇒ auto-bound (x, y, …)
     puck:   room.state.puck,   // ⇒ auto-bound (x, y, vx, vy)
   },
-  step: (ctx, cmd, w) => stepWorld(w, cmd, ctx.dt),      // the SAME fn the server runs
+  step: (ctx, w, cmd) => stepWorld(w, cmd, ctx.dt),      // the SAME fn the server runs
 });
 draw(predict.value(player, "x"), predict.value(room.state.puck, "x")); // one idiom
 chase(me.world.paddle);        // RAW predicted state for logic — never the render read
@@ -318,7 +318,7 @@ replaces the instance on the world object itself).
 **Opaque engine state.** Anything without a refId passes through untouched, and
 the `adopt` / `pose` callbacks own it — a physics solver's `world` handle + body:
 
-- `step(ctx, cmd, world)` — deterministic, **SHARED with the server**; advance `world`
+- `step(ctx, world, cmd)` — deterministic, **SHARED with the server**; advance `world`
   by `ctx.dt`. One-shot concerns split three ways by shape: `ctx.memo` for VALUES
   the sim consumes (frozen, replayed back), `ctx.predict` for EVENTS with
   settlement, and a plain `if (!ctx.isReplay) { … }` branch for fire-and-forget
@@ -336,7 +336,7 @@ the `adopt` / `pose` callbacks own it — a physics solver's `world` handle + bo
 const me = predict.sim({
   input,
   world: { world, body },      // engine handles — no refId ⇒ opaque
-  step:  (ctx, cmd, w) => { applyInput(w.body, cmd); w.world.step(); },  // timestep = ctx.dt
+  step:  (ctx, w, cmd) => { applyInput(w.body, cmd); w.world.step(); },  // timestep = ctx.dt
   adopt: (w) => { w.body.setTranslation({ x: self.x, y: self.y }, true); },
   pose:  (w) => { const t = w.body.translation(); return { x: t.x, y: t.y }; },
 });
@@ -502,7 +502,7 @@ identical loop on both sides:
 
 ```ts
 // shared client/server — works for subSteps 1 too (subDt === dt then)
-step: (ctx, cmd, e) => {
+step: (ctx, e, cmd) => {
   applyCmd(e.body, cmd);                                       // per-INPUT effect (impulses!)
   for (let i = 0; i < ctx.subSteps; i++) e.world.step(ctx.subDt);
 },

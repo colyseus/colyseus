@@ -132,7 +132,7 @@ describe('ctx.reckonTime resolution + lagCompActive', () => {
         p.sim({
             input: asHandle(input),
             world: { paddle: player },
-            step: (ctx, cmd, w) => { seenTimes.push(ctx.reckonTime); w.paddle.x += cmd.ax; },
+            step: (ctx, w, cmd) => { seenTimes.push(ctx.reckonTime); w.paddle.x += cmd.ax; },
         });
         input.data.ax = 1; input.send();
         assert.deepEqual(seenTimes, [4242], 'unstamped step resolved through the injected room clock');

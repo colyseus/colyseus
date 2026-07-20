@@ -2,6 +2,13 @@
 
 ## 0.18.0
 
+### Experimental: client-side prediction
+
+- **Breaking:** `predict.sim`'s `step` callback is now `(ctx, world, command)`
+  (was `(ctx, command, world)`), matching `predict.reconciler`'s
+  `step(ctx, state, command)` — context, the thing you mutate, the input.
+  Update the parameter order in your `step` callbacks; bodies are unaffected.
+
 ### Experimental: typed binary client→server input
 
 > **Status: experimental.** API surface and wire format may change before 0.18 stable. Feedback welcome.

@@ -51,6 +51,8 @@ published JS types.)
   `reconcileSeq`, `dead`.
 - `Reconciler` adds `state` (exact predicted state, mutable) and
   `value(field)`; `SimReconciler` adds `world`, `value(field)`, `pose()`.
+- Both `step` callbacks share ONE shape — `(ctx, <the-thing-you-mutate>,
+  command)`: `step(ctx, state, command)` / `step(ctx, world, command)`.
 - **`StepContext`** (the `step` callback's ctx): `dt`, `dtMs`, `tick`,
   `subSteps`, `subDt`, `subDtMs`, `isReplay`, `reckonTime`, `lagCompActive`,
   `memo(keyOrCompute, compute?)`, `predict(sink, payload)` (+ the structural

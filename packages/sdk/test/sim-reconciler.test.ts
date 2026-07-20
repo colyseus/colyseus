@@ -85,7 +85,7 @@ function baseOpts(input: FakeInput, world: Engine, src: Self, extra: Partial<Opt
     return {
         input: input as unknown as InputHandle<Cmd>,
         world,
-        step: (ctx, cmd, w) => { w.vx += cmd.ax * ctx.dt; w.x += w.vx * ctx.dt; w.spin += 1; },
+        step: (ctx, w, cmd) => { w.vx += cmd.ax * ctx.dt; w.x += w.vx * ctx.dt; w.spin += 1; },
         adopt: (w) => { w.x = src.x; w.vx = src.vx; }, // NOT spin
         pose: (w) => ({ x: w.x }),
         ...extra,
@@ -353,7 +353,7 @@ describe('SimReconciler', () => {
         // ax=0 → the base sim leaves x alone; ctx.memo is the only thing moving x.
         // Key-less form: one memo per step shares the default slot.
         const { ctl, instance } = make(engine, input, {
-            step: (ctx, _cmd, w) => {
+            step: (ctx, w, _cmd) => {
                 const v = ctx.memo(() => { computeCount++; return computeCount * 100; });
                 w.x += v ?? 0;
             },
@@ -378,7 +378,7 @@ describe('SimReconciler', () => {
         let computeCount = 0;
         // keyed form — the >1-memos-per-step overload
         const { ctl, instance } = make(engine, input, {
-            step: (ctx, _cmd, w) => { w.x += ctx.memo('bump', () => { computeCount++; return 100; }) ?? 0; },
+            step: (ctx, w, _cmd) => { w.x += ctx.memo('bump', () => { computeCount++; return 100; }) ?? 0; },
         });
 
         for (let i = 0; i < 3; i++) step(ctl, input, { ax: 0 }); // 3 unacked values memoized
@@ -407,7 +407,7 @@ describe('ctx.memo collision warning', () => {
     test('two key-less memos in one step warn once (not per step)', () => {
         const input = new FakeInput();
         const { ctl } = make(makeEngine(), input, {
-            step: (ctx, _cmd, w) => {
+            step: (ctx, w, _cmd) => {
                 w.x += ctx.memo(() => 1) ?? 0;
                 w.vx = ctx.memo(() => 2) ?? 0;   // same shared "" slot
             },
@@ -423,7 +423,7 @@ describe('ctx.memo collision warning', () => {
     test('warns even when the first compute returned undefined (stored nowhere)', () => {
         const input = new FakeInput();
         const { ctl } = make(makeEngine(), input, {
-            step: (ctx, _cmd, w) => {
+            step: (ctx, w, _cmd) => {
                 ctx.memo(() => undefined);        // "no hit" — sparse storage skips it
                 w.x += ctx.memo(() => 5) ?? 0;    // still the same slot
             },
@@ -437,7 +437,7 @@ describe('ctx.memo collision warning', () => {
     test('distinct explicit keys are silent, live and on replay', () => {
         const input = new FakeInput();
         const { ctl, instance } = make(makeEngine(), input, {
-            step: (ctx, _cmd, w) => {
+            step: (ctx, w, _cmd) => {
                 w.x += ctx.memo('a', () => 1) ?? 0;
                 w.x += ctx.memo('b', () => 2) ?? 0;
             },
@@ -454,7 +454,7 @@ describe('ctx.memo collision warning', () => {
     test('key-less plus one explicit key is silent (different slots)', () => {
         const input = new FakeInput();
         const { ctl } = make(makeEngine(), input, {
-            step: (ctx, _cmd, w) => {
+            step: (ctx, w, _cmd) => {
                 w.x += ctx.memo(() => 1) ?? 0;
                 w.x += ctx.memo('extra', () => 2) ?? 0;
             },
@@ -468,7 +468,7 @@ describe('ctx.memo collision warning', () => {
     test('the same explicit key twice in one step warns and names the key', () => {
         const input = new FakeInput();
         const { ctl } = make(makeEngine(), input, {
-            step: (ctx, _cmd, w) => {
+            step: (ctx, w, _cmd) => {
                 w.x += ctx.memo('hit', () => 1) ?? 0;
                 w.x += ctx.memo('hit', () => 2) ?? 0;
             },
@@ -482,7 +482,7 @@ describe('ctx.memo collision warning', () => {
     test('silent with diagnostics off (prod)', () => {
         const input = new FakeInput();
         const { ctl } = make(makeEngine(), input, {
-            step: (ctx, _cmd, w) => {
+            step: (ctx, w, _cmd) => {
                 w.x += ctx.memo(() => 1) ?? 0;
                 w.x += ctx.memo(() => 2) ?? 0;
             },
@@ -494,7 +494,7 @@ describe('ctx.memo collision warning', () => {
     test('an epoch reset\'s reused seq numbers do not false-positive', () => {
         const input = new FakeInput();
         const { ctl } = make(makeEngine(), input, {
-            step: (ctx, _cmd, w) => { w.x += ctx.memo(() => 1) ?? 0; },   // ONE key-less memo — correct
+            step: (ctx, w, _cmd) => { w.x += ctx.memo(() => 1) ?? 0; },   // ONE key-less memo — correct
         });
         withDiagnostics(() => {
             const warns = captureWarn(() => {
@@ -578,7 +578,7 @@ describe('read-before-pump warning', () => {
         // step reads back a render value — controller-driven, not the app's render pass
         let ctl!: SimReconciler<Cmd, Pose, Engine>;
         ctl = new SimReconciler<Cmd, Pose, Engine>(baseOpts(input, engine, instance, {
-            step: (ctx, cmd, w) => { w.vx += cmd.ax * ctx.dt; w.x += w.vx * ctx.dt; ctl.value('x'); },
+            step: (ctx, w, cmd) => { w.vx += cmd.ax * ctx.dt; w.x += w.vx * ctx.dt; ctl.value('x'); },
         }));
 
         const warns = captureWarn(() => {

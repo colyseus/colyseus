@@ -191,7 +191,7 @@ describe('predict.read — batch render reads', () => {
         const me = p.sim({
             input: asHandle(input),
             world: { paddle: player },
-            step: (_ctx, cmd: Cmd, w) => { w.paddle.x += cmd.ax; },
+            step: (_ctx, w, cmd: Cmd) => { w.paddle.x += cmd.ax; },
         });
 
         p.tick(1000);

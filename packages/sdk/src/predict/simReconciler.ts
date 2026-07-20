@@ -72,10 +72,10 @@
  *
  *     your render frame:
  *                                          ┌─ new ack? ─▶ adopt (bound pulls + adopt())  adopt server truth
- *       n = predict.tick(now) ─────────────┤             step(ctx, cmd, world) × pend    replay, isReplay=true
+ *       n = predict.tick(now) ─────────────┤             step(ctx, world, cmd) × pend    replay, isReplay=true
  *                                          │             refresh pose (once)
  *                                          └─ always ──▶ error decay
- *       n × (input.data = …; input.send()) ─▶            step(ctx, cmd, world)           live, isReplay=false (on send)
+ *       n × (input.data = …; input.send()) ─▶            step(ctx, world, cmd)           live, isReplay=false (on send)
  *       draw(predict.value(player, "x"))   ◀── pure read: interpolate + smooth
  *
  * Composite-scalar example (no engine — the common case):
@@ -87,7 +87,7 @@
  *             paddle: player,                                      // decoded schema ⇒ auto-bound
  *             puck:   room.state.puck,                             // ⇒ auto-bound (x, y, vx, vy)
  *         },
- *         step: (ctx, cmd, w) => stepWorld(w, cmd, ctx.dt),        // SHARED with the server
+ *         step: (ctx, w, cmd) => stepWorld(w, cmd, ctx.dt),        // SHARED with the server
  *         smoothing: 15,
  *     });
  *     const n = predict.tick(now);                                 // fixed steps due this frame
@@ -100,7 +100,7 @@
  *     const me = predict.sim({
  *         input,
  *         world: { world, body },                                  // the engine handle
- *         step:  (ctx, cmd, w) => { applyInput(w.body, cmd); w.world.step(); }, // dt = ctx.dt
+ *         step:  (ctx, w, cmd) => { applyInput(w.body, cmd); w.world.step(); }, // dt = ctx.dt
  *         adopt: (w) => { w.body.setTranslation({ x: self.x, y: self.y }, true); },
  *         pose:  (w) => { const t = w.body.translation(); return { x: t.x, y: t.y }; },
  *     });
@@ -178,12 +178,15 @@ export interface SimReconcilerOptions<I, P extends Record<string, number>, E> ex
      * through `ctx.memo` (freeze a value replay can't re-derive) and
      * `ctx.predict` (optimistic events — live steps only, replay-safe).
      *
+     * Parameter order matches `Reconciler`'s `step(ctx, state, command)`:
+     * context, the thing you mutate, the input — `world ≈ state`.
+     *
      * `command` is the buffered wire input the handle recorded at `send()`
      * (`input.at(seq)`) — the round-tripped value the server decodes, read the same
      * way on the live catch-up step and on rollback replay, so lossy wire fields
      * replay identically.
      */
-    step: (ctx: StepContext, command: I, world: Materialize<E>) => void;
+    step: (ctx: StepContext, world: Materialize<E>, command: I) => void;
     /**
      * Adopt the server's authoritative truth into `world`'s OPAQUE entries: seed
      * them from the authoritative scalars on your schema instance(s). Called on
@@ -243,7 +246,7 @@ export class SimReconciler<I = any, P extends Record<string, number> = any, E = 
     /** Set whenever the pose endpoints/alpha change; {@link pose} recomputes once. */
     private poseDirty = true;
 
-    private readonly step: (ctx: StepContext, command: I, world: Materialize<E>) => void;
+    private readonly step: (ctx: StepContext, world: Materialize<E>, command: I) => void;
     private readonly adopt?: (world: Materialize<E>) => void;
     /** The `pose` option callback, stored under a distinct name so it doesn't
      *  shadow the public {@link pose} method. */
@@ -383,7 +386,7 @@ export class SimReconciler<I = any, P extends Record<string, number> = any, E = 
 
     protected smoothedFields(): readonly string[] { return this.poseFields; }
     protected readCurrent(field: string): number { return this.curPose[field]; }
-    protected applyStep(input: I): void { this.step(this.stepCtx, input, this.worldHandle); }
+    protected applyStep(input: I): void { this.step(this.stepCtx, this.worldHandle, input); }
 
     /** Bound triples pull first — every bound field, unconditionally (replay has
      *  mutated the mirrors since the last adopt, so even a server-unchanged field
