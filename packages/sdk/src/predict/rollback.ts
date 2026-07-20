@@ -251,6 +251,22 @@ export interface RollbackOptions<I> {
      */
     smoothing?: number;
     /**
+     * Teleport threshold (world/pose units). When a reconcile's max per-field
+     * |correction| exceeds it, the visual offsets POP to the corrected pose
+     * (error zeroed, interpolation re-seeded) instead of decaying out — the
+     * active-controller mirror of the passive `attachAll` `snap:`: past the
+     * threshold the jump is a discontinuity (teleport / respawn), not an error
+     * to glide across the map. All-or-nothing over the smoothed fields — a
+     * teleport is one event, one cut; popping per field would tear the pose.
+     * Offsets-only: pending inputs still replay from the new truth (correct
+     * rollback). A respawn that lands on the SAME position induces zero
+     * correction and never trips it — it doesn't need to. Size it above
+     * `maxSpeed × patch interval` and below the smallest legitimate teleport.
+     * `0`/unset = off (every correction smooths). For discontinuities with no
+     * positional jump, call `reset()` instead.
+     */
+    snap?: number;
+    /**
      * Fixed simulation timestep (ms). One input is produced + predicted per step,
      * so the input rate is tied to this, NOT the frame rate — a 120fps and a 60fps
      * client emit the same number of inputs. The owning `Predict` reads this to
@@ -348,6 +364,9 @@ export abstract class RollbackController<I = any> {
 
     protected lastTick = -1;
     protected lastAcked = 0;
+    /** Cached `input.epoch` — {@link tick} self-resets when the handle's epoch
+     *  moves (reconnect / `input.reset()`), so the app never wires it manually. */
+    private lastEpoch: number;
     /** Seq floor for replay: inputs sent at/before this aren't replayed (they
      *  applied to a prior life — set to the sent count on {@link reset}). The
      *  unacked INPUTS themselves live on the input handle, not here. */
@@ -392,6 +411,8 @@ export abstract class RollbackController<I = any> {
     /** Per-seq memo backing `ctx.memo` — computed live, replayed verbatim, pruned on ack. */
     protected readonly memos = new MemoStore();
     protected readonly smoothing: number;
+    /** Teleport pop threshold — see {@link RollbackOptions.snap}. 0 = off. */
+    private readonly snapThreshold: number;
     /** The fixed simulation step (ms) this controller predicts at — read by the
      *  owning `Predict` to pace `predict.tick(now)`. */
     readonly stepMs: number;
@@ -406,6 +427,7 @@ export abstract class RollbackController<I = any> {
         // interval) so corrections ease out before the next one — no stacking.
         this.smoothing = opts.smoothing
             ?? (this.input_.patchRate ? 1000 / this.input_.patchRate : 20);
+        this.snapThreshold = opts.snap ?? 0;
         // Fixed step: prefer an explicit ms, else the handle's server-advertised
         // rate, else derive from an explicit stepSeconds. A wrong dt silently
         // diverges rollback-replay, so we refuse to guess (no 60Hz fallback):
@@ -440,6 +462,7 @@ export abstract class RollbackController<I = any> {
         this.onReconcile = opts.onReconcile;
         this.warnTolerance = opts.warnOnDivergence;
         this.lastAcked = this.input_.lastProcessed;
+        this.lastEpoch = this.input_.epoch;
         // Only inputs sent AFTER this controller exists are predicted (catch-up
         // starts here); pre-existing sends belong to whatever ran before.
         this.predictedSeq = this.input_.sentCount;
@@ -471,6 +494,17 @@ export abstract class RollbackController<I = any> {
         // grows when nothing consumes it (a PAUSE) — alpha clamps at 1 so the render
         // HOLDS at the latest step, and catchUp snaps the backlog back on resume.
         if (dt > 0 && this.stepMs > 0) this.renderAcc += dt;
+
+        // Follow the handle's reset (reconnect / `input.reset()`): the epoch moved,
+        // so our seq cursors describe a dead seq space — without this, predictedSeq
+        // sits above the re-zeroed sentCount and catch-up no-ops (a frozen entity).
+        // Must run BEFORE the ack poll: reset() re-syncs lastAcked, so the poll
+        // below sees no phantom delta. Compare (not +1) absorbs multiple resets.
+        const epoch = this.input_.epoch;
+        if (epoch !== this.lastEpoch) {
+            this.lastEpoch = epoch;
+            this.reset();
+        }
 
         const acked = this.input_.lastProcessed;
         if (acked > this.lastAcked) {
@@ -640,25 +674,41 @@ export abstract class RollbackController<I = any> {
         // Re-base `error` so the smoothed value is unchanged at this instant, then
         // decays out via tick(). `prev` untouched (interpolation keeps flowing).
         // The raw correction (pre-smoothing pop) doubles as a debug gauge —
-        // recorded regardless of snap mode so telemetry sees it either way. The
-        // `error` rebase below is the REAL reconciliation and always runs.
-        const snap = this.smoothing <= 0;
+        // recorded regardless of smoothing mode so telemetry sees it either way.
+        // The `error` rebase below is the REAL reconciliation and always runs.
+        const hard = this.smoothing <= 0;
+        const wantMag = diag || this.snapThreshold > 0;
         let mag = 0;
         for (const f of this.smoothedFields()) {
             const correction = renderedBefore[f] - this.readCurrent(f);
-            this.error[f] = snap ? 0 : correction;
-            if (diag) {
-                this.lastCorrection[f] = correction;
+            this.error[f] = hard ? 0 : correction;
+            if (wantMag) {
                 const a = correction < 0 ? -correction : correction;
                 if (a > mag) mag = a;
+            }
+            if (diag) this.lastCorrection[f] = correction;
+        }
+        // Past the snap threshold the correction is a TELEPORT, not an error: pop
+        // every smoothed field to the corrected pose (see RollbackOptions.snap).
+        // `prev` must re-seed too — zeroing `error` alone still lerps one render
+        // step from the pre-jump pose (a one-frame glide across the map).
+        const popped = this.snapThreshold > 0 && mag > this.snapThreshold;
+        if (popped) {
+            for (const f of this.smoothedFields()) {
+                this.error[f] = 0;
+                this.prev[f] = this.readCurrent(f);
             }
         }
         this.reconcileSeq++;
         if (diag) {
             this.lastCorrectionMag = mag;
-            updateDrift(this.drift, mag);
-            if (this.warnTolerance !== undefined && classifyDrift(this.drift, this.warnTolerance) === "diverging") {
-                warnDivergence(acked, this.lastCorrection, this.drift.ema, this.warnTolerance);
+            // A detected teleport is not divergence — feeding it to the drift EMA
+            // would false-fire warnOnDivergence on every respawn.
+            if (!popped) {
+                updateDrift(this.drift, mag);
+                if (this.warnTolerance !== undefined && classifyDrift(this.drift, this.warnTolerance) === "diverging") {
+                    warnDivergence(acked, this.lastCorrection, this.drift.ema, this.warnTolerance);
+                }
             }
         }
 
@@ -674,8 +724,19 @@ export abstract class RollbackController<I = any> {
         return this.input_.pendingCount;
     }
 
-    /** Re-seed local state from the authoritative instance(s) and clear the
-     *  error offset + input buffer. For respawns / hard resyncs. */
+    /**
+     * Re-seed local state from the authoritative instance(s): clears the error
+     * offsets, memos, and the in-flight window (prior-life sends won't replay).
+     *
+     * Mostly the library's job: the controller self-resets when the input handle
+     * resets (reconnect / `input.reset()` — it polls `input.epoch`), and a
+     * {@link RollbackOptions.snap} threshold pops big positional jumps
+     * (teleport / respawn) with no reset at all. Call this yourself only for
+     * discontinuities the library can't see: a schema field changed meaning with
+     * no positional jump and no input flow (a round flip in a backgrounded tab),
+     * app-side context went stale (a map swap), or in-flight inputs the app
+     * knows are void (death).
+     */
     reset(): void {
         this.reseedState();
         resetDrift(this.drift);   // fresh life — don't carry the prior life's drift

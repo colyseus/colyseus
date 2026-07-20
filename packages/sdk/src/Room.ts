@@ -736,9 +736,8 @@ export class Room<
             // (its consumed counter restarts at 0). Zero ours now so post-reconnect
             // seqs line up — otherwise every ack echo (≤ the old counter) is
             // discarded until the new counter catches up past it, and `sentCount`
-            // stays permanently ahead: reconcilers replay an ever-fat pending
-            // backlog every reconcile. Reconcilers must drop their pending inputs
-            // on `onReconnect` (e.g. `Reconciler.reset()`) for the same reason.
+            // stays permanently ahead. Reconcilers follow this reset on their own
+            // (they poll the handle's `epoch`) — no `onReconnect` wiring needed.
             this.#input?.reset();
         }
 

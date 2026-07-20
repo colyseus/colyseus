@@ -195,9 +195,18 @@ export interface InputHandle<I = any> {
   /**
    * Reset encoder state. Drops the unreliable ring buffer; re-marks every
    * populated field as dirty so the next send emits a full snapshot. Useful
-   * on scene transitions or after reconnection.
+   * on scene transitions; the SDK calls it itself on the reconnect path.
+   * Observing rollback controllers follow a reset automatically (they poll
+   * {@link epoch}) — no manual `Reconciler.reset()` wiring needed.
    */
   reset(): void;
+  /**
+   * Monotonic reset counter: increments on every {@link reset}, whatever
+   * triggered it (the SDK's reconnect path or an app call). Rollback
+   * controllers poll it each tick and self-reset when it moves. Compare with
+   * `!==`, never `+1` — multiple resets can land between polls.
+   */
+  readonly epoch: number;
   /**
    * Last input the server has acknowledged PROCESSING into its authoritative
    * state (the server input-buffer's consumed count, echoed via the TIMED
@@ -262,6 +271,7 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
   // Input round-trip state (one handle per room).
   private _sentCount = 0;                       // reliable inputs transmitted
   private _lastProcessed = 0;                   // server-acked (consumedCount)
+  private _epoch = 0;                           // reset counter — see InputHandle.epoch
   // RTT send-time ring (seq % size → send time); avoids per-send Map churn.
   // Sized WITH the replay ring (one seq window — replay and RTT age out together).
   private _sendTimes: Float64Array;
@@ -373,6 +383,7 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
   get sentCount(): number { return this._sentCount; }
   get pendingCount(): number { return this._sentCount - this._lastProcessed; }
   get replayBufferSize(): number { return this._inputBufferSize; }
+  get epoch(): number { return this._epoch; }
 
   at(seq: number): I | undefined {
     if (this._inputBuffer === null) return undefined;
@@ -413,6 +424,7 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
     this._lastStamp = 0; // next stamped send ships an absolute delta — re-syncs the server's re-zeroed baseline
     this._sendTimes.fill(0); // stale acks for pre-reset seqs must read as "unknown" (-1), not a bogus RTT
     // _inputBuffer is reused as-is: at() gates on _sentCount/_lastProcessed, so it can't surface stale snapshots.
+    this._epoch++; // observing controllers poll this and follow the reset
   }
 
   /**

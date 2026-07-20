@@ -6,11 +6,13 @@ import { InputEncoder } from '@colyseus/schema/input';
 import { schema, t, type SchemaType } from '@colyseus/schema';
 
 import { InputHandleImpl, type InputHandleHost } from '../src/input/InputHandle.ts';
+import { Reconciler } from '../src/predict.ts';
 
-// Regression guard for the fps-demo's automatic-reconnect path:
-//   room.onReconnect → (SDK) inputHandle.reset() + (app) recon.reset()
+// Regression guard for the automatic-reconnect path:
+//   room.onReconnect → (SDK) inputHandle.reset() → controllers follow via `epoch`
 // The server allocates a FRESH input buffer (consumed counter restarts at 0),
-// so the handle resets to realign seqs. This locks in that `reset()` clearing
+// so the handle resets to realign seqs; rollback controllers poll the handle's
+// `epoch` and self-reset — no app wiring. This locks in that `reset()` clearing
 // `_sendTimes` (the fix) does NOT regress what prediction reads off the handle.
 
 const MoveInput = schema({ x: t.number().default(0), y: t.number().default(0) });
@@ -74,5 +76,33 @@ describe('fps-demo automatic-reconnect: inputHandle.reset() prediction invariant
         // surface the pre-reset send-time as a bogus RTT into the just-reset
         // clock (which would corrupt the EMA seed). -1 = "no sample".
         assert.equal(handle.ackInput(2), -1, 'stale pre-reset ack → no RTT sample');
+    });
+
+    test('a rollback controller follows the reset automatically (epoch poll, no wiring)', () => {
+        const { handle, instance } = makeHandle();
+        const PlayerState = schema({ x: t.number() });
+        const state = new PlayerState();
+        state.x = 0;
+        const recon = new Reconciler<{ x: number }, MoveInput>(state, {
+            input: handle,
+            smoothing: 0,
+            step: (_ctx, s, cmd) => { s.x += cmd.x; },
+        });
+
+        // Pre-drop: 3 sends of +1, server acked 2 (truth x = 2).
+        for (let i = 0; i < 3; i++) { instance.x = 1; handle.send(); }
+        state.x = 2;
+        handle.ackInput(2);
+        recon.tick(0);
+        assert.equal(recon.state.x, 3, 'acked truth + replayed seq 3');
+
+        // Reconnect: the SDK resets the handle. NO app onReconnect wiring.
+        handle.reset();
+        recon.tick(16);
+        assert.equal(recon.state.x, 2, 'controller self-reset off the epoch move');
+
+        // Freeze regression: fresh post-reconnect sends must step prediction.
+        instance.x = 5; handle.send();
+        assert.equal(recon.state.x, 7, 'post-reconnect send predicted');
     });
 });

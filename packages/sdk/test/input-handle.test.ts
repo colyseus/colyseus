@@ -225,10 +225,14 @@ describe('InputHandle', () => {
             handle.ackInput(1);
             assert.equal(handle.sentCount, 2);
             assert.equal(handle.lastProcessed, 1);
+            assert.equal(handle.epoch, 0, 'epoch untouched by sends/acks');
 
             handle.reset();
             assert.equal(handle.sentCount, 0);
             assert.equal(handle.lastProcessed, 0);
+            assert.equal(handle.epoch, 1, 'every reset bumps the epoch');
+            handle.reset();
+            assert.equal(handle.epoch, 2);
 
             // Stale ack from before reset: no matching send-time, but the
             // counter is monotonic so it still moves forward.
