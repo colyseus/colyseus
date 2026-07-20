@@ -148,6 +148,20 @@ describe('@colyseus/sdk/predict — public barrel', () => {
         void ({} as StepCmd);
     });
 
+    test('predict.reconciler `fields` is optional and stays name-checked when given', () => {
+        // Compile-only: `fields` may be omitted (auto-derived from schema
+        // metadata), an explicit list still typechecks, and a name outside
+        // `keyof S` is rejected.
+        const _check = (p: ReturnType<typeof Predict.get>, handle: InputHandle<MoveInputT>) => {
+            const self = { x: 0, y: 0 };
+            p.reconciler(self, { input: handle, step: (_ctx, s) => { s.x += 1; } });
+            p.reconciler(self, { input: handle, fields: ['x', 'y'], step: () => {} });
+            // @ts-expect-error — 'vx' is not a field of `self`
+            p.reconciler(self, { input: handle, fields: ['vx'], step: () => {} });
+        };
+        void _check;
+    });
+
     test('Reconciler<S, I> and PredictedEvents<K> are concrete classes', () => {
         // If the barrel accidentally re-exported only the *types*, `new …`
         // would fail at runtime — guarding the value-vs-type re-export.

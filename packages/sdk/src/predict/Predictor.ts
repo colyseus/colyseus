@@ -2428,6 +2428,9 @@ export class Predict<TState = any> {
      *
      * Auto-ticked by this Predict's {@link tick} each frame (reconcile + smooth-
      * correction decay) — no separate `tick()` call to forget.
+     *
+     * `opts.fields` defaults to every scalar field of `instance`'s schema — see
+     * {@link Reconciler} for the derivation and when to subset explicitly.
      */
     reconciler<S extends object, W>(
         instance: S,

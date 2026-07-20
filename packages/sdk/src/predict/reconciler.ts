@@ -16,6 +16,17 @@
  * pose = read them back). For composite state across several instances, or an
  * opaque physics-engine handle, reach for `SimReconciler` (`predict.sim`).
  *
+ * `fields` is OPTIONAL and defaults to EVERY scalar field the instance's schema
+ * declares (numbers / booleans / strings, declaration order — the same metadata
+ * walk as `predict.sim`'s auto-bind; child schemas, collections and `.noSync()`
+ * fields are excluded). Pass an explicit list only to subset deliberately: hot
+ * server-driven scalars (hp regen, timers) defeat the wire-precision reconcile
+ * skip and surface as drift-telemetry corrections when they move; a string field
+ * disables the history ring; adopt-only fields become mirrored into `.state` at
+ * ack cadence (read them off the raw instance for decode cadence). With an
+ * explicit subset, a dev-only diagnostic (debug overlay loaded) warns once per
+ * schema field `step` touches that the list doesn't mirror.
+ *
  * The acknowledgement lives on the INPUT HANDLE, not a clock: you send inputs
  * through `room.input(...)`, so that handle knows the server ack
  * (`input.lastProcessed`) and the seq you've sent (`input.sentCount`).
@@ -36,8 +47,8 @@
  *     const me = predict.reconciler(player, {
  *         input,
  *         step: (ctx, state, command) => applyInput(state, command, LEVEL, ctx.dt), // ctx.dt shared w/ server
- *         fields: ["x", "y", "vx", "vy", "grounded"],
  *         smoothing: 15,
+ *         // fields: defaults to every scalar field of `player`'s schema.
  *         // stepMs / stepSeconds default from `input`'s server-advertised rate.
  *     });
  *
@@ -60,7 +71,8 @@
  */
 
 import { RollbackController, type RollbackOptions, type StepContext } from "./rollback.ts";
-import { wireQuantizerOf } from "./schema.ts";
+import { wireQuantizerOf, scalarFieldsOf } from "./schema.ts";
+import { diagnosticsActive } from "./divergence.ts";
 
 /** Ring/compare encoding of a predicted field value: numbers pass through,
  *  booleans become 0/1, anything else NaN (never matches → safe adopt). The
@@ -93,8 +105,21 @@ export interface ReconcilerOptions<S extends object, I> extends RollbackOptions<
      * Fields to mirror from the server on reconcile (everything the step reads
      * or writes). Numeric fields additionally get smooth error correction;
      * non-numeric fields (e.g. `grounded`) are copied verbatim.
+     *
+     * OPTIONAL — when omitted, defaults to EVERY scalar field the instance's
+     * schema declares (numbers / booleans / strings, declaration order; child
+     * schemas, collections and `.noSync()` fields excluded — the same metadata
+     * walk as `predict.sim`'s auto-bind).
+     *
+     * List explicitly only to SUBSET deliberately: hot server-driven scalars
+     * (hp regen, timers) defeat the wire-precision reconcile skip and register
+     * as drift-telemetry corrections when they move; string fields disable the
+     * history ring; adopt-only fields become mirrored at ack cadence (read them
+     * off the raw instance for decode cadence). With an explicit subset, a
+     * dev-only diagnostic (debug overlay active) warns once per schema field
+     * `step` touches that the list doesn't mirror.
      */
-    fields: readonly (keyof S & string)[];
+    fields?: readonly (keyof S & string)[];
 }
 
 export class Reconciler<S extends object = any, I = any> extends RollbackController<I> {
@@ -125,10 +150,29 @@ export class Reconciler<S extends object = any, I = any> extends RollbackControl
      *  reconcile adopts, exactly the pre-history behavior. */
     private readonly historyOn: boolean;
 
+    /** Schema scalars absent from an EXPLICIT `fields` list — the dev
+     *  diagnostic's watch set. null ⇒ diagnostic off (derived list, complete
+     *  list, or no metadata): applyStep's check is then one null compare. */
+    private undeclared: Set<string> | null = null;
+    /** Cached dev proxy over `local` handed to `step` while the debug overlay
+     *  is active (see {@link stepView}). */
+    private devView: S | null = null;
+
     constructor(instance: object, opts: ReconcilerOptions<S, I>) {
         super(opts);
         this.instance = instance;
-        this.fields = opts.fields as readonly string[];
+        const explicit = opts.fields;
+        // Omitted fields ⇒ mirror every schema scalar (sim's auto-bind rule).
+        const fields = explicit ?? scalarFieldsOf(instance).fields;
+        if (explicit === undefined && fields.length === 0) {
+            throw new Error(
+                "predict.reconciler(): no `fields` given and none derivable — the " +
+                "instance has no schema metadata (a plain object, or a schema with no " +
+                "scalar fields). Pass the decoded instance from room.state, or list " +
+                "`fields` explicitly.",
+            );
+        }
+        this.fields = fields as readonly string[];
         this.step = opts.step;
         let scalarOnly = this.fields.length > 0;
         for (const f of this.fields) {
@@ -143,6 +187,11 @@ export class Reconciler<S extends object = any, I = any> extends RollbackControl
         this.historySize = this.input_.replayBufferSize ?? 64;
         this.history = new Float64Array(this.historyOn ? this.historySize * this.fields.length : 0);
         this.historySeq = new Float64Array(this.historyOn ? this.historySize : 0).fill(-1);
+        if (explicit !== undefined) {
+            const declared = new Set<string>(this.fields);
+            const rest = scalarFieldsOf(instance).fields.filter((f) => !declared.has(f));
+            if (rest.length > 0) this.undeclared = new Set(rest);
+        }
     }
 
     /**
@@ -191,7 +240,12 @@ export class Reconciler<S extends object = any, I = any> extends RollbackControl
     protected readCurrent(field: string): number { return this.local[field] as number; }
 
     protected applyStep(input: I): void {
-        this.step(this.stepCtx, this.local as S, input);
+        // Explicit-subset dev diagnostic: hand `step` a proxied view that warns
+        // on undeclared-schema-field touches. Overlay checked per step (its
+        // dynamic import races construction). Raw local otherwise.
+        const state = this.undeclared !== null && diagnosticsActive()
+            ? this.stepView() : (this.local as S);
+        this.step(this.stepCtx, state, input);
         // Record this seq's predicted state (live and replay alike — after a
         // rollback the replayed values are the canonical prediction).
         if (this.historyOn) {
@@ -203,6 +257,37 @@ export class Reconciler<S extends object = any, I = any> extends RollbackControl
             }
             this.historySeq[slot] = seq;
         }
+    }
+
+    /** Dev-only view of `local` for `step`: warns ONCE per schema scalar missing
+     *  from the explicit `fields` list on first read/write — the "step touched a
+     *  field the reconciler doesn't mirror" hazard (prediction integrates on a
+     *  stale value; rubber-bands only under latency). String keys only: symbols
+     *  (runtime probes) and non-schema scratch keys forward untouched. Built
+     *  lazily on the first overlay-active step, then cached — identity is stable
+     *  across live and replay steps. Non-semantic by construction (forwards
+     *  everything unchanged) — ports substitute a native check or skip it, see
+     *  PORTING.md. */
+    private stepView(): S {
+        if (this.devView !== null) return this.devView;
+        const undeclared = this.undeclared!;
+        const warned = new Set<string>();
+        const check = (verb: string, prop: string | symbol): void => {
+            if (typeof prop !== "string" || !undeclared.has(prop) || warned.has(prop)) return;
+            warned.add(prop);
+            console.warn(
+                `@colyseus/sdk predict: step ${verb} "${prop}" — a schema field NOT in this ` +
+                `reconciler's \`fields\` list, so it is never mirrored or replayed: prediction ` +
+                `integrates on top of a stale value and rubber-bands under latency. Add "${prop}" ` +
+                `to \`fields\`, or omit \`fields\` to mirror every scalar field. Read adopt-only ` +
+                `fields off the raw instance instead of the predicted state.`,
+            );
+        };
+        this.devView = new Proxy(this.local, {
+            get(t, prop, recv) { check("read", prop); return Reflect.get(t, prop, recv); },
+            set(t, prop, v, recv) { check("wrote", prop); return Reflect.set(t, prop, v, recv); },
+        }) as S;
+        return this.devView;
     }
 
     /**
