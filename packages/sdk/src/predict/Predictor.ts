@@ -19,8 +19,7 @@
  *   - `predict.defineEvent(…)` → a {@link PredictedEventChannel} — a typed
  *     optimistic DISCRETE event (a goal, a kill, a pickup): predicted from the
  *     sim via `ctx.predict(channel, payload)` (replay-safe) or from UI, with
- *     confirm / rejectWhen / TTL settlement against server truth.
- *     (`predict.events(…)` is its low-level string-keyed store.)
+ *     confirm / auto-reject / TTL settlement against server truth.
  *
  * ONE READ IDIOM for rendering: `predict.value(instance, field)` covers every
  * entity — passively-smoothed remotes AND the instances a reconciler/sim
@@ -31,7 +30,7 @@
  * (hit-reg, zone checks) keeps reading EXACT state via `controller.state` /
  * `controller.world` — never the smoothed render read.
  * One `predict.tick(now)` per frame drives all three — controllers and event
- * stores spawned here are ticked/pruned automatically (see {@link tick}).
+ * channels spawned here are ticked/pruned automatically (see {@link tick}).
  *
  * Mirrors `Callbacks.get(room)` from `@colyseus/schema` — construct via the
  * static factory and attach prediction to schemas as they appear. The
@@ -67,16 +66,16 @@
  *     const lerp   = Predict.get(room, { mode: "lerp",   delay: 80 });
  *     const damped = Predict.get(room, { mode: "damped", damping: 15 });
  *
- * Low-level primitives `track`, `untrack`, `trackStepped` are also exposed
- * for cases where the declarative `attach(...)` shape doesn't fit.
+ * The exact public surface an SDK port implements is recorded in the port
+ * manifest (`PORTING.md`, repo root); everything else in this module is
+ * internal machinery or a JS-only dev affordance.
  *
- * NOTE: call `attach`/`track` AFTER the instance has been delivered by the
+ * NOTE: call `attach` AFTER the instance has been delivered by the
  * server (e.g. inside `onAdd`). Attaching to an instance that hasn't been
  * decoded yet throws `Can't addCallback (refId is undefined)`.
  */
 
-import { Callbacks, MapSchema, ArraySchema, SetSchema, type Data } from "@colyseus/schema";
-import { PredictedEvents, type PredictedEventsGetOptions } from "./predictedEvents.ts";
+import { Callbacks, type Data } from "@colyseus/schema";
 import { PredictedEventChannel, type PredictedEventChannelOptions } from "./predictedEventChannel.ts";
 import { PredictedSpawns, type PredictedSpawnsOptions } from "./predictedSpawns.ts";
 import { Reconciler, type ReconcilerOptions } from "./reconciler.ts";
@@ -88,7 +87,9 @@ import { publishDebug } from "../debug-channel.ts";
 import {
     $VALUES,
     refIdOf, metadataOf, fieldIndexOf, scalarFieldNamesOf, makeUnrolledSnapshot,
+    type CollectionKeys, type ChildOf,
 } from "./schema.ts";
+import { wireConfirmOn, type ConfirmOn } from "./confirmOn.ts";
 
 // -----------------------------------------------------------------------------
 // Type helpers for narrow inference on Predict.{attach,attachAll,value}.
@@ -98,18 +99,6 @@ import {
 type NumericKeys<T> = {
     [K in keyof T]-?: T[K] extends number ? K : never;
 }[keyof T] & string;
-
-/** Keys of T whose value is a Colyseus collection (Map/Array/Set schema). */
-type CollectionKeys<T> = {
-    [K in keyof T]-?: T[K] extends MapSchema<any> | ArraySchema<any> | SetSchema<any> ? K : never;
-}[keyof T] & string;
-
-/** Element type of a Colyseus collection. */
-type ChildOf<C> =
-    C extends MapSchema<infer V> ? V :
-    C extends ArraySchema<infer V> ? V :
-    C extends SetSchema<infer V> ? V :
-    never;
 
 export type PredictMode = "lerp" | "extrapolate" | "damped" | "reckon" | "raw";
 
@@ -326,11 +315,11 @@ const MODE_CODES: Record<PredictMode, number> = {
 };
 
 /**
- * Stepped-prediction API: the ergonomic on-ramp for dead reckoning.
+ * @internal Stepped-prediction options behind the reckon attach path.
  *
  * You already have a pure `step(state, dt, elapsedMs)` function that runs on
- * the server tick. Pass the *same* function to `predict.trackStepped(...)`
- * (or via `attach({ kind: "reckon", step, ... })`) and the client advances a
+ * the server tick. Pass the *same* function via
+ * `attach({ kind: "reckon", step, ... })` and the client advances a
  * scratch copy of the entity forward by `forwardMs` in small substeps, then
  * predict-then-smooths the result.
  *
@@ -381,14 +370,15 @@ export interface PredictSpawnsOptions<S = unknown, L = Partial<S>, D = undefined
     /** Reckon smoothing for confirmed entities. Default 0 — a deterministic
      *  constant-step projectile rebases exactly, so smoothing only adds lag. */
     smoothing?: number;
-    /** Reckon substep in ms (see {@link SteppedOptions.substep}). */
+    /** Reckon substep in ms. Smaller = more accurate bounces / collisions. Default 16. */
     substep?: number;
 }
 
 /**
- * Low-level entity-level forward prediction. Use when your motion doesn't
- * fit the `step(state, dt, elapsed)` shape — e.g. a closed-form formula or a
- * non-temporal query. For the usual case prefer {@link SteppedOptions}.
+ * @internal Low-level entity-level forward prediction. Used when the motion
+ * doesn't fit the `step(state, dt, elapsed)` shape — e.g. a closed-form
+ * formula or a non-temporal query. For the usual case prefer
+ * {@link SteppedOptions}.
  */
 export interface SimulateOptions<T = any> {
     /** Fields on `instance` that `advance` forecasts and `value()` reads. */
@@ -652,10 +642,10 @@ interface AttachGroup {
  */
 export type PredictGetOptions<T = any> = PredictOptions<T> & {
     /**
-     * Clock used as the default for `trackStepped`'s `forwardMs` / `elapsedMs`.
-     * Falls back to `room.clock` (allocated by the SDK when the server called
-     * `defineInput()`). When neither is available, `trackStepped` callers must
-     * pass explicit `forwardMs` / `elapsedMs`.
+     * Clock used as the default for the reckon attaches' `forwardMs` /
+     * `elapsedMs`. Falls back to `room.clock` (allocated by the SDK when the
+     * server called `defineInput()`). When neither is available, reckon
+     * attaches must pass explicit `forwardMs` / `elapsedMs`.
      */
     clock?: RoomClockLike;
     /**
@@ -818,6 +808,9 @@ export class Predict<TState = any> {
         onRemove: (...args: any[]) => () => void;
         listen: (instance: any, field: string, cb: (v: any) => void, immediate?: boolean) => () => void;
     };
+    /** The construction input, kept for `sessionId` (a Room has one, a raw
+     *  Decoder doesn't) — `confirmOn.mine` resolves against it. */
+    private sessionSource: { sessionId?: string };
     // SoA storage for smoothing slots. `slotBuf` holds all slots packed at
     // `slotIdx * SLOT_STRIDE`. `slotByRef` maps refId → (field NAME → slot idx).
     // Keying the inner map by field name (not index) means the hot `value()`
@@ -914,8 +907,9 @@ export class Predict<TState = any> {
     readonly name: string;
     private disposeListeners: Array<() => void> = [];
     /**
-     * Child primitives spawned by {@link events} / {@link controller} that this
-     * Predict drives from its own {@link tick}. The Predict is the single
+     * Child primitives spawned by {@link defineEvent} / {@link spawns} /
+     * {@link reconciler} / {@link sim} that this Predict drives from its own
+     * {@link tick}. The Predict is the single
      * per-frame driver for the whole prediction stack — one `predict.tick(now)`
      * advances smoothing AND every controller AND prunes every event store, so
      * callers can't forget to tick/prune a child (a forgotten drive is a silent
@@ -926,6 +920,7 @@ export class Predict<TState = any> {
 
     private constructor(room: CallbacksInput, opts: PredictGetOptions) {
         this.callbacks = Callbacks.get(room as any) as any;
+        this.sessionSource = room as { sessionId?: string };
         const { clock, ...rest } = opts as PredictGetOptions & Record<string, any>;
         // Determine the predictor's *default* prediction style. Per-attach
         // overrides can still switch to a different mode.
@@ -1020,7 +1015,7 @@ export class Predict<TState = any> {
      * {@link PredictGetOptions.renderPresent} was set `false`, and when the clock
      * implements {@link RoomClockLike.renderNow}, it's the slew-smoothed render
      * timeline; otherwise the raw {@link RoomClockLike.serverNow}. `undefined`
-     * with no clock — {@link trackStepped} then requires explicit
+     * with no clock — reckon attaches then require explicit
      * forwardMs/elapsedMs. Resolved once on the cold attach path.
      *
      * The lag-comp read (`valueAt` with an explicit `when`) never goes through
@@ -2155,7 +2150,7 @@ export class Predict<TState = any> {
      * handle (`for (n) { input.data.x = …; input.send(); }`), and the reconcilers
      * observe + predict each send. Besides pacing, the call reconciles + steps +
      * decays every {@link reconciler}/{@link sim} spawned here, advances
-     * smoothing, and prunes every {@link events} store.
+     * smoothing, and prunes every event channel/spawn store.
      *
      * Returns 0 while the fixed step is UNKNOWN: the rate is adopted from the
      * first {@link reconciler}/{@link sim} spawned here, so pre-spawn frames —
@@ -2222,33 +2217,7 @@ export class Predict<TState = any> {
         return steps;
     }
 
-    // --- Sibling-store factory -------------------------------------------------
-
-    /**
-     * Spawn a raw {@link PredictedEvents} store bound to this Predict's clock —
-     * the low-level, FLAG-SHAPED sibling of {@link defineEvent}.
-     *
-     * Pick by consumption shape:
-     *   - **{@link defineEvent}** — callback-shaped: "a discrete thing
-     *     happened → fire feedback once → settle" (a goal, a kill sound).
-     *     Typed payloads, replay-safe `ctx.predict`, ack-anchored auto-settle.
-     *   - **`events()`** — flag-shaped: a queryable set of optimistic FACTS
-     *     that render/logic POLL and derive from each frame, OR'd with
-     *     authoritative state (`!enemy.alive || deaths.has(id)`). No
-     *     callbacks; mispredicts recover implicitly when the entry prunes and
-     *     the derived view snaps back. Per-entry handles (cancel/accept) and
-     *     arbitrary key types.
-     *
-     * Equivalent to `PredictedEvents.get(room, opts)` but reuses the cached
-     * clock; for applications without a Predict, use `PredictedEvents.get`
-     * directly. The returned store is auto-pruned by this Predict's
-     * {@link tick} each frame — no separate `prune()` call needed.
-     */
-    events<K = string>(opts: PredictedEventsGetOptions<K> = {}): PredictedEvents<K> {
-        const store = PredictedEvents.get<K>({ clock: this.clock }, opts);
-        this.driven.push(store as { prune?(): void });
-        return store;
-    }
+    // --- Event channels --------------------------------------------------------
 
     /**
      * Declare a typed optimistic-event CHANNEL — one logical event type
@@ -2271,12 +2240,40 @@ export class Predict<TState = any> {
      *     // in the reconciler step:      if (crossed) ctx.predict(goals, team);
      *     // on the server's broadcast:   room.onMessage("score", () => goals.confirm());
      *
-     * For unkeyed/low-level needs (string-keyed store, per-entry handles) use
-     * {@link events} instead — this channel delegates its settlement timing to
-     * the same machinery.
+     * When the authoritative signal is a STATE change rather than a broadcast,
+     * declare it with `confirmOn` and skip the hand-wired listener entirely —
+     * the Predict subscribes it for you and tears it down with the channel:
+     *
+     *     const breaks = predict.defineEvent<string>({
+     *         label: "break",
+     *         // when a crate's `alive` flips false, confirm the entry keyed
+     *         // by that crate's collection key
+     *         confirmOn: { collection: "crates", field: "alive", equals: false },
+     *     });
+     *
+     * Also `{ collection, event: "add" | "remove" }` when membership itself is
+     * the signal (`add` settles keyless, optionally gated by `mine`). The
+     * field/remove forms require channel entry keys (the `uniqueBy` output) to
+     * BE collection keys; root-level collections only — mismatched schemes
+     * confirm manually (see the `confirmOn` module header).
      */
-    defineEvent<T>(opts: PredictedEventChannelOptions<T>): PredictedEventChannel<T> {
-        const channel = new PredictedEventChannel<T>(opts, this.clock ?? null);
+    defineEvent<T>(
+        opts: PredictedEventChannelOptions<T> & { confirmOn?: ConfirmOn<TState> },
+    ): PredictedEventChannel<T> {
+        const { confirmOn, ...channelOpts } = opts;
+        const channel = new PredictedEventChannel<T>(channelOpts, this.clock ?? null);
+        if (confirmOn !== undefined) {
+            if (confirmOn.mine !== undefined && typeof this.sessionSource.sessionId !== "string") {
+                throw new Error(
+                    `Predict.defineEvent: confirmOn.mine ("${confirmOn.mine}") requires a Predict ` +
+                    `built from a Room (it compares against room.sessionId); confirm manually instead.`,
+                );
+            }
+            channel._addTeardown(wireConfirmOn(
+                this.callbacks, channel, confirmOn,
+                () => this.sessionSource.sessionId,
+            ));
+        }
         this.driven.push(channel);
         return channel;
     }
@@ -2401,7 +2398,7 @@ export class Predict<TState = any> {
 
     /**
      * Bind lag-comp's `renderDelay` on the input handle to this Predict's lerp
-     * `delay` (see {@link InputHandleImpl.bindRenderDelay}) so the remote interp
+     * `delay` (the impl's `bindRenderDelay`) so the remote interp
      * buffer and the server's rewind instant stay one value — no "keep the two
      * delays equal" footgun. `instanceof`-narrowed (not cast), so a non-impl
      * input (a test mock) is a no-op; an explicit `room.input({ renderDelay })`
@@ -2542,7 +2539,8 @@ export class Predict<TState = any> {
     }
 
     /**
-     * RAW forward-projected value — the reckoned position WITHOUT the decaying
+     * RAW reckoned value at an ARBITRARY server-time instant `time`
+     * (server-clock ms) — the reckoned position WITHOUT the decaying
      * smooth-correction offset that {@link value} adds for rendering.
      *
      * Use this for GAME LOGIC (collision / hit tests), and {@link value} for
@@ -2550,40 +2548,19 @@ export class Predict<TState = any> {
      * feeding it into a hit test makes the client judge an overlap against a
      * position a few cm off the physical prediction, which flips knife-edge
      * stomp/hit calls vs the server (the server reads the exact timeline, no
-     * offset). For every non-reckon field this equals {@link value} — including
-     * controller-bound fields: their exact predicted state lives on the
+     * offset). Controller-bound fields' exact predicted state lives on the
      * controller (`me.state` / `me.world`), not behind this read.
-     */
-    valueRaw<T extends object>(instance: T, field: NumericKeys<T>): number {
-        const refId = refIdOf(instance);
-        const slotIdx = refId === undefined ? undefined : this.slotByRef.get(refId)?.get(field);
-        if (slotIdx === undefined) return instance[field] as number;
-        const i = slotIdx * SLOT_STRIDE;
-        const profileIdx = this.slotBuf[i + SLOT_PROFILE] | 0;
-        // Only reckon has a raw-vs-smoothed split; other modes carry no offset.
-        if (this.profileComputers[profileIdx] !== this.computeReckon) {
-            return this.profileComputers[profileIdx](slotIdx);
-        }
-        const sim = this.simByRef.get(this.slotBuf[i + SLOT_REF]);
-        if (sim !== undefined) {
-            const fieldId = this.slotBuf[i + SLOT_FIELD] | 0;
-            const pos = fieldId < sim.posOf.length ? sim.posOf[fieldId] : -1;
-            // applySimulation refreshes out[]+smoothed[] for this frame (guarded);
-            // we return the pre-offset `out`.
-            if (pos >= 0) { this.applySimulation(sim, pos); return sim.out[pos]; }
-        }
-        return this.slotBuf[i + SLOT_V1];
-    }
-
-    /**
-     * RAW reckoned value at an ARBITRARY server-time instant — the {@link valueRaw}
-     * analog at a chosen `time` (server-clock ms). `valueRaw(e, f)` ≡
-     * `valueAt(e, f, serverNow())`.
      *
      * For client-side collision/hit prediction, sample remote entities at the
      * input's `ctx.reckonTime` (the instant the server rewinds to) so the client's
      * hit call matches the server's lag-comp read BY CONSTRUCTION — on the live
-     * step AND deterministically on rollback replay (same `time` per seq).
+     * step AND deterministically on rollback replay (same `time` per seq). For
+     * logic reads at the present instant outside a step, pass
+     * `room.clock.serverNow()`.
+     *
+     * Perf: the render read's per-frame reckon is cached; `valueAt` re-runs the
+     * forward projection on EVERY call. Hot per-frame consumers should batch
+     * with {@link readAt} — one projection per instance instead of one per field.
      *
      * Reckons FORWARD from the latest server snapshot to `time`: integrates the
      * tracked `step` from `lastServerTime()` to `time`, evaluating time-sampled
@@ -2619,6 +2596,91 @@ export class Predict<TState = any> {
             }
         }
         return this.slotBuf[i + SLOT_V1];
+    }
+
+    /**
+     * Batch {@link value} reads — the render value of each listed field written
+     * into one object. The `fields` YOU list define the result's shape
+     * (`Record<field, number>`). Pass `out` to fill (and return) a reused
+     * scratch instead of allocating — its properties beyond `fields` are left
+     * untouched, so a scratch can carry extra context (an `alive` flag, say).
+     * Mirrors the server's `seen.read` — the same batch-read concept on both
+     * sides of the wire.
+     *
+     * Hot-path guidance (per-frame loops): hoist `fields` as a module-level
+     * const and reuse the scratch — a fresh array or object literal per frame
+     * allocates. The batch resolves the instance's ref once for the whole
+     * group, then reads each field through the same computers as {@link value}.
+     */
+    read<T extends object, F extends NumericKeys<T>, O extends Record<F, number> = Record<F, number>>(
+        instance: T,
+        fields: readonly F[],
+        out?: O,
+    ): O {
+        const o = (out ?? {}) as Record<F, number>;
+        const refId = refIdOf(instance);
+        const fieldMap = refId === undefined ? undefined : this.slotByRef.get(refId);
+        for (let i = 0; i < fields.length; i++) {
+            const field = fields[i];
+            const slotIdx = fieldMap?.get(field);
+            o[field] = slotIdx === undefined
+                ? instance[field] as number   // untracked → live, as value()
+                : this.profileComputers[this.slotBuf[slotIdx * SLOT_STRIDE + SLOT_PROFILE] | 0](slotIdx);
+        }
+        return o as O;
+    }
+
+    /**
+     * Batch {@link valueAt} reads — every listed field sampled at the same
+     * server-time instant `time`, with {@link read}'s scratch contract.
+     *
+     * For client-side hit prediction, sample a remote's pose at the input's
+     * `ctx.reckonTime` in one call: the batch runs the forward reckon
+     * integration ONCE per instance instead of once per field, so a
+     * four-field pose read costs one `step` walk, not four. Non-reckon and
+     * untracked fields ignore `time`, exactly like {@link valueAt}.
+     */
+    readAt<T extends object, F extends NumericKeys<T>, O extends Record<F, number> = Record<F, number>>(
+        instance: T,
+        fields: readonly F[],
+        time: number,
+        out?: O,
+    ): O {
+        const o = (out ?? {}) as Record<F, number>;
+        const refId = refIdOf(instance);
+        const fieldMap = refId === undefined ? undefined : this.slotByRef.get(refId);
+        let sim: SimState | undefined;
+        let advanced = false;   // one advance per batch — the instance has one sim
+        for (let i = 0; i < fields.length; i++) {
+            const field = fields[i];
+            const slotIdx = fieldMap?.get(field);
+            if (slotIdx === undefined) { o[field] = instance[field] as number; continue; }
+            const s = slotIdx * SLOT_STRIDE;
+            const profileIdx = this.slotBuf[s + SLOT_PROFILE] | 0;
+            // Only reckon depends on the instant; other modes read as value().
+            if (this.profileComputers[profileIdx] !== this.computeReckon) {
+                o[field] = this.profileComputers[profileIdx](slotIdx);
+                continue;
+            }
+            if (!advanced) {
+                advanced = true;
+                sim = this.simByRef.get(this.slotBuf[s + SLOT_REF]);
+                if (sim !== undefined) {
+                    // Same window as valueAt: forward from the snapshot (clamped ≥ 0)
+                    // into `valueOut`, leaving the per-frame render reckon untouched.
+                    const base = this.clock?.lastServerTime?.() ?? NaN;
+                    const fwd = Number.isNaN(base) ? 0 : Math.max(0, time - base);
+                    sim.advance(sim.instance, fwd, sim.valueOut, time);
+                }
+            }
+            if (sim !== undefined) {
+                const fieldId = this.slotBuf[s + SLOT_FIELD] | 0;
+                const pos = fieldId < sim.posOf.length ? sim.posOf[fieldId] : -1;
+                if (pos >= 0) { o[field] = sim.valueOut[pos]; continue; }
+            }
+            o[field] = this.slotBuf[s + SLOT_V1];
+        }
+        return o as O;
     }
 
 

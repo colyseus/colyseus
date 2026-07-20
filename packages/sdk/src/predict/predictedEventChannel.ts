@@ -83,13 +83,23 @@ export interface PredictedEventChannelOptions<T> {
     /**
      * The prediction was wrong — undo the optimistic feedback (show the entity
      * again, refund the item). Fired by TTL expiry, explicit {@link reject},
-     * or a {@link rejectWhen} contradiction. NOT fired by {@link confirm} or
-     * {@link clear}.
+     * or the ack-anchored auto-reject (see
+     * {@link PredictedEventChannelOptions.graceTicks}). NOT fired by
+     * {@link confirm} or {@link clear}.
      */
     onReject?: (payload: T) => void;
     /** The server agreed (fired by {@link confirm}, once per settled entry).
      *  Usually empty — the optimistic feedback already played. */
     onConfirm?: (payload: T) => void;
+    /**
+     * A {@link confirm} settled NOTHING — the authoritative signal arrived for
+     * an event this client never predicted (a remote actor's doing, or a
+     * prediction that already timed out). The push form of `confirm()`'s
+     * `returns 0` contract: play the feedback `onPredict` skipped (the FX for
+     * a remote player's pickup, the un-muted goal horn). Receives the key
+     * `confirm()` was called with (`undefined` for a keyless settle-all).
+     */
+    onUnpredicted?: (key: string | number | undefined) => void;
     /**
      * SIM-BORN settlement deadline, in input ticks: an entry auto-rejects
      * once the server has processed this many ticks PAST its birth seq
@@ -228,7 +238,15 @@ export class PredictedEventChannel<T> implements PredictSink<T> {
      * when omitted (the single-pending shape). Fires `onConfirm` per settled
      * entry; never `onReject`. Returns how many entries were settled — `0`
      * means the event arrived unpredicted (the caller usually plays the
-     * feedback it skipped optimistically).
+     * feedback it skipped optimistically); {@link
+     * PredictedEventChannelOptions.onUnpredicted} is the push form of that.
+     *
+     * ORDERING GUARANTEES:
+     *   - the entry is removed BEFORE its `onConfirm` fires — `has(key)`
+     *     inside `onConfirm` is already `false`. Branch on the callbacks
+     *     (`onConfirm` = we predicted it, `onUnpredicted` = we didn't), never
+     *     on a `has()` pre-read racing the confirm.
+     *   - when nothing settles, `onUnpredicted` fires with the key.
      */
     confirm(key?: string | number): number {
         let n = 0;
@@ -240,6 +258,7 @@ export class PredictedEventChannel<T> implements PredictSink<T> {
             this.opts.onConfirm?.(e.payload);
             n++;
         }
+        if (n === 0) this.opts.onUnpredicted?.(key);
         return n;
     }
 
@@ -267,7 +286,7 @@ export class PredictedEventChannel<T> implements PredictSink<T> {
     }
 
     /** Per-frame drive (the owning Predict calls this from `tick()`):
-     *  `rejectWhen` contradictions first, then TTL eviction. */
+     *  sim-born grace-tick auto-rejects first, then wall-clock TTL eviction. */
     prune(): void {
         if (this.entries.size > 0) {
             const grace = this.opts.graceTicks ?? DEFAULT_GRACE_TICKS;
@@ -284,8 +303,18 @@ export class PredictedEventChannel<T> implements PredictSink<T> {
      *  its drive list on the next tick. */
     dead = false;
 
+    /** Teardowns drained by {@link dispose} — populated by the owning
+     *  Predict's `defineEvent` (`confirmOn` bindings). @internal */
+    private teardowns: Array<() => void> = [];
+
+    /** @internal */
+    _addTeardown(fn: () => void): void {
+        this.teardowns.push(fn);
+    }
+
     /** Stop being driven and drop all entries (silently). */
     dispose(): void {
+        for (const fn of this.teardowns.splice(0)) fn();
         this.dead = true;
         this.clear();
         this.store.dispose();

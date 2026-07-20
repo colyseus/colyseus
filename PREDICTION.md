@@ -13,6 +13,9 @@ This guide puts the **server half** (`defineInput` + `setFixedTimestep` +
 > - `test/prediction/` — hand-rolled platformer (no physics engine).
 > - `demos/multiplayer-2d-shooter-prototype/` — Rapier2D physics shooter.
 > - `demos/fps-demo/` — 3D FPS (hitscan + capsule hitboxes).
+>
+> Porting this layer to the Native SDKs (C# / C / Lua / Haxe)? See `PORTING.md`
+> for what is semantic contract vs JS-only dev affordance.
 
 ---
 
@@ -39,11 +42,12 @@ import { Room } from "@colyseus/core";
 class GameRoom extends Room {
   state = new GameState();
 
-  // Per-client input schema (flat primitives only). renderTime:true auto-stamps
-  // each input with the client's render time for lag comp.
-  input = this.defineInput(MoveInput, { bufferMaxSize: 64, renderTime: true });
+  // Per-client input schema (flat primitives only). Lag-comp stamps ride the
+  // input channel automatically once rewind is armed — no flag to set.
+  input = this.defineInput(MoveInput, { bufferMaxSize: 64 });
 
-  // Records attached entities' positions per tick (auto, after each step).
+  // Records attached entities' positions (auto, on each broadcast — snapshots
+  // exactly what clients receive, so patchRate ≠ timestep stays exact).
   rewind = this.allowRewindState({ maxRewindMs: 500 });
 
   onCreate() {
@@ -56,9 +60,9 @@ class GameRoom extends Room {
     for (const [sid, p] of this.state.players) {
       // Consuming the buffer — pick ONE:
       //  • per-entity integration → drain() all and sub-step each:
-      //      for (const cmd of this.input(sid).drain()) applyInput(p, cmd, ctx.dt);
+      //      for (const cmd of this.inputs.get(sid).drain()) applyInput(p, cmd, ctx.dt);
       //  • one shared solver step for everyone → next() exactly one per tick:
-      //      const cmd = this.input(sid).next(); if (cmd) applyInput(p, cmd, ctx.dt);
+      //      const cmd = this.inputs.get(sid).next(); if (cmd) applyInput(p, cmd, ctx.dt);
     }
     // ...advance world, then hit tests (see §6 lag comp).
   }
@@ -66,13 +70,15 @@ class GameRoom extends Room {
 ```
 
 - **`defineInput(Input, opts)`** — declares the per-client input schema and buffers
-  inbound frames. `renderTime: true` adds a 6-byte display-time stamp per reliable
-  input (read it via `input(sid).renderTime`, or — better — `rewind.lastSeenBy(sid)`).
+  inbound frames. Display-time stamps auto-enable from the rewind `attachAll` `mode`
+  of the groups you rewind — no flag; each stamped reliable input carries 6 extra
+  bytes (read via `inputs.get(sid).renderTime`, or — better — `rewind.lastSeenBy(sid)`).
 - **`setFixedTimestep(step, hz)`** — framework-owned accumulator loop; each `step`
   advances by the SAME fixed `dt = 1/hz`, and the rate is advertised to clients so
   they predict at the matching `dt`. (Don't also pass `tickRate` to `defineInput`.)
 - **`allowRewindState({ maxRewindMs })`** + **`rewind.attachAll(collection, { fields })`** —
-  records the numeric `fields` of every entity in the collection once per tick.
+  records the numeric `fields` of every entity in the collection on each broadcast
+  (snapshotting exactly what clients receive; `rewind.record()` takes over the cadence).
 
 ### Consuming input: `drain()` vs `next()`
 
@@ -92,7 +98,7 @@ reads it (`latest`, the buffer, the `idle` ctx):
 
 ```ts
 input = this.defineInput(MoveInput, {
-  bufferMaxSize: 64, renderTime: true,
+  bufferMaxSize: 64,
   sanitize: {                               // map form — range clamps
     moveF: [-1, 1], moveR: [-1, 1],
     pitch: [-PITCH_LIMIT, PITCH_LIMIT],
@@ -132,7 +138,7 @@ What does "no input this tick" mean? Three policies, all expressible — declare
 
   ```ts
   input = this.defineInput(MoveInput, {
-    bufferMaxSize: 64, renderTime: true,
+    bufferMaxSize: 64,
     idle: ({ latest, sessionId }) => {
       const p = this.state.players.get(sessionId);
       if (!p) return true;
@@ -151,7 +157,7 @@ What does "no input this tick" mean? Three policies, all expressible — declare
   idle: ({ latest, sessionId }) =>
     (this.clients.getById(sessionId)?.state === ClientState.JOINED && latest) || true,
   // …
-  const cmd = this.input(sid).next();   // typed I — never undefined
+  const cmd = this.inputs.get(sid).next();   // typed I — never undefined
   ```
 
 The policy also covers **absent sessions** — a player that dropped but is still
@@ -198,9 +204,11 @@ predict.attachAll("players", { mode: "lerp", fields: ["x", "y"], snap: 4 });
 const input = room.input({ mode: "reliable" });
 const me = predict.reconciler(self, {
   input,                              // OBSERVED: each input.send() below is predicted
-  fields: ["x", "y", "vx", "vy", "grounded"],
   step: (ctx, s, cmd) => applyInput(s, cmd, LEVEL, ctx.dt),   // SAME function as the server
   smoothing: 15,
+  // fields: defaults to every scalar field of `self`'s schema. List explicitly
+  // only to subset deliberately (hot server-driven scalars, string fields) —
+  // a dev diagnostic then warns if `step` touches a field the list misses.
 });
 
 function frame(now) {                 // `now` = the rAF timestamp — pass it through
@@ -286,7 +294,7 @@ field becomes a render-pose field, registered into `predict.value(instance,
 field)` so bound entities render through the same idiom as everything else:
 
 ```ts
-const input = room.input(MoveInput, { mode: "reliable" });
+const input = room.input({ type: MoveInput });
 const me = predict.sim({
   input,
   world: {
@@ -311,7 +319,11 @@ replaces the instance on the world object itself).
 the `adopt` / `pose` callbacks own it — a physics solver's `world` handle + body:
 
 - `step(ctx, cmd, world)` — deterministic, **SHARED with the server**; advance `world`
-  by `ctx.dt`. One-shot concerns go through `ctx.memo` / `ctx.predict`.
+  by `ctx.dt`. One-shot concerns split three ways by shape: `ctx.memo` for VALUES
+  the sim consumes (frozen, replayed back), `ctx.predict` for EVENTS with
+  settlement, and a plain `if (!ctx.isReplay) { … }` branch for fire-and-forget
+  presentation (sound, particles, timestamps) — the branch IS the idiom; there is
+  deliberately no wrapper API for it.
 - `adopt(world)` — seed the server's authoritative scalars into the opaque entries
   on each ack, before replay. Runs AFTER the bound entries' auto-adopt, so it may
   derive from just-adopted mirrors. Required when nothing is bound.
@@ -515,9 +527,9 @@ The shooter sees remote targets **interpolated in the past** (`delay`) and **del
 the network** (≈ `rtt/2`). To honor their aim, the server rewinds each target to that
 moment. Two pieces:
 
-**Client** — tell the server the render time. With `renderTime: true` on the server,
-the SDK auto-stamps every reliable input with `serverNow() − renderDelay − rtt/2`
-(0 until the clock syncs). You normally set nothing: wiring the input through
+**Client** — tell the server the render time. Once the server arms rewind, the SDK
+auto-stamps every reliable input with `serverNow() − renderDelay − rtt/2`
+(0 until the clock syncs — the library resolves that sentinel to a live instant). You normally set nothing: wiring the input through
 `predict.reconciler`/`predict.sim` binds `renderDelay` to the `Predict` lerp `delay`,
 so the interp buffer and the rewind instant are one value. The SDK adds the latency
 term itself. Override only to decouple them:
@@ -551,6 +563,12 @@ const pos = seen.read(target, ["x", "y"]);           // { x, y }
 seen.read(enemy, ENEMY_POS, this.seenScratch);       // zero-alloc: fills + returns the scratch
 ```
 
+The batch is mirrored client-side as the same concept: `predict.read(e, fields, out?)`
+batches render reads, and `predict.readAt(e, fields, time, out?)` samples every listed
+field at one instant — running the forward reckon integration **once per entity**
+instead of once per field (the hand-rolled `valueAt` loop pays one integration per
+field).
+
 > ℹ️ `at()`/`lastSeenBy` re-aim and return the room's **internal default view** — the
 > usual one-view-at-a-time flow is zero-alloc with nothing to declare. Need two views
 > alive at once (compare two shooters' perspectives)? Pass your own as `out`:
@@ -578,13 +596,12 @@ rewind then approximates.
 - **Hand-rolled sim** (`test/prediction` platformer) — `applyInput` is plain math;
   `attachAll(enemies, { interpolate: (e) => e.kind === "teleporter" ? "step" : "linear" })`
   keeps teleport snaps sharp under rewind.
-- **Dead-reckoned types** — declare the lag-comp timeline ONCE on the entity type:
-  `schema({...}, "Enemy").with({ lagComp: "reckon" })` (or `@entity({ lagComp: "reckon" })`).
-  The server's rewind then aims those entities at the client's reconstructed send
-  instant (a reckon renderer already cancelled downstream latency — rewinding to
-  the raw stamp would double-compensate), and the client's `Predict.attachAll`
-  infers `mode: "reckon"` for them — one declaration, both sides. `"snapshot"`
-  (default) reads at the raw stamp; `"none"` records no history (reads are live).
+- **Dead-reckoned types** — pick the lag-comp timeline per rewind attach:
+  `rewind.attachAll(state.enemies, { fields, mode: "reckon" })`. The server's rewind
+  then aims those entities at the client's reconstructed send instant (a reckon
+  renderer already cancelled downstream latency — rewinding to the raw stamp would
+  double-compensate); attach them `mode: "reckon"` client-side to match. `"snapshot"`
+  (default) reads at the raw stamp; untracked entities read live.
 - **Physics sim** (`2d-shooter`) — bridge Rapier into `predict.sim`'s `step` (the
   engine handle is your `world`); consume one input per tick with `next()` and
   `world.step()` once.
@@ -605,9 +622,9 @@ rewind then approximates.
 | Remotes stutter / teleport | Interp `delay` too small (buffer underruns); raise it past 1–2 patch intervals, or check patch rate. |
 | A respawn/teleport GLIDES or streaks across the map | The smoother interpolates the position jump like any motion. Set `snap` (value-space teleport threshold) on the attach: `attachAll("players", { fields: ["x","y"], snap: 4 })` — beyond-threshold sample deltas reset the smoother (all modes, reckon rebases included) and render as a cut. |
 | "I hit them but no damage" on moving targets | Not rewinding (or rewinding to server-now). Use `rewind.lastSeenBy(shooterId)` (§6). |
-| Hits register *behind* a dead-reckoned target (where it already walked) | The type renders forward-reckoned but rewinds to the raw stamp (double compensation). Declare `schema({...}, "Enemy").with({ lagComp: "reckon" })` on the type. |
+| Hits register *behind* a dead-reckoned target (where it already walked) | The type renders forward-reckoned but rewinds to the raw stamp (double compensation). Attach it `mode: "reckon"` on both sides (`rewind.attachAll` server, `predict.attachAll` client). |
 | Hits land slightly ahead of the crosshair | `MAX_REWIND_MS` too small — it truncates the real rewind (`renderDelay + RTT + a tick`); raise it. |
-| `rewind.lastSeenBy` throws | The room didn't enable `defineInput({ renderTime: true })`; or use `at(time)` with your own time. |
+| `rewind.lastSeenBy` throws | The room never called `defineInput()` (the stamps ride the input channel); or use `at(time)` with your own time. |
 | `room.clock` returns `performance.now()` | The room never called `defineInput()` (the clock rides input acks). |
 | Bullet overshoots / tunnels past a target | Point hit test on a fast projectile — use a swept (segment) test. |
 
@@ -619,13 +636,15 @@ rewind then approximates.
 |---|---|---|
 | Server | `defineInput(Input, { renderTime, bufferMaxSize })` | Per-client input schema + buffer; render-time stamping |
 | Server | `defineInput({ sanitize })` | Per-field `[min, max]` clamps (NaN-safe) or a fix-up callback, applied to every decoded frame before `latest`/buffer visibility |
-| Server | `defineInput({ idle })` + `input(sid).drain()` / `.next()` | Consume frames; the room's `idle: (ctx) => overrides` policy synthesizes one frame on empty ticks (defaults ⊕ overrides; never advances the ack); per-call `{ idle }` overrides, `{ idle: false }` suppresses |
+| Server | `defineInput({ idle })` + `inputs.get(sid).drain()` / `.next()` | Consume frames; the room's `idle: (ctx) => overrides` policy synthesizes one frame on empty ticks (defaults ⊕ overrides; never advances the ack); per-call `{ idle }` overrides, `{ idle: false }` suppresses |
 | Server | `setFixedTimestep(step, hz, { subSteps })` | Fixed-step loop; advertises the tick rate (+ optional physics sub-steps per input — §5) |
-| Shared | `schema({...}, "Enemy").with({ lagComp: "reckon" \| "snapshot" \| "none" })` | Per-TYPE lag-comp timeline, declared once: drives the server rewind aim AND the client Predict mode inference |
-| Server | `allowRewindState({ maxRewindMs })` + `rewind.attachAll(coll, { fields })` | Record positions per tick (fields a type lacks read live; `lagComp:"none"` types record nothing) |
+| Server | `rewind.attachAll(coll, { fields, mode: "snapshot" \| "reckon" })` | Per-attach lag-comp timeline: `reckon` groups rewind to the client's reconstructed sim instant, `snapshot` to the raw stamp |
+| Server | `allowRewindState({ maxRewindMs })` + `rewind.attachAll(coll, { fields })` | Record positions on each broadcast (fields a type lacks read live; untracked types read live) |
 | Server | `rewind.lastSeenBy(sid)` / `rewind.at(time)` | Rewound view (clamp + live-fallback baked in): `view.value(e, field)`, `view.read(e, fields, out?)` |
-| Server | `input(sid).renderTime` | Raw render time of the last consumed input (prefer `lastSeenBy`) |
+| Server | `inputs.get(sid).renderTime` | Raw render time of the last consumed input (prefer `lastSeenBy`) |
 | Client | `room.input({ mode })` | Input transport; lag-comp `renderDelay` auto-binds to the `Predict` lerp `delay` when wired through `reconciler`/`sim` (pass `renderDelay` to override) |
 | Client | `Predict.get(room, opts)` + `attachAll` / `reconciler` / `sim` | Remote smoothing; local rollback for one flat-field entity (`reconciler`) or composite/engine state (`sim`) |
 | Client | `predict.tick(now)` | Per-frame driver: reconcile + decay + smoothing, returns the due fixed-step count for the frame driver's send loop (§4 frame order) |
+| Client | `predict.value(e, field)` / `predict.read(e, fields, out?)` | Render reads (one idiom across passive + controller-bound); `read` batches into an object/scratch — mirror of `view.value`/`view.read` |
+| Client | `predict.valueAt(e, field, time)` / `predict.readAt(e, fields, time, out?)` | Raw reckoned reads at an instant (sample remotes at `ctx.reckonTime` for hit prediction); `readAt` runs ONE integration per entity |
 | Client | `room.clock` | `serverNow()` / `smoothedRtt()` / `lastServerTime()` |

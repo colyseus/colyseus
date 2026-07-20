@@ -44,7 +44,7 @@
 // Drives + reads acks through `room.input(...)`'s handle (type-only, erased).
 import type { InputHandle } from "../input/InputHandle.ts";
 import { newDrift, updateDrift, resetDrift, classifyDrift, type Drift } from "./drift.ts";
-import { warnDivergence, warnReadBeforePump, diagnosticsActive } from "./divergence.ts";
+import { warnDivergence, warnReadBeforePump, warnMemoCollision, diagnosticsActive } from "./divergence.ts";
 
 /**
  * Per-seq memo backing {@link StepContext.memo}: run a closure ONCE on the
@@ -54,11 +54,18 @@ import { warnDivergence, warnReadBeforePump, diagnosticsActive } from "./diverge
  * `SimReconciler` (both replay the same per-seq input buffer the same way).
  *
  * Storage is sparse — only seqs that memoized ≥1 value get an entry — so it
- * stays as small as the hand-rolled per-seq Maps it replaces.
+ * stays as small as the hand-rolled per-seq Maps it replaces. With dev
+ * diagnostics on, warns once per key when two calls in one step share a slot.
  */
 class MemoStore {
     /** seq → (key → memoized value). */
     private byTick = new Map<number, Map<string, any>>();
+
+    // Collision diagnostic (live path, diagnostics-gated): keys seen this tick.
+    // Tracked separately from byTick — undefined computes are never stored there.
+    private diagTick = -1;
+    private diagKeys = new Set<string>();
+    private warnedKeys = new Set<string>();
 
     /**
      * LIVE (`isReplay=false`): run `compute`, memoize a non-`undefined` result
@@ -67,6 +74,14 @@ class MemoStore {
      */
     run<T>(tick: number, isReplay: boolean, key: string, compute: () => T): T | undefined {
         if (isReplay) return this.byTick.get(tick)?.get(key) as T | undefined;
+        if (diagnosticsActive()) {
+            if (tick !== this.diagTick) { this.diagTick = tick; this.diagKeys.clear(); }
+            else if (this.diagKeys.has(key) && !this.warnedKeys.has(key)) {
+                this.warnedKeys.add(key);
+                warnMemoCollision(tick, key);
+            }
+            this.diagKeys.add(key);
+        }
         const v = compute();
         if (v !== undefined) {
             let m = this.byTick.get(tick);
@@ -81,7 +96,13 @@ class MemoStore {
         for (const tick of this.byTick.keys()) if (tick <= acked) this.byTick.delete(tick);
     }
 
-    clear(): void { this.byTick.clear(); }
+    clear(): void {
+        this.byTick.clear();
+        // Epoch reset reuses tick numbers — stale diag state would false-positive.
+        // warnedKeys survives: warn-once per store lifetime, no re-spam on respawn.
+        this.diagTick = -1;
+        this.diagKeys.clear();
+    }
 }
 
 /**
@@ -125,9 +146,15 @@ export interface StepContext {
    * the server acks it (often several frames). Deterministic simulation (your
    * `applyInput`) MUST re-run every time, or replay won't reproduce the server.
    * But anything one-shot must not: this is the standard re-simulation flag
-   * rollback netcode exposes. You rarely branch on it directly — {@link memo}
-   * (frozen values) and {@link predict} (optimistic events) handle the two
-   * one-shot shapes for you.
+   * rollback netcode exposes.
+   *
+   * The one-shot family has three legs, split by shape:
+   * - {@link memo} — one-shot VALUES the sim consumes (frozen, replayed back);
+   * - {@link predict} — one-shot EVENTS with settlement (confirm / auto-reject);
+   * - `if (!ctx.isReplay) { … }` — fire-and-forget PRESENTATION (a sound,
+   *   particles, camera shake, a timestamp): a plain branch on this flag IS the
+   *   idiom, deliberately not a wrapper API — a branch transcribes to any
+   *   language a port targets; a closure-taking helper doesn't.
    */
   readonly isReplay: boolean;
   /**
@@ -180,7 +207,10 @@ export interface StepContext {
    * sparsely — costs nothing). Call `memo` on EVERY step (let `compute` decide
    * the value) rather than conditionally, so replay sees the same call shape.
    * A step that keeps MORE THAN ONE memo disambiguates them with the `key`
-   * overload — `ctx.memo("collide", …)`; the key-less form is one shared slot.
+   * overload — `ctx.memo("collide", …)`; the key-less form is ONE shared slot
+   * per step. Two calls landing on the same slot in one step (two key-less
+   * calls, or a repeated key) silently corrupt replay — both call sites get
+   * the one frozen value back; dev diagnostics warn on the collision.
    *
    * Prefer reconciled `fields` when the value IS derivable by re-running the
    * step (sync it, both sides simulate it) — that replays AND self-corrects for

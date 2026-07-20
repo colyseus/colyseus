@@ -46,6 +46,26 @@ export function warnReadBeforePump(): void {
 }
 
 /**
+ * Dev-only memo collision warning ({@link diagnosticsActive}-gated, warn-once
+ * per key per store). Fired when two `ctx.memo` calls in ONE step land on the
+ * same slot — two key-less calls, or the same explicit key twice. The live
+ * calls each run their compute (last write wins the slot), but every replay of
+ * that seq returns the ONE frozen value to both call sites — a silent,
+ * latency-dependent re-simulation corruption. Warns instead of throwing: a
+ * single key-less memo per step is the common, correct form.
+ */
+export function warnMemoCollision(tick: number, key: string): void {
+    console.warn(key === ""
+        ? `@colyseus/sdk predict: two key-less ctx.memo calls ran in one step (input seq ${tick}) — ` +
+          `the key-less form is ONE shared slot per step, so replay returns one frozen value for ` +
+          `both (silent re-simulation corruption). Pass distinct keys: ctx.memo("a", …) / ctx.memo("b", …).`
+        : `@colyseus/sdk predict: ctx.memo("${key}") ran twice in one step (input seq ${tick}) — ` +
+          `both calls share one slot on replay. Give each call site its own key ` +
+          `(include the loop index for a per-iteration memo).`,
+    );
+}
+
+/**
  * Dev-only divergence warning, wired by the opt-in `warnOnDivergence` tolerance
  * on a {@link Reconciler}/{@link SimReconciler}. Fired when the reconciler's
  * verdict is `diverging` (the *persistent* drift `ema` crossed the tolerance —

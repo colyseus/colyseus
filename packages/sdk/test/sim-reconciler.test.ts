@@ -39,6 +39,7 @@ class FakeInput {
     patchRate?: number;
     lastProcessed = 0;
     sentCount = 0;
+    epoch = 0;
     private buffer = new Map<number, Cmd>();
     private sendCb?: (seq: number) => void;
 
@@ -55,6 +56,13 @@ class FakeInput {
         return this.sentCount;
     }
     onSend(cb: (seq: number) => void): () => void { this.sendCb = cb; return () => { this.sendCb = undefined; }; }
+    /** Mirrors `InputHandle.reset()`: fresh seq space + epoch bump (the controller self-resets). */
+    reset(): void {
+        this.sentCount = 0;
+        this.lastProcessed = 0;
+        this.buffer.clear();
+        this.epoch++;
+    }
     at(seq: number): Cmd | undefined { return this.buffer.get(seq); }
     reckonTimeAt(_seq: number): number { return 0; } // no reckon lag-comp in tests
     get pendingCount(): number { return this.sentCount - this.lastProcessed; }
@@ -385,6 +393,118 @@ describe('SimReconciler', () => {
         ctl.tick(0);
         assert.equal(engine.x, 0, 'cleared memos are not replayed after reset');
         assert.equal(computeCount, 3, 'no recompute either');
+    });
+});
+
+// -----------------------------------------------------------------------------
+// ctx.memo collision warning (dev-diagnostics-gated): two calls landing on the
+// same slot in ONE step — two key-less calls, or a repeated explicit key — get
+// one frozen value back on replay. Warn once per key; never on the replay path,
+// never in prod, never across an epoch reset's reused seq numbers.
+// -----------------------------------------------------------------------------
+
+describe('ctx.memo collision warning', () => {
+    test('two key-less memos in one step warn once (not per step)', () => {
+        const input = new FakeInput();
+        const { ctl } = make(makeEngine(), input, {
+            step: (ctx, _cmd, w) => {
+                w.x += ctx.memo(() => 1) ?? 0;
+                w.vx = ctx.memo(() => 2) ?? 0;   // same shared "" slot
+            },
+        });
+        withDiagnostics(() => {
+            const warns = captureWarn(() => {
+                for (let i = 0; i < 3; i++) step(ctl, input, { ax: 0 });
+            });
+            assert.lengthOf(warns.filter(w => w.includes('key-less')), 1, 'warn-once despite 3 colliding steps');
+        });
+    });
+
+    test('warns even when the first compute returned undefined (stored nowhere)', () => {
+        const input = new FakeInput();
+        const { ctl } = make(makeEngine(), input, {
+            step: (ctx, _cmd, w) => {
+                ctx.memo(() => undefined);        // "no hit" — sparse storage skips it
+                w.x += ctx.memo(() => 5) ?? 0;    // still the same slot
+            },
+        });
+        withDiagnostics(() => {
+            const warns = captureWarn(() => step(ctl, input, { ax: 0 }));
+            assert.lengthOf(warns.filter(w => w.includes('key-less')), 1);
+        });
+    });
+
+    test('distinct explicit keys are silent, live and on replay', () => {
+        const input = new FakeInput();
+        const { ctl, instance } = make(makeEngine(), input, {
+            step: (ctx, _cmd, w) => {
+                w.x += ctx.memo('a', () => 1) ?? 0;
+                w.x += ctx.memo('b', () => 2) ?? 0;
+            },
+        });
+        withDiagnostics(() => {
+            const warns = captureWarn(() => {
+                for (let i = 0; i < 2; i++) step(ctl, input, { ax: 0 });
+                instance.x = 3; input.lastProcessed = 1; ctl.tick(0);   // ack → replay seq 2
+            });
+            assert.lengthOf(warns, 0);
+        });
+    });
+
+    test('key-less plus one explicit key is silent (different slots)', () => {
+        const input = new FakeInput();
+        const { ctl } = make(makeEngine(), input, {
+            step: (ctx, _cmd, w) => {
+                w.x += ctx.memo(() => 1) ?? 0;
+                w.x += ctx.memo('extra', () => 2) ?? 0;
+            },
+        });
+        withDiagnostics(() => {
+            const warns = captureWarn(() => step(ctl, input, { ax: 0 }));
+            assert.lengthOf(warns, 0);
+        });
+    });
+
+    test('the same explicit key twice in one step warns and names the key', () => {
+        const input = new FakeInput();
+        const { ctl } = make(makeEngine(), input, {
+            step: (ctx, _cmd, w) => {
+                w.x += ctx.memo('hit', () => 1) ?? 0;
+                w.x += ctx.memo('hit', () => 2) ?? 0;
+            },
+        });
+        withDiagnostics(() => {
+            const warns = captureWarn(() => step(ctl, input, { ax: 0 }));
+            assert.lengthOf(warns.filter(w => w.includes('ctx.memo("hit")')), 1);
+        });
+    });
+
+    test('silent with diagnostics off (prod)', () => {
+        const input = new FakeInput();
+        const { ctl } = make(makeEngine(), input, {
+            step: (ctx, _cmd, w) => {
+                w.x += ctx.memo(() => 1) ?? 0;
+                w.x += ctx.memo(() => 2) ?? 0;
+            },
+        });
+        const warns = captureWarn(() => step(ctl, input, { ax: 0 }));
+        assert.lengthOf(warns, 0);
+    });
+
+    test('an epoch reset\'s reused seq numbers do not false-positive', () => {
+        const input = new FakeInput();
+        const { ctl } = make(makeEngine(), input, {
+            step: (ctx, _cmd, w) => { w.x += ctx.memo(() => 1) ?? 0; },   // ONE key-less memo — correct
+        });
+        withDiagnostics(() => {
+            const warns = captureWarn(() => {
+                step(ctl, input, { ax: 0 });   // live seq 1 (old life)
+                input.reset();
+                ctl.tick(0);                   // epoch poll → controller reset → memos cleared
+                step(ctl, input, { ax: 0 });   // new life REUSES seq 1 — must stay silent
+            });
+            assert.lengthOf(warns, 0);
+        });
     });
 });
 

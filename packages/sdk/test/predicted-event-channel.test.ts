@@ -46,6 +46,23 @@ describe('PredictedEventChannel (standalone)', () => {
         expect(ch.pendingCount).toBe(1);
     });
 
+    test('a zero-settle confirm fires onUnpredicted with the key; a settling one does not', () => {
+        const onUnpredicted = vi.fn(), onConfirm = vi.fn();
+        const { clock } = makeClock();
+        const ch = new PredictedEventChannel<string>({ onPredict: () => {}, onConfirm, onUnpredicted }, clock);
+
+        expect(ch.confirm('k')).toBe(0);      // keyed miss
+        expect(onUnpredicted).toHaveBeenCalledWith('k');
+        expect(ch.confirm()).toBe(0);         // keyless miss
+        expect(onUnpredicted).toHaveBeenCalledWith(undefined);
+        expect(onUnpredicted).toHaveBeenCalledTimes(2);
+
+        ch.predict('goal');
+        expect(ch.confirm('goal')).toBe(1);   // settles — push the confirm, not the miss
+        expect(onConfirm).toHaveBeenCalledWith('goal');
+        expect(onUnpredicted).toHaveBeenCalledTimes(2);
+    });
+
     test('explicit reject fires onReject with the payload', () => {
         const onReject = vi.fn();
         const { clock } = makeClock();

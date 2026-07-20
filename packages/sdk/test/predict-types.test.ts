@@ -9,7 +9,6 @@ import {
     Predict,
     Reconciler,
     SimReconciler,
-    PredictedEvents,
     type StepContext,
 } from '../src/predict.ts';
 import type { InputHandle } from '../src/input/InputHandle.ts';
@@ -32,17 +31,19 @@ class GameState { bullets = new MapSchema<Bullet>(); }
  * to `Data<unknown>` casts (the very friction TODO 01 set out to remove).
  */
 describe('@colyseus/sdk/predict — public barrel', () => {
-    test('public surface: Predict.get / reconciler / events', () => {
+    test('public surface: Predict.get / reconciler / sim / defineEvent', () => {
         // `Predict.get(room, …)` matches the sibling `Callbacks.get(room)` API
         // (kept after the rename pass). The active-rollback method was
         // renamed `controller` → `reconciler` (matches the returned type).
-        // `events()` is kept — already namespaced under the `predict` instance.
+        // `events()` / `valueRaw()` were pruned off the surface (port manifest).
         expectTypeOf(Predict).toHaveProperty('get');
-        expectTypeOf<InstanceType<typeof Predict>>().toHaveProperty('reconciler');
-        expectTypeOf<InstanceType<typeof Predict>>().toHaveProperty('physics');
-        expectTypeOf<InstanceType<typeof Predict>>().toHaveProperty('events');
-        expectTypeOf<InstanceType<typeof Predict>>().toHaveProperty('spawns');
-        expectTypeOf<InstanceType<typeof Predict>>().not.toHaveProperty('controller');
+        expectTypeOf<Predict>().toHaveProperty('reconciler');
+        expectTypeOf<Predict>().toHaveProperty('sim');
+        expectTypeOf<Predict>().toHaveProperty('defineEvent');
+        expectTypeOf<Predict>().toHaveProperty('spawns');
+        expectTypeOf<Predict>().not.toHaveProperty('controller');
+        expectTypeOf<Predict>().not.toHaveProperty('events');
+        expectTypeOf<Predict>().not.toHaveProperty('valueRaw');
     });
 
     test('predict.spawns infers local fields from the collection element (no any)', () => {
@@ -162,12 +163,11 @@ describe('@colyseus/sdk/predict — public barrel', () => {
         void _check;
     });
 
-    test('Reconciler<S, I> and PredictedEvents<K> are concrete classes', () => {
+    test('Reconciler<S, I> and SimReconciler are concrete classes', () => {
         // If the barrel accidentally re-exported only the *types*, `new …`
         // would fail at runtime — guarding the value-vs-type re-export.
         expectTypeOf(Reconciler).toBeConstructibleWith({} as any, {} as any);
         expectTypeOf(SimReconciler).toBeConstructibleWith({} as any);
-        expectTypeOf(PredictedEvents).toBeConstructibleWith({} as any, {} as any);
     });
 
     test('StepContext carries the fixed step contract', () => {

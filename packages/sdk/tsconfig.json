@@ -9,6 +9,7 @@
         "outDir": "build",
         "rootDir": "src",
         "declaration": true,
+        "stripInternal": true,
         "allowSyntheticDefaultImports": true,
 
         "strictNullChecks": false,

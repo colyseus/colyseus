@@ -1,6 +1,10 @@
 /**
  * Generic optimistic-prediction store with TTL-based mispredict cleanup.
  *
+ * INTERNAL machinery — not exported from the public barrels. This store is
+ * the settlement engine behind {@link PredictedEventChannel} (`defineEvent`)
+ * and `PredictedSpawns`; consumers reach it through those surfaces.
+ *
  * Pattern: the client predicts a discrete event happened (death, pickup,
  * door-open, projectile-spawn, …), marks the corresponding key. The render
  * layer reads the predicted state immediately rather than waiting ~RTT for
@@ -183,8 +187,9 @@ export class PredictedEvents<K = string> {
         return this.entries.size;
     }
 
-    /** Set when {@link dispose} is called — a Predict that auto-prunes this
-     *  store (via `predict.events()`) drops a `dead` child on its next tick. */
+    /** Set when {@link dispose} is called — a driver auto-pruning this store
+     *  (the channel/spawn surface wrapping it) drops a `dead` child on its
+     *  next tick. */
     dead = false;
 
     /** Stop being auto-pruned by the owning Predict and drop all entries. */

@@ -12,12 +12,12 @@
  *     const predict = Predict.get(room, { mode: "lerp", delay: 80 });
  *     predict.attachAll("players", { fields: ["x", "y"], mode: "damped" });
  *     const me      = predict.reconciler(self, { input, fields: ["x","y"], step });
- *     const deaths  = predict.events();
+ *     const deaths  = predict.defineEvent({ onPredict: playDeathFx });
  *
  *     // Per frame, one driver advances all three:
  *     predict.tick(performance.now());
  *
- * The {@link Reconciler}, {@link PredictedEvents} and the `Predict`-managed
+ * The {@link Reconciler}, {@link PredictedEventChannel} and the `Predict`-managed
  * attachment ring share their input/ack/replay/smoothing machinery; see each
  * file's docs for the underlying contracts.
  *
@@ -39,8 +39,6 @@ export {
     type ReckonOptions,
     type ReckonAttachConfig,
     type RawOptions,
-    type SteppedOptions,
-    type SimulateOptions,
     type PredictSpawnsOptions,
     type PredictCore,
     type ProfileCore,
@@ -65,19 +63,14 @@ export {
 } from './predict/simReconciler.ts';
 
 export {
-    PredictedEvents,
-    DEFAULT_TTL_POLICY,
-    type PredictedEventsConfig,
-    type PredictedEventsClock,
-    type PredictedEventsGetOptions,
-    type PredictedEventHandle,
-} from './predict/predictedEvents.ts';
-
-export {
     PredictedEventChannel,
     DEFAULT_GRACE_TICKS,
     type PredictedEventChannelOptions,
 } from './predict/predictedEventChannel.ts';
+
+export {
+    type ConfirmOn,
+} from './predict/confirmOn.ts';
 
 export {
     PredictedSpawns,

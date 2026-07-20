@@ -14,6 +14,19 @@
 // (`Symbol.for`), so the import is one value even across duplicate installs.
 // `Symbol.metadata` is the TC39 decorator-metadata symbol, not a schema export.
 import { $refId, $values } from "@colyseus/schema";
+import type { MapSchema, ArraySchema, SetSchema } from "@colyseus/schema";
+
+/** Keys of T whose value is a Colyseus collection (Map/Array/Set schema). */
+export type CollectionKeys<T> = {
+    [K in keyof T]-?: T[K] extends MapSchema<any> | ArraySchema<any> | SetSchema<any> ? K : never;
+}[keyof T] & string;
+
+/** Element type of a Colyseus collection. */
+export type ChildOf<C> =
+    C extends MapSchema<infer V> ? V :
+    C extends ArraySchema<infer V> ? V :
+    C extends SetSchema<infer V> ? V :
+    never;
 
 const $METADATA: symbol = (Symbol as { metadata?: symbol }).metadata ?? Symbol.for("Symbol.metadata");
 /** Schema's own SoA: a dense array of a decoded instance's field values, indexed
