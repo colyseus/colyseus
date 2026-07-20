@@ -444,8 +444,10 @@ export class InputBufferImpl<I = any> {
   /** Reckon-display stamp of the most recently consumed input — the client's
    *  serverNow estimate when it sampled that input, i.e. the EXACT instant its
    *  forward-reckoned entities were displayed at. Same consume semantics as
-   *  {@link renderTime}. Consumed automatically by `rewind.lastSeenBy()` for
-   *  `mode:"reckon"` rewind groups — rarely read directly. `0` until stamped. */
+   *  {@link renderTime}. RAW: stays `0` until stamped — the resolved,
+   *  always-usable value is the accessor's `reckonTime`
+   *  (`room.inputs.get(sid)`); `rewind.lastSeenBy()`'s midpoint-reconstruction
+   *  fallback depends on this raw `0`. */
   get reckonTime(): number {
     return this._lastReckonTime;
   }
@@ -487,7 +489,14 @@ export class InputBufferImpl<I = any> {
  */
 export class InputAccessorImpl<I = any> implements InputAccessor<I> {
   private _client: ClientPrivate;
-  constructor(client: ClientPrivate) { this._client = client; }
+  /** Current room time (`clock.elapsedTime`) — resolves the {@link reckonTime}
+   *  fallback. Threaded by `RoomInput.allocate()`; optional so bare
+   *  constructions (tests) keep the raw 0. */
+  private _nowOf?: () => number;
+  constructor(client: ClientPrivate, nowOf?: () => number) {
+    this._client = client;
+    this._nowOf = nowOf;
+  }
   get latest(): I | undefined { return this._client._input as I | undefined; }
   at(value: number): I | undefined { return this._client._inputBuffer?.at(value) as I | undefined; }
   consume(opts?: ConsumeOptions<I>): IterableIterator<I> {
@@ -505,7 +514,15 @@ export class InputAccessorImpl<I = any> implements InputAccessor<I> {
   get wasIdle(): boolean { return this._client._inputBuffer?.wasIdle ?? false; }
   clear(): void { this._client._inputBuffer?.clear(); }
   get renderTime(): number { return this._client._inputBuffer?.renderTime ?? 0; }
-  get reckonTime(): number { return this._client._inputBuffer?.reckonTime ?? 0; }
+  /** @internal RAW reckon stamp (0 until stamped). The rewind binding reads
+   *  THIS, not the resolved getter below: `Rewind._aim`'s midpoint fallback
+   *  must still see 0 for unstamped clients (a resolved value would silently
+   *  take the direct-stamp clamp path). */
+  get rawReckonTime(): number { return this._client._inputBuffer?.reckonTime ?? 0; }
+  get reckonTime(): number {
+    const raw = this._client._inputBuffer?.reckonTime ?? 0;
+    return raw > 0 ? raw : this._nowOf !== undefined ? this._nowOf() : 0;
+  }
 }
 
 /**
@@ -528,5 +545,5 @@ export const NO_OP_INPUT_ACCESSOR: InputAccessor<any> = Object.freeze({
   wasIdle: false,
   clear: () => {},
   renderTime: 0,
-  reckonTime: 0,
+  reckonTime: 0, // stays 0 — an unknown session / input-less room has no clock to resolve against
 });

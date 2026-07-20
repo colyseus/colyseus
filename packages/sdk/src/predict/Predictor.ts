@@ -2441,7 +2441,9 @@ export class Predict<TState = any> {
         // The command type is then `Data<W>` (the input's data fields), so neither
         // type argument needs to be written at the call site, and `step`'s `cmd`
         // is contextually typed.
-        const recon = new Reconciler<S, Data<W>>(instance, opts);
+        // Inject this Predict's clock so ctx.reckonTime resolves its unstamped
+        // fallback (serverNow) inside the library; an explicit opts.clock wins.
+        const recon = new Reconciler<S, Data<W>>(instance, { ...opts, clock: opts.clock ?? this.clock });
         this.adoptFixedStep(recon.stepMs);
         this.bindInputRenderDelay(opts.input);
         // One read idiom: predict.value(instance, field) reads THIS controller's
@@ -2472,7 +2474,11 @@ export class Predict<TState = any> {
         // world is fully bound and no custom pose exists), world handle `E` from
         // `opts.world` — none written at the call site, and `step`'s `cmd` is
         // contextually typed `Data<W>`.
-        const ctl = new SimReconciler<Data<W>, P, E>(opts as SimReconcilerOptions<Data<W>, P, E>);
+        // Clock injection: same as reconciler() — resolves ctx.reckonTime's fallback.
+        const ctl = new SimReconciler<Data<W>, P, E>({
+            ...(opts as SimReconcilerOptions<Data<W>, P, E>),
+            clock: opts.clock ?? this.clock,
+        });
         this.adoptFixedStep(ctl.stepMs);
         this.bindInputRenderDelay(opts.input);
         // One read idiom: bound world entries register into predict.value(instance,

@@ -1024,8 +1024,10 @@ export class Room<T extends RoomOptions = RoomOptions> {
     });
     // Direct reckon-display stamp: mode:"reckon" groups read at exactly the
     // instant the client displayed them — immune to its RTT-estimation error.
+    // RAW (not the accessor's resolved getter): _aim's midpoint fallback must
+    // see 0 for unstamped clients.
     this.#rewind.bindReckonTime((sessionId) =>
-      this._inputController?.api.get(sessionId).reckonTime ?? 0,
+      this._inputController?.rawReckonTime(sessionId) ?? 0,
     );
     // Anchor the reckon midpoint FALLBACK at the true processing instant (the
     // record timestamp is one tick stale by hit-test time — see bindNow).

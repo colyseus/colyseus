@@ -177,7 +177,9 @@ export class RewindView {
 
   /** The clamped server-time (ms) `mode: "reckon"` groups read at — the
    *  client's reconstructed simulation instant, not the raw stamp (see
-   *  {@link Rewind.at}). */
+   *  {@link Rewind.at}). Always a resolved instant: a clamped direct stamp,
+   *  or the midpoint/live reconstruction when unstamped. `0` only before the
+   *  first `record()`. */
   get reckonTime(): number { return this._reckonTime; }
 
   /** @internal Aim at a rewind + clamped times ({@link Rewind.at} owns the clamps). */

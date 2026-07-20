@@ -144,11 +144,26 @@ export interface StepContext {
    * motion. Because it's the same value per seq across rollbacks, collision in
    * the step replays deterministically.
    *
-   * `0` when reckon lag-comp isn't enabled (the room never rewinds to it) or
-   * before the clock syncs — fall back to `serverNow()` then, mirroring the
-   * server's `reckonTime > 0 ? reckonTime : now`.
+   * Always a usable instant when the controller has a clock (automatic when
+   * spawned via `predict.reconciler()` / `predict.sim()`): a seq that wasn't
+   * stamped for lag-comp (the room never rewinds, clock not yet synced, seq
+   * aged out) resolves to the clock's live `serverNow()` — the fallback
+   * consumers previously wrote by hand. Check {@link lagCompActive} to
+   * distinguish. An unstamped seq re-reads the live `serverNow()` on each
+   * replay — that was never deterministic (consumers substituted live
+   * `serverNow()` there anyway); stamped seqs stay per-seq-buffered and
+   * replay-deterministic. `0` only on a bare controller constructed without a
+   * clock.
    */
   readonly reckonTime: number;
+  /**
+   * Whether THIS seq carried a reckon lag-comp stamp — the server rewinds to
+   * {@link reckonTime} for it, and the value is the buffered per-seq stamp
+   * (replay-deterministic). `false` ⇒ `reckonTime` resolved to the live
+   * `serverNow()`. The gate for the rare "skip the lag-comp read entirely"
+   * consumer.
+   */
+  readonly lagCompActive: boolean;
   /**
    * Memoize a VALUE on the rollback timeline that replay can't re-derive: a
    * lag-comp'd collision outcome (its `reckonTime` interp samples age out), an
@@ -244,6 +259,14 @@ export interface RollbackOptions<I> {
      */
     input: InputHandle<I>;
     /**
+     * Server-synced clock resolving {@link StepContext.reckonTime}'s fallback
+     * (`serverNow()` for unstamped seqs). Injected automatically by
+     * `predict.reconciler()` / `predict.sim()` (the owning Predict's clock —
+     * `room.clock`); pass explicitly only for bare construction. Absent ⇒
+     * unstamped seqs read `ctx.reckonTime === 0` / `lagCompActive === false`.
+     */
+    clock?: { serverNow(): number };
+    /**
      * Error-decay rate (spring constant 1/s; higher = snappier). The reconcile
      * delta eases to zero at this rate. 0 = hard snap. Defaults to the server's
      * correction cadence (`input.patchRate`) so the error decays over ~one patch
@@ -312,10 +335,12 @@ export interface RollbackOptions<I> {
 }
 
 /** Reused per-step context — mutated in place each step, no per-step alloc.
- *  `dt`/`dtMs`/sub-step trio are constant; `tick`/`isReplay`/`reckonTime` change.
- *  `memo` is bound once and reads the live `tick`/`isReplay` at call time. */
+ *  `dt`/`dtMs`/sub-step trio are constant; `tick`/`isReplay`/`reckonTime`/
+ *  `lagCompActive` change. `memo` is bound once and reads the live
+ *  `tick`/`isReplay` at call time. */
 interface MutableStepContext {
     dt: number; dtMs: number; tick: number; isReplay: boolean; reckonTime: number;
+    lagCompActive: boolean;
     subSteps: number; subDt: number; subDtMs: number;
     memo: <T>(keyOrCompute: string | (() => T), compute?: () => T) => T | undefined;
     predict: <T>(sink: PredictSink<T>, payload: T) => void;
@@ -420,9 +445,12 @@ export abstract class RollbackController<I = any> {
     private readonly onReconcile?: (acked: number) => void;
     /** Divergence-warning tolerance; `undefined` ⇒ off. @see warnOnDivergence */
     private readonly warnTolerance?: number;
+    /** Resolves ctx.reckonTime's unstamped fallback. @see RollbackOptions.clock */
+    private readonly clock?: { serverNow(): number };
 
     constructor(opts: RollbackOptions<I>) {
         this.input_ = opts.input;
+        this.clock = opts.clock;
         // Default decay rate to the server's correction cadence (τ = one patch
         // interval) so corrections ease out before the next one — no stacking.
         this.smoothing = opts.smoothing
@@ -451,6 +479,7 @@ export abstract class RollbackController<I = any> {
         const subSteps = opts.subSteps ?? this.input_.subSteps ?? 1;
         this.stepCtx = {
             dt, dtMs: stepMs, tick: 0, isReplay: false, reckonTime: 0,
+            lagCompActive: false,
             subSteps, subDt: dt / subSteps, subDtMs: stepMs / subSteps,
             // key-less form shares one slot per seq ("" — see StepContext.memo)
             memo: (keyOrCompute, compute) => (typeof keyOrCompute === "string"
@@ -603,7 +632,13 @@ export abstract class RollbackController<I = any> {
      */
     protected runStep(seq: number, input: I): void {
         this.stepCtx.tick = seq;
-        this.stepCtx.reckonTime = this.input_.reckonTimeAt(seq); // same per-seq value live + on replay
+        // Per-seq stamp when lag-comp stamped this seq (same value live + on
+        // every replay); else resolve to the live serverNow() — the fallback
+        // every consumer previously hand-wrote. 0 only with no clock (bare tests).
+        const raw = this.input_.reckonTimeAt(seq);
+        this.stepCtx.lagCompActive = raw > 0;
+        this.stepCtx.reckonTime = raw > 0 ? raw
+            : this.clock !== undefined ? this.clock.serverNow() : 0;
         this.applyStep(input);
     }
 

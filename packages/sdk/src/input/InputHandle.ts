@@ -247,9 +247,12 @@ export interface InputHandle<I = any> {
    * client's `serverNow()` estimate at send, the SAME value the server reads as
    * `channel.reckonTime` (and `rewind.lastSeenBy(sid)`). The reconciler surfaces
    * it as `ctx.reckonTime` so a prediction step hit-tests remote entities at the
-   * exact instant the server rewinds to (live AND replay). `0` when reckon
-   * lag-comp isn't enabled (the room never rewinds to it — fall back to
-   * `serverNow()`), or if `seq` is unsent, acked, aged out, or pre-clock-sync.
+   * exact instant the server rewinds to (live AND replay). Returns the RAW
+   * stamp: `0` when reckon lag-comp isn't enabled (the room never rewinds to
+   * it), or if `seq` is unsent, acked, aged out, or pre-clock-sync — the
+   * reconciler resolves that `0` to the clock's live `serverNow()` before
+   * surfacing it as `ctx.reckonTime` (see `StepContext.reckonTime` /
+   * `lagCompActive`).
    */
   reckonTimeAt(seq: number): number;
 }
@@ -290,8 +293,8 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
   // reconciler reads it back as ctx.reckonTime on the live step AND on replay, so
   // both hit-test at the exact instant the server rewinds to. Sized = replay ring.
   // Lazily allocated AND only when reckon stamping is on (`_stampReckon`): a room
-  // without reckon lag-comp never rewinds to it, so we don't track it (ctx.reckonTime
-  // then reads 0 and callers fall back to serverNow()).
+  // without reckon lag-comp never rewinds to it, so we don't track it (reckonTimeAt
+  // then reads 0 and the controller resolves ctx.reckonTime to serverNow()).
   private _reckonTimes: Float64Array | null = null;
   // Reckon instant of the in-flight send() — computed in send() when stamping,
   // stamped on the wire AND recorded into _reckonTimes by _recordSent (same value
@@ -404,7 +407,7 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
   }
 
   reckonTimeAt(seq: number): number {
-    // 0 when reckon stamping is off (no ring) — callers fall back to serverNow().
+    // 0 when reckon stamping is off (no ring) — the controller resolves to serverNow().
     if (this._reckonTimes === null) return 0;
     // Same validity window as at(): sent, unacked, still in the ring. Live reads
     // it for the just-sent seq (== sentCount); replay reads each unacked seq.

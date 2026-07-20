@@ -443,8 +443,15 @@ export interface InputAccessor<I = any, Idle extends boolean = false> {
    * index into the same recorded timeline, so estimation error cancels (the
    * `maxRewindMs` clamp still bounds spoofing). Same consume semantics as
    * {@link renderTime}; consumed automatically by `rewind.lastSeenBy()` —
-   * rarely read directly. `0` until stamped (→ rewind falls back to the
-   * midpoint reconstruction).
+   * rarely read directly.
+   *
+   * Always a usable instant: when no reckon-stamped input has been consumed
+   * yet (lag-comp off, client clock unsynced, nothing consumed), resolves to
+   * the room clock's current `elapsedTime` — the fallback rooms previously
+   * hand-wrote as `reckonTime > 0 ? reckonTime : now`. `rewind.lastSeenBy()`
+   * internally reads the raw stamp, so its midpoint reconstruction still
+   * engages for unstamped clients. The no-op accessor (unknown session / no
+   * `defineInput()`) returns `0`.
    */
   readonly reckonTime: number;
 }

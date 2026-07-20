@@ -90,8 +90,12 @@ export class RoomInput {
   #stampReckon = false;
   #stampResolved = false;
 
+  /** One shared now-resolver handed to every accessor (see {@link InputAccessorImpl}). */
+  private nowOf: () => number;
+
   constructor(room: Room<any>) {
     this.room = room;
+    this.nowOf = () => this.room.clock.elapsedTime;
   }
 
   /**
@@ -155,7 +159,17 @@ export class RoomInput {
       // ctor → idle synthesis; client ref → idle ctx; idle policy → total drain()/next().
       client._inputBuffer = new InputBufferImpl(maxSize, this.options.seqField, this.options.ctor, client, this.options.idle);
     }
-    client._inputAccessor = new InputAccessorImpl(client);
+    client._inputAccessor = new InputAccessorImpl(client, this.nowOf);
+  }
+
+  /** @internal Raw reckon stamp for {@link Room.allowRewindState}'s
+   *  `bindReckonTime` — bypasses the accessor's resolved getter so the rewind
+   *  midpoint fallback still engages for unstamped clients. instanceof-narrowed:
+   *  the registry only ever holds `InputAccessorImpl` (see {@link allocate}),
+   *  so the 0 fallback covers only a missing session. */
+  rawReckonTime(sessionId: string): number {
+    const acc = this.accessors.get(sessionId);
+    return acc instanceof InputAccessorImpl ? acc.rawReckonTime : 0;
   }
 
   /** Register a (re)joined client's accessor. On reconnect this overwrites the
