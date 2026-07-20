@@ -17,7 +17,7 @@ import { createSignal } from './core/signal.ts';
 
 import { SchemaConstructor, SchemaSerializer } from './serializer/SchemaSerializer.ts';
 
-import { NULL_CLOCK, type RoomClockLike } from './RoomClock.ts';
+import { NULL_CLOCK, type RoomClock } from './RoomClock.ts';
 
 import { type ReconnectionOptions, createReconnection, enqueueMessage } from './Reconnection.ts';
 import { type OnReply, type RequestOptions, toRequestError } from './RoomRequest.ts';
@@ -62,20 +62,24 @@ export class Room<
      * Server-time + RTT estimator, driven by the {@link ProtocolModifier.TIMED}
      * prefix that servers emit when `defineInput()` was called.
      *
+     * PRESENCE CONTRACT: `clock` is never `undefined` and always satisfies
+     * {@link RoomClock} — every member, including `renderNow()`, is callable
+     * with no optional chaining and no fallback.
+     *
      * - Defaults to a shared frozen {@link NULL_CLOCK} so `room.clock.serverNow()`
      *   always works. The shim returns the client's own `performance.now()` and
      *   reports `0` for RTT. Rooms that never call `defineInput()` keep this
      *   stub for the whole session — zero allocation cost for chat / lobby /
      *   turn-based rooms.
-     * - After handshake on an input room, a default {@link RoomClock} is
+     * - After handshake on an input room, a default {@link RoomClockImpl} is
      *   instantiated. Users can swap their own implementation in via
      *   `room.clock = new MyClock()` between `await joinOrCreate(...)` and
      *   the first state message (any state-message arrival is on a future
-     *   microtask, so a synchronous swap is race-free).
-     * - Access timing through `room.clock.serverNow()` etc. directly — no
-     *   optional chaining or fallback needed.
+     *   microtask, so a synchronous swap is race-free). A custom clock with no
+     *   slew state of its own satisfies the `renderNow` guarantee by aliasing:
+     *   `renderNow() { return this.serverNow(); }`.
      */
-    public clock: RoomClockLike = NULL_CLOCK;
+    public clock: RoomClock = NULL_CLOCK;
 
     protected onMessageHandlers = createNanoEvents();
 

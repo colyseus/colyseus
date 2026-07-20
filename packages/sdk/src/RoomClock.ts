@@ -1,10 +1,12 @@
 import { now } from './core/utils.ts';
 
 /**
- * Contract the {@link Room} expects from its clock. The default is
- * {@link RoomClock}; consumers can replace `room.clock` with any object
- * satisfying this interface (test mocks, alternative RTT estimators,
- * NTP-style probe-driven clocks, etc.).
+ * Structural contract for anything USED as a clock — the loose type Predict
+ * accepts, so bare test fakes may omit the optional members. What a
+ * {@link Room} EXPOSES is the stricter {@link RoomClock}, which additionally
+ * guarantees {@link renderNow}. The default implementation is
+ * {@link RoomClockImpl} (test mocks, alternative RTT estimators, NTP-style
+ * probe-driven clocks can replace it — see {@link Room.clock}).
  *
  * PURE TIME + LATENCY: the clock no longer tracks input acks. The input
  * round-trip (what you sent / what the server processed) lives on the
@@ -18,7 +20,7 @@ export interface RoomClockLike {
      *  {@link serverNow}, which you want for server-STAMPED absolute deadlines
      *  (invuln / respawn / buy-phase windows you compare an absolute instant against). */
     now(): number;
-    /** Estimated server clock (ms since room start — see {@link RoomClock.serverNow}). */
+    /** Estimated server clock (ms since room start — see {@link RoomClockImpl.serverNow}). */
     serverNow(): number;
     /** Server clock like {@link serverNow}, but on a SLEW-LIMITED **render**
      *  timeline: a clock advanced at 1 ms/ms and servoed gently toward
@@ -65,6 +67,18 @@ export interface RoomClockLike {
 }
 
 /**
+ * The clock contract `Room.clock` guarantees: {@link RoomClockLike} with
+ * {@link RoomClockLike.renderNow | renderNow} always present, so render code
+ * calls `room.clock.renderNow()` with no optional chaining and no
+ * `serverNow()` fallback. Both built-in clocks ({@link NULL_CLOCK},
+ * {@link RoomClockImpl}) satisfy it; a custom replacement with no slew state
+ * of its own aliases the estimate: `renderNow() { return this.serverNow(); }`.
+ */
+export interface RoomClock extends RoomClockLike {
+    renderNow(): number;
+}
+
+/**
  * Stub clock returned by {@link Room.clock} until the JOIN_ROOM handshake
  * reveals whether the room declared input.
  *
@@ -76,9 +90,9 @@ export interface RoomClockLike {
  *
  * Shared, frozen singleton — costs nothing to keep around for rooms that
  * never call `defineInput()`. The Room replaces it with a real
- * {@link RoomClock} during handshake when input is declared.
+ * {@link RoomClockImpl} during handshake when input is declared.
  */
-export const NULL_CLOCK: RoomClockLike = Object.freeze({
+export const NULL_CLOCK: RoomClock = Object.freeze({
     now: () => now(),
     serverNow: () => now(),
     renderNow: () => now(),
@@ -114,7 +128,7 @@ export const NULL_CLOCK: RoomClockLike = Object.freeze({
  * calls {@link sample} when a TIMED prefix arrives, passing a pre-computed RTT
  * sample (the input round-trip is tracked by the InputHandle). Pure math.
  */
-export class RoomClock implements RoomClockLike {
+export class RoomClockImpl implements RoomClock {
     /** Default exponential-smoothing weight for offset + RTT EMA. */
     private static readonly EMA_ALPHA = 0.1;
 
@@ -186,7 +200,7 @@ export class RoomClock implements RoomClockLike {
     private _lastServerTime = 0;    // raw sNow of the last patch (snapshot stamp)
     private _patchInterval = 0;     // server patchRate (ms); 0 until advertised
 
-    private _renderTau = RoomClock.RENDER_TAU; // slew time-constant (ms); 0 disables
+    private _renderTau = RoomClockImpl.RENDER_TAU; // slew time-constant (ms); 0 disables
     private _renderSn = 0;          // slew-limited render-clock reading (ms since room start)
     private _renderSnAt = 0;        // local time (now()) the render clock last advanced
 
@@ -218,7 +232,7 @@ export class RoomClock implements RoomClockLike {
         this._renderSn += dt;                            // free-run at 1 ms/ms
         // Snap past large gaps rather than slew them (see RENDER_SNAP) — a
         // standing lag reads worse than one clean jump.
-        if (Math.abs(target - this._renderSn) > RoomClock.RENDER_SNAP) { this._renderSn = target; return this._renderSn; }
+        if (Math.abs(target - this._renderSn) > RoomClockImpl.RENDER_SNAP) { this._renderSn = target; return this._renderSn; }
         this._renderSn += (target - this._renderSn) * (1 - Math.exp(-dt / this._renderTau)); // servo toward server-present
         return this._renderSn;
     }
@@ -286,7 +300,7 @@ export class RoomClock implements RoomClockLike {
      */
     public sample(sNow: number, rttSample: number): void {
         const tNow = now();
-        const a = RoomClock.EMA_ALPHA;
+        const a = RoomClockImpl.EMA_ALPHA;
 
         // Connection jitter (RFC 3550 interarrival): how far this patch's arrival
         // interval strays from the advertised cadence — measured against the cadence,
@@ -297,8 +311,8 @@ export class RoomClock implements RoomClockLike {
         if (this._lastRecvTime >= 0 && PI > 0) {
             const gap = tNow - this._lastRecvTime;
             const mult = Math.round(gap / PI);
-            if (mult >= 1 && mult <= RoomClock.JITTER_STALL_X) {
-                this._jitter += (Math.abs(gap - mult * PI) - this._jitter) * RoomClock.JITTER_GAIN;
+            if (mult >= 1 && mult <= RoomClockImpl.JITTER_STALL_X) {
+                this._jitter += (Math.abs(gap - mult * PI) - this._jitter) * RoomClockImpl.JITTER_GAIN;
             }
         }
         this._lastRecvTime = tNow;
@@ -309,7 +323,7 @@ export class RoomClock implements RoomClockLike {
         // Reject impossible / outlier RTT (tab-resume spikes once converged).
         if (rttSample < 0) {
             rttSample = -1;
-        } else if (this._smoothedRtt > 0 && rttSample > this._smoothedRtt * RoomClock.RTT_OUTLIER_X) {
+        } else if (this._smoothedRtt > 0 && rttSample > this._smoothedRtt * RoomClockImpl.RTT_OUTLIER_X) {
             rttSample = -1;
         }
 
@@ -327,9 +341,9 @@ export class RoomClock implements RoomClockLike {
             // rttSample<0 (no ack this packet) skips the offset entirely — an
             // uncorrected `sNow-tNow` is the noisiest kind, so let the offset hold.
             const floor = this.pushRttFloor(rttSample, tNow);
-            const warming = this._offsetCount < RoomClock.RTT_GATE_WARMUP;
+            const warming = this._offsetCount < RoomClockImpl.RTT_GATE_WARMUP;
             this._offsetCount++;
-            if (warming || rttSample <= floor * RoomClock.RTT_GATE_FACTOR) {
+            if (warming || rttSample <= floor * RoomClockImpl.RTT_GATE_FACTOR) {
                 this._clockOffset = this._clockOffset * (1 - a) + offsetSample * a;
             }
         }
@@ -359,7 +373,7 @@ export class RoomClock implements RoomClockLike {
         while (V.length > 0 && V[V.length - 1] >= rttSample) { V.pop(); T.pop(); }
         V.push(rttSample); T.push(tNow);
         // Expire entries older than the window from the front.
-        const cutoff = tNow - RoomClock.RTT_GATE_WINDOW;
+        const cutoff = tNow - RoomClockImpl.RTT_GATE_WINDOW;
         while (T.length > 0 && T[0] < cutoff) { T.shift(); V.shift(); }
         return V[0]; // front = windowed minimum
     }

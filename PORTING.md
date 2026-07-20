@@ -77,6 +77,16 @@ published JS types.)
 `replayBufferSize`, and the advertised rates: `tickRate`,
 `stepSeconds`/`stepMs`, `patchRate`, `subSteps`, `subStepSeconds`/`subStepMs`.
 
+### Room clock (`RoomClock.ts`)
+
+- **`RoomClock`** — the contract `room.clock` GUARANTEES (never null; a frozen
+  null-object stub pre-handshake): `now()`, `serverNow()`, `renderNow()`,
+  `rtt()`, `smoothedRtt()`, `jitter()`, `lastServerTime()`, `patchInterval()`,
+  `setPatchInterval(ms)`, `sample(sNow, rttSample)`.
+- **`RoomClockLike`** — the loose ACCEPT type (what Predict takes; `renderNow`
+  and the patch-interval pair optional). A typed port may collapse the pair
+  into one interface if optional members don't translate.
+
 ### Explicitly NOT ported
 
 - `track` / `untrack` / `trackStepped` (+ `SteppedOptions` /

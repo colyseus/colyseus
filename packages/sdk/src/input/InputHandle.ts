@@ -577,7 +577,7 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
    * @internal Feed the server's last-PROCESSED input seq (decoded from the
    * TIMED prefix). Advances {@link lastProcessed} (monotonic) and returns the
    * round-trip time sample for that ack (`now − sendTime(seq)`), or `-1` if the
-   * send time is unknown. The {@link RoomClock} filters/EMA-smooths the sample.
+   * send time is unknown. The {@link RoomClockImpl} filters/EMA-smooths the sample.
    */
   ackInput(seq: number): number {
     if (seq <= this._lastProcessed) return -1;

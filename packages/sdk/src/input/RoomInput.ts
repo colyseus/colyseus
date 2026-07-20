@@ -3,7 +3,7 @@ import { InputEncoder } from '@colyseus/schema/input';
 import { InputFlags } from '@colyseus/shared-types';
 
 import { InputHandleImpl, type InputHandle, type InputOptions } from './InputHandle.ts';
-import { NULL_CLOCK, RoomClock } from '../RoomClock.ts';
+import { NULL_CLOCK, RoomClockImpl } from '../RoomClock.ts';
 
 // Type-only: avoids a runtime import cycle (Room imports RoomInput as a value).
 import type { Room } from '../Room.ts';
@@ -78,7 +78,7 @@ export class RoomInput {
      *
      * INPUT_REFLECTION is also the signal that the server called `defineInput()`
      * and will emit TIMED-prefixed state messages — so swap the default stub
-     * clock for a real {@link RoomClock} unless the user already replaced
+     * clock for a real {@link RoomClockImpl} unless the user already replaced
      * `room.clock` with their own. Advances `it`.
      */
     applyReflection(buffer: Uint8Array, it: Iterator, sectionEnd: number): void {
@@ -86,7 +86,7 @@ export class RoomInput {
         Reflection.makeEncodable(inputDecoder.state.constructor as any);
         this.#ctorFromReflection = inputDecoder.state.constructor as new () => any;
 
-        if (this.#room.clock === NULL_CLOCK) this.#room.clock = new RoomClock();
+        if (this.#room.clock === NULL_CLOCK) this.#room.clock = new RoomClockImpl();
     }
 
     /**
