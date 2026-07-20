@@ -356,7 +356,7 @@ export interface SteppedOptions<T = any> {
  * entities, replacing a separate `attachAll(key, { mode: "reckon", … })` for
  * spawn-style collections.
  */
-export interface PredictSpawnsOptions<S = unknown, L = Partial<S>, D = undefined>
+export interface SpawnsOptions<S = unknown, L = Partial<S>, D = undefined>
     extends PredictedSpawnsOptions<S, L, D> {
     /**
      * Dead-reckon confirmed entities on these fields, using the same `step`
@@ -2323,7 +2323,7 @@ export class Predict<TState = any> {
      */
     spawns<K extends CollectionKeys<TState>, L = Partial<ChildOf<TState[K]>>, D = undefined>(
         key: K,
-        opts: PredictSpawnsOptions<ChildOf<TState[K]>, L, D> = {},
+        opts: SpawnsOptions<ChildOf<TState[K]>, L, D> = {},
     ): PredictedSpawns<ChildOf<TState[K]>, L, D> {
         type S = ChildOf<TState[K]>;
         const store = new PredictedSpawns<S, L, D>(opts, this.clock ?? null);

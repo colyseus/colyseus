@@ -39,7 +39,7 @@ export {
     type ReckonOptions,
     type ReckonAttachConfig,
     type RawOptions,
-    type PredictSpawnsOptions,
+    type SpawnsOptions,
     type PredictCore,
     type ProfileCore,
 } from './predict/Predictor.ts';

@@ -42,7 +42,7 @@ published JS types.)
 - **Option types**: `PredictMode`, `PredictOptions` (= `SmoothingOptions |
   ReckonOptions | RawOptions`), `PredictGetOptions`, `AttachConfig`
   (= `SmoothingConfig | ReckonAttachConfig`), `FieldSmoothing`,
-  `PredictSpawnsOptions`, `ConfirmOn`.
+  `SpawnsOptions`, `ConfirmOn`.
 
 ### Rollback controllers (`predict/rollback.ts` + `reconciler.ts` / `simReconciler.ts`)
 
