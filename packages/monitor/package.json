@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/monitor",
-  "version": "0.18.0",
+  "version": "0.18.1",
   "description": "Web Monitoring Panel for Colyseus",
   "input": "./src/index.ts",
   "main": "./build/index.cjs",

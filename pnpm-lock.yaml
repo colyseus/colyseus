@@ -121,8 +121,8 @@ importers:
         specifier: workspace:^
         version: link:../../packages/drivers/drizzle-driver
       '@colyseus/schema':
-        specifier: ^5.0.6
-        version: 5.0.6(typescript@6.0.3)
+        specifier: ^5.0.8
+        version: 5.0.8(typescript@6.0.3)
       '@colyseus/sdk':
         specifier: workspace:^
         version: link:../../packages/sdk
@@ -437,8 +437,8 @@ importers:
         specifier: workspace:^
         version: link:../presence/redis-presence
       '@colyseus/schema':
-        specifier: ^5.0.6
-        version: 5.0.6(typescript@6.0.3)
+        specifier: ^5.0.8
+        version: 5.0.8(typescript@6.0.3)
       '@colyseus/tools':
         specifier: workspace:^
         version: link:../tools
@@ -563,8 +563,8 @@ importers:
         specifier: workspace:^
         version: link:../presence/redis-presence
       '@colyseus/schema':
-        specifier: ^5.0.6
-        version: 5.0.6(typescript@6.0.3)
+        specifier: ^5.0.8
+        version: 5.0.8(typescript@6.0.3)
       '@colyseus/sdk':
         specifier: workspace:^
         version: link:../sdk
@@ -829,8 +829,8 @@ importers:
         specifier: workspace:^
         version: link:../better-call/packages/better-call
       '@colyseus/schema':
-        specifier: ^5.0.6
-        version: 5.0.6(typescript@6.0.3)
+        specifier: ^5.0.8
+        version: 5.0.8(typescript@6.0.3)
       '@colyseus/shared-types':
         specifier: workspace:^
         version: link:../shared-types
@@ -958,8 +958,8 @@ importers:
         specifier: workspace:^
         version: link:../core
       '@colyseus/schema':
-        specifier: ^5.0.6
-        version: 5.0.6(typescript@6.0.3)
+        specifier: ^5.0.8
+        version: 5.0.8(typescript@6.0.3)
       '@colyseus/sdk':
         specifier: workspace:^
         version: link:../sdk
@@ -1544,6 +1544,12 @@ packages:
 
   '@colyseus/schema@5.0.6':
     resolution: {integrity: sha512-/poMVsvJjCY5piC0KeG/PU1xJ5+I8TQFGtg0XpDl+hmJ85Y7bTGllpiAMTqHXjMR536rd/edOiUdz/tw7+3bHw==}
+    hasBin: true
+    peerDependencies:
+      typescript: ^5.0.0 || ^6.0.0
+
+  '@colyseus/schema@5.0.8':
+    resolution: {integrity: sha512-6IaQxn4jVVJC6qzQtPLquYE5yVNitAOGiI9Yp7/vpy4MJhGiUGe/ju29dPLZecfvKobc2v/KMTgyjzEYxvbDsg==}
     hasBin: true
     peerDependencies:
       typescript: ^5.0.0 || ^6.0.0
@@ -10071,6 +10077,10 @@ snapshots:
   '@colyseus/clock@2.0.3': {}
 
   '@colyseus/schema@5.0.6(typescript@6.0.3)':
+    dependencies:
+      typescript: 6.0.3
+
+  '@colyseus/schema@5.0.8(typescript@6.0.3)':
     dependencies:
       typescript: 6.0.3
 

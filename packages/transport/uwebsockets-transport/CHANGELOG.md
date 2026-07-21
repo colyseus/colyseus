@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.1
+
+- Internal: `enqueueRaw()` now delegates to `enqueueClientRaw()` from `@colyseus/core`, which centralizes join-time message buffering and `afterNextPatch` routing; the per-client `_afterNextPatchQueue` field is gone. Requires `@colyseus/core` 0.18.1.
+
 ## 0.17.20
 
 - Use `MAY_TRY_RECONNECT` close code (instead of `FAILED_TO_RECONNECT`) in devMode when a reconnection token is present but the seat hasn't been reserved yet. This allows the SDK to retry during the brief HMR reload window.

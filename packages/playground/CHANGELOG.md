@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.18.1
+
+- Security: data endpoints (room listing/inspection, API docs listing, CPU profiles) are now gated. They stay open during local development (devMode, or `NODE_ENV !== "production"`); on production mounts they return 404 unless a `use:` middleware guard is configured — the guard is the opt-in, and a one-time warning reminds you to make it enforce authentication.
+- API docs listing no longer includes `SERVER_ONLY` endpoints (they aren't routable).
+- Connection inspector: send **requests** (`room.request()`) in addition to fire-and-forget messages — the response row pairs with its request and shows an `ok` / `rejected` / `error` status badge plus the round-trip time.
+
 ## 0.17.12
 
 - Make `zod` an optional peer dependency

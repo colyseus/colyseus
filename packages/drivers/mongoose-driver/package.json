@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/mongoose-driver",
-  "version": "0.18.0",
+  "version": "0.18.1",
   "type": "module",
   "input": "./src/index.ts",
   "main": "./build/index.cjs",

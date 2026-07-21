@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/geoip",
-  "version": "0.18.0",
+  "version": "0.18.1",
   "type": "module",
   "description": "GeoIP country detection plugin for Colyseus rooms.",
   "input": "./src/index.ts",

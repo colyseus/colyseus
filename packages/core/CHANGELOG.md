@@ -1,5 +1,65 @@
 # Changelog
 
+## 0.18.1
+
+0.18 preview refresh — the server side of the client-prediction stack. Experimental surfaces below may still change before 0.18 stable. **Compat:** rooms that call `defineInput()` changed wire format — upgrade `@colyseus/sdk` to 0.18.1 alongside. This release also brings in the 0.17.43 / 0.17.44 fixes (`Server.serverless()`, Redis auto-config on Colyseus Cloud — see their sections below), which the published 0.18.0 predates.
+
+### Experimental: fixed timestep (**breaking** — replaces `setTickedSimulation`)
+
+- `Room.setTickedSimulation(cb, delay?, startTick?)` and the `room.tick` getter are gone, split into two explicit APIs:
+  - `setTimestep(cb, delay?)` — variable timestep, callback receives the measured `deltaTime`. (Rename of `setSimulationInterval()`, which stays as a deprecated alias.)
+  - `setFixedTimestep(step, tickRate = 60, opts?)` — framework-owned fixed-step accumulator for deterministic simulation / rollback. The callback receives a `StepContext`: `{ dt, dtMs, tick, subSteps, subDt, subDtMs }`. Catch-up is capped at 5 steps per wake — a stalled event loop drops backlog instead of spiraling.
+- Physics sub-steps: `subSteps` (on `setFixedTimestep` or `defineInput`) decouples the physics rate from the input/network rate — each fixed step integrates `subSteps` engine sub-steps of `dt / subSteps`, identically on client and server (`ctx.subDt` / `ctx.subDtMs`).
+- `SimulationIntervalException` renamed to `TimestepException` (deprecated alias kept).
+
+### Experimental: input (**breaking** — accessor rework)
+
+- `defineInput()`'s return is now assigned to `room.inputs` (was `input`); the per-client accessor is `room.inputs.get(sessionId)`. The API object also exposes the declared step (`tickRate` / `stepSeconds` / `stepMs`, `subSteps` / `subStepSeconds` / `subStepMs`).
+- The accessor was redesigned around explicit consumption (was `.latest` / `.at` / `.drain` / `.peek` / `.size` / `.clear`):
+  - `consume(opts?)` — one-at-a-time iterator (also `[Symbol.iterator]`), advancing the reconcile ack as you go; `next(opts?)` — oldest single input; `take(n)`; `drain(opts?)` — all + clear; `peek()` — read without consuming.
+  - `latest`, `at(seq)`, `size`, `clear()` remain.
+  - New reads: `consumedCount` (the ack the SDK reconciles against), `wasIdle`, `renderTime` / `reckonTime` (lag-comp timeline stamps of the last consumed input).
+- `seqField` is now opt-in (no `"seq"` default) and only powers `.at()` lookup and reliable-channel dedupe. Unreliable dedupe uses a framework-owned wire sequence over the redundancy ring — rollback input needs zero schema ceremony.
+- New `defineInput()` options:
+  - `sanitize` — per-field `[min, max]` clamp map or `(input) => void` function; never trust the wire.
+  - `idle` — synthesized input for quiet/absent clients: `true` (reuse latest), a `Partial<I>`, or `(ctx) => …`; also per-call via `next({ idle })` / `consume({ idle })`.
+  - `tickRate` / `stepMs` / `stepSeconds` and `subSteps` — the declared step, advertised to the SDK in the JOIN handshake (`HandshakeSection.INPUT_OPTIONS`: tick rate, patch rate, sub-steps, lag-comp timeline flags).
+
+### Experimental: lag compensation
+
+- New `Room.allowRewindState(opts?)` returns a per-room `Rewind` recorder for validating hits at what the client actually saw:
+  - `rewind.attachAll(collection, { fields, mode?, interpolate?, maxRewindMs? })` / `rewind.attach(instance, …)` — record numeric fields per entity. `mode: "snapshot"` (default) rewinds to the client's interpolated render time; `mode: "reckon"` rewinds to the client's forward-reckoned display time (its serverNow estimate, stamped directly on inputs, so the rewind read is immune to RTT-estimation error).
+  - `rewind.lastSeenBy(sessionId)` / `rewind.at(time)` return a `RewindView` with `.value(entity, field)` and batch `.read(entity, fields, out?)`; one-off `rewind.valueAt(instance, time, field)`.
+  - Recording is automatic on every broadcast patch, stamped with the same server-time the frame carries — display and rewind agree even when `patchRate` ≠ timestep. Manual `record(now)` during a tick supersedes that tick's auto-record.
+- Input timeline stamps are delta-coded on the wire (≈1 byte/frame); the SDK gates them per-input via `room.input({ allowRewind })`.
+
+### Experimental: request/response replies
+
+`room.request()` (client → server with a reply, shipped undocumented in 0.18.0) matured:
+
+- Message handlers now receive an optional 3rd argument, `ctx: MessageContext` — existing 2-arg handlers are unaffected. `ctx.id` is the request id (`undefined` for fire-and-forget), and `return ctx.resolve(value)` / `return ctx.reject(reason)` are typed reply arms: the SDK's `room.request()` promise resolves/rejects accordingly, with the reject reason type inferred (`ExtractRejectReason`).
+- A plain return value is still the response payload (`ExtractResponseType` now subtracts the reply arms); thrown errors reply `ERROR`.
+- Synchronous handlers reply in the same tick (no microtask deferral).
+
+### TIMED protocol
+
+- New `ProtocolModifier.TIMED` envelope bit: rooms that called `defineInput()` prepend server-time + per-recipient last-input-ack timestamps to `ROOM_STATE` / `ROOM_STATE_PATCH`, giving the SDK RTT / server-clock / offset estimation with no application-level schema cooperation.
+
+### Performance
+
+- `broadcast(..., { afterNextPatch: true })` no longer keeps a per-client queue: non-timed rooms fan out one shared buffer right after the patch; timed rooms stage per-client frames flushed via a dirty list (no full client scan per patch).
+
+### Security
+
+- better-call's `/api/reference` OpenAPI page is **disabled by default** — it dumps the full API surface unauthenticated. Opt back in by passing `openapi` to `createRouter(endpoints, config)`, optionally guarded with the `basicAuth()` middleware.
+
+### Other
+
+- New: `clients.get(sessionId)` — canonical O(1) session lookup, mirroring `inputs.get(sessionId)`. `clients.getById()` is deprecated.
+- New exports: `Rewind` / `RewindView` / `RewindOptions` / `RewindMode`, `StepContext` / `FixedTimestepCallback` / `SimulationCallback`, `TimestepException`, input types (`DefineInputOptions`, `InputAPI`, `InputAccessor`, `ConsumeOptions`, `IdleInput`, `SanitizeInput`, …), `MessageContext` / `Rejection` / `Resolution` / `ExtractResponseType` / `ExtractRejectReason`, `ProtocolModifier`, and `enqueueClientRaw` (raw-send queueing centralized here; used by the 0.18.1 transports).
+- Fix: `OnMessageException` now carries the correct `type` / `payload` across all dispatch paths.
+- Require `@colyseus/schema` `^5.0.8` — monotonic refIds + `decodeResync` for the SDK's reconnect resync.
+
 ## 0.18.0
 
 ### Experimental: typed binary client→server input

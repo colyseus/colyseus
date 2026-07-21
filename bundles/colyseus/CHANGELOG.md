@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.18.1
+
+- 0.18 preview refresh. See the `@colyseus/core` and `@colyseus/sdk` 0.18.1 changelogs for the headline work: client-side prediction (`@colyseus/sdk/predict`), fixed timestep (`setFixedTimestep` + `StepContext`), input accessor rework, lag compensation (`allowRewindState`), request/response reply context, TIMED protocol, and reconnect resync.
+- WebRTC plugin: signaling relay uses the new `clients.get(sessionId)` (was the now-deprecated `getById`).
+- Require `@colyseus/schema` `^5.0.8`.
+
 ## 0.17.10
 
 ### Vite plugin fixes
