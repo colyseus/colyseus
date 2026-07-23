@@ -8,7 +8,7 @@ import { hasDevModeCache, isDevMode, getDevModeCache, writeDevModeCache } from '
 type Callback = (...args: any[]) => void;
 
 export class LocalPresence implements Presence {
-    public subscriptions = new EventEmitter();
+    public subscriptions: EventEmitter = new EventEmitter();
 
     public data: {[roomName: string]: string[]} = {};
     public hash: {[roomName: string]: {[key: string]: string}} = {};
