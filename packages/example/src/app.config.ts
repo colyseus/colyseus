@@ -278,6 +278,9 @@ export const server = config({
     // Admin panel + REST. Browse to http://localhost:2567/admin/.
     // Send `X-User-Id: <id>` to authenticate; POST /admin-seed to bootstrap one.
     ...admin({
+      // e2e logs in fresh per subtest — the default 10/min login bucket
+      // would starve everything past the first ~10 tests.
+      ...(process.env.NODE_ENV === "test" && { rateLimit: { login: false } }),
       dashboard: {
         presets: {
           // totals: false,
