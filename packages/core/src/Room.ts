@@ -1885,7 +1885,7 @@ type DefineRoomOptions<T extends RoomOptions = RoomOptions> =
   ThisType<Room<T>>
 ;
 
-export function room<T>(options: DefineRoomOptions<T>) {
+export function room<T extends RoomOptions>(options: DefineRoomOptions<T>) {
   class _ extends Room<T> {
     messages = options.messages;
 
