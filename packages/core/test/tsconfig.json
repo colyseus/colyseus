@@ -1,0 +1,18 @@
+{
+  // Simulates a strict external consumer of the published declarations:
+  // NodeNext resolution, strict mode, and no skipLibCheck escape hatch.
+  // `@colyseus/core` resolves through this package's own `exports` map,
+  // so `build/` must exist — run the root build first.
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2022",
+    "strict": true,
+    "skipLibCheck": false,
+    "noEmit": true,
+    // pin type acquisition to the workspace root, ignoring nested @types
+    "types": ["node"],
+    "typeRoots": ["../../../node_modules/@types"]
+  },
+  "include": ["**/*.ts"]
+}

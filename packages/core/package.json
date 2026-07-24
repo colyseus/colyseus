@@ -4,7 +4,7 @@
   "description": "Multiplayer Framework for Node.js.",
   "type": "module",
   "scripts": {
-    "test": "tsc --noEmit --strict --skipLibCheck false --module NodeNext --moduleResolution NodeNext --target ES2022 --typeRoots ../../node_modules/@types --types node test/strict-declarations.ts && node --input-type=module -e \"import assert from 'node:assert/strict'; import fs from 'node:fs'; assert.match(fs.readFileSync('build/presence/LocalPresence.d.ts', 'utf8'), /subscriptions: EventEmitter;/);\""
+    "test": "tsc -p test"
   },
   "input": "./src/index.ts",
   "main": "./build/index.cjs",

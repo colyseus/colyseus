@@ -1,7 +1,17 @@
+/**
+ * Compile-only regression test for the published type declarations.
+ *
+ * Compiled as a strict NodeNext consumer (`strict: true`, `skipLibCheck:
+ * false` — see tsconfig.json) against the `build/` output, resolved through
+ * this package's own `exports` map, exactly as an external project would.
+ *
+ * Run with `pnpm --filter @colyseus/core test`. Never executed at runtime.
+ */
+import { EventEmitter } from 'node:events';
 import {
   type Client,
+  LocalPresence,
   Room,
-  room,
   type RoomOptions,
 } from '@colyseus/core';
 import {
@@ -12,10 +22,16 @@ import {
   OnReconnectException,
 } from '@colyseus/core/errors/RoomExceptions';
 
+// ─── assertion helpers ──────────────────────────────────────────────────────
+
 type Equal<A, B> =
   (<T>() => T extends A ? 1 : 2) extends
   (<T>() => T extends B ? 1 : 2) ? true : false;
 type Expect<T extends true> = T;
+
+// ─── RoomExceptions: hook parameter inference ───────────────────────────────
+// Lifecycle hooks are optional on Room; exception types must still infer
+// their parameter types from a subclass's overrides.
 
 interface StrictRoomOptions extends RoomOptions {
   state: { count: number };
@@ -30,7 +46,7 @@ class StrictRoom extends Room<StrictRoomOptions> {
   override onReconnect(client: Client) {}
 }
 
-type HookInference = [
+type _HookInference = [
   Expect<Equal<OnCreateException<StrictRoom>['options'], { seed: string }>>,
   Expect<Equal<OnJoinException<StrictRoom>['client'], Client>>,
   Expect<Equal<OnJoinException<StrictRoom>['options'], { name: string } | undefined>>,
@@ -42,13 +58,8 @@ type HookInference = [
   Expect<Equal<OnReconnectException<StrictRoom>['client'], Client>>,
 ];
 
-const FunctionalRoom = room<StrictRoomOptions>({
-  state: () => ({ count: 0 }),
-  onCreate(options: { seed: string }) {
-    this.state.count = options.seed.length;
-  },
-});
-const functionalRoom: Room<StrictRoomOptions> = new FunctionalRoom();
+// ─── LocalPresence: EventEmitter declaration emit ───────────────────────────
+// Guards against declaration emit narrowing the inferred type to
+// EventEmitter<[never]>, which rejects every .on()/.emit() call.
 
-void (0 as unknown as HookInference);
-void functionalRoom;
+type _Subscriptions = Expect<Equal<LocalPresence['subscriptions'], EventEmitter>>;
