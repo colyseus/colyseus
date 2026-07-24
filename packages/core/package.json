@@ -3,6 +3,9 @@
   "version": "0.18.1",
   "description": "Multiplayer Framework for Node.js.",
   "type": "module",
+  "scripts": {
+    "test": "tsc -p test"
+  },
   "input": "./src/index.ts",
   "main": "./build/index.cjs",
   "module": "./src/index.ts",

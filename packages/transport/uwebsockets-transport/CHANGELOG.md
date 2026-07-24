@@ -4,6 +4,11 @@
 
 - Internal: `enqueueRaw()` now delegates to `enqueueClientRaw()` from `@colyseus/core`, which centralizes join-time message buffering and `afterNextPatch` routing; the per-client `_afterNextPatchQueue` field is gone. Requires `@colyseus/core` 0.18.1.
 
+## 0.17.21
+
+- Fix process-wide crash (`ERR_UNHANDLED_ERROR`) when an HTTP request body is incomplete or arrives too slowly — remotely triggerable by advertising a `Content-Length` and withholding the body. Such requests are now answered with `408 Request Timeout` and the server stays operational. Works with currently published `uwebsockets-express` versions (colyseus/uWebSockets-express#43, thanks to @pierroo)
+- Add `readBodyMaxTime` transport option: maximum time (in milliseconds) allowed while reading an HTTP request body before responding `408` (default: `500`). Previously this limit was hard-coded and could not be configured through the transport.
+
 ## 0.17.20
 
 - Use `MAY_TRY_RECONNECT` close code (instead of `FAILED_TO_RECONNECT`) in devMode when a reconnection token is present but the seat hasn't been reserved yet. This allows the SDK to retry during the brief HMR reload window.

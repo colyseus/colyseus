@@ -12,7 +12,15 @@ import('uwebsockets-express')
   .then((module) => uWebSocketsExpress.resolve(module))
   .catch((error) => uWebSocketsExpress.reject(error));
 
-export type TransportOptions = Omit<uWebSockets.WebSocketBehavior<any>, "upgrade" | "open" | "pong" | "close" | "message">;
+const noop = () => {};
+
+export type TransportOptions = Omit<uWebSockets.WebSocketBehavior<any>, "upgrade" | "open" | "pong" | "close" | "message"> & {
+  /**
+   * Maximum time (in milliseconds) allowed while reading an HTTP request body
+   * before the request is rejected with "408 Request Timeout". (default: 500)
+   */
+  readBodyMaxTime?: number,
+};
 
 type RawWebSocketClient = uWebSockets.WebSocket<any> & {
   url: string,
@@ -29,6 +37,7 @@ export class uWebSocketsTransport extends Transport {
   private _listeningSocket: any;
   private _originalRawSend: typeof uWebSocketClient.prototype.raw | null = null;
   private _expressApp?: express.Application;
+  private _readBodyMaxTime?: number;
 
   constructor(options: TransportOptions = {}, appOptions: uWebSockets.AppOptions = {}) {
     super();
@@ -37,24 +46,28 @@ export class uWebSocketsTransport extends Transport {
       ? uWebSockets.SSLApp(appOptions)
       : uWebSockets.App(appOptions);
 
-    if (options.maxBackpressure === undefined) {
-      options.maxBackpressure = 1024 * 1024;
+    // not a uWS.WebSocketBehavior option — must not be spread into app.ws()
+    const { readBodyMaxTime, ...wsOptions } = options;
+    this._readBodyMaxTime = readBodyMaxTime;
+
+    if (wsOptions.maxBackpressure === undefined) {
+      wsOptions.maxBackpressure = 1024 * 1024;
     }
 
-    if (options.compression === undefined) {
-      options.compression = uWebSockets.DISABLED;
+    if (wsOptions.compression === undefined) {
+      wsOptions.compression = uWebSockets.DISABLED;
     }
 
-    if (options.maxPayloadLength === undefined) {
-      options.maxPayloadLength = 4 * 1024;
+    if (wsOptions.maxPayloadLength === undefined) {
+      wsOptions.maxPayloadLength = 4 * 1024;
     }
 
-    if (options.sendPingsAutomatically === undefined) {
-      options.sendPingsAutomatically = true;
+    if (wsOptions.sendPingsAutomatically === undefined) {
+      wsOptions.sendPingsAutomatically = true;
     }
 
     this.app.ws('/*', {
-      ...options,
+      ...wsOptions,
 
       upgrade: (res, req, context) => {
         // get all headers
@@ -124,7 +137,7 @@ export class uWebSocketsTransport extends Transport {
           // in bindRouter().
           const originalAny = this.app.any;
           this.app.any = (() => this.app) as any;
-          this._expressApp = (module.default(this.app) as unknown) as express.Application;
+          this._expressApp = (module.default(this.app, { readBodyMaxTime: this._readBodyMaxTime }) as unknown) as express.Application;
           this.app.any = originalAny;
           resolve(this._expressApp);
         } catch (error) {
@@ -283,9 +296,22 @@ export class uWebSocketsTransport extends Transport {
           eres.setHeader(header, corsHeaders[header].toString());
         }
 
+        // uwebsockets-express <= 2.0.2 emits a bare 'error' on body-read timeout,
+        // which throws process-wide when unhandled (colyseus/uWebSockets-express#43)
+        // TODO: remove once minimum uwebsockets-express is >= 2.0.3
+        ereq.on('error', noop);
+
         // Read the request body from uWebSockets before passing to express
         // (uWebSockets requires res.onData() to be called to consume the body)
-        await ereq._readBody();
+        try {
+          await ereq._readBody();
+        } catch (e: any) {
+          // every rejection is a body-read timeout (versions <= 2.0.2 reject without
+          // an error value); eres.end() is a no-op if the client already aborted
+          eres.statusCode = 408;
+          eres.end();
+          return;
+        }
 
         // skip if aborted during body read
         if (res.aborted) { return; }

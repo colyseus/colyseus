@@ -27,11 +27,11 @@ export type RoomException<R extends Room = Room> =
   TimedEventException;
 
 export class OnCreateException<R extends Room = Room> extends Error {
-  options: Parameters<R['onCreate']>[0];
+  options: Parameters<NonNullable<R['onCreate']>>[0];
   constructor(
     cause: Error,
     message: string,
-    options:  Parameters<R['onCreate']>[0],
+    options:  Parameters<NonNullable<R['onCreate']>>[0],
   ) {
     super(message, { cause });
     this.name = 'OnCreateException';
@@ -56,15 +56,15 @@ export class OnAuthException<R extends Room = Room> extends Error {
 }
 
 export class OnJoinException<R extends Room = Room> extends Error {
-  client: Parameters<R['onJoin']>[0];
-  options: Parameters<R['onJoin']>[1];
-  auth: Parameters<R['onJoin']>[2];
+  client: Parameters<NonNullable<R['onJoin']>>[0];
+  options: Parameters<NonNullable<R['onJoin']>>[1];
+  auth: Parameters<NonNullable<R['onJoin']>>[2];
   constructor(
     cause: Error,
     message: string,
-    client: Parameters<R['onJoin']>[0],
-    options: Parameters<R['onJoin']>[1],
-    auth: Parameters<R['onJoin']>[2],
+    client: Parameters<NonNullable<R['onJoin']>>[0],
+    options: Parameters<NonNullable<R['onJoin']>>[1],
+    auth: Parameters<NonNullable<R['onJoin']>>[2],
   ) {
     super(message, { cause });
     this.name = 'OnJoinException';
@@ -75,13 +75,13 @@ export class OnJoinException<R extends Room = Room> extends Error {
 }
 
 export class OnLeaveException<R extends Room = Room> extends Error {
-  client: Parameters<R['onLeave']>[0];
-  consented: Parameters<R['onLeave']>[1];
+  client: Parameters<NonNullable<R['onLeave']>>[0];
+  consented: Parameters<NonNullable<R['onLeave']>>[1];
   constructor(
     cause: Error,
     message: string,
-    client: Parameters<R['onLeave']>[0],
-    consented: Parameters<R['onLeave']>[1],
+    client: Parameters<NonNullable<R['onLeave']>>[0],
+    consented: Parameters<NonNullable<R['onLeave']>>[1],
   ) {
     super(message, { cause });
     this.name = 'OnLeaveException';
@@ -91,13 +91,13 @@ export class OnLeaveException<R extends Room = Room> extends Error {
 }
 
 export class OnDropException<R extends Room = Room> extends Error {
-  client: Parameters<R['onDrop']>[0];
-  code: Parameters<R['onDrop']>[1];
+  client: Parameters<NonNullable<R['onDrop']>>[0];
+  code: Parameters<NonNullable<R['onDrop']>>[1];
   constructor(
     cause: Error,
     message: string,
-    client: Parameters<R['onDrop']>[0],
-    code: Parameters<R['onDrop']>[1],
+    client: Parameters<NonNullable<R['onDrop']>>[0],
+    code: Parameters<NonNullable<R['onDrop']>>[1],
   ) {
     super(message, { cause });
     this.name = 'OnDropException';
@@ -107,11 +107,11 @@ export class OnDropException<R extends Room = Room> extends Error {
 }
 
 export class OnReconnectException<R extends Room = Room> extends Error {
-  client: Parameters<R['onReconnect']>[0];
+  client: Parameters<NonNullable<R['onReconnect']>>[0];
   constructor(
     cause: Error,
     message: string,
-    client: Parameters<R['onReconnect']>[0],
+    client: Parameters<NonNullable<R['onReconnect']>>[0],
   ) {
     super(message, { cause });
     this.name = 'OnReconnectException';

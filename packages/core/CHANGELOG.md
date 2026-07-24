@@ -85,6 +85,12 @@
 - Bump `@colyseus/schema` to `^5.0.3` (required for input-reflection auto-discovery on the SDK side via `Reflection.makeEncodable`).
 - Remove deprecated `Client#id` property. Use `Client#sessionId` instead.
 
+## 0.17.45
+
+- Fix published type declarations for strict TypeScript consumers (`strict: true` + `skipLibCheck: false` under NodeNext resolution): `RoomExceptions` no longer applies `Parameters<>` to the optional lifecycle hooks, and `LocalPresence.subscriptions` no longer leaks an inferred `EventEmitter<[never]>` type that rejected every `.on()`/`.emit()` call. (thanks @Hoodgail for the fix - https://github.com/colyseus/colyseus/pull/947)
+- Type-level: the `room()` helper generic is now constrained to `RoomOptions`, matching the existing `Room<T>` class constraint. Explicit type arguments incompatible with `RoomOptions` (already rejected by `Room<T>`) now error at the call site.
+- Add a compile-only regression test (`pnpm --filter @colyseus/core test`) that type-checks the built declarations as a strict NodeNext consumer.
+
 ## 0.17.44
 
 - Add `Server.serverless()`: prepares matchmaking + HTTP routes and returns the underlying `http.Server` **without** binding to a port — for serverless platforms that consume an exported server instead of a listening one (e.g. Vercel, whose Express/Hono WebSocket examples use `export default server`). Calling `listen()` on those platforms selects their "captured server" path, which does not invoke Express-style app handlers. Pass an `http.Server` to the transport so it can be exported:
