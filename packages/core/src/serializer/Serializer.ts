@@ -2,12 +2,12 @@ import type { Client } from '../Transport.ts';
 
 /**
  * Per-tick timing context, populated by the Room when
- * {@link Room.defineInput} was called. The serializer uses it to emit a
- * {@link ProtocolModifier.TIMED} prefix for clients that advertised
- * the {@link HandshakeSection.CLIENT_TIMING} capability.
+ * {@link Room.defineInput} was called. Its presence makes the serializer emit
+ * a {@link ProtocolModifier.TIMED} prefix on every state/patch frame — the
+ * gate is per-room (defineInput), not a per-client capability.
  */
 export interface PatchTimingContext {
-  /** `performance.now()` at the moment the patch is being applied. */
+  /** Server clock as ms since room start (`clock.elapsedTime`) at patch time. */
   sNow: number;
 }
 

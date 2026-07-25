@@ -56,7 +56,7 @@ export interface LatencyOptions {
 }
 
 export class ColyseusSDK<ServerType extends SDKTypes = any, UserData = any> {
-    static VERSION = "0.17";
+    static VERSION = "0.18";
 
     /**
      * The HTTP client to make requests to the server.

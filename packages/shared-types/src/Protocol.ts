@@ -42,23 +42,28 @@ export type Protocol = typeof Protocol[keyof typeof Protocol];
  */
 export const ProtocolModifier = {
   /**
-   * Server-time + per-recipient last-input-ack timestamps are prepended to
-   * the message body.
+   * Server-time + per-recipient last-input-ack are prepended to the message
+   * body.
    *
    * Layout when set (applied to {@link Protocol.ROOM_STATE} and
    * {@link Protocol.ROOM_STATE_PATCH}):
    *
-   *     [code | TIMED][float64 sNow LE][float64 lastTReceived LE][...body]
+   *     [code | TIMED][uint32 sNow LE][uint32 inputSeq LE][...body]
    *
-   * - `sNow` is the server's `performance.now()` at encode time (shared
-   *   across all recipients of this tick).
-   * - `lastTReceived` is the server's `performance.now()` recorded when the
-   *   most recent input from *this specific recipient* arrived. `0` if the
-   *   client has never sent an input. Per-recipient — never another client's
-   *   ack.
+   * - `sNow` is the server clock as ms since room start
+   *   (`room.clock.elapsedTime` — NOT raw `performance.now()`; portable
+   *   integer, wraps at u32 ≈ 49.7 days). Shared across all recipients of
+   *   this tick.
+   * - `inputSeq` is the seq value of the last input CONSUMED into the
+   *   authoritative state from *this specific recipient* (`0` if the client
+   *   never sent an input). Per-recipient — never another client's ack.
+   *
+   * Authoritative field semantics: the `TIMED_PREFIX_SIZE` doc in
+   * `@colyseus/core` `serializer/SchemaSerializer.ts`.
    *
    * The client SDK uses these to estimate RTT, server time, and clock offset
-   * without any application-level schema cooperation.
+   * (and to prune its reconciliation replay buffer) without any
+   * application-level schema cooperation.
    *
    * Emitted whenever the Room called `defineInput()`. SDK clients that
    * understand the TIMED bit decode the prefix; older clients that don't
@@ -181,10 +186,10 @@ export const InputFlags = {
   SUB_STEPS: 1 << 3,
   /** Client auto-stamps reliable inputs with the RECKON-timeline instant
    *  (`reckonTime` = its serverNow estimate, ms since room start) for
-   *  lag-compensated hit registration of `mode:"reckon"` rewind targets. When
-   *  set together with {@link RENDER_TIME}, the input ships
-   *  `[uint32 reckonTime][uint16 renderDelta]`; alone it ships
-   *  `[uint32 reckonTime]`. See {@link ProtocolModifier.TIMED}. */
+   *  lag-compensated hit registration of `mode:"reckon"` rewind targets. The
+   *  stamp is DELTA-CODED (signed varint vs the previous stamp): together with
+   *  {@link RENDER_TIME} the input ships `[varint Δreckon][uint16 renderDelta]`;
+   *  alone it ships `[varint Δreckon]`. See {@link ProtocolModifier.TIMED}. */
   RECKON_TIME: 1 << 4,
 } as const;
 export type InputFlags = typeof InputFlags[keyof typeof InputFlags];

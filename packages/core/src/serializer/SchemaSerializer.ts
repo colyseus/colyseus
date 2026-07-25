@@ -174,10 +174,10 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
         }
       }
 
-      // Heartbeat: clients that advertised CLIENT_TIMING still need
-      // periodic timing samples to keep their clock offset / RTT estimate
-      // fresh during quiet ticks. Emit a TIMED-prefixed ROOM_STATE_PATCH
-      // with an empty schema body — 1 byte protocol + 12 bytes prefix.
+      // Heartbeat: `defineInput()` rooms still need periodic timing samples
+      // to keep client clock offset / RTT estimates fresh during quiet
+      // ticks. Emit a TIMED-prefixed ROOM_STATE_PATCH with an empty schema
+      // body — 1 byte protocol + 8 bytes prefix.
       // No-op for rooms without `defineInput()` (timing is undefined).
       if (timing) {
         const heartbeatBody = Buffer.from([Protocol.ROOM_STATE_PATCH]);

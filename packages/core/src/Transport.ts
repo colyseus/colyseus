@@ -232,8 +232,9 @@ export interface ClientPrivate {
 
   /**
    * `performance.now()` recorded when the most recent ROOM_INPUT_* packet
-   * from this client was received. Drives the per-recipient `lastTReceived`
-   * field of the {@link ProtocolModifier.TIMED} state prefix.
+   * from this client was received. Receive-side diagnostic only — NOT on the
+   * wire: the {@link ProtocolModifier.TIMED} state prefix acks the seq of the
+   * last input CONSUMED into the state (the input buffer's `ackSeq`).
    *
    * `0` until the client has sent its first input.
    */
@@ -241,10 +242,10 @@ export interface ClientPrivate {
 
   /**
    * Monotonic count of *reliable* inputs successfully received from this
-   * client. Echoed back in the TIMED prefix as `lastInputSeq` so the
-   * client can correlate to its own send-time table and compute RTT.
-   * Stays at the default `0` until the client sends its first reliable
-   * input.
+   * client. Receive-time counter — it LEADS the state by inputs still
+   * buffered; what the TIMED prefix acks is the CONSUMED seq (the input
+   * buffer's `ackSeq`), not this. Stays at the default `0` until the client
+   * sends its first reliable input.
    *
    * Only ROOM_INPUT_RELIABLE bumps this — unreliable's redundant-ring
    * pattern would double-count.

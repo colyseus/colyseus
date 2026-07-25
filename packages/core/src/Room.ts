@@ -1291,7 +1291,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
     }
 
     // When `defineInput()` was called, hand the serializer a fresh `sNow`
-    // each tick. The per-client `lastTReceived` is read off the client at
+    // each tick. The per-client `inputSeq` ack is read off the client at
     // encode time inside `applyPatches`.
     const sNow = this.clock.elapsedTime;
     const hasChanges = this._serializer.applyPatches(
