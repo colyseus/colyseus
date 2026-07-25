@@ -4,7 +4,7 @@ import { HandshakeSection, InputFlags, ProtocolModifier } from '@colyseus/shared
 
 import {
   InputAccessorImpl, InputBufferImpl, NO_OP_INPUT_ACCESSOR,
-  compileSanitizer, validateSubSteps,
+  compileSanitizer, seedInputZeroValues, validateSubSteps,
 } from './InputBuffer.ts';
 import type {
   InputAccessor, InputAPI, NormalizedInputOptions,
@@ -152,6 +152,11 @@ export class RoomInput {
    *  via `bufferMaxSize > 0`, for rollback/lockstep), and the accessor. */
   allocate(client: Client & ClientPrivate): void {
     client._input = new this.options.ctor();
+    // Wire-neutral zero values for fields with no construction default: a
+    // client only transmits fields it assigns, and `undefined` here would
+    // NaN-propagate into the sim (or get floor-clamped by a range sanitizer
+    // into a PHANTOM held input).
+    seedInputZeroValues(client._input, this.options.ctor);
     client._inputDecoder = new InputDecoder(client._input);
     client._reckonBaseline = 0; // mirrors the SDK's delta-coded stamp baseline (reset together on (re)connect)
     const maxSize = this.options.bufferMaxSize;

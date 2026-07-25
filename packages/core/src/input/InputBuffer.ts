@@ -38,6 +38,10 @@ export function compileSanitizer<I>(spec: SanitizeInput<I>): (input: I) => void 
     const inst = input as Record<string, number>;
     for (let i = 0; i < names.length; i++) {
       const v = inst[names[i]];
+      // Never-received field: no input to sanitize — clamping would INVENT
+      // one (delta-encoding clients legitimately never transmit fields they
+      // never assigned; the range floor turned "no input" into "held stick").
+      if (v === undefined) { continue; }
       // NaN-safe: NaN fails both comparisons → clamp floor.
       inst[names[i]] = v >= mins[i] ? (v <= maxs[i] ? v : maxs[i]) : mins[i];
     }
@@ -57,6 +61,33 @@ function fieldNamesOf(ctor: new () => any): string[] {
     }
   }
   return names;
+}
+
+/**
+ * @internal Seed every declared field that has no construction default with
+ * its wire-neutral zero value (0 / false / ""; quantized: 0 clamped into the
+ * descriptor's range). The input contract is "the server holds the last
+ * received value" — before anything is received, that value is the ZERO of
+ * the field's type, never `undefined`: a sim would NaN-propagate it and a
+ * range sanitizer would clamp it into a phantom input. Clients only transmit
+ * fields they assign, so an untouched field stays absent on the wire forever.
+ */
+export function seedInputZeroValues(instance: any, ctor: new () => any): void {
+  const md = (ctor as any)[$METADATA] as
+    Record<number, { name?: string, type?: unknown }> | undefined;
+  if (!md) { return; }
+  for (let i = 0; ; i++) {
+    const f = md[i];
+    if (!f || typeof f.name !== "string") break;
+    if (instance[f.name] !== undefined) { continue; }   // .default() wins
+    const type = f.type;
+    if (typeof type === "string") {
+      instance[f.name] = type === "string" ? "" : type === "boolean" ? false : 0;
+    } else if (type !== null && typeof type === "object" && "quantized" in (type as object)) {
+      const q = (type as { quantized: { min: number, max: number } }).quantized;
+      instance[f.name] = q.min > 0 ? q.min : q.max < 0 ? q.max : 0;
+    }
+  }
 }
 
 /** Reclaim the consumed prefix once the read cursor passes this many items —
@@ -184,6 +215,7 @@ export class InputBufferImpl<I = any> {
     if (this._idle === undefined) {
       // Lazy mint (cold): the fresh instance doubles as the defaults source.
       this._idle = new this._ctor!();
+      seedInputZeroValues(this._idle, this._ctor!);
       this._fieldNames = fieldNamesOf(this._ctor!);
       const fresh = this._idle as Record<string, unknown>;
       this._defaults = this._fieldNames.map((n) => fresh[n]);
