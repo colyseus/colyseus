@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.17.46
+
+- Fix crash on `listen()` when using Express v4 with an app that has no routes registered. Detecting whether the app already handles `/` read `app._router` and fell back to `app.router` — but on Express v4 `_router` is only created once the first route/middleware is registered, and reading `app.router` throws `'app.router' is deprecated!`. Registering any route (e.g. `app.use("/", ...)`) masked it, which is why it only surfaced on an otherwise empty `app.config.ts`. Express v5 was unaffected. (thanks m.ilan on Discord for reporting)
+- Root route detection no longer reports "a root route exists" when the Express app exposes no router stack, which would have suppressed the default `Colyseus <version>` response on `/`.
+
 ## 0.17.45
 
 - Fix published type declarations for strict TypeScript consumers (`strict: true` + `skipLibCheck: false` under NodeNext resolution): `RoomExceptions` no longer applies `Parameters<>` to the optional lifecycle hooks, and `LocalPresence.subscriptions` no longer leaks an inferred `EventEmitter<[never]>` type that rejected every `.on()`/`.emit()` call. (thanks @Hoodgail for the fix - https://github.com/colyseus/colyseus/pull/947)
