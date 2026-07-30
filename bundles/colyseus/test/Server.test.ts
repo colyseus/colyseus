@@ -55,6 +55,12 @@ describe("Server", () => {
     });
 
     describe("server.simulateLatency", () => {
+      // dispose rooms between tests: these all reuse the 'onmessage' room name,
+      // so a leftover room would be re-joined and run the previous test's handlers
+      afterEach(async () => {
+        await Promise.all(matchMaker.disconnectAll());
+      });
+
       it("should synchronize state with delay", async () => {
         const Item = schema({
           name: t.string(),
