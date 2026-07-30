@@ -55,6 +55,15 @@ describe("Server", () => {
     });
 
     describe("server.simulateLatency", () => {
+      // `setTimeout(n)` may complete in n-1ms as measured by `Date.now()`
+      const TIMER_TOLERANCE = 2;
+
+      // dispose rooms between tests: these all reuse the 'onmessage' room name,
+      // so a leftover room would be re-joined and run the previous test's handlers
+      afterEach(async () => {
+        await Promise.all(matchMaker.disconnectAll());
+      });
+
       it("should synchronize state with delay", async () => {
         const Item = schema({
           name: "string",
@@ -126,10 +135,10 @@ describe("Server", () => {
         elapsedTimeForRequest = receivedOnServerAt - startedAt;
         elapsedTimeForResponse = receivedOnClientAt - receivedOnServerAt;
 
-        assert.ok(elapsedTimeForRequest >= HALF_LATENCY, `latency for outgoing messages should be at least ${HALF_LATENCY}ms, got: ${elapsedTimeForRequest}ms`);
+        assert.ok(elapsedTimeForRequest >= (HALF_LATENCY - TIMER_TOLERANCE), `latency for outgoing messages should be at least ${HALF_LATENCY - TIMER_TOLERANCE}ms, got: ${elapsedTimeForRequest}ms`);
         assert.ok(elapsedTimeForRequest < (HALF_LATENCY + timeout), `latency for outgoing messages should be at most ${HALF_LATENCY + timeout}ms, got: ${elapsedTimeForRequest}ms`);
 
-        assert.ok(elapsedTimeForResponse >= HALF_LATENCY, `latency for incoming messages should be at least ${HALF_LATENCY}ms, got: ${elapsedTimeForResponse}ms`);
+        assert.ok(elapsedTimeForResponse >= (HALF_LATENCY - TIMER_TOLERANCE), `latency for incoming messages should be at least ${HALF_LATENCY - TIMER_TOLERANCE}ms, got: ${elapsedTimeForResponse}ms`);
         assert.ok(elapsedTimeForResponse < (HALF_LATENCY + timeout), `latency for incoming messages should be at most ${HALF_LATENCY + timeout}ms, got: ${elapsedTimeForResponse}ms`);
 
         await connection.leave();
@@ -173,10 +182,10 @@ describe("Server", () => {
         elapsedTimeForRequest = receivedOnServerAt - startedAt;
         elapsedTimeForResponse = receivedOnClientAt - receivedOnServerAt;
 
-        assert.ok(elapsedTimeForRequest >= HALF_LATENCY, `latency for outgoing messages should be at least ${HALF_LATENCY}ms, got: ${elapsedTimeForRequest}ms`);
+        assert.ok(elapsedTimeForRequest >= (HALF_LATENCY - TIMER_TOLERANCE), `latency for outgoing messages should be at least ${HALF_LATENCY - TIMER_TOLERANCE}ms, got: ${elapsedTimeForRequest}ms`);
         assert.ok(elapsedTimeForRequest < (HALF_LATENCY + timeout), `latency for outgoing messages should be at most ${HALF_LATENCY + timeout}ms, got: ${elapsedTimeForRequest}ms`);
 
-        assert.ok(elapsedTimeForResponse >= HALF_LATENCY, `latency for incoming messages should be at least ${HALF_LATENCY}ms, got: ${elapsedTimeForResponse}ms`);
+        assert.ok(elapsedTimeForResponse >= (HALF_LATENCY - TIMER_TOLERANCE), `latency for incoming messages should be at least ${HALF_LATENCY - TIMER_TOLERANCE}ms, got: ${elapsedTimeForResponse}ms`);
         assert.ok(elapsedTimeForResponse < (HALF_LATENCY + timeout), `latency for incoming messages should be at most ${HALF_LATENCY + timeout}ms, got: ${elapsedTimeForResponse}ms`);
 
         await connection.leave();
