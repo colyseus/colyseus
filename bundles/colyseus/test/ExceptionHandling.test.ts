@@ -22,7 +22,8 @@ describe("Exception Handling", () => {
   });
 
   afterEach(async () => {
-    await matchMaker.disconnectAll();
+    // disconnectAll() returns an array of promises, not a promise
+    await Promise.all(matchMaker.disconnectAll());
     await server.gracefullyShutdown(false);
   });
 
