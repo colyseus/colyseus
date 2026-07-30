@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.2
+
+Brings in the 0.17.46 fix (Express v4 crash on `listen()` when the app has no routes registered — see its section below), which the published 0.18.1 predates.
+
 ## 0.18.1
 
 0.18 preview refresh — the server side of the client-prediction stack. Experimental surfaces below may still change before 0.18 stable. **Compat:** rooms that call `defineInput()` changed wire format — upgrade `@colyseus/sdk` to 0.18.1 alongside. This release also brings in the 0.17.43 / 0.17.44 fixes (`Server.serverless()`, Redis auto-config on Colyseus Cloud — see their sections below), which the published 0.18.0 predates.
@@ -84,6 +88,10 @@
 
 - Bump `@colyseus/schema` to `^5.0.3` (required for input-reflection auto-discovery on the SDK side via `Reflection.makeEncodable`).
 - Remove deprecated `Client#id` property. Use `Client#sessionId` instead.
+## 0.17.46
+
+- Fix crash on `listen()` when using Express v4 with an app that has no routes registered. Detecting whether the app already handles `/` read `app._router` and fell back to `app.router` — but on Express v4 `_router` is only created once the first route/middleware is registered, and reading `app.router` throws `'app.router' is deprecated!`. Registering any route (e.g. `app.use("/", ...)`) masked it, which is why it only surfaced on an otherwise empty `app.config.ts`. Express v5 was unaffected. (thanks m.ilan on Discord for reporting)
+- Root route detection no longer reports "a root route exists" when the Express app exposes no router stack, which would have suppressed the default `Colyseus <version>` response on `/`.
 
 ## 0.17.45
 

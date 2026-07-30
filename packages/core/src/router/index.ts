@@ -41,7 +41,7 @@ export function bindRouterToTransport(transport: Transport, router: Router, useE
   // add default "/" route, if not provided.
   const hasRootRoute = (
     // check if express app has a root route
-    (expressApp && expressRootRoute(expressApp) !== undefined) ||
+    (expressApp && hasExpressRootRoute(expressApp)) ||
 
     // check if router has a root route
     Object.values(router.endpoints).some(endpoint => endpoint.path === "/")
@@ -105,20 +105,33 @@ export function bindRouterToTransport(transport: Transport, router: Router, useE
   });
 }
 
-function expressRootRoute(expressApp: express.Application) {
-  //
-  // express v5 uses `app.router`, express v4 uses `app._router`
-  // check for `app._router` first, then `app.router`
-  //
-  // (express v4 will show a warning if `app.router` is used)
-  //
-  const stack = (expressApp as any)?._router?.stack ?? (expressApp as any)?.router?.stack;
+/**
+ * Whether the express app already handles the root route, in which case
+ * Colyseus must not register its own default "/" endpoint over it.
+ */
+function hasExpressRootRoute(expressApp: express.Application) {
+  return expressRouterStack(expressApp).some((layer: any) =>
+    layer.match('/') && !['query', 'expressInit'].includes(layer.name));
+}
 
-  if (!stack) {
-    return false;
+/**
+ * The app's router stack, or an empty stack if it has no routes yet.
+ *
+ * express v5 exposes the router as `app.router`; v4 exposes it as `app._router`
+ * and only creates it once the first route/middleware is registered.
+ */
+function expressRouterStack(expressApp: express.Application): any[] {
+  const app = expressApp as any;
+
+  if (app?._router?.stack) {
+    return app._router.stack;
   }
 
-  return stack.find((layer: any) => layer.match('/') && !['query', 'expressInit'].includes(layer.name));
+  try {
+    return app?.router?.stack ?? [];
+  } catch (e) {
+    return []; // express v4 throws on `app.router` — no routes registered
+  }
 }
 
 export function createRouter<

@@ -137,3 +137,63 @@ describe("Router - query string handling (issue #930)", () => {
     });
   }
 });
+
+/**
+ * Regression test for the default "/" route detection.
+ *
+ * `hasExpressRootRoute()` reads `app._router` (express v4) then `app.router`
+ * (express v5). On express v4 `_router` only exists once a route/middleware is
+ * registered, and reading `app.router` throws "'app.router' is deprecated!" —
+ * so an express app with no routes at all crashed on `server.listen()`.
+ */
+describe("Router - default \"/\" route detection", () => {
+  let server: ReturnType<typeof defineServer>;
+  let client: ColyseusSDK;
+  let port = TEST_PORT + 1; // own port per test — shutdown doesn't release it in time
+
+  const startServer = async (express?: (app: any) => void) => {
+    server = defineServer({
+      greet: false,
+      gracefullyShutdown: false,
+      presence: new LocalPresence(),
+      driver: new LocalDriver(),
+      transport: new WebSocketTransport(),
+      rooms: { dummy: defineRoom(DummyRoom) },
+      ...(express ? { express } : {}),
+    });
+
+    await matchMaker.setup(new LocalPresence(), new LocalDriver());
+    await server.listen(++port);
+    client = new ColyseusSDK(`ws://localhost:${port}`);
+  };
+
+  afterEach(async () => {
+    await server.gracefullyShutdown(false);
+  });
+
+  it("express v4 app with no routes should not crash on listen()", async () => {
+    await startServer((app) => {
+      // mimic express v4: `_router` is absent, and `app.router` throws
+      Object.defineProperty(app, "router", {
+        configurable: true,
+        get() {
+          throw new Error("'app.router' is deprecated!\nPlease see the 3.x to 4.x migration guide for details on how to update your app.");
+        },
+      });
+    });
+
+    const res = await client.http.get("/");
+    assert.strictEqual(res.status, 200);
+    assert.ok(String(res.data).startsWith("Colyseus "), `got: ${res.data}`);
+  });
+
+  it("express app with a root route should keep it", async () => {
+    await startServer((app) => {
+      app.get("/", (req: any, res: any) => res.send("hi"));
+    });
+
+    const res = await client.http.get("/");
+    assert.strictEqual(res.status, 200);
+    assert.strictEqual(res.data, "hi");
+  });
+});
