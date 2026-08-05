@@ -11,7 +11,9 @@ export {
   createMiddleware,
   createInternalContext,
 
-  // Re-export types needed for declaration emit
+  // Re-export every type reachable from an inferred type below — consumers
+  // depend on @colyseus/core, not @colyseus/better-call, and cannot name it
+  // under pnpm's isolated node_modules (TS2742/TS2883).
   type Router,
   type RouterConfig,
   type Endpoint,
@@ -19,6 +21,12 @@ export {
   type EndpointOptions,
   type EndpointContext,
   type StrictEndpoint,
+  type StandardSchemaV1,
+  type MiddlewareOptions,
+  type MiddlewareInputContext,
+  type CookieOptions,
+  type CookiePrefixOptions,
+  type Status,
 } from "@colyseus/better-call";
 
 export { toNodeHandler };
