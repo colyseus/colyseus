@@ -1,9 +1,44 @@
 const pm2 = require('pm2');
 const cst = require('pm2/constants');
 const os = require('os');
+const v8 = require('v8');
 
 const NAMESPACE = 'cloud';
 const MAX_ACTIVE_PROCESSES = Number(process.env.MAX_ACTIVE_PROCESSES || os.cpus().length);
+
+// RAM held back for the OS, nginx, the PM2 daemon and this agent. Proportional,
+// but with an absolute floor — the overhead is roughly fixed (~450MB measured),
+// so a percentage alone under-reserves on small plans.
+const MEMORY_RESERVE_RATIO = 0.2;
+const MEMORY_RESERVE_FLOOR_MB = 640;
+
+// stay below V8's own ceiling, so PM2 restarts gracefully instead of the
+// process hard-crashing on OOM before the limit is ever reached
+const HEAP_CEILING_RATIO = 0.9;
+
+const MIN_MAX_MEMORY_RESTART_MB = 256;
+
+/**
+ * Per-process memory ceiling, derived from the instance's total RAM.
+ *
+ * Sized against a rolling deploy rather than the steady state: the post-deploy
+ * agent spawns `ceil(instances / 2)` new processes before draining the old ones,
+ * so the box briefly holds `instances + ceil(instances / 2)`. Swap is disabled on
+ * Cloud instances, so exceeding that peak means the OOM killer, not slowdown.
+ *
+ * @param {number} instances - resolved number of app processes
+ * @returns {number} ceiling in MB
+ */
+function defaultMaxMemoryRestartMB(instances) {
+  const totalMB = os.totalmem() / 1024 / 1024;
+  const peakProcesses = instances + Math.ceil(instances / 2);
+
+  const reservedMB = Math.max(MEMORY_RESERVE_FLOOR_MB, totalMB * MEMORY_RESERVE_RATIO);
+  const perProcessMB = (totalMB - reservedMB) / peakProcesses;
+  const heapCeilingMB = (v8.getHeapStatistics().heap_size_limit / 1024 / 1024) * HEAP_CEILING_RATIO;
+
+  return Math.max(MIN_MAX_MEMORY_RESTART_MB, Math.floor(Math.min(perProcessMB, heapCeilingMB)));
+}
 
 const CONFIG_KEYS = [
   'max_memory_restart',
@@ -49,9 +84,15 @@ async function getAppConfig(ecosystemFilePath) {
       app.instances = MAX_ACTIVE_PROCESSES;
     }
 
-    // default: restart if memory exceeds 512M
+    // PM2 reads 0 / -1 / "max" as "one per core"
+    const instances = (Number(app.instances) > 0)
+      ? Number(app.instances)
+      : MAX_ACTIVE_PROCESSES;
+
+    // default: derived from the instance's RAM. A fixed value starves large plans
+    // (512M capped a 4GB/2-worker box at 1GB) and overcommits small ones.
     if (app.max_memory_restart === undefined) {
-      app.max_memory_restart = '512M';
+      app.max_memory_restart = `${defaultMaxMemoryRestartMB(instances)}M`;
     }
 
     app.time = true;
@@ -150,6 +191,7 @@ module.exports = {
    */
   listApps,
   getAppConfig,
+  defaultMaxMemoryRestartMB,
 
   updateProcessConfig,
 
