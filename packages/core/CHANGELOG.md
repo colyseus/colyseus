@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.18.3
+
+Brings in the 0.17.47 fix, which the published 0.18.2 predates.
+
+- Fix `TS2883` / `TS2742` ("The inferred type of ... cannot be named without a reference to `StandardSchemaV1` ... This is likely not portable") when emitting declarations for code that calls `createEndpoint()`. The inferred return type expands to a structure naming `StandardSchemaV1`, which is declared inside `@colyseus/better-call` — a package consumers do not depend on directly, and which under pnpm's isolated `node_modules` is only reachable through `.pnpm/…`. TypeScript therefore refuses to emit the reference. `@colyseus/core` now re-exports every `@colyseus/better-call` type reachable from an inferred type: `StandardSchemaV1`, `MiddlewareOptions`, `MiddlewareInputContext`, `CookieOptions`, `CookiePrefixOptions` and `Status`. (thanks @ColaFanta for reporting - https://github.com/colyseus/colyseus/issues/949)
+- The same error also affected `createMiddleware()`, `createRouter()` and endpoints using `ctx.setCookie()`. Only isolated `node_modules` layouts (pnpm) were affected — npm/yarn hoisting makes `@colyseus/better-call` reachable from the project root, which is why this went unnoticed. No runtime or public API change: the added exports are type-only, and they live on `@colyseus/core/router/index` rather than the package root so the top-level API surface is unchanged.
+
 ## 0.18.2
 
 Brings in the 0.17.46 fix (Express v4 crash on `listen()` when the app has no routes registered — see its section below), which the published 0.18.1 predates.
