@@ -1,5 +1,5 @@
 import { Redis, Cluster, type ClusterNode, type ClusterOptions, type RedisOptions } from 'ioredis';
-import type { Presence } from '@colyseus/core';
+import { logger, type Presence } from '@colyseus/core';
 import EventEmitter from 'events';
 
 type Callback = (...args: any[]) => void;
@@ -11,19 +11,54 @@ export class RedisPresence implements Presence {
     protected subscriptions = new EventEmitter();
 
     constructor(options?: number | string | RedisOptions | ClusterNode[] | Redis | Cluster, clusterOptions?: ClusterOptions) {
-        if (options instanceof Redis || options instanceof Cluster) {
+        //
+        // The ready check issues INFO, which Redis rejects on a subscriber-mode connection.
+        // ioredis then skips readyHandler() — the only place autoResubscribe runs — leaving
+        // the socket connected but permanently unsubscribed, and invisible to matchmaking.
+        //
+        const subOptions: Partial<RedisOptions> = { enableReadyCheck: false };
+
+        if (options instanceof Cluster) {
             this.pub = options;
-            this.sub = options.duplicate();
+            this.sub = options.duplicate([], { redisOptions: { ...options.options?.redisOptions, ...subOptions } });
+        } else if (options instanceof Redis) {
+            this.pub = options;
+            this.sub = options.duplicate(subOptions);
         } else if (Array.isArray(options)) {
-            this.sub = new Cluster(options, clusterOptions)
             this.pub = new Cluster(options, clusterOptions);
+            this.sub = new Cluster(options, { ...clusterOptions, redisOptions: { ...clusterOptions?.redisOptions, ...subOptions } });
+        } else if (typeof options === 'number' || typeof options === 'string') {
+            this.pub = new Redis(options as any);
+            this.sub = new Redis(options as any, subOptions);
         } else {
-            this.sub = new Redis(options as RedisOptions);
             this.pub = new Redis(options as RedisOptions);
+            this.sub = new Redis({ ...options, ...subOptions });
         }
 
         // no listener limit
         this.sub.setMaxListeners(0);
+
+        // ioredis logs an "Unhandled error event" without these, so connection
+        // failures stay invisible until matchmaking silently breaks.
+        this.sub.on('error', (e) => logger.warn('RedisPresence: sub connection error:', e.message));
+        this.pub.on('error', (e) => logger.warn('RedisPresence: pub connection error:', e.message));
+
+        // ioredis only restores subscriptions it saw succeed, and never retries a
+        // SUBSCRIBE rejected mid-reconnect — either way the topic is silently dead
+        // forever. `subscriptions` holds the intended set, so reconcile from it.
+        this.sub.on('ready', () => this.resubscribeAll());
+    }
+
+    /**
+     * Re-issue SUBSCRIBE for every topic we intend to be listening on.
+     * SUBSCRIBE is idempotent, so overlapping with ioredis' own autoResubscribe is harmless.
+     */
+    protected resubscribeAll() {
+        const topics = this.subscriptions.eventNames().filter((topic): topic is string => typeof topic === 'string');
+        if (topics.length === 0) { return; }
+
+        (this.sub as Redis).subscribe(...topics).catch((e) =>
+          logger.warn('RedisPresence: failed to re-subscribe:', e.message));
     }
 
     public async subscribe(topic: string, callback: Callback) {
