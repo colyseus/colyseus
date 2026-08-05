@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/tools",
-  "version": "0.18.1",
+  "version": "0.18.2",
   "type": "module",
   "description": "Simplify the development and production settings for your Colyseus project.",
   "input": "./src/index.ts",
@@ -23,7 +23,7 @@
   },
   "scripts": {
     "start": "tsx example/app.ts",
-    "test": "mocha --require tsx test/pm2-deployment.test.ts"
+    "test": "mocha --require tsx test/*.test.ts"
   },
   "bin": {
     "colyseus-system-boot": "system-boot.cjs",
