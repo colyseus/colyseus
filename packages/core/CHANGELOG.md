@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.18.4
+
+Brings in the 0.17.48 fix.
+
+- Fix reconnection being killed right after succeeding when `onDrop` `await`s `allowReconnection()` and the server never saw the old connection close. As reported: a page refresh behind a proxy that discards in-flight data on disconnect (swallowing the client's WS close frame — observed on Render.com) leaves the server believing the old connection is still alive; a page refresh on localhost doesn't trigger it because the close frame reaches the server. When the reconnect request arrived in that state, `checkReconnectionToken()` force-closed the stale client and deferred `client.leave(4002)` until `_onLeave` resolved — but with an awaited `allowReconnection()`, `_onLeave` resolves only *after* the successful reconnection has transplanted the new socket into `client.ref`, so the deferred `leave()` closed the freshly reconnected socket (`onDrop 4002 → onReconnect → onDrop 4002 → onLeave 4002`, with the client burning its retry budget against a dead session). The deferred `leave()` is now skipped when the client's `ref` has been transplanted by a successful reconnection. Regression test in `bundles/colyseus/test/Issue950.test.ts` — no proxy needed: calling `reconnect()` while the old connection is still open creates the same server-side state. (thanks @ehart004 for the detailed diagnosis - https://github.com/colyseus/colyseus/issues/950)
+
 ## 0.18.3
 
 Brings in the 0.17.47 fix, which the published 0.18.2 predates.
