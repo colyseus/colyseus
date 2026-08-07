@@ -1753,14 +1753,27 @@ export class Room<T extends RoomOptions = RoomOptions> {
       }
     }
 
+    //
+    // A successful reconnection has already replaced this client: the replacement
+    // owns the 'leave' accounting from here on.
+    //
+    // This must be checked before looking up `_reconnections`: allowReconnection()
+    // reassigns `previousClient.reconnectionToken` to the replacement's token, so a
+    // late-resuming _onLeave() would otherwise attach a second #_onAfterLeave() to
+    // the replacement's pending reconnection and decrement ccu twice for one join.
+    //
+    // @ts-ignore (client.state may be modified at onLeave())
+    if (client.state === ClientState.RECONNECTED) {
+      return;
+    }
+
     // check for manual "reconnection" flow
     if (this._reconnections[client.reconnectionToken]) {
       this._reconnections[client.reconnectionToken][1].catch(async () => {
         await this.#_onAfterLeave(client, code, method === this.onDrop);
       });
 
-      // @ts-ignore (client.state may be modified at onLeave())
-    } else if (client.state !== ClientState.RECONNECTED) {
+    } else {
       await this.#_onAfterLeave(client, code, method === this.onDrop);
     }
   }

@@ -426,4 +426,94 @@ describe("MatchMaker Stats", () => {
 
   });
 
+  /**
+   * allowReconnection() reassigns `previousClient.reconnectionToken` to the
+   * replacement client's token. An _onLeave() that is still suspended inside
+   * onDrop() when that happens used to resume, find the replacement's pending
+   * reconnection under its own (rewritten) token, and register a second
+   * decrement against it - so a single 'join' produced two 'leave' emissions.
+   */
+  it("should not decrement ccu twice when a reconnected client drops again", async () => {
+    const onRoomDisposed = new Deferred();
+    let onDropCalls = 0;
+    let onLeaveCalls = 0;
+
+    matchMaker.defineRoomType('reconnect_then_drop', class _ extends Room {
+      async onJoin() { }
+
+      async onDrop(client, code: CloseCode) {
+        onDropCalls++;
+        try { await this.allowReconnection(client, 0.6); } catch (e) { }
+        // app bookkeeping that outlives the reconnection itself
+        await timeout(250);
+      }
+
+      async onLeave() { onLeaveCalls++; }
+      onDispose() { onRoomDisposed.resolve(); }
+    });
+
+    const conn = await client.joinOrCreate('reconnect_then_drop');
+    assert.strictEqual(1, matchMaker.stats.local.ccu);
+
+    // 1st drop -> reconnection is armed
+    conn.connection.transport.close();
+    await timeout(60);
+    assert.strictEqual(1, matchMaker.stats.local.ccu, "ccu must hold while reconnection is pending");
+
+    // reconnect successfully
+    const conn2 = await client.reconnect(conn.reconnectionToken);
+    assert.strictEqual(1, matchMaker.stats.local.ccu, "ccu must hold after reconnecting");
+
+    // 2nd drop, while the first onDrop() is still running its cleanup
+    conn2.connection.transport.close();
+
+    // let every reconnection window expire
+    await onRoomDisposed;
+    await timeout(300);
+
+    assert.strictEqual(0, matchMaker.stats.local.ccu, "ccu must settle at 0, never below");
+    assert.strictEqual(0, matchMaker.stats.local.roomCount);
+    assert.strictEqual(2, onDropCalls, "onDrop() once per disconnection");
+    assert.strictEqual(1, onLeaveCalls, "onLeave() exactly once for a single joined client");
+  });
+
+  it("should not drive ccu negative over repeated drop/reconnect cycles", async () => {
+    const CYCLES = 5;
+    const onRoomDisposed = new Deferred();
+
+    matchMaker.defineRoomType('reconnect_cycles', class _ extends Room {
+      async onJoin() { }
+      async onDrop(client, code: CloseCode) {
+        try { await this.allowReconnection(client, 0.6); } catch (e) { }
+        await timeout(120);
+      }
+      async onLeave() { }
+      onDispose() { onRoomDisposed.resolve(); }
+    });
+
+    let conn = await client.joinOrCreate('reconnect_cycles');
+    assert.strictEqual(1, matchMaker.stats.local.ccu);
+
+    for (let i = 0; i < CYCLES; i++) {
+      conn.connection.transport.close();
+      await timeout(60);
+
+      assert.ok(
+        matchMaker.stats.local.ccu >= 0,
+        `ccu went negative on cycle ${i}: ${matchMaker.stats.local.ccu}`
+      );
+
+      conn = await client.reconnect(conn.reconnectionToken);
+      assert.strictEqual(1, matchMaker.stats.local.ccu, `ccu after reconnect #${i}`);
+    }
+
+    // final drop, let the reconnection expire
+    conn.connection.transport.close();
+    await onRoomDisposed;
+    await timeout(300);
+
+    assert.strictEqual(0, matchMaker.stats.local.ccu, "ccu must settle at 0, never below");
+    assert.strictEqual(0, matchMaker.stats.local.roomCount);
+  });
+
 });
