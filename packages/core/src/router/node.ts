@@ -13,14 +13,28 @@ import * as matchMaker from '../MatchMaker.ts';
 import { setResponse } from '@colyseus/better-call/node';
 import { postMatchmakeMethod } from './default_routes.ts';
 
+/** Matchmaking options are small — the cap only stops unbounded buffering. */
+const MAX_BODY_SIZE = 1024 * 1024;
+
+const badRequest = (status: number, message: string) =>
+  Object.assign(new Error(message), { status });
+
 function readBody(req: http.IncomingMessage): Promise<any> {
   return new Promise((resolve, reject) => {
     let data = '';
 
     req.on('data', (chunk: Buffer | string) => {
       data += chunk.toString();
+      if (data.length > MAX_BODY_SIZE) {
+        reject(badRequest(413, 'request body too large'));
+        req.destroy();
+      }
     });
-    req.on('end', () => resolve(data ? JSON.parse(data) : {}));
+    // JSON.parse throws on a later tick — uncaught here it kills the process.
+    req.on('end', () => {
+      try { resolve(data ? JSON.parse(data) : {}); }
+      catch { reject(badRequest(400, 'malformed JSON body')); }
+    });
     req.on('error', reject);
   });
 }
@@ -112,10 +126,20 @@ export function createNodeMatchmakingMiddleware() {
 
     const [, method, roomName] = match;
 
+    let body: any;
+    try {
+      body = await readBody(req);
+    } catch (e: any) {
+      // answer here — next() would report a misleading 404 for a bad body
+      res.writeHead(e.status ?? 400, { ...corsHeaders, 'content-type': 'application/json' });
+      res.end(JSON.stringify({ error: e.message }));
+      return;
+    }
+
     try {
       const response = await postMatchmakeMethod({
         params: { method, roomName },
-        body: await readBody(req),
+        body,
         headers: req.headers as Record<string, string>,
         request: { headers } as any,
         asResponse: true,

@@ -146,11 +146,18 @@ export function createRouter<
   E extends Record<string, Endpoint>,
   Config extends RouterConfig
 >(endpoints: E, config: Config = {} as Config) {
+  const onError = config?.onError;
   return createBetterCallRouter({ ...endpoints }, {
     // better-call's /api/reference page dumps the full API surface
     // unauthenticated — opt back in by passing `openapi` explicitly.
     openapi: { disabled: true },
     ...config,
+    // Otherwise a malformed body is a 500 plus a stack trace on stderr: log
+    // noise any anonymous client can trigger at will. Matched on the message
+    // because `onError` receives no request context to test against.
+    onError: async (error: unknown) => (error instanceof SyntaxError && error.message.includes('JSON'))
+      ? Response.json({ error: 'malformed request body' }, { status: 400 })
+      : await onError?.(error),
   });
 }
 
