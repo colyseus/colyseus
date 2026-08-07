@@ -106,19 +106,29 @@ describe("@colyseus/testing", () => {
     assert.strictEqual(1, room.state.players.get(client1.sessionId).score);
   });
 
-  it("waitForNextSimulationTick()", async () => {
+  it("waitForNextTimestep()", async () => {
     const room = await colyseus.createRoom("room_with_simulation");
     const sdkRoom = await colyseus.connectTo(room);
 
     let currentTick = room.state.tick;
     for (let i = 0; i < 5; i++) {
-      await room.waitForNextSimulationTick();
+      await room.waitForNextTimestep();
 
       assert.strictEqual(++currentTick, room.state.tick);
     }
 
     await room.waitForNextPatch();
     assert.strictEqual(room.state.tick, sdkRoom.state.tick);
+  });
+
+  it("waitForNextSimulationTick() still forwards (deprecated alias)", async () => {
+    const room = await colyseus.createRoom("room_with_simulation");
+    await colyseus.connectTo(room);
+
+    const currentTick = room.state.tick;
+    await room.waitForNextSimulationTick();
+
+    assert.strictEqual(currentTick + 1, room.state.tick);
   });
 
   it("should disconnect all connected clients after test is done", async () => {

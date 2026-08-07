@@ -17,6 +17,8 @@ declare module "@colyseus/core" {
     waitForMessage(messageType: string): Promise<[Client, any]>;
     waitForNextMessage(additionalDelay?: number): Promise<void>;
     waitForNextPatch(): Promise<void>;
+    waitForNextTimestep(): Promise<void>;
+    /** @deprecated Renamed to {@link Room.waitForNextTimestep}. Forwards unchanged. */
     waitForNextSimulationTick(): Promise<void>;
     _waitingForMessage: [number, Deferred];
     _waitingForPatch: [number, Deferred];
@@ -67,18 +69,30 @@ Room.prototype.waitForMessage = async function(this: Room, type: string, rejectT
 }
 
 /**
- * Wait next simulation tick
+ * Wait for the next timestep.
+ *
+ * Works with either loop — `setTimestep()` and `setFixedTimestep()` both drive
+ * the same underlying interval.
  */
-Room.prototype.waitForNextSimulationTick = async function(this: Room) {
+Room.prototype.waitForNextTimestep = async function(this: Room) {
   if (this['_simulationInterval']) {
     const milliseconds = this['_simulationInterval']['_idleTimeout'];
     return new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
     // return timers.setTimeout(milliseconds);
 
   } else {
-    console.warn("⚠️ waitForSimulation() - .setSimulationInterval() is a must.");
+    console.warn("⚠️ waitForNextTimestep() - the room must call .setTimestep() or .setFixedTimestep().");
     return Promise.resolve();
   }
+}
+
+/**
+ * @deprecated Renamed to `waitForNextTimestep()`, pairing with the
+ * `setSimulationInterval()` → `setTimestep()` rename in 0.18. Forwards
+ * unchanged; will be removed in 0.19.
+ */
+Room.prototype.waitForNextSimulationTick = function(this: Room) {
+  return this.waitForNextTimestep();
 }
 
 /**
