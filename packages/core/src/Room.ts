@@ -1713,7 +1713,13 @@ export class Room<T extends RoomOptions = RoomOptions> {
     client.ref.removeListener('close', client.ref['onleave']);
 
     // only effectively close connection when "onLeave" is fulfilled
-    this._onLeave(client, closeCode).then(() => client.leave(closeCode));
+    const ref = client.ref;
+    this._onLeave(client, closeCode).then(() => {
+      // skip if a successful reconnection has transplanted a new ref (#950)
+      if (client.ref === ref) {
+        client.leave(closeCode);
+      }
+    });
   }
 
   private async _onLeave(client: ExtractRoomClient<T>, code?: number): Promise<any> {
