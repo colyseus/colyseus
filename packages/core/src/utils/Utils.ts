@@ -22,6 +22,24 @@ export type ExtractMethodOrPropertyType<
   ? Awaited<R>
   : TClass[TKey];
 
+/**
+ * Return type of `remoteRoomCall()`.
+ *
+ * Resolves to the method's awaited return type (or the property's type) when
+ * the method name was captured as a literal type. Falls back to `any` when it
+ * wasn't — e.g. `remoteRoomCall<MyRoom>(...)` with only the room type given:
+ * TypeScript applies the `TMethod` default instead of inferring the literal
+ * once an explicit type argument list is present (microsoft/TypeScript#26242).
+ * Pass both type arguments (`remoteRoomCall<MyRoom, 'myMethod'>`) for a
+ * precise return type.
+ */
+export type RemoteRoomCallReturn<
+  TRoom,
+  TMethod extends keyof TRoom
+> = keyof TRoom extends TMethod
+  ? any
+  : ExtractMethodOrPropertyType<TRoom, TMethod>;
+
 // remote room call timeouts
 export const REMOTE_ROOM_SHORT_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_SHORT_TIMEOUT || 2000);
 export const MAX_CONCURRENT_CREATE_ROOM_WAIT_TIME = Number(process.env.COLYSEUS_MAX_CONCURRENT_CREATE_ROOM_WAIT_TIME || 0.5);
