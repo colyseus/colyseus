@@ -255,7 +255,8 @@ export class Room<T extends RoomOptions = RoomOptions> {
   public messages?: Messages<any>;
 
   private onMessageEvents = createNanoEvents();
-  private onMessageValidators: {[message: string]: StandardSchemaV1} = {};
+  // null-prototype: keyed by client-supplied message type (colyseus/colyseus#951)
+  private onMessageValidators: {[message: string]: StandardSchemaV1} = Object.create(null);
 
   private onMessageFallbacks = {
     '__no_message_handler': (client: ExtractRoomClient<T>, messageType: string | number, _: unknown) => {

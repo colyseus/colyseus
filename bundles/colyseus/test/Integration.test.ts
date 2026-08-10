@@ -660,6 +660,200 @@ describe("Integration", () => {
               assert.strictEqual(onLeaveCode, CloseCode.WITH_ERROR);
             });
 
+            //
+            // Message types are client-supplied strings used as keys into the handler
+            // and validator registries. While those were plain objects, these names
+            // resolved to inherited `Object.prototype` members instead of missing.
+            // https://github.com/colyseus/colyseus/issues/951
+            //
+            describe("message types colliding with Object.prototype keys", () => {
+              const PROTO_KEYS = ["__proto__", "constructor", "toString", "valueOf", "hasOwnProperty"];
+
+              it("should reach the '*' catch-all", async () => {
+                const received: string[] = [];
+
+                matchMaker.defineRoomType('onmessage_proto_wildcard', class _ extends Room {
+                  onCreate() {
+                    this.onMessage("*", (_client, type) => received.push(String(type)));
+                  }
+                });
+
+                const conn = await client.joinOrCreate('onmessage_proto_wildcard');
+                let onLeaveCode: number | undefined;
+                conn.onLeave((code) => onLeaveCode = code);
+
+                conn.send("hello");
+                for (const key of PROTO_KEYS) { conn.send(key); }
+                await timeout(50);
+
+                assert.deepStrictEqual(received, ["hello", ...PROTO_KEYS]);
+                assert.strictEqual(onLeaveCode, undefined);
+                assert.strictEqual(true, conn.connection.isOpen);
+              });
+
+              it("should reach handlers registered under those names", async () => {
+                const received: Array<[string, any]> = [];
+
+                matchMaker.defineRoomType('onmessage_proto_registered', class _ extends Room {
+                  onCreate() {
+                    for (const key of PROTO_KEYS) {
+                      this.onMessage(key, (_client, message) => received.push([key, message]));
+                    }
+                  }
+                });
+
+                const conn = await client.joinOrCreate('onmessage_proto_registered');
+                let onLeaveCode: number | undefined;
+                conn.onLeave((code) => onLeaveCode = code);
+
+                for (const key of PROTO_KEYS) { conn.send(key, { key }); }
+                await timeout(50);
+
+                assert.deepStrictEqual(received, PROTO_KEYS.map((key) => [key, { key }]));
+                assert.strictEqual(onLeaveCode, undefined);
+              });
+
+              it("should apply per-type validators, and only to the validated type", async () => {
+                const received: Array<[string, any]> = [];
+
+                matchMaker.defineRoomType('onmessage_proto_validation', class _ extends Room {
+                  onCreate() {
+                    this.onMessage("__proto__", z.number(), (_client, message) => received.push(["__proto__", message]));
+                    this.onMessage("toString", (_client, message) => received.push(["toString", message]));
+                  }
+                });
+
+                const conn = await client.joinOrCreate('onmessage_proto_validation');
+                let onLeaveCode: number | undefined;
+                conn.onLeave((code) => onLeaveCode = code);
+
+                conn.send("toString", { anything: true });
+                conn.send("__proto__", 42);
+                await timeout(50);
+
+                assert.deepStrictEqual(received, [["toString", { anything: true }], ["__proto__", 42]]);
+                assert.strictEqual(onLeaveCode, undefined);
+
+                // the same type must still reject a payload the schema refuses
+                const failing = await client.joinOrCreate('onmessage_proto_validation');
+                let failingLeaveCode: number | undefined;
+                failing.onLeave((code) => failingLeaveCode = code);
+
+                failing.send("__proto__", "not a number");
+                await timeout(50);
+
+                assert.strictEqual(failingLeaveCode, CloseCode.WITH_ERROR);
+                assert.strictEqual(received.length, 2, "rejected payload must not reach the handler");
+              });
+
+              it("should drop the sender like any other unregistered type", async () => {
+                matchMaker.defineRoomType('onmessage_proto_fallback', class _ extends Room {
+                  onCreate() {
+                    // a registered handler, but no '*' catch-all
+                    this.onMessage("known", () => {/* noop */});
+                  }
+                });
+
+                const closeCodeFor = async (messageType: string) => {
+                  const conn = await client.joinOrCreate('onmessage_proto_fallback');
+                  let onLeaveCode: number | undefined;
+                  conn.onLeave((code) => onLeaveCode = code);
+                  conn.send(messageType);
+                  await timeout(50);
+                  return onLeaveCode;
+                };
+
+                const unknownCode = await closeCodeFor("definitely_not_registered");
+                assert.strictEqual(unknownCode, CloseCode.WITH_ERROR);
+
+                for (const key of PROTO_KEYS) {
+                  assert.strictEqual(await closeCodeFor(key), unknownCode, `"${key}" should be dropped like an unknown type`);
+                }
+              });
+
+              it("should support raw bytes", async () => {
+                const received: Array<[string, number[]]> = [];
+
+                matchMaker.defineRoomType('onmessage_proto_bytes', class _ extends Room {
+                  onCreate() {
+                    for (const key of PROTO_KEYS) {
+                      this.onMessageBytes(key, (_client, payload: Buffer) =>
+                        received.push([key, Array.from(new Uint8Array(payload))]));
+                    }
+                  }
+                });
+
+                const conn = await client.joinOrCreate('onmessage_proto_bytes');
+                let onLeaveCode: number | undefined;
+                conn.onLeave((code) => onLeaveCode = code);
+
+                PROTO_KEYS.forEach((key, i) => conn.sendBytes(key, new Uint8Array([i, i + 1])));
+                await timeout(50);
+
+                assert.deepStrictEqual(received, PROTO_KEYS.map((key, i) => [key, [i, i + 1]]));
+                assert.strictEqual(onLeaveCode, undefined);
+              });
+
+              it("should behave like any other type once unbound", async () => {
+                const received: string[] = [];
+
+                // "ordinary" is the control: whatever it does after unbind(), "constructor"
+                // must do the same. (Both currently go silent rather than falling through
+                // to '*' — the remove closure leaves an empty callback array behind, which
+                // reads as "handled". That is type-agnostic, and not what this asserts.)
+                matchMaker.defineRoomType('onmessage_proto_unbind', class _ extends Room {
+                  onCreate() {
+                    const unbind: { [type: string]: () => void } = {
+                      constructor: this.onMessage("constructor", () => received.push("constructor:handler")),
+                      ordinary: this.onMessage("ordinary", () => received.push("ordinary:handler")),
+                    };
+                    this.onMessage("*", (_client, type) => received.push(`*:${type}`));
+                    this.onMessage("unbind", (_client, type: string) => unbind[type]());
+                  }
+                });
+
+                const conn = await client.joinOrCreate('onmessage_proto_unbind');
+                let onLeaveCode: number | undefined;
+                conn.onLeave((code) => onLeaveCode = code);
+
+                conn.send("constructor");
+                conn.send("ordinary");
+                await timeout(50);
+                assert.deepStrictEqual(received, ["constructor:handler", "ordinary:handler"]);
+
+                received.length = 0;
+                conn.send("unbind", "constructor");
+                conn.send("unbind", "ordinary");
+                await timeout(50);
+
+                conn.send("constructor");
+                conn.send("ordinary");
+                await timeout(50);
+
+                const forConstructor = received.filter((e) => e.endsWith("constructor")).map((e) => e.replace("constructor", "<type>"));
+                const forOrdinary = received.filter((e) => e.endsWith("ordinary")).map((e) => e.replace("ordinary", "<type>"));
+                assert.deepStrictEqual(forConstructor, forOrdinary, `unbound "constructor" diverged from an unbound ordinary type: ${JSON.stringify(received)}`);
+                assert.strictEqual(onLeaveCode, undefined);
+              });
+
+              it("should not affect other clients in the room", async () => {
+                matchMaker.defineRoomType('onmessage_proto_bystander', class _ extends Room {
+                  onCreate() {
+                    this.onMessage("ping", (client) => client.send("pong"));
+                  }
+                });
+
+                const sender = await client.joinOrCreate('onmessage_proto_bystander');
+                for (const key of PROTO_KEYS) { sender.send(key); }
+                await timeout(50);
+
+                const bystander = await client.joinOrCreate('onmessage_proto_bystander');
+                const pong = new Promise<void>((resolve) => bystander.onMessage("pong", () => resolve()));
+                bystander.send("ping");
+                await pong;
+              });
+            });
+
           });
 
           describe("patchRate", () => {
