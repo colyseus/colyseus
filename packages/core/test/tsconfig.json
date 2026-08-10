@@ -3,6 +3,7 @@
   // NodeNext resolution, strict mode, and no skipLibCheck escape hatch.
   // `@colyseus/core` resolves through this package's own `exports` map,
   // so `build/` must exist — run the root build first.
+  // Used by vitest typecheck mode (see ../vitest.config.ts).
   "compilerOptions": {
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
