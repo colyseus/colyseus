@@ -583,6 +583,65 @@ describe("Room Reconnection", () => {
       assert.ok(!matchMaker.getLocalRoomById(newConn.roomId));
     });
 
+    //
+    // As reported: a page refresh behind a proxy that discards in-flight data on
+    // disconnect (swallowing the client's WS close frame — observed on Render.com)
+    // leaves the server believing the old connection is still alive when the
+    // reconnect request arrives. checkReconnectionToken() then force-closes the
+    // stale client and defers client.leave(WITH_ERROR) until _onLeave resolves —
+    // but with an awaited allowReconnection(), _onLeave resolves only *after* the
+    // successful reconnection transplanted the new socket into client.ref, so the
+    // deferred leave() closed the freshly reconnected socket.
+    //
+    // No proxy needed to reproduce: calling reconnect() while the old connection
+    // is still open creates the same server-side state.
+    // https://github.com/colyseus/colyseus/issues/950
+    //
+    it("awaited allowReconnection() should survive the stale connection's deferred leave()", async () => {
+      const events: string[] = [];
+
+      matchMaker.defineRoomType('reconnect_awaited_allow_reconnection', class _ extends Room {
+        async onDrop(client: Client, code: number) {
+          events.push(`onDrop ${code}`);
+          try {
+            await this.allowReconnection(client, 10);
+            events.push('reconnected');
+          } catch (e) {
+            events.push('reconnection expired');
+          }
+        }
+        async onReconnect(client: Client) {
+          events.push('onReconnect');
+        }
+        async onLeave(client: Client, code: number) {
+          events.push(`onLeave ${code}`);
+        }
+      });
+
+      const conn = await client.joinOrCreate('reconnect_awaited_allow_reconnection');
+      const reconnectionToken = conn.reconnectionToken;
+      const originalSessionId = conn.sessionId;
+
+      // do NOT close `conn`: the server must still believe the old connection is
+      // alive when the reconnect request arrives
+      const newConn = await client.reconnect(reconnectionToken);
+
+      let newConnLeaveCode: number | undefined;
+      newConn.onLeave((code) => newConnLeaveCode = code);
+
+      // give the deferred leave() time to (wrongly) fire
+      await timeout(100);
+
+      assert.strictEqual(originalSessionId, newConn.sessionId, "sessionId should be preserved");
+      assert.deepStrictEqual(events, [`onDrop ${CloseCode.WITH_ERROR}`, 'onReconnect', 'reconnected'],
+        `unexpected server event sequence: ${JSON.stringify(events)}`);
+      assert.strictEqual(newConnLeaveCode, undefined, "reconnected client should not have been closed");
+      assert.strictEqual(true, newConn.connection.isOpen, "reconnected connection should remain open");
+
+      await newConn.leave();
+      await timeout(50);
+    });
+
     describe("offline / online", () => {
       it("should reconnect when going online", async () => {
 
