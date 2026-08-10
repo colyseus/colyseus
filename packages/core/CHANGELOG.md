@@ -8,6 +8,7 @@ Brings in the 0.17.48 fix.
 - Fix `matchMaker.stats.local.ccu` drifting negative when `onDrop()` `await`s `allowReconnection()`: a late-resuming `_onLeave()` held the replacement's `reconnectionToken` and registered a second leave for one join. The `RECONNECTED` guard now runs before the `_reconnections` lookup.
 - Fix crash on a non-JSON `POST /matchmake/*` body: `JSON.parse` threw inside the request stream's `"end"` listener in the raw Node adapter (`router/node.ts`, used by `colyseus/vite`), escaping as an `uncaughtException`. Now replies `400`, and the body is capped at 1MB (`413`).
 - Malformed body on the default router replies `400` instead of `500` with a stack trace on stderr.
+- Fix JSDoc `@param` names that did not match the actual arguments, which reach users through editor tooltips and the generated docs: `Room.allowReconnection()` documented `client` (the parameter is `previousClient`), and `matchMaker.findOneRoomAvailable()` documented `sortOptions` — the parameter is `additionalSortOptions`, and `sortOptions` is a different value inside the function (the room handler's defaults, with the argument merged over them). (thanks @darkdi for the fix - https://github.com/colyseus/colyseus/pull/953)
 
 ## 0.18.3
 
