@@ -338,7 +338,7 @@ export async function findRoomsByIds(roomIds: string[]): Promise<Map<string, IRo
  *
  * @param roomName - The Id of the specific room.
  * @param filterOptions - Filter options.
- * @param sortOptions - Sorting options.
+ * @param additionalSortOptions - Sorting options, merged over the ones declared on the room handler.
  *
  * @returns Promise<IRoomCache> - A promise contaning an object which includes room metadata and configurations.
  */
