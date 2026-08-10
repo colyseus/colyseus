@@ -88,7 +88,8 @@ export class RoomMessages {
 
   /** Per-type StandardSchema validators. Public for the same reason as
    *  {@link events} (`onMessageValidators`). */
-  validators: { [type: string]: StandardSchemaV1 } = {};
+  // null-prototype: keyed by client-supplied message type (colyseus/colyseus#951)
+  validators: { [type: string]: StandardSchemaV1 } = Object.create(null);
 
   constructor(room: Room<any>) {
     this.room = room;

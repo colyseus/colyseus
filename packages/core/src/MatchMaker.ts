@@ -32,7 +32,8 @@ export { controller, stats, type MatchMakerDriver };
 export type ClientOptions = any;
 export type SelectProcessIdCallback = (roomName: string, clientOptions: ClientOptions) => Promise<string>;
 
-const handlers: {[id: string]: RegisteredHandler} = {};
+// null-prototype: keyed by client-supplied room name (colyseus/colyseus#951)
+const handlers: {[id: string]: RegisteredHandler} = Object.create(null);
 const rooms: {[roomId: string]: Room} = {};
 const events = new EventEmitter();
 
