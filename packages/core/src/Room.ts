@@ -1308,7 +1308,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
    * Allow the specified client to reconnect into the room. Must be used inside `onLeave()` method.
    * If seconds is provided, the reconnection is going to be cancelled after the provided amount of seconds.
    *
-   * @param client - The client that is allowed to reconnect into the room.
+   * @param previousClient - The client that is allowed to reconnect into the room.
    * @param seconds - The time in seconds that the client is allowed to reconnect into the room.
    *
    * @returns Deferred<Client> - The differed is a promise like type.
