@@ -4,7 +4,7 @@
   "description": "Multiplayer Framework for Node.js.",
   "type": "module",
   "scripts": {
-    "test": "tsc -p test"
+    "test": "vitest run"
   },
   "input": "./src/index.ts",
   "main": "./build/index.cjs",
@@ -63,7 +63,8 @@
     "@colyseus/redis-presence": "workspace:^",
     "@colyseus/schema": "^5.0.8",
     "@colyseus/tools": "workspace:^",
-    "express": "^5.0.0"
+    "express": "^5.0.0",
+    "vitest": "^3.1.1"
   },
   "peerDependencies": {
     "@colyseus/auth": "workspace:^",
