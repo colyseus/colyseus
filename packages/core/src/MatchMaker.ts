@@ -2,7 +2,7 @@ import { EventEmitter } from 'events';
 
 import { requestFromIPC, subscribeIPC, subscribeWithTimeout } from './IPC.ts';
 
-import { type Type, Deferred, generateId, merge, retry, MAX_CONCURRENT_CREATE_ROOM_WAIT_TIME, REMOTE_ROOM_SHORT_TIMEOUT, type MethodName, type ExtractMethodOrPropertyType } from './utils/Utils.ts';
+import { type Type, Deferred, generateId, merge, retry, MAX_CONCURRENT_CREATE_ROOM_WAIT_TIME, REMOTE_ROOM_SHORT_TIMEOUT, type MethodName, type RemoteRoomCallReturn } from './utils/Utils.ts';
 import { isDevMode, cacheRoomHistory, getPreviousProcessId, getRoomRestoreListKey, reloadFromCache } from './utils/DevMode.ts';
 
 import { RegisteredHandler } from './matchmaker/RegisteredHandler.ts';
@@ -353,23 +353,43 @@ export async function findOneRoomAvailable(
 /**
  * Call a method or return a property on a remote room.
  *
+ * Provide both type arguments for a precisely typed result, e.g.
+ * `remoteRoomCall<MyRoom, 'myMethod'>(roomId, 'myMethod')`. With only the
+ * room type given, TypeScript cannot infer the method literal
+ * (microsoft/TypeScript#26242) and the result is typed `any`.
+ *
  * @param roomId - The Id of the specific room instance.
  * @param method - Method or attribute to call or retrive.
  * @param args - Array of arguments for the method
  *
- * @returns Promise<any> - Returned value from the called or retrieved method/attribute.
+ * @returns Promise - Returned value from the called or retrieved method/attribute.
  */
-export async function remoteRoomCall<TRoom = Room>(
+export function remoteRoomCall<TRoom = Room, TMethod extends keyof TRoom = keyof TRoom>(
+  roomId: string,
+  method: TMethod,
+  args?: any[],
+  rejectionTimeout?: number,
+): Promise<RemoteRoomCallReturn<TRoom, TMethod>>;
+
+// fallback for dynamic method names not present on the room type
+export function remoteRoomCall<TRoom = Room>(
   roomId: string,
   method: keyof TRoom,
   args?: any[],
+  rejectionTimeout?: number,
+): Promise<any>;
+
+export async function remoteRoomCall(
+  roomId: string,
+  method: any,
+  args?: any[],
   rejectionTimeout = REMOTE_ROOM_SHORT_TIMEOUT,
-): Promise<ExtractMethodOrPropertyType<TRoom, typeof method>> {
-  const room = rooms[roomId] as TRoom;
+): Promise<any> {
+  const room = rooms[roomId];
 
   if (!room) {
     try {
-      return await requestFromIPC(presence, getRoomChannel(roomId), method as string, args, rejectionTimeout);
+      return await requestFromIPC(presence, getRoomChannel(roomId), method, args, rejectionTimeout);
 
     } catch (e: any) {
 
@@ -384,7 +404,7 @@ export async function remoteRoomCall<TRoom = Room>(
 
       // TODO: for 1.0, consider always throwing previous error directly.
 
-      const request = `${String(method)}${args && ' with args ' + JSON.stringify(args) || ''}`;
+      const request = `${method}${args && ' with args ' + JSON.stringify(args) || ''}`;
       throw new ServerError(
         ErrorCode.MATCHMAKE_UNHANDLED,
         `remote room (${roomId}) timed out, requesting "${request}". (${rejectionTimeout}ms exceeded)`,
@@ -392,9 +412,9 @@ export async function remoteRoomCall<TRoom = Room>(
     }
 
   } else {
-    return (!args && typeof (room[method]) !== 'function')
-        ? room[method as string]
-        : (await room[method as string].apply(room, args && JSON.parse(JSON.stringify(args))));
+    return (!args && typeof ((room as any)[method]) !== 'function')
+        ? (room as any)[method]
+        : (await (room as any)[method].apply(room, args && JSON.parse(JSON.stringify(args))));
   }
 }
 
