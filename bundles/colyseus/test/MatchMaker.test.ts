@@ -23,6 +23,10 @@ describe("MatchMaker", () => {
         matchMaker.defineRoomType("reconnect", ReconnectRoom);
         matchMaker.defineRoomType("reconnect_token", ReconnectTokenRoom);
 
+        // a room name that is also an Object.prototype key (see "room names
+        // colliding with Object.prototype keys" below)
+        matchMaker.defineRoomType("isPrototypeOf", DummyRoom);
+
         matchMaker
           .defineRoomType("room2_filtered", Room2Clients)
           .filterBy(['mode']);
@@ -222,6 +226,33 @@ describe("MatchMaker", () => {
 
           const reservedSeat9 = await matchMaker.join("room3_sorted_asc");
           assert.strictEqual(roomsCachedOrder[2].roomId, reservedSeat9.room.roomId);
+        });
+      });
+
+      //
+      // Room names are client-supplied strings used as keys into the handler
+      // registry. While that was a plain object, these names resolved to inherited
+      // `Object.prototype` members instead of missing.
+      // https://github.com/colyseus/colyseus/issues/951
+      //
+      describe("room names colliding with Object.prototype keys", () => {
+        const PROTO_KEYS = ["__proto__", "constructor", "toString", "valueOf", "hasOwnProperty"];
+
+        it("should report an undefined room name as such", async () => {
+          for (const roomName of PROTO_KEYS) {
+            await assert.rejects(
+              async () => await matchMaker.joinOrCreate(roomName),
+              /not defined/i,
+              `unexpected error for room name "${roomName}"`,
+            );
+          }
+        });
+
+        it("should allow a room to be defined under one of those names", async () => {
+          const reservedSeat = await matchMaker.joinOrCreate("isPrototypeOf");
+          const room = matchMaker.getLocalRoomById(reservedSeat.room.roomId);
+          assert.ok(room.hasReservedSeat(reservedSeat.sessionId));
+          assert.ok(room instanceof DummyRoom);
         });
       });
 

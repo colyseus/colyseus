@@ -609,6 +609,189 @@ describe("Integration", () => {
               assert.strictEqual(onLeaveCode, Protocol.WS_CLOSE_WITH_ERROR);
             });
 
+            //
+            // Message types are client-supplied strings used as keys into the handler
+            // registry. While that was a plain object, these names resolved to inherited
+            // `Object.prototype` members: dispatch saw a truthy `messageTypeHandler`
+            // with no `.callback`, and the resulting TypeError was thrown outside any
+            // try/catch — an uncaught exception that took the whole process down, and
+            // with it every room on that server.
+            // https://github.com/colyseus/colyseus/issues/951
+            //
+            describe("message types colliding with Object.prototype keys", () => {
+              const PROTO_KEYS = ["__proto__", "constructor", "toString", "valueOf", "hasOwnProperty"];
+
+              it("should reach the '*' catch-all", async () => {
+                const received: string[] = [];
+
+                matchMaker.defineRoomType('onmessage_proto_wildcard', class _ extends Room {
+                  onCreate() {
+                    this.onMessage("*", (_client, type) => received.push(String(type)));
+                  }
+                });
+
+                const conn = await client.joinOrCreate('onmessage_proto_wildcard');
+                let onLeaveCode: number;
+                conn.onLeave((code) => onLeaveCode = code);
+
+                conn.send("hello");
+                for (const key of PROTO_KEYS) { conn.send(key); }
+                await timeout(50);
+
+                assert.deepStrictEqual(received, ["hello", ...PROTO_KEYS]);
+                assert.strictEqual(onLeaveCode, undefined);
+                assert.strictEqual(true, conn.connection.isOpen);
+              });
+
+              it("should reach handlers registered under those names", async () => {
+                const received: Array<[string, any]> = [];
+
+                matchMaker.defineRoomType('onmessage_proto_registered', class _ extends Room {
+                  onCreate() {
+                    for (const key of PROTO_KEYS) {
+                      this.onMessage(key, (_client, message) => received.push([key, message]));
+                    }
+                  }
+                });
+
+                const conn = await client.joinOrCreate('onmessage_proto_registered');
+                let onLeaveCode: number;
+                conn.onLeave((code) => onLeaveCode = code);
+
+                for (const key of PROTO_KEYS) { conn.send(key, { key }); }
+                await timeout(50);
+
+                assert.deepStrictEqual(received, PROTO_KEYS.map((key) => [key, { key }]));
+                assert.strictEqual(onLeaveCode, undefined);
+              });
+
+              it("registering '__proto__' should not leak the handler's own keys as message types", async () => {
+                // on a plain object, `handlers['__proto__'] = h` runs the Object.prototype
+                // setter and installs `h` as the registry's prototype, so h's own keys
+                // ("callback", "validate") start resolving as if they were handlers
+                const received: string[] = [];
+
+                matchMaker.defineRoomType('onmessage_proto_pollution', class _ extends Room {
+                  onCreate() {
+                    this.onMessage("__proto__", () => received.push("__proto__ handler"));
+                    this.onMessage("*", (_client, type) => received.push(`*:${type}`));
+                  }
+                });
+
+                const conn = await client.joinOrCreate('onmessage_proto_pollution');
+                conn.send("__proto__");
+                conn.send("callback");
+                conn.send("validate");
+                await timeout(50);
+
+                assert.deepStrictEqual(received, ["__proto__ handler", "*:callback", "*:validate"]);
+              });
+
+              it("should apply the per-type validator to those names", async () => {
+                const received: any[] = [];
+
+                matchMaker.defineRoomType('onmessage_proto_validation', class _ extends Room {
+                  onCreate() {
+                    this.onMessage("constructor", (_client, message) => received.push(message),
+                      (payload: any) => ({ x: payload.x }));
+                  }
+                });
+
+                const conn = await client.joinOrCreate('onmessage_proto_validation');
+                conn.send("constructor", { x: 1, y: 2 });
+                await timeout(50);
+
+                assert.deepStrictEqual(received, [{ x: 1 }]);
+              });
+
+              it("should drop the sender like any other unregistered type", async () => {
+                matchMaker.defineRoomType('onmessage_proto_fallback', class _ extends Room {
+                  onCreate() {
+                    // a registered handler, but no '*' catch-all
+                    this.onMessage("known", () => {/* noop */});
+                  }
+                });
+
+                const closeCodeFor = async (messageType: string) => {
+                  const conn = await client.joinOrCreate('onmessage_proto_fallback');
+                  let onLeaveCode: number;
+                  conn.onLeave((code) => onLeaveCode = code);
+                  conn.send(messageType);
+                  await timeout(50);
+                  return onLeaveCode;
+                };
+
+                const unknownCode = await closeCodeFor("definitely_not_registered");
+                assert.strictEqual(unknownCode, Protocol.WS_CLOSE_WITH_ERROR);
+
+                for (const key of PROTO_KEYS) {
+                  assert.strictEqual(await closeCodeFor(key), unknownCode, `"${key}" should be dropped like an unknown type`);
+                }
+              });
+
+              it("should support raw bytes", async () => {
+                const received: Array<[string, number[]]> = [];
+
+                matchMaker.defineRoomType('onmessage_proto_bytes', class _ extends Room {
+                  onCreate() {
+                    for (const key of PROTO_KEYS) {
+                      this.onMessage(key, (_client, payload: Buffer) =>
+                        received.push([key, Array.from(new Uint8Array(payload))]));
+                    }
+                  }
+                });
+
+                const conn = await client.joinOrCreate('onmessage_proto_bytes');
+                let onLeaveCode: number;
+                conn.onLeave((code) => onLeaveCode = code);
+
+                PROTO_KEYS.forEach((key, i) => conn.sendBytes(key, new Uint8Array([i, i + 1])));
+                await timeout(50);
+
+                assert.deepStrictEqual(received, PROTO_KEYS.map((key, i) => [key, [i, i + 1]]));
+                assert.strictEqual(onLeaveCode, undefined);
+              });
+
+              it("should fall back to '*' once unbound", async () => {
+                const received: string[] = [];
+
+                matchMaker.defineRoomType('onmessage_proto_unbind', class _ extends Room {
+                  onCreate() {
+                    const unbind = this.onMessage("constructor", () => received.push("handler"));
+                    this.onMessage("*", (_client, type) => received.push(`*:${type}`));
+                    this.onMessage("unbind", () => unbind());
+                  }
+                });
+
+                const conn = await client.joinOrCreate('onmessage_proto_unbind');
+                conn.send("constructor");
+                await timeout(50);
+                conn.send("unbind");
+                await timeout(50);
+                conn.send("constructor");
+                await timeout(50);
+
+                assert.deepStrictEqual(received, ["handler", "*:constructor"]);
+              });
+
+              it("should not take the server down for other clients", async () => {
+                matchMaker.defineRoomType('onmessage_proto_bystander', class _ extends Room {
+                  onCreate() {
+                    this.onMessage("ping", (client) => client.send("pong"));
+                  }
+                });
+
+                const sender = await client.joinOrCreate('onmessage_proto_bystander');
+                for (const key of PROTO_KEYS) { sender.send(key); }
+                await timeout(50);
+
+                const bystander = await client.joinOrCreate('onmessage_proto_bystander');
+                const pong = new Promise<void>((resolve) => bystander.onMessage("pong", () => resolve()));
+                bystander.send("ping");
+                await pong;
+              });
+            });
+
           });
 
           describe("patchRate", () => {

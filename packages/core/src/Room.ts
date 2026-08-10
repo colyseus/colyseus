@@ -135,12 +135,15 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
   protected _reconnections: { [reconnectionToken: string]: [string, Deferred] } = {};
   private _reconnectingSessionId = new Map<string, string>();
 
+  // null-prototype: keyed by client-supplied message type, so "__proto__" /
+  // "constructor" / "toString" resolve to missing rather than to an inherited
+  // Object.prototype member (colyseus/colyseus#951)
   private onMessageHandlers: {
     [id: string]: {
       callback: (...args: any[]) => void,
       validate?: (data: unknown) => any,
     }
-  } = {
+  } = Object.assign(Object.create(null), {
       '__no_message_handler': {
         callback: (client: Client, messageType: string, _: unknown) => {
           const errorMessage = `room onMessage for "${messageType}" not registered.`;
@@ -156,7 +159,7 @@ export abstract class Room<State extends object= any, Metadata= any, UserData = 
           }
         }
       }
-    };
+    });
 
   private _serializer: Serializer<State> = noneSerializer;
   private _afterNextPatchQueue: Array<[string | Client, IArguments]> = [];
