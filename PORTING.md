@@ -30,8 +30,11 @@ published JS types.)
   `dispose()`.
 - **Attachment**: `attach(instance, config)`, `attachAll(...)` (collection
   form), `detach(instance)`.
-- **Driver**: `tick(now)` — the one per-frame call; returns the frame's input
-  send budget (fixed steps due) and drives every child spawned below.
+- **Driver**: `tick(now?)` — the one per-frame call; returns the frame's input
+  send budget (fixed steps due) and drives every child spawned below. `now` is
+  optional everywhere: omitted, each SDK reads its own room clock, so a caller
+  never has to pick a platform clock and risk a different epoch. GDScript has
+  no nullable float default and uses a negative sentinel instead.
 - **Factories**: `reconciler(instance, opts)` → `Reconciler`, `sim(opts)` →
   `SimReconciler`, `defineEvent(opts)` → `PredictedEventChannel`,
   `spawns(...)` → `PredictedSpawns`.
