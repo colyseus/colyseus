@@ -71,7 +71,7 @@
  */
 
 import { RollbackController, type RollbackOptions, type StepContext } from "./rollback.ts";
-import { wireQuantizerOf, scalarFieldsOf } from "./schema.ts";
+import { wireQuantizerOf, scalarFieldsOf } from "../core/schema-reflect.ts";
 import { diagnosticsActive } from "./divergence.ts";
 
 /** Ring/compare encoding of a predicted field value: numbers pass through,

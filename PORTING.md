@@ -106,7 +106,7 @@ published JS types.)
 
 `predict.reconciler`'s `fields` option is optional; omitted, it defaults to every
 scalar field the instance's schema declares (`scalarFieldsOf`,
-`packages/sdk/src/predict/schema.ts`) — one walk over the schema metadata table
+`packages/sdk/src/core/schema-reflect.ts`) — one walk over the schema metadata table
 returning `{ fields, numeric }`. The explicit list stays a plain string array.
 Nothing here is a closure; the whole feature is a table lookup at construction.
 

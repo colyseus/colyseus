@@ -108,7 +108,7 @@
 
 import type { Schema } from "@colyseus/schema";
 import { RollbackController, type RollbackOptions, type StepContext } from "./rollback.ts";
-import { refIdOf, metadataOf, scalarFieldsOf } from "./schema.ts";
+import { refIdOf, metadataOf, scalarFieldsOf } from "../core/schema-reflect.ts";
 
 // -----------------------------------------------------------------------------
 // Compile-time sugar for auto-bound worlds. Runtime detection is refId-based;

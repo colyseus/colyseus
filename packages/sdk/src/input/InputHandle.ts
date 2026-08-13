@@ -5,7 +5,7 @@ import { Protocol, ProtocolModifier } from '@colyseus/shared-types';
 import type { Connection } from '../Connection.ts';
 import { now } from '../core/utils.ts';
 import { debugOverlayActive } from '../debug-channel.ts';
-import { metadataOf } from '../predict/schema.ts';
+import { metadataOf } from '../core/schema-reflect.ts';
 
 /**
  * Minimal structural type the input handle needs from its host (Room). Lets

@@ -3,10 +3,13 @@
 // `refId` (own, non-enumerable `Symbol.for("$refId")` property) and exposes a
 // field-name → field-index map on `constructor[Symbol.metadata]`. These two
 // integers — refId and field index — are the SAME identity the wire protocol
-// and any C / C# port use, so Predict keys all of its runtime state on them
-// rather than on JS object identity (WeakMap) or field-name strings. The
-// instance object and the field-name string never reach the engine's hot path;
-// they're resolved to `(refId, fieldId)` once at the API boundary.
+// and any C / C# port use, so callers key their runtime state on them rather
+// than on JS object identity (WeakMap) or field-name strings. The instance
+// object and the field-name string never reach a hot path; they're resolved to
+// `(refId, fieldId)` once at the API boundary.
+//
+// Reflection only — no prediction state lives here. Both `input/` and
+// `predict/` read it, which is why it sits under `core/`.
 // -----------------------------------------------------------------------------
 
 // `$refId`/`$values` are imported (not re-declared) so they stay identical to the

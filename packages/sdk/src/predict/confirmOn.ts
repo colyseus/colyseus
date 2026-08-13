@@ -34,7 +34,7 @@
  * silent rejects would be hard to debug. Confirm-only.
  */
 
-import type { CollectionKeys, ChildOf } from "./schema.ts";
+import type { CollectionKeys, ChildOf } from "../core/schema-reflect.ts";
 
 /** The loose callbacks surface the owning Predict already holds (its
  *  `Callbacks.get(room)` wrapper). All three return detach functions. */

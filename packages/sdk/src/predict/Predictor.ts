@@ -88,7 +88,7 @@ import {
     $VALUES,
     refIdOf, metadataOf, fieldIndexOf, scalarFieldNamesOf, makeUnrolledSnapshot,
     type CollectionKeys, type ChildOf,
-} from "./schema.ts";
+} from "../core/schema-reflect.ts";
 import { wireConfirmOn, type ConfirmOn } from "./confirmOn.ts";
 
 // -----------------------------------------------------------------------------

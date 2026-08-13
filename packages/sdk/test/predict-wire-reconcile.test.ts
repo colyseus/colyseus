@@ -4,7 +4,7 @@ import { assert } from 'chai';
 
 import { schema, t, encode, decode } from '@colyseus/schema';
 import { Reconciler } from '../src/predict.ts';
-import { wireQuantizerOf } from '../src/predict/schema.ts';
+import { wireQuantizerOf } from '../src/core/schema-reflect.ts';
 import type { InputHandle } from '../src/input/InputHandle.ts';
 
 // -----------------------------------------------------------------------------
