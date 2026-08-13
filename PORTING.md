@@ -31,10 +31,13 @@ published JS types.)
 - **Attachment**: `attach(instance, config)`, `attachAll(...)` (collection
   form), `detach(instance)`.
 - **Driver**: `tick(now?)` — the one per-frame call; returns the frame's input
-  send budget (fixed steps due) and drives every child spawned below. `now` is
-  optional everywhere: omitted, each SDK reads its own room clock, so a caller
-  never has to pick a platform clock and risk a different epoch. GDScript has
-  no nullable float default and uses a negative sentinel instead.
+  send budget (fixed steps due) and drives every child spawned below. Omit
+  `now` and the SDK reads its own room clock, so a caller never has to pick a
+  platform clock and risk a different epoch. Optional in JS, Defold, Unity,
+  Haxe, Flutter and Godot; GDScript has no nullable float default and uses a
+  negative sentinel. Still required by the C core
+  (`colyseus_predict_tick(p, now)`) and the GameMaker binding, which have no
+  clock handle at the call site.
 - **Factories**: `reconciler(instance, opts)` → `Reconciler`, `sim(opts)` →
   `SimReconciler`, `defineEvent(opts)` → `PredictedEventChannel`,
   `spawns(...)` → `PredictedSpawns`.
