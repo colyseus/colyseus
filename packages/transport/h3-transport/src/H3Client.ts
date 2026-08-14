@@ -8,10 +8,13 @@ import { type Iterator, decode, encode } from '@colyseus/schema';
 
 const lengthPrefixBuffer = Buffer.alloc(9); // 9 bytes is the maximum length of a length prefix
 
-// Test-only datagram loss injector: drop this fraction [0..1] of INCOMING
-// unreliable datagrams (whole packet = all ring slots in it), to measure how
-// well the redundancy ring recovers. Set via H3_DATAGRAM_LOSS. 0 = off.
+// Test-only datagram loss injectors: drop this fraction [0..1] of unreliable
+// datagrams (whole packet), to measure how well each direction recovers.
+// Separate per direction so a test can isolate one — H3_DATAGRAM_LOSS covers
+// INCOMING input (all ring slots in the packet), H3_DATAGRAM_LOSS_OUT covers
+// OUTGOING state patches. 0 = off.
 const DATAGRAM_LOSS = Number(process.env.H3_DATAGRAM_LOSS ?? 0);
+const DATAGRAM_LOSS_OUT = Number(process.env.H3_DATAGRAM_LOSS_OUT ?? 0);
 
 // 9 bytes is the maximum length of a variable-length integer prefix
 const MAX_LENGTH_PREFIX_BYTES = 9;
@@ -156,11 +159,17 @@ export class H3Client implements Client, ClientPrivate {
     );
   }
 
-  public sendDatagram(data: Uint8Array | Buffer) {
+  public rawUnreliable(data: Uint8Array | Buffer, options?: ISendOptions, cb?: (err?: Error) => void) {
+    // skip if client not open
+    if (this.readyState !== 1) {// OPEN
+      return;
+    }
+
+    const datagrams = this._wtSession.datagrams as any;
+
     if (!this._datagramWriter) {
       // Prefer `createWritable()` (non-deprecated in @fails-components 1.6); fall
       // back to the standard `datagrams.writable` property for other runtimes.
-      const datagrams = this._wtSession.datagrams as any;
       this._datagramWriter = (datagrams.createWritable ? datagrams.createWritable() : datagrams.writable).getWriter();
 
       this._datagramWriter.closed
@@ -173,6 +182,21 @@ export class H3Client implements Client, ClientPrivate {
     const dataWithPrefixedLength = new Uint8Array(prefixLength + data.length);
     dataWithPrefixedLength.set(lengthPrefixBuffer.subarray(0, prefixLength), 0);
     dataWithPrefixedLength.set(data, prefixLength);
+
+    // Drop rather than split an oversized payload. A datagram is atomic, so the
+    // receiver's reassembler only ever holds whole frames; a frame spread over
+    // two datagrams would desync its framing for good the first time one is lost.
+    const maxSize = datagrams.maxDatagramSize;
+    if (maxSize > 0 && dataWithPrefixedLength.byteLength > maxSize) {
+      logger.warn(
+        `@colyseus/h3-transport: dropping a ${dataWithPrefixedLength.byteLength}-byte` +
+        ` unreliable frame — over the ${maxSize}-byte datagram limit.`
+      );
+      return;
+    }
+
+    // Test-only: drop outgoing datagrams to simulate loss toward the client.
+    if (DATAGRAM_LOSS_OUT > 0 && Math.random() < DATAGRAM_LOSS_OUT) { return; }
 
     this._datagramWriter.write(dataWithPrefixedLength);
   }

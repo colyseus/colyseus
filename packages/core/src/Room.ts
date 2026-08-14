@@ -56,6 +56,9 @@ export {
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
+
+// Shared so the unarmed `_flushUnreliable` call site stays monomorphic.
+const NOOP = () => {};
 const noneSerializer = new NoneSerializer();
 
 /** Shared `enqueueRaw` options routing a frame onto `_pendingFrames` to ride the
@@ -277,6 +280,45 @@ export class Room<T extends RoomOptions = RoomOptions> {
   #_patchInterval: NodeJS.Timeout;
 
   /**
+   * Frequency to flush `@unreliable` state fields, in milliseconds.
+   *
+   * Those fields never ride a state patch — they go out over the transport's
+   * unreliable channel (a WebTransport datagram), so a dropped frame costs one
+   * stale value instead of stalling the reliable stream behind a retransmit.
+   * Setting this decouples them from {@link patchRate}, which is the point:
+   * 60Hz movement over a 20Hz structural patch.
+   *
+   * KNOWN COST of a rate faster than {@link patchRate}: an entity's ADD travels
+   * the reliable channel, so datagrams sent between patches can reference a
+   * refId the client hasn't been told about yet. Those frames are skipped by the
+   * client's decoder — safe (the ref graph can't desync, since `@unreliable` is
+   * primitives-only) but each one logs `"refId" not found`, and that entity's
+   * first value lands one mutation later. Measured at `patchRate/this` reports
+   * per mid-session spawn. Leave this unset and the flush rides
+   * {@link broadcastPatch}, which ships the ADD first and avoids it entirely.
+   *
+   * Requires a transport with a datagram channel — today only
+   * `@colyseus/h3-transport` (WebTransport), which is **experimental**. Every
+   * WebSocket transport lacks one, and those clients are skipped entirely (the
+   * room warns once), so `@unreliable` fields keep their join-time value there.
+   *
+   * @default null — flush alongside every {@link broadcastPatch}, and only when
+   * the state actually declares an `@unreliable` field.
+   */
+  public unreliablePatchRate: number | null = null;
+  #_unreliablePatchRate: number | null = null;
+  #_unreliablePatchInterval: NodeJS.Timeout;
+
+  /**
+   * The unreliable flush, called unconditionally at the end of every
+   * {@link broadcastPatch}. Stays {@link NOOP} unless the state actually
+   * declares an `@unreliable` field, so a room that never uses the channel
+   * pays an empty call the engine inlines away — and there is no second
+   * entry point that could drift from `broadcastPatch()`.
+   */
+  private _flushUnreliable: () => void = NOOP;
+
+  /**
    * Maximum number of messages a client can send to the server per second.
    * If a client sends more messages than this, it will be disconnected.
    *
@@ -420,6 +462,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
     this.#_state = this.state;
     this.#_autoDispose = this.autoDispose;
     this.#_patchRate = this.patchRate;
+    this.#_unreliablePatchRate = this.unreliablePatchRate;
     this.#_maxClients = this.maxClients;
 
     Object.defineProperties(this, {
@@ -436,6 +479,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
           }
           this._serializer.reset(newState);
           this.#_state = newState;
+          this._armUnreliablePatches();
         },
       },
 
@@ -477,6 +521,15 @@ export class Room<T extends RoomOptions = RoomOptions> {
             // When patchRate and no simulation interval are both set to 0, tick the clock to keep timers working
             this.#_patchInterval = setInterval(() => this.clock.tick(), DEFAULT_SIMULATION_INTERVAL);
           }
+        },
+      },
+
+      unreliablePatchRate: {
+        enumerable: true,
+        get: () => this.#_unreliablePatchRate,
+        set: (milliseconds: number | null) => {
+          this.#_unreliablePatchRate = milliseconds;
+          this._armUnreliablePatches();
         },
       },
     });
@@ -1300,6 +1353,12 @@ export class Room<T extends RoomOptions = RoomOptions> {
       this._inputController !== undefined ? { sNow } : undefined,
     );
 
+    // Flush `@unreliable` fields over the datagram channel, after the reliable
+    // patch so a spawn's ADD is already on the wire when the datagram mutating
+    // it goes out. No-op unless the state declares such a field, and skipped
+    // when `unreliablePatchRate` gave the flush its own timer.
+    this._flushUnreliable();
+
     // Deliver any per-client `afterNextPatch` frames as standalone frames right
     // after the patch (never coalesced into it). Iterates only the clients that
     // staged frames this cycle (`#pendingFrameClients`), never the full list.
@@ -1319,6 +1378,64 @@ export class Room<T extends RoomOptions = RoomOptions> {
     }
 
     return hasChanges;
+  }
+
+  /**
+   * Encode and send the `@unreliable` state fields over each client's
+   * unreliable channel. Those fields never appear in a {@link broadcastPatch}
+   * frame, and clients on a transport without a datagram channel are skipped.
+   *
+   * Driven automatically once the state declares an `@unreliable` field — right
+   * after each {@link broadcastPatch}, or on its own timer when
+   * {@link unreliablePatchRate} is set. Public so a room driving
+   * `broadcastPatch()` by hand can drive this by hand too.
+   */
+  public broadcastUnreliablePatch() {
+    if (!this.state) {
+      return false;
+    }
+    return this._serializer.applyUnreliablePatches?.(this.clients) ?? false;
+  }
+
+  /**
+   * Decide how the unreliable channel is driven — and, for the rooms that never
+   * touch it, decide to not drive it at all. Runs when the state is assigned
+   * (the serializer knows by then whether any `@unreliable` field exists) and
+   * whenever {@link unreliablePatchRate} changes.
+   *
+   * A room whose state declares no `@unreliable` field leaves
+   * {@link _flushUnreliable} at {@link NOOP}, so its patch tick costs exactly
+   * what it did before this feature existed.
+   */
+  private _armUnreliablePatches() {
+    if (this.#_unreliablePatchInterval) {
+      clearInterval(this.#_unreliablePatchInterval);
+      this.#_unreliablePatchInterval = undefined;
+    }
+
+    const armed = this._serializer?.hasUnreliableFields === true;
+    const rate = this.#_unreliablePatchRate;
+    const dedicated = armed && rate !== null && rate !== 0;
+
+    // Default mode flushes from the patch itself rather than an independent
+    // timer of the same period, which would put the datagram ahead of a spawn's
+    // ADD about half the time.
+    const inline = armed && !dedicated;
+
+    this._flushUnreliable = inline
+      ? () => { this.broadcastUnreliablePatch(); }
+      : NOOP;
+
+    if (dedicated) {
+      this.#_unreliablePatchInterval = setInterval(() => this.broadcastUnreliablePatch(), rate);
+
+    } else if (inline && !this.#_patchRate) {
+      // patchRate 0/null means no patch tick to piggyback on.
+      logger.warn(
+        "@colyseus/core: state has @unreliable fields but patchRate is disabled —" +
+        " set `room.unreliablePatchRate` to flush them, or they will never update."
+      );
+    }
   }
 
   /**
@@ -2076,6 +2193,11 @@ export class Room<T extends RoomOptions = RoomOptions> {
     if (this.#_patchInterval) {
       clearInterval(this.#_patchInterval);
       this.#_patchInterval = undefined;
+    }
+
+    if (this.#_unreliablePatchInterval) {
+      clearInterval(this.#_unreliablePatchInterval);
+      this.#_unreliablePatchInterval = undefined;
     }
 
     if (this._simulationInterval) {

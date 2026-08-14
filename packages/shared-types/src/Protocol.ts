@@ -71,20 +71,49 @@ export const ProtocolModifier = {
    * alongside the first SDK release that decodes it, so the protocol bump
    * is implicit in the version.
    *
-   * Also set on the client→server input opcode
-   * ({@link Protocol.ROOM_INPUT_RELIABLE}) when the Room's lag-comp attachments
-   * require a per-client stamp. The handshake tells the client which timeline(s)
-   * to send via {@link InputFlags.RENDER_TIME} / {@link InputFlags.RECKON_TIME};
-   * the prefix shape follows from which flags are set. The timeline value is
-   * DELTA-CODED on the wire — each frame carries the signed change from the
-   * previous stamp via the self-describing number codec (≈ one fixed step per
-   * tick → ~1 byte vs a raw 4-byte u32; the first frame / post-reset ships the
-   * absolute as a one-off larger delta). The server reconstructs it against a
-   * per-client baseline both sides re-zero together on (re)connect:
+   * Also set on either client→server input opcode
+   * ({@link Protocol.ROOM_INPUT_RELIABLE} / {@link Protocol.ROOM_INPUT_UNRELIABLE})
+   * when the Room's lag-comp attachments require a per-client stamp. The
+   * handshake tells the client which timeline(s) to send via
+   * {@link InputFlags.RENDER_TIME} / {@link InputFlags.RECKON_TIME}; the prefix
+   * shape follows from which flags are set — and from the channel, because the
+   * two have different delivery guarantees.
+   *
+   * RELIABLE carries ONE stamp for its single input, DELTA-CODED: each frame
+   * ships the signed change from the previous stamp via the self-describing
+   * number codec (≈ one fixed step per tick → ~1 byte vs a raw 4-byte u32; the
+   * first frame / post-reset ships the absolute as a one-off larger delta). The
+   * server reconstructs it against a per-client baseline both sides re-zero
+   * together on (re)connect:
    *
    *   - RECKON_TIME only: `[varint Δreckon]`
    *   - RENDER_TIME only: `[varint Δrender]`
    *   - BOTH:             `[varint Δreckon][uint16 renderDelta]`
+   *
+   * UNRELIABLE carries a SELF-CONTAINED block, one stamp per ring slot, because
+   * the packet holds `k` inputs sampled at `k` different instants and a running
+   * baseline cannot survive loss or reordering:
+   *
+   *       [varint k][uint32 newest][varint Δ]×(k−1)
+   *       [uint16 rdNewest][varint Δrd]×(k−1)        ← BOTH mode only
+   *
+   * `newest` is absolute, and each Δ walks one slot older
+   * (`stamp[i] = stamp[i+1] − Δ`) — so a packet is readable on its own and an
+   * input recovered redundantly from a later packet still arrives with its own
+   * instant. Stamps pair positionally with the ring's oldest→newest slots.
+   *
+   * BOTH mode trails the `renderDelta` series in the same shape — one value per
+   * slot, not one per packet — so each input keeps the interp buffer plus
+   * one-way latency it was actually sampled with. Consecutive values differ by
+   * ~0–1 ms, which the number codec encodes in one byte, so per-slot exactness
+   * costs `k−1` bytes over a single shared value.
+   *
+   * The block is all-or-nothing: every slot is stamped, or the bit is not set.
+   * A client's `allowRewind` gates the RELIABLE opcode only — here the block
+   * ships whole, so excluding a slot would save nothing and would make its
+   * neighbour's delta swing the full absolute value. Slots sampled before the
+   * client's clock synced ship as `0`, the standard "unstamped, read live"
+   * sentinel.
    *
    * reckonTime (ms since room start) = the client's serverNow estimate at
    * input-sample time — what its forward-RECKONED entities display at, stamped
@@ -97,14 +126,41 @@ export const ProtocolModifier = {
    * See {@link HandshakeSection.INPUT_OPTIONS} / {@link InputFlags}.
    */
   TIMED: 0x80,
+
+  /**
+   * The frame rode the transport's UNRELIABLE channel (a WebTransport datagram)
+   * and may therefore be lost, duplicated, or reordered.
+   *
+   * Layout when set (applied to {@link Protocol.ROOM_STATE_PATCH}):
+   *
+   *     [code | UNRELIABLE][uint16 seq LE][...body]
+   *
+   * - `seq` is a room-wide counter incremented once per unreliable flush and
+   *   shared by every recipient of that flush. It wraps at 65536, so freshness
+   *   is a wrap-safe comparison — `(int16)(seq - lastApplied) > 0` — not `>`.
+   *   The client drops any frame that isn't newer than the last one it applied;
+   *   a reordered datagram would otherwise write a stale value that survives
+   *   until the field changes again.
+   *
+   * Carries only fields marked `@unreliable` in the state schema. Those are
+   * restricted to primitives, so every ADD/DELETE of a ref still travels the
+   * reliable channel: a dropped frame costs a stale field value and can never
+   * desync the ref graph.
+   *
+   * Never combined with {@link ProtocolModifier.TIMED}. The clock sample and the
+   * input ack must arrive in order to be meaningful, so they stay exclusive to
+   * the reliable patch — which already emits a per-tick heartbeat in rooms that
+   * called `defineInput()`.
+   */
+  UNRELIABLE: 0x40,
 } as const;
 export type ProtocolModifier = typeof ProtocolModifier[keyof typeof ProtocolModifier];
 
 /** Mask isolating the base protocol code (low 5 bits, values 0..31). */
 export const PROTOCOL_CODE_MASK = 0x1F;
 
-/** Mask isolating modifier bits (high 3 bits; only {@link ProtocolModifier.TIMED}
- *  is assigned today, the other two are reserved). */
+/** Mask isolating modifier bits (high 3 bits; {@link ProtocolModifier.TIMED} and
+ *  {@link ProtocolModifier.UNRELIABLE} are assigned, the third is reserved). */
 export const PROTOCOL_MODIFIER_MASK = 0xE0;
 
 /**

@@ -22,6 +22,20 @@ import { debugAndPrintError } from '../Debug.ts';
 const _inputReflectionCache = new WeakMap<Function, Uint8Array>();
 
 /**
+ * Rebuild one `k`-length series of the unreliable stamp block: `newest` is the
+ * absolute anchor, and each wire delta walks one slot older
+ * (`out[i] = out[i+1] − Δ`). Mirrors the SDK's `_writeSeriesDeltas`.
+ */
+function readSeriesDeltas(buffer: Buffer, it: Iterator, k: number, newest: number): number[] {
+  const out = new Array<number>(k);
+  out[k - 1] = newest;
+  for (let i = k - 2; i >= 0; i--) {
+    out[i] = out[i + 1] - decode.number(buffer, it);
+  }
+  return out;
+}
+
+/**
  * Runtime behind {@link InputAPI}. A class, not a per-`define()` object literal:
  * literal (and `defineProperty`) accessors carry their closure identity in the
  * hidden class, so every room instance would get a UNIQUE map — sending shared
@@ -272,11 +286,70 @@ export class RoomInput {
   }
 
   /** Decode a `ROOM_INPUT_UNRELIABLE` redundancy ring — each slot carries its
-   *  framework seq (base seq + position) for ring dedupe, no user seqField. */
-  decodeUnreliable(client: ClientPrivate, buffer: Buffer, _modifiers: number): void {
+   *  framework seq (base seq + position) for ring dedupe, no user seqField.
+   *
+   *  With the TIMED bit, a self-contained lag-comp stamp block precedes the ring:
+   *
+   *      [varint k][uint32 newest][varint Δ]×(k−1)
+   *      [uint16 rdNewest][varint Δrd]×(k−1)        ← BOTH mode only
+   *
+   *  One stamp per slot, because a packet carries k inputs sampled at k
+   *  different instants. The anchor is absolute and the deltas never leave the
+   *  packet, so — unlike the reliable channel's running baseline — no amount of
+   *  loss or reordering can desync it, and an input recovered redundantly from a
+   *  later packet still arrives with its own instant. Stamps are paired
+   *  positionally with `decodeAll`'s oldest→newest yields; a `k` that disagrees
+   *  with the decoded slot count means a malformed packet, so the stamps are
+   *  dropped rather than misapplied (inputs still land, read live). */
+  decodeUnreliable(client: ClientPrivate, buffer: Buffer, modifiers: number): void {
     if (!client._inputDecoder) { return; }
+
+    const it: Iterator = { offset: 1 };
+    let stamps: number[] | undefined;
+    let renderDeltas: number[] | undefined;
+
+    if (modifiers & ProtocolModifier.TIMED) {
+      this.#resolveWireModes();
+      try {
+        const k = decode.number(buffer, it);
+        stamps = readSeriesDeltas(buffer, it, k, decode.uint32(buffer, it));
+        // BOTH mode trails the renderDelta series in the same shape, so each
+        // slot keeps the latency term it was actually sampled with.
+        if (this.#stampReckon && this.#stampRender) {
+          renderDeltas = readSeriesDeltas(buffer, it, k, decode.uint16(buffer, it));
+        }
+      } catch (e: any) {
+        debugAndPrintError(e);
+        return;
+      }
+    }
+
+    let i = 0;
     try {
-      client._inputDecoder.decodeAll(buffer.subarray(1), (_inst, seq) => this.capture(client, 0, 0, seq));
+      const count = client._inputDecoder.decodeAll(buffer.subarray(it.offset), (_inst, seq) => {
+        // Positional pairing — `decodeAll` yields oldest→newest, the order the
+        // block was written in.
+        const slot = i++;
+        const stamp = stamps?.[slot] ?? 0;
+        let renderTime = 0, reckonTime = 0;
+        if (stamp > 0) {
+          if (this.#stampReckon && this.#stampRender) {
+            const rd = renderDeltas?.[slot] ?? 0;
+            reckonTime = stamp;
+            renderTime = stamp > rd ? stamp - rd : 0;
+          } else if (this.#stampReckon) {
+            reckonTime = stamp;
+          } else {
+            renderTime = stamp;
+          }
+        }
+        this.capture(client, renderTime, reckonTime, seq);
+      });
+      if (stamps !== undefined && count !== stamps.length) {
+        debugAndPrintError(new Error(
+          `@colyseus/core: unreliable input stamp block declared ${stamps.length} slots, decoded ${count}`
+        ));
+      }
     } catch (e: any) {
       debugAndPrintError(e);
       return;

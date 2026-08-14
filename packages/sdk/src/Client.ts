@@ -24,12 +24,23 @@ export interface EndpointSettings {
     port?: number,
     pathname?: string,
     searchParams?: string,
+    /** @see {@link ClientOptions.protocol} — `"h3"` is experimental. */
     protocol?: "ws" | "h3";
 }
 
 export interface ClientOptions {
     headers?: { [id: string]: string };
     urlBuilder?: (url: URL) => string;
+    /**
+     * Wire protocol: `"ws"` (WebSocket, the default) or `"h3"` (WebTransport).
+     *
+     * **`"h3"` is experimental.** It is the only protocol with a real
+     * unreliable channel, so it's what `room.input({ mode: "unreliable" })` and
+     * `@unreliable` state fields need to actually ride datagrams — on `"ws"`
+     * that traffic is correct but travels the reliable channel. It needs
+     * `@colyseus/h3-transport` server-side, and WebTransport browser support
+     * (absent in Safari at time of writing).
+     */
     protocol?: "ws" | "h3";
     fetchFn?: FetchFn;
 }
@@ -44,7 +55,7 @@ export interface RoomAvailable<Metadata = any> {
 }
 
 export interface LatencyOptions {
-    /** "ws" for WebSocket, "h3" for WebTransport (default: "ws") */
+    /** "ws" for WebSocket, "h3" for WebTransport (default: "ws"). @see {@link ClientOptions.protocol} */
     protocol?: "ws" | "h3";
     /** Number of pings to send (default: 1). Returns the average latency when > 1. */
     pingCount?: number;

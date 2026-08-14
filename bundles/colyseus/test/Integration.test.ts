@@ -939,7 +939,7 @@ describe("Integration", () => {
               await conn.leave();
             });
 
-            it("should accept mode: 'unreliable' and still honor `timeout`", async () => {
+            it("should accept mode: 'unreliable' — over WebSocket it falls back to the reliable channel", async () => {
               matchMaker.defineRoomType('req_unreliable', class _ extends Room {
                 onCreate() {
                   this.onMessage("echo", (_client, message) => message);
@@ -947,10 +947,24 @@ describe("Integration", () => {
               });
 
               const conn = await client.joinOrCreate('req_unreliable');
-              // WebSocket has no unreliable channel: the send is dropped, so the
-              // unreliable request must still settle — via its timeout.
+              // WebSocket has no unreliable channel, so the transport sends this
+              // reliably rather than dropping it — the request still resolves.
+              const response = await conn.request("echo", { n: 7 }, { mode: "unreliable", timeout: 500 });
+              assert.deepStrictEqual(response, { n: 7 });
+              await conn.leave();
+            });
+
+            it("should honor `timeout` on an unreliable request the server never answers", async () => {
+              matchMaker.defineRoomType('req_unreliable_timeout', class _ extends Room {
+                onCreate() {
+                  // Never settles — the request can only end via its timeout.
+                  this.onMessage("blackhole", () => new Promise(() => {}));
+                }
+              });
+
+              const conn = await client.joinOrCreate('req_unreliable_timeout');
               await assert.rejects(
-                conn.request("echo", { n: 7 }, { mode: "unreliable", timeout: 200 }),
+                conn.request("blackhole", { n: 7 }, { mode: "unreliable", timeout: 200 }),
                 (err: Error) => /timed out/.test(err.message),
               );
               await conn.leave();

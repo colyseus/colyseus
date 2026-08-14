@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Apply `@unreliable` state patches arriving over WebTransport datagrams. Each carries a sequence number; a reordered frame is dropped instead of applied, so a late packet can't write a stale value over a newer one.
+- Lag compensation now works with `room.input({ mode: "unreliable" })`. Unreliable inputs previously carried no `renderTime`/`reckonTime` stamp — the stamp was delta-coded against a running baseline that can't survive loss — so a room using `allowRewindState()` silently read those clients at live positions. Each packet now carries a self-contained stamp block, one per ring slot, so an input recovered redundantly from a later packet still arrives with the instant it was sampled at. `mode` is purely a delivery choice again. One constraint comes with it: `allowRewind` gates the reliable channel only — an unreliable packet stamps its whole redundancy ring or none of it, so per-input exclusion would cost bandwidth rather than save it. Setting it on an unreliable handle warns once.
+- Fix `mode: "unreliable"` traffic being discarded on WebSocket transports. `sendUnreliable()` warned and dropped, so every unreliable input and `request({ mode: "unreliable" })` was silently lost — the server never saw them and the client's pending set grew without bound. It now falls back to the reliable channel (what callers already assumed), warning once. Real datagram delivery still needs `@colyseus/h3-transport` (WebTransport), which is experimental.
+
 ## 0.18.1
 
 0.18 preview refresh — ships the client-side prediction library. Experimental surfaces may still change before 0.18 stable. **Compat:** rooms that use `defineInput()` changed wire format — upgrade `@colyseus/core` to 0.18.1 alongside. This release also brings in the 0.17.42 / 0.17.43 fixes (H3 frame reassembly, `getLatency()` hang — see their sections below), which the published 0.18.0 predates.

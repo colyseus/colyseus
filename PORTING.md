@@ -178,3 +178,115 @@ Two asymmetries to be aware of:
   port the predicted state is the full struct, so an unmirrored field silently
   holds a stale value — exactly the failure the diagnostic exists to catch, with
   no runtime symptom until it rubber-bands.
+
+## Unreliable state patches (portable — decoder-side)
+
+> Both unreliable sections below only engage on a transport with a datagram
+> channel. Today that is WebTransport alone (`@colyseus/h3-transport`, still
+> experimental); over any WebSocket transport this traffic travels the reliable
+> channel, so a port targeting WebSocket only can skip both and lose nothing.
+
+A field marked `@unreliable` server-side is never emitted into a reliable state
+patch. It ships on the transport's unreliable channel, so a port that speaks a
+datagram transport must recognize a second patch envelope:
+
+```
+[ROOM_STATE_PATCH | ProtocolModifier.UNRELIABLE (0x40)][uint16 seq LE][...schema bytes]
+```
+
+The body is an ordinary patch payload — the existing decoder handles it
+unchanged; there is no new opcode and nothing in `Reflection` marks the field.
+Two rules a port must reproduce:
+
+- **Drop stale frames.** Keep the seq of the newest frame applied; apply an
+  incoming frame only when `(int16)(seq − lastApplied) > 0`. The comparison is
+  wrap-safe at 65536 — a plain `>` breaks at the wrap and orders only half the
+  range. Reset the baseline to `0` on every full state sync (`ROOM_STATE`), which
+  is what re-baselines a rejoin.
+- **Never gate the reliable channel on it.** A patch without the `UNRELIABLE`
+  bit carries no seq and is always applied.
+
+On a **state patch**, `UNRELIABLE` and `TIMED` are never set together, so the two
+prefixes don't compose and can be read independently. (Client→server INPUT
+opcodes are a separate story — see the input stamp block below, where `TIMED`
+rides the unreliable opcode by design.)
+
+Why this is safe to decode out of order at all: `@unreliable` is rejected at
+schema-definition time for ref-type fields, so every ADD/DELETE of a ref still
+travels the reliable channel. A lost or reordered datagram costs a stale field
+value and can never desync the ref graph. A port needs no recovery path beyond
+the seq check.
+
+### Unknown refIds are expected on this channel
+
+A port's decoder **will** meet a `SWITCH_TO_STRUCTURE` naming a refId it has
+never seen, and must treat it as routine: skip that structure and continue, the
+way the JS decoder already does. It is not corruption and not worth reporting to
+the user. Two ways it arises, both measured:
+
+- **Spawn.** An entity's ADD rides the reliable channel; its `@unreliable`
+  fields ride datagrams. When the server flushes the unreliable channel between
+  reliable patches, the datagram legitimately precedes the ADD — `patchRate ÷
+  unreliablePatchRate` such frames per mid-session spawn (measured at 118 over
+  8s with 200ms/20ms and ~10 spawns/s). Flushing in step with the patch instead
+  measured 0.
+- **Despawn.** A datagram already in flight when the entity is removed. The
+  removal is authoritative — the entity must NOT be resurrected.
+
+Related asymmetry a port should not be surprised by: a full state sync carries
+`@unreliable` field values (they are part of `encodeAll`), but a mid-session ADD
+does not. An entity added while connected therefore arrives with those fields
+unset until the first datagram that carries them, which for a per-tick field is
+the next unreliable flush.
+
+Transports with no datagram channel receive nothing on this envelope — the
+server skips them rather than falling back — so a WebSocket-only port has
+nothing to implement here.
+
+## Lag-comp stamp on unreliable inputs (portable — encoder-side)
+
+A room that rewinds (`allowRewindState` + a rewind group) asks clients to stamp
+each input with the timeline instant it was sampled at. The handshake says which
+timeline via `InputFlags.RENDER_TIME` / `RECKON_TIME`; the wire shape then
+depends on the CHANNEL, because the two have different guarantees.
+
+`ROOM_INPUT_RELIABLE | TIMED` — one delta-coded stamp, against a running
+baseline both sides re-zero on (re)connect. Cheap (~1 byte), and safe only
+because delivery is ordered and lossless.
+
+`ROOM_INPUT_UNRELIABLE | TIMED` — a self-contained block ahead of the ring body:
+
+```
+[varint k][uint32 newest][varint Δ]×(k−1)
+[uint16 rdNewest][varint Δrd]×(k−1)        ← BOTH mode only
+```
+
+- `k` is the number of slots in this packet's ring — what
+  `InputDecoder.decodeAll` will yield, oldest→newest. Stamps pair positionally
+  with those yields.
+- `newest` is THIS send's instant, absolute. Each Δ walks one slot older:
+  `stamp[i] = stamp[i+1] − Δ`.
+- The `renderDelta` series is present only when BOTH timeline flags are set, and
+  is written in the same shape — one value per slot, reconstructed the same way
+  (`rd[i] = rd[i+1] − Δrd`). Consecutive values differ by ~0–1 ms, so each costs
+  one byte; per-slot exactness is `k−1` bytes over a single shared value.
+
+Two rules a port must reproduce:
+
+- **Never delta-code across packets on this channel.** The whole point of the
+  absolute anchor is that a lost or reordered packet can't desync anything, and
+  that an input recovered redundantly from a later packet still arrives carrying
+  the instant it was sampled at.
+- **Track `k` explicitly, don't derive it from the seq.** The framework seq is
+  monotonic across `reset()`, but `reset()` drops the encoder's ring — deriving
+  `k` from the seq would claim slots the packet doesn't carry. Count sends into
+  the ring instead, clamped to `historySize`, and zero it on reset.
+
+The block is all-or-nothing — every slot stamped, or no block at all. A port's
+`allowRewind` equivalent gates the RELIABLE opcode only: the unreliable block
+ships whole, so excluding one slot saves nothing and makes its neighbour's delta
+swing the full absolute value. Slots sampled before the client's clock synced
+ship as `0`, the same "unstamped, read live" sentinel used everywhere else.
+
+A packet with no `TIMED` bit is read live in full, so a port can ship the input
+path before the stamp block.

@@ -8,6 +8,7 @@ import { matchMaker, Room, Server, Transport, Protocol, type Presence, type Matc
 import { DRIVERS, PRESENCE_IMPLEMENTATIONS, timeout } from "../utils/index.ts";
 
 import { WebSocketTransport } from "@colyseus/ws-transport";
+import { unreliableRing, unreliableRingPacket } from "./ring.ts";
 
 const TEST_PORT = 8571;
 const TEST_ENDPOINT = `ws://localhost:${TEST_PORT}`;
@@ -33,51 +34,6 @@ const TickState = schema({
 });
 type TickState = SchemaType<typeof TickState>;
 
-/**
- * Build a ROOM_INPUT_UNRELIABLE packet from `mutators`. The final encoder
- * output already contains the framed ring of all snapshots staged so far.
- */
-function unreliableRingPacket<I extends object>(
-  Ctor: new () => I,
-  mutators: Array<(inst: I) => void>,
-): Uint8Array {
-  const inst = new Ctor();
-  const encoder = new InputEncoder(inst as any, { mode: "unreliable", historySize: mutators.length });
-  let last: Uint8Array = new Uint8Array(0);
-  for (const m of mutators) { m(inst); last = encoder.encode(); }
-  const framed = new Uint8Array(1 + last.length);
-  framed[0] = Protocol.ROOM_INPUT_UNRELIABLE;
-  framed.set(last, 1);
-  return framed;
-}
-
-/**
- * Successive ROOM_INPUT_UNRELIABLE packets from a SINGLE encoder, so the
- * framework wire seq (which drives ring dedupe — NOT the user `seqField`) stays
- * continuous across packets, exactly as a real client's redundancy ring slides.
- * Each returned `tick(mutator)` encodes one tick; the bytes carry the last
- * `historySize` slots (overlapping consecutive packets).
- */
-function unreliableRing<I extends object>(Ctor: new () => I, historySize: number) {
-  const inst = new Ctor();
-  const encoder = new InputEncoder(inst as any, { mode: "unreliable", historySize });
-  return (mutator: (inst: I) => void): Uint8Array => {
-    mutator(inst);
-    const last = encoder.encode();
-    const framed = new Uint8Array(1 + last.length);
-    framed[0] = Protocol.ROOM_INPUT_UNRELIABLE;
-    framed.set(last, 1);
-    return framed;
-  };
-}
-
-/**
- * Build a ROOM_INPUT_RELIABLE packet carrying a KNOWN render-time stamp for a
- * RENDER-ONLY room (a `mode:"snapshot"` rewind target): the TIMED modifier + a
- * `[uint32 renderTime LE]` prefix the SDK normally fills from the synced clock.
- * Render-only ships renderTime directly (no u16 delta), so the server reads it
- * back verbatim — deterministic, no clock-sync timing.
- */
 describe("Input (InputEncoder / InputDecoder integration)", () => {
   let driver: MatchMakerDriver;
   let server: Server;

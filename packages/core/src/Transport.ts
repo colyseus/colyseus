@@ -137,6 +137,16 @@ export interface Client<T extends { userData?: any, auth?: any, messages?: Recor
   enqueueRaw(data: Uint8Array | Buffer, options?: ISendOptions): void;
 
   /**
+   * Send raw bytes over the transport's UNRELIABLE channel — no delivery,
+   * ordering, or duplication guarantee. Used for `@unreliable` state patches.
+   *
+   * Absent on transports with no datagram channel (every WebSocket transport).
+   * Its presence IS the capability check — callers feature-detect rather than
+   * reading a separate flag, and skip clients that can't receive.
+   */
+  rawUnreliable?(data: Uint8Array | Buffer, options?: ISendOptions, cb?: (err?: Error) => void): void;
+
+  /**
    * Send a type of message to the client. Messages are encoded with MsgPack and can hold any
    * JSON-serializable data structure.
    *

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- `allowRewindState()` now lag-compensates clients sending `input({ mode: "unreliable" })`. `decodeUnreliable()` previously ignored the TIMED modifier and captured every input with a zero stamp, so those clients were always read live. It now parses the per-slot stamp block the SDK sends and pairs it with the ring's slots; a packet without the modifier still reads live, so older clients are unaffected.
+
+- Schema fields marked `@unreliable` now sync over the transport's unreliable channel (a WebTransport datagram) instead of the state patch, so a dropped frame costs one stale value instead of stalling the ordered stream behind a retransmit. They flush with each `broadcastPatch()` by default; set `room.unreliablePatchRate` to give them their own cadence — 60Hz movement over a 20Hz `patchRate`. Needs a transport with a datagram channel — today only `@colyseus/h3-transport` (WebTransport), which is experimental; on WebSocket transports those fields keep their join-time value and the room warns once.
+
+  A faster `unreliablePatchRate` has a known cost: entity ADDs ride the reliable channel, so datagrams sent between patches can name a refId the client hasn't received yet. The client skips those frames — state can't desync, since `@unreliable` is primitives-only — but each logs `"refId" not found` and that entity's first value arrives one mutation later. Leaving `unreliablePatchRate` unset avoids it entirely.
+
 ## 0.18.4
 
 Brings in the 0.17.48 and 0.17.50 fixes.

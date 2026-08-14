@@ -20,7 +20,7 @@ interface MockConn {
     unreliable: Uint8Array[];
 }
 
-function mockHost(opts: { clockNow?: () => number; clockRtt?: number; clockSynced?: boolean } = {}): { host: InputHandleHost; conn: MockConn } {
+function mockHost(opts: { clockNow?: () => number; clockRtt?: number | (() => number); clockSynced?: boolean } = {}): { host: InputHandleHost; conn: MockConn } {
     const conn: MockConn = { isOpen: true, reliable: [], unreliable: [] };
     const host: InputHandleHost = {
         connection: {
@@ -32,7 +32,7 @@ function mockHost(opts: { clockNow?: () => number; clockRtt?: number; clockSynce
         } as any,
         clock: opts.clockNow ? {
             serverNow: opts.clockNow,
-            smoothedRtt: () => opts.clockRtt ?? 0,
+            smoothedRtt: () => (typeof opts.clockRtt === 'function' ? opts.clockRtt() : opts.clockRtt) ?? 0,
             // >0 ⇒ "clock synced" (stamp computed); 0 ⇒ warmup (stamp 0). Synced by default.
             lastServerTime: () => (opts.clockSynced === false ? 0 : 1),
         } : undefined,
@@ -52,7 +52,7 @@ function makeHandle(
         subSteps?: number;
         allowRewind?: (data: MoveInput) => boolean;
         clockNow?: () => number;
-        clockRtt?: number;
+        clockRtt?: number | (() => number);
         clockSynced?: boolean;
     } = {},
 ) {
@@ -502,19 +502,165 @@ describe('InputHandle', () => {
             assert.equal(handle.pendingCount, 0);
         });
 
-        test('stamp flags are ignored on unreliable sends', () => {
+        test('stamps every ring slot in a self-contained block', () => {
             const { handle, conn, instance } = makeHandle('unreliable', {
                 historySize: 3,
-                stampRender: true,
                 stampReckon: true,
                 renderDelay: 0,
                 clockNow: () => 1000,
             });
-            instance.x = 1;
-            handle.send();
 
-            // Plain unreliable opcode, no TIMED bit, no prefix.
-            assert.equal(conn.unreliable[0][0], Protocol.ROOM_INPUT_UNRELIABLE);
+            instance.x = 1; handle.send();
+            instance.x = 2; handle.send();
+            instance.x = 3; handle.send();
+
+            const packet = conn.unreliable[2];
+            assert.equal(packet[0], Protocol.ROOM_INPUT_UNRELIABLE | ProtocolModifier.TIMED,
+                'TIMED rides the unreliable opcode too');
+
+            // [varint k][uint32 newest][varint Δ]×(k−1) — one stamp per slot, so
+            // a packet is readable without any cross-packet baseline.
+            const it = { offset: 1 };
+            const k = decode.number(packet as any, it);
+            assert.equal(k, 3, 'the block covers every slot the ring carries');
+
+            const stamps: number[] = new Array(k);
+            stamps[k - 1] = decode.uint32(packet as any, it);
+            for (let i = k - 2; i >= 0; i--) {
+                stamps[i] = stamps[i + 1] - decode.number(packet as any, it);
+            }
+            // Frozen clock ⇒ every slot stamps the same instant; the point is
+            // that all three are present and reconstruct exactly.
+            assert.deepEqual(stamps, [1000, 1000, 1000]);
+        });
+
+        test('BOTH mode: renderDelta is per-slot, not the newest value smeared across the ring', () => {
+            let rtt = 20;
+            const { handle, conn, instance } = makeHandle('unreliable', {
+                historySize: 3,
+                stampReckon: true,
+                stampRender: true,
+                renderDelay: 0,
+                clockNow: () => 1000,
+                clockRtt: () => rtt,
+            });
+
+            // renderDelta = renderDelay + smoothedRtt/2 → 10, 20, 30.
+            instance.x = 1; handle.send();
+            rtt = 40; instance.x = 2; handle.send();
+            rtt = 60; instance.x = 3; handle.send();
+
+            const packet = conn.unreliable[2];
+            const it = { offset: 1 };
+            const k = decode.number(packet as any, it);
+            assert.equal(k, 3);
+
+            // Skip the timeline series (anchor + k−1 deltas).
+            decode.uint32(packet as any, it);
+            for (let i = 0; i < k - 1; i++) { decode.number(packet as any, it); }
+
+            const rds: number[] = new Array(k);
+            rds[k - 1] = decode.uint16(packet as any, it);
+            for (let i = k - 2; i >= 0; i--) {
+                rds[i] = rds[i + 1] - decode.number(packet as any, it);
+            }
+            assert.deepEqual(rds, [10, 20, 30],
+                'each slot keeps the latency term it was sampled with');
+        });
+
+        test('BOTH mode: a steady renderDelta costs one byte per redundant slot', () => {
+            const mk = (both: boolean) => {
+                const { handle, conn, instance } = makeHandle('unreliable', {
+                    historySize: 4,
+                    stampReckon: true,
+                    stampRender: both,
+                    renderDelay: 0,
+                    clockNow: () => 1000,
+                    clockRtt: 40,
+                });
+                for (let i = 1; i <= 4; i++) { instance.x = i; handle.send(); }
+                return conn.unreliable[3].length;
+            };
+            // Same body either way; the delta is the renderDelta series: a u16
+            // anchor plus 3 one-byte deltas (all zero here) = 5 bytes.
+            assert.equal(mk(true) - mk(false), 5);
+        });
+
+        test('allowRewind is ignored, and says so once', () => {
+            const warnings: string[] = [];
+            const realWarn = console.warn;
+            console.warn = (...a: any[]) => { warnings.push(String(a[0])); };
+            try {
+                // Reliable is where the option means something — stay quiet there.
+                makeHandle('reliable', { stampReckon: true, allowRewind: () => true });
+                assert.equal(warnings.length, 0, 'no warning on the channel that honours it');
+
+                (InputHandleImpl as any)._warnedAllowRewindIgnored = false;
+                makeHandle('unreliable', { historySize: 3, stampReckon: true, allowRewind: () => true });
+                makeHandle('unreliable', { historySize: 3, stampReckon: true, allowRewind: () => true });
+
+                assert.equal(warnings.length, 1, 'warns once per process, not per handle');
+                assert.match(warnings[0], /allowRewind` is ignored/);
+            } finally {
+                console.warn = realWarn;
+            }
+        });
+
+        test('allowRewind does not apply — the ring is stamped all-or-nothing', () => {
+            let asked = 0;
+            const { handle, conn, instance } = makeHandle('unreliable', {
+                historySize: 3,
+                stampReckon: true,
+                clockNow: () => 1000,
+                allowRewind: () => { asked++; return false; },
+            });
+
+            instance.x = 1; handle.send();
+            instance.x = 2; handle.send();
+
+            assert.equal(asked, 0, 'the predicate is not even evaluated on this channel');
+
+            const packet = conn.unreliable[1];
+            assert.equal(packet[0], Protocol.ROOM_INPUT_UNRELIABLE | ProtocolModifier.TIMED);
+
+            const it = { offset: 1 };
+            const k = decode.number(packet as any, it);
+            const stamps: number[] = new Array(k);
+            stamps[k - 1] = decode.uint32(packet as any, it);
+            for (let i = k - 2; i >= 0; i--) {
+                stamps[i] = stamps[i + 1] - decode.number(packet as any, it);
+            }
+            assert.deepEqual(stamps, [1000, 1000],
+                'every slot carries a real stamp — none zeroed out');
+        });
+
+        test('the block shrinks to the slots the ring actually holds', () => {
+            const { handle, conn, instance } = makeHandle('unreliable', {
+                historySize: 4,
+                stampReckon: true,
+                clockNow: () => 500,
+            });
+
+            instance.x = 1; handle.send();
+            const it = { offset: 1 };
+            assert.equal(decode.number(conn.unreliable[0] as any, it), 1,
+                'first send carries one slot, not historySize');
+        });
+
+        test('reset() re-bases the block, since the encoder drops its ring but keeps the seq', () => {
+            const { handle, conn, instance } = makeHandle('unreliable', {
+                historySize: 4,
+                stampReckon: true,
+                clockNow: () => 500,
+            });
+
+            for (let i = 1; i <= 4; i++) { instance.x = i; handle.send(); }
+            handle.reset();
+            instance.x = 9; handle.send();
+
+            // Deriving k from the (monotonic) seq would claim 4 slots here.
+            const it = { offset: 1 };
+            assert.equal(decode.number(conn.unreliable[conn.unreliable.length - 1] as any, it), 1);
         });
     });
 });

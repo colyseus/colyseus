@@ -1,5 +1,16 @@
 # Changelog
 
+> **Status: experimental.** WebTransport is the only Colyseus transport with a
+> real unreliable channel, and it is what `room.input({ mode: "unreliable" })`
+> and `@unreliable` state fields need to actually ride datagrams — on any
+> WebSocket transport that traffic is correct but travels the reliable channel.
+> The API surface and wire format may change before 0.18 stable. Browser support
+> is not universal (absent in Safari at time of writing). Feedback welcome.
+
+## Unreleased
+
+- Server→client unreliable delivery: `H3Client.rawUnreliable()` sends over datagrams, and `@colyseus/core` uses it for `@unreliable` state fields. Replaces `sendDatagram()`, which nothing called. A frame over the QUIC datagram limit is dropped with a warning rather than split — a frame spread across two datagrams would corrupt the receiver's framing the first time one is lost. `H3_DATAGRAM_LOSS_OUT=<0..1>` injects outgoing loss (the existing `H3_DATAGRAM_LOSS` stays incoming-only). Requires `@colyseus/core` with the unreliable state channel.
+
 ## 0.18.1
 
 WebTransport delivery works again end-to-end (browser and Node clients) — the transport had drifted and needed several fixes:

@@ -7,6 +7,14 @@ import { now } from '../core/utils.ts';
 import { debugOverlayActive } from '../debug-channel.ts';
 import { metadataOf } from '../core/schema-reflect.ts';
 
+/** Widest a single self-describing number can encode to. */
+const MAX_VARINT = 9;
+/** Reliable stamp prefix: one delta-coded timeline value (+2 for BOTH's u16). */
+const RELIABLE_STAMP_MAX = MAX_VARINT;
+/** Unreliable stamp block: `[k][u32 anchor][Δ]×(k−1)`, twice over for BOTH. */
+const ringStampMax = (historySize: number, both: boolean) =>
+  (both ? 2 : 1) * (MAX_VARINT + 4 + MAX_VARINT * historySize);
+
 /**
  * Minimal structural type the input handle needs from its host (Room). Lets
  * us decouple from the full `Room` class so this module stays import-cycle
@@ -34,6 +42,22 @@ export interface InputHandleHost {
  *
  * Recommended for rollback netcode: `{ mode: "unreliable", historySize: 4 }`
  * — small redundant deltas, idempotent across drops via absolute-value wire ops.
+ * Each packet re-sends the last `historySize` inputs, so a dropped one is
+ * recovered from its successors and the server dedupes by wire seq; only a run
+ * of losses longer than `historySize` actually loses input.
+ *
+ * Lag compensation works on either channel: a room that rewinds
+ * (`allowRewindState` + a rewind group) gets a per-input `renderTime`/
+ * `reckonTime` stamp here too, and an input recovered redundantly from a later
+ * packet still carries the instant it was sampled at. `mode` is purely a
+ * delivery choice.
+ *
+ * **`mode:"unreliable"` is only actually unreliable on `@colyseus/h3-transport`
+ * (WebTransport), which is experimental.** Every WebSocket transport lacks a
+ * datagram channel and sends this traffic on the reliable one instead —
+ * correct, and every input still arrives exactly once, but the redundancy ring
+ * is then pure overhead (`historySize` duplicate slots the ordered channel
+ * didn't need). On WebSocket, prefer `mode:"reliable"`.
  *
  * `I` is intentionally unconstrained: pinning it to `Schema` from this
  * SDK's copy of `@colyseus/schema` would reject user-side schemas coming
@@ -91,6 +115,12 @@ export interface InputOptions<I = any> extends InputEncoderOptions {
    * gaps — no server change. Per-input ONLY: it gates the timestamp, not rewind
    * itself (that's the room's `allowRewindState`), so `() => false` just keeps the
    * server live for this client — it never disables rewind.
+   *
+   * **`mode:"reliable"` only.** An unreliable packet carries a whole ring of
+   * inputs under one stamp block, which is all-or-nothing: mixing stamped and
+   * unstamped slots would blow up the intra-packet deltas for no saving, since
+   * the block ships either way. The predicate is not evaluated on that channel,
+   * and setting it there warns once.
    *
    * ⚠ ONLY safe when the timestamp is consumed SERVER-side (a `mode:"snapshot"`
    * renderTime rewind for hit registration). If the CLIENT reads the stamp for its
@@ -309,7 +339,18 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
   // delta after a (re)connect carries the absolute, re-syncing with the server's
   // freshly-allocated baseline.
   private _lastStamp = 0;
+  // Per-seq timeline stamps for the UNRELIABLE ring, indexed `seq % historySize`
+  // — exactly the slots a packet carries, so the index can't collide. Lazily
+  // allocated, and only when the room asked for stamps. See _writeRingStamps.
+  private _stampRing: Float64Array | null = null;
+  // Parallel to _stampRing, BOTH mode only: the renderDelta each slot was
+  // sampled with, so the block can carry the exact value per slot.
+  private _renderDeltaRing: Uint16Array | null = null;
+  // Slots the encoder's ring currently carries (≤ historySize). Tracked, not
+  // derived from `seq`: `reset()` drops the ring but keeps the seq monotonic.
+  private _ringSlots = 0;
   private static _warnedBufferOverflow = false;
+  private static _warnedAllowRewindIgnored = false;
   // Dev diagnostic (see _warnUnknownFields): unknown data keys already warned.
   private _warnedUnknownKeys: Set<string> | null = null;
 
@@ -360,6 +401,19 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
     this._stampRender = opts?.stampRender ?? false;
     this._stampReckon = opts?.stampReckon ?? false;
     this._allowRewind = opts?.allowRewind;
+    // Inert on this channel, and silently so — the predicate is never even
+    // called (see `send`). Say it once rather than let someone watch bandwidth
+    // not move and go looking.
+    if (this._allowRewind !== undefined && encoder.mode === "unreliable"
+      && !InputHandleImpl._warnedAllowRewindIgnored) {
+      InputHandleImpl._warnedAllowRewindIgnored = true;
+      console.warn(
+        `@colyseus/sdk: \`allowRewind\` is ignored on \`mode:"unreliable"\` — a packet ` +
+        `stamps its whole redundancy ring or none of it, so excluding one input would ` +
+        `cost bandwidth rather than save it. Use \`mode:"reliable"\` to gate the ` +
+        `lag-comp stamp per input.`,
+      );
+    }
     this._renderDelay = opts?.renderDelay ?? 0;
     this._renderDelayExplicit = opts?.renderDelay !== undefined;
     this._tickRate = opts?.tickRate;
@@ -429,6 +483,10 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
     this._sentCount = this._lastProcessed = this._encoder.seq;
     this._framed = null;
     this._lastStamp = 0; // next stamped send ships an absolute delta — re-syncs the server's re-zeroed baseline
+    // The encoder dropped its ring but keeps `_seq`, so the slot count has to be
+    // tracked rather than derived from the seq — else the next packet would
+    // claim slots the ring no longer carries.
+    this._ringSlots = 0;
     this._sendTimes.fill(0); // stale acks for pre-reset seqs must read as "unknown" (-1), not a bogus RTT
     // _inputBuffer is reused as-is: at() gates on _sentCount/_lastProcessed, so it can't surface stale snapshots.
     this._epoch++; // observing controllers poll this and follow the reset
@@ -483,52 +541,40 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
     const bytes = this._encoder.encode();
     const reliable = this._encoder.mode === "reliable";
 
-    // Lag-comp stamp prefix (reliable only): OR the TIMED modifier onto the
-    // opcode and prepend the delta-coded timeline stamp (wire shape + baseline
-    // story: see _stampRender/_lastStamp). `allowRewind` (when present) skips the
-    // stamp on inputs the server won't rewind — the baseline only advances on
-    // stamped sends, so it stays locked across the gaps.
-    const wantStamp = (this._stampReckon || this._stampRender) && reliable
+    // Lag-comp stamp prefix. The two channels carry different shapes — one
+    // delta-coded stamp vs a self-contained per-slot block; see
+    // ProtocolModifier.TIMED and _writeRingStamps.
+    const stampsEnabled = this._stampReckon || this._stampRender;
+    // Evaluate `allowRewind` at most once: it's app code over live input data.
+    // `allowRewind` gates the RELIABLE channel only — the unreliable ring is
+    // all-or-nothing (see _writeRingStamps), so evaluating the app predicate
+    // there would be misleading as well as wasted.
+    const wantStamp = stampsEnabled && reliable
       && (this._allowRewind === undefined || this._allowRewind(this.data));
+    const wantRingStamp = stampsEnabled && !reliable;
     const both = this._stampReckon && this._stampRender;
-    // Upper bound: opcode + stamp (number codec ≤9B for Δ, +2B u16 renderDelta) + body.
-    const stampMax = wantStamp ? (both ? 9 + 2 : 9) : 0;
+    const stampMax = wantStamp
+      ? RELIABLE_STAMP_MAX + (both ? 2 : 0)
+      : (wantRingStamp ? ringStampMax(this._encoder.historySize, both) : 0);
     const totalMax = 1 + stampMax + bytes.length;
     if (totalMax > this._scratch.byteLength) {
       this._scratch = new Uint8Array(Math.max(totalMax, this._scratch.byteLength * 2));
       this._framed = null;   // cached view points into the old buffer
     }
     this._scratch[0] = (reliable ? Protocol.ROOM_INPUT_RELIABLE : Protocol.ROOM_INPUT_UNRELIABLE)
-      | (wantStamp ? ProtocolModifier.TIMED : 0);
+      | ((wantStamp || wantRingStamp) ? ProtocolModifier.TIMED : 0);
 
     const it = { offset: 1 };
-    if (wantStamp) {
-      // The reckon instant for THIS send: the client's serverNow() estimate
-      // (rounded u32 ms), 0 until the clock syncs. Wire-stamped below AND
-      // recorded per-seq (read-back story: see _pendingReckon/_reckonTimes).
-      const clock = this._host.clock;
-      const synced = (clock?.lastServerTime?.() ?? 0) > 0;
-      const rk = synced ? Math.max(0, Math.round(clock!.serverNow())) >>> 0 : 0;
-      this._pendingReckon = rk;
-      // reckonTime stamps the display ESTIMATE directly: the server reads its
-      // history at this exact index, so clock/RTT estimation error cancels
-      // (client displayed f(est), server reads f(est)).
-      // renderTime = reckonTime − renderDelta — the SNAPSHOT timeline (what
-      // lerped remotes were on screen): renderDelta = the interp buffer
-      // (`renderDelay`, app-set) + the one-way downstream latency (≈ smoothedRtt/2,
-      // ours). BOTH mode ships reckonTime + a u16 renderDelta (the gap is bounded
-      // ≪ 65s) and the server derives renderTime; single-timeline modes ship the
-      // one they use. All 0 until the clock syncs → the server falls back to
-      // live positions instead of a bogus stamp.
-      const renderDelta = synced
-        ? Math.min(0xffff, Math.max(0, Math.round(this._resolveRenderDelay() + (clock!.smoothedRtt?.() ?? 0) / 2)))
-        : 0;
-      // Emit the mode's single u32 timeline, delta-coded against the baseline;
-      // BOTH then trails the absolute u16 renderDelta.
-      const stamp = this._stampReckon ? rk : (rk > renderDelta ? rk - renderDelta : 0);
+    if (wantRingStamp) {
+      this._writeRingStamps(it);
+
+    } else if (wantStamp) {
+      // Delta-coded against the running baseline; BOTH trails the absolute u16.
+      const { stamp, renderDelta } = this._sampleStamp();
       encode.number(this._scratch, stamp - this._lastStamp, it);
       this._lastStamp = stamp;
       if (both) { encode.uint16(this._scratch, renderDelta, it); }
+
     } else {
       this._pendingReckon = 0; // not stamping → no reckon instant to record
     }
@@ -557,6 +603,101 @@ export class InputHandleImpl<I = any> implements InputHandle<I> {
     // Local, not _sentCount: a re-entrant send() from an onSend listener would
     // have advanced the field before this returns.
     return seq;
+  }
+
+  /**
+   * @internal Write the unreliable channel's self-contained stamp block, then
+   * leave `it` at the start of the ring body.
+   *
+   *     [varint k][uint32 newest][varint Δ]×(k−1)
+   *     [uint16 rdNewest][varint Δrd]×(k−1)        ← BOTH mode only
+   *
+   * `k` is the slot count of the ring this packet carries (oldest→newest, the
+   * order `InputDecoder.decodeAll` yields). `newest` is THIS send's timeline
+   * instant, absolute — so a packet is readable on its own and no amount of
+   * loss or reordering can desync a baseline. Each Δ walks one slot older
+   * (`stamp[i] = stamp[i+1] − Δ`), which is ≈ one fixed step and so ~1 byte
+   * through the self-describing number codec.
+   *
+   * BOTH mode appends the `renderDelta` series in the same shape, so every slot
+   * carries the interp buffer + one-way latency it was actually sampled with,
+   * rather than the newest slot's value smeared across the ring. Consecutive
+   * values differ by ~0–1 ms (`renderDelay` is app-set and constant,
+   * `smoothedRtt` is smoothed), which lands in the codec's 1-byte fixnum range —
+   * so exactness costs one byte per redundant slot, and a violent RTT swing
+   * degrades to at most 3 (the u16 range), never more.
+   *
+   * All-or-nothing: every slot in the block is stamped, or the room asked for
+   * no stamps and there is no block. `allowRewind` does not apply here — the
+   * block ships whole, so excluding one slot would save nothing while making
+   * its neighbour's delta swing the full absolute value. The one transient
+   * exception is the pre-clock-sync window, where the slots genuinely have no
+   * known instant and ship as 0 for the server to read live.
+   */
+  private _writeRingStamps(it: { offset: number }): void {
+    const { stamp, renderDelta } = this._sampleStamp();
+
+    const historySize = this._encoder.historySize;
+    const seq = this._encoder.seq;   // this send's seq — already advanced by encode()
+    // The packet carries the last `historySize` sends, or fewer while the ring
+    // is still filling (from construction or a reset()).
+    const k = this._ringSlots = Math.min(this._ringSlots + 1, historySize);
+
+    const ring = (this._stampRing ??= new Float64Array(historySize));
+    ring[seq % historySize] = stamp;
+    encode.number(this._scratch, k, it);
+    encode.uint32(this._scratch, stamp, it);
+    this._writeSeriesDeltas(ring, seq, k, it);
+
+    if (this._stampReckon && this._stampRender) {
+      // Uint16Array: renderDelta is already clamped to the u16 range, so the
+      // ring stores it exactly at half the width of the timeline ring.
+      const rdRing = (this._renderDeltaRing ??= new Uint16Array(historySize));
+      rdRing[seq % historySize] = renderDelta;
+      encode.uint16(this._scratch, renderDelta, it);
+      this._writeSeriesDeltas(rdRing, seq, k, it);
+    }
+  }
+
+  /** Walk `k` ring slots newest→oldest, emitting each step as a signed delta. */
+  private _writeSeriesDeltas(
+    ring: Float64Array | Uint16Array,
+    seq: number,
+    k: number,
+    it: { offset: number },
+  ): void {
+    const size = ring.length;
+    for (let i = 1; i < k; i++) {
+      encode.number(this._scratch, ring[(seq - i + 1) % size] - ring[(seq - i) % size], it);
+    }
+  }
+
+  /**
+   * @internal Sample this send's lag-comp instants from the clock, and record
+   * the reckon one for {@link reckonTimeAt}.
+   *
+   * `renderDelta` is the interp buffer (`renderDelay`, app-set) plus the one-way
+   * downstream latency (≈ `smoothedRtt/2`, ours). `stamp` is the timeline this
+   * room actually rewinds on: reckon rooms ship the estimate directly — the
+   * server reads its history at that index, so clock/RTT estimation error
+   * cancels (client displayed f(est), server reads f(est)) — while snapshot
+   * rooms ship `reckonTime − renderDelta`, the instant lerped remotes were on
+   * screen. BOTH ships reckon plus the gap and lets the server subtract.
+   *
+   * Everything is 0 before the clock syncs, or when `allowRewind` excluded this
+   * input: the server then falls back to live positions rather than trusting a
+   * bogus instant.
+   */
+  private _sampleStamp(): { stamp: number; renderDelta: number } {
+    const clock = this._host.clock;
+    const synced = (clock?.lastServerTime?.() ?? 0) > 0;
+    const rk = synced ? Math.max(0, Math.round(clock!.serverNow())) >>> 0 : 0;
+    const renderDelta = synced
+      ? Math.min(0xffff, Math.max(0, Math.round(this._resolveRenderDelay() + (clock!.smoothedRtt?.() ?? 0) / 2)))
+      : 0;
+    this._pendingReckon = rk;
+    // rk is 0 while unsynced, so this floors to 0 on its own.
+    return { stamp: this._stampReckon ? rk : (rk > renderDelta ? rk - renderDelta : 0), renderDelta };
   }
 
   /**

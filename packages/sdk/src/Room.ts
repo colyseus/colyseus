@@ -120,6 +120,15 @@ export class Room<
      */
     #input?: RoomInput;
 
+    /**
+     * Seq of the newest {@link ProtocolModifier.UNRELIABLE} patch applied, so a
+     * reordered datagram can be dropped rather than write a stale value. Wraps
+     * at 65536; `0` is the post-`ROOM_STATE` baseline. Stays `0` forever on
+     * rooms whose state declares no `@unreliable` field.
+     * @internal
+     */
+    #lastUnreliableSeq = 0;
+
     constructor(name: string, rootSchema?: SchemaConstructor<State>) {
         this.name = name;
 
@@ -642,10 +651,22 @@ export class Room<
             this.leave();
 
         } else if (code === Protocol.ROOM_STATE) {
+            // Full state re-baselines the unreliable timeline (join / resync).
+            this.#lastUnreliableSeq = 0;
             this.serializer.setState(buffer, it);
             this.onStateChange.invoke(this.serializer.getState());
 
         } else if (code === Protocol.ROOM_STATE_PATCH) {
+            // The unreliable channel can reorder. `@unreliable` fields carry
+            // absolute values, so a late frame would write a stale one that
+            // survives until the field changes again — drop it instead.
+            if (rawByte & ProtocolModifier.UNRELIABLE) {
+                const seq = decode.uint16(buffer as Buffer, it);
+                // wrap-safe at 65536: a positive int16 delta means newer
+                if ((((seq - this.#lastUnreliableSeq) << 16) >> 16) <= 0) { return; }
+                this.#lastUnreliableSeq = seq;
+            }
+
             this.serializer.patch(buffer, it);
             this.onStateChange.invoke(this.serializer.getState());
 
