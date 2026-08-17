@@ -8,7 +8,8 @@ import { StateView } from '@colyseus/schema';
 import type { InputDecoder } from '@colyseus/schema/input';
 
 import { EventEmitter } from 'events';
-import { spliceOne } from './utils/Utils.ts';
+import { debugAndPrintError } from './Debug.ts';
+import { getBearerToken, spliceOne } from './utils/Utils.ts';
 import { ServerError } from './errors/ServerError.ts';
 
 import type { Room } from './Room.ts';
@@ -46,12 +47,129 @@ export abstract class Transport {
     public bindRouter?(router: Router): void;
 }
 
+/**
+ * Intercepts an incoming WebSocket upgrade request, before the handshake.
+ *
+ * Return a `Response` to answer the request instead of upgrading it. Return
+ * nothing to upgrade as usual. The handler may be async, and the handshake waits
+ * for it to resolve.
+ *
+ * `context` is the same shape `onAuth()` receives, read-only here: mutating it
+ * does not carry over to `onAuth()`.
+ *
+ * Not supported by `H3Transport`: WebTransport has no upgrade handshake.
+ *
+ * @example
+ * ```typescript
+ * new uWebSocketsTransport({
+ *   beforeUpgrade: async (request, context) => {
+ *     if (await isBanned(context.ip)) {
+ *       return new Response(null, { status: 403 });
+ *     }
+ *   }
+ * });
+ * ```
+ */
+export type BeforeUpgradeHandler = (
+  request: Request,
+  context: Readonly<AuthContext>,
+) => Response | void | Promise<Response | void>;
+
+/**
+ * Invokes a `beforeUpgrade` handler, resolving with the `Response` to send
+ * instead of upgrading, or `undefined` to proceed with the upgrade.
+ *
+ * Every transport goes through here, so a handler written against one keeps
+ * working on the others. Never rejects: uWebSockets.js aborts the process on an
+ * upgrade handler that yields without responding, and on the other transports a
+ * raw socket left behind leaks a connection.
+ *
+ * @internal
+ */
+export async function runBeforeUpgrade(
+  handler: BeforeUpgradeHandler,
+  url: string, // path, optionally including the query string
+  context: AuthContext,
+): Promise<Response | undefined> {
+  let request: Request;
+
+  try {
+    const host = context.headers.get('host') || 'localhost';
+    request = new Request(`http://${host}${url}`, { headers: context.headers });
+
+  } catch (e: any) {
+    // a `Host` header that isn't a valid authority fails to parse as a URL
+    debugAndPrintError(e);
+    return new Response(null, { status: 400 });
+  }
+
+  try {
+    return (await handler(request, context)) ?? undefined;
+
+  } catch (e: any) {
+    debugAndPrintError(e);
+    return new Response(null, { status: 500 });
+  }
+}
+
+/** Headers as the transport has them: uWebSockets.js and Node give a plain record. */
+type RawHeaders = Headers | Record<string, string | undefined>;
+
+const readHeader = (headers: RawHeaders, name: string) =>
+  (headers instanceof Headers) ? headers.get(name) : headers[name];
+
+/**
+ * Builds the context passed to `beforeUpgrade` and `onAuth`.
+ *
+ * Every transport goes through here, so the context is identical everywhere,
+ * down to how the client address is resolved. `headers` is materialized on
+ * first read: a connection nobody inspects pays nothing for the conversion.
+ *
+ * @internal
+ */
+export function createAuthContext(options: {
+  headers: RawHeaders,
+  token?: string | null,
+  remoteAddress?: string,
+  req?: any,
+}): AuthContext {
+  const source = options.headers;
+  let headers: Headers | undefined;
+
+  return {
+    token: options.token ?? getBearerToken(readHeader(source, 'authorization')),
+    ip: resolveClientIp(source, options.remoteAddress),
+    req: options.req,
+    get headers() {
+      return headers ??= (source instanceof Headers)
+        ? source
+        : new Headers(source as Record<string, string>);
+    },
+  };
+}
+
+/**
+ * A single address, resolved the same way on every transport: `x-forwarded-for`
+ * carries the whole proxy chain, and only its first entry is the client.
+ */
+function resolveClientIp(headers: RawHeaders, remoteAddress?: string): string | undefined {
+  // an empty header counts as absent
+  const firstHop = (name: string) => readHeader(headers, name)?.split(',')[0].trim() || undefined;
+
+  return (
+    firstHop('x-real-ip') ??
+    firstHop('x-forwarded-for') ??
+    firstHop('x-client-ip') ??
+    (remoteAddress || undefined)
+  );
+}
+
 export type AuthContext = {
   token?: string,
+  /** Undefined when no proxy header carries it and the transport has no peer address. */
+  ip: string | undefined;
   headers: Headers,
-  ip: string | string[];
-  // FIXME: each transport may have its own specific properties.
-  // "req" only applies to WebSocketTransport.
+  /** Only set on the HTTP matchmaking request, where it is the `Request` itself. */
   req?: any;
 };
 

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- New `beforeUpgrade` transport option, called before the WebSocket handshake with the incoming `Request` and the same read-only context `onAuth()` receives. Return a `Response` to answer the request instead of upgrading it. Supported by `@colyseus/ws-transport`, `@colyseus/uwebsockets-transport` and `@colyseus/bun-websockets`; WebTransport has no handshake to intercept, so `@colyseus/h3-transport` warns and ignores it. (thanks @mikkas70 for the proposal and @Br1an67 for the first pass - https://github.com/colyseus/colyseus/issues/912)
+
+- `context.ip` is now a single address on every transport, resolved the same way everywhere: `x-real-ip`, then the first entry of `x-forwarded-for`, then `x-client-ip`, then the address of the connection. It previously varied per transport, could be a `string[]`, and returned the entire `x-forwarded-for` proxy chain. It is `undefined` when no source provides one.
+
+- Fix `context.headers` not being a `Headers` instance under `@colyseus/uwebsockets-transport`, where it was a plain object. `context.headers.get()` threw in `onAuth()` on that transport only.
+
+- `context.headers` is now built on first read instead of on every connection, so a room that never reads it pays nothing. Connection setup on `@colyseus/ws-transport` is ~2.2µs cheaper as a result.
+
 - `allowRewindState()` now lag-compensates clients sending `input({ mode: "unreliable" })`. `decodeUnreliable()` previously ignored the TIMED modifier and captured every input with a zero stamp, so those clients were always read live. It now parses the per-slot stamp block the SDK sends and pairs it with the ring's slots; a packet without the modifier still reads live, so older clients are unaffected.
 
 - Schema fields marked `@unreliable` now sync over the transport's unreliable channel (a WebTransport datagram) instead of the state patch, so a dropped frame costs one stale value instead of stalling the ordered stream behind a retransmit. They flush with each `broadcastPatch()` by default; set `room.unreliablePatchRate` to give them their own cadence — 60Hz movement over a 20Hz `patchRate`. Needs a transport with a datagram channel — today only `@colyseus/h3-transport` (WebTransport), which is experimental; on WebSocket transports those fields keep their join-time value and the room warns once.

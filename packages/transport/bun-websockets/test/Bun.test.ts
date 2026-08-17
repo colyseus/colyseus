@@ -110,6 +110,44 @@ describe('BunWebSockets', () => {
     await server.gracefullyShutdown(false);
   });
 
+  it('beforeUpgrade', async () => {
+    let requestUrl: string;
+    let contextIp: string | undefined;
+    let intercept = false;
+
+    const server = defineServer({
+      greet: false,
+      transport: new BunWebSockets({
+        beforeUpgrade: async (request, context) => {
+          await Bun.sleep(20);
+          requestUrl = request.url;
+          contextIp = context.ip;
+          if (intercept) {
+            return new Response(null, { headers: { 'fly-replay': 'instance=abc123' } });
+          }
+        },
+      }),
+      rooms: { dummy: defineRoom(DummyRoom) },
+    });
+
+    await server.listen(8569);
+
+    const client = new ColyseusSDK(`ws://localhost:8569`);
+    const sdkRoom = await client.joinOrCreate('dummy');
+    assert.ok(requestUrl.includes(`/${sdkRoom.roomId}`), `unexpected request url: ${requestUrl}`);
+    assert.ok(contextIp, `expected a client address, got ${contextIp}`);
+    await sdkRoom.leave();
+
+    // a returned Response answers the request instead of upgrading
+    intercept = true;
+    const response = await fetch('http://localhost:8569/whatever', {
+      headers: { Connection: 'Upgrade', Upgrade: 'websocket', 'Sec-WebSocket-Key': 'dGhlIHNhbXBsZSBub25jZQ==', 'Sec-WebSocket-Version': '13' },
+    });
+    assert.equal(response.headers.get('fly-replay'), 'instance=abc123');
+
+    await server.gracefullyShutdown(false);
+  });
+
   it('client.raw() should accept non-ArrayBufferView data without throwing', async () => {
     const port = 8568;
 

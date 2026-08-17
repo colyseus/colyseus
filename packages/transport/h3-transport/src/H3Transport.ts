@@ -4,7 +4,7 @@ import { Http3Server } from '@fails-components/webtransport';
 import { URL } from 'url';
 import { decode, type Iterator } from '@colyseus/schema';
 
-import { matchMaker, Protocol, Transport, debugAndPrintError, spliceOne, getBearerToken, CloseCode, connectClientToRoom, isDevMode } from '@colyseus/core';
+import { matchMaker, Protocol, Transport, createAuthContext, debugAndPrintError, spliceOne, CloseCode, connectClientToRoom, isDevMode } from '@colyseus/core';
 import { H3Client } from './H3Client.ts';
 import { resolveDevCertificate } from './utils/devCert.ts';
 import type { Application, Request, Response } from 'express';
@@ -39,6 +39,11 @@ export class H3Transport extends Transport {
     super();
 
     this.options = options;
+
+    // sessions arrive already established, and their headers aren't exposed to us
+    if ('beforeUpgrade' in options) {
+      console.warn("H3Transport: 'beforeUpgrade' is not supported (WebTransport has no upgrade handshake).");
+    }
 
     // local proxy (frontend)
     if (options.localProxy) {
@@ -156,10 +161,12 @@ export class H3Transport extends Transport {
       const roomName = matchedParams[matchmakeIndex + 2] || '';
 
 
+      const requestHeaders = new Headers(req.headers as Record<string, string>);
+
       const headers = Object.assign(
         {},
         matchMaker.controller.DEFAULT_CORS_HEADERS,
-        matchMaker.controller.getCorsHeaders.call(undefined, new Headers(req.headers as Record<string, string>))
+        matchMaker.controller.getCorsHeaders.call(undefined, requestHeaders)
       );
       headers['Content-Type'] = 'application/json';
       res.writeHead(200, headers);
@@ -170,11 +177,11 @@ export class H3Transport extends Transport {
           method,
           roomName,
           clientOptions,
-          {
-            token: (req.query['_authToken'] as string) ?? getBearerToken(req.headers['authorization']),
-            headers: new Headers(req.headers as Record<string, string>),
-            ip: req.headers['x-real-ip'] ?? req.ips
-          },
+          createAuthContext({
+            headers: requestHeaders,
+            token: req.query['_authToken'] as string,
+            remoteAddress: req.ip,
+          }),
         );
 
         if (fingerprint) {
