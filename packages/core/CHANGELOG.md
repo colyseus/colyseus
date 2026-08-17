@@ -8,6 +8,8 @@
 
   A faster `unreliablePatchRate` has a known cost: entity ADDs ride the reliable channel, so datagrams sent between patches can name a refId the client hasn't received yet. The client skips those frames — state can't desync, since `@unreliable` is primitives-only — but each logs `"refId" not found` and that entity's first value arrives one mutation later. Leaving `unreliablePatchRate` unset avoids it entirely.
 
+- Fix `gracefullyShutdown()` returning before every room's async `onDispose()` had finished, tearing down presence/driver (and exiting the process) while rooms were still writing. `matchMaker.stats.local.roomCount` is decremented when a room *starts* disposing, so with several rooms shutting down at once the first one to finish released the whole shutdown. A room that was already mid-dispose when shutdown began was also not waited on at all. (thanks @hunkydoryrepair for reporting - https://github.com/colyseus/colyseus/issues/823)
+
 ## 0.18.4
 
 Brings in the 0.17.48 and 0.17.50 fixes.

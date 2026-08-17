@@ -37,6 +37,16 @@ const handlers: {[id: string]: RegisteredHandler} = Object.create(null);
 const rooms: {[roomId: string]: Room} = {};
 const events = new EventEmitter();
 
+// A room isn't gone when 'dispose' fires — that only *starts* `Room.#_dispose()`,
+// which awaits the user's async `onDispose()`. `roomCount` is decremented there,
+// so this covers the window until 'disconnect' (emitted once `#_dispose()`
+// settles). Invariant: roomCount + disposingRoomCount = rooms not yet fully gone.
+let disposingRoomCount = 0;
+
+function hasActiveRooms() {
+  return stats.local.roomCount > 0 || disposingRoomCount > 0;
+}
+
 export let publicAddress: string;
 export let processId: string;
 export let presence: Presence;
@@ -103,6 +113,7 @@ export async function setup(
   publicAddress = _publicAddress || getDefaultPublicAddress();
 
   stats.reset(false);
+  disposingRoomCount = 0;
 
   // ensure processId is set
   if (!processId) { processId = generateId(); }
@@ -648,11 +659,14 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
       room['_events'].removeAllListeners('metadata-change');
     }
 
+    // this room's `onDispose()` has settled
+    disposingRoomCount--;
+
     //
     // emit "no active rooms" event when there are no more rooms in this process
     // (used during graceful shutdown)
     //
-    if (stats.local.roomCount <= 0) {
+    if (!hasActiveRooms()) {
       events.emit('no-active-rooms');
     }
   });
@@ -713,7 +727,7 @@ async function lockAndDisposeAll(): Promise<any> {
   }
 
   const noActiveRooms = new Deferred();
-  if (stats.local.roomCount <= 0) {
+  if (!hasActiveRooms()) {
     // no active rooms to dispose
     noActiveRooms.resolve();
 
@@ -820,7 +834,7 @@ export async function hotReload(): Promise<void> {
 
   // Lock all rooms and trigger default onBeforeShutdown (dev mode impl).
   const noActiveRooms = new Deferred();
-  if (stats.local.roomCount <= 0) {
+  if (!hasActiveRooms()) {
     noActiveRooms.resolve();
   } else {
     events.once('no-active-rooms', () => noActiveRooms.resolve());
@@ -1204,6 +1218,9 @@ async function disposeRoom(roomName: string, room: Room) {
   //
   driver.remove(room['_listing'].roomId);
   stats.local.roomCount--;
+
+  // `onDispose()` is still pending — released on 'disconnect'
+  disposingRoomCount++;
 
   // decrease amount of rooms this process is handling
   if (state !== MatchMakerState.SHUTTING_DOWN) {

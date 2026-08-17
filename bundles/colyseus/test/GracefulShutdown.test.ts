@@ -108,6 +108,87 @@ describe("Graceful Shutdown", () => {
     assert.ok(onDisposeTime <= onShutdownTime);
   });
 
+  //
+  // Rooms with *variable* onDispose() durations: `stats.local.roomCount` is
+  // decremented when 'dispose' is emitted, which is before an async onDispose()
+  // settles — so the first room to finish used to release the whole shutdown.
+  // (colyseus/colyseus#823)
+  //
+  it("should wait for every async onDispose(), not just the fastest", async () => {
+    const NUM_ROOMS = 10;
+
+    let disposeStarted = 0;
+    let disposeFinished = 0;
+    let finishedAtShutdown = -1;
+
+    server.define("my_room", class extends Room {
+      maxClients = 1;
+      onCreate() { }
+      async onDispose() {
+        disposeStarted++;
+        await new Promise((resolve) => setTimeout(resolve, 50 + Math.floor(Math.random() * 500)));
+        disposeFinished++;
+      }
+    });
+
+    server.onShutdown(() => {
+      finishedAtShutdown = disposeFinished;
+    });
+
+    await Promise.all(
+      Array.from({ length: NUM_ROOMS }, () => client.joinOrCreate("my_room"))
+    );
+
+    assert.strictEqual(matchMaker.stats.local.roomCount, NUM_ROOMS);
+
+    await server.gracefullyShutdown(false);
+
+    assert.strictEqual(disposeStarted, NUM_ROOMS, "all rooms should have started disposing");
+    assert.strictEqual(
+      finishedAtShutdown,
+      NUM_ROOMS,
+      `onShutdown ran with only ${finishedAtShutdown}/${NUM_ROOMS} onDispose() resolved`
+    );
+  });
+
+  it("should not shut down presence/driver while onDispose() is pending", async () => {
+    const NUM_ROOMS = 10;
+    let disposeFinished = 0;
+    let finishedAtPresenceShutdown = -1;
+
+    server.define("my_room", class extends Room {
+      maxClients = 1;
+      onCreate() { }
+      async onDispose() {
+        await new Promise((resolve) => setTimeout(resolve, 50 + Math.floor(Math.random() * 500)));
+        disposeFinished++;
+      }
+    });
+
+    await Promise.all(
+      Array.from({ length: NUM_ROOMS }, () => client.joinOrCreate("my_room"))
+    );
+
+    const presence: any = matchMaker.presence;
+    const originalShutdown = presence.shutdown;
+    presence.shutdown = function () {
+      finishedAtPresenceShutdown = disposeFinished;
+      return originalShutdown.apply(this, arguments);
+    };
+
+    try {
+      await server.gracefullyShutdown(false);
+    } finally {
+      presence.shutdown = originalShutdown;
+    }
+
+    assert.strictEqual(
+      finishedAtPresenceShutdown,
+      NUM_ROOMS,
+      `presence.shutdown() ran with only ${finishedAtPresenceShutdown}/${NUM_ROOMS} onDispose() resolved`
+    );
+  });
+
   it("should not try to reconnect if client disconnects during shutdown", async () => {
     let onLeaveCalled = false;
     let onLeaveCode: number | undefined;
