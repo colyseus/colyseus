@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.18.2
+
+- Fix the CommonJS build crashing on import, which also took down `require("colyseus")`.
+
+- Node.js 22 is now the declared minimum (`engines`).
+
 ## 0.17.8
 
 - Allow editing and deleting room state values from the monitor panel

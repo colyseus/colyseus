@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.18.2
+
+- Fix the CommonJS build crashing on import, which also took down `require("colyseus")`.
+
+- `/playground/profiling` now finds `cpupro` under CommonJS. It reported the package as missing even when installed.
+
+- Node.js 22 is now the declared minimum (`engines`).
+
 ## 0.18.1
 
 - Security: data endpoints (room listing/inspection, API docs listing, CPU profiles) are now gated. They stay open during local development (devMode, or `NODE_ENV !== "production"`); on production mounts they return 404 unless a `use:` middleware guard is configured — the guard is the opt-in, and a one-time warning reminds you to make it enforce authentication.
