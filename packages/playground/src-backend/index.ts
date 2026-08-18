@@ -1,6 +1,5 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import inspector from 'node:inspector/promises';
 import { spawn } from 'node:child_process';
 import os from 'node:os';
@@ -24,7 +23,7 @@ export interface PlaygroundOptions {
   use?: any[];
 }
 
-const SPA_DIST = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'build');
+const SPA_DIST = path.resolve(import.meta.dirname, '..', 'build');
 
 // CPU profiling state — single process, single active session. The captured
 // `.cpuprofile` and the cpupro-generated standalone HTML report are kept in

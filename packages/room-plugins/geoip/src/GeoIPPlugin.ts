@@ -1,5 +1,4 @@
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { RoomPlugin, type Client, type AuthContext } from '@colyseus/core';
 
 import type { GeoIPData, GeoIPReader } from './types.ts';
@@ -30,7 +29,6 @@ const DEFAULT_REFRESH_MS = 7 * 24 * HOUR;
 
 const readerCache = new Map<string, Promise<GeoIPReader>>();
 const refreshTimers = new Map<string, NodeJS.Timeout>();
-const getDirname = () => (typeof __dirname !== 'undefined') ? __dirname : path.dirname(fileURLToPath(import.meta.url));
 
 /**
  * Drop-in plugin that resolves the client's country at auth time and
@@ -141,7 +139,7 @@ async function loadReader(opts: GeoIPPluginOptions): Promise<GeoIPReader> {
   // Bundled mode — relies on a DB-IP Lite snapshot shipped alongside the
   // build. Not committed in this scaffold; release tooling drops the file
   // in `databases/dbip-country-lite.mmdb` before publish.
-  const bundledPath = path.join(getDirname(), 'databases', 'dbip-country-lite.mmdb');
+  const bundledPath = path.join(import.meta.dirname, 'databases', 'dbip-country-lite.mmdb');
   return new MMDBReader(bundledPath);
 }
 

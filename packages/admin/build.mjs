@@ -1,4 +1,3 @@
-import fs from 'fs';
 import path from 'path';
 import glob from 'fast-glob';
 import { fileURLToPath } from 'url';
@@ -59,6 +58,14 @@ async function main() {
     sourcemap: 'external',
     platform: 'node',
     outExtension: { '.js': '.cjs' },
+    // `import.meta` has no CJS equivalent — esbuild stubs it to `{}`, so lower
+    // it to the per-file CJS values instead of emitting `undefined`.
+    define: {
+      'import.meta.url': '__cjsImportMetaUrl',
+      'import.meta.dirname': '__dirname',
+      'import.meta.filename': '__filename',
+    },
+    banner: { js: "const __cjsImportMetaUrl = require('node:url').pathToFileURL(__filename).href;" },
     plugins: [{
       name: 'externalize-imports',
       setup(build) {
@@ -94,17 +101,6 @@ async function main() {
             }
             return { path: args.path, external: true };
           }
-        });
-      },
-    }, {
-      // ESM doesn't have __dirname; transparently rewrite to fileURLToPath(import.meta.url)
-      name: 'dirname',
-      setup(build) {
-        build.onLoad({ filter: /.*/ }, ({ path: filePath }) => {
-          let contents = fs.readFileSync(filePath, 'utf8');
-          const loader = path.extname(filePath).substring(1);
-          contents = contents.replace(/__dirname/g, `path.dirname(fileURLToPath(import.meta.url))`);
-          return { contents, loader };
         });
       },
     }],

@@ -1,6 +1,5 @@
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { createEndpoint, createMiddleware, type Endpoint } from '@colyseus/core';
 import GrantFactory from 'grant/lib/grant.js';
 import { sign as cookieSign, unsign as cookieUnsign } from 'cookie-signature';
@@ -15,7 +14,6 @@ import {
 } from './oauth.ts';
 
 const COOKIE_NAME = 'grant';
-const getDirname = () => (typeof __dirname !== 'undefined') ? __dirname : path.dirname(fileURLToPath(import.meta.url));
 
 type GrantSessionPayload = { grant?: any; [k: string]: any };
 
@@ -60,7 +58,7 @@ function originFromContext(ctx: any): string {
 
 function readHelpUrls(): Record<string, string> {
   try {
-    const p = path.join(getDirname(), '..', 'oauth_help_urls.json');
+    const p = path.join(import.meta.dirname, '..', 'oauth_help_urls.json');
     return JSON.parse(fs.readFileSync(p, 'utf-8'));
   } catch { return {}; }
 }

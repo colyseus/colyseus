@@ -149,6 +149,14 @@ async function main() {
       sourcemap: "external",
       platform: "node",
       outExtension: { '.js': '.cjs', },
+      // `import.meta` has no CJS equivalent — esbuild stubs it to `{}`, so lower
+      // it to the per-file CJS values instead of emitting `undefined`.
+      define: {
+        'import.meta.url': '__cjsImportMetaUrl',
+        'import.meta.dirname': '__dirname',
+        'import.meta.filename': '__filename',
+      },
+      banner: { js: "const __cjsImportMetaUrl = require('node:url').pathToFileURL(__filename).href;" },
       plugins: [{
         name: 'add-cjs',
         setup(build) {

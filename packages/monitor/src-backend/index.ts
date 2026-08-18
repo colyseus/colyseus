@@ -1,6 +1,5 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { z } from 'zod';
 import { createEndpoint, dualModeEndpoints, matchMaker, type Endpoint } from '@colyseus/core';
 import { OSUtils } from 'node-os-utils';
@@ -10,7 +9,7 @@ import './ext/Room.js';
 
 const osutils = new OSUtils();
 const UNAVAILABLE_ROOM_ERROR = "@colyseus/monitor: room $roomId is not available anymore.";
-const SPA_DIST = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'build', 'static');
+const SPA_DIST = path.resolve(import.meta.dirname, '..', 'build', 'static');
 
 export interface MonitorOptions {
   /** Mount prefix used when spread into `createRouter`. Ignored in express-middleware mode. Defaults to `''`. */

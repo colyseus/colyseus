@@ -4,7 +4,6 @@
  * actual handlers live in `./endpoints/*.ts`, one file per REST endpoint.
  */
 import path from 'path';
-import { fileURLToPath } from 'url'; // required for ESM build (see build.mjs)
 import { dualModeEndpoints, type Endpoint } from '@colyseus/core';
 import { getTableConfig as getPgTableConfig } from 'drizzle-orm/pg-core';
 import { getTableConfig as getSqliteTableConfig } from 'drizzle-orm/sqlite-core';
@@ -369,8 +368,7 @@ function buildContext(opts: AdminOptions): EndpointContext {
   }
   const apiPath = (opts.apiPath ?? '/admin-api').replace(/\/$/, '');
   const uiPath = (opts.uiPath ?? '/admin').replace(/\/$/, '');
-  // build.mjs's "dirname" plugin rewrites __dirname to a fileURLToPath call for the ESM build
-  const uiDistDir = opts.uiDistDir ?? path.resolve(__dirname, '..', 'build');
+  const uiDistDir = opts.uiDistDir ?? path.resolve(import.meta.dirname, '..', 'build');
   const allowDevHeader = opts.allowDevHeader ?? (process.env.NODE_ENV !== 'production');
   const resolveUserId = opts.resolveUserId ?? makeDefaultResolver(allowDevHeader, database);
   const enforceRbac = opts.enforceRbac !== false;

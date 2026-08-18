@@ -1,4 +1,3 @@
-import fs from 'fs';
 import path from 'path';
 import glob from 'fast-glob';
 import { fileURLToPath } from 'url';
@@ -25,7 +24,8 @@ async function main() {
       declaration: true,
       emitDeclarationOnly: true,
       skipLibCheck: true,
-      module: ts.ModuleKind.CommonJS,
+      module: ts.ModuleKind.NodeNext,
+      moduleResolution: ts.ModuleResolutionKind.NodeNext,
       target: ts.ScriptTarget.ES2020,
       outDir: outdir,
       esModuleInterop: true,
@@ -59,6 +59,14 @@ async function main() {
     sourcemap: "external",
     platform: "node",
     outExtension: { '.js': '.cjs' },
+    // `import.meta` has no CJS equivalent — esbuild stubs it to `{}`, so lower
+    // it to the per-file CJS values instead of emitting `undefined`.
+    define: {
+      'import.meta.url': '__cjsImportMetaUrl',
+      'import.meta.dirname': '__dirname',
+      'import.meta.filename': '__filename',
+    },
+    banner: { js: "const __cjsImportMetaUrl = require('node:url').pathToFileURL(__filename).href;" },
     plugins: [{
       name: 'add-cjs',
       setup(build) {
@@ -97,23 +105,6 @@ async function main() {
           }
         })
       },
-    }, {
-      //
-      // WORKAROUND FOR __dirname usage in ESM
-      // TODO: need to have a better appraoch for ESM + CJS builds...
-      //
-      name: 'dirname',
-      setup(build) {
-        build.onLoad({ filter: /.*/ }, ({ path: filePath }) => {
-          let contents = fs.readFileSync(filePath, "utf8");
-          const loader = path.extname(filePath).substring(1);
-          contents = contents.replace("__dirname", `path.dirname(fileURLToPath(import.meta.url))`)
-          return {
-            contents,
-            loader,
-          };
-        });
-      }
     }]
   });
 
