@@ -49,6 +49,9 @@
     "url": "https://github.com/colyseus/colyseus/issues"
   },
   "homepage": "https://github.com/colyseus/colyseus#readme",
+  "engines": {
+    "node": ">= 22.x"
+  },
   "devDependencies": {
     "@emotion/react": "^11.11.1",
     "@emotion/styled": "^11.11.0",

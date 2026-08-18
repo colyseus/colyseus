@@ -54,6 +54,9 @@
     "url": "git://github.com/colyseus/colyseus.git"
   },
   "homepage": "https://colyseus.io/",
+  "engines": {
+    "node": ">= 22.x"
+  },
   "publishConfig": {
     "access": "public",
     "tag": "next"

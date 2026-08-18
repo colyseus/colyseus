@@ -41,6 +41,9 @@
     "src"
   ],
   "homepage": "https://colyseus.io",
+  "engines": {
+    "node": ">= 22.x"
+  },
   "dependencies": {
     "@colyseus/core": "workspace:^",
     "@colyseus/redis-presence": "workspace:^"

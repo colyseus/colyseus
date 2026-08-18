@@ -52,5 +52,8 @@
     "access": "public",
     "tag": "next"
   },
-  "homepage": "https://colyseus.io/"
+  "homepage": "https://colyseus.io/",
+  "engines": {
+    "node": ">= 22.x"
+  }
 }

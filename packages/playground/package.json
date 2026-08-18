@@ -19,6 +19,9 @@
       "require": "./build/*.cjs"
     }
   },
+  "engines": {
+    "node": ">= 22.x"
+  },
   "scripts": {
     "start": "vite",
     "build": "vite build && node build.mjs",

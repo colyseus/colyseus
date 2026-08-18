@@ -38,6 +38,9 @@
     "src"
   ],
   "homepage": "https://colyseus.io",
+  "engines": {
+    "node": ">= 22.x"
+  },
   "publishConfig": {
     "access": "public"
   }
