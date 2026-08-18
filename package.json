@@ -6,7 +6,7 @@
   "packageManager": "pnpm@10.9.0",
   "scripts": {
     "build": "tsx build.ts",
-    "build-all": "pnpm --filter @colyseus/better-call run build && pnpm run build && pnpm --filter @colyseus/sdk run build && pnpm --filter @colyseus/playground run build && pnpm --filter @colyseus/monitor run build",
+    "build-all": "pnpm --filter @better-auth/root run build && pnpm run build && pnpm --filter @colyseus/sdk run build && pnpm --filter @colyseus/playground run build && pnpm --filter @colyseus/monitor run build && pnpm --filter @colyseus/admin run build",
     "test": "pnpm -r --filter '!./packages/better-call/**' run test",
     "example": "pnpm --filter @colyseus/example run start",
     "update-contributors": "all-contributors generate",
