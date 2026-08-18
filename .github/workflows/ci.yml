@@ -44,4 +44,38 @@ jobs:
     - name: Test
       run: pnpm test
 
+  packaging:
+    name: packaging (require + import)
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v6
+      with:
+        submodules: recursive
+
+    - name: Install Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22
+
+    - name: Install pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: '10.9.0'
+        cache: true
+
+    - name: Install dependencies
+      run: pnpm install
+
+    # The default `pnpm build` skips every package with a custom build script —
+    # monitor, playground, admin, sdk — which is exactly where the CJS/ESM
+    # artifacts diverge. Nothing else in CI loads them: the test suites resolve
+    # the `@source` condition and never touch build/.
+    - name: Build all packages
+      run: pnpm build-all
+
+    - name: Verify every exports subpath loads
+      run: pnpm verify-exports
+
 

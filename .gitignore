@@ -36,3 +36,4 @@ packages/database/drizzle/
 /SCHEMA.md
 /TODO_0.18.md
 /test.sh
+pnpm-publish-summary.json
