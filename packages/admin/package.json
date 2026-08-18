@@ -25,6 +25,7 @@
     "start": "vite",
     "build": "vite build && node build.mjs",
     "preview": "vite preview",
+    "prepublishOnly": "npm run build",
     "test": "tsx --test test/**.test.ts test/**.test.tsx"
   },
   "files": [
