@@ -188,9 +188,10 @@ export interface MatchMakerDriver {
 
   /**
    * Empty the room cache. Used for testing purposes only.
+   * May be asynchronous — callers must await it.
    * @internal Do not call this method yourself.
    */
-  clear(): void;
+  clear(): void | Promise<void>;
 
   /**
    * Boot the room cache medium (if available).
@@ -199,6 +200,7 @@ export interface MatchMakerDriver {
 
   /**
    * Dispose the connection of the room cache medium.
+   * May be asynchronous — callers must await it.
    */
-  shutdown(): void;
+  shutdown(): void | Promise<void>;
 }

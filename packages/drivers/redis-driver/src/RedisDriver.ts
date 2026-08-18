@@ -180,8 +180,8 @@ export class RedisDriver implements MatchMakerDriver {
   // only relevant for the test-suite.
   // not used during runtime.
   //
-  public clear() {
-    this._client.del(ROOMCACHES_KEY);
+  public async clear() {
+    await this._client.del(ROOMCACHES_KEY);
   }
 
 }

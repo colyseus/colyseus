@@ -78,7 +78,7 @@ export class ColyseusTestServer<ServerType extends SDKTypes = any> {
     await this.sdk.auth.signOut();
 
     const driver = this.server['driver'];
-    if (driver) { driver.clear(); }
+    if (driver) { await driver.clear(); }
   }
 
   async shutdown() {

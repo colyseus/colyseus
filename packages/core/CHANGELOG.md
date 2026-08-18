@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.18.5
 
 - New `beforeUpgrade` transport option, called before the WebSocket handshake with the incoming `Request` and the same read-only context `onAuth()` receives. Return a `Response` to answer the request instead of upgrading it. Supported by `@colyseus/ws-transport`, `@colyseus/uwebsockets-transport` and `@colyseus/bun-websockets`; WebTransport has no handshake to intercept, so `@colyseus/h3-transport` warns and ignores it. (thanks @mikkas70 for the proposal and @Br1an67 for the first pass - https://github.com/colyseus/colyseus/issues/912)
 
@@ -17,6 +17,8 @@
   A faster `unreliablePatchRate` has a known cost: entity ADDs ride the reliable channel, so datagrams sent between patches can name a refId the client hasn't received yet. The client skips those frames — state can't desync, since `@unreliable` is primitives-only — but each logs `"refId" not found` and that entity's first value arrives one mutation later. Leaving `unreliablePatchRate` unset avoids it entirely.
 
 - Fix `gracefullyShutdown()` returning before every room's async `onDispose()` had finished, tearing down presence/driver (and exiting the process) while rooms were still writing. `matchMaker.stats.local.roomCount` is decremented when a room *starts* disposing, so with several rooms shutting down at once the first one to finish released the whole shutdown. A room that was already mid-dispose when shutdown began was also not waited on at all. (thanks @hunkydoryrepair for reporting - https://github.com/colyseus/colyseus/issues/823)
+
+- `MatchMakerDriver`'s `clear()` and `shutdown()` are now typed `void | Promise<void>`, matching how every driver except `LocalDriver` already behaved. Anything calling them must `await`.
 
 ## 0.18.4
 
