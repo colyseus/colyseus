@@ -6,8 +6,7 @@
  * (XSS-resistant — can't grab the session via document.cookie).
  */
 import type { AuthProvider } from '@refinedev/core';
-
-const API = '/admin-api';
+import { API } from '@/lib/runtime-config';
 
 interface AuthStatus {
   needsBootstrap: boolean;

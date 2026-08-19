@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.4
+
+- `admin()` now works under any express path mount: `app.use("/x", admin())` serves the UI at `/x/` with the API at `/x/admin-api`. Previously only a root mount (or `createRouter`) worked — sub-mounting rendered the UI but every API call 404'd. Reverse-proxy sub-paths are also supported via `X-Forwarded-Prefix`, and customizing `uiPath`/`apiPath` no longer breaks the prebuilt UI.
+
 ## 0.18.3
 
 - The bare-path redirect (`/admin` → `/admin/`) is now a 302, so browsers no longer cache it permanently.

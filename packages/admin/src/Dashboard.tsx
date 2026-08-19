@@ -7,6 +7,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import { humanize } from '../src-backend/display/humanize.js';
 import { iconFor } from './icons';
 import { syntheticShowPath } from './pages/internals/synthetic-resources';
+import { API } from '@/lib/runtime-config';
 
 interface Widget {
   id: string;
@@ -142,7 +143,7 @@ function WidgetCard({ widget: initial }: { widget: Widget }) {
     const tick = async () => {
       try {
         const r = await fetch(
-          `/admin-api/_dashboard/${encodeURIComponent(widget.id)}`,
+          `${API}/_dashboard/${encodeURIComponent(widget.id)}`,
           { credentials: 'include' },
         );
         if (!r.ok) { return; }
@@ -205,7 +206,7 @@ export function Dashboard() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/admin-api/_dashboard', { credentials: 'include' })
+    fetch(`${API}/_dashboard`, { credentials: 'include' })
       .then(async (r) => {
         if (!r.ok) { throw new Error(`/_dashboard returned ${r.status}`); }
         return r.json() as Promise<DashboardPayload>;

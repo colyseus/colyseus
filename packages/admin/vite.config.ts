@@ -9,9 +9,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Frontend builds into `build/` (same dir as the backend artifacts) so the
 // runtime serveStatic() in src-backend/static.ts can find index.html + assets/
 // at one canonical location.
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [react(), tailwindcss()],
-  base: '/admin/',
+  // Relative asset URLs + the serve-time <base href> injection let one
+  // prebuilt bundle work at any mount path. Dev server keeps /admin/.
+  base: command === 'build' ? './' : '/admin/',
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
@@ -23,4 +25,4 @@ export default defineConfig({
     emptyOutDir: false,
     sourcemap: true,
   },
-});
+}));

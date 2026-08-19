@@ -16,6 +16,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import type { Column, Resource } from '../../types';
+import { API } from '@/lib/runtime-config';
 
 export type FkLabelMaps = Map<string, Map<unknown, string>>;
 
@@ -50,7 +51,7 @@ export function useFkLabels(rows: any[], def: Resource | undefined): FkLabelMaps
       if (values.length === 0) { return [c.name, empty]; }
 
       // _end >= unique count so we get one row per id back.
-      const url = `/admin-api/${encodeURIComponent(linkTo.resource)}` +
+      const url = `${API}/${encodeURIComponent(linkTo.resource)}` +
         `?${encodeURIComponent(linkTo.pkColumn)}_in=${values.map((v) => encodeURIComponent(String(v))).join(',')}` +
         `&_end=${values.length}`;
       try {

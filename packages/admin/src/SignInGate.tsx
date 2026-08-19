@@ -15,6 +15,7 @@
  */
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
+import { API } from '@/lib/runtime-config';
 
 interface Status {
   needsBootstrap: boolean;
@@ -25,7 +26,7 @@ export function SignInGate() {
   const [status, setStatus] = useState<Status | null>(null);
 
   useEffect(() => {
-    fetch('/admin-api/auth/status', { credentials: 'include' })
+    fetch(`${API}/auth/status`, { credentials: 'include' })
       .then((r) => r.json())
       .then(setStatus)
       .catch(() => setStatus({ needsBootstrap: false, authenticated: false }));

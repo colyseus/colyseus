@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { consumeNextParam } from '@/lib/next-param';
+import { UI_BASE } from '@/lib/runtime-config';
 
 export function LoginPage() {
   const { mutate: login, isLoading } = useLogin<{ email: string; password: string }>();
@@ -42,13 +43,8 @@ export function LoginPage() {
           //    App's mount-time fetch ran while anonymous and returned
           //    []. A full reload remounts App and refetches it with the
           //    session cookie, so the sidebar is populated.
-          // NOTE: the shipped bundle is built once at publish time, so the
-          // mount root is fixed at '/admin/'. Customizing admin()'s uiPath
-          // is a backend-only knob today — the prebuilt UI does not support
-          // it (see vite base + App.tsx basename). Keep this literal in
-          // sync with those if that limitation is ever lifted.
           const next = consumeNextParam();
-          window.location.replace(next || '/admin/');
+          window.location.replace(next || UI_BASE);
         },
       },
     );

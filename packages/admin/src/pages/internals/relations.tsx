@@ -22,6 +22,7 @@ import { findResource, pickLabelColumn, visibleColumns } from './helpers';
 import { formatCell } from './format-cell';
 import { Pagination } from './pagination';
 import { iconFor } from '../../icons';
+import { API } from '@/lib/runtime-config';
 
 export function Profilerow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -46,7 +47,7 @@ export function useRelationCounts(
   useEffect(() => {
     if (!resource || !id) { return; }
     let cancelled = false;
-    fetch(`/admin-api/${resource}/${encodeURIComponent(id)}/_counts`, { credentials: 'include' })
+    fetch(`${API}/${resource}/${encodeURIComponent(id)}/_counts`, { credentials: 'include' })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => { if (!cancelled) { setCounts(data); } })
       .catch(() => { if (!cancelled) { setCounts(null); } });
@@ -91,7 +92,7 @@ export function RelatedTable({
     setLoading(true);
     const start = (page - 1) * pageSize;
     fetch(
-      `/admin-api/${parentResource}/${parentId}/relations/${relation.name}?_start=${start}&_end=${start + pageSize}`,
+      `${API}/${parentResource}/${parentId}/relations/${relation.name}?_start=${start}&_end=${start + pageSize}`,
       { credentials: 'include' },
     )
       .then(async (r) => {
@@ -255,7 +256,7 @@ export function OneRelationLink({
   const [row, setRow] = useState<any | null>(null);
   const [empty, setEmpty] = useState(false);
   useEffect(() => {
-    fetch(`/admin-api/${parentResource}/${parentId}/relations/${relation.name}?_start=0&_end=1`, {
+    fetch(`${API}/${parentResource}/${parentId}/relations/${relation.name}?_start=0&_end=1`, {
       credentials: 'include',
     })
       .then(async (r) => (r.ok ? (await r.json()) as any[] : []))

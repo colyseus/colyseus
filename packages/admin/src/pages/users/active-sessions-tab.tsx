@@ -18,6 +18,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { KickConfirmDialog } from '../internals/kick-confirm-dialog';
 import { withReturnTo } from '../internals/return-to';
+import { API } from '@/lib/runtime-config';
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -52,7 +53,7 @@ export function ActiveUserSessionsTab({
   const fetchOnce = React.useCallback(async () => {
     try {
       const res = await fetch(
-        `/admin-api/rooms/by-user/${encodeURIComponent(userId)}`,
+        `${API}/rooms/by-user/${encodeURIComponent(userId)}`,
         { credentials: 'include' },
       );
       if (!res.ok) {
@@ -82,7 +83,7 @@ export function ActiveUserSessionsTab({
     try {
       const trimmed = reason?.trim();
       const res = await fetch(
-        `/admin-api/rooms/${encodeURIComponent(roomId)}/clients/${encodeURIComponent(sessionId)}`,
+        `${API}/rooms/${encodeURIComponent(roomId)}/clients/${encodeURIComponent(sessionId)}`,
         {
           method: 'DELETE', credentials: 'include',
           ...(trimmed ? {

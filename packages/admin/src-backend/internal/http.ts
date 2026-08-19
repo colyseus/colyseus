@@ -5,6 +5,9 @@
  *     better-call adapter bug — see notes below).
  *   - `serveStatic` serves the built admin SPA from disk with a sandboxed
  *     path resolver and SPA fallback.
+ *   - `externalUiConfig` resolves the UI's external base + API URL from
+ *     the forwarded-prefix headers, so the prebuilt SPA follows express
+ *     path mounts and reverse-proxy sub-paths.
  *
  * Once the upstream Node adapter reliably terminates streamed bodies, the
  * Content-Length / Connection: close dance can be deleted and callers can
@@ -59,12 +62,66 @@ const MIME: Record<string, string> = {
 };
 
 /**
+ * External addressing for the prebuilt SPA. `base` is the UI's external
+ * URL prefix (always with a trailing slash); `api` is the external REST
+ * base (never with one). Injected into index.html at serve time so one
+ * prebuilt bundle works at any mount path.
+ */
+export interface UiRuntimeConfig {
+  base: string;
+  api: string;
+}
+
+// Path-only charset — no quotes, angle brackets, backslashes or spaces, so a
+// sanitized value can be embedded in an attribute and a <script> literally.
+// Segments are non-empty, which also rejects protocol-relative `//host` bases.
+const SAFE_PATH = /^(\/[A-Za-z0-9._~!$&()*+,;=:@%-]+)+$/;
+
+/** Sanitize an untrusted URL-path prefix; anything off-charset becomes ''. */
+export function safePath(raw: string | null | undefined): string {
+  if (!raw) { return ''; }
+  const trimmed = raw.replace(/\/+$/, '');
+  return SAFE_PATH.test(trimmed) ? trimmed : '';
+}
+
+/**
+ * Resolve the UI's external base + API URL for one request.
+ *
+ * The express middleware forwards the mount coordinates via internal
+ * `x-colyseus-admin-base` / `x-colyseus-admin-api` headers; a reverse
+ * proxy serving the app under a sub-path announces it via the de-facto
+ * `x-forwarded-prefix`. With neither, the configured paths stand as-is
+ * (root mounts, router mode). Values are sanitized to plain URL paths —
+ * a spoofed header can only mis-address the spoofer's own page.
+ */
+export function externalUiConfig(
+  getHeader: (k: string) => string | null,
+  paths: { uiPath: string; apiPath: string },
+): UiRuntimeConfig {
+  const base = safePath(getHeader('x-colyseus-admin-base'));
+  const api = safePath(getHeader('x-colyseus-admin-api'));
+  if (base && api) { return { base: `${base}/`, api }; }
+  const prefix = safePath(getHeader('x-forwarded-prefix'));
+  return { base: `${prefix}${paths.uiPath}/`, api: `${prefix}${paths.apiPath}` };
+}
+
+// <base> makes the bundle's relative asset URLs resolve from deep links
+// (`/x/users/42` must load `/x/assets/*`, not `/x/users/assets/*`); the
+// global carries the same coordinates to the SPA's router + fetch layer.
+function injectRuntimeConfig(buf: Buffer, cfg: UiRuntimeConfig): Buffer {
+  const tags = `<base href="${cfg.base}"><script>window.__COLYSEUS_ADMIN__=${JSON.stringify(cfg)}</script>`;
+  const html = buf.toString('utf8');
+  return Buffer.from(html.includes('</head>') ? html.replace('</head>', `${tags}</head>`) : tags + html);
+}
+
+/**
  * Serve a file from `root` for the given relative path.
  * - blocks ".." traversal
  * - falls back to index.html for SPA routes (no extension or unknown asset)
+ * - injects the runtime config into any served index.html when `inject` is given
  * - sets Content-Length + Connection: close (see top-of-file note)
  */
-export async function serveStatic(root: string, relPath: string | undefined): Promise<Response> {
+export async function serveStatic(root: string, relPath: string | undefined, inject?: UiRuntimeConfig): Promise<Response> {
   const safe = sanitize(relPath ?? '');
   const filePath = safe ? path.join(root, safe) : path.join(root, 'index.html');
 
@@ -75,12 +132,19 @@ export async function serveStatic(root: string, relPath: string | undefined): Pr
   }
 
   const data = await tryRead(resolved);
-  if (data) { return fileResponse(data, mimeOf(resolved)); }
+  if (data) {
+    if (inject && path.basename(resolved) === 'index.html') {
+      return fileResponse(injectRuntimeConfig(data, inject), 'text/html; charset=utf-8');
+    }
+    return fileResponse(data, mimeOf(resolved));
+  }
 
   // SPA fallback — serve index.html for any non-asset request
   if (!path.extname(safe)) {
     const index = await tryRead(path.join(resolvedRoot, 'index.html'));
-    if (index) { return fileResponse(index, 'text/html; charset=utf-8'); }
+    if (index) {
+      return fileResponse(inject ? injectRuntimeConfig(index, inject) : index, 'text/html; charset=utf-8');
+    }
   }
 
   return new Response('not found', { status: 404 });

@@ -24,6 +24,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader,
   AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { API } from '@/lib/runtime-config';
 
 interface UserActionsProps {
   userId: string;
@@ -68,7 +69,7 @@ export function UserActions({ userId, user, onChanged }: UserActionsProps) {
   ): Promise<void> {
     setBusy(label);
     try {
-      const res = await fetch(`/admin-api/users/${encodeURIComponent(userId)}/${path}`, {
+      const res = await fetch(`${API}/users/${encodeURIComponent(userId)}/${path}`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'content-type': 'application/json' },

@@ -10,7 +10,7 @@
  */
 import { createEndpoint, type Endpoint } from '@colyseus/core';
 import { sql } from 'drizzle-orm';
-import { json, serveStatic } from '../internal/http.js';
+import { externalUiConfig, json, serveStatic } from '../internal/http.js';
 import type { EndpointContext } from '../internal/context.js';
 
 /**
@@ -38,8 +38,8 @@ export function healthEndpoint(ctx: EndpointContext): Endpoint {
 
 /** GET /admin/ — serve the canonical SPA index. */
 export function uiIndexEndpoint(ctx: EndpointContext): Endpoint {
-  return createEndpoint(`${ctx.uiPath}/`, { method: 'GET' }, async () => {
-    return serveStatic(ctx.uiDistDir, '');
+  return createEndpoint(`${ctx.uiPath}/`, { method: 'GET' }, async (reqCtx) => {
+    return serveStatic(ctx.uiDistDir, '', externalUiConfig(reqCtx.getHeader, ctx));
   });
 }
 
@@ -47,6 +47,6 @@ export function uiIndexEndpoint(ctx: EndpointContext): Endpoint {
 export function uiAssetsEndpoint(ctx: EndpointContext): Endpoint {
   return createEndpoint(`${ctx.uiPath}/**:splat`, { method: 'GET' }, async (reqCtx) => {
     const splat = (reqCtx.params as any).splat as string | undefined;
-    return serveStatic(ctx.uiDistDir, splat);
+    return serveStatic(ctx.uiDistDir, splat, externalUiConfig(reqCtx.getHeader, ctx));
   });
 }

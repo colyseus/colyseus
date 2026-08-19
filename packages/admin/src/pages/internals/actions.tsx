@@ -7,6 +7,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { API } from '@/lib/runtime-config';
 
 export function ActionButton({ resource, action, rowId, onComplete }: {
   resource: string;
@@ -22,7 +23,7 @@ export function ActionButton({ resource, action, rowId, onComplete }: {
       const headers: HeadersInit = { 'content-type': 'application/json' };
       const userId = localStorage.getItem('colyseus-admin-user-id') ?? '';
       if (userId) { (headers as any)['X-User-Id'] = userId; }
-      const res = await fetch(`/admin-api/${resource}/_action/${action.name}`, {
+      const res = await fetch(`${API}/${resource}/_action/${action.name}`, {
         method: 'POST',
         headers,
         body: JSON.stringify(rowId ? { id: rowId } : {}),

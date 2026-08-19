@@ -13,6 +13,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { type Resource, singlePk } from '../../types';
 import { findResource, pickLabelColumn } from './helpers';
 import { cn } from '@/lib/utils';
+import { API } from '@/lib/runtime-config';
 
 export function RelationPicker({
   target, resources, value, onChange,
@@ -39,7 +40,7 @@ export function RelationPicker({
   // Search + initial load via the same _q endpoint we use for the list page.
   useEffect(() => {
     if (!targetDef) { return; }
-    const url = `/admin-api/${target}?_start=0&_end=20${q ? `&_q=${encodeURIComponent(q)}` : ''}`;
+    const url = `${API}/${target}?_start=0&_end=20${q ? `&_q=${encodeURIComponent(q)}` : ''}`;
     fetch(url, { credentials: 'include' })
       .then((r) => (r.ok ? (r.json() as Promise<any[]>) : Promise.resolve([])))
       .then((rows) => {
@@ -58,7 +59,7 @@ export function RelationPicker({
   // Resolve label for a preset value (Edit / prefill) on first render.
   useEffect(() => {
     if (value == null || value === '' || !targetDef || labelByValue.has(value)) { return; }
-    fetch(`/admin-api/${target}/${encodeURIComponent(String(value))}`, { credentials: 'include' })
+    fetch(`${API}/${target}/${encodeURIComponent(String(value))}`, { credentials: 'include' })
       .then((r) => (r.ok ? r.json() : null))
       .then((row) => {
         if (!row) { return; }

@@ -33,6 +33,7 @@ import { KickConfirmDialog } from '../internals/kick-confirm-dialog';
 import { safeReturnTo } from '../internals/return-to';
 import { useTheme } from '@/lib/theme-provider';
 import { cn } from '@/lib/utils';
+import { API } from '@/lib/runtime-config';
 
 const POLL_INTERVAL_MS = 2000;
 
@@ -111,7 +112,7 @@ export function RoomShowPage() {
 
     const fetchOnce = async () => {
       try {
-        const res = await fetch(`/admin-api/rooms/${roomId}`, { credentials: 'include' });
+        const res = await fetch(`${API}/rooms/${roomId}`, { credentials: 'include' });
         if (!res.ok) {
           if (res.status === 404) {
             setError('Room is no longer active.');
@@ -206,7 +207,7 @@ export function RoomShowPage() {
     try {
       const trimmed = reason?.trim();
       const res = await fetch(
-        `/admin-api/rooms/${roomId}/clients/${sessionId}`,
+        `${API}/rooms/${roomId}/clients/${sessionId}`,
         {
           method: 'DELETE', credentials: 'include',
           // Only send a body when there's a reason — keeps DELETEs
@@ -239,7 +240,7 @@ export function RoomShowPage() {
     if (!roomId) { return; }
     setBusy(true);
     try {
-      const res = await fetch(`/admin-api/rooms/${roomId}`, {
+      const res = await fetch(`${API}/rooms/${roomId}`, {
         method: 'DELETE', credentials: 'include',
       });
       if (!res.ok) { throw new Error(`dispose failed (HTTP ${res.status})`); }
@@ -256,7 +257,7 @@ export function RoomShowPage() {
     setBusy(true);
     setLockPending(nextLocked);
     try {
-      const res = await fetch(`/admin-api/rooms/${roomId}`, {
+      const res = await fetch(`${API}/rooms/${roomId}`, {
         method: 'PATCH', credentials: 'include',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ locked: nextLocked }),
@@ -724,7 +725,7 @@ function StateEditor({
   const { resolved: themeMode } = useTheme();
 
   async function save(path: Array<string | number>, value: unknown): Promise<void> {
-    const res = await fetch(`/admin-api/rooms/${roomId}/state`, {
+    const res = await fetch(`${API}/rooms/${roomId}/state`, {
       method: 'PATCH', credentials: 'include',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ path, value }),
@@ -734,7 +735,7 @@ function StateEditor({
   }
 
   async function remove(path: Array<string | number>): Promise<void> {
-    const res = await fetch(`/admin-api/rooms/${roomId}/state`, {
+    const res = await fetch(`${API}/rooms/${roomId}/state`, {
       method: 'DELETE', credentials: 'include',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ path }),

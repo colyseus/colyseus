@@ -23,8 +23,7 @@ import { ThemeProvider } from '@/lib/theme-provider';
 import { LayoutDashboard, Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-
-const API = '/admin-api';
+import { API, BASENAME } from '@/lib/runtime-config';
 
 // Cookie-based: send the session on every request. The X-User-Id header is
 // only forwarded when the impersonation input (gated behind ?dev=1) has a
@@ -63,7 +62,7 @@ export function App() {
 
   return (
     <ThemeProvider>
-    <BrowserRouter basename="/admin">
+    <BrowserRouter basename={BASENAME}>
       <Refine
         dataProvider={provider}
         routerProvider={routerProvider}

@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/table';
 import { SearchInput } from '../internals/search';
 import { Pagination } from '../internals/pagination';
+import { API } from '@/lib/runtime-config';
 
 const POLL_INTERVAL_MS = 3000;
 const PAGE_SIZE = 20;
@@ -60,7 +61,7 @@ export function RoomsListPage() {
 
     const fetchOnce = async () => {
       try {
-        const res = await fetch('/admin-api/rooms', { credentials: 'include' });
+        const res = await fetch(`${API}/rooms`, { credentials: 'include' });
         if (!res.ok) {
           setError(res.status === 403 ? 'You do not have permission to view rooms.' : `HTTP ${res.status}`);
           return;

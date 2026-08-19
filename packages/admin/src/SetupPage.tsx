@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { consumeNextParam } from '@/lib/next-param';
+import { API, UI_BASE } from '@/lib/runtime-config';
 
 export function SetupPage() {
   const [email, setEmail] = useState('');
@@ -26,7 +27,7 @@ export function SetupPage() {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch('/admin-api/auth/bootstrap', {
+      const res = await fetch(`${API}/auth/bootstrap`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'content-type': 'application/json' },
@@ -37,10 +38,8 @@ export function SetupPage() {
         // outside the admin router, and the operator-gated catalog
         // needs App to remount + refetch it with the freshly-set
         // session cookie so the sidebar populates.
-        // Prebuilt-bundle mount root is fixed at '/admin/' (see note in
-        // LoginPage). uiPath customization is backend-only for now.
         const next = consumeNextParam();
-        window.location.replace(next || '/admin/');
+        window.location.replace(next || UI_BASE);
         return;
       }
       const body = await res.json().catch(() => ({}));

@@ -2,7 +2,7 @@ import { count, eq } from 'drizzle-orm';
 import { Hash, JWT, auth, readTemplate } from '@colyseus/auth';
 import { createEndpoint, type Endpoint } from '@colyseus/core';
 import type { GameDatabase } from '@colyseus/database';
-import { json, errorResponse } from '../internal/http.js';
+import { externalUiConfig, json, errorResponse } from '../internal/http.js';
 import {
   signSession,
   setSessionCookie,
@@ -342,7 +342,9 @@ export function authEndpoints(opts: AuthEndpointsOptions): Record<string, Endpoi
             const tv = await database.auth.getTokenVersion(user.id);
             const claims: ResetTokenClaims = { sub: user.id, kind: 'reset', tv };
             const token = await JWT.sign(claims, { expiresIn: RESET_TOKEN_TTL_SECONDS });
-            const url = `${uiPath}/reset?token=${encodeURIComponent(token)}`;
+            // Mount-aware base so the link lands on the panel wherever it is served
+            const { base } = externalUiConfig(ctx.getHeader, { uiPath, apiPath });
+            const url = `${base}reset?token=${encodeURIComponent(token)}`;
             await onResetRequest({ email: body.email, userId: user.id, token, url });
           }
         } catch (err) {

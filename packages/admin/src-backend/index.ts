@@ -5,6 +5,7 @@
  */
 import path from 'path';
 import { dualModeEndpoints, type Endpoint } from '@colyseus/core';
+import { safePath } from './internal/http.js';
 import { getTableConfig as getPgTableConfig } from 'drizzle-orm/pg-core';
 import { getTableConfig as getSqliteTableConfig } from 'drizzle-orm/sqlite-core';
 import { GameDatabase } from '@colyseus/database';
@@ -87,10 +88,18 @@ export interface AdminOptions {
   /** Per-resource UI/UX overrides keyed by drizzle table name. */
   resources?: Record<string, ResourceDefinition>;
 
-  /** Mount path for admin UI. Default `/admin`. Canonical URL is `${uiPath}/`. */
+  /**
+   * Path the admin UI is served at when mounted at the express root or
+   * spread into `createRouter`. Default `/admin`; canonical URL is
+   * `${uiPath}/`. Under an express path mount (`app.use("/x", admin())`)
+   * the mount path takes over and the UI serves at `/x/`.
+   */
   uiPath?: string;
 
-  /** Mount path for REST API. Default `/admin-api`. */
+  /**
+   * Path the REST API is served at. Default `/admin-api`. Under an express
+   * path mount the API nests inside the mount: `/x${apiPath}`.
+   */
   apiPath?: string;
 
   /** Absolute path to the built UI; defaults to ../build relative to this file. */
@@ -424,7 +433,10 @@ function buildContext(opts: AdminOptions): EndpointContext {
 /**
  * Better-call endpoint map for the admin panel — REST API + static UI. Spread
  * into `createRouter({ ...admin({ database }), yourRoutes... })`. The same
- * return value is also a valid express middleware: `app.use("/", admin({...}))`.
+ * return value is also a valid express middleware, at the root or under any
+ * path mount: `app.use(admin({...}))` serves `/admin` + `/admin-api`, while
+ * `app.use("/x", admin({...}))` serves the UI at `/x/` with the API nested
+ * at `/x/admin-api`.
  *
  * Session guard for sibling apps lives at `admin.guard()` (mirrors
  * `auth.middleware()`): `playground({ use: [admin.guard()] })`. It's a
@@ -525,37 +537,72 @@ function adminImpl(opts: AdminOptions) {
     adminUiAssets:    uiAssetsEndpoint(ctx),
   };
 
-  // Express compat — routing decisions key off req.originalUrl (the same
-  // string better-call's getRequest uses to build the dispatched Request URL),
-  // so the middleware's match check and the actual dispatch always agree.
+  // Express compat. Root and pathless mounts arrive with the endpoints'
+  // namespaces (`/admin`, `/admin-api`) intact. Path mounts arrive stripped —
+  // the mount takes over uiPath (`app.use("/x", admin())` serves the UI at
+  // `/x/`) and the API rides along inside it at `${mount}${apiPath}`, since
+  // express never forwards a sibling namespace into a mount. The served
+  // index.html gets the external coordinates injected (see externalUiConfig)
+  // so the prebuilt SPA follows.
   return dualModeEndpoints(endpoints, {
     catchAllKey: 'adminUiAssets',
     buildMiddleware: ({ specificRouter, specificHandler, fullHandler }) => (req, res, next) => {
-      const dispatchUrl = ((req as any).originalUrl ?? req.url ?? '').split('?')[0]!;
-      const method = req.method ?? 'GET';
+      const r = req as typeof req & { baseUrl?: string; originalUrl?: string };
+      const method = r.method ?? 'GET';
+      const raw = r.url ?? '';
+      const qi = raw.indexOf('?');
+      const url = qi < 0 ? raw : raw.slice(0, qi);
+      const query = qi < 0 ? '' : raw.slice(qi);
 
-      // Bare-uiPath (`/admin`) → canonical `/admin/`. 302, not 301 —
-      // browsers cache 301s across dev-server remounts.
-      if (method === 'GET' && dispatchUrl === ctx.uiPath) {
-        res.writeHead(302, { location: `${ctx.uiPath}/` });
+      const mount = r.baseUrl ?? '';
+      const isApi = url === ctx.apiPath || url.startsWith(ctx.apiPath + '/');
+      const dispatchPath = mount && !isApi ? ctx.uiPath + url : url;
+
+      // Canonicalize the bare index URL onto its trailing slash. 302, not
+      // 301 — browsers cache 301s across dev-server remounts.
+      const original = (r.originalUrl ?? raw).split('?')[0]!;
+      const bare = mount ? url === '/' && !original.endsWith('/') : url === ctx.uiPath;
+      if (method === 'GET' && bare) {
+        res.writeHead(302, { location: `${original}/${query}` });
         res.end();
         return;
       }
 
-      const route = specificRouter.findRoute(method, dispatchUrl);
+      const dispatch = (handler: (rq: any, rs: any) => Promise<void>) => {
+        const headers: typeof req.headers = { ...req.headers };
+        // Internal mount-coordinate headers — always ours, never the client's
+        delete headers['x-colyseus-admin-base'];
+        delete headers['x-colyseus-admin-api'];
+        if (mount) {
+          const fwd = req.headers['x-forwarded-prefix'];
+          const proxy = safePath(typeof fwd === 'string' ? fwd : null);
+          headers['x-colyseus-admin-base'] = `${proxy}${mount}/`;
+          headers['x-colyseus-admin-api'] = `${proxy}${mount}${ctx.apiPath}`;
+        }
+        // better-call's getRequest resolves the URL as baseUrl + url
+        const wrapped = Object.create(req, {
+          url: { value: dispatchPath + query, enumerable: true, configurable: true },
+          baseUrl: { value: '', enumerable: true, configurable: true },
+          originalUrl: { value: dispatchPath + query, enumerable: true, configurable: true },
+          headers: { value: headers, enumerable: true, configurable: true },
+        });
+        handler(wrapped, res).catch(next);
+      };
+
+      const route = specificRouter.findRoute(method, dispatchPath);
       // route.data.path is the route template (e.g. `/admin-api/:resource`),
       // so we can't compare it strictly against the dispatched URL. Trust
       // findRoute for parameterized routes; only skip when the template ends
       // in `/` and the dispatched URL doesn't (rou3 normalizes trailing
       // slashes in findRoute but processRequest does exact-match).
-      if (route && (!route.data?.path?.endsWith('/') || dispatchUrl.endsWith('/'))) {
-        return specificHandler(req as any, res as any).catch(next);
+      if (route && (!route.data?.path?.endsWith('/') || dispatchPath.endsWith('/'))) {
+        return dispatch(specificHandler);
       }
 
       // GET under uiPath → SPA fallback via the catch-all so React Router
       // routes (e.g. `/admin/users/42`) serve index.html on direct visit.
-      if (method === 'GET' && dispatchUrl.startsWith(ctx.uiPath + '/')) {
-        return fullHandler(req as any, res as any).catch(next);
+      if (method === 'GET' && dispatchPath.startsWith(ctx.uiPath + '/')) {
+        return dispatch(fullHandler);
       }
 
       next();
