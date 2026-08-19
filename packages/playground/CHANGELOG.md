@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.18.3
+
+- Opening the playground without the trailing slash (`/playground`) now redirects to `/playground/` instead of rendering a blank page.
+
+- The panel now works at any express mount path — `app.use("/anything", playground())` — with no `prefix` option needed.
+
 ## 0.18.2
 
 - Fix the CommonJS build crashing on import, which also took down `require("colyseus")`.

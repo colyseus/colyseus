@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.6
+
+- `dualModeEndpoints()` now provides a default express middleware — `buildMiddleware` is optional; pass `prefix` and `staticDir` instead. It works at any mount path, redirects the bare index URL to its trailing-slash form, and only serves catch-all requests for files that exist on disk. The monitor and playground panels are built on it.
+
 ## 0.18.5
 
 - New `beforeUpgrade` transport option, called before the WebSocket handshake with the incoming `Request` and the same read-only context `onAuth()` receives. Return a `Response` to answer the request instead of upgrading it. Supported by `@colyseus/ws-transport`, `@colyseus/uwebsockets-transport` and `@colyseus/bun-websockets`; WebTransport has no handshake to intercept, so `@colyseus/h3-transport` warns and ignores it. (thanks @mikkas70 for the proposal and @Br1an67 for the first pass - https://github.com/colyseus/colyseus/issues/912)

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.18.3
+
+- The panel now works at any express mount path — `app.use("/stats", monitor())` no longer requires a matching `prefix` option.
+
+- The bare-path redirect (`/monitor` → `/monitor/`) is now a 302, so browsers no longer cache it permanently.
+
 ## 0.18.2
 
 - Fix the CommonJS build crashing on import, which also took down `require("colyseus")`.

@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/admin",
-  "version": "0.18.2",
+  "version": "0.18.3",
   "type": "module",
   "description": "Database-backed admin panel for Colyseus (REST + Refine UI, no express)",
   "input": "./src-backend/index.ts",
