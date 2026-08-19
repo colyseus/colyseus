@@ -534,9 +534,10 @@ function adminImpl(opts: AdminOptions) {
       const dispatchUrl = ((req as any).originalUrl ?? req.url ?? '').split('?')[0]!;
       const method = req.method ?? 'GET';
 
-      // Bare-uiPath (`/admin`) → 301 to canonical `/admin/`.
+      // Bare-uiPath (`/admin`) → canonical `/admin/`. 302, not 301 —
+      // browsers cache 301s across dev-server remounts.
       if (method === 'GET' && dispatchUrl === ctx.uiPath) {
-        res.writeHead(301, { location: `${ctx.uiPath}/` });
+        res.writeHead(302, { location: `${ctx.uiPath}/` });
         res.end();
         return;
       }

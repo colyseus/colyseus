@@ -1,4 +1,3 @@
-import fs from 'fs/promises';
 import path from 'path';
 import { z } from 'zod';
 import { createEndpoint, dualModeEndpoints, matchMaker, type Endpoint } from '@colyseus/core';
@@ -12,7 +11,7 @@ const UNAVAILABLE_ROOM_ERROR = "@colyseus/monitor: room $roomId is not available
 const SPA_DIST = path.resolve(import.meta.dirname, '..', 'build', 'static');
 
 export interface MonitorOptions {
-  /** Mount prefix used when spread into `createRouter`. Ignored in express-middleware mode. Defaults to `''`. */
+  /** Endpoint path prefix — namespaces the routes when spread into `createRouter`, honored at root express mounts. Under a path mount (`app.use("/stats", monitor())`) the mount path takes over. Defaults to `'/monitor'`. */
   prefix?: string;
   /** Better-call middleware applied to every monitor endpoint — use for auth gating. */
   use?: any[];
@@ -119,45 +118,9 @@ export function monitor(opts: MonitorOptions = {}) {
     }),
   };
 
-  const SPA_DIST_RESOLVED = path.resolve(SPA_DIST);
-
-  // Express compat — works with either `app.use("/monitor", monitor())` or
-  // `app.use("/", monitor())`. Routing decisions use originalUrl (the same
-  // string better-call's getRequest uses to build the dispatched Request URL),
-  // so the middleware's match check and the actual dispatch always agree.
   return dualModeEndpoints(endpoints, {
     catchAllKey: 'monitor-static',
-    buildMiddleware: ({ specificRouter, specificHandler, fullHandler }) => (req, res, next) => {
-      if (req.method !== 'GET') { return next(); }
-
-      const dispatchUrl = ((req as any).originalUrl ?? req.url ?? '').split('?')[0]!;
-
-      // Bare prefix (`/monitor`) → 301 to canonical `/monitor/`.
-      if (prefix && dispatchUrl === prefix) {
-        res.writeHead(301, { location: `${prefix}/` });
-        res.end();
-        return;
-      }
-
-      const route = specificRouter.findRoute('GET', dispatchUrl);
-      if (route && route.data?.path === dispatchUrl) {
-        return specificHandler(req as any, res as any).catch(next);
-      }
-
-      // Asset request — only delegate if the file exists on disk.
-      if (!dispatchUrl.startsWith(prefix)) { return next(); }
-      const rel = dispatchUrl.slice(prefix.length).replace(/^\/+/, '');
-      if (!rel || rel.includes('..')) { return next(); }
-      const filePath = path.resolve(SPA_DIST_RESOLVED, rel);
-      if (!filePath.startsWith(SPA_DIST_RESOLVED + path.sep)) { return next(); }
-
-      fs.stat(filePath).then((stat) => {
-        if (stat.isFile()) {
-          fullHandler(req as any, res as any).catch(next);
-        } else {
-          next();
-        }
-      }).catch(() => next());
-    },
+    prefix,
+    staticDir: SPA_DIST,
   });
 }

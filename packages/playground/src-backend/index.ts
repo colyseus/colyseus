@@ -4,7 +4,6 @@ import inspector from 'node:inspector/promises';
 import { spawn } from 'node:child_process';
 import os from 'node:os';
 import { createRequire } from 'node:module';
-import type { IncomingMessage, ServerResponse } from 'http';
 import { createEndpoint, dualModeEndpoints, isDevMode, logger, matchMaker, Server, type IRoomCache, type Endpoint } from '@colyseus/core';
 import { auth, JWT } from '@colyseus/auth';
 import { applyMonkeyPatch } from './colyseus.ext.js';
@@ -17,7 +16,7 @@ export type AuthConfig = {
 };
 
 export interface PlaygroundOptions {
-  /** Mount prefix used when spread into `createRouter`. Ignored in express-middleware mode (express strips its mount path). Defaults to `''`. */
+  /** Endpoint path prefix — required to namespace the routes when spread into `createRouter`, honored at root express mounts. Under a path mount (`app.use("/playground", playground())`) the mount path takes over. Defaults to `''`. */
   prefix?: string;
   /** Better-call middleware applied to every playground endpoint — use for auth gating. */
   use?: any[];
@@ -254,53 +253,9 @@ export function playground(opts: PlaygroundOptions = {}) {
     }),
   };
 
-  const SPA_DIST_RESOLVED = path.resolve(SPA_DIST);
-
   return dualModeEndpoints(endpoints, {
     catchAllKey: 'playground-static',
-    buildMiddleware: ({ fullHandler }) => {
-      // Strip express's `baseUrl` so the inner router sees the request
-      // relative to its mount point — playground's endpoint paths assume
-      // a `''` prefix, so a sub-mount like `app.use("/foo", playground())`
-      // needs the leading `/foo` stripped before dispatch.
-      const dispatch = (req: IncomingMessage, res: ServerResponse, next: (e?: any) => void) => {
-        const stripped = Object.create(req, {
-          baseUrl: { value: '', enumerable: true, configurable: true },
-          originalUrl: { value: req.url, enumerable: true, configurable: true },
-        });
-        fullHandler(stripped as any, res as any).catch(next);
-      };
-
-      return (req, res, next) => {
-        const url = (req.url ?? '').split('?')[0]!;
-        const isProfiling = url.startsWith('/profiling');
-
-        // Profiling start/stop are POSTs; everything else here is GET-only.
-        if (req.method === 'POST') {
-          return isProfiling ? dispatch(req, res, next) : next();
-        }
-        if (req.method !== 'GET') { return next(); }
-
-        if (url === '/' || url === '/rooms' || url === '/__apidocs' || isProfiling) {
-          return dispatch(req, res, next);
-        }
-
-        // Asset request — only delegate if the file actually exists on
-        // disk. Avoids the catch-all's SPA fallback (which would serve
-        // index.html for unknown paths, masking sibling express routes).
-        const rel = url.replace(/^\/+/, '');
-        if (!rel || rel.includes('..')) { return next(); }
-        const filePath = path.resolve(SPA_DIST_RESOLVED, rel);
-        if (!filePath.startsWith(SPA_DIST_RESOLVED + path.sep)) { return next(); }
-
-        fs.stat(filePath).then((stat) => {
-          if (stat.isFile()) {
-            dispatch(req, res, next);
-          } else {
-            next();
-          }
-        }).catch(() => next());
-      };
-    },
+    prefix,
+    staticDir: SPA_DIST,
   });
 }

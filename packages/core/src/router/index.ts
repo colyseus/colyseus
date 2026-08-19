@@ -1,5 +1,7 @@
 import type express from "express";
 import type { IncomingMessage, ServerResponse } from "http";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { type Endpoint, type Router, type RouterConfig, createRouter as createBetterCallRouter, createEndpoint, createMiddleware, APIError } from "@colyseus/better-call";
 import { toNodeHandler, getRequest, setResponse } from "@colyseus/better-call/node";
@@ -250,8 +252,12 @@ export function dualModeEndpoints<E extends Record<string, Endpoint>>(
   opts: {
     /** Key in `endpoints` whose path is a catch-all. Excluded from `specificRouter` so it doesn't eat fall-through decisions. */
     catchAllKey?: keyof E;
-    /** Build the express middleware given the pre-built routers + node handlers. */
-    buildMiddleware: (helpers: DualModeHelpers) => ExpressMiddleware;
+    /** Endpoint-path prefix baked into `endpoints` (`''`, `'/monitor'`). Used by the default middleware to rebase path mounts. */
+    prefix?: string;
+    /** SPA dist dir — the default middleware dispatches catch-all requests only for files that exist here. */
+    staticDir?: string;
+    /** Build a custom express middleware given the pre-built routers + node handlers. Omit for the default SPA-panel middleware. */
+    buildMiddleware?: (helpers: DualModeHelpers) => ExpressMiddleware;
   },
 ): ExpressMiddleware & E {
   const fullRouter = createRouter(endpoints);
@@ -265,8 +271,71 @@ export function dualModeEndpoints<E extends Record<string, Endpoint>>(
   const specificRouter = createRouter(specificEndpoints as E);
   const specificHandler = toNodeHandler(specificRouter.handler) as NodeHandler;
 
-  const middleware = opts.buildMiddleware({
+  const buildMiddleware = opts.buildMiddleware ?? panelMiddleware(opts.prefix ?? '', opts.staticDir);
+  const middleware = buildMiddleware({
     specificRouter, specificHandler, fullRouter, fullHandler,
   });
   return Object.assign(middleware, endpoints) as ExpressMiddleware & E;
+}
+
+/**
+ * Default express middleware for a single-prefix SPA panel (monitor,
+ * playground). Express and the endpoint map use different coordinates: a path
+ * mount strips its prefix into `req.baseUrl`, while the endpoints keep the
+ * configured `prefix` baked into their paths. This rebases every request onto
+ * the endpoint namespace, so the panel works at any mount path — `prefix` only
+ * matters in router mode and at root mounts.
+ */
+function panelMiddleware(prefix: string, staticDir?: string) {
+  const staticRoot = staticDir && path.resolve(staticDir);
+  return ({ specificRouter, specificHandler, fullHandler }: DualModeHelpers): ExpressMiddleware =>
+    (req, res, next) => {
+      const r = req as IncomingMessage & { baseUrl?: string; originalUrl?: string };
+      const raw = r.url ?? '';
+      const q = raw.indexOf('?');
+      const url = q < 0 ? raw : raw.slice(0, q);
+      const query = q < 0 ? '' : raw.slice(q);
+
+      // Path mounts arrive stripped (`req.url` is mount-relative); root and
+      // pathless mounts arrive unstripped and already match the endpoints.
+      const dispatchPath = r.baseUrl ? prefix + url : url;
+
+      // Canonicalize the index: the SPA references its assets relatively, so
+      // they only resolve from the trailing-slash URL. The browser's address
+      // is originalUrl — 302 (not 301: browsers cache 301s across remounts).
+      if (dispatchPath === prefix || dispatchPath === `${prefix}/`) {
+        const original = (r.originalUrl ?? raw).split('?')[0]!;
+        if (r.method === 'GET' && !original.endsWith('/')) {
+          res.writeHead(302, { location: `${original}/${query}` });
+          res.end();
+          return;
+        }
+      }
+
+      const dispatch = (handler: NodeHandler) => {
+        // better-call's getRequest resolves the path as baseUrl + url
+        const wrapped = Object.create(req, {
+          url: { value: dispatchPath + query, enumerable: true, configurable: true },
+          baseUrl: { value: '', enumerable: true, configurable: true },
+          originalUrl: { value: dispatchPath + query, enumerable: true, configurable: true },
+        });
+        handler(wrapped as any, res).catch(next);
+      };
+
+      const route = specificRouter.findRoute(r.method ?? 'GET', dispatchPath);
+      // rou3 normalizes trailing slashes in findRoute but processRequest
+      // exact-matches — only trust the hit when the slashes agree.
+      if (route && (!route.data?.path?.endsWith('/') || dispatchPath.endsWith('/'))) {
+        return dispatch(specificHandler);
+      }
+
+      // Asset request — only delegate when the file exists on disk, so the
+      // catch-all's SPA fallback can't mask sibling express routes.
+      if (r.method !== 'GET' || !staticRoot || !dispatchPath.startsWith(prefix)) { return next(); }
+      const rel = dispatchPath.slice(prefix.length).replace(/^\/+/, '');
+      if (!rel || rel.includes('..')) { return next(); }
+      const filePath = path.resolve(staticRoot, rel);
+      if (!filePath.startsWith(staticRoot + path.sep)) { return next(); }
+      fs.stat(filePath).then((stat) => stat.isFile() ? dispatch(fullHandler) : next()).catch(() => next());
+    };
 }

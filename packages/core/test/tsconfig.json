@@ -15,5 +15,7 @@
     "types": ["node"],
     "typeRoots": ["../../../node_modules/@types"]
   },
-  "include": ["**/*.ts"]
+  // declaration tests only — runtime tests import src directly and are
+  // transformed by vitest, not this strict-consumer program
+  "include": ["**/*.test-d.ts"]
 }
