@@ -25,7 +25,7 @@ export interface ProfileCore {
     readonly label?: string;
     readonly mode: PredictMode;
     readonly delay: number;
-    readonly damping: number;
+    readonly smoothMs: number;
     readonly maxExtrapolate: number;
     readonly tickInterval: number;
     /** Value-space teleport threshold (0 = off). */
@@ -55,8 +55,8 @@ export interface ReconcilerStat {
 export interface PredictCore {
     readonly name: string;
     mode(): PredictMode;
-    smoothingDefaults(): { mode: PredictMode; delay: number; damping: number; maxExtrapolate: number; tickInterval?: number };
-    reckonDefaults(): { step: StepFn | undefined; smoothing: number; substep: number };
+    smoothingDefaults(): { mode: PredictMode; delay: number; smoothMs: number; maxExtrapolate: number; tickInterval?: number };
+    reckonDefaults(): { step: StepFn | undefined; smoothMs: number; substep: number };
     attachedCount(): number;
     reconcilers(): ReconcilerStat[];
     setDefaults(opts: any): void;
@@ -79,8 +79,8 @@ export interface ProfileInfo extends ProfileCore {
 export interface PredictDebugHandle {
     readonly name: string;
     mode(): PredictMode;
-    smoothingDefaults(): { mode: PredictMode; delay: number; damping: number; maxExtrapolate: number; tickInterval?: number };
-    reckonDefaults(): { step: StepFn | undefined; smoothing: number; substep: number };
+    smoothingDefaults(): { mode: PredictMode; delay: number; smoothMs: number; maxExtrapolate: number; tickInterval?: number };
+    reckonDefaults(): { step: StepFn | undefined; smoothMs: number; substep: number };
     attachedCount(): number;
     reconcilers(): ReconcilerStat[];
     setDefaults(opts: any): void;

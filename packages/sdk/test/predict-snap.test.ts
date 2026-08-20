@@ -105,7 +105,7 @@ describe('Predict `snap` (teleport threshold)', () => {
         const clock = { serverNow: () => serverTime, rtt: () => 0, smoothedRtt: () => 0, lastServerTime: () => serverTime, sample() {} };
         const { decoder, cu, patch } = setup();
         const step = () => {};                    // stationary — forward sim = snapshot
-        const p = Predict.get(decoder, { mode: 'reckon', step, smoothing: 20, snap: 4, name: 'snap-reckon', clock });
+        const p = Predict.get(decoder, { mode: 'reckon', step, smoothMs: 50, snap: 4, name: 'snap-reckon', clock });
         p.attachAll('units', { fields: ['x'] });
 
         p.tick(1000);
@@ -121,7 +121,7 @@ describe('Predict `snap` (teleport threshold)', () => {
         const clock = { serverNow: () => serverTime, rtt: () => 0, smoothedRtt: () => 0, lastServerTime: () => serverTime, sample() {} };
         const { decoder, cu, patch } = setup();
         const step = () => {};
-        const p = Predict.get(decoder, { mode: 'reckon', step, smoothing: 20, snap: 4, name: 'snap-reckon-small', clock });
+        const p = Predict.get(decoder, { mode: 'reckon', step, smoothMs: 50, snap: 4, name: 'snap-reckon-small', clock });
         p.attachAll('units', { fields: ['x'] });
 
         p.tick(1000);

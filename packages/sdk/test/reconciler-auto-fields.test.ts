@@ -74,7 +74,7 @@ describe('reconciler auto-derived fields', () => {
         instance.x = 0; instance.grounded = true; instance.hp = 10;
         const recon = new Reconciler<{ x: number; grounded: boolean; hp: number }, Cmd>(instance, {
             input: input as unknown as InputHandle<Cmd>,
-            smoothing: 0,
+            smoothMs: 0,
             step: (_ctx, s, cmd) => { s.x += cmd.ax; },
         });
 
@@ -105,7 +105,7 @@ describe('reconciler auto-derived fields', () => {
         let stepCalls = 0;
         const recon = new Reconciler<{ x: number; grounded: boolean }, Cmd>(instance, {
             input: input as unknown as InputHandle<Cmd>,
-            smoothing: 0,
+            smoothMs: 0,
             step: (_ctx, s, cmd) => { stepCalls++; s.x += cmd.ax * STRIDE; },
         });
 
@@ -131,7 +131,7 @@ describe('reconciler auto-derived fields', () => {
         let stepCalls = 0;
         const recon = new Reconciler<{ x: number; name: string }, Cmd>(instance, {
             input: input as unknown as InputHandle<Cmd>,
-            smoothing: 0,
+            smoothMs: 0,
             step: (_ctx, s, cmd) => { stepCalls++; s.x += cmd.ax * STRIDE; },
         });
 
@@ -176,7 +176,7 @@ describe('reconciler explicit-subset dev diagnostic', () => {
         const recon = new Reconciler<{ x: number }, Cmd>(instance, {
             input: input as unknown as InputHandle<Cmd>,
             fields: ['x'],
-            smoothing: 0,
+            smoothMs: 0,
             step: stepFn,
         });
         return { input, instance, recon };
@@ -218,7 +218,7 @@ describe('reconciler explicit-subset dev diagnostic', () => {
             const recon = new Reconciler<{ x: number; y: number }, Cmd>(instance, {
                 input: input as unknown as InputHandle<Cmd>,
                 fields: ['x', 'y'],
-                smoothing: 0,
+                smoothMs: 0,
                 step: (_ctx, s) => { seen = s; },
             });
             const warns = captureWarn(() => step(input, 1));
@@ -243,7 +243,7 @@ describe('reconciler explicit-subset dev diagnostic', () => {
             let seen: unknown;
             const recon = new Reconciler<{ x: number; y: number }, Cmd>(instance, {
                 input: input as unknown as InputHandle<Cmd>,
-                smoothing: 0,
+                smoothMs: 0,
                 step: (_ctx, s, cmd) => { seen = s; s.x += cmd.ax; },
             });
             const warns = captureWarn(() => step(input, 1));

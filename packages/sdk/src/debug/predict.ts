@@ -492,16 +492,18 @@ function renderProfileSliders(subcard: HTMLElement, handle: PredictDebugHandle, 
             handle.setProfile(id, { delay: v }));
         addSlider(slidersEl, "tickInterval (ms, 0=off)", 0, 100, p.tickInterval ?? 0, (v) =>
             handle.setProfile(id, { tickInterval: v }));
+        addSlider(slidersEl, "smoothMs (0=off)", 0, 300, p.smoothMs, (v) =>
+            handle.setProfile(id, { smoothMs: v }));
     } else if (mode === "extrapolate") {
         addSlider(slidersEl, "maxExtrapolate (ms)", 0, 300, p.maxExtrapolate, (v) =>
             handle.setProfile(id, { maxExtrapolate: v }));
         addSlider(slidersEl, "tickInterval (ms, 0=off)", 0, 100, p.tickInterval ?? 0, (v) =>
             handle.setProfile(id, { tickInterval: v }));
-        addSlider(slidersEl, "damping (0=off)", 0, 40, p.damping, (v) =>
-            handle.setProfile(id, { damping: v }));
+        addSlider(slidersEl, "smoothMs (0=off)", 0, 300, p.smoothMs, (v) =>
+            handle.setProfile(id, { smoothMs: v }));
     } else if (mode === "damped") {
-        addSlider(slidersEl, "damping", 2, 40, p.damping, (v) =>
-            handle.setProfile(id, { damping: v }));
+        addSlider(slidersEl, "smoothMs (0=snap)", 0, 300, p.smoothMs, (v) =>
+            handle.setProfile(id, { smoothMs: v }));
     }
     if (mode === "lerp" || mode === "extrapolate" || mode === "damped") {
         // Value units are game-specific — widen the range to fit the config.
@@ -584,7 +586,7 @@ function fmtDrift(v: number): string {
 // what to do". (Mirrors classifyDrift + the warnOnDivergence message.)
 const STATUS: Record<string, { word: string; color: string; action: string }> = {
     matched:   { word: "✓ matched",   color: "#6c9", action: "" },
-    jitter:    { word: "~ jitter",    color: "#dc7", action: "transient spikes (packet loss / reorder) — raise smoothing or ignore; not a bug" },
+    jitter:    { word: "~ jitter",    color: "#dc7", action: "transient spikes (packet loss / reorder) — raise smoothMs or ignore; not a bug" },
     diverging: { word: "✗ diverging", color: "#e66", action: "client/server sim disagree — check dt · shared step · constants · skipped inputs" },
 };
 

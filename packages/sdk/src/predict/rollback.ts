@@ -297,12 +297,13 @@ export interface RollbackOptions<I> {
      */
     clock?: { serverNow(): number };
     /**
-     * Error-decay rate (spring constant 1/s; higher = snappier). The reconcile
-     * delta eases to zero at this rate. 0 = hard snap. Defaults to the server's
-     * correction cadence (`input.patchRate`) so the error decays over ~one patch
-     * interval — else 20.
+     * Error-decay time constant in ms — the reconcile delta eases out ~63%
+     * per `smoothMs` (see {@link SmoothingOptions.smoothMs}). 0 = hard snap.
+     * Defaults to the server's correction cadence (`input.patchRate`, one
+     * patch interval) so a correction fades before the next one lands —
+     * else 50.
      */
-    smoothing?: number;
+    smoothMs?: number;
     /**
      * Teleport threshold (world/pose units). When a reconcile's max per-field
      * |correction| exceeds it, the visual offsets POP to the corrected pose
@@ -465,7 +466,7 @@ export abstract class RollbackController<I = any> {
     private readonly ackWatermark = () => this.input_.lastProcessed;
     /** Per-seq memo backing `ctx.memo` — computed live, replayed verbatim, pruned on ack. */
     protected readonly memos = new MemoStore();
-    protected readonly smoothing: number;
+    protected readonly smoothMs: number;
     /** Teleport pop threshold — see {@link RollbackOptions.snap}. 0 = off. */
     private readonly snapThreshold: number;
     /** The fixed simulation step (ms) this controller predicts at — read by the
@@ -481,10 +482,10 @@ export abstract class RollbackController<I = any> {
     constructor(opts: RollbackOptions<I>) {
         this.input_ = opts.input;
         this.clock = opts.clock;
-        // Default decay rate to the server's correction cadence (τ = one patch
-        // interval) so corrections ease out before the next one — no stacking.
-        this.smoothing = opts.smoothing
-            ?? (this.input_.patchRate ? 1000 / this.input_.patchRate : 20);
+        // Default the decay window to the server's correction cadence (τ = one
+        // patch interval) so corrections ease out before the next one — no stacking.
+        this.smoothMs = opts.smoothMs
+            ?? (this.input_.patchRate ? this.input_.patchRate : 50);
         this.snapThreshold = opts.snap ?? 0;
         // Fixed step: prefer an explicit ms, else the handle's server-advertised
         // rate, else derive from an explicit stepSeconds. A wrong dt silently
@@ -573,7 +574,7 @@ export abstract class RollbackController<I = any> {
         this.markDirty();   // render clock advanced → any cached render pose is stale
 
         if (dt <= 0) return;
-        const k = this.smoothing <= 0 ? 1 : 1 - Math.exp(-this.smoothing * dt / 1000);
+        const k = this.smoothMs <= 0 ? 1 : 1 - Math.exp(-dt / this.smoothMs);
         for (const f of this.smoothedFields()) this.error[f] -= this.error[f] * k;
     }
 
@@ -741,7 +742,7 @@ export abstract class RollbackController<I = any> {
         // The raw correction (pre-smoothing pop) doubles as a debug gauge —
         // recorded regardless of smoothing mode so telemetry sees it either way.
         // The `error` rebase below is the REAL reconciliation and always runs.
-        const hard = this.smoothing <= 0;
+        const hard = this.smoothMs <= 0;
         const wantMag = diag || this.snapThreshold > 0;
         let mag = 0;
         for (const f of this.smoothedFields()) {

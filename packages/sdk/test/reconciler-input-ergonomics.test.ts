@@ -91,7 +91,7 @@ describe('#2 the reconciler observes the input handle (single mutate + send surf
         const recon = new Reconciler<{ x: number }, Cmd>({ x: 0 }, {
             input: input as any,
             fields: ['x'],
-            smoothing: 0,
+            smoothMs: 0,
             step: (_c, s, cmd) => { s.x += cmd.q; },
         });
 
@@ -109,7 +109,7 @@ describe('#2 the reconciler observes the input handle (single mutate + send surf
         const recon = new Reconciler<{ x: number }, Cmd>({ x: 0 }, {
             input: input as any,
             fields: ['x'],
-            smoothing: 0,
+            smoothMs: 0,
             step: (_c, s, cmd) => { s.x += cmd.q; },
         });
         input.data.q = 5; input.send();   // stepped (prev = 0, cur = 5)
@@ -128,7 +128,7 @@ describe('#2 the reconciler observes the input handle (single mutate + send surf
         const recon = new Reconciler<{ x: number }, Cmd>({ x: 0 }, {
             input: input as any,
             fields: ['x'],
-            smoothing: 0,
+            smoothMs: 0,
             step: (_c, s) => { s.x += 10; },   // +10 world units per step (constant velocity)
         });
         const STEP = 100, FRAME = 40;          // 2.5 render frames per step
@@ -159,7 +159,7 @@ describe('#2 the reconciler observes the input handle (single mutate + send surf
         const recon = new Reconciler<{ x: number }, Cmd>({ x: 0 }, {
             input: input as any,
             fields: ['x'],
-            smoothing: 0,
+            smoothMs: 0,
             step: (_c, s) => { s.x += 10; },
         });
         recon.tick(0);
@@ -188,7 +188,7 @@ describe('#2 the reconciler observes the input handle (single mutate + send surf
         const recon = new Reconciler<{ x: number }, Cmd>({ x: 0 }, {
             input: input as any,
             fields: ['x'],
-            smoothing: 0,
+            smoothMs: 0,
             step: (_c, s) => { s.x += 10; },
         });
         const STEP = 100, FRAME = 40, MAX = 5; // MAX = Predict's per-frame step cap
@@ -227,7 +227,7 @@ describe('#2 the reconciler observes the input handle (single mutate + send surf
         const recon = new Reconciler<{ x: number }, Cmd>({ x: 0 }, {
             input: input as any,
             fields: ['x'],
-            smoothing: 0,   // isolate interpolation from error decay
+            smoothMs: 0,   // isolate interpolation from error decay
             step: (_c, s, cmd) => { s.x += cmd.q; },
         });
         input.data.q = 10; input.send();   // prev = 0, cur = 10; lastStepAt = render clock 0
@@ -249,7 +249,7 @@ describe('#2 the reconciler observes the input handle (single mutate + send surf
         const me = new SimReconciler<Cmd, { x: number }, { x: number }>({
             input: input as any,
             world: { x: 0 },
-            smoothing: 0,
+            smoothMs: 0,
             step: (_c, w, cmd) => { w.x += cmd.q; },
             adopt: () => {},
             pose: (w) => ({ x: w.x }),

@@ -133,7 +133,7 @@ describe('predict.read — batch render reads', () => {
     test('reckon: batch equals value() with ONE advance per frame', () => {
         const { decoder } = roundTrip((s) => s.enemies.set('a', enemy()));
         const p = Predict.get(decoder, { mode: 'lerp', name: 'batch-reckon', clock });
-        p.attachAll('enemies', { mode: 'reckon', fields: ['x', 'y', 'vx'], step, smoothing: 0 });
+        p.attachAll('enemies', { mode: 'reckon', fields: ['x', 'y', 'vx'], step, smoothMs: 0 });
         const ce = (decoder.state as any).enemies.get('a');
 
         p.tick(0);
@@ -177,7 +177,7 @@ describe('predict.read — batch render reads', () => {
         assert.deepEqual(p.read({ x: 7, y: 8 }, ['x', 'y']), { x: 7, y: 8 });
 
         // Attached instance, but 'hp' is outside the tracked field set → live.
-        p.attachAll('enemies', { mode: 'reckon', fields: ['x', 'y', 'vx'], step, smoothing: 0 });
+        p.attachAll('enemies', { mode: 'reckon', fields: ['x', 'y', 'vx'], step, smoothMs: 0 });
         p.tick(0);
         const r = p.read(ce, ['x', 'hp']);
         assert.approximately(r.x, 10.2, 1e-6, 'tracked field reckoned');
@@ -227,7 +227,7 @@ describe('predict.readAt — batch reads at an instant', () => {
 
     test('batch equals per-field valueAt (and the closed form) at time=1200', () => {
         const { p, ce } = reckonSetup();
-        p.attachAll('enemies', { mode: 'reckon', fields: ['x', 'y', 'vx'], step, smoothing: 0 });
+        p.attachAll('enemies', { mode: 'reckon', fields: ['x', 'y', 'vx'], step, smoothMs: 0 });
         p.tick(0);
 
         const r = p.readAt(ce, ['x', 'y', 'vx'], 1200);
@@ -240,7 +240,7 @@ describe('predict.readAt — batch reads at an instant', () => {
 
     test('mixed batch: reckon fields forward to time, lerp field ignores it', () => {
         const { p, ce } = reckonSetup();
-        p.attachAll('enemies', { mode: 'reckon', fields: ['x', 'vx'], step, smoothing: 0 });
+        p.attachAll('enemies', { mode: 'reckon', fields: ['x', 'vx'], step, smoothMs: 0 });
         p.attachAll('enemies', { y: 'lerp' });
         p.tick(0);
 
@@ -251,7 +251,7 @@ describe('predict.readAt — batch reads at an instant', () => {
 
     test('one advance per batch vs one per field hand-rolled', () => {
         const { p, ce } = reckonSetup();
-        p.attachAll('enemies', { mode: 'reckon', fields: ['x', 'y', 'vx'], step, smoothing: 0 });
+        p.attachAll('enemies', { mode: 'reckon', fields: ['x', 'y', 'vx'], step, smoothMs: 0 });
         p.tick(0);
 
         const b0 = stepCalls;
@@ -272,14 +272,14 @@ describe('predict.readAt — batch reads at an instant', () => {
 
     test('time at/before the snapshot clamps to it', () => {
         const { p, ce } = reckonSetup();
-        p.attachAll('enemies', { mode: 'reckon', fields: ['x', 'y', 'vx'], step, smoothing: 0 });
+        p.attachAll('enemies', { mode: 'reckon', fields: ['x', 'y', 'vx'], step, smoothMs: 0 });
         p.tick(0);
         assert.approximately(p.readAt(ce, ['x'], 900).x, 10, 1e-6, 'no reckoning into the past');
     });
 
     test('scratch as 4th arg; untracked field in the batch reads live', () => {
         const { p, ce } = reckonSetup();
-        p.attachAll('enemies', { mode: 'reckon', fields: ['x', 'y', 'vx'], step, smoothing: 0 });
+        p.attachAll('enemies', { mode: 'reckon', fields: ['x', 'y', 'vx'], step, smoothMs: 0 });
         p.tick(0);
 
         const scratch = { x: 0, hp: 0 };

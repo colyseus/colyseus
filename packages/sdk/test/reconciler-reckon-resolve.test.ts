@@ -50,7 +50,7 @@ function makeRecon(input: FakeInput, seen: Seen[], clock?: { serverNow(): number
     return new Reconciler<{ x: number }, Cmd>({ x: 0 }, {
         input: asHandle(input),
         fields: ['x'],
-        smoothing: 0,
+        smoothMs: 0,
         clock,
         step: (ctx, s, cmd) => {
             seen.push({ seq: ctx.tick, reckonTime: ctx.reckonTime, lagCompActive: ctx.lagCompActive, isReplay: ctx.isReplay });

@@ -131,7 +131,7 @@ describe('sub-stepping (network rate ÷ physics rate decoupling)', () => {
             input: asHandle(input),
             step: subSteppedStep,
             fields: ['x', 'vx'],
-            smoothing: 0,
+            smoothMs: 0,
         });
         for (let i = 0; i < 6; i++) stepR(ctl, input, { ax: 1 });
         instance.x = states[1].x; instance.vx = states[1].vx;

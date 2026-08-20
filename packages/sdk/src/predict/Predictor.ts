@@ -51,7 +51,7 @@
  *     // (e.g. `room.state`) only for nested collections — root-level
  *     // collections take just the key:
  *     predict.attachAll("enemies", {
- *         mode: "reckon", step: stepEnemy, fields: ["x","y","vx"], smoothing: 25,
+ *         mode: "reckon", step: stepEnemy, fields: ["x","y","vx"], smoothMs: 40,
  *     });
  *
  *     // Once per render frame:
@@ -64,7 +64,7 @@
  * For side-by-side mode comparison, spin up multiple Predicts:
  *
  *     const lerp   = Predict.get(room, { mode: "lerp",   delay: 80 });
- *     const damped = Predict.get(room, { mode: "damped", damping: 15 });
+ *     const damped = Predict.get(room, { mode: "damped", smoothMs: 65 });
  *
  * The exact public surface an SDK port implements is recorded in the port
  * manifest (`PORTING.md`, repo root); everything else in this module is
@@ -110,6 +110,9 @@ export type PredictMode = "lerp" | "extrapolate" | "damped" | "reckon" | "raw";
  *                 the bracketing pair. Smooth, lagged, sample-faithful.
  *                 The primary knob is `delay`; size it so jitter rarely
  *                 makes the buffer underrun (1–2 server tick intervals).
+ *                 An optional `smoothMs` output spring (default off) keeps
+ *                 rendered velocity continuous when the snapshot stream
+ *                 itself is imperfect.
  * `extrapolate` — linear forecast from the two most recent samples.
  *                 Live, can overshoot.
  * `damped`      — exponential smoothing toward the latest value.
@@ -120,12 +123,31 @@ export interface SmoothingOptions {
     /** Render-time lag in ms for `lerp` (default 100). Ignored by other modes. */
     delay?: number;
     /**
-     * Output-smoothing rate (spring constant, default 15 — ~65 ms half-life).
-     * Used by `damped` directly and by `extrapolate`'s predict-then-smooth
-     * EMA. Ignored by `lerp`. Set to 0 on `extrapolate` to disable smoothing
-     * and return the raw forward-projection.
+     * Output-smoothing time constant, in milliseconds. 0 disables.
+     *
+     * The smoothed value closes ~63% of any gap to its target per `smoothMs`
+     * (~95% after 3×). The practical reading: `smoothMs` is roughly the extra
+     * display latency the smoothing adds — during steady motion the display
+     * trails its target by ≈ `speed × smoothMs` (260 px/s at `smoothMs: 65`
+     * → ~17 px).
+     *
+     * `damped` uses it as the chase rate toward the latest value, and
+     * `extrapolate` as its predict-then-smooth blend (default 50 for both;
+     * 0 snaps — raw latest value / raw forward-projection).
+     *
+     * `lerp` uses it as an optional output spring on the interpolated result
+     * — default 0 (off, exact interpolation). Turn it on to keep rendered
+     * velocity CONTINUOUS when the snapshot stream itself is imperfect
+     * (server stamp jitter, uneven per-patch motion): the eye punishes
+     * discrete velocity jumps far harder than smooth, bounded error. ~25
+     * removes the discontinuities at minimal added lag; ~65 renders rough
+     * streams buttery at the cost of that much more lag. DISPLAY-ONLY:
+     * server-side rewind (lag compensation) reconstructs the UNSMOOTHED
+     * interpolation, so the drawn position trails the hit position by the
+     * `speed × smoothMs` bound above — leave at 0 where draw == hit
+     * precision matters.
      */
-    damping?: number;
+    smoothMs?: number;
     /** Maximum extrapolation overshoot in ms past the latest sample for `extrapolate` (default 200). Ignored by other modes. */
     maxExtrapolate?: number;
     /**
@@ -185,8 +207,8 @@ export interface ReckonOptions<T = any> {
     mode: "reckon";
     /** The pure step function. Mutates the provided scratch object in place. */
     step?: (state: T, dt: number, elapsedMs: number) => void;
-    /** Predict-then-smooth damping. Default 20 (~50 ms half-life). 0 = snap. */
-    smoothing?: number;
+    /** Predict-then-smooth time constant in ms — see {@link SmoothingOptions.smoothMs}. Default 50. 0 = snap. */
+    smoothMs?: number;
     /** Substep length in ms. Smaller = more accurate bounces / collisions. Default 16. */
     substep?: number;
     /** Rebase discontinuities larger than this pop instead of decaying out —
@@ -213,10 +235,10 @@ export type PredictOptions<T = any> = SmoothingOptions | ReckonOptions<T> | RawO
 // state, including lerp's snapshot ring. Indexed by slot id (assigned at
 // track-time, recycled via a free-list).
 //
-// Config (mode/delay/damping/maxExtrapolate/tickInterval) is *not* stored
+// Config (mode/delay/smoothMs/maxExtrapolate/tickInterval) is *not* stored
 // per slot — it lives in a separate `profileBuf` and the slot only carries a
 // `profileIdx`. Many slots that share the same config share one profile, so
-// homogeneous attachAll groups collapse to a single 5-float record. Mutating
+// homogeneous attachAll groups collapse to a single packed record. Mutating
 // the defaults profile in place is enough for `setDefaults` to take effect —
 // no retrack-all walk.
 //
@@ -225,14 +247,16 @@ export type PredictOptions<T = any> = SmoothingOptions | ReckonOptions<T> | RawO
 //   [1]  auxV               mode-multiplexed smoothing state:
 //                              damped       → current EMA value
 //                              extrapolate  → predict-then-smooth output
-//                              lerp         → unused
+//                              lerp         → output-spring value (smoothMs > 0)
 //   [2]  auxT               timestamp of the last frame that advanced auxV
 //   [3]  profileIdx         index into `profileBuf` for this slot's config
 //   [4]  refId              schema refId this slot belongs to (self-describing)
 //   [5]  fieldId            schema field index this slot predicts
 //   [6]  ringHead           next write index into the snapshot ring (0..RING_CAP-1)
 //   [7]  ringCount          number of valid entries (0..RING_CAP)
-//   [8..]                   RING_CAP × (t, v) interleaved snapshots
+//   [8]  lerpPrev           previous frame's RAW lerp output — the target slope
+//                              for the output spring's first-order-hold step
+//   [9..]                   RING_CAP × (t, v) interleaved snapshots
 //                              (used by both lerp and extrapolate)
 //
 // refId / fieldId make the slot self-describing: given only a slot id, the
@@ -256,8 +280,9 @@ const SLOT_REF = 4;
 const SLOT_FIELD = 5;
 const SLOT_RING_HEAD = 6;
 const SLOT_RING_COUNT = 7;
-const SLOT_RING_BASE = 8;
-const SLOT_STRIDE = SLOT_RING_BASE + RING_CAP * 2; // 8 + 32 = 40
+const SLOT_LERP_PREV = 8;
+const SLOT_RING_BASE = 9;
+const SLOT_STRIDE = SLOT_RING_BASE + RING_CAP * 2; // 9 + 32 = 41
 
 // Idle-resume gap collapse (see the listener). Colyseus delta-encodes, so a
 // field that stops changing (a player standing still, y while grounded) emits
@@ -279,19 +304,24 @@ const GAP_RESUME_MULT = 3;      // collapse when gap > MULT × recent interval (
 const GAP_RESUME_PATCH_MULT = 1.5;
 const GAP_RESUME_MAX_MS = 250;  // cap the synthesized resume span (safety)
 
-// Profile table — packed Float64Array, stride 5. Profile 0 is the Predict's
+// Profile table — packed Float64Array, PROFILE_STRIDE floats. Profile 0 is the Predict's
 // *defaults* (mutable; setDefaults edits it in place). Profiles 1..N are
 // *frozen* per-call configs, allocated when an attach overrides any defaults.
 // Frozen profiles are value-deduplicated via `profileKeys` so that an
 // attachAll on a thousand entities sharing the same override still allocates
 // just one extra profile, not a thousand.
-const PROFILE_STRIDE = 6;
+const PROFILE_STRIDE = 7;
 const P_MODE = 0;
 const P_DELAY = 1;
-const P_DAMPING = 2;
+const P_SMOOTH_MS = 2;
 const P_MAX_EXTRAPOLATE = 3;
 const P_TICK_INTERVAL = 4;
 const P_SNAP = 5;
+// Lerp's output-spring time constant, stored SEPARATELY from P_SMOOTH_MS:
+// the same `smoothMs` option defaults 0 on lerp (spring off) but 50 on
+// damped/extrapolate, and a profile can mode-flip at runtime — one float
+// can't carry both defaults. An explicit `smoothMs` writes both fields.
+const P_LERP_SMOOTH_MS = 6;
 const DEFAULTS_PROFILE = 0;
 
 const MODE_LERP = 0;
@@ -337,8 +367,8 @@ export interface SteppedOptions<T = any> {
     forwardMs?: () => number;
     /** Server time for time-keyed formulas (sinusoids etc). Defaults to `clock.serverNow()`. */
     elapsedMs?: () => number;
-    /** Predict-then-smooth damping. Default 20 (~50 ms half-life). 0 = snap. */
-    smoothing?: number;
+    /** Predict-then-smooth time constant in ms — see {@link SmoothingOptions.smoothMs}. Default 50. 0 = snap. */
+    smoothMs?: number;
     /** Substep length in ms. Smaller = more accurate bounces / collisions. Default 16. */
     substep?: number;
     /** Rebase discontinuities larger than this pop instead of decaying out —
@@ -367,9 +397,10 @@ export interface SpawnsOptions<S = unknown, L = Partial<S>, D = undefined>
      * input lead when {@link PredictedSpawnsOptions.spawnTime} is set.
      */
     fields?: readonly (keyof S & string)[];
-    /** Reckon smoothing for confirmed entities. Default 0 — a deterministic
-     *  constant-step projectile rebases exactly, so smoothing only adds lag. */
-    smoothing?: number;
+    /** Reckon smoothing time constant in ms for confirmed entities. Default 0
+     *  — a deterministic constant-step projectile rebases exactly, so smoothing
+     *  only adds lag. */
+    smoothMs?: number;
     /** Reckon substep in ms. Smaller = more accurate bounces / collisions. Default 16. */
     substep?: number;
 }
@@ -403,11 +434,11 @@ export interface SimulateOptions<T = any> {
      */
     elapsedMs?: () => number;
     /**
-     * Damping for predict-then-smooth (spring constant, same units as the
-     * `damped` mode). Default 20 (~50 ms half-life). Set to 0 to snap directly
+     * Predict-then-smooth time constant in ms — see
+     * {@link SmoothingOptions.smoothMs}. Default 50. Set to 0 to snap directly
      * to the `advance` output every frame.
      */
-    smoothing?: number;
+    smoothMs?: number;
     /** Rebase discontinuities larger than this pop instead of decaying out —
      *  see {@link SmoothingOptions.snap}. 0 disables (default). */
     snap?: number;
@@ -432,7 +463,7 @@ interface SimState {
      *  lands on it) so time-sampled step fns read the right instant; the window
      *  spans `[endElapsed − forwardMs, endElapsed]`. */
     advance: (instance: any, forwardMs: number, out: Float64Array, endElapsed: number) => void;
-    smoothing: number;
+    smoothMs: number;
     /** Value-space discontinuity threshold — rebase jumps beyond it skip the
      *  offset capture (pop, don't glide). 0 = off. */
     snap: number;
@@ -463,7 +494,7 @@ interface SimState {
 const SMOOTHING_DEFAULTS: Required<SmoothingOptions> = {
     mode: "lerp",
     delay: 100,
-    damping: 15,
+    smoothMs: 50,
     maxExtrapolate: 200,
     tickInterval: 0,
     snap: 0,
@@ -474,13 +505,13 @@ const SMOOTHING_DEFAULTS: Required<SmoothingOptions> = {
  *  or per-attach; otherwise `attach`/`attachAll` throws. */
 interface ReckonDefaults {
     step: ((state: any, dt: number, elapsedMs: number) => void) | undefined;
-    smoothing: number;
+    smoothMs: number;
     substep: number;
     snap: number;
 }
 const RECKON_DEFAULTS: ReckonDefaults = {
     step: undefined,
-    smoothing: 20,
+    smoothMs: 50,
     substep: 16,
     snap: 0,
 };
@@ -538,14 +569,17 @@ export interface ReckonAttachConfig<T = any> {
     fields: readonly NumericKeys<T>[];
     /** Step function. Falls back to the Predict's constructor-time default. */
     step?: (state: T, dt: number, elapsedMs: number) => void;
-    /** Predict-then-smooth damping. Defaults to the Predict's setting (or 20). */
-    smoothing?: number;
     /** Substep length in ms. Defaults to the Predict's setting (or 16). */
     substep?: number;
     /** Value-space discontinuity threshold, applied to every field here — a
      *  per-sample jump beyond it snaps instead of smoothing (teleports:
      *  respawn, blink, warp). See {@link SmoothingOptions.snap}. Default 0 (off). */
     snap?: number;
+    /** Output-smoothing time constant in ms, applied to every field here —
+     *  see {@link SmoothingOptions.smoothMs}. On a reckon group it is the
+     *  predict-then-smooth window (default the Predict's setting, or 50); on
+     *  a `lerp` group the display-only output spring (default 0 = off). */
+    smoothMs?: number;
     /** Treat every field here as a radian ANGLE — see {@link SmoothingOptions.angle}.
      *  Use only on smoothing-mode attaches (lerp/damped/extrapolate), not reckon. */
     angle?: boolean;
@@ -601,7 +635,7 @@ interface GroupPlan {
     isReckon: boolean;
     reckonFields?: readonly string[];
     reckonStep?: (state: any, dt: number, elapsedMs: number) => void;
-    reckonSmoothing?: number;
+    reckonSmoothMs?: number;
     reckonSubstep?: number;
     reckonSnap?: number;
     reckonSnapshot?: (state: any) => any;
@@ -635,7 +669,7 @@ interface AttachGroup {
  * default mode — is a flat one-liner:
  *
  *     Predict.get(room, { mode: "lerp",   delay: 80 });
- *     Predict.get(room, { mode: "reckon", step: stepEnemy, smoothing: 25 });
+ *     Predict.get(room, { mode: "reckon", step: stepEnemy, smoothMs: 40 });
  *
  * Type alias (not interface) because PredictOptions is a discriminated union
  * and interface-extends-union isn't permitted in TS.
@@ -719,7 +753,7 @@ export interface PredictCore {
     readonly smoothingDefaults: () => {
         mode: PredictMode;
         delay: number;
-        damping: number;
+        smoothMs: number;
         maxExtrapolate: number;
         tickInterval: number;
     };
@@ -766,7 +800,7 @@ export interface ProfileCore {
     readonly label: string | undefined;
     readonly mode: PredictMode;
     readonly delay: number;
-    readonly damping: number;
+    readonly smoothMs: number;
     readonly maxExtrapolate: number;
     readonly tickInterval: number;
     readonly snap: number;
@@ -936,7 +970,7 @@ export class Predict<TState = any> {
                 return {
                     mode: (s.mode ?? SMOOTHING_DEFAULTS.mode) as SmoothingMode,
                     delay: s.delay ?? SMOOTHING_DEFAULTS.delay,
-                    damping: s.damping ?? SMOOTHING_DEFAULTS.damping,
+                    smoothMs: s.smoothMs ?? SMOOTHING_DEFAULTS.smoothMs,
                     maxExtrapolate: s.maxExtrapolate ?? SMOOTHING_DEFAULTS.maxExtrapolate,
                     tickInterval: s.tickInterval ?? SMOOTHING_DEFAULTS.tickInterval,
                     snap: s.snap ?? SMOOTHING_DEFAULTS.snap,
@@ -951,10 +985,14 @@ export class Predict<TState = any> {
         // later flip to a smoothing mode (via setDefaults) has sane values.
         // `dedup: false` because we mutate this profile in place via setDefaults;
         // deduping would conflate it with a frozen profile of the same values.
+        // Lerp's output spring defaults OFF — only an explicit `smoothMs` arms
+        // it (initial.smoothMs's 50 fallback serves damped/extrapolate).
+        const lerpSmoothMs = isSmoothingDefault ? ((rest as SmoothingOptions).smoothMs ?? 0) : 0;
         const dIdx = this.allocProfile(
             this.defaultMode,
             initial.delay,
-            initial.damping,
+            initial.smoothMs,
+            lerpSmoothMs,
             initial.maxExtrapolate,
             initial.tickInterval,
             initial.snap,
@@ -969,7 +1007,7 @@ export class Predict<TState = any> {
             const r = rest as ReckonOptions;
             this.reckonDefaults = {
                 step: r.step,
-                smoothing: r.smoothing ?? RECKON_DEFAULTS.smoothing,
+                smoothMs: r.smoothMs ?? RECKON_DEFAULTS.smoothMs,
                 substep: r.substep ?? RECKON_DEFAULTS.substep,
                 snap: r.snap ?? RECKON_DEFAULTS.snap,
             };
@@ -1084,7 +1122,7 @@ export class Predict<TState = any> {
         return out;
     }
 
-    private readSmoothingDefaults(): { mode: PredictMode; delay: number; damping: number; maxExtrapolate: number; tickInterval: number; snap: number } {
+    private readSmoothingDefaults(): { mode: PredictMode; delay: number; smoothMs: number; lerpSmoothMs: number; maxExtrapolate: number; tickInterval: number; snap: number } {
         const p = this.profileBuf;
         const b = DEFAULTS_PROFILE * PROFILE_STRIDE;
         const m = p[b + P_MODE] | 0;
@@ -1096,7 +1134,8 @@ export class Predict<TState = any> {
         return {
             mode,
             delay: p[b + P_DELAY],
-            damping: p[b + P_DAMPING],
+            smoothMs: p[b + P_SMOOTH_MS],
+            lerpSmoothMs: p[b + P_LERP_SMOOTH_MS],
             maxExtrapolate: p[b + P_MAX_EXTRAPOLATE],
             tickInterval: p[b + P_TICK_INTERVAL],
             snap: p[b + P_SNAP],
@@ -1112,7 +1151,8 @@ export class Predict<TState = any> {
     private allocProfile(
         mode: PredictMode | number,
         delay: number,
-        damping: number,
+        smoothMs: number,
+        lerpSmoothMs: number,
         maxExtrapolate: number,
         tickInterval: number,
         snap: number,
@@ -1125,7 +1165,7 @@ export class Predict<TState = any> {
         if (dedup) {
             // Label is part of the key: two groups never share a profile, so
             // their panel cards stay independent.
-            key = `${label ?? ""}|${modeCode}|${delay}|${damping}|${maxExtrapolate}|${tickInterval}|${snap}`;
+            key = `${label ?? ""}|${modeCode}|${delay}|${smoothMs}|${lerpSmoothMs}|${maxExtrapolate}|${tickInterval}|${snap}`;
             const existing = this.profileKeys.get(key);
             if (existing !== undefined) return existing;
         }
@@ -1139,7 +1179,8 @@ export class Predict<TState = any> {
         const base = idx * PROFILE_STRIDE;
         this.profileBuf[base + P_MODE] = modeCode;
         this.profileBuf[base + P_DELAY] = delay;
-        this.profileBuf[base + P_DAMPING] = damping;
+        this.profileBuf[base + P_SMOOTH_MS] = smoothMs;
+        this.profileBuf[base + P_LERP_SMOOTH_MS] = lerpSmoothMs;
         this.profileBuf[base + P_MAX_EXTRAPOLATE] = maxExtrapolate;
         this.profileBuf[base + P_TICK_INTERVAL] = tickInterval;
         this.profileBuf[base + P_SNAP] = snap;
@@ -1175,7 +1216,7 @@ export class Predict<TState = any> {
         if (
             opts.mode === undefined &&
             opts.delay === undefined &&
-            opts.damping === undefined &&
+            opts.smoothMs === undefined &&
             opts.maxExtrapolate === undefined &&
             opts.tickInterval === undefined &&
             opts.snap === undefined
@@ -1185,7 +1226,8 @@ export class Predict<TState = any> {
         const d = this.readSmoothingDefaults();
         const mode = (opts.mode ?? d.mode) as PredictMode;
         const delay = opts.delay ?? d.delay;
-        const damping = opts.damping ?? d.damping;
+        const smoothMs = opts.smoothMs ?? d.smoothMs;
+        const lerpSmoothMs = opts.smoothMs ?? d.lerpSmoothMs;
         const maxExtrapolate = opts.maxExtrapolate ?? d.maxExtrapolate;
         const tickInterval = opts.tickInterval ?? d.tickInterval;
         const snap = opts.snap ?? d.snap;
@@ -1194,13 +1236,14 @@ export class Predict<TState = any> {
         // a Predict already at lerp) with the implicit no-override case —
         // ensuring there's exactly one internal state for any given intent.
         if (
-            mode === d.mode && delay === d.delay && damping === d.damping &&
+            mode === d.mode && delay === d.delay && smoothMs === d.smoothMs &&
+            lerpSmoothMs === d.lerpSmoothMs &&
             maxExtrapolate === d.maxExtrapolate && tickInterval === d.tickInterval &&
             snap === d.snap
         ) {
             return DEFAULTS_PROFILE;
         }
-        return this.allocProfile(mode, delay, damping, maxExtrapolate, tickInterval, snap, true);
+        return this.allocProfile(mode, delay, smoothMs, lerpSmoothMs, maxExtrapolate, tickInterval, snap, true);
     }
 
     /**
@@ -1213,7 +1256,7 @@ export class Predict<TState = any> {
      * groups never do.
      */
     private groupProfile(
-        opts: { mode?: PredictMode; delay?: number; damping?: number; maxExtrapolate?: number; tickInterval?: number; snap?: number },
+        opts: { mode?: PredictMode; delay?: number; smoothMs?: number; maxExtrapolate?: number; tickInterval?: number; snap?: number },
         label: string,
     ): number {
         const d = this.readSmoothingDefaults();
@@ -1221,7 +1264,8 @@ export class Predict<TState = any> {
         return this.allocProfile(
             mode,
             opts.delay ?? d.delay,
-            opts.damping ?? d.damping,
+            opts.smoothMs ?? d.smoothMs,
+            opts.smoothMs ?? d.lerpSmoothMs,
             opts.maxExtrapolate ?? d.maxExtrapolate,
             opts.tickInterval ?? d.tickInterval,
             opts.snap ?? d.snap,
@@ -1263,7 +1307,9 @@ export class Predict<TState = any> {
         const base = DEFAULTS_PROFILE * PROFILE_STRIDE;
         const p = this.profileBuf;
         if (s.delay !== undefined) p[base + P_DELAY] = s.delay;
-        if (s.damping !== undefined) p[base + P_DAMPING] = s.damping;
+        // Explicit smoothMs arms both fields — lerp's spring and damped/
+        // extrapolate's rate — so the value survives runtime mode flips.
+        if (s.smoothMs !== undefined) { p[base + P_SMOOTH_MS] = s.smoothMs; p[base + P_LERP_SMOOTH_MS] = s.smoothMs; }
         if (s.maxExtrapolate !== undefined) p[base + P_MAX_EXTRAPOLATE] = s.maxExtrapolate;
         if (s.tickInterval !== undefined) p[base + P_TICK_INTERVAL] = s.tickInterval;
         if (s.snap !== undefined) { p[base + P_SNAP] = s.snap; this.reckonDefaults.snap = s.snap; }
@@ -1271,7 +1317,7 @@ export class Predict<TState = any> {
         // Reckon-mode fields → reckonDefaults.
         const r = opts as ReckonOptions;
         if (r.step !== undefined) this.reckonDefaults.step = r.step;
-        if (r.smoothing !== undefined) this.reckonDefaults.smoothing = r.smoothing;
+        if (r.smoothMs !== undefined) this.reckonDefaults.smoothMs = r.smoothMs;
         if (r.substep !== undefined) this.reckonDefaults.substep = r.substep;
     }
 
@@ -1300,7 +1346,9 @@ export class Predict<TState = any> {
                 label: this.profileLabels[i],
                 mode,
                 delay: this.profileBuf[base + P_DELAY],
-                damping: this.profileBuf[base + P_DAMPING],
+                // Report the smoothMs the ACTIVE mode reads (lerp's spring vs
+                // damped/extrapolate's rate) — the panel slider round-trips it.
+                smoothMs: this.profileBuf[base + (m === MODE_LERP ? P_LERP_SMOOTH_MS : P_SMOOTH_MS)],
                 maxExtrapolate: this.profileBuf[base + P_MAX_EXTRAPOLATE],
                 tickInterval: this.profileBuf[base + P_TICK_INTERVAL],
                 snap: this.profileBuf[base + P_SNAP],
@@ -1328,7 +1376,7 @@ export class Predict<TState = any> {
             if (id === DEFAULTS_PROFILE) this.defaultMode = opts.mode;
         }
         if (opts.delay !== undefined) p[base + P_DELAY] = opts.delay;
-        if (opts.damping !== undefined) p[base + P_DAMPING] = opts.damping;
+        if (opts.smoothMs !== undefined) { p[base + P_SMOOTH_MS] = opts.smoothMs; p[base + P_LERP_SMOOTH_MS] = opts.smoothMs; }
         if (opts.maxExtrapolate !== undefined) p[base + P_MAX_EXTRAPOLATE] = opts.maxExtrapolate;
         if (opts.tickInterval !== undefined) p[base + P_TICK_INTERVAL] = opts.tickInterval;
         if (opts.snap !== undefined) p[base + P_SNAP] = opts.snap;
@@ -1418,6 +1466,7 @@ export class Predict<TState = any> {
         buf[base + SLOT_V1] = initial;
         buf[base + SLOT_AUX_V] = initial;
         buf[base + SLOT_AUX_T] = performance.now();
+        buf[base + SLOT_LERP_PREV] = initial;
         buf[base + SLOT_PROFILE] = profileIdx;
         buf[base + SLOT_REF] = refId;
         buf[base + SLOT_FIELD] = fieldId;
@@ -1478,6 +1527,7 @@ export class Predict<TState = any> {
                     head = 0;
                     count = 0;
                     b[i + SLOT_AUX_V] = current;
+                    b[i + SLOT_LERP_PREV] = current;   // lerp's output spring pops too
                 }
 
                 // Derive lastT1 (timestamp of the previous newest snapshot)
@@ -1659,6 +1709,7 @@ export class Predict<TState = any> {
             buf[base + SLOT_V1] = initial;
             buf[base + SLOT_AUX_V] = initial;
             buf[base + SLOT_AUX_T] = 0;
+            buf[base + SLOT_LERP_PREV] = initial;
             buf[base + SLOT_PROFILE] = profileIdx;
             buf[base + SLOT_REF] = refId;
             buf[base + SLOT_FIELD] = fieldIndexOf(source, field);
@@ -1706,7 +1757,7 @@ export class Predict<TState = any> {
         for (const reg of ctrl.boundRegistrations) {
             if (reg.fields.length === 0 || refIdOf(reg.source) === undefined) continue;
             if (this.boundProfileIdx < 0) {
-                this.boundProfileIdx = this.allocProfile(MODE_BOUND, 0, 0, 0, 0, 0, false, "bound");
+                this.boundProfileIdx = this.allocProfile(MODE_BOUND, 0, 0, 0, 0, 0, 0, false, "bound");
             }
             offs.push(this.registerBound(ctrl, reg.source, reg.fields, reg.poseKeys, this.boundProfileIdx));
         }
@@ -1744,7 +1795,6 @@ export class Predict<TState = any> {
         // server's lag-comp reads mis-aim by lead × velocity (enough to flip
         // knife-edge hit calls). Override `forwardMs` for a different
         // horizon (e.g. a collision read wanting extra look-ahead).
-        const smoothing = opts.smoothing ?? 20;
         const present = this.presentFn(); // serverNow(), or renderNow() under renderPresent
         const forwardMs = opts.forwardMs ?? (present
             ? () => { const stamp = clock!.lastServerTime(); return stamp > 0 ? Math.max(0, present() - stamp) : 0; }
@@ -1830,7 +1880,7 @@ export class Predict<TState = any> {
             fields,
             forwardMs,
             elapsedMs,
-            smoothing: opts.smoothing,
+            smoothMs: opts.smoothMs,
             snap: opts.snap,
             advance,
         });
@@ -1865,7 +1915,7 @@ export class Predict<TState = any> {
             forwardMs: opts.forwardMs,
             elapsedMs,
             advance: opts.advance as SimState["advance"],
-            smoothing: opts.smoothing ?? 20,
+            smoothMs: opts.smoothMs ?? 50,
             snap: opts.snap ?? 0,
             smoothed,
             out: new Float64Array(n),
@@ -1982,14 +2032,14 @@ export class Predict<TState = any> {
                 );
             }
             // One profile for the whole group (all fields share it).
-            const profileIdx = this.groupProfile({ mode: effectiveMode, snap: rcfg.snap }, label);
+            const profileIdx = this.groupProfile({ mode: effectiveMode, snap: rcfg.snap, smoothMs: rcfg.smoothMs }, label);
             for (const f of rcfg.fields) fieldProfiles.push({ field: f as string, profileIdx, angle: rcfg.angle });
             return {
                 label,
                 isReckon,
                 reckonFields: isReckon ? (rcfg.fields as readonly string[]) : undefined,
                 reckonStep: isReckon ? step : undefined,
-                reckonSmoothing: rcfg.smoothing ?? this.reckonDefaults.smoothing,
+                reckonSmoothMs: rcfg.smoothMs ?? this.reckonDefaults.smoothMs,
                 reckonSubstep: rcfg.substep ?? this.reckonDefaults.substep,
                 reckonSnap: rcfg.snap ?? this.reckonDefaults.snap,
                 reckonSnapshot: rcfg.snapshot,
@@ -2018,7 +2068,7 @@ export class Predict<TState = any> {
             offs.push(this.trackStepped<T>(instance, {
                 fields: plan.reckonFields as readonly (keyof T & string)[],
                 step: plan.reckonStep as (s: T, dt: number, e: number) => void,
-                smoothing: plan.reckonSmoothing,
+                smoothMs: plan.reckonSmoothMs,
                 substep: plan.reckonSubstep,
                 snap: plan.reckonSnap,
                 snapshot: plan.reckonSnapshot as ((s: T) => T) | undefined,
@@ -2343,7 +2393,7 @@ export class Predict<TState = any> {
                 mode: "reckon",
                 fields,
                 step: step as unknown as (state: S, dt: number, elapsedMs: number) => void,
-                smoothing: opts.smoothing ?? 0,
+                smoothMs: opts.smoothMs ?? 0,
                 substep: opts.substep,
             } as ReckonAttachConfig<S>)
             : undefined;
@@ -2686,7 +2736,7 @@ export class Predict<TState = any> {
 
     /**
      * Exponential smoothing toward the latest server value (`v1`). Reads
-     * `damping` from the slot's profile.
+     * `smoothMs` from the slot's profile.
      */
     private computeDamped = (slotIdx: number): number => {
         const buf = this.slotBuf;
@@ -2701,7 +2751,8 @@ export class Predict<TState = any> {
         buf[i + SLOT_AUX_T] = now;
         let damped = buf[i + SLOT_AUX_V];
         if (dtFrame > 0) {
-            const k = 1 - Math.exp(-pBuf[pBase + P_DAMPING] * dtFrame / 1000);
+            const tau = pBuf[pBase + P_SMOOTH_MS];
+            const k = tau > 0 ? 1 - Math.exp(-dtFrame / tau) : 1;   // 0 = snap
             damped += (v1 - damped) * k;
             buf[i + SLOT_AUX_V] = damped;
         }
@@ -2718,8 +2769,46 @@ export class Predict<TState = any> {
      *      extrapolate. Extrapolation here is what produced the "flickery"
      *      feel; bracketing changes happen at predictable render-time
      *      crossings, not at jittered packet arrivals.
+     *   4. Optionally chase the result with an output spring (`smoothMs`,
+     *      default 0 = off) — display-side velocity continuity for imperfect
+     *      snapshot streams; see {@link SmoothingOptions.smoothMs}.
      */
     private computeLerp = (slotIdx: number): number => {
+        const raw = this.computeLerpRaw(slotIdx);
+        const buf = this.slotBuf;
+        const i = slotIdx * SLOT_STRIDE;
+        const tau = this.profileBuf[(buf[i + SLOT_PROFILE] | 0) * PROFILE_STRIDE + P_LERP_SMOOTH_MS];
+        const now = this.renderTime;
+        if (tau <= 0) {
+            // Spring off (the default) — pin the state to the raw output so a
+            // runtime smoothMs enable starts from here instead of gliding in
+            // from wherever the spring last rested.
+            buf[i + SLOT_AUX_V] = raw;
+            buf[i + SLOT_LERP_PREV] = raw;
+            buf[i + SLOT_AUX_T] = now;
+            return raw;
+        }
+        const lastT = buf[i + SLOT_AUX_T];
+        const dt = now - lastT;
+        if (dt <= 0) return buf[i + SLOT_AUX_V];   // same-frame re-read
+        // Exact first-order-hold step for a linearly-varying target (τ = smoothMs):
+        //   y(dt) = u1 − s·τ + (y0 − u0 + s·τ)·e^(−dt/τ),  s = (u1 − u0)/dt
+        // Frame-rate independent: a steady mover renders with a constant s·τ
+        // trail at any fps (a per-frame EMA's trail varies with frame rate),
+        // which also lets a rewind-side reproduction match it in closed form.
+        const u0 = buf[i + SLOT_LERP_PREV];
+        const y0 = buf[i + SLOT_AUX_V];
+        const kdt = dt / tau;
+        const trail = (raw - u0) / kdt;
+        const y = raw - trail + (y0 - u0 + trail) * Math.exp(-kdt);
+        buf[i + SLOT_AUX_V] = y;
+        buf[i + SLOT_LERP_PREV] = raw;
+        buf[i + SLOT_AUX_T] = now;
+        return y;
+    };
+
+    /** Steps 1–3 of {@link computeLerp} — the undamped interpolant. */
+    private computeLerpRaw(slotIdx: number): number {
         const buf = this.slotBuf;
         const i = slotIdx * SLOT_STRIDE;
         const pBuf = this.profileBuf;
@@ -2767,7 +2856,7 @@ export class Predict<TState = any> {
         const u = (target - tA) / span;
         const vA = buf[aOff + 1], vB = buf[bOff + 1];
         return vA + (vB - vA) * u;
-    };
+    }
 
     /**
      * Ring-driven forward projection with predict-then-smooth output EMA.
@@ -2775,7 +2864,7 @@ export class Predict<TState = any> {
      *   2. Slope from a 2-step lookback in the ring (~2 tick intervals)
      *      when available, else last-2 fallback.
      *   3. raw = anchor + slope · clamp(now − anchor.t, 0, maxExtrapolate).
-     *   4. EMA-blend raw → smoothed using `damping` (0 disables → return raw).
+     *   4. EMA-blend raw → smoothed using `smoothMs` (0 disables → return raw).
      */
     private computeExtrapolate = (slotIdx: number): number => {
         const buf = this.slotBuf;
@@ -2821,15 +2910,15 @@ export class Predict<TState = any> {
         // other consumer; the two modes can't share a slot).
         const lastT = buf[i + SLOT_AUX_T];
         buf[i + SLOT_AUX_T] = now;
-        const damping = pBuf[pBase + P_DAMPING];
-        if (damping <= 0) {
+        const tau = pBuf[pBase + P_SMOOTH_MS];
+        if (tau <= 0) {
             buf[i + SLOT_AUX_V] = raw;
             return raw;
         }
         const dtFrame = now - lastT;
         let smoothed = buf[i + SLOT_AUX_V];
         if (dtFrame > 0) {
-            const k = 1 - Math.exp(-damping * dtFrame / 1000);
+            const k = 1 - Math.exp(-dtFrame / tau);
             smoothed += (raw - smoothed) * k;
             buf[i + SLOT_AUX_V] = smoothed;
         }
@@ -2890,7 +2979,7 @@ export class Predict<TState = any> {
      * `out + offset`. Between snapshots the forward sim is continuous, so the
      * display moves at the target's full velocity — STEADY-STATE EXACT, no
      * systematic lag on a moving entity (an EMA chasing a mover lags it by
-     * ~v/smoothing forever — enough to flip knife-edge hit calls vs the
+     * ~v × smoothMs forever — enough to flip knife-edge hit calls vs the
      * server, which always reads the exact timeline). When a new SNAPSHOT
      * rebases the sim and the trajectory jumps (a real misprediction), the
      * discontinuity is captured into `offset` and decays out — the pop-hiding
@@ -2912,7 +3001,7 @@ export class Predict<TState = any> {
             const baseT = this.clock?.lastServerTime?.() ?? NaN;
             sim.advance(sim.instance, sim.forwardMs(), out, sim.elapsedMs());
             const first = sim.lastApplyTime === -Infinity;
-            if (first || sim.smoothing <= 0) {
+            if (first || sim.smoothMs <= 0) {
                 for (let k = 0; k < n; k++) { off[k] = 0; sm[k] = out[k]; }
             } else if (!Number.isNaN(baseT)) {
                 const dtMs = Math.max(0, Math.min(now - sim.lastApplyTime, 100));
@@ -2937,12 +3026,12 @@ export class Predict<TState = any> {
                     const outPrev = sim.outPrev, vel = sim.frameVel;
                     for (let k = 0; k < n; k++) vel[k] = (out[k] - outPrev[k]) / dtMs;
                 }
-                const decay = Math.exp(-sim.smoothing * dtMs / 1000);
+                const decay = Math.exp(-dtMs / sim.smoothMs);
                 for (let k = 0; k < n; k++) { off[k] *= decay; sm[k] = out[k] + off[k]; }
             } else {
                 // No clock → no rebase signal: legacy predict-then-smooth EMA.
                 const dtMs = Math.max(0, Math.min(now - sim.lastApplyTime, 100));
-                const kk = 1 - Math.exp(-sim.smoothing * dtMs / 1000);
+                const kk = 1 - Math.exp(-dtMs / sim.smoothMs);
                 for (let k = 0; k < n; k++) sm[k] += (out[k] - sm[k]) * kk;
             }
             const outPrev = sim.outPrev;

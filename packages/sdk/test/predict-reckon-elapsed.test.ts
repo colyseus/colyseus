@@ -54,7 +54,7 @@ describe('reckon advance: absolute-time threading', () => {
             s.y = elapsedMs;
             seen.push(elapsedMs);
         };
-        const p = Predict.get(decoder, { mode: 'reckon', step, smoothing: 0, name: 'elapsed', clock });
+        const p = Predict.get(decoder, { mode: 'reckon', step, smoothMs: 0, name: 'elapsed', clock });
         p.attachAll('enemies', { fields: ['x', 'y', 'vx'] } as any);
         const ce = (decoder.state as any).enemies.get('a');
         p.tick(0);

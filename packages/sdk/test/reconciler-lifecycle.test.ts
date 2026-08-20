@@ -47,10 +47,10 @@ class FakeInput {
 
 const PlayerState = schema({ x: t.number() });
 
-function makeRecon(input: FakeInput, instance: InstanceType<typeof PlayerState>, opts: { smoothing?: number; snap?: number; onReconcile?: (acked: number) => void } = {}) {
+function makeRecon(input: FakeInput, instance: InstanceType<typeof PlayerState>, opts: { smoothMs?: number; snap?: number; onReconcile?: (acked: number) => void } = {}) {
     return new Reconciler<{ x: number }, Cmd>(instance, {
         input: input as unknown as InputHandle<Cmd>,
-        smoothing: opts.smoothing ?? 0,
+        smoothMs: opts.smoothMs ?? 0,
         snap: opts.snap,
         onReconcile: opts.onReconcile,
         step: (_ctx, s, cmd) => { s.x += cmd.ax; },
@@ -134,7 +134,7 @@ describe('reconciler lifecycle: snap threshold', () => {
         instance.x = 0;
         let valueAtReconcile = NaN;
         const recon = makeRecon(input, instance, {
-            smoothing: 5, snap: 4,
+            smoothMs: 200, snap: 4,
             onReconcile: () => { valueAtReconcile = recon.value('x'); },
         });
 
@@ -154,7 +154,7 @@ describe('reconciler lifecycle: snap threshold', () => {
         const input = new FakeInput();
         const instance = new PlayerState();
         instance.x = 0;
-        const recon = makeRecon(input, instance, { smoothing: 5, snap: 4 });
+        const recon = makeRecon(input, instance, { smoothMs: 200, snap: 4 });
 
         step(input, 0);                 // predicted x stays 0
         instance.x = 3;                 // sub-threshold correction
@@ -164,7 +164,7 @@ describe('reconciler lifecycle: snap threshold', () => {
         assert.equal(recon.state.x, 3, 'truth adopted');
         assert.approximately(recon.value('x'), 0, 1e-9, 'rendered value unchanged at the reconcile instant');
 
-        // Error decays out over a few smoothing windows (τ = 200ms at 5/s).
+        // Error decays out over a few smoothing windows (smoothMs = 200).
         for (let now = 100; now <= 3000; now += 100) recon.tick(now);
         assert.approximately(recon.value('x'), 3, 0.05, 'decayed onto the truth');
     });

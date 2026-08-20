@@ -75,7 +75,7 @@ describe('Predict attach composition (no clobber)', () => {
 
         // Replace x's mode in place; still exactly one instance, x still tracked, and it
         // now reads the latest-ish (damped) value rather than the lerp midpoint.
-        p.attachAll('enemies', { x: 'damped', damping: 40 });
+        p.attachAll('enemies', { x: 'damped', smoothMs: 25 });
         assert.equal(handles['replace'].attachedCount(), 1, 'no phantom instance after re-attach');
         now = 1160; p.tick(1160);
         assert.isAbove(p.value(ce(), 'x'), 18, 'x switched to damped (toward latest 20), not the lerp 15');

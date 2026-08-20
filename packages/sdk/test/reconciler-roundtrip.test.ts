@@ -64,7 +64,7 @@ describe('Reconciler predicts from the round-tripped input', () => {
         const recon = new Reconciler<{ x: number }, Cmd>(self, {
             input: input as any,
             fields: ['x'],
-            smoothing: 0, // snap mode → error is exactly the correction
+            smoothMs: 0, // snap mode → error is exactly the correction
             step: (_ctx, s, cmd) => { s.x += cmd.q; },
         });
 
@@ -83,7 +83,7 @@ describe('Reconciler predicts from the round-tripped input', () => {
         const recon = new Reconciler<{ x: number }, Cmd>(self, {
             input: input as any,
             fields: ['x'],
-            smoothing: 0,
+            smoothMs: 0,
             warnOnDivergence: 100, // enables correction telemetry (lastCorrectionMag)
             step: (_ctx, s, cmd) => { s.x += cmd.q; },
         });

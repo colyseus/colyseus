@@ -62,7 +62,7 @@ function make(input: FakeInput) {
     const recon = new Reconciler<{ x: number; n: number; grounded: boolean }, Cmd>(instance, {
         input: input as unknown as InputHandle<Cmd>,
         fields: ['x', 'n', 'grounded'],
-        smoothing: 0,
+        smoothMs: 0,
         warnOnDivergence: 1e9, // enables correction telemetry without warning
         step: (_ctx, s, cmd) => { stepCalls++; s.x += cmd.ax * STRIDE; s.n += cmd.ax * STRIDE; },
     });
@@ -138,7 +138,7 @@ describe('wire-precision-aware reconcile', () => {
         const recon = new Reconciler<{ x: number }, Cmd>(self, {
             input: input as unknown as InputHandle<Cmd>,
             fields: ['x'],
-            smoothing: 0,
+            smoothMs: 0,
             step: (_ctx, s, cmd) => { stepCalls++; s.x += cmd.ax * STRIDE; },
         });
 

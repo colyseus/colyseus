@@ -85,7 +85,7 @@ describe('fps-demo automatic-reconnect: inputHandle.reset() prediction invariant
         state.x = 0;
         const recon = new Reconciler<{ x: number }, MoveInput>(state, {
             input: handle,
-            smoothing: 0,
+            smoothMs: 0,
             step: (_ctx, s, cmd) => { s.x += cmd.x; },
         });
 

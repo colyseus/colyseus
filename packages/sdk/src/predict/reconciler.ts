@@ -47,7 +47,7 @@
  *     const me = predict.reconciler(player, {
  *         input,
  *         step: (ctx, state, command) => applyInput(state, command, LEVEL, ctx.dt), // ctx.dt shared w/ server
- *         smoothing: 15,
+ *         smoothMs: 65,
  *         // fields: defaults to every scalar field of `player`'s schema.
  *         // stepMs / stepSeconds default from `input`'s server-advertised rate.
  *     });

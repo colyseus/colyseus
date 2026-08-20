@@ -246,7 +246,7 @@ function makeSim(channel: PredictedEventChannel<string>, opts: {
         },
         adopt: (w) => { w.x = src.x; },
         pose: (w) => ({ x: w.x }),
-        smoothing: 0,
+        smoothMs: 0,
     };
     const ctl = new SimReconciler<Cmd, { x: number }, World>(simOpts);
     return { input, world, src, ctl };

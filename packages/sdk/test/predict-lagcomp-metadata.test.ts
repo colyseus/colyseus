@@ -68,7 +68,7 @@ describe('Predict per-type plan resolution', () => {
     test('explicit mode:"reckon" dead-reckons — no schema declaration needed', () => {
         const { decoder } = roundTrip((s) => s.enemies.set('a', enemy()));
         const p = Predict.get(decoder, { mode: 'lerp', name: 'explicit', clock });
-        p.attachAll('enemies', { mode: 'reckon', fields: ['x', 'y', 'vx'], step, smoothing: 0 });
+        p.attachAll('enemies', { mode: 'reckon', fields: ['x', 'y', 'vx'], step, smoothMs: 0 });
 
         const profs = handles['explicit'].profiles();
         assert.equal(profs.find((pp: any) => pp.label === 'enemies')?.mode, 'reckon', 'attach mode is honored verbatim');

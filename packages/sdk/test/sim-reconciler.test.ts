@@ -179,7 +179,7 @@ describe('SimReconciler', () => {
     test('correct prediction induces no correction (render undisturbed by reconcile)', () => {
         const input = new FakeInput();
         const engine = makeEngine();
-        const { ctl, instance } = make(engine, input, { smoothing: 10 });
+        const { ctl, instance } = make(engine, input, { smoothMs: 100 });
         for (let i = 0; i < 3; i++) step(ctl, input, { ax: 1 });
         ctl.tick(0);         // prime the render clock (first tick has dt 0)
         ctl.tick(500);       // dt 500 → interpolation fraction 0.5 (no ack yet → no reconcile)
@@ -194,7 +194,7 @@ describe('SimReconciler', () => {
     test('mispredict is smoothed (hidden then decayed), not popped', () => {
         const input = new FakeInput();
         const engine = makeEngine();
-        const { ctl, instance } = make(engine, input, { smoothing: 10 });
+        const { ctl, instance } = make(engine, input, { smoothMs: 100 });
 
         for (let i = 0; i < 3; i++) step(ctl, input, { ax: 0 }); // engine stays at x=0
         instance.x = 10; instance.vx = 0; // big server correction

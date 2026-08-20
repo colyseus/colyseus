@@ -88,7 +88,7 @@
  *             puck:   room.state.puck,                             // ⇒ auto-bound (x, y, vx, vy)
  *         },
  *         step: (ctx, w, cmd) => stepWorld(w, cmd, ctx.dt),        // SHARED with the server
- *         smoothing: 15,
+ *         smoothMs: 65,
  *     });
  *     const n = predict.tick(now);                                 // fixed steps due this frame
  *     for (let i = 0; i < n; i++) { stage(input.data); input.send(); } // mutate + send via handle
