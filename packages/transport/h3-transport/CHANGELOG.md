@@ -7,7 +7,9 @@
 > The API surface and wire format may change before 0.18 stable. Browser support
 > is not universal (absent in Safari at time of writing). Feedback welcome.
 
-## Unreleased
+## 0.18.2
+
+- `simulateLatency()` now works — it was a no-op — and also delays the unreliable datagram channel.
 
 - Server→client unreliable delivery: `H3Client.rawUnreliable()` sends over datagrams, and `@colyseus/core` uses it for `@unreliable` state fields. Replaces `sendDatagram()`, which nothing called. A frame over the QUIC datagram limit is dropped with a warning rather than split — a frame spread across two datagrams would corrupt the receiver's framing the first time one is lost. `H3_DATAGRAM_LOSS_OUT=<0..1>` injects outgoing loss (the existing `H3_DATAGRAM_LOSS` stays incoming-only). Requires `@colyseus/core` with the unreliable state channel.
 

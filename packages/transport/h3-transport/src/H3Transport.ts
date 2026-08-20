@@ -33,7 +33,8 @@ export class H3Transport extends Transport {
   private options: TransportOptions;
   private isListening = false;
 
-  private _originalSend: any = null;
+  private _originalRawSend: typeof H3Client.prototype.raw | null = null;
+  private _originalRawUnreliable: typeof H3Client.prototype.rawUnreliable | null = null;
 
   constructor(options: TransportOptions) {
     super();
@@ -135,15 +136,23 @@ export class H3Transport extends Transport {
   }
 
   public simulateLatency(milliseconds: number) {
-    // if (this._originalSend == null) {
-    //   this._originalSend = WebSocket.prototype.send;
-    // }
+    if (this._originalRawSend == null) {
+      this._originalRawSend = H3Client.prototype.raw;
+      this._originalRawUnreliable = H3Client.prototype.rawUnreliable;
+    }
 
-    // const originalSend = this._originalSend;
+    const originalRaw = this._originalRawSend;
+    const originalRawUnreliable = this._originalRawUnreliable!;
+    const delayed = (original: (...args: any[]) => void) => function (this: H3Client, ...args: any[]) {
+      let [buf, ...rest] = args;
+      buf = Buffer.from(buf); // the encoder may reuse the buffer before the timeout
+      setTimeout(() => original.apply(this, [buf, ...rest]), milliseconds);
+    };
 
-    // WebSocket.prototype.send = milliseconds <= Number.EPSILON ? originalSend : function (...args: any[]) {
-    //   setTimeout(() => originalSend.apply(this, args), milliseconds);
-    // };
+    // patch the prototype, not instances: `rawUnreliable` presence on it is the
+    // datagram capability check
+    H3Client.prototype.raw = milliseconds <= Number.EPSILON ? originalRaw : delayed(originalRaw);
+    H3Client.prototype.rawUnreliable = milliseconds <= Number.EPSILON ? originalRawUnreliable : delayed(originalRawUnreliable);
   }
 
   protected registerMatchMakeRoutes(fingerprint?: number[]) {

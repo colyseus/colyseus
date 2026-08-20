@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.18.7
+
+- `server.simulateLatency()` can now be called before `listen()` — it previously threw when the server was created without an explicit `transport`. It also works in Vite dev mode now.
+
+- New `COLYSEUS_LATENCY=<ms>` environment variable enables latency simulation without code changes. It overrides `simulateLatency()` calls made before the server boots.
+
 ## 0.18.6
 
 - `dualModeEndpoints()` now provides a default express middleware — `buildMiddleware` is optional; pass `prefix` and `staticDir` instead. It works at any mount path, redirects the bare index URL to its trailing-slash form, and only serves catch-all requests for files that exist on disk. The monitor and playground panels are built on it.

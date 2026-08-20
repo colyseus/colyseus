@@ -1,7 +1,7 @@
 import assert from "assert";
 
 import * as ColyseusSDK from "@colyseus/sdk";
-import { Room, Server, matchMaker } from "@colyseus/core";
+import { Room, Server, matchMaker, logger } from "@colyseus/core";
 import WebSocket from "ws";
 
 const TEST_PORT = 8570;
@@ -254,5 +254,26 @@ describe("Graceful Shutdown - presence/driver race", () => {
     (server as any).driver = undefined;
 
     await assert.doesNotReject(() => server.gracefullyShutdown(false));
+  });
+
+  it("should not error when the transport hasn't resolved yet", async () => {
+    // Without a `transport` option, attach() assigns this.transport only after
+    // dynamically importing the default one — shutdown can race that window.
+    const server = new Server({ greet: false, gracefullyShutdown: false });
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    (server as any).transport = undefined;
+
+    // gracefullyShutdown() swallows errors into logger.error — capture them
+    const errors: string[] = [];
+    const originalError = logger.error;
+    logger.error = (...args: any[]) => { errors.push(args.join(" ")); };
+    try {
+      await server.gracefullyShutdown(false);
+    } finally {
+      logger.error = originalError;
+    }
+
+    assert.deepStrictEqual(errors.filter((e) => e.includes("error during shutdown")), []);
   });
 });
