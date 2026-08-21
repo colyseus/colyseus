@@ -302,6 +302,30 @@ describe("Presence", () => {
         assert.strictEqual('3', await presence.hget("hincrby", "one"));
       });
 
+      it("prototype names are plain keys (#942)", async () => {
+        assert.strictEqual(false, await presence.exists("constructor"));
+        assert.strictEqual(null, await presence.hget("toString", "x"));
+        assert.deepStrictEqual([], await presence.smembers("constructor"));
+
+        await presence.hset("__proto__", "polluted", "yes");
+        assert.strictEqual(undefined, ({} as any).polluted);
+        assert.strictEqual("yes", await presence.hget("__proto__", "polluted"));
+
+        await presence.hincrby("__proto__", "constructor", 1);
+        assert.strictEqual("1", await presence.hget("__proto__", "constructor"));
+
+        // both the set name and the member
+        await presence.sadd("constructor", "constructor");
+        await presence.sadd("toString", "constructor");
+        assert.deepStrictEqual(["constructor"], await presence.smembers("constructor"));
+        assert.deepStrictEqual(["constructor"], await presence.sinter("constructor", "toString"));
+
+        await presence.del("__proto__");
+        await presence.del("constructor");
+        await presence.del("toString");
+        assert.strictEqual(false, await presence.exists("__proto__"));
+      });
+
       it("channels", async () => {
         await presence.subscribe("p:one", () => {});
         await presence.subscribe("$one", () => {});

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.8
+
+- `LocalPresence` no longer treats `__proto__`, `constructor`, `toString` and other `Object.prototype` names specially — `hset("__proto__", …)` polluted `Object.prototype`, and set/list operations on such keys threw. Keys are plain data now, matching `RedisPresence`. [#942](https://github.com/colyseus/colyseus/issues/942)
+
 ## 0.18.7
 
 - `server.simulateLatency()` can now be called before `listen()` — it previously threw when the server was created without an explicit `transport`. It also works in Vite dev mode now.

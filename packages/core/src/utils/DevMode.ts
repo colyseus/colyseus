@@ -14,8 +14,14 @@ export function hasDevModeCache() {
   return fs.existsSync(DEVMODE_CACHE_FILE_PATH);
 }
 
+// presence dictionaries are keyed by caller-controlled strings: rebuild them null-proto
+const nullProto = (_: string, value: any) =>
+  (value && typeof value === 'object' && !Array.isArray(value))
+    ? Object.assign(Object.create(null), value)
+    : value;
+
 export function getDevModeCache() {
-  return JSON.parse(fs.readFileSync(DEVMODE_CACHE_FILE_PATH, 'utf8')) || {};
+  return JSON.parse(fs.readFileSync(DEVMODE_CACHE_FILE_PATH, 'utf8'), nullProto) || {};
 }
 
 export function writeDevModeCache(cache: any) {
