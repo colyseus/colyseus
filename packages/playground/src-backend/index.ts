@@ -7,6 +7,7 @@ import { createRequire } from 'node:module';
 import { createEndpoint, dualModeEndpoints, isDevMode, logger, matchMaker, Server, type IRoomCache, type Endpoint } from '@colyseus/core';
 import { auth, JWT } from '@colyseus/auth';
 import { applyMonkeyPatch } from './colyseus.ext.js';
+import { toJSONSchema } from './json-schema.js';
 import { serveStatic } from './serve-static.js';
 
 export type AuthConfig = {
@@ -131,20 +132,18 @@ export function playground(opts: PlaygroundOptions = {}) {
     'playground-apidocs': createEndpoint(`${prefix}/__apidocs`, { method: 'GET', use }, async () => {
       const denied = guardedDenied(); if (denied) { return denied; }
 
-      let z: any;
-      try { z = await import('zod'); } catch { /* zod is an optional peer */ }
       const routerEndpoints: Record<string, any> = (Server.current?.router as any)?.endpoints ?? {};
-      return Object.values(routerEndpoints)
+      return Promise.all(Object.values(routerEndpoints)
         // SERVER_ONLY endpoints aren't routable — don't list them either
         .filter((endpoint: any) => !endpoint.options.metadata?.SERVER_ONLY)
-        .map((endpoint: any) => ({
+        .map(async (endpoint: any) => ({
           method: endpoint.options.method,
           path: endpoint.path,
-          body: z && endpoint.options.body && z.toJSONSchema(endpoint.options.body),
-          query: z && endpoint.options.query && z.toJSONSchema(endpoint.options.query),
+          body: await toJSONSchema(endpoint.options.body),
+          query: await toJSONSchema(endpoint.options.query),
           metadata: endpoint.options.metadata,
           description: endpoint.options.metadata?.openapi?.description,
-        }));
+        })));
     }),
 
     'profiling-start': createEndpoint(`${prefix}/profiling/start`, { method: 'POST', use }, async (ctx) => {

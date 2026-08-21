@@ -10,12 +10,6 @@ export async function applyMonkeyPatch() {
   if (__patched) { return; }
   __patched = true;
 
-  /**
-   * Optional: if zod is available, we can use toJSONSchema() for body and query types
-   */
-  let z: any = undefined;
-  try { z = await import("zod"); } catch (e: any) { /* zod not installed  */ }
-
   const _onJoin = Room.prototype['_onJoin'];
   Room.prototype['_onJoin'] = async function (this: Room, client: Client & ClientPrivate) {
     const result = await _onJoin.apply(this, arguments as any);
