@@ -4,6 +4,7 @@ import { auth, JWT } from '@colyseus/auth';
 import { matchMaker, IRoomCache, __globalEndpoints } from '@colyseus/core';
 import type { Endpoint } from "@colyseus/better-call";
 import { applyMonkeyPatch } from './colyseus.ext.js';
+import { toJSONSchema } from './json-schema.js';
 
 import { fileURLToPath } from 'url'; // required for ESM build (see build.mjs)
 
@@ -52,22 +53,16 @@ export function playground(): Router {
   // serve API docs for playground
   // (workaround to use better-call route inside express.Router)
   router.get("/__apidocs", async (_, res) => {
-    /**
-     * Optional: if zod is available, we can use toJSONSchema() for body and query types
-     */
-    let z: any = undefined;
-    try { z = await import("zod"); } catch (e: any) { /* zod not installed  */ }
-
-    res.json(Object.values(__globalEndpoints).map((endpoint: Endpoint) => {
+    res.json(await Promise.all(Object.values(__globalEndpoints).map(async (endpoint: Endpoint) => {
       return {
         method: endpoint.options.method,
         path: endpoint.path,
-        body: z && endpoint.options.body && z.toJSONSchema(endpoint.options.body),
-        query: z && endpoint.options.query && z.toJSONSchema(endpoint.options.query),
+        body: await toJSONSchema(endpoint.options.body),
+        query: await toJSONSchema(endpoint.options.query),
         metadata: endpoint.options.metadata,
         description: endpoint.options.metadata?.openapi?.description,
       };
-    }));
+    })));
   });
 
   return router;
