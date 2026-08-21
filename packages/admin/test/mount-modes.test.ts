@@ -22,12 +22,25 @@ let db: GameDatabase;
 let dbPath: string;
 let distDir: string;
 
-// Fake UI dist — keeps the test independent of the vite build.
+// Fake UI dist — keeps the test independent of the vite build, but mirrors its
+// shape: relative asset URLs in <head>, which only resolve if <base> precedes them.
 function makeDist(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'admin-dist-'));
-  fs.writeFileSync(path.join(dir, 'index.html'), '<html><head><title>t</title></head><body>SPA</body></html>');
+  fs.writeFileSync(path.join(dir, 'index.html'), [
+    '<!doctype html>',
+    '<html lang="en">',
+    '  <head>',
+    '    <meta charset="UTF-8" />',
+    '    <title>t</title>',
+    '    <script type="module" crossorigin src="./assets/app.js"></script>',
+    '    <link rel="stylesheet" crossorigin href="./assets/app.css">',
+    '  </head>',
+    '  <body><div id="root"></div></body>',
+    '</html>',
+  ].join('\n'));
   fs.mkdirSync(path.join(dir, 'assets'));
   fs.writeFileSync(path.join(dir, 'assets', 'app.js'), 'console.log(1)');
+  fs.writeFileSync(path.join(dir, 'assets', 'app.css'), 'body{}');
   return dir;
 }
 
@@ -66,6 +79,37 @@ function injected(body: string): { base: string | null; api: string | null } {
   return { base: body.match(/<base href="([^"]*)"/)?.[1] ?? null, api: parsed.api ?? null };
 }
 
+/**
+ * Resolve a served document's relative asset URLs the way a browser does, then
+ * fetch them. Per spec only the first <base href> counts, and only for the
+ * references that follow it — so a <base> emitted after the bundle tags makes
+ * `/x/a/b` load `/x/a/b/assets/*` and every asset 404s.
+ */
+async function assertAssetsResolve(origin: string, pagePath: string) {
+  const res = await fetch(`${origin}${pagePath}`);
+  assert.strictEqual(res.status, 200, pagePath);
+  const html = await res.text();
+  const baseTag = /<base href="([^"]*)"/.exec(html);
+  const refs = [...html.matchAll(/(?:src|href)="(\.\/[^"]+)"/g)];
+  assert.ok(refs.length >= 2, `fixture lost its relative asset refs (${pagePath})`);
+  for (const ref of refs) {
+    const governs = baseTag && baseTag.index < ref.index;
+    const from = governs ? new URL(baseTag[1]!, origin) : new URL(pagePath, origin);
+    const resolved = new URL(ref[1]!, from);
+    const asset = await fetch(resolved);
+    assert.strictEqual(asset.status, 200, `${pagePath} resolved ${ref[1]} to ${resolved.pathname}`);
+  }
+}
+
+/** Every depth a deep link can reach must serve a document whose assets resolve. */
+async function assertDeepLinks(url: string, mount: string, base: string) {
+  for (const suffix of ['', 'a', 'a/b', 'a/b/c']) {
+    await assertAssetsResolve(url, `${mount}/${suffix}`);
+    const body = await (await fetch(`${url}${mount}/${suffix}`)).text();
+    assert.strictEqual(injected(body).base, base, `${mount}/${suffix}`);
+  }
+}
+
 describe('root mount — app.use(admin())', () => {
   let server: Server, url: string;
   before(async () => { ({ server, url } = await listen((app) => app.use(panel()))); });
@@ -84,9 +128,7 @@ describe('root mount — app.use(admin())', () => {
   });
 
   it('serves SPA deep links and assets', async () => {
-    const deep = await fetch(`${url}/admin/users/42`);
-    assert.strictEqual(deep.status, 200);
-    assert.strictEqual(injected(await deep.text()).base, '/admin/');
+    await assertDeepLinks(url, '/admin', '/admin/');
     const asset = await fetch(`${url}/admin/assets/app.js`);
     assert.strictEqual(asset.status, 200);
   });
@@ -132,9 +174,7 @@ describe('path mount — app.use("/internal", admin())', () => {
   });
 
   it('serves SPA deep links and assets under the mount', async () => {
-    const deep = await fetch(`${url}/internal/users/42`);
-    assert.strictEqual(deep.status, 200);
-    assert.strictEqual(injected(await deep.text()).base, '/internal/');
+    await assertDeepLinks(url, '/internal', '/internal/');
     const asset = await fetch(`${url}/internal/assets/app.js`);
     assert.strictEqual(asset.status, 200);
   });

@@ -108,10 +108,15 @@ export function externalUiConfig(
 // <base> makes the bundle's relative asset URLs resolve from deep links
 // (`/x/users/42` must load `/x/assets/*`, not `/x/users/assets/*`); the
 // global carries the same coordinates to the SPA's router + fetch layer.
+// Both go at the *top* of <head>: <base> only governs the tags that follow it,
+// and the bundle's <script>/<link> are already in there.
 function injectRuntimeConfig(buf: Buffer, cfg: UiRuntimeConfig): Buffer {
   const tags = `<base href="${cfg.base}"><script>window.__COLYSEUS_ADMIN__=${JSON.stringify(cfg)}</script>`;
   const html = buf.toString('utf8');
-  return Buffer.from(html.includes('</head>') ? html.replace('</head>', `${tags}</head>`) : tags + html);
+  const head = /<head(?=[\s>])[^>]*>/i.exec(html); // lookahead so <header> can't match
+  if (!head) { return Buffer.from(tags + html); }
+  const at = head.index + head[0].length;
+  return Buffer.from(html.slice(0, at) + tags + html.slice(at));
 }
 
 /**

@@ -103,6 +103,21 @@ describe('admin e2e (auth + first-run + CRUD)', () => {
     await page.close();
   });
 
+  it('a deep link loads the bundle (the <base> tag governs ./assets)', async () => {
+    const page = await browser!.newPage();
+    const missing: string[] = [];
+    page.on('response', (r) => {
+      if (r.status() === 404 && r.url().includes('/assets/')) { missing.push(new URL(r.url()).pathname); }
+    });
+    // Two levels below uiPath — the depth where the browser resolves ./assets/*
+    // against the deep link's own directory unless <base> precedes those tags.
+    await page.goto(`${BASE}/admin/rooms/ar_probe`, { waitUntil: 'networkidle2' });
+    const rendered = await page.evaluate(() => document.getElementById('root')?.innerHTML.length ?? 0);
+    await page.close();
+    assert.deepStrictEqual(missing, [], 'deep link 404d its assets');
+    assert.ok(rendered > 0, '#root is empty — the SPA bundle never ran');
+  });
+
   it('bootstrap form creates the first admin and signs them in', async () => {
     const page = await browser!.newPage();
     await page.setViewport({ width: 1400, height: 900 });
