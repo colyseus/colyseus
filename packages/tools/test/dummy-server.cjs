@@ -6,7 +6,10 @@
 const http = require('http');
 
 const INSTANCE_ID = Number(process.env.NODE_APP_INSTANCE || 0);
-const PORT = (process.env.PORT || 3000) + INSTANCE_ID;
+
+// Deliberately collides if two workers share an instance number -- that is the
+// failure the deploy tests exist to catch, so it must not be hidden.
+const PORT = 43000 + INSTANCE_ID;
 
 const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -18,16 +21,20 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`[Instance ${INSTANCE_ID}] Dummy server running on port ${PORT} (PID: ${process.pid})`);
+  const boundPort = server.address().port;
+  console.log(`[Instance ${INSTANCE_ID}] Dummy server running on port ${boundPort} (PID: ${process.pid})`);
 
-  // Start leaking memory here to check when PM2 will automatic restart the process
-  const memoryLeak = [];
-  setInterval(() => {
-    // Allocate array with ~50MB of strings (stored in V8 heap)
-    memoryLeak.push(new Array(512 * 512).fill('x'.repeat(10)));
-    const usedMB = Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
-    console.log(`[Instance ${INSTANCE_ID}] Heap used: ${usedMB} MB (leaked chunks: ${memoryLeak.length})`);
-  }, 100);
+  // Opt-in: grow the heap until PM2 trips max_memory_restart. Off by default so
+  // deploy tests can count processes without them restarting underneath.
+  if (process.env.LEAK_MEMORY) {
+    const memoryLeak = [];
+    setInterval(() => {
+      // Allocate array with ~50MB of strings (stored in V8 heap)
+      memoryLeak.push(new Array(512 * 512).fill('x'.repeat(10)));
+      const usedMB = Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
+      console.log(`[Instance ${INSTANCE_ID}] Heap used: ${usedMB} MB (leaked chunks: ${memoryLeak.length})`);
+    }, 100);
+  }
 
   // Signal PM2 that the process is ready
   if (process.send) {

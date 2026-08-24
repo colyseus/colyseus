@@ -4,6 +4,8 @@ const fs = require('fs');
 const net = require('net');
 const pm2 = require('pm2');
 const dotenv = require('dotenv');
+const shared = require('./pm2/shared.cjs');
+const { socketPort } = require('./pm2/rollout.cjs');
 
 const COLYSEUS_CLOUD_URL = `${process.env.ENDPOINT}/vultr/stats`;
 
@@ -64,12 +66,12 @@ pm2.Client.executeRemote('getMonitorData', {}, async function(err, list) {
   //
   // Filter out:
   // - @colyseus/tools module (PM2 agent)
-  // - "stopped" processes (gracefully shut down)
+  // - processes PM2 is still moving between states (no socket to probe yet)
   //
   list = list.filter((item) => {
     return (
       item.name !== '@colyseus/tools' &&
-      item.pm2_env.status !== 'stopped'
+      shared.hasSettledSocket(item.pm2_env.status)
     );
   });
 
@@ -110,7 +112,7 @@ pm2.Client.executeRemote('getMonitorData', {}, async function(err, list) {
     }
 
     // check if process .sock file is active
-    const socket_is_active = await checkSocketIsActive(`/run/colyseus/${(2567 + env.NODE_APP_INSTANCE)}.sock`);
+    const socket_is_active = await checkSocketIsActive(`${shared.PROCESS_UNIX_SOCK_PATH}${socketPort(env.NODE_APP_INSTANCE)}.sock`);
 
     apps[app_id] = {
       pid: item.pid,

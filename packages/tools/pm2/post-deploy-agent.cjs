@@ -9,12 +9,18 @@
  */
 const pm2 = require('pm2');
 const fs = require('fs');
-const cst = require('pm2/constants');
 const io = require('@pm2/io');
 const path = require('path');
 const shared = require('./shared.cjs');
+const rollout = require('./rollout.cjs');
 
 let appConfig = undefined;
+
+// This agent is itself a PM2 fork, so PM2 gives it NODE_APP_INSTANCE=0 — and
+// PM2 merges the caller's process.env into every app it starts. Left in place,
+// that "0" overrides the number PM2 assigns each worker, so they all claim the
+// same instance (and the same socket). Drop it before the first pm2.* call.
+delete process.env.NODE_APP_INSTANCE;
 
 io.initModule({
   pid: path.resolve('/var/run/colyseus-agent.pid'),
@@ -76,7 +82,7 @@ function postDeploy(config, reply) {
     if (apps.length === 0) {
       return pm2.start(config, (err, result) => {
         reply({ success: !err, message: err?.message });
-        updateAndSave(err, result);
+        if (!err) { reconcileAndSave(config); }
       });
     }
 
@@ -95,66 +101,53 @@ function postDeploy(config, reply) {
         // start again
         pm2.start(config, (err, result) => {
           reply({ success: !err, message: err?.message });
-          updateAndSave(err, result);
+          if (!err) { reconcileAndSave(config); }
         });
       });
     }
 
     /**
-     * Graceful restart logic:
-     * List of PM2 app envs to stop or restart
+     * Graceful restart: bring the new generation up, point NGINX at it, drain
+     * the old one, then reconcile the pool and persist.
      */
-    const appsToStop = [];
-    const appsStopped = [];
-    let numAppsStopping = 0;
-    let numTotalApps = undefined;
+    const plan = rollout.planRollout({ apps, instances: config.instances });
 
-    apps.forEach((app) => {
-      const env = app.pm2_env;
+    const bringUp = plan.scaleTo === null
+      ? Promise.resolve([])
+      : new Promise((resolve, reject) => {
+          console.log("Scaling to", plan.scaleTo, "for", plan.toSpawn, "new process(es)");
+          pm2.scale(apps[0].name, plan.scaleTo, (err) => {
+            if (err) { return reject(err); }
+            // PM2 numbers instances itself; read back what it started
+            shared.listApps((err, after) => err ? reject(err) : resolve(rollout.newProcesses(apps, after)));
+          });
+        });
 
-      /**
-       * Asynchronously teardown/stop processes with active connections
-       */
-      if (env.status === cst.STOPPED_STATUS) {
-        appsStopped.push(env);
+    const revive = Promise.all(plan.reuse.map((app_env) => new Promise((resolve, reject) => {
+      restartingAppIds.add(app_env.pm_id);
+      pm2.restart(app_env.pm_id, (err) => {
+        restartingAppIds.delete(app_env.pm_id);
+        if (err) { return reject(err); }
 
-      } else if (env.status !== cst.STOPPING_STATUS) {
-        appsToStop.push(env);
+        // reset counter stats (restart_time=0)
+        pm2.reset(app_env.pm_id, logIfError);
+        shared.updateProcessConfig(app_env.pm_id, config, logIfError);
+        resolve(app_env);
+      });
+    })));
 
-      } else if (!restartingAppIds.has(env.pm_id)) {
-        numAppsStopping++;
-      }
-    });
+    Promise.all([bringUp, revive])
+      .then(([spawned, revived]) => onFirstAppsStart(spawned.concat(revived)))
+      .catch((err) => replyIfError(err, reply));
 
-    /**
-     * - Start new process
-     * - Update NGINX config to expose only the new process
-     * - Stop old processes
-     * - Spawn/reactivate the rest of the processes (shared.MAX_ACTIVE_PROCESSES)
-     */
-    const onFirstAppsStart = async (initialApps, err, result) => {
+    async function onFirstAppsStart(initialApps) {
       /**
        * release post-deploy action while proceeding with graceful restart of other processes
        */
-      reply({ success: !err, message: err?.message });
+      reply({ success: true });
 
-      if (err) { return console.error(err); }
-
-      let numActiveApps = initialApps.length + restartingAppIds.size;
-      const maxActiveProcesses = config.instances;
-
-      // update config of newly spawned processes (memory limit, etc)
-      shared.listApps(function(err, apps) {
-        logIfError(err);
-
-        // get new processes excluding initialApps 
-        const new_app_envs = shared.filterActiveApps(apps)
-          .map((app) => app.pm2_env)
-          .filter(app_env => !initialApps.find(init_app => init_app.pm_id === app_env.pm_id)); 
-
-        new_app_envs.forEach((app_env) => 
-          shared.updateProcessConfig(app_env.pm_id, appConfig, logIfError));
-      });
+      initialApps.forEach((app_env) =>
+        shared.updateProcessConfig(app_env.pm_id, config, logIfError));
 
       /**
        * - Write NGINX config to expose only the new active process
@@ -171,109 +164,60 @@ function postDeploy(config, reply) {
       // Asynchronously stop/restart apps with active connections
       // (They make take from minutes up to hours to stop)
       //
-      appsToStop.forEach((app_env) => {
-        if (numActiveApps < maxActiveProcesses) {
-          numActiveApps++;
-
-          restartingAppIds.add(app_env.pm_id);
-          pm2.restart(app_env.pm_id, (err, _) => {
-            restartingAppIds.delete(app_env.pm_id);
-            if (err) { return logIfError(err); }
-
-            // reset counter stats (restart_time=0)
-            pm2.reset(app_env.pm_id, logIfError);
-
-            // update process config (memory limit, etc)
-            shared.updateProcessConfig(app_env.pm_id, config, logIfError);
-          });
-
-        } else {
-          pm2.stop(app_env.pm_id, logIfError);
-        }
+      const drain = rollout.planDrain({
+        appsToStop: plan.appsToStop,
+        activeCount: initialApps.length + restartingAppIds.size,
+        instances: config.instances,
       });
 
-      if (numActiveApps < maxActiveProcesses) {
-        const missingOnlineApps = maxActiveProcesses - numActiveApps;
-
-        // console.log("Active apps is lower than MAX_ACTIVE_PROCESSES, will SCALE again =>", {
-        //   missingOnlineApps,
-        //   numActiveApps,
-        //   newNumTotalApps: numTotalApps + missingOnlineApps
-        // });
-
-        console.log("Scale up to", numTotalApps + missingOnlineApps);
-        pm2.scale(apps[0].name, numTotalApps + missingOnlineApps, updateAndSaveIfAllRunning);
-      }
-    };
-
-    const numHalfMaxActiveProcesses = Math.ceil(config.instances / 2);
-
-    /**
-     * Re-use previously stopped apps if available
-     */
-    if (appsStopped.length >= numHalfMaxActiveProcesses) {
-      const initialApps = appsStopped.splice(0, numHalfMaxActiveProcesses);
-
-      let numSucceeded = 0;
-      initialApps.forEach((app_env) => {
-        // console.log("pm2.restart => ", app_env.pm_id);
-
+      drain.toRestart.forEach((app_env) => {
         restartingAppIds.add(app_env.pm_id);
         pm2.restart(app_env.pm_id, (err) => {
           restartingAppIds.delete(app_env.pm_id);
-          if (err) { return replyIfError(err, reply); }
+          if (err) { return logIfError(err); }
 
           // reset counter stats (restart_time=0)
           pm2.reset(app_env.pm_id, logIfError);
           shared.updateProcessConfig(app_env.pm_id, config, logIfError);
-
-          // TODO: set timeout here to exit if some processes are not restarting
-
-          numSucceeded++;
-          if (numSucceeded === initialApps.length) {
-            onFirstAppsStart(initialApps);
-          }
         });
       });
 
-    } else {
-      /**
-       * Increment to +(MAX/2) processes
-       */
-      let LAST_NODE_APP_INSTANCE = apps[apps.length - 1].pm2_env.NODE_APP_INSTANCE;
-      const initialApps = Array.from({ length: numHalfMaxActiveProcesses }).map((_, i) => {
-        const new_app_env = Object.assign({}, apps[0].pm2_env);
-        new_app_env.NODE_APP_INSTANCE = ++LAST_NODE_APP_INSTANCE;
-        return new_app_env;
-      });
+      // Each stop resolves once PM2 has the process down, which may take up to
+      // kill_timeout while rooms drain. Reconcile waits for them so it sees
+      // the settled pool, not one still mid-transition.
+      const stops = drain.toStop.map((app_env) =>
+        new Promise((resolve) => pm2.stop(app_env.pm_id, (err) => { logIfError(err); resolve(); })));
 
-      numTotalApps = apps.length + numHalfMaxActiveProcesses;
+      if (drain.numActive < config.instances) {
+        const target = initialApps.length + drain.numActive;
+        console.log("Scale up to", target);
+        await new Promise((resolve) => pm2.scale(apps[0].name, target, (err) => { logIfError(err); resolve(); }));
+      }
 
-      console.log("Starting first half of new apps... pm2.scale(app, ", numTotalApps, ")");
-
-      // Ensure to scale to a number of processes where `numHalfMaxActiveProcesses` can start immediately.
-      pm2.scale(apps[0].name, numTotalApps, onFirstAppsStart.bind(undefined, initialApps));
+      await Promise.all(stops);
+      reconcileAndSave(config);
     }
   });
 }
 
-function updateAndSave() {
-  // console.log("updateAndExit");
-  updateAndReloadNginx(() => complete());
-}
+/**
+ * Drop stopped slots beyond the rolling-deploy peak, refresh NGINX from what is
+ * actually running, and `pm2 save`. Runs at the end of every rollout on a
+ * fresh list, so this deploy's own leftovers count and the saved state can
+ * never resurrect more than the peak.
+ */
+function reconcileAndSave(config) {
+  shared.listApps((err, apps) => {
+    if (err) { return logIfError(err); }
 
-function updateAndSaveIfAllRunning(err) {
-  if (err) { return console.error(err); }
-
-  updateAndReloadNginx((app_envs) => {
-    // console.log("updateAndExitIfAllRunning, app_ids (", app_envs.map(app_env => app_env.NODE_APP_INSTANCE) ,") => ", app_envs.length, "/", config.instances);
-
-    //
-    // TODO: add timeout to exit here, in case some processes are not starting
-    //
-    if (app_envs.length === appConfig.instances) {
-      complete();
+    const surplus = rollout.planReclaim({ apps, instances: config.instances });
+    if (surplus.length > 0) {
+      console.log("Reclaiming", surplus.length, "surplus process(es)");
     }
+
+    Promise.all(surplus.map((app_env) =>
+      new Promise((resolve) => pm2.delete(app_env.pm_id, (err) => { logIfError(err); resolve(); }))
+    )).then(() => updateAndReloadNginx(() => complete()));
   });
 }
 
@@ -307,17 +251,23 @@ function updateAndReloadNginx(cb) {
 }
 
 function writeNginxConfig(app_envs) {
-  // console.log("writeNginxConfig: ", app_envs.map(app_env => app_env.NODE_APP_INSTANCE));
   if (!fs.existsSync(shared.NGINX_SERVERS_CONFIG_FILE)) {
     console.warn(`NGINX config file not found at ${shared.NGINX_SERVERS_CONFIG_FILE}, skipping NGINX config update.`);
     return;
   }
 
-  const port = 2567;
+  // An empty upstream block is an NGINX config error, so the reload would take
+  // the site down. A list can come up empty for an instant when every process
+  // is mid-transition; keep the last good one rather than publish nothing.
+  if (app_envs.length === 0) {
+    console.warn("No active process to route to; leaving NGINX config untouched.");
+    return;
+  }
+
   const addresses = [];
 
   app_envs.forEach(function(app_env) {
-    addresses.push(`unix:${shared.PROCESS_UNIX_SOCK_PATH}${port + app_env.NODE_APP_INSTANCE}.sock`);
+    addresses.push(`unix:${shared.PROCESS_UNIX_SOCK_PATH}${rollout.socketPort(app_env.NODE_APP_INSTANCE)}.sock`);
   });
 
   // write NGINX config

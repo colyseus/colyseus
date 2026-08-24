@@ -7,5 +7,6 @@ module.exports = {
     name: 'my-app',
     script: './dummy-server.cjs',
     instances: 1,
+    kill_timeout: 2000,
   }]
 };

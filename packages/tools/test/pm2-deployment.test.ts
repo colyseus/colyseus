@@ -23,11 +23,6 @@ const TOOLS_PACKAGE_PATH = path.resolve(__dirname, '..');
 const PM2_APP_NAME = 'my-app';
 
 /**
- * Set environment variables for test NGINX config path
- */
-process.env.NGINX_CONFIG_FILE = TEST_NGINX_CONFIG_PATH;
-
-/**
  * Update ecosystem config with specified number of instances
  */
 function updateEcosystemConfig(instances: number): void {
@@ -40,6 +35,7 @@ module.exports = {
     name: '${PM2_APP_NAME}',
     script: './dummy-server.cjs',
     instances: ${instances},
+    kill_timeout: 2000,
   }]
 };
 `;
@@ -91,6 +87,22 @@ function waitForApps(expectedCount: number, status = 'online', timeout = 15000):
 }
 
 /**
+ * Wait until no process is mid-transition. Polling beats a fixed sleep: faster
+ * on a quick box, and it doesn't race the agent's own 1.5s NGINX settle.
+ */
+async function waitForSettled(timeout = 15000): Promise<void> {
+  const startTime = Date.now();
+  const transient = new Set(['launching', 'stopping', 'waiting restart']);
+
+  while (Date.now() - startTime < timeout) {
+    const apps = await listApps();
+    if (!apps.some(app => transient.has(app.pm2_env?.status ?? ''))) { return; }
+    await new Promise(resolve => setTimeout(resolve, 250));
+  }
+  throw new Error('Timeout: processes never settled');
+}
+
+/**
  * Clean up all test processes
  */
 function cleanup(): Promise<void> {
@@ -103,8 +115,8 @@ function cleanup(): Promise<void> {
  * Get fresh shared module (clears cache)
  */
 function getSharedModule() {
-  delete require.cache[require.resolve('../pm2/shared')];
-  return require('../pm2/shared');
+  delete require.cache[require.resolve('../pm2/shared.cjs')];
+  return require('../pm2/shared.cjs');
 }
 
 /**
@@ -117,6 +129,8 @@ function installPostDeployAgent(): Promise<void> {
       name: '@colyseus/tools',
       script: agentPath,
       cwd: TOOLS_PACKAGE_PATH,
+      // the agent resolves the NGINX path at require-time, in its own process
+      env: { NGINX_CONFIG_FILE: TEST_NGINX_CONFIG_PATH },
     }, (err) => {
       if (err) return reject(err);
       // Wait for the module to initialize
@@ -152,7 +166,7 @@ function triggerPostDeploy(cwd: string, ecosystemPath: string): Promise<{ succes
   });
 }
 
-xdescribe('PM2 Deployment', function () {
+describe('PM2 Deployment', function () {
   this.timeout(60000); // 60 second timeout for all tests
 
   const EXPECTED_INSTANCES = 1;
@@ -166,6 +180,9 @@ xdescribe('PM2 Deployment', function () {
 
     // Update ecosystem config
     updateEcosystemConfig(EXPECTED_INSTANCES);
+
+    // writeNginxConfig() only writes when the target already exists
+    fs.writeFileSync(TEST_NGINX_CONFIG_PATH, '');
 
     // Connect to PM2
     await new Promise<void>((resolve, reject) => {
@@ -253,40 +270,62 @@ xdescribe('PM2 Deployment', function () {
   });
 
   describe('Multiple Consecutive Deployments', function () {
-    const DEPLOY_COUNT = 3;
+    const DEPLOY_COUNT = 5;
 
-    it(`should not grow beyond ${1} instance(s) after ${3} deploys`, async function () {
+    // A rolling deploy is briefly meant to hold both generations at once, so the
+    // ceiling is the peak -- not `instances`. What must not happen is the total
+    // creeping up by one per deploy, which is how a 1-worker app reached 29.
+    const PEAK = getSharedModule().peakProcesses(EXPECTED_INSTANCES);
+
+    it(`should not grow past the rolling-deploy peak over ${DEPLOY_COUNT} deploys`, async function () {
+      // start from a known pool, not whatever the previous describe left behind
+      await cleanup();
+      await triggerPostDeploy(TEST_DIR, ECOSYSTEM_CONFIG_PATH);
+      await waitForApps(EXPECTED_INSTANCES);
+
       for (let i = 1; i <= DEPLOY_COUNT; i++) {
-        console.log(`      Deployment ${i}/${DEPLOY_COUNT}...`);
-
-        // Trigger post-deploy via PM2 module
         await triggerPostDeploy(TEST_DIR, ECOSYSTEM_CONFIG_PATH);
+        await waitForSettled();
 
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        // what the inactive-socket monitor did: restart anything it read as dead
+        const stopped = (await listApps()).filter(app => app.pm2_env?.status === 'stopped');
+        await Promise.all(stopped.map(app =>
+          new Promise<void>(resolve => pm2.restart(app.pm_id!, () => resolve()))));
 
         const apps = await listApps();
-        const onlineApps = apps.filter(app => app.pm2_env?.status === 'online');
+        console.log(`      Deployment ${i}/${DEPLOY_COUNT}: ${apps.length} process(es)`);
 
-        console.log("ONLINE APPS:", onlineApps);
-
-        console.log(`        Online instances: ${onlineApps.length}`);
-
-        // Check if instances grew unexpectedly
-        if (onlineApps.length > EXPECTED_INSTANCES) {
-          assert.fail(
-            `BUG: After deployment ${i}, instances grew from ${EXPECTED_INSTANCES} to ${onlineApps.length}`
-          );
-        }
+        assert.ok(
+          apps.length <= PEAK,
+          `After deployment ${i}: ${apps.length} processes, peak is ${PEAK}`
+        );
       }
+    });
 
-      const finalApps = await listApps();
-      const onlineApps = finalApps.filter(app => app.pm2_env?.status === 'online');
+    it(`should settle back to exactly ${EXPECTED_INSTANCES} online instance(s)`, async function () {
+      const apps = await waitForApps(EXPECTED_INSTANCES, 'online', 30000);
 
-      assert.strictEqual(
-        onlineApps.length,
-        EXPECTED_INSTANCES,
-        `After ${DEPLOY_COUNT} deployments: Expected ${EXPECTED_INSTANCES} instances, got ${onlineApps.length}`
-      );
+      assert.strictEqual(apps.length, EXPECTED_INSTANCES);
+    });
+
+    it('should give every worker its own instance number and NGINX upstream', async function () {
+      // the agent's own NODE_APP_INSTANCE used to leak into the workers it
+      // started, so they all claimed instance 0 -- and the same socket
+      await waitForSettled();
+      const online = await waitForApps(EXPECTED_INSTANCES, 'online', 30000);
+
+      const instances = online.map(app => Number((app.pm2_env as any).NODE_APP_INSTANCE));
+      assert.strictEqual(new Set(instances).size, instances.length, `duplicate instances: ${instances}`);
+
+      // NGINX may briefly keep an extra upstream while a restarted process
+      // drains (it skips a dead socket), so the contract is: distinct entries,
+      // never more than the rolling-deploy peak, and the live socket included.
+      const upstreams = fs.readFileSync(TEST_NGINX_CONFIG_PATH, 'utf8').trim().split('\n').filter(Boolean);
+      const PEAK = getSharedModule().peakProcesses(EXPECTED_INSTANCES);
+      assert.ok(upstreams.length >= 1 && upstreams.length <= PEAK, `upstreams: ${upstreams}`);
+      assert.strictEqual(new Set(upstreams).size, upstreams.length, `duplicate upstreams: ${upstreams}`);
+      const liveSock = `server unix:/run/colyseus/${2567 + instances[0]}.sock;`;
+      assert.ok(upstreams.includes(liveSock), `live sock ${liveSock} missing from: ${upstreams}`);
     });
   });
 
