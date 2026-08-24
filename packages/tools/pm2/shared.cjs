@@ -222,4 +222,7 @@ module.exports = {
   hasSettledSocket: (status) =>
     status === cst.ONLINE_STATUS ||
     status === cst.ERRORED_STATUS,
+
+  /** Gracefully shut down. Unlike `stopping`, nothing left to report on it. */
+  isStopped: (status) => status === cst.STOPPED_STATUS,
 }

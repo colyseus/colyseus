@@ -4,6 +4,8 @@
  * Sends 'ready' signal to PM2 after startup.
  */
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
 
 const INSTANCE_ID = Number(process.env.NODE_APP_INSTANCE || 0);
 
@@ -42,11 +44,27 @@ server.listen(PORT, () => {
   }
 });
 
+// Opt-in: also bind the unix socket report-stats probes, so a test can tell a
+// live worker from a draining one the same way the Cloud monitor does.
+if (process.env.UNIX_SOCK_PATH) {
+  const sockPath = path.join(process.env.UNIX_SOCK_PATH, `${2567 + INSTANCE_ID}.sock`);
+  fs.mkdirSync(process.env.UNIX_SOCK_PATH, { recursive: true });
+  fs.rmSync(sockPath, { force: true }); // a previous run's stale socket refuses to bind
+  http.createServer((req, res) => res.end('ok')).listen(sockPath);
+}
+
 // Graceful shutdown
 process.on('SIGINT', gracefulShutdown);
 process.on('SIGTERM', gracefulShutdown);
 
 function gracefulShutdown() {
+  // Opt-in: never finish shutting down, so the process sits in 'stopping' for
+  // as long as kill_timeout allows and a test can observe it there.
+  if (process.env.HANG_ON_SHUTDOWN) {
+    console.log(`[Instance ${INSTANCE_ID}] Ignoring shutdown signal (HANG_ON_SHUTDOWN).`);
+    return;
+  }
+
   console.log(`[Instance ${INSTANCE_ID}] Received shutdown signal, closing server...`);
   server.close(() => {
     console.log(`[Instance ${INSTANCE_ID}] Server closed.`);

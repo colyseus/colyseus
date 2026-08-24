@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/tools",
-  "version": "0.17.21",
+  "version": "0.17.22",
   "type": "module",
   "description": "Simplify the development and production settings for your Colyseus project.",
   "input": "./src/index.ts",
@@ -24,7 +24,7 @@
   "scripts": {
     "start": "tsx example/app.ts",
     "test": "mocha --exit --timeout 90000 --require tsx test/pm2-rollout.test.ts test/max-memory-restart.test.ts",
-    "test:integration": "mocha --exit --timeout 90000 --require tsx test/pm2-deployment.test.ts"
+    "test:integration": "mocha --exit --timeout 90000 --require tsx test/pm2-deployment.test.ts test/report-stats.test.ts"
   },
   "bin": {
     "colyseus-system-boot": "system-boot.cjs",

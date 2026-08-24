@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.17.22
+
+- Workers appear in the Colyseus Cloud process list again while they start up or
+  drain. 0.17.21 left them out of the report entirely, so a shutting-down worker
+  vanished from the dashboard instead of showing red until it was gone.
+
 ## 0.17.21
 
 - Fixed a process leak on single-worker deployments: each deploy could leave one

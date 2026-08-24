@@ -15,7 +15,7 @@
 import assert from 'assert';
 
 const { planRollout, planDrain, planReclaim, newProcesses, socketPort } = require('../pm2/rollout.cjs');
-const { peakProcesses, hasSettledSocket } = require('../pm2/shared.cjs');
+const { peakProcesses, hasSettledSocket, isStopped } = require('../pm2/shared.cjs');
 
 type Proc = { pm_id: number; NODE_APP_INSTANCE: number; status: string };
 
@@ -297,6 +297,15 @@ describe('rolling deploy', () => {
     it('should still report settled processes', () => {
       assert.strictEqual(hasSettledSocket('online'), true);
       assert.strictEqual(hasSettledSocket('errored'), true);
+    });
+
+    it('should keep draining processes in the report, only their probe is skipped', () => {
+      // the Cloud process list blinks red on 'stopping' -- dropping those from
+      // the payload made a draining worker vanish instead
+      for (const status of ['stopping', 'launching', 'waiting restart', 'errored']) {
+        assert.strictEqual(isStopped(status), false, status);
+      }
+      assert.strictEqual(isStopped('stopped'), true);
     });
   });
 });
