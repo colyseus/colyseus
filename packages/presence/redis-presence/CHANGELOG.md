@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.18.3
+
+- `brpop()` no longer blocks every other presence command: it runs on its own
+  connection instead of the shared one, so a pending pop can't stall matchmaking.
+- `lpush()` / `rpush()` now push every value they're given. Only the first made it
+  to Redis, despite the `Presence` interface declaring them variadic.
+
 ## 0.18.2
 
 Brings in the 0.17.8 fix, which the published 0.18.1 predates.
