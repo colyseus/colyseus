@@ -7,7 +7,7 @@ on:
   push:
     branches:
       - master
-      - "0.18"
+      - "0.17"
 
 jobs:
   detect-changes:
@@ -88,8 +88,8 @@ jobs:
       - name: Resolve npm dist-tag
         id: dist_tag
         run: |
-          if [ "${{ github.ref }}" = "refs/heads/0.18" ]; then
-            echo "tag=next" >> $GITHUB_OUTPUT
+          if [ "${{ github.ref }}" = "refs/heads/0.17" ]; then
+            echo "tag=legacy-0.17" >> $GITHUB_OUTPUT
           else
             echo "tag=latest" >> $GITHUB_OUTPUT
           fi
