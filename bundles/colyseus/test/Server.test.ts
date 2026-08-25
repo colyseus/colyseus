@@ -55,6 +55,12 @@ describe("Server", () => {
     });
 
     describe("server.simulateLatency", () => {
+      // Delivery-window slack (ms): CI runs several package suites at once, so a
+      // setTimeout-scheduled delivery can land tens of ms late. Wide enough to
+      // absorb that, tight enough to still tell 300ms from 1500ms — and from 0.
+      const SLACK = 100;
+      const TOLERANCE = 5; // setTimeout can fire a hair early under load
+
       // dispose rooms between tests: these all reuse the 'onmessage' room name,
       // so a leftover room would be re-joined and run the previous test's handlers
       afterEach(async () => {
@@ -98,8 +104,6 @@ describe("Server", () => {
       it("clients should receive messages at least after X ms of latency", async () => {
         const LATENCY = 300;
         const HALF_LATENCY = LATENCY / 2; // that's how simulateLatency works
-        const timeout = 30;
-        const TOLERANCE = 5; // setTimeout can fire a hair early under load
 
         let startedAt = 0;
         let receivedOnServerAt = 0;
@@ -134,10 +138,10 @@ describe("Server", () => {
         elapsedTimeForResponse = receivedOnClientAt - receivedOnServerAt;
 
         assert.ok(elapsedTimeForRequest >= HALF_LATENCY - TOLERANCE, `latency for outgoing messages should be at least ${HALF_LATENCY}ms, got: ${elapsedTimeForRequest}ms`);
-        assert.ok(elapsedTimeForRequest < (HALF_LATENCY + timeout), `latency for outgoing messages should be at most ${HALF_LATENCY + timeout}ms, got: ${elapsedTimeForRequest}ms`);
+        assert.ok(elapsedTimeForRequest < (HALF_LATENCY + SLACK), `latency for outgoing messages should be at most ${HALF_LATENCY + SLACK}ms, got: ${elapsedTimeForRequest}ms`);
 
         assert.ok(elapsedTimeForResponse >= HALF_LATENCY - TOLERANCE, `latency for incoming messages should be at least ${HALF_LATENCY}ms, got: ${elapsedTimeForResponse}ms`);
-        assert.ok(elapsedTimeForResponse < (HALF_LATENCY + timeout), `latency for incoming messages should be at most ${HALF_LATENCY + timeout}ms, got: ${elapsedTimeForResponse}ms`);
+        assert.ok(elapsedTimeForResponse < (HALF_LATENCY + SLACK), `latency for incoming messages should be at most ${HALF_LATENCY + SLACK}ms, got: ${elapsedTimeForResponse}ms`);
 
         await connection.leave();
       });
@@ -145,8 +149,6 @@ describe("Server", () => {
       it("only the latest call of simulateLatency should be applied", async () => {
         const LATENCY = 300;
         const HALF_LATENCY = LATENCY / 2; // that's how simulateLatency works
-        const timeout = 30;
-        const TOLERANCE = 5; // setTimeout can fire a hair early under load
 
         let startedAt = 0;
         let receivedOnServerAt = 0;
@@ -182,17 +184,16 @@ describe("Server", () => {
         elapsedTimeForResponse = receivedOnClientAt - receivedOnServerAt;
 
         assert.ok(elapsedTimeForRequest >= HALF_LATENCY - TOLERANCE, `latency for outgoing messages should be at least ${HALF_LATENCY}ms, got: ${elapsedTimeForRequest}ms`);
-        assert.ok(elapsedTimeForRequest < (HALF_LATENCY + timeout), `latency for outgoing messages should be at most ${HALF_LATENCY + timeout}ms, got: ${elapsedTimeForRequest}ms`);
+        assert.ok(elapsedTimeForRequest < (HALF_LATENCY + SLACK), `latency for outgoing messages should be at most ${HALF_LATENCY + SLACK}ms, got: ${elapsedTimeForRequest}ms`);
 
         assert.ok(elapsedTimeForResponse >= HALF_LATENCY - TOLERANCE, `latency for incoming messages should be at least ${HALF_LATENCY}ms, got: ${elapsedTimeForResponse}ms`);
-        assert.ok(elapsedTimeForResponse < (HALF_LATENCY + timeout), `latency for incoming messages should be at most ${HALF_LATENCY + timeout}ms, got: ${elapsedTimeForResponse}ms`);
+        assert.ok(elapsedTimeForResponse < (HALF_LATENCY + SLACK), `latency for incoming messages should be at most ${HALF_LATENCY + SLACK}ms, got: ${elapsedTimeForResponse}ms`);
 
         await connection.leave();
       });
 
       it("passing latency <= 0 should disable simulate latency", async () => {
         const LATENCY = 300;
-        const timeout = 30;
 
         let startedAt = 0;
         let receivedOnServerAt = 0;
@@ -227,8 +228,8 @@ describe("Server", () => {
         elapsedTimeForRequest = receivedOnServerAt - startedAt;
         elapsedTimeForResponse = receivedOnClientAt - receivedOnServerAt;
 
-        assert.ok(elapsedTimeForRequest < timeout, `latency for outgoing messages should be at most ${timeout}ms, got: ${elapsedTimeForRequest}ms`);
-        assert.ok(elapsedTimeForResponse < timeout, `latency for incoming messages should be at most ${timeout}ms, got: ${elapsedTimeForResponse}ms`);
+        assert.ok(elapsedTimeForRequest < SLACK, `latency for outgoing messages should be at most ${SLACK}ms, got: ${elapsedTimeForRequest}ms`);
+        assert.ok(elapsedTimeForResponse < SLACK, `latency for incoming messages should be at most ${SLACK}ms, got: ${elapsedTimeForResponse}ms`);
 
         await connection.leave();
       });

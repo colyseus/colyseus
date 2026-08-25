@@ -4,14 +4,17 @@ import crypto from "crypto";
 import * as httpie from "httpie";
 import { JWT, auth, Hash, type JwtPayload, } from "../src/index.ts";
 import express from "express";
+import type { AddressInfo } from "net";
 
-const TEST_PORT = 8888;
+// Ephemeral port: a fixed one races the sibling suites, whose servers mocha
+// tears down back-to-back in this same process.
+let testPort = 0;
 
 function get(segments: string, opts: Partial<httpie.Options> = undefined) {
-  return httpie.get(`http://localhost:${TEST_PORT}${segments}`, opts);
+  return httpie.get(`http://localhost:${testPort}${segments}`, opts);
 }
 function post(segments: string, opts: Partial<httpie.Options> = undefined) {
-  return httpie.post(`http://localhost:${TEST_PORT}${segments}`, opts);
+  return httpie.post(`http://localhost:${testPort}${segments}`, opts);
 }
 
 const passwordPlainText = "123456";
@@ -54,10 +57,16 @@ describe("Auth", () => {
     onRegisterOptions = undefined; // reset onRegisterOptions
 
     return new Promise<void>((resolve) => {
-      server = app.listen(TEST_PORT, () => resolve());
+      server = app.listen(0, () => {
+        testPort = (server.address() as AddressInfo).port;
+        resolve();
+      });
     })
   });
-  afterEach(() => server.close());
+  afterEach(async () => {
+    server.closeAllConnections(); // keep-alive sockets would hold close() open
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
 
   describe("anonymous", () => {
     it("should allow to sign-in as 'anonymous'", async () => {
@@ -117,7 +126,7 @@ describe("Auth", () => {
       // create fake db entry
       fakedb["endel@colyseus.io"] = await Hash.make(passwordPlainText);
 
-      assert.rejects(async () => {
+      await assert.rejects(async () => {
         await post("/auth/login", {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

@@ -1,4 +1,4 @@
-import { describe, test, expectTypeOf } from "vitest";
+import { describe, test, expectTypeOf, vi } from "vitest";
 import { assert } from "chai";
 
 import { NULL_CLOCK, RoomClockImpl, type RoomClock, type RoomClockLike } from "../src/RoomClock.ts";
@@ -19,17 +19,32 @@ describe("RoomClock", () => {
     });
 
     test("renderNow with slew disabled returns serverNow verbatim", () => {
-        const clock = new RoomClockImpl();
-        clock.setRenderTau(0);
-        // Verbatim: both read the same local-now + offset, no slew state between.
-        assert.closeTo(clock.renderNow(), clock.serverNow(), 0.001);
+        // Freeze the clock source: verbatim means the SAME reading, not two
+        // wall-clock samples a scheduler hiccup apart.
+        const nowSpy = vi.spyOn(performance, "now").mockReturnValue(1234);
+        try {
+            const clock = new RoomClockImpl();
+            clock.setRenderTau(0);
+            assert.equal(clock.renderNow(), clock.serverNow());
+        } finally {
+            nowSpy.mockRestore();
+        }
     });
 
     test("renderNow slews: seeded on first use, idempotent within a frame", () => {
-        const clock = new RoomClockImpl();
-        const first = clock.renderNow();
-        assert.closeTo(first, clock.serverNow(), 1);
-        assert.equal(clock.renderNow(), first, "same-frame read does not re-advance");
+        // Drive the clock source by hand — the same-frame guard is a sub-ms
+        // window, too tight to hit reliably off wall-clock reads.
+        let t = 1000;
+        const nowSpy = vi.spyOn(performance, "now").mockImplementation(() => t);
+        try {
+            const clock = new RoomClockImpl();
+            const first = clock.renderNow();
+            assert.closeTo(first, clock.serverNow(), 1);
+            t += 0.1; // still within the frame
+            assert.equal(clock.renderNow(), first, "same-frame read does not re-advance");
+        } finally {
+            nowSpy.mockRestore();
+        }
     });
 
     test("type: room.clock guarantees a non-optional renderNow", () => {

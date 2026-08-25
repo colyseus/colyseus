@@ -414,7 +414,7 @@ describe("MatchMaker Stats", () => {
     // wait for reconnection to timeout
     await timeout(50);
 
-    assert.rejects(async () =>
+    await assert.rejects(async () =>
       await client.reconnect(roomConnection2.reconnectionToken));
 
     await onRoomDisposed;

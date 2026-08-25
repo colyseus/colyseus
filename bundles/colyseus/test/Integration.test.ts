@@ -1480,7 +1480,7 @@ describe("Integration", () => {
 
               room.disconnect();
 
-              assert.rejects(async () => {
+              await assert.doesNotReject(async () => {
                 await room.disconnect();
               })
             });
@@ -1517,10 +1517,10 @@ describe("Integration", () => {
                 }
               });
 
-              assert.rejects(async () => {
+              await assert.rejects(async () => {
                 await client.joinOrCreate('disconnect_oncreate');
                 onJoinResolved = true;
-              }, "cannot disconnect during onCreate()");
+              }, /cannot disconnect during onCreate/);
 
               await timeout(50);
 

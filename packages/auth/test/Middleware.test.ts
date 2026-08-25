@@ -5,14 +5,17 @@ import { JWT, auth, Hash, type JwtPayload, } from "../src/index.ts";
 import express from "express";
 import { createEndpoint, createRouter } from "@colyseus/better-call";
 import { toNodeHandler } from "@colyseus/better-call/node";
+import type { AddressInfo } from "net";
 
-const TEST_PORT = 8888;
+// Ephemeral port: a fixed one races the sibling suites, whose servers mocha
+// tears down back-to-back in this same process.
+let testPort = 0;
 
 function get(segments: string, opts: Partial<httpie.Options> = undefined) {
-    return httpie.get(`http://localhost:${TEST_PORT}${segments}`, opts);
+    return httpie.get(`http://localhost:${testPort}${segments}`, opts);
 }
 function post(segments: string, opts: Partial<httpie.Options> = undefined) {
-    return httpie.post(`http://localhost:${TEST_PORT}${segments}`, opts);
+    return httpie.post(`http://localhost:${testPort}${segments}`, opts);
 }
 
 const passwordPlainText = "123456";
@@ -80,14 +83,20 @@ describe("Auth: middleware", () => {
         onRegisterOptions = undefined; // reset onRegisterOptions
 
         return new Promise<void>((resolve) => {
-            server = app.listen(TEST_PORT, () => resolve());
+            server = app.listen(0, () => {
+                testPort = (server.address() as AddressInfo).port;
+                resolve();
+            });
         })
     });
-    afterEach(() => server.close());
+    afterEach(async () => {
+        server.closeAllConnections(); // keep-alive sockets would hold close() open
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+    });
 
     describe("express middleware", () => {
         it("should restrict access to protected routes", async () => {
-            assert.rejects(async () => {
+            await assert.rejects(async () => {
                 await get("/protected_route", {
                     headers: { Authorization: `Bearer invalidtoken` },
                     withCredentials: true,
