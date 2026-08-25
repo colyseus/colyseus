@@ -347,6 +347,10 @@ describe("Presence", () => {
       });
 
       describe("brpop", () => {
+        // the key outlives the connection: a leftover item lets the blocking
+        // test pop an old one instead of waiting for a new one
+        beforeEach(() => presence.del("brpop"));
+
         it("brpop should return existing item", async () => {
           await presence.lpush("brpop", "one", "two", "three");
           const result = await presence.brpop("brpop", 1);

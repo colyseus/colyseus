@@ -564,9 +564,11 @@ describe("Input (InputEncoder / InputDecoder integration)", () => {
       (i) => { i.seq = 2; i.x = 222; },
     ]));
 
-    // Wait long enough that the server's ticked simulation has advanced past 2
-    // (30ms × ~5 = 150ms). The buffer cap is 16 so the input is still resident.
-    await timeout(150);
+    // Wait for the ticked simulation to advance past 2 — polling, since a busy
+    // runner stretches the 30ms timestep. The buffer cap is 16, so the input
+    // stays resident meanwhile.
+    const deadline = Date.now() + 5000;
+    while (serverTick < 3 && Date.now() < deadline) { await timeout(10); }
 
     // Probe: server tick should be > 2, but at(2) should still return the input.
     conn.send("probeAtSeq2");
