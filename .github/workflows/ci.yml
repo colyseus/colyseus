@@ -11,6 +11,7 @@ jobs:
   test-suite:
     name: test-suite
     runs-on: ubuntu-latest
+    timeout-minutes: 25
 
     steps:
     - name: Start Redis
@@ -52,6 +53,7 @@ jobs:
   packaging:
     name: packaging (require + import)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
     - name: Checkout

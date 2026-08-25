@@ -66,7 +66,13 @@ before(async () => {
     if (s.includes('Error') || s.includes('error')) { process.stderr.write(`[server] ${s}`); }
   });
   await waitFor(serverReady);
-  browser = await puppeteer.launch({ headless: true, protocolTimeout: 30_000 });
+  // --no-sandbox: CI runners disable unprivileged user namespaces, and Chrome
+  // refuses to start without a usable sandbox. Only our own localhost is loaded.
+  browser = await puppeteer.launch({
+    headless: true,
+    protocolTimeout: 30_000,
+    args: ['--no-sandbox', '--disable-dev-shm-usage'],
+  });
 });
 
 after(async () => {

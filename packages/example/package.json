@@ -10,7 +10,7 @@
     "example-h3": "tsx src/ServerH3.ts",
     "vite": "vite --config vite.config.ts",
     "vite:build": "vite build --app",
-    "test": "tsx --test test/**.test.ts"
+    "test": "tsx --test --test-timeout=120000 --test-force-exit test/**.test.ts"
   },
   "dependencies": {
     "@colyseus/core": "workspace:^",
