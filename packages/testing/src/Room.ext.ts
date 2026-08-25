@@ -22,6 +22,7 @@ declare module "@colyseus/core" {
     waitForNextSimulationTick(): Promise<void>;
     _waitingForMessage: [number, Deferred];
     _waitingForPatch: [number, Deferred];
+    _waitingForTimestep: Array<() => void>;
   }
 }
 
@@ -75,15 +76,42 @@ Room.prototype.waitForMessage = async function(this: Room, type: string, rejectT
  * the same underlying interval.
  */
 Room.prototype.waitForNextTimestep = async function(this: Room) {
-  if (this['_simulationInterval']) {
-    const milliseconds = this['_simulationInterval']['_idleTimeout'];
-    return new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
-    // return timers.setTimeout(milliseconds);
-
-  } else {
+  if (!this['_simulationInterval']) {
     console.warn("⚠️ waitForNextTimestep() - the room must call .setTimestep() or .setFixedTimestep().");
-    return Promise.resolve();
+    return;
   }
+  return new Promise<void>((resolve) => (this._waitingForTimestep ??= []).push(resolve));
+}
+
+/**
+ * Resolve everyone waiting on a step, once that step has actually run.
+ *
+ * `setFixedTimestep` drives an accumulator, so a single interval can run zero
+ * steps or several - sleeping for one interval says nothing about how many
+ * executed. Hooking the callback is the only signal that means "a step ran".
+ */
+function releaseTimestepWaiters(room: Room) {
+  const waiting = room._waitingForTimestep;
+  if (waiting === undefined || waiting.length === 0) { return; }
+  room._waitingForTimestep = [];
+  for (const resolve of waiting) { resolve(); }
+}
+
+const _originalSetTimestep = Room.prototype.setTimestep;
+Room.prototype.setTimestep = function(this: Room, onTickCallback?: any, delay?: number) {
+  if (onTickCallback === undefined) { return _originalSetTimestep.call(this, onTickCallback, delay); }
+  return _originalSetTimestep.call(this, (deltaTime: number) => {
+    try { return onTickCallback(deltaTime); }
+    finally { releaseTimestepWaiters(this); } // a throwing step must not strand the waiter
+  }, delay);
+}
+
+const _originalSetFixedTimestep = Room.prototype.setFixedTimestep;
+Room.prototype.setFixedTimestep = function(this: Room, step: any, tickRate?: number, opts?: any) {
+  return _originalSetFixedTimestep.call(this, (ctx: any) => {
+    try { return step(ctx); }
+    finally { releaseTimestepWaiters(this); }
+  }, tickRate, opts);
 }
 
 /**

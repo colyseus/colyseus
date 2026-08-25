@@ -10,6 +10,7 @@ import { State, RoomWithState } from "./app1/RoomWithState.ts";
 import { JWT } from "@colyseus/auth";
 import { MapSchema } from "@colyseus/schema";
 import { RoomWithoutState } from "./app1/RoomWithoutState.ts";
+import { FixedState } from "./app1/RoomWithFixedTimestep.ts";
 
 describe("@colyseus/testing", () => {
   JWT.settings.secret = "secret";
@@ -152,6 +153,19 @@ describe("@colyseus/testing", () => {
 
     await room.waitForNextPatch();
     assert.strictEqual(room.state.tick, sdkRoom.state.tick);
+  });
+
+  it("waitForNextTimestep() waits for a step to actually run", async () => {
+    const room = await colyseus.createRoom<FixedState>("room_with_fixed_timestep");
+
+    // Sleeping for one interval can land just before the next step fires and
+    // observe nothing at all; only hooking the step itself is a real signal.
+    for (let i = 0; i < 10; i++) {
+      const steps = room.state.steps;
+      await new Promise((resolve) => setTimeout(resolve, 0)); // land off the tick phase
+      await room.waitForNextTimestep();
+      assert.ok(room.state.steps > steps, `no step ran on iteration ${i}`);
+    }
   });
 
   it("waitForNextSimulationTick() still forwards (deprecated alias)", async () => {

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.5
+
+- `room.waitForNextTimestep()` now resolves when a timestep has actually run. It slept for one interval instead, which under `setFixedTimestep()`'s accumulator could land before the next step fired and return having advanced nothing — tests compensated by awaiting it twice.
+
 ## 0.18.4
 
 - `connectTo()` now resolves with the room's initial state already applied. Joining settles on the JOIN_ROOM handshake and the server only sends the state once it sees the client's ack, so `client.state` was empty for a round-trip afterwards — long enough for a `room.waitForNextPatch()` to resolve first and leave assertions reading `{}`. New `client.waitForInitialState()` closes the same gap for rooms joined through `colyseus.sdk` directly.
