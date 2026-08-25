@@ -16,7 +16,7 @@ declare module "@colyseus/core" {
   interface Room {
     waitForMessage(messageType: string): Promise<[Client, any]>;
     waitForNextMessage(additionalDelay?: number): Promise<void>;
-    waitForNextPatch(): Promise<void>;
+    waitForNextPatch(additionalDelay?: number): Promise<void>;
     waitForNextTimestep(): Promise<void>;
     /** @deprecated Renamed to {@link Room.waitForNextTimestep}. Forwards unchanged. */
     waitForNextSimulationTick(): Promise<void>;
@@ -119,9 +119,9 @@ declare module "@colyseus/sdk" {
   interface Room {
     waitForMessage(messageType: string, rejectTimeout?: number): Promise<any>;
     waitForNextMessage(additionalDelay?: number): Promise<[string, any]>;
-    waitForNextPatch(): Promise<void>;
+    waitForNextPatch(additionalDelay?: number): Promise<void>;
+    waitForInitialState(): Promise<void>;
     _waitingForMessage: [number, Deferred];
-    _waitingForPatch: [number, Deferred];
   }
 }
 
@@ -155,16 +155,30 @@ ClientRoom.prototype.waitForNextMessage = async function(this: Room, additionalD
   return this._waitingForMessage[1];
 }
 
-const _originalClientPatch = ClientRoom.prototype['patch'];
-ClientRoom.prototype['patch'] = function(this: ClientRoom) {
-  _originalClientPatch.apply(this, arguments);
-  if (this._waitingForPatch) {
-    setTimeout(() => {
-      this._waitingForPatch[1].resolve([arguments[0], arguments[1]]);
-    }, this._waitingForPatch[0]);
-  }
-};
+/**
+ * Wait for the next state update to be applied on the client.
+ *
+ * @param additionalDelay - milliseconds to wait after the update is applied.
+ */
 ClientRoom.prototype.waitForNextPatch = async function(this: ClientRoom, additionalDelay: number = 0) {
-  this._waitingForPatch = [additionalDelay, new Deferred()];
-  return this._waitingForPatch[1];
+  // no patch() to hook: decoding goes through serializer.patch()
+  return new Promise<void>((resolve) =>
+    this.onStateChange.once(() => setTimeout(resolve, additionalDelay)));
+}
+
+/**
+ * Wait for the room's initial state to be applied on the client.
+ *
+ * Joining settles on the JOIN_ROOM handshake, and the server only sends the
+ * full state once it sees the client's ack - so `room.state` is a round-trip
+ * behind when `join()` resolves. Rooms without state resolve right away.
+ */
+ClientRoom.prototype.waitForInitialState = async function(this: ClientRoom) {
+  // mirrors the server's own `if (this.state)` gate: no state, no ROOM_STATE
+  if (this.serializerId === "none") { return; }
+
+  return new Promise<void>((resolve) => {
+    this.onStateChange.once(() => resolve());
+    this.onLeave.once(() => resolve()); // rejected after the handshake: don't hang
+  });
 }

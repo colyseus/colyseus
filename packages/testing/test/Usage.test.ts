@@ -52,8 +52,6 @@ describe("@colyseus/testing", () => {
     sdkRoom.onMessage("chat", ([sessionId, message]) =>
       console.log(sessionId, message));
 
-    // wait for next state
-    await room.waitForNextPatch();
     assert.deepStrictEqual({
       players: {
         [sdkRoom.sessionId]: {
@@ -68,6 +66,41 @@ describe("@colyseus/testing", () => {
 
     await sdkRoom.leave();
     sinon.assert.callCount(onLeaveSpy, 1);
+  });
+
+  it("connectTo() resolves with the state already applied", async () => {
+    const room = await colyseus.createRoom("room_with_state", {});
+    const sdkRoom = await colyseus.connectTo(room);
+
+    assert.deepStrictEqual({
+      players: { [sdkRoom.sessionId]: { playerNum: 1, score: 0 } }
+    }, sdkRoom.state.toJSON());
+  });
+
+  it("client.waitForInitialState() closes the same gap for sdk joins", async () => {
+    const sdkRoom = await colyseus.sdk.joinOrCreate("room_with_state");
+    await sdkRoom.waitForInitialState();
+
+    assert.deepStrictEqual({
+      players: { [sdkRoom.sessionId]: { playerNum: 1, score: 0 } }
+    }, sdkRoom.state.toJSON());
+  });
+
+  it("connectTo() does not hang on a room without state", async () => {
+    const room = await colyseus.createRoom("room_without_state", {});
+    const sdkRoom = await colyseus.connectTo(room);
+    assert.strictEqual(sdkRoom.sessionId, room.clients[0].sessionId);
+  });
+
+  it("client.waitForNextPatch()", async () => {
+    const room = await colyseus.createRoom("room_with_state", {});
+    const sdkRoom = await colyseus.connectTo(room);
+
+    const scoreBefore = sdkRoom.state.players.get(sdkRoom.sessionId).score;
+    room.state.players.get(sdkRoom.sessionId).score = scoreBefore + 10;
+
+    await sdkRoom.waitForNextPatch();
+    assert.strictEqual(scoreBefore + 10, sdkRoom.state.players.get(sdkRoom.sessionId).score);
   });
 
   it("room.waitForNextMessage()", async () => {

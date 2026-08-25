@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.18.4
+
+- `connectTo()` now resolves with the room's initial state already applied. Joining settles on the JOIN_ROOM handshake and the server only sends the state once it sees the client's ack, so `client.state` was empty for a round-trip afterwards — long enough for a `room.waitForNextPatch()` to resolve first and leave assertions reading `{}`. New `client.waitForInitialState()` closes the same gap for rooms joined through `colyseus.sdk` directly.
+- Fix `client.waitForNextPatch()` never resolving. It hooked a `patch()` method the client SDK does not have, so the returned promise hung until the test timed out.
+
 ## 0.18.3
 
 - `cleanup()` now waits for the driver to finish clearing the room cache. With a database- or Redis-backed driver, the previous test's wipe could land after the next test's `createRoom()` and fail it with `room "..." not found`.
