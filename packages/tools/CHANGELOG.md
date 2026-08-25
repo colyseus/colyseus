@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.18.3
+
+Brings in the 0.17.21 and 0.17.22 fixes.
+
+- Fixed a process leak on single-worker deployments: each deploy could leave one
+  extra PM2 process behind, growing without bound — one app reached 29 processes
+  on a 1GB instance, with NGINX routing all traffic to a single one. The first
+  deploy on this version reclaims the surplus automatically.
+- Processes that are still starting or shutting down are no longer reported to
+  the Colyseus Cloud monitor as having a dead socket, so deploys no longer
+  trigger spurious "inactive socket" alerts — which restarted the very processes
+  the deploy had just stopped.
+- Workers that are starting up or draining appear in the Colyseus Cloud process
+  list, showing red until they are gone instead of vanishing from the dashboard.
+- The PM2 process list is saved after every deploy, so a machine reboot restores
+  what was actually running instead of a stale list.
+
 ## 0.18.2
 
 - Derive the default `max_memory_restart` from the instance's RAM instead of a

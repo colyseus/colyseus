@@ -4,11 +4,16 @@ const fs = require('fs');
 const net = require('net');
 const pm2 = require('pm2');
 const dotenv = require('dotenv');
+const shared = require('./pm2/shared.cjs');
+const { socketPort } = require('./pm2/rollout.cjs');
 
 const COLYSEUS_CLOUD_URL = `${process.env.ENDPOINT}/vultr/stats`;
 
-const FAILED_ATTEMPS_FILE = "/var/tmp/pm2-stats-attempts.txt";
+const FAILED_ATTEMPS_FILE = process.env.STATS_ATTEMPTS_FILE || "/var/tmp/pm2-stats-attempts.txt";
 const FETCH_TIMEOUT = 30000;
+
+// Vultr's instance metadata service, only reachable from the instance itself
+const METADATA_URL = process.env.INSTANCE_METADATA_URL || "http://169.254.169.254/v1.json";
 
 // load environment variables (Colyseus Cloud environment variables)
 if (process.env.APP_ROOT_PATH) {
@@ -66,10 +71,13 @@ pm2.Client.executeRemote('getMonitorData', {}, async function(err, list) {
   // - @colyseus/tools module (PM2 agent)
   // - "stopped" processes (gracefully shut down)
   //
+  // Everything else is reported, transitional statuses included: the Cloud
+  // process list renders `stopping` and `launching` workers.
+  //
   list = list.filter((item) => {
     return (
       item.name !== '@colyseus/tools' &&
-      item.pm2_env.status !== 'stopped'
+      !shared.isStopped(item.pm2_env.status)
     );
   });
 
@@ -110,7 +118,11 @@ pm2.Client.executeRemote('getMonitorData', {}, async function(err, list) {
     }
 
     // check if process .sock file is active
-    const socket_is_active = await checkSocketIsActive(`/run/colyseus/${(2567 + env.NODE_APP_INSTANCE)}.sock`);
+    // mid-transition processes are left unreported — probing one reads as a
+    // live worker with a dead socket, tripping the inactive-socket monitor
+    const socket_is_active = shared.hasSettledSocket(status)
+      ? await checkSocketIsActive(`${shared.PROCESS_UNIX_SOCK_PATH}${socketPort(env.NODE_APP_INSTANCE)}.sock`)
+      : undefined;
 
     apps[app_id] = {
       pid: item.pid,
@@ -126,7 +138,7 @@ pm2.Client.executeRemote('getMonitorData', {}, async function(err, list) {
     };
   }));
 
-  const fetchipv4 = await fetch("http://169.254.169.254/v1.json");
+  const fetchipv4 = await fetch(METADATA_URL);
   const ip = (await fetchipv4.json()).interfaces[0].ipv4.address;
 
   const body = {

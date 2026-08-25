@@ -3,6 +3,7 @@ const pm2 = require('pm2');
 const fs = require('fs');
 const path = require('path');
 const shared = require('./pm2/shared.cjs');
+const rollout = require('./pm2/rollout.cjs');
 
 const opts = { env: process.env.NODE_ENV || "production", };
 
@@ -155,11 +156,10 @@ function updateAndReloadNginx() {
     }
     bailOnErr(err);
 
-    const port = 2567;
     const addresses = [];
 
     apps.forEach(function(app) {
-      addresses.push(`unix:${shared.PROCESS_UNIX_SOCK_PATH}${port + app.pm2_env.NODE_APP_INSTANCE}.sock`);
+      addresses.push(`unix:${shared.PROCESS_UNIX_SOCK_PATH}${rollout.socketPort(app.pm2_env.NODE_APP_INSTANCE)}.sock`);
     });
 
     // write NGINX config

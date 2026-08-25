@@ -18,23 +18,33 @@ const HEAP_CEILING_RATIO = 0.9;
 
 const MIN_MAX_MEMORY_RESTART_MB = 256;
 
+/** New processes a rolling deploy brings up before draining the old ones. */
+function spawnCount(instances) {
+  return Math.ceil(instances / 2);
+}
+
+/**
+ * Processes the box holds at the peak of a rolling deploy. Memory sizing and
+ * the process-count ceiling both key off this, so it lives in one place.
+ */
+function peakProcesses(instances) {
+  return instances + spawnCount(instances);
+}
+
 /**
  * Per-process memory ceiling, derived from the instance's total RAM.
  *
- * Sized against a rolling deploy rather than the steady state: the post-deploy
- * agent spawns `ceil(instances / 2)` new processes before draining the old ones,
- * so the box briefly holds `instances + ceil(instances / 2)`. Swap is disabled on
- * Cloud instances, so exceeding that peak means the OOM killer, not slowdown.
+ * Sized against the rolling-deploy peak rather than the steady state. Swap is
+ * disabled on Cloud instances, so exceeding it means the OOM killer, not slowdown.
  *
  * @param {number} instances - resolved number of app processes
  * @returns {number} ceiling in MB
  */
 function defaultMaxMemoryRestartMB(instances) {
   const totalMB = os.totalmem() / 1024 / 1024;
-  const peakProcesses = instances + Math.ceil(instances / 2);
 
   const reservedMB = Math.max(MEMORY_RESERVE_FLOOR_MB, totalMB * MEMORY_RESERVE_RATIO);
-  const perProcessMB = (totalMB - reservedMB) / peakProcesses;
+  const perProcessMB = (totalMB - reservedMB) / peakProcesses(instances);
   const heapCeilingMB = (v8.getHeapStatistics().heap_size_limit / 1024 / 1024) * HEAP_CEILING_RATIO;
 
   return Math.max(MIN_MAX_MEMORY_RESTART_MB, Math.floor(Math.min(perProcessMB, heapCeilingMB)));
@@ -192,11 +202,27 @@ module.exports = {
   listApps,
   getAppConfig,
   defaultMaxMemoryRestartMB,
+  spawnCount,
+  peakProcesses,
 
   updateProcessConfig,
 
+  /** Processes NGINX may route to. Includes `launching` — the socket is coming. */
   filterActiveApps: (apps) => apps.filter(app =>
     app.pm2_env.status !== cst.STOPPING_STATUS &&
     app.pm2_env.status !== cst.STOPPED_STATUS
   ),
+
+  /**
+   * Whether a socket probe against this process says anything about the app.
+   * Allowlist, not denylist: PM2 has several transitional statuses (launching,
+   * stopping, waiting restart, ...) and a process in any of them has no socket
+   * to judge — reporting one reads as a live worker with a dead socket.
+   */
+  hasSettledSocket: (status) =>
+    status === cst.ONLINE_STATUS ||
+    status === cst.ERRORED_STATUS,
+
+  /** Gracefully shut down. Unlike `stopping`, nothing left to report on it. */
+  isStopped: (status) => status === cst.STOPPED_STATUS,
 }
