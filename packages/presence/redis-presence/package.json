@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/redis-presence",
-  "version": "0.17.8",
+  "version": "0.18.3",
   "type": "module",
   "input": "./src/index.ts",
   "main": "./build/index.cjs",
@@ -35,8 +35,12 @@
     "url": "git://github.com/colyseus/colyseus.git"
   },
   "homepage": "https://colyseus.io/",
+  "engines": {
+    "node": ">= 22.x"
+  },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "tag": "next"
   },
   "gitHead": "320a0325f01eff3cd7afa8fb2efa80077ebdbf4a"
 }

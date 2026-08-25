@@ -4,7 +4,17 @@ import type { StandardSchemaV1 } from '@standard-schema/spec';
 export type { StandardSchemaV1 };
 
 // Re-export Protocol types
-export { Protocol, ErrorCode, CloseCode } from './Protocol.js';
+export {
+  Protocol,
+  ProtocolModifier,
+  PROTOCOL_CODE_MASK,
+  PROTOCOL_MODIFIER_MASK,
+  ErrorCode,
+  CloseCode,
+  HandshakeSection,
+  InputFlags,
+  ResponseStatus,
+} from './Protocol.js';
 
 /**
  * Minimal Room-like interface for SDK type inference.
@@ -96,15 +106,107 @@ export type NormalizeRoomType<T> = Instantiate<T> extends { '~state': any } ? T 
 
 /**
  * Extract room messages type from a Room constructor or instance type.
- * Supports both constructor types (typeof MyRoom) and instance types (MyRoom)
+ *
+ * Walks both:
+ *  - the room's own `messages` field (declarative handlers on the class)
+ *  - the room's `plugins` record (each plugin may also declare `messages`)
+ *
+ * The merged shape is what the SDK sees when typing `room.send(...)`. If
+ * two plugins declare the same message key the intersection collapses to
+ * a never-callable signature (TS surfaces the conflict at the SDK call
+ * site); runtime mirrors this with a thrown error at room __init.
+ *
+ * Supports both constructor types (typeof MyRoom) and instance types (MyRoom).
  */
-export type ExtractRoomMessages<T> = Instantiate<T> extends { messages: infer M } ? M : {};
+export type ExtractRoomMessages<T> =
+  & (Instantiate<T> extends { messages: infer M } ? M : {})
+  & ExtractPluginMessages<T>;
+
+/**
+ * Internal: walks `room.plugins` values and intersects their `messages`
+ * shapes. Plugins that DON'T narrow `messages` away from the base
+ * `Messages<This>` type (i.e. still a `Record<string, AnyMessageHandler>`)
+ * contribute `{}` here — otherwise the SDK's `room.send(...)` would
+ * accept any string and silently lose its closed-set safety.
+ *
+ * The narrow-detection trick: a literal message map like `{ ping: ... }`
+ * has `keyof` = literal union, so `string extends keyof M` is `false`.
+ * A wide `Record<string, ...>` has `keyof` = `string`, so it's `true`.
+ */
+type ExtractPluginMessages<T> =
+  Instantiate<T> extends { plugins: infer P }
+    ? UnionToIntersection<
+        { [K in keyof P]: P[K] extends { messages?: infer M }
+          ? NonNullable<M> extends Record<PropertyKey, any>
+            ? string extends keyof NonNullable<M>
+              ? {}
+              : NonNullable<M>
+            : {}
+          : {}
+        }[keyof P]
+      >
+    : {};
+
+/** Standard `union → intersection` helper used by the plugin walk above. */
+type UnionToIntersection<U> =
+  (U extends any ? (x: U) => 0 : never) extends ((x: infer I) => 0) ? I : never;
 
 /**
  * Extract client-side messages type from a Room constructor or instance type.
  * These are messages that the server can send to the client.
  */
 export type ExtractRoomClientMessages<T> = Instantiate<T> extends { '~client': { '~messages': infer M } } ? M : {};
+
+/**
+ * Extract the input Schema instance type from a Room constructor or instance.
+ * The server declares `input?: new () => MoveInput` (typically via
+ * `defineInput`); this returns `MoveInput` so the SDK can constrain
+ * `room.setInput()` to the same shape.
+ *
+ * Returns `never` when the room doesn't declare `input`.
+ */
+export type InferInput<T> = Instantiate<T> extends { input?: new () => infer I } ? I : never;
+
+// -----------------------------------------------------------------------------
+// Request/response reply arms. A `messages` handler picks its reply by what it
+// returns: a plain value is request-data (the `room.request` path), while
+// `ctx.reject(reason)` / `ctx.resolve(value)` are typed reply arms. Branded with
+// unique symbols so the response-data type can subtract them — a reply arm is
+// never mistaken for request-data.
+// -----------------------------------------------------------------------------
+
+declare const REJECT: unique symbol;
+declare const RESOLVE: unique symbol;
+
+/** A deliberate, typed rejection produced by `ctx.reject(reason)`. The SDK
+ *  surfaces `R` to the originating client. */
+export interface Rejection<R = unknown> { readonly [REJECT]: R }
+
+/** An acceptance produced by `ctx.resolve(value)` — replies `OK` with `value`. */
+export interface Resolution<S = unknown> { readonly [RESOLVE]: S }
+
+/**
+ * Per-dispatch context, passed as the optional 3rd argument to every `messages`
+ * handler (backward-compatible: `(client, message)` handlers ignore it).
+ *
+ * `id` is `undefined` for fire-and-forget `room.send`, and the request id for
+ * `room.request`.
+ */
+export interface MessageContext {
+  readonly id: number | undefined;
+  /**
+   * Reject this dispatch. For `room.request` → a rejected promise carrying
+   * `reason`. `return ctx.reject(r)` so the reason type is inferred; a bare
+   * `ctx.reject(r)` (no return) also rejects, with the reason typed `any`.
+   */
+  reject<R>(reason?: R): Rejection<R>;
+  /**
+   * Resolve (accept) this dispatch — symmetric with {@link reject}. Optional: a
+   * clean return already resolves. Pass a `value` to reply `OK` with it.
+   * `return ctx.resolve(value)`, or a bare side-effecting call.
+   */
+  resolve<S>(value?: S): Resolution<S>;
+}
 
 /**
  * Message handler with automatic type inference from format schema.
@@ -116,17 +218,22 @@ export type ExtractRoomClientMessages<T> = Instantiate<T> extends { '~client': {
  */
 export type MessageHandlerWithFormat<T extends StandardSchemaV1 = any, Client = any, This = any> = {
   format: T;
-  handler: (this: This, client: Client, message: StandardSchemaV1.InferOutput<T>) => void;
+  handler: (this: This, client: Client, message: StandardSchemaV1.InferOutput<T>, ctx: MessageContext) => void;
 };
 
 /**
  * Message handler type that can be either a function or a format handler with validation.
  *
+ * The optional `ctx` 3rd param ({@link MessageContext}) is backward-compatible —
+ * existing `(client, message)` handlers simply omit it. The return is `unknown`
+ * (not `void`) so request/response data and `ctx.resolve`/`ctx.reject` replies
+ * type-check; {@link ExtractResponseType} / {@link ExtractRejectReason} read it.
+ *
  * @template Client - The client type (from @colyseus/core Transport)
  * @template This - The Room class context
  */
 export type MessageHandler<Client = any, This = any> =
-  | ((this: This, client: Client, message: any) => void)
+  | ((this: This, client: Client, message: any, ctx: MessageContext) => unknown)
   | MessageHandlerWithFormat<any, Client, This>;
 
 /**
@@ -136,9 +243,42 @@ export type MessageHandler<Client = any, This = any> =
 export type ExtractMessageType<T> =
   T extends { format: infer Format extends StandardSchemaV1; handler: any }
     ? StandardSchemaV1.InferOutput<Format>
-    : T extends (this: any, client: any, message: infer Message) => void
+    : T extends (this: any, client: any, message: infer Message, ...args: any[]) => any
       ? Message
       : any;
+
+/**
+ * The awaited return type of a message handler (function or format handler).
+ * The trailing `...args` tolerates the optional `ctx` 3rd param so a handler
+ * written as `(client, message, ctx) => …` still matches.
+ */
+type AwaitedReturnOf<T> =
+  T extends { format: any; handler: infer Handler }
+    ? Handler extends (this: any, client: any, message: any, ...args: any[]) => infer R ? Awaited<R> : any
+    : T extends (this: any, client: any, message: any, ...args: any[]) => infer R
+      ? Awaited<R>
+      : any;
+
+/**
+ * Extract the response payload type for a request/response message handler —
+ * what `room.request(...)` resolves to (and what `room.send(..., callback)`
+ * receives). Reads the handler's *return* type, unwrapped through {@link Awaited}.
+ *
+ * Both reply arms ({@link Rejection} / {@link Resolution}) are subtracted: a
+ * `ctx.resolve`/`ctx.reject` return is a reply arm, not request-data, so an
+ * action handler's data-response type collapses away. A handler that returns
+ * `void` yields `void` — the correct response type for a request with no payload.
+ */
+export type ExtractResponseType<T> =
+  Exclude<AwaitedReturnOf<T>, Rejection<any> | Resolution<any>>;
+
+/**
+ * Extract the typed reject reason `R` from a handler that can `return
+ * ctx.reject(reason)` — the complement of {@link ExtractResponseType}. `never`
+ * when the handler never rejects.
+ */
+export type ExtractRejectReason<T> =
+  Extract<AwaitedReturnOf<T>, Rejection<any>> extends Rejection<infer X> ? X : never;
 
 /**
  * Fallback message handler that receives the message type as an additional parameter.

@@ -1,5 +1,11 @@
-import { unpack } from '@colyseus/msgpackr';
 import { decode, type Iterator, $changes } from '@colyseus/schema';
+import { validateSubSteps } from './input/InputBuffer.ts';
+import type { InputAPI, DefineInputOptions, IdleDeclared } from './input/types.ts';
+import { RoomInput } from './input/RoomInput.ts';
+import { RoomMessages } from './RoomMessages.ts';
+import { Rewind, type RewindOptions } from './Rewind.ts';
+export { type InputAccessor, type InputAPI, type NormalizedInputOptions, type ConsumeOptions, type IdleInput, type IdleContext, type SanitizeInput, type NumericFieldsOf, type DefineInputOptions, type IdleDeclared } from './input/types.ts';
+
 import { ClockTimer as Clock } from '@colyseus/timer';
 
 import { EventEmitter } from 'events';
@@ -14,44 +20,111 @@ import { SchemaSerializer } from './serializer/SchemaSerializer.ts';
 
 import { getMessageBytes } from './Protocol.ts';
 import { type Type, Deferred, generateId, wrapTryCatch } from './utils/Utils.ts';
-import { createNanoEvents } from './utils/nanoevents.ts';
 import { isDevMode } from './utils/DevMode.ts';
 
 import { debugAndPrintError, debugMatchMaking, debugMessage } from './Debug.ts';
 import { ServerError } from './errors/ServerError.ts';
 import { ClientState, type AuthContext, type Client, type ClientPrivate, ClientArray, type ISendOptions, type MessageArgs } from './Transport.ts';
-import { type RoomMethodName, OnAuthException, OnCreateException, OnDisposeException, OnDropException, OnJoinException, OnLeaveException, OnMessageException, OnReconnectException, type RoomException, SimulationIntervalException, TimedEventException } from './errors/RoomExceptions.ts';
+import { type RoomMethodName, OnAuthException, OnCreateException, OnDisposeException, OnDropException, OnJoinException, OnLeaveException, OnReconnectException, type RoomException, TimestepException, TimedEventException } from './errors/RoomExceptions.ts';
 
-import { standardValidate, type StandardSchemaV1 } from './utils/StandardSchema.ts';
+import { type StandardSchemaV1 } from './utils/StandardSchema.ts';
 import * as matchMaker from './MatchMaker.ts';
 
 import {
   CloseCode,
   ErrorCode,
   Protocol,
+  PROTOCOL_CODE_MASK,
+  PROTOCOL_MODIFIER_MASK,
   type MessageHandlerWithFormat as SharedMessageHandlerWithFormat,
   type MessageHandler as SharedMessageHandler,
   type Messages as SharedMessages,
+  type MessageContext,
 } from '@colyseus/shared-types';
+
+import {
+  RoomPlugin,
+  setupRoomPlugins,
+  type PluginLayout,
+} from './RoomPlugin.ts';
+export {
+  RoomPlugin,
+  definePlugins,
+  attachToTestRoom,
+  type RoomPluginOrder,
+} from './RoomPlugin.ts';
 
 const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
 const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
+
+// Shared so the unarmed `_flushUnreliable` call site stays monomorphic.
+const NOOP = () => {};
 const noneSerializer = new NoneSerializer();
+
+/** Shared `enqueueRaw` options routing a frame onto `_pendingFrames` to ride the
+ *  next patch. Frozen + shared (read-only) → zero per-call allocation. */
+const AFTER_PATCH_OPTS = Object.freeze({ afterNextPatch: true });
 
 export const DEFAULT_SEAT_RESERVATION_TIME = Number(process.env.COLYSEUS_SEAT_RESERVATION_TIME || 15);
 
 export type SimulationCallback = (deltaTime: number) => void;
 
+/**
+ * Per-step context passed to a {@link Room.setFixedTimestep} callback. Carries
+ * ONLY the fixed simulation step — never wall-clock/measured time — so feeding a
+ * jittery delta into deterministic sim math is unrepresentable. The same fixed
+ * `dt` is advertised to clients so prediction integrates identically. (The
+ * client's step context additionally carries an `isReplay` flag for rollback
+ * re-simulation; the server is authoritative and never replays, so it has none.)
+ */
+export interface StepContext {
+  /** Fixed step in SECONDS (`1/tickRate`) — the dt to integrate one step with. */
+  readonly dt: number;
+  /** Fixed step in MILLISECONDS (`1000/tickRate`). */
+  readonly dtMs: number;
+  /** Monotonic index of the fixed step being simulated. */
+  readonly tick: number;
+  /**
+   * Physics sub-steps per fixed step (≥ 1; `1` unless declared via
+   * `setFixedTimestep(..., { subSteps })`). Run your engine `subSteps` times at
+   * {@link subDt} inside each step — `for (let i = 0; i < ctx.subSteps; i++)
+   * world.step(ctx.subDt)` — to integrate physics at `tickRate * subSteps` Hz
+   * while inputs flow at `tickRate`. The same numbers are cascaded to predicting
+   * clients (their step context carries identical `subSteps`/`subDt`), so the
+   * sub-stepped trajectory replays bit-identically.
+   */
+  readonly subSteps: number;
+  /** Physics sub-step in SECONDS (`dt / subSteps`); equals {@link dt} when
+   *  `subSteps` is 1, so the loop above is valid for every room. */
+  readonly subDt: number;
+  /** Physics sub-step in MILLISECONDS (`dtMs / subSteps`). */
+  readonly subDtMs: number;
+}
+
+/** Fixed-timestep simulation callback. @see Room.setFixedTimestep */
+export type FixedTimestepCallback = (ctx: StepContext) => void;
+
 export interface RoomOptions {
   state?: object;
   metadata?: any;
   client?: Client;
+  /**
+   * Schema class for client→server input packets. When set, the Room
+   * allocates one instance per joining client and binds an InputDecoder.
+   * Must be a flat Schema (primitive fields only — see InputEncoder docs).
+   *
+   * Typed loosely (no `Schema` constraint) to avoid type-identity clashes
+   * when the user's app loads a different copy of `@colyseus/schema` than
+   * `@colyseus/core` does. Runtime validation happens via the encoder.
+   */
+  input?: any;
 }
 
 // Helper types to extract individual properties from RoomOptions
 export type ExtractRoomState<T> = T extends { state?: infer S extends object } ? S : any;
 export type ExtractRoomMetadata<T> = T extends { metadata?: infer M } ? M : any;
 export type ExtractRoomClient<T> = T extends { client?: infer C extends Client } ? C : Client;
+export type ExtractRoomInput<T> = T extends { input?: infer I } ? I : never;
 
 export interface IBroadcastOptions extends ISendOptions {
   except?: Client | Client[];
@@ -86,7 +159,7 @@ export type Messages<This extends Room> = SharedMessages<This, Client>;
  */
 export function validate<T extends StandardSchemaV1, This = any>(
   format: T,
-  handler: (this: This, client: Client, message: StandardSchemaV1.InferOutput<T>) => void
+  handler: (this: This, client: Client, message: StandardSchemaV1.InferOutput<T>, ctx: MessageContext) => unknown
 ): MessageHandlerWithFormat<T, This> {
   return { format, handler };
 }
@@ -207,6 +280,45 @@ export class Room<T extends RoomOptions = RoomOptions> {
   #_patchInterval: NodeJS.Timeout;
 
   /**
+   * Frequency to flush `@unreliable` state fields, in milliseconds.
+   *
+   * Those fields never ride a state patch — they go out over the transport's
+   * unreliable channel (a WebTransport datagram), so a dropped frame costs one
+   * stale value instead of stalling the reliable stream behind a retransmit.
+   * Setting this decouples them from {@link patchRate}, which is the point:
+   * 60Hz movement over a 20Hz structural patch.
+   *
+   * KNOWN COST of a rate faster than {@link patchRate}: an entity's ADD travels
+   * the reliable channel, so datagrams sent between patches can reference a
+   * refId the client hasn't been told about yet. Those frames are skipped by the
+   * client's decoder — safe (the ref graph can't desync, since `@unreliable` is
+   * primitives-only) but each one logs `"refId" not found`, and that entity's
+   * first value lands one mutation later. Measured at `patchRate/this` reports
+   * per mid-session spawn. Leave this unset and the flush rides
+   * {@link broadcastPatch}, which ships the ADD first and avoids it entirely.
+   *
+   * Requires a transport with a datagram channel — today only
+   * `@colyseus/h3-transport` (WebTransport), which is **experimental**. Every
+   * WebSocket transport lacks one, and those clients are skipped entirely (the
+   * room warns once), so `@unreliable` fields keep their join-time value there.
+   *
+   * @default null — flush alongside every {@link broadcastPatch}, and only when
+   * the state actually declares an `@unreliable` field.
+   */
+  public unreliablePatchRate: number | null = null;
+  #_unreliablePatchRate: number | null = null;
+  #_unreliablePatchInterval: NodeJS.Timeout;
+
+  /**
+   * The unreliable flush, called unconditionally at the end of every
+   * {@link broadcastPatch}. Stays {@link NOOP} unless the state actually
+   * declares an `@unreliable` field, so a room that never uses the channel
+   * pays an empty call the engine inlines away — and there is no second
+   * entry point that could drift from `broadcastPatch()`.
+   */
+  private _flushUnreliable: () => void = NOOP;
+
+  /**
    * Maximum number of messages a client can send to the server per second.
    * If a client sends more messages than this, it will be disconnected.
    *
@@ -253,29 +365,68 @@ export class Room<T extends RoomOptions = RoomOptions> {
   private _reconnectionAttempts: { [reconnectionToken: string]: Deferred } = {};
 
   public messages?: Messages<any>;
+  /** @internal Message-routing layer: handler registry + user-message decode/dispatch. */
+  #_messages = new RoomMessages(this);
 
-  private onMessageEvents = createNanoEvents();
-  // null-prototype: keyed by client-supplied message type (colyseus/colyseus#951)
-  private onMessageValidators: {[message: string]: StandardSchemaV1} = Object.create(null);
+  /**
+   * Room plugins, keyed by an operator-chosen handle. Each plugin
+   * contributes any subset of: declarative message handlers (merged
+   * into `this.messages`), lifecycle hooks (composed with the room's
+   * own), and public methods callable via `this.plugins.<key>.X()`.
+   *
+   * The framework walks this record once per Room subclass to compute
+   * the lifecycle/message layout and install hook wrappers on the
+   * class prototype; subsequent constructs reuse the cached layout
+   * and just inject `.room` + merge messages.
+   *
+   * Use `definePlugins({...})` so TypeScript preserves each plugin's
+   * literal instance type. Frozen after `__init`.
+   */
+  public plugins?: any;
 
-  private onMessageFallbacks = {
-    '__no_message_handler': (client: ExtractRoomClient<T>, messageType: string | number, _: unknown) => {
-      const errorMessage = `room onMessage for "${messageType}" not registered.`;
-      debugMessage(`${errorMessage} (roomId: ${this.roomId})`);
+  /**
+   * Auto-included plugin instances pulled in via `static
+   * dependencies` declarations on user-registered plugins. Kept
+   * separate from `this.plugins` so the user's typed view doesn't
+   * gain framework-managed keys. Sentinel-keyed (`__dep:<ClassName>`)
+   * so the hook wrappers can route lookups to the right map.
+   *
+   * @internal
+   */
+  public _autoPlugins?: Record<string, RoomPlugin<any>>;
 
-      if (isDevMode) {
-        // send error code to client in development mode
-        client.error(ErrorCode.INVALID_PAYLOAD, errorMessage);
+  /**
+   * Layout cache populated on the FIRST construction of each Room
+   * subclass. Holds the precomputed hook participation order + message
+   * key → plugin key mapping. Stored on the constructor (a static field)
+   * so all instances of the same class share it.
+   *
+   * `null` is a sentinel meaning "no plugins on this class" — distinct
+   * from `undefined` ("not yet computed") so we don't re-walk an empty
+   * plugin record on every construct.
+   *
+   * @internal
+   */
+  static __pluginLayout?: PluginLayout | null;
 
-      } else {
-        // immediately close the connection in production
-        client.leave(CloseCode.WITH_ERROR, errorMessage);
-      }
-    }
-  };
+  // Re-expose the registry for @colyseus/playground introspection and
+  // @colyseus/testing handler-swapping (both reach in via bracket access).
+  private get onMessageEvents() { return this.#_messages.events; }
+  private get onMessageValidators() { return this.#_messages.validators; }
 
   private _serializer: Serializer<ExtractRoomState<T>> = noneSerializer;
-  private _afterNextPatchQueue: Array<[string | number | ExtractRoomClient<T>, ArrayLike<any>]> = [];
+
+  /** Clients that staged `afterNextPatch` frames since the last patch, so the
+   *  post-patch flush iterates only these — never the full client list. Shared by
+   *  reference onto each client at join. Reset each `broadcastPatch`. */
+  #pendingFrameClients: Array<Client & ClientPrivate> = [];
+
+  /** `broadcast(..., { afterNextPatch })` in NON-timed rooms, sent as a SHARED
+   *  frame right after the next patch (one encode, N sends). Non-timed patches are
+   *  themselves a shared buffer, so a per-client copy would force N× allocation in
+   *  large rooms — sharing avoids that. TIMED rooms instead stage the broadcast onto
+   *  each client's `_pendingFrames`. Drained each `broadcastPatch`. */
+  #afterPatchBroadcasts: Array<{ bytes: Uint8Array; except: Client[] | undefined }> = [];
 
   private _simulationInterval: NodeJS.Timeout;
 
@@ -311,6 +462,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
     this.#_state = this.state;
     this.#_autoDispose = this.autoDispose;
     this.#_patchRate = this.patchRate;
+    this.#_unreliablePatchRate = this.unreliablePatchRate;
     this.#_maxClients = this.maxClients;
 
     Object.defineProperties(this, {
@@ -327,6 +479,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
           }
           this._serializer.reset(newState);
           this.#_state = newState;
+          this._armUnreliablePatches();
         },
       },
 
@@ -370,6 +523,15 @@ export class Room<T extends RoomOptions = RoomOptions> {
           }
         },
       },
+
+      unreliablePatchRate: {
+        enumerable: true,
+        get: () => this.#_unreliablePatchRate,
+        set: (milliseconds: number | null) => {
+          this.#_unreliablePatchRate = milliseconds;
+          this._armUnreliablePatches();
+        },
+      },
     });
 
     // set patch interval, now with the setter
@@ -378,6 +540,15 @@ export class Room<T extends RoomOptions = RoomOptions> {
     // set state, now with the setter
     if (this.#_state) {
       this.state = this.#_state;
+    }
+
+    // Wire room plugins from the instance-level `this.plugins` record.
+    // The heavy lifting (conflict detection, hook participation, hook
+    // wrapping on the prototype) runs once per class — see
+    // `setupRoomPlugins` in `./RoomPlugin.ts`. Per-instance: set
+    // `plugin.room = this`, instantiate auto-deps, merge messages.
+    if (this.plugins !== undefined) {
+      setupRoomPlugins(this);
     }
 
     // Bind messages to the room
@@ -405,6 +576,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
 
     this.clock.start();
   }
+
 
   /**
    * The name of the room you provided as first argument for `gameServer.define()`.
@@ -491,6 +663,86 @@ export class Room<T extends RoomOptions = RoomOptions> {
   public onLeave?(client: ExtractRoomClient<T>, code?: number): void | Promise<any>;
 
   /**
+   * Per-client input accessor. Assign it `= this.defineInput(...)`, then call
+   * `this.inputs.get(sessionId)` each tick to read that client's buffered input
+   * *stream* — iterate it directly, or call `.next()` / `.drain()` / `.latest`.
+   *
+   * (In the `Room<{ input: I }>` generic, `input` is the input *type* of one
+   * frame; `this.inputs` is the per-client accessor over the stream of them.)
+   *
+   * @example
+   * ```typescript
+   * class FpsRoom extends Room<{ input: MoveInput }> {
+   *   inputs = this.defineInput(MoveInput);
+   *
+   *   onCreate() {
+   *     this.setFixedTimestep((ctx) => {
+   *       for (const [sid, p] of this.state.players)
+   *         for (const input of this.inputs.get(sid))   // consume one-by-one
+   *           applyInput(p, input, ctx.dt);
+   *     }, 30);
+   *   }
+   * }
+   * ```
+   */
+  public inputs?: InputAPI<ExtractRoomInput<T>>;
+
+  /**
+   * @internal The per-room input subsystem (options, accessor registry, wire
+   * stamp mode, encode/decode/handshake). Created lazily on the first
+   * {@link defineInput} call — rooms without inputs allocate none of it, and its
+   * presence is what enables client-timed state messages. See {@link RoomInput}.
+   */
+  private _inputController?: RoomInput;
+
+  /**
+   * Declare the input schema and configuration in a single line. Returns the
+   * input API that gets assigned to `this.inputs` — call
+   * `this.inputs.get(sessionId)` per tick to consume.
+   *
+   * ```typescript
+   * class FpsRoom extends Room<{ input: MoveInput }> {
+   *   inputs = this.defineInput(MoveInput, {
+   *     seqField: "tick",       // typed: only numeric fields of MoveInput
+   *     bufferMaxSize: 64,
+   *   });
+   *
+   *   // …or without options — no seq dedupe, bufferMaxSize: 32:
+   *   // inputs = this.defineInput(MoveInput);
+   * }
+   * ```
+   *
+   * **Defaults** when `opts` (or individual fields) are omitted:
+   * - `seqField`: unset — dedupe and `this.inputs.get(sessionId).at(value)` lookup are
+   *   OPT-IN (lockstep / rollback). Name a monotonic numeric field here to enable
+   *   them; redundant frames (`input[seqField]` ≤ the last seen) are then dropped.
+   *   Leave unset for reliable, in-order channels where every frame is unique.
+   * - `bufferMaxSize`: `32` — enables per-client snapshot buffering for
+   *   `this.inputs.get(sessionId)` iteration / `.consume() / .drain() / .next() /
+   *   .take() / .peek() / .at()`. Set to `0` to disable buffering (the `.latest`
+   *   read still works).
+   *
+   * **Consuming the buffer** — `for (const inp of this.inputs.get(sessionId))` (sugar
+   * for `.consume()`) is the per-entity loop: it consumes one at a time, so
+   * lag-comp `renderTime` tracks each input. `next()` (take exactly one, ack +1)
+   * suits a shared physics world stepped once for everyone; `drain()` returns the
+   * whole pending set as an array. See {@link InputAccessor} for the full
+   * per-entity-vs-shared-world guidance and why the choice affects the reconcile ack.
+   */
+  protected defineInput<
+    C extends new () => any,
+    O extends DefineInputOptions<InstanceType<C>> = DefineInputOptions<InstanceType<C>>,
+  >(
+    type: C,
+    opts?: O,
+  ): InputAPI<InstanceType<C>, IdleDeclared<O, InstanceType<C>>> {
+    // Lazily spun up on first call; its presence is the "real-time room" gate
+    // (enables client-timed state). Rooms that never call this pay nothing.
+    this._inputController ??= new RoomInput(this);
+    return this._inputController.define<C, O>(type, opts);
+  }
+
+  /**
    * This method is called when the room is disposed.
    */
   public onDispose?(): void | Promise<any>;
@@ -503,7 +755,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
    * - `onMessage`
    * - `onAuth` / `onJoin` / `onLeave` / `onCreate` / `onDispose`
    * - `clock.setTimeout` / `clock.setInterval`
-   * - `setSimulationInterval`
+   * - `setTimestep` / `setFixedTimestep`
    *
    * (Experimental: this feature is subject to change in the future - we're currently getting feedback to improve it)
    */
@@ -605,7 +857,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
 
     } else if (typeof(reconnectionToken) === "string") {
         // potentially a stale client reference, so a reconnection attempt is possible.
-        return this.clients.getById(sessionId)?.reconnectionToken === reconnectionToken;
+        return this.clients.get(sessionId)?.reconnectionToken === reconnectionToken;
     }
 
     return false;
@@ -629,22 +881,29 @@ export class Room<T extends RoomOptions = RoomOptions> {
   }
 
   /**
-   * (Optional) Set a simulation interval that can change the state of the game.
-   * The simulation interval is your game loop.
+   * Set the room's game loop. `onTickCallback` runs every `delay` ms and receives
+   * the MEASURED wall-clock delta since the previous tick (a VARIABLE timestep).
+   * For deterministic, prediction-friendly simulation prefer
+   * {@link Room.setFixedTimestep}, which advances a fixed step via an accumulator.
    *
    * @default 16.6ms (60fps)
    *
-   * @param onTickCallback - You can implement your physics or world updates here!
-   *  This is a good place to update the room state.
-   * @param delay - Interval delay on executing `onTickCallback` in milliseconds.
+   * @param onTickCallback - Your physics / world update — a good place to mutate
+   *  room state. Receives the measured delta (`this.clock.deltaTime`).
+   * @param delay - Interval between ticks in milliseconds.
    */
-  public setSimulationInterval(onTickCallback?: SimulationCallback, delay: number = DEFAULT_SIMULATION_INTERVAL): void {
-    // clear previous interval in case called setSimulationInterval more than once
+  public setTimestep(onTickCallback?: SimulationCallback, delay: number = DEFAULT_SIMULATION_INTERVAL): void {
+    // clear previous loop in case it was set more than once
     if (this._simulationInterval) { clearInterval(this._simulationInterval); }
+
+    // Advertise this loop's rate to predicting clients unless set explicitly.
+    if (onTickCallback && this._inputController && this._inputController.options.tickRate === undefined) {
+      this._inputController.options.tickRate = Math.round(1000 / delay);
+    }
 
     if (onTickCallback) {
       if (this.onUncaughtException !== undefined) {
-        onTickCallback = wrapTryCatch(onTickCallback, this.onUncaughtException.bind(this), SimulationIntervalException, 'setSimulationInterval');
+        onTickCallback = wrapTryCatch(onTickCallback, this.onUncaughtException.bind(this), TimestepException, 'setTimestep');
       }
 
       this._simulationInterval = setInterval(() => {
@@ -652,6 +911,181 @@ export class Room<T extends RoomOptions = RoomOptions> {
         onTickCallback(this.clock.deltaTime);
       }, delay);
     }
+  }
+
+  /**
+   * @deprecated Renamed to {@link Room.setTimestep} (which pairs with
+   * {@link Room.setFixedTimestep}). Kept for backwards compatibility — forwards
+   * to `setTimestep` unchanged.
+   */
+  public setSimulationInterval(onTickCallback?: SimulationCallback, delay: number = DEFAULT_SIMULATION_INTERVAL): void {
+    this.setTimestep(onTickCallback, delay);
+  }
+
+  /**
+   * Fixed-timestep game loop with a framework-owned accumulator — the right
+   * default for prediction/rollback. Unlike {@link setTimestep} (which
+   * hands you the *measured* wall-clock delta), this runs `step` a whole number
+   * of times per real frame so each step advances by the SAME fixed
+   * `dt = 1/tickRate`; the measured delta only decides HOW MANY steps run. The
+   * fixed dt is delivered via {@link StepContext}, so the jittery wall-clock
+   * delta can't leak into deterministic simulation.
+   *
+   * `tickRate` is also the SINGLE SOURCE of the simulation rate: it's advertised
+   * to predicting clients via the join handshake (they predict at the matching
+   * `dt`), so don't also pass `tickRate` to {@link defineInput}.
+   *
+   * **`tickRate` couples three rates** — by design, one input == one fixed step
+   * == one server tick, so lowering `tickRate` to save bandwidth also lowers
+   * the simulation rate. To keep high-fidelity physics on a lower network rate,
+   * pass `{ subSteps: N }`: one input still drives one fixed step, but you
+   * integrate `N` engine sub-steps of `ctx.subDt` (= `ctx.dt / N`) inside it —
+   * physics at `tickRate * N` Hz, inputs at `tickRate`/sec. The same
+   * `subSteps`/`subDt` are cascaded to predicting clients (via the join
+   * handshake, onto their reconciler's step context), so client replay
+   * reproduces the sub-stepped trajectory exactly. Render interpolation already
+   * smooths above the step rate — most games don't need this; reach for it when
+   * the *simulation* needs the extra Hz (fast projectiles, stacking, tunneling).
+   *
+   * On a hitch the accumulator runs at most a few catch-up steps then drops the
+   * backlog (no spiral of death). Lag-comp is recorded once per real frame.
+   *
+   * **Consuming input inside the step** — how you consume each client's buffer
+   * depends on who integrates (see {@link InputAccessor}):
+   * - *Per-entity* (each body integrates itself): `for (const cmd of
+   *   this.inputs.get(sid)) applyInput(player, cmd, ctx.dt)` — N inputs =
+   *   N sub-integrations, ack lands on the newest applied, and `renderTime`
+   *   tracks each input (lag comp stays exact per step).
+   * - *Shared world* (one solver step advances every body): consume exactly one
+   *   input per entity per step with `this.inputs.get(sid).next()` (or `take(n)` +
+   *   sub-step), then `world.step()` once. Draining all and applying only the
+   *   latest would jump the reconcile ack past inputs you never simulated.
+   *
+   * @param step - Called once per fixed step with a {@link StepContext}.
+   * @param tickRate - Simulation rate in **Hz**. Defaults to 60.
+   * @param opts - `subSteps`: physics sub-steps per fixed step (integer ≥ 1,
+   *   default 1) — see above.
+   *
+   * @example
+   * ```ts
+   * onCreate() {
+   *   // 30 inputs/sec on the wire, physics integrated at 60 Hz:
+   *   this.setFixedTimestep((ctx) => {
+   *     this.applyInputs(ctx);      // consume ONE input per client per step
+   *     for (let i = 0; i < ctx.subSteps; i++) this.world.step(ctx.subDt);
+   *   }, 30, { subSteps: 2 });
+   * }
+   * ```
+   */
+  public setFixedTimestep(step: FixedTimestepCallback, tickRate: number = Math.round(1000 / DEFAULT_SIMULATION_INTERVAL), opts?: { subSteps?: number }): void {
+    if (this._simulationInterval) { clearInterval(this._simulationInterval); }
+
+    const stepMs = 1000 / tickRate;
+    const stepSeconds = 1 / tickRate;
+    // Explicit option wins; else an earlier defineInput({ subSteps }) declaration.
+    const subSteps = validateSubSteps(opts?.subSteps, 'setFixedTimestep')
+      ?? this._inputController?.options.subSteps ?? 1;
+
+    // Single source of the fixed rate (and sub-step count): advertise both to
+    // predicting clients so N and dt can't drift between the two sides.
+    if (this._inputController) {
+      this._inputController.options.tickRate = tickRate;
+      this._inputController.options.subSteps = subSteps;
+    }
+
+    let cb = step;
+    if (this.onUncaughtException !== undefined) {
+      cb = wrapTryCatch(step, this.onUncaughtException.bind(this), TimestepException, 'setFixedTimestep');
+    }
+
+    let acc = 0;
+    let tick = 0;
+    // Reused per-step context — no per-step allocation in the hot loop.
+    // subDt = stepSeconds/subSteps: same expression as the client handle's
+    // subStepSeconds, so the per-sub-step dt is bit-identical on both sides.
+    const ctx = {
+      dt: stepSeconds, dtMs: stepMs, tick: 0,
+      subSteps, subDt: stepSeconds / subSteps, subDtMs: stepMs / subSteps,
+    };
+    const MAX_CATCHUP_STEPS = 5;
+
+    this._simulationInterval = setInterval(() => {
+      this.clock.tick();
+      acc += this.clock.deltaTime;
+
+      // Run a whole number of FIXED steps to consume the measured time.
+      let ran = 0;
+      while (acc >= stepMs && ran < MAX_CATCHUP_STEPS) {
+        acc -= stepMs;
+        ctx.tick = tick++;
+        cb(ctx);
+        ran++;
+      }
+      if (ran === MAX_CATCHUP_STEPS) { acc = 0; } // hitch: drop backlog, don't spiral
+    }, stepMs);
+  }
+
+  /** Server-side lag compensation, lazily created. @see allowRewindState */
+  #rewind?: Rewind;
+
+  /** @internal The rewind attachments' timeline mode (snapshot/reckon), or
+   *  `undefined` when no rewind is configured. {@link RoomInput} reads it to
+   *  derive the wire input stamp mode (snapshot → renderTime, reckon → reckonTime). */
+  _timelineMode(): { snapshot?: boolean; reckon?: boolean } | undefined {
+    return this.#rewind?.timelineMode();
+  }
+
+  /**
+   * Enable server-side lag compensation: returns a {@link Rewind} that records the
+   * position history of the entities you attach and automatically snapshots them
+   * on each broadcast (the patchRate cadence). Attach the collections to rewind,
+   * then read past positions (at a client's renderTime) in your hit tests.
+   *
+   * @example
+   * ```ts
+   * const rewind = this.allowRewindState({ maxRewindMs: 500 });
+   * rewind.attachAll(this.state.enemies, { fields: ["x", "y"] });
+   * // in a hit test — rewind to where the SHOOTER saw the world:
+   * const seen = rewind.lastSeenBy(shooterSessionId);   // needs this.defineInput(...)
+   * const seenX = seen.value(enemy, "x"), seenY = seen.value(enemy, "y");
+   * ```
+   *
+   * Per-client stamps auto-enable from the `attachAll` `mode` of the groups you
+   * rewind — no `renderTime` flag. The default auto-record fires on each
+   * broadcast, snapshotting exactly what the client receives — so the rewind
+   * reproduces the client's interpolation and hits stay exact even when the
+   * broadcast rate differs from the sim rate (`patchRate ≠ timestep`). Call
+   * `rewind.record()` yourself during a tick to take over that cadence (you then
+   * own correctness against your own broadcast rate).
+   */
+  public allowRewindState(opts?: RewindOptions): Rewind {
+    this.#rewind = Rewind.get(this, opts);
+    // Resolve `rewind.lastSeenBy(sid)` through the framework-owned input API.
+    // Lazy: read at call time, so field-init order between `inputs` and `rewind`
+    // doesn't matter. A missing input API fails loudly; a client that hasn't
+    // stamped yet legitimately reads 0 → live fallback (NOT a config error).
+    this.#rewind.bindRenderTime((sessionId) => {
+      const api = this._inputController?.api;
+      if (api === undefined) {
+        throw new Error(
+          "rewind.lastSeenBy() found no input API. Declare " +
+          "`inputs = this.defineInput(YourInput)`, or use " +
+          "rewind.at(time) with a render time you track yourself.",
+        );
+      }
+      return api.get(sessionId).renderTime;
+    });
+    // Direct reckon-display stamp: mode:"reckon" groups read at exactly the
+    // instant the client displayed them — immune to its RTT-estimation error.
+    // RAW (not the accessor's resolved getter): _aim's midpoint fallback must
+    // see 0 for unstamped clients.
+    this.#rewind.bindReckonTime((sessionId) =>
+      this._inputController?.rawReckonTime(sessionId) ?? 0,
+    );
+    // Anchor the reckon midpoint FALLBACK at the true processing instant (the
+    // record timestamp is one tick stale by hit-test time — see bindNow).
+    this.#rewind.bindNow(() => this.clock.elapsedTime);
+    return this.#rewind;
   }
 
   /**
@@ -672,21 +1106,8 @@ export class Room<T extends RoomOptions = RoomOptions> {
     this._serializer = serializer;
   }
 
-  public async setMetadata(meta: Partial<ExtractRoomMetadata<T>>, persist: boolean = true) {
-    if (!this._listing.metadata) {
-      this._listing.metadata = meta as ExtractRoomMetadata<T>;
-
-    } else {
-      for (const field in meta) {
-        if (!meta.hasOwnProperty(field)) { continue; }
-        this._listing.metadata[field] = meta[field];
-      }
-
-      // `MongooseDriver` workaround: persit metadata mutations
-      if ('markModified' in this._listing) {
-        (this._listing as any).markModified('metadata');
-      }
-    }
+  public async setMetadata(meta: ExtractRoomMetadata<T>, persist: boolean = true) {
+    this._listing.metadata = meta;
 
     if (persist && this._internalState === RoomInternalState.CREATED) {
       await matchMaker.driver.persist(this._listing);
@@ -736,7 +1157,8 @@ export class Room<T extends RoomOptions = RoomOptions> {
    *
    * @example
    * ```typescript
-   * // Partial metadata update (merges with existing)
+   * // Merging with existing metadata: spread `this.metadata` yourself.
+   * // `metadata` is always REPLACED (not merged) by setMatchmaking()/setMetadata().
    * await this.setMatchmaking({
    *   metadata: { ...this.metadata, round: this.metadata.round + 1 }
    * });
@@ -895,12 +1317,6 @@ export class Room<T extends RoomOptions = RoomOptions> {
     ...args: MessageArgs<ExtractRoomClient<T>['~messages'][K], IBroadcastOptions>
   ) {
     const [message, options] = args;
-    if (options && options.afterNextPatch) {
-      delete options.afterNextPatch;
-      this._afterNextPatchQueue.push(['broadcast', [type, ...args]]);
-      return;
-    }
-
     this.broadcastMessageType(type, message, options);
   }
 
@@ -908,12 +1324,6 @@ export class Room<T extends RoomOptions = RoomOptions> {
    * Broadcast bytes (UInt8Arrays) to a particular room
    */
   public broadcastBytes(type: string | number, message: Uint8Array, options: IBroadcastOptions) {
-    if (options && options.afterNextPatch) {
-      delete options.afterNextPatch;
-      this._afterNextPatchQueue.push(['broadcastBytes', arguments]);
-      return;
-    }
-
     this.broadcastMessageType(type as string, message, options);
   }
 
@@ -933,12 +1343,99 @@ export class Room<T extends RoomOptions = RoomOptions> {
       return false;
     }
 
-    const hasChanges = this._serializer.applyPatches(this.clients, this.state);
+    // When `defineInput()` was called, hand the serializer a fresh `sNow`
+    // each tick. The per-client `inputSeq` ack is read off the client at
+    // encode time inside `applyPatches`.
+    const sNow = this.clock.elapsedTime;
+    const hasChanges = this._serializer.applyPatches(
+      this.clients,
+      this.state,
+      this._inputController !== undefined ? { sNow } : undefined,
+    );
 
-    // broadcast messages enqueued for "after patch"
-    this._dequeueAfterPatchMessages();
+    // Flush `@unreliable` fields over the datagram channel, after the reliable
+    // patch so a spawn's ADD is already on the wire when the datagram mutating
+    // it goes out. No-op unless the state declares such a field, and skipped
+    // when `unreliablePatchRate` gave the flush its own timer.
+    this._flushUnreliable();
+
+    // Deliver any per-client `afterNextPatch` frames as standalone frames right
+    // after the patch (never coalesced into it). Iterates only the clients that
+    // staged frames this cycle (`#pendingFrameClients`), never the full list.
+    this._flushPendingClientFrames();
+
+    // After-patch broadcasts ride here as shared frames (one buffer → N sends).
+    this._flushAfterPatchBroadcasts();
+
+    // Lag-comp: record the snapshot the client just received, on the broadcast
+    // cadence and stamped with the SAME `sNow` the frame carries — so valueAt()
+    // reproduces the client's interpolation over the IDENTICAL pair (exact hits
+    // at any patchRate). Idempotent per `sNow`: a manual record() this tick wins,
+    // and a patchRate faster than the sim simply dedups back to per-tick.
+    const rw = this.#rewind;
+    if (rw !== undefined && rw.lastRecordedAt !== sNow) {
+      rw.record(sNow, this.#_patchRate || undefined);
+    }
 
     return hasChanges;
+  }
+
+  /**
+   * Encode and send the `@unreliable` state fields over each client's
+   * unreliable channel. Those fields never appear in a {@link broadcastPatch}
+   * frame, and clients on a transport without a datagram channel are skipped.
+   *
+   * Driven automatically once the state declares an `@unreliable` field — right
+   * after each {@link broadcastPatch}, or on its own timer when
+   * {@link unreliablePatchRate} is set. Public so a room driving
+   * `broadcastPatch()` by hand can drive this by hand too.
+   */
+  public broadcastUnreliablePatch() {
+    if (!this.state) {
+      return false;
+    }
+    return this._serializer.applyUnreliablePatches?.(this.clients) ?? false;
+  }
+
+  /**
+   * Decide how the unreliable channel is driven — and, for the rooms that never
+   * touch it, decide to not drive it at all. Runs when the state is assigned
+   * (the serializer knows by then whether any `@unreliable` field exists) and
+   * whenever {@link unreliablePatchRate} changes.
+   *
+   * A room whose state declares no `@unreliable` field leaves
+   * {@link _flushUnreliable} at {@link NOOP}, so its patch tick costs exactly
+   * what it did before this feature existed.
+   */
+  private _armUnreliablePatches() {
+    if (this.#_unreliablePatchInterval) {
+      clearInterval(this.#_unreliablePatchInterval);
+      this.#_unreliablePatchInterval = undefined;
+    }
+
+    const armed = this._serializer?.hasUnreliableFields === true;
+    const rate = this.#_unreliablePatchRate;
+    const dedicated = armed && rate !== null && rate !== 0;
+
+    // Default mode flushes from the patch itself rather than an independent
+    // timer of the same period, which would put the datagram ahead of a spawn's
+    // ADD about half the time.
+    const inline = armed && !dedicated;
+
+    this._flushUnreliable = inline
+      ? () => { this.broadcastUnreliablePatch(); }
+      : NOOP;
+
+    if (dedicated) {
+      this.#_unreliablePatchInterval = setInterval(() => this.broadcastUnreliablePatch(), rate);
+
+    } else if (inline && !this.#_patchRate) {
+      // patchRate 0/null means no patch tick to piggyback on.
+      logger.warn(
+        "@colyseus/core: state has @unreliable fields but patchRate is disabled —" +
+        " set `room.unreliablePatchRate` to flush them, or they will never update."
+      );
+    }
   }
 
   /**
@@ -971,43 +1468,19 @@ export class Room<T extends RoomOptions = RoomOptions> {
   );
   public onMessage<T = any, C extends Client = ExtractRoomClient<T>>(
     messageType: string | number,
-    callback: (client: C, message: T) => void,
+    callback: (client: C, message: T, ctx: MessageContext) => unknown,
   );
   public onMessage<T = any, C extends Client = ExtractRoomClient<T>>(
     messageType: string | number,
     validationSchema: StandardSchemaV1<T>,
-    callback: (client: C, message: T) => void,
+    callback: (client: C, message: T, ctx: MessageContext) => unknown,
   );
   public onMessage<T = any>(
     _messageType: '*' | string | number,
     _validationSchema: StandardSchemaV1<T> | ((...args: any[]) => void),
     _callback?: (...args: any[]) => void,
   ) {
-    const messageType = _messageType.toString();
-
-    const validationSchema = (typeof _callback === 'function')
-      ? _validationSchema as StandardSchemaV1<T>
-      : undefined;
-
-    const callback = (validationSchema === undefined)
-      ? _validationSchema as (...args: any[]) => void
-      : _callback;
-
-    const removeListener = this.onMessageEvents.on(messageType, (this.onUncaughtException !== undefined)
-      ? wrapTryCatch(callback, this.onUncaughtException.bind(this), OnMessageException, 'onMessage', false, _messageType)
-      : callback);
-
-    if (validationSchema !== undefined) {
-      this.onMessageValidators[messageType] = validationSchema;
-    }
-
-    // returns a method to unbind the callback
-    return () => {
-      removeListener();
-      if (this.onMessageEvents.events[messageType].length === 0) {
-        delete this.onMessageValidators[messageType];
-      }
-    };
+    return this.#_messages.on(_messageType, _validationSchema as any, _callback);
   }
 
   public onMessageBytes<T = any, C extends Client = ExtractRoomClient<T>>(
@@ -1026,20 +1499,117 @@ export class Room<T extends RoomOptions = RoomOptions> {
     _validationSchema: StandardSchemaV1<T> | ((...args: any[]) => void),
     _callback?: (...args: any[]) => void,
   ) {
-    const messageType = `_$b${_messageType}`;
+    return this.#_messages.on(`_$b${_messageType}`, _validationSchema as any, _callback);
+  }
 
-    const validationSchema = (typeof _callback === 'function')
-      ? _validationSchema as StandardSchemaV1<T>
-      : undefined;
+  // ---------------------------------------------------------------------------
+  // Operator API — used by @colyseus/admin (and monitor in due course)
+  // through `remoteRoomCall(roomId, methodName)`. Marked `@internal` because
+  // they're framework-tooling primitives, not part of the game-code surface.
+  // ---------------------------------------------------------------------------
 
-    const callback = (validationSchema === undefined)
-      ? _validationSchema as (...args: any[]) => void
-      : _callback;
+  /**
+   * Snapshot the room's live state for an inspector / admin UI. Includes:
+   *
+   *   roomId, name, maxClients, locked, elapsedTime (ms),
+   *   metadata, clients (sessionId + per-client elapsed + userId when set),
+   *   state (the schema/json the SDK would see),
+   *   stateSize (bytes of the encoded full state, or 0 when no serializer).
+   *
+   * The payload is intentionally plain JSON — `remoteRoomCall` serializes
+   * the return value across process boundaries.
+   *
+   * @internal Operator-only. Game code should not call this.
+   */
+  public getInspectorView(): {
+    roomId: string;
+    name: string;
+    clients: number;
+    maxClients: number;
+    locked: boolean;
+    elapsedTime: number;
+    metadata: any;
+    clientList: Array<{
+      sessionId: string;
+      userId: string | null;
+      userEmail: string | null;
+      elapsedTime: number;
+    }>;
+    state: any;
+    stateSize: number;
+  } {
+    const elapsed = this.clock.elapsedTime;
+    return {
+      roomId: this.roomId,
+      name: this.roomName,
+      clients: this.clients.length,
+      maxClients: this.maxClients,
+      locked: this.#_locked,
+      elapsedTime: elapsed,
+      metadata: this.metadata ?? null,
+      // Cast through `unknown`: `ExtractRoomClient<T>` vs `Client & ClientPrivate`
+      // don't structurally overlap (the user's `client` generic may carry a
+      // narrower userData/auth shape), but the runtime objects we walk here
+      // always have the private join-time field. The narrow per-property
+      // `(c as any)` reads below keep the cast scoped.
+      //
+      // userId / userEmail read straight off `client.auth` — the JWT
+      // payload @colyseus/auth's default onAuth decodes carries both
+      // when the user has them on file. Saves the admin a per-client
+      // database round-trip; falls back to null when the client signed
+      // in anonymously (or with a custom onAuth that returns a shape
+      // without those fields).
+      clientList: (this.clients as unknown as ReadonlyArray<Client & ClientPrivate>).map((c) => {
+        const auth = (c as any).auth;
+        return {
+          sessionId: c.sessionId,
+          userId: ((c as any).userId ?? auth?.id) ?? null,
+          userEmail: auth?.email ?? null,
+          elapsedTime: elapsed - ((c as any)._joinedAt ?? elapsed),
+        };
+      }),
+      state: this.state ?? null,
+      stateSize: this.#_inspectorStateSize(),
+    };
+  }
 
-    if (validationSchema !== undefined) {
-      return this.onMessage(messageType, validationSchema as any, callback as any);
-    } else {
-      return this.onMessage(messageType, callback as any);
+  /**
+   * Force-disconnect a single client by sessionId. No-op when the client
+   * isn't connected (idempotent — the caller doesn't need to race-check).
+   *
+   * @internal Operator-only. Game code disconnects clients by calling
+   *   `.leave()` on the Client object directly.
+   */
+  public kickClient(sessionId: string, closeCode: number = CloseCode.CONSENTED, reason?: string): void {
+    // Same `unknown` indirection as in `getInspectorView` above —
+    // ExtractRoomClient<T> doesn't structurally include ClientPrivate.
+    for (const client of this.clients as unknown as ReadonlyArray<Client & ClientPrivate>) {
+      if (client.sessionId === sessionId) {
+        this.#_forciblyCloseClient(client as ExtractRoomClient<T> & ClientPrivate, closeCode, reason);
+        return;
+      }
+    }
+  }
+
+  /**
+   * Best-effort byte size of the current full state. Falls back to `0`
+   * when the room has no serializer or the serializer can't produce a
+   * payload (raw rooms, very-early-onCreate, etc.). The serializer
+   * detection mirrors `@colyseus/monitor`'s — we read whichever buffer
+   * is available across schema v2 and v3.
+   */
+  #_inspectorStateSize(): number {
+    const ser = this._serializer as any;
+    if (!ser) { return 0; }
+    const hasState = ser.encoder || ser.state;
+    if (!hasState) { return 0; }
+    try {
+      const full = ser.getFullState?.();
+      if (!full) { return 0; }
+      // Buffer / Uint8Array have `byteLength`; raw arrays have `length`.
+      return (full as any).byteLength ?? (full as any).length ?? 0;
+    } catch {
+      return 0;
     }
   }
 
@@ -1104,6 +1674,9 @@ export class Room<T extends RoomOptions = RoomOptions> {
     // (each new reconnection receives a new reconnection token)
     client.reconnectionToken = generateId();
 
+    // Allocate per-client input state early so onJoin can read inputs.get(sid).latest.
+    this._inputController?.allocate(client);
+
     if (this._reservedSeatTimeouts[sessionId]) {
       clearTimeout(this._reservedSeatTimeouts[sessionId]);
       delete this._reservedSeatTimeouts[sessionId];
@@ -1122,7 +1695,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
     if (
       this._reservedSeats[sessionId] === undefined &&
       connectionOptions?.reconnectionToken &&
-      this.clients.getById(sessionId)?.reconnectionToken === connectionOptions.reconnectionToken
+      this.clients.get(sessionId)?.reconnectionToken === connectionOptions.reconnectionToken
     ) {
       debugMatchMaking('attempting to reconnect client with a stale previous connection - sessionId: \'%s\', roomId: \'%s\'', client.sessionId, this.roomId);
       this._reconnectionAttempts[connectionOptions.reconnectionToken] = new Deferred();
@@ -1161,8 +1734,10 @@ export class Room<T extends RoomOptions = RoomOptions> {
     this._reservedSeats[sessionId][2] = true; // flag seat reservation as "consumed"
     debugMatchMaking('consuming seat reservation, sessionId: \'%s\' (roomId: %s)', client.sessionId, this.roomId);
 
-    // share "after next patch queue" reference with every client.
-    client._afterNextPatchQueue = this._afterNextPatchQueue;
+    // Share the after-patch flush list so a client can announce staged frames
+    // without the flush scanning every client. `_pendingFrames` are delivered as
+    // standalone frames right after the patch by `_flushPendingClientFrames`.
+    (client as Client & ClientPrivate)._pendingFrameClients = this.#pendingFrameClients;
 
     // add temporary callback to keep track of disconnections during `onJoin`.
     client.ref['onleave'] = (_) => client.state = ClientState.LEAVING;
@@ -1172,6 +1747,9 @@ export class Room<T extends RoomOptions = RoomOptions> {
       const reconnectionToken = connectionOptions?.reconnectionToken;
       if (reconnectionToken && this._reconnections[reconnectionToken]?.[0] === sessionId) {
         this.clients.push(client);
+        // After push (no leak on a failed join), before onReconnect; overwrites
+        // the dropped session's stale entry.
+        this._inputController?.register(sessionId, client);
 
         //
         // await for reconnection:
@@ -1237,6 +1815,8 @@ export class Room<T extends RoomOptions = RoomOptions> {
         }
 
         this.clients.push(client);
+        // After push (no leak on a failed join), before onJoin (resolves inputs.get there).
+        this._inputController?.register(sessionId, client);
 
         //
         // Flag sessionId as non-enumarable so hasReachedMaxClients() doesn't count it
@@ -1290,6 +1870,11 @@ export class Room<T extends RoomOptions = RoomOptions> {
       // allow client to send messages after onJoin has succeeded.
       client.ref.on('message', this._onMessage.bind(this, client));
 
+      // NOT gated by skipHandshake: that flag means "client already has the STATE
+      // schema", but these carry input config the client can't derive locally
+      // (re-parsing on reconnect is idempotent).
+      const extraSections = this._inputController?.handshakeSections();
+
       // confirm room id that matches the room name requested to join
       client.raw(getMessageBytes[Protocol.JOIN_ROOM](
         client.reconnectionToken,
@@ -1301,6 +1886,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
         (connectionOptions?.skipHandshake)
           ? undefined
           : this._serializer.handshake && this._serializer.handshake(),
+        extraSections,
       ));
     }
   }
@@ -1405,7 +1991,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
     // switching Wi-Fi), as the original connection may still be open while a
     // new reconnection attempt is being made.
     //
-    if (this._reconnectionAttempts[reconnectionToken]) {
+    if (this._reconnectionAttempts[reconnectionToken] !== undefined) {
       debugMatchMaking('resolving reconnection attempt for client - sessionId: \'%s\', roomId: \'%s\'', sessionId, this.roomId);
       this._reconnectionAttempts[reconnectionToken].resolve(true);
     }
@@ -1439,39 +2025,67 @@ export class Room<T extends RoomOptions = RoomOptions> {
         : [options.except]
       : undefined;
 
+    // `afterNextPatch` in a NON-timed room: the patch is a SHARED buffer, so
+    // coalescing would force N per-client copies. Keep this one shared buffer and
+    // ride it right after the patch (see #afterPatchBroadcasts). `except` is
+    // captured now; recipients resolve at drain time.
+    if (options.afterNextPatch && this._inputController === undefined) {
+      this.#afterPatchBroadcasts.push({ bytes: encodedMessage, except });
+      return;
+    }
+
+    // Otherwise one loop: a TIMED-room `afterNextPatch` broadcast stages onto each
+    // recipient's `_pendingFrames` (flushed right after the patch); an immediate
+    // broadcast sends now.
+    const sendOpts = options.afterNextPatch ? AFTER_PATCH_OPTS : undefined;
     let numClients = this.clients.length;
     while (numClients--) {
       const client = this.clients[numClients];
-
       if (!except || !except.includes(client)) {
-        client.enqueueRaw(encodedMessage);
+        client.enqueueRaw(encodedMessage, sendOpts);
       }
     }
+  }
+
+  /** Drain `#afterPatchBroadcasts` right after the patch — each as ONE shared
+   *  buffer fanned out to its (non-excepted) recipients. `enqueueRaw` handles
+   *  JOINED (send now) vs still-joining (buffer until JOIN) per client. */
+  private _flushAfterPatchBroadcasts() {
+    const queued = this.#afterPatchBroadcasts;
+    if (queued.length === 0) { return; }
+    for (let i = 0; i < queued.length; i++) {
+      const { bytes, except } = queued[i];
+      let numClients = this.clients.length;
+      while (numClients--) {
+        const client = this.clients[numClients];
+        if (!except || !except.includes(client)) { client.enqueueRaw(bytes); }
+      }
+    }
+    queued.length = 0;
   }
 
   private sendFullState(client: Client): void {
-    client.raw(this._serializer.getFullState(client));
+    client.raw(this._serializer.getFullState(
+      client,
+      this._inputController !== undefined ? { sNow: this.clock.elapsedTime } : undefined,
+    ));
   }
 
-  private _dequeueAfterPatchMessages() {
-    const length = this._afterNextPatchQueue.length;
-
-    if (length > 0) {
-      for (let i = 0; i < length; i++) {
-        const [target, args] = this._afterNextPatchQueue[i];
-
-        if (target === "broadcast") {
-          this.broadcast.apply(this, args as any);
-
-        } else {
-          (target as Client).raw.apply(target, args as any);
-        }
+  /** Send each client's staged `afterNextPatch` frames as standalone frames right
+   *  after the patch, then reset the tracker. Iterates only the clients that staged
+   *  frames this cycle (`#pendingFrameClients`), never the full client list; empty
+   *  (→ O(1)) on a tick where nothing was staged. */
+  private _flushPendingClientFrames() {
+    const dirty = this.#pendingFrameClients;
+    if (dirty.length === 0) { return; }
+    for (let i = 0; i < dirty.length; i++) {
+      const frames = dirty[i]._pendingFrames;
+      if (frames !== undefined && frames.length > 0) {
+        for (let j = 0; j < frames.length; j++) { dirty[i].raw(frames[j]); }
+        frames.length = 0;
       }
-
-      // new messages may have been added in the meantime,
-      // let's splice the ones that have been processed
-      this._afterNextPatchQueue.splice(0, length);
     }
+    dirty.length = 0;
   }
 
   private async _reserveSeat(
@@ -1518,6 +2132,8 @@ export class Room<T extends RoomOptions = RoomOptions> {
         delete this._reconnections[devModeReconnectionToken];
         delete this._reservedSeats[sessionId];
         delete this._reservedSeatTimeouts[sessionId];
+        // devMode reconnection bypasses #_onAfterLeave — drop the input accessor here.
+        this._inputController?.release(sessionId);
 
         if (!allowReconnection) {
           await this.#_decrementClientCount();
@@ -1579,19 +2195,27 @@ export class Room<T extends RoomOptions = RoomOptions> {
       this.#_patchInterval = undefined;
     }
 
+    if (this.#_unreliablePatchInterval) {
+      clearInterval(this.#_unreliablePatchInterval);
+      this.#_unreliablePatchInterval = undefined;
+    }
+
     if (this._simulationInterval) {
       clearInterval(this._simulationInterval);
       this._simulationInterval = undefined;
     }
 
     if (this._autoDisposeTimeout) {
-      clearInterval(this._autoDisposeTimeout);
+      clearTimeout(this._autoDisposeTimeout);
       this._autoDisposeTimeout = undefined;
     }
 
     // clear all timeouts/intervals + force to stop ticking
     this.clock.clear();
     this.clock.stop();
+
+    // drop any input accessors still held for in-flight reconnections
+    this._inputController?.dispose();
 
     return await (userReturnData || Promise.resolve());
   }
@@ -1616,71 +2240,25 @@ export class Room<T extends RoomOptions = RoomOptions> {
     }
 
     const it: Iterator = { offset: 1 };
-    const code = buffer[0];
+    // Strip modifier bits (e.g. ProtocolModifier.TIMED on a render-time input)
+    // before dispatch; existing client→server codes set no modifiers.
+    const code = buffer[0] & PROTOCOL_CODE_MASK;
+    const modifiers = buffer[0] & PROTOCOL_MODIFIER_MASK;
 
     if (code === Protocol.ROOM_DATA) {
-      const messageType = (decode.stringCheck(buffer, it))
-        ? decode.string(buffer, it)
-        : decode.number(buffer, it);
+      this.#_messages.onData(client, buffer, it);
 
-      let message;
-      try {
-        message = (buffer.byteLength > it.offset)
-          ? unpack(buffer.subarray(it.offset, buffer.byteLength))
-          : undefined;
-        debugMessage("received: '%s' -> %j (roomId: %s)", messageType, message, this.roomId);
-
-        // custom message validation
-        if (this.onMessageValidators[messageType] !== undefined) {
-          message = standardValidate(this.onMessageValidators[messageType], message);
-        }
-
-      } catch (e: any) {
-        debugAndPrintError(e);
-        client.leave(CloseCode.WITH_ERROR);
-        return;
-      }
-
-      if (this.onMessageEvents.events[messageType]) {
-        this.onMessageEvents.emit(messageType as string, client, message);
-
-      } else if (this.onMessageEvents.events['*']) {
-        this.onMessageEvents.emit('*', client, messageType, message);
-
-      } else {
-        this.onMessageFallbacks['__no_message_handler'](client, messageType, message);
-      }
+    } else if (code === Protocol.ROOM_REQUEST) {
+      this.#_messages.onRequest(client, buffer, it);
 
     } else if (code === Protocol.ROOM_DATA_BYTES) {
-      const messageType = (decode.stringCheck(buffer, it))
-        ? decode.string(buffer, it)
-        : decode.number(buffer, it);
+      this.#_messages.onDataBytes(client, buffer, it);
 
-      let message: any = buffer.subarray(it.offset, buffer.byteLength);
-      debugMessage("received: '%s' -> %j (roomId: %s)", messageType, message, this.roomId);
+    } else if (code === Protocol.ROOM_INPUT_RELIABLE) {
+      this._inputController?.decodeReliable(client, buffer, it, modifiers);
 
-      const bytesMessageType = `_$b${messageType}`;
-
-      // custom message validation
-      try {
-        if (this.onMessageValidators[bytesMessageType] !== undefined) {
-          message = standardValidate(this.onMessageValidators[bytesMessageType], message);
-        }
-      } catch (e: any) {
-        debugAndPrintError(e);
-        client.leave(CloseCode.WITH_ERROR);
-        return;
-      }
-
-      if (this.onMessageEvents.events[bytesMessageType]) {
-        this.onMessageEvents.emit(bytesMessageType, client, message);
-
-      } else if (this.onMessageEvents.events['*']) {
-        this.onMessageEvents.emit('*', client, messageType, message);
-
-      } else {
-        this.onMessageFallbacks['__no_message_handler'](client, messageType, message);
-      }
+    } else if (code === Protocol.ROOM_INPUT_UNRELIABLE) {
+      this._inputController?.decodeUnreliable(client, buffer, modifiers);
 
     } else if (code === Protocol.JOIN_ROOM && client.state === ClientState.JOINING) {
       // join room has been acknowledged by the client
@@ -1706,7 +2284,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
     }
   }
 
-  #_forciblyCloseClient(client: ExtractRoomClient<T> & ClientPrivate, closeCode: number) {
+  #_forciblyCloseClient(client: ExtractRoomClient<T> & ClientPrivate, closeCode: number, reason?: string) {
     // stop receiving messages from this client
     client.ref.removeAllListeners('message');
 
@@ -1718,7 +2296,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
     this._onLeave(client, closeCode).then(() => {
       // skip if a successful reconnection has transplanted a new ref (#950)
       if (client.ref === ref) {
-        client.leave(closeCode);
+        (client as any).leave(closeCode, reason);
       }
     });
   }
@@ -1735,6 +2313,10 @@ export class Room<T extends RoomOptions = RoomOptions> {
       // skip if client already left the room
       return;
     }
+
+    // Freeze the seat: a held (reconnecting) session idles from the first tick
+    // instead of replaying last-known moves.
+    this._inputController?.freeze(client as unknown as ClientPrivate);
 
     if (method) {
       debugMatchMaking(`${method.name}, sessionId: \'%s\' (close code: %d, roomId: %s)`, client.sessionId, code, this.roomId);
@@ -1789,9 +2371,11 @@ export class Room<T extends RoomOptions = RoomOptions> {
 
     // trigger 'leave' only if seat reservation has been fully consumed
     if (this._reservedSeats[client.sessionId] === undefined) {
+      // Session fully gone — drop its accessor. No identity check needed: a
+      // successful reconnect skips this finalizer, so the entry is always this client's.
+      this._inputController?.release(client.sessionId);
       this._events.emit('leave', client, willDispose);
     }
-
   }
 
   async #_incrementClientCount() {
@@ -1876,53 +2460,4 @@ export class Room<T extends RoomOptions = RoomOptions> {
     }
   }
 
-}
-
-/**
- * (WIP) Alternative, method-based room definition.
- * We should be able to define
- */
-
-type RoomLifecycleMethods =
-  | 'messages'
-  | 'onCreate'
-  | 'onJoin'
-  | 'onLeave'
-  | 'onDispose'
-  | 'onCacheRoom'
-  | 'onRestoreRoom'
-  | 'onDrop'
-  | 'onReconnect'
-  | 'onUncaughtException'
-  | 'onAuth'
-  | 'onBeforeShutdown'
-  | 'onBeforePatch';
-
-type DefineRoomOptions<T extends RoomOptions = RoomOptions> =
-  Partial<Pick<Room<T>, RoomLifecycleMethods>> &
-  { state?: ExtractRoomState<T> | (() => ExtractRoomState<T>); } &
-  ThisType<Exclude<Room<T>, RoomLifecycleMethods>> &
-  ThisType<Room<T>>
-;
-
-export function room<T extends RoomOptions>(options: DefineRoomOptions<T>) {
-  class _ extends Room<T> {
-    messages = options.messages;
-
-    constructor() {
-      super();
-      if (options.state && typeof options.state === 'function') {
-        this.state = options.state();
-      }
-    }
-  }
-
-  // Copy all methods to the prototype
-  for (const key in options) {
-    if (typeof options[key] === 'function') {
-      _.prototype[key] = options[key];
-    }
-  }
-
-  return _ as typeof Room<T>;
 }

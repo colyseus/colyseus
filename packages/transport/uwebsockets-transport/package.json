@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/uwebsockets-transport",
-  "version": "0.17.21",
+  "version": "0.18.1",
   "type": "module",
   "input": "./src/index.ts",
   "main": "./build/index.cjs",
@@ -28,7 +28,7 @@
     "uwebsockets-express": "^2.0.1"
   },
   "peerDependencies": {
-    "@colyseus/core": "0.17.x",
+    "@colyseus/core": "0.18.x",
     "uwebsockets-express": "^1.4.1 || ^2.0.1"
   },
   "peerDependenciesMeta": {
@@ -54,8 +54,12 @@
     "url": "git://github.com/colyseus/colyseus.git"
   },
   "homepage": "https://colyseus.io/",
+  "engines": {
+    "node": ">= 22.x"
+  },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "tag": "next"
   },
   "gitHead": "320a0325f01eff3cd7afa8fb2efa80077ebdbf4a"
 }

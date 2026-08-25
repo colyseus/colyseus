@@ -29,7 +29,7 @@ function getStorage(): Storage {
         storage = {
             cache: {},
             setItem: function (key, value) { this.cache[key] = value; },
-            getItem: function (key) { this.cache[key]; },
+            getItem: function (key) { return this.cache[key]; },
             removeItem: function (key) { delete this.cache[key]; },
         };
     }

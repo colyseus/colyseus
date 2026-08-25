@@ -76,6 +76,17 @@ export class MongooseDriver implements MatchMakerDriver {
     return query as any as Promise<IRoomCache>;
   }
 
+  public async findByIds(roomIds: string[]): Promise<Map<string, IRoomCache>> {
+    const result = new Map<string, IRoomCache>();
+    if (roomIds.length === 0) { return result; }
+    const docs = await RoomCache.find(
+      { roomId: { $in: roomIds } },
+      { _id: 0 },
+    ) as any as IRoomCache[];
+    for (const room of docs) { result.set(room.roomId, room); }
+    return result;
+  }
+
   public async clear() {
     await RoomCache.deleteMany({});
   }

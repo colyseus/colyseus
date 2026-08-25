@@ -1,0 +1,302 @@
+import assert from 'assert';
+import { describe, it } from 'node:test';
+import { buildResourceCatalog } from '../src-backend/catalog/builder.ts';
+
+const col = (props: Record<string, any>) =>
+  ({ primary: false, notNull: false, ...props });
+
+const tableLike = (sqlName: string, columns: any[], primaryKeys: any[] = []) => {
+  const t: any = { [Symbol.for('drizzle:Name')]: sqlName };
+  // Real drizzle exposes columns as enumerable JS-keyed properties on the
+  // table; the catalog reads `(table as any)[fk]` to translate JS field names
+  // back to SQL names. Build the same shape for tests.
+  for (const c of columns) { t[c.jsKey ?? c.name] = c; }
+  return { table: t, cfg: { name: sqlName, columns, primaryKeys } };
+};
+
+const cfgFor = (table: any) => (table as any).__cfg;
+
+describe('buildResourceCatalog', () => {
+  it('builds the per-resource shape for a single-PK table with no relations', () => {
+    const id = col({ name: 'id', primary: true, notNull: true, getSQLType: () => 'text', dataType: 'string' });
+    const email = col({ name: 'email', getSQLType: () => 'text', dataType: 'string' });
+    const { table, cfg } = tableLike('colyseus_users', [id, email]);
+    table.__cfg = cfg;
+
+    const catalog = buildResourceCatalog({
+      tables: { users: table },
+      resources: {},
+      getTableConfig: cfgFor,
+      relations: {},
+    });
+
+    assert.strictEqual(catalog.length, 1);
+    const r = catalog[0]!;
+    assert.strictEqual(r.name, 'users');
+    assert.strictEqual(r.label, 'Users'); // humanize fallback
+    assert.deepStrictEqual(r.primaryKey, ['id']);
+    assert.strictEqual(r.columns.length, 2);
+    assert.deepStrictEqual(r.columns[0], {
+      name: 'id', label: 'Id', type: 'text', dataType: 'string',
+      notNull: true, primary: true, hasDefault: false,
+    });
+    assert.deepStrictEqual(r.actions, []);
+    assert.deepStrictEqual(r.relations, []);
+  });
+
+  it('uses ResourceDefinition overrides for label/icon/columns/actions', () => {
+    const id = col({ name: 'id', primary: true, getSQLType: () => 'text' });
+    const { table, cfg } = tableLike('colyseus_items', [id]);
+    table.__cfg = cfg;
+    const def: any = {
+      __tableName: 'items',
+      label: 'Inventory',
+      icon: 'package',
+      list: { columns: ['id'] },
+      form: { fields: ['id'] },
+      show: { fields: ['id'] },
+      actions: [{ name: 'reset', label: 'Reset', perRow: true, confirm: { title: 'Are you sure?' } }],
+    };
+
+    const [r] = buildResourceCatalog({
+      tables: { items: table },
+      resources: { items: def },
+      getTableConfig: cfgFor,
+      relations: {},
+    });
+
+    assert.strictEqual(r!.label, 'Inventory');
+    assert.strictEqual(r!.icon, 'package');
+    assert.deepStrictEqual(r!.listColumns, ['id']);
+    assert.deepStrictEqual(r!.formFields, ['id']);
+    assert.deepStrictEqual(r!.showFields, ['id']);
+    assert.strictEqual(r!.actions[0]!.label, 'Reset');
+    assert.strictEqual(r!.actions[0]!.perRow, true);
+    assert.deepStrictEqual(r!.actions[0]!.confirm, { title: 'Are you sure?' });
+  });
+
+  it('reports composite primary keys', () => {
+    // cloudSaves is a built-in composite-key table — (userId, slot). The
+    // shape here mirrors that, so the catalog should report both keys.
+    const userId = col({ name: 'user_id', getSQLType: () => 'text' });
+    const slot = col({ name: 'slot', getSQLType: () => 'integer' });
+    const { table, cfg } = tableLike(
+      'colyseus_cloud_saves',
+      [userId, slot],
+      [{ columns: [userId, slot] }],
+    );
+    table.__cfg = cfg;
+
+    const [r] = buildResourceCatalog({
+      tables: { cloudSaves: table },
+      resources: {},
+      getTableConfig: cfgFor,
+      relations: {},
+    });
+    assert.deepStrictEqual(r!.primaryKey, ['user_id', 'slot']);
+  });
+
+  it('emits relations with SQL fk names (translates from drizzle JS field names)', () => {
+    // Source table: users
+    const usersId = col({ name: 'id', primary: true, getSQLType: () => 'text' });
+    const users = tableLike('colyseus_users', [usersId]);
+    users.table.__cfg = users.cfg;
+
+    // Target table: cloudSaves with userId (JS) → user_id (SQL) FK
+    const userIdCol = col({ name: 'user_id', getSQLType: () => 'text', jsKey: 'userId' });
+    const slot = col({ name: 'slot', getSQLType: () => 'integer' });
+    const saves = tableLike('colyseus_cloud_saves', [userIdCol, slot]);
+    saves.table.__cfg = saves.cfg;
+
+    const [usersResource] = buildResourceCatalog({
+      tables: { users: users.table, cloudSaves: saves.table },
+      resources: {},
+      getTableConfig: cfgFor,
+      relations: {
+        users: [{ name: 'saves', target: 'cloudSaves', kind: 'many', fk: 'userId' }],
+      },
+    });
+    assert.strictEqual(usersResource!.relations.length, 1);
+    const rel = usersResource!.relations[0]!;
+    assert.strictEqual(rel.name, 'saves');
+    assert.strictEqual(rel.kind, 'many');
+    assert.strictEqual(rel.fk, 'user_id'); // translated from JS 'userId'
+  });
+
+  it('drops relations whose target is not registered as a resource', () => {
+    const id = col({ name: 'id', primary: true, getSQLType: () => 'text' });
+    const users = tableLike('colyseus_users', [id]);
+    users.table.__cfg = users.cfg;
+
+    const [r] = buildResourceCatalog({
+      tables: { users: users.table },
+      resources: {},
+      getTableConfig: cfgFor,
+      relations: {
+        users: [{ name: 'guilds', target: 'guildMembers', kind: 'many', fk: 'userId' }],
+      },
+    });
+    assert.deepStrictEqual(r!.relations, []);
+  });
+
+  it('honors per-column / per-relation label overrides from defineAdminResource', () => {
+    // Source: users (single PK)
+    const usersId = col({ name: 'id', primary: true, getSQLType: () => 'text' });
+    const createdAt = col({ name: 'created_at', getSQLType: () => 'integer', dataType: 'date' });
+    const users = tableLike('colyseus_users', [usersId, createdAt]);
+    users.table.__cfg = users.cfg;
+
+    // Target: cloudSaves (so the relation has somewhere to point)
+    const userIdCol = col({ name: 'user_id', getSQLType: () => 'text', jsKey: 'userId' });
+    const slot = col({ name: 'slot', primary: true, getSQLType: () => 'integer' });
+    const saves = tableLike('colyseus_cloud_saves', [userIdCol, slot]);
+    saves.table.__cfg = saves.cfg;
+
+    const def: any = {
+      __tableName: 'users',
+      columns: { created_at: { label: 'Joined' } },
+      relations: { cloudSaves: { label: 'Saves' } },
+    };
+
+    const [r] = buildResourceCatalog({
+      tables: { users: users.table, cloudSaves: saves.table },
+      resources: { users: def },
+      getTableConfig: cfgFor,
+      relations: {
+        users: [{ name: 'cloudSaves', target: 'cloudSaves', kind: 'many', fk: 'userId' }],
+      },
+    });
+    // Column override wins over humanize().
+    const created = r!.columns.find((c) => c.name === 'created_at')!;
+    assert.equal(created.label, 'Joined');
+    // Other columns still get humanize fallback.
+    const id = r!.columns.find((c) => c.name === 'id')!;
+    assert.equal(id.label, 'Id');
+    // Relation override wins.
+    assert.equal(r!.relations[0]!.label, 'Saves');
+  });
+
+  it('marks hasDefault=true for any of {default, defaultFn, autoIncrement}', () => {
+    const id = col({ name: 'id', primary: true, getSQLType: () => 'text', defaultFn: () => 'auto' });
+    const created = col({ name: 'created_at', getSQLType: () => 'integer', dataType: 'date', hasDefault: true });
+    // autoIncrement integer PKs (sqlite). Drizzle 1.0 also sets hasDefault
+    // here, but the catalog defends against schema variants where it might
+    // not — this test pins that behavior.
+    const autoinc = col({ name: 'autoinc_id', primary: true, getSQLType: () => 'integer', autoIncrement: true });
+    const plain = col({ name: 'plain', getSQLType: () => 'text' });
+    const { table, cfg } = tableLike('t', [id, created, autoinc, plain]);
+    table.__cfg = cfg;
+
+    const [r] = buildResourceCatalog({
+      tables: { t: table }, resources: {}, getTableConfig: cfgFor, relations: {},
+    });
+    assert.strictEqual(r!.columns[0]!.hasDefault, true);  // via defaultFn
+    assert.strictEqual(r!.columns[1]!.hasDefault, true);  // via hasDefault
+    assert.strictEqual(r!.columns[2]!.hasDefault, true);  // via autoIncrement
+    assert.strictEqual(r!.columns[3]!.hasDefault, false); // neither
+  });
+
+  describe('linkTo column overrides', () => {
+    it('forwards a static linkTo column override even when no FK relation exists', () => {
+      // The audit-log style — `target_id` is a free-form FK that points
+      // at different tables depending on the row's `resource` value, so
+      // the user supplies the linkTo manually instead of declaring a
+      // static FK relation.
+      const id = col({ name: 'id', primary: true, getSQLType: () => 'text' });
+      const targetId = col({ name: 'target_id', getSQLType: () => 'text' });
+      const { table, cfg } = tableLike('audit', [id, targetId]);
+      table.__cfg = cfg;
+
+      const def: any = {
+        __tableName: 'audit',
+        columns: { target_id: { linkTo: { resource: 'users' } } },
+      };
+
+      const [r] = buildResourceCatalog({
+        tables: { audit: table },
+        resources: { audit: def },
+        getTableConfig: cfgFor,
+        relations: {}, // no FK declared — override is the only source of linkTo
+      });
+      const col_ = r!.columns.find((c) => c.name === 'target_id')!;
+      assert.deepStrictEqual(col_.linkTo, { resource: 'users' });
+    });
+
+    it('forwards a dynamic linkTo (resourceFromColumn) for audit-style tables', () => {
+      // The dynamic case — `resourceFromColumn` tells the renderer to
+      // read the row's value at the named column to pick the target
+      // resource. Used by adminAudit.target_id, where the resource
+      // varies row-to-row.
+      const id = col({ name: 'id', primary: true, getSQLType: () => 'text' });
+      const resource = col({ name: 'resource', getSQLType: () => 'text' });
+      const targetId = col({ name: 'target_id', getSQLType: () => 'text' });
+      const { table, cfg } = tableLike('audit', [id, resource, targetId]);
+      table.__cfg = cfg;
+
+      const def: any = {
+        __tableName: 'audit',
+        columns: {
+          target_id: { linkTo: { resourceFromColumn: 'resource' } },
+        },
+      };
+
+      const [r] = buildResourceCatalog({
+        tables: { audit: table },
+        resources: { audit: def },
+        getTableConfig: cfgFor,
+        relations: {},
+      });
+      const col_ = r!.columns.find((c) => c.name === 'target_id')!;
+      assert.deepStrictEqual(col_.linkTo, { resourceFromColumn: 'resource' });
+    });
+
+    it('column override linkTo wins over the FK-derived linkTo', () => {
+      // If a column has both a declared one-relation AND an explicit
+      // linkTo override, the override takes precedence — gives users
+      // an escape hatch when the FK target shouldn't be the show-page
+      // they actually want to land on.
+      const usersId = col({ name: 'id', primary: true, getSQLType: () => 'text' });
+      const users = tableLike('users', [usersId]);
+      users.table.__cfg = users.cfg;
+
+      const profileId = col({ name: 'id', primary: true, getSQLType: () => 'text' });
+      const userIdCol = col({ name: 'user_id', getSQLType: () => 'text', jsKey: 'userId' });
+      const profiles = tableLike('profiles', [profileId, userIdCol]);
+      profiles.table.__cfg = profiles.cfg;
+
+      // FK-derived linkTo on profiles.user_id would point at 'users'
+      // (the relation target). The override redirects it to a
+      // hypothetical "people" resource instead.
+      const def: any = {
+        __tableName: 'profiles',
+        columns: { user_id: { linkTo: { resource: 'people' } } },
+      };
+
+      const [, profilesResource] = buildResourceCatalog({
+        tables: { users: users.table, profiles: profiles.table },
+        resources: { profiles: def },
+        getTableConfig: cfgFor,
+        relations: {
+          profiles: [{ name: 'user', target: 'users', kind: 'one', fk: 'userId' }],
+        },
+      });
+      const userCol = profilesResource!.columns.find((c) => c.name === 'user_id')!;
+      // Override resource wins; FK-derived `pkColumn`/`labelColumn`
+      // are dropped because the override only declared `resource`.
+      assert.deepStrictEqual(userCol.linkTo, { resource: 'people' });
+    });
+
+    it('emits no linkTo when neither override nor FK relation supplies one', () => {
+      const id = col({ name: 'id', primary: true, getSQLType: () => 'text' });
+      const note = col({ name: 'note', getSQLType: () => 'text' });
+      const { table, cfg } = tableLike('t', [id, note]);
+      table.__cfg = cfg;
+
+      const [r] = buildResourceCatalog({
+        tables: { t: table }, resources: {}, getTableConfig: cfgFor, relations: {},
+      });
+      const noteCol = r!.columns.find((c) => c.name === 'note')!;
+      assert.strictEqual((noteCol as any).linkTo, undefined);
+    });
+  });
+});

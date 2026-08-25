@@ -15,10 +15,10 @@ export class RoomWithSimulation extends Room {
   }
 
   onCreate(options) {
-    this.setSimulationInterval((dt) => this.tick(), 80);
+    this.setSimulationInterval((dt) => this.simulate(), 80);
   }
 
-  tick() {
+  simulate() {
     this.state.tick++;
   }
 

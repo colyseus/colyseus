@@ -1,0 +1,136 @@
+import { and, asc, desc, eq, gt, lt, sql } from 'drizzle-orm';
+import type { ServiceDb } from './_db.ts';
+
+type Dialect = 'sqlite' | 'pg';
+
+export interface LeaderboardEntry {
+  boardId: string;
+  userId: string;
+  season: string;
+  score: number;
+  createdAt: Date;
+}
+
+import type { LeaderboardsTableShape, LeaderboardEntriesTableShape } from '../types.ts';
+
+/**
+ * Leaderboards is dialect-aware (the keep-best upsert uses `GREATEST`
+ * on pg vs `max()` on sqlite — see `submit`). We carry the dialect as
+ * a runtime field rather than a type generic on `db` because TS can't
+ * narrow class-method `this.db` through a `Dialect extends 'sqlite' |
+ * 'pg'` conditional — inside the class body the generic stays unbound
+ * and a `db: Dialect extends 'pg' ? PgAsync : BaseSqlite` field
+ * resolves to a union TS won't allow method calls on. So `db: ServiceDb`
+ * (the loose structural shape) is what we end up with for every
+ * service, dialect-aware or not.
+ */
+export class LeaderboardsService<
+  TBoards extends LeaderboardsTableShape = LeaderboardsTableShape,
+  TEntries extends LeaderboardEntriesTableShape = LeaderboardEntriesTableShape,
+> {
+  private db: ServiceDb;
+  private leaderboards: TBoards;
+  private entries: TEntries;
+  private dialect: Dialect;
+
+  constructor(db: ServiceDb, leaderboards: TBoards, entries: TEntries, dialect: Dialect) {
+    this.db = db;
+    this.leaderboards = leaderboards;
+    this.entries = entries;
+    this.dialect = dialect;
+  }
+
+  /**
+   * Idempotently register a leaderboard with the given id (and optional display name).
+   */
+  async ensure(boardId: string, name?: string): Promise<void> {
+    await this.db
+      .insert(this.leaderboards)
+      .values({ id: boardId, name: name ?? boardId })
+      .onConflictDoNothing();
+  }
+
+  /**
+   * Submit a score. Keep-best semantics: only updates if the new score is higher.
+   */
+  async submit(
+    boardId: string,
+    userId: string,
+    score: number,
+    season = 'global',
+  ): Promise<void> {
+    // GREATEST(a, b) is pg-only; sqlite uses max(a, b) as a scalar.
+    const keepBest = this.dialect === 'pg'
+      ? sql`GREATEST(${this.entries.score}, EXCLUDED.score)`
+      : sql`max(${this.entries.score}, excluded.score)`;
+
+    await this.db
+      .insert(this.entries)
+      .values({ boardId, userId, score, season, createdAt: new Date() })
+      .onConflictDoUpdate({
+        target: [this.entries.boardId, this.entries.userId, this.entries.season],
+        set: { score: keepBest, createdAt: new Date() },
+      });
+  }
+
+  /**
+   * Top N entries on the board, sorted by score DESC.
+   */
+  async top(boardId: string, n = 10, season = 'global'): Promise<LeaderboardEntry[]> {
+    return await this.db
+      .select()
+      .from(this.entries)
+      .where(and(eq(this.entries.boardId, boardId), eq(this.entries.season, season)))
+      .orderBy(desc(this.entries.score))
+      .limit(n);
+  }
+
+  /**
+   * The user's row plus N entries above and N below them on the board.
+   * Returns [] if the user has no entry on this board/season.
+   */
+  async aroundMe(
+    boardId: string,
+    userId: string,
+    n = 5,
+    season = 'global',
+  ): Promise<LeaderboardEntry[]> {
+    const me = await this.db
+      .select()
+      .from(this.entries)
+      .where(and(
+        eq(this.entries.boardId, boardId),
+        eq(this.entries.userId, userId),
+        eq(this.entries.season, season),
+      ))
+      .limit(1);
+
+    if (!me[0]) { return []; }
+    const myScore = me[0].score;
+
+    const [above, below] = await Promise.all([
+      this.db
+        .select()
+        .from(this.entries)
+        .where(and(
+          eq(this.entries.boardId, boardId),
+          eq(this.entries.season, season),
+          gt(this.entries.score, myScore),
+        ))
+        .orderBy(asc(this.entries.score))
+        .limit(n),
+      this.db
+        .select()
+        .from(this.entries)
+        .where(and(
+          eq(this.entries.boardId, boardId),
+          eq(this.entries.season, season),
+          lt(this.entries.score, myScore),
+        ))
+        .orderBy(desc(this.entries.score))
+        .limit(n),
+    ]);
+
+    return [...above.reverse(), me[0], ...below];
+  }
+}

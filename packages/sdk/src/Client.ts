@@ -7,6 +7,7 @@ import { HTTP, type FetchFn } from './HTTP.ts';
 import { Auth } from './Auth.ts';
 import { Connection } from './Connection.ts';
 import { discordURLBuilder } from './3rd_party/discord.ts';
+import { publishDebug } from './debug-channel.ts';
 
 export type JoinOptions = any;
 export type { ISeatReservation };
@@ -23,18 +24,38 @@ export interface EndpointSettings {
     port?: number,
     pathname?: string,
     searchParams?: string,
+    /** @see {@link ClientOptions.protocol} — `"h3"` is experimental. */
     protocol?: "ws" | "h3";
 }
 
 export interface ClientOptions {
     headers?: { [id: string]: string };
     urlBuilder?: (url: URL) => string;
+    /**
+     * Wire protocol: `"ws"` (WebSocket, the default) or `"h3"` (WebTransport).
+     *
+     * **`"h3"` is experimental.** It is the only protocol with a real
+     * unreliable channel, so it's what `room.input({ mode: "unreliable" })` and
+     * `@unreliable` state fields need to actually ride datagrams — on `"ws"`
+     * that traffic is correct but travels the reliable channel. It needs
+     * `@colyseus/h3-transport` server-side, and WebTransport browser support
+     * (absent in Safari at time of writing).
+     */
     protocol?: "ws" | "h3";
     fetchFn?: FetchFn;
 }
 
+/** A room listing entry returned by matchmaking queries. */
+export interface RoomAvailable<Metadata = any> {
+    name: string;
+    roomId: string;
+    clients: number;
+    maxClients: number;
+    metadata?: Metadata;
+}
+
 export interface LatencyOptions {
-    /** "ws" for WebSocket, "h3" for WebTransport (default: "ws") */
+    /** "ws" for WebSocket, "h3" for WebTransport (default: "ws"). @see {@link ClientOptions.protocol} */
     protocol?: "ws" | "h3";
     /** Number of pings to send (default: 1). Returns the average latency when > 1. */
     pingCount?: number;
@@ -46,7 +67,7 @@ export interface LatencyOptions {
 }
 
 export class ColyseusSDK<ServerType extends SDKTypes = any, UserData = any> {
-    static VERSION = "0.17";
+    static VERSION = "0.18";
 
     /**
      * The HTTP client to make requests to the server.
@@ -301,7 +322,9 @@ export class ColyseusSDK<ServerType extends SDKTypes = any, UserData = any> {
 
         room.connect(
             this.buildEndpoint(response, options),
-            response,
+            // `protocol` lives on client settings, not the matchmake response — inject it so
+            // Room.connect picks the right transport. Without this it silently falls back to ws.
+            { ...response, protocol: this.settings.protocol },
             this.http.options.headers
         );
 
@@ -311,6 +334,12 @@ export class ColyseusSDK<ServerType extends SDKTypes = any, UserData = any> {
 
             room['onJoin'].once(() => {
                 room.onError.remove(onError);
+                // Surface the connected room to `@colyseus/sdk/debug` (buffered
+                // until the overlay loads). This is the single choke point for
+                // join/create/joinById/reconnect, so every room gets a panel —
+                // and one joined before a late debug import is adopted on replay,
+                // not missed like the old consumeSeatReservation monkey-patch.
+                publishDebug("room", room);
                 resolve(room);
             });
         });

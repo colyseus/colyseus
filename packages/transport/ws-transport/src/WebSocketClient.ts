@@ -1,7 +1,7 @@
 import WebSocket from 'ws';
 
 import {
-  Protocol, ClientState, getMessageBytes, logger, debugMessage,
+  Protocol, ClientState, getMessageBytes, logger, debugMessage, enqueueClientRaw,
   type Client, type ClientPrivate, type ISendOptions,
 } from '@colyseus/core';
 
@@ -18,7 +18,6 @@ export class WebSocketClient implements Client, ClientPrivate {
   public reconnectionToken: string;
 
   public _enqueuedMessages: any[] = [];
-  public _afterNextPatchQueue;
   public _reconnectionToken: string;
   public _joinedAt;
   public _numMessagesLastSecond: number = 0;
@@ -48,22 +47,7 @@ export class WebSocketClient implements Client, ClientPrivate {
   }
 
   public enqueueRaw(data: Uint8Array | Buffer, options?: ISendOptions) {
-    // use room's afterNextPatch queue
-    if (options?.afterNextPatch) {
-      this._afterNextPatchQueue.push([this, [data]]);
-      return;
-    }
-
-    if (this.state !== ClientState.JOINED) {
-      // sending messages during `onJoin` or `onReconnect`.
-      // - the client-side cannot register "onMessage" callbacks at this point.
-      // - enqueue the messages to be send after JOIN_ROOM message has been sent
-      // - create a new buffer for enqueued messages, as the underlying buffer might be modified
-      this._enqueuedMessages?.push(data);
-      return;
-    }
-
-    this.raw(data, options);
+    enqueueClientRaw(this, data, options);
   }
 
   public raw(data: Uint8Array | Buffer, options?: ISendOptions, cb?: (err?: Error) => void) {

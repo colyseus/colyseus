@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.1
+
+- Internal: `enqueueRaw()` now delegates to `enqueueClientRaw()` from `@colyseus/core`, which centralizes join-time message buffering and `afterNextPatch` routing; the per-client `_afterNextPatchQueue` field is gone. Requires `@colyseus/core` 0.18.1.
+
 ## 0.17.21
 
 - Fix process-wide crash (`ERR_UNHANDLED_ERROR`) when an HTTP request body is incomplete or arrives too slowly — remotely triggerable by advertising a `Content-Length` and withholding the body. Such requests are now answered with `408 Request Timeout` and the server stays operational. Works with currently published `uwebsockets-express` versions (colyseus/uWebSockets-express#43, thanks to @pierroo)

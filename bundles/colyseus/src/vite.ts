@@ -27,12 +27,14 @@ import {
   registerRoomDefinitions,
   unregisterRoomDefinitions,
   toNodeHandler,
+  applySimulatedLatency,
+  parseLatencyEnv,
   type RoomDefinitions,
   type ServerOptions,
   type Transport,
   type Router,
 } from '@colyseus/core';
-import { setTransport } from '@colyseus/core/Transport';
+import { getTransport, setTransport } from '@colyseus/core/Transport';
 import type { Plugin } from 'vite';
 
 // ─── Virtual module IDs ───────────────────────────────────────────────
@@ -382,6 +384,13 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
         isStarted = true;
       } else {
         await matchMaker.hotReload();
+      }
+
+      // Re-applied after every import so the env var keeps winning over
+      // top-level simulateLatency() calls the reload just re-ran.
+      const envLatency = parseLatencyEnv();
+      if (envLatency !== undefined) {
+        applySimulatedLatency(getTransport(), envLatency);
       }
 
       if (!options.quiet) {

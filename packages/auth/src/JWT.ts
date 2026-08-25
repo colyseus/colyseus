@@ -27,6 +27,21 @@ export const JWT = {
        */
       algorithms: ['HS256'],
     } as VerifyOptions,
+
+    /**
+     * Optional revocation check called after a successful
+     * `JWT.verify` in the default `Room.onAuth`. Return `false` to
+     * reject the token as revoked — its signature/expiry are fine
+     * but the *issuer* (your app) has revoked it server-side.
+     *
+     * `@colyseus/database` registers a default that compares the
+     * token's `tokenVersion` claim against the user's row, so
+     * "Revoke sessions" / "Ban" in the admin panel takes effect
+     * the next time a kicked client tries to rejoin a room.
+     * Apps that don't use `@colyseus/database` can assign this
+     * themselves to plug in their own revocation source.
+     */
+    revocationCheck: undefined as undefined | ((payload: any) => boolean | Promise<boolean>),
   },
 
   sign: function (payload: any, options: jsonwebtoken.SignOptions = {}) {

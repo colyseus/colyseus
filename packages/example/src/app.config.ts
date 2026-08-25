@@ -15,6 +15,22 @@ import { exposeServerToTraefik } from "@colyseus/traefik";
 import { RedisPresence } from "@colyseus/redis-presence";
 import { RedisDriver } from "@colyseus/redis-driver";
 import { PostgresDriver } from "@colyseus/drizzle-driver";
+import { DatabaseDriver } from "@colyseus/database";
+
+import { admin, defineAdminResource } from "@colyseus/admin";
+import { registerSegments } from "./db/segments.ts";
+import { database } from "./db/database.ts";
+
+registerSegments(database); // segments must be defined pre-boot
+
+// Tiny test-only seed endpoint — creates an admin + a mod for the panel demo.
+async function seedAdminAndMod() {
+  const admin = await database.auth.settings.onRegisterAnonymously?.({});
+  await database.moderation.setRole((admin as any).id, "admin");
+  const mod = await database.auth.settings.onRegisterAnonymously?.({});
+  await database.moderation.assignMod((mod as any).id, "users");
+  return { adminId: (admin as any).id, modId: (mod as any).id };
+}
 
 // import { Client } from "@colyseus/sdk";
 // const client = new Client<typeof server>("ws://localhost:2567");
@@ -228,6 +244,13 @@ const port = Number((process.env.PORT || 2567)) + Number(process.env.NODE_APP_IN
 export const server = config({
   options: {
     devMode: true,
+    database,
+
+    // Matchmaking room cache backed by the same GameDatabase connection
+    // (one pool shared with auth / cloud-saves / configs).
+    driver: new DatabaseDriver({ database }),
+
+    // Standalone Postgres-only driver (separate connection):
     // driver: new PostgresDriver(),
 
     // driver: new RedisDriver(),
@@ -243,6 +266,43 @@ export const server = config({
   },
 
   routes: createRouter({
+    // Both /playground and /monitor sit behind the admin login screen.
+    // admin.guard() reads the same HttpOnly session cookie as the admin
+    // panel, redirects browser visits to /admin/?next=<original-url>,
+    // and answers XHR/fetch with a 401 JSON body. loginUrl defaults to
+    // '/admin' — pass `admin.guard({ loginUrl })` if you customize the
+    // panel's uiPath.
+    ...playground({ use: [admin.guard()] }),
+    ...monitor({    use: [admin.guard()] }),
+
+    // Admin panel + REST. Browse to http://localhost:2567/admin/.
+    // Send `X-User-Id: <id>` to authenticate; POST /admin-seed to bootstrap one.
+    ...admin({
+      // e2e logs in fresh per subtest — the default 10/min login bucket
+      // would starve everything past the first ~10 tests.
+      ...(process.env.NODE_ENV === "test" && { rateLimit: { login: false } }),
+      dashboard: {
+        presets: {
+          // totals: false,
+          recentUsers: { limit: 5 },
+          // health: false,
+          // segments: false,
+        },
+        widgets: [
+          // Custom replacement for `health` with extra uptime KPI.
+          {
+            title: 'System health',
+            icon: 'heart',
+            render: 'kpi',
+            data: async () => ({ db: 'ok', uptime: `${Math.round(process.uptime())}s` }),
+          },
+        ],
+      },
+    }),
+    adminSeed: createEndpoint("/admin-seed", { method: "POST" }, async () => {
+      return seedAdminAndMod();
+    }),
+
     // index,
     listThings,
     getThing,
@@ -300,11 +360,11 @@ export const server = config({
   }),
 
   initializeExpress: (app) => {
-    // app.use("/playground", playground());
-    app.use("/", playground());
-    app.use("/monitor", monitor());
     app.get("/express", (_, res) => res.json({ message: "Hello World" }));
-    app.use(auth.prefix, auth.routes({}));
+    // playground / monitor / auth are now better-call endpoints (spread above).
+    // The express-mount form is still supported for backwards compat:
+    //   app.use("/", playground())
+    //   app.use("/monitor", monitor()) or app.use("/", monitor())
   },
 
   beforeListen: async () => {

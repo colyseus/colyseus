@@ -1,7 +1,15 @@
 import { Room, Client, ClientState, ClientPrivate, AuthContext } from '@colyseus/core';
 import { toJSONSchema } from './json-schema.js';
 
+let __patched = false;
+
 export async function applyMonkeyPatch() {
+  // Idempotent: playground() may be invoked multiple times (e.g. once for
+  // createRouter spread, once for the express middleware) — stacking
+  // _onJoin wrappers would leak.
+  if (__patched) { return; }
+  __patched = true;
+
   const _onJoin = Room.prototype['_onJoin'];
   Room.prototype['_onJoin'] = async function (this: Room, client: Client & ClientPrivate) {
     const result = await _onJoin.apply(this, arguments as any);

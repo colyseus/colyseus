@@ -3,16 +3,30 @@ import { ClockTimer as Clock, Delayed } from '@colyseus/timer';
 // Shared types - re-export from @colyseus/shared-types for convenience
 export {
   Protocol,
+  ProtocolModifier,
   ErrorCode,
   CloseCode,
+  ResponseStatus,
   type InferState,
   type ExtractRoomMessages,
   type ExtractRoomClientMessages,
+  type MessageContext,
+  type Rejection,
+  type Resolution,
+  type ExtractRejectReason,
+  type ExtractResponseType,
 } from '@colyseus/shared-types';
 
 // Core classes
-export { Server, defineRoom, defineServer, registerRoomDefinitions, unregisterRoomDefinitions, type RoomDefinitions, type ServerOptions, type SDKTypes } from './Server.ts';
-export { Room, room, RoomInternalState, validate, type RoomOptions, type MessageHandlerWithFormat, type Messages, type ExtractRoomState, type ExtractRoomMetadata, type ExtractRoomClient } from './Room.ts';
+export { Server, defineRoom, defineServer, registerRoomDefinitions, unregisterRoomDefinitions, applySimulatedLatency, parseLatencyEnv, type RoomDefinitions, type ServerOptions, type SDKTypes } from './Server.ts';
+export { Room, RoomInternalState, validate, type RoomOptions, type DefineInputOptions, type SimulationCallback, type FixedTimestepCallback, type StepContext, type MessageHandlerWithFormat, type Messages, type ExtractRoomState, type ExtractRoomMetadata, type ExtractRoomClient } from './Room.ts';
+export { InputBufferImpl, compileSanitizer } from './input/InputBuffer.ts';
+export { type InputAccessor, type InputAPI, type NormalizedInputOptions, type ConsumeOptions, type IdleInput, type IdleContext, type SanitizeInput, type NumericFieldsOf } from './input/types.ts';
+export { Rewind, RewindView, type RewindOptions, type RewindMode } from './Rewind.ts';
+export {
+  RoomPlugin, definePlugins, attachToTestRoom,
+  type RoomPluginOrder, type PluginDependencies, type RoomPluginClass,
+} from './RoomPlugin.ts';
 export { getMessageBytes } from './Protocol.ts';
 export { RegisteredHandler } from './matchmaker/RegisteredHandler.ts';
 export { ServerError } from './errors/ServerError.ts';
@@ -26,6 +40,7 @@ export {
   OnLeaveException,
   OnDisposeException,
   OnMessageException,
+  TimestepException,
   SimulationIntervalException,
   TimedEventException,
 } from './errors/RoomExceptions.ts';
@@ -41,7 +56,7 @@ export * from './matchmaker/LocalDriver/LocalDriver.ts';
 export { initializeRoomCache } from './matchmaker/driver.ts';
 
 // Transport
-export { type Client, type ClientPrivate, type AuthContext, ClientState, ClientArray, Transport, type ISendOptions, connectClientToRoom } from './Transport.ts';
+export { type Client, type ClientPrivate, type AuthContext, ClientState, ClientArray, Transport, type ISendOptions, type BeforeUpgradeHandler, runBeforeUpgrade, createAuthContext, connectClientToRoom, enqueueClientRaw } from './Transport.ts';
 
 // Presence
 export { type Presence } from './presence/Presence.ts';
@@ -82,8 +97,10 @@ export {
   createInternalContext,
   createMiddleware,
   createRouter,
+  basicAuth,
+  type BasicAuthOptions,
   toNodeHandler,
-  __globalEndpoints,
+  dualModeEndpoints,
   type Router,
   type RouterConfig,
   type Endpoint,
@@ -91,6 +108,9 @@ export {
   type EndpointOptions,
   type EndpointContext,
   type StrictEndpoint,
+  type ExpressMiddleware,
+  type NodeHandler,
+  type DualModeHelpers,
 } from './router/index.ts';
 
 // Abstract logging support

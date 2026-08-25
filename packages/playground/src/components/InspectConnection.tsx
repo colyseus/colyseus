@@ -36,6 +36,15 @@ const tabs: {[key in InspectTab]: TabConfig} = {
 // When switching connections, use last tab opened from previous session
 let lastTabSelected = InspectTab.MESSAGES;
 
+// display-only id pairing a request row with its response row (not the wire requestId)
+let nextRequestId = 1;
+
+const responseStatusStyles: Record<string, string> = {
+	ok: "bg-green-200 text-green-800 dark:bg-green-900/50 dark:text-green-300",
+	rejected: "bg-yellow-200 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300",
+	error: "bg-red-200 text-red-800 dark:bg-red-900/50 dark:text-red-300",
+};
+
 const MAX_TABLE_ROWS = 25;
 
 export function InspectConnection({
@@ -120,18 +129,58 @@ export function InspectConnection({
 	const drop = () => room.connection.close();
 	const leave = () => room.leave();
 
+	const buildOutgoingMessage = () => {
+		const actualMessageType = messageType === "*" ? customMessageType : messageType;
+		const hasValidator = messageFormats?.[messageType];
+		const payload = hasValidator ? messageValues : JSON.parse(message || "{}");
+		return { actualMessageType, payload };
+	};
+
 	const sendMessage = () => {
 		try {
-			const now = new Date();
-			const actualMessageType = messageType === "*" ? customMessageType : messageType;
-			const hasValidator = messageFormats?.[messageType];
-			const payload = hasValidator ? messageValues : JSON.parse(message || "{}");
+			const { actualMessageType, payload } = buildOutgoingMessage();
 
-			const newMessage = { type: actualMessageType, message: payload, out: true, now, };
+			const newMessage = { type: actualMessageType, message: payload, out: true, now: new Date(), };
 			setMessages([newMessage, ...messages]);
 			connection.messages.unshift(newMessage);
 
 			room.send(actualMessageType, payload);
+
+		} catch (e: any) {
+			displayError(e.message);
+		}
+	};
+
+	const sendRequest = () => {
+		try {
+			const { actualMessageType, payload } = buildOutgoingMessage();
+
+			const requestId = nextRequestId++;
+			const entry = { type: actualMessageType, message: payload, out: true, requestId, pending: true, now: new Date(), };
+			connection.messages.unshift(entry);
+
+			const started = performance.now();
+			const settle = (status: "ok" | "rejected" | "error", response: any) => {
+				entry.pending = false;
+				// unshift fires messages.onChange → re-renders the cleared spinner too
+				connection.messages.unshift({
+					type: actualMessageType,
+					message: response,
+					in: true,
+					response: true,
+					status,
+					rtt: performance.now() - started,
+					requestId,
+					now: new Date(),
+				});
+			};
+
+			room.request(actualMessageType, payload).then(
+				(response: any) => settle("ok", response),
+				(e: any) => (e.name === "rejected")
+					? settle("rejected", e.reason) // deliberate ctx.reject(reason)
+					: settle("error", { name: e.name, message: e.message, ...(e.code !== undefined ? { code: e.code } : {}) }),
+			);
 
 		} catch (e: any) {
 			displayError(e.message);
@@ -261,15 +310,26 @@ export function InspectConnection({
 									)}
 								</div>
 
-								<div className="flex">
+								<div className="flex gap-2">
 									<button
-										className="w-full bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-700 hover:to-purple-600 disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed text-white font-semibold py-2.5 px-5 rounded-lg text-sm whitespace-nowrap transition-all duration-200 shadow-md hover:shadow-lg disabled:shadow-none transform hover:scale-[1.02] active:scale-[0.98] disabled:transform-none flex items-center justify-center gap-2"
+										className="flex-1 bg-purple-600 enabled:hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-2.5 px-5 rounded-lg text-sm whitespace-nowrap transition-all shadow-sm enabled:hover:shadow-md flex items-center justify-center gap-2"
+										title="room.send() — fire and forget"
 										disabled={!isSendMessageEnabled || (messageType === "*" && !customMessageType.trim())}
 										onClick={sendMessage}>
 										<svg className="w-4 h-4" fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
 											<path d="M498.1 5.6c10.1 7 15.4 19.1 13.5 31.2l-64 416c-1.5 9.7-7.4 18.2-16 23s-18.9 5.4-28 1.6L284 427.7l-68.5 74.1c-8.9 9.7-22.9 12.9-35.2 8.1S160 493.2 160 480V396.4c0-4 1.5-7.8 4.2-10.7L331.8 202.8c5.8-6.3 5.6-16-.4-22s-15.7-6.4-22-.7L106 360.8 17.7 316.6C7.1 311.3 .3 300.7 0 288.9s5.9-22.8 16.1-28.7l448-256c10.7-6.1 23.9-5.5 34 1.4z"/>
 										</svg>
 										<span>Send</span>
+									</button>
+									<button
+										className="flex-1 bg-blue-600 enabled:hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-2.5 px-5 rounded-lg text-sm whitespace-nowrap transition-all shadow-sm enabled:hover:shadow-md flex items-center justify-center gap-2"
+										title="room.request() — awaits the onMessage handler's response"
+										disabled={!isSendMessageEnabled || (messageType === "*" && !customMessageType.trim())}
+										onClick={sendRequest}>
+										<svg className="w-4 h-4" fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+											<path d="M32 96l320 0 0-64c0-12.9 7.8-24.6 19.8-29.6s25.7-2.2 34.9 6.9l96 96c6 6 9.4 14.1 9.4 22.6s-3.4 16.6-9.4 22.6l-96 96c-9.2 9.2-22.9 11.9-34.9 6.9s-19.8-16.6-19.8-29.6l0-64L32 160c-17.7 0-32-14.3-32-32s14.3-32 32-32zm448 320l-320 0 0 64c0 12.9-7.8 24.6-19.8 29.6s-25.7 2.2-34.9-6.9l-96-96c-6-6-9.4-14.1-9.4-22.6s3.4-16.6 9.4-22.6l96-96c9.2-9.2 22.9-11.9 34.9-6.9s19.8 16.6 19.8 29.6l0 64 320 0c17.7 0 32 14.3 32 32s-14.3 32-32 32z"/>
+										</svg>
+										<span>Request</span>
 									</button>
 								</div>
 							</div>
@@ -340,9 +400,11 @@ export function InspectConnection({
 										key={i + '-' + message.now}
 										className={
 											"border-b dark:border-slate-700 transition-all duration-150 hover:shadow-sm " +
-											(message.in
-												? "bg-gradient-to-r from-red-50 to-pink-50 dark:from-red-950/30 dark:to-pink-950/30 hover:from-red-100 hover:to-pink-100 dark:hover:from-red-950/50 dark:hover:to-pink-950/50"
-												: "bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 hover:from-green-100 hover:to-emerald-100 dark:hover:from-green-950/50 dark:hover:to-emerald-950/50"
+											((message.response && message.status !== "ok")
+												? "bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-950/30 dark:to-orange-950/30 hover:from-yellow-100 hover:to-orange-100 dark:hover:from-yellow-950/50 dark:hover:to-orange-950/50"
+												: message.in
+													? "bg-gradient-to-r from-red-50 to-pink-50 dark:from-red-950/30 dark:to-pink-950/30 hover:from-red-100 hover:to-pink-100 dark:hover:from-red-950/50 dark:hover:to-pink-950/50"
+													: "bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 hover:from-green-100 hover:to-emerald-100 dark:hover:from-green-950/50 dark:hover:to-emerald-950/50"
 											)
 										}>
 										<td className="p-2 sm:p-3">
@@ -359,6 +421,16 @@ export function InspectConnection({
 
 										<td className="p-2 sm:p-3 border-r text-left dark:border-slate-700">
 											<code className="inline-block bg-white dark:bg-slate-800 px-2 py-1 rounded-md shadow-sm border border-gray-200 dark:border-slate-600 text-purple-600 dark:text-purple-400 font-mono text-[10px] sm:text-xs font-semibold">"{message.type}"</code>
+											{(message.requestId !== undefined) &&
+												<span className="ml-1.5 inline-flex items-center gap-1.5 align-middle whitespace-nowrap">
+													<span className="text-[10px] font-mono font-semibold text-gray-500 dark:text-slate-400">#{message.requestId}</span>
+													{message.pending &&
+														<span className="inline-block w-3 h-3 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></span>}
+													{message.response &&
+														<span className={"px-1.5 py-0.5 rounded-md text-[10px] font-bold uppercase " + responseStatusStyles[message.status]}>
+															{message.status} · {Math.round(message.rtt)}ms
+														</span>}
+												</span>}
 										</td>
 
 										<td className="p-2 sm:p-3 border-r text-left dark:border-slate-700">

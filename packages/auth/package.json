@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/auth",
-  "version": "0.17.9",
+  "version": "0.18.1",
   "type": "module",
   "description": "Authentication Utilities for Colyseus",
   "input": "./src/index.ts",
@@ -50,10 +50,13 @@
   "dependencies": {
     "@types/jsonwebtoken": "^9.0.5",
     "connect-redis": "^7.1.0",
+    "cookie": "^0.7.2",
+    "cookie-signature": "^1.2.2",
     "express-jwt": "^8.5.1",
     "express-session": "^1.17.3",
     "grant": "^5.4.24",
-    "jsonwebtoken": "^9.0.0"
+    "jsonwebtoken": "^9.0.0",
+    "zod": "^4.1.12"
   },
   "devDependencies": {
     "@colyseus/better-call": "workspace:^",
@@ -61,10 +64,12 @@
     "httpie": "^2.0.0-next.13"
   },
   "peerDependencies": {
-    "@colyseus/core": "0.17.x",
-    "express": ">=4.16.0"
+    "@colyseus/core": "0.18.x",
+    "express": ">=4.16.0",
+    "zod": "^4.1.12"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "tag": "next"
   }
 }

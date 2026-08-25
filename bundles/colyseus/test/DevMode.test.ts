@@ -1,5 +1,5 @@
 import assert from "assert";
-import { schema, type SchemaType } from "@colyseus/schema";
+import { schema, t, type SchemaType } from "@colyseus/schema";
 import {
   Room,
   matchMaker,
@@ -15,30 +15,28 @@ import {
   cacheRoomHistory,
   reloadFromCache,
   getRoomRestoreListKey,
-  getProcessRestoreKey,
-  getPreviousProcessId,
 } from "@colyseus/core/utils/DevMode";
 import { Client as SDKClient, Callbacks } from "@colyseus/sdk";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import { timeout } from "./utils/index.ts";
 
 const DevModeState = schema({
-  message: { type: "string", default: "hello" },
-  count: { type: "number", default: 0 },
+  message: t.string().default("hello"),
+  count: t.number().default(0),
 });
 type DevModeState = SchemaType<typeof DevModeState>;
 
 // State with nested structures (similar to MyRoom's state)
 const Player = schema({
-  x: "number",
-  y: "number",
+  x: t.number(),
+  y: t.number(),
 });
 type Player = SchemaType<typeof Player>;
 
 const NestedState = schema({
-  mapWidth: "number",
-  mapHeight: "number",
-  players: { map: Player },
+  mapWidth: t.number(),
+  mapHeight: t.number(),
+  players: t.map(Player),
 });
 type NestedState = SchemaType<typeof NestedState>;
 
@@ -163,32 +161,9 @@ describe("DevMode", () => {
     });
   });
 
-  describe("getRoomRestoreListKey / getProcessRestoreKey", () => {
+  describe("getRoomRestoreListKey", () => {
     it("getRoomRestoreListKey should return 'roomhistory'", () => {
       assert.strictEqual(getRoomRestoreListKey(), "roomhistory");
-    });
-
-    it("getProcessRestoreKey should return 'processhistory'", () => {
-      assert.strictEqual(getProcessRestoreKey(), "processhistory");
-    });
-  });
-
-  describe("getPreviousProcessId", () => {
-    it("should return null when no previous process exists", async () => {
-      const processId = await getPreviousProcessId("hostname");
-      assert.strictEqual(processId, null);
-    });
-
-    it("should return the previous process id", async () => {
-      await presence.hset(getProcessRestoreKey(), "hostname", "process-123");
-      const processId = await getPreviousProcessId("hostname");
-      assert.strictEqual(processId, "process-123");
-    });
-
-    it("should use empty string as default hostname", async () => {
-      await presence.hset(getProcessRestoreKey(), "", "process-456");
-      const processId = await getPreviousProcessId();
-      assert.strictEqual(processId, "process-456");
     });
   });
 

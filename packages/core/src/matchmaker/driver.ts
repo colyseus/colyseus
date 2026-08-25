@@ -148,6 +148,19 @@ export interface MatchMakerDriver {
   ): Promise<IRoomCache<ExtractRoomCacheMetadata<T>>>;
 
   /**
+   * Batch-resolve room caches by roomId in a single backend round
+   * trip. Missing roomIds are absent from the returned map. Used by
+   * hot paths (per-join uniqueness check, by-user reverse-index
+   * lookups) where K serial `findOne` calls would multiply round
+   * trips needlessly.
+   *
+   * @param roomIds - Room ids to look up.
+   *
+   * @returns Map keyed by roomId of the rooms that were found.
+   */
+  findByIds(roomIds: string[]): Promise<Map<string, IRoomCache>>;
+
+  /**
    * Remove a room from room cache.
    *
    * @param roomId - The room id.
@@ -175,9 +188,10 @@ export interface MatchMakerDriver {
 
   /**
    * Empty the room cache. Used for testing purposes only.
+   * May be asynchronous — callers must await it.
    * @internal Do not call this method yourself.
    */
-  clear(): void;
+  clear(): void | Promise<void>;
 
   /**
    * Boot the room cache medium (if available).
@@ -186,6 +200,7 @@ export interface MatchMakerDriver {
 
   /**
    * Dispose the connection of the room cache medium.
+   * May be asynchronous — callers must await it.
    */
-  shutdown(): void;
+  shutdown(): void | Promise<void>;
 }

@@ -24,7 +24,7 @@ describe("RedisDriver", () => {
       const room = await injectedDriver.findOne({ roomId: "inj1" });
       assert.strictEqual(room.name, "injected");
 
-      injectedDriver.clear();
+      await injectedDriver.clear();
       await injectedDriver.shutdown();
     });
 
@@ -38,14 +38,14 @@ describe("RedisDriver", () => {
       assert.ok(raw);
       assert.strictEqual(JSON.parse(raw).name, "shared");
 
-      injectedDriver.clear();
+      await injectedDriver.clear();
       await injectedDriver.shutdown();
     });
   });
 
   it("should allow concurrent queries to multiple room names", async () => {
     // Clear any existing data
-    driver.clear();
+    await driver.clear();
 
     for (let i=0; i<10; i++) { await driver.persist(initializeRoomCache({ name: "one", roomId: "x" + i, clients: i, maxClients: 10, })); }
     for (let i=0; i<10; i++) { await driver.persist(initializeRoomCache({ name: "two", roomId: "y" + i, clients: i, maxClients: 10, })); }
@@ -67,7 +67,7 @@ describe("RedisDriver", () => {
 
   it("should filter and sort rooms using query()", async () => {
     // Clear any existing data
-    driver.clear();
+    await driver.clear();
 
     await driver.persist(initializeRoomCache({ name: "game", roomId: "a1", clients: 5, maxClients: 10 }));
     await driver.persist(initializeRoomCache({ name: "game", roomId: "a2", clients: 3, maxClients: 10 }));
@@ -94,7 +94,7 @@ describe("RedisDriver", () => {
 
   it("should filter by metadata fields", async () => {
     // Clear any existing data
-    driver.clear();
+    await driver.clear();
 
     await driver.persist(initializeRoomCache({ name: "game", roomId: "m1", clients: 1, maxClients: 10, metadata: { mode: "pvp", level: 5 } }));
     await driver.persist(initializeRoomCache({ name: "game", roomId: "m2", clients: 2, maxClients: 10, metadata: { mode: "pve", level: 3 } }));

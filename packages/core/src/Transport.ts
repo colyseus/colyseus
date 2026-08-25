@@ -5,9 +5,11 @@ import type { Router } from '@colyseus/better-call';
 
 import { ErrorCode } from '@colyseus/shared-types';
 import { StateView } from '@colyseus/schema';
+import type { InputDecoder } from '@colyseus/schema/input';
 
 import { EventEmitter } from 'events';
-import { spliceOne } from './utils/Utils.ts';
+import { debugAndPrintError } from './Debug.ts';
+import { getBearerToken, spliceOne } from './utils/Utils.ts';
 import { ServerError } from './errors/ServerError.ts';
 
 import type { Room } from './Room.ts';
@@ -18,6 +20,11 @@ export function getTransport() { return _transport; }
 
 export abstract class Transport {
     public protocol?: string;
+    /** Self-signed cert SHA-256 hash (byte array), surfaced to clients in the
+     *  matchmake response so a WebTransport client can pin it via
+     *  `serverCertificateHashes`. Set by transports that generate their own cert
+     *  (h3). Undefined for transports using a CA-trusted cert. */
+    public fingerprint?: number[];
     public server?: http.Server | https.Server;
 
     public abstract listen(port?: number | string, hostname?: string, backlog?: number, listeningListener?: Function): this;
@@ -40,12 +47,129 @@ export abstract class Transport {
     public bindRouter?(router: Router): void;
 }
 
+/**
+ * Intercepts an incoming WebSocket upgrade request, before the handshake.
+ *
+ * Return a `Response` to answer the request instead of upgrading it. Return
+ * nothing to upgrade as usual. The handler may be async, and the handshake waits
+ * for it to resolve.
+ *
+ * `context` is the same shape `onAuth()` receives, read-only here: mutating it
+ * does not carry over to `onAuth()`.
+ *
+ * Not supported by `H3Transport`: WebTransport has no upgrade handshake.
+ *
+ * @example
+ * ```typescript
+ * new uWebSocketsTransport({
+ *   beforeUpgrade: async (request, context) => {
+ *     if (await isBanned(context.ip)) {
+ *       return new Response(null, { status: 403 });
+ *     }
+ *   }
+ * });
+ * ```
+ */
+export type BeforeUpgradeHandler = (
+  request: Request,
+  context: Readonly<AuthContext>,
+) => Response | void | Promise<Response | void>;
+
+/**
+ * Invokes a `beforeUpgrade` handler, resolving with the `Response` to send
+ * instead of upgrading, or `undefined` to proceed with the upgrade.
+ *
+ * Every transport goes through here, so a handler written against one keeps
+ * working on the others. Never rejects: uWebSockets.js aborts the process on an
+ * upgrade handler that yields without responding, and on the other transports a
+ * raw socket left behind leaks a connection.
+ *
+ * @internal
+ */
+export async function runBeforeUpgrade(
+  handler: BeforeUpgradeHandler,
+  url: string, // path, optionally including the query string
+  context: AuthContext,
+): Promise<Response | undefined> {
+  let request: Request;
+
+  try {
+    const host = context.headers.get('host') || 'localhost';
+    request = new Request(`http://${host}${url}`, { headers: context.headers });
+
+  } catch (e: any) {
+    // a `Host` header that isn't a valid authority fails to parse as a URL
+    debugAndPrintError(e);
+    return new Response(null, { status: 400 });
+  }
+
+  try {
+    return (await handler(request, context)) ?? undefined;
+
+  } catch (e: any) {
+    debugAndPrintError(e);
+    return new Response(null, { status: 500 });
+  }
+}
+
+/** Headers as the transport has them: uWebSockets.js and Node give a plain record. */
+type RawHeaders = Headers | Record<string, string | undefined>;
+
+const readHeader = (headers: RawHeaders, name: string) =>
+  (headers instanceof Headers) ? headers.get(name) : headers[name];
+
+/**
+ * Builds the context passed to `beforeUpgrade` and `onAuth`.
+ *
+ * Every transport goes through here, so the context is identical everywhere,
+ * down to how the client address is resolved. `headers` is materialized on
+ * first read: a connection nobody inspects pays nothing for the conversion.
+ *
+ * @internal
+ */
+export function createAuthContext(options: {
+  headers: RawHeaders,
+  token?: string | null,
+  remoteAddress?: string,
+  req?: any,
+}): AuthContext {
+  const source = options.headers;
+  let headers: Headers | undefined;
+
+  return {
+    token: options.token ?? getBearerToken(readHeader(source, 'authorization')),
+    ip: resolveClientIp(source, options.remoteAddress),
+    req: options.req,
+    get headers() {
+      return headers ??= (source instanceof Headers)
+        ? source
+        : new Headers(source as Record<string, string>);
+    },
+  };
+}
+
+/**
+ * A single address, resolved the same way on every transport: `x-forwarded-for`
+ * carries the whole proxy chain, and only its first entry is the client.
+ */
+function resolveClientIp(headers: RawHeaders, remoteAddress?: string): string | undefined {
+  // an empty header counts as absent
+  const firstHop = (name: string) => readHeader(headers, name)?.split(',')[0].trim() || undefined;
+
+  return (
+    firstHop('x-real-ip') ??
+    firstHop('x-forwarded-for') ??
+    firstHop('x-client-ip') ??
+    (remoteAddress || undefined)
+  );
+}
+
 export type AuthContext = {
   token?: string,
+  /** Undefined when no proxy header carries it and the transport has no peer address. */
+  ip: string | undefined;
   headers: Headers,
-  ip: string | string[];
-  // FIXME: each transport may have its own specific properties.
-  // "req" only applies to WebSocketTransport.
+  /** Only set on the HTTP matchmaking request, where it is the `Request` itself. */
   req?: any;
 };
 
@@ -91,14 +215,9 @@ export interface Client<T extends { userData?: any, auth?: any, messages?: Recor
   ref: EventEmitter;
 
   /**
-   * @deprecated use `sessionId` instead.
-   */
-  id: string;
-
-  /**
    * Unique id per session.
    */
-  sessionId: string; // TODO: remove sessionId on version 1.0.0
+  sessionId: string;
 
   /**
    * Connection state
@@ -134,6 +253,16 @@ export interface Client<T extends { userData?: any, auth?: any, messages?: Recor
   // TODO: move these to ClientPrivate
   raw(data: Uint8Array | Buffer, options?: ISendOptions, cb?: (err?: Error) => void): void;
   enqueueRaw(data: Uint8Array | Buffer, options?: ISendOptions): void;
+
+  /**
+   * Send raw bytes over the transport's UNRELIABLE channel — no delivery,
+   * ordering, or duplication guarantee. Used for `@unreliable` state patches.
+   *
+   * Absent on transports with no datagram channel (every WebSocket transport).
+   * Its presence IS the capability check — callers feature-detect rather than
+   * reading a separate flag, and skip clients that can't receive.
+   */
+  rawUnreliable?(data: Uint8Array | Buffer, options?: ISendOptions, cb?: (err?: Error) => void): void;
 
   /**
    * Send a type of message to the client. Messages are encoded with MsgPack and can hold any
@@ -190,7 +319,6 @@ export interface Client<T extends { userData?: any, auth?: any, messages?: Recor
 export interface ClientPrivate {
   readyState: number; // TODO: remove readyState on version 1.0.0. Use only "state" instead.
   _enqueuedMessages?: any[];
-  _afterNextPatchQueue: Array<[string | number | Client, ArrayLike<any>]>;
   _joinedAt: number; // "elapsedTime" when the client joined the room.
 
   /**
@@ -198,15 +326,179 @@ export interface ClientPrivate {
    */
   _numMessagesLastSecond?: number;
   _lastMessageTime?: number;
+
+  /**
+   * Per-client input Schema instance, allocated on join when the Room
+   * declares `input`. Mutated in-place by {@link _inputDecoder} on each
+   * incoming ROOM_INPUT_* packet.
+   *
+   * Typed loosely (`any`) so duplicate `@colyseus/schema` installs don't
+   * trigger type-identity errors against user-defined input classes.
+   */
+  _input?: any;
+  _inputDecoder?: InputDecoder;
+
+  /**
+   * Per-client buffer of cloned input snapshots, allocated on join when
+   * `Room.inputOptions.bufferMaxSize > 0`. Populated on each decoded frame.
+   */
+  _inputBuffer?: import('./input/InputBuffer.ts').InputBufferImpl;
+
+  /**
+   * Cached per-client accessor returned by `room.input(sessionId)`. Built
+   * once at join (when the Room called `defineInput()`), so the public API
+   * call is a Map lookup + property read with no per-call allocation.
+   */
+  _inputAccessor?: import('./input/types.ts').InputAccessor;
+
+  /**
+   * Used for rate limiting ROOM_INPUT_* packets via maxInputsPerSecond,
+   * independent of maxMessagesPerSecond.
+   */
+  _numInputsLastSecond?: number;
+  _lastInputTime?: number;
+
+  /**
+   * `performance.now()` recorded when the most recent ROOM_INPUT_* packet
+   * from this client was received. Receive-side diagnostic only — NOT on the
+   * wire: the {@link ProtocolModifier.TIMED} state prefix acks the seq of the
+   * last input CONSUMED into the state (the input buffer's `ackSeq`).
+   *
+   * `0` until the client has sent its first input.
+   */
+  _lastInputReceivedAt?: number;
+
+  /**
+   * Monotonic count of *reliable* inputs successfully received from this
+   * client. Receive-time counter — it LEADS the state by inputs still
+   * buffered; what the TIMED prefix acks is the CONSUMED seq (the input
+   * buffer's `ackSeq`), not this. Stays at the default `0` until the client
+   * sends its first reliable input.
+   *
+   * Only ROOM_INPUT_RELIABLE bumps this — unreliable's redundant-ring
+   * pattern would double-count.
+   */
+  _receivedInputCount?: number;
+
+  /**
+   * Running baseline for the DELTA-CODED lag-comp stamp on ROOM_INPUT_RELIABLE
+   * frames (the {@link ProtocolModifier.TIMED} prefix). Each frame carries only
+   * the signed change from the previous stamp; this accumulates them back into
+   * the absolute timeline value. Zeroed on (re)connect alongside the SDK's own
+   * baseline so the first delta after a reset is absolute. `0` until allocated.
+   */
+  _reckonBaseline?: number;
+
+  /**
+   * @internal Per-client raw frames staged to ride out right AFTER this client's
+   * next state patch — per-client `afterNextPatch` messages. Lazily allocated.
+   * Pushed by {@link enqueueClientRaw} (the `afterNextPatch` path), flushed as
+   * standalone frames after the patch by {@link Room._flushPendingClientFrames}.
+   * Room-level `broadcast` `afterNextPatch` uses the Room's own queue instead, not
+   * this buffer.
+   */
+  _pendingFrames?: Uint8Array[];
+
+  /**
+   * @internal Back-reference to the Room's "clients with staged frames" list,
+   * shared by reference at join. {@link enqueueClientRaw} pushes the client here
+   * on its first staged frame of a cycle, so the after-patch flush iterates just
+   * those clients rather than scanning every client.
+   */
+  _pendingFrameClients?: Array<Client & ClientPrivate>;
+}
+
+/**
+ * The framework-level send path shared by every transport's `enqueueRaw` — the
+ * single source of truth so each transport implements only the wire-level `raw`.
+ * Routes a raw frame by where it should go:
+ *
+ *  - `afterNextPatch` → stage onto the per-client {@link ClientPrivate._pendingFrames}
+ *    buffer, sent as a standalone frame right AFTER the next state patch; a
+ *    no-allocation push into a reused array. The client announces itself to the
+ *    Room's {@link ClientPrivate._pendingFrameClients} list on its first staged
+ *    frame of a cycle.
+ *  - before JOIN → buffer in `_enqueuedMessages` until the JOIN_ROOM handshake flushes.
+ *  - otherwise → send now via the transport's `raw`.
+ *
+ * @internal
+ */
+export function enqueueClientRaw(
+  client: Client & ClientPrivate,
+  data: Uint8Array | Buffer,
+  options?: ISendOptions,
+): void {
+  if (options?.afterNextPatch) {
+    let frames = client._pendingFrames;
+    if (frames === undefined) { frames = client._pendingFrames = []; }
+    if (frames.length === 0) { client._pendingFrameClients?.push(client); } // first frame this cycle
+    frames.push(data);
+    return;
+  }
+  if (client.state !== ClientState.JOINED) {
+    // During `onJoin` / `onReconnect` the client can't register onMessage
+    // handlers yet — buffer until JOIN_ROOM has been sent.
+    client._enqueuedMessages?.push(data);
+    return;
+  }
+  client.raw(data, options);
 }
 
 export class ClientArray<C extends Client = Client> extends Array<C> {
+  /**
+   * Secondary index for O(1) lookup by sessionId. Kept in sync by the
+   * mutating methods overridden below. Direct index assignment
+   * (`arr[i] = client`) and `arr.length = 0` bypass this index — use
+   * `push` / `splice` / `delete` / `pop` / `shift` / `unshift` instead.
+   */
+  private _byId: Map<string, C> = new Map();
+
+  /** The client for `sessionId`, or `undefined` — O(1). The canonical per-session
+   *  lookup (mirrors `room.inputs.get(sessionId)`). */
+  public get(sessionId: string): C | undefined {
+    return this._byId.get(sessionId);
+  }
+
+  /** @deprecated Use {@link get}. */
   public getById(sessionId: string): C | undefined {
-    return this.find((client) => client.sessionId === sessionId);
+    return this._byId.get(sessionId);
   }
 
   public delete(client: C): boolean {
-    return spliceOne(this, this.indexOf(client));
+    const removed = spliceOne(this, this.indexOf(client));
+    if (removed) this._byId.delete(client.sessionId);
+    return removed;
+  }
+
+  public push(...items: C[]): number {
+    for (let i = 0; i < items.length; i++) this._byId.set(items[i].sessionId, items[i]);
+    return super.push(...items);
+  }
+
+  public pop(): C | undefined {
+    const removed = super.pop();
+    if (removed !== undefined) this._byId.delete(removed.sessionId);
+    return removed;
+  }
+
+  public shift(): C | undefined {
+    const removed = super.shift();
+    if (removed !== undefined) this._byId.delete(removed.sessionId);
+    return removed;
+  }
+
+  public unshift(...items: C[]): number {
+    for (let i = 0; i < items.length; i++) this._byId.set(items[i].sessionId, items[i]);
+    return super.unshift(...items);
+  }
+
+  public splice(start: number, deleteCount?: number, ...items: C[]): C[] {
+    const removed = (deleteCount === undefined)
+      ? super.splice(start)
+      : super.splice(start, deleteCount, ...items);
+    for (let i = 0; i < removed.length; i++) this._byId.delete(removed[i].sessionId);
+    for (let i = 0; i < items.length; i++) this._byId.set(items[i].sessionId, items[i]);
+    return removed;
   }
 }
 

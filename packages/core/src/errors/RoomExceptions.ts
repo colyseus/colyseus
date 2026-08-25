@@ -9,7 +9,8 @@ export type RoomMethodName = 'onCreate'
   | 'onReconnect'
   | 'onDispose'
   | 'onMessage'
-  | 'setSimulationInterval'
+  | 'setTimestep'
+  | 'setFixedTimestep'
   | 'setInterval'
   | 'setTimeout';
 
@@ -22,7 +23,7 @@ export type RoomException<R extends Room = Room> =
   OnReconnectException<R> |
   OnDisposeException |
   OnMessageException<R> |
-  SimulationIntervalException |
+  TimestepException |
   TimedEventException;
 
 export class OnCreateException<R extends Room = Room> extends Error {
@@ -151,15 +152,28 @@ export class OnMessageException<R extends Room, MessageType extends keyof R['mes
   }
 }
 
-export class SimulationIntervalException extends Error {
+/** Thrown when a {@link Room.setTimestep} or {@link Room.setFixedTimestep} tick
+ *  callback throws (or rejects). Reported to `onUncaughtException` with the
+ *  originating method as `methodName` (`'setTimestep'` / `'setFixedTimestep'`). */
+export class TimestepException extends Error {
   constructor(
     cause: Error,
     message: string,
   ) {
     super(message, { cause });
-    this.name = 'SimulationIntervalException';
+    this.name = 'TimestepException';
   }
 }
+
+/** 
+ * @deprecated Renamed to {@link TimestepException} (it now covers both
+ * `setTimestep` and `setFixedTimestep`). Kept as an alias for backwards
+ *  compatibility — `instanceof` checks against either name still match. 
+ * 
+ * TODO: remove this on 1.0
+ */
+export const SimulationIntervalException = TimestepException;
+export type SimulationIntervalException = TimestepException;
 
 export class TimedEventException extends Error {
   public args: any[];

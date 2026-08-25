@@ -6,7 +6,8 @@ export default defineConfig({
   plugins: [react()],
   test: {
     globals: true,
-    environment: 'jsdom',
+    // per-file opt-in to jsdom via @vitest-environment docblock (jsdom not installed)
+    environment: 'node',
     // setupFiles: './src/setupTests.ts',
   },
   resolve: {

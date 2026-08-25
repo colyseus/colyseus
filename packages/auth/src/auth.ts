@@ -1,11 +1,5 @@
-import fs from 'fs/promises';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import express, { Router } from 'express';
-import { existsSync } from 'fs';
-import { debugAndPrintError, generateId, logger, matchMaker } from '@colyseus/core';
-import { type Request } from 'express-jwt';
-import { type OAuthProviderCallback, oAuthProviderCallback, oauth } from './oauth.ts';
+import { dualModeEndpoints, type ExpressMiddleware } from '@colyseus/core';
+import { type OAuthProviderCallback, oauth } from './oauth.ts';
 import { JWT, type JwtPayload } from './JWT.ts';
 import { Hash } from './Hash.ts';
 
@@ -25,6 +19,28 @@ export type ParseTokenCallback = (token: JwtPayload) => Promise<unknown> | unkno
 export type GenerateTokenCallback = (userdata: unknown) => Promise<unknown>;
 export type HashPasswordCallback = (password: string) => Promise<string>;
 
+/**
+ * Info returned by `onCheckBanned` when the user is banned. Both
+ * fields are optional — apps that don't want to expose either keep
+ * the field absent in their response.
+ */
+export interface BannedInfo {
+  reason?: string | null;
+  until?: Date | string | null;
+}
+/**
+ * Optional ban check called after credentials are verified (login)
+ * or after an OAuth profile is matched. Return a `BannedInfo` to
+ * reject the sign-in as banned; return `null` / `false` / `undefined`
+ * to allow.
+ *
+ * Lets the auth layer distinguish "your credentials are valid but
+ * you're banned" from "invalid credentials" — the former needs a
+ * different status code (403) and a clearer message for the client.
+ */
+export type CheckBannedCallback = (user: unknown) =>
+  Promise<BannedInfo | null | false | undefined> | BannedInfo | null | false | undefined;
+
 export interface AuthSettings {
   onFindUserByEmail: FindUserByEmailCallback,
   onRegisterWithEmailAndPassword: RegisterWithEmailAndPasswordCallback,
@@ -40,27 +56,14 @@ export interface AuthSettings {
   onParseToken?: ParseTokenCallback,
   onGenerateToken?: GenerateTokenCallback,
   onHashPassword?: HashPasswordCallback,
+  onCheckBanned?: CheckBannedCallback,
 };
 
 let onFindUserByEmail: FindUserByEmailCallback = (email: string) => { throw new Error('`auth.settings.onFindUserByEmail` not implemented.'); };
 let onRegisterWithEmailAndPassword: RegisterWithEmailAndPasswordCallback = () => { throw new Error('`auth.settings.onRegisterWithEmailAndPassword` not implemented.'); };
-let onForgotPassword: ForgotPasswordCallback = () => { throw new Error('`auth.settings.onForgotPassword` not implemented.'); };
 let onParseToken: ParseTokenCallback = (jwt: JwtPayload) => jwt;
 let onGenerateToken: GenerateTokenCallback = async (userdata: unknown) => await JWT.sign(userdata);
 let onHashPassword: HashPasswordCallback = async (password: string) => Hash.make(password);
-
-/**
- * Detect HTML template path (for password reset form)
- */
-// __dirname is not available in ESM
-const getDirname = () => (typeof __dirname !== 'undefined') ? __dirname : path.dirname(fileURLToPath(import.meta.url));
-
-const htmlTemplatePath = [
-  path.join(process.cwd(), "html"),
-  path.join(getDirname(), "..", "html"),
-].find((filePath) => existsSync(filePath));
-
-const RESET_PASSWORD_TOKEN_EXPIRATION_MINUTES = 30;
 
 export const auth = {
   /**
@@ -100,9 +103,12 @@ export const auth = {
     onEmailConfirmed: undefined as EmailConfirmedCallback,
 
     /**
-     * (Optional) Send reset password link via email.
+     * (Optional) Send reset password link via email. Unset by default —
+     * `/auth/forgot-password` logs a loud error and no-ops when it's
+     * missing (no throw), and `@colyseus/admin`'s reset bridge falls
+     * back to logging the link.
      */
-    onForgotPassword,
+    onForgotPassword: undefined as ForgotPasswordCallback,
 
     /**
      * (Optional) Reset password action.
@@ -120,7 +126,8 @@ export const auth = {
     onGenerateToken,
 
     /**
-     * Hash password before storing it. By default, it uses SHA1 + process.env.AUTH_SALT.
+     * Hash password before storing it. By default, it uses scrypt with a
+     * fresh per-password random salt (stored inline as `<algo>$<salt>$<hash>`).
      */
     onHashPassword,
   } as AuthSettings,
@@ -136,7 +143,23 @@ export const auth = {
    */
   middleware: JWT.middleware,
 
-  routes: function (settings: Partial<AuthSettings> = {}): Router {
+  /**
+   * Better-call endpoint map. Spread into `createRouter({ ...auth.endpoints(...) })`.
+   * Same coverage as `auth.routes()` but no express dependency. Bound below
+   * (after the `endpoints.ts` module loads — avoids circular import).
+   */
+  endpoints: null as unknown as typeof import('./endpoints.ts').endpoints,
+
+  /**
+   * Express-compatible auth middleware. Returns the same handler logic as
+   * `auth.endpoints()` (the better-call map) wrapped as express middleware,
+   * so `app.use(auth.routes())` keeps working. The return value also carries
+   * the endpoint map, so it can be spread into `createRouter({ ...auth.routes() })`.
+   *
+   * This is a thin adapter over `auth.endpoints()` + `dualModeEndpoints` —
+   * there is a single source of truth for the handler logic (endpoints.ts).
+   */
+  routes: function (settings: Partial<AuthSettings> = {}): ExpressMiddleware {
     if (process.env.NODE_ENV !== 'production') {
       // do not warn in production
       console.warn(`
@@ -145,294 +168,30 @@ export const auth = {
       `);
     }
 
-    const router = express.Router();
+    // Single source of truth: auth.endpoints() builds the better-call map
+    // (login / register / anonymous / forgot / reset / confirm-email + OAuth).
+    // It also merges `settings` into auth.settings and wires the OAuth
+    // callback, so the legacy per-key copy + onParseToken/onGenerateToken
+    // defaulting is no longer needed (auth.settings already carries those
+    // defaults). dualModeEndpoints wraps the map as express middleware while
+    // keeping it spreadable into createRouter({ ...auth.routes() }).
+    const map = auth.endpoints({ settings, prefix: auth.prefix });
 
-    //
-    // Auto-detect backend URL from the first request, if not defined.
-    // (We do only once to reduce chances of 'Host' header injection vulnerability)
-    //
-    const originDetector: any = function (req, _, next) {
-      if (!auth.backend_url) {
-        auth.backend_url = req.protocol + '://' + req.get('host');
-      }
-      if (!oauth.defaults.origin) {
-        oauth.defaults.origin = auth.backend_url;
-      }
-      // remove this middleware from the stack
-      const stackIndex = router.stack.indexOf(originDetector);
-      if (stackIndex !== -1) { router.stack.splice(stackIndex, 1); }
-      next();
-    };
-    router.use(originDetector);
-
-    // set register/login callbacks
-    Object.keys(settings).forEach(key => {
-      auth.settings[key] = settings[key];
+    return dualModeEndpoints(map, {
+      buildMiddleware: ({ specificRouter, specificHandler }) => (req, res, next) => {
+        // Match on originalUrl (the same string better-call's getRequest uses
+        // to build the dispatched Request URL) so the match check and the
+        // actual dispatch always agree.
+        const url = ((req as any).originalUrl ?? req.url ?? '').split('?')[0];
+        if (specificRouter.findRoute(req.method ?? 'GET', url)) {
+          return specificHandler(req as any, res as any).catch(next);
+        }
+        next();
+      },
     });
-
-    if (!auth.settings.onParseToken) {
-      auth.settings.onParseToken = onParseToken;
-    }
-    if (!auth.settings.onGenerateToken) {
-      auth.settings.onGenerateToken = onGenerateToken;
-    }
-    if (!auth.settings.onHashPassword) {
-      auth.settings.onHashPassword = onHashPassword;
-    }
-
-    /**
-     * OAuth (optional)
-     */
-    if (settings.onOAuthProviderCallback) {
-      oauth.onCallback(settings.onOAuthProviderCallback);
-    }
-
-    if (oAuthProviderCallback) {
-      const prefix = oauth.prefix;
-
-      // make sure oauth.prefix contains the full prefix
-      oauth.prefix = auth.prefix + prefix;
-
-      router.use(prefix, oauth.routes());
-    }
-
-    /**
-     * Get user data from JWT token.
-     */
-    router.get("/userdata", auth.middleware(), async (req: Request, res) => {
-      try {
-        res.json({ user: await auth.settings.onParseToken(req.auth), });
-      } catch (e: any) {
-        res.status(401).json({ error: e.message });
-      }
-    });
-
-    /**
-     * Login user by email and password.
-     */
-    router.post("/login", express.json(), async (req, res) => {
-      try {
-        const email = req.body.email;
-        if (!isValidEmail(email)) { throw new Error("email_malformed"); }
-
-        const user = Object.assign({}, await auth.settings.onFindUserByEmail(email));
-        if (user && user.password === await Hash.make(req.body.password)) {
-          delete user.password; // remove password from JWT payload
-          res.json({ user, token: await auth.settings.onGenerateToken(user) });
-
-        } else {
-          throw new Error("invalid_credentials");
-        }
-
-      } catch (e: any) {
-        logger.error(e);
-        res.status(401).json({ error: e.message });
-      }
-    });
-
-    /**
-     * Register user by email and password.
-     * - auth.middleware() is used here to allow upgrading anonymous users.
-     */
-    router.post("/register", express.json(), async (req: Request, res) => {
-      const email = req.body.email;
-      const password = req.body.password;
-
-      if (!isValidEmail(email)) {
-        return res.status(400).json({ error: "email_malformed" });
-      }
-
-      let existingUser: any;
-      try {
-        existingUser = await auth.settings.onFindUserByEmail(email)
-
-      } catch (e: any) {
-        logger.error('@colyseus/auth, onFindUserByEmail exception:' + e.stack);
-      }
-
-      try {
-        // TODO: allow to set password on existing user, if valid token is equivalent to email
-        //  (existingUser.password && existingUser.password.length > 0)
-        if (existingUser) {
-          throw new Error("email_already_in_use");
-        }
-
-        if (!isValidPassword(password)) {
-          return res.status(400).json({ error: "password_too_short" });
-        }
-
-        // Build options
-        const options: MayHaveUpgradeToken = req.body.options || {};
-
-        // Verify Authorization header, if present.
-        if (req.headers.authorization) {
-          const authHeader = req.headers.authorization;
-          const authToken = (authHeader.startsWith("Bearer ") && authHeader.substring(7, authHeader.length)) || undefined;
-          options.upgradingToken = await JWT.verify(authToken);
-        }
-
-        // Register
-        await auth.settings.onRegisterWithEmailAndPassword(email, await Hash.make(password), options);
-
-        const user = Object.assign({}, await auth.settings.onFindUserByEmail(email));
-        delete user.password; // remove password from JWT payload
-
-        const token = await auth.settings.onGenerateToken(user);
-
-        // Call `onSendEmailConfirmation` callback, if defined.
-        if (typeof (auth.settings.onSendEmailConfirmation) === "function") {
-          const confirmEmailLink = `${auth.backend_url}${auth.prefix}/confirm-email?token=${token}`;
-          const html = (await fs.readFile(path.join(htmlTemplatePath, "address-confirmation-email.html"), "utf-8"))
-            .replace("[LINK]", confirmEmailLink);
-
-          await auth.settings.onSendEmailConfirmation(email, html, confirmEmailLink);
-        }
-
-        res.json({ user, token, });
-
-      } catch (e: any) {
-        logger.error(e);
-        res.status(401).json({ error: e.message });
-      }
-    });
-
-    router.get("/confirm-email", async (req, res) => {
-      if (req.query.success || req.query.error) {
-        const html = await fs.readFile(path.join(htmlTemplatePath, "address-confirmation.html"), "utf-8");
-        return res.end(html);
-      }
-
-      // send "address confirmed" message
-      if (typeof (auth.settings.onEmailConfirmed) !== "function") {
-        return res.status(404).end('Not found.');
-      }
-
-      try {
-        const token = (req.query.token || "").toString();
-        const data = await JWT.verify<{ email: string }>(token);
-
-        await auth.settings.onEmailConfirmed(data.email);
-        res.redirect(auth.prefix + "/confirm-email?success=" + encodeURIComponent("Email confirmed successfully!"));
-
-      } catch (e: any) {
-        res.redirect(auth.prefix + "/confirm-email?error=" + e.message);
-      }
-    });
-
-    /**
-     * Anonymous sign-in
-     */
-    router.post("/anonymous", express.json(), async (req, res) => {
-      try {
-        const options = (req.body || {}).options;
-
-        // register anonymous user, if callback is defined.
-        const user = (auth.settings.onRegisterAnonymously)
-          ? await auth.settings.onRegisterAnonymously(options)
-          : { ...options, id: undefined, anonymousId: generateId(21), anonymous: true }
-
-        res.json({
-          user,
-          token: await auth.settings.onGenerateToken(user)
-        });
-      } catch (e: any) {
-        debugAndPrintError(e);
-        res.status(401).json({ error: e.message });
-      }
-    });
-
-    router.post("/forgot-password", express.json(), async (req, res) => {
-      try {
-        //
-        // check if "forgot password" feature is fully implemented
-        //
-        if (typeof (auth.settings.onForgotPassword) !== "function") {
-          throw new Error("auth.settings.onForgotPassword must be implemented.");
-        }
-
-        if (typeof (auth.settings.onResetPassword) !== "function") {
-          throw new Error("auth.settings.onResetPassword must be implemented.");
-        }
-
-        const email = req.body.email;
-        const user = await auth.settings.onFindUserByEmail(email);
-        if (!user) {
-          throw new Error("email_not_found");
-        }
-
-        const token = await JWT.sign({ email }, { expiresIn: `${RESET_PASSWORD_TOKEN_EXPIRATION_MINUTES}m` });
-        const passwordResetLink = `${auth.backend_url}${auth.prefix}/reset-password?token=${token}`;
-        const html = (await fs.readFile(path.join(htmlTemplatePath, "reset-password-email.html"), "utf-8"))
-          .replace("[LINK]", passwordResetLink);
-
-        const result = (await auth.settings.onForgotPassword(email, html, passwordResetLink)) ?? true;
-        res.json(result);
-
-      } catch (e: any) {
-        debugAndPrintError(e);
-        res.status(401).json({ error: e.message });
-      }
-    });
-
-    // reset password form
-    router.get("/reset-password", async (req, res) => {
-      try {
-        const token = (req.query.token || "").toString();
-
-        const htmlForm = (await fs.readFile(path.join(htmlTemplatePath, "reset-password-form.html"), "utf-8"))
-          .replace("[ACTION]", auth.prefix + "/reset-password")
-          .replace("[TOKEN]", token);
-
-        res
-          .set("content-type", "text/html")
-          .send(htmlForm);
-
-      } catch (e: any) {
-        logger.debug(e);
-        res.end(`Error: ${e.message}`);
-      }
-    });
-
-    // reset password form ACTION
-    router.post("/reset-password", express.urlencoded({ extended: false }), async (req, res) => {
-      const token = req.body.token;
-      const password = req.body.password;
-
-      try {
-        const data = await JWT.verify<{ email: string }>(token);
-
-        if (matchMaker.presence?.get("reset-password:" + token)) {
-          throw new Error("token_already_used");
-        }
-
-        if (!isValidPassword(password)) {
-          throw new Error("Password is too short.");
-        }
-
-        const result = await auth.settings.onResetPassword(data.email, await Hash.make(password)) ?? true;
-
-        if (!result) {
-          throw new Error("Could not reset password.");
-        }
-
-        // invalidate used token for 30m
-        matchMaker.presence?.setex("reset-password:" + token, "1", 60 * RESET_PASSWORD_TOKEN_EXPIRATION_MINUTES);
-
-        res.redirect(auth.prefix + "/reset-password?success=" + encodeURIComponent("Password reset successfully!"));
-
-      } catch (e: any) {
-        res.redirect(auth.prefix + "/reset-password?token=" + token + "&error=" + e.message);
-      }
-    });
-
-    return router;
   },
 };
 
-function isValidEmail(email: string) {
-  return /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)
-}
-
-function isValidPassword(password: string) {
-  return password.length >= 6;
-}
+// Late binding to avoid a circular import — endpoints.ts imports `auth`.
+import { endpoints as _endpointsImpl } from './endpoints.ts';
+auth.endpoints = _endpointsImpl;

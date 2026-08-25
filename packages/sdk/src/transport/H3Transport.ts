@@ -66,6 +66,9 @@ function concatBytes(a: Uint8Array, b: Uint8Array): Uint8Array {
 
 export class H3TransportTransport implements ITransport {
     wt: WebTransport;
+    /** Connect URL — exposed so tooling (e.g. the debug panel) can show the
+     *  endpoint, mirroring `WebSocketTransport.ws.url`. */
+    url?: string;
     isOpen: boolean = false;
     events: ITransportEventMap;
 
@@ -85,13 +88,17 @@ export class H3TransportTransport implements ITransport {
     }
 
     public connect(url: string, options: any = {}) {
+        this.url = url;
         const wtOpts: WebTransportOptions = options.fingerprint && ({
             // requireUnreliable: true,
             // congestionControl: "default", // "low-latency" || "throughput"
 
             serverCertificateHashes: [{
                 algorithm: 'sha-256',
-                value: new Uint8Array(options.fingerprint).buffer
+                // Pass the Uint8Array VIEW, not `.buffer`: the @fails-components Node client
+                // (1.6) rejects a raw ArrayBuffer here, silently failing the cert-hash match
+                // → "Opening handshake failed". Browsers accept either; Node wants the view.
+                value: new Uint8Array(options.fingerprint)
             }]
         }) || undefined;
 
@@ -102,7 +109,12 @@ export class H3TransportTransport implements ITransport {
             this.isOpen = true;
 
             this.unreliableReader = this.wt.datagrams.readable.getReader();
-            this.unreliableWriter = this.wt.datagrams.writable.getWriter();
+            // Datagram writer differs by runtime: the browser's native WebTransport
+            // exposes `datagrams.writable` (a WritableStream); @fails-components/webtransport
+            // 1.6 (Node) deprecates that in favor of `createWritable()`. Prefer the method
+            // when present (silences the Node deprecation), else the standard property.
+            const datagrams = this.wt.datagrams as any;
+            this.unreliableWriter = (datagrams.createWritable ? datagrams.createWritable() : datagrams.writable).getWriter();
 
             const incomingBidi = this.wt.incomingBidirectionalStreams.getReader();
             incomingBidi.read().then((stream) => {
@@ -143,26 +155,41 @@ export class H3TransportTransport implements ITransport {
     }
 
     public send(data: Buffer | Uint8Array): void {
-        const prefixLength = encode.number(this.lengthPrefixBuffer as any, data.length, { offset: 0 });
-        const dataWithPrefixedLength = new Uint8Array(prefixLength + data.length);
-        dataWithPrefixedLength.set(this.lengthPrefixBuffer.subarray(0, prefixLength), 0);
-        dataWithPrefixedLength.set(data, prefixLength);
-        this.writer.write(dataWithPrefixedLength);
+        this.writer.write(this.frame(data));
     }
 
     public sendUnreliable(data: Buffer | Uint8Array): void {
-        const prefixLength = encode.number(this.lengthPrefixBuffer as any, data.length, { offset: 0 });
-        const dataWithPrefixedLength = new Uint8Array(prefixLength + data.length);
-        dataWithPrefixedLength.set(this.lengthPrefixBuffer.subarray(0, prefixLength), 0);
-        dataWithPrefixedLength.set(data, prefixLength);
-        this.unreliableWriter.write(dataWithPrefixedLength);
+        this.unreliableWriter.write(this.frame(data));
+    }
+
+    /**
+     * Length-prefix a payload for the wire. Normalizes the input to a typed array
+     * first: unlike `ws.send()` (which accepts an ArrayBuffer directly), we frame
+     * manually — reading `.length` and copying via `.set()` — so a bare ArrayBuffer
+     * (e.g. the debug panel's latency-sim clone) must be wrapped, or `.length` is
+     * `undefined` and the allocation/copy goes out of bounds.
+     */
+    protected frame(data: Buffer | Uint8Array | ArrayBuffer): Uint8Array {
+        const bytes = data instanceof Uint8Array ? data : new Uint8Array(data as ArrayBuffer);
+        const prefixLength = encode.number(this.lengthPrefixBuffer as any, bytes.length, { offset: 0 });
+        const out = new Uint8Array(prefixLength + bytes.length);
+        out.set(this.lengthPrefixBuffer.subarray(0, prefixLength), 0);
+        out.set(bytes, prefixLength);
+        return out;
     }
 
     public close(code?: number, reason?: string) {
+        this.isOpen = false; // stop the reader loops; mark closed before tearing down
         try {
-            this.wt.close({ closeCode: code, reason: reason });
+            // close() is void in the browser but can reject async (e.g. "session is
+            // closed" when already closing/closed) in some impls — swallow both the
+            // sync throw and any rejected promise so it doesn't surface as uncaught.
+            const ret = this.wt?.close({ closeCode: code, reason: reason }) as unknown as Promise<void> | void;
+            if (ret && typeof (ret as Promise<void>).catch === "function") {
+                (ret as Promise<void>).catch(() => { /* already closed — benign */ });
+            }
         } catch (e) {
-            console.error(e);
+            /* already closed / invalid state — benign during a simulated drop */
         }
     }
 
@@ -173,6 +200,10 @@ export class H3TransportTransport implements ITransport {
             try {
                 result = await this.reader.read();
 
+                // Stream ended (close/drop): a `done` read has no `value` — bail
+                // before decoding, or `decode.number(undefined)` throws on teardown.
+                if (result.done || !result.value) { break; }
+
                 //
                 // a single read may contain multiple messages
                 // each message is prefixed with its length
@@ -182,7 +213,7 @@ export class H3TransportTransport implements ITransport {
                     this.events.onmessage({ data: frame });
                 }
 
-            } catch (e) {
+            } catch (e: any) {
                 if (e.message.indexOf("session is closed") === -1) {
                     console.error("H3Transport: failed to read incoming data", e);
                 }
@@ -202,6 +233,10 @@ export class H3TransportTransport implements ITransport {
             try {
                 result = await this.unreliableReader.read();
 
+                // Stream ended (close/drop): a `done` read has no `value` — bail
+                // before decoding, or `decode.number(undefined)` throws on teardown.
+                if (result.done || !result.value) { break; }
+
                 //
                 // a single read may contain multiple messages
                 // each message is prefixed with its length
@@ -211,7 +246,7 @@ export class H3TransportTransport implements ITransport {
                     this.events.onmessage({ data: frame });
                 }
 
-            } catch (e) {
+            } catch (e: any) {
                 if (e.message.indexOf("session is closed") === -1) {
                     console.error("H3Transport: failed to read incoming data", e);
                 }

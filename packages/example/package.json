@@ -2,37 +2,43 @@
   "name": "@colyseus/example",
   "private": true,
   "type": "module",
-  "version": "0.17.4",
+  "version": "0.18.1",
   "author": "Endel Dreyer",
   "license": "MIT",
   "scripts": {
     "start": "tsx src/app.config.ts",
     "example-h3": "tsx src/ServerH3.ts",
     "vite": "vite --config vite.config.ts",
-    "vite:build": "vite build --app"
+    "vite:build": "vite build --app",
+    "test": "tsx --test --test-timeout=120000 --test-force-exit test/**.test.ts"
   },
   "dependencies": {
     "@colyseus/core": "workspace:^",
     "colyseus": "workspace:^"
   },
   "devDependencies": {
+    "@colyseus/admin": "workspace:^",
     "@colyseus/auth": "workspace:^",
     "@colyseus/better-call": "workspace:^",
+    "@colyseus/bun-websockets": "workspace:^",
+    "@colyseus/database": "workspace:^",
     "@colyseus/drizzle-driver": "workspace:^",
     "@colyseus/h3-transport": "workspace:^",
     "@colyseus/monitor": "workspace:^",
     "@colyseus/playground": "workspace:^",
     "@colyseus/redis-driver": "workspace:^",
     "@colyseus/redis-presence": "workspace:^",
-    "@colyseus/schema": "^4.0.7",
+    "@colyseus/schema": "^5.0.8",
     "@colyseus/sdk": "workspace:^",
     "@colyseus/tools": "workspace:^",
     "@colyseus/traefik": "workspace:^",
     "@colyseus/uwebsockets-transport": "workspace:^",
-    "@colyseus/bun-websockets": "workspace:^",
     "@colyseus/ws-transport": "workspace:^",
-    "zod": "^4.1.12",
+    "drizzle-orm": "1.0.0-rc.2",
+    "puppeteer": "^25.3.0",
     "serve-index": "^1.8.0",
-    "vite": "^8.0.2"
+    "tsx": "^4.1.2",
+    "vite": "^8.0.2",
+    "zod": "^4.1.12"
   }
 }

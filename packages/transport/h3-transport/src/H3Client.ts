@@ -1,12 +1,20 @@
 // import WebSocket from 'ws';
 
 import type { ReadableStreamDefaultReader, WritableStreamDefaultWriter } from 'stream/web';
-import { Protocol, type Client, ClientState, type ISendOptions, getMessageBytes, logger, debugMessage, type ClientPrivate, CloseCode } from '@colyseus/core';
+import { Protocol, type Client, ClientState, type ISendOptions, getMessageBytes, logger, debugMessage, type ClientPrivate, CloseCode, enqueueClientRaw } from '@colyseus/core';
 import { type WebTransportSession } from '@fails-components/webtransport';
 import { EventEmitter } from 'events';
 import { type Iterator, decode, encode } from '@colyseus/schema';
 
 const lengthPrefixBuffer = Buffer.alloc(9); // 9 bytes is the maximum length of a length prefix
+
+// Test-only datagram loss injectors: drop this fraction [0..1] of unreliable
+// datagrams (whole packet), to measure how well each direction recovers.
+// Separate per direction so a test can isolate one — H3_DATAGRAM_LOSS covers
+// INCOMING input (all ring slots in the packet), H3_DATAGRAM_LOSS_OUT covers
+// OUTGOING state patches. 0 = off.
+const DATAGRAM_LOSS = Number(process.env.H3_DATAGRAM_LOSS ?? 0);
+const DATAGRAM_LOSS_OUT = Number(process.env.H3_DATAGRAM_LOSS_OUT ?? 0);
 
 // 9 bytes is the maximum length of a variable-length integer prefix
 const MAX_LENGTH_PREFIX_BYTES = 9;
@@ -81,7 +89,6 @@ export class H3Client implements Client, ClientPrivate {
   public state: ClientState = ClientState.JOINING;
   public reconnectionToken: string;
   public _enqueuedMessages: any[] = [];
-  public _afterNextPatchQueue;
   public _joinedAt;
 
   // TODO: remove readyState
@@ -152,9 +159,18 @@ export class H3Client implements Client, ClientPrivate {
     );
   }
 
-  public sendDatagram(data: Uint8Array | Buffer) {
+  public rawUnreliable(data: Uint8Array | Buffer, options?: ISendOptions, cb?: (err?: Error) => void) {
+    // skip if client not open
+    if (this.readyState !== 1) {// OPEN
+      return;
+    }
+
+    const datagrams = this._wtSession.datagrams as any;
+
     if (!this._datagramWriter) {
-      this._datagramWriter = this._wtSession.datagrams.writable.getWriter();
+      // Prefer `createWritable()` (non-deprecated in @fails-components 1.6); fall
+      // back to the standard `datagrams.writable` property for other runtimes.
+      this._datagramWriter = (datagrams.createWritable ? datagrams.createWritable() : datagrams.writable).getWriter();
 
       this._datagramWriter.closed
         .then(() => console.log("datagram writer closed successfully!"))
@@ -166,6 +182,21 @@ export class H3Client implements Client, ClientPrivate {
     const dataWithPrefixedLength = new Uint8Array(prefixLength + data.length);
     dataWithPrefixedLength.set(lengthPrefixBuffer.subarray(0, prefixLength), 0);
     dataWithPrefixedLength.set(data, prefixLength);
+
+    // Drop rather than split an oversized payload. A datagram is atomic, so the
+    // receiver's reassembler only ever holds whole frames; a frame spread over
+    // two datagrams would desync its framing for good the first time one is lost.
+    const maxSize = datagrams.maxDatagramSize;
+    if (maxSize > 0 && dataWithPrefixedLength.byteLength > maxSize) {
+      logger.warn(
+        `@colyseus/h3-transport: dropping a ${dataWithPrefixedLength.byteLength}-byte` +
+        ` unreliable frame — over the ${maxSize}-byte datagram limit.`
+      );
+      return;
+    }
+
+    // Test-only: drop outgoing datagrams to simulate loss toward the client.
+    if (DATAGRAM_LOSS_OUT > 0 && Math.random() < DATAGRAM_LOSS_OUT) { return; }
 
     this._datagramWriter.write(dataWithPrefixedLength);
   }
@@ -204,6 +235,9 @@ export class H3Client implements Client, ClientPrivate {
       try {
         read = await this._datagramReader.read();
 
+        // Test-only: drop the whole datagram to simulate packet loss.
+        if (DATAGRAM_LOSS > 0 && read.value && Math.random() < DATAGRAM_LOSS) { continue; }
+
         //
         // a single read may contain multiple messages
         // each message is prefixed with its length
@@ -233,21 +267,7 @@ export class H3Client implements Client, ClientPrivate {
   }
 
   public enqueueRaw(data: Buffer | Uint8Array, options?: ISendOptions) {
-    // use room's afterNextPatch queue
-    if (options?.afterNextPatch) {
-      this._afterNextPatchQueue.push([this, arguments]);
-      return;
-    }
-
-    if (this.state !== ClientState.JOINED) {
-      // sending messages during `onJoin` or `onReconnect`.
-      // - the client-side cannot register "onMessage" callbacks at this point.
-      // - enqueue the messages to be send after JOIN_ROOM message has been sent
-      this._enqueuedMessages?.push(data);
-      return;
-    }
-
-    this.raw(data, options);
+    enqueueClientRaw(this, data, options);
   }
 
   public raw(data: Buffer | Uint8Array, options?: ISendOptions, cb?: (err?: Error) => void) {

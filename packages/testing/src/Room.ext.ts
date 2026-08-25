@@ -16,10 +16,13 @@ declare module "@colyseus/core" {
   interface Room {
     waitForMessage(messageType: string): Promise<[Client, any]>;
     waitForNextMessage(additionalDelay?: number): Promise<void>;
-    waitForNextPatch(): Promise<void>;
+    waitForNextPatch(additionalDelay?: number): Promise<void>;
+    waitForNextTimestep(): Promise<void>;
+    /** @deprecated Renamed to {@link Room.waitForNextTimestep}. Forwards unchanged. */
     waitForNextSimulationTick(): Promise<void>;
     _waitingForMessage: [number, Deferred];
     _waitingForPatch: [number, Deferred];
+    _waitingForTimestep: Array<() => void>;
   }
 }
 
@@ -67,18 +70,57 @@ Room.prototype.waitForMessage = async function(this: Room, type: string, rejectT
 }
 
 /**
- * Wait next simulation tick
+ * Wait for the next timestep.
+ *
+ * Works with either loop — `setTimestep()` and `setFixedTimestep()` both drive
+ * the same underlying interval.
  */
-Room.prototype.waitForNextSimulationTick = async function(this: Room) {
-  if (this['_simulationInterval']) {
-    const milliseconds = this['_simulationInterval']['_idleTimeout'];
-    return new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
-    // return timers.setTimeout(milliseconds);
-
-  } else {
-    console.warn("⚠️ waitForSimulation() - .setSimulationInterval() is a must.");
-    return Promise.resolve();
+Room.prototype.waitForNextTimestep = async function(this: Room) {
+  if (!this['_simulationInterval']) {
+    console.warn("⚠️ waitForNextTimestep() - the room must call .setTimestep() or .setFixedTimestep().");
+    return;
   }
+  return new Promise<void>((resolve) => (this._waitingForTimestep ??= []).push(resolve));
+}
+
+/**
+ * Resolve everyone waiting on a step, once that step has actually run.
+ *
+ * `setFixedTimestep` drives an accumulator, so a single interval can run zero
+ * steps or several - sleeping for one interval says nothing about how many
+ * executed. Hooking the callback is the only signal that means "a step ran".
+ */
+function releaseTimestepWaiters(room: Room) {
+  const waiting = room._waitingForTimestep;
+  if (waiting === undefined || waiting.length === 0) { return; }
+  room._waitingForTimestep = [];
+  for (const resolve of waiting) { resolve(); }
+}
+
+const _originalSetTimestep = Room.prototype.setTimestep;
+Room.prototype.setTimestep = function(this: Room, onTickCallback?: any, delay?: number) {
+  if (onTickCallback === undefined) { return _originalSetTimestep.call(this, onTickCallback, delay); }
+  return _originalSetTimestep.call(this, (deltaTime: number) => {
+    try { return onTickCallback(deltaTime); }
+    finally { releaseTimestepWaiters(this); } // a throwing step must not strand the waiter
+  }, delay);
+}
+
+const _originalSetFixedTimestep = Room.prototype.setFixedTimestep;
+Room.prototype.setFixedTimestep = function(this: Room, step: any, tickRate?: number, opts?: any) {
+  return _originalSetFixedTimestep.call(this, (ctx: any) => {
+    try { return step(ctx); }
+    finally { releaseTimestepWaiters(this); }
+  }, tickRate, opts);
+}
+
+/**
+ * @deprecated Renamed to `waitForNextTimestep()`, pairing with the
+ * `setSimulationInterval()` → `setTimestep()` rename in 0.18. Forwards
+ * unchanged; will be removed in 0.19.
+ */
+Room.prototype.waitForNextSimulationTick = function(this: Room) {
+  return this.waitForNextTimestep();
 }
 
 /**
@@ -105,9 +147,9 @@ declare module "@colyseus/sdk" {
   interface Room {
     waitForMessage(messageType: string, rejectTimeout?: number): Promise<any>;
     waitForNextMessage(additionalDelay?: number): Promise<[string, any]>;
-    waitForNextPatch(): Promise<void>;
+    waitForNextPatch(additionalDelay?: number): Promise<void>;
+    waitForInitialState(): Promise<void>;
     _waitingForMessage: [number, Deferred];
-    _waitingForPatch: [number, Deferred];
   }
 }
 
@@ -141,16 +183,30 @@ ClientRoom.prototype.waitForNextMessage = async function(this: Room, additionalD
   return this._waitingForMessage[1];
 }
 
-const _originalClientPatch = ClientRoom.prototype['patch'];
-ClientRoom.prototype['patch'] = function(this: ClientRoom) {
-  _originalClientPatch.apply(this, arguments);
-  if (this._waitingForPatch) {
-    setTimeout(() => {
-      this._waitingForPatch[1].resolve([arguments[0], arguments[1]]);
-    }, this._waitingForPatch[0]);
-  }
-};
+/**
+ * Wait for the next state update to be applied on the client.
+ *
+ * @param additionalDelay - milliseconds to wait after the update is applied.
+ */
 ClientRoom.prototype.waitForNextPatch = async function(this: ClientRoom, additionalDelay: number = 0) {
-  this._waitingForPatch = [additionalDelay, new Deferred()];
-  return this._waitingForPatch[1];
+  // no patch() to hook: decoding goes through serializer.patch()
+  return new Promise<void>((resolve) =>
+    this.onStateChange.once(() => setTimeout(resolve, additionalDelay)));
+}
+
+/**
+ * Wait for the room's initial state to be applied on the client.
+ *
+ * Joining settles on the JOIN_ROOM handshake, and the server only sends the
+ * full state once it sees the client's ack - so `room.state` is a round-trip
+ * behind when `join()` resolves. Rooms without state resolve right away.
+ */
+ClientRoom.prototype.waitForInitialState = async function(this: ClientRoom) {
+  // mirrors the server's own `if (this.state)` gate: no state, no ROOM_STATE
+  if (this.serializerId === "none") { return; }
+
+  return new Promise<void>((resolve) => {
+    this.onStateChange.once(() => resolve());
+    this.onLeave.once(() => resolve()); // rejected after the handshake: don't hang
+  });
 }

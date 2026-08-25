@@ -4,6 +4,10 @@ import type { ITransport, ITransportEventMap } from "./ITransport.ts";
 
 const WebSocket = globalThis.WebSocket || NodeWebSocket;
 
+// Once per process — the fallback is per-send, and a 60Hz input ring would
+// otherwise flood the console.
+let warnedNoUnreliableChannel = false;
+
 export class WebSocketTransport implements ITransport {
     ws: WebSocket | NodeWebSocket;
     protocols?: string | string[];
@@ -18,8 +22,25 @@ export class WebSocketTransport implements ITransport {
         this.ws.send(data);
     }
 
-    public sendUnreliable(data: Uint8Array): void {
-        console.warn("@colyseus/sdk: The WebSocket transport does not support unreliable messages");
+    /**
+     * WebSocket has no unreliable channel, so this falls back to the reliable
+     * one — which is what every caller is written against (see `sendRequest`,
+     * and the input handle's redundancy ring). Dropping instead loses every
+     * `mode:"unreliable"` input and request silently: the server never sees
+     * them, and the client's pending set grows without bound because nothing
+     * is ever acked.
+     *
+     * The cost of falling back is bandwidth, not correctness — an input ring
+     * carries `historySize` redundant slots the ordered channel doesn't need,
+     * and the server dedupes them by wire seq exactly as it would over
+     * datagrams. Use `@colyseus/h3-transport` for real unreliable delivery.
+     */
+    public sendUnreliable(data: Buffer | Uint8Array): void {
+        if (!warnedNoUnreliableChannel) {
+            warnedNoUnreliableChannel = true;
+            console.warn("@colyseus/sdk: the WebSocket transport has no unreliable channel — sending `mode:\"unreliable\"` traffic reliably instead. Use @colyseus/h3-transport (WebTransport) for datagram delivery.");
+        }
+        this.send(data);
     }
 
     /**

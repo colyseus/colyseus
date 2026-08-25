@@ -1,7 +1,7 @@
 import WebSocket from "ws";
 import { EventEmitter } from "events";
 
-import { pack, unpack } from "@colyseus/msgpackr";
+import { pack, unpack } from "msgpackr";
 
 import {
   type Client,
@@ -26,7 +26,7 @@ import { RedisDriver } from "@colyseus/redis-driver";
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { PostgresDriver } from "@colyseus/drizzle-driver";
 
-Server.prototype['getDefaultTransport'] = function (options: ServerOptions) {
+Server.prototype['getDefaultTransport'] = async function (options: ServerOptions) {
   return new WebSocketTransport({
     pingInterval: 150,
     pingMaxRetries: 1,

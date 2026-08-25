@@ -14,14 +14,14 @@ export function AuthOptions({
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 
-	const [emailAndPasswordError, setEmailAndPasswordError] = useState("");
+	const [emailAndPasswordError, setEmailAndPasswordError] = useState<AuthErrorState>(null);
 	const [emailAndPasswordLoading, setEmailAndPasswordLoading] = useState(false);
 
 	const [anonymousLoading, setAnonymousLoading] = useState(false);
-	const [anonymousError, setAnonymousError] = useState("");
+	const [anonymousError, setAnonymousError] = useState<AuthErrorState>(null);
 
 	const [oAuthLoading, setOAuthLoading] = useState(false);
-	const [oAuthError, setOAuthError] = useState("");
+	const [oAuthError, setOAuthError] = useState<AuthErrorState>(null);
 
 	const handleAuthTokenChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		onAuthTokenChange(e.target.value, false);
@@ -37,7 +37,7 @@ export function AuthOptions({
 
 	const signInWithEmailAndPassword = async function(e: React.MouseEvent<HTMLButtonElement> | React.FormEvent<HTMLFormElement>) {
 		e.preventDefault();
-		setEmailAndPasswordError("");
+		setEmailAndPasswordError(null);
 
 		try {
 			setEmailAndPasswordLoading(true);
@@ -45,7 +45,7 @@ export function AuthOptions({
 
 		} catch (e: any) {
 			console.error(e);
-			setEmailAndPasswordError(e.message);
+			setEmailAndPasswordError(parseAuthError(e));
 
 		} finally {
 			setEmailAndPasswordLoading(false);
@@ -53,7 +53,7 @@ export function AuthOptions({
 	};
 
 	const signInAnonymously = async function(e: React.MouseEvent<HTMLButtonElement>) {
-		setAnonymousError("");
+		setAnonymousError(null);
 
 		try {
 			setAnonymousLoading(true);
@@ -61,7 +61,7 @@ export function AuthOptions({
 
 		} catch (e: any) {
 			console.error(e);
-			setAnonymousError(e.message);
+			setAnonymousError(parseAuthError(e));
 
 		} finally {
 			setAnonymousLoading(false);
@@ -70,7 +70,7 @@ export function AuthOptions({
 
 	const signInWithProvider = function(provider) {
 		return async (e: React.MouseEvent<HTMLButtonElement>) => {
-			setOAuthError("");
+			setOAuthError(null);
 
 			try {
 				setOAuthLoading(true);
@@ -78,7 +78,7 @@ export function AuthOptions({
 
 			} catch (e: any) {
 				console.error(e);
-				setOAuthError(e.message);
+				setOAuthError(parseAuthError(e));
 
 			} finally {
 				setOAuthLoading(false);
@@ -111,7 +111,7 @@ export function AuthOptions({
 								<input onChange={handlePasswordChange} type="password" name="password" placeholder="Password" className="flex-grow p-1.5 text-sm overflow-hidden rounded text-ellipsis border border-gray-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-gray-400" />
 								<button className="w-full @sm:w-auto bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50 enabled:hover:bg-blue-700 dark:bg-blue-600 dark:enabled:hover:bg-blue-700 text-white text-sm font-semibold py-1.5 px-3 rounded transition whitespace-nowrap" onClick={signInWithEmailAndPassword} disabled={emailAndPasswordLoading}>Sign-in</button>
 							</form>
-							{(emailAndPasswordError) && <div className="mt-1.5 bg-red-100 dark:bg-red-900/30 rounded p-1.5 text-red-900 dark:text-red-200 text-xs border border-red-200 dark:border-red-800">{emailAndPasswordError}</div>}
+							<AuthErrorMessage error={emailAndPasswordError} />
 						</div>
 					: null}
 
@@ -132,7 +132,7 @@ export function AuthOptions({
 										</button>
 									))}
 								</div>
-								{(oAuthError) && <div className="mt-1.5 bg-red-100 dark:bg-red-900/30 rounded p-1.5 text-red-900 dark:text-red-200 text-xs border border-red-200 dark:border-red-800">{oAuthError}</div>}
+								<AuthErrorMessage error={oAuthError} />
 							</div>
 						</>
 					: null}
@@ -149,7 +149,7 @@ export function AuthOptions({
 								>
 									Sign-in Anonymously
 								</button>
-								{(anonymousError) && <div className="mt-1.5 bg-red-100 dark:bg-red-900/30 rounded p-1.5 text-red-900 dark:text-red-200 text-xs border border-red-200 dark:border-red-800">{anonymousError}</div>}
+								<AuthErrorMessage error={anonymousError} />
 							</div>
 						</>
 					: null}
@@ -168,6 +168,90 @@ export function AuthOptions({
 					Clear
 				</button>
 			</div>
+		</div>
+	);
+}
+
+/** Shape stored in the three sign-in error states. `null` ⇒ no error. */
+type AuthErrorState = {
+	message: string;
+	banDetails?: { reason?: string | null; until?: string | Date | null };
+} | null;
+
+/**
+ * Translate an SDK rejection into a render-ready error object. Handles
+ * three rejection shapes the SDK currently produces:
+ *
+ *  - `ServerError` (email/password, anonymous): structured data on
+ *    `e.data`, machine code on `e.message`.
+ *  - OAuth Error with attached `code`/`reason`/`until` from the
+ *    postMessage payload (after the recent SDK change).
+ *  - Bare string (older SDK builds — fall through gracefully).
+ */
+function parseAuthError(e: any): AuthErrorState {
+	const code = e?.code
+		?? (typeof e?.message === 'string' ? e.message : undefined)
+		?? (typeof e === 'string' ? e : undefined);
+	const message = humanizeAuthError(typeof code === 'string' ? code : undefined);
+
+	// Ban details can live on either the Error itself (OAuth path) or
+	// the ServerError.data envelope (email/password path).
+	const candidate = (typeof e?.reason !== 'undefined' || typeof e?.until !== 'undefined')
+		? e
+		: e?.data;
+	const isBanned = code === 'banned' || candidate?.error === 'banned';
+	const banDetails = isBanned
+		? { reason: candidate?.reason ?? null, until: candidate?.until ?? null }
+		: undefined;
+
+	return { message, banDetails };
+}
+
+/**
+ * Translate the server's machine-readable error codes into a sentence
+ * the operator/player can read. Unknown codes fall through as-is so
+ * custom backends still surface something.
+ */
+function humanizeAuthError(code: string | undefined | null): string {
+	if (!code) { return 'Sign-in failed.'; }
+	switch (code) {
+		case 'banned':                return 'Your account is banned.';
+		case 'invalid_credentials':   return 'Invalid email or password.';
+		case 'email_already_in_use':  return 'Email already in use.';
+		case 'email_malformed':       return 'Invalid email address.';
+		case 'password_too_short':    return 'Password is too short.';
+		case 'cancelled':             return 'Sign-in cancelled.';
+		default:                      return code;
+	}
+}
+
+/**
+ * Render the `until` value from the banned payload in the viewer's
+ * locale. Accepts ISO strings (HTTP wire format) and Date instances.
+ * Year 9999 is the service's "permanent" sentinel — say so
+ * explicitly rather than dumping a useless date string.
+ */
+function formatUntil(value: string | Date): string {
+	const d = value instanceof Date ? value : new Date(value);
+	if (Number.isNaN(d.getTime())) { return String(value); }
+	if (d.getUTCFullYear() >= 9999) { return 'permanent'; }
+	return d.toLocaleString();
+}
+
+/** Shared red-tinted error block. `null` renders nothing. */
+function AuthErrorMessage({ error }: { error: AuthErrorState }) {
+	if (!error) { return null; }
+	const { message, banDetails } = error;
+	const hasBanDetails = banDetails && (banDetails.reason || banDetails.until);
+	return (
+		<div className="mt-1.5 bg-red-100 dark:bg-red-900/30 rounded p-1.5 text-red-900 dark:text-red-200 text-xs border border-red-200 dark:border-red-800">
+			<div>{message}</div>
+			{hasBanDetails && (
+				<div className="mt-1 space-y-0.5 opacity-80">
+					{banDetails!.reason && <div>Reason: {banDetails!.reason}</div>}
+					{banDetails!.until && <div>Until: {formatUntil(banDetails!.until)}</div>}
+				</div>
+			)}
 		</div>
 	);
 }

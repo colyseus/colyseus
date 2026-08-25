@@ -31,25 +31,29 @@ export interface LobbyOptions {
   filter?: FilterInput;
 }
 
+export type LobbyMessages = {
+  filter: (client: LobbyClient, filter: FilterInput) => void;
+};
+
 export class LobbyRoom<Metadata = any> extends Room {
   public rooms: IRoomCache<Metadata>[] = [];
   public unsubscribeLobby: () => void;
 
   public clientOptions: { [sessionId: string]: LobbyOptions } = {};
 
-  messages = {
-    filter: (client: LobbyClient, filter: FilterInput) => {
+  declare messages: LobbyMessages;
+
+  public async onCreate(options: any) {
+    // prevent LobbyRoom to notify itself
+    this['_listing'].unlisted = true;
+
+    this.onMessage('filter', (client, filter) => {
       const clientOptions = this.clientOptions[client.sessionId];
       if (!clientOptions) { return; }
 
       clientOptions.filter = filter;
       client.send('rooms', this.filterItemsForClient(clientOptions));
-    }
-  }
-
-  public async onCreate(options: any) {
-    // prevent LobbyRoom to notify itself
-    this['_listing'].unlisted = true;
+    });
 
     this.unsubscribeLobby = await subscribeLobby((roomId, data) => {
       const roomIndex = this.rooms.findIndex((room) => room.roomId === roomId);

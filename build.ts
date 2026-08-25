@@ -109,13 +109,15 @@ async function main() {
         emitDeclarationOnly: true,
         resolveJsonModule: true,
         skipLibCheck: true,
+        // TS 6.0 defaults `strict` to true; keep .d.ts emit non-strict as
+        // before — the project's tsconfig still governs typechecking in CI.
+        strict: false,
         // module: ts.ModuleKind.CommonJS,
         module: ts.ModuleKind.NodeNext,
         moduleResolution: ts.ModuleResolutionKind.NodeNext,
         target: ts.ScriptTarget.ESNext,
         lib: ["lib.esnext.d.ts", "lib.dom.d.ts"],
         outDir: outdir,
-        downlevelIteration: true, // (redis-driver)
         esModuleInterop: true,
         experimentalDecorators: true,
         allowImportingTsExtensions: true,
@@ -147,6 +149,14 @@ async function main() {
       sourcemap: "external",
       platform: "node",
       outExtension: { '.js': '.cjs', },
+      // `import.meta` has no CJS equivalent — esbuild stubs it to `{}`, so lower
+      // it to the per-file CJS values instead of emitting `undefined`.
+      define: {
+        'import.meta.url': '__cjsImportMetaUrl',
+        'import.meta.dirname': '__dirname',
+        'import.meta.filename': '__filename',
+      },
+      banner: { js: "const __cjsImportMetaUrl = require('node:url').pathToFileURL(__filename).href;" },
       plugins: [{
         name: 'add-cjs',
         setup(build) {

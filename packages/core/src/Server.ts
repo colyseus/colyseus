@@ -11,10 +11,10 @@ import { Deferred, registerGracefulShutdown, dynamicImport, type Type } from './
 
 import type { Presence } from "./presence/Presence.ts";
 
-import { setTransport, Transport } from './Transport.ts';
+import { getTransport, setTransport, Transport } from './Transport.ts';
 import { logger, setLogger } from './Logger.ts';
 import { setDevMode, isDevMode } from './utils/DevMode.ts';
-import { type Router, bindRouterToTransport } from './router/index.ts';
+import { type Router, bindRouterToTransport, createRouter } from './router/index.ts';
 import { prereadRequestBodies } from './router/node.ts';
 import { type SDKTypes as SharedSDKTypes } from '@colyseus/shared-types';
 import { getDefaultRouter } from './router/default_routes.ts';
@@ -32,6 +32,29 @@ export type ServerOptions = {
    * This is useful for example to connect into a database or other services before the server listens.
    */
   beforeListen?: () => Promise<void> | void,
+
+  /**
+   * Booted before `matchMaker.accept()`. Structural so `@colyseus/core` keeps
+   * no runtime dep on `@colyseus/database` — any `{ boot(): Promise<void> }`
+   * works. The optional `applyRouterDefaults` is invoked after boot with the
+   * user's router so the database can contribute endpoints (e.g. auth routes).
+   */
+  database?: {
+    boot(): Promise<void>;
+    applyRouterDefaults?(router: Router): Router | Promise<Router>;
+  },
+
+  /**
+   * Mount `@colyseus/auth` routes into the router. Pass an options object
+   * (forwarded to `auth.endpoints(...)`) to wire it explicitly — useful when
+   * `database` is not in use. `false` disables auto-mounting even if a
+   * `database` is present and would have provided defaults.
+   */
+  auth?: false | {
+    settings?: Record<string, any>;
+    oauth?: boolean | { cookieSecret?: string };
+    prefix?: string;
+  },
 
   /**
    * Optional callback to configure Express routes.
@@ -102,7 +125,11 @@ export class Server<
 
   protected _onTransportReady = new Deferred<Transport>();
 
-  private _originalRoomOnMessage: typeof Room.prototype['_onMessage'] | null = null;
+  // Implicit default for callers that omit explicit Server reference — e.g.
+  // `playground()` reads `Server.current.router.endpoints` at request time.
+  // Last-construction wins; multi-server setups should reference instances
+  // explicitly.
+  static current: Server<any, any> | undefined;
 
   constructor(options: ServerOptions = {}) {
     const {
@@ -114,6 +141,8 @@ export class Server<
 
     this.options = options;
     this.greet = greet;
+
+    (Server as { current: Server<any, any> | undefined }).current = this as Server<any, any>;
 
     this.attach(options);
 
@@ -141,14 +170,8 @@ export class Server<
 
   public async attach(options: ServerOptions) {
     this.transport = options.transport || await this.getDefaultTransport(options);
-
-    // Initialize Express if callback is provided
-    if (options.express && this.transport.getExpressApp) {
-      const expressApp = await this.transport.getExpressApp();
-      await options.express(expressApp);
-    }
-
-    // Resolve the promise when the transport is ready
+    // `options.express` runs in `listen()` after `database.boot()` so user
+    // code reading `database.auth.settings` etc. finds services instantiated.
     this._onTransportReady.resolve(this.transport);
   }
 
@@ -161,9 +184,7 @@ export class Server<
    * @param listeningListener
    */
   public async listen(port: number | string, hostname?: string, backlog?: number, listeningListener?: Function) {
-    if (this.options.beforeListen) {
-      await this.options.beforeListen();
-    }
+    await this._bootServices();
 
     //
     // if Colyseus Cloud is detected, use @colyseus/tools to listen
@@ -254,9 +275,7 @@ export class Server<
    * ```
    */
   public async serverless(): Promise<HttpServer> {
-    if (this.options.beforeListen) {
-      await this.options.beforeListen();
-    }
+    await this._bootServices();
 
     // transport (and its HTTP server) must be ready before binding routes
     await this._onTransportReady;
@@ -363,7 +382,7 @@ export class Server<
       // this is going to lock all rooms and wait for them to be disposed
       await matchMaker.gracefullyShutdown();
 
-      this.transport.shutdown();
+      this.transport?.shutdown();
       this.presence?.shutdown();
       await this.driver?.shutdown();
 
@@ -382,29 +401,19 @@ export class Server<
 
   /**
    * Add simulated latency between client and server.
+   *
+   * May be called at any time — before or after `listen()`. Also available
+   * via the `COLYSEUS_LATENCY` environment variable (round-trip ms), which
+   * overrides calls made before the server boots.
+   *
    * @param milliseconds round trip latency in milliseconds.
    */
   public simulateLatency(milliseconds: number) {
-    if (milliseconds > 0) {
-      logger.warn(`📶️❗ Colyseus latency simulation enabled → ${milliseconds}ms latency for round trip.`);
-    } else {
-      logger.warn(`📶️❗ Colyseus latency simulation disabled.`);
-    }
-
-    const halfwayMS = (milliseconds / 2);
-    this.transport.simulateLatency(halfwayMS);
-
-    if (this._originalRoomOnMessage == null) {
-      this._originalRoomOnMessage = Room.prototype['_onMessage'];
-    }
-
-    const originalOnMessage = this._originalRoomOnMessage;
-
-    Room.prototype['_onMessage'] = milliseconds <= Number.EPSILON ? originalOnMessage : function (this: Room, client, buffer) {
-      // uWebSockets.js: duplicate buffer because it is cleared at native layer before the timeout.
-      const cachedBuffer = Buffer.from(buffer);
-      setTimeout(() => originalOnMessage.call(this, client, cachedBuffer), halfwayMS);
-    };
+    // transport may still be resolving (constructor's attach() imports the default one)
+    this._onTransportReady.then(
+      (transport) => applySimulatedLatency(transport, milliseconds),
+      () => {/* missing-transport error already surfaces via attach()/listen() */},
+    );
   }
 
   /**
@@ -417,6 +426,57 @@ export class Server<
 
   public onBeforeShutdown(callback: () => void | Promise<any>) {
     this.onBeforeShutdownCallback = callback;
+  }
+
+  // Boot sequence shared by listen() and serverless(): user `beforeListen`
+  // hook, database boot, framework router defaults (auth/db endpoints), then
+  // the express app. serverless() needs this too — its exported server still
+  // serves the express callback and auth/database routes.
+  private async _bootServices(): Promise<void> {
+    const { beforeListen, database, express } = this.options;
+
+    // boot runs after module evaluation, so the env var wins over
+    // simulateLatency() calls made at the top level of user code
+    const envLatency = parseLatencyEnv();
+    if (envLatency !== undefined) { this.simulateLatency(envLatency); }
+
+    if (beforeListen) { await beforeListen(); }
+    if (database) { await database.boot(); }
+
+    await this._applyRouterDefaults();
+
+    if (express) {
+      await this._onTransportReady;
+      if (this.transport.getExpressApp) {
+        const expressApp = await this.transport.getExpressApp();
+        await express(expressApp);
+      }
+    }
+  }
+
+  // Extend the user's router with framework-contributed endpoints. An explicit
+  // `auth` option wins over the database's `applyRouterDefaults` so a non-DB
+  // setup can still auto-mount @colyseus/auth, and a DB user can opt out.
+  private async _applyRouterDefaults(): Promise<void> {
+    const { auth, database } = this.options;
+    const wantsAuth = auth !== undefined && auth !== false;
+    const wantsDatabase = auth === undefined && !!database?.applyRouterDefaults;
+    if (!wantsAuth && !wantsDatabase) { return; }
+
+    // Boot an empty router if the user didn't pass `routes` — the framework's
+    // default routes get layered on later in the `transport.listen()` callback.
+    this.router ??= createRouter({}) as unknown as Routes;
+
+    if (wantsAuth) {
+      const authMod: any = await dynamicImport('@colyseus/auth').catch(() => undefined);
+      const endpointsFn = authMod?.auth?.endpoints ?? authMod?.default?.auth?.endpoints;
+      if (typeof endpointsFn === 'function') {
+        this.router = (this.router as Router).extend(endpointsFn(auth)) as Routes;
+      }
+    } else {
+      const updated = await database!.applyRouterDefaults!(this.router as Router);
+      if (updated) { this.router = updated as Routes; }
+    }
   }
 
   protected async getDefaultTransport(options: any): Promise<Transport> {
@@ -436,6 +496,55 @@ export class Server<
 
   protected onBeforeShutdownCallback: () => void | Promise<any> =
     () => Promise.resolve()
+}
+
+let _originalRoomOnMessage: typeof Room.prototype['_onMessage'] | null = null;
+
+/**
+ * Applies both halves of the round-trip latency simulation: delays the
+ * transport's outgoing messages and the Room's incoming message handling.
+ *
+ * Prefer `server.simulateLatency()` — this is the shared core behind it, the
+ * dev-mode `defineServer()` object and the `COLYSEUS_LATENCY` env var, where
+ * no `Server` instance (or transport, yet) may exist.
+ */
+export function applySimulatedLatency(transport: Transport | undefined, milliseconds: number) {
+  if (milliseconds > 0) {
+    logger.warn(`📶️❗ Colyseus latency simulation enabled → ${milliseconds}ms latency for round trip.`);
+  } else {
+    logger.warn(`📶️❗ Colyseus latency simulation disabled.`);
+  }
+
+  const halfwayMS = (milliseconds / 2);
+  transport?.simulateLatency(halfwayMS);
+
+  if (_originalRoomOnMessage == null) {
+    _originalRoomOnMessage = Room.prototype['_onMessage'];
+  }
+
+  const originalOnMessage = _originalRoomOnMessage;
+
+  Room.prototype['_onMessage'] = milliseconds <= Number.EPSILON ? originalOnMessage : function (this: Room, client, buffer) {
+    // uWebSockets.js: duplicate buffer because it is cleared at native layer before the timeout.
+    const cachedBuffer = Buffer.from(buffer);
+    setTimeout(() => originalOnMessage.call(this, client, cachedBuffer), halfwayMS);
+  };
+}
+
+/**
+ * Reads the `COLYSEUS_LATENCY` environment variable (round-trip milliseconds).
+ * Returns `undefined` when absent or empty; a non-numeric value warns and is ignored.
+ */
+export function parseLatencyEnv(): number | undefined {
+  const value = process.env.COLYSEUS_LATENCY;
+  if (value === undefined || value === '') { return undefined; }
+
+  const milliseconds = Number(value);
+  if (isNaN(milliseconds)) {
+    logger.warn(`📶️❗ Ignoring COLYSEUS_LATENCY: expected a number of milliseconds, got ${JSON.stringify(value)}.`);
+    return undefined;
+  }
+  return milliseconds;
 }
 
 export type RoomDefinitions = Record<string, RegisteredHandler | Type<Room>>;
@@ -495,6 +604,8 @@ export function defineServer<
       options: serverOptions,
       router: routes,
       '~rooms': rooms,
+      // the vite plugin registers the transport before importing user code
+      simulateLatency: (milliseconds: number) => applySimulatedLatency(getTransport(), milliseconds),
     } as unknown as Server<T, R>;
   }
 

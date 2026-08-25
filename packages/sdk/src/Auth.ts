@@ -165,7 +165,17 @@ export class Auth<UserData = any> {
                 window.removeEventListener("message", onMessage);
 
                 if (event.data.error !== undefined) {
-                    reject(event.data.error);
+                    // Reject with an Error so consumers' `catch (e) {
+                    // ... e.message }` reads as expected. Attach the
+                    // structured payload (reason / until / etc.) as
+                    // properties so callers that want to render a
+                    // richer message (e.g. "banned until X for Y")
+                    // can pull them off without re-parsing.
+                    const err: any = new Error(String(event.data.error));
+                    err.code = event.data.error;
+                    if (event.data.reason !== undefined) { err.reason = event.data.reason; }
+                    if (event.data.until !== undefined) { err.until = event.data.until; }
+                    reject(err);
 
                 } else {
                     resolve(event.data);

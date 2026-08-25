@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/loadtest",
-  "version": "0.17.8",
+  "version": "0.18.1",
   "description": "Utility tool for load testing Colyseus.",
   "type": "module",
   "exports": {
@@ -37,6 +37,9 @@
     "url": "git://github.com/colyseus/colyseus.git"
   },
   "homepage": "https://colyseus.io/",
+  "engines": {
+    "node": ">= 22.x"
+  },
   "keywords": [
     "colyseus",
     "load",
@@ -53,11 +56,14 @@
     "@colyseus/sdk": "workspace:^",
     "blessed": "^0.1.81",
     "minimist": "^1.2.5",
-    "typescript": "^5.9.3",
+    "typescript": "^6.0.3",
     "ws": "^8.19.0"
   },
   "devDependencies": {
     "@types/blessed": "^0.1.10"
   },
-  "gitHead": "c45b410e99eadffff4b74e701339992e2faa15f8"
+  "gitHead": "c45b410e99eadffff4b74e701339992e2faa15f8",
+  "publishConfig": {
+    "tag": "next"
+  }
 }

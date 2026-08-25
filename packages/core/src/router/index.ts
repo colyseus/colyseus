@@ -1,6 +1,9 @@
 import type express from "express";
 import type { IncomingMessage, ServerResponse } from "http";
-import { type Endpoint, type Router, type RouterConfig, createRouter as createBetterCallRouter, createEndpoint } from "@colyseus/better-call";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { createHash, timingSafeEqual } from "node:crypto";
+import { type Endpoint, type Router, type RouterConfig, createRouter as createBetterCallRouter, createEndpoint, createMiddleware, APIError } from "@colyseus/better-call";
 import { toNodeHandler, getRequest, setResponse } from "@colyseus/better-call/node";
 import { Transport } from "../Transport.ts";
 import { controller } from "../matchmaker/controller.ts";
@@ -141,19 +144,198 @@ function expressRouterStack(expressApp: express.Application): any[] {
   }
 }
 
-/**
- * Do not use this directly. This is used internally by `@colyseus/playground`.
- * TODO: refactor. Avoid using globals.
- * @internal
- */
-export let __globalEndpoints: Record<string, Endpoint> = {};
-
 export function createRouter<
   E extends Record<string, Endpoint>,
   Config extends RouterConfig
 >(endpoints: E, config: Config = {} as Config) {
-  // TODO: refactor. Avoid using globals.
-  __globalEndpoints = endpoints;
+  const onError = config?.onError;
+  return createBetterCallRouter({ ...endpoints }, {
+    // better-call's /api/reference page dumps the full API surface
+    // unauthenticated — opt back in by passing `openapi` explicitly.
+    openapi: { disabled: true },
+    ...config,
+    // Otherwise a malformed body is a 500 plus a stack trace on stderr: log
+    // noise any anonymous client can trigger at will. Matched on the message
+    // because `onError` receives no request context to test against.
+    onError: async (error: unknown) => (error instanceof SyntaxError && error.message.includes('JSON'))
+      ? Response.json({ error: 'malformed request body' }, { status: 400 })
+      : await onError?.(error),
+  });
+}
 
-  return createBetterCallRouter({ ...endpoints }, config);
+export interface BasicAuthOptions {
+  /** username → password. The common static case. */
+  users?: Record<string, string>;
+  /** Custom validator (e.g. DB-backed). Takes precedence over `users`. */
+  validate?: (username: string, password: string) => boolean | Promise<boolean>;
+  /** Realm shown in the browser prompt. Default 'Restricted'. */
+  realm?: string;
+}
+
+/**
+ * HTTP Basic Auth middleware. Drop into any endpoint's `use:` slot to gate
+ * it behind a browser credentials prompt:
+ *
+ *   playground({ use: [basicAuth({ users: { admin: 's3cret' } })] })
+ */
+export function basicAuth(opts: BasicAuthOptions) {
+  const { users, validate } = opts;
+  if (!users && !validate) {
+    throw new Error('[basicAuth] provide `users` or `validate`');
+  }
+  // Realm is interpolated into a header — strip `"` so it can't break out.
+  const challenge = `Basic realm="${(opts.realm ?? 'Restricted').replace(/"/g, '')}", charset="UTF-8"`;
+
+  return createMiddleware(async (ctx) => {
+    const creds = parseBasicHeader(ctx.getHeader('authorization'));
+    const ok = !!creds && (validate
+      ? await validate(creds.username, creds.password)
+      : staticCheck(users!, creds.username, creds.password));
+    if (!ok) {
+      throw new APIError(401, { message: 'authentication required' }, { 'WWW-Authenticate': challenge });
+    }
+  });
+}
+
+function parseBasicHeader(header: string | null | undefined) {
+  if (!header) { return null; }
+  const sep = header.indexOf(' ');
+  if (sep < 0 || header.slice(0, sep).toLowerCase() !== 'basic') { return null; }
+  let decoded: string;
+  try { decoded = Buffer.from(header.slice(sep + 1), 'base64').toString('utf8'); } catch { return null; }
+  const colon = decoded.indexOf(':');
+  if (colon < 0) { return null; }
+  return { username: decoded.slice(0, colon), password: decoded.slice(colon + 1) };
+}
+
+function staticCheck(users: Record<string, string>, username: string, password: string): boolean {
+  const expected = Object.prototype.hasOwnProperty.call(users, username) ? users[username] : undefined;
+  // Compare even for an unknown user so reject timing doesn't reveal which
+  // usernames exist.
+  return safeEqual(password, expected ?? '\0') && expected !== undefined;
+}
+
+// Hash both sides first: equalizes length (timingSafeEqual throws on a
+// length mismatch, which would itself leak the secret's length).
+function safeEqual(a: string, b: string): boolean {
+  return timingSafeEqual(
+    createHash('sha256').update(a).digest(),
+    createHash('sha256').update(b).digest(),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// dualModeEndpoints — shared express-compat layer for @colyseus/admin,
+// @colyseus/monitor, @colyseus/playground. Builds the two local routers
+// (specific = no catch-all, full = everything) and the matching node
+// handlers, then packages the express middleware so the return value works
+// both as `{...spread}` into createRouter AND as `app.use("/", x)` middleware.
+// ---------------------------------------------------------------------------
+
+export type ExpressMiddleware = (
+  req: IncomingMessage,
+  res: ServerResponse,
+  next: (err?: any) => void,
+) => void;
+
+export type NodeHandler = (req: IncomingMessage, res: ServerResponse) => Promise<void>;
+
+export interface DualModeHelpers {
+  specificRouter: Router;
+  specificHandler: NodeHandler;
+  fullRouter: Router;
+  fullHandler: NodeHandler;
+}
+
+export function dualModeEndpoints<E extends Record<string, Endpoint>>(
+  endpoints: E,
+  opts: {
+    /** Key in `endpoints` whose path is a catch-all. Excluded from `specificRouter` so it doesn't eat fall-through decisions. */
+    catchAllKey?: keyof E;
+    /** Endpoint-path prefix baked into `endpoints` (`''`, `'/monitor'`). Used by the default middleware to rebase path mounts. */
+    prefix?: string;
+    /** SPA dist dir — the default middleware dispatches catch-all requests only for files that exist here. */
+    staticDir?: string;
+    /** Build a custom express middleware given the pre-built routers + node handlers. Omit for the default SPA-panel middleware. */
+    buildMiddleware?: (helpers: DualModeHelpers) => ExpressMiddleware;
+  },
+): ExpressMiddleware & E {
+  const fullRouter = createRouter(endpoints);
+  const fullHandler = toNodeHandler(fullRouter.handler) as NodeHandler;
+
+  const specificEndpoints = opts.catchAllKey
+    ? Object.fromEntries(
+        Object.entries(endpoints).filter(([k]) => k !== opts.catchAllKey),
+      ) as Partial<E>
+    : endpoints;
+  const specificRouter = createRouter(specificEndpoints as E);
+  const specificHandler = toNodeHandler(specificRouter.handler) as NodeHandler;
+
+  const buildMiddleware = opts.buildMiddleware ?? panelMiddleware(opts.prefix ?? '', opts.staticDir);
+  const middleware = buildMiddleware({
+    specificRouter, specificHandler, fullRouter, fullHandler,
+  });
+  return Object.assign(middleware, endpoints) as ExpressMiddleware & E;
+}
+
+/**
+ * Default express middleware for a single-prefix SPA panel (monitor,
+ * playground). Express and the endpoint map use different coordinates: a path
+ * mount strips its prefix into `req.baseUrl`, while the endpoints keep the
+ * configured `prefix` baked into their paths. This rebases every request onto
+ * the endpoint namespace, so the panel works at any mount path — `prefix` only
+ * matters in router mode and at root mounts.
+ */
+function panelMiddleware(prefix: string, staticDir?: string) {
+  const staticRoot = staticDir && path.resolve(staticDir);
+  return ({ specificRouter, specificHandler, fullHandler }: DualModeHelpers): ExpressMiddleware =>
+    (req, res, next) => {
+      const r = req as IncomingMessage & { baseUrl?: string; originalUrl?: string };
+      const raw = r.url ?? '';
+      const q = raw.indexOf('?');
+      const url = q < 0 ? raw : raw.slice(0, q);
+      const query = q < 0 ? '' : raw.slice(q);
+
+      // Path mounts arrive stripped (`req.url` is mount-relative); root and
+      // pathless mounts arrive unstripped and already match the endpoints.
+      const dispatchPath = r.baseUrl ? prefix + url : url;
+
+      // Canonicalize the index: the SPA references its assets relatively, so
+      // they only resolve from the trailing-slash URL. The browser's address
+      // is originalUrl — 302 (not 301: browsers cache 301s across remounts).
+      if (dispatchPath === prefix || dispatchPath === `${prefix}/`) {
+        const original = (r.originalUrl ?? raw).split('?')[0]!;
+        if (r.method === 'GET' && !original.endsWith('/')) {
+          res.writeHead(302, { location: `${original}/${query}` });
+          res.end();
+          return;
+        }
+      }
+
+      const dispatch = (handler: NodeHandler) => {
+        // better-call's getRequest resolves the path as baseUrl + url
+        const wrapped = Object.create(req, {
+          url: { value: dispatchPath + query, enumerable: true, configurable: true },
+          baseUrl: { value: '', enumerable: true, configurable: true },
+          originalUrl: { value: dispatchPath + query, enumerable: true, configurable: true },
+        });
+        handler(wrapped as any, res).catch(next);
+      };
+
+      const route = specificRouter.findRoute(r.method ?? 'GET', dispatchPath);
+      // rou3 normalizes trailing slashes in findRoute but processRequest
+      // exact-matches — only trust the hit when the slashes agree.
+      if (route && (!route.data?.path?.endsWith('/') || dispatchPath.endsWith('/'))) {
+        return dispatch(specificHandler);
+      }
+
+      // Asset request — only delegate when the file exists on disk, so the
+      // catch-all's SPA fallback can't mask sibling express routes.
+      if (r.method !== 'GET' || !staticRoot || !dispatchPath.startsWith(prefix)) { return next(); }
+      const rel = dispatchPath.slice(prefix.length).replace(/^\/+/, '');
+      if (!rel || rel.includes('..')) { return next(); }
+      const filePath = path.resolve(staticRoot, rel);
+      if (!filePath.startsWith(staticRoot + path.sep)) { return next(); }
+      fs.stat(filePath).then((stat) => stat.isFile() ? dispatch(fullHandler) : next()).catch(() => next());
+    };
 }

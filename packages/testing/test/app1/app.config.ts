@@ -8,6 +8,7 @@ import { WebSocketTransport } from "@colyseus/ws-transport";
 import { RoomWithoutState } from "./RoomWithoutState.ts";
 import { RoomWithState } from "./RoomWithState.ts";
 import { RoomWithSimulation } from "./RoomWithSimulation.ts";
+import { RoomWithFixedTimestep } from "./RoomWithFixedTimestep.ts";
 import { auth, Hash } from "@colyseus/auth";
 
 export default config({
@@ -15,6 +16,7 @@ export default config({
     room_without_state: defineRoom(RoomWithoutState),
     room_with_state: defineRoom(RoomWithState),
     room_with_simulation: defineRoom(RoomWithSimulation),
+    room_with_fixed_timestep: defineRoom(RoomWithFixedTimestep),
   },
 
   options: { greet: false, },

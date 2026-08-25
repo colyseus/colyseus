@@ -4,9 +4,9 @@ import { Http3Server } from '@fails-components/webtransport';
 import { URL } from 'url';
 import { decode, type Iterator } from '@colyseus/schema';
 
-import { matchMaker, Protocol, Transport, debugAndPrintError, spliceOne, getBearerToken, CloseCode, connectClientToRoom, isDevMode } from '@colyseus/core';
+import { matchMaker, Protocol, Transport, createAuthContext, debugAndPrintError, spliceOne, CloseCode, connectClientToRoom, isDevMode } from '@colyseus/core';
 import { H3Client } from './H3Client.ts';
-import { generateWebTransportCertificate } from './utils/mkcert.ts';
+import { resolveDevCertificate } from './utils/devCert.ts';
 import type { Application, Request, Response } from 'express';
 
 export type CertLike = string;
@@ -33,12 +33,18 @@ export class H3Transport extends Transport {
   private options: TransportOptions;
   private isListening = false;
 
-  private _originalSend: any = null;
+  private _originalRawSend: typeof H3Client.prototype.raw | null = null;
+  private _originalRawUnreliable: typeof H3Client.prototype.rawUnreliable | null = null;
 
   constructor(options: TransportOptions) {
     super();
 
     this.options = options;
+
+    // sessions arrive already established, and their headers aren't exposed to us
+    if ('beforeUpgrade' in options) {
+      console.warn("H3Transport: 'beforeUpgrade' is not supported (WebTransport has no upgrade handshake).");
+    }
 
     // local proxy (frontend)
     if (options.localProxy) {
@@ -105,20 +111,14 @@ export class H3Transport extends Transport {
     };
 
     if (!this.options.cert || !this.options.key) {
-      //
-      // TODO: cache certificate on filesystem for 10 days
-      //
-      generateWebTransportCertificate([
-        { shortName: 'C', value: 'BR' },
-        { shortName: 'ST', value: 'Rio Grande do Sul' },
-        { shortName: 'L', value: 'Sapiranga' },
-        { shortName: 'O', value: 'Colyseus WebTransport' },
-        { shortName: 'CN', value: hostname },
-      ], {
-        days: 10,
-      }).then((generated) => {
-        const fingerprint = generated.fingerprint.split(":").map((hex) => parseInt(hex, 16));
-        createServers(generated.cert, generated.private, fingerprint);
+      // Dev: prefer a browser-TRUSTED cert via mkcert (seamless — no flags, no
+      // fingerprint), falling back to a self-signed cert pinned by fingerprint.
+      resolveDevCertificate(hostname).then(({ cert, key, fingerprint }) => {
+        // Surface the fingerprint ONLY for the self-signed fallback, so the core
+        // matchmake route hands it to clients for serverCertificateHashes pinning.
+        // A trusted (mkcert) cert needs none — the browser validates it normally.
+        if (fingerprint) { this.fingerprint = fingerprint; }
+        createServers(cert, key, fingerprint);
       });
 
     } else {
@@ -136,15 +136,23 @@ export class H3Transport extends Transport {
   }
 
   public simulateLatency(milliseconds: number) {
-    // if (this._originalSend == null) {
-    //   this._originalSend = WebSocket.prototype.send;
-    // }
+    if (this._originalRawSend == null) {
+      this._originalRawSend = H3Client.prototype.raw;
+      this._originalRawUnreliable = H3Client.prototype.rawUnreliable;
+    }
 
-    // const originalSend = this._originalSend;
+    const originalRaw = this._originalRawSend;
+    const originalRawUnreliable = this._originalRawUnreliable!;
+    const delayed = (original: (...args: any[]) => void) => function (this: H3Client, ...args: any[]) {
+      let [buf, ...rest] = args;
+      buf = Buffer.from(buf); // the encoder may reuse the buffer before the timeout
+      setTimeout(() => original.apply(this, [buf, ...rest]), milliseconds);
+    };
 
-    // WebSocket.prototype.send = milliseconds <= Number.EPSILON ? originalSend : function (...args: any[]) {
-    //   setTimeout(() => originalSend.apply(this, args), milliseconds);
-    // };
+    // patch the prototype, not instances: `rawUnreliable` presence on it is the
+    // datagram capability check
+    H3Client.prototype.raw = milliseconds <= Number.EPSILON ? originalRaw : delayed(originalRaw);
+    H3Client.prototype.rawUnreliable = milliseconds <= Number.EPSILON ? originalRawUnreliable : delayed(originalRawUnreliable);
   }
 
   protected registerMatchMakeRoutes(fingerprint?: number[]) {
@@ -162,10 +170,12 @@ export class H3Transport extends Transport {
       const roomName = matchedParams[matchmakeIndex + 2] || '';
 
 
+      const requestHeaders = new Headers(req.headers as Record<string, string>);
+
       const headers = Object.assign(
         {},
         matchMaker.controller.DEFAULT_CORS_HEADERS,
-        matchMaker.controller.getCorsHeaders.call(undefined, new Headers(req.headers as Record<string, string>))
+        matchMaker.controller.getCorsHeaders.call(undefined, requestHeaders)
       );
       headers['Content-Type'] = 'application/json';
       res.writeHead(200, headers);
@@ -176,11 +186,11 @@ export class H3Transport extends Transport {
           method,
           roomName,
           clientOptions,
-          {
-            token: (req.query['_authToken'] as string) ?? getBearerToken(req.headers['authorization']),
-            headers: new Headers(req.headers as Record<string, string>),
-            ip: req.headers['x-real-ip'] ?? req.ips
-          },
+          createAuthContext({
+            headers: requestHeaders,
+            token: req.query['_authToken'] as string,
+            remoteAddress: req.ip,
+          }),
         );
 
         if (fingerprint) {

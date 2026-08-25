@@ -15,7 +15,7 @@
                 "inlinedLibraries": [
                     "node:async_hooks",
                     "events",
-                    "@colyseus/msgpackr",
+                    "msgpackr",
                     "@colyseus/schema",
                     "@colyseus/better-call",
                     "@colyseus/timer",

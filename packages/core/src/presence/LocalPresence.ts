@@ -10,12 +10,13 @@ type Callback = (...args: any[]) => void;
 export class LocalPresence implements Presence {
     public subscriptions: EventEmitter = new EventEmitter();
 
-    public data: {[roomName: string]: string[]} = {};
-    public hash: {[roomName: string]: {[key: string]: string}} = {};
+    // null-proto: keys are caller-controlled, must never resolve through Object.prototype
+    public data: {[roomName: string]: string[]} = Object.create(null);
+    public hash: {[roomName: string]: {[key: string]: string}} = Object.create(null);
 
-    public keys: {[name: string]: string | number} = {};
+    public keys: {[name: string]: string | number} = Object.create(null);
 
-    private timeouts: {[name: string]: NodeJS.Timeout} = {};
+    private timeouts: {[name: string]: NodeJS.Timeout} = Object.create(null);
 
     constructor() {
       //
@@ -140,7 +141,7 @@ export class LocalPresence implements Presence {
     }
 
     public async sinter(...keys: string[]) {
-      const intersection: {[value: string]: number} = {};
+      const intersection: {[value: string]: number} = Object.create(null);
 
       for (let i = 0, l = keys.length; i < l; i++) {
         (await this.smembers(keys[i])).forEach((member) => {
@@ -161,13 +162,13 @@ export class LocalPresence implements Presence {
     }
 
     public hset(key: string, field: string, value: string) {
-        if (!this.hash[key]) { this.hash[key] = {}; }
+        if (!this.hash[key]) { this.hash[key] = Object.create(null); }
         this.hash[key][field] = value;
         return Promise.resolve(true);
     }
 
     public hincrby(key: string, field: string, incrBy: number) {
-        if (!this.hash[key]) { this.hash[key] = {}; }
+        if (!this.hash[key]) { this.hash[key] = Object.create(null); }
         let value = Number(this.hash[key][field] || '0');
         value += incrBy;
         this.hash[key][field] = value.toString();
@@ -175,7 +176,7 @@ export class LocalPresence implements Presence {
     }
 
     public hincrbyex(key: string, field: string, incrBy: number, expireInSeconds: number) {
-        if (!this.hash[key]) { this.hash[key] = {}; }
+        if (!this.hash[key]) { this.hash[key] = Object.create(null); }
         let value = Number(this.hash[key][field] || '0');
         value += incrBy;
         this.hash[key][field] = value.toString();
@@ -202,7 +203,7 @@ export class LocalPresence implements Presence {
     }
 
     public async hgetall(key: string) {
-        return this.hash[key] || {};
+        return { ...this.hash[key] }; // fresh plain object, like redis
     }
 
     public hdel(key: string, field: any) {

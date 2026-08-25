@@ -10,6 +10,7 @@ import { State, RoomWithState } from "./app1/RoomWithState.ts";
 import { JWT } from "@colyseus/auth";
 import { MapSchema } from "@colyseus/schema";
 import { RoomWithoutState } from "./app1/RoomWithoutState.ts";
+import { FixedState } from "./app1/RoomWithFixedTimestep.ts";
 
 describe("@colyseus/testing", () => {
   JWT.settings.secret = "secret";
@@ -52,8 +53,6 @@ describe("@colyseus/testing", () => {
     sdkRoom.onMessage("chat", ([sessionId, message]) =>
       console.log(sessionId, message));
 
-    // wait for next state
-    await room.waitForNextPatch();
     assert.deepStrictEqual({
       players: {
         [sdkRoom.sessionId]: {
@@ -68,6 +67,41 @@ describe("@colyseus/testing", () => {
 
     await sdkRoom.leave();
     sinon.assert.callCount(onLeaveSpy, 1);
+  });
+
+  it("connectTo() resolves with the state already applied", async () => {
+    const room = await colyseus.createRoom("room_with_state", {});
+    const sdkRoom = await colyseus.connectTo(room);
+
+    assert.deepStrictEqual({
+      players: { [sdkRoom.sessionId]: { playerNum: 1, score: 0 } }
+    }, sdkRoom.state.toJSON());
+  });
+
+  it("client.waitForInitialState() closes the same gap for sdk joins", async () => {
+    const sdkRoom = await colyseus.sdk.joinOrCreate("room_with_state");
+    await sdkRoom.waitForInitialState();
+
+    assert.deepStrictEqual({
+      players: { [sdkRoom.sessionId]: { playerNum: 1, score: 0 } }
+    }, sdkRoom.state.toJSON());
+  });
+
+  it("connectTo() does not hang on a room without state", async () => {
+    const room = await colyseus.createRoom("room_without_state", {});
+    const sdkRoom = await colyseus.connectTo(room);
+    assert.strictEqual(sdkRoom.sessionId, room.clients[0].sessionId);
+  });
+
+  it("client.waitForNextPatch()", async () => {
+    const room = await colyseus.createRoom("room_with_state", {});
+    const sdkRoom = await colyseus.connectTo(room);
+
+    const scoreBefore = sdkRoom.state.players.get(sdkRoom.sessionId).score;
+    room.state.players.get(sdkRoom.sessionId).score = scoreBefore + 10;
+
+    await sdkRoom.waitForNextPatch();
+    assert.strictEqual(scoreBefore + 10, sdkRoom.state.players.get(sdkRoom.sessionId).score);
   });
 
   it("room.waitForNextMessage()", async () => {
@@ -106,19 +140,42 @@ describe("@colyseus/testing", () => {
     assert.strictEqual(1, room.state.players.get(client1.sessionId).score);
   });
 
-  it("waitForNextSimulationTick()", async () => {
+  it("waitForNextTimestep()", async () => {
     const room = await colyseus.createRoom("room_with_simulation");
     const sdkRoom = await colyseus.connectTo(room);
 
     let currentTick = room.state.tick;
     for (let i = 0; i < 5; i++) {
-      await room.waitForNextSimulationTick();
+      await room.waitForNextTimestep();
 
       assert.strictEqual(++currentTick, room.state.tick);
     }
 
     await room.waitForNextPatch();
     assert.strictEqual(room.state.tick, sdkRoom.state.tick);
+  });
+
+  it("waitForNextTimestep() waits for a step to actually run", async () => {
+    const room = await colyseus.createRoom<FixedState>("room_with_fixed_timestep");
+
+    // Sleeping for one interval can land just before the next step fires and
+    // observe nothing at all; only hooking the step itself is a real signal.
+    for (let i = 0; i < 10; i++) {
+      const steps = room.state.steps;
+      await new Promise((resolve) => setTimeout(resolve, 0)); // land off the tick phase
+      await room.waitForNextTimestep();
+      assert.ok(room.state.steps > steps, `no step ran on iteration ${i}`);
+    }
+  });
+
+  it("waitForNextSimulationTick() still forwards (deprecated alias)", async () => {
+    const room = await colyseus.createRoom("room_with_simulation");
+    await colyseus.connectTo(room);
+
+    const currentTick = room.state.tick;
+    await room.waitForNextSimulationTick();
+
+    assert.strictEqual(currentTick + 1, room.state.tick);
   });
 
   it("should disconnect all connected clients after test is done", async () => {

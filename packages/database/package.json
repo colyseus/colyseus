@@ -1,0 +1,85 @@
+{
+  "name": "@colyseus/database",
+  "version": "0.18.1",
+  "type": "module",
+  "description": "Database-first game backend features for Colyseus (auth, configs, cloud saves)",
+  "input": "./src/index.ts",
+  "main": "./build/index.cjs",
+  "module": "./src/index.ts",
+  "typings": "./build/index.d.ts",
+  "exports": {
+    ".": {
+      "@source": "./src/index.ts",
+      "types": "./build/index.d.ts",
+      "import": "./build/index.mjs",
+      "require": "./build/index.cjs"
+    },
+    "./*": {
+      "@source": "./src/*.ts",
+      "types": "./build/*.d.ts",
+      "import": "./build/*.mjs",
+      "require": "./build/*.cjs"
+    }
+  },
+  "funding": "https://github.com/sponsors/endel",
+  "author": "Endel Dreyer",
+  "license": "MIT",
+  "keywords": [
+    "colyseus",
+    "database",
+    "auth",
+    "cloud-saves",
+    "game-backend",
+    "drizzle"
+  ],
+  "files": [
+    "build",
+    "src"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/colyseus/colyseus.git"
+  },
+  "homepage": "https://colyseus.io/",
+  "engines": {
+    "node": ">= 22.x"
+  },
+  "scripts": {
+    "test": "tsx --test test/**.test.ts",
+    "db:generate-pg": "tsx scripts/regen-migration.ts --dialect pg --schema ./src/schemas/pg.ts --out ./drizzle/pg",
+    "db:generate-sqlite": "tsx scripts/regen-migration.ts --dialect sqlite --schema ./src/schemas/sqlite.ts --out ./drizzle/sqlite",
+    "db:migrate-pg": "drizzle-kit migrate --config=drizzle.config.pg.ts",
+    "db:migrate-sqlite": "drizzle-kit migrate --config=drizzle.config.sqlite.ts",
+    "test:regen-fixture": "tsx scripts/regen-migration.ts --dialect sqlite --schema ./test/fixtures/custom-schema/schema.ts --out ./test/fixtures/custom-schema/migrations"
+  },
+  "dependencies": {
+    "@standard-schema/spec": "^1.0.0",
+    "drizzle-orm": "1.0.0-rc.2"
+  },
+  "peerDependencies": {
+    "@colyseus/core": "0.18.x",
+    "@colyseus/auth": "0.18.x",
+    "postgres": "^3.4.7"
+  },
+  "peerDependenciesMeta": {
+    "postgres": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@colyseus/core": "workspace:^",
+    "@colyseus/auth": "workspace:^",
+    "@electric-sql/pglite": "^0.4.5",
+    "@types/mocha": "^10.0.1",
+    "@types/node": "^22.13.14",
+    "drizzle-kit": "1.0.0-rc.2",
+    "mocha": "^10.2.0",
+    "postgres": "^3.4.7",
+    "tsx": "^4.1.2",
+    "zod": "^4.1.12"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "next"
+  }
+}

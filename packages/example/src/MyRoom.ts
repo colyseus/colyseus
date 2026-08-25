@@ -1,19 +1,28 @@
-import { CloseCode, Room, type Client, validate, type Messages, type AuthContext } from "@colyseus/core";
-import { schema, type SchemaType } from "@colyseus/schema";
+import { CloseCode, Room, type Client, validate, type Messages, type AuthContext, definePlugins } from "@colyseus/core";
+import { schema, t, type SchemaType } from "@colyseus/schema";
+import { AnalyticsPlugin, CloudSavesPlugin, LeaderboardsPlugin } from "@colyseus/database";
 import { z } from "zod";
+import { database } from "./db/database.ts";
+// Importing @colyseus/auth installs a JWT-decoding default for
+// Room.onAuth (side-effect import). The example already imports it
+// elsewhere via app.config.ts, but pinning the import here documents
+// the dependency for anyone reading just this room file.
+import "@colyseus/auth";
+import { TrackUserSessionsPlugin } from "colyseus/plugins/track-user-sessions";
 
 const VERSION = 5;
 
 export const Player = schema({
-  x: "number",
-  y: "number",
+  x: t.number(),
+  y: t.number(),
+  score: t.number(),
 });
 export type Player = SchemaType<typeof Player>;
 
 export const MyRoomState = schema({
-  mapWidth: "number",
-  mapHeight: "number",
-  players: { map: Player },
+  mapWidth: t.number(),
+  mapHeight: t.number(),
+  players: t.map(Player),
 });
 export type MyRoomState = SchemaType<typeof MyRoomState>;
 
@@ -54,8 +63,49 @@ type MyClient = Client<{
   };
 }>;
 
-export class MyRoom extends Room<{ state: MyRoomState, client: MyClient }> {
+const Input = schema({
+  seq: t.number(),
+  x: t.number(),
+  y: t.number(),
+});
+type Input = SchemaType<typeof Input>;
+
+export class MyRoom extends Room<{ state: MyRoomState, client: MyClient, input: Input }> {
   state = new MyRoomState();
+
+  // Database-driven plugins — one instance per room. The framework
+  // walks this record at __init, computes the lifecycle/message layout
+  // ONCE per Room class (cached on the constructor), and installs hook
+  // wrappers on the prototype. Subsequent constructs of MyRoom reuse
+  // the cached layout. Public methods are reachable as
+  // `this.plugins.<key>.<method>(...)` with full types.
+
+  plugins = definePlugins([
+    new TrackUserSessionsPlugin(),
+    new AnalyticsPlugin({ database, prefix: 'my_room' }),
+    new CloudSavesPlugin({
+      database,
+      slot: 0,
+      payload: (room, client) => {
+        const player = room.state.players.get(client.sessionId);
+        return player ? { x: player.x, y: player.y, score: player.score } : null;
+      },
+      apply: (room, client, data) => {
+        const player = room.state.players.get(client.sessionId);
+        if (!player || !data) return;
+        const d = data as { x: number; y: number; score: number };
+        player.x = d.x;
+        player.y = d.y;
+        player.score = d.score;
+      },
+    }),
+    new LeaderboardsPlugin({
+      database,
+      boardId: 'my_room_score',
+      boardName: 'MyRoom Score',
+      score: (room, client) => room.state.players.get(client.sessionId)?.score ?? null,
+    })
+  ]);
 
   messages = {
     ...thirdPartyMessages,

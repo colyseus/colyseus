@@ -1,7 +1,7 @@
 import assert from "assert";
 
 import * as Colyseus from "@colyseus/sdk";
-import { OnAuthException, OnCreateException, OnDisposeException, OnJoinException, OnLeaveException, OnMessageException, Room, Server, SimulationIntervalException, TimedEventException, matchMaker } from "@colyseus/core";
+import { OnAuthException, OnCreateException, OnDisposeException, OnJoinException, OnLeaveException, OnMessageException, Room, Server, TimestepException, SimulationIntervalException, TimedEventException, matchMaker } from "@colyseus/core";
 import { timeout } from "./utils/index.ts";
 
 const TEST_PORT = 8570;
@@ -278,6 +278,7 @@ describe("Exception Handling", () => {
     assert.strictEqual(caught.methodName, "onDispose");
   });
 
+  // the room clock ticks on the 50ms patch grid — a 100ms timer fires anywhere in [100, 150)
   it("setTimeout should be caught", async () => {
     let caught: any = { error: undefined, methodName: undefined };
 
@@ -297,7 +298,7 @@ describe("Exception Handling", () => {
     });
 
     await client.joinOrCreate("my_room", { arg0: "arg0" });
-    await timeout(200);
+    await timeout(300);
 
     assert.ok(caught.error instanceof TimedEventException);
     assert.strictEqual(caught.error.message, "setTimeout Error");
@@ -325,7 +326,7 @@ describe("Exception Handling", () => {
     });
 
     await client.joinOrCreate("my_room", { arg0: "arg0" });
-    await timeout(200);
+    await timeout(300);
 
     assert.ok(caught.error instanceof TimedEventException);
     assert.strictEqual(caught.error.message, "async setTimeout Error");
@@ -352,7 +353,7 @@ describe("Exception Handling", () => {
     });
 
     await client.joinOrCreate("my_room", { arg0: "arg0" });
-    await timeout(110);
+    await timeout(300);
 
     assert.ok(caught.error instanceof TimedEventException);
     assert.strictEqual(caught.error.message, "setTimeout Error");
@@ -380,7 +381,7 @@ describe("Exception Handling", () => {
     });
 
     await client.joinOrCreate("my_room", { arg0: "arg0" });
-    await timeout(200);
+    await timeout(300);
 
     assert.ok(caught.error instanceof TimedEventException);
     assert.strictEqual(caught.error.message, "async setTimeout Error");
@@ -448,7 +449,87 @@ describe("Exception Handling", () => {
     assert.deepStrictEqual(caught.error.payload, onMessageArgs[1]);
   });
 
-  it("setSimulationInterval: error should be caught", async () => {
+  it("request onMessage: handler throw should be caught with correct type/payload", async () => {
+    let caught: any = { error: undefined, methodName: undefined };
+
+    matchMaker.defineRoomType("my_room", class extends Room {
+      onCreate() {
+        this.onMessage("req", (_client, _message) => {
+          throw new Error("request onMessage Error");
+        });
+      }
+      onUncaughtException(error: Error, methodName: string): void {
+        caught.error = error;
+        caught.methodName = methodName;
+      }
+    });
+
+    const conn = await client.joinOrCreate("my_room", { arg0: "arg0" });
+    // onUncaughtException swallows the throw, so the request settles (OK/undefined)
+    // rather than rejecting — but the exception is still reported with the right type.
+    await conn.request("req", { n: 1 });
+    await conn.leave();
+
+    assert.ok(caught.error instanceof OnMessageException);
+    assert.strictEqual(caught.error.message, "request onMessage Error");
+    assert.strictEqual(caught.methodName, "onMessage");
+    assert.strictEqual(caught.error.type, "req");
+    assert.ok(caught.error.isType("req"));
+    assert.deepStrictEqual(caught.error.payload, { n: 1 });
+  });
+
+  it("wildcard onMessage('*'): error should be caught with the RECEIVED type/payload", async () => {
+    let caught: any = { error: undefined, methodName: undefined };
+
+    matchMaker.defineRoomType("my_room", class extends Room {
+      onCreate() {
+        // wildcard handler signature is (client, type, message)
+        this.onMessage("*", (_client, _type, _message) => {
+          throw new Error("wildcard onMessage Error");
+        });
+      }
+      onUncaughtException(error: Error, methodName: string): void {
+        caught.error = error;
+        caught.methodName = methodName;
+      }
+    });
+
+    const conn = await client.joinOrCreate("my_room", { arg0: "arg0" });
+    await conn.send("some_type", { hello: "world" });
+    await conn.leave();
+
+    assert.ok(caught.error instanceof OnMessageException);
+    assert.strictEqual(caught.error.message, "wildcard onMessage Error");
+    assert.strictEqual(caught.methodName, "onMessage");
+    assert.strictEqual(caught.error.type, "some_type"); // the received type, not '*'
+    assert.ok(caught.error.isType("some_type"));
+    assert.deepStrictEqual(caught.error.payload, { hello: "world" });
+  });
+
+  it("setTimestep: error should be caught", async () => {
+    let caught: any = [];
+
+    matchMaker.defineRoomType("my_room", class extends Room {
+      onCreate() {
+        this.setTimestep(() => {
+          throw new Error("setTimestep Error");
+        });
+      }
+      onUncaughtException(error: Error, methodName: string): void {
+        caught.push({ error, methodName });
+      }
+    });
+
+    const conn = await client.joinOrCreate("my_room", { arg0: "arg0" });
+    await timeout(200);
+    await conn.leave();
+
+    assert.ok(caught[0].error instanceof TimestepException);
+    assert.strictEqual(caught[0].error.message, "setTimestep Error");
+    assert.strictEqual(caught[0].methodName, "setTimestep");
+  });
+
+  it("setSimulationInterval (deprecated alias): error should still be caught", async () => {
     let caught: any = [];
 
     matchMaker.defineRoomType("my_room", class extends Room {
@@ -466,9 +547,11 @@ describe("Exception Handling", () => {
     await timeout(200);
     await conn.leave();
 
-    assert.ok(caught[0].error instanceof SimulationIntervalException);
+    // forwards to setTimestep unchanged: same exception, canonical methodName.
+    assert.ok(caught[0].error instanceof TimestepException);
+    assert.ok(caught[0].error instanceof SimulationIntervalException); // deprecated alias still matches
     assert.strictEqual(caught[0].error.message, "setSimulationInterval Error");
-    assert.strictEqual(caught[0].methodName, "setSimulationInterval");
+    assert.strictEqual(caught[0].methodName, "setTimestep");
   });
 
 });

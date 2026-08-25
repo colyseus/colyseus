@@ -1,3 +1,5 @@
+import './Room.ext.ts';
+
 import { Server, Room, matchMaker, type SDKTypes } from "@colyseus/core";
 import { ColyseusSDK, type Room as SDKRoom, type InferRoomConstructor } from "@colyseus/sdk";
 import * as httpie from "httpie";
@@ -56,11 +58,17 @@ export class ColyseusTestServer<ServerType extends SDKTypes = any> {
     return this.getRoomById(room.roomId);
   }
 
-  connectTo<RoomInstance extends Room>(
+  async connectTo<RoomInstance extends Room>(
     room: RoomInstance,
     clientOptions: any = {},
   ): Promise<SDKRoom<RoomInstance, RoomInstance['state']>> {
-    return this.sdk.joinById(room.roomId, clientOptions);
+    const client = await this.sdk.joinById(room.roomId, clientOptions);
+
+    // otherwise `client.state` stays empty for a round-trip, and every
+    // assertion on it races the room's patch interval
+    await client.waitForInitialState();
+
+    return client;
   }
 
   // Overload: Pass Room type directly
@@ -78,7 +86,7 @@ export class ColyseusTestServer<ServerType extends SDKTypes = any> {
     await this.sdk.auth.signOut();
 
     const driver = this.server['driver'];
-    if (driver) { driver.clear(); }
+    if (driver) { await driver.clear(); }
   }
 
   async shutdown() {

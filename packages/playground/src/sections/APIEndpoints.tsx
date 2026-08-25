@@ -1,11 +1,17 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { endpoint, client } from "../utils/Types";
+import {
+	endpointMatchesFilter,
+	groupEndpointsByPrefix,
+	type APIEndpoint,
+	type IndexedEndpoint,
+} from "../utils/groupEndpoints";
 import { ResizableSidebar } from "../components/ResizableSidebar";
 import { SDKCodeExamples } from "../components/SDKCodeExamples";
 import { JSONSchemaFields } from "../components/JSONSchemaFields";
 import { useSettings } from "../contexts/SettingsContext";
 import { Callout } from "../components/Callout";
-import { faPlay } from "@fortawesome/free-solid-svg-icons";
+import { faChevronRight, faPlay, faSearch, faXmark } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus, vs } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -13,12 +19,72 @@ import { AuthTokenSection } from "../components/AuthTokenSection";
 import type { AuthConfig } from "../../src-backend/index";
 import { ServerError } from "@colyseus/sdk";
 
-interface APIEndpoint {
-	method: string;
-	path: string;
-  body: any;
-  query: any;
-	description: string;
+const EXPAND_STORAGE_KEY = 'playground-api-endpoints-expanded';
+
+// Anything beyond this gets rendered as plain <pre> instead of running through
+// Prism. Tokenizing megabytes of text blocks the main thread long enough that
+// React can't commit prior state updates (e.g. flipping `loading` off), so the
+// UI appears frozen on the old frame.
+const HIGHLIGHT_MAX_CHARS = 50_000;
+
+function formatBytes(n: number): string {
+	if (n < 1024) return `${n} B`;
+	if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+	return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function PlainTextBody({ text }: { text: string }) {
+	return (
+		<pre className="m-0 p-4 text-xs font-mono whitespace-pre-wrap break-all text-gray-800 dark:text-slate-200">
+			{text}
+		</pre>
+	);
+}
+
+function ResponseBody({ response, darkMode }: { response: unknown; darkMode: boolean }) {
+	// Strings come from `text/*` content-types (HTML, XML, plain text). Render
+	// them as-is — JSON-stringifying a 100KB HTML doc and feeding it to a JSON
+	// syntax highlighter is what froze the panel before.
+	if (typeof response === 'string') {
+		return <PlainTextBody text={response} />;
+	}
+
+	if (typeof Blob !== 'undefined' && response instanceof Blob) {
+		return (
+			<p className="p-4 text-sm text-gray-600 dark:text-slate-400">
+				Binary response ({response.type || 'application/octet-stream'}, {formatBytes(response.size)})
+			</p>
+		);
+	}
+
+	const serialized = JSON.stringify(response, null, 2);
+
+	if (serialized.length > HIGHLIGHT_MAX_CHARS) {
+		return (
+			<>
+				<p className="px-4 pt-3 text-xs text-gray-500 dark:text-slate-400">
+					Response is {formatBytes(serialized.length)} — syntax highlighting disabled.
+				</p>
+				<PlainTextBody text={serialized} />
+			</>
+		);
+	}
+
+	return (
+		<SyntaxHighlighter
+			language="json"
+			style={darkMode ? vscDarkPlus : vs}
+			customStyle={{
+				margin: 0,
+				padding: '1rem',
+				fontSize: '0.875rem',
+				backgroundColor: 'transparent',
+			}}
+			codeTagProps={{ style: { fontSize: '0.875rem' } }}
+		>
+			{serialized}
+		</SyntaxHighlighter>
+	);
 }
 
 const getMethodColor = (method: string): string => {
@@ -42,6 +108,75 @@ const getMethodColor = (method: string): string => {
 	}
 };
 
+// Highlight the first case-insensitive match of `query` inside `text`. Returns
+// `text` unchanged when there's no match or no query.
+function HighlightedText({ text, query }: { text: string; query: string }) {
+	if (!query) return <>{text}</>;
+	const idx = text.toLowerCase().indexOf(query.toLowerCase());
+	if (idx < 0) return <>{text}</>;
+	return (
+		<>
+			{text.slice(0, idx)}
+			<mark className="bg-yellow-200 dark:bg-yellow-700/60 text-inherit rounded-sm px-0.5">
+				{text.slice(idx, idx + query.length)}
+			</mark>
+			{text.slice(idx + query.length)}
+		</>
+	);
+}
+
+// Renders a full path with the group prefix dimmed (so the eye lands on the
+// unique suffix). When no group context is available, renders the path as-is.
+function EndpointPath({ path, groupPrefix, query }: { path: string; groupPrefix?: string; query: string }) {
+	if (groupPrefix && path.startsWith(groupPrefix)) {
+		return (
+			<>
+				<span className="opacity-50">
+					<HighlightedText text={groupPrefix} query={query} />
+				</span>
+				<HighlightedText text={path.slice(groupPrefix.length)} query={query} />
+			</>
+		);
+	}
+	return <HighlightedText text={path} query={query} />;
+}
+
+interface EndpointButtonProps {
+	item: IndexedEndpoint;
+	selected: boolean;
+	groupPrefix?: string;
+	query: string;
+	onSelect: (index: number) => void;
+}
+
+function EndpointButton({ item, selected, groupPrefix, query, onSelect }: EndpointButtonProps) {
+	const { endpoint } = item;
+	return (
+		<button
+			onClick={() => onSelect(item.index)}
+			className={`w-full text-left p-2 sm:p-3 rounded border transition-colors ${
+				selected
+					? "bg-purple-100 dark:bg-purple-900 border-purple-500"
+					: "bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-750"
+			}`}
+		>
+			<div className="flex items-center gap-2 mb-1 flex-wrap">
+				<span className={`inline-block px-2 py-0.5 text-xs font-semibold ${getMethodColor(endpoint.method)} text-white rounded flex-shrink-0`}>
+					{endpoint.method}
+				</span>
+				<code className="text-xs sm:text-sm dark:text-slate-300 break-all">
+					<EndpointPath path={endpoint.path} groupPrefix={groupPrefix} query={query} />
+				</code>
+			</div>
+			{endpoint.description && (
+				<p className="text-xs text-gray-600 dark:text-slate-400 line-clamp-2">
+					<HighlightedText text={endpoint.description} query={query} />
+				</p>
+			)}
+		</button>
+	);
+}
+
 export function APIEndpoints({ authConfig }: { authConfig?: AuthConfig }) {
 	const { darkMode } = useSettings();
 	const [endpoints, setEndpoints] = useState<APIEndpoint[]>([]);
@@ -57,8 +192,94 @@ export function APIEndpoints({ authConfig }: { authConfig?: AuthConfig }) {
 	const [uriParams, setUriParams] = useState<Record<string, string>>({});
 	const [authToken, setAuthToken] = useState(client.auth.token || "");
 
+	// Sidebar filter + group expand state
+	const [filter, setFilter] = useState("");
+	const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(() => {
+		try {
+			const raw = localStorage.getItem(EXPAND_STORAGE_KEY);
+			return raw ? JSON.parse(raw) : {};
+		} catch { return {}; }
+	});
+	// Per-group collapse overrides that only apply while the filter is active.
+	// Discarded on filter clear so the saved `expandedGroups` state is restored.
+	const [filterCollapsed, setFilterCollapsed] = useState<Record<string, boolean>>({});
+
+	useEffect(() => {
+		try {
+			localStorage.setItem(EXPAND_STORAGE_KEY, JSON.stringify(expandedGroups));
+		} catch { /* localStorage may be unavailable */ }
+	}, [expandedGroups]);
+
+	const grouped = useMemo(() => groupEndpointsByPrefix(endpoints), [endpoints]);
+
+	const isFilterActive = filter.trim().length > 0;
+	const visibleGroups = useMemo(() => {
+		if (!isFilterActive) return grouped.groups;
+		return grouped.groups
+			.map(g => ({
+				...g,
+				endpoints: g.endpoints.filter(it => endpointMatchesFilter(it.endpoint, filter)),
+			}))
+			.filter(g => g.endpoints.length > 0);
+	}, [grouped.groups, filter, isFilterActive]);
+
+	const visibleSingletons = useMemo(() => {
+		if (!isFilterActive) return grouped.singletons;
+		return grouped.singletons.filter(it => endpointMatchesFilter(it.endpoint, filter));
+	}, [grouped.singletons, filter, isFilterActive]);
+
+	// While filtering, groups are expanded by default but each can be collapsed
+	// individually; that collapse state is forgotten when the filter clears.
+	const isGroupExpanded = (prefix: string) =>
+		isFilterActive ? !filterCollapsed[prefix] : !!expandedGroups[prefix];
+
+	const toggleGroup = (prefix: string) => {
+		if (isFilterActive) {
+			setFilterCollapsed(prev => ({ ...prev, [prefix]: !prev[prefix] }));
+		} else {
+			setExpandedGroups(prev => ({ ...prev, [prefix]: !prev[prefix] }));
+		}
+	};
+
+	const clearFilter = () => {
+		setFilter("");
+		setFilterCollapsed({});
+	};
+
+	// Drop any filter-time collapses as soon as the filter is cleared, so a
+	// later filter session starts fresh with "all matching groups expanded".
+	useEffect(() => {
+		if (!isFilterActive && Object.keys(filterCollapsed).length > 0) {
+			setFilterCollapsed({});
+		}
+	}, [isFilterActive, filterCollapsed]);
+
+	// Auto-expand the group that contains the currently-selected endpoint so
+	// the selection stays visible across reloads (expanded state is persisted).
+	useEffect(() => {
+		if (selectedEndpointIndex === null) return;
+		for (const group of grouped.groups) {
+			if (group.endpoints.some(it => it.index === selectedEndpointIndex)) {
+				setExpandedGroups(prev => prev[group.prefix] ? prev : { ...prev, [group.prefix]: true });
+				return;
+			}
+		}
+	}, [selectedEndpointIndex, grouped.groups]);
+
 	// Ref for auto-focusing first field
 	const formRef = useRef<HTMLFormElement>(null);
+
+	// Tracks the in-flight executeRequest so a new selection (or a new run)
+	// can abort the previous fetch and prevent its response from clobbering
+	// the panel state after the user moved on.
+	const inFlightRef = useRef<AbortController | null>(null);
+	const cancelInFlight = () => {
+		if (inFlightRef.current) {
+			inFlightRef.current.abort();
+			inFlightRef.current = null;
+		}
+	};
+	useEffect(() => cancelInFlight, []);
 
 	// Fetch endpoints from OpenAPI specification
 	useEffect(() => {
@@ -122,6 +343,10 @@ export function APIEndpoints({ authConfig }: { authConfig?: AuthConfig }) {
 	};
 
 	const executeRequest = async (endpointPath: string, method: string, useFormData = false) => {
+		cancelInFlight();
+		const controller = new AbortController();
+		inFlightRef.current = controller;
+
 		setLoading(true);
 		setError(null);
 		setResponse(null);
@@ -163,6 +388,7 @@ export function APIEndpoints({ authConfig }: { authConfig?: AuthConfig }) {
 			// Build options for HTTP client
 			const options: any = {
 				headers: customHeaders,
+				signal: controller.signal,
 			};
 
 			// Add query params if present
@@ -204,9 +430,12 @@ export function APIEndpoints({ authConfig }: { authConfig?: AuthConfig }) {
 				throw new Error(`Unsupported HTTP method: ${method}`);
 		}
 
+		if (controller.signal.aborted) return;
 		setResponse(res.data);
 
 	} catch (e: any) {
+		// Aborted requests are intentional — don't surface as an error.
+		if (controller.signal.aborted || e?.name === 'AbortError') return;
 		if (e instanceof ServerError) {
 			// HTTP error response
 			setError(`${e.status} - ${e.code} ${e.message}`);
@@ -214,11 +443,21 @@ export function APIEndpoints({ authConfig }: { authConfig?: AuthConfig }) {
 			setError(e.message || "Failed to fetch");
 		}
 		} finally {
-			setLoading(false);
+			// Only the request that's still "current" gets to clear loading;
+			// a superseded request must not flip the new request's spinner off.
+			if (inFlightRef.current === controller) {
+				inFlightRef.current = null;
+				setLoading(false);
+			}
 		}
 	};
 
 	const handleEndpointClick = (index: number) => {
+		// Cancel any in-flight request from the previously selected endpoint
+		// so its response can't land on this endpoint's panel.
+		cancelInFlight();
+		setLoading(false);
+
 		const endpoint = endpoints[index];
 		setSelectedEndpointIndex(index);
 		setQueryFields({});
@@ -254,7 +493,32 @@ export function APIEndpoints({ authConfig }: { authConfig?: AuthConfig }) {
 				maxWidth={500}
 			>
 				<div className="p-4 md:p-6">
-					<h2 className="text-lg md:text-xl font-semibold mb-4 dark:text-slate-300">Available Endpoints</h2>
+					<h2 className="text-lg md:text-xl font-semibold mb-3 dark:text-slate-300">Available Endpoints</h2>
+
+					<div className="relative mb-4">
+						<FontAwesomeIcon
+							icon={faSearch}
+							className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 dark:text-slate-500 pointer-events-none"
+						/>
+						<input
+							type="text"
+							placeholder="Filter endpoints…"
+							value={filter}
+							onChange={(e) => setFilter(e.target.value)}
+							onKeyDown={(e) => { if (e.key === 'Escape' && filter) { e.preventDefault(); clearFilter(); } }}
+							className="w-full pl-8 pr-8 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500"
+						/>
+						{filter && (
+							<button
+								type="button"
+								onClick={clearFilter}
+								aria-label="Clear filter"
+								className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded text-gray-400 hover:text-gray-700 dark:text-slate-500 dark:hover:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+							>
+								<FontAwesomeIcon icon={faXmark} className="text-xs" />
+							</button>
+						)}
+					</div>
 
 					<div className="space-y-2 mb-6">
 						{endpoints.length === 0 && (
@@ -269,25 +533,69 @@ export function APIEndpoints({ authConfig }: { authConfig?: AuthConfig }) {
 								</a>
 							</Callout>
 						)}
-						{endpoints.map((endpoint, idx) => (
-							<button
-								key={idx}
-								onClick={() => handleEndpointClick(idx)}
-								className={`w-full text-left p-2 sm:p-3 rounded border transition-colors ${
-									selectedEndpointIndex === idx
-										? "bg-purple-100 dark:bg-purple-900 border-purple-500"
-										: "bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-750"
-								}`}
-							>
-							<div className="flex items-center gap-2 mb-1 flex-wrap">
-								<span className={`inline-block px-2 py-0.5 text-xs font-semibold ${getMethodColor(endpoint.method)} text-white rounded flex-shrink-0`}>
-									{endpoint.method}
-								</span>
-								<code className="text-xs sm:text-sm dark:text-slate-300 break-all">{endpoint.path}</code>
+
+						{endpoints.length > 0 && visibleGroups.length === 0 && visibleSingletons.length === 0 && (
+							<Callout>
+								No endpoints match "{filter}"
+							</Callout>
+						)}
+
+						{visibleGroups.map((group) => {
+							const expanded = isGroupExpanded(group.prefix);
+							return (
+								<div key={group.prefix}>
+									<button
+										type="button"
+										onClick={() => toggleGroup(group.prefix)}
+										className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
+									>
+										<FontAwesomeIcon
+											icon={faChevronRight}
+											className={`text-xs text-gray-400 dark:text-slate-500 transition-transform ${expanded ? 'rotate-90' : ''}`}
+										/>
+										<code className="text-xs sm:text-sm font-semibold break-all flex-1">
+											<HighlightedText text={group.prefix} query={filter} />
+										</code>
+										<span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-slate-300 flex-shrink-0">
+											{group.endpoints.length}
+										</span>
+									</button>
+									{expanded && (
+										<div className="mt-1 ml-3 pl-2 border-l border-gray-200 dark:border-slate-600 space-y-1.5">
+											{group.endpoints.map((item) => (
+												<EndpointButton
+													key={item.index}
+													item={item}
+													selected={selectedEndpointIndex === item.index}
+													groupPrefix={group.prefix}
+													query={filter}
+													onSelect={handleEndpointClick}
+												/>
+											))}
+										</div>
+									)}
+								</div>
+							);
+						})}
+
+						{visibleSingletons.length > 0 && (
+							<div className={visibleGroups.length > 0 ? 'pt-3 mt-3 border-t border-gray-200 dark:border-slate-600' : ''}>
+								{visibleGroups.length > 0 && (
+									<p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-500 mb-2 px-1">Other</p>
+								)}
+								<div className="space-y-1.5">
+									{visibleSingletons.map((item) => (
+										<EndpointButton
+											key={item.index}
+											item={item}
+											selected={selectedEndpointIndex === item.index}
+											query={filter}
+											onSelect={handleEndpointClick}
+										/>
+									))}
+								</div>
 							</div>
-								<p className="text-xs text-gray-600 dark:text-slate-400 line-clamp-2">{endpoint.description}</p>
-							</button>
-						))}
+						)}
 					</div>
 
 				</div>
@@ -456,25 +764,9 @@ export function APIEndpoints({ authConfig }: { authConfig?: AuthConfig }) {
 							</div>
 						)}
 
-					{response && (
+					{response !== null && response !== undefined && (
 						<div className="bg-gray-50 dark:bg-slate-800 rounded overflow-x-auto">
-							<SyntaxHighlighter
-								language="json"
-								style={darkMode ? vscDarkPlus : vs}
-								customStyle={{
-									margin: 0,
-									padding: '1rem',
-									fontSize: '0.875rem',
-									backgroundColor: 'transparent',
-								}}
-								codeTagProps={{
-									style: {
-										fontSize: '0.875rem',
-									}
-								}}
-							>
-								{JSON.stringify(response, null, 2)}
-							</SyntaxHighlighter>
+							<ResponseBody response={response} darkMode={darkMode} />
 						</div>
 					)}
 

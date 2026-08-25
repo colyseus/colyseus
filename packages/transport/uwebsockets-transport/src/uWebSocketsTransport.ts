@@ -1,8 +1,9 @@
 import querystring, { type ParsedUrlQuery } from 'querystring';
+import { STATUS_CODES } from 'http';
 import uWebSockets, { type WebSocket } from 'uWebSockets.js';
 import type express from 'express';
 
-import { type AuthContext, Transport, matchMaker, Protocol, getBearerToken, debugAndPrintError, spliceOne, connectClientToRoom, CloseCode, isDevMode, type Router } from '@colyseus/core';
+import { type AuthContext, type BeforeUpgradeHandler, Transport, matchMaker, Protocol, createAuthContext, debugAndPrintError, spliceOne, connectClientToRoom, runBeforeUpgrade, CloseCode, isDevMode, type Router } from '@colyseus/core';
 import { uWebSocketClient, uWebSocketWrapper } from './uWebSocketClient.ts';
 import { Deferred } from '@colyseus/core';
 
@@ -14,12 +15,29 @@ import('uwebsockets-express')
 
 const noop = () => {};
 
+// uWS wants the status line before any header, and a synchronous cork callback
+function writeResponse(res: uWebSockets.HttpResponse, response: Response, body: ArrayBuffer) {
+  res.cork(() => {
+    res.writeStatus(`${response.status} ${response.statusText || STATUS_CODES[response.status] || ''}`);
+    response.headers.forEach((value, key) => {
+      if (key.toLowerCase() !== 'content-length') { res.writeHeader(key, value); }
+    });
+    res.end(body);
+  });
+}
+
 export type TransportOptions = Omit<uWebSockets.WebSocketBehavior<any>, "upgrade" | "open" | "pong" | "close" | "message"> & {
   /**
    * Maximum time (in milliseconds) allowed while reading an HTTP request body
    * before the request is rejected with "408 Request Timeout". (default: 500)
    */
   readBodyMaxTime?: number,
+
+  /**
+   * Intercepts an incoming WebSocket upgrade request, before the handshake.
+   * Return a `Response` to answer the request instead of upgrading it.
+   */
+  beforeUpgrade?: BeforeUpgradeHandler,
 };
 
 type RawWebSocketClient = uWebSockets.WebSocket<any> & {
@@ -38,6 +56,7 @@ export class uWebSocketsTransport extends Transport {
   private _originalRawSend: typeof uWebSocketClient.prototype.raw | null = null;
   private _expressApp?: express.Application;
   private _readBodyMaxTime?: number;
+  private _beforeUpgrade?: BeforeUpgradeHandler;
 
   constructor(options: TransportOptions = {}, appOptions: uWebSockets.AppOptions = {}) {
     super();
@@ -46,9 +65,10 @@ export class uWebSocketsTransport extends Transport {
       ? uWebSockets.SSLApp(appOptions)
       : uWebSockets.App(appOptions);
 
-    // not a uWS.WebSocketBehavior option — must not be spread into app.ws()
-    const { readBodyMaxTime, ...wsOptions } = options;
+    // not uWS.WebSocketBehavior options — must not be spread into app.ws()
+    const { readBodyMaxTime, beforeUpgrade, ...wsOptions } = options;
     this._readBodyMaxTime = readBodyMaxTime;
+    this._beforeUpgrade = beforeUpgrade;
 
     if (wsOptions.maxBackpressure === undefined) {
       wsOptions.maxBackpressure = 1024 * 1024;
@@ -71,28 +91,52 @@ export class uWebSocketsTransport extends Transport {
 
       upgrade: (res, req, context) => {
         // get all headers
-        const headers: { [id: string]: string } = {};
-        req.forEach((key, value) => headers[key] = value);
+        const rawHeaders: { [id: string]: string } = {};
+        req.forEach((key, value) => rawHeaders[key] = value);
 
-        const searchParams = querystring.parse(req.getQuery());
+        const query = req.getQuery();
+        const searchParams = querystring.parse(query);
+        const url = req.getUrl();
 
-        /* This immediately calls open handler, you must not use res after this call */
-        /* Spell these correctly */
-        res.upgrade(
-          {
-            url: req.getUrl(),
-            searchParams,
-            context: {
-              token: searchParams._authToken ?? getBearerToken(req.getHeader('authorization')),
-              headers,
-              ip: headers['x-real-ip'] ?? headers['x-forwarded-for'] ?? Buffer.from(res.getRemoteAddressAsText()).toString(),
+        const userData = {
+          url,
+          searchParams,
+          context: createAuthContext({
+            headers: rawHeaders,
+            token: searchParams._authToken as string,
+            remoteAddress: Buffer.from(res.getRemoteAddressAsText()).toString(),
+          }),
+        };
+
+        // uWS discards `req` as soon as this handler returns, so the handshake
+        // headers must be read here — before `beforeUpgrade` gets a chance to yield.
+        const secWebSocketKey = req.getHeader('sec-websocket-key');
+        const secWebSocketProtocol = req.getHeader('sec-websocket-protocol');
+        const secWebSocketExtensions = req.getHeader('sec-websocket-extensions');
+
+        // res.upgrade() immediately calls the open handler; res must not be used after it
+        if (this._beforeUpgrade === undefined) {
+          res.upgrade(userData, secWebSocketKey, secWebSocketProtocol, secWebSocketExtensions, context);
+          return;
+        }
+
+        // uWS aborts the process if a handler yields without responding or attaching this
+        let aborted = false;
+        res.onAborted(() => { aborted = true; });
+
+        runBeforeUpgrade(this._beforeUpgrade, query ? `${url}?${query}` : url, userData.context)
+          .then(async (response) => {
+            if (response !== undefined) {
+              const body = await response.arrayBuffer(); // read before corking
+              if (!aborted) { writeResponse(res, response, body); }
+              return;
             }
-          },
-          req.getHeader('sec-websocket-key'),
-          req.getHeader('sec-websocket-protocol'),
-          req.getHeader('sec-websocket-extensions'),
-          context
-        );
+
+            if (!aborted) {
+              res.cork(() => res.upgrade(userData, secWebSocketKey, secWebSocketProtocol, secWebSocketExtensions, context));
+            }
+          })
+          .catch(debugAndPrintError);
       },
 
       open: async (ws: WebSocket<any>) => {

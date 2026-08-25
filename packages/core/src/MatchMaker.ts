@@ -3,7 +3,7 @@ import { EventEmitter } from 'events';
 import { requestFromIPC, subscribeIPC, subscribeWithTimeout } from './IPC.ts';
 
 import { type Type, Deferred, generateId, merge, retry, MAX_CONCURRENT_CREATE_ROOM_WAIT_TIME, REMOTE_ROOM_SHORT_TIMEOUT, type MethodName, type RemoteRoomCallReturn } from './utils/Utils.ts';
-import { isDevMode, cacheRoomHistory, getPreviousProcessId, getRoomRestoreListKey, reloadFromCache } from './utils/DevMode.ts';
+import { isDevMode, cacheRoomHistory, getRoomRestoreListKey, reloadFromCache } from './utils/DevMode.ts';
 
 import { RegisteredHandler } from './matchmaker/RegisteredHandler.ts';
 import { type OnCreateOptions, Room, RoomInternalState } from './Room.ts';
@@ -36,6 +36,16 @@ export type SelectProcessIdCallback = (roomName: string, clientOptions: ClientOp
 const handlers: {[id: string]: RegisteredHandler} = Object.create(null);
 const rooms: {[roomId: string]: Room} = {};
 const events = new EventEmitter();
+
+// A room isn't gone when 'dispose' fires — that only *starts* `Room.#_dispose()`,
+// which awaits the user's async `onDispose()`. `roomCount` is decremented there,
+// so this covers the window until 'disconnect' (emitted once `#_dispose()`
+// settles). Invariant: roomCount + disposingRoomCount = rooms not yet fully gone.
+let disposingRoomCount = 0;
+
+function hasActiveRooms() {
+  return stats.local.roomCount > 0 || disposingRoomCount > 0;
+}
 
 export let publicAddress: string;
 export let processId: string;
@@ -103,9 +113,7 @@ export async function setup(
   publicAddress = _publicAddress || getDefaultPublicAddress();
 
   stats.reset(false);
-
-  // devMode: try to retrieve previous processId
-  if (isDevMode) { processId = await getPreviousProcessId(); }
+  disposingRoomCount = 0;
 
   // ensure processId is set
   if (!processId) { processId = generateId(); }
@@ -253,7 +261,7 @@ export async function join(roomName: string, clientOptions: ClientOptions = {}, 
     }
 
     return reserveSeatFor(room, clientOptions, authData);
-  });
+  }, 5, [SeatReservationError]);
 }
 
 /**
@@ -320,6 +328,20 @@ export async function query<T extends Room = any>(
   sortOptions?: SortOptions,
 ) {
   return await driver.query<T>(conditions, sortOptions);
+}
+
+/**
+ * Batch-resolve room caches by roomId in a single backend round
+ * trip. Returns a Map keyed by roomId; missing roomIds are absent.
+ *
+ * Hot paths (per-join uniqueness checks, by-user reverse-index
+ * lookups) reach for this instead of `query({})` — the latter scans
+ * the whole room cache and grows linearly with cluster size, while
+ * `findRoomsByIds` is O(K) in the caller's input.
+ */
+export async function findRoomsByIds(roomIds: string[]): Promise<Map<string, IRoomCache>> {
+  if (roomIds.length === 0) { return new Map(); }
+  return await driver.findByIds(roomIds);
 }
 
 /**
@@ -558,6 +580,8 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
 
   // set room public attributes
   if (restoringRoomId && isDevMode) {
+    // an ungraceful exit may have left a stale cache row for this roomId
+    await driver.remove(restoringRoomId);
     room.roomId = restoringRoomId;
 
   } else {
@@ -635,11 +659,14 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
       room['_events'].removeAllListeners('metadata-change');
     }
 
+    // this room's `onDispose()` has settled
+    disposingRoomCount--;
+
     //
     // emit "no active rooms" event when there are no more rooms in this process
     // (used during graceful shutdown)
     //
-    if (stats.local.roomCount <= 0) {
+    if (!hasActiveRooms()) {
       events.emit('no-active-rooms');
     }
   });
@@ -700,7 +727,7 @@ async function lockAndDisposeAll(): Promise<any> {
   }
 
   const noActiveRooms = new Deferred();
-  if (stats.local.roomCount <= 0) {
+  if (!hasActiveRooms()) {
     // no active rooms to dispose
     noActiveRooms.resolve();
 
@@ -807,7 +834,7 @@ export async function hotReload(): Promise<void> {
 
   // Lock all rooms and trigger default onBeforeShutdown (dev mode impl).
   const noActiveRooms = new Deferred();
-  if (stats.local.roomCount <= 0) {
+  if (!hasActiveRooms()) {
     noActiveRooms.resolve();
   } else {
     events.once('no-active-rooms', () => noActiveRooms.resolve());
@@ -960,13 +987,33 @@ export function buildSeatReservation(room: IRoomCache, sessionId: string) {
 
 async function callOnAuth(roomName: string, clientOptions?: ClientOptions, authContext?: AuthContext) {
   const roomClass = getRoomClass(roomName);
-  if (roomClass && roomClass['onAuth'] && roomClass['onAuth'] !== Room['onAuth']) {
-    const result = await roomClass['onAuth'](authContext.token, clientOptions, authContext)
-    if (!result) {
-      throw new ServerError(ErrorCode.AUTH_FAILED, 'onAuth failed');
-    }
-    return result;
+  const onAuth = roomClass?.['onAuth'];
+  if (!onAuth) { return; }
+
+  // Server-initiated joins (e.g. internal `matchMaker.create()` from
+  // bots/tests/cron) skip auth — there's no transport, no headers, no
+  // token. Treat the absence of authContext as "no auth performed",
+  // which leaves client.auth undefined just like the legacy short-
+  // circuit did.
+  if (!authContext) { return; }
+
+  // Always invoke onAuth when an auth context is present — even when
+  // the room hasn't overridden it. The base `Room.onAuth` returns
+  // `true` (or whatever a side-effect import like @colyseus/auth swapped
+  // it for), and we use the return value to populate `client.auth` when
+  // it's a payload object. Pre-change this call was skipped when the
+  // subclass inherited the default, which made it impossible to install
+  // a workspace-wide token decoder by patching `Room.onAuth` once.
+  const result = await onAuth(authContext.token, clientOptions, authContext);
+
+  // Auth-result semantics:
+  //   false / null / undefined  → AUTH_FAILED
+  //   true                      → succeeded but no payload (don't set client.auth)
+  //   anything else (object)    → succeeded; the value becomes client.auth
+  if (result === false || result === null || result === undefined) {
+    throw new ServerError(ErrorCode.AUTH_FAILED, 'onAuth failed');
   }
+  return result === true ? undefined : result;
 }
 
 /**
@@ -1026,10 +1073,9 @@ export function healthCheckProcessId(processId: string) {
       logger.debug(`❌ Process '${processId}' failed to respond. Cleaning it up.`);
       await stats.excludeProcess(processId);
 
-      // clean-up possibly stale room ids
-      if (!isDevMode) {
-        await removeRoomsByProcessId(processId);
-      }
+      // clean-up stale room ids — a dead process never comes back;
+      // devMode restore reads 'roomhistory' (presence), never these rows
+      await removeRoomsByProcessId(processId);
 
       resolve(false);
     } finally {
@@ -1172,6 +1218,9 @@ async function disposeRoom(roomName: string, room: Room) {
   //
   driver.remove(room['_listing'].roomId);
   stats.local.roomCount--;
+
+  // `onDispose()` is still pending — released on 'disconnect'
+  disposingRoomCount++;
 
   // decrease amount of rooms this process is handling
   if (state !== MatchMakerState.SHUTTING_DOWN) {

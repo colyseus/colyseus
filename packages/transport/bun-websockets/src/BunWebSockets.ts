@@ -4,7 +4,7 @@
 // @ts-ignore
 import { Server, ServerWebSocket, WebSocketHandler } from 'bun';
 
-import { matchMaker, Protocol, Transport, debugAndPrintError, getBearerToken, CloseCode, connectClientToRoom, spliceOne, isDevMode, type Router } from '@colyseus/core';
+import { matchMaker, Protocol, Transport, type AuthContext, type BeforeUpgradeHandler, createAuthContext, debugAndPrintError, CloseCode, connectClientToRoom, runBeforeUpgrade, spliceOne, isDevMode, type Router } from '@colyseus/core';
 import { WebSocketClient, WebSocketWrapper } from './WebSocketClient.ts';
 
 import type { Application } from "express";
@@ -13,13 +13,21 @@ import bunExpress, { IncomingMessage, ServerResponse } from 'bun-serve-express';
 // Bun global is available at runtime
 declare const Bun: any;
 
-export type TransportOptions = Partial<Omit<WebSocketHandler<WebSocketData>, "message" | "open" | "drain" | "close" | "ping" | "pong">>;
+export type TransportOptions = Partial<Omit<WebSocketHandler<WebSocketData>, "message" | "open" | "drain" | "close" | "ping" | "pong">> & {
+  /**
+   * Intercepts an incoming WebSocket upgrade request, before the handshake.
+   * Return a `Response` to answer the request instead of upgrading it.
+   */
+  beforeUpgrade?: BeforeUpgradeHandler,
+};
 
 interface WebSocketData {
   url: string;
   searchParams: URLSearchParams;
   headers: Headers;
   remoteAddress: string;
+  /** Only built at upgrade when `beforeUpgrade` needs it. */
+  context?: AuthContext;
 }
 
 export class BunWebSockets extends Transport {
@@ -30,7 +38,8 @@ export class BunWebSockets extends Transport {
   private _expressApp: Application | undefined;
   private _router: Router | undefined;
   private _originalRawSend: typeof WebSocketClient.prototype.raw | null = null;
-  private options: TransportOptions = {};
+  private _beforeUpgrade?: BeforeUpgradeHandler;
+  private options: Omit<TransportOptions, "beforeUpgrade"> = {};
 
   constructor(options: TransportOptions = {}) {
     super();
@@ -39,7 +48,10 @@ export class BunWebSockets extends Transport {
       options.maxPayloadLength = 4 * 1024;
     }
 
-    this.options = options;
+    // not a Bun WebSocketHandler option — must not be spread into Bun.serve()'s `websocket`
+    const { beforeUpgrade, ...wsOptions } = options;
+    this._beforeUpgrade = beforeUpgrade;
+    this.options = wsOptions;
   }
 
   public getExpressApp(): Application {
@@ -64,13 +76,28 @@ export class BunWebSockets extends Transport {
       async fetch(req, server) {
         const url = new URL(req.url);
 
+        const remoteAddress = server.requestIP(req)?.address || 'unknown';
+        let context: AuthContext | undefined;
+
+        if (self._beforeUpgrade !== undefined && req.headers.get('upgrade')?.toLowerCase() === 'websocket') {
+          context = createAuthContext({
+            headers: req.headers,
+            token: url.searchParams.get('_authToken'),
+            remoteAddress,
+          });
+
+          const response = await runBeforeUpgrade(self._beforeUpgrade, url.pathname + url.search, context);
+          if (response !== undefined) { return response; }
+        }
+
         // Try to upgrade to WebSocket
         if (server.upgrade(req, {
           data: {
             url: url.pathname,
             searchParams: url.searchParams,
             headers: req.headers as Headers,
-            remoteAddress: server.requestIP(req)?.address || 'unknown',
+            remoteAddress,
+            context,
           }
         })) {
           return; // WebSocket upgrade successful
@@ -212,11 +239,11 @@ export class BunWebSockets extends Transport {
     const skipHandshake = searchParams.has("skipHandshake");
 
     try {
-      await connectClientToRoom(room, client, {
-        token: searchParams.get("_authToken") ?? getBearerToken(rawClient.data.headers.get('authorization')),
+      await connectClientToRoom(room, client, rawClient.data.context ?? createAuthContext({
         headers: rawClient.data.headers,
-        ip: rawClient.data.headers.get('x-real-ip') ?? rawClient.data.headers.get('x-forwarded-for') ?? rawClient.data.remoteAddress,
-      }, {
+        token: searchParams.get("_authToken"),
+        remoteAddress: rawClient.data.remoteAddress,
+      }), {
         reconnectionToken,
         skipHandshake
       });

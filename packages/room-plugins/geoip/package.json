@@ -1,0 +1,60 @@
+{
+  "name": "@colyseus/geoip",
+  "version": "0.18.1",
+  "type": "module",
+  "description": "GeoIP country detection plugin for Colyseus rooms.",
+  "input": "./src/index.ts",
+  "main": "./build/index.cjs",
+  "module": "./src/index.ts",
+  "typings": "./build/index.d.ts",
+  "exports": {
+    ".": {
+      "@source": "./src/index.ts",
+      "types": "./build/index.d.ts",
+      "import": "./build/index.mjs",
+      "require": "./build/index.cjs"
+    },
+    "./*": {
+      "@source": "./src/*.ts",
+      "types": "./build/*.d.ts",
+      "import": "./build/*.mjs",
+      "require": "./build/*.cjs"
+    }
+  },
+  "scripts": {
+    "test": "mocha test/**.test.ts --exit --timeout 15000"
+  },
+  "funding": "https://github.com/sponsors/endel",
+  "author": "Endel Dreyer",
+  "license": "MIT",
+  "keywords": [
+    "colyseus",
+    "geoip",
+    "country",
+    "maxmind",
+    "geolite2",
+    "db-ip"
+  ],
+  "files": [
+    "build",
+    "src"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/colyseus/colyseus.git"
+  },
+  "homepage": "https://colyseus.io/",
+  "engines": {
+    "node": ">= 22.x"
+  },
+  "dependencies": {
+    "maxmind": "^5.0.0"
+  },
+  "peerDependencies": {
+    "@colyseus/core": "workspace:^"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "next"
+  }
+}

@@ -1,6 +1,7 @@
 {
   "name": "@colyseus/monitor",
-  "version": "0.17.8",
+  "version": "0.18.3",
+  "type": "module",
   "description": "Web Monitoring Panel for Colyseus",
   "input": "./src/index.ts",
   "main": "./build/index.cjs",
@@ -48,6 +49,9 @@
     "url": "https://github.com/colyseus/colyseus/issues"
   },
   "homepage": "https://github.com/colyseus/colyseus#readme",
+  "engines": {
+    "node": ">= 22.x"
+  },
   "devDependencies": {
     "@emotion/react": "^11.11.1",
     "@emotion/styled": "^11.11.0",
@@ -67,12 +71,15 @@
     "react-dom": "^18.2.0",
     "json-edit-react": "^1.17.0",
     "react-router-dom": "^4.2.2",
-    "typescript": "^5.9.3",
+    "typescript": "^6.0.3",
     "vite": "^5.0.11"
   },
   "dependencies": {
     "@colyseus/core": "workspace:^",
-    "express": ">=4.16.0",
-    "node-os-utils": "^2.0.0"
+    "node-os-utils": "^2.0.0",
+    "zod": "^4.1.12"
+  },
+  "publishConfig": {
+    "tag": "next"
   }
 }

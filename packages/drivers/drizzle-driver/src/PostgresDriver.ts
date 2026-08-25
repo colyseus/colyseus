@@ -1,7 +1,7 @@
 import postgres from 'postgres';
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { pgTable, integer, boolean, timestamp, jsonb, getTableConfig, varchar } from 'drizzle-orm/pg-core';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, inArray, sql } from 'drizzle-orm';
 
 import {
   type IRoomCache,
@@ -122,6 +122,17 @@ export class PostgresDriver implements MatchMakerDriver {
       // filter list by other conditions
       return (await this.getRooms<T>(conditions, sortOptions, 1))[0];
     }
+  }
+
+  public async findByIds(roomIds: string[]): Promise<Map<string, IRoomCache>> {
+    const result = new Map<string, IRoomCache>();
+    if (roomIds.length === 0) { return result; }
+    const rows = await this.db
+      .select()
+      .from(this.schema)
+      .where(inArray(this.schema.roomId, roomIds));
+    for (const row of rows) { result.set(row.roomId, row as IRoomCache); }
+    return result;
   }
 
   private getRooms<T extends Room = any>(

@@ -1,7 +1,7 @@
-import { createEndpoint, createRouter } from "@colyseus/better-call";
+import { createEndpoint } from "@colyseus/better-call";
+import { createRouter } from "./index.ts";
 import * as matchMaker from "../MatchMaker.ts";
-import { getBearerToken } from "../utils/Utils.ts";
-import { getTransport } from "../Transport.ts";
+import { createAuthContext, getTransport } from "../Transport.ts";
 
 export const postMatchmakeMethod = createEndpoint("/matchmake/:method/:roomName", { method: "POST" }, async (ctx) => {
   // do not accept matchmaking requests if already shutting down
@@ -20,12 +20,7 @@ export const postMatchmakeMethod = createEndpoint("/matchmake/:method/:roomName"
       method,
       roomName,
       clientOptions,
-      {
-        token: getBearerToken(ctx.request.headers.get('authorization')),
-        headers: ctx.request.headers,
-        ip: requestHeaders.get('x-forwarded-for') ?? requestHeaders.get('x-client-ip') ?? requestHeaders.get('x-real-ip'),
-        req: ctx.request as any,
-      },
+      createAuthContext({ headers: requestHeaders, req: ctx.request }),
     );
 
     //
@@ -35,6 +30,10 @@ export const postMatchmakeMethod = createEndpoint("/matchmake/:method/:roomName"
     const transport = getTransport();
     if (transport.protocol !== undefined) {
       response.protocol = transport.protocol;
+    }
+    // WebTransport (h3): client pins the self-signed cert via serverCertificateHashes.
+    if (transport.fingerprint !== undefined) {
+      response.fingerprint = transport.fingerprint;
     }
 
     const json = JSON.stringify(response);
@@ -57,5 +56,6 @@ export const postMatchmakeMethod = createEndpoint("/matchmake/:method/:roomName"
 });
 
 export function getDefaultRouter() {
-  return createRouter({ postMatchmakeMethod });
+  // no public docs page — the docs surface is playground's gated /__apidocs
+  return createRouter({ postMatchmakeMethod }, { openapi: { disabled: true } });
 }

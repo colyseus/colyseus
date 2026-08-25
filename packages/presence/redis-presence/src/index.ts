@@ -213,12 +213,12 @@ export class RedisPresence implements Presence {
       return await this.pub.llen(key);
     }
 
-    public async rpush(key: string, value: string): Promise<number> {
-      return await this.pub.rpush(key, value);
+    public async rpush(key: string, ...values: string[]): Promise<number> {
+      return await this.pub.rpush(key, ...values);
     }
 
-    public async lpush(key: string, value: string): Promise<number> {
-      return await this.pub.lpush(key, value);
+    public async lpush(key: string, ...values: string[]): Promise<number> {
+      return await this.pub.lpush(key, ...values);
     }
 
     public async rpop(key: string): Promise<string | null> {
@@ -229,8 +229,22 @@ export class RedisPresence implements Presence {
       return await this.pub.lpop(key);
     }
 
+    /**
+     * Blocking pop, on a connection of its own: ioredis queues every command
+     * behind a blocking one, so running this on `pub` would stall the whole
+     * instance — matchmaking included — until an item lands or the timeout
+     * expires. A dedicated connection also keeps concurrent `brpop()` calls
+     * from serializing behind each other.
+     */
     public async brpop(...args: any): Promise<[string, string] | null> {
-      return await this.pub.brpop.apply(this.pub, args);
+      const blocking = (this.pub instanceof Cluster)
+        ? this.pub.duplicate([])
+        : this.pub.duplicate();
+      try {
+        return await blocking.brpop.apply(blocking, args);
+      } finally {
+        blocking.quit().catch(() => { /* already gone */ });
+      }
     }
 
     public shutdown() {

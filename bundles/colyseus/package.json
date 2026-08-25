@@ -1,6 +1,6 @@
 {
   "name": "colyseus",
-  "version": "0.17.10",
+  "version": "0.18.3",
   "description": "Multiplayer Framework for Node.js",
   "type": "module",
   "input": "./src/index.ts",
@@ -17,10 +17,31 @@
       "types": "./build/vite.d.ts",
       "import": "./build/vite.mjs",
       "require": "./build/vite.cjs"
+    },
+    "./plugins/webrtc": {
+      "types": "./build/plugins/webrtc.d.ts",
+      "import": "./build/plugins/webrtc.mjs",
+      "require": "./build/plugins/webrtc.cjs"
+    },
+    "./plugins/idle-kick": {
+      "types": "./build/plugins/idle-kick.d.ts",
+      "import": "./build/plugins/idle-kick.mjs",
+      "require": "./build/plugins/idle-kick.cjs"
+    },
+    "./plugins/unique-session": {
+      "types": "./build/plugins/unique-session.d.ts",
+      "import": "./build/plugins/unique-session.mjs",
+      "require": "./build/plugins/unique-session.cjs"
+    },
+    "./plugins/track-user-sessions": {
+      "types": "./build/plugins/track-user-sessions.d.ts",
+      "import": "./build/plugins/track-user-sessions.mjs",
+      "require": "./build/plugins/track-user-sessions.cjs"
     }
   },
   "scripts": {
-    "test": "COLYSEUS_SEAT_RESERVATION_TIME=0.3 COLYSEUS_PRESENCE_SHORT_TIMEOUT=300 mocha test/**.test.ts test/**/**.test.ts --exit --timeout 15000"
+    "test": "COLYSEUS_SEAT_RESERVATION_TIME=0.3 COLYSEUS_PRESENCE_SHORT_TIMEOUT=300 mocha test/**.test.ts test/**/**.test.ts --exit --timeout 15000",
+    "typecheck": "tsc --noEmit -p test/tsconfig.json"
   },
   "author": "Endel Dreyer",
   "license": "MIT",
@@ -42,7 +63,7 @@
   },
   "homepage": "https://colyseus.io/",
   "engines": {
-    "node": ">= 20.x"
+    "node": ">= 22.x"
   },
   "dependencies": {
     "@colyseus/auth": "workspace:^",
@@ -58,24 +79,24 @@
     "@colyseus/better-call": "workspace:^",
     "@colyseus/core": "workspace:^",
     "@colyseus/drizzle-driver": "workspace:^",
-    "@colyseus/msgpackr": "*",
-    "@colyseus/schema": "^4.0.7",
+    "@colyseus/schema": "^5.0.8",
     "@colyseus/sdk": "workspace:^",
     "@colyseus/tools": "workspace:^",
     "@colyseus/uwebsockets-transport": "workspace:^",
     "@types/ws": "^8.5.14",
     "ioredis": "^5.9.3",
+    "msgpackr": "^2.0.1",
     "ws": "^8.18.0",
     "zod": "^4.1.12"
   },
   "peerDependencies": {
-    "@colyseus/auth": "0.17.x",
-    "@colyseus/core": "0.17.x",
-    "@colyseus/redis-driver": "0.17.x",
-    "@colyseus/redis-presence": "0.17.x",
-    "@colyseus/schema": "^4.0.7",
-    "@colyseus/uwebsockets-transport": "0.17.x",
-    "@colyseus/ws-transport": "0.17.x",
+    "@colyseus/auth": "0.18.x",
+    "@colyseus/core": "0.18.x",
+    "@colyseus/redis-driver": "0.18.x",
+    "@colyseus/redis-presence": "0.18.x",
+    "@colyseus/schema": "^5.0.8",
+    "@colyseus/uwebsockets-transport": "0.18.x",
+    "@colyseus/ws-transport": "0.18.x",
     "vite": ">=6.0.0"
   },
   "peerDependenciesMeta": {
@@ -83,5 +104,8 @@
       "optional": true
     }
   },
-  "gitHead": "25ba61e283429bb4fa02db0454f804ea218259eb"
+  "gitHead": "25ba61e283429bb4fa02db0454f804ea218259eb",
+  "publishConfig": {
+    "tag": "next"
+  }
 }

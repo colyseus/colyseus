@@ -11,6 +11,7 @@ jobs:
   test-suite:
     name: test-suite
     runs-on: ubuntu-latest
+    timeout-minutes: 25
 
     steps:
     - name: Start Redis
@@ -38,10 +39,50 @@ jobs:
     - name: Install dependencies
       run: pnpm install
 
+    # build-all, not build: the latter skips every package with a custom build
+    # script (sdk, monitor, playground, admin), and the suites import those from
+    # build/, not from source.
     - name: Build
-      run: pnpm build
+      run: pnpm build-all
 
+    # test:ci == pnpm test with --no-bail, so one failing package still reports
+    # the rest.
     - name: Test
-      run: pnpm test
+      run: pnpm test:ci
+
+  packaging:
+    name: packaging (require + import)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v6
+      with:
+        submodules: recursive
+
+    - name: Install Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22
+
+    - name: Install pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: '10.9.0'
+        cache: true
+
+    - name: Install dependencies
+      run: pnpm install
+
+    # The default `pnpm build` skips every package with a custom build script —
+    # monitor, playground, admin, sdk — which is exactly where the CJS/ESM
+    # artifacts diverge. Nothing else in CI loads them: the test suites resolve
+    # the `@source` condition and never touch build/.
+    - name: Build all packages
+      run: pnpm build-all
+
+    - name: Verify every exports subpath loads
+      run: pnpm verify-exports
 
 

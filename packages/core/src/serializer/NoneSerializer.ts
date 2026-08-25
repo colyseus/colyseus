@@ -1,16 +1,16 @@
 import type { Client } from '../Transport.ts';
-import type { Serializer } from './Serializer.ts';
+import type { PatchTimingContext, Serializer } from './Serializer.ts';
 
 export class NoneSerializer<T= any> implements Serializer<T> {
   public id: string = 'none';
 
   public reset(data: any) {}
 
-  public getFullState(client?: Client) {
+  public getFullState(_client?: Client, _timing?: PatchTimingContext) {
     return null;
   }
 
-  public applyPatches(clients: Client[], state: T): boolean {
+  public applyPatches(_clients: Client[], _state: T, _timing?: PatchTimingContext): boolean {
     return false;
   }
 }
