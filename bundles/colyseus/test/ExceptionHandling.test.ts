@@ -278,6 +278,7 @@ describe("Exception Handling", () => {
     assert.strictEqual(caught.methodName, "onDispose");
   });
 
+  // the room clock ticks on the 50ms patch grid — a 100ms timer fires anywhere in [100, 150)
   it("setTimeout should be caught", async () => {
     let caught: any = { error: undefined, methodName: undefined };
 
@@ -297,7 +298,7 @@ describe("Exception Handling", () => {
     });
 
     await client.joinOrCreate("my_room", { arg0: "arg0" });
-    await timeout(200);
+    await timeout(300);
 
     assert.ok(caught.error instanceof TimedEventException);
     assert.strictEqual(caught.error.message, "setTimeout Error");
@@ -325,7 +326,7 @@ describe("Exception Handling", () => {
     });
 
     await client.joinOrCreate("my_room", { arg0: "arg0" });
-    await timeout(200);
+    await timeout(300);
 
     assert.ok(caught.error instanceof TimedEventException);
     assert.strictEqual(caught.error.message, "async setTimeout Error");
@@ -352,7 +353,7 @@ describe("Exception Handling", () => {
     });
 
     await client.joinOrCreate("my_room", { arg0: "arg0" });
-    await timeout(110);
+    await timeout(300);
 
     assert.ok(caught.error instanceof TimedEventException);
     assert.strictEqual(caught.error.message, "setTimeout Error");
@@ -380,7 +381,7 @@ describe("Exception Handling", () => {
     });
 
     await client.joinOrCreate("my_room", { arg0: "arg0" });
-    await timeout(200);
+    await timeout(300);
 
     assert.ok(caught.error instanceof TimedEventException);
     assert.strictEqual(caught.error.message, "async setTimeout Error");
