@@ -44,9 +44,8 @@ jobs:
     - name: Build
       run: pnpm build-all
 
-    # test:ci == pnpm test, minus @colyseus/example (its admin e2e needs a
-    # Chromium, and puppeteer's install script isn't in onlyBuiltDependencies),
-    # and with --no-bail so one failing package still reports the rest.
+    # test:ci == pnpm test with --no-bail, so one failing package still reports
+    # the rest.
     - name: Test
       run: pnpm test:ci
 

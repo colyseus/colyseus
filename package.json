@@ -8,7 +8,7 @@
     "build": "tsx build.ts",
     "build-all": "pnpm --filter @better-auth/root run build && pnpm run build && pnpm --filter @colyseus/sdk run build && pnpm --filter @colyseus/playground run build && pnpm --filter @colyseus/monitor run build && pnpm --filter @colyseus/admin run build",
     "test": "pnpm -r --filter '!./packages/better-call/**' run test",
-    "test:ci": "pnpm -r --no-bail --filter '!./packages/better-call/**' --filter '!@colyseus/example' run test",
+    "test:ci": "pnpm -r --no-bail --filter '!./packages/better-call/**' run test",
     "verify-exports": "node scripts/verify-exports.mjs",
     "example": "pnpm --filter @colyseus/example run start",
     "update-contributors": "all-contributors generate",

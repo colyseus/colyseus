@@ -24,7 +24,7 @@ import puppeteer, { type Browser } from 'puppeteer';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const exampleDir = path.resolve(__dirname, '..');
-const PORT = 2567;
+const PORT = Number(process.env.PORT ?? 2567); // the spawned server inherits it
 const BASE = `http://localhost:${PORT}`;
 
 let server: ChildProcess | null = null;
