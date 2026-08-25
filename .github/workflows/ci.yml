@@ -41,8 +41,11 @@ jobs:
     - name: Build
       run: pnpm build
 
+    # test:ci == pnpm test, minus @colyseus/example (its admin e2e wants the admin
+    # UI build, which `pnpm build` skips, and a Chromium, which pnpm doesn't
+    # install), and with --no-bail so one failing package still reports the rest.
     - name: Test
-      run: pnpm test
+      run: pnpm test:ci
 
   packaging:
     name: packaging (require + import)
