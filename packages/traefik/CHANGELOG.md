@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.2
+
+- Requires Node 22.
+
 ## 0.17.7
 
 - Add IPv6 support for `internalAddress`. Bracketed (`[::1]:2567`) and bare

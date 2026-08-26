@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.18.2
+
+- New `beforeUpgrade` option: called before the WebSocket handshake with the incoming `Request` and the same read-only context `onAuth()` receives. Return a `Response` to answer the request instead of upgrading it. Requires `@colyseus/core` 0.18.5.
+
+- The 0.17.21 request-body fixes reach the 0.18 line: an incomplete or slow HTTP body is answered with `408 Request Timeout` instead of crashing the process, and `readBodyMaxTime` configures the limit. They had only ever shipped for 0.17.
+
 ## 0.18.1
 
 - Internal: `enqueueRaw()` now delegates to `enqueueClientRaw()` from `@colyseus/core`, which centralizes join-time message buffering and `afterNextPatch` routing; the per-client `_afterNextPatchQueue` field is gone. Requires `@colyseus/core` 0.18.1.

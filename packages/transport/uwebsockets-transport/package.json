@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/uwebsockets-transport",
-  "version": "0.18.1",
+  "version": "0.18.2",
   "type": "module",
   "input": "./src/index.ts",
   "main": "./build/index.cjs",
@@ -28,7 +28,7 @@
     "uwebsockets-express": "^2.0.1"
   },
   "peerDependencies": {
-    "@colyseus/core": "0.18.x",
+    "@colyseus/core": "^0.18.5",
     "uwebsockets-express": "^1.4.1 || ^2.0.1"
   },
   "peerDependenciesMeta": {

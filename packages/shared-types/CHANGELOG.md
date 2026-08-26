@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.2
+
+- Protocol docs: the `TIMED` prefix carries `uint32 sNow` + `uint32 inputSeq`, not two `float64` timestamps. Documentation only — the wire format has been this since 0.18.1.
+
 ## 0.18.1
 
 ### Experimental: protocol modifiers + input handshake options

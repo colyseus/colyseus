@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/ws-transport",
-  "version": "0.18.1",
+  "version": "0.18.2",
   "type": "module",
   "input": "./src/index.ts",
   "main": "./build/index.cjs",
@@ -28,7 +28,7 @@
     "@colyseus/core": "workspace:^"
   },
   "peerDependencies": {
-    "@colyseus/core": "0.18.x",
+    "@colyseus/core": "^0.18.5",
     "express": "^4.16.0 || ^5.0.0"
   },
   "peerDependenciesMeta": {
