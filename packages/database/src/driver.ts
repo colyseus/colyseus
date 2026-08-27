@@ -36,7 +36,7 @@ import {
 } from '@colyseus/core';
 
 import { GameDatabase } from './GameDatabase.ts';
-import { generateCreateTableSQL } from './utils.ts';
+import { generateCreateTableSQL, generateCreateIndexSQL } from './utils.ts';
 import { colyseusRoomCaches as pgRoomCaches } from './schemas/pg.ts';
 import { colyseusRoomCaches as sqliteRoomCaches } from './schemas/sqlite.ts';
 // Re-exported so consumers of the driver subpath can reference the
@@ -183,7 +183,7 @@ export class DatabaseDriver implements MatchMakerDriver {
 
     const tableName = await this.tableName();
     try {
-      await this.execRaw(generateCreateTableSQL(await this.tableConfig()));
+      await this.ensureTable();
       debugMatchMaking(`DatabaseDriver: ensured ${tableName} table`);
     } catch (error: any) {
       // Concurrent boot across processes: ignore pg "already exists"
@@ -359,7 +359,7 @@ export class DatabaseDriver implements MatchMakerDriver {
     if (!this.rawClient) { return; }
     const tableName = await this.tableName();
     await this.execRaw(this.flavor.dropTableSQL(tableName));
-    await this.execRaw(generateCreateTableSQL(await this.tableConfig()));
+    await this.ensureTable();
   }
 
   // -------------------------------------------------------------------------
@@ -422,6 +422,15 @@ export class DatabaseDriver implements MatchMakerDriver {
       }
     }
     return clauses;
+  }
+
+  // CREATE TABLE + its indexes, all IF NOT EXISTS.
+  private async ensureTable(): Promise<void> {
+    const config = await this.tableConfig();
+    await this.execRaw(generateCreateTableSQL(config, this.dialect));
+    for (const stmt of generateCreateIndexSQL(config, this.dialect)) {
+      await this.execRaw(stmt);
+    }
   }
 
   private async getTableConfig(): Promise<(table: any) => any> {

@@ -23,7 +23,8 @@
  * Tables with composite primary keys (cloudSaves, leaderboardEntries)
  * get the right primaryKey() constraint applied automatically.
  */
-import { sqliteTable, primaryKey } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, primaryKey, type SQLiteTableExtraConfigValue } from 'drizzle-orm/sqlite-core';
+import type { BuildColumns } from 'drizzle-orm';
 import {
   userColumns,
   configColumns,
@@ -37,38 +38,48 @@ import {
   roomCacheColumns,
 } from '../schemas/sqlite.ts';
 
+/**
+ * Optional third factory argument, same shape as sqliteTable's: receives the built
+ * columns (base + extras) and returns indexes / checks / unique constraints.
+ * Merged after the built-in composite primary key where one exists.
+ */
+type ExtraConfig<C extends Record<string, any>> =
+  (table: BuildColumns<string, C, 'sqlite'>) => SQLiteTableExtraConfigValue[];
+
 export const sqlite = {
-  users: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
-    sqliteTable(name, { ...userColumns, ...(extras as E) }),
+  users: <E extends Record<string, any> = {}>(name: string, extras?: E, extraConfig?: ExtraConfig<typeof userColumns & E>) =>
+    sqliteTable(name, { ...userColumns, ...(extras as E) }, (table) => extraConfig?.(table as any) ?? []),
 
-  configs: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
-    sqliteTable(name, { ...configColumns, ...(extras as E) }),
+  configs: <E extends Record<string, any> = {}>(name: string, extras?: E, extraConfig?: ExtraConfig<typeof configColumns & E>) =>
+    sqliteTable(name, { ...configColumns, ...(extras as E) }, (table) => extraConfig?.(table as any) ?? []),
 
-  cloudSaves: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
+  cloudSaves: <E extends Record<string, any> = {}>(name: string, extras?: E, extraConfig?: ExtraConfig<typeof cloudSaveColumns & E>) =>
     sqliteTable(name, { ...cloudSaveColumns, ...(extras as E) }, (table) => [
       primaryKey({ columns: [table.userId, table.slot] }),
+      ...(extraConfig?.(table as any) ?? []),
     ]),
 
-  leaderboards: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
-    sqliteTable(name, { ...leaderboardColumns, ...(extras as E) }),
+  leaderboards: <E extends Record<string, any> = {}>(name: string, extras?: E, extraConfig?: ExtraConfig<typeof leaderboardColumns & E>) =>
+    sqliteTable(name, { ...leaderboardColumns, ...(extras as E) }, (table) => extraConfig?.(table as any) ?? []),
 
-  leaderboardEntries: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
+  leaderboardEntries: <E extends Record<string, any> = {}>(name: string, extras?: E, extraConfig?: ExtraConfig<typeof leaderboardEntryColumns & E>) =>
     sqliteTable(name, { ...leaderboardEntryColumns, ...(extras as E) }, (table) => [
       primaryKey({ columns: [table.boardId, table.userId, table.season] }),
+      ...(extraConfig?.(table as any) ?? []),
     ]),
 
-  analyticsEvents: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
-    sqliteTable(name, { ...analyticsEventColumns, ...(extras as E) }),
+  analyticsEvents: <E extends Record<string, any> = {}>(name: string, extras?: E, extraConfig?: ExtraConfig<typeof analyticsEventColumns & E>) =>
+    sqliteTable(name, { ...analyticsEventColumns, ...(extras as E) }, (table) => extraConfig?.(table as any) ?? []),
 
-  roles: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
-    sqliteTable(name, { ...roleColumns, ...(extras as E) }),
+  roles: <E extends Record<string, any> = {}>(name: string, extras?: E, extraConfig?: ExtraConfig<typeof roleColumns & E>) =>
+    sqliteTable(name, { ...roleColumns, ...(extras as E) }, (table) => extraConfig?.(table as any) ?? []),
 
-  userNotes: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
-    sqliteTable(name, { ...userNoteColumns, ...(extras as E) }),
+  userNotes: <E extends Record<string, any> = {}>(name: string, extras?: E, extraConfig?: ExtraConfig<typeof userNoteColumns & E>) =>
+    sqliteTable(name, { ...userNoteColumns, ...(extras as E) }, (table) => extraConfig?.(table as any) ?? []),
 
-  adminAudit: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
-    sqliteTable(name, { ...adminAuditColumns, ...(extras as E) }),
+  adminAudit: <E extends Record<string, any> = {}>(name: string, extras?: E, extraConfig?: ExtraConfig<typeof adminAuditColumns & E>) =>
+    sqliteTable(name, { ...adminAuditColumns, ...(extras as E) }, (table) => extraConfig?.(table as any) ?? []),
 
-  roomCaches: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
-    sqliteTable(name, { ...roomCacheColumns, ...(extras as E) }),
+  roomCaches: <E extends Record<string, any> = {}>(name: string, extras?: E, extraConfig?: ExtraConfig<typeof roomCacheColumns & E>) =>
+    sqliteTable(name, { ...roomCacheColumns, ...(extras as E) }, (table) => extraConfig?.(table as any) ?? []),
 };

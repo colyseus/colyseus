@@ -1,8 +1,8 @@
 /**
  * AnalyticsPlugin — auto-tracks Colyseus room lifecycle events into the
  * GameDatabase analytics store. Each fired event becomes a row in the
- * `analyticsEvents` table, queryable via `db.analytics.retention()` /
- * `.funnel()` or surfaced on the admin dashboard.
+ * `analyticsEvents` table, readable via `db.drizzle` or surfaced on the
+ * admin dashboard.
  *
  * Wiring example (inside a Room subclass):
  *

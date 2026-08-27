@@ -5,8 +5,16 @@
  * Works with both SQLite and PG table configs (both expose the same
  * structural shape from getTableConfig).
  */
+import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
+import { PgDialect } from 'drizzle-orm/pg-core';
 
-export function generateCreateTableSQL(config: {
+export type DdlDialect = 'sqlite' | 'pg';
+
+/**
+ * Structural subset of drizzle's `getTableConfig()` result that the DDL
+ * generators read. Shared by sqlite-core and pg-core.
+ */
+export interface TableDdlConfig {
   name: string;
   columns: Array<{
     name: string;
@@ -14,6 +22,9 @@ export function generateCreateTableSQL(config: {
     primary: boolean;
     notNull: boolean;
     default?: any;
+    isUnique?: boolean;
+    uniqueName?: string;
+    uniqueType?: string;
   }>;
   primaryKeys?: Array<{
     columns: Array<{ name: string }>;
@@ -24,7 +35,47 @@ export function generateCreateTableSQL(config: {
       foreignColumns: Array<{ name: string; table?: any }>;
     };
   }>;
-}): string {
+  uniqueConstraints?: Array<{
+    columns: Array<{ name: string }>;
+    nullsNotDistinct?: boolean;
+    getName(): string | undefined;
+  }>;
+  checks?: Array<{ name: string; value: any }>;
+  indexes?: Array<{
+    config: {
+      name?: string;
+      columns: any[];
+      unique: boolean;
+      where?: any;
+      method?: string;
+    };
+  }>;
+}
+
+const dialects = {
+  sqlite: new SQLiteSyncDialect(),
+  pg: new PgDialect(),
+};
+
+/**
+ * Render a drizzle `SQL` fragment the way drizzle-kit does for constraints and
+ * indexes: params inlined, column references unqualified (`"handle"` rather
+ * than `"users"."handle"`), so the text is valid inside CREATE TABLE.
+ */
+function renderSql(fragment: any, dialect: DdlDialect): string {
+  return dialects[dialect].sqlToQuery(fragment.inlineParams(), 'indexes').sql;
+}
+
+function isSqlFragment(value: any): boolean {
+  return value && Array.isArray(value.queryChunks);
+}
+
+/**
+ * CREATE TABLE IF NOT EXISTS for one table: columns, single or composite
+ * primary key, foreign keys, column-level and table-level UNIQUE, and CHECK
+ * constraints. Indexes are separate statements, see `generateCreateIndexSQL`.
+ */
+export function generateCreateTableSQL(config: TableDdlConfig, dialect: DdlDialect = 'sqlite'): string {
   const tableName = config.name;
   const hasCompositePK = config.primaryKeys && config.primaryKeys.length > 0;
 
@@ -40,6 +91,13 @@ export function generateCreateTableSQL(config: {
       def += ' NOT NULL';
     }
 
+    if (col.isUnique) {
+      def += ' UNIQUE';
+      if (dialect === 'pg' && col.uniqueType === 'not distinct') {
+        def += ' NULLS NOT DISTINCT';
+      }
+    }
+
     if (col.default !== undefined) {
       def += ` DEFAULT ${extractSQLString(col.default)}`;
     }
@@ -53,6 +111,20 @@ export function generateCreateTableSQL(config: {
       const colNames = pk.columns.map(c => `"${c.name}"`).join(', ');
       columnDefinitions.push(`PRIMARY KEY (${colNames})`);
     }
+  }
+
+  for (const uq of config.uniqueConstraints ?? []) {
+    const colNames = uq.columns.map(c => `"${c.name}"`).join(', ');
+    const name = uq.getName();
+    let def = name ? `CONSTRAINT "${name}" UNIQUE` : 'UNIQUE';
+    if (dialect === 'pg' && uq.nullsNotDistinct) {
+      def += ' NULLS NOT DISTINCT';
+    }
+    columnDefinitions.push(`${def} (${colNames})`);
+  }
+
+  for (const check of config.checks ?? []) {
+    columnDefinitions.push(`CONSTRAINT "${check.name}" CHECK (${renderSql(check.value, dialect)})`);
   }
 
   // Add foreign key constraints
@@ -77,12 +149,50 @@ export function generateCreateTableSQL(config: {
 }
 
 /**
+ * One `CREATE [UNIQUE] INDEX IF NOT EXISTS` per index declared in the table's
+ * extra config (`index()` / `uniqueIndex()`, with optional `.where()`).
+ * Idempotent, so the auto strategy can run them on every boot and tables
+ * created before an index was declared still receive it.
+ */
+export function generateCreateIndexSQL(config: TableDdlConfig, dialect: DdlDialect = 'sqlite'): string[] {
+  const out: string[] = [];
+  for (const index of config.indexes ?? []) {
+    const cfg = index.config;
+    const columns = cfg.columns.map((col: any) => {
+      if (isSqlFragment(col)) { return `(${renderSql(col, dialect)})`; }
+      let def = `"${col.name}"`;
+      // pg: `.asc()` / `.desc()` / `.nullsFirst()` / `.nullsLast()`; drizzle
+      // pre-fills `indexConfig` with the defaults, so only emit what differs.
+      const ic = col.indexConfig;
+      const defaults = col.defaultConfig ?? {};
+      if (ic?.order && ic.order !== defaults.order) { def += ` ${String(ic.order).toUpperCase()}`; }
+      if (ic?.nulls && ic.nulls !== defaults.nulls) { def += ` NULLS ${String(ic.nulls).toUpperCase()}`; }
+      return def;
+    });
+    const name = cfg.name
+      ?? `${config.name}_${cfg.columns.map((c: any) => c.name ?? 'expr').join('_')}_index`;
+    let stmt = `CREATE ${cfg.unique ? 'UNIQUE ' : ''}INDEX IF NOT EXISTS "${name}" ON "${config.name}"`;
+    if (dialect === 'pg' && cfg.method && cfg.method !== 'btree') {
+      stmt += ` USING ${cfg.method}`;
+    }
+    stmt += ` (${columns.join(', ')})`;
+    if (cfg.where) {
+      stmt += ` WHERE ${renderSql(cfg.where, dialect)}`;
+    }
+    out.push(stmt);
+  }
+  return out;
+}
+
+/**
  * Generate ALTER TABLE … ADD COLUMN statements for columns that exist in the
  * drizzle table config but not in `existingColumnNames`. Returns one statement
  * per missing column. Empty array if everything is up to date.
  *
- * Drop and type-change are intentionally not handled — they're risky, and
- * dev workflows can blow away the file/PGlite to force a recreate.
+ * Drop, type-change and constraints on an existing table are intentionally not
+ * handled — they're risky, and dev workflows can blow away the file/PGlite to
+ * force a recreate. Declare `uniqueIndex()` instead of `.unique()` when the
+ * table may already exist: indexes are applied on every boot.
  */
 export function generateAlterAddColumnSQL(
   config: {

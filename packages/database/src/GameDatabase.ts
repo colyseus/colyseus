@@ -1,6 +1,6 @@
 import type { DatabaseSyncOptions } from 'node:sqlite';
 import type { Presence } from '@colyseus/core';
-import { generateCreateTableSQL, generateAlterAddColumnSQL } from './utils.ts';
+import { generateCreateTableSQL, generateCreateIndexSQL, generateAlterAddColumnSQL } from './utils.ts';
 import { AuthService } from './services/AuthService.ts';
 import { ConfigService } from './services/ConfigService.ts';
 import { CloudSaveService } from './services/CloudSaveService.ts';
@@ -109,7 +109,10 @@ interface CommonOptions<
 
   /**
    * Migration strategy:
-   *  - `"auto"` (default): CREATE TABLE IF NOT EXISTS + ALTER ADD COLUMN.
+   *  - `"auto"` (default): CREATE TABLE IF NOT EXISTS (columns, primary and
+   *    foreign keys, UNIQUE and CHECK constraints), ALTER TABLE ADD COLUMN
+   *    for new columns, and CREATE INDEX IF NOT EXISTS on every boot. Never
+   *    drops, retypes, or adds constraints to a table that already exists.
    *  - `{ files: "./drizzle" }`: drizzle-orm's file-based migrator.
    *  - `"skip"`: caller manages the schema externally.
    */
@@ -411,6 +414,7 @@ export class GameDatabase<
       // Create-or-extend behavior: idempotent, dev-friendly. No DROP/type-change.
       await this.createTables(schemas);
       await this.alterTablesForNewColumns(schemas);
+      await this.createIndexes(schemas);
     } else if (strategy === 'skip') {
       // No-op: caller manages the schema externally (e.g. CI step that ran
       // `drizzle-kit migrate` before the server started).
@@ -667,6 +671,28 @@ export class GameDatabase<
   }
 
   /**
+   * CREATE INDEX IF NOT EXISTS for every index declared on the resolved
+   * tables. Runs on every auto boot: idempotent, and the only way a table
+   * created before the index was declared receives it.
+   */
+  private async createIndexes(
+    schemas: ReturnType<GameDatabase['resolveSchemas']>,
+  ) {
+    const getTableConfig = await this.getTableConfig();
+    for (const table of Object.values(schemas)) {
+      for (const stmt of generateCreateIndexSQL(getTableConfig(table), this.dialect)) {
+        await this.execRaw(stmt);
+      }
+    }
+  }
+
+  private async getTableConfig(): Promise<(table: any) => any> {
+    return this.dialect === 'pg'
+      ? (await import('drizzle-orm/pg-core')).getTableConfig
+      : (await import('drizzle-orm/sqlite-core')).getTableConfig;
+  }
+
+  /**
    * Run a single raw DDL/DML statement. Routes to the right driver method:
    *   postgres-js: client.unsafe(sql)
    *   pglite:      client.exec(sql)
@@ -745,7 +771,7 @@ export class GameDatabase<
       // generation — the registry's `entry.table` is only the default.
       const table = (schemas as any)[entry.key];
       const config = getTableConfig(table);
-      const sql = generateCreateTableSQL(config);
+      const sql = generateCreateTableSQL(config, this.dialect);
 
       if (this.dialect === 'pg') {
         try {

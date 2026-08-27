@@ -9,7 +9,8 @@
  *     level: integer('level').notNull().default(1),
  *   });
  */
-import { pgTable, primaryKey } from 'drizzle-orm/pg-core';
+import { pgTable, primaryKey, type PgTableExtraConfigValue } from 'drizzle-orm/pg-core';
+import type { BuildColumns } from 'drizzle-orm';
 import {
   userColumns,
   configColumns,
@@ -23,38 +24,48 @@ import {
   roomCacheColumns,
 } from '../schemas/pg.ts';
 
+/**
+ * Optional third factory argument, same shape as pgTable's: receives the built
+ * columns (base + extras) and returns indexes / checks / unique constraints.
+ * Merged after the built-in composite primary key where one exists.
+ */
+type ExtraConfig<C extends Record<string, any>> =
+  (table: BuildColumns<string, C, 'pg'>) => PgTableExtraConfigValue[];
+
 export const pg = {
-  users: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
-    pgTable(name, { ...userColumns, ...(extras as E) }),
+  users: <E extends Record<string, any> = {}>(name: string, extras?: E, extraConfig?: ExtraConfig<typeof userColumns & E>) =>
+    pgTable(name, { ...userColumns, ...(extras as E) }, (table) => extraConfig?.(table as any) ?? []),
 
-  configs: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
-    pgTable(name, { ...configColumns, ...(extras as E) }),
+  configs: <E extends Record<string, any> = {}>(name: string, extras?: E, extraConfig?: ExtraConfig<typeof configColumns & E>) =>
+    pgTable(name, { ...configColumns, ...(extras as E) }, (table) => extraConfig?.(table as any) ?? []),
 
-  cloudSaves: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
+  cloudSaves: <E extends Record<string, any> = {}>(name: string, extras?: E, extraConfig?: ExtraConfig<typeof cloudSaveColumns & E>) =>
     pgTable(name, { ...cloudSaveColumns, ...(extras as E) }, (table) => [
       primaryKey({ columns: [table.userId, table.slot] }),
+      ...(extraConfig?.(table as any) ?? []),
     ]),
 
-  leaderboards: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
-    pgTable(name, { ...leaderboardColumns, ...(extras as E) }),
+  leaderboards: <E extends Record<string, any> = {}>(name: string, extras?: E, extraConfig?: ExtraConfig<typeof leaderboardColumns & E>) =>
+    pgTable(name, { ...leaderboardColumns, ...(extras as E) }, (table) => extraConfig?.(table as any) ?? []),
 
-  leaderboardEntries: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
+  leaderboardEntries: <E extends Record<string, any> = {}>(name: string, extras?: E, extraConfig?: ExtraConfig<typeof leaderboardEntryColumns & E>) =>
     pgTable(name, { ...leaderboardEntryColumns, ...(extras as E) }, (table) => [
       primaryKey({ columns: [table.boardId, table.userId, table.season] }),
+      ...(extraConfig?.(table as any) ?? []),
     ]),
 
-  analyticsEvents: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
-    pgTable(name, { ...analyticsEventColumns, ...(extras as E) }),
+  analyticsEvents: <E extends Record<string, any> = {}>(name: string, extras?: E, extraConfig?: ExtraConfig<typeof analyticsEventColumns & E>) =>
+    pgTable(name, { ...analyticsEventColumns, ...(extras as E) }, (table) => extraConfig?.(table as any) ?? []),
 
-  roles: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
-    pgTable(name, { ...roleColumns, ...(extras as E) }),
+  roles: <E extends Record<string, any> = {}>(name: string, extras?: E, extraConfig?: ExtraConfig<typeof roleColumns & E>) =>
+    pgTable(name, { ...roleColumns, ...(extras as E) }, (table) => extraConfig?.(table as any) ?? []),
 
-  userNotes: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
-    pgTable(name, { ...userNoteColumns, ...(extras as E) }),
+  userNotes: <E extends Record<string, any> = {}>(name: string, extras?: E, extraConfig?: ExtraConfig<typeof userNoteColumns & E>) =>
+    pgTable(name, { ...userNoteColumns, ...(extras as E) }, (table) => extraConfig?.(table as any) ?? []),
 
-  adminAudit: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
-    pgTable(name, { ...adminAuditColumns, ...(extras as E) }),
+  adminAudit: <E extends Record<string, any> = {}>(name: string, extras?: E, extraConfig?: ExtraConfig<typeof adminAuditColumns & E>) =>
+    pgTable(name, { ...adminAuditColumns, ...(extras as E) }, (table) => extraConfig?.(table as any) ?? []),
 
-  roomCaches: <E extends Record<string, any> = {}>(name: string, extras?: E) =>
-    pgTable(name, { ...roomCacheColumns, ...(extras as E) }),
+  roomCaches: <E extends Record<string, any> = {}>(name: string, extras?: E, extraConfig?: ExtraConfig<typeof roomCacheColumns & E>) =>
+    pgTable(name, { ...roomCacheColumns, ...(extras as E) }, (table) => extraConfig?.(table as any) ?? []),
 };

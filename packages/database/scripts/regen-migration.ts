@@ -29,7 +29,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { generateCreateTableSQL } from '../src/utils.ts';
+import { generateCreateTableSQL, generateCreateIndexSQL } from '../src/utils.ts';
 
 interface Args {
   dialect: 'sqlite' | 'pg';
@@ -99,11 +99,11 @@ async function main() {
     throw new Error(`no drizzle tables exported from ${args.schema}`);
   }
 
-  // Generate one CREATE TABLE per table; statements separated by
+  // One CREATE TABLE per table plus its CREATE INDEX statements; separated by
   // `--> statement-breakpoint` so drizzle's migrator splits them.
-  const statements = tables.map(({ table }) => {
+  const statements = tables.flatMap(({ table }) => {
     const cfg = getTableConfig(table);
-    return generateCreateTableSQL(cfg);
+    return [generateCreateTableSQL(cfg, args.dialect), ...generateCreateIndexSQL(cfg, args.dialect)];
   });
   const sql = statements.join(';\n--> statement-breakpoint\n') + ';\n';
 
@@ -120,7 +120,7 @@ async function main() {
     if (fs.existsSync(existingPath) && fs.readFileSync(existingPath, 'utf8') === sql) {
       // eslint-disable-next-line no-console
       console.log(
-        `[regen-migration] no change — ${tables.length} CREATE TABLE statement(s) in\n` +
+        `[regen-migration] no change — ${statements.length} statement(s) for ${tables.length} table(s) in\n` +
         `  ${path.relative(cwd, existingPath)}`,
       );
       return;
@@ -143,7 +143,7 @@ async function main() {
 
   // eslint-disable-next-line no-console
   console.log(
-    `[regen-migration] wrote ${tables.length} CREATE TABLE statement(s) to\n` +
+    `[regen-migration] wrote ${statements.length} statement(s) for ${tables.length} table(s) to\n` +
     `  ${path.relative(cwd, path.join(dir, 'migration.sql'))}`,
   );
 }
