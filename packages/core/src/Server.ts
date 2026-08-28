@@ -132,17 +132,33 @@ export class Server<
   static current: Server<any, any> | undefined;
 
   constructor(options: ServerOptions = {}) {
-    const {
-      gracefullyShutdown = true,
-      greet = true
-    } = options;
-
-    setDevMode(options.devMode === true);
+    const { greet = true } = options;
 
     this.options = options;
     this.greet = greet;
 
     (Server as { current: Server<any, any> | undefined }).current = this as Server<any, any>;
+
+    if (options.logger) {
+      setLogger(options.logger);
+    }
+
+    this.bootRuntime();
+  }
+
+  /**
+   * Every side effect of construction: the dev-mode flag, the transport, the
+   * matchmaker and the process signal handlers. Distinct from
+   * {@link _bootServices}, which prepares user services once we're listening.
+   *
+   * Isolated so {@link DevServer} can opt out of all four — under
+   * `colyseus/vite` the plugin owns them, and user code still gets a real
+   * `Server` to call.
+   */
+  protected bootRuntime() {
+    const options = this.options;
+
+    setDevMode(options.devMode === true);
 
     this.attach(options);
 
@@ -159,12 +175,8 @@ export class Server<
       this.driver = matchMaker.driver;
     });
 
-    if (gracefullyShutdown) {
+    if (options.gracefullyShutdown !== false) {
       registerGracefulShutdown((err) => this.gracefullyShutdown(true, err));
-    }
-
-    if (options.logger) {
-      setLogger(options.logger);
     }
   }
 
@@ -498,6 +510,47 @@ export class Server<
     () => Promise.resolve()
 }
 
+// the user module re-evaluates on every HMR reload — warn once per process
+const devWarnings = new Set<string>();
+function warnDevOnce(message: string) {
+  if (devWarnings.has(message)) { return; }
+  devWarnings.add(message);
+  logger.warn(message);
+}
+
+/**
+ * The `Server` handed to user code under `colyseus/vite`.
+ *
+ * The plugin owns the HTTP server, the transport, the matchmaker and the
+ * process lifecycle, so constructing one has no side effects — it only
+ * carries the user's configuration back to the plugin. Everything else is
+ * inherited, so the documented `Server` API keeps working in dev mode.
+ */
+class DevServer<
+  RoomTypes extends Record<string, RegisteredHandler> = any,
+  Routes extends Router = any
+> extends Server<RoomTypes, Routes> {
+
+  protected bootRuntime() {
+    // the plugin creates the transport and runs matchMaker.setup() before
+    // importing user code, so both are already available here
+    this.transport = getTransport();
+    this._onTransportReady.resolve(this.transport);
+    this.presence = matchMaker.presence;
+    this.driver = matchMaker.driver;
+
+    if (this.options.transport) {
+      warnDevOnce("⚠️  'transport' is ignored in dev mode — colyseus/vite serves WebSockets over Vite's own HTTP server.");
+    }
+  }
+
+  /** The plugin already serves Colyseus on Vite's own HTTP server and port. */
+  public async listen(_port?: number | string, _hostname?: string, _backlog?: number, listeningListener?: Function) {
+    warnDevOnce("⚠️  listen() is ignored in dev mode — connect to the Vite dev server's URL instead.");
+    listeningListener?.();
+  }
+}
+
 let _originalRoomOnMessage: typeof Room.prototype['_onMessage'] | null = null;
 
 /**
@@ -597,22 +650,18 @@ export function defineServer<
 ): Server<T, R> {
   const { rooms, routes, ...serverOptions } = options;
 
-  if (isDevMode) {
-    // In dev mode, the Vite plugin manages Server/matchMaker lifecycle.
-    // Return a config-only object — no Server instance, no matchMaker.setup().
-    return {
-      options: serverOptions,
-      router: routes,
-      '~rooms': rooms,
-      // the vite plugin registers the transport before importing user code
-      simulateLatency: (milliseconds: number) => applySimulatedLatency(getTransport(), milliseconds),
-    } as unknown as Server<T, R>;
-  }
+  const server = isDevMode
+    ? new DevServer<T, R>(serverOptions)
+    : new Server<T, R>(serverOptions);
 
-  const server = new Server<T, R>(serverOptions);
   server.router = routes;
+  server['~rooms'] = rooms;
 
-  registerRoomDefinitions(rooms);
+  // in dev mode the plugin reads `~rooms` back and owns their
+  // (re-)registration across HMR reloads
+  if (!isDevMode) {
+    registerRoomDefinitions(rooms);
+  }
 
   return server;
 }

@@ -10,12 +10,12 @@
  * as the plugin process. This lets user code (monitor, playground, custom
  * middleware) access the real matchMaker with actual room data.
  *
- * In dev mode, defineServer() returns a config-only object (no Server
- * instance). The plugin manages the matchMaker lifecycle, transport, and
- * HMR directly.
+ * In dev mode, defineServer() returns a Server that never boots itself: the
+ * plugin manages the matchMaker lifecycle, transport, process signals and
+ * HMR directly, while user code still gets the full Server API.
  *
  * On HMR:
- * 1. Re-import user module (defineServer returns fresh config)
+ * 1. Re-import user module (defineServer returns a fresh Server)
  * 2. Swap router handler + re-register room definitions
  * 3. matchMaker.hotReload() — cache rooms, dispose, restore
  */
@@ -29,18 +29,29 @@ import {
   toNodeHandler,
   applySimulatedLatency,
   parseLatencyEnv,
+  Server,
   type RoomDefinitions,
-  type ServerOptions,
   type Transport,
-  type Router,
 } from '@colyseus/core';
 import { getTransport, setTransport } from '@colyseus/core/Transport';
+import { registerGracefulShutdown } from '@colyseus/core/utils/Utils';
 import type { Plugin } from 'vite';
 
 // ─── Virtual module IDs ───────────────────────────────────────────────
 
 const VIRTUAL_SERVER_ENTRY = 'virtual:colyseus-server-entry';
 const RESOLVED_VIRTUAL_SERVER_ENTRY = '\0' + VIRTUAL_SERVER_ENTRY;
+
+// Module scope, not plugin scope: `process` listeners outlive both the plugin
+// closure (a Vite restart builds a fresh one) and any single reloaded Server.
+let currentServer: Server | undefined;
+let shutdownRegistered = false;
+
+function registerDevShutdownOnce() {
+  if (shutdownRegistered) { return; }
+  shutdownRegistered = true;
+  registerGracefulShutdown((err) => currentServer?.gracefullyShutdown(true, err));
+}
 
 // ─── Options ──────────────────────────────────────────────────────────
 
@@ -74,25 +85,22 @@ export interface ColyseusViteOptions {
 
 // ─── Internal types ───────────────────────────────────────────────────
 
-type ServerConfig = {
-  options?: ServerOptions;
-  router?: Router;
-  '~rooms'?: RoomDefinitions;
-};
-
 type ServerModule = {
-  server?: ServerConfig;
+  server?: Server;
   rooms?: RoomDefinitions;
   default?: {
-    server?: ServerConfig;
+    server?: Server;
     rooms?: RoomDefinitions;
   };
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────
 
-function getServerExport(mod: ServerModule): ServerConfig | undefined {
-  return mod.server || mod.default?.server;
+function getServerExport(mod: ServerModule): Server | undefined {
+  // `Server.current` picks up an entry that built a server but didn't export it
+  // under the name we look for — `const gameServer = defineServer(...)`, which
+  // is how the non-Vite docs spell it.
+  return mod.server || mod.default?.server || Server.current;
 }
 
 function getRoomsExport(mod: ServerModule): RoomDefinitions | undefined {
@@ -323,27 +331,30 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
           },
         });
         setTransport(transport);
+
+        // dev-mode servers don't register this themselves — the user module
+        // re-evaluates on every reload, and each one would add a listener
+        registerDevShutdownOnce();
       }
 
       // ── Step 2: Import user module ──
-      // In dev mode, defineServer() returns a config object (no Server
-      // instance, no matchMaker.setup() call) because isDevMode is true.
+      // isDevMode is set, so defineServer() hands back an unbooted Server.
       const mod = await env.runner.import(options.serverEntry);
 
-      const config = getServerExport(mod);
+      currentServer = getServerExport(mod);
       const rooms: RoomDefinitions | undefined = getRoomsExport(mod)
-        || config?.['~rooms'];
+        || currentServer?.['~rooms'];
 
       // ── Step 3: Build application middleware (router + express) ──
-      const router = config?.router;
+      const router = currentServer?.router;
 
       // Set up express once — persistent across HMR reloads.
-      if (!expressApp && config?.options?.express) {
+      if (!expressApp && currentServer?.options?.express) {
         try {
           const expressModule = await dynamicImport<any>('express');
           const express = expressModule?.default ?? expressModule;
           expressApp = express();
-          await config.options.express(expressApp);
+          await currentServer.options.express(expressApp);
         } catch (e) {
           console.warn('[colyseus] Express not available. Install express to use the express option.');
         }
