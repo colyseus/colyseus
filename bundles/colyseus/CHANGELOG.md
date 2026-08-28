@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.18.4
+
+- The Vite plugin now finds your server even when the entry doesn't export it under the name `server` — `const gameServer = defineServer(...)`, as the non-Vite docs spell it, previously registered no rooms and warned that the entry should export `server` or `rooms`.
+
+- Ctrl-C on the dev server now shuts Colyseus down gracefully, running your `onBeforeShutdown`/`onShutdown` callbacks and caching room state for the next restart.
+
 ## 0.18.2
 
 - Fix `require("colyseus")` throwing `ERR_INVALID_ARG_TYPE` before any user code ran, which broke every CommonJS project — whether or not it used the monitor or playground panels.

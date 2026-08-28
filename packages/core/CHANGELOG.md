@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.18.9
+
+- Fix `server.onShutdown()`, `server.listen()` and the rest of the `Server` API throwing `is not a function` under the Vite plugin. In dev mode `defineServer()` returned a plain configuration object rather than a `Server`, so only `simulateLatency()` was callable. Your shutdown callbacks now also run when the dev server stops. [#956](https://github.com/colyseus/colyseus/issues/956)
+
+- In dev mode, `listen()` and a `transport` passed to `defineServer()` now warn that they are ignored — the Vite plugin serves Colyseus on Vite's own HTTP server and port.
+
 ## 0.18.8
 
 - `LocalPresence` no longer treats `__proto__`, `constructor`, `toString` and other `Object.prototype` names specially — `hset("__proto__", …)` polluted `Object.prototype`, and set/list operations on such keys threw. Keys are plain data now, matching `RedisPresence`. [#942](https://github.com/colyseus/colyseus/issues/942)
