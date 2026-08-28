@@ -41,6 +41,8 @@ export type ServerOptions = {
    */
   database?: {
     boot(): Promise<void>;
+    /** Release connections — a host that re-boots on reload disposes the instance it replaced. */
+    shutdown?(): Promise<void>;
     applyRouterDefaults?(router: Router): Router | Promise<Router>;
   },
 
@@ -149,7 +151,7 @@ export class Server<
   /**
    * Every side effect of construction: the dev-mode flag, the transport, the
    * matchmaker and the process signal handlers. Distinct from
-   * {@link _bootServices}, which prepares user services once we're listening.
+   * {@link prepareServices}, which boots the services user code declared.
    *
    * Isolated so {@link DevServer} can opt out of all four — under
    * `colyseus/vite` the plugin owns them, and user code still gets a real
@@ -196,7 +198,7 @@ export class Server<
    * @param listeningListener
    */
   public async listen(port: number | string, hostname?: string, backlog?: number, listeningListener?: Function) {
-    await this._bootServices();
+    await this._bootForListen();
 
     //
     // if Colyseus Cloud is detected, use @colyseus/tools to listen
@@ -287,7 +289,7 @@ export class Server<
    * ```
    */
   public async serverless(): Promise<HttpServer> {
-    await this._bootServices();
+    await this._bootForListen();
 
     // transport (and its HTTP server) must be ready before binding routes
     await this._onTransportReady;
@@ -440,22 +442,42 @@ export class Server<
     this.onBeforeShutdownCallback = callback;
   }
 
-  // Boot sequence shared by listen() and serverless(): user `beforeListen`
-  // hook, database boot, framework router defaults (auth/db endpoints), then
-  // the express app. serverless() needs this too — its exported server still
-  // serves the express callback and auth/database routes.
-  private async _bootServices(): Promise<void> {
-    const { beforeListen, database, express } = this.options;
+  /**
+   * Boot the services user code declared: the `beforeListen` hook, the
+   * database, and the endpoints they contribute to the router. Returns the
+   * finalized router, so a caller can't read a stale one by mistake.
+   *
+   * Reached from outside via `@colyseus/core/internal` — `colyseus/vite` owns
+   * the HTTP server and never calls {@link listen}, but user code there still
+   * expects `database.boot()` and the auth routes.
+   *
+   * `runBeforeListen` is false when a host re-boots after an HMR reload:
+   * `beforeListen` fires once because the server listens once, while the
+   * database and the router defaults track instances the reload rebuilt.
+   */
+  protected async prepareServices(runBeforeListen: boolean = true): Promise<Routes> {
+    const { beforeListen, database } = this.options;
+
+    if (runBeforeListen && beforeListen) { await beforeListen(); }
+    if (database) { await database.boot(); }
+
+    await this._applyRouterDefaults();
+
+    return this.router;
+  }
+
+  // Listen-time boot: the services above, then the express app. serverless()
+  // needs this too — its exported server still serves the express callback
+  // and the auth/database routes.
+  private async _bootForListen(): Promise<void> {
+    const { express } = this.options;
 
     // boot runs after module evaluation, so the env var wins over
     // simulateLatency() calls made at the top level of user code
     const envLatency = parseLatencyEnv();
     if (envLatency !== undefined) { this.simulateLatency(envLatency); }
 
-    if (beforeListen) { await beforeListen(); }
-    if (database) { await database.boot(); }
-
-    await this._applyRouterDefaults();
+    await this.prepareServices();
 
     if (express) {
       await this._onTransportReady;

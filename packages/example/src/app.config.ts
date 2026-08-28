@@ -18,10 +18,7 @@ import { PostgresDriver } from "@colyseus/drizzle-driver";
 import { DatabaseDriver } from "@colyseus/database";
 
 import { admin, defineAdminResource } from "@colyseus/admin";
-import { registerSegments } from "./db/segments.ts";
 import { database } from "./db/database.ts";
-
-registerSegments(database); // segments must be defined pre-boot
 
 // Tiny test-only seed endpoint — creates an admin + a mod for the panel demo.
 async function seedAdminAndMod() {

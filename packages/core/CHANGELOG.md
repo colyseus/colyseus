@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.18.10
+
+- A host that serves Colyseus without calling `listen()` can now run the `beforeListen` hook, `database.boot()` and the endpoints a database contributes — this is what unblocks them under `vite dev`.
+
+- `ServerOptions.database` accepts an optional `shutdown()`, so such a host can release a replaced instance's connections.
+
 ## 0.18.9
 
 - Fix `server.onShutdown()`, `server.listen()` and the rest of the `Server` API throwing `is not a function` under the Vite plugin. In dev mode `defineServer()` returned a plain configuration object rather than a `Server`, so only `simulateLatency()` was callable. Your shutdown callbacks now also run when the dev server stops. [#956](https://github.com/colyseus/colyseus/issues/956)

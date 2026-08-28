@@ -34,6 +34,7 @@ import {
   type Transport,
 } from '@colyseus/core';
 import { getTransport, setTransport } from '@colyseus/core/Transport';
+import { prepareServices } from '@colyseus/core/internal';
 import { registerGracefulShutdown } from '@colyseus/core/utils/Utils';
 import type { Plugin } from 'vite';
 
@@ -308,7 +309,7 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
         env.runner.evaluatedModules.clear();
       }
 
-      // ── Step 1: Set up matchMaker + transport (initial load only) ──
+      // ── Set up matchMaker + transport (initial load only) ──
       if (!isStarted) {
         setDevMode(true);
         await matchMaker.setup();
@@ -337,16 +338,24 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
         registerDevShutdownOnce();
       }
 
-      // ── Step 2: Import user module ──
+      // ── Import user module ──
       // isDevMode is set, so defineServer() hands back an unbooted Server.
+      const previousDatabase = currentServer?.options?.database;
       const mod = await env.runner.import(options.serverEntry);
 
       currentServer = getServerExport(mod);
       const rooms: RoomDefinitions | undefined = getRoomsExport(mod)
         || currentServer?.['~rooms'];
 
-      // ── Step 3: Build application middleware (router + express) ──
-      const router = currentServer?.router;
+      // ── Boot the services user code declared ──
+      // `beforeListen`, `database.boot()` and the endpoints they contribute —
+      // normally listen()'s job, which we never call. The router comes back
+      // from here so the extension can't be read before it is applied.
+      const router = currentServer
+        ? await prepareServices(currentServer, !isStarted)
+        : undefined;
+
+      // ── Build application middleware (router + express) ──
 
       // Set up express once — persistent across HMR reloads.
       if (!expressApp && currentServer?.options?.express) {
@@ -376,7 +385,7 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
         currentAppHandler = null;
       }
 
-      // ── Step 4: Register room definitions ──
+      // ── Register room definitions ──
       // Must happen BEFORE hotReload() because reloadFromCache() needs
       // the new handlers to recreate room instances.
       unregisterRoomDefinitions(currentRoomNames);
@@ -389,12 +398,20 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
         );
       }
 
-      // ── Step 5: Accept connections or hot-reload rooms ──
+      // ── Accept connections or hot-reload rooms ──
       if (!isStarted) {
         await matchMaker.accept();
         isStarted = true;
       } else {
         await matchMaker.hotReload();
+      }
+
+      // A reload re-evaluates the user's module graph, so the database it
+      // built is a new instance — close the connections the old one opened.
+      // After hotReload(), so disposing rooms still reach the one they used.
+      const database = currentServer?.options?.database;
+      if (previousDatabase && previousDatabase !== database) {
+        await previousDatabase.shutdown?.();
       }
 
       // Re-applied after every import so the env var keeps winning over

@@ -1,7 +1,8 @@
 import assert from "assert";
 
-import { defineRoom, defineServer, matchMaker, Room, setDevMode, Server, unregisterRoomDefinitions } from "@colyseus/core";
+import { createEndpoint, defineRoom, defineServer, matchMaker, Room, setDevMode, Server, unregisterRoomDefinitions } from "@colyseus/core";
 import { setTransport } from "@colyseus/core/Transport";
+import { prepareServices } from "@colyseus/core/internal";
 import { reloadColyseusViteRooms } from "colyseus/vite";
 
 /**
@@ -73,5 +74,69 @@ describe("defineServer() in dev mode", () => {
     } finally {
       unregisterRoomDefinitions(roomNames);
     }
+  });
+});
+
+/**
+ * The plugin never calls `listen()`, so it has to run the service boot itself
+ * — otherwise `beforeListen`, `database.boot()` and the endpoints they
+ * contribute never happen under `colyseus/vite`.
+ */
+describe("prepareServices() in dev mode", () => {
+  beforeEach(() => setDevMode(true));
+  afterEach(() => setDevMode(false));
+
+  it("runs beforeListen and boots the database", async () => {
+    const calls: string[] = [];
+    const server = defineServer({
+      rooms: {},
+      beforeListen: () => { calls.push("beforeListen"); },
+      database: { boot: async () => { calls.push("boot"); } },
+    });
+
+    await prepareServices(server, true);
+
+    assert.deepStrictEqual(calls, ["beforeListen", "boot"]);
+  });
+
+  // the server listens once, so re-booting after a reload must not re-run it
+  it("skips beforeListen when the host is already started", async () => {
+    let ran = 0;
+    const server = defineServer({ rooms: {}, beforeListen: () => { ran++; } });
+
+    await prepareServices(server, false);
+
+    assert.strictEqual(ran, 0);
+  });
+
+  it("lets the database contribute endpoints to the router", async () => {
+    const server = defineServer({
+      rooms: {},
+      database: {
+        boot: async () => {},
+        applyRouterDefaults: async (router) => router.extend({
+          whoami: createEndpoint("/whoami", { method: "GET" }, async () => ({ ok: true })),
+        }),
+      },
+    });
+
+    const router = await prepareServices(server, true);
+
+    assert.ok(router.endpoints.whoami, "database endpoints should be mounted");
+  });
+
+  // HMR re-evaluates user code, so each reload hands over a fresh database
+  // instance that has never been booted
+  it("boots the fresh database a reload hands over", async () => {
+    const booted: string[] = [];
+    const reload = (name: string) => defineServer({
+      rooms: {},
+      database: { boot: async () => { booted.push(name); } },
+    });
+
+    await prepareServices(reload("first"), true);
+    await prepareServices(reload("second"), false);
+
+    assert.deepStrictEqual(booted, ["first", "second"]);
   });
 });

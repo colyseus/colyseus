@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.18.5
+
+- `vite dev`: `@colyseus/database`, `@colyseus/auth` and `beforeListen` now work — rooms using database plugins threw on join before, and `/auth/*` answered 404.
+
+- An HMR reload rebuilds your `database`, so the plugin boots the new instance and closes the one it replaced — every save used to leak a connection.
+
 ## 0.18.4
 
 - The Vite plugin now finds your server even when the entry doesn't export it under the name `server` — `const gameServer = defineServer(...)`, as the non-Vite docs spell it, previously registered no rooms and warned that the entry should export `server` or `rooms`.

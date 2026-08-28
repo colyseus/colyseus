@@ -12,6 +12,8 @@
  * @internal
  */
 import * as matchMaker from './MatchMaker.ts';
+import type { Server } from './Server.ts';
+import type { Router } from './router/index.ts';
 import {
   listUserSessions,
   type ListUserSessionsOptions,
@@ -43,4 +45,21 @@ export function listUserSessionsLive(
   options?: ListUserSessionsOptions,
 ): Promise<UserSessionInfo[]> {
   return listUserSessions(matchMaker.presence, matchMaker.findRoomsByIds, userId, options);
+}
+
+/**
+ * Boot a server's services without listening — `colyseus/vite` owns the HTTP
+ * server and never calls `Server.listen()`, so it runs this step itself.
+ * Returns the finalized router, which the database may have extended.
+ *
+ * Pass `runBeforeListen: false` when re-booting after an HMR reload: the
+ * `beforeListen` hook fires once because the server listens once, while the
+ * database and the router defaults track the instances the reload rebuilt.
+ */
+export function prepareServices(server: Server, runBeforeListen: boolean): Promise<Router> {
+  // `prepareServices` is protected — first-party hosts reach it through here
+  // rather than widening the published `Server` API.
+  return (server as unknown as {
+    prepareServices(runBeforeListen: boolean): Promise<Router>;
+  }).prepareServices(runBeforeListen);
 }
