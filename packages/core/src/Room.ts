@@ -2230,10 +2230,10 @@ export class Room<T extends RoomOptions = RoomOptions> {
     }
 
     // reset message count every second
-    if (this.clock.currentTime - client._lastMessageTime >= 1000) {
+    if (this.clock.currentTime - (client._lastMessageTime ?? 0) >= 1000) {
       client._numMessagesLastSecond = 0;
       client._lastMessageTime = this.clock.currentTime;
-    } else if (++client._numMessagesLastSecond > this.maxMessagesPerSecond) {
+    } else if ((client._numMessagesLastSecond = (client._numMessagesLastSecond ?? 0) + 1) > this.maxMessagesPerSecond) {
       // drop client if it sends more messages than the maximum allowed per second
       debugMatchMaking('dropping client - sessionId: \'%s\' (roomId: %s), too many messages per second', client.sessionId, this.roomId);
       return this.#_forciblyCloseClient(client, CloseCode.WITH_ERROR);
