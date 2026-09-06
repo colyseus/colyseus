@@ -1,4 +1,5 @@
 import assert from "assert";
+import WebSocket from "ws";
 import { CloseCode, ColyseusSDK, getStateCallbacks, Room as SDKRoom } from "@colyseus/sdk";
 import { type Client,  type MatchMakerDriver, type Presence, matchMaker, Room, Server, Transport, LocalDriver, LocalPresence, Deferred } from "@colyseus/core";
 
@@ -786,6 +787,98 @@ describe("Room Reconnection", () => {
       });
     });
 
+  });
+
+  describe("Invalid reconnection token", () => {
+    // A raw connection carrying a valid sessionId but a bad token — anyone who
+    // knows the sessionId can make one. It must leave the reserved seat, its
+    // grace timer and the auto-dispose timer exactly as it found them.
+    // (https://github.com/colyseus/colyseus/issues/962)
+    function attemptWithBadToken(conn: SDKRoom) {
+      const ws = new WebSocket(`${TEST_ENDPOINT}/${matchMaker.processId}/${conn.roomId}?sessionId=${conn.sessionId}&reconnectionToken=bad_token`);
+      return new Promise<void>((resolve) => {
+        const done = () => { ws.terminate(); resolve(); };
+        ws.once('close', done);
+        ws.once('error', done);
+      });
+    }
+
+    it("should be rejected by hasReservedSeat(), before the seat is consumed", async () => {
+      const room = new Deferred<Room>();
+      matchMaker.defineRoomType('bad_token_gate', class _ extends Room {
+        onCreate() { room.resolve(this); }
+        async onDrop(client: Client) {
+          try { await this.allowReconnection(client, 5); } catch (e) { }
+        }
+      });
+
+      const conn = await client.joinOrCreate('bad_token_gate');
+      conn.reconnection.enabled = false; // the reconnection attempt is driven manually here
+      const [roomId, token] = conn.reconnectionToken.split(":");
+
+      conn.leave(false);
+      await timeout(100);
+
+      const seat = (await room) as any;
+      assert.strictEqual(seat.hasReservedSeat(conn.sessionId, "bad_token"), false);
+      assert.strictEqual(seat.hasReservedSeat(conn.sessionId), false);
+      assert.strictEqual(seat.hasReservedSeat(conn.sessionId, token), true);
+
+      await (await client.reconnect(conn.reconnectionToken)).leave();
+    });
+
+    it("should not prevent the room from disposing", async () => {
+      const disposed = new Deferred();
+      let reconnectionRejected = false;
+
+      matchMaker.defineRoomType('bad_token_dispose', class _ extends Room {
+        async onDrop(client: Client) {
+          try {
+            await this.allowReconnection(client, 0.2);
+          } catch (e) {
+            reconnectionRejected = true;
+          }
+        }
+        onDispose() { disposed.resolve(true); }
+      });
+
+      const conn = await client.joinOrCreate('bad_token_dispose');
+      conn.reconnection.enabled = false;
+
+      conn.leave(false);
+      await timeout(100);
+
+      await attemptWithBadToken(conn);
+
+      await disposed; // grace timer expires, then auto-dispose
+      assert.strictEqual(reconnectionRejected, true, "allowReconnection() should have been rejected");
+      assert.ok(!matchMaker.getLocalRoomById(conn.roomId));
+    });
+
+    it("should not consume the seat of the legitimate client", async () => {
+      let onReconnectCalled = false;
+
+      matchMaker.defineRoomType('bad_token_seat', class _ extends Room {
+        async onDrop(client: Client) {
+          try { await this.allowReconnection(client, 5); } catch (e) { }
+        }
+        onReconnect(client: Client) { onReconnectCalled = true; }
+      });
+
+      const conn = await client.joinOrCreate('bad_token_seat');
+      conn.reconnection.enabled = false;
+
+      conn.leave(false);
+      await timeout(100);
+
+      await attemptWithBadToken(conn);
+
+      const reconnected = await client.reconnect(conn.reconnectionToken);
+      assert.strictEqual(reconnected.sessionId, conn.sessionId);
+      assert.strictEqual(onReconnectCalled, true, "onReconnect should have been called");
+
+      await reconnected.leave();
+    });
   });
 
 });

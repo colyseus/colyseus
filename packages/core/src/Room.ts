@@ -847,13 +847,13 @@ export class Room<T extends RoomOptions = RoomOptions> {
     const reservedSeat = this._reservedSeats[sessionId];
 
     if (reservedSeat) {
-      // seat reservation is present
-      return (
-        // not consumed
-        (reservedSeat[2] === false) ||
-        // reconnection is allowed and the reconnection token is valid.
-        (reservedSeat[3] && this._reconnections[reconnectionToken]?.[0] === sessionId)
-      )
+      return (reservedSeat[3])
+        // seat is held by allowReconnection(): only the issued token may claim it.
+        // (a token-less "not consumed yet" pass here would let anyone who knows the
+        // sessionId burn the seat — https://github.com/colyseus/colyseus/issues/962)
+        ? this._reconnections[reconnectionToken]?.[0] === sessionId
+        // fresh seat reservation: valid until consumed.
+        : reservedSeat[2] === false;
 
     } else if (typeof(reconnectionToken) === "string") {
         // potentially a stale client reference, so a reconnection attempt is possible.

@@ -2,6 +2,8 @@
 
 ## 0.18.11
 
+- A reconnection attempt with a missing or wrong `reconnectionToken` is now rejected before it can claim the seat it targets. One such attempt used to keep the room alive until the process restarted, and left the legitimate client with "already consumed" on every retry. Thanks @juhaelee! [#962](https://github.com/colyseus/colyseus/issues/962)
+
 - `maxMessagesPerSecond` now applies on every transport. It only ever took effect on `@colyseus/ws-transport` — on `@colyseus/uwebsockets-transport`, `@colyseus/bun-websockets` and `@colyseus/h3-transport` the limit was silently ignored.
 
 ## 0.18.10
