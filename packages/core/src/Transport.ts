@@ -104,7 +104,8 @@ export async function runBeforeUpgrade(
   }
 
   try {
-    return (await handler(request, context)) ?? undefined;
+    // `||`, not `??`: a handler that returns nothing is typed `void`, which `??` doesn't strip
+    return (await handler(request, context)) || undefined;
 
   } catch (e: any) {
     debugAndPrintError(e);
