@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.11
+
+- `maxMessagesPerSecond` now applies on every transport. It only ever took effect on `@colyseus/ws-transport` — on `@colyseus/uwebsockets-transport`, `@colyseus/bun-websockets` and `@colyseus/h3-transport` the limit was silently ignored.
+
 ## 0.18.10
 
 - A host that serves Colyseus without calling `listen()` can now run the `beforeListen` hook, `database.boot()` and the endpoints a database contributes — this is what unblocks them under `vite dev`.
