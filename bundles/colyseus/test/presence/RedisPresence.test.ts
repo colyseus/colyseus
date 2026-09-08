@@ -190,56 +190,56 @@ describe("RedisPresence", () => {
 
   describe("message handling", () => {
     let presence: RedisPresence;
+    let topic: string;
     let warn: sinon.SinonStub;
 
     beforeEach(() => {
-      // exercise ioredis' 'message' event without connecting to a server
-      presence = new RedisPresence({ lazyConnect: true });
-      presence['sub'].on('message', presence['handleSubscription']);
+      presence = new RedisPresence();
+      topic = "messages-" + Date.now();
       warn = sinon.stub(logger, 'warn');
     });
 
     afterEach(() => {
       warn.restore();
-      presence['sub'].disconnect();
-      presence['pub'].disconnect();
+      presence.shutdown();
     });
 
-    for (const message of ['', 'not json', '{"incomplete":']) {
-      it(`should ignore malformed JSON ${JSON.stringify(message)} and deliver subsequent messages`, () => {
-        // the handler runs from an event listener: a throw here takes the process down (#730)
-        const received: unknown[] = [];
-        presence['subscriptions'].on('topic', (data) => received.push(data));
+    // synthetic 'message' event: publish() always JSON.stringify()s, so a malformed
+    // payload can only come from another client
+    const deliver = (payload: string) => presence['sub'].emit('message', topic, payload);
 
-        assert.doesNotThrow(() => presence['sub'].emit('message', 'topic', message));
-        assert.deepStrictEqual([], received);
-        assert.strictEqual(1, warn.callCount);
-
-        presence['sub'].emit('message', 'topic', '{"ok":true}');
-        assert.deepStrictEqual([{ ok: true }], received);
-      });
-    }
-
-    it("should deliver all valid JSON values, including falsy ones", () => {
-      // publish() turns `undefined` into `false`, so falsy payloads are a real wire case
-      const values = [null, false, 0, '', 'hello', [], { value: 1 }];
+    it("should ignore malformed JSON and keep delivering", async () => {
+      // the handler runs from an ioredis listener: a throw there takes the process down (#730)
       const received: unknown[] = [];
-      presence['subscriptions'].on('topic', (data) => received.push(data));
+      await presence.subscribe(topic, (data) => received.push(data));
 
-      for (const value of values) {
-        presence['sub'].emit('message', 'topic', JSON.stringify(value));
+      for (const payload of ['', 'not json', '{"incomplete":']) {
+        deliver(payload);
+        assert.deepStrictEqual([], received, `delivered a payload for ${JSON.stringify(payload)}`);
       }
+      assert.strictEqual(3, warn.callCount);
+
+      deliver('{"ok":true}');
+      assert.deepStrictEqual([{ ok: true }], received);
+    });
+
+    it("should deliver all valid JSON values, including falsy ones", async () => {
+      // publish() turns `undefined` into `false`, so falsy payloads are a real wire case
+      const values = [null, false, 0, "", "hello", [], { value: 1 }];
+      const received: unknown[] = [];
+      await presence.subscribe(topic, (data) => received.push(data));
+
+      values.forEach((value) => deliver(JSON.stringify(value)));
 
       assert.deepStrictEqual(values, received);
       assert.strictEqual(0, warn.callCount);
     });
 
-    it("should not swallow subscription callback errors", () => {
-      const error = new Error('application callback failed');
-      presence['subscriptions'].on('topic', () => { throw error; });
+    it("should not swallow subscription callback errors", async () => {
+      const error = new Error("application callback failed");
+      await presence.subscribe(topic, () => { throw error; });
 
-      assert.throws(() => presence['sub'].emit('message', 'topic', '{}'), (thrown) => thrown === error);
-      assert.strictEqual(0, warn.callCount);
+      assert.throws(() => deliver("{}"), (thrown) => thrown === error);
     });
   });
 

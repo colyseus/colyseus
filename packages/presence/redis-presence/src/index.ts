@@ -257,7 +257,7 @@ export class RedisPresence implements Presence {
     }
 
     protected handleSubscription = (channel, message) => {
-        let data: any;
+        let data;
         try {
             data = JSON.parse(message);
         } catch {
