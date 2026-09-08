@@ -4,7 +4,7 @@
 
 - A malformed JSON payload published by another Redis client no longer crashes the
   process: the message is discarded with a warning. Thanks @jokrasno!
-  [#730](https://github.com/colyseus/colyseus/issues/730)
+  [#963](https://github.com/colyseus/colyseus/pull/963)
 
 ## 0.18.3
 
