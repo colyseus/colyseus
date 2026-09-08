@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Ignore malformed JSON messages from Redis publishers instead of throwing from
+  the subscription handler. Valid messages and subscription callback errors keep
+  their existing behavior (#730).
+
 ## 0.18.3
 
 - `brpop()` no longer blocks every other presence command: it runs on its own
