@@ -1,5 +1,7 @@
 import assert from "assert";
+import sinon from "sinon";
 import { Redis } from "ioredis";
+import { logger } from "@colyseus/core";
 import { RedisPresence } from "@colyseus/redis-presence";
 
 import { timeout } from "../utils/index.ts";
@@ -183,6 +185,61 @@ describe("RedisPresence", () => {
       await timeout(100);
 
       assert.deepStrictEqual([], await presence.channels(topic));
+    });
+  });
+
+  describe("message handling", () => {
+    let presence: RedisPresence;
+    let warn: sinon.SinonStub;
+
+    beforeEach(() => {
+      // exercise ioredis' 'message' event without connecting to a server
+      presence = new RedisPresence({ lazyConnect: true });
+      presence['sub'].on('message', presence['handleSubscription']);
+      warn = sinon.stub(logger, 'warn');
+    });
+
+    afterEach(() => {
+      warn.restore();
+      presence['sub'].disconnect();
+      presence['pub'].disconnect();
+    });
+
+    for (const message of ['', 'not json', '{"incomplete":']) {
+      it(`should ignore malformed JSON ${JSON.stringify(message)} and deliver subsequent messages`, () => {
+        // the handler runs from an event listener: a throw here takes the process down (#730)
+        const received: unknown[] = [];
+        presence['subscriptions'].on('topic', (data) => received.push(data));
+
+        assert.doesNotThrow(() => presence['sub'].emit('message', 'topic', message));
+        assert.deepStrictEqual([], received);
+        assert.strictEqual(1, warn.callCount);
+
+        presence['sub'].emit('message', 'topic', '{"ok":true}');
+        assert.deepStrictEqual([{ ok: true }], received);
+      });
+    }
+
+    it("should deliver all valid JSON values, including falsy ones", () => {
+      // publish() turns `undefined` into `false`, so falsy payloads are a real wire case
+      const values = [null, false, 0, '', 'hello', [], { value: 1 }];
+      const received: unknown[] = [];
+      presence['subscriptions'].on('topic', (data) => received.push(data));
+
+      for (const value of values) {
+        presence['sub'].emit('message', 'topic', JSON.stringify(value));
+      }
+
+      assert.deepStrictEqual(values, received);
+      assert.strictEqual(0, warn.callCount);
+    });
+
+    it("should not swallow subscription callback errors", () => {
+      const error = new Error('application callback failed');
+      presence['subscriptions'].on('topic', () => { throw error; });
+
+      assert.throws(() => presence['sub'].emit('message', 'topic', '{}'), (thrown) => thrown === error);
+      assert.strictEqual(0, warn.callCount);
     });
   });
 

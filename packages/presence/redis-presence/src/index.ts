@@ -257,7 +257,15 @@ export class RedisPresence implements Presence {
     }
 
     protected handleSubscription = (channel, message) => {
-        this.subscriptions.emit(channel, JSON.parse(message));
+        let data: any;
+        try {
+            data = JSON.parse(message);
+        } catch {
+            logger.warn('RedisPresence: ignoring invalid JSON on channel:', channel);
+            return;
+        }
+
+        this.subscriptions.emit(channel, data);
     }
 
 }

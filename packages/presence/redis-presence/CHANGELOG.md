@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.18.4
+
+- A malformed JSON payload published by another Redis client no longer crashes the
+  process: the message is discarded with a warning. Thanks @jokrasno!
+  [#730](https://github.com/colyseus/colyseus/issues/730)
+
 ## 0.18.3
 
 - `brpop()` no longer blocks every other presence command: it runs on its own
