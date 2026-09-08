@@ -1,10 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.18.4
 
-- Ignore malformed JSON messages from Redis publishers instead of throwing from
-  the subscription handler. Valid messages and subscription callback errors keep
-  their existing behavior (#730).
+- A malformed JSON payload published by another Redis client no longer crashes the
+  process: the message is discarded with a warning. Thanks @jokrasno!
+  [#730](https://github.com/colyseus/colyseus/issues/730)
 
 ## 0.18.3
 
