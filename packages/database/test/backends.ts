@@ -14,6 +14,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { GameDatabase, type GameDatabaseOptions } from '../src/index.ts';
+import { probeRawClient, RAW_DRIVERS } from '../src/drivers.ts';
 
 export interface Backend {
   name: 'sqlite' | 'pglite';
@@ -24,7 +25,8 @@ export interface Backend {
   cleanupOne(db: GameDatabase): Promise<void>;
 }
 
-function freshSqlitePath(label: string): string {
+/** A unique sqlite path under the OS temp dir. Exported so tests stop copying it. */
+export function freshSqlitePath(label: string): string {
   return path.join(os.tmpdir(), `colyseus-db-${label}-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
 }
 
@@ -90,19 +92,8 @@ export function applyBackends(register: (backend: Backend) => void): void {
 
 /** Return the rows from a raw SELECT, regardless of driver. */
 export async function rawQuery(db: GameDatabase, sql: string): Promise<any[]> {
-  const conn = (db as any).ownedConnection;
-  // pglite: client.query(sql) -> { rows }
-  if (typeof conn.query === 'function' && typeof conn.exec === 'function' && !conn.prepare) {
-    const result = await conn.query(sql);
-    return result.rows ?? [];
-  }
-  // postgres-js: tagged template / function; we don't use it in tests, but
-  // calling `.unsafe(sql)` returns rows.
-  if (typeof conn.unsafe === 'function') {
-    return await conn.unsafe(sql);
-  }
-  // node:sqlite: .prepare(sql).all()
-  return conn.prepare(sql).all();
+  const conn = (db as any).rawClient;
+  return await RAW_DRIVERS[probeRawClient(conn)!].rows(conn, sql, []);
 }
 
 /** List `colyseus_*` (or any LIKE-pattern) table names. */

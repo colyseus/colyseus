@@ -25,6 +25,7 @@
  * is isolated behind the `flavor` seam below.
  */
 import { eq, and, asc, desc, inArray, sql, type SQL } from 'drizzle-orm';
+import { probeRawClient, rawClientOf, RAW_DRIVERS, type SubDialect } from './drivers.ts';
 import {
   type IRoomCache,
   type MatchMakerDriver,
@@ -145,6 +146,7 @@ export class DatabaseDriver implements MatchMakerDriver {
   private closeOnShutdown = false;
   // Resolved at boot() — drives raw DDL (CREATE/DROP) on the shared client.
   private rawClient: any = null;
+  private subDialect: SubDialect | null = null;
 
   constructor(options?: DatabaseDriverOptions) {
     const raw = options && 'drizzle' in options ? options : undefined;
@@ -179,7 +181,8 @@ export class DatabaseDriver implements MatchMakerDriver {
       await this.database.boot();
       this.db = this.database.drizzle;
     }
-    this.rawClient = (this.db as any)?.$client ?? null;
+    this.rawClient = rawClientOf(this.db);
+    this.subDialect = probeRawClient(this.rawClient);
 
     const tableName = await this.tableName();
     try {
@@ -343,15 +346,8 @@ export class DatabaseDriver implements MatchMakerDriver {
     // GameDatabase.shutdown() tears it down, never here.
     if (!this.rawMode || !this.closeOnShutdown) { return; }
 
-    const client = this.rawClient;
-    if (!client) { return; }
-    // postgres-js: `.end()`. pglite / node:sqlite: `.close()`
-    // (node:sqlite's is sync — awaiting `undefined` is harmless).
-    if (typeof client.end === 'function') {
-      await client.end();
-    } else if (typeof client.close === 'function') {
-      await client.close();
-    }
+    if (!this.rawClient || !this.subDialect) { return; }
+    await RAW_DRIVERS[this.subDialect].close(this.rawClient);
     this.rawClient = null;
   }
 
@@ -447,20 +443,13 @@ export class DatabaseDriver implements MatchMakerDriver {
     return (await this.tableConfig()).name;
   }
 
-  // Raw DDL on the shared client. postgres-js exposes `.unsafe()`;
-  // pglite and node:sqlite both expose `.exec()` (pglite async,
-  // node:sqlite sync — awaiting a sync `undefined` is harmless).
   private async execRaw(ddl: string): Promise<void> {
-    const client = this.rawClient;
-    if (!client) {
+    if (!this.rawClient) {
       throw new Error('[DatabaseDriver] no raw client available for DDL — GameDatabase not booted?');
     }
-    if (typeof client.unsafe === 'function') {
-      await client.unsafe(ddl);
-    } else if (typeof client.exec === 'function') {
-      await client.exec(ddl);
-    } else {
-      throw new Error('[DatabaseDriver] shared connection exposes no raw DDL method (.unsafe/.exec)');
+    if (!this.subDialect) {
+      throw new Error('[DatabaseDriver] shared connection exposes no raw DDL method (.unsafe/.exec/.query)');
     }
+    await RAW_DRIVERS[this.subDialect].exec(this.rawClient, ddl);
   }
 }

@@ -11,6 +11,7 @@ import { NotesService } from './services/NotesService.ts';
 import { AuditService } from './services/AuditService.ts';
 import { SegmentsService } from './services/SegmentsService.ts';
 import { buildRelationsCallback, mergeRelations, type RelationDefinition } from './relations-meta.ts';
+import { importDriver, probeRawClient, rawClientOf, RAW_DRIVERS, type SubDialect } from './drivers.ts';
 import type { SchemaSet } from './types.ts';
 import { topologicalSort, type TableEntry } from './schemas/registry.ts';
 import { SQLITE_TABLES } from './schemas/sqlite.ts';
@@ -102,8 +103,15 @@ interface CommonOptions<
   connectionString?: string;
 
   /**
-   * Provide an existing Drizzle database instance. When set, connectionString
-   * is ignored and no connection is managed (must pair with `dialect`).
+   * Provide an existing Drizzle database instance. `connectionString` is
+   * ignored, and `dialect` is read off the instance unless you pass it.
+   *
+   * The instance's own driver client (`$client`) is adopted for schema work,
+   * so `migrations: "auto"` applies here too, and any driver drizzle supports
+   * is fair game (postgres-js, node-postgres, pglite, node:sqlite). Its
+   * lifecycle stays yours: `shutdown()` closes only a connection this class
+   * opened itself. An instance exposing no client needs `"skip"` or
+   * `{ files }`, which don't issue raw DDL.
    */
   db?: any;
 
@@ -266,19 +274,6 @@ export type GameDatabaseOptions<
 type SQLFlavor = 'sqlite' | 'pg';
 
 /**
- * Internal sub-dialect: pg-flavored connections come in two flavors with
- * different driver APIs:
- *   - `postgres-js`: real Postgres over network. `client(sql, ...)` template
- *     tag for queries, `client.unsafe(sql)` for raw DDL.
- *   - `pglite`: embedded WebAssembly Postgres (@electric-sql/pglite). Same
- *     SQL surface but a different driver: `client.query(sql, params)` and
- *     `client.exec(sql)`. Used for tests + dev convenience.
- *
- * SQLite is its own thing.
- */
-type SubDialect = 'sqlite' | 'postgres-js' | 'pglite';
-
-/**
  * The fully-resolved tables map exposed on `db.tables`. Drives the type
  * argument for `db.defineSegment(...)` so resolvers see the user's actual
  * schema (custom + default) without re-importing it.
@@ -341,7 +336,10 @@ export class GameDatabase<
   readonly dialect: SQLFlavor;
   private subDialect: SubDialect = 'sqlite';
   private options: GameDatabaseOptions<S, C>;
-  private ownedConnection: any = null;
+  // The raw driver client, whoever opened it. Drives DDL and introspection.
+  private rawClient: any = null;
+  // False for a client adopted from `options.db`: shutdown() leaves it open.
+  private ownsClient = false;
   // Shared by eager `boot()` callers and Server.listen() so migrations run once.
   private _bootPromise: Promise<void> | null = null;
 
@@ -364,8 +362,8 @@ export class GameDatabase<
     } else if (options.dialect === 'sqlite') {
       this.dialect = 'sqlite';
     } else if (common.db) {
-      // When user provides db without dialect hint, default to sqlite
-      this.dialect = 'sqlite';
+      // No dialect given: ask the instance's own client which flavor it speaks.
+      this.dialect = probeRawClient(rawClientOf(common.db)) === 'sqlite' ? 'sqlite' : 'pg';
     } else {
       this.dialect = detectDialect(common.connectionString);
     }
@@ -390,8 +388,9 @@ export class GameDatabase<
 
     // 2. Create or adopt Drizzle instance
     if (this.options.db) {
+      // Adopt the caller's client for schema work without owning its lifecycle.
       this.drizzle = this.options.db;
-      this.subDialect = this.dialect === 'pg' ? 'postgres-js' : 'sqlite';
+      this.rawClient = rawClientOf(this.options.db);
     } else if (this.options.dialect === 'pglite') {
       // Explicit pglite — connectionString is the data dir (or empty/:memory:)
       const cs = this.options.connectionString ?? '';
@@ -408,9 +407,26 @@ export class GameDatabase<
       await this.bootSQLite(schemas);
     }
 
+    this.ownsClient = !this.options.db;
+    // One source of truth for the driver: whatever the client turned out to
+    // be. The fallback covers an adopted client we can't identify, which only
+    // `{ files }` goes on to consult — every other consumer needs a client it
+    // can reach, and the guard below stops first.
+    this.subDialect = probeRawClient(this.rawClient)
+      ?? (this.dialect === 'pg' ? 'postgres-js' : 'sqlite');
+
     // 3. Apply migrations according to the configured strategy
     const strategy = this.options.migrations ?? 'auto';
     if (strategy === 'auto') {
+      // "auto" is the only strategy that issues raw DDL, so it's also the only
+      // one that needs a client we can reach.
+      if (!this.rawClient) {
+        throw new Error(
+          '[GameDatabase] migrations: "auto" needs raw SQL access, and the drizzle instance ' +
+          'passed as `db` exposes no client to reach it. Pass `migrations: "skip"` (or ' +
+          '`{ files }`) and manage the schema yourself, or let GameDatabase open the connection.',
+        );
+      }
       // Create-or-extend behavior: idempotent, dev-friendly. No DROP/type-change.
       await this.createTables(schemas);
       await this.alterTablesForNewColumns(schemas);
@@ -492,15 +508,11 @@ export class GameDatabase<
     if (this.configs) {
       await this.configs.shutdown();
     }
-    if (this.ownedConnection) {
-      if (this.subDialect === 'postgres-js') {
-        await this.ownedConnection.end();
-      } else if (this.subDialect === 'pglite') {
-        await this.ownedConnection.close();
-      } else {
-        this.ownedConnection.close();
-      }
-      this.ownedConnection = null;
+    // Only a connection we opened. A client adopted from `options.db` belongs
+    // to the caller and stays open.
+    if (this.ownsClient && this.rawClient) {
+      await RAW_DRIVERS[this.subDialect].close(this.rawClient);
+      this.rawClient = null;
     }
   }
 
@@ -541,8 +553,7 @@ export class GameDatabase<
     } as any) as unknown as typeof this.drizzle;
 
     // $client is the underlying DatabaseSync — needed for raw DDL + pragmas
-    this.ownedConnection = (this.drizzle as any).$client;
-    this.subDialect = 'sqlite';
+    this.rawClient = rawClientOf(this.drizzle);
 
     this.applySqlitePragmas();
   }
@@ -560,12 +571,18 @@ export class GameDatabase<
     };
     const merged = { ...defaults, ...(userPragmas ?? {}) };
     for (const [key, value] of Object.entries(merged)) {
-      this.ownedConnection.exec(`PRAGMA ${key} = ${value}`);
+      RAW_DRIVERS.sqlite.exec(this.rawClient, `PRAGMA ${key} = ${value}`);
     }
   }
 
   private async bootPostgres(schemas: Record<string, any>) {
-    const pg = (await import('postgres')).default;
+    const pg = (await importDriver(
+      'postgres',
+      () => import('postgres'),
+      'connecting by URL opens postgres-js, a different package from `pg` (node-postgres)',
+      'To stay on `pg` instead, open the pool yourself and pass the drizzle instance as `db`:\n' +
+      'https://docs.colyseus.io/database#use-an-existing-drizzle-instance',
+    )).default;
     const { drizzle } = await import('drizzle-orm/postgres-js');
     const { defineRelations } = await import('drizzle-orm');
 
@@ -585,8 +602,7 @@ export class GameDatabase<
       client: sql,
       relations: defineRelations(schemas as any, buildRelationsCallback(schemas, this.relations) as any),
     } as any) as unknown as typeof this.drizzle;
-    this.ownedConnection = sql;
-    this.subDialect = 'postgres-js';
+    this.rawClient = sql;
   }
 
   /**
@@ -600,7 +616,11 @@ export class GameDatabase<
    *   "./path"   — file-backed, persists across boots
    */
   private async bootPGlite(dataDir: string, schemas: Record<string, any>) {
-    const { PGlite } = await import('@electric-sql/pglite');
+    const { PGlite } = await importDriver(
+      '@electric-sql/pglite',
+      () => import('@electric-sql/pglite'),
+      'the "pglite" dialect needs the embedded Postgres driver',
+    );
     const { drizzle } = await import('drizzle-orm/pglite');
     const { defineRelations } = await import('drizzle-orm');
 
@@ -619,8 +639,7 @@ export class GameDatabase<
       client,
       relations: defineRelations(schemas as any, buildRelationsCallback(schemas, this.relations) as any),
     } as any) as unknown as typeof this.drizzle;
-    this.ownedConnection = client;
-    this.subDialect = 'pglite';
+    this.rawClient = client;
   }
 
   // -------------------------------------------------------------------------
@@ -692,20 +711,9 @@ export class GameDatabase<
       : (await import('drizzle-orm/sqlite-core')).getTableConfig;
   }
 
-  /**
-   * Run a single raw DDL/DML statement. Routes to the right driver method:
-   *   postgres-js: client.unsafe(sql)
-   *   pglite:      client.exec(sql)
-   *   sqlite:      client.exec(sql)
-   */
+  /** Run a single raw DDL/DML statement on whichever driver we ended up with. */
   private async execRaw(stmt: string): Promise<void> {
-    if (this.subDialect === 'postgres-js') {
-      await this.ownedConnection.unsafe(stmt);
-    } else if (this.subDialect === 'pglite') {
-      await this.ownedConnection.exec(stmt);
-    } else {
-      this.ownedConnection.exec(stmt);
-    }
+    await RAW_DRIVERS[this.subDialect].exec(this.rawClient, stmt);
   }
 
   /**
@@ -721,6 +729,9 @@ export class GameDatabase<
     if (this.subDialect === 'postgres-js') {
       const { migrate } = await import('drizzle-orm/postgres-js/migrator');
       await migrate(drizzleClient, { migrationsFolder: folder });
+    } else if (this.subDialect === 'node-postgres') {
+      const { migrate } = await import('drizzle-orm/node-postgres/migrator');
+      await migrate(drizzleClient, { migrationsFolder: folder });
     } else if (this.subDialect === 'pglite') {
       const { migrate } = await import('drizzle-orm/pglite/migrator');
       await migrate(drizzleClient, { migrationsFolder: folder });
@@ -731,25 +742,11 @@ export class GameDatabase<
   }
 
   private async fetchExistingColumns(tableName: string): Promise<Set<string>> {
-    if (this.subDialect === 'postgres-js') {
-      const rows = await this.ownedConnection`
-        SELECT column_name AS name
-        FROM information_schema.columns
-        WHERE table_name = ${tableName}
-      `;
-      return new Set(rows.map((r: { name: string }) => r.name));
-    }
-    if (this.subDialect === 'pglite') {
-      const result = await this.ownedConnection.query(
-        `SELECT column_name AS name
-         FROM information_schema.columns
-         WHERE table_name = $1`,
-        [tableName],
-      );
-      return new Set((result.rows as Array<{ name: string }>).map((r) => r.name));
-    }
-    // sqlite — pragma_table_info on a missing table returns no rows (no error)
-    const rows = this.ownedConnection.prepare(`SELECT name FROM pragma_table_info(?)`).all(tableName);
+    // sqlite's pragma_table_info returns no rows for a missing table (no error).
+    const sql = this.dialect === 'pg'
+      ? `SELECT column_name AS name FROM information_schema.columns WHERE table_name = $1`
+      : `SELECT name FROM pragma_table_info(?)`;
+    const rows = await RAW_DRIVERS[this.subDialect].rows(this.rawClient, sql, [tableName]);
     return new Set((rows as Array<{ name: string }>).map((r) => r.name));
   }
 
@@ -784,7 +781,7 @@ export class GameDatabase<
         }
       } else {
         // SQLite uses CREATE TABLE IF NOT EXISTS; no try/catch needed
-        this.ownedConnection.exec(sql);
+        await this.execRaw(sql);
       }
     }
   }

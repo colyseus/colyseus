@@ -34,7 +34,7 @@ async function cleanup() {
 }
 
 function readPragma(database: GameDatabase, name: string): string | number {
-  const conn = (database as any).ownedConnection;
+  const conn = (database as any).rawClient;
   const row = conn.prepare(`PRAGMA ${name}`).get() as Record<string, any>;
   return row ? Object.values(row)[0] : '';
 }

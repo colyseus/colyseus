@@ -66,7 +66,7 @@ describe('GameDatabase with drizzle-kit-generated migrations + custom schemas', 
   });
 
   it('creates the customized `users` table with extra columns', async () => {
-    const conn = (db as any).ownedConnection;
+    const conn = (db as any).rawClient;
     const cols = conn.prepare("SELECT name FROM pragma_table_info('users')").all() as Array<{ name: string }>;
     const names = cols.map((c) => c.name);
     assert.ok(names.includes('id'), 'base id column');
@@ -76,7 +76,7 @@ describe('GameDatabase with drizzle-kit-generated migrations + custom schemas', 
   });
 
   it('creates the default colyseus_* tables alongside the custom one', async () => {
-    const conn = (db as any).ownedConnection;
+    const conn = (db as any).rawClient;
     const tables = conn.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'colyseus_%'"
     ).all() as Array<{ name: string }>;
@@ -101,7 +101,7 @@ describe('GameDatabase with drizzle-kit-generated migrations + custom schemas', 
     const userId = (created as { id: string }).id;
 
     // Set a display_name on the row drizzle-kit's migration created
-    const conn = (db as any).ownedConnection;
+    const conn = (db as any).rawClient;
     conn.prepare('UPDATE users SET display_name = ?, level = ? WHERE id = ?').run('Endel', 7, userId);
 
     const row = conn.prepare("SELECT id, display_name, level FROM users WHERE id = ?").get(userId) as

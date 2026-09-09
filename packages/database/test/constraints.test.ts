@@ -85,7 +85,7 @@ function postgresBackend(url: string): Backend {
       await janitor.boot();
       for (const t of ['players', 'colyseus_users', 'colyseus_configs', 'colyseus_cloud_saves', 'colyseus_leaderboards',
         'colyseus_leaderboard_entries', 'colyseus_analytics_events', 'colyseus_roles', 'colyseus_user_notes', 'colyseus_admin_audit']) {
-        await (janitor as any).ownedConnection.unsafe(`DROP TABLE IF EXISTS "${t}" CASCADE`);
+        await (janitor as any).rawClient.unsafe(`DROP TABLE IF EXISTS "${t}" CASCADE`);
       }
       await janitor.shutdown();
     },
