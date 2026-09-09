@@ -1,9 +1,11 @@
 import assert from "assert";
 
-import { createEndpoint, defineRoom, defineServer, matchMaker, Room, setDevMode, Server, unregisterRoomDefinitions } from "@colyseus/core";
+import { createEndpoint, defineRoom, defineServer, isDevMode, LocalDriver, LocalPresence, matchMaker, Room, setDevMode, Server, unregisterRoomDefinitions } from "@colyseus/core";
 import { setTransport } from "@colyseus/core/Transport";
 import { prepareServices } from "@colyseus/core/internal";
 import { reloadColyseusViteRooms } from "colyseus/vite";
+
+const noopTransport = { simulateLatency() {}, shutdown() {} } as any;
 
 /**
  * Under `colyseus/vite` the plugin owns the transport, the matchmaker and the
@@ -41,21 +43,21 @@ describe("defineServer() in dev mode", () => {
   });
 
   it("adopts the transport the plugin registered before importing user code", () => {
-    const transport = { simulateLatency() {}, shutdown() {} } as any;
-    setTransport(transport);
+    setTransport(noopTransport);
 
     try {
-      assert.strictEqual(defineServer({ rooms: {} }).transport, transport);
+      assert.strictEqual(defineServer({ rooms: {} }).transport, noopTransport);
     } finally {
       setTransport(undefined as any);
     }
   });
 
   it("hands the room definitions back to the plugin instead of registering them", () => {
-    const rooms = {} as any;
+    const rooms = { pullowar: defineRoom(class extends Room {}) };
     const server = defineServer({ rooms });
 
     assert.strictEqual(server["~rooms"], rooms);
+    assert.strictEqual(matchMaker.getAllHandlers()["pullowar"], undefined);
   });
 
   // the non-Vite docs spell it `const gameServer = defineServer(...)`, which
@@ -138,5 +140,38 @@ describe("prepareServices() in dev mode", () => {
     await prepareServices(reload("second"), false);
 
     assert.deepStrictEqual(booted, ["first", "second"]);
+  });
+});
+
+/**
+ * `devMode: true` without the plugin is the standalone `tsx watch` workflow: a
+ * real listening server that also caches room state across restarts. The flag
+ * it sets is the same module-level one the plugin sets, so `defineServer()`
+ * has to tell the two apart. https://github.com/colyseus/colyseus/issues/964
+ */
+describe("defineServer({ devMode: true }) without the plugin", () => {
+  const rooms = { pullowar: defineRoom(class extends Room {}) };
+
+  afterEach(() => {
+    unregisterRoomDefinitions(Object.keys(rooms));
+    setDevMode(false);
+  });
+
+  // the constructor flips the same module-level flag, so the guard that hands
+  // registration to the plugin has to read it before constructing
+  it("registers its rooms, and still enables dev mode", () => {
+    defineServer({
+      rooms,
+      devMode: true,
+      greet: false,
+      gracefullyShutdown: false,
+      // built before dev mode is on, so it skips reloading .devmode.json
+      presence: new LocalPresence(),
+      driver: new LocalDriver(),
+      transport: noopTransport,
+    });
+
+    assert.ok(matchMaker.getAllHandlers()["pullowar"], "room type was not registered");
+    assert.strictEqual(isDevMode, true);
   });
 });

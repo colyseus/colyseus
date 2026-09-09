@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.12
+
+- Fix `devMode: true` discarding the `rooms` passed to `defineServer()` (and to `@colyseus/tools`' `config()`): no room type was registered at all, so every join failed and the playground showed "No room types defined". Broken since 0.18.9 — `colyseus/vite` and `gameServer.define()` were never affected. Thanks @JoaoCnh! [#964](https://github.com/colyseus/colyseus/issues/964)
+
 ## 0.18.11
 
 - A reconnection attempt with a missing or wrong `reconnectionToken` is now rejected before it can claim the seat it targets. One such attempt used to keep the room alive until the process restarted, and left the legitimate client with "already consumed" on every retry. Thanks @juhaelee! [#962](https://github.com/colyseus/colyseus/issues/962)

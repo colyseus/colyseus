@@ -672,16 +672,19 @@ export function defineServer<
 ): Server<T, R> {
   const { rooms, routes, ...serverOptions } = options;
 
-  const server = isDevMode
+  // the plugin flips dev mode on before importing user code; `options.devMode`
+  // flips it on in the constructor below — only the former owns the lifecycle
+  const pluginManaged = isDevMode;
+
+  const server = pluginManaged
     ? new DevServer<T, R>(serverOptions)
     : new Server<T, R>(serverOptions);
 
   server.router = routes;
   server['~rooms'] = rooms;
 
-  // in dev mode the plugin reads `~rooms` back and owns their
-  // (re-)registration across HMR reloads
-  if (!isDevMode) {
+  // under the plugin, `~rooms` is read back and re-registered across HMR reloads
+  if (!pluginManaged) {
     registerRoomDefinitions(rooms);
   }
 
