@@ -1790,14 +1790,21 @@ export class Room<T extends RoomOptions = RoomOptions> {
       try {
         if (authData) {
           client.auth = authData;
+        }
 
-        } else if (this.onAuth !== Room.prototype.onAuth) {
+        // only an own static onAuth() skips instance/plugin onAuth, not @colyseus/auth's default
+        const authedStatically = authData && (this.constructor as typeof Room).onAuth !== Room.onAuth;
+
+        if (!authedStatically && this.onAuth !== Room.prototype.onAuth) {
           try {
-            client.auth = await this.onAuth(client, joinOptions, authContext);
+            const result = await this.onAuth(client, joinOptions, authContext);
 
-            if (!client.auth) {
+            if (!result) {
               throw new ServerError(ErrorCode.AUTH_FAILED, 'onAuth failed');
             }
+
+            // `true` adds nothing: keep the payload the default static onAuth decoded
+            client.auth = (result === true && authData) || result;
 
           } catch (e) {
             // remove seat reservation

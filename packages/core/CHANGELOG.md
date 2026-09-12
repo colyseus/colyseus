@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.13
+
+- A room's `onAuth()` and plugin `onAuth` hooks now run when a client joins with a valid `@colyseus/auth` token — any validly-signed token used to bypass them. Thanks charmantle!
+
 ## 0.18.12
 
 - Fix `devMode: true` discarding the `rooms` passed to `defineServer()` (and to `@colyseus/tools`' `config()`): no room type was registered at all, so every join failed and the playground showed "No room types defined". Broken since 0.18.9 — `colyseus/vite` and `gameServer.define()` were never affected. Thanks @JoaoCnh! [#964](https://github.com/colyseus/colyseus/issues/964)
