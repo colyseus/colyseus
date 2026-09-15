@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.14
+
+- A room whose `onCreate()` throws is now disposed — its timers and presence subscriptions kept running, so one with `autoDispose = false` stayed in memory until the process restarted. `onDispose()` now also runs in this case, so it must tolerate a partially created room.
+
 ## 0.18.13
 
 - A room's `onAuth()` and plugin `onAuth` hooks now run when a client joins with a valid `@colyseus/auth` token — any validly-signed token used to bypass them. Thanks charmantle!
