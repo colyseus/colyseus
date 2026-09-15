@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.3
+
+- Runs on Debian 12 again, and on any other system with glibc older than 2.38. Fresh installs there crashed at startup with ``version `GLIBC_2.38' not found``. uWebSockets.js is pinned to v20.52.0, which covers Node.js 20, 22 and 24; Node.js 25 (end-of-life) is no longer supported.
+
 ## 0.18.2
 
 - New `beforeUpgrade` option: called before the WebSocket handshake with the incoming `Request` and the same read-only context `onAuth()` receives. Return a `Response` to answer the request instead of upgrading it. Requires `@colyseus/core` 0.18.5.
