@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.22
+
+- Runs on Debian 12 again, and on any other system with glibc older than 2.38. Since 0.17.7, fresh installs there crashed at startup with ``version `GLIBC_2.38' not found``. uWebSockets.js is pinned to v20.52.0, which covers Node.js 20, 22 and 24; Node.js 25 (end-of-life) is no longer supported.
+
 ## 0.17.21
 
 - Fix process-wide crash (`ERR_UNHANDLED_ERROR`) when an HTTP request body is incomplete or arrives too slowly — remotely triggerable by advertising a `Content-Length` and withholding the body. Such requests are now answered with `408 Request Timeout` and the server stays operational. Works with currently published `uwebsockets-express` versions (colyseus/uWebSockets-express#43, thanks to @pierroo)
