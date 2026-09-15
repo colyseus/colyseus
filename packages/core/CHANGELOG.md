@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.51
+
+- A room whose `onCreate()` throws is now disposed — its timers and presence subscriptions kept running, so one with `autoDispose = false` stayed in memory until the process restarted. `onDispose()` now also runs in this case, so it must tolerate a partially created room.
+
 ## 0.17.50
 
 - Fix message types and room names that collide with `Object.prototype` keys (`__proto__`, `constructor`, `toString`, `valueOf`, `hasOwnProperty`, …) resolving to inherited members on the plain objects used as dispatch registries. Three symptoms: `onMessage("constructor", cb)` threw at registration (`this.events[event].push is not a function`), so the room failed to be created at all; an incoming message with such a type false-positived the per-type validator lookup, threw inside `standardValidate()` and disconnected the sender with `WITH_ERROR` instead of reaching the registered handler or the `'*'` catch-all; and matchmaking against such a room name surfaced `handler.getFilterOptions is not a function` instead of `MATCHMAKE_NO_HANDLER`. The handler, validator and room-handler registries are now null-prototype objects, so these types behave like any other. Regression tests under "message types colliding with Object.prototype keys" (`Integration.test.ts`) and "room names colliding with Object.prototype keys" (`MatchMaker.test.ts`). Note that the process-killing variant reported against 0.16 does not apply to 0.17: 0.16 indexed `onMessageHandlers` directly and called `.callback` on the inherited value, throwing an uncaught exception outside dispatch; 0.17 restructured this and only ever dropped the client. (thanks @BestOlumese for the report and repro - https://github.com/colyseus/colyseus/issues/951)

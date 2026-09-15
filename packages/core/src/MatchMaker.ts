@@ -594,6 +594,10 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
 
     } catch (e: any) {
       debugAndPrintError(e);
+
+      // no matchMaker listeners yet, so this only releases the room's own timers and presence
+      room['_events'].emit('dispose');
+
       throw new ServerError(
         e.code || ErrorCode.MATCHMAKE_UNHANDLED,
         e.message,

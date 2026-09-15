@@ -152,6 +152,30 @@ describe("MatchMaker", () => {
           await assert.rejects(async () => await matchMaker.create("non_existing_room"), /not defined/i);
         });
 
+        it("create() should dispose the room when onCreate() throws", async () => {
+          let ticks = 0;
+          let messages = 0;
+          let disposed = false;
+
+          matchMaker.defineRoomType("failing_on_create", class extends Room {
+            onCreate() {
+              this.autoDispose = false; // so the auto-dispose timer can't mask the leak
+              this.clock.setInterval(() => ticks++, 10);
+              this.presence.subscribe("failing_on_create", () => messages++);
+              throw new Error("onCreate failed");
+            }
+            onDispose() { disposed = true; }
+          });
+
+          await assert.rejects(async () => await matchMaker.create("failing_on_create"), /onCreate failed/);
+          assert.ok(disposed, "onDispose() should run, to release what onCreate() acquired");
+
+          await matchMaker.presence.publish("failing_on_create", "ping");
+          await timeout(100);
+          assert.strictEqual(ticks, 0, "clock should stop ticking");
+          assert.strictEqual(messages, 0, "presence subscription should be released");
+        });
+
         it("filterBy(): filter by 'mode' field", async () => {
           const reservedSeat1 = await matchMaker.joinOrCreate("room2_filtered", { mode: "squad" });
           const reservedSeat2 = await matchMaker.joinOrCreate("room2_filtered", { mode: "duo" });
