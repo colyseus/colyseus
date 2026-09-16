@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.6
+
+- The Vite plugin now works alongside Nitro (e.g. TanStack Start): `vite dev` no longer fails with `Cannot read properties of undefined (reading 'import')`, and `vite build` writes `dist/server/server.mjs`. List `colyseus()` before `nitro()` — see [Using Nitro](https://docs.colyseus.io/server/vite#using-nitro). Thanks @MeirArani! [#967](https://github.com/colyseus/colyseus/pull/967)
+
 ## 0.18.5
 
 - `vite dev`: `@colyseus/database`, `@colyseus/auth` and `beforeListen` now work — rooms using database plugins threw on join before, and `/auth/*` answered 404.

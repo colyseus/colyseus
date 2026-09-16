@@ -36,7 +36,8 @@ import {
 import { getTransport, setTransport } from '@colyseus/core/Transport';
 import { prepareServices } from '@colyseus/core/internal';
 import { registerGracefulShutdown } from '@colyseus/core/utils/Utils';
-import type { Plugin } from 'vite';
+import type { DevEnvironment, Plugin } from 'vite';
+import type { ModuleRunner } from 'vite/module-runner';
 
 // ─── Virtual module IDs ───────────────────────────────────────────────
 
@@ -196,6 +197,51 @@ export async function reloadColyseusViteRooms(
   };
 }
 
+// ─── Module runner ────────────────────────────────────────────────────
+
+// Keyed by environment, not by plugin: a Vite restart rebuilds the environment
+// while inline plugin objects survive it.
+const fetchModuleRunners = new WeakMap<DevEnvironment, Promise<ModuleRunner>>();
+
+/**
+ * The module runner that loads the server entry from `env`.
+ *
+ * Only a `RunnableDevEnvironment` carries a `runner`, and a plugin that brings
+ * its own environment factory (nitro, cloudflare) takes ours with it.
+ * `fetchModule()` is on every `DevEnvironment`, so the fallback — a runner
+ * wired straight to it — loads the entry regardless of who created the
+ * environment.
+ */
+function getModuleRunner(env: DevEnvironment & { runner?: ModuleRunner }): Promise<ModuleRunner> {
+  if (env.runner) {
+    return Promise.resolve(env.runner);
+  }
+
+  let runner = fetchModuleRunners.get(env);
+
+  if (!runner) {
+    fetchModuleRunners.set(env, runner = createFetchModuleRunner(env));
+  }
+
+  return runner;
+}
+
+async function createFetchModuleRunner(env: DevEnvironment): Promise<ModuleRunner> {
+  // A real import(), resolved against this plugin: vite is ESM-only and a peer
+  // here, so neither a static import (this file also ships CJS) nor
+  // @colyseus/core's dynamicImport() (resolves against core) would find it.
+  const { ModuleRunner, ESModulesEvaluator, createNodeImportMeta } =
+    await import('vite/module-runner');
+
+  return new ModuleRunner({
+    // every environment answers fetchModule/getBuiltins on its hot channel
+    transport: { invoke: (payload) => env.hot.handleInvoke(payload) },
+    createImportMeta: createNodeImportMeta, // vite >= 7.1
+    sourcemapInterceptor: 'node', // V8 source maps, not a global Error.prepareStackTrace
+    hmr: false, // the plugin re-imports the entry itself on every change
+  }, new ESModulesEvaluator());
+}
+
 // ─── Plugin ───────────────────────────────────────────────────────────
 
 export function colyseus(options: ColyseusViteOptions): Plugin[] {
@@ -226,7 +272,10 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
                 outDir: 'dist/server',
                 ssr: true,
                 rollupOptions: {
-                  input: VIRTUAL_SERVER_ENTRY,
+                  // named-object form on purpose: a bare string entry makes
+                  // nitro adopt this environment as one of its own services
+                  // and redirect the build into its output directory.
+                  input: { server: VIRTUAL_SERVER_ENTRY },
                   output: { entryFileNames: 'server.mjs' },
                 },
               },
@@ -302,11 +351,13 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
     }
 
     try {
+      const runner = await getModuleRunner(env);
+
       // Clear the runner's evaluated module cache so re-import picks up
       // fresh user code. External packages (@colyseus/*) are cached by
       // Node's module system — they keep their singleton state.
-      if (isStarted && env.runner.evaluatedModules) {
-        env.runner.evaluatedModules.clear();
+      if (isStarted) {
+        runner.evaluatedModules.clear();
       }
 
       // ── Set up matchMaker + transport (initial load only) ──
@@ -341,7 +392,7 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
       // ── Import user module ──
       // isDevMode is set, so defineServer() hands back an unbooted Server.
       const previousDatabase = currentServer?.options?.database;
-      const mod = await env.runner.import(options.serverEntry);
+      const mod = await runner.import(options.serverEntry);
 
       currentServer = getServerExport(mod);
       const rooms: RoomDefinitions | undefined = getRoomsExport(mod)
