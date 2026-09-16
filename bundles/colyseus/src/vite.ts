@@ -19,7 +19,7 @@
  * 2. Swap router handler + re-register room definitions
  * 3. matchMaker.hotReload() — cache rooms, dispose, restore
  */
-import * as matchMaker from '@colyseus/core/MatchMaker';
+import * as matchMaker from "@colyseus/core/MatchMaker";
 import {
   setDevMode,
   createNodeMatchmakingMiddleware,
@@ -32,16 +32,17 @@ import {
   Server,
   type RoomDefinitions,
   type Transport,
-} from '@colyseus/core';
-import { getTransport, setTransport } from '@colyseus/core/Transport';
-import { prepareServices } from '@colyseus/core/internal';
-import { registerGracefulShutdown } from '@colyseus/core/utils/Utils';
-import type { Plugin } from 'vite';
+} from "@colyseus/core";
+import { getTransport, setTransport } from "@colyseus/core/Transport";
+import { prepareServices } from "@colyseus/core/internal";
+import { registerGracefulShutdown } from "@colyseus/core/utils/Utils";
+import { createDirectRunner } from "./dev-module-runner.ts";
+import type { Plugin } from "vite";
 
 // ─── Virtual module IDs ───────────────────────────────────────────────
 
-const VIRTUAL_SERVER_ENTRY = 'virtual:colyseus-server-entry';
-const RESOLVED_VIRTUAL_SERVER_ENTRY = '\0' + VIRTUAL_SERVER_ENTRY;
+const VIRTUAL_SERVER_ENTRY = "virtual:colyseus-server-entry";
+const RESOLVED_VIRTUAL_SERVER_ENTRY = "\0" + VIRTUAL_SERVER_ENTRY;
 
 // Module scope, not plugin scope: `process` listeners outlive both the plugin
 // closure (a Vite restart builds a fresh one) and any single reloaded Server.
@@ -49,9 +50,13 @@ let currentServer: Server | undefined;
 let shutdownRegistered = false;
 
 function registerDevShutdownOnce() {
-  if (shutdownRegistered) { return; }
+  if (shutdownRegistered) {
+    return;
+  }
   shutdownRegistered = true;
-  registerGracefulShutdown((err) => currentServer?.gracefullyShutdown(true, err));
+  registerGracefulShutdown((err) =>
+    currentServer?.gracefullyShutdown(true, err),
+  );
 }
 
 // ─── Options ──────────────────────────────────────────────────────────
@@ -70,7 +75,10 @@ export interface ColyseusViteOptions {
   serveClient?: boolean;
   loadWsTransport?: () => Promise<{
     WebSocketTransport: new (options?: any) => Transport & {
-      attachToServer(server: any, options?: { filter?: (req: any) => boolean }): any;
+      attachToServer(
+        server: any,
+        options?: { filter?: (req: any) => boolean },
+      ): any;
     };
   }>;
   /**
@@ -81,7 +89,7 @@ export interface ColyseusViteOptions {
    * In standalone Vite dev mode this is ignored — the plugin uses Vite's
    * own HTTP server.
    */
-  httpServer?: import('http').Server;
+  httpServer?: import("http").Server;
 }
 
 // ─── Internal types ───────────────────────────────────────────────────
@@ -163,7 +171,7 @@ export function createColyseusViteServerEntry(options: ColyseusViteOptions) {
     `}`,
   );
 
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 // ─── Exported helpers (for testing) ───────────────────────────────────
@@ -178,8 +186,8 @@ export async function reloadColyseusViteRooms(
   unregisterRoomDefinitions(currentRoomNames);
 
   const server = getServerExport(mod);
-  const rooms: RoomDefinitions | undefined = getRoomsExport(mod)
-    || server?.['~rooms'];
+  const rooms: RoomDefinitions | undefined =
+    getRoomsExport(mod) || server?.["~rooms"];
 
   if (!rooms) {
     return {
@@ -201,20 +209,21 @@ export async function reloadColyseusViteRooms(
 export function colyseus(options: ColyseusViteOptions): Plugin[] {
   let viteServer: any;
   let currentRoomNames: string[] = [];
-  let currentAppHandler: ((req: any, res: any, next: any) => void) | null = null;
+  let currentAppHandler: ((req: any, res: any, next: any) => void) | null =
+    null;
   let expressApp: any = null;
   let isStarted = false;
 
   return [
     {
-      name: 'colyseus:config',
+      name: "colyseus:config",
       config() {
         return {
           builder: {},
-          build: { outDir: 'dist/client' },
+          build: { outDir: "dist/client" },
           environments: {
             colyseus: {
-              consumer: 'server' as const,
+              consumer: "server" as const,
               resolve: {
                 // Externalize all dependencies so they share the same module
                 // instances (and matchMaker singleton) with the plugin process.
@@ -223,11 +232,11 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
                 external: true,
               },
               build: {
-                outDir: 'dist/server',
+                outDir: "dist/server",
                 ssr: true,
                 rollupOptions: {
                   input: VIRTUAL_SERVER_ENTRY,
-                  output: { entryFileNames: 'server.mjs' },
+                  output: { entryFileNames: "server.mjs" },
                 },
               },
             },
@@ -235,7 +244,9 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
         };
       },
       resolveId(id: string) {
-        if (id === VIRTUAL_SERVER_ENTRY) { return RESOLVED_VIRTUAL_SERVER_ENTRY; }
+        if (id === VIRTUAL_SERVER_ENTRY) {
+          return RESOLVED_VIRTUAL_SERVER_ENTRY;
+        }
       },
       load(id: string) {
         if (id === RESOLVED_VIRTUAL_SERVER_ENTRY) {
@@ -245,14 +256,16 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
     },
 
     {
-      name: 'colyseus:dev-server',
+      name: "colyseus:dev-server",
       configureServer(server: any) {
         viteServer = server;
         server.middlewares.use(createNodeMatchmakingMiddleware());
 
         // Dynamic application middleware — handler is swapped on each HMR reload.
         server.middlewares.use((req: any, res: any, next: any) => {
-          if (!currentAppHandler) { return next(); }
+          if (!currentAppHandler) {
+            return next();
+          }
           currentAppHandler(req, res, next);
         });
 
@@ -260,27 +273,33 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
           const httpServer = options.httpServer ?? server.httpServer;
           if (!httpServer) {
             throw new Error(
-              '[colyseus] No HTTP server available. When running Vite in ' +
-              'middlewareMode, pass `httpServer` to the colyseus() plugin.'
+              "[colyseus] No HTTP server available. When running Vite in " +
+                "middlewareMode, pass `httpServer` to the colyseus() plugin.",
             );
           }
           await loadServerModule(httpServer);
-          console.log("[colyseus] Server ready on " + (options.httpServer ? 'user-provided' : "Vite's") + ' HTTP server');
+          console.log(
+            "[colyseus] Server ready on " +
+              (options.httpServer ? "user-provided" : "Vite's") +
+              " HTTP server",
+          );
         };
       },
     },
 
     {
-      name: 'colyseus:hmr',
+      name: "colyseus:hmr",
       hotUpdate({ file, modules }) {
-        if (this.environment?.name === 'colyseus' && modules.length > 0) {
-          loadServerModule().then(() => {
-            if (!options.quiet) {
-              console.log(`[colyseus] Server code reloaded (${file})`);
-            }
-          }).catch((e) => {
-            console.error('[colyseus] Failed to reload server module:', e);
-          });
+        if (this.environment?.name === "colyseus" && modules.length > 0) {
+          loadServerModule()
+            .then(() => {
+              if (!options.quiet) {
+                console.log(`[colyseus] Server code reloaded (${file})`);
+              }
+            })
+            .catch((e) => {
+              console.error("[colyseus] Failed to reload server module:", e);
+            });
         }
       },
     },
@@ -294,14 +313,15 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
    * On HMR reload: re-imports user code, swaps rooms/router, hot-reloads
    * running rooms (cache → dispose → restore).
    */
-  async function loadServerModule(httpServer?: import('http').Server) {
+  async function loadServerModule(httpServer?: import("http").Server) {
     const env = viteServer.environments.colyseus;
     if (!env) {
-      console.error('[colyseus] Environment not found');
+      console.error("[colyseus] Environment not found");
       return;
     }
 
     try {
+      env.runner = createDirectRunner(env);
       // Clear the runner's evaluated module cache so re-import picks up
       // fresh user code. External packages (@colyseus/*) are cached by
       // Node's module system — they keep their singleton state.
@@ -316,18 +336,22 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
 
         const wsModule = await (options.loadWsTransport
           ? options.loadWsTransport()
-          : dynamicImport<typeof import('@colyseus/ws-transport')>('@colyseus/ws-transport'));
+          : dynamicImport<typeof import("@colyseus/ws-transport")>(
+              "@colyseus/ws-transport",
+            ));
 
         const transport = new wsModule.WebSocketTransport({ noServer: true });
 
-        if (typeof (transport as any).attachToServer !== 'function') {
-          throw new Error('[colyseus] Vite dev mode requires a transport with attachToServer().');
+        if (typeof (transport as any).attachToServer !== "function") {
+          throw new Error(
+            "[colyseus] Vite dev mode requires a transport with attachToServer().",
+          );
         }
 
         (transport as any).attachToServer(httpServer ?? viteServer.httpServer, {
           filter(req: any) {
             return /^\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_-]+\/?$/.test(
-              new URL(req.url || '', 'http://localhost').pathname,
+              new URL(req.url || "", "http://localhost").pathname,
             );
           },
         });
@@ -342,10 +366,11 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
       // isDevMode is set, so defineServer() hands back an unbooted Server.
       const previousDatabase = currentServer?.options?.database;
       const mod = await env.runner.import(options.serverEntry);
+      env.runner.close();
 
       currentServer = getServerExport(mod);
-      const rooms: RoomDefinitions | undefined = getRoomsExport(mod)
-        || currentServer?.['~rooms'];
+      const rooms: RoomDefinitions | undefined =
+        getRoomsExport(mod) || currentServer?.["~rooms"];
 
       // ── Boot the services user code declared ──
       // `beforeListen`, `database.boot()` and the endpoints they contribute —
@@ -360,12 +385,14 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
       // Set up express once — persistent across HMR reloads.
       if (!expressApp && currentServer?.options?.express) {
         try {
-          const expressModule = await dynamicImport<any>('express');
+          const expressModule = await dynamicImport<any>("express");
           const express = expressModule?.default ?? expressModule;
           expressApp = express();
           await currentServer.options.express(expressApp);
         } catch (e) {
-          console.warn('[colyseus] Express not available. Install express to use the express option.');
+          console.warn(
+            "[colyseus] Express not available. Install express to use the express option.",
+          );
         }
       }
 
@@ -373,7 +400,9 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
       if (router || expressApp) {
         const routerHandler = router ? toNodeHandler(router.handler) : null;
         currentAppHandler = (req: any, res: any, next: any) => {
-          if (router?.findRoute(req.method, req.url?.split('?')[0]) !== undefined) {
+          if (
+            router?.findRoute(req.method, req.url?.split("?")[0]) !== undefined
+          ) {
             routerHandler!(req, res);
           } else if (expressApp) {
             expressApp(req, res, next);
@@ -394,7 +423,7 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
       } else {
         currentRoomNames = [];
         console.warn(
-          '[colyseus] Server entry should export `server = defineServer(...)` or `rooms`.',
+          "[colyseus] Server entry should export `server = defineServer(...)` or `rooms`.",
         );
       }
 
@@ -426,9 +455,8 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
           console.log(`[colyseus] Room defined: "${roomName}"`);
         }
       }
-
     } catch (e) {
-      console.error('[colyseus] Failed to load server module:', e);
+      console.error("[colyseus] Failed to load server module:", e);
     }
   }
 }
