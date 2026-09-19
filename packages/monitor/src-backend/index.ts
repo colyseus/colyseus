@@ -64,7 +64,7 @@ export function monitor(opts: MonitorOptions = {}) {
           }),
           connections,
           cpu,
-          memory: { totalMemMb, usedMemMb },
+          memory: { totalMemMb, usedMemMb, rssMb: process.memoryUsage.rss() / 1024 / 1024 },
         };
       } catch (e: any) {
         console.error(e.message);
