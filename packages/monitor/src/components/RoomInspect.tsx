@@ -248,14 +248,14 @@ export class RoomInspect extends React.Component<Props, State> {
         return (
             <Box>
                 <AppBar position="static" elevation={0} sx={{ borderBottom: 1, borderColor: 'divider' }}>
-                    <Toolbar variant="dense">
+                    <Toolbar variant="dense" sx={{ flexWrap: { xs: 'wrap', sm: 'nowrap' }, py: { xs: 1, sm: 0 }, gap: { xs: 1, sm: 0 } }}>
                         <IconButton edge="start" size="small" onClick={this.goBack.bind(this)} sx={{ mr: 1 }}>
                             <ArrowBackIcon />
                         </IconButton>
                         <Typography variant="subtitle1" fontWeight={600} sx={{ flexGrow: 1 }}>
                             Room {this.state.roomId}
                         </Typography>
-                        <Stack direction="row" spacing={1}>
+                        <Stack direction="row" spacing={1} sx={{ width: { xs: '100%', sm: 'auto' }, justifyContent: 'flex-end' }}>
                             <Button size="small" variant="outlined" startIcon={<SendIcon />} onClick={this.sendMessage.bind(this, undefined)}>
                                 Broadcast
                             </Button>
@@ -268,7 +268,7 @@ export class RoomInspect extends React.Component<Props, State> {
 
                 <Container maxWidth="lg" sx={{ py: 3 }}>
                     <Stack spacing={2}>
-                        <Stack direction="row" spacing={1.5}>
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
                             <StatCard
                                 icon={this.state.locked ? <LockIcon sx={{ fontSize: 14 }} /> : <LockOpenIcon sx={{ fontSize: 14 }} />}
                                 label="Status"

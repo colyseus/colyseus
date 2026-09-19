@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Keep monitor statistics and room actions within the viewport on small screens.
+
 ## 0.18.3
 
 - The panel now works at any express mount path — `app.use("/stats", monitor())` no longer requires a matching `prefix` option.
