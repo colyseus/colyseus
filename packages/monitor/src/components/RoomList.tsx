@@ -213,7 +213,7 @@ export class RoomList extends React.Component {
             <StatCard icon={<CableOutlined sx={{ fontSize: 20, color: 'text.secondary' }} />} label="Connections" value={this.state.connections} />
             <StatCard icon={<MeetingRoomOutlined sx={{ fontSize: 20, color: 'text.secondary' }} />} label="Rooms" value={this.state.rooms.length} />
             <StatCard icon={<MemoryOutlined sx={{ fontSize: 20, color: 'text.secondary' }} />} label="CPU" value={`${this.state.cpu.toFixed(1)}%`} />
-            <StatCard icon={<StorageOutlined sx={{ fontSize: 20, color: 'text.secondary' }} />} label="Process memory (RSS)" value={this.formatMemory(Math.round(this.state.memory.rssMb))} />
+            <StatCard icon={<StorageOutlined sx={{ fontSize: 20, color: 'text.secondary' }} />} label="Process RSS" value={this.formatMemory(Math.round(this.state.memory.rssMb))} />
           </Stack>
 
           {!this.state.loaded ? (
