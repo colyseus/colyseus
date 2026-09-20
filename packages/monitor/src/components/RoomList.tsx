@@ -32,8 +32,8 @@ const sortComparator: { [key in ExtractStringNames<MonitorOptions['columns']>]?:
   elapsedTime: gridDateComparator
 }
 
-function StatCard({ icon, label, value }: { icon?: React.ReactNode, label: string, value: string | number }) {
-  return (
+function StatCard({ icon, label, value, tooltip }: { icon?: React.ReactNode, label: string, value: string | number, tooltip?: React.ReactNode }) {
+  const card = (
     <Paper variant="outlined" sx={{ flex: 1, px: 2.5, py: 1.5, textAlign: 'center' }}>
       <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5, fontSize: '0.7rem' }}>
         {icon && <Box component="span" sx={{ verticalAlign: 'middle', mr: 0.5 }}>{icon}</Box>}
@@ -44,6 +44,8 @@ function StatCard({ icon, label, value }: { icon?: React.ReactNode, label: strin
       </Typography>
     </Paper>
   );
+  // Paper forwards the ref Tooltip needs — no wrapper element required.
+  return tooltip ? <Tooltip title={tooltip} arrow enterTouchDelay={0}>{card}</Tooltip> : card;
 }
 
 export class RoomList extends React.Component {
@@ -52,7 +54,7 @@ export class RoomList extends React.Component {
     rooms: [],
     connections: 0,
     cpu: 0,
-    memory: { totalMemMb: 0, usedMemMb: 0, rssMb: 0 },
+    memory: { totalMemMb: 0, usedMemMb: 0, rssMb: 0, processId: '' },
     columns: [],
     loaded: false,
   };
@@ -134,6 +136,19 @@ export class RoomList extends React.Component {
     return `${memInMb} MB`;
   }
 
+  renderMemoryTooltip() {
+    return (
+      <Box>
+        <Typography variant="caption" sx={{ display: 'block' }}>
+          Resident memory (RSS) of the Colyseus process serving this panel. Other processes are not included.
+        </Typography>
+        <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
+          Process <Box component="span" sx={{ fontFamily: 'monospace' }}>{this.state.memory.processId}</Box>
+        </Typography>
+      </Box>
+    );
+  }
+
   getColumnsNames(columns: any): Array<GridColDef> {
     const data: GridColDef[] = columns.map(column => {
       const value = this.getColumnHeader(column);
@@ -213,7 +228,7 @@ export class RoomList extends React.Component {
             <StatCard icon={<CableOutlined sx={{ fontSize: 20, color: 'text.secondary' }} />} label="Connections" value={this.state.connections} />
             <StatCard icon={<MeetingRoomOutlined sx={{ fontSize: 20, color: 'text.secondary' }} />} label="Rooms" value={this.state.rooms.length} />
             <StatCard icon={<MemoryOutlined sx={{ fontSize: 20, color: 'text.secondary' }} />} label="CPU" value={`${this.state.cpu.toFixed(1)}%`} />
-            <StatCard icon={<StorageOutlined sx={{ fontSize: 20, color: 'text.secondary' }} />} label="Process RSS" value={this.formatMemory(Math.round(this.state.memory.rssMb))} />
+            <StatCard icon={<StorageOutlined sx={{ fontSize: 20, color: 'text.secondary' }} />} label="Memory" value={this.formatMemory(Math.round(this.state.memory.rssMb))} tooltip={this.renderMemoryTooltip()} />
           </Stack>
 
           {!this.state.loaded ? (
