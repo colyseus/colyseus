@@ -52,7 +52,7 @@ export class RoomList extends React.Component {
     rooms: [],
     connections: 0,
     cpu: 0,
-    memory: { totalMemMb: 0, usedMemMb: 0 },
+    memory: { totalMemMb: 0, usedMemMb: 0, rssMb: 0 },
     columns: [],
     loaded: false,
   };
@@ -213,7 +213,7 @@ export class RoomList extends React.Component {
             <StatCard icon={<CableOutlined sx={{ fontSize: 20, color: 'text.secondary' }} />} label="Connections" value={this.state.connections} />
             <StatCard icon={<MeetingRoomOutlined sx={{ fontSize: 20, color: 'text.secondary' }} />} label="Rooms" value={this.state.rooms.length} />
             <StatCard icon={<MemoryOutlined sx={{ fontSize: 20, color: 'text.secondary' }} />} label="CPU" value={`${this.state.cpu.toFixed(1)}%`} />
-            <StatCard icon={<StorageOutlined sx={{ fontSize: 20, color: 'text.secondary' }} />} label="Memory" value={this.formatMemory(this.state.memory.usedMemMb)} />
+            <StatCard icon={<StorageOutlined sx={{ fontSize: 20, color: 'text.secondary' }} />} label="Process RSS" value={this.formatMemory(Math.round(this.state.memory.rssMb))} />
           </Stack>
 
           {!this.state.loaded ? (
