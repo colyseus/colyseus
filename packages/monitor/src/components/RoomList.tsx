@@ -34,7 +34,7 @@ const sortComparator: { [key in ExtractStringNames<MonitorOptions['columns']>]?:
 
 function StatCard({ icon, label, value, tooltip }: { icon?: React.ReactNode, label: string, value: string | number, tooltip?: React.ReactNode }) {
   const card = (
-    <Paper variant="outlined" sx={{ flex: 1, px: 2.5, py: 1.5, textAlign: 'center' }}>
+    <Paper variant="outlined" sx={{ px: 2.5, py: 1.5, textAlign: 'center' }}>
       <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5, fontSize: '0.7rem' }}>
         {icon && <Box component="span" sx={{ verticalAlign: 'middle', mr: 0.5 }}>{icon}</Box>}
         {label}
@@ -224,12 +224,12 @@ export class RoomList extends React.Component {
     return (
       <Container maxWidth="lg" sx={{ py: 3 }}>
         <Stack spacing={2}>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+          <Box sx={{ display: 'grid', gap: 1.5, gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(4, 1fr)' } }}>
             <StatCard icon={<CableOutlined sx={{ fontSize: 20, color: 'text.secondary' }} />} label="Connections" value={this.state.connections} />
             <StatCard icon={<MeetingRoomOutlined sx={{ fontSize: 20, color: 'text.secondary' }} />} label="Rooms" value={this.state.rooms.length} />
             <StatCard icon={<MemoryOutlined sx={{ fontSize: 20, color: 'text.secondary' }} />} label="CPU" value={`${this.state.cpu.toFixed(1)}%`} />
             <StatCard icon={<StorageOutlined sx={{ fontSize: 20, color: 'text.secondary' }} />} label="Memory" value={this.formatMemory(Math.round(this.state.memory.rssMb))} tooltip={this.renderMemoryTooltip()} />
-          </Stack>
+          </Box>
 
           {!this.state.loaded ? (
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 4, gap: 1 }}>
