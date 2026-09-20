@@ -1,8 +1,9 @@
 import type { MonitorOptions } from "../../";
+import type { GridColDef } from "@mui/x-data-grid";
 
 export type ExtractStringNames<T> = T extends (infer U)[] ? U extends string ? U : never : never;
 
-export const valueFormatter: { [key in ExtractStringNames<MonitorOptions['columns']>]?: Function } = {
+export const valueFormatter: { [key in ExtractStringNames<MonitorOptions['columns']>]?: GridColDef['valueFormatter'] } = {
   elapsedTime: (params) => {
     if (params.value && params.value.getTime) {
       return humanizeElapsedTime(Date.now() - params.value.getTime());

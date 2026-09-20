@@ -59,7 +59,7 @@ export class RoomList extends React.Component {
     loaded: false,
   };
 
-  updateRoomListInterval: number;
+  updateRoomListInterval: number | undefined;
 
   isSelected = (index) => {
     return this.state.selected.indexOf(index) !== -1;
