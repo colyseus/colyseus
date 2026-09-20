@@ -49,7 +49,7 @@ function ThemedJsonEditor(props: any) {
 
 function StatCard({ icon, label, value }: { icon?: React.ReactNode, label: string, value: string | number }) {
     return (
-        <Paper variant="outlined" sx={{ flex: 1, px: 2.5, py: 1.5, textAlign: 'center' }}>
+        <Paper variant="outlined" sx={{ px: 2.5, py: 1.5, textAlign: 'center' }}>
             <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5, fontSize: '0.7rem' }}>
                 {icon && <Box component="span" sx={{ verticalAlign: 'middle', mr: 0.5 }}>{icon}</Box>}
                 {label}
@@ -268,7 +268,7 @@ export class RoomInspect extends React.Component<Props, State> {
 
                 <Container maxWidth="lg" sx={{ py: 3 }}>
                     <Stack spacing={2}>
-                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+                        <Box sx={{ display: 'grid', gap: 1.5, gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(3, 1fr)' }, '& > :last-child': { gridColumn: { xs: '1 / -1', sm: 'auto' } } }}>
                             <StatCard
                                 icon={this.state.locked ? <LockIcon sx={{ fontSize: 14 }} /> : <LockOpenIcon sx={{ fontSize: 14 }} />}
                                 label="Status"
@@ -276,7 +276,7 @@ export class RoomInspect extends React.Component<Props, State> {
                             />
                             <StatCard icon={<CableOutlined sx={{ fontSize: 14 }} />} label="Clients" value={clientsLabel} />
                             <StatCard icon={<DataObjectOutlined sx={{ fontSize: 14 }} />} label="State Size" value={`${this.state.stateSize} B`} />
-                        </Stack>
+                        </Box>
 
                         <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
                             <TabContext value={this.state.currentTab}>
