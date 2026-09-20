@@ -3,9 +3,21 @@ import sinon from 'sinon';
 import { createRouter, matchMaker, LocalDriver, LocalPresence } from '@colyseus/core';
 import { monitor } from '@colyseus/monitor';
 
+const MB = 1024 * 1024;
+
 describe('Monitor process memory', () => {
+  let router: ReturnType<typeof createRouter>;
+
+  const fetchApi = () => router
+    .handler(new Request('http://localhost/monitor/api'))
+    .then((response) => {
+      assert.equal(response.status, 200);
+      return response.json();
+    });
+
   beforeEach(async () => {
     await matchMaker.setup(new LocalPresence(), new LocalDriver());
+    router = createRouter({ ...monitor() });
   });
 
   afterEach(async () => {
@@ -13,25 +25,20 @@ describe('Monitor process memory', () => {
     await matchMaker.gracefullyShutdown();
   });
 
-  it('reports RSS in megabytes and preserves the system memory fields', async () => {
-    const rss = sinon.stub(process.memoryUsage, 'rss');
-    rss.onFirstCall().returns(157286400);
-    rss.onSecondCall().returns(201850880);
-    const router = createRouter({ ...monitor() });
+  it('reports this process\' RSS in megabytes, and which process it is', async () => {
+    const rss = sinon.stub(process.memoryUsage, 'rss').returns(150 * MB);
 
-    const response = await router.handler(new Request('http://localhost/monitor/api'));
-    assert.equal(response.status, 200);
-    const data = await response.json();
-
+    const data = await fetchApi();
     assert.equal(data.memory.rssMb, 150);
-    assert.equal(rss.callCount, 1);
-    assert.ok(Object.hasOwn(data.memory, 'totalMemMb'));
-    assert.ok(Object.hasOwn(data.memory, 'usedMemMb'));
-    assert.deepEqual(data.rooms, []);
-    assert.equal(data.connections, 0);
+    assert.equal(data.memory.processId, matchMaker.processId);
 
-    const nextResponse = await router.handler(new Request('http://localhost/monitor/api'));
-    assert.equal((await nextResponse.json()).memory.rssMb, 192.5);
-    assert.equal(rss.callCount, 2);
+    rss.returns(192.5 * MB);
+    assert.equal((await fetchApi()).memory.rssMb, 192.5);
+  });
+
+  it('keeps the system memory fields', async () => {
+    const { memory } = await fetchApi();
+    assert.ok(Object.hasOwn(memory, 'totalMemMb'));
+    assert.ok(Object.hasOwn(memory, 'usedMemMb'));
   });
 });

@@ -64,7 +64,8 @@ export function monitor(opts: MonitorOptions = {}) {
           }),
           connections,
           cpu,
-          memory: { totalMemMb, usedMemMb, rssMb: process.memoryUsage.rss() / 1024 / 1024 },
+          // rssMb is this process only — processId says which one it is
+          memory: { totalMemMb, usedMemMb, rssMb: process.memoryUsage.rss() / 1024 / 1024, processId: matchMaker.processId },
         };
       } catch (e: any) {
         console.error(e.message);
