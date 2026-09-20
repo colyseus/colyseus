@@ -65,7 +65,15 @@ export class GeoIPPlugin extends RoomPlugin {
       readerCache.set(this.cacheKey, pending);
       scheduleRefreshIfApplicable(this.cacheKey, this.opts);
     }
-    this.reader = await pending;
+    try {
+      this.reader = await pending;
+    } catch (error) {
+      // A later room can retry after the database becomes available.
+      if (readerCache.get(this.cacheKey) === pending) {
+        readerCache.delete(this.cacheKey);
+      }
+      throw error;
+    }
   }
 
   protected onAuth(client: Client, _options: any, context: AuthContext): void {
