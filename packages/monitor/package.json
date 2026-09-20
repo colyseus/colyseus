@@ -23,6 +23,7 @@
   },
   "scripts": {
     "start": "vite",
+    "typecheck": "tsc --noEmit",
     "build": "vite build && node build.mjs",
     "preview": "vite preview",
     "prepublishOnly": "npm run build"

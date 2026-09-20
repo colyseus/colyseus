@@ -98,7 +98,7 @@ export class RoomInspect extends React.Component<Props, State> {
         sendData: JSON.parse(localStorage.getItem(SEND_DATA_CACHE) || "{}")
     };
 
-    updateDataInterval: number;
+    updateDataInterval: number | undefined;
 
     componentDidMount() {
         this.fetchRoomData();
@@ -198,7 +198,7 @@ export class RoomInspect extends React.Component<Props, State> {
     }
 
     render() {
-        const client_columns: GridColDef[] = [
+        const client_columns: GridColDef<State['clients'][number]>[] = [
             {
                 field: "sessionId",
                 headerName: "sessionId",
@@ -210,7 +210,7 @@ export class RoomInspect extends React.Component<Props, State> {
                 flex: 1,
                 valueFormatter: valueFormatter.elapsedTime,
                 sortComparator: gridNumberComparator
-            } as GridColDef,
+            },
             {
                 field: "actions",
                 headerName: "",
@@ -219,11 +219,11 @@ export class RoomInspect extends React.Component<Props, State> {
                 renderCell: (param) => {
                     return (
                         <Stack direction="row" spacing={0.5}>
-                            <Button size="small" variant="text" startIcon={<SendIcon />} onClick={this.sendMessage.bind(this, param.id)}>
+                            <Button size="small" variant="text" startIcon={<SendIcon />} onClick={this.sendMessage.bind(this, param.row.sessionId)}>
                                 Send
                             </Button>
                             <Tooltip title="Disconnect client">
-                                <IconButton size="small" color="error" onClick={this.disconnectClient.bind(this, param.id)}>
+                                <IconButton size="small" color="error" onClick={this.disconnectClient.bind(this, param.row.sessionId)}>
                                     <DoDisturbOnIcon fontSize="small" />
                                 </IconButton>
                             </Tooltip>
