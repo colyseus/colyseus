@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- `IdleKickPlugin` measures inactivity from the most recent inbound frame rather than the start of the message rate-limit window, preventing premature disconnects.
+
 ## 0.18.6
 
 - The Vite plugin now works alongside Nitro (e.g. TanStack Start): `vite dev` no longer fails with `Cannot read properties of undefined (reading 'import')`, and `vite build` writes `dist/server/server.mjs`. List `colyseus()` before `nitro()` — see [Using Nitro](https://docs.colyseus.io/server/vite#using-nitro). Thanks @MeirArani! [#967](https://github.com/colyseus/colyseus/pull/967)

@@ -2236,6 +2236,8 @@ export class Room<T extends RoomOptions = RoomOptions> {
       return;
     }
 
+    client._lastActivityTime = this.clock.currentTime;
+
     // reset message count every second
     if (this.clock.currentTime - (client._lastMessageTime ?? 0) >= 1000) {
       client._numMessagesLastSecond = 0;
