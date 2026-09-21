@@ -19,7 +19,7 @@ export interface GeoIPData {
 /**
  * Pluggable reader contract. Implementations wrap a specific MMDB-style
  * database. The plugin only depends on this shape, which keeps mode
- * swapping (user-path / auto-download / bundled) cheap.
+ * swapping (user path / MaxMind / DB-IP) cheap.
  */
 export interface GeoIPReader {
   /** Resolve an IPv4/IPv6 string to country data, or undefined when unknown. */

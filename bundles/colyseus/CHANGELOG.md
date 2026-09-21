@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.7
+
+- `IdleKickPlugin` no longer kicks clients that are still sending messages. It measured inactivity from a rate-limiter timestamp that only moves once per second. Thanks @fatihcvs! [#974](https://github.com/colyseus/colyseus/pull/974)
+
 ## 0.18.6
 
 - The Vite plugin now works alongside Nitro (e.g. TanStack Start): `vite dev` no longer fails with `Cannot read properties of undefined (reading 'import')`, and `vite build` writes `dist/server/server.mjs`. List `colyseus()` before `nitro()` — see [Using Nitro](https://docs.colyseus.io/server/vite#using-nitro). Thanks @MeirArani! [#967](https://github.com/colyseus/colyseus/pull/967)

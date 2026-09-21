@@ -1,12 +1,14 @@
 import assert from 'assert';
-import { attachToTestRoom } from '@colyseus/core';
+import sinon from 'sinon';
+import { attachToTestRoom, ClientState, Protocol, Room } from '@colyseus/core';
 import { IdleKickPlugin } from '../../src/plugins/idle-kick.ts';
 
 /**
  * Unit tests for IdleKickPlugin. The plugin only touches three things on
  * the room: `clock.currentTime`, `clock.setInterval`, and `kickClient`
  * — plus `_lastMessageTime` on each client. We fake all of them with a
- * small stub so we can control time precisely.
+ * small stub so we can control time precisely. The last test drives a real
+ * Room instead, to pin down where `_lastMessageTime` comes from.
  */
 
 interface StubClient {
@@ -58,6 +60,40 @@ function makeClient(id: string, lastMessageTime: number = 0): StubClient {
 }
 
 describe('IdleKickPlugin', () => {
+
+  it('measures activity from the last frame, not from the rate-limit counter', () => {
+    // `_lastMessageTime` used to be the rate limiter's reset timestamp, which
+    // only moves once per second — a client sending steadily got kicked anyway.
+    const room = new Room();
+    const plugin = new IdleKickPlugin({ timeoutMs: 1000 });
+    const kick = sinon.stub(room, 'kickClient');
+    const client: any = { sessionId: 'active', state: ClientState.JOINED, raw: sinon.spy() };
+    room.clients.push(client);
+    attachToTestRoom(plugin, room);
+
+    room.clock.currentTime = 10_000;
+    plugin['onJoin']!(client);
+    assert.equal(client._messageCountResetsAt, undefined, 'the plugin leaves rate-limit state alone');
+
+    room.clock.currentTime = 10_400;
+    room['_onMessage'](client, Buffer.from([Protocol.PING]));
+    room.clock.currentTime = 10_800;
+    room['_onMessage'](client, Buffer.from([Protocol.PING]));
+    assert.equal(client.raw.callCount, 2, 'the real dispatcher answered both pings');
+
+    room.clock.currentTime = 11_100;
+    plugin['scan']();
+    sinon.assert.notCalled(kick);
+
+    room.clock.currentTime = 11_800;
+    plugin['scan']();
+    sinon.assert.calledOnceWithExactly(kick, 'active', 1000, 'kicked');
+
+    assert.equal(client._lastMessageTime, 10_800);
+    assert.equal(client._messageCountResetsAt, 11_400, 'the rate-limit counter resets once per second');
+
+    room.clock.clear();
+  });
 
   it('kicks a client that has been idle past timeoutMs', () => {
     const plugin = new IdleKickPlugin({ timeoutMs: 1000 });

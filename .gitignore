@@ -7,7 +7,9 @@ build/
 .devmode.json
 .claude/
 
-**/README.md
+# LICENSE is identical for every package; `build.ts --publish-files` copies
+# the root one in at publish time. READMEs are NOT ignored: a package's own
+# README has to be tracked, or CI never sees it and npm shows the root one.
 **/LICENSE
 
 .nyc_output

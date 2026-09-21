@@ -82,16 +82,24 @@ async function main() {
     // "main" field from package.json file.
     const pkgJSON = pkg.toJSON();
 
+    // Fill in the boilerplate npm expects from packages that don't ship
+    // their own. Only under --publish-files: a package's own README.md is
+    // tracked, and writing copies on every build is what hid them from git
+    // — CI, which never saw the untracked file, published the root README
+    // in their place.
+    if (argv['publish-files']) {
+      for (const file of ["README.md", "LICENSE"]) {
+        const target = path.join(basePath, file);
+        if (!fs.existsSync(target)) {
+          fs.copyFileSync(path.resolve(__dirname, file), target);
+        }
+      }
+    }
+
     // Skip rollup build if package has "build" configured.
     if (pkgJSON.scripts?.build) {
       console.log(pkgJSON.name, "has custom build! skipping default build.");
       return;
-    }
-
-    // Copy README.md and LICENSE into child package folder.
-    if (!fs.existsSync(path.join(basePath, "README.md"))) {
-      fs.copyFileSync(path.resolve(__dirname, "README.md"), path.join(basePath, "README.md"));
-      fs.copyFileSync(path.resolve(__dirname, "LICENSE"), path.join(basePath, "LICENSE"));
     }
 
     // Get all .ts as input files

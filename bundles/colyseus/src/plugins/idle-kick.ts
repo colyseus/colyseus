@@ -14,8 +14,8 @@
  *
  * Footprint: one `clock.setInterval` per room, zero per-message work and
  * zero per-client state. Activity is read from `client._lastMessageTime`,
- * which the room already maintains for rate-limiting. Any inbound frame
- * (including SDK keepalive PINGs) refreshes it — by design.
+ * which the room stamps on every inbound frame (including SDK keepalive
+ * PINGs) — by design.
  *
  * On kick, clients see WS close code 1000 ("normal closure") with the
  * reason `'kicked'` by default. The SDK treats 1000 as a final leave

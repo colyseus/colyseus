@@ -2,6 +2,7 @@ export { GeoIPPlugin, type GeoIPPluginOptions } from './GeoIPPlugin.ts';
 export type { GeoIPData, GeoIPReader } from './types.ts';
 export { MMDBReader } from './readers/MMDBReader.ts';
 export { AutoDownloader, type AutoDownloaderOptions } from './readers/AutoDownloader.ts';
+export { DBIPDownloader, type DBIPDownloaderOptions } from './readers/DBIPDownloader.ts';
 
 import type { GeoIPData } from './types.ts';
 

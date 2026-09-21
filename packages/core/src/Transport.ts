@@ -323,9 +323,17 @@ export interface ClientPrivate {
   _joinedAt: number; // "elapsedTime" when the client joined the room.
 
   /**
-   * Used for rate limiting via maxMessagesPerSecond.
+   * Rate limiting via maxMessagesPerSecond: frames seen so far, and the
+   * moment the count goes back to zero.
    */
   _numMessagesLastSecond?: number;
+  _messageCountResetsAt?: number;
+
+  /**
+   * Time of the most recent inbound frame. Moves on every frame — this is
+   * the one to read for "how long has this client been quiet?" (see
+   * IdleKickPlugin). The rate-limit counter above only resets once a second.
+   */
   _lastMessageTime?: number;
 
   /**

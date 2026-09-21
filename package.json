@@ -12,8 +12,8 @@
     "verify-exports": "node scripts/verify-exports.mjs",
     "example": "pnpm --filter @colyseus/example run start",
     "update-contributors": "all-contributors generate",
-    "publish-from-package-stable": "pnpm run build && pnpm -r publish",
-    "publish-from-package-preview": "pnpm run build && pnpm -r publish --tag preview",
+    "publish-from-package-stable": "pnpm run build -- --publish-files && pnpm -r publish",
+    "publish-from-package-preview": "pnpm run build -- --publish-files && pnpm -r publish --tag preview",
     "update-submodule": "git submodule update --remote packages/better-call",
     "preinstall": "git submodule update --init --recursive",
     "postinstall": "pnpm --filter @better-auth/root run build"
