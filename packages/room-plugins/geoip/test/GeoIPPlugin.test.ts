@@ -1,4 +1,6 @@
 import assert from 'assert';
+import fs from 'fs';
+import { tmpdir } from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { Room, RoomPlugin, definePlugins } from '@colyseus/core';
@@ -136,6 +138,38 @@ describe('GeoIPPlugin', () => {
 });
 
 describe('MMDBReader (real fixture)', () => {
+  it('retries a failed database load and continues sharing a successful reader', async () => {
+    const directory = fs.mkdtempSync(path.join(tmpdir(), 'colyseus-geoip-'));
+    const dbPath = path.join(directory, 'country.mmdb');
+    class R extends Room {
+      plugins = definePlugins([new GeoIPPlugin({ dbPath })]);
+    }
+    const createRoom = () => {
+      const room = new R();
+      runInit(room);
+      return room;
+    };
+
+    try {
+      const first = createRoom();
+      await assert.rejects(() => (first as any).onCreate({}), { code: 'ENOENT' });
+
+      fs.copyFileSync(FIXTURE_MMDB, dbPath);
+      const retry = createRoom();
+      await (retry as any).onCreate({});
+      assert.equal(retry.plugins.geoip.lookup('81.2.69.142')?.isoCode, 'GB');
+
+      // A successful reader stays cached, even if the file is no longer present.
+      fs.unlinkSync(dbPath);
+      const cached = createRoom();
+      await (cached as any).onCreate({});
+      assert.equal(cached.plugins.geoip.lookup('81.2.69.142')?.isoCode, 'GB');
+    } finally {
+      if (fs.existsSync(dbPath)) { fs.unlinkSync(dbPath); }
+      fs.rmdirSync(directory);
+    }
+  });
+
   // IPs and expected results pulled from the MaxMind-DB test fixture.
   // `is_in_european_union` is only stamped on the `country` record for
   // the Swedish range — UK ranges in this fixture are marked at the
