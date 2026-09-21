@@ -1,17 +1,17 @@
 import assert from 'assert';
-import { attachToTestRoom } from '@colyseus/core';
+import { attachToTestRoom, Room, ClientState, Protocol } from '@colyseus/core';
+import sinon from 'sinon';
 import { IdleKickPlugin } from '../../src/plugins/idle-kick.ts';
 
 /**
- * Unit tests for IdleKickPlugin. The plugin only touches three things on
- * the room: `clock.currentTime`, `clock.setInterval`, and `kickClient`
- * — plus `_lastMessageTime` on each client. We fake all of them with a
- * small stub so we can control time precisely.
+ * Tests for IdleKickPlugin. Most cases use stub clients, clock and kickClient
+ * to control time precisely. The regression also exercises the real Room
+ * message dispatcher.
  */
 
 interface StubClient {
   sessionId: string;
-  _lastMessageTime: number;
+  _lastActivityTime: number;
 }
 
 interface StubRoom {
@@ -53,11 +53,44 @@ function makeRoom(clients: StubClient[]): StubRoom {
   return room;
 }
 
-function makeClient(id: string, lastMessageTime: number = 0): StubClient {
-  return { sessionId: id, _lastMessageTime: lastMessageTime };
+function makeClient(id: string, lastActivityTime: number = 0): StubClient {
+  return { sessionId: id, _lastActivityTime: lastActivityTime };
 }
 
 describe('IdleKickPlugin', () => {
+
+  it('counts recent inbound frames independently of the rate-limit window', () => {
+    const room = new Room();
+    const plugin = new IdleKickPlugin({ timeoutMs: 1000 });
+    const kick = sinon.stub(room, 'kickClient');
+    const client: any = { sessionId: 'active', state: ClientState.JOINED, raw: sinon.spy() };
+    room.clients.push(client);
+    attachToTestRoom(plugin, room);
+    room.clock.currentTime = 10_000;
+    plugin["onJoin"]!(client);
+
+    try {
+      room.clock.currentTime = 10_400;
+      room['_onMessage'](client, Buffer.from([Protocol.PING]));
+      room.clock.currentTime = 10_800;
+      room['_onMessage'](client, Buffer.from([Protocol.PING]));
+      assert.equal(client.raw.callCount, 2, 'real room dispatch responds to the pings');
+      assert.equal(client._lastMessageTime, 10_000, 'the rate-limit window is unchanged');
+      assert.equal(client._numMessagesLastSecond, 2);
+
+      room.clock.currentTime = 11_100;
+      plugin['scan']();
+      sinon.assert.notCalled(kick);
+
+      room.clock.currentTime = 11_800;
+      plugin['scan']();
+      sinon.assert.calledOnceWithExactly(kick, 'active', 1000, 'kicked');
+    } finally {
+      kick.restore();
+      room.clock.clear();
+      room.clock.stop();
+    }
+  });
 
   it('kicks a client that has been idle past timeoutMs', () => {
     const plugin = new IdleKickPlugin({ timeoutMs: 1000 });
@@ -65,7 +98,7 @@ describe('IdleKickPlugin', () => {
     const room = makeRoom([alice]);
     attachToTestRoom(plugin, room as any);
 
-    plugin["onJoin"]!(alice as any);              // seeds _lastMessageTime = 0
+    plugin["onJoin"]!(alice as any);              // seeds _lastActivityTime = 0
     plugin["onCreate"]!();
 
     room.advance(500);                        // not yet idle
@@ -75,7 +108,7 @@ describe('IdleKickPlugin', () => {
     assert.deepEqual(room.kicked, [{ sessionId: 'alice', closeCode: 1000, reason: 'kicked' }]);
   });
 
-  it('does not kick a client whose _lastMessageTime is recent', () => {
+  it('does not kick a client whose _lastActivityTime is recent', () => {
     const plugin = new IdleKickPlugin({ timeoutMs: 1000 });
     const alice = makeClient('alice', 0);
     const room = makeRoom([alice]);
@@ -85,7 +118,7 @@ describe('IdleKickPlugin', () => {
     plugin["onCreate"]!();
 
     room.advance(800);                        // tick at 800
-    alice._lastMessageTime = room.clock.currentTime;
+    alice._lastActivityTime = room.clock.currentTime;
     room.advance(500);                        // 1300ms total but only 500 since last msg
     assert.deepEqual(room.kicked, []);
   });
@@ -154,7 +187,7 @@ describe('IdleKickPlugin', () => {
     assert.deepEqual(room.kicked, []);
   });
 
-  it('seeds _lastMessageTime on join so silent newcomers are not instantly kicked', () => {
+  it('seeds _lastActivityTime on join so silent newcomers are not instantly kicked', () => {
     const plugin = new IdleKickPlugin({ timeoutMs: 1000 });
     const room = makeRoom([]);
     attachToTestRoom(plugin, room as any);
@@ -162,11 +195,11 @@ describe('IdleKickPlugin', () => {
 
     // simulate the room clock advancing before alice joins
     room.clock.currentTime = 10_000;
-    const alice = makeClient('alice', 0);     // _lastMessageTime stays 0 until plugin.onJoin
+    const alice = makeClient('alice', 0);     // _lastActivityTime stays 0 until plugin.onJoin
     room.clients.push(alice);
     plugin["onJoin"]!(alice as any);
 
-    assert.equal(alice._lastMessageTime, 10_000);
+    assert.equal(alice._lastActivityTime, 10_000);
 
     room.advance(500);
     assert.deepEqual(room.kicked, []);

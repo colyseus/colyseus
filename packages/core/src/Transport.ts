@@ -328,6 +328,9 @@ export interface ClientPrivate {
   _numMessagesLastSecond?: number;
   _lastMessageTime?: number;
 
+  /** Time of the most recent inbound frame, independent of the rate-limit window. */
+  _lastActivityTime?: number;
+
   /**
    * Per-client input Schema instance, allocated on join when the Room
    * declares `input`. Mutated in-place by {@link _inputDecoder} on each
