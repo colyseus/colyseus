@@ -44,6 +44,12 @@ export type RemoteRoomCallReturn<
 export const REMOTE_ROOM_SHORT_TIMEOUT = Number(process.env.COLYSEUS_PRESENCE_SHORT_TIMEOUT || 2000);
 export const MAX_CONCURRENT_CREATE_ROOM_WAIT_TIME = Number(process.env.COLYSEUS_MAX_CONCURRENT_CREATE_ROOM_WAIT_TIME || 0.5);
 
+// a peer that removes this process's room listings leaves a receipt. this
+// process looks for it every INTERVAL (ms) and restores them. the TTL (seconds)
+// only bounds what dead processes leave behind.
+export const SWEPT_CHECK_INTERVAL = Number(process.env.COLYSEUS_SWEPT_CHECK_INTERVAL || 5000);
+export const SWEPT_RECEIPT_TTL = Number(process.env.COLYSEUS_SWEPT_RECEIPT_TTL || 600);
+
 /**
  * The well-known `Symbol.metadata` (TC39 decorator metadata), falling back to the
  * registered symbol on runtimes that don't expose it globally yet. `@colyseus/schema`

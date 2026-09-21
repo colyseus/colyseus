@@ -818,6 +818,14 @@ describe("MatchMaker", () => {
           return cache;
         }
 
+        // a room listing owned by another process, which is also registered in 'roomcount'
+        async function createRemoteRoomCache(processId: string, roomId: string) {
+          matchMaker.presence.hset('roomcount', processId, "1,1");
+          await createDummyRoomCache({
+            processId, roomId, name: "one", locked: false, clients: 1, maxClients: 4,
+          });
+        }
+
         it("should clean up stale processId's", async () => {
           //
           // create fake processId and room caches
@@ -878,6 +886,195 @@ describe("MatchMaker", () => {
 
           assert.strictEqual(room.processId, matchMaker.processId);
           assert.strictEqual(1, (await driver.query({})).length);
+        });
+
+        it("should leave a receipt for the process whose room listings it removed", async () => {
+          await createRemoteRoomCache("stalled1", "StalledRoom");
+
+          assert.strictEqual(false, await matchMaker.healthCheckProcessId("stalled1"));
+
+          assert.strictEqual(0, (await driver.query({})).length);
+          assert.strictEqual(true, await matchMaker.presence.exists("swept:stalled1"));
+        });
+
+        it("should not hang when cleaning up an unresponsive process fails", async () => {
+          await createRemoteRoomCache("stalled2", "StalledRoom");
+
+          const presence = matchMaker.presence;
+          const setex = presence.setex;
+          presence.setex = async () => { throw new Error("presence is down"); };
+
+          try {
+            assert.strictEqual(false, await matchMaker.healthCheckProcessId("stalled2"));
+
+          } finally {
+            presence.setex = setex;
+          }
+        });
+
+        it("should re-publish its own room listings when they go missing", async () => {
+          const room = await matchMaker.createRoom("dummy", {});
+
+          // a peer believed this process was dead and removed its listings
+          await driver.cleanup!(matchMaker.processId);
+
+          await matchMaker.restoreMissingRoomCaches();
+
+          const rooms = await driver.query({});
+          assert.strictEqual(1, rooms.length);
+          assert.strictEqual(room.roomId, rooms[0].roomId);
+          assert.strictEqual(matchMaker.processId, rooms[0].processId);
+        });
+
+        it("should leave no listing behind after shutting down", async () => {
+          await matchMaker.createRoom("dummy", {});
+
+          // a restore that runs mid-shutdown must not outlive it
+          const shuttingDown = matchMaker.gracefullyShutdown();
+          await matchMaker.restoreMissingRoomCaches();
+          await shuttingDown;
+
+          assert.strictEqual(0, (await driver.query({})).length);
+
+          // afterEach expects a running matchmaker
+          await matchMaker.setup(undefined, driver);
+          await matchMaker.accept();
+        });
+
+        describe("swept receipt", () => {
+          const CHECK_INTERVAL = Number(process.env.COLYSEUS_SWEPT_CHECK_INTERVAL);
+          const sweptKey = () => `swept:${matchMaker.processId}`;
+          const listedRoomIds = async () => (await driver.query({})).map((r) => r.roomId);
+
+          // what a peer does when this process fails its health-check
+          async function sweep() {
+            await driver.cleanup!(matchMaker.processId);
+            await matchMaker.presence.setex(sweptKey(), "1", 60);
+          }
+
+          // an empty room is disposed after the suite's 0.3s seat reservation time
+          function createLastingRoom() {
+            matchMaker.defineRoomType("lasting", class extends Room { autoDispose = false; });
+            return matchMaker.createRoom("lasting", {});
+          }
+
+          before(function () {
+            // these wait for real checks: only practical with the short interval set by `npm test`
+            if (!(CHECK_INTERVAL <= 500)) { this.skip(); }
+          });
+
+          it("should restore its listings and consume the receipt", async () => {
+            const room = await createLastingRoom();
+
+            await sweep();
+            await timeout(CHECK_INTERVAL * 2.5);
+
+            assert.deepStrictEqual([room.roomId], await listedRoomIds());
+            assert.strictEqual(false, await matchMaker.presence.exists(sweptKey()));
+          });
+
+          it("should not look at its listings without a receipt", async () => {
+            await createLastingRoom();
+
+            let numFindByIds = 0;
+            const findByIds = driver.findByIds;
+            driver.findByIds = function (...args: any[]) {
+              numFindByIds++;
+              return findByIds.apply(driver, args as any);
+            };
+
+            try {
+              await timeout(CHECK_INTERVAL * 3.5);
+
+            } finally {
+              driver.findByIds = findByIds;
+            }
+
+            assert.strictEqual(0, numFindByIds);
+          });
+
+          it("should be joinable again after missing a health-check", async () => {
+            const room = await createLastingRoom();
+            const presence = matchMaker.presence;
+
+            // stalled: nothing sent to this process gets through
+            const publish = presence.publish;
+            presence.publish = function (topic: string, ...args: any[]) {
+              if (topic === `p:${matchMaker.processId}`) { return; }
+              return (publish as Function).call(presence, topic, ...args);
+            } as any;
+
+            try {
+              assert.strictEqual(false, await matchMaker.healthCheckProcessId(matchMaker.processId));
+              await assert.rejects(matchMaker.joinById(room.roomId, {}));
+
+            } finally {
+              presence.publish = publish;
+            }
+
+            await timeout(CHECK_INTERVAL * 2.5);
+
+            const reservation = await matchMaker.joinById(room.roomId, {});
+            assert.strictEqual(room.roomId, reservation.roomId);
+          });
+
+          it("should restore again when a second peer removes them after the first restore", async () => {
+            const room = await createLastingRoom();
+
+            await sweep();
+            await timeout(CHECK_INTERVAL * 2.5);
+            assert.deepStrictEqual([room.roomId], await listedRoomIds());
+
+            await sweep();
+            await timeout(CHECK_INTERVAL * 2.5);
+            assert.deepStrictEqual([room.roomId], await listedRoomIds());
+          });
+
+          it("should restore listings removed while a restore is in progress", async () => {
+            const room = await createLastingRoom();
+
+            // a second peer's removal lands while this process is still restoring
+            const persist = driver.persist;
+            let raced = false;
+            driver.persist = async function (...args: any[]) {
+              const persisted = await persist.apply(driver, args as any);
+              if (!raced) { raced = true; await sweep(); }
+              return persisted;
+            };
+
+            try {
+              await sweep();
+              await timeout(CHECK_INTERVAL * 4.5);
+
+            } finally {
+              driver.persist = persist;
+            }
+
+            assert.strictEqual(true, raced);
+            assert.deepStrictEqual([room.roomId], await listedRoomIds());
+          });
+
+          it("should keep restoring while rooms are still shutting down", async () => {
+            matchMaker.defineRoomType("slow_shutdown", class extends Room {
+              autoDispose = false; // only onBeforeShutdown() ends this room
+              onBeforeShutdown() { setTimeout(() => this.disconnect(), CHECK_INTERVAL * 6); }
+            });
+            const room = await matchMaker.createRoom("slow_shutdown", {});
+
+            const shuttingDown = matchMaker.gracefullyShutdown();
+
+            await timeout(CHECK_INTERVAL);
+            await sweep();
+            await timeout(CHECK_INTERVAL * 2.5);
+            assert.deepStrictEqual([room.roomId], await listedRoomIds());
+
+            await shuttingDown;
+            assert.strictEqual(0, (await driver.query({})).length);
+
+            // afterEach expects a running matchmaker
+            await matchMaker.setup(undefined, driver);
+            await matchMaker.accept();
+          });
         });
 
         it("devMode: auto-heal when trying to reserve seat on stale processId", async () => {

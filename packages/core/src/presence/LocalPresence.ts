@@ -107,6 +107,8 @@ export class LocalPresence implements Presence {
     }
 
     public del(key: string) {
+        clearTimeout(this.timeouts[key]); // a pending expiry would wipe whatever is set next
+        delete this.timeouts[key];
         delete this.keys[key];
         delete this.data[key];
         delete this.hash[key];

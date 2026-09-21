@@ -4,6 +4,7 @@
 
 - `createRoom()` no longer leaves two rooms running when the process it asked answers after the request timed out, as happens during an event-loop stall or when `onCreate()` outlasts the IPC timeout. Needs a driver that implements `insert()`, such as `@colyseus/redis-driver` 0.18.4. Thanks @brobinett! [#978](https://github.com/colyseus/colyseus/issues/978)
 - Creating a room while the server is shutting down now fails, instead of leaving behind a room that shutdown never disposes.
+- A process that misses a health-check no longer loses its room listings for good. Those rooms kept running, invisible to matchmaking, until someone left and rejoined one of them. The process now re-publishes them within a few seconds. Thanks @sylvainpolletvillard and @brobinett! [#968](https://github.com/colyseus/colyseus/issues/968)
 
 ## 0.18.16
 

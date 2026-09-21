@@ -2,7 +2,7 @@ import { EventEmitter } from 'events';
 
 import { requestFromIPC, subscribeIPC, subscribeWithTimeout } from './IPC.ts';
 
-import { type Type, Deferred, generateId, merge, retry, MAX_CONCURRENT_CREATE_ROOM_WAIT_TIME, REMOTE_ROOM_SHORT_TIMEOUT, type MethodName, type RemoteRoomCallReturn } from './utils/Utils.ts';
+import { type Type, Deferred, generateId, merge, retry, MAX_CONCURRENT_CREATE_ROOM_WAIT_TIME, REMOTE_ROOM_SHORT_TIMEOUT, SWEPT_CHECK_INTERVAL, SWEPT_RECEIPT_TTL, type MethodName, type RemoteRoomCallReturn } from './utils/Utils.ts';
 import { isDevMode, cacheRoomHistory, getRoomRestoreListKey, reloadFromCache } from './utils/DevMode.ts';
 
 import { RegisteredHandler } from './matchmaker/RegisteredHandler.ts';
@@ -182,6 +182,8 @@ export async function accept(isStandalone: boolean = false) {
      * (`stats.excludeProcess()`) by mistake due to health-check failure
      */
     stats.setAutoPersistInterval();
+
+    startSweptCheck();
   }
 
   state = MatchMakerState.READY;
@@ -879,6 +881,9 @@ export async function gracefullyShutdown(): Promise<any> {
   // unsubscribe from process id channel
   presence.unsubscribe(getProcessChannel());
 
+  // only now: rooms may take minutes to drain, and must stay joinable meanwhile
+  clearInterval(sweptCheckInterval);
+
   // make sure all rooms are disposed
   return Promise.all(disconnectAll(
     (isDevMode)
@@ -1151,13 +1156,23 @@ export function healthCheckProcessId(processId: string) {
       resolve(true)
 
     } catch (e) {
-      // process failed to respond - remove it from stats
       logger.debug(`❌ Process '${processId}' failed to respond. Cleaning it up.`);
-      await stats.excludeProcess(processId);
 
-      // clean-up stale room ids — a dead process never comes back;
-      // devMode restore reads 'roomhistory' (presence), never these rows
-      await removeRoomsByProcessId(processId);
+      try {
+        // stop placing new rooms on it. if it is still alive, it re-adds itself
+        // the next time it persists its stats.
+        await stats.excludeProcess(processId);
+
+        // devMode restore reads 'roomhistory' (presence), never these listings
+        await removeRoomsByProcessId(processId);
+
+        // receipt goes AFTER the removal: written before, a merely stalled
+        // process could restore its listings ahead of the delete
+        await presence.setex(getProcessSweptKey(processId), '1', SWEPT_RECEIPT_TTL);
+
+      } catch (e) {
+        debugMatchMaking(e); // presence/driver failing must not leave the caller hanging
+      }
 
       resolve(false);
     } finally {
@@ -1178,6 +1193,67 @@ async function removeRoomsByProcessId(processId: string) {
   // (ungraceful shutdowns using Redis can result on stale room ids still on memory.)
   //
   await driver.cleanup(processId);
+}
+
+let sweptCheckInterval: NodeJS.Timeout | undefined;
+let isCheckingSwept = false;
+
+function startSweptCheck() {
+  clearInterval(sweptCheckInterval); // accept() may be called more than once
+
+  sweptCheckInterval = setInterval(async () => {
+    if (isCheckingSwept) { return; } // a slow presence would stack them up
+    isCheckingSwept = true;
+
+    try {
+      await restoreIfSwept();
+
+    } catch (e) {
+      debugMatchMaking(e); // a failed presence call must not crash the process
+
+    } finally {
+      isCheckingSwept = false;
+    }
+  }, SWEPT_CHECK_INTERVAL);
+
+  sweptCheckInterval.unref(); // don't keep the process running just for this
+}
+
+/**
+ * A peer that failed to reach this process removed our room listings, and
+ * left a receipt. If we are reading it, we were only stalled: re-create them.
+ */
+async function restoreIfSwept() {
+  if (!await presence.exists(getProcessSweptKey())) { return; }
+
+  // consume before restoring: a removal landing mid-restore leaves a new receipt
+  await presence.del(getProcessSweptKey());
+  await restoreMissingRoomCaches();
+}
+
+/**
+ * Re-create the listings of rooms running on this process that are missing
+ * from the driver.
+ *
+ * Peers remove a process's listings when they believe it is dead. If this
+ * process was only stalled, its rooms are still running, and without their
+ * listings nobody could join them anymore.
+ */
+export async function restoreMissingRoomCaches() {
+  const roomIds = Object.keys(rooms);
+  if (roomIds.length === 0) { return; }
+
+  const cached = await driver.findByIds(roomIds);
+
+  const missing = roomIds
+    .map((roomId) => rooms[roomId])
+    .filter((room) =>
+      room?.['_internalState'] === RoomInternalState.CREATED && // still here, not disposing
+      !cached.has(room.roomId)
+    );
+
+  debugMatchMaking('restoring %s missing room listing(s)', missing.length);
+  await Promise.all(missing.map((room) => driver.persist(room['_listing'], true)));
 }
 
 async function createRoomReferences(room: Room, init: boolean = false): Promise<boolean> {
@@ -1338,4 +1414,8 @@ function getConcurrencyHashKey(roomName: string) {
 
 function getProcessChannel(id: string = processId) {
   return `p:${id}`;
+}
+
+function getProcessSweptKey(id: string = processId) {
+  return `swept:${id}`;
 }

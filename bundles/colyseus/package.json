@@ -46,7 +46,7 @@
     }
   },
   "scripts": {
-    "test": "COLYSEUS_SEAT_RESERVATION_TIME=0.3 COLYSEUS_PRESENCE_SHORT_TIMEOUT=300 mocha test/**.test.ts test/**/**.test.ts --exit --timeout 15000",
+    "test": "COLYSEUS_SEAT_RESERVATION_TIME=0.3 COLYSEUS_PRESENCE_SHORT_TIMEOUT=300 COLYSEUS_SWEPT_CHECK_INTERVAL=100 mocha test/**.test.ts test/**/**.test.ts --exit --timeout 15000",
     "typecheck": "tsc --noEmit -p test/tsconfig.json"
   },
   "author": "Endel Dreyer",
