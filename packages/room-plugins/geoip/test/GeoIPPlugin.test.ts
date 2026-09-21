@@ -165,8 +165,7 @@ describe('MMDBReader (real fixture)', () => {
       await (cached as any).onCreate({});
       assert.equal(cached.plugins.geoip.lookup('81.2.69.142')?.isoCode, 'GB');
     } finally {
-      if (fs.existsSync(dbPath)) { fs.unlinkSync(dbPath); }
-      fs.rmdirSync(directory);
+      fs.rmSync(directory, { recursive: true, force: true });
     }
   });
 

@@ -61,19 +61,17 @@ export class GeoIPPlugin extends RoomPlugin {
   protected async onCreate(): Promise<void> {
     let pending = readerCache.get(this.cacheKey);
     if (pending === undefined) {
-      pending = loadReader(this.opts);
+      // Evict a failed load so the next room retries — a cached rejection
+      // would outlive the database showing up. The identity check keeps a
+      // newer entry (a refresh that landed meanwhile) in place.
+      pending = loadReader(this.opts).catch((e) => {
+        if (readerCache.get(this.cacheKey) === pending) { readerCache.delete(this.cacheKey); }
+        throw e;
+      });
       readerCache.set(this.cacheKey, pending);
       scheduleRefreshIfApplicable(this.cacheKey, this.opts);
     }
-    try {
-      this.reader = await pending;
-    } catch (error) {
-      // A later room can retry after the database becomes available.
-      if (readerCache.get(this.cacheKey) === pending) {
-        readerCache.delete(this.cacheKey);
-      }
-      throw error;
-    }
+    this.reader = await pending;
   }
 
   protected onAuth(client: Client, _options: any, context: AuthContext): void {
