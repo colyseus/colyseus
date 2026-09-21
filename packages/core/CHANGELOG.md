@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.15
+
+- Internal: `client._lastMessageTime` is stamped on every inbound frame. The rate-limit bookkeeping it used to hold moved to `client._messageCountResetsAt`.
+
 ## 0.18.14
 
 - A room whose `onCreate()` throws is now disposed — its timers and presence subscriptions kept running, so one with `autoDispose = false` stayed in memory until the process restarted. `onDispose()` now also runs in this case, so it must tolerate a partially created room.

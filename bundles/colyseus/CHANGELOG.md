@@ -1,8 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.18.7
 
-- `IdleKickPlugin` measures inactivity from the most recent inbound frame rather than the start of the message rate-limit window, preventing premature disconnects.
+- `IdleKickPlugin` no longer kicks clients that are still sending messages. It measured inactivity from a rate-limiter timestamp that only moves once per second. Thanks @fatihcvs! [#974](https://github.com/colyseus/colyseus/pull/974)
 
 ## 0.18.6
 

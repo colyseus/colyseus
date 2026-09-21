@@ -12,9 +12,10 @@
  *     });
  *   }
  *
- * Footprint: one `clock.setInterval` per room. Activity is read from
- * `client._lastActivityTime`, which the room refreshes on every inbound frame
- * (including SDK keepalive PINGs) — by design.
+ * Footprint: one `clock.setInterval` per room, zero per-message work and
+ * zero per-client state. Activity is read from `client._lastMessageTime`,
+ * which the room stamps on every inbound frame (including SDK keepalive
+ * PINGs) — by design.
  *
  * On kick, clients see WS close code 1000 ("normal closure") with the
  * reason `'kicked'` by default. The SDK treats 1000 as a final leave
@@ -81,12 +82,10 @@ export class IdleKickPlugin extends RoomPlugin {
   }
 
   protected onJoin(client: Client) {
-    // Seed `_lastActivityTime` so a client that joins and immediately goes
+    // Seed `_lastMessageTime` so a client that joins and immediately goes
     // silent has a meaningful "last seen" timestamp. Without this it's 0
     // until their first inbound frame, which would look like "infinitely
     // idle" to the scan.
-    (client as any)._lastActivityTime = this.room.clock.currentTime;
-    // Preserve the existing rate-limit window initialization on join.
     (client as any)._lastMessageTime = this.room.clock.currentTime;
   }
 
@@ -102,9 +101,9 @@ export class IdleKickPlugin extends RoomPlugin {
     // from `this.room.clients` via `_forciblyCloseClient`, so going
     // backwards keeps the index valid.
     for (let i = this.room.clients.length - 1; i >= 0; i--) {
-      const c = this.room.clients[i] as Client & { _lastActivityTime: number };
+      const c = this.room.clients[i] as Client & { _lastMessageTime: number };
       if (this.isExempt?.(c)) { continue; }
-      const last = c._lastActivityTime;
+      const last = c._lastMessageTime;
       if (last <= cutoff) {
         this.onKickCb?.(c, now - last);
         this.room.kickClient(c.sessionId, this.closeCode, this.reason);
