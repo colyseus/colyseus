@@ -7,6 +7,10 @@
 > The API surface and wire format may change before 0.18 stable. Browser support
 > is not universal (absent in Safari at time of writing). Feedback welcome.
 
+## 0.18.3
+
+- A failed read on either channel now drops the client and logs, instead of silently killing the read loop — a session whose stream failed kept reporting itself open, so the room never ran `onLeave`. [#975](https://github.com/colyseus/colyseus/issues/975)
+
 ## 0.18.2
 
 - `simulateLatency()` now works — it was a no-op — and also delays the unreliable datagram channel.

@@ -1,8 +1,8 @@
 // import WebSocket from 'ws';
 
-import type { ReadableStreamDefaultReader, WritableStreamDefaultWriter } from 'stream/web';
+import type { ReadableStreamDefaultReader, ReadableStreamReadResult, WritableStreamDefaultWriter } from 'stream/web';
 import { Protocol, type Client, ClientState, type ISendOptions, getMessageBytes, logger, debugMessage, type ClientPrivate, CloseCode, enqueueClientRaw } from '@colyseus/core';
-import { type WebTransportSession } from '@fails-components/webtransport';
+import type { WebTransportSession } from '@fails-components/webtransport';
 import { EventEmitter } from 'events';
 import { type Iterator, decode, encode } from '@colyseus/schema';
 
@@ -18,6 +18,8 @@ const DATAGRAM_LOSS_OUT = Number(process.env.H3_DATAGRAM_LOSS_OUT ?? 0);
 
 // 9 bytes is the maximum length of a variable-length integer prefix
 const MAX_LENGTH_PREFIX_BYTES = 9;
+
+type Channel = 'reliable' | 'unreliable';
 
 /**
  * Reassembles length-prefixed frames from arbitrary byte chunks.
@@ -135,8 +137,8 @@ export class H3Client implements Client, ClientPrivate {
 
       // reading datagrams
       this._datagramReader = _wtSession.datagrams.readable.getReader();
-      this._datagramReader.closed.catch((e: any) =>
-        console.log("datagram reader closed with error!", e));
+      // the read loop reports the failure; this only keeps the rejection handled
+      this._datagramReader.closed.catch(() => {});
 
     }).catch((e: any) => {
       console.error("session failed to open =>", e);
@@ -201,58 +203,43 @@ export class H3Client implements Client, ClientPrivate {
     this._datagramWriter.write(dataWithPrefixedLength);
   }
 
-  public async readIncoming() {
-    let read = undefined;
-
-    while (this.readyState === 1) {
-      try {
-        read = await this._bidiReader.read();
-
-        //
-        // a single read may contain multiple messages
-        // each message is prefixed with its length
-        // a read may also deliver a partial frame; buffer across reads
-        //
-        for (const frame of this._bidiReassembler.push(read.value)) {
-          this.ref.emit('message', frame);
-        }
-
-      } catch (e) {
-        return;
-      }
-
-      if (read.done) {
-        return;
-      }
-
-    }
+  public readIncoming() {
+    return this._readLoop(this._bidiReader, this._bidiReassembler, 'reliable');
   }
 
-  public async readIncomingUnreliable() {
-    let read = undefined;
+  public readIncomingUnreliable() {
+    return this._readLoop(this._datagramReader, this._datagramReassembler, 'unreliable', DATAGRAM_LOSS);
+  }
 
+  /** @param loss test-only fraction [0..1] of whole reads to drop, simulating packet loss. */
+  private async _readLoop(
+    reader: ReadableStreamDefaultReader<Uint8Array>,
+    reassembler: FrameReassembler,
+    channel: Channel,
+    loss = 0,
+  ) {
     while (this.readyState === 1) {
+      let read: ReadableStreamReadResult<Uint8Array>;
+
       try {
-        read = await this._datagramReader.read();
-
-        // Test-only: drop the whole datagram to simulate packet loss.
-        if (DATAGRAM_LOSS > 0 && read.value && Math.random() < DATAGRAM_LOSS) { continue; }
-
-        //
-        // a single read may contain multiple messages
-        // each message is prefixed with its length
-        // a read may also deliver a partial frame; buffer across reads
-        //
-        for (const frame of this._datagramReassembler.push(read.value)) {
-          this.ref.emit('message', frame);
-        }
+        read = await reader.read();
 
       } catch (e) {
+        this._onChannelFailure(channel, e);
         return;
       }
 
-      if (read.done) {
-        return;
+      if (read.done) { return; }
+
+      if (loss > 0 && read.value && Math.random() < loss) { continue; }
+
+      //
+      // a single read may contain multiple messages
+      // each message is prefixed with its length
+      // a read may also deliver a partial frame; buffer across reads
+      //
+      for (const frame of reassembler.push(read.value)) {
+        this.ref.emit('message', frame);
       }
     }
   }
@@ -290,8 +277,14 @@ export class H3Client implements Client, ClientPrivate {
   }
 
   public leave(code?: number, data?: string) {
+    // `closed` can settle after a failure path already ran _close(); don't reopen
+    if (this.readyState === 3) { return; }
     this.readyState = 2; // CLOSING;
-    this._wtSession.close({ reason: data || "", closeCode: code });
+    try {
+      this._wtSession.close({ reason: data || "", closeCode: code });
+    } catch (e) {
+      // already closing or failed — there is nothing left to close
+    }
   }
 
   public close(code?: number, data?: string) {
@@ -306,6 +299,31 @@ export class H3Client implements Client, ClientPrivate {
 
   public toJSON() {
     return { sessionId: this.sessionId, readyState: this.readyState };
+  }
+
+  /**
+   * Ends the session after a read loop failed.
+   *
+   * A rejected `read()` is the end of that channel, never a hiccup: an errored
+   * ReadableStream stays errored, so retrying re-raises the same rejection (a
+   * busy loop) and a fresh reader taken off the same stream is born errored.
+   * With nothing to recover, the only alternative to closing is a client that
+   * still reports itself OPEN while the room can no longer hear it.
+   */
+  private _onChannelFailure(channel: Channel, e: any) {
+    // A session marks itself closed/failed *before* erroring its streams, so an
+    // ordinary teardown is already visible here and passes silently.
+    if (this.readyState !== 1 || this._wtSession.state !== 'connected') { return; }
+
+    logger.warn(
+      `@colyseus/h3-transport: '${this.sessionId}' stopped reading its ${channel} channel` +
+      ` while the session was open (${e?.message || e}) — dropping the client.`
+    );
+
+    this.leave(CloseCode.WITH_ERROR, `${channel} channel failed`);
+
+    // don't wait on the session's `closed` chain — a broken session may never settle it
+    this._close();
   }
 
   private _close() {

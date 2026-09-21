@@ -120,6 +120,9 @@ importers:
       '@colyseus/drizzle-driver':
         specifier: workspace:^
         version: link:../../packages/drivers/drizzle-driver
+      '@colyseus/h3-transport':
+        specifier: workspace:^
+        version: link:../../packages/transport/h3-transport
       '@colyseus/schema':
         specifier: ^5.0.8
         version: 5.0.8(typescript@6.0.3)

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.3
+
+- WebTransport: a failed read on either channel now drops the connection so the room can reconnect, instead of leaving a transport that reports itself open but can never deliver another message. [#975](https://github.com/colyseus/colyseus/issues/975)
+
 ## 0.18.2
 
 - The smoothing rate options — `damping` (lerp/extrapolate/damped) and `smoothing` (reckon, `reconciler`, `sim`, `spawns`) — are unified as a single `smoothMs`, now in **milliseconds** (time constant; 0 = off) instead of an opaque per-second rate. Roughly the extra display lag smoothing adds: a steady mover renders `speed × smoothMs` behind, and corrections fade ~63% per `smoothMs`. Convert old values with `smoothMs = 1000 / old` (damping 15 → 65, smoothing 20 → 50). The default is 50 everywhere it applies.

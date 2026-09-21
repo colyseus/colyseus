@@ -79,6 +79,7 @@
     "@colyseus/better-call": "workspace:^",
     "@colyseus/core": "workspace:^",
     "@colyseus/drizzle-driver": "workspace:^",
+    "@colyseus/h3-transport": "workspace:^",
     "@colyseus/schema": "^5.0.8",
     "@colyseus/sdk": "workspace:^",
     "@colyseus/tools": "workspace:^",

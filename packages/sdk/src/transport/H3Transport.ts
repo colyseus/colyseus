@@ -1,8 +1,11 @@
 import { encode, decode, type Iterator } from '@colyseus/schema';
+import { CloseCode } from '@colyseus/shared-types';
 import type { ITransport, ITransportEventMap } from "./ITransport.ts";
 
 // 9 bytes is the maximum length of a variable-length integer prefix
 const MAX_LENGTH_PREFIX_BYTES = 9;
+
+type Channel = 'reliable' | 'unreliable';
 
 /**
  * Reassembles length-prefixed frames from arbitrary byte chunks.
@@ -193,70 +196,68 @@ export class H3TransportTransport implements ITransport {
         }
     }
 
-    protected async readIncomingData() {
-        let result: ReadableStreamReadResult<Uint8Array>;
+    protected readIncomingData() {
+        return this.readLoop(this.reader, this.reliableReassembler, "reliable");
+    }
 
+    protected readIncomingUnreliableData() {
+        return this.readLoop(this.unreliableReader, this.unreliableReassembler, "unreliable");
+    }
+
+    protected async readLoop(
+        reader: ReadableStreamDefaultReader<Uint8Array>,
+        reassembler: FrameReassembler,
+        channel: Channel,
+    ) {
         while (this.isOpen) {
+            let result: ReadableStreamReadResult<Uint8Array>;
+
             try {
-                result = await this.reader.read();
-
-                // Stream ended (close/drop): a `done` read has no `value` — bail
-                // before decoding, or `decode.number(undefined)` throws on teardown.
-                if (result.done || !result.value) { break; }
-
-                //
-                // a single read may contain multiple messages
-                // each message is prefixed with its length
-                // a read may also deliver a partial frame; buffer across reads
-                //
-                for (const frame of this.reliableReassembler.push(result.value)) {
-                    this.events.onmessage({ data: frame });
-                }
+                result = await reader.read();
 
             } catch (e: any) {
-                if (e.message.indexOf("session is closed") === -1) {
-                    console.error("H3Transport: failed to read incoming data", e);
-                }
-                break;
+                await this.onChannelFailure(channel, e);
+                return;
             }
 
-            if (result.done) {
-                break;
+            // Stream ended (close/drop): a `done` read has no `value` — bail
+            // before decoding, or `decode.number(undefined)` throws on teardown.
+            if (result.done || !result.value) { return; }
+
+            //
+            // a single read may contain multiple messages
+            // each message is prefixed with its length
+            // a read may also deliver a partial frame; buffer across reads
+            //
+            for (const frame of reassembler.push(result.value)) {
+                this.events.onmessage({ data: frame });
             }
         }
     }
 
-    protected async readIncomingUnreliableData() {
-        let result: ReadableStreamReadResult<Uint8Array>;
+    /**
+     * Drops the connection after a read loop failed.
+     *
+     * A rejected `read()` is the end of that channel, never a hiccup: an errored
+     * ReadableStream stays errored, so retrying re-raises the same rejection (a
+     * busy loop) and a fresh reader taken off the same stream is born errored.
+     * With nothing to recover, the only alternative to closing is a transport
+     * that reports itself open but can never deliver another frame.
+     */
+    protected async onChannelFailure(channel: Channel, e: any) {
+        // Yield one turn before deciding. An implementation settles `wt.closed`
+        // in the same turn it errors the streams, and this rejection lands
+        // first, so letting that path flip `isOpen` keeps an ordinary
+        // disconnect quiet. `WebTransport` exposes no session state to read
+        // instead — the server side checks `_wtSession.state` synchronously.
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        if (!this.isOpen) { return; }
 
-        while (this.isOpen) {
-            try {
-                result = await this.unreliableReader.read();
+        console.error(`H3Transport: stopped reading the ${channel} channel while the session was open`, e);
 
-                // Stream ended (close/drop): a `done` read has no `value` — bail
-                // before decoding, or `decode.number(undefined)` throws on teardown.
-                if (result.done || !result.value) { break; }
-
-                //
-                // a single read may contain multiple messages
-                // each message is prefixed with its length
-                // a read may also deliver a partial frame; buffer across reads
-                //
-                for (const frame of this.unreliableReassembler.push(result.value)) {
-                    this.events.onmessage({ data: frame });
-                }
-
-            } catch (e: any) {
-                if (e.message.indexOf("session is closed") === -1) {
-                    console.error("H3Transport: failed to read incoming data", e);
-                }
-                break;
-            }
-
-            if (result.done) {
-                break;
-            }
-        }
+        // ABNORMAL_CLOSURE so the room treats it as a drop and reconnects,
+        // rather than a consented leave.
+        this.close(CloseCode.ABNORMAL_CLOSURE, `h3 ${channel} channel failed`);
     }
 
     protected sendSeatReservation (roomId: string, sessionId: string, reconnectionToken?: string, skipHandshake?: boolean) {
