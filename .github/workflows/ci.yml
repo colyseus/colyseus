@@ -39,6 +39,9 @@ jobs:
     - name: Install dependencies
       run: pnpm install
 
+    - name: Install Chrome for admin e2e tests
+      run: pnpm --filter @colyseus/example exec puppeteer browsers install chrome
+
     # build-all, not build: the latter skips every package with a custom build
     # script (sdk, monitor, playground, admin), and the suites import those from
     # build/, not from source.
