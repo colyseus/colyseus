@@ -83,7 +83,7 @@ jobs:
         run: pnpm install
 
       - name: Build
-        run: pnpm build
+        run: pnpm build -- --publish-files
 
       - name: Resolve npm dist-tag
         id: dist_tag
