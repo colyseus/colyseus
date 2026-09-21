@@ -7,13 +7,14 @@ import { Room, RoomPlugin, definePlugins } from '@colyseus/core';
 
 import { GeoIPPlugin } from '../src/GeoIPPlugin.ts';
 import { MMDBReader } from '../src/readers/MMDBReader.ts';
+import { DBIPDownloader, recentMonths } from '../src/readers/DBIPDownloader.ts';
 import type { GeoIPData, GeoIPReader } from '../src/types.ts';
 
 /**
  * Two layers of tests live here:
  *   1. `GeoIPPlugin` unit tests — use a `MockReader` to drive the onAuth
  *      hot path in isolation, bypassing the on-disk load.
- *   2. `MMDBReader + bundled-path` integration tests — exercise the real
+ *   2. `MMDBReader` integration tests — exercise the real
  *      load path against the MaxMind-provided test fixture
  *      `test/fixtures/GeoLite2-Country-Test.mmdb` (Apache-2.0, see
  *      `fixtures/NOTICE.md`). This catches regressions in actual MMDB
@@ -134,6 +135,51 @@ describe('GeoIPPlugin', () => {
     const client: any = { sessionId: 's1' };
     await (room as any).onAuth(client, {}, { ip: '203.0.113.5', headers: new Headers() });
     assert.deepEqual(order, ['room-onAuth']);
+  });
+});
+
+describe('DBIPDownloader', () => {
+  // Everything here stays offline: the month-stamped filenames mean a
+  // cached snapshot short-circuits before any request is made.
+  const tmpCacheDir = () => fs.mkdtempSync(path.join(tmpdir(), 'colyseus-dbip-'));
+
+  it('derives the current and previous month, wrapping the year', () => {
+    assert.deepEqual(recentMonths(new Date('2026-09-21T00:00:00Z')), ['2026-09', '2026-08']);
+    assert.deepEqual(recentMonths(new Date('2027-01-05T00:00:00Z')), ['2027-01', '2026-12']);
+  });
+
+  it('serves a cached snapshot without hitting the network, dropping superseded ones', async () => {
+    const cacheDir = tmpCacheDir();
+    const downloader = new DBIPDownloader({ cacheDir });
+    const [current, previous] = recentMonths(new Date());
+    fs.writeFileSync(downloader.dbPathFor(current), 'current');
+    fs.writeFileSync(downloader.dbPathFor(previous), 'superseded');
+
+    try {
+      assert.equal(await downloader.fetch(), downloader.dbPathFor(current));
+      assert.deepEqual(fs.readdirSync(cacheDir), [path.basename(downloader.dbPathFor(current))]);
+    } finally {
+      fs.rmSync(cacheDir, { recursive: true, force: true });
+    }
+  });
+
+  it('loads the default mode from the cache, no credentials and no download', async () => {
+    const cacheDir = tmpCacheDir();
+    const [current] = recentMonths(new Date());
+    fs.copyFileSync(FIXTURE_MMDB, path.join(cacheDir, `dbip-country-lite-${current}.mmdb`));
+
+    class R extends Room {
+      plugins = definePlugins([new GeoIPPlugin({ cacheDir })]);
+    }
+    const room = new R();
+    runInit(room);
+
+    try {
+      await (room as any).onCreate({});
+      assert.equal(room.plugins.geoip.lookup('81.2.69.142')?.isoCode, 'GB');
+    } finally {
+      fs.rmSync(cacheDir, { recursive: true, force: true });
+    }
   });
 });
 

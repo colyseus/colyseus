@@ -6,6 +6,8 @@
 
 - A failed auto-refresh now logs a warning. It passed silently, so an expired license key left you serving the database loaded at boot with no sign of it.
 
+- Zero-config `new GeoIPPlugin()` downloads DB-IP's Lite Country database from db-ip.com on first boot and caches it, picking up their monthly snapshot as it lands. It previously read a database meant to be bundled at publish time, which never shipped — so the mode threw `ENOENT` on every room creation.
+
 ## 0.18.2
 
 - Internal: the bundled database path resolves through `import.meta.dirname`.

@@ -1,9 +1,9 @@
-import path from 'path';
 import { RoomPlugin, logger, type Client, type AuthContext } from '@colyseus/core';
 
 import type { GeoIPData, GeoIPReader } from './types.ts';
 import { MMDBReader } from './readers/MMDBReader.ts';
 import { AutoDownloader, type AutoDownloaderOptions } from './readers/AutoDownloader.ts';
+import { DBIPDownloader, type DBIPDownloaderOptions } from './readers/DBIPDownloader.ts';
 
 /**
  * Constructor options. The three variants pick the database source:
@@ -12,8 +12,8 @@ import { AutoDownloader, type AutoDownloaderOptions } from './readers/AutoDownlo
  *                                        (MaxMind via `geoipupdate`, or DB-IP).
  *   { accountId, licenseKey, cacheDir? } — auto-fetch GeoLite2-Country from
  *                                        MaxMind under your account.
- *   {}                                 — use the bundled DB-IP Lite Country
- *                                        snapshot (CC-BY-4.0).
+ *   {}                                 — fetch DB-IP Lite Country from
+ *                                        db-ip.com (CC BY 4.0, no account).
  *
  * Each room instance attaches the *same* loaded reader — readers are
  * cached in a module-level Map keyed by source so memory stays flat
@@ -22,10 +22,11 @@ import { AutoDownloader, type AutoDownloaderOptions } from './readers/AutoDownlo
 export type GeoIPPluginOptions =
   | { dbPath: string }
   | (AutoDownloaderOptions & { refreshIntervalMs?: number })
-  | Record<string, never>;
+  | (DBIPDownloaderOptions & { refreshIntervalMs?: number });
 
 const HOUR = 60 * 60 * 1000;
-const DEFAULT_REFRESH_MS = 7 * 24 * HOUR;
+const MAXMIND_REFRESH_MS = 7 * 24 * HOUR;   // GeoLite2 is rebuilt weekly
+const DBIP_REFRESH_MS = 24 * HOUR;          // monthly snapshots — this only catches the rollover
 
 const readerCache = new Map<string, Promise<GeoIPReader>>();
 const refreshTimers = new Map<string, NodeJS.Timeout>();
@@ -122,7 +123,7 @@ function computeCacheKey(opts: GeoIPPluginOptions): string {
   if ('accountId' in opts && opts.accountId) {
     return `mm:${opts.accountId}:${opts.edition ?? 'GeoLite2-Country'}`;
   }
-  return 'bundled';
+  return `dbip:${('cacheDir' in opts && opts.cacheDir) || ''}`;
 }
 
 function isPathMode(opts: GeoIPPluginOptions): opts is { dbPath: string } {
@@ -142,22 +143,33 @@ async function loadReader(opts: GeoIPPluginOptions): Promise<GeoIPReader> {
     await downloader.fetch();
     return new MMDBReader(downloader.dbPath);
   }
-  // Bundled mode — relies on a DB-IP Lite snapshot shipped alongside the
-  // build. Not committed in this scaffold; release tooling drops the file
-  // in `databases/dbip-country-lite.mmdb` before publish.
-  const bundledPath = path.join(import.meta.dirname, 'databases', 'dbip-country-lite.mmdb');
-  return new MMDBReader(bundledPath);
+  // Default mode — DB-IP Lite Country, fetched from db-ip.com on first
+  // boot and reused from the on-disk cache afterwards.
+  return new MMDBReader(await new DBIPDownloader(opts).fetch());
 }
 
 function scheduleRefreshIfApplicable(key: string, opts: GeoIPPluginOptions): void {
-  if (!isAutoMode(opts)) { return; }
+  if (isPathMode(opts)) { return; }   // the operator owns the file
   if (refreshTimers.has(key)) { return; }
-  const interval = opts.refreshIntervalMs ?? DEFAULT_REFRESH_MS;
+
+  const auto = isAutoMode(opts);
+  const interval = opts.refreshIntervalMs ?? (auto ? MAXMIND_REFRESH_MS : DBIP_REFRESH_MS);
+  let loaded: string | undefined;
+
   const timer = setInterval(async () => {
     try {
-      const fresh = new AutoDownloader(opts);
-      await fresh.fetch(true);
-      readerCache.set(key, Promise.resolve(new MMDBReader(fresh.dbPath)));
+      if (auto) {
+        // MaxMind rewrites one filename, so a refresh always reopens.
+        const downloader = new AutoDownloader(opts);
+        await downloader.fetch(true);
+        readerCache.set(key, Promise.resolve(new MMDBReader(downloader.dbPath)));
+
+      } else {
+        const dbPath = await new DBIPDownloader(opts).fetch();
+        if (dbPath === loaded) { return; }   // same month — nothing to reopen
+        loaded = dbPath;
+        readerCache.set(key, Promise.resolve(new MMDBReader(dbPath)));
+      }
     } catch (e: any) {
       // Keep serving the previous reader; next tick will retry — but say so,
       // or an expired license key silently serves a stale database for months.
