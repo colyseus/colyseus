@@ -110,4 +110,32 @@ describe("RedisDriver", () => {
     assert.strictEqual((pveRoom.metadata as any).mode, "pve");
   });
 
+  it("query() by name should only return rooms of that name", async () => {
+    await driver.clear();
+
+    await driver.persist(initializeRoomCache({ name: "one", roomId: "n1", clients: 1, maxClients: 10 }));
+    await driver.persist(initializeRoomCache({ name: "one_more", roomId: "n2", clients: 1, maxClients: 10 }));
+
+    // its JSON contains `"name":"one"`, but it is not a room named "one"
+    await driver.persist(initializeRoomCache({ name: "two", roomId: "n3", clients: 1, maxClients: 10, metadata: { name: "one" } }));
+
+    assert.deepStrictEqual(["n1"], (await driver.query({ name: "one" })).map((r) => r.roomId));
+    assert.strictEqual(3, (await driver.query({})).length);
+  });
+
+  it("findByIds() should handle more ids than fit in one command", async () => {
+    await driver.clear();
+
+    const roomIds: string[] = [];
+    for (let i = 0; i < 1200; i++) {
+      roomIds.push(`r${i}`);
+      await driver.persist(initializeRoomCache({ name: "many", roomId: `r${i}`, clients: 0, maxClients: 10 }));
+    }
+
+    const found = await driver.findByIds([...roomIds, "missing"]);
+    assert.strictEqual(1200, found.size);
+    assert.strictEqual("r1199", found.get("r1199")!.roomId);
+    assert.strictEqual(false, found.has("missing"));
+  });
+
 });

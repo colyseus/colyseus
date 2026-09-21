@@ -3,6 +3,7 @@
 ## 0.18.4
 
 - Lets `@colyseus/core` 0.18.17 prevent a duplicate room when another process answers a create request after it timed out. [#978](https://github.com/colyseus/colyseus/issues/978)
+- `query()` now filters by room name before parsing, as `findOne()` already did — it was parsing every room cache in the cluster on each call.
 
 ## 0.18.3
 

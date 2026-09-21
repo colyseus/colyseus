@@ -56,6 +56,7 @@ export class MongooseDriver implements MatchMakerDriver {
       maxClients: true,
       metadata: true,
       name: true,
+      processId: true,
       roomId: true,
     });
 

@@ -18,6 +18,9 @@ import { Query } from './Query.ts';
 
 const ROOMCACHES_KEY = 'roomcaches';
 
+// max fields per command. spreading a very large array as arguments throws RangeError.
+const ITEMS_PER_COMMAND = 500;
+
 export class RedisDriver implements MatchMakerDriver {
   private readonly _client: Redis | Cluster;
 
@@ -34,7 +37,7 @@ export class RedisDriver implements MatchMakerDriver {
   }
 
   public async query(conditions: Partial<IRoomCache>, sortOptions?: SortOptions) {
-    const query = new Query<IRoomCache>(this.getRooms(), conditions);
+    const query = new Query<IRoomCache>(this.getRooms(conditions['name']), conditions);
 
     if (sortOptions) {
       query.sort(sortOptions);
@@ -48,23 +51,22 @@ export class RedisDriver implements MatchMakerDriver {
     const cachedRooms = await this.query({ processId });
     debugMatchMaking("removing stale rooms by processId %s (%s rooms found)", processId, cachedRooms.length);
 
-    const itemsPerCommand = 500;
-
-    // remove rooms in batches of 500
-    for (let i = 0; i < cachedRooms.length; i += itemsPerCommand) {
-      await this._client.hdel(ROOMCACHES_KEY, ...cachedRooms.slice(i, i + itemsPerCommand).map((room) => room.roomId));
+    for (let i = 0; i < cachedRooms.length; i += ITEMS_PER_COMMAND) {
+      await this._client.hdel(ROOMCACHES_KEY, ...cachedRooms.slice(i, i + ITEMS_PER_COMMAND).map((room) => room.roomId));
     }
   }
 
   public async findByIds(roomIds: string[]): Promise<Map<string, IRoomCache>> {
     const result = new Map<string, IRoomCache>();
     if (roomIds.length === 0) { return result; }
-    // Single HMGET — N field lookups in one wire op. ioredis returns
-    // an array of `string | null` aligned with the input order.
-    const values = await this._client.hmget(ROOMCACHES_KEY, ...roomIds);
-    for (let i = 0; i < roomIds.length; i++) {
-      const raw = values[i];
-      if (raw) { result.set(roomIds[i], initializeRoomCache(JSON.parse(raw))); }
+    // HMGET returns `string | null` per id, in the same order as the input
+    for (let i = 0; i < roomIds.length; i += ITEMS_PER_COMMAND) {
+      const batch = roomIds.slice(i, i + ITEMS_PER_COMMAND);
+      const values = await this._client.hmget(ROOMCACHES_KEY, ...batch);
+      for (let j = 0; j < batch.length; j++) {
+        const raw = values[j];
+        if (raw) { result.set(batch[j], initializeRoomCache(JSON.parse(raw))); }
+      }
     }
     return result;
   }
