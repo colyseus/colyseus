@@ -1,5 +1,5 @@
 import path from 'path';
-import { RoomPlugin, type Client, type AuthContext } from '@colyseus/core';
+import { RoomPlugin, logger, type Client, type AuthContext } from '@colyseus/core';
 
 import type { GeoIPData, GeoIPReader } from './types.ts';
 import { MMDBReader } from './readers/MMDBReader.ts';
@@ -158,8 +158,10 @@ function scheduleRefreshIfApplicable(key: string, opts: GeoIPPluginOptions): voi
       const fresh = new AutoDownloader(opts);
       await fresh.fetch(true);
       readerCache.set(key, Promise.resolve(new MMDBReader(fresh.dbPath)));
-    } catch {
-      // Keep serving the previous reader; next tick will retry.
+    } catch (e: any) {
+      // Keep serving the previous reader; next tick will retry — but say so,
+      // or an expired license key silently serves a stale database for months.
+      logger.warn(`@colyseus/geoip: database refresh failed, still serving the one loaded earlier — ${e.message}`);
     }
   }, interval);
   timer.unref();
