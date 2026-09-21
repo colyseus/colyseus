@@ -158,6 +158,19 @@ export function timeout(ms: number = 200) {
   return new Promise<void>((resolve, reject) => setTimeout(resolve, ms));
 }
 
+/**
+ * Waits for `condition` to hold instead of sleeping a duration guessed from
+ * how long the code under test ought to take. Returns as soon as it's true,
+ * and gives up after `timeoutMs` so the assertion that follows reports what
+ * actually went wrong rather than a bare timeout.
+ */
+export async function waitUntil(condition: () => boolean, timeoutMs: number = 2000) {
+  const deadline = Date.now() + timeoutMs;
+  while (!condition() && Date.now() < deadline) {
+    await timeout(10);
+  }
+}
+
 export class DummyRoom extends Room {
   onCreate(options: any) {
     if (options.roomId) { this.roomId = options.roomId; }

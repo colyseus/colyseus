@@ -2,7 +2,7 @@ import assert from "assert";
 
 import * as Colyseus from "@colyseus/sdk";
 import { OnAuthException, OnCreateException, OnDisposeException, OnJoinException, OnLeaveException, OnMessageException, Room, Server, TimestepException, SimulationIntervalException, TimedEventException, matchMaker } from "@colyseus/core";
-import { timeout } from "./utils/index.ts";
+import { timeout, waitUntil } from "./utils/index.ts";
 
 const TEST_PORT = 8570;
 const TEST_ENDPOINT = `ws://localhost:${TEST_PORT}`;
@@ -226,6 +226,7 @@ describe("Exception Handling", () => {
     const conn = await client.joinOrCreate("my_room", { arg0: "arg0" });
     await timeout(50);
     await conn.leave();
+    await waitUntil(() => caught.error !== undefined);
 
     assert.ok(caught.error instanceof OnLeaveException);
     assert.strictEqual(caught.error.message, "async onLeave Error");
@@ -438,7 +439,7 @@ describe("Exception Handling", () => {
 
     const conn = await client.joinOrCreate("my_room", { arg0: "arg0" });
     await conn.send("foo", "bar");
-    await timeout(50);
+    await waitUntil(() => caught.error !== undefined);
     await conn.leave();
 
     assert.ok(caught.error instanceof OnMessageException);
