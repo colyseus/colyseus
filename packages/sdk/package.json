@@ -34,6 +34,7 @@
     ".": {
       "@source": "./src/index.ts",
       "browser": "./build/index.mjs",
+      "module-sync": "./build/index.mjs",
       "import": "./build/index.mjs",
       "require": "./build/index.cjs",
       "types": "./build/index.d.ts"
@@ -41,6 +42,7 @@
     "./*": {
       "@source": "./src/*.ts",
       "types": "./build/*.d.ts",
+      "module-sync": "./build/*.mjs",
       "import": "./build/*.mjs",
       "require": "./build/*.cjs"
     },

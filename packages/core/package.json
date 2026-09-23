@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/core",
-  "version": "0.18.15",
+  "version": "0.18.16",
   "description": "Multiplayer Framework for Node.js.",
   "type": "module",
   "scripts": {
@@ -14,12 +14,14 @@
     ".": {
       "@source": "./src/index.ts",
       "types": "./build/index.d.ts",
+      "module-sync": "./build/index.mjs",
       "import": "./build/index.mjs",
       "require": "./build/index.cjs"
     },
     "./*": {
       "@source": "./src/*.ts",
       "types": "./build/*.d.ts",
+      "module-sync": "./build/*.mjs",
       "import": "./build/*.mjs",
       "require": "./build/*.cjs"
     },

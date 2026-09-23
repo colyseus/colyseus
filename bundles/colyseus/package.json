@@ -10,31 +10,37 @@
   "exports": {
     ".": {
       "types": "./build/index.d.ts",
+      "module-sync": "./build/index.mjs",
       "import": "./build/index.mjs",
       "require": "./build/index.cjs"
     },
     "./vite": {
       "types": "./build/vite.d.ts",
+      "module-sync": "./build/vite.mjs",
       "import": "./build/vite.mjs",
       "require": "./build/vite.cjs"
     },
     "./plugins/webrtc": {
       "types": "./build/plugins/webrtc.d.ts",
+      "module-sync": "./build/plugins/webrtc.mjs",
       "import": "./build/plugins/webrtc.mjs",
       "require": "./build/plugins/webrtc.cjs"
     },
     "./plugins/idle-kick": {
       "types": "./build/plugins/idle-kick.d.ts",
+      "module-sync": "./build/plugins/idle-kick.mjs",
       "import": "./build/plugins/idle-kick.mjs",
       "require": "./build/plugins/idle-kick.cjs"
     },
     "./plugins/unique-session": {
       "types": "./build/plugins/unique-session.d.ts",
+      "module-sync": "./build/plugins/unique-session.mjs",
       "import": "./build/plugins/unique-session.mjs",
       "require": "./build/plugins/unique-session.cjs"
     },
     "./plugins/track-user-sessions": {
       "types": "./build/plugins/track-user-sessions.d.ts",
+      "module-sync": "./build/plugins/track-user-sessions.mjs",
       "import": "./build/plugins/track-user-sessions.mjs",
       "require": "./build/plugins/track-user-sessions.cjs"
     }

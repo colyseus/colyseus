@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.16
+
+- Reaching Colyseus through both `require()` and `import` in the same process no longer loads two copies of the matchmaker. The monitor's `/api` answered 500 with `Cannot read properties of undefined (reading 'query')`, and `matchMaker` calls from the duplicated copy saw no rooms. Thanks @konistehrad! [#979](https://github.com/colyseus/colyseus/issues/979)
+
 ## 0.18.15
 
 - Internal: `client._lastMessageTime` is stamped on every inbound frame. The rate-limit bookkeeping it used to hold moved to `client._messageCountResetsAt`.
