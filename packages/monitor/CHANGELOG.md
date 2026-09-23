@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.5
+
+- `@colyseus/core` moved to `peerDependencies`, matching the other panels. A project whose own `@colyseus/core` range no longer overlaps the monitor's now fails at install, instead of quietly getting a second copy of the matchmaker that reports no rooms.
+
 ## 0.18.4
 
 - The "Memory" card now shows the resident memory of the Colyseus process serving the panel instead of system-wide usage — hover it to see which process that is. The API keeps `totalMemMb`/`usedMemMb` and adds `memory.rssMb` and `memory.processId`. Thanks @fatihcvs! [#969](https://github.com/colyseus/colyseus/pull/969)
