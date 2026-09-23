@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.4
+
+- `require()` of this package now resolves to the same ESM build `import` gets, so a process that uses both no longer loads two copies. [#979](https://github.com/colyseus/colyseus/issues/979)
+
 ## 0.18.3
 
 - A missing `postgres` or `@electric-sql/pglite` driver now names the package to install, instead of Node's `ERR_MODULE_NOT_FOUND` pointing inside the build. The message also warns that `pg` (node-postgres) is a different package. [#965](https://github.com/colyseus/colyseus/issues/965)

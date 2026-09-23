@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.8
+
+- `require()` of this package now resolves to the same ESM build `import` gets, so a process that uses both no longer loads two copies. [#979](https://github.com/colyseus/colyseus/issues/979)
+
 ## 0.18.7
 
 - `IdleKickPlugin` no longer kicks clients that are still sending messages. It measured inactivity from a rate-limiter timestamp that only moves once per second. Thanks @fatihcvs! [#974](https://github.com/colyseus/colyseus/pull/974)

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.4
+
+- `require()` of this package now resolves to the same ESM build `import` gets, so a process that uses both no longer loads two copies. [#979](https://github.com/colyseus/colyseus/issues/979)
+
 > **Status: experimental.** WebTransport is the only Colyseus transport with a
 > real unreliable channel, and it is what `room.input({ mode: "unreliable" })`
 > and `@unreliable` state fields need to actually ride datagrams — on any

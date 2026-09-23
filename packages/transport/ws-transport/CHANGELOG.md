@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.3
+
+- `require()` of this package now resolves to the same ESM build `import` gets, so a process that uses both no longer loads two copies. [#979](https://github.com/colyseus/colyseus/issues/979)
+
 ## 0.18.2
 
 - New `beforeUpgrade` option: called before the WebSocket handshake with the incoming `Request` and the same read-only context `onAuth()` receives. Return a `Response` to answer the request instead of upgrading it. Requires `@colyseus/core` 0.18.5.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.6
+
+- `require()` of this package now resolves to the same ESM build `import` gets, so a process that uses both no longer loads two copies. [#979](https://github.com/colyseus/colyseus/issues/979)
+
 ## 0.18.5
 
 - `room.waitForNextTimestep()` now resolves when a timestep has actually run. It slept for one interval instead, which under `setFixedTimestep()`'s accumulator could land before the next step fired and return having advanced nothing — tests compensated by awaiting it twice.

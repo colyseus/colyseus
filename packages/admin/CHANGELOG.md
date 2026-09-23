@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.6
+
+- `require()` of this package now resolves to the same ESM build `import` gets, so a process that uses both no longer loads two copies. [#979](https://github.com/colyseus/colyseus/issues/979)
+
 ## 0.18.5
 
 - Fix admin URLs two or more levels deep (`/admin/rooms/<id>`, `/admin/users/show/<id>`) rendering a blank page on direct load, refresh or bookmark.

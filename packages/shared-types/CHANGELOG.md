@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.3
+
+- `require()` of this package now resolves to the same ESM build `import` gets, so a process that uses both no longer loads two copies. [#979](https://github.com/colyseus/colyseus/issues/979)
+
 ## 0.18.2
 
 - Protocol docs: the `TIMED` prefix carries `uint32 sNow` + `uint32 inputSeq`, not two `float64` timestamps. Documentation only — the wire format has been this since 0.18.1.
