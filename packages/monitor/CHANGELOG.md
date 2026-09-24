@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.6
+
+- Inspecting a room with a large state no longer re-downloads it every few seconds: the state is fetched only while the State tab is open, and strings over 1 KB are shown as a size placeholder (read-only). [#979](https://github.com/colyseus/colyseus/issues/979)
+
 ## 0.18.5
 
 - `@colyseus/core` moved to `peerDependencies`, matching the other panels. A project whose own `@colyseus/core` range no longer overlaps the monitor's now fails at install, instead of quietly getting a second copy of the matchmaker that reports no rooms.

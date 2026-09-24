@@ -8,8 +8,10 @@ export function fetchRoomList () {
       .then(res => res.json());
 }
 
-export function fetchRoomData (roomId: string) {
-    return fetch(`${ENDPOINT}/api/room?roomId=${roomId}`)
+export function fetchRoomData (roomId: string, includeState: boolean) {
+    const query = new URLSearchParams({ roomId });
+    if (includeState) { query.set('state', '1'); }
+    return fetch(`${ENDPOINT}/api/room?${query.toString()}`)
       .then(res => res.json());
 }
 

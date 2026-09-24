@@ -70,6 +70,7 @@ interface Props {}
 interface State {
   roomId?: string,
   state: any,
+  truncated: string[],
   clients: Array<{ sessionId: string, elapsedTime: number }>,
   maxClients: number,
   stateSize: number,
@@ -86,6 +87,7 @@ export class RoomInspect extends React.Component<Props, State> {
     state: State = {
         roomId: undefined,
         state: {},
+        truncated: [],
         clients: [],
         maxClients: 0,
         stateSize: 0,
@@ -107,7 +109,8 @@ export class RoomInspect extends React.Component<Props, State> {
     fetchRoomData () {
         const roomId = (this.props as any).match.params.roomId;
 
-        fetchRoomData(roomId).
+        // state can be megabytes — only pull it while the State tab is visible
+        fetchRoomData(roomId, this.state.currentTab === "2").
             then((data) => this.setState(data)).
             catch((err) => console.error(err));
 
@@ -184,7 +187,7 @@ export class RoomInspect extends React.Component<Props, State> {
     }
 
     handleTabChange = (event: React.SyntheticEvent, newValue: string) => {
-        this.setState({ currentTab: newValue });
+        this.setState({ currentTab: newValue }, () => this.fetchRoomData());
     };
 
     handleStateEdit = ({ newValue, path }) => {
@@ -310,7 +313,7 @@ export class RoomInspect extends React.Component<Props, State> {
                                             data={this.state.state}
                                             onUpdate={this.handleStateEdit}
                                             onDelete={this.handleStateDelete}
-                                            restrictEdit={({ value }) => typeof value === 'object' && value !== null}
+                                            restrictEdit={({ value, path }) => (typeof value === 'object' && value !== null) || this.state.truncated.includes(JSON.stringify(path))}
                                             restrictTypeSelection={true}
                                             restrictAdd={true}
                                         />

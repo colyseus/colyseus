@@ -78,12 +78,12 @@ export function monitor(opts: MonitorOptions = {}) {
 
     'monitor-api-room': createEndpoint(`${prefix}/api/room`, {
       method: 'GET',
-      query: z.object({ roomId: z.string() }),
+      query: z.object({ roomId: z.string(), state: z.string().optional() }),
       use,
     }, async (ctx) => {
       const roomId = ctx.query.roomId;
       try {
-        return await matchMaker.remoteRoomCall(roomId, 'getInspectData');
+        return await matchMaker.remoteRoomCall(roomId, 'getInspectData', [ctx.query.state === '1']);
       } catch {
         return new Response(JSON.stringify({ message: UNAVAILABLE_ROOM_ERROR.replace('$roomId', roomId) }), {
           status: 500,

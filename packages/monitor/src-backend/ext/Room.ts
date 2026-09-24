@@ -31,8 +31,36 @@ function getStateSize(room) {
     return { ...data, locked, elapsedTime, stateSize };
 };
 
-(Room.prototype as any).getInspectData = async function () {
-    const state = this.state;
+// longer strings (e.g. base64 blobs) are replaced so polling a big state stays cheap
+const MAX_STRING_LENGTH = 1024;
+
+function formatLength(length: number) {
+    return (length >= 1024 * 1024)
+        ? `${(length / 1024 / 1024).toFixed(1)} MB`
+        : `${(length / 1024).toFixed(1)} KB`;
+}
+
+function pruneLargeStrings(value: any, path: (string | number)[], truncated: string[]): any {
+    if (typeof value === 'string') {
+        if (value.length <= MAX_STRING_LENGTH) { return value; }
+        truncated.push(JSON.stringify(path));
+        return `‹${formatLength(value.length)} string, truncated›`;
+    }
+    if (value === null || typeof value !== 'object') { return value; }
+    if (typeof value.toJSON === 'function') {
+        return pruneLargeStrings(value.toJSON(), path, truncated);
+    }
+    if (Array.isArray(value)) {
+        return value.map((item, i) => pruneLargeStrings(item, [...path, i], truncated));
+    }
+    const pruned: any = {};
+    for (const key in value) {
+        pruned[key] = pruneLargeStrings(value[key], [...path, key], truncated);
+    }
+    return pruned;
+}
+
+(Room.prototype as any).getInspectData = async function (includeState: boolean = false) {
     const stateSize = getStateSize(this);
     const roomElapsedTime = this.clock.elapsedTime;
 
@@ -43,7 +71,15 @@ function getStateSize(room) {
     }));
     const locked = this.locked;
 
-    return { ...data, locked, clients, state, stateSize };
+    if (!includeState) {
+        return { ...data, locked, clients, stateSize };
+    }
+
+    // paths are JSON-encoded so the panel can refuse edits on placeholders
+    const truncated: string[] = [];
+    const state = pruneLargeStrings(this.state ?? {}, [], truncated);
+
+    return { ...data, locked, clients, state, truncated, stateSize };
 };
 
 // Actions
