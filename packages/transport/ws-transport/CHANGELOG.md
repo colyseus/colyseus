@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.4
+
+- npm and pnpm now install `express` along with this package. It was declared optional, but the transport can't load without it, so a setup that didn't already have `express` crashed at startup with `Cannot find package 'express'`.
+
 ## 0.18.3
 
 - `require()` of this package now resolves to the same ESM build `import` gets, so a process that uses both no longer loads two copies. [#979](https://github.com/colyseus/colyseus/issues/979)

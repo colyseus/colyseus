@@ -2,6 +2,8 @@ import http, { STATUS_CODES } from 'http';
 import type { Duplex } from 'stream';
 import { URL } from 'url';
 import WebSocket, { type ServerOptions, WebSocketServer } from 'ws';
+// static on purpose: getExpressApp() is synchronous, and bundlers only include what they can see
+// TODO: on 1.0, make getExpressApp() async on every transport and load express lazily (see uWebSocketsTransport)
 import express from 'express';
 
 import { matchMaker, Protocol, Transport, type AuthContext, type BeforeUpgradeHandler, createAuthContext, debugAndPrintError, debugConnection, CloseCode, connectClientToRoom, runBeforeUpgrade, isDevMode } from '@colyseus/core';
