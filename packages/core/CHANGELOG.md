@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.18.17
+
+- `createRoom()` no longer leaves two rooms running when the process it asked answers after the request timed out, as happens during an event-loop stall or when `onCreate()` outlasts the IPC timeout. Needs a driver that implements `insert()`, such as `@colyseus/redis-driver` 0.18.4. Thanks @brobinett! [#978](https://github.com/colyseus/colyseus/issues/978)
+- Creating a room while the server is shutting down now fails, instead of leaving behind a room that shutdown never disposes.
+
 ## 0.18.16
 
 - Reaching Colyseus through both `require()` and `import` in the same process no longer loads two copies of the matchmaker. The monitor's `/api` answered 500 with `Cannot read properties of undefined (reading 'query')`, and `matchMaker` calls from the duplicated copy saw no rooms. Thanks @konistehrad! [#979](https://github.com/colyseus/colyseus/issues/979)

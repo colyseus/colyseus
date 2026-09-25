@@ -530,13 +530,27 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
     room = await handleCreateRoom(roomName, clientOptions);
 
   } else {
+    // pre-assign the roomId so a late remote answer collides with our fallback room instead of duplicating it
+    const roomId = driver.insert ? generateId() : undefined;
+
+    //
+    // TODO: on 1.0, drop the shape that keeps this working across 0.18 versions:
+    //  - name this request and send one options object, instead of a positional
+    //    list that 0.18 receivers `.apply()` onto handleCreateRoom()
+    //  - `presetRoomId` then joins `restoringRoomId` in that object, and the
+    //    empty slot at index 2 below goes away
+    //  - require `MatchMakerDriver.insert()` and drop `persist()`'s `create`
+    //    flag, so the roomId is always pre-assigned (see `recordRoom`)
+    //
+
     // ask other process to create the room!
     try {
       room = await requestFromIPC<IRoomCache>(
         presence,
         getProcessChannel(selectedProcessId),
         undefined,
-        [roomName, clientOptions],
+        // index 2 is restoringRoomId (see handleCreateRoom)
+        [roomName, clientOptions, undefined, roomId],
         REMOTE_ROOM_SHORT_TIMEOUT,
       );
 
@@ -554,7 +568,7 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
         }
 
         // if other process failed to respond, create the room on this process
-        room = await handleCreateRoom(roomName, clientOptions);
+        room = await handleCreateRoom(roomName, clientOptions, undefined, roomId);
 
       } else {
         // re-throw intentional exception thrown during remote onCreate()
@@ -574,7 +588,22 @@ export async function createRoom(roomName: string, clientOptions: ClientOptions)
   return room;
 }
 
-export async function handleCreateRoom(roomName: string, clientOptions: ClientOptions, restoringRoomId?: string): Promise<IRoomCache> {
+/**
+ * Create a room on this process.
+ *
+ * @param restoringRoomId - devMode restore: reuse this roomId, dropping any stale cache row.
+ * @param presetRoomId - roomId chosen by the process that requested this room. Stays at
+ *   argument index 3, because receivers `.apply()` the IPC arguments positionally and
+ *   index 2 is `restoringRoomId`.
+ * @returns the room's cache entry, which belongs to another process if it recorded
+ *   this roomId first.
+ */
+export async function handleCreateRoom(
+  roomName: string,
+  clientOptions: ClientOptions,
+  restoringRoomId?: string,
+  presetRoomId?: string,
+): Promise<IRoomCache> {
   const handler = getHandler(roomName);
   const room: Room = new handler.klass();
 
@@ -585,7 +614,7 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
     room.roomId = restoringRoomId;
 
   } else {
-    room.roomId = generateId();
+    room.roomId = presetRoomId || generateId();
   }
 
   //
@@ -619,8 +648,7 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
     } catch (e: any) {
       debugAndPrintError(e);
 
-      // no matchMaker listeners yet, so this only releases the room's own timers and presence
-      room['_events'].emit('dispose');
+      discardRoom(room);
 
       throw new ServerError(
         e.code || ErrorCode.MATCHMAKE_UNHANDLED,
@@ -633,6 +661,15 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
 
   room['_listing'].roomId = room.roomId;
   room['_listing'].maxClients = room.maxClients;
+
+  releaseIfShuttingDown(room); // shutdown began during onCreate()
+
+  const owner = await recordRoom(room);
+
+  // another process got this roomId first, and `room` has been discarded
+  if (owner) { return owner; }
+
+  releaseIfShuttingDown(room); // ...or during the write
 
   // imediatelly ask client to join the room
   debugMatchMaking('creating room \'%s\', roomId: \'%s\', processId: \'%s\'', roomName, room.roomId, processId);
@@ -678,14 +715,55 @@ export async function handleCreateRoom(roomName: string, clientOptions: ClientOp
   // room always start unlocked
   await createRoomReferences(room, true);
 
-  // persist room data only if match-making is enabled
-  if (state !== MatchMakerState.SHUTTING_DOWN) {
-    await driver.persist(room['_listing'], true);
-  }
-
   handler.emit('create', room);
 
   return room['_listing'];
+}
+
+/**
+ * Record a room in the cache. Returns another process's cache entry when it
+ * recorded this roomId first — `room` is discarded in that case. Throws if
+ * that entry is already gone.
+ */
+async function recordRoom(room: Room): Promise<IRoomCache | undefined> {
+  // older drivers overwrite a known roomId, so there is nothing to arbitrate
+  // TODO: require insert() on 1.0 and delete this branch
+  if (!driver.insert) {
+    await driver.persist(room['_listing'], true);
+    return;
+  }
+
+  if (await driver.insert(room['_listing'])) { return; }
+
+  debugMatchMaking('discarding duplicate room \'%s\' (%s)', room.roomName, room.roomId);
+  room['_listing'].roomId = undefined; // the row is the winner's: keep disposal off it
+  discardRoom(room);
+
+  const owner = await driver.findOne({ roomId: room.roomId });
+  if (!owner) {
+    throw new SeatReservationError(`room ${room.roomId} is no longer available.`); // the winner is already gone
+  }
+
+  return owner;
+}
+
+/**
+ * Shutdown can't see a room that isn't counted or registered yet, so one still
+ * being created when shutdown starts would outlive it. Release it instead.
+ */
+function releaseIfShuttingDown(room: Room) {
+  if (state !== MatchMakerState.SHUTTING_DOWN) { return; }
+
+  discardRoom(room); // removes our cache row too, if it was written
+  throw new ServerError(ErrorCode.MATCHMAKE_UNHANDLED, `room '${room.roomName}' not created: shutting down`);
+}
+
+/**
+ * Release a room that never went live. Only the room's own timers and presence
+ * are attached at this point, so there is no matchMaker bookkeeping to undo.
+ */
+function discardRoom(room: Room) {
+  room['_events'].emit('dispose');
 }
 
 /**

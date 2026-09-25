@@ -187,6 +187,18 @@ export interface MatchMakerDriver {
   persist(room: IRoomCache, create?: boolean): Promise<boolean> | boolean;
 
   /**
+   * Record a room, unless its `roomId` is already recorded. Must be atomic, and
+   * must return false rather than throwing when the `roomId` is taken.
+   *
+   * Matchmaking uses this to settle which process owns a room when one create
+   * request is answered twice. Drivers that don't implement it fall back to
+   * `persist(room, true)`, where the second write silently wins.
+   *
+   * TODO: required on 1.0, replacing `persist()`'s `create` flag.
+   */
+  insert?(room: IRoomCache): Promise<boolean>;
+
+  /**
    * Empty the room cache. Used for testing purposes only.
    * May be asynchronous — callers must await it.
    * @internal Do not call this method yourself.

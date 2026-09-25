@@ -3,7 +3,7 @@ import path from 'path';
 import { type Schema, MapSchema, ArraySchema, SetSchema, CollectionSchema, $childType, $changes } from '@colyseus/schema';
 import { logger } from '../Logger.ts';
 import { debugAndPrintError, debugDevMode } from '../Debug.ts';
-import { getLocalRoomById, handleCreateRoom, presence, remoteRoomCall } from '../MatchMaker.ts';
+import { getLocalRoomById, handleCreateRoom, MatchMakerState, presence, remoteRoomCall, state } from '../MatchMaker.ts';
 import type { Room } from '../Room.ts';
 
 const DEVMODE_CACHE_FILE_PATH = path.resolve(".devmode.json");
@@ -49,6 +49,9 @@ export async function reloadFromCache() {
       recreatedRoom = getLocalRoomById(recreatedRoomListing.roomId);
 
     } catch (e: any) {
+      // shutdown interrupted the restore: keep the remaining entries for the next boot
+      if (state === MatchMakerState.SHUTTING_DOWN) { break; }
+
       // unrestorable entry (e.g. room type renamed/removed) — drop it
       // instead of wedging the boot
       debugAndPrintError(`❌ couldn't restore room '${roomId}':\n${e.stack}`);

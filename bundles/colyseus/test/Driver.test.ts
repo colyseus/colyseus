@@ -83,6 +83,26 @@ describe("Driver implementations", () => {
         assert.strictEqual(0, entries.length)
       });
 
+      describe("insert()", () => {
+        before(function () { if (!driver.insert) { this.skip(); } });
+
+        it("should record a roomId only once, and free it again on remove() and clear()", async () => {
+          const room = () => initializeRoomCache({ roomId: "insert-once", name: "one", clients: 0, maxClients: 4 });
+
+          assert.strictEqual(true, await driver.insert!(room()));
+          assert.strictEqual(false, await driver.insert!(room()), "a taken roomId must be rejected");
+          assert.strictEqual(1, (await driver.query({})).length, "neither overwritten nor duplicated");
+          assert.strictEqual(true, await driver.has("insert-once"));
+
+          await driver.remove("insert-once");
+          assert.strictEqual(false, await driver.has("insert-once"));
+          assert.strictEqual(true, await driver.insert!(room()), "remove() must free the roomId");
+
+          await driver.clear();
+          assert.strictEqual(true, await driver.insert!(room()), "clear() must free the roomId");
+        });
+      });
+
       describe("cleanup", () => {
         it("should remove 400 'stale' entries by processId", async () => {
           const p1 = generateId();

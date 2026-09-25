@@ -1,5 +1,5 @@
 import assert, { match } from "assert";
-import { generateId, matchMaker, Room, setDevMode, type MatchMakerDriver, type IRoomCache, initializeRoomCache } from "@colyseus/core";
+import { Deferred, generateId, matchMaker, Room, setDevMode, subscribeIPC, type MatchMakerDriver, type IRoomCache, initializeRoomCache } from "@colyseus/core";
 import { DummyRoom, Room2Clients, createDummyClient, timeout, ReconnectRoom, Room3Clients, DRIVERS, ReconnectTokenRoom } from "./utils/index.ts";
 
 const DEFAULT_SEAT_RESERVATION_TIME = Number(process.env.COLYSEUS_SEAT_RESERVATION_TIME);
@@ -655,6 +655,159 @@ describe("MatchMaker", () => {
           for (const room of rooms) {
             await matchMaker.getLocalRoomById(room.roomId).disconnect();
           }
+        });
+      });
+
+      describe("remote room creation", async () => {
+        // autoDispose=false: rooms outlive the create request, so a duplicate is observable
+        class PersistentRoom extends Room {
+          autoDispose = false;
+          onCreate() {}
+        }
+
+        let recovered: Deferred<void>;      // releases the stalled process
+        let drained: Promise<any>;          // resolves once it has answered
+        let received: any[];                // the arguments it received
+
+        //
+        // Stands in for a process whose event loop is blocked: it answers the
+        // create request only once `recovered` is resolved.
+        //
+        // It is registered with no rooms, so `selectProcessIdToCreateRoom()`
+        // prefers it over this process, which owns the "bias" room by then.
+        //
+        async function selectStalledProcess(processId: string) {
+          await matchMaker.handleCreateRoom("bias", {});
+          matchMaker.presence.hset('roomcount', processId, "0,0");
+
+          await subscribeIPC(matchMaker.presence, `p:${processId}`, (method: string, args: any) => {
+            if (method === 'healthcheck') { return true; }
+
+            received = args;
+            return drained = recovered.then(() => matchMaker.handleCreateRoom.apply(undefined, args));
+          });
+        }
+
+        beforeEach(() => {
+          recovered = new Deferred<void>();
+          drained = Promise.resolve();
+          matchMaker.defineRoomType("bias", PersistentRoom);
+          matchMaker.defineRoomType("one", PersistentRoom);
+        });
+
+        afterEach(async () => {
+          // never leave a pending create behind, it would land in the next test
+          recovered.resolve();
+          await drained.catch(() => {});
+        });
+
+        it("should not create a second room when the remote process answers late", async () => {
+          await selectStalledProcess("stalled1");
+
+          const room = await matchMaker.createRoom("one", {});
+          assert.strictEqual(matchMaker.processId, room.processId, "must fall back to this process");
+
+          recovered.resolve();
+          await drained;
+
+          const roomIds = (await matchMaker.query({ name: "one" })).map((cache) => cache.roomId);
+          assert.deepStrictEqual(roomIds, [room.roomId], "one createRoom() call must create one room");
+        });
+
+        it("should leave the roomId to the remote process when the driver can't reject duplicates", async () => {
+          // an older driver package, without insert() (shadows the prototype method)
+          (driver as any).insert = undefined;
+
+          try {
+            await selectStalledProcess("stalled2");
+
+            const room = await matchMaker.createRoom("one", {});
+            recovered.resolve();
+            await drained;
+
+            // nothing can arbitrate, so the duplicate survives — it must just not reuse the roomId
+            const roomIds = (await matchMaker.query({ name: "one" })).map((cache) => cache.roomId);
+            assert.strictEqual(2, roomIds.length);
+            assert.strictEqual(2, new Set(roomIds).size, "rooms must not share a roomId");
+            assert.ok(roomIds.includes(room.roomId));
+
+          } finally {
+            delete (driver as any).insert;
+          }
+        });
+
+        //
+        // Shutdown can't see a room until it is counted and registered, and two
+        // awaits come before that: onCreate() and the cache write. Each test
+        // below parks the create in one of them, then shuts down.
+        //
+        async function assertShutdownReleases(pending: Promise<any>, resume: Deferred<void>) {
+          await matchMaker.gracefullyShutdown(); // it can't see the room, so it finishes first
+          resume.resolve();
+          await assert.rejects(pending);
+
+          assert.strictEqual(0, matchMaker.stats.local.roomCount, "shutdown must not leave a room running");
+          assert.strictEqual(0, (await driver.query({})).length, "nor its cache entry");
+        }
+
+        it("should not leave a room behind when shutdown starts during onCreate()", async () => {
+          const entered = new Deferred<void>();
+          const resume = new Deferred<void>();
+          matchMaker.defineRoomType("slow_create", class extends Room {
+            async onCreate() { entered.resolve(); await resume; }
+          });
+
+          let writes = 0;
+          const insert = driver.insert!;
+          (driver as any).insert = (room: IRoomCache) => { writes++; return insert.call(driver, room); };
+
+          try {
+            const pending = matchMaker.handleCreateRoom("slow_create", {});
+            await entered;
+            await assertShutdownReleases(pending, resume);
+
+            assert.strictEqual(0, writes, "must not record a room while shutting down");
+
+          } finally {
+            resume.resolve();
+            delete (driver as any).insert;
+            await matchMaker.setup(undefined, driver); // afterEach expects a running matchmaker
+            await matchMaker.accept();
+          }
+        });
+
+        it("should not leave a room behind when shutdown starts while recording it", async () => {
+          const entered = new Deferred<void>();
+          const resume = new Deferred<void>();
+          const insert = driver.insert!;
+          (driver as any).insert = async (room: IRoomCache) => {
+            entered.resolve();
+            await resume;
+            return insert.call(driver, room);
+          };
+
+          try {
+            const pending = matchMaker.handleCreateRoom("one", {});
+            await entered;
+            await assertShutdownReleases(pending, resume);
+
+          } finally {
+            resume.resolve();
+            delete (driver as any).insert;
+            await matchMaker.setup(undefined, driver); // afterEach expects a running matchmaker
+            await matchMaker.accept();
+          }
+        });
+
+        it("should send the roomId where an older process would ignore it", async () => {
+          await selectStalledProcess("stalled3");
+
+          recovered.resolve(); // answer right away, this is about the arguments
+          await matchMaker.createRoom("one", {});
+
+          // older receivers .apply() these onto handleCreateRoom(name, options, restoringRoomId)
+          assert.ok(!received[2], "3rd argument must stay empty");
+          assert.strictEqual("string", typeof received[3]);
         });
       });
 

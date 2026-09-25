@@ -403,6 +403,33 @@ describe("DevMode", () => {
       // Verify cached data was restored
       assert.deepStrictEqual((restoredRoom as NestedStateRoom).cachedData, { nested: true });
     });
+
+    it("should keep the restore entry when shutdown interrupts the restore", async () => {
+      setDevMode(true);
+
+      const entered = new Deferred<void>();
+      const resume = new Deferred<void>();
+      matchMaker.defineRoomType("slow_restore", class extends Room {
+        async onCreate() { entered.resolve(); await resume; }
+      });
+
+      const roomId = "interrupted-room-id";
+      await presence.hset(getRoomRestoreListKey(), roomId, JSON.stringify({
+        roomName: "slow_restore",
+        clientOptions: {},
+        clients: [],
+      }));
+
+      const restoring = reloadFromCache();
+      await entered;
+
+      await matchMaker.gracefullyShutdown();
+      resume.resolve();
+      await restoring;
+
+      // shutdown is temporary: the next boot must still restore this room
+      assert.ok(await presence.hget(getRoomRestoreListKey(), roomId), "restore entry must survive");
+    });
   });
 
   describe("stale player cleanup on devMode restore", () => {

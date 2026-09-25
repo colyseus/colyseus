@@ -2187,7 +2187,8 @@ export class Room<T extends RoomOptions = RoomOptions> {
   async #_dispose(): Promise<any> {
     this._internalState = RoomInternalState.DISPOSING;
 
-    // If the room is still CREATING, the roomId is not yet set.
+    // no row to remove: roomId is unset if onCreate() failed, and cleared when the
+    // row belongs to another process (see `recordRoom`)
     if (this._listing?.roomId !== undefined) {
       await matchMaker.driver.remove(this._listing.roomId);
     }

@@ -8,8 +8,11 @@ export type { IRoomCache, SortOptions, MatchMakerDriver };
 export class LocalDriver implements MatchMakerDriver {
   public rooms: IRoomCache[] = [];
 
+  // the roomIds in `rooms`: keeps has() and insert() O(1) however many rooms there are
+  private roomIds = new Set<string>();
+
   public has(roomId: string) {
-    return this.rooms.some((room) => room.roomId === roomId);
+    return this.roomIds.has(roomId);
   }
 
   public query(conditions: Partial<IRoomCache>, sortOptions?: SortOptions) {
@@ -70,15 +73,18 @@ export class LocalDriver implements MatchMakerDriver {
     return true;
   }
 
-  public persist(room: IRoomCache, create: boolean = false) {
-    // if (this.rooms.indexOf(room) !== -1) {
-    //   // already in the list
-    //   return true;
-    // }
+  public async insert(room: IRoomCache) {
+    if (this.has(room.roomId)) { return false; }
 
+    this.roomIds.add(room.roomId);
+    this.rooms.push(room);
+    return true;
+  }
+
+  public persist(room: IRoomCache, create: boolean = false) {
     if (!create) { return false; }
 
-    // add to the list
+    this.roomIds.add(room.roomId);
     this.rooms.push(room);
 
     return true;
@@ -88,6 +94,7 @@ export class LocalDriver implements MatchMakerDriver {
     const roomIndex = this.rooms.findIndex((room) => room.roomId === roomId);
     if (roomIndex !== -1) {
       this.rooms.splice(roomIndex, 1);
+      this.roomIds.delete(roomId);
       return true;
     }
     return false;
@@ -95,6 +102,7 @@ export class LocalDriver implements MatchMakerDriver {
 
   public clear() {
     this.rooms = [];
+    this.roomIds.clear();
   }
 
   public shutdown() {

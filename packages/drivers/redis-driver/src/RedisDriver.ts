@@ -157,6 +157,15 @@ export class RedisDriver implements MatchMakerDriver {
     return true;
   }
 
+  public async insert(room: IRoomCache) {
+    if (!room.roomId) {
+      debugMatchMaking("RedisDriver: can't .insert() without a `roomId`");
+      return false;
+    }
+
+    return await this._client.hsetnx(ROOMCACHES_KEY, room.roomId, JSON.stringify(room)) === 1;
+  }
+
   public async persist(room: IRoomCache, _: boolean = false) {
     if (!room.roomId) {
       debugMatchMaking("RedisDriver: can't .persist() without a `roomId`");
