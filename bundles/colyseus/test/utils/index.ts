@@ -114,7 +114,7 @@ export class WebSocketClient implements Client, ClientPrivate {
     // (see `Room._onMessage`)
     //
     this.state = ClientState.JOINED;
-    delete this._enqueuedMessages;
+    this._enqueuedMessages = undefined;
   }
 
   error(code, message) {

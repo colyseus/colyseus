@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.18
+
+- Rooms and clients now stay in V8's fast-properties mode, so hot-path property reads are no longer hash lookups. A broadcast to 6 clients is about 1.8× faster. Thanks @sarpaslan for reporting!
+
 ## 0.18.17
 
 - `createRoom()` no longer leaves two rooms running when the process it asked answers after the request timed out, as happens during an event-loop stall or when `onCreate()` outlasts the IPC timeout. Needs a driver that implements `insert()`, such as `@colyseus/redis-driver` 0.18.4. Thanks @brobinett! [#978](https://github.com/colyseus/colyseus/issues/978)

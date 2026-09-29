@@ -51,6 +51,14 @@ In practice that means:
 If you need a quick local check, run the file under `node --experimental-strip-types`.
 The transform throws a `SyntaxError` on the offending construct.
 
+## Keep `Room` and `Client` in V8 fast mode
+
+Their properties are read on every message and broadcast. Never `delete` a
+property on them (assign `undefined`), and never `Object.defineProperty` on an
+instance: both switch the object to V8's dictionary mode, where every property
+read becomes a hash lookup. Put shared accessors on the prototype. The comment
+above `Room`'s `static {}` block has the details.
+
 ## Testing
 
 (see AGENTS.md for the existing testing conventions)

@@ -65,6 +65,9 @@ const noneSerializer = new NoneSerializer();
  *  next patch. Frozen + shared (read-only) → zero per-call allocation. */
 const AFTER_PATCH_OPTS = Object.freeze({ afterNextPatch: true });
 
+/** Room properties backed by `Room.prototype` accessors. */
+const ROOM_ACCESSORS = ['state', 'maxClients', 'autoDispose', 'patchRate', 'unreliablePatchRate'] as const;
+
 export const DEFAULT_SEAT_RESERVATION_TIME = Number(process.env.COLYSEUS_SEAT_RESERVATION_TIME || 15);
 
 export type SimulationCallback = (deltaTime: number) => void;
@@ -258,25 +261,25 @@ export class Room<T extends RoomOptions = RoomOptions> {
    * it is locked automatically. Unless the room was explicitly locked by you via `lock()` method,
    * the room will be unlocked as soon as a client disconnects from it.
    */
-  public maxClients: number = Infinity;
+  declare public maxClients: number;
   #_maxClientsReached: boolean = false;
-  #_maxClients: number;
+  #_maxClients: number = Infinity;
 
   /**
    * Automatically dispose the room when last client disconnects.
    *
    * @default true
    */
-  public autoDispose: boolean = true;
-  #_autoDispose: boolean;
+  declare public autoDispose: boolean;
+  #_autoDispose: boolean = true;
 
   /**
    * Frequency to send the room state to connected clients, in milliseconds.
    *
    * @default 50ms (20fps)
    */
-  public patchRate: number | null = DEFAULT_PATCH_RATE;
-  #_patchRate: number;
+  declare public patchRate: number | null;
+  #_patchRate: number = DEFAULT_PATCH_RATE;
   #_patchInterval: NodeJS.Timeout;
 
   /**
@@ -305,7 +308,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
    * @default null — flush alongside every {@link broadcastPatch}, and only when
    * the state actually declares an `@unreliable` field.
    */
-  public unreliablePatchRate: number | null = null;
+  declare public unreliablePatchRate: number | null;
   #_unreliablePatchRate: number | null = null;
   #_unreliablePatchInterval: NodeJS.Timeout;
 
@@ -329,8 +332,11 @@ export class Room<T extends RoomOptions = RoomOptions> {
   /**
    * The state instance you provided to `setState()`.
    */
-  public state: ExtractRoomState<T>;
+  declare public state: ExtractRoomState<T>;
   #_state: ExtractRoomState<T>;
+
+  /** Until `__init()`, the prototype accessor setters only store the value. */
+  #_ready: boolean = false;
 
   /**
    * The presence instance. Check Presence API for more details.
@@ -455,21 +461,30 @@ export class Room<T extends RoomOptions = RoomOptions> {
   }
 
   /**
-   * This method is called by the MatchMaker before onCreate()
-   * @internal
+   * These accessors are defined once, on the prototype, to keep rooms in V8's
+   * fast-properties mode.
+   *
+   * V8 reads a property of an ordinary object at a fixed offset. A few
+   * operations switch the object to "dictionary mode" instead, where every
+   * read is a hash lookup, and it stays there:
+   *  - `delete obj.prop`, unless `prop` was the last property added;
+   *  - redefining an existing data property as an accessor;
+   *  - `Object.defineProperty(instance, ...)` with fresh getter/setter
+   *    closures per instance (every room after the first).
+   *
+   * Room and Client properties are read on every message and broadcast, so
+   * never `delete` their properties (assign `undefined`) and never define
+   * accessors per instance. Check with `node --allow-natives-syntax` and
+   * `%HasFastProperties(room)`.
    */
-  private __init() {
-    this.#_state = this.state;
-    this.#_autoDispose = this.autoDispose;
-    this.#_patchRate = this.patchRate;
-    this.#_unreliablePatchRate = this.unreliablePatchRate;
-    this.#_maxClients = this.maxClients;
-
-    Object.defineProperties(this, {
+  static {
+    Object.defineProperties(this.prototype, {
       state: {
         enumerable: true,
-        get: () => this.#_state,
-        set: (newState: ExtractRoomState<T>) => {
+        configurable: true,
+        get(this: Room<any>) { return this.#_state; },
+        set(this: Room<any>, newState: any) {
+          if (!this.#_ready) { this.#_state = newState; return; }
           if (newState?.constructor[Symbol.metadata] !== undefined || newState[$changes] !== undefined) {
             this.setSerializer(new SchemaSerializer());
           } else if ('_definition' in newState) {
@@ -485,16 +500,20 @@ export class Room<T extends RoomOptions = RoomOptions> {
 
       maxClients: {
         enumerable: true,
-        get: () => this.#_maxClients,
-        set: (value: number) => {
+        configurable: true,
+        get(this: Room<any>) { return this.#_maxClients; },
+        set(this: Room<any>, value: number) {
+          if (!this.#_ready) { this.#_maxClients = value; return; }
           this.setMatchmaking({ maxClients: value });
         },
       },
 
       autoDispose: {
         enumerable: true,
-        get: () => this.#_autoDispose,
-        set: (value: boolean) => {
+        configurable: true,
+        get(this: Room<any>) { return this.#_autoDispose; },
+        set(this: Room<any>, value: boolean) {
+          if (!this.#_ready) { this.#_autoDispose = value; return; }
           if (
             value !== this.#_autoDispose &&
             this._internalState !== RoomInternalState.DISPOSING
@@ -507,9 +526,11 @@ export class Room<T extends RoomOptions = RoomOptions> {
 
       patchRate: {
         enumerable: true,
-        get: () => this.#_patchRate,
-        set: (milliseconds: number) => {
+        configurable: true,
+        get(this: Room<any>) { return this.#_patchRate; },
+        set(this: Room<any>, milliseconds: number) {
           this.#_patchRate = milliseconds;
+          if (!this.#_ready) { return; }
           // clear previous interval in case called setPatchRate more than once
           if (this.#_patchInterval) {
             clearInterval(this.#_patchInterval);
@@ -526,13 +547,33 @@ export class Room<T extends RoomOptions = RoomOptions> {
 
       unreliablePatchRate: {
         enumerable: true,
-        get: () => this.#_unreliablePatchRate,
-        set: (milliseconds: number | null) => {
+        configurable: true,
+        get(this: Room<any>) { return this.#_unreliablePatchRate; },
+        set(this: Room<any>, milliseconds: number | null) {
           this.#_unreliablePatchRate = milliseconds;
+          if (!this.#_ready) { return; }
           this._armUnreliablePatches();
         },
       },
     });
+  }
+
+  /**
+   * This method is called by the MatchMaker before onCreate()
+   * @internal
+   */
+  private __init() {
+    // Native class fields (plain JS, type-stripped TS, `useDefineForClassFields`) shadow
+    // the prototype accessors: re-install them here, at the cost of this room's fast mode.
+    for (let i = 0; i < ROOM_ACCESSORS.length; i++) {
+      const key = ROOM_ACCESSORS[i];
+      if (!Object.hasOwn(this, key)) { continue; }
+      const value = this[key];
+      Object.defineProperty(this, key, Object.getOwnPropertyDescriptor(Room.prototype, key));
+      (this as any)[key] = value; // not ready yet: only stores
+    }
+
+    this.#_ready = true;
 
     // set patch interval, now with the setter
     this.patchRate = this.#_patchRate;
@@ -2285,7 +2326,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
       if (client._enqueuedMessages.length > 0) {
         client._enqueuedMessages.forEach((enqueued) => client.raw(enqueued));
       }
-      delete client._enqueuedMessages;
+      client._enqueuedMessages = undefined; // not `delete`: keeps the client in V8 fast mode (see Room's static block)
 
     } else if (code === Protocol.PING) {
       client.raw(getMessageBytes[Protocol.PING]());
