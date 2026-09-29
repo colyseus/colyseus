@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.6
+
+- The `colyseus-report-stats` script on Colyseus Cloud no longer prints dotenv's log either.
+
 ## 0.18.5
 
 - dotenv's own "injecting env" log line is silenced on startup; the `✅ .env loaded.` line still reports which file was loaded.

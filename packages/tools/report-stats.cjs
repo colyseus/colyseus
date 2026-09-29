@@ -17,7 +17,7 @@ const METADATA_URL = process.env.INSTANCE_METADATA_URL || "http://169.254.169.25
 
 // load environment variables (Colyseus Cloud environment variables)
 if (process.env.APP_ROOT_PATH) {
-  dotenv.config({ path: `${process.env.APP_ROOT_PATH}/.env.cloud` });
+  dotenv.config({ path: `${process.env.APP_ROOT_PATH}/.env.cloud`, quiet: true });
 }
 
 async function retryFailedAttempts() {
