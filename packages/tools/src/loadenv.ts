@@ -31,7 +31,7 @@ function loadEnvFile(envFileOptions: string[], log: 'none' | 'success' | 'both' 
     const envPath = envPaths.find((envPath) => fs.existsSync(envPath));
 
     if (envPath) {
-        dotenv.config({ path: envPath, override });
+        dotenv.config({ path: envPath, override, quiet: true });
 
         if (log !== "none") {
             console.info(`✅ ${path.basename(envPath)} loaded.`);
@@ -44,7 +44,7 @@ function loadEnvFile(envFileOptions: string[], log: 'none' | 'success' | 'both' 
 
 // reload /etc/environment, if exists
 if (fs.existsSync("/etc/environment")) {
-  dotenv.config({ path: "/etc/environment", override: true })
+  dotenv.config({ path: "/etc/environment", override: true, quiet: true })
 }
 
 // (overrides previous env configs)
