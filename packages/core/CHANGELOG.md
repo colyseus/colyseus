@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.52
+
+- A process that misses a health-check no longer loses its room listings for good. Those rooms kept running, invisible to matchmaking, until someone left and rejoined one of them. The process now re-publishes them within a few seconds. Thanks @sylvainpolletvillard and @brobinett! [#968](https://github.com/colyseus/colyseus/issues/968)
+
 ## 0.17.51
 
 - A room whose `onCreate()` throws is now disposed — its timers and presence subscriptions kept running, so one with `autoDispose = false` stayed in memory until the process restarted. `onDispose()` now also runs in this case, so it must tolerate a partially created room.
