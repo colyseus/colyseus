@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.7
+
+- After a server reboot on Colyseus Cloud, the next deploy no longer disconnects players. The app came back from the reboot without its 30-minute shutdown grace period, so that deploy stopped the old processes after 1.6 seconds instead of waiting for their rooms to finish.
+
 ## 0.18.6
 
 - The `colyseus-report-stats` script on Colyseus Cloud no longer prints dotenv's log either.

@@ -8,6 +8,7 @@
  *   npx mocha --import tsx test/pm2-deployment.test.ts --timeout 60000
  */
 import pm2 from 'pm2';
+import { execFile } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
@@ -120,9 +121,10 @@ function getSharedModule() {
 }
 
 /**
- * Install @colyseus/tools as a PM2 module by starting the agent script directly
+ * Launch the agent script as the @colyseus/tools module, without waiting for
+ * it to register its action -- what `pm2 ping` leaves behind on boot.
  */
-function installPostDeployAgent(): Promise<void> {
+function launchPostDeployAgent(): Promise<void> {
   return new Promise((resolve, reject) => {
     const agentPath = path.resolve(TOOLS_PACKAGE_PATH, 'pm2/post-deploy-agent.cjs');
     pm2.start({
@@ -131,11 +133,28 @@ function installPostDeployAgent(): Promise<void> {
       cwd: TOOLS_PACKAGE_PATH,
       // the agent resolves the NGINX path at require-time, in its own process
       env: { NGINX_CONFIG_FILE: TEST_NGINX_CONFIG_PATH },
-    }, (err) => {
-      if (err) return reject(err);
-      // Wait for the module to initialize
-      setTimeout(resolve, 2000);
-    });
+    }, (err) => err ? reject(err) : resolve());
+  });
+}
+
+/**
+ * Install @colyseus/tools as a PM2 module by starting the agent script directly
+ */
+async function installPostDeployAgent(): Promise<void> {
+  await launchPostDeployAgent();
+  // Wait for the module to initialize
+  await new Promise(resolve => setTimeout(resolve, 2000));
+}
+
+/**
+ * Run the real `colyseus-post-deploy` script from `cwd`, as a deploy does.
+ */
+function runPostDeployScript(cwd: string): Promise<string> {
+  return new Promise((resolve) => {
+    execFile(process.execPath, [path.resolve(TOOLS_PACKAGE_PATH, 'post-deploy.cjs')], {
+      cwd,
+      env: { ...process.env, NGINX_CONFIG_FILE: TEST_NGINX_CONFIG_PATH },
+    }, (err, stdout, stderr) => resolve(`${stdout}${stderr}${err ? String(err) : ''}`));
   });
 }
 
@@ -326,6 +345,25 @@ describe('PM2 Deployment', function () {
       assert.strictEqual(new Set(upstreams).size, upstreams.length, `duplicate upstreams: ${upstreams}`);
       const liveSock = `server unix:/run/colyseus/${2567 + instances[0]}.sock;`;
       assert.ok(upstreams.includes(liveSock), `live sock ${liveSock} missing from: ${upstreams}`);
+    });
+  });
+
+  describe('Boot', function () {
+    it('should wait for an agent that is still starting instead of falling back', async function () {
+      await cleanup();
+      await uninstallPostDeployAgent();
+
+      // colyseus-boot runs `pm2 ping && colyseus-post-deploy`: the agent is
+      // launched, but hasn't registered its action yet
+      await launchPostDeployAgent();
+      const output = await runPostDeployScript(TEST_DIR);
+
+      assert.doesNotMatch(output, /legacy/, output);
+      assert.match(output, /Post-deploy success/, output);
+
+      // only the agent applies the Cloud defaults (the legacy script starts the raw file)
+      const apps = await waitForApps(EXPECTED_INSTANCES);
+      assert.strictEqual((apps[0].pm2_env as any).wait_ready, true);
     });
   });
 

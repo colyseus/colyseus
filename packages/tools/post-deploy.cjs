@@ -23,25 +23,72 @@ if (!CONFIG_FILE) {
 
 const CONFIG_FILE_PATH = `${pm2.cwd}/${CONFIG_FILE}`;
 
+const AGENT_NAME = '@colyseus/tools';
+const AGENT_ACTION = 'post-deploy';
+const AGENT_WAIT_MS = Number(process.env.AGENT_WAIT_MS || 30 * 1000);
+
 /**
  * Try to handle post-deploy via PM2 module first (pm2 install @colyseus/tools)
  * If not available, fallback to legacy post-deploy script.
  */
-pm2.trigger('@colyseus/tools', 'post-deploy', `${pm2.cwd}:${CONFIG_FILE_PATH}`, async function (err, result) {
-  if (err) {
-    console.log("Proceeding with legacy post-deploy script...");
-    postDeploy();
+waitForAgent().then(() => {
+  pm2.trigger(AGENT_NAME, AGENT_ACTION, `${pm2.cwd}:${CONFIG_FILE_PATH}`, async function (err, result) {
+    if (err) {
+      console.log("Proceeding with legacy post-deploy script...");
+      postDeploy();
 
-  } else {
-    if (result[0].data?.return?.success === false) {
-      console.error(result[0].data?.return?.message || "Post-deploy failed. Check application logs for more details.");
-      process.exit(1);
     } else {
-      console.log("Post-deploy success.");
-      process.exit();
+      if (result[0].data?.return?.success === false) {
+        console.error(result[0].data?.return?.message || "Post-deploy failed. Check application logs for more details.");
+        process.exit(1);
+      } else {
+        console.log("Post-deploy success.");
+        process.exit();
+      }
     }
-  }
+  });
 });
+
+/**
+ * Wait until the agent has registered its action.
+ *
+ * On boot, `pm2 ping` launches the agent and returns before the agent is
+ * ready, and PM2 only delivers a trigger to processes that already registered
+ * the action. Without waiting, every reboot fell back to the legacy script,
+ * which starts the app without the agent's defaults (e.g. `kill_timeout`).
+ *
+ * Returns immediately when no agent is running (not installed, or crashed);
+ * after AGENT_WAIT_MS the trigger is attempted anyway.
+ */
+function waitForAgent() {
+  const deadline = Date.now() + AGENT_WAIT_MS;
+  let waited = false;
+
+  return new Promise((resolve) => {
+    (function check() {
+      pm2.describe(AGENT_NAME, (err, procs) => {
+        const envs = (procs || []).map((proc) => proc.pm2_env).filter(Boolean);
+        const registered = envs.some((env) => env.axm_actions?.some((action) => action.action_name === AGENT_ACTION));
+        const starting = envs.some((env) => env.status === 'online' || env.status === 'launching');
+
+        if (err || registered || !starting || Date.now() >= deadline) {
+          if (waited) {
+            console.log(registered
+              ? `${AGENT_NAME} agent ready after ${AGENT_WAIT_MS - (deadline - Date.now())}ms.`
+              : `${AGENT_NAME} agent not ready after ${AGENT_WAIT_MS}ms.`);
+          }
+          return resolve();
+        }
+
+        if (!waited) {
+          waited = true;
+          console.log(`Waiting for the ${AGENT_NAME} agent to start...`);
+        }
+        setTimeout(check, 250);
+      });
+    })();
+  });
+}
 
 async function postDeploy() {
   shared.listApps(function (err, apps) {

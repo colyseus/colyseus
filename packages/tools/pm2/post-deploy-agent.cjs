@@ -172,21 +172,22 @@ function postDeploy(config, reply) {
 
       drain.toRestart.forEach((app_env) => {
         restartingAppIds.add(app_env.pm_id);
-        pm2.restart(app_env.pm_id, (err) => {
+        withCurrentConfig(app_env.pm_id, config, () => pm2.restart(app_env.pm_id, (err) => {
           restartingAppIds.delete(app_env.pm_id);
           if (err) { return logIfError(err); }
 
           // reset counter stats (restart_time=0)
           pm2.reset(app_env.pm_id, logIfError);
           shared.updateProcessConfig(app_env.pm_id, config, logIfError);
-        });
+        }));
       });
 
       // Each stop resolves once PM2 has the process down, which may take up to
       // kill_timeout while rooms drain. Reconcile waits for them so it sees
       // the settled pool, not one still mid-transition.
-      const stops = drain.toStop.map((app_env) =>
-        new Promise((resolve) => pm2.stop(app_env.pm_id, (err) => { logIfError(err); resolve(); })));
+      const stops = drain.toStop.map((app_env) => new Promise((resolve) =>
+        withCurrentConfig(app_env.pm_id, config, () =>
+          pm2.stop(app_env.pm_id, (err) => { logIfError(err); resolve(); }))));
 
       if (drain.numActive < config.instances) {
         const target = initialApps.length + drain.numActive;
@@ -272,6 +273,18 @@ function writeNginxConfig(app_envs) {
 
   // write NGINX config
   fs.writeFileSync(shared.NGINX_SERVERS_CONFIG_FILE, addresses.map(address => `server ${address};`).join("\n"), logIfError);
+}
+
+/**
+ * PM2 stops a process with the `kill_timeout` it was started with. One started
+ * outside a deploy (the legacy script, e.g. on boot) has PM2's 1.6s default,
+ * and would be SIGKILLed mid-drain.
+ */
+function withCurrentConfig(pm_id, config, next) {
+  shared.updateProcessConfig(pm_id, config, (err) => {
+    logIfError(err);
+    next();
+  });
 }
 
 function complete() {
