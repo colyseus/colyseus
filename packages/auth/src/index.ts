@@ -1,5 +1,5 @@
 import { type Request } from 'express-jwt';
-import { Room } from '@colyseus/core';
+import { Room, logger } from '@colyseus/core';
 
 import { JWT, type JwtPayload, type Jwt } from './JWT.ts';
 import {
@@ -64,15 +64,29 @@ export {
 //                                  undefined; anonymous flows keep working).
 //   - valid token                → returns the decoded payload (object).
 //   - malformed / expired token  → returns `false` → AUTH_FAILED.
+//   - any token, no JWT secret   → returns `true`, same as no token. Auth
+//                                  isn't set up, so the token can't be this
+//                                  app's — typically one the browser kept
+//                                  from another app on the same origin.
+//                                  Rejecting it would lock that browser out
+//                                  of an app that never asked for auth.
 //
 // We only patch when `Room.onAuth` is still the framework default — if
 // the host process imported a custom replacement first, or a room
 // subclass overrides `static onAuth`, that takes precedence.
 // ---------------------------------------------------------------------------
+let warnedTokenWithoutSecret = false;
 const __frameworkDefaultOnAuth = Room.onAuth;
 if ((Room as any).onAuth === __frameworkDefaultOnAuth) {
   (Room as any).onAuth = async function jwtDecodingOnAuth(token: string) {
     if (!token) { return true; }
+    if (!JWT.settings.secret && !process.env.JWT_SECRET) {
+      if (!warnedTokenWithoutSecret) {
+        warnedTokenWithoutSecret = true;
+        logger.warn("@colyseus/auth: ignoring the client's auth token, since no JWT secret is configured (set JWT_SECRET or JWT.settings.secret to verify tokens).");
+      }
+      return true;
+    }
     try {
       const decoded = await JWT.verify<any>(token);
       // Optional server-side revocation gate. The JWT itself is

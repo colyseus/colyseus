@@ -127,5 +127,40 @@ transports.forEach((transport) => {
       });
     });
 
+    describe("default onAuth with a token it can't verify", () => {
+      // signed with some other app's secret
+      const foreignToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6InUxIn0.3r1JUKbyZfgVBtpHKPhOaY5QwqnlvW3Uv8QhUFQkcw0";
+
+      beforeEach(() => { client.auth.token = foreignToken; });
+      afterEach(() => client.auth.signOut());
+
+      it("rejects the join when a JWT secret is configured", async () => {
+        await assert.rejects(client.joinOrCreate('dummy'), /onAuth failed/);
+      });
+
+      describe("without a JWT secret", () => {
+        let secret: typeof JWT.settings.secret;
+        let envSecret: string | undefined;
+
+        beforeEach(() => {
+          secret = JWT.settings.secret;
+          envSecret = process.env.JWT_SECRET;
+          JWT.settings.secret = undefined;
+          delete process.env.JWT_SECRET;
+        });
+        afterEach(() => {
+          JWT.settings.secret = secret;
+          process.env.JWT_SECRET = envSecret;
+        });
+
+        it("ignores the token and joins anonymously", async () => {
+          const sdkRoom = await client.joinOrCreate('dummy');
+          const room = matchMaker.getLocalRoomById(sdkRoom.roomId);
+          assert.strictEqual(room.clients[0].auth, undefined);
+          await sdkRoom.leave();
+        });
+      });
+    });
+
   });
 });
