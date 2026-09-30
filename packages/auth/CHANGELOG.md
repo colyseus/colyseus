@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.4
+
+- A browser holding an auth token from another app on the same origin can now join rooms in a project that doesn't use auth: the token is ignored when no JWT secret is configured.
+
 ## 0.18.3
 
 - `require()` of this package now resolves to the same ESM build `import` gets, so a process that uses both no longer loads two copies. [#979](https://github.com/colyseus/colyseus/issues/979)
