@@ -142,13 +142,18 @@ export function createColyseusViteServerEntry(options: ColyseusViteOptions) {
     `if (server) {`,
   );
 
+  // chained after the user's `express` callback (run by listen()), or the SPA
+  // fallback would answer every GET route it registers
   if (options.serveClient) {
     lines.push(
       `  await server["_onTransportReady"];`,
       `  if (server.transport.getExpressApp) {`,
-      `    const app = server.transport.getExpressApp();`,
-      `    app.use(express.static(clientDir));`,
-      `    app.get("*all", (req, res) => res.sendFile(join(clientDir, "index.html")));`,
+      `    const userExpress = server.options.express;`,
+      `    server.options.express = async (app) => {`,
+      `      await userExpress?.(app);`,
+      `      app.use(express.static(clientDir));`,
+      `      app.get("*all", (req, res) => res.sendFile(join(clientDir, "index.html")));`,
+      `    };`,
       `  }`,
     );
   }

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.9
+
+- `vite build` with `serveClient: true` no longer hides the routes and middleware from your `express` option: every GET request, `/monitor` included, was answered with the client's `index.html`. Thanks @cmcgdd for reporting!
+
 ## 0.18.8
 
 - `require()` of this package now resolves to the same ESM build `import` gets, so a process that uses both no longer loads two copies. [#979](https://github.com/colyseus/colyseus/issues/979)

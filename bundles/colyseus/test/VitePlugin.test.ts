@@ -1,8 +1,9 @@
 import assert from "assert";
+import fs from "fs";
 import http from "http";
 import type { Plugin, ViteDevServer } from "vite";
 
-import { matchMaker, setDevMode, unregisterRoomDefinitions } from "@colyseus/core";
+import { matchMaker, Server, setDevMode, unregisterRoomDefinitions } from "@colyseus/core";
 import { MatchMakerState } from "@colyseus/core/MatchMaker";
 import { setTransport } from "@colyseus/core/Transport";
 import { colyseus } from "colyseus/vite";
@@ -117,5 +118,45 @@ describe("colyseus() vite plugin", () => {
     await waitFor(() => matchMaker.state === MatchMakerState.READY, "the reload to finish");
 
     assert.notStrictEqual(roomHandler(), previous);
+  });
+});
+
+describe("colyseus() vite plugin: production build", () => {
+  const root = `${import.meta.dirname}/fixtures/vite-app`;
+  const PORT = 8591;
+  const url = (path: string) => `http://localhost:${PORT}${path}`;
+
+  after(async () => {
+    await Server.current?.transport?.shutdown();
+    unregisterRoomDefinitions(["vite_build_room"]);
+    await matchMaker.gracefullyShutdown().catch(() => { });
+    fs.rmSync(`${root}/dist`, { recursive: true, force: true });
+  });
+
+  // listen() runs the user's `express` callback, so a SPA fallback registered
+  // before it answered every GET route the user defined
+  it("serveClient does not shadow express routes", async () => {
+    const { createBuilder } = await import("vite");
+    const builder = await createBuilder({
+      configFile: false,
+      root,
+      logLevel: "silent",
+      plugins: [colyseus({ serverEntry: "/server.ts", serveClient: true, port: PORT })],
+    });
+    await builder.buildApp();
+
+    await import(`${root}/dist/server/server.mjs`);
+
+    // the entry doesn't await listen()
+    let listening = false;
+    for (let i = 0; i < 200 && !listening; i++) {
+      listening = await fetch(url("/__healthcheck")).then((res) => res.ok, () => false);
+      if (!listening) { await new Promise((resolve) => setTimeout(resolve, 10)); }
+    }
+    assert.ok(listening, "built server never started listening");
+
+    assert.strictEqual(await (await fetch(url("/hello"))).text(), "hello from express");
+    assert.match(await (await fetch(url("/"))).text(), /vite-app client/);
+    assert.match(await (await fetch(url("/some/client/route"))).text(), /vite-app client/);
   });
 });
