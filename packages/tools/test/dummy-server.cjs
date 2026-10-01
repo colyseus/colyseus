@@ -22,7 +22,13 @@ const server = http.createServer((req, res) => {
   }));
 });
 
-server.listen(PORT, () => {
+// Opt-in: boot this long before listening, like an app connecting to a
+// database first. 'ready' is only sent once listening. Read from a file, not
+// env: PM2 scales a rollout's new workers by cloning an existing one's env.
+const LISTEN_DELAY_FILE = path.join(__dirname, '.listen-delay-ms');
+const LISTEN_DELAY_MS = fs.existsSync(LISTEN_DELAY_FILE) ? Number(fs.readFileSync(LISTEN_DELAY_FILE, 'utf8')) : 0;
+
+setTimeout(() => server.listen(PORT, () => {
   const boundPort = server.address().port;
   console.log(`[Instance ${INSTANCE_ID}] Dummy server running on port ${boundPort} (PID: ${process.pid})`);
 
@@ -42,7 +48,7 @@ server.listen(PORT, () => {
   if (process.send) {
     process.send('ready');
   }
-});
+}), LISTEN_DELAY_MS);
 
 // Opt-in: also bind the unix socket report-stats probes, so a test can tell a
 // live worker from a draining one the same way the Cloud monitor does.
@@ -65,9 +71,15 @@ function gracefulShutdown() {
     return;
   }
 
-  console.log(`[Instance ${INSTANCE_ID}] Received shutdown signal, closing server...`);
-  server.close(() => {
+  // Opt-in: one instance drains for DRAIN_MS before closing, like a room
+  // finishing its game, so a test can order which process settles first.
+  const drainMs = (process.env.DRAIN_INSTANCE === 'all' || Number(process.env.DRAIN_INSTANCE) === INSTANCE_ID)
+    ? Number(process.env.DRAIN_MS || 0)
+    : 0;
+
+  console.log(`[Instance ${INSTANCE_ID}] Received shutdown signal, closing server in ${drainMs}ms...`);
+  setTimeout(() => server.close(() => {
     console.log(`[Instance ${INSTANCE_ID}] Server closed.`);
     process.exit(0);
-  });
+  }), drainMs);
 }

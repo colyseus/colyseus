@@ -1,5 +1,6 @@
 const pm2 = require('pm2');
 const cst = require('pm2/constants');
+const fs = require('fs');
 const os = require('os');
 const v8 = require('v8');
 
@@ -55,12 +56,29 @@ const CONFIG_KEYS = [
   'kill_timeout',
   'kill_retry_time',
   'wait_ready',
+  'listen_timeout',
   'merge_logs',
   'cron_restart',
   'autorestart',
   'exp_backoff_restart_delay',
   'restart_delay',
 ];
+
+/** Memory the kernel can hand out right now without swapping (MemAvailable). */
+function availableMemoryMB() {
+  try {
+    const match = fs.readFileSync('/proc/meminfo', 'utf8').match(/^MemAvailable:\s+(\d+) kB/m);
+    if (match) { return Number(match[1]) / 1024; }
+  } catch (e) {
+    // not Linux
+  }
+  return os.freemem() / 1024 / 1024;
+}
+
+/** Per-process ceiling a worker may grow to before PM2 restarts it. */
+function memoryCeilingMB(app) {
+  return convertValue(app.max_memory_restart) / 1024 / 1024;
+}
 
 function listApps(callback) {
   pm2.list((err, apps) => {
@@ -109,6 +127,13 @@ async function getAppConfig(ecosystemFilePath) {
     app.wait_ready = true;
     app.watch = false;
 
+    // default: wait up to 60 seconds for listen() to report 'ready'. Past PM2's
+    // own 3 seconds it marks the process online anyway, and a rollout would
+    // route to an app still booting (connecting to a database, etc).
+    if (app.listen_timeout === undefined) {
+      app.listen_timeout = 60 * 1000;
+    }
+
     // default: merge logs into a single file
     if (app.merge_logs === undefined) {
       app.merge_logs = true;
@@ -120,9 +145,11 @@ async function getAppConfig(ecosystemFilePath) {
       app.kill_timeout = 30 * 60 * 1000;
     }
 
-    // default: retry kill after 1 second
+    // default: check every 5 seconds whether a stopping process has exited. PM2
+    // only notices the exit on a check: with a kill_timeout shorter than that,
+    // it kills, gives up and marks a cleanly stopped process errored.
     if (!app.kill_retry_time) {
-      app.kill_retry_time = 5000;
+      app.kill_retry_time = Math.min(5000, Math.max(100, Math.floor(convertValue(app.kill_timeout) / 2)));
     }
 
     // Ensure these config values are also set in app.env so they take priority
@@ -173,10 +200,17 @@ function convertValue(value) {
  * @param {Object} config - Configuration object (e.g., { max_memory_restart: '512M', kill_timeout: 30000 })
  * @param {Function} cb - Callback(err, updatedEnv)
  */
-function updateProcessConfig(pm_id, config, cb) {
+/**
+ * Settings that only take effect when a process starts or stops. Safe to change
+ * on one that is running or draining, unlike e.g. max_memory_restart: PM2
+ * enforces that on draining processes too, and restarts one above it.
+ */
+const LIFECYCLE_KEYS = ['kill_timeout', 'kill_retry_time', 'wait_ready', 'listen_timeout'];
+
+function updateProcessConfig(pm_id, config, cb, keys = CONFIG_KEYS) {
   const env = {};
 
-  CONFIG_KEYS.forEach((key) => {
+  keys.forEach((key) => {
     if (config[key] !== undefined) {
       env[key] = convertValue(config[key]);
     }
@@ -202,10 +236,13 @@ module.exports = {
   listApps,
   getAppConfig,
   defaultMaxMemoryRestartMB,
+  availableMemoryMB,
+  memoryCeilingMB,
   spawnCount,
   peakProcesses,
 
   updateProcessConfig,
+  LIFECYCLE_KEYS,
 
   /** Processes NGINX may route to. Includes `launching` — the socket is coming. */
   filterActiveApps: (apps) => apps.filter(app =>

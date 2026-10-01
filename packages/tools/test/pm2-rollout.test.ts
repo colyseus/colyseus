@@ -14,7 +14,7 @@
  */
 import assert from 'assert';
 
-const { planRollout, planDrain, planReclaim, newProcesses, socketPort } = require('../pm2/rollout.cjs');
+const { planRollout, planDrain, planReclaim, planOvershoot, planSurplus, newProcesses, socketPort, OVERSHOOT_MARGIN_MB } = require('../pm2/rollout.cjs');
 const { peakProcesses, hasSettledSocket, isStopped } = require('../pm2/shared.cjs');
 
 type Proc = { pm_id: number; NODE_APP_INSTANCE: number; status: string };
@@ -235,6 +235,69 @@ describe('rolling deploy', () => {
 
       assert.deepStrictEqual(drain.toRestart, []);
       assert.strictEqual(drain.toStop.length, 1);
+    });
+  });
+
+  describe('overshoot', () => {
+    // the previous rollout still draining: live generation online, the rest stopping
+    const atPeak = () => planRollout({
+      instances: 2,
+      apps: [
+        { pm2_env: { pm_id: 1, NODE_APP_INSTANCE: 0, status: 'stopping' } },
+        { pm2_env: { pm_id: 2, NODE_APP_INSTANCE: 1, status: 'stopping' } },
+        { pm2_env: { pm_id: 3, NODE_APP_INSTANCE: 2, status: 'online' } },
+      ],
+    });
+
+    it('should find nothing to bring up at the peak while the previous rollout drains', () => {
+      const plan = atPeak();
+      assert.strictEqual(plan.toSpawn, 0);
+      assert.strictEqual(plan.reuse.length, 0);
+    });
+
+    it('should start above the peak when the RAM a process may grow into is free', () => {
+      const count = planOvershoot({ plan: atPeak(), instances: 2, availableMB: 1500, ceilingMB: 469 });
+      assert.strictEqual(count, 1);
+    });
+
+    it('should wait when there is no memory to spare', () => {
+      const tight = OVERSHOOT_MARGIN_MB + 469 - 1;
+      assert.strictEqual(planOvershoot({ plan: atPeak(), instances: 2, availableMB: tight, ceilingMB: 469 }), 0);
+    });
+
+    it('should never start more than a generation', () => {
+      assert.strictEqual(planOvershoot({ plan: atPeak(), instances: 2, availableMB: 64000, ceilingMB: 100 }), 1);
+    });
+
+    it('should leave a rollout that can bring something up alone', () => {
+      const plan = planRollout({ instances: 2, apps: [
+        { pm2_env: { pm_id: 1, NODE_APP_INSTANCE: 0, status: 'online' } },
+        { pm2_env: { pm_id: 2, NODE_APP_INSTANCE: 1, status: 'online' } },
+      ] });
+      assert.strictEqual(plan.toSpawn, 1);
+      assert.strictEqual(planOvershoot({ plan, instances: 2, availableMB: 64000, ceilingMB: 100 }), 0);
+    });
+  });
+
+  describe('surplus', () => {
+    const live = [
+      { pm_id: 1, NODE_APP_INSTANCE: 0, status: 'online' },
+      { pm_id: 2, NODE_APP_INSTANCE: 1, status: 'online' },
+      { pm_id: 3, NODE_APP_INSTANCE: 2, status: 'online' },
+    ];
+
+    it('should leave a pool of the right size alone', () => {
+      assert.deepStrictEqual(planSurplus({ live: live.slice(0, 2), instances: 2, routed: new Set([0, 1]) }), []);
+    });
+
+    it('should drain only what exceeds the pool, unrouted first', () => {
+      const surplus = planSurplus({ live, instances: 2, routed: new Set([0, 2]) });
+      assert.deepStrictEqual(surplus.map((env: any) => env.NODE_APP_INSTANCE), [1]);
+    });
+
+    it('should always keep `instances` processes serving', () => {
+      const surplus = planSurplus({ live, instances: 1, routed: new Set([0, 1, 2]) });
+      assert.strictEqual(surplus.length, 2);
     });
   });
 

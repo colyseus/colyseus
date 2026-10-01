@@ -8,6 +8,7 @@
  * - The rest of the processes are spawned/reactivated.
  */
 const pm2 = require('pm2');
+const cst = require('pm2/constants');
 const fs = require('fs');
 const io = require('@pm2/io');
 const path = require('path');
@@ -42,26 +43,23 @@ pm2.connect(function(err) {
    * Remote actions
    */
   io.action('post-deploy', async function (arg0, reply) {
-    const [cwd, ecosystemFilePath] = arg0.split(':');
+    // requestId: set by post-deploy.cjs to match this reply; older ones send none
+    const [cwd, ecosystemFilePath, requestId] = arg0.split(':');
     console.log("Received 'post-deploy' action!", { cwd, config: ecosystemFilePath });
 
     let replied = false;
 
-    //
-    // Override 'reply' to decrement amount of concurrent deployments
-    //
-    const onReply = function() {
+    const onReply = function(result) {
       if (replied) { return; }
       replied = true;
-      reply.apply(null, arguments);
+      reply({ ...result, requestId });
     }
 
     try {
       const config = await shared.getAppConfig(ecosystemFilePath);
+      const ticket = ++latestTicket;
 
-      appConfig = { ...config.apps[0], cwd };
-
-      postDeploy(appConfig, onReply);
+      takeTurn('post-deploy', (done) => postDeploy({ ...config.apps[0], cwd }, onReply, done, ticket));
 
     } catch (err) {
       onReply({ success: false, message: err?.message });
@@ -71,10 +69,63 @@ pm2.connect(function(err) {
 
 const restartingAppIds = new Set();
 
-function postDeploy(config, reply) {
+// Every post-deploy takes a ticket. Only the newest one rolls out: the files on
+// disk and the ecosystem config are the latest deploy's anyway.
+let latestTicket = 0;
+
+const WAITING_MESSAGE = "Post-deploy success. This server has no room for more processes " +
+  "until a draining one exits: this version goes live then, and players keep " +
+  "being served meanwhile.";
+
+/**
+ * Rollouts take turns. Two at once plan against the same pool: both pick the
+ * same old processes to restart and stop, which can orphan one on its socket,
+ * and one can route NGINX to processes the other is about to drain.
+ *
+ * A rollout holds the turn from planning until its old generation has left
+ * `online`; the drain itself runs outside it. NGINX updates and reconciles made
+ * outside a rollout take a turn too.
+ */
+const TURN_TIMEOUT = 5 * 60 * 1000;
+let turns = Promise.resolve();
+
+function takeTurn(label, task) {
+  const turn = turns.then(() => new Promise((release) => {
+    // a stuck step must never block every later deploy
+    const timer = setTimeout(() => {
+      console.warn(`${label} held the rollout turn for ${TURN_TIMEOUT / 1000}s, releasing it.`);
+      release();
+    }, TURN_TIMEOUT);
+
+    const done = () => { clearTimeout(timer); release(); };
+
+    try {
+      task(done);
+    } catch (err) {
+      logIfError(err);
+      done();
+    }
+  }));
+
+  turns = turn;
+  return turn;
+}
+
+function postDeploy(config, reply, done, ticket) {
+  if (ticket !== latestTicket) {
+    console.log(`Deploy #${ticket} superseded by #${latestTicket}`);
+    reply({ success: true, message: "Post-deploy success. A newer deploy on this server is rolling out instead." });
+    return done();
+  }
+
+  console.log(`Deploy #${ticket} rolling out`);
+
+  appConfig = config;
+
   shared.listApps(function(err, apps) {
     if (err) {
       console.error(err);
+      done();
       return reply({ success: false, message: err?.message });
     }
 
@@ -82,6 +133,7 @@ function postDeploy(config, reply) {
     if (apps.length === 0) {
       return pm2.start(config, (err, result) => {
         reply({ success: !err, message: err?.message });
+        done();
         if (!err) { reconcileAndSave(config); }
       });
     }
@@ -101,6 +153,7 @@ function postDeploy(config, reply) {
         // start again
         pm2.start(config, (err, result) => {
           reply({ success: !err, message: err?.message });
+          done();
           if (!err) { reconcileAndSave(config); }
         });
       });
@@ -110,20 +163,50 @@ function postDeploy(config, reply) {
      * Graceful restart: bring the new generation up, point NGINX at it, drain
      * the old one, then reconcile the pool and persist.
      */
-    const plan = rollout.planRollout({ apps, instances: config.instances });
+    let plan = rollout.planRollout({ apps, instances: config.instances });
+
+    // At the peak with nothing to reuse (the previous rollout still draining):
+    // start above it if the RAM is free, otherwise wait for a slot.
+    const overshoot = rollout.planOvershoot({
+      plan,
+      instances: config.instances,
+      availableMB: shared.availableMemoryMB(),
+      ceilingMB: shared.memoryCeilingMB(config),
+    });
+
+    if (overshoot > 0) {
+      console.log("Previous deploy still draining: starting", overshoot, "process(es) above the usual peak");
+      plan = { ...plan, toSpawn: overshoot, scaleTo: apps.length + overshoot };
+
+    } else if (plan.reuse.length === 0 && plan.toSpawn === 0) {
+      console.log("No free slot and no memory to spare: waiting for a process to exit");
+      reply({ success: true, message: WAITING_MESSAGE });
+
+      const surplus = rollout.planSurplus({ live: plan.appsToStop, instances: config.instances, routed: routedInstances() });
+
+      return drainSurplus(surplus, config).catch(logIfError).then(() => {
+        done();
+        if (surplus.length > 0) { routeToActive(); }
+        waitForCapacity(config, ticket);
+      });
+    }
+
+    // PM2 scales by cloning an existing process: give them this deploy's
+    // start settings first, or the new generation inherits whatever they had
+    const configured = Promise.all(apps.map((app) => withCurrentConfig(app.pm2_env.pm_id, config)));
 
     const bringUp = plan.scaleTo === null
       ? Promise.resolve([])
-      : new Promise((resolve, reject) => {
+      : configured.then(() => new Promise((resolve, reject) => {
           console.log("Scaling to", plan.scaleTo, "for", plan.toSpawn, "new process(es)");
           pm2.scale(apps[0].name, plan.scaleTo, (err) => {
             if (err) { return reject(err); }
             // PM2 numbers instances itself; read back what it started
             shared.listApps((err, after) => err ? reject(err) : resolve(rollout.newProcesses(apps, after)));
           });
-        });
+        }));
 
-    const revive = Promise.all(plan.reuse.map((app_env) => new Promise((resolve, reject) => {
+    const revive = configured.then(() => Promise.all(plan.reuse.map((app_env) => new Promise((resolve, reject) => {
       restartingAppIds.add(app_env.pm_id);
       pm2.restart(app_env.pm_id, (err) => {
         restartingAppIds.delete(app_env.pm_id);
@@ -134,11 +217,12 @@ function postDeploy(config, reply) {
         shared.updateProcessConfig(app_env.pm_id, config, logIfError);
         resolve(app_env);
       });
-    })));
+    }))));
 
     Promise.all([bringUp, revive])
       .then(([spawned, revived]) => onFirstAppsStart(spawned.concat(revived)))
-      .catch((err) => replyIfError(err, reply));
+      .catch((err) => replyIfError(err, reply))
+      .finally(done);
 
     async function onFirstAppsStart(initialApps) {
       /**
@@ -170,24 +254,30 @@ function postDeploy(config, reply) {
         instances: config.instances,
       });
 
-      drain.toRestart.forEach((app_env) => {
+      const outgoing = drain.toRestart.concat(drain.toStop);
+      await Promise.all(outgoing.map((app_env) => withCurrentConfig(app_env.pm_id, config)));
+
+      const restarts = drain.toRestart.map((app_env) => new Promise((resolve) => {
         restartingAppIds.add(app_env.pm_id);
-        withCurrentConfig(app_env.pm_id, config, () => pm2.restart(app_env.pm_id, (err) => {
+        pm2.restart(app_env.pm_id, (err) => {
           restartingAppIds.delete(app_env.pm_id);
-          if (err) { return logIfError(err); }
+          if (err) { logIfError(err); return resolve(); }
 
           // reset counter stats (restart_time=0)
           pm2.reset(app_env.pm_id, logIfError);
           shared.updateProcessConfig(app_env.pm_id, config, logIfError);
-        }));
-      });
 
-      // Each stop resolves once PM2 has the process down, which may take up to
-      // kill_timeout while rooms drain. Reconcile waits for them so it sees
-      // the settled pool, not one still mid-transition.
+          // route to it now, not only once every other process has drained
+          routeToActive(() => resolve());
+        });
+      }));
+
+      // Each stop or restart resolves once PM2 has the process down (or back),
+      // which may take up to kill_timeout while rooms drain.
       const stops = drain.toStop.map((app_env) => new Promise((resolve) =>
-        withCurrentConfig(app_env.pm_id, config, () =>
-          pm2.stop(app_env.pm_id, (err) => { logIfError(err); resolve(); }))));
+        pm2.stop(app_env.pm_id, (err) => { logIfError(err); resolve(); })));
+
+      await leftOnline(outgoing);
 
       if (drain.numActive < config.instances) {
         const target = initialApps.length + drain.numActive;
@@ -195,8 +285,17 @@ function postDeploy(config, reply) {
         await new Promise((resolve) => pm2.scale(apps[0].name, target, (err) => { logIfError(err); resolve(); }));
       }
 
+      // the next rollout may plan now: the old generation is draining
+      done();
+
+      // housekeeping once the stops are through, and again once the restarts are
       await Promise.all(stops);
-      reconcileAndSave(config);
+      await reconcileAndSave(config);
+
+      if (restarts.length > 0) {
+        await Promise.all(restarts);
+        await reconcileAndSave(config);
+      }
     }
   });
 }
@@ -206,10 +305,13 @@ function postDeploy(config, reply) {
  * actually running, and `pm2 save`. Runs at the end of every rollout on a
  * fresh list, so this deploy's own leftovers count and the saved state can
  * never resurrect more than the peak.
+ *
+ * Takes a turn: a rollout planning at the same time may be reusing the very
+ * stopped slots this deletes.
  */
 function reconcileAndSave(config) {
-  shared.listApps((err, apps) => {
-    if (err) { return logIfError(err); }
+  return takeTurn('reconcile', (done) => shared.listApps((err, apps) => {
+    if (err) { logIfError(err); return done(); }
 
     const surplus = rollout.planReclaim({ apps, instances: config.instances });
     if (surplus.length > 0) {
@@ -218,7 +320,102 @@ function reconcileAndSave(config) {
 
     Promise.all(surplus.map((app_env) =>
       new Promise((resolve) => pm2.delete(app_env.pm_id, (err) => { logIfError(err); resolve(); }))
-    )).then(() => updateAndReloadNginx(() => complete()));
+    )).then(() => updateAndReloadNginx((err) => {
+      if (err) { return done(); }
+      // "pm2 save"
+      pm2.dump((err) => { logIfError(err); done(); });
+    }));
+  }));
+}
+
+/** Drain processes beyond the pool's size, so their slots free up. */
+async function drainSurplus(app_envs, config) {
+  if (app_envs.length === 0) { return; }
+
+  console.log("Draining", app_envs.length, "surplus process(es) to free a slot");
+  await Promise.all(app_envs.map((app_env) => withCurrentConfig(app_env.pm_id, config)));
+  app_envs.forEach((app_env) => pm2.stop(app_env.pm_id, logIfError));
+  await leftOnline(app_envs);
+}
+
+/** Instance numbers NGINX currently routes to. */
+function routedInstances() {
+  try {
+    const ports = fs.readFileSync(shared.NGINX_SERVERS_CONFIG_FILE, 'utf8').match(/\d+(?=\.sock)/g) || [];
+    return new Set(ports.map((port) => Number(port) - rollout.socketPort(0)));
+  } catch (e) {
+    return new Set();
+  }
+}
+
+/**
+ * Roll out once a draining process has exited (or there is RAM to start above
+ * the peak). The live generation keeps serving until then. Gives up when a
+ * newer deploy arrives -- it takes over -- or once every drain must be over.
+ */
+function waitForCapacity(config, ticket) {
+  const drainMs = Number(config.env?.kill_timeout) || 30 * 60 * 1000;
+  const deadline = Date.now() + drainMs + 60 * 1000;
+
+  (function check() {
+    if (ticket !== latestTicket) { return; }
+
+    shared.listApps((err, apps) => {
+      // the app was removed meanwhile: don't bring it back
+      if (!err && apps.length === 0) {
+        return console.log("App removed while a deploy waited for a slot; not starting it.");
+      }
+
+      if (!err) {
+        const plan = rollout.planRollout({ apps, instances: config.instances });
+        const hasCapacity = plan.reuse.length > 0 || plan.toSpawn > 0 || rollout.planOvershoot({
+          plan,
+          instances: config.instances,
+          availableMB: shared.availableMemoryMB(),
+          ceilingMB: shared.memoryCeilingMB(config),
+        }) > 0;
+
+        if (hasCapacity) {
+          console.log("A draining process exited: resuming the waiting deploy");
+          return takeTurn('post-deploy (resumed)', (done) => postDeploy(config, () => {}, done, ticket));
+        }
+      }
+
+      if (Date.now() > deadline) {
+        return console.error("Gave up waiting for a draining process to exit; the previous version keeps serving.");
+      }
+      setTimeout(check, 2000);
+    });
+  })();
+}
+
+/** Point NGINX at every running process, between rollouts. */
+function routeToActive(cb) {
+  return takeTurn('nginx update', (done) => updateAndReloadNginx((err, app_envs) => {
+    done();
+    cb?.(err, app_envs);
+  }));
+}
+
+/**
+ * Wait until PM2 has taken each outgoing process out of `online`, so the next
+ * rollout plans against a pool where they are already draining.
+ */
+function leftOnline(app_envs, timeout = 5000) {
+  const deadline = Date.now() + timeout;
+
+  return new Promise((resolve) => {
+    (function check() {
+      shared.listApps((err, apps) => {
+        const stillOnline = !err && app_envs.some((app_env) => apps.some((app) =>
+          app.pm2_env.pm_id === app_env.pm_id &&
+          app.pm2_env.status === cst.ONLINE_STATUS &&
+          app.pm2_env.pm_uptime === app_env.pm_uptime));
+
+        if (!stillOnline || Date.now() >= deadline) { return resolve(); }
+        setTimeout(check, 100);
+      });
+    })();
   });
 }
 
@@ -236,8 +433,11 @@ function updateAndReloadNginx(cb) {
   // done
 
   shared.listApps(function(err, apps) {
-    if (apps.length === 0) { err = "no apps running."; }
-    if (err) { return console.error(err); }
+    if (!err && apps.length === 0) { err = "no apps running."; }
+    if (err) {
+      console.error(err);
+      return cb?.(err);
+    }
 
     const app_envs = shared.filterActiveApps(apps).map((app) => app.pm2_env);
 
@@ -247,7 +447,7 @@ function updateAndReloadNginx(cb) {
     app_envs.forEach((app_env) => 
       shared.updateProcessConfig(app_env.pm_id, appConfig, logIfError));
 
-    cb?.(app_envs);
+    cb?.(null, app_envs);
   });
 }
 
@@ -271,25 +471,30 @@ function writeNginxConfig(app_envs) {
     addresses.push(`unix:${shared.PROCESS_UNIX_SOCK_PATH}${rollout.socketPort(app_env.NODE_APP_INSTANCE)}.sock`);
   });
 
-  // write NGINX config
-  fs.writeFileSync(shared.NGINX_SERVERS_CONFIG_FILE, addresses.map(address => `server ${address};`).join("\n"), logIfError);
+  // every write reloads NGINX, and each reload leaves the previous workers
+  // holding their WebSockets until they close: only write a real change
+  const contents = addresses.sort().map(address => `server ${address};`).join("\n");
+  if (fs.readFileSync(shared.NGINX_SERVERS_CONFIG_FILE, 'utf8') === contents) { return; }
+
+  fs.writeFileSync(shared.NGINX_SERVERS_CONFIG_FILE, contents);
 }
 
 /**
- * PM2 stops a process with the `kill_timeout` it was started with. One started
+ * Give an existing process this deploy's start/stop settings, and nothing else.
+ *
+ * PM2 stops a process with the `kill_timeout` it was started with: one started
  * outside a deploy (the legacy script, e.g. on boot) has PM2's 1.6s default,
- * and would be SIGKILLed mid-drain.
+ * and would be SIGKILLed mid-drain. PM2 also scales by cloning an existing
+ * process, so the new generation starts with that process's `listen_timeout`.
+ *
+ * The rest (max_memory_restart, ...) waits for the new generation: a draining
+ * process given a lower memory limit gets restarted by PM2 mid-drain.
  */
-function withCurrentConfig(pm_id, config, next) {
-  shared.updateProcessConfig(pm_id, config, (err) => {
+function withCurrentConfig(pm_id, config) {
+  return new Promise((resolve) => shared.updateProcessConfig(pm_id, config, (err) => {
     logIfError(err);
-    next();
-  });
-}
-
-function complete() {
-  // "pm2 save"
-  pm2.dump(logIfError);
+    resolve();
+  }, shared.LIFECYCLE_KEYS));
 }
 
 function logIfError (err) {

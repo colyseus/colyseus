@@ -32,22 +32,60 @@ const AGENT_WAIT_MS = Number(process.env.AGENT_WAIT_MS || 30 * 1000);
  * If not available, fallback to legacy post-deploy script.
  */
 waitForAgent().then(() => {
-  pm2.trigger(AGENT_NAME, AGENT_ACTION, `${pm2.cwd}:${CONFIG_FILE_PATH}`, async function (err, result) {
+  triggerAgent(`${pm2.cwd}:${CONFIG_FILE_PATH}`, function (err, result) {
     if (err) {
       console.log("Proceeding with legacy post-deploy script...");
       postDeploy();
 
     } else {
-      if (result[0].data?.return?.success === false) {
-        console.error(result[0].data?.return?.message || "Post-deploy failed. Check application logs for more details.");
+      if (result?.success === false) {
+        console.error(result?.message || "Post-deploy failed. Check application logs for more details.");
         process.exit(1);
       } else {
-        console.log("Post-deploy success.");
+        console.log(result?.message || "Post-deploy success.");
         process.exit();
       }
     }
   });
 });
+
+/**
+ * Send the post-deploy action to the agent and wait for its reply to it.
+ *
+ * Not pm2.trigger(): it counts replies against a process count it only learns
+ * once the message is sent, so a reply faster than that (the agent answers at
+ * once when a deploy waits or is superseded) is dropped and the call never
+ * returns. It also takes any reply from the agent, so overlapping deploys read
+ * each other's. The agent echoes a request id instead; one from before request
+ * ids replies without it.
+ */
+function triggerAgent(params, cb) {
+  const requestId = `${process.pid}-${Date.now()}`;
+  let done = false;
+  const finish = (err, result) => {
+    if (done) { return; }
+    done = true;
+    cb(err, result);
+  };
+
+  pm2.launchBus((err, bus) => {
+    if (err) { return finish(err); }
+
+    bus.on('axm:reply', (packet) => {
+      if (packet.process?.name !== AGENT_NAME) { return; }
+
+      const result = packet.data?.return;
+      if (result?.requestId !== undefined && result.requestId !== requestId) { return; }
+
+      finish(null, result);
+    });
+
+    pm2.msgProcess({ name: AGENT_NAME, msg: AGENT_ACTION, opts: `${params}:${requestId}` }, (err, data) => {
+      if (err) { return finish(err); }
+      if (!data?.process_count) { return finish(new Error('Unknown process')); }
+    });
+  });
+}
 
 /**
  * Wait until the agent has registered its action.

@@ -104,6 +104,40 @@ describe('max_memory_restart default', () => {
       assert.strictEqual(1500 * 1024 * 1024, config.apps[0].env.max_memory_restart);
     });
 
+    it('should wait for a slow listen() instead of PM2\'s 3 seconds', async () => {
+      const file = writeEcosystem('__listen-default.config.cjs', { name: 'd', script: 'x.js' });
+      written.push(file);
+
+      const config = await shared.getAppConfig(file);
+      assert.strictEqual(60000, config.apps[0].listen_timeout);
+      // mirrored into env, so a rollout's config update reaches running workers
+      assert.strictEqual(60000, config.apps[0].env.listen_timeout);
+    });
+
+    it('should keep an explicit listen_timeout', async () => {
+      const file = writeEcosystem('__listen-explicit.config.cjs', { name: 'e', script: 'x.js', listen_timeout: 10000 });
+      written.push(file);
+
+      const config = await shared.getAppConfig(file);
+      assert.strictEqual(10000, config.apps[0].listen_timeout);
+    });
+
+    it('should check for a stopped process every 5 seconds by default', async () => {
+      const file = writeEcosystem('__retry-default.config.cjs', { name: 'f', script: 'x.js' });
+      written.push(file);
+
+      const config = await shared.getAppConfig(file);
+      assert.strictEqual(5000, config.apps[0].kill_retry_time);
+    });
+
+    it('should check within a short kill_timeout, or PM2 marks a clean stop errored', async () => {
+      const file = writeEcosystem('__retry-short.config.cjs', { name: 'g', script: 'x.js', kill_timeout: 2000 });
+      written.push(file);
+
+      const config = await shared.getAppConfig(file);
+      assert.strictEqual(1000, config.apps[0].kill_retry_time);
+    });
+
     it('should treat instances: 0 as one per core', async () => {
       const file = writeEcosystem('__mem-zero.config.cjs', { name: 'c', script: 'x.js', instances: 0 });
       written.push(file);

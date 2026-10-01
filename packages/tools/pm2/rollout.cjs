@@ -9,6 +9,9 @@ const { spawnCount, peakProcesses } = require('./shared.cjs');
 
 const BASE_PORT = 2567;
 
+// RAM left untouched when starting processes above the peak
+const OVERSHOOT_MARGIN_MB = 256;
+
 /** Socket port for a worker, matching `listen()` in src/index.ts. */
 function socketPort(nodeAppInstance) {
   return BASE_PORT + Number(nodeAppInstance);
@@ -50,6 +53,49 @@ function planRollout({ apps, instances }) {
     scaleTo: toSpawn > 0 ? apps.length + toSpawn : null,
     appsToStop: live,
   };
+}
+
+/**
+ * Processes to start above the peak when a rollout can bring up none: the
+ * previous rollout's old generation is still draining and holds every slot.
+ * Draining the live generation with nothing new up would leave no process to
+ * route to, so start them anyway -- as long as the RAM each may grow into
+ * (its max_memory_restart) is free right now. Zero means wait instead.
+ *
+ * @param {object} opts
+ * @param {object} opts.plan         planRollout() result
+ * @param {number} opts.instances    desired process count (config.instances)
+ * @param {number} opts.availableMB  memory the kernel can hand out now
+ * @param {number} opts.ceilingMB    per-process max_memory_restart
+ */
+function planOvershoot({ plan, instances, availableMB, ceilingMB }) {
+  if (plan.reuse.length > 0 || plan.toSpawn > 0) { return 0; }
+  if (!(ceilingMB > 0) || !(availableMB > 0)) { return 0; }
+
+  const affordable = Math.floor((availableMB - OVERSHOOT_MARGIN_MB) / ceilingMB);
+  return Math.max(0, Math.min(spawnCount(instances), affordable));
+}
+
+/**
+ * Live processes beyond `instances` to drain when a rollout has no slot to start
+ * in and no RAM to go above the peak. Nothing else would ever free a slot: they
+ * are online, not draining (revived by hand, or by a monitor). Unrouted ones
+ * first -- they take no new players anyway -- and the rest keep serving.
+ *
+ * @param {object} opts
+ * @param {Array}  opts.live       planRollout().appsToStop
+ * @param {number} opts.instances  desired process count (config.instances)
+ * @param {Set<number>} opts.routed instance numbers NGINX currently routes to
+ */
+function planSurplus({ live, instances, routed }) {
+  const extra = live.length - instances;
+  if (extra <= 0) { return []; }
+
+  const isRouted = (env) => routed.has(Number(env.NODE_APP_INSTANCE)) ? 1 : 0;
+  return live
+    .slice()
+    .sort((a, b) => (isRouted(a) - isRouted(b)) || (b.pm_id - a.pm_id))
+    .slice(0, extra);
 }
 
 /**
@@ -105,8 +151,11 @@ function planReclaim({ apps, instances }) {
 }
 
 module.exports = {
+  OVERSHOOT_MARGIN_MB,
   socketPort,
   planRollout,
+  planOvershoot,
+  planSurplus,
   newProcesses,
   planDrain,
   planReclaim,

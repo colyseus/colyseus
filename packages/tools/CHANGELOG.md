@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.18.8
+
+- Deploying again while the previous deploy's players are still finishing their games no longer leaves new players unable to join. The new version starts alongside when the server has the memory for it, otherwise it goes live as soon as a draining process exits; the deploy log says when it's waiting.
+- After a deploy, every process takes new players again. One restarted during the deploy could stay out of rotation until the next deploy.
+- Apps that take more than 3 seconds to start no longer receive players (502s) before they're listening.
+- `colyseus-post-deploy` no longer hangs on a deploy right after another one, and overlapping deploys each report their own result.
+- A `kill_timeout` shorter than 5 seconds no longer marks cleanly stopped processes as errored.
+
 ## 0.18.7
 
 - After a server reboot on Colyseus Cloud, the next deploy no longer disconnects players. The app came back from the reboot without its 30-minute shutdown grace period, so that deploy stopped the old processes after 1.6 seconds instead of waiting for their rooms to finish.
