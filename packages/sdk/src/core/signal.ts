@@ -3,6 +3,9 @@ type FunctionParameters<T extends (...args: any[]) => any> =
     ? P
     : never;
 
+// once() wrapper → cb; a property on the wrapper would change its map and slow invoke()
+const onceTargets = new WeakMap<Function, Function>();
+
 export class EventEmitter<CallbackSignature extends (...args: any[]) => any> {
   handlers: Array<CallbackSignature> = [];
 
@@ -12,7 +15,9 @@ export class EventEmitter<CallbackSignature extends (...args: any[]) => any> {
   }
 
   invoke(...args: FunctionParameters<CallbackSignature>) {
-    this.handlers.forEach((handler) => handler.apply(this, args));
+    // not forEach: its per-call closure costs 2–8x; handlers added mid-invoke run from the next invoke
+    const handlers = this.handlers;
+    for (let i = 0, l = handlers.length; i < l; i++) { handlers[i].apply(this, args); }
   }
 
   invokeAsync(...args: FunctionParameters<CallbackSignature>) {
@@ -20,9 +25,12 @@ export class EventEmitter<CallbackSignature extends (...args: any[]) => any> {
   }
 
   remove (cb: CallbackSignature) {
-    const index = this.handlers.indexOf(cb);
-    this.handlers[index] = this.handlers[this.handlers.length - 1];
-    this.handlers.pop();
+    let index = this.handlers.indexOf(cb);
+    if (index === -1) { index = this.handlers.findIndex((h) => onceTargets.get(h) === cb); }
+    if (index !== -1) {
+      // copy-on-write: an in-flight invoke() keeps iterating the old array
+      this.handlers = this.handlers.filter((_, i) => i !== index);
+    }
   }
 
   clear() {
@@ -48,9 +56,10 @@ export function createSignal<CallbackSignature extends (...args: any[]) => void 
 
   register.once = (cb: CallbackSignature) => {
     const callback: any = function (this: any, ...args: any[]) {
+      emitter.remove(callback); // first, so a throw or re-entrant invoke can't fire it twice
       cb.apply(this, args);
-      emitter.remove(callback);
     }
+    onceTargets.set(callback, cb);
     emitter.register(callback);
   }
   register.remove = (cb: CallbackSignature) => emitter.remove(cb)

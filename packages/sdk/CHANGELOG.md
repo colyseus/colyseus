@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.5
+
+- Room event handlers (`onLeave`, `onDrop`, `onStateChange`, …) no longer get skipped when another handler is removed while the event fires, such as by `.once()`, and `remove()` of a handler that isn't registered no longer removes a different one. Thanks @40110! [#980](https://github.com/colyseus/colyseus/issues/980)
+
 ## 0.18.4
 
 - `require()` of this package now resolves to the same ESM build `import` gets, so a process that uses both no longer loads two copies. [#979](https://github.com/colyseus/colyseus/issues/979)

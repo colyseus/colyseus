@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/sdk",
-  "version": "0.18.4",
+  "version": "0.18.5",
   "description": "Colyseus Multiplayer SDK for JavaScript/TypeScript",
   "author": "Endel Dreyer",
   "license": "MIT",
