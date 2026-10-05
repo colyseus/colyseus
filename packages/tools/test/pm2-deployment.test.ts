@@ -19,6 +19,8 @@ const TEST_DIR = __dirname;
 const ECOSYSTEM_CONFIG_PATH = path.join(TEST_DIR, 'ecosystem.config.cjs');
 const TEST_NGINX_CONFIG_PATH = path.join(TEST_DIR, 'test_colyseus_servers.conf');
 const LISTEN_DELAY_FILE = path.join(TEST_DIR, '.listen-delay-ms');
+// what the Cloud panel writes to ~/.colyseus/env/runtime.json
+const TEST_RUNTIME_ENV_PATH = path.join(TEST_DIR, 'test_runtime_env.json');
 
 // Path to the local @colyseus/tools package for PM2 module installation
 const TOOLS_PACKAGE_PATH = path.resolve(__dirname, '..');
@@ -209,7 +211,7 @@ function launchPostDeployAgent(): Promise<void> {
       cwd: TOOLS_PACKAGE_PATH,
       time: true,
       // the agent resolves the NGINX path at require-time, in its own process
-      env: { NGINX_CONFIG_FILE: TEST_NGINX_CONFIG_PATH },
+      env: { NGINX_CONFIG_FILE: TEST_NGINX_CONFIG_PATH, COLYSEUS_RUNTIME_ENV_FILE: TEST_RUNTIME_ENV_PATH },
     }, (err) => err ? reject(err) : resolve());
   });
 }
@@ -640,6 +642,45 @@ describe('PM2 Deployment', function () {
       // only the agent applies the Cloud defaults (the legacy script starts the raw file)
       const apps = await waitForApps(EXPECTED_INSTANCES);
       assert.strictEqual((apps[0].pm2_env as any).wait_ready, true);
+    });
+  });
+
+  describe('Cloud panel variables', function () {
+    const CLOUD_ECOSYSTEM_PATH = path.join(TEST_DIR, 'test_cloud_env.config.cjs');
+
+    before(function () {
+      fs.writeFileSync(CLOUD_ECOSYSTEM_PATH, `module.exports = { apps: [{
+        name: '${PM2_APP_NAME}', script: './dummy-server.cjs', kill_timeout: 2000,
+        instances: Number(process.env.CLOUD_TEST_WORKERS || 1),
+      }] };\n`);
+    });
+
+    after(async function () {
+      await cleanup();
+      fs.rmSync(CLOUD_ECOSYSTEM_PATH, { force: true });
+      fs.rmSync(TEST_RUNTIME_ENV_PATH, { force: true });
+    });
+
+    it('should evaluate the ecosystem file with them, on the first deploy and after', async function () {
+      await cleanup();
+
+      fs.writeFileSync(TEST_RUNTIME_ENV_PATH, JSON.stringify({ CLOUD_TEST_WORKERS: '2' }));
+      await triggerPostDeploy(TEST_DIR, CLOUD_ECOSYSTEM_PATH);
+      await waitForApps(2, 'online', 30000);
+
+      fs.writeFileSync(TEST_RUNTIME_ENV_PATH, JSON.stringify({ CLOUD_TEST_WORKERS: '1' }));
+      await triggerPostDeploy(TEST_DIR, CLOUD_ECOSYSTEM_PATH);
+      await waitForSettled();
+      await waitForApps(1, 'online', 30000);
+    });
+
+    it('should not put them in the processes\' env (the app reads .env.cloud)', async function () {
+      const apps = await listApps();
+      assert.ok(apps.length > 0);
+      for (const app of apps) {
+        assert.strictEqual((app.pm2_env as any).env?.CLOUD_TEST_WORKERS, undefined);
+        assert.strictEqual((app.pm2_env as any).CLOUD_TEST_WORKERS, undefined);
+      }
     });
   });
 

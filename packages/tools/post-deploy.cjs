@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const shared = require('./pm2/shared.cjs');
 const rollout = require('./pm2/rollout.cjs');
+const cloudEnv = require('./pm2/cloud-env.cjs');
 
 const opts = { env: process.env.NODE_ENV || "production", };
 
@@ -136,7 +137,7 @@ async function postDeploy() {
       //
       // first deploy
       //
-      pm2.start(CONFIG_FILE_PATH, { ...opts }, () => onAppRunning());
+      pm2.start(cloudEnv.requireEcosystem(CONFIG_FILE_PATH), { ...opts }, () => onAppRunning());
 
     } else {
 
@@ -171,7 +172,7 @@ function restartAll () {
   pm2.delete('all', function (err) {
     // kill & start again
     pm2.kill(function () {
-      pm2.start(CONFIG_FILE_PATH, { ...opts }, () => onAppRunning());
+      pm2.start(cloudEnv.requireEcosystem(CONFIG_FILE_PATH), { ...opts }, () => onAppRunning());
     });
   });
 }

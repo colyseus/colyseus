@@ -3,6 +3,7 @@ const cst = require('pm2/constants');
 const fs = require('fs');
 const os = require('os');
 const v8 = require('v8');
+const cloudEnv = require('./cloud-env.cjs');
 
 const NAMESPACE = 'cloud';
 const MAX_ACTIVE_PROCESSES = Number(process.env.MAX_ACTIVE_PROCESSES || os.cpus().length);
@@ -92,10 +93,8 @@ function listApps(callback) {
 }
 
 async function getAppConfig(ecosystemFilePath) {
-  // Clear require cache to force reload of the config file
-  const resolvedPath = require.resolve(ecosystemFilePath);
-  delete require.cache[resolvedPath];
-  const config = require(ecosystemFilePath);
+  // fresh on every deploy, seeing the variables set on the Cloud panel
+  const config = cloudEnv.requireEcosystem(ecosystemFilePath);
 
   /**
    * Tune PM2 app config

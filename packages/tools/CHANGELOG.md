@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.9
+
+- On Colyseus Cloud, `ecosystem.config.js` now sees the environment variables set in the panel, e.g. `instances: Number(process.env.WORKERS)`.
+
 ## 0.18.8
 
 - Deploying again while the previous deploy's players are still finishing their games no longer leaves new players unable to join. The new version starts alongside when the server has the memory for it, otherwise it goes live as soon as a draining process exits; the deploy log says when it's waiting.
