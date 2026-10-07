@@ -273,11 +273,24 @@ export class Room<T extends RoomOptions = RoomOptions> {
   /**
    * Frequency to send the room state to connected clients, in milliseconds.
    *
+   * Under {@link setFixedTimestep} the patch rides the step loop instead of its
+   * own timer: it goes out right after every `round(patchRate / stepMs)` steps
+   * (at least one), so a step's changes — and the input ack it produced —
+   * leave as soon as the step ends. The effective cadence is then that whole
+   * number of steps (e.g. 50ms on a 24Hz loop → every step, ~41.7ms), and that
+   * is what predicting clients are told.
+   *
+   * `null` / `0` turns automatic patches off; call {@link broadcastPatch} yourself.
+   *
    * @default 50ms (20fps)
    */
   public patchRate: number | null = DEFAULT_PATCH_RATE;
   #_patchRate: number;
   #_patchInterval: NodeJS.Timeout;
+  /** Fixed step length (ms) while {@link setFixedTimestep} owns the loop, else 0. */
+  #_fixedStepMs: number = 0;
+  /** Steps per patch while the fixed-step loop owns the broadcast; 0 = no auto patch. */
+  #_stepsPerPatch: number = 0;
 
   /**
    * Frequency to flush `@unreliable` state fields, in milliseconds.
@@ -510,17 +523,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
         get: () => this.#_patchRate,
         set: (milliseconds: number) => {
           this.#_patchRate = milliseconds;
-          // clear previous interval in case called setPatchRate more than once
-          if (this.#_patchInterval) {
-            clearInterval(this.#_patchInterval);
-            this.#_patchInterval = undefined;
-          }
-          if (milliseconds !== null && milliseconds !== 0) {
-            this.#_patchInterval = setInterval(() => this.broadcastPatch(), milliseconds);
-          } else if (!this._simulationInterval) {
-            // When patchRate and no simulation interval are both set to 0, tick the clock to keep timers working
-            this.#_patchInterval = setInterval(() => this.clock.tick(), DEFAULT_SIMULATION_INTERVAL);
-          }
+          this.#armPatches();
         },
       },
 
@@ -911,6 +914,14 @@ export class Room<T extends RoomOptions = RoomOptions> {
         onTickCallback(this.clock.deltaTime);
       }, delay);
     }
+
+    // Replacing a fixed-step loop hands the patch back to its own timer; and a
+    // clock-only fallback (patchRate null, armed before this loop existed) must
+    // stop, or two intervals would tick the clock.
+    if (this.#_fixedStepMs !== 0 || !this.#_patchRate) {
+      this.#_fixedStepMs = 0;
+      this.#armPatches();
+    }
   }
 
   /**
@@ -1008,6 +1019,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
       subSteps, subDt: stepSeconds / subSteps, subDtMs: stepMs / subSteps,
     };
     const MAX_CATCHUP_STEPS = 5;
+    let stepsSincePatch = 0;
 
     this._simulationInterval = setInterval(() => {
       this.clock.tick();
@@ -1022,7 +1034,24 @@ export class Room<T extends RoomOptions = RoomOptions> {
         ran++;
       }
       if (ran === MAX_CATCHUP_STEPS) { acc = 0; } // hitch: drop backlog, don't spiral
+
+      // The patch rides the loop: out right after the step(s) that changed the
+      // state, never waiting on a second, unsynchronised timer. Catch-up steps
+      // of one frame share a single patch.
+      const perPatch = this.#_stepsPerPatch;
+      if (ran > 0 && perPatch > 0) {
+        stepsSincePatch += ran;
+        if (stepsSincePatch >= perPatch) {
+          stepsSincePatch %= perPatch;
+          this.broadcastPatch();
+        }
+      }
     }, stepMs);
+
+    // This loop owns the broadcast from now on (stops the patch timer, or the
+    // clock-only fallback a null patchRate armed before the loop existed).
+    this.#_fixedStepMs = stepMs;
+    this.#armPatches();
   }
 
   /** Server-side lag compensation, lazily created. @see allowRewindState */
@@ -1328,6 +1357,48 @@ export class Room<T extends RoomOptions = RoomOptions> {
   }
 
   /**
+   * (Re)arm automatic patching for the current {@link patchRate} and loop: a
+   * fixed-step loop broadcasts every `#_stepsPerPatch` steps itself; otherwise a
+   * `patchRate` timer does. With neither a rate nor a loop, a clock-only
+   * interval keeps `this.clock` timers running.
+   */
+  #armPatches() {
+    if (this.#_patchInterval) {
+      clearInterval(this.#_patchInterval);
+      this.#_patchInterval = undefined;
+    }
+    const milliseconds = this.#_patchRate;
+    const enabled = milliseconds !== null && milliseconds !== undefined && milliseconds !== 0;
+
+    if (this.#_fixedStepMs > 0) {
+      this.#_stepsPerPatch = enabled ? Math.max(1, Math.round(milliseconds / this.#_fixedStepMs)) : 0;
+
+    } else if (enabled) {
+      this.#_stepsPerPatch = 0;
+      this.#_patchInterval = setInterval(() => this.broadcastPatch(), milliseconds);
+
+    } else {
+      this.#_stepsPerPatch = 0;
+      if (!this._simulationInterval) {
+        // When patchRate and no simulation interval are both set to 0, tick the clock to keep timers working
+        this.#_patchInterval = setInterval(() => this.clock.tick(), DEFAULT_SIMULATION_INTERVAL);
+      }
+    }
+  }
+
+  /**
+   * @internal The cadence patches actually go out at (ms): a whole number of
+   * fixed steps under {@link setFixedTimestep}, else {@link patchRate}; `0` when
+   * automatic patches are off. What predicting clients are told, and what sizes
+   * the rewind history.
+   */
+  _patchIntervalMs(): number {
+    if (this.#_stepsPerPatch > 0) { return this.#_stepsPerPatch * this.#_fixedStepMs; }
+    if (this.#_fixedStepMs > 0) { return 0; }
+    return this.#_patchRate || 0;
+  }
+
+  /**
    * Checks whether mutations have occurred in the state, and broadcast them to all connected clients.
    */
   public broadcastPatch() {
@@ -1374,7 +1445,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
     // and a patchRate faster than the sim simply dedups back to per-tick.
     const rw = this.#rewind;
     if (rw !== undefined && rw.lastRecordedAt !== sNow) {
-      rw.record(sNow, this.#_patchRate || undefined);
+      rw.record(sNow, this._patchIntervalMs() || undefined);
     }
 
     return hasChanges;

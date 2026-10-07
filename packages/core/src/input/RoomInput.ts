@@ -387,8 +387,9 @@ export class RoomInput {
     const stampRender = this.#stampRender;
     const stampReckon = this.#stampReckon;
     const tickRate = this.options.tickRate;
-    const patchRate = (typeof this.room.patchRate === "number" && this.room.patchRate > 0)
-      ? Math.round(this.room.patchRate) : undefined;
+    // the EFFECTIVE cadence: under setFixedTimestep, a whole number of steps
+    const patchMs = this.room._patchIntervalMs();
+    const patchRate = (patchMs > 0) ? Math.round(patchMs) : undefined;
     const subSteps = (this.options.subSteps !== undefined && this.options.subSteps > 1)
       ? this.options.subSteps : undefined;
     if (stampRender || stampReckon || tickRate || patchRate || subSteps) {

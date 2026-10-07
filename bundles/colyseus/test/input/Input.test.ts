@@ -683,6 +683,72 @@ describe("Input (InputEncoder / InputDecoder integration)", () => {
     await timeout(50);
   });
 
+  it("setFixedTimestep — patches ride the step loop, and the advertised patchRate is the real cadence", async () => {
+    // [step ticks that ran, patches] per timer firing, in order
+    const log: string[] = [];
+
+    matchMaker.defineRoomType('input_patch_on_step', class _ extends Room<{ state: TickState; input: MoveInput }> {
+      state = new TickState();
+      inputs = this.defineInput(MoveInput);
+      onCreate() {
+        this.patchRate = 100; // 30 Hz loop → every 3 steps (100ms)
+        this.setFixedTimestep((ctx) => {
+          this.state.tick = ctx.tick;
+          log.push("step");
+        }, 30);
+      }
+      onBeforePatch() { log.push("patch"); }
+    });
+
+    const conn = await client.joinOrCreate('input_patch_on_step');
+    const input = conn.input({ type: MoveInput });
+    assert.strictEqual(input.patchRate, 100, "3 steps × 33.3ms, rounded");
+
+    await timeout(700);
+    const room = matchMaker.getLocalRoomById(conn.roomId);
+    room.patchRate = 50; // re-armed live: round(50 / 33.3) = 2 steps
+    log.length = 0;
+    await timeout(700);
+
+    // Steps between consecutive patches. A timer firing that runs catch-up steps
+    // (common on Windows' 15.6ms timer) carries the remainder over, so single runs
+    // vary (e.g. 3,1) while the AVERAGE holds 2 — the advertised cadence. A patch
+    // never goes out without a step behind it.
+    const runs: number[] = [];
+    let n = 0;
+    for (const e of log) {
+      if (e === "step") { n++; } else { runs.push(n); n = 0; }
+    }
+    const closed = runs.slice(1); // the first run started before log.length = 0
+    assert.ok(closed.length >= 5, `patches went out (${closed.length})`);
+    assert.ok(closed.every((r) => r >= 1), `every patch follows a step, got runs ${runs.join(",")}`);
+    const mean = closed.reduce((a, b) => a + b, 0) / closed.length;
+    assert.ok(mean >= 1.6 && mean <= 2.4, `~2 steps per patch on average, got ${mean.toFixed(2)} (${runs.join(",")})`);
+
+    await conn.leave();
+    await timeout(50);
+  });
+
+  it("setFixedTimestep — patchRate null before the loop leaves no stray clock interval", async () => {
+    let steps = 0;
+    matchMaker.defineRoomType('input_patch_null', class _ extends Room<{ state: TickState }> {
+      state = new TickState();
+      onCreate() {
+        this.patchRate = null; // arms the clock-only fallback (no loop yet)…
+        this.setFixedTimestep(() => { steps++; }, 50); // …which this must stop
+      }
+    });
+
+    const conn = await client.joinOrCreate('input_patch_null');
+    steps = 0;
+    await timeout(1000);
+    // a second clock.tick() interval would shrink every measured delta → far fewer steps
+    assert.ok(steps >= 40, `~50 steps in 1s, got ${steps}`);
+
+    await conn.leave();
+    await timeout(50);
+  });
+
   it("sub-stepping — rejects fractional counts loudly", async () => {
     assert.throws(() => {
       class _ extends Room<{ input: MoveInput }> {
