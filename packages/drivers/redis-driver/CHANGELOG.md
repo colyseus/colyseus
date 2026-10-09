@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.5
+
+- Matchmaking queries now recover once Redis is back. A single failed read used to make every later `query()` fail until the process restarted. Thanks @rapina!
+
 ## 0.18.4
 
 - Lets `@colyseus/core` 0.18.17 prevent a duplicate room when another process answers a create request after it timed out. [#978](https://github.com/colyseus/colyseus/issues/978)

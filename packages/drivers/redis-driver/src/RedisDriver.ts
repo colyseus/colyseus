@@ -114,10 +114,14 @@ export class RedisDriver implements MatchMakerDriver {
     const roomCacheRequest = this._concurrentRoomCacheRequest || this._client.hgetall(ROOMCACHES_KEY);
     this._concurrentRoomCacheRequest = roomCacheRequest;
 
-    this._roomCacheRequestByName[roomName] = roomCacheRequest.then((result) => {
-      // clear shared promises so we can read it again
+    // clear shared promises so we can read it again
+    const release = () => {
       this._concurrentRoomCacheRequest = undefined;
       delete this._roomCacheRequestByName[roomName];
+    };
+
+    this._roomCacheRequestByName[roomName] = roomCacheRequest.then((result) => {
+      release();
 
       let roomcaches = Object.entries(result ?? {});
 
@@ -133,6 +137,9 @@ export class RedisDriver implements MatchMakerDriver {
       return roomcaches.map(
         ([, roomcache]) => initializeRoomCache(JSON.parse(roomcache as string))
       );
+    }, (e) => {
+      release(); // a cached rejection would be served forever
+      throw e;
     });
 
     return this._roomCacheRequestByName[roomName];
