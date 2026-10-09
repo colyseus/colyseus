@@ -12,6 +12,7 @@ import {
   type SortOptions,
   debugMatchMaking,
   initializeRoomCache,
+  logger,
 } from '@colyseus/core';
 
 import { Query } from './Query.ts';
@@ -30,6 +31,9 @@ export class RedisDriver implements MatchMakerDriver {
       : (Array.isArray(options))
         ? new Cluster(options, clusterOptions)
         : new Redis(options as RedisOptions);
+
+    // without a listener, ioredis prints a stack trace on every reconnect attempt
+    this._client.on('error', (e) => logger.warn('RedisDriver: connection error:', e.message));
   }
 
   public async has(roomId: string) {
