@@ -110,4 +110,24 @@ describe("RedisDriver", () => {
     assert.strictEqual((pveRoom.metadata as any).mode, "pve");
   });
 
+  it("query() should recover after a failed Redis read", async () => {
+    await driver.clear();
+    await driver.persist(initializeRoomCache({ name: "game", roomId: "f1", clients: 0, maxClients: 10 }));
+
+    // simulate Redis being down: ioredis rejects once its retries run out
+    const client = (driver as any)._client as Redis;
+    client.hgetall = (() => Promise.reject(new Error("Reached the max retries per request limit"))) as any;
+
+    try {
+      // both names share the same in-flight read
+      const results = await Promise.allSettled([driver.query({ name: "game" }), driver.query({ name: "lobby" })]);
+      assert.deepStrictEqual(["rejected", "rejected"], results.map((r) => r.status));
+    } finally {
+      delete (client as any).hgetall;
+    }
+
+    assert.deepStrictEqual(["f1"], (await driver.query({ name: "game" })).map((r) => r.roomId));
+    assert.strictEqual(1, (await driver.query({})).length);
+  });
+
 });
