@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.5
+
+- Reloading server code under `colyseus/vite` no longer corrupts a file-backed PGlite database (lost rows, or duplicates under one primary key). `GameDatabase` instances on the same data dir now share one PGlite connection.
+
 ## 0.18.4
 
 - `require()` of this package now resolves to the same ESM build `import` gets, so a process that uses both no longer loads two copies. [#979](https://github.com/colyseus/colyseus/issues/979)

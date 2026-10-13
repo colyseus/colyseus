@@ -280,6 +280,42 @@ type SQLFlavor = 'sqlite' | 'pg';
  */
 type ResolvedTables<S extends Partial<SchemaSet>> = { [K in keyof SchemaSet]: Resolve<S, K> };
 
+/**
+ * PGlite clients by data dir, shared by every GameDatabase booted on one.
+ * PGlite takes no lock, and a second client on the same dir corrupts it —
+ * which is what a host does when it boots a reloaded module's database before
+ * shutting down the one it replaces (colyseus/vite). On `globalThis` so a host
+ * that re-evaluates this package still finds the open client.
+ */
+const sharedPGlite: Map<string, { client: any; refs: number }> =
+  (globalThis as any)[Symbol.for('@colyseus/database:pglite')] ??= new Map();
+
+/**
+ * Join the client already open on `dataDir`, or open it. In-memory databases
+ * (`undefined`, PGlite's own `memory://`) are never shared.
+ */
+function acquirePGlite(dataDir: string | undefined, open: () => any): any {
+  if (dataDir === undefined || dataDir.startsWith('memory://')) { return open(); }
+  let shared = sharedPGlite.get(dataDir);
+  if (!shared) {
+    const client = open();
+    // evicted before any booter resumes, so a later boot opens afresh instead of joining it
+    client.waitReady.catch(() => sharedPGlite.delete(dataDir));
+    sharedPGlite.set(dataDir, shared = { client, refs: 0 });
+  }
+  shared.refs++;
+  return shared.client;
+}
+
+/** Drop one reference to the client on `dataDir`. True when it was the last, so the caller closes it. */
+function releasePGlite(dataDir: string | undefined): boolean {
+  if (dataDir === undefined) { return true; }
+  const shared = sharedPGlite.get(dataDir);
+  if (shared && --shared.refs > 0) { return false; }
+  sharedPGlite.delete(dataDir);
+  return true;
+}
+
 export class GameDatabase<
   S extends Partial<SchemaSet> = {},
   Dialect extends 'sqlite' | 'pg' = 'sqlite',
@@ -340,6 +376,8 @@ export class GameDatabase<
   private rawClient: any = null;
   // False for a client adopted from `options.db`: shutdown() leaves it open.
   private ownsClient = false;
+  // Data dir of a PGlite client other instances may share; see `sharedPGlite`.
+  private pgliteDataDir: string | undefined;
   // Shared by eager `boot()` callers and Server.listen() so migrations run once.
   private _bootPromise: Promise<void> | null = null;
 
@@ -511,7 +549,9 @@ export class GameDatabase<
     // Only a connection we opened. A client adopted from `options.db` belongs
     // to the caller and stays open.
     if (this.ownsClient && this.rawClient) {
-      await RAW_DRIVERS[this.subDialect].close(this.rawClient);
+      if (releasePGlite(this.pgliteDataDir)) {
+        await RAW_DRIVERS[this.subDialect].close(this.rawClient);
+      }
       this.rawClient = null;
     }
   }
@@ -631,8 +671,9 @@ export class GameDatabase<
     const resolvedDataDir = userOpts.dataDir ?? (
       dataDir === ':memory:' || dataDir === '' ? undefined : dataDir
     );
-    const client = new PGlite({ ...userOpts, dataDir: resolvedDataDir });
+    const client = acquirePGlite(resolvedDataDir, () => new PGlite({ ...userOpts, dataDir: resolvedDataDir }));
     await client.waitReady;
+    this.pgliteDataDir = resolvedDataDir;
 
     // See bootPostgres for why we pass `relations` (not `schema`) on pg.
     this.drizzle = drizzle({

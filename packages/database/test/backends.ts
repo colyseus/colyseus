@@ -30,7 +30,8 @@ export function freshSqlitePath(label: string): string {
   return path.join(os.tmpdir(), `colyseus-db-${label}-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
 }
 
-function freshPgliteDir(label: string): string {
+/** A fresh PGlite data dir under the OS temp dir. Exported so tests stop copying it. */
+export function freshPgliteDir(label: string): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), `colyseus-pglite-${label}-`));
 }
 
