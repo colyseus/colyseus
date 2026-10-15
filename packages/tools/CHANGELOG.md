@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.18.10
+
+- On Colyseus Cloud, a deploy whose new version crashes on startup or never starts listening now fails, and the previous version keeps serving. It used to be reported as deployed while players were sent to the broken version.
+- New processes only receive players once they accept connections, even with a short `listen_timeout`: the deploy waits for `listen_timeout` or a minute, whichever is longer.
+
 ## 0.18.9
 
 - On Colyseus Cloud, `ecosystem.config.js` now sees the environment variables set in the panel, e.g. `instances: Number(process.env.WORKERS)`.

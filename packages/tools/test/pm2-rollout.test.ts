@@ -14,7 +14,7 @@
  */
 import assert from 'assert';
 
-const { planRollout, planDrain, planReclaim, planOvershoot, planSurplus, newProcesses, socketPort, OVERSHOOT_MARGIN_MB } = require('../pm2/rollout.cjs');
+const { planRollout, planDrain, planReclaim, planOvershoot, planSurplus, newProcesses, readiness, socketPort, OVERSHOOT_MARGIN_MB } = require('../pm2/rollout.cjs');
 const { peakProcesses, hasSettledSocket, isStopped } = require('../pm2/shared.cjs');
 
 type Proc = { pm_id: number; NODE_APP_INSTANCE: number; status: string };
@@ -334,6 +334,40 @@ describe('rolling deploy', () => {
       const surplus = planReclaim({ apps, instances: 1 });
 
       assert.deepStrictEqual(surplus.map((e: { NODE_APP_INSTANCE: string }) => e.NODE_APP_INSTANCE), ['10']);
+    });
+  });
+
+  describe('readiness', () => {
+    const look = (opts: object) => readiness({ status: 'online', starts: 1, listening: false, waitedMs: 0, timeoutMs: 60000, ...opts });
+
+    it('should serve once its socket accepts connections, whatever PM2 says', () => {
+      assert.deepStrictEqual(look({ listening: true }), { state: 'serving' });
+      assert.deepStrictEqual(look({ listening: true, status: 'launching', starts: 2 }), { state: 'serving' });
+    });
+
+    it('should keep waiting while it boots', () => {
+      assert.deepStrictEqual(look({ status: 'launching' }), { state: 'pending' });
+      assert.deepStrictEqual(look({ starts: 2, waitedMs: 59000 }), { state: 'pending' });
+    });
+
+    // PM2 calls a worker that exits before 'ready' online, and restarts it forever
+    it('should give up on one that keeps exiting without listening', () => {
+      assert.deepStrictEqual(look({ starts: 3 }), { state: 'failed', reason: 'exited 2 times without listening' });
+    });
+
+    // PM2 calls a worker that never sends 'ready' online once listen_timeout passes
+    it('should give up on one not listening by listen_timeout', () => {
+      assert.deepStrictEqual(look({ waitedMs: 60000 }), { state: 'failed', reason: 'was not listening after 60s' });
+    });
+
+    it('should give up on one PM2 stopped restarting, or removed', () => {
+      assert.deepStrictEqual(look({ status: 'errored' }), { state: 'failed', reason: 'crashed' });
+      assert.deepStrictEqual(look({ status: undefined }), { state: 'failed', reason: 'was removed' });
+    });
+
+    // PM2 passes through 'stopped' between a crash and the autorestart
+    it('should not read a stop between restarts as final', () => {
+      assert.deepStrictEqual(look({ status: 'stopped', starts: 2 }), { state: 'pending' });
     });
   });
 

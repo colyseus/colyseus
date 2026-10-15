@@ -12,6 +12,9 @@ const BASE_PORT = 2567;
 // RAM left untouched when starting processes above the peak
 const OVERSHOOT_MARGIN_MB = 256;
 
+// a worker that exits this many times without ever listening won't start on its own
+const STARTS_BEFORE_GIVING_UP = 3;
+
 /** Socket port for a worker, matching `listen()` in src/index.ts. */
 function socketPort(nodeAppInstance) {
   return BASE_PORT + Number(nodeAppInstance);
@@ -133,6 +136,36 @@ function planDrain({ appsToStop, activeCount, instances }) {
 }
 
 /**
+ * What one look at a starting worker says about whether it will serve.
+ *
+ * PM2 can't answer this. It reports a worker that exits before sending 'ready'
+ * as started, then restarts it in a loop, and it reports one that never listens
+ * as started once `listen_timeout` passes. Only the socket NGINX routes to can
+ * tell.
+ *
+ * @param {object}  opts
+ * @param {string}  [opts.status]  PM2 status now; undefined once the process is gone
+ * @param {number}  opts.starts     distinct starts seen since the rollout began it
+ * @param {boolean} opts.listening  its socket accepts connections
+ * @param {number}  opts.waitedMs   since the rollout began starting it
+ * @param {number}  opts.timeoutMs  listen_timeout
+ * @returns {{ state: 'serving' | 'pending' | 'failed', reason?: string }}
+ */
+function readiness({ status, starts, listening, waitedMs, timeoutMs }) {
+  if (status === undefined) { return { state: 'failed', reason: 'was removed' }; }
+  if (listening) { return { state: 'serving' }; }
+  // 'stopped' isn't final: PM2 passes through it between a crash and the autorestart
+  if (status === cst.ERRORED_STATUS) { return { state: 'failed', reason: 'crashed' }; }
+  if (starts >= STARTS_BEFORE_GIVING_UP) {
+    return { state: 'failed', reason: `exited ${starts - 1} times without listening` };
+  }
+  if (waitedMs >= timeoutMs) {
+    return { state: 'failed', reason: `was not listening after ${Math.round(timeoutMs / 1000)}s` };
+  }
+  return { state: 'pending' };
+}
+
+/**
  * Stopped slots to delete once the box holds more than a rolling deploy needs.
  * Newest first, so surviving instance numbers stay compact. Stopped only — a
  * stopped process serves no traffic, so removing it is free.
@@ -158,5 +191,6 @@ module.exports = {
   planSurplus,
   newProcesses,
   planDrain,
+  readiness,
   planReclaim,
 };

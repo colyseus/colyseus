@@ -10,6 +10,7 @@
 const pm2 = require('pm2');
 const cst = require('pm2/constants');
 const fs = require('fs');
+const net = require('net');
 const io = require('@pm2/io');
 const path = require('path');
 const shared = require('./shared.cjs');
@@ -59,7 +60,7 @@ pm2.connect(function(err) {
       const config = await shared.getAppConfig(ecosystemFilePath);
       const ticket = ++latestTicket;
 
-      takeTurn('post-deploy', (done) => postDeploy({ ...config.apps[0], cwd }, onReply, done, ticket));
+      takeTurn('post-deploy', (done) => postDeploy({ ...config.apps[0], cwd }, onReply, done, ticket), rolloutTurnTimeout(config.apps[0]));
 
     } catch (err) {
       onReply({ success: false, message: err?.message });
@@ -89,13 +90,13 @@ const WAITING_MESSAGE = "Post-deploy success. This server has no room for more p
 const TURN_TIMEOUT = 5 * 60 * 1000;
 let turns = Promise.resolve();
 
-function takeTurn(label, task) {
+function takeTurn(label, task, timeout = TURN_TIMEOUT) {
   const turn = turns.then(() => new Promise((release) => {
     // a stuck step must never block every later deploy
     const timer = setTimeout(() => {
-      console.warn(`${label} held the rollout turn for ${TURN_TIMEOUT / 1000}s, releasing it.`);
+      console.warn(`${label} held the rollout turn for ${timeout / 1000}s, releasing it.`);
       release();
-    }, TURN_TIMEOUT);
+    }, timeout);
 
     const done = () => { clearTimeout(timer); release(); };
 
@@ -191,6 +192,8 @@ function postDeploy(config, reply, done, ticket) {
       });
     }
 
+    const startedAt = Date.now();
+
     // PM2 scales by cloning an existing process: give them this deploy's
     // start settings first, or the new generation inherits whatever they had
     const configured = Promise.all(apps.map((app) => withCurrentConfig(app.pm2_env.pm_id, config)));
@@ -225,6 +228,18 @@ function postDeploy(config, reply, done, ticket) {
       .finally(done);
 
     async function onFirstAppsStart(initialApps) {
+      const failures = await waitUntilServing(initialApps, startedAt, config);
+
+      if (failures.length > 0) {
+        // NGINX and the old generation are left alone: the previous version keeps serving
+        await stopForGood(initialApps);
+
+        return reply({
+          success: false,
+          message: notServingMessage(`The new version never started serving (${failures.join('; ')}); the previous version keeps serving.`),
+        });
+      }
+
       /**
        * release post-deploy action while proceeding with graceful restart of other processes
        */
@@ -377,7 +392,7 @@ function waitForCapacity(config, ticket) {
 
         if (hasCapacity) {
           console.log("A draining process exited: resuming the waiting deploy");
-          return takeTurn('post-deploy (resumed)', (done) => postDeploy(config, () => {}, done, ticket));
+          return takeTurn('post-deploy (resumed)', (done) => postDeploy(config, () => {}, done, ticket), rolloutTurnTimeout(config));
         }
       }
 
@@ -417,6 +432,146 @@ function leftOnline(app_envs, timeout = 5000) {
       });
     })();
   });
+}
+
+/**
+ * Wait until each process accepts connections on the socket NGINX routes to,
+ * or turns out never to.
+ *
+ * PM2's callbacks can't be trusted for this: they report a worker that crashes
+ * before 'ready' as started, and one that never listens as started once
+ * `listen_timeout` passes. Routing on that word sent players to a crash-looping
+ * worker and drained the healthy one.
+ *
+ * Resolves with why each process failed ("instance 0 exited 2 times without
+ * listening"), empty when all serve.
+ */
+function waitUntilServing(app_envs, startedAt, config) {
+  // no NGINX routing here (self-hosted): nothing to probe
+  if (!fs.existsSync(shared.NGINX_SERVERS_CONFIG_FILE)) { return Promise.resolve([]); }
+
+  const timeoutMs = readinessTimeout(config);
+  const pending = new Map(app_envs.map((app_env) => [app_env.pm_id, { app_env, starts: new Set() }]));
+  const failures = [];
+
+  return new Promise((resolve) => {
+    (function check() {
+      shared.listApps(async (err, apps) => {
+        if (err) {
+          logIfError(err);
+
+        } else {
+          await Promise.all([...pending.values()].map(async (watch) => {
+            const env = apps.find((app) => app.pm2_env.pm_id === watch.app_env.pm_id)?.pm2_env;
+            if (env?.pm_uptime) { watch.starts.add(env.pm_uptime); }
+
+            const { state, reason } = rollout.readiness({
+              status: env?.status,
+              starts: watch.starts.size,
+              listening: env !== undefined && await acceptsConnections(socketPath(watch.app_env)),
+              waitedMs: Date.now() - startedAt,
+              timeoutMs,
+            });
+
+            if (state === 'pending') { return; }
+            if (state === 'failed') { failures.push(`instance ${watch.app_env.NODE_APP_INSTANCE} ${reason}`); }
+            pending.delete(watch.app_env.pm_id);
+          }));
+        }
+
+        // PM2 unreachable past the timeout: nothing proves the new version serves
+        if (err && Date.now() - startedAt >= timeoutMs) {
+          pending.forEach((watch) => failures.push(`instance ${watch.app_env.NODE_APP_INSTANCE} could not be checked`));
+          pending.clear();
+        }
+
+        if (pending.size === 0) { return resolve(failures); }
+        setTimeout(check, 250);
+      });
+    })();
+  });
+}
+
+/**
+ * Stop processes, and wait until they are stopped.
+ *
+ * A stop doesn't hold on a worker that never sent 'ready': when it exits, PM2 7
+ * concludes its wait_ready by marking it online, over our 'stopping', and
+ * autorestarts it. Left running, the next rollout plans around it as a live
+ * process, routes to it and can drain the healthy one. Turning autorestart off
+ * first makes the stop final; the next rollout turns it back on
+ * (LIFECYCLE_KEYS) before reusing the slot.
+ *
+ * Bounded: a worker still draining after `timeout` is `stopping`, which every
+ * plan and NGINX already leave out.
+ */
+async function stopForGood(app_envs, timeout = 15 * 1000) {
+  const deadline = Date.now() + timeout;
+  const stoppedAt = new Map(app_envs.map((app_env) => [app_env.pm_id, 0]));
+
+  await Promise.all(app_envs.map((app_env) => new Promise((resolve) =>
+    shared.updateProcessConfig(app_env.pm_id, { autorestart: false }, (err) => { logIfError(err); resolve(); }, ['autorestart']))));
+
+  return new Promise((resolve) => {
+    (function check() {
+      shared.listApps((err, apps) => {
+        const ours = err ? [] : apps.filter((app) => stoppedAt.has(app.pm2_env.pm_id));
+
+        ours.filter((app) => app.pm2_env.status !== cst.STOPPED_STATUS && app.pm2_env.status !== cst.STOPPING_STATUS)
+          // one call per second: a stop takes a moment to show in the list
+          .filter((app) => Date.now() - stoppedAt.get(app.pm2_env.pm_id) >= 1000)
+          .forEach((app) => {
+            stoppedAt.set(app.pm2_env.pm_id, Date.now());
+            pm2.stop(app.pm2_env.pm_id, logIfError);
+          });
+
+        const settled = !err && ours.every((app) => app.pm2_env.status === cst.STOPPED_STATUS);
+        if (settled || Date.now() >= deadline) { return resolve(); }
+        setTimeout(check, 250);
+      });
+    })();
+  });
+}
+
+/**
+ * How long a new generation gets to start serving: the app's `listen_timeout`,
+ * but never under a minute. PM2's examples set 3-10s, and an app booting
+ * slower than that is still healthy -- PM2 only stops waiting for its 'ready'.
+ */
+function readinessTimeout(config) {
+  return Math.max(Number(config.env?.listen_timeout) || 0, 60 * 1000);
+}
+
+/**
+ * How long a rollout may hold the turn. It waits on its new generation up to
+ * twice -- PM2's restart callback or the readiness probe, then a scale-up --
+ * each up to `readinessTimeout`. A turn released mid-rollout lets the next
+ * deploy plan around processes this one is still judging.
+ */
+function rolloutTurnTimeout(config) {
+  return Math.max(TURN_TIMEOUT, 2 * readinessTimeout(config) + 60 * 1000);
+}
+
+// The Cloud panel knows this sentence: it fails the deploy without retrying (the app's
+// own error, retries won't fix it) and points the user at the application logs.
+function notServingMessage(detail) {
+  return `Post-deploy failed. Check application logs for more details. ${detail}`;
+}
+
+/** Whether a unix socket accepts connections right now. */
+function acceptsConnections(sockPath) {
+  return new Promise((resolve) => {
+    const socket = net.createConnection({ path: sockPath });
+    const settle = (result) => { socket.destroy(); resolve(result); };
+    socket.setTimeout(1000, () => settle(false));
+    socket.once('connect', () => settle(true));
+    socket.once('error', () => settle(false));
+  });
+}
+
+/** The socket a worker listens on, and NGINX routes to. */
+function socketPath(app_env) {
+  return `${shared.PROCESS_UNIX_SOCK_PATH}${rollout.socketPort(app_env.NODE_APP_INSTANCE)}.sock`;
 }
 
 function updateAndReloadNginx(cb) {
@@ -465,11 +620,7 @@ function writeNginxConfig(app_envs) {
     return;
   }
 
-  const addresses = [];
-
-  app_envs.forEach(function(app_env) {
-    addresses.push(`unix:${shared.PROCESS_UNIX_SOCK_PATH}${rollout.socketPort(app_env.NODE_APP_INSTANCE)}.sock`);
-  });
+  const addresses = app_envs.map((app_env) => `unix:${socketPath(app_env)}`);
 
   // every write reloads NGINX, and each reload leaves the previous workers
   // holding their WebSockets until they close: only write a real change

@@ -126,6 +126,11 @@ async function getAppConfig(ecosystemFilePath) {
     app.wait_ready = true;
     app.watch = false;
 
+    // explicit, so a rollout restores it on a slot a failed deploy turned it off for
+    if (app.autorestart === undefined) {
+      app.autorestart = true;
+    }
+
     // default: wait up to 60 seconds for listen() to report 'ready'. Past PM2's
     // own 3 seconds it marks the process online anyway, and a rollout would
     // route to an app still booting (connecting to a database, etc).
@@ -204,7 +209,7 @@ function convertValue(value) {
  * on one that is running or draining, unlike e.g. max_memory_restart: PM2
  * enforces that on draining processes too, and restarts one above it.
  */
-const LIFECYCLE_KEYS = ['kill_timeout', 'kill_retry_time', 'wait_ready', 'listen_timeout'];
+const LIFECYCLE_KEYS = ['kill_timeout', 'kill_retry_time', 'wait_ready', 'listen_timeout', 'autorestart'];
 
 function updateProcessConfig(pm_id, config, cb, keys = CONFIG_KEYS) {
   const env = {};

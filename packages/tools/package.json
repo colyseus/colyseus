@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/tools",
-  "version": "0.18.9",
+  "version": "0.18.10",
   "type": "module",
   "description": "Simplify the development and production settings for your Colyseus project.",
   "input": "./src/index.ts",
@@ -69,8 +69,8 @@
     "@colyseus/uwebsockets-transport": "workspace:^",
     "@colyseus/ws-transport": "workspace:^",
     "@types/dotenv": "^8.2.0",
-    "pm2": "^6.0.14",
     "mocha": "^11.7.5",
+    "pm2": "^7.0.4",
     "uwebsockets-express": "^2.0.1"
   },
   "peerDependencies": {

@@ -28,7 +28,28 @@ const server = http.createServer((req, res) => {
 const LISTEN_DELAY_FILE = path.join(__dirname, '.listen-delay-ms');
 const LISTEN_DELAY_MS = fs.existsSync(LISTEN_DELAY_FILE) ? Number(fs.readFileSync(LISTEN_DELAY_FILE, 'utf8')) : 0;
 
+// Opt-in: throw while loading, like an app that fails a startup check
+if (fs.existsSync(path.join(__dirname, '.crash-on-boot'))) {
+  throw new Error(`[Instance ${INSTANCE_ID}] Crashing on boot (.crash-on-boot).`);
+}
+
+// Opt-in: stay up without ever listening, like an app stuck awaiting a dependency
+if (fs.existsSync(path.join(__dirname, '.never-listen'))) {
+  console.log(`[Instance ${INSTANCE_ID}] Never listening (.never-listen).`);
+  setInterval(() => {}, 60 * 60 * 1000);
+  return;
+}
+
 setTimeout(() => server.listen(PORT, () => {
+  // Opt-in: also bind the unix socket NGINX routes to and report-stats probes,
+  // so a test sees a worker the way the agent and the Cloud monitor do.
+  if (process.env.UNIX_SOCK_PATH) {
+    const sockPath = path.join(process.env.UNIX_SOCK_PATH, `${2567 + INSTANCE_ID}.sock`);
+    fs.mkdirSync(process.env.UNIX_SOCK_PATH, { recursive: true });
+    fs.rmSync(sockPath, { force: true }); // a previous run's stale socket refuses to bind
+    http.createServer((req, res) => res.end('ok')).listen(sockPath);
+  }
+
   const boundPort = server.address().port;
   console.log(`[Instance ${INSTANCE_ID}] Dummy server running on port ${boundPort} (PID: ${process.pid})`);
 
@@ -49,15 +70,6 @@ setTimeout(() => server.listen(PORT, () => {
     process.send('ready');
   }
 }), LISTEN_DELAY_MS);
-
-// Opt-in: also bind the unix socket report-stats probes, so a test can tell a
-// live worker from a draining one the same way the Cloud monitor does.
-if (process.env.UNIX_SOCK_PATH) {
-  const sockPath = path.join(process.env.UNIX_SOCK_PATH, `${2567 + INSTANCE_ID}.sock`);
-  fs.mkdirSync(process.env.UNIX_SOCK_PATH, { recursive: true });
-  fs.rmSync(sockPath, { force: true }); // a previous run's stale socket refuses to bind
-  http.createServer((req, res) => res.end('ok')).listen(sockPath);
-}
 
 // Graceful shutdown
 process.on('SIGINT', gracefulShutdown);
