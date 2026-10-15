@@ -167,17 +167,17 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
   public getFullState(client?: Client, timing?: PatchTimingContext) {
     if (this.needFullEncode || this.encoder.root.changes.next !== undefined) {
       this.sharedOffsetCache = { offset: 1 };
-      this.fullEncodeCache = this.encoder.encodeAll(this.sharedOffsetCache, this.fullEncodeBuffer);
+      this.fullEncodeCache = Buffer.from(this.encoder.encodeAll(this.sharedOffsetCache, this.fullEncodeBuffer));
       this.needFullEncode = false;
     }
 
     const body = (this.hasFilters && client?.view)
-      ? this.encoder.encodeAllView(
+      ? Buffer.from(this.encoder.encodeAllView(
           client.view,
           this.sharedOffsetCache.offset,
           { ...this.sharedOffsetCache },
           this.fullEncodeBuffer
-        )
+        ))
       : this.fullEncodeCache;
 
     if (timing && client) {
@@ -220,7 +220,7 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
           this.encoder.sharedBuffer[0] = Protocol.ROOM_STATE_PATCH;
 
           clientsWithViewChange.forEach((client) => {
-            const encodedView = this.encoder.encodeView(client.view, sharedOffset, it);
+            const encodedView = Buffer.from(this.encoder.encodeView(client.view, sharedOffset, it));
             sendClientFrame(client, encodedView, timing);
           });
         }
@@ -259,7 +259,7 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
     this.encoder.sharedBuffer[0] = Protocol.ROOM_STATE_PATCH;
 
     // encode changes once, for all clients
-    const encodedChanges = this.encoder.encode(it);
+    const encodedChanges = Buffer.from(this.encoder.encode(it));
 
     if (!this.hasFilters) {
       while (numClients--) {
@@ -298,7 +298,7 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
         if (encodedView === undefined) {
           encodedView = (view === SHARED_VIEW)
             ? encodedChanges
-            : this.encoder.encodeView(client.view, sharedOffset, it);
+            : Buffer.from(this.encoder.encodeView(client.view, sharedOffset, it));
           this.encodedViews.set(view, encodedView);
         }
 
@@ -359,7 +359,7 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
     encode.uint16(this.encoder.sharedBuffer, this.unreliableSeq, { offset: 1 });
 
     // encode changes once, for all clients
-    const encodedChanges = this.encoder.encodeUnreliable(it);
+    const encodedChanges = Buffer.from(this.encoder.encodeUnreliable(it));
 
     let numClients = clients.length;
 
@@ -385,7 +385,7 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
         if (encodedView === undefined) {
           encodedView = (view === SHARED_VIEW)
             ? encodedChanges
-            : this.encoder.encodeUnreliableView(client.view, sharedOffset, it);
+            : Buffer.from(this.encoder.encodeUnreliableView(client.view, sharedOffset, it));
           this.encodedUnreliableViews.set(view, encodedView);
         }
 
