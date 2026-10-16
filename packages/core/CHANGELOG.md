@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.18.19
+
+- `RoomPlugin` hooks now run in the first room of a class that defines `onUncaughtException`. Thanks @agudulin! [#988](https://github.com/colyseus/colyseus/issues/988)
+- Hooks declared as class fields (`onJoin = () => {}`) now run plugin hooks and report errors to `onUncaughtException`, which can now be a class field too.
+- Defining `onUncaughtException` without `onAuth()` no longer sets `client.auth` to `true`.
+
 ## 0.18.18
 
 - Rooms and clients now stay in V8's fast-properties mode, so hot-path property reads are no longer hash lookups. A broadcast to 6 clients is about 1.8× faster. Thanks @sarpaslan for reporting!

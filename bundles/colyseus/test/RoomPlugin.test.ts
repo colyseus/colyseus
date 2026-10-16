@@ -192,6 +192,19 @@ describe('RoomPlugin core plumbing', () => {
       assert.deepEqual(order, ['a'], 'subsequent plugins + room should not run');
     });
 
+    it('runs plugin hooks around a room hook declared as a class field', async () => {
+      const order: string[] = [];
+      class P extends RoomPlugin { onJoin() { order.push('plugin'); } }
+      class R extends Room {
+        plugins = definePlugins({ p: new P() });
+        onJoin = () => { order.push('room'); };
+      }
+      const room = new R();
+      runInit(room);
+      await (room as any).onJoin({} as any);
+      assert.deepEqual(order, ['plugin', 'room']);
+    });
+
     it('wraps the original room hook even when no plugin declares it', async () => {
       const order: string[] = [];
       class P extends RoomPlugin { /* no lifecycle hooks at all */ }
@@ -204,6 +217,36 @@ describe('RoomPlugin core plumbing', () => {
       await (room as any).onJoin({} as any);
       // Room's hook still runs; just no plugins to invoke.
       assert.deepEqual(order, ['room']);
+    });
+  });
+
+  // https://github.com/colyseus/colyseus/issues/988
+  describe('with onUncaughtException', () => {
+    it('runs plugin hooks in the first room of the class', async () => {
+      const ran: string[] = [];
+      class P extends RoomPlugin { onJoin() { ran.push(`plugin:${this.room.roomId}`); } }
+      class R extends Room {
+        plugins = definePlugins({ p: new P() });
+        onJoin() { ran.push(`room:${this.roomId}`); }
+        onUncaughtException() {}
+      }
+      const first = new R(); first.roomId = 'first'; runInit(first);
+      const second = new R(); second.roomId = 'second'; runInit(second);
+      await (first as any).onJoin({} as any);
+      await (second as any).onJoin({} as any);
+      assert.deepEqual(ran, ['plugin:first', 'room:first', 'plugin:second', 'room:second']);
+    });
+
+    it('reports a plugin hook throw from the first room', async () => {
+      const caught: string[] = [];
+      class P extends RoomPlugin { onJoin() { throw new Error('boom'); } }
+      class R extends Room {
+        plugins = definePlugins({ p: new P() });
+        onUncaughtException(_error: Error, methodName: string) { caught.push(methodName); }
+      }
+      const first = new R(); runInit(first);
+      await assert.rejects(() => (first as any).onJoin({} as any), /boom/);
+      assert.deepEqual(caught, ['onJoin']);
     });
   });
 

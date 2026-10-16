@@ -451,13 +451,6 @@ export class Room<T extends RoomOptions = RoomOptions> {
         .catch((e) => debugAndPrintError(`onDispose error: ${(e && e.stack || e.message || e || 'promise rejected')} (roomId: ${this.roomId})`))
         .finally(() => this._events.emit('disconnect'));
     });
-
-    /**
-     * If `onUncaughtException` is defined, it will automatically catch exceptions
-     */
-    if (this.onUncaughtException !== undefined) {
-      this.#registerUncaughtExceptionHandlers();
-    }
   }
 
   /**
@@ -590,6 +583,12 @@ export class Room<T extends RoomOptions = RoomOptions> {
     // `plugin.room = this`, instantiate auto-deps, merge messages.
     if (this.plugins !== undefined) {
       setupRoomPlugins(this);
+    }
+
+    // After setupRoomPlugins(), so the try/catch covers plugin hooks too.
+    // Not in the constructor: subclass fields aren't assigned until it returns.
+    if (this.onUncaughtException !== undefined) {
+      this.#registerUncaughtExceptionHandlers();
     }
 
     // Bind messages to the room
@@ -2487,7 +2486,8 @@ export class Room<T extends RoomOptions = RoomOptions> {
       this.onCreate = wrapTryCatch(this.onCreate.bind(this), onUncaughtException, OnCreateException, 'onCreate', true);
     }
 
-    if (this.onAuth !== undefined) {
+    // _onJoin skips onAuth only while it's still Room's default
+    if (this.onAuth !== Room.prototype.onAuth) {
       this.onAuth = wrapTryCatch(this.onAuth.bind(this), onUncaughtException, OnAuthException, 'onAuth', true);
     }
 

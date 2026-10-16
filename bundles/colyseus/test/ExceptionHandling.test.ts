@@ -1,7 +1,7 @@
 import assert from "assert";
 
 import * as Colyseus from "@colyseus/sdk";
-import { OnAuthException, OnCreateException, OnDisposeException, OnJoinException, OnLeaveException, OnMessageException, Room, Server, TimestepException, SimulationIntervalException, TimedEventException, matchMaker } from "@colyseus/core";
+import { OnAuthException, OnCreateException, OnDisposeException, OnJoinException, OnLeaveException, OnMessageException, Room, RoomPlugin, Server, TimestepException, SimulationIntervalException, TimedEventException, definePlugins, matchMaker } from "@colyseus/core";
 import { timeout, waitUntil } from "./utils/index.ts";
 
 const TEST_PORT = 8570;
@@ -553,6 +553,42 @@ describe("Exception Handling", () => {
     assert.ok(caught[0].error instanceof SimulationIntervalException); // deprecated alias still matches
     assert.strictEqual(caught[0].error.message, "setSimulationInterval Error");
     assert.strictEqual(caught[0].methodName, "setTimestep");
+  });
+
+  it("client.auth should stay unset when the room has no onAuth", async () => {
+    matchMaker.defineRoomType("my_room", class extends Room {
+      onUncaughtException() {}
+    });
+
+    const conn = await client.joinOrCreate("my_room");
+    const room = matchMaker.getLocalRoomById(conn.roomId);
+    assert.strictEqual(room.clients[0].auth, undefined);
+    await conn.leave();
+  });
+
+  // https://github.com/colyseus/colyseus/issues/988
+  it("plugin hooks should run in the first room of the class", async () => {
+    const ranIn = new Set<string>();
+
+    class JoinLog extends RoomPlugin {
+      readonly pluginName = "joinLog" as const;
+      onJoin() { ranIn.add(this.room.roomId); }
+    }
+
+    matchMaker.defineRoomType("my_room", class extends Room {
+      plugins = definePlugins([new JoinLog()]);
+      onJoin() {}
+      onUncaughtException() {}
+    });
+
+    const first = await client.create("my_room");
+    const second = await client.create("my_room");
+
+    assert.ok(ranIn.has(first.roomId), "plugin onJoin ran in the 1st room");
+    assert.ok(ranIn.has(second.roomId), "plugin onJoin ran in the 2nd room");
+
+    await first.leave();
+    await second.leave();
   });
 
 });

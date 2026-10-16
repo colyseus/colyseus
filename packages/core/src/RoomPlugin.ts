@@ -435,29 +435,50 @@ export function installPluginHookWrappers(
   for (const hook of PLUGIN_LIFECYCLE_KEYS) {
     const { before, after } = layout.hooks[hook];
     if (before.length === 0 && after.length === 0) { continue; }
-
-    const original = proto[hook] as Function | undefined;
-    proto[hook] = async function (
-      this: { plugins?: Record<string, RoomPlugin>; _autoPlugins?: Record<string, RoomPlugin> },
-      ...args: any[]
-    ) {
-      // User plugins live on `this.plugins`, auto-deps (sentinel-keyed)
-      // on `this._autoPlugins` — kept separate so user types stay clean.
-      const lookup = (k: string): RoomPlugin =>
-        (k.startsWith(DEP_KEY_PREFIX) ? this._autoPlugins![k] : this.plugins![k]);
-      for (const k of before) {
-        const p = lookup(k);
-        await (p[hook] as Function).call(p, ...args);
-      }
-      let result: unknown;
-      if (original) { result = await original.apply(this, args); }
-      for (const k of after) {
-        const p = lookup(k);
-        await (p[hook] as Function).call(p, ...args);
-      }
-      return result;
-    };
+    proto[hook] = composePluginHook(hook, before, after, proto[hook]);
   }
+}
+
+/**
+ * Hooks declared as class fields (`onJoin = () => {}`) are own properties
+ * that shadow the prototype wrapper, so wrap them per instance.
+ */
+function wrapOwnHooks(room: RoomPluginHost, layout: PluginLayout): void {
+  for (const hook of PLUGIN_LIFECYCLE_KEYS) {
+    const { before, after } = layout.hooks[hook];
+    if (before.length === 0 && after.length === 0) { continue; }
+    if (!Object.hasOwn(room, hook)) { continue; }
+    (room as any)[hook] = composePluginHook(hook, before, after, (room as any)[hook]);
+  }
+}
+
+/** Run the `before` plugins, then `original`, then the `after` plugins. */
+function composePluginHook(
+  hook: PluginLifecycleKey,
+  before: string[],
+  after: string[],
+  original: Function | undefined,
+) {
+  return async function (
+    this: { plugins?: Record<string, RoomPlugin>; _autoPlugins?: Record<string, RoomPlugin> },
+    ...args: any[]
+  ) {
+    // User plugins live on `this.plugins`, auto-deps (sentinel-keyed)
+    // on `this._autoPlugins` — kept separate so user types stay clean.
+    const lookup = (k: string): RoomPlugin =>
+      (k.startsWith(DEP_KEY_PREFIX) ? this._autoPlugins![k] : this.plugins![k]);
+    for (const k of before) {
+      const p = lookup(k);
+      await (p[hook] as Function).call(p, ...args);
+    }
+    let result: unknown;
+    if (original) { result = await original.apply(this, args); }
+    for (const k of after) {
+      const p = lookup(k);
+      await (p[hook] as Function).call(p, ...args);
+    }
+    return result;
+  };
 }
 
 /** Structural shape used by `setupRoomPlugins` — avoids a Room import
@@ -482,6 +503,10 @@ export function setupRoomPlugins(room: RoomPluginHost): void {
   const layout = resolveOrComputeLayout(room.constructor, plugins);
 
   attachRoomReference(room, plugins);
+
+  if (layout) {
+    wrapOwnHooks(room, layout);
+  }
 
   if (layout && layout.autoDeps.length > 0) {
     room._autoPlugins = instantiateAutoDeps(room, layout);
