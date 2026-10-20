@@ -138,10 +138,7 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
   // flag to avoid re-encoding full state if no changes were made
   protected needFullEncode: boolean = true;
 
-  // TODO: make this optional. allocating a new buffer for each room may not be always necessary.
-  protected fullEncodeBuffer: Uint8Array = new Uint8Array(Encoder.BUFFER_SIZE);
   protected fullEncodeCache: Uint8Array;
-  protected sharedOffsetCache: Iterator = { offset: 0 };
 
   protected encodedViews: Map<StateView | typeof SHARED_VIEW, Uint8Array>;
 
@@ -162,8 +159,7 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
     this.hasFilters = this.encoder.context.hasFilters;
     this.hasUnreliableFields = stateHasUnreliableFields(this.encoder.context);
 
-    // cache ROOM_STATE byte as part of the encoded buffer
-    this.fullEncodeBuffer[0] = Protocol.ROOM_STATE;
+    this.needFullEncode = true; // the cached full state belongs to the previous encoder
 
     if (this.hasFilters) {
       this.encodedViews = new Map();
@@ -178,20 +174,17 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
 
   public getFullState(client?: Client, timing?: PatchTimingContext) {
     if (this.needFullEncode || this.encoder.root.changes.next !== undefined) {
-      this.sharedOffsetCache = { offset: 1 };
-      // copy: a socket may hold it past the next re-encode (slice(): a pooled Buffer would pin 8KB)
-      this.fullEncodeCache = this.encoder.encodeAll(this.sharedOffsetCache, this.fullEncodeBuffer).slice();
+      this.encoder.sharedBuffer[0] = Protocol.ROOM_STATE;
+      // copy: the next encode reuses the shared buffer (slice(): a pooled Buffer would pin 8KB)
+      this.fullEncodeCache = this.encoder.encodeAll({ offset: 1 }).slice();
       this.needFullEncode = false;
     }
 
-    const body = (this.hasFilters && client?.view)
-      ? this.encoder.encodeAllView(
-          client.view,
-          this.sharedOffsetCache.offset,
-          { ...this.sharedOffsetCache },
-          this.fullEncodeBuffer
-        )
-      : this.fullEncodeCache;
+    let body = this.fullEncodeCache;
+    if (this.hasFilters && client?.view) {
+      this.encoder.sharedBuffer.set(body); // patches since the full encode may have overwritten it
+      body = this.encoder.encodeAllView(client.view, body.byteLength, { offset: body.byteLength });
+    }
 
     if (timing && client) {
       return buildTimedFrame(body, timing.sNow, clientProcessedInputSeq(client));
