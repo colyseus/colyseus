@@ -3,6 +3,7 @@
 ## 0.17.53
 
 - State patches no longer get corrupted (`"refId" not found`) for clients whose connection is backed up, or when `perMessageDeflate` is enabled. Thanks @chaeso! [#982](https://github.com/colyseus/colyseus/issues/982)
+- Clients joining with a `StateView` no longer receive an incomplete state when it's larger than `Encoder.BUFFER_SIZE`, and the buffer overflow warning no longer repeats on every join.
 
 ## 0.17.52
 

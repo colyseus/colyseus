@@ -43,20 +43,34 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
       this.sharedOffsetCache = { offset: 1 };
       // copy: the next full encode reuses the buffer (slice(): a pooled Buffer would pin 8KB)
       this.fullEncodeCache = this.encoder.encodeAll(this.sharedOffsetCache, this.fullEncodeBuffer).slice();
+      this.fitFullEncodeBuffer(this.sharedOffsetCache.offset);
       this.needFullEncode = false;
     }
 
     if (this.hasFilters && client?.view) {
-      return this.encoder.encodeAllView(
-        client.view,
-        this.sharedOffsetCache.offset,
-        { ...this.sharedOffsetCache },
-        this.fullEncodeBuffer
-      );
+      const it = { ...this.sharedOffsetCache };
+      const encoded = this.encoder.encodeAllView(client.view, this.sharedOffsetCache.offset, it, this.fullEncodeBuffer);
+      this.fitFullEncodeBuffer(it.offset);
+      return encoded;
 
     } else {
       return this.fullEncodeCache;
     }
+  }
+
+  /**
+   * Grow {@link fullEncodeBuffer} once an encode outgrew it. The encoder grows
+   * a buffer it is handed for that one encode only, so otherwise every full
+   * encode overflows again and per-view encodes read a truncated shared part.
+   *
+   * `byteLength` is the iterator's final offset, not the returned length:
+   * before @colyseus/schema 4.0.27, a per-view encode that overflows returns
+   * its bytes cut short at the old buffer size.
+   */
+  protected fitFullEncodeBuffer(byteLength: number) {
+    if (byteLength <= this.fullEncodeBuffer.byteLength) { return; }
+    this.fullEncodeBuffer = new Uint8Array(byteLength + Encoder.BUFFER_SIZE);
+    this.fullEncodeBuffer.set(this.fullEncodeCache);
   }
 
   public applyPatches(clients: Client[]) {
