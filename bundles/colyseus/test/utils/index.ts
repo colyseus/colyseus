@@ -2,6 +2,7 @@ import WebSocket from "ws";
 import { EventEmitter } from "events";
 
 import { pack, unpack } from "@colyseus/msgpackr";
+import { Decoder, type Schema, type StateView } from "@colyseus/schema";
 
 import {
   type Client,
@@ -16,6 +17,7 @@ import {
   LocalPresence,
   Deferred,
   CloseCode,
+  SchemaSerializer,
 } from "@colyseus/core";
 
 import { RedisPresence } from "@colyseus/redis-presence";
@@ -156,6 +158,45 @@ export function createDummyClient (seatReservation: matchMaker.ISeatReservation,
 
 export function timeout(ms: number = 200) {
   return new Promise<void>((resolve, reject) => setTimeout(resolve, ms));
+}
+
+/**
+ * Waits for `condition` to hold instead of sleeping a duration guessed from
+ * how long the code under test ought to take. Returns as soon as it's true,
+ * and gives up after `timeoutMs` so the assertion that follows reports what
+ * actually went wrong rather than a bare timeout.
+ */
+export async function waitUntil(condition: () => boolean, timeoutMs: number = 2000) {
+  const deadline = Date.now() + timeoutMs;
+  while (!condition() && Date.now() < deadline) {
+    await timeout(10);
+  }
+}
+
+/** A client that keeps the frames handed to `raw` by reference, as a stalled socket does. */
+export function fakeClient(view?: StateView) {
+  const reliable: Uint8Array[] = [];
+  const client: any = {
+    state: ClientState.JOINED,
+    view,
+    reliable,
+    raw: (data: Uint8Array) => reliable.push(data),
+  };
+  return client as Client & { reliable: Uint8Array[] };
+}
+
+export function serializerFor<T extends Schema>(state: T) {
+  const serializer = new SchemaSerializer<T>();
+  serializer.reset(state);
+  return serializer;
+}
+
+/** The state a client ends up with once it decodes `frames`, in order. */
+export function decodeFrames(klass: any, frames: Uint8Array[]) {
+  const decoded = new klass();
+  const decoder = new Decoder(decoded);
+  for (const frame of frames) { decoder.decode(frame.subarray(1)); }
+  return decoded.toJSON();
 }
 
 export class DummyRoom extends Room {

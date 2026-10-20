@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.53
+
+- State patches no longer get corrupted (`"refId" not found`) for clients whose connection is backed up, or when `perMessageDeflate` is enabled. Thanks @chaeso! [#982](https://github.com/colyseus/colyseus/issues/982)
+
 ## 0.17.52
 
 - A process that misses a health-check no longer loses its room listings for good. Those rooms kept running, invisible to matchmaking, until someone left and rejoined one of them. The process now re-publishes them within a few seconds. Thanks @sylvainpolletvillard and @brobinett! [#968](https://github.com/colyseus/colyseus/issues/968)

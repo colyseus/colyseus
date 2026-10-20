@@ -41,7 +41,8 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
   public getFullState(client?: Client) {
     if (this.needFullEncode || this.encoder.root.changes.next !== undefined) {
       this.sharedOffsetCache = { offset: 1 };
-      this.fullEncodeCache = this.encoder.encodeAll(this.sharedOffsetCache, this.fullEncodeBuffer);
+      // copy: the next full encode reuses the buffer (slice(): a pooled Buffer would pin 8KB)
+      this.fullEncodeCache = this.encoder.encodeAll(this.sharedOffsetCache, this.fullEncodeBuffer).slice();
       this.needFullEncode = false;
     }
 
@@ -119,6 +120,9 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
     const encodedChanges = this.encoder.encode(it);
 
     if (!this.hasFilters) {
+      // copy once for all clients: a transport may still hold it after the next encode (see Client.raw)
+      const frame = Buffer.from(encodedChanges);
+
       while (numClients--) {
         const client = clients[numClients];
 
@@ -129,7 +133,7 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
           continue;
         }
 
-        client.raw(encodedChanges);
+        client.raw(frame);
       }
 
     } else {
@@ -154,7 +158,7 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
         // allow to pass the same encoded view for multiple clients
         if (encodedView === undefined) {
           encodedView = (view === SHARED_VIEW)
-            ? encodedChanges
+            ? Buffer.from(encodedChanges) // encodeView already returns a copy
             : this.encoder.encodeView(client.view, sharedOffset, it);
           this.encodedViews.set(view, encodedView);
         }
