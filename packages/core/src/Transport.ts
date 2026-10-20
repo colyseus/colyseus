@@ -252,7 +252,18 @@ export interface Client<T extends { userData?: any, auth?: any, messages?: Recor
   reconnectionToken: string;
 
   // TODO: move these to ClientPrivate
+  /**
+   * Send raw bytes over the transport's reliable channel.
+   *
+   * The transport owns `data` from this call on: it may write it later (a
+   * socket with backpressure, permessage-deflate), so callers never mutate it
+   * afterwards. The same `data` may be handed to several clients.
+   */
   raw(data: Uint8Array | Buffer, options?: ISendOptions, cb?: (err?: Error) => void): void;
+  /**
+   * {@link raw}, or held until the client finishes joining (or until after the
+   * next patch, with `afterNextPatch`). Owns `data` the same way {@link raw} does.
+   */
   enqueueRaw(data: Uint8Array | Buffer, options?: ISendOptions): void;
 
   /**
@@ -262,6 +273,10 @@ export interface Client<T extends { userData?: any, auth?: any, messages?: Recor
    * Absent on transports with no datagram channel (every WebSocket transport).
    * Its presence IS the capability check — callers feature-detect rather than
    * reading a separate flag, and skip clients that can't receive.
+   *
+   * Unlike {@link raw}, `data` is only valid during this call: the caller
+   * reuses its bytes afterwards, so a transport that sends it later copies it
+   * first.
    */
   rawUnreliable?(data: Uint8Array | Buffer, options?: ISendOptions, cb?: (err?: Error) => void): void;
 

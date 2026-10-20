@@ -7,8 +7,8 @@ import {
   ProtocolModifier,
   Room,
   SchemaSerializer,
-  type Client,
 } from "@colyseus/core";
+import { fakeClient } from "./utils/index.ts";
 
 //
 // `@unreliable` fields never ride a state patch — they go out through
@@ -22,30 +22,6 @@ const State = schema({
   x: t.number().unreliable(),
 });
 type State = SchemaType<typeof State>;
-
-/** A client that records what each channel received. `rawUnreliable` is only
- *  defined when `unreliableCapable` — its ABSENCE is the capability check the
- *  serializer performs, exactly as a WebSocket transport presents itself. */
-function fakeClient(unreliableCapable: boolean, view?: StateView) {
-  const reliable: Uint8Array[] = [];
-  const unreliableFrames: Uint8Array[] = [];
-
-  const client: any = {
-    state: ClientState.JOINED,
-    view,
-    reliable,
-    unreliable: unreliableFrames,
-    // copy: the serializer hands out a subarray of its shared buffer, which is
-    // overwritten on the next encode.
-    raw: (data: Uint8Array) => reliable.push(data.slice()),
-  };
-
-  if (unreliableCapable) {
-    client.rawUnreliable = (data: Uint8Array) => unreliableFrames.push(data.slice());
-  }
-
-  return client as Client & { reliable: Uint8Array[]; unreliable: Uint8Array[] };
-}
 
 const seqOf = (frame: Uint8Array) => frame[1] | (frame[2] << 8);
 

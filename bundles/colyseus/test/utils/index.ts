@@ -2,6 +2,7 @@ import WebSocket from "ws";
 import { EventEmitter } from "events";
 
 import { pack, unpack } from "msgpackr";
+import { Decoder, type Schema, type StateView } from "@colyseus/schema";
 
 import {
   type Client,
@@ -16,6 +17,7 @@ import {
   LocalPresence,
   Deferred,
   CloseCode,
+  SchemaSerializer,
 } from "@colyseus/core";
 
 import { RedisPresence } from "@colyseus/redis-presence";
@@ -169,6 +171,45 @@ export async function waitUntil(condition: () => boolean, timeoutMs: number = 20
   while (!condition() && Date.now() < deadline) {
     await timeout(10);
   }
+}
+
+/**
+ * A client that records what the serializer hands each channel. `raw` keeps
+ * frames by reference, as a stalled socket does. `rawUnreliable` copies, as a
+ * datagram transport must, and exists only when `unreliableCapable` (its
+ * absence is the capability check).
+ */
+export function fakeClient(unreliableCapable: boolean, view?: StateView) {
+  const reliable: Uint8Array[] = [];
+  const unreliable: Uint8Array[] = [];
+
+  const client: any = {
+    state: ClientState.JOINED,
+    view,
+    reliable,
+    unreliable,
+    raw: (data: Uint8Array) => reliable.push(data),
+  };
+
+  if (unreliableCapable) {
+    client.rawUnreliable = (data: Uint8Array) => unreliable.push(data.slice());
+  }
+
+  return client as Client & { reliable: Uint8Array[]; unreliable: Uint8Array[] };
+}
+
+export function serializerFor<T extends Schema>(state: T) {
+  const serializer = new SchemaSerializer<T>();
+  serializer.reset(state);
+  return serializer;
+}
+
+/** The state a client ends up with once it decodes `frames`, in order. */
+export function decodeFrames(klass: any, frames: Uint8Array[], headerSize = 1) {
+  const decoded = new klass();
+  const decoder = new Decoder(decoded);
+  for (const frame of frames) { decoder.decode(frame.subarray(headerSize)); }
+  return decoded.toJSON();
 }
 
 export class DummyRoom extends Room {

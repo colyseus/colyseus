@@ -82,6 +82,18 @@ function sendClientFrame(client: Client, encodedBody: Uint8Array, timing?: Patch
 }
 
 /**
+ * Detach an untimed patch from the encoder's shared buffer: the transport may
+ * still hold it when the next encode reuses that buffer (see {@link Client.raw}).
+ * Timed frames skip this — {@link buildTimedFrame} already copies per client.
+ */
+function ownedPatch(encoded: Uint8Array, timing?: PatchTimingContext): Uint8Array {
+  return timing ? encoded : Buffer.from(encoded);
+}
+
+/** Empty quiet-tick patch body; sent only timed, so sharing it is safe. */
+const HEARTBEAT_BODY = new Uint8Array([Protocol.ROOM_STATE_PATCH]);
+
+/**
  * Size of the {@link ProtocolModifier.UNRELIABLE} header that follows the
  * protocol byte: `[uint16 seq]`. See {@link ProtocolModifier.UNRELIABLE} for
  * the wrap-safe freshness rule the client applies to `seq`.
@@ -167,7 +179,8 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
   public getFullState(client?: Client, timing?: PatchTimingContext) {
     if (this.needFullEncode || this.encoder.root.changes.next !== undefined) {
       this.sharedOffsetCache = { offset: 1 };
-      this.fullEncodeCache = this.encoder.encodeAll(this.sharedOffsetCache, this.fullEncodeBuffer);
+      // copy: a socket may hold it past the next re-encode (slice(): a pooled Buffer would pin 8KB)
+      this.fullEncodeCache = this.encoder.encodeAll(this.sharedOffsetCache, this.fullEncodeBuffer).slice();
       this.needFullEncode = false;
     }
 
@@ -232,11 +245,10 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
       // body — 1 byte protocol + 8 bytes prefix.
       // No-op for rooms without `defineInput()` (timing is undefined).
       if (timing) {
-        const heartbeatBody = Buffer.from([Protocol.ROOM_STATE_PATCH]);
         for (let i = 0; i < clients.length; i++) {
           const client = clients[i];
           if (client.state !== ClientState.JOINED) continue;
-          sendClientFrame(client, heartbeatBody, timing);
+          sendClientFrame(client, HEARTBEAT_BODY, timing);
         }
       }
 
@@ -262,6 +274,8 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
     const encodedChanges = this.encoder.encode(it);
 
     if (!this.hasFilters) {
+      const frame = ownedPatch(encodedChanges, timing);
+
       while (numClients--) {
         const client = clients[numClients];
 
@@ -272,7 +286,7 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
           continue;
         }
 
-        sendClientFrame(client, encodedChanges, timing);
+        sendClientFrame(client, frame, timing);
       }
 
     } else {
@@ -297,7 +311,7 @@ export class SchemaSerializer<T extends Schema> implements Serializer<T> {
         // allow to pass the same encoded view for multiple clients
         if (encodedView === undefined) {
           encodedView = (view === SHARED_VIEW)
-            ? encodedChanges
+            ? ownedPatch(encodedChanges, timing) // encodeView already returns a copy
             : this.encoder.encodeView(client.view, sharedOffset, it);
           this.encodedViews.set(view, encodedView);
         }

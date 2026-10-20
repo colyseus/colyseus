@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.20
+
+- State patches no longer get corrupted (`"refId" not found`) for clients whose connection is backed up, or when `perMessageDeflate` is enabled. Thanks @chaeso! [#982](https://github.com/colyseus/colyseus/issues/982)
+
 ## 0.18.19
 
 - `RoomPlugin` hooks now run in the first room of a class that defines `onUncaughtException`. Thanks @agudulin! [#988](https://github.com/colyseus/colyseus/issues/988)
