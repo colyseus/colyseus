@@ -1,7 +1,7 @@
 import assert from "assert";
 
 import * as ColyseusSDK from "@colyseus/sdk";
-import { Room, Server, matchMaker } from "@colyseus/core";
+import { type Client, Deferred, Room, Server, matchMaker } from "@colyseus/core";
 import WebSocket from "ws";
 
 const TEST_PORT = 8570;
@@ -144,6 +144,45 @@ describe("Graceful Shutdown", () => {
     assert.strictEqual(onLeaveCode, ColyseusSDK.CloseCode.SERVER_SHUTDOWN, "onLeave code should be SERVER_SHUTDOWN (4001)");
     assert.strictEqual(onDropCalled, false, "onDrop should NOT be called during graceful shutdown");
     assert.strictEqual(onReconnectCalled, false, "onReconnect should NOT be called during graceful shutdown");
+  });
+
+  //
+  // See: https://github.com/colyseus/colyseus/issues/991
+  //
+  it("should stop an unused seat reservation's timer", async () => {
+    server.define("my_room", class extends Room {
+      seatReservationTimeout = 30; // a fired timer is _destroyed too
+    });
+
+    const listing = await matchMaker.createRoom("my_room", {});
+    await matchMaker.reserveSeatFor(listing, {});
+    const [timer] = Object.values(matchMaker.getLocalRoomById(listing.roomId)['_reservedSeatTimeouts']);
+
+    await server.gracefullyShutdown(false);
+
+    assert.strictEqual(timer['_destroyed'], true);
+  });
+
+  it("should stop a pending reconnection's timer", async () => {
+    const reconnectionTimer = new Deferred<NodeJS.Timeout>();
+
+    server.define("my_room", class extends Room {
+      onDrop(client: Client) {
+        this.allowReconnection(client, 30).catch(() => {}); // rejects for the client dropped by the shutdown
+        reconnectionTimer.resolve(this['_reservedSeatTimeouts'][client.sessionId]);
+      }
+    });
+
+    const conn = await client.joinOrCreate("my_room");
+    await client.join("my_room"); // still connected: dispose runs after the rejected reconnection's cleanup
+
+    conn.reconnection.enabled = false;
+    conn.leave(false);
+    const timer = await reconnectionTimer;
+
+    await server.gracefullyShutdown(false);
+
+    assert.strictEqual(timer['_destroyed'], true);
   });
 
 });

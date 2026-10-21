@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.55
+
+- The process no longer stays alive after `server.gracefullyShutdown(false)` until unused seat reservations and pending `allowReconnection()` holds expire. Thanks @eminl! [#991](https://github.com/colyseus/colyseus/issues/991)
+
 ## 0.17.54
 
 - Hardened how matchmaking and room metadata handle client options. Thanks @hoan02! [#992](https://github.com/colyseus/colyseus/issues/992)
