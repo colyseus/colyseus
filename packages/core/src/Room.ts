@@ -2007,6 +2007,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
     }
 
     const cleanup = () => {
+      clearTimeout(this._reservedSeatTimeouts[sessionId]);
       delete this._reconnections[reconnectionToken];
       delete this._reservedSeats[sessionId];
       delete this._reservedSeatTimeouts[sessionId];
@@ -2022,7 +2023,6 @@ export class Room<T extends RoomOptions = RoomOptions> {
       previousClient.state = ClientState.RECONNECTED;
       previousClient.ref = newClient.ref;
       previousClient.reconnectionToken = newClient.reconnectionToken;
-      clearTimeout(this._reservedSeatTimeouts[sessionId]);
 
     }, () => {
       this.resetAutoDisposeTimeout();
@@ -2256,6 +2256,10 @@ export class Room<T extends RoomOptions = RoomOptions> {
     if (this._autoDisposeTimeout) {
       clearTimeout(this._autoDisposeTimeout);
       this._autoDisposeTimeout = undefined;
+    }
+
+    for (const sessionId in this._reservedSeatTimeouts) {
+      clearTimeout(this._reservedSeatTimeouts[sessionId]);
     }
 
     // clear all timeouts/intervals + force to stop ticking

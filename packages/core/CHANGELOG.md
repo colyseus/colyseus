@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.21
+
+- The process no longer stays alive after `server.gracefullyShutdown(false)` until unused seat reservations and pending `allowReconnection()` holds expire. Thanks @eminl! [#991](https://github.com/colyseus/colyseus/issues/991)
+
 ## 0.18.20
 
 - State patches no longer get corrupted (`"refId" not found`) for clients whose connection is backed up, or when `perMessageDeflate` is enabled. Thanks @chaeso! [#982](https://github.com/colyseus/colyseus/issues/982)
