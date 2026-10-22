@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.54
+
+- Hardened how matchmaking and room metadata handle client options. Thanks @hoan02! [#992](https://github.com/colyseus/colyseus/issues/992)
+
 ## 0.17.53
 
 - State patches no longer get corrupted (`"refId" not found`) for clients whose connection is backed up, or when `perMessageDeflate` is enabled. Thanks @chaeso! [#982](https://github.com/colyseus/colyseus/issues/982)

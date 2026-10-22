@@ -678,7 +678,8 @@ export class Room<T extends RoomOptions = RoomOptions> {
 
     } else {
       for (const field in meta) {
-        if (!meta.hasOwnProperty(field)) { continue; }
+        // JSON.parse keeps "__proto__" as an own key: assigning it replaces metadata's prototype
+        if (field === "__proto__" || !Object.hasOwn(meta, field)) { continue; }
         this._listing.metadata[field] = meta[field];
       }
 

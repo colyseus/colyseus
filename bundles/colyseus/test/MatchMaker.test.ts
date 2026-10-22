@@ -287,6 +287,71 @@ describe("MatchMaker", () => {
         });
       });
 
+      //
+      // Client options come from JSON.parse, so their keys can be Object.prototype
+      // names. "__proto__" stays an own key: copied by assignment, it replaced the
+      // prototype of the options onCreate() receives, so clients could add fields
+      // that onAuth's `"field" in options` never saw. A "hasOwnProperty" key
+      // shadowed the method used to copy and filter options, failing the request,
+      // and once copied into a room's metadata, every filtered join of that type.
+      // https://github.com/colyseus/colyseus/issues/992
+      //
+      describe("client options with Object.prototype keys", () => {
+        let createOptions: any;
+
+        before(() => {
+          matchMaker.defineRoomType("captures_create_options", class extends Room {
+            onCreate(options: any) { createOptions = options; }
+          });
+
+          matchMaker
+            .defineRoomType("metadata_from_options", class extends Room {
+              async onCreate(options: any) { await this.setMetadata(options); }
+            })
+            .filterBy(["mode"])
+            .sortBy({ rank: 1 });
+        });
+
+        it("should not reach onCreate() options through the prototype", async () => {
+          const clientOptions = JSON.parse('{ "__proto__": { "isAdmin": true }, "mode": "duo" }');
+          await matchMaker.create("captures_create_options", clientOptions);
+
+          assert.strictEqual(createOptions.isAdmin, undefined);
+          assert.strictEqual(Object.getPrototypeOf(createOptions), Object.prototype);
+          assert.strictEqual(createOptions.mode, "duo");
+        });
+
+        it("should accept a \"hasOwnProperty\" option", async () => {
+          const clientOptions = JSON.parse('{ "hasOwnProperty": 1, "mode": "duo" }');
+
+          await matchMaker.create("captures_create_options", clientOptions);
+          assert.strictEqual(createOptions.hasOwnProperty, 1);
+
+          // filterBy() reads options on both the find and the create path
+          const seat1 = await matchMaker.joinOrCreate("room2_filtered", clientOptions);
+          const seat2 = await matchMaker.joinOrCreate("room2_filtered", clientOptions);
+          assert.strictEqual(seat1.roomId, seat2.roomId);
+        });
+
+        it("should keep finding rooms that copy a \"hasOwnProperty\" option into metadata", async () => {
+          const first = await matchMaker.createRoom("metadata_from_options", { mode: "duo", rank: 1, hasOwnProperty: 1 });
+          await matchMaker.createRoom("metadata_from_options", { mode: "duo", rank: 2, hasOwnProperty: 1 });
+
+          const seat = await matchMaker.joinOrCreate("metadata_from_options", { mode: "duo" });
+          assert.strictEqual(seat.roomId, first.roomId);
+        });
+
+        // setMetadata() merges into existing metadata by assignment
+        it("should not let setMetadata() options replace the metadata's prototype", async () => {
+          const { roomId } = await matchMaker.createRoom("metadata_from_options", { mode: "duo", rank: 1 });
+          const room = matchMaker.getLocalRoomById(roomId);
+
+          await room.setMetadata(JSON.parse('{ "__proto__": { "isAdmin": true } }'));
+          assert.strictEqual((room.metadata as any).isAdmin, undefined);
+          assert.strictEqual((room.metadata as any).mode, "duo");
+        });
+      });
+
       describe("query() for cached rooms", () => {
         it("should list all", async () => {
           // create 4 rooms

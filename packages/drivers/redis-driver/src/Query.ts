@@ -37,11 +37,11 @@ export class Query<T> {
       if (withConditions) {
         for (let [field, value] of conditions) {
           // Check if field exists in room (IRoomCache base fields)
-          if (room.hasOwnProperty(field)) {
+          if (Object.hasOwn(room, field)) {
             if (room[field] !== value) {
               return false;
             }
-          } else if (room.metadata?.hasOwnProperty(field)) {
+          } else if (room.metadata && Object.hasOwn(room.metadata, field)) {
             // Check if field exists in metadata
             if (room.metadata[field] !== value) {
               return false;
@@ -61,8 +61,8 @@ export class Query<T> {
       rooms.sort((room1: any, room2: any) => {
         for (const [field, direction] of this.order) {
           // Check if field exists in room or metadata
-          const val1 = room1.hasOwnProperty(field) ? room1[field] : room1.metadata?.[field];
-          const val2 = room2.hasOwnProperty(field) ? room2[field] : room2.metadata?.[field];
+          const val1 = Object.hasOwn(room1, field) ? room1[field] : room1.metadata?.[field];
+          const val2 = Object.hasOwn(room2, field) ? room2[field] : room2.metadata?.[field];
 
           if (direction === 1) {
             if (val1 > val2) return 1;

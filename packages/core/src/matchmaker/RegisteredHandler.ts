@@ -158,7 +158,7 @@ export class RegisteredHandler<
       const field = String(arr[i]);
 
       // Handle regular (non-metadata) fields
-      if (options.hasOwnProperty(field)) {
+      if (Object.hasOwn(options, field)) {
         if (INVALID_OPTION_KEYS.indexOf(field as any) !== -1) {
           logger.warn(`option "${field}" has internal usage and is going to be ignored.`);
         } else {
