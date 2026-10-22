@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.23
+
+- No longer requires the latest `@colyseus/shared-types`, and installs alongside any 0.18 `@colyseus/auth` or `@colyseus/ws-transport`.
+
 ## 0.18.22
 
 - Hardened how matchmaking handles client options. Thanks @hoan02! [#992](https://github.com/colyseus/colyseus/issues/992)

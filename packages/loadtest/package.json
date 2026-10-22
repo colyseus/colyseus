@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/loadtest",
-  "version": "0.18.3",
+  "version": "0.18.4",
   "description": "Utility tool for load testing Colyseus.",
   "type": "module",
   "exports": {
@@ -55,7 +55,7 @@
     "url": "https://github.com/colyseus/colyseus/issues"
   },
   "dependencies": {
-    "@colyseus/sdk": "workspace:^",
+    "@colyseus/sdk": "workspace:0.18.x",
     "blessed": "^0.1.81",
     "minimist": "^1.2.5",
     "typescript": "^6.0.3",

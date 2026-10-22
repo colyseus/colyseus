@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/traefik",
-  "version": "0.18.3",
+  "version": "0.18.4",
   "type": "module",
   "description": "Utility to expose Colyseus servers to Traefik as a load balancer",
   "input": "./src/index.ts",
@@ -47,8 +47,8 @@
     "node": ">= 22.x"
   },
   "dependencies": {
-    "@colyseus/core": "workspace:^",
-    "@colyseus/redis-presence": "workspace:^"
+    "@colyseus/core": "workspace:0.18.x",
+    "@colyseus/redis-presence": "workspace:0.18.x"
   },
   "devDependencies": {
     "@colyseus/ws-transport": "workspace:^"

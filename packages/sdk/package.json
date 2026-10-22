@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/sdk",
-  "version": "0.18.5",
+  "version": "0.18.6",
   "description": "Colyseus Multiplayer SDK for JavaScript/TypeScript",
   "author": "Endel Dreyer",
   "license": "MIT",
@@ -70,7 +70,7 @@
   "dependencies": {
     "@colyseus/better-call": "workspace:^",
     "@colyseus/schema": "^5.0.8",
-    "@colyseus/shared-types": "workspace:^",
+    "@colyseus/shared-types": "workspace:^0.18.2",
     "msgpackr": "^2.0.1",
     "tslib": "^2.1.0",
     "ws": "^8.13.0"

@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/monitor",
-  "version": "0.18.6",
+  "version": "0.18.7",
   "type": "module",
   "description": "Web Monitoring Panel for Colyseus",
   "input": "./src/index.ts",
@@ -82,7 +82,7 @@
     "zod": "^4.1.12"
   },
   "peerDependencies": {
-    "@colyseus/core": "workspace:^"
+    "@colyseus/core": "workspace:0.18.x"
   },
   "publishConfig": {
     "tag": "next"

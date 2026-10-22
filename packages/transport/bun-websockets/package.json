@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/bun-websockets",
-  "version": "0.18.3",
+  "version": "0.18.4",
   "type": "module",
   "input": "./src/index.ts",
   "main": "./build/index.cjs",
@@ -23,7 +23,7 @@
     }
   },
   "dependencies": {
-    "@colyseus/core": "workspace:^",
+    "@colyseus/core": "workspace:^0.18.5",
     "bun-serve-express": "^2.0.2"
   },
   "devDependencies": {

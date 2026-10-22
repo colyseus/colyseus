@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.10
+
+- No longer requires the latest version of each `@colyseus/*` package: any 0.18 version works (`@colyseus/core` from 0.18.10).
+
 ## 0.18.9
 
 - `vite build` with `serveClient: true` no longer hides the routes and middleware from your `express` option: every GET request, `/monitor` included, was answered with the client's `index.html`. Thanks @cmcgdd for reporting!

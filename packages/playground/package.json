@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/playground",
-  "version": "0.18.5",
+  "version": "0.18.6",
   "type": "module",
   "main": "./build/index.cjs",
   "module": "./build/index.mjs",
@@ -36,8 +36,8 @@
     "src-backend"
   ],
   "peerDependencies": {
-    "@colyseus/auth": "workspace:^",
-    "@colyseus/core": "workspace:^",
+    "@colyseus/auth": "workspace:0.18.x",
+    "@colyseus/core": "workspace:0.18.x",
     "cpupro": "^0.7.0",
     "zod": "^4.1.12"
   },

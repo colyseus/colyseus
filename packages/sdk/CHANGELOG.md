@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.6
+
+- No longer requires the latest `@colyseus/shared-types`.
+
 ## 0.18.5
 
 - Room event handlers (`onLeave`, `onDrop`, `onStateChange`, …) no longer get skipped when another handler is removed while the event fires, such as by `.once()`, and `remove()` of a handler that isn't registered no longer removes a different one. Thanks @40110! [#980](https://github.com/colyseus/colyseus/issues/980)

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.7
+
+- No longer requires the latest `@colyseus/core`: any 0.18 version works.
+
 ## 0.18.6
 
 - Inspecting a room with a large state no longer re-downloads it every few seconds: the state is fetched only while the State tab is open, and strings over 1 KB are shown as a size placeholder (read-only). [#979](https://github.com/colyseus/colyseus/issues/979)

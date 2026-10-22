@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.5
+
+- No longer requires the latest `@colyseus/core`: any 0.18 version works.
+
 ## 0.18.4
 
 - `query()` now returns each room's `processId`, which it had been projecting away.
