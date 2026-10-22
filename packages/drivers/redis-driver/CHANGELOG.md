@@ -3,6 +3,7 @@
 ## 0.17.9
 
 - Hardened how matchmaking queries match room metadata. Thanks @hoan02! [#992](https://github.com/colyseus/colyseus/issues/992)
+- No longer requires the latest `@colyseus/core`: any 0.17 version works.
 
 ## 0.17.8
 

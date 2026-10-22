@@ -21,8 +21,13 @@
     }
   },
   "dependencies": {
-    "@colyseus/core": "workspace:^",
     "ioredis": "^5.3.2"
+  },
+  "peerDependencies": {
+    "@colyseus/core": "0.17.x"
+  },
+  "devDependencies": {
+    "@colyseus/core": "workspace:^"
   },
   "author": "Endel Dreyer",
   "license": "MIT",
