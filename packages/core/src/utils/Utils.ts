@@ -164,7 +164,8 @@ export function merge(a: any, ...objs: any[]): any {
   for (let i = 0, len = objs.length; i < len; i++) {
     const b = objs[i];
     for (const key in b) {
-      if (b.hasOwnProperty(key)) {
+      // JSON.parse keeps "__proto__" as an own key: assigning it replaces a's prototype
+      if (key !== "__proto__" && Object.hasOwn(b, key)) {
         a[key] = b[key];
       }
     }

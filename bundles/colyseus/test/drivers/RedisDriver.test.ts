@@ -110,6 +110,16 @@ describe("RedisDriver", () => {
     assert.strictEqual((pveRoom.metadata as any).mode, "pve");
   });
 
+  // rooms may copy client options into metadata
+  it("should filter by metadata that has a \"hasOwnProperty\" key", async () => {
+    await driver.clear();
+
+    await driver.persist(initializeRoomCache({ name: "game", roomId: "h1", clients: 1, maxClients: 10, metadata: { mode: "pvp", hasOwnProperty: 1 } }));
+
+    const pvpRooms = await driver.query({ name: "game", mode: "pvp" } as any);
+    assert.strictEqual(pvpRooms.length, 1);
+  });
+
   it("query() by name should only return rooms of that name", async () => {
     await driver.clear();
 

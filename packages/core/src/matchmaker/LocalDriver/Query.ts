@@ -25,7 +25,7 @@ export class Query<T extends IRoomCache> {
     return rooms.sort((room1: T, room2: T) => {
       for (const field in this.sortOptions) {
         const direction = this.sortOptions[field];
-        if (room1.hasOwnProperty(field)) {
+        if (Object.hasOwn(room1, field)) {
           /**
            * IRoomCache field
            */
@@ -37,7 +37,7 @@ export class Query<T extends IRoomCache> {
             if (room1[field] > room2[field]) { return -1; }
             if (room1[field] < room2[field]) { return 1; }
           }
-        } else if (room1.metadata?.hasOwnProperty(field)) {
+        } else if (room1.metadata && Object.hasOwn(room1.metadata, field)) {
           /**
            * metadata field
            */
@@ -57,13 +57,13 @@ export class Query<T extends IRoomCache> {
   private applyFilter(rooms: T[], conditions: any): T[] {
     return rooms.filter(((room) => {
       for (const field in conditions) {
-        if (conditions.hasOwnProperty(field)) {
+        if (Object.hasOwn(conditions, field)) {
           // Check if field exists in room (IRoomCache base fields)
-          if (room.hasOwnProperty(field)) {
+          if (Object.hasOwn(room, field)) {
             if (room[field] !== conditions[field]) {
               return false;
             }
-          } else if (room.metadata?.hasOwnProperty(field)) {
+          } else if (room.metadata && Object.hasOwn(room.metadata, field)) {
             // Check if field exists in metadata
             if (room.metadata[field] !== conditions[field]) {
               return false;
