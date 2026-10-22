@@ -1,6 +1,6 @@
 {
   "name": "colyseus",
-  "version": "0.17.10",
+  "version": "0.17.11",
   "description": "Multiplayer Framework for Node.js",
   "type": "module",
   "input": "./src/index.ts",
@@ -45,14 +45,14 @@
     "node": ">= 20.x"
   },
   "dependencies": {
-    "@colyseus/auth": "workspace:^",
-    "@colyseus/core": "workspace:^",
-    "@colyseus/monitor": "workspace:^",
-    "@colyseus/playground": "workspace:^",
-    "@colyseus/redis-driver": "workspace:^",
-    "@colyseus/redis-presence": "workspace:^",
-    "@colyseus/tools": "workspace:^",
-    "@colyseus/ws-transport": "workspace:^"
+    "@colyseus/auth": "workspace:0.17.x",
+    "@colyseus/core": "workspace:^0.17.41",
+    "@colyseus/monitor": "workspace:0.17.x",
+    "@colyseus/playground": "workspace:0.17.x",
+    "@colyseus/redis-driver": "workspace:0.17.x",
+    "@colyseus/redis-presence": "workspace:0.17.x",
+    "@colyseus/tools": "workspace:0.17.x",
+    "@colyseus/ws-transport": "workspace:0.17.x"
   },
   "devDependencies": {
     "@colyseus/better-call": "workspace:^",
@@ -70,7 +70,7 @@
   },
   "peerDependencies": {
     "@colyseus/auth": "0.17.x",
-    "@colyseus/core": "0.17.x",
+    "@colyseus/core": "^0.17.41",
     "@colyseus/redis-driver": "0.17.x",
     "@colyseus/redis-presence": "0.17.x",
     "@colyseus/schema": "^4.0.7",

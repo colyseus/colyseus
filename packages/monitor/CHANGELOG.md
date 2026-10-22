@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.9
+
+- No longer requires the latest `@colyseus/core`: any 0.17 version works.
+
 ## 0.17.8
 
 - Allow editing and deleting room state values from the monitor panel

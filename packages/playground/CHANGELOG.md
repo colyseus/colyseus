@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.14
+
+- No longer requires the latest `@colyseus/core` and `@colyseus/auth`: any 0.17 version works.
+
 ## 0.17.13
 
 - Message and endpoint schemas from any Standard Schema library are now rendered as forms — zod, Effect, arktype, valibot, sury. Non-zod validators used to throw `Cannot read properties of undefined (reading 'def')` and block the room join. Thanks @ColaFanta! [#955](https://github.com/colyseus/colyseus/issues/955)

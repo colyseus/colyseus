@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/monitor",
-  "version": "0.17.8",
+  "version": "0.17.9",
   "description": "Web Monitoring Panel for Colyseus",
   "input": "./src/index.ts",
   "main": "./build/index.cjs",
@@ -71,7 +71,7 @@
     "vite": "^5.0.11"
   },
   "dependencies": {
-    "@colyseus/core": "workspace:^",
+    "@colyseus/core": "workspace:0.17.x",
     "express": ">=4.16.0",
     "node-os-utils": "^2.0.0"
   }

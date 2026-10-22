@@ -3,6 +3,7 @@
 ## 0.17.54
 
 - Hardened how matchmaking and room metadata handle client options. Thanks @hoan02! [#992](https://github.com/colyseus/colyseus/issues/992)
+- Installs alongside any 0.17 `@colyseus/ws-transport`, not only the latest.
 
 ## 0.17.53
 

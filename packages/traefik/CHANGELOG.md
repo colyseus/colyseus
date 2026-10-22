@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.8
+
+- No longer requires the latest `@colyseus/core` and `@colyseus/redis-presence`: any 0.17 version works.
+
 ## 0.17.7
 
 - Add IPv6 support for `internalAddress`. Bracketed (`[::1]:2567`) and bare

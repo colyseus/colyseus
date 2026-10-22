@@ -66,7 +66,7 @@
     "node": ">= 12.x"
   },
   "dependencies": {
-    "@colyseus/shared-types": "workspace:^",
+    "@colyseus/shared-types": "workspace:^0.17.6",
     "@colyseus/better-call": "workspace:^",
     "@colyseus/msgpackr": "^1.11.2",
     "@colyseus/schema": "^4.0.7",

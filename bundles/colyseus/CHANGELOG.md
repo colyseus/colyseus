@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.11
+
+- No longer requires the latest version of each `@colyseus/*` package: any 0.17 version works (`@colyseus/core` from 0.17.41).
+
 ## 0.17.10
 
 ### Vite plugin fixes

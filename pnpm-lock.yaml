@@ -90,28 +90,28 @@ importers:
   bundles/colyseus:
     dependencies:
       '@colyseus/auth':
-        specifier: workspace:^
+        specifier: workspace:0.17.x
         version: link:../../packages/auth
       '@colyseus/core':
-        specifier: workspace:^
+        specifier: workspace:^0.17.41
         version: link:../../packages/core
       '@colyseus/monitor':
-        specifier: workspace:^
+        specifier: workspace:0.17.x
         version: link:../../packages/monitor
       '@colyseus/playground':
-        specifier: workspace:^
+        specifier: workspace:0.17.x
         version: link:../../packages/playground
       '@colyseus/redis-driver':
-        specifier: workspace:^
+        specifier: workspace:0.17.x
         version: link:../../packages/drivers/redis-driver
       '@colyseus/redis-presence':
-        specifier: workspace:^
+        specifier: workspace:0.17.x
         version: link:../../packages/presence/redis-presence
       '@colyseus/tools':
-        specifier: workspace:^
+        specifier: workspace:0.17.x
         version: link:../../packages/tools
       '@colyseus/ws-transport':
-        specifier: workspace:^
+        specifier: workspace:0.17.x
         version: link:../../packages/transport/ws-transport
       vite:
         specifier: '>=6.0.0'
@@ -279,13 +279,13 @@ importers:
         specifier: ^1.11.3
         version: 1.11.3
       '@colyseus/shared-types':
-        specifier: workspace:^
+        specifier: workspace:^0.17.6
         version: link:../shared-types
       '@colyseus/timer':
         specifier: ^2.0.0
         version: 2.0.3
       '@colyseus/ws-transport':
-        specifier: workspace:^
+        specifier: workspace:0.17.x
         version: link:../transport/ws-transport
       '@pm2/io':
         specifier: ^6.1.0
@@ -325,7 +325,7 @@ importers:
   packages/drivers/drizzle-driver:
     dependencies:
       '@colyseus/core':
-        specifier: workspace:^
+        specifier: workspace:0.17.x
         version: link:../../core
       drizzle-orm:
         specifier: ^0.38.4
@@ -341,7 +341,7 @@ importers:
   packages/drivers/mongoose-driver:
     dependencies:
       '@colyseus/core':
-        specifier: workspace:^
+        specifier: workspace:0.17.x
         version: link:../../core
       mongoose:
         specifier: ^8.4.4
@@ -426,7 +426,7 @@ importers:
   packages/loadtest:
     dependencies:
       '@colyseus/sdk':
-        specifier: workspace:^
+        specifier: workspace:0.17.x
         version: link:../sdk
       blessed:
         specifier: ^0.1.81
@@ -448,7 +448,7 @@ importers:
   packages/monitor:
     dependencies:
       '@colyseus/core':
-        specifier: workspace:^
+        specifier: workspace:0.17.x
         version: link:../core
       express:
         specifier: '>=4.16.0'
@@ -521,13 +521,13 @@ importers:
   packages/playground:
     dependencies:
       '@colyseus/auth':
-        specifier: workspace:^
+        specifier: workspace:0.17.x
         version: link:../auth
       '@colyseus/better-call':
         specifier: workspace:^
         version: link:../better-call/packages/better-call
       '@colyseus/core':
-        specifier: workspace:^
+        specifier: workspace:0.17.x
         version: link:../core
       express:
         specifier: '>=4.16.0'
@@ -630,7 +630,7 @@ importers:
   packages/presence/redis-presence:
     dependencies:
       '@colyseus/core':
-        specifier: workspace:^
+        specifier: workspace:0.17.x
         version: link:../../core
       ioredis:
         specifier: ^5.3.2
@@ -648,7 +648,7 @@ importers:
         specifier: ^4.0.7
         version: 4.0.13(typescript@5.9.3)
       '@colyseus/shared-types':
-        specifier: workspace:^
+        specifier: workspace:^0.17.6
         version: link:../shared-types
       tslib:
         specifier: ^2.1.0
@@ -733,7 +733,7 @@ importers:
   packages/serializer/fossil-delta-serializer:
     dependencies:
       '@colyseus/core':
-        specifier: workspace:^
+        specifier: workspace:0.17.x
         version: link:../../core
       fast-json-patch:
         specifier: ^2.0.5
@@ -838,10 +838,10 @@ importers:
   packages/traefik:
     dependencies:
       '@colyseus/core':
-        specifier: workspace:^
+        specifier: workspace:0.17.x
         version: link:../core
       '@colyseus/redis-presence':
-        specifier: workspace:^
+        specifier: workspace:0.17.x
         version: link:../presence/redis-presence
     devDependencies:
       '@colyseus/ws-transport':
@@ -851,7 +851,7 @@ importers:
   packages/transport/bun-websockets:
     dependencies:
       '@colyseus/core':
-        specifier: workspace:^
+        specifier: workspace:^0.17.11
         version: link:../../core
       bun-serve-express:
         specifier: ^2.0.2
@@ -867,7 +867,7 @@ importers:
   packages/transport/h3-transport:
     dependencies:
       '@colyseus/core':
-        specifier: workspace:^
+        specifier: workspace:^0.17.11
         version: link:../../core
       '@colyseus/schema':
         specifier: ^4.0.7

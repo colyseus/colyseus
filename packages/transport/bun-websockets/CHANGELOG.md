@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.14
+
+- No longer requires the latest `@colyseus/core`: any version from 0.17.11 works.
+
 ## 0.17.13
 
 - Use `MAY_TRY_RECONNECT` close code (instead of `FAILED_TO_RECONNECT`) in devMode when a reconnection token is present but the seat hasn't been reserved yet. This allows the SDK to retry during the brief HMR reload window.

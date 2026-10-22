@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/fossil-delta-serializer",
-  "version": "0.17.1",
+  "version": "0.17.2",
   "type": "module",
   "input": "./src/index.ts",
   "main": "./build/index.cjs",
@@ -21,7 +21,7 @@
     }
   },
   "dependencies": {
-    "@colyseus/core": "workspace:^",
+    "@colyseus/core": "workspace:0.17.x",
     "fast-json-patch": "^2.0.5",
     "fossil-delta": "^1.0.1",
     "msgpackr": "^1.9.1"

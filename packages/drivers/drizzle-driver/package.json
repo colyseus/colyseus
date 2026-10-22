@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/drizzle-driver",
-  "version": "0.17.7",
+  "version": "0.17.8",
   "type": "module",
   "input": "./src/index.ts",
   "main": "./build/index.cjs",
@@ -21,7 +21,7 @@
     }
   },
   "dependencies": {
-    "@colyseus/core": "workspace:^",
+    "@colyseus/core": "workspace:0.17.x",
     "drizzle-orm": "^0.38.4",
     "postgres": "^3.4.7"
   },

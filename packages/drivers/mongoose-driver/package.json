@@ -1,6 +1,6 @@
 {
   "name": "@colyseus/mongoose-driver",
-  "version": "0.17.6",
+  "version": "0.17.7",
   "type": "module",
   "input": "./src/index.ts",
   "main": "./build/index.cjs",
@@ -21,7 +21,7 @@
     }
   },
   "dependencies": {
-    "@colyseus/core": "workspace:^",
+    "@colyseus/core": "workspace:0.17.x",
     "mongoose": "^8.4.4"
   },
   "author": "Endel Dreyer",
