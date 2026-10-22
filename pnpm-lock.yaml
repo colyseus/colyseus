@@ -519,12 +519,13 @@ importers:
 
   packages/drivers/redis-driver:
     dependencies:
-      '@colyseus/core':
-        specifier: workspace:^
-        version: link:../../core
       ioredis:
         specifier: ^5.3.2
         version: 5.10.1
+    devDependencies:
+      '@colyseus/core':
+        specifier: workspace:^
+        version: link:../../core
 
   packages/example:
     dependencies:
