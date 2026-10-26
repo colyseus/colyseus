@@ -1,4 +1,4 @@
-import { describe, test, beforeAll, afterAll, vi } from "vitest";
+import { describe, test, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
 import { assert } from "chai";
 import { CloseCode } from "@colyseus/shared-types";
 
@@ -6,6 +6,9 @@ import { CloseCode } from "@colyseus/shared-types";
 class FakeWebSocket {
     static OPEN = 1;
     static last: FakeWebSocket;
+    static constructed: any[][] = [];
+    /** Like a browser: an options object is read as a subprotocol, an invalid one. */
+    static rejectsOptions = false;
 
     readyState = 0;
     binaryType = "blob";
@@ -14,7 +17,13 @@ class FakeWebSocket {
     onclose: ((ev: any) => void) | null = null;
     onerror: ((ev: any) => void) | null = null;
 
-    constructor() { FakeWebSocket.last = this; }
+    constructor(...args: any[]) {
+        FakeWebSocket.constructed.push(args);
+        if (FakeWebSocket.rejectsOptions && typeof args[1] === "object" && !Array.isArray(args[1])) {
+            throw new SyntaxError(`Wrong protocol for WebSocket '${args[1]}'`);
+        }
+        FakeWebSocket.last = this;
+    }
     close() {}
 }
 
@@ -104,5 +113,30 @@ describe("WebSocketTransport", () => {
 
         assert.throws(() => transport.close(CloseCode.MAY_TRY_RECONNECT), "onLeave listener failed");
         assert.deepEqual(closeCodes, [CloseCode.MAY_TRY_RECONNECT]);
+    });
+
+    describe("constructing the socket", () => {
+        beforeEach(() => { FakeWebSocket.constructed = []; });
+
+        afterEach(() => {
+            FakeWebSocket.rejectsOptions = false;
+            vi.unstubAllGlobals();
+            vi.stubGlobal("WebSocket", FakeWebSocket);
+        });
+
+        test("in a browser, doesn't probe with an options object (Safari logs the rejected subprotocol)", () => {
+            vi.stubGlobal("document", {});
+            FakeWebSocket.rejectsOptions = true;
+
+            new WebSocketTransport({}).connect("ws://localhost:2567", {});
+
+            assert.deepEqual(FakeWebSocket.constructed, [["ws://localhost:2567", undefined]]);
+        });
+
+        test("outside a browser, passes the headers", () => {
+            new WebSocketTransport({}).connect("ws://localhost:2567", { authorization: "x" });
+
+            assert.deepEqual(FakeWebSocket.constructed, [["ws://localhost:2567", { headers: { authorization: "x" }, protocols: undefined }]]);
+        });
     });
 });
