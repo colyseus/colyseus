@@ -17,7 +17,14 @@ export class EventEmitter<CallbackSignature extends (...args: any[]) => any> {
   invoke(...args: FunctionParameters<CallbackSignature>) {
     // not forEach: its per-call closure costs 2–8x; handlers added mid-invoke run from the next invoke
     const handlers = this.handlers;
-    for (let i = 0, l = handlers.length; i < l; i++) { handlers[i].apply(this, args); }
+    let thrown = false;
+    let error: unknown;
+    for (let i = 0, l = handlers.length; i < l; i++) {
+      // a throwing handler doesn't skip the rest; the first error is rethrown once all have run
+      try { handlers[i].apply(this, args); }
+      catch (e) { if (!thrown) { thrown = true; error = e; } }
+    }
+    if (thrown) { throw error; }
   }
 
   invokeAsync(...args: FunctionParameters<CallbackSignature>) {

@@ -177,9 +177,12 @@ export class Room<
 
             if (this.joinedAtTime === 0) {
                 console.warn?.(`Room connection was closed unexpectedly (${e.code}): ${e.reason}`);
-                this.onError.invoke(e.code, e.reason);
-                // leave() ran before the join, which failed: settle it
-                if (this.leaving) { this.finish(CloseCode.CONSENTED); }
+                try {
+                    this.onError.invoke(e.code, e.reason);
+                } finally {
+                    // leave() ran before the join, which failed: settle it
+                    if (this.leaving) { this.finish(CloseCode.CONSENTED); }
+                }
                 return;
             }
 
@@ -195,8 +198,11 @@ export class Room<
                     return;
                 }
 
-                this.onDrop.invoke(e.code, e.reason);
-                this.handleReconnection(e.code, e.reason);
+                try {
+                    this.onDrop.invoke(e.code, e.reason);
+                } finally {
+                    this.handleReconnection(e.code, e.reason); // even if an onDrop listener threw
+                }
 
             } else {
                 this.finish(e.code, e.reason);
@@ -244,7 +250,8 @@ export class Room<
         if (this.leaveCode !== undefined) { return Promise.resolve(this.leaveCode); }
 
         return new Promise((resolve) => {
-            this.onLeave((code) => resolve(code));
+            // deferred: if an onLeave listener throws while leave() ends the room, leave() rejects with it
+            this.onLeave((code) => { Promise.resolve(code).then(resolve); });
 
             if (!this.connection) {
                 this.finish(CloseCode.CONSENTED);
@@ -684,33 +691,37 @@ export class Room<
                 this.clock.setPatchInterval?.(patchRate);
             }
 
-            if (this.joinedAtTime === 0) {
-                this.joinedAtTime = Date.now();
-                this.onJoin.invoke();
+            try {
+                if (this.joinedAtTime === 0) {
+                    this.joinedAtTime = Date.now();
+                    this.onJoin.invoke();
 
-            } else {
-                console.info(`[Colyseus reconnection]: ${String.fromCodePoint(0x2705)} reconnection successful!`); // ✅
-                this.reconnection.isReconnecting = false;
-                this.onReconnect.invoke();
-            }
-
-            this.reconnectionToken = `${this.roomId}:${reconnectionToken}`;
-
-            // Acknowledge JOIN_ROOM.
-            this.sharedBuffer[0] = Protocol.JOIN_ROOM;
-            this.connection.send(this.sharedBuffer.subarray(0, 1));
-
-            // Send any enqueued messages that were buffered while disconnected
-            if (this.reconnection.enqueuedMessages.length > 0) {
-                for (const message of this.reconnection.enqueuedMessages) {
-                    this.connection.send(message.data);
+                } else {
+                    console.info(`[Colyseus reconnection]: ${String.fromCodePoint(0x2705)} reconnection successful!`); // ✅
+                    this.reconnection.isReconnecting = false;
+                    this.onReconnect.invoke();
                 }
-                // Clear the buffer after sending
-                this.reconnection.enqueuedMessages = [];
-            }
 
-            // leave() ran before the join completed: the server listens from now on
-            if (this.leaving) { this.leave(); }
+            } finally {
+                // even if a listener threw: the server waits for the acknowledgement
+                this.reconnectionToken = `${this.roomId}:${reconnectionToken}`;
+
+                // Acknowledge JOIN_ROOM.
+                this.sharedBuffer[0] = Protocol.JOIN_ROOM;
+                this.connection.send(this.sharedBuffer.subarray(0, 1));
+
+                // Send any enqueued messages that were buffered while disconnected
+                if (this.reconnection.enqueuedMessages.length > 0) {
+                    for (const message of this.reconnection.enqueuedMessages) {
+                        this.connection.send(message.data);
+                    }
+                    // Clear the buffer after sending
+                    this.reconnection.enqueuedMessages = [];
+                }
+
+                // leave() ran before the join completed: the server listens from now on
+                if (this.leaving) { this.leave(); }
+            }
 
         } else if (code === Protocol.ERROR) {
             const code = decode.number(buffer as Buffer, it);

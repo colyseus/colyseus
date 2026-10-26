@@ -8,6 +8,7 @@
 - A throwing `onLeave` or `onDrop` listener no longer leaves the room's socket open.
 - Going offline in the browser now closes every open connection, not every other one.
 - Node 22: calling `leave(false)` from `onError` while a reconnection attempt fails no longer recurses.
+- A listener that throws no longer skips the other listeners of the event, nor what the room does after it: reconnecting after `onDrop`, completing the rejoin after `onReconnect`, or settling `leave()`. The first error is rethrown once every listener has run.
 
 ## 0.18.6
 

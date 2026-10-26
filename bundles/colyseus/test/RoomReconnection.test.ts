@@ -915,7 +915,7 @@ describe("Room Reconnection", () => {
           conn.leave().then(resolve, resolve); // rejects with the listener's error
         }));
 
-        assert.notStrictEqual(await settle(leaving), "pending");
+        assert.strictEqual((await settle(leaving) as Error).message, "onLeave listener failed");
         assert.ok(attempt.readyState >= WebSocket.CLOSING);
       });
 
@@ -1043,6 +1043,102 @@ describe("Room Reconnection", () => {
         assert.strictEqual(false, conn.connection.isOpen);
 
         assert.strictEqual(await settle(serverLeave.promise), CloseCode.CONSENTED);
+      });
+    });
+
+    describe("a listener that throws", () => {
+      // a listener's error leaves the socket's event as uncaught; collect it instead of failing the test
+      function catchListenerErrors(conn: SDKRoom) {
+        const errors: Error[] = [];
+        const events = conn.connection.events;
+        for (const name of ["onmessage", "onclose"] as const) {
+          const handler = events[name]!;
+          events[name] = (event: any) => {
+            try { handler(event); } catch (e) { errors.push(e as Error); }
+          };
+        }
+        return errors;
+      }
+
+      it("onDrop: the room still reconnects", async () => {
+        matchMaker.defineRoomType('throwing_ondrop', class _ extends Room {
+          onJoin(client: Client) { simulateAbnormalClosure(client); }
+          async onDrop(client: Client) { await this.allowReconnection(client, 1); }
+        });
+
+        const conn = await client.joinOrCreate('throwing_ondrop');
+        setupReconnection(conn);
+        const errors = catchListenerErrors(conn);
+
+        conn.onDrop(() => { throw new Error("onDrop listener failed"); });
+        const reconnected = new Promise<boolean>((resolve) => conn.onReconnect(() => resolve(true)));
+
+        assert.strictEqual(await settle(reconnected), true);
+        assert.deepEqual(errors.map((e) => e.message), ["onDrop listener failed"]);
+
+        await conn.leave();
+      });
+
+      it("onReconnect: the rejoin is still acknowledged and the queue sent", async () => {
+        const received = new Deferred<number>();
+        matchMaker.defineRoomType('throwing_onreconnect', class _ extends Room {
+          messages = { test(client: Client, index: number) { received.resolve(index); } };
+          onJoin(client: Client) { simulateAbnormalClosure(client); }
+          async onDrop(client: Client) { await this.allowReconnection(client, 1); }
+        });
+
+        const conn = await client.joinOrCreate('throwing_onreconnect');
+        setupReconnection(conn);
+        const errors = catchListenerErrors(conn);
+
+        conn.onReconnect(() => { throw new Error("onReconnect listener failed"); });
+        await new Promise((resolve) => conn.onDrop.once(() => resolve(true)));
+        conn.send("test", 1); // queued while reconnecting
+
+        assert.strictEqual(await settle(received.promise), 1);
+        assert.deepEqual(errors.map((e) => e.message), ["onReconnect listener failed"]);
+
+        await conn.leave();
+      });
+
+      it("onError: a leave() from before a failed join still settles", async () => {
+        matchMaker.defineRoomType('throwing_onerror', class _ extends Room {
+          async onJoin() { throw new Error("join rejected"); }
+        });
+
+        // a room reference from before the join, as a createRoom() override has
+        let leaving!: Promise<number>;
+        let errors!: Error[];
+        const sdk = new ColyseusSDK(TEST_ENDPOINT);
+        const createRoom = sdk['createRoom'].bind(sdk);
+        sdk['createRoom'] = ((name: string, rootSchema?: any) => {
+          const room = createRoom(name, rootSchema);
+          const connect = room.connect.bind(room);
+          room.connect = (endpoint: string, options?: any, headers?: any) => {
+            connect(endpoint, options, headers);
+            errors = catchListenerErrors(room);
+            room.onError(() => { throw new Error("onError listener failed"); });
+            leaving = room.leave(); // socket is CONNECTING
+          };
+          return room;
+        }) as typeof createRoom;
+
+        await sdk.joinOrCreate('throwing_onerror').catch(() => {});
+
+        assert.strictEqual(await settle(leaving), CloseCode.CONSENTED);
+        assert.ok(errors.some((e) => e.message === "onError listener failed"));
+      });
+
+      it("onLeave: leave() still settles when the server closes", async () => {
+        matchMaker.defineRoomType('throwing_onleave', class _ extends Room {});
+
+        const conn = await client.joinOrCreate('throwing_onleave');
+        const errors = catchListenerErrors(conn);
+
+        conn.onLeave(() => { throw new Error("onLeave listener failed"); });
+
+        assert.strictEqual(await settle(conn.leave()), CloseCode.CONSENTED);
+        assert.deepEqual(errors.map((e) => e.message), ["onLeave listener failed"]);
       });
     });
 
