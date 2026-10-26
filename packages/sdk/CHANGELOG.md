@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.7
+
+- `room.leave()` while the room is reconnecting now stops the reconnection and resolves right away with `CloseCode.CONSENTED`, instead of only once every retry has failed. A `leave()` before the join completes leaves as soon as it does. Thanks @SvenChristian! [colyseus/react-tools#15](https://github.com/colyseus/react-tools/issues/15)
+
 ## 0.18.6
 
 - No longer requires the latest `@colyseus/shared-types`.

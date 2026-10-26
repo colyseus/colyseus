@@ -4,7 +4,7 @@ import { CloseCode, ColyseusSDK, getStateCallbacks, Room as SDKRoom } from "@col
 import { type Client,  type MatchMakerDriver, type Presence, matchMaker, Room, Server, Transport, LocalDriver, LocalPresence, Deferred } from "@colyseus/core";
 
 import { WebSocketTransport } from "@colyseus/ws-transport";
-import { timeout } from "./utils/index.ts";
+import { timeout, waitUntil } from "./utils/index.ts";
 import { schema, t, type SchemaType } from "@colyseus/schema";
 
 const TEST_PORT = 8567;
@@ -14,6 +14,10 @@ function simulateAbnormalClosure(client: Client) {
   // @ts-ignore
   setTimeout(() => client['ref']._socket.destroy(), 50);
 }
+
+// "pending" when it doesn't settle in time
+const settle = <T>(promise: Promise<T>, ms: number = 500) =>
+  Promise.race([promise, timeout(ms).then(() => "pending" as const)]);
 
 describe("Room Reconnection", () => {
   let driver: MatchMakerDriver;
@@ -784,6 +788,190 @@ describe("Room Reconnection", () => {
 
         await conn.leave();
         assert.strictEqual(CloseCode.CONSENTED, closeCode);
+      });
+    });
+
+    describe(".leave() after the connection dropped", () => {
+      // runs fn right after each reconnection attempt creates its socket (still CONNECTING)
+      function onReconnectAttempt(conn: SDKRoom, fn: () => void) {
+        const reconnect = conn.connection.reconnect.bind(conn.connection);
+        conn.connection.reconnect = (params) => {
+          reconnect(params);
+          fn();
+        };
+      }
+
+      // the room would let the client back in, so a retry that slips through succeeds
+      function defineReconnectableRoom(name: string) {
+        matchMaker.defineRoomType(name, class _ extends Room {
+          onJoin(client: Client) { simulateAbnormalClosure(client); }
+          async onDrop(client: Client) { await this.allowReconnection(client, 1); }
+        });
+      }
+
+      it("should cancel the pending retry", async () => {
+        defineReconnectableRoom('leave_while_waiting_to_retry');
+
+        const conn = await client.joinOrCreate('leave_while_waiting_to_retry');
+        setupReconnection(conn);
+        conn.reconnection.backoff = () => 20;
+
+        let attempts = 0;
+        onReconnectAttempt(conn, () => attempts++);
+
+        await new Promise((resolve) => conn.onDrop.once(() => resolve(true)));
+        assert.strictEqual(true, conn.reconnection.isReconnecting);
+
+        assert.strictEqual(await settle(conn.leave()), CloseCode.CONSENTED);
+        assert.strictEqual(false, conn.reconnection.isReconnecting);
+
+        await timeout(50); // past the retry delay
+        assert.strictEqual(attempts, 0);
+        assert.strictEqual(false, conn.connection.isOpen);
+      });
+
+      it("should abort a reconnection attempt that is still connecting", async () => {
+        defineReconnectableRoom('leave_while_attempt_connecting');
+
+        const conn = await client.joinOrCreate('leave_while_attempt_connecting');
+        setupReconnection(conn);
+
+        let attempt!: WebSocket;
+        const leaving = new Promise<number>((resolve) => onReconnectAttempt(conn, () => {
+          attempt = (conn.connection.transport as any).ws;
+          resolve(conn.leave());
+        }));
+
+        assert.strictEqual(await settle(leaving), CloseCode.CONSENTED);
+
+        assert.ok(attempt.readyState >= WebSocket.CLOSING); // closed while connecting: it can't open any more
+        assert.strictEqual(false, conn.connection.isOpen);
+      });
+
+      it("should ignore a reconnection JOIN_ROOM that lands after it left", async () => {
+        matchMaker.defineRoomType('join_after_leave', class _ extends Room {});
+
+        // keep the JOIN_ROOM frame, to replay it as a late reconnection
+        let joinFrame!: ArrayBuffer;
+        const sdk = new ColyseusSDK(TEST_ENDPOINT);
+        const createRoom = sdk['createRoom'].bind(sdk);
+        sdk['createRoom'] = ((name: string, rootSchema?: any) => {
+          const room = createRoom(name, rootSchema);
+          const onMessage = room['onMessageCallback'].bind(room);
+          room['onMessageCallback'] = (event: MessageEvent) => { joinFrame ??= event.data; onMessage(event); };
+          return room;
+        }) as typeof createRoom;
+
+        const conn = await sdk.joinOrCreate('join_after_leave');
+        assert.strictEqual(await settle(conn.leave()), CloseCode.CONSENTED);
+
+        let sent = 0;
+        conn.connection.send = () => { sent++; };
+        conn['onMessageCallback']({ data: joinFrame } as MessageEvent);
+
+        assert.strictEqual(sent, 0); // no JOIN_ROOM acknowledgement
+      });
+
+      it("should not reconnect when called from an onDrop listener", async () => {
+        defineReconnectableRoom('leave_from_ondrop');
+
+        const conn = await client.joinOrCreate('leave_from_ondrop');
+        setupReconnection(conn);
+
+        const leaving = new Promise<number>((resolve) => conn.onDrop(() => resolve(conn.leave())));
+
+        assert.strictEqual(await settle(leaving), CloseCode.CONSENTED);
+        assert.strictEqual(conn.reconnection.retryCount, 0);
+        assert.strictEqual(false, conn.connection.isOpen);
+      });
+
+      it("should not reconnect if the socket dies before the server closes it", async () => {
+        matchMaker.defineRoomType('leave_then_drop', class _ extends Room {
+          async onDrop(client: Client) { await this.allowReconnection(client, 1); }
+        });
+
+        const conn = await client.joinOrCreate('leave_then_drop');
+        setupReconnection(conn);
+
+        conn.connection.send = () => {}; // LEAVE_ROOM is lost
+        const leaving = conn.leave();
+        simulateAbnormalClosure(matchMaker.getLocalRoomById(conn.roomId).clients[0]);
+
+        assert.strictEqual(await settle(leaving), CloseCode.CONSENTED);
+        assert.strictEqual(conn.reconnection.retryCount, 0);
+        assert.strictEqual(false, conn.connection.isOpen);
+      });
+
+      it("should resolve with the original close code if the room already left", async () => {
+        matchMaker.defineRoomType('leave_after_kick', class _ extends Room {
+          onJoin(client: Client) { setTimeout(() => client.leave(4321), 10); }
+        });
+
+        const conn = await client.joinOrCreate('leave_after_kick');
+        const kickCode = await new Promise<number>((resolve) => conn.onLeave((code) => resolve(code)));
+        assert.strictEqual(kickCode, 4321);
+
+        assert.strictEqual(await settle(conn.leave()), 4321);
+      });
+    });
+
+    describe(".leave() while joining, while closing, or through a Proxy", () => {
+      it("should work through a Proxy", async () => {
+        matchMaker.defineRoomType('leave_through_proxy', class _ extends Room {});
+
+        const conn = await client.joinOrCreate('leave_through_proxy');
+
+        // what Vue's reactive() or valtio hand back
+        const proxied = new Proxy(conn, {});
+        assert.strictEqual(await settle(proxied.leave()), CloseCode.CONSENTED);
+      });
+
+      it("should keep the server's close code if the server is already closing", async () => {
+        matchMaker.defineRoomType('leave_while_server_closes', class _ extends Room {});
+
+        const conn = await client.joinOrCreate('leave_while_server_closes');
+        const serverClient = matchMaker.getLocalRoomById(conn.roomId).clients[0];
+
+        // hold the TCP close back: the socket stays CLOSING until released
+        const socket = (serverClient as any).ref._socket;
+        const end = socket.end.bind(socket);
+        let release: (() => void) | undefined;
+        socket.end = (...args: any[]) => { release = () => end(...args); return socket; };
+
+        serverClient.leave(4321);
+        await waitUntil(() => !conn.connection.isOpen && release !== undefined);
+
+        const leaving = conn.leave();
+        release!();
+
+        assert.strictEqual(await settle(leaving), 4321);
+      });
+
+      it("should leave as soon as the join completes", async () => {
+        const serverLeave = new Deferred<number>();
+        matchMaker.defineRoomType('leave_before_join', class _ extends Room {
+          onLeave(client: Client, code: number) { serverLeave.resolve(code); }
+        });
+
+        // a room reference from before the join, as a createRoom() override has
+        let leaving!: Promise<number>;
+        const sdk = new ColyseusSDK(TEST_ENDPOINT);
+        const createRoom = sdk['createRoom'].bind(sdk);
+        sdk['createRoom'] = ((name: string, rootSchema?: any) => {
+          const room = createRoom(name, rootSchema);
+          const connect = room.connect.bind(room);
+          room.connect = (endpoint: string, options?: any, headers?: any) => {
+            connect(endpoint, options, headers);
+            leaving = room.leave(); // socket is CONNECTING
+          };
+          return room;
+        }) as typeof createRoom;
+
+        const conn = await sdk.joinOrCreate('leave_before_join');
+        assert.strictEqual(await settle(leaving), CloseCode.CONSENTED);
+        assert.strictEqual(false, conn.connection.isOpen);
+
+        assert.strictEqual(await settle(serverLeave.promise), CloseCode.CONSENTED);
       });
     });
 
