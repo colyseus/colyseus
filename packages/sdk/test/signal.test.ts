@@ -50,6 +50,18 @@ describe("createSignal", () => {
             signal.invoke();
             assert.deepEqual(calls, ["a", "late"]);
         });
+
+        test("a throwing handler doesn't skip the others, and the caller still gets its error", () => {
+            const signal = createSignal();
+            const calls: string[] = [];
+            signal(() => calls.push("a"));
+            signal(() => { throw new Error("first"); });
+            signal(() => calls.push("b"));
+            signal(() => { throw new Error("second"); });
+
+            assert.throws(() => signal.invoke(), "first");
+            assert.deepEqual(calls, ["a", "b"]);
+        });
     });
 
     describe("remove", () => {

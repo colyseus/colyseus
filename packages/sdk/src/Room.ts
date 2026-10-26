@@ -129,6 +129,21 @@ export class Room<
      */
     #lastUnreliableSeq = 0;
 
+    // TS-private, not # (also finish()): leave() must work through a Proxy (Vue reactive, valtio)
+
+    /** Pending auto-reconnection attempt; a consented `leave()` cancels it. */
+    private retryTimeout?: ReturnType<typeof setTimeout> = undefined;
+
+    /**
+     * A consented `leave()` is pending: the socket's close ends the room (a drop
+     * as CONSENTED instead of reconnecting), or, before the join, JOIN_ROOM
+     * sends LEAVE_ROOM.
+     */
+    private leaving = false;
+
+    /** The code `onLeave` fired with, once the room has left. */
+    private leaveCode?: number = undefined;
+
     constructor(name: string, rootSchema?: SchemaConstructor<State>) {
         this.name = name;
 
@@ -157,9 +172,17 @@ export class Room<
             // the in-flight requests can't be answered on a closed socket
             this.#rejectAllPending("connection closed before a response was received.");
 
+            // a room that has left ignores its socket (e.g. the aborted attempt closing)
+            if (this.leaveCode !== undefined) { return; }
+
             if (this.joinedAtTime === 0) {
                 console.warn?.(`Room connection was closed unexpectedly (${e.code}): ${e.reason}`);
-                this.onError.invoke(e.code, e.reason);
+                try {
+                    this.onError.invoke(e.code, e.reason);
+                } finally {
+                    // leave() ran before the join, which failed: settle it
+                    if (this.leaving) { this.finish(CloseCode.CONSENTED); }
+                }
                 return;
             }
 
@@ -169,11 +192,20 @@ export class Room<
                 e.code === CloseCode.GOING_AWAY ||
                 e.code === CloseCode.MAY_TRY_RECONNECT
             ) {
-                this.onDrop.invoke(e.code, e.reason);
-                this.handleReconnection(e.code, e.reason);
+                // leave() is pending: a drop ends the room instead of reconnecting
+                if (this.leaving) {
+                    this.finish(CloseCode.CONSENTED);
+                    return;
+                }
+
+                try {
+                    this.onDrop.invoke(e.code, e.reason);
+                } finally {
+                    this.handleReconnection(e.code, e.reason); // even if an onDrop listener threw
+                }
 
             } else {
-                this.onLeave.invoke(e.code, e.reason);
+                this.finish(e.code, e.reason);
             }
         };
 
@@ -198,23 +230,64 @@ export class Room<
 
     }
 
+    /**
+     * Leave the room. Resolves with the close code once the room has left.
+     *
+     * A consented leave (the default) also ends automatic reconnection: if the
+     * connection has dropped, pending retries are cancelled and the room leaves
+     * locally with `CloseCode.CONSENTED`, without waiting for the server.
+     * Called before the room has joined, it leaves as soon as the join
+     * completes.
+     *
+     * `leave(false)` closes the connection without consent, which the server
+     * treats as a drop: automatic reconnection applies as usual.
+     *
+     * Calling it on a room that has already left resolves with the code it
+     * left with.
+     */
     public leave(consented: boolean = true): Promise<number> {
+        // already left: onLeave won't fire again
+        if (this.leaveCode !== undefined) { return Promise.resolve(this.leaveCode); }
+
         return new Promise((resolve) => {
-            this.onLeave((code) => resolve(code));
+            // deferred: if an onLeave listener throws while leave() ends the room, leave() rejects with it
+            this.onLeave((code) => { Promise.resolve(code).then(resolve); });
 
-            if (this.connection) {
-                if (consented) {
-                    this.sharedBuffer[0] = Protocol.LEAVE_ROOM;
-                    this.connection.send(this.sharedBuffer.subarray(0, 1));
+            if (!this.connection) {
+                this.finish(CloseCode.CONSENTED);
 
-                } else {
-                    this.connection.close();
-                }
+            } else if (!consented) {
+                this.connection.close();
 
             } else {
-                this.onLeave.invoke(CloseCode.CONSENTED);
+                this.leaving = true;
+
+                if (this.reconnection.isReconnecting) {
+                    // no joined socket to tell the server on, so stop retrying
+                    try {
+                        this.finish(CloseCode.CONSENTED);
+                    } finally {
+                        // even if an onLeave listener threw
+                        this.connection.close(); // the attempt in flight: connecting, or open but not joined
+                    }
+
+                } else if (this.connection.isOpen) {
+                    this.sharedBuffer[0] = Protocol.LEAVE_ROOM;
+                    this.connection.send(this.sharedBuffer.subarray(0, 1));
+                }
+                // otherwise closing (onclose ends the room) or still joining (JOIN_ROOM leaves)
             }
         });
+    }
+
+    /** Every way the room ends goes through here: `onLeave` fires once and retries stop. */
+    private finish(code: number, reason?: string) {
+        if (this.leaveCode !== undefined) { return; }
+
+        this.leaveCode = code;
+        clearTimeout(this.retryTimeout);
+        this.reconnection.isReconnecting = false;
+        this.onLeave.invoke(code, reason);
     }
 
     public onMessage<MessageType extends keyof ExtractRoomClientMessages<NormalizeRoomType<T>>>(
@@ -544,6 +617,8 @@ export class Room<
     }
 
     protected onMessageCallback(event: MessageEvent) {
+        // a room that has left ignores its socket: Node's `ws` still delivers frames while closing
+        if (this.leaveCode !== undefined) { return; }
         this.#dispatchFrame(new Uint8Array(event.data));
     }
 
@@ -616,29 +691,36 @@ export class Room<
                 this.clock.setPatchInterval?.(patchRate);
             }
 
-            if (this.joinedAtTime === 0) {
-                this.joinedAtTime = Date.now();
-                this.onJoin.invoke();
+            try {
+                if (this.joinedAtTime === 0) {
+                    this.joinedAtTime = Date.now();
+                    this.onJoin.invoke();
 
-            } else {
-                console.info(`[Colyseus reconnection]: ${String.fromCodePoint(0x2705)} reconnection successful!`); // ✅
-                this.reconnection.isReconnecting = false;
-                this.onReconnect.invoke();
-            }
-
-            this.reconnectionToken = `${this.roomId}:${reconnectionToken}`;
-
-            // Acknowledge JOIN_ROOM.
-            this.sharedBuffer[0] = Protocol.JOIN_ROOM;
-            this.connection.send(this.sharedBuffer.subarray(0, 1));
-
-            // Send any enqueued messages that were buffered while disconnected
-            if (this.reconnection.enqueuedMessages.length > 0) {
-                for (const message of this.reconnection.enqueuedMessages) {
-                    this.connection.send(message.data);
+                } else {
+                    console.info(`[Colyseus reconnection]: ${String.fromCodePoint(0x2705)} reconnection successful!`); // ✅
+                    this.reconnection.isReconnecting = false;
+                    this.onReconnect.invoke();
                 }
-                // Clear the buffer after sending
-                this.reconnection.enqueuedMessages = [];
+
+            } finally {
+                // even if a listener threw: the server waits for the acknowledgement
+                this.reconnectionToken = `${this.roomId}:${reconnectionToken}`;
+
+                // Acknowledge JOIN_ROOM.
+                this.sharedBuffer[0] = Protocol.JOIN_ROOM;
+                this.connection.send(this.sharedBuffer.subarray(0, 1));
+
+                // Send any enqueued messages that were buffered while disconnected
+                if (this.reconnection.enqueuedMessages.length > 0) {
+                    for (const message of this.reconnection.enqueuedMessages) {
+                        this.connection.send(message.data);
+                    }
+                    // Clear the buffer after sending
+                    this.reconnection.enqueuedMessages = [];
+                }
+
+                // leave() ran before the join completed: the server listens from now on
+                if (this.leaving) { this.leave(); }
             }
 
         } else if (code === Protocol.ERROR) {
@@ -743,14 +825,17 @@ export class Room<
     }
 
     private handleReconnection(code: number, reason?: string) {
+        // leave() was called from an onDrop listener
+        if (this.leaving) { this.finish(CloseCode.CONSENTED); return; }
+
         if (!this.reconnection.enabled) {
-            this.onLeave.invoke(code, reason);
+            this.finish(code, reason);
             return;
         }
 
         if (Date.now() - this.joinedAtTime < this.reconnection.minUptime) {
             console.info(`[Colyseus reconnection]: ${String.fromCodePoint(0x274C)} Room has not been up for long enough for automatic reconnection. (min uptime: ${this.reconnection.minUptime}ms)`); // ❌
-            this.onLeave.invoke(CloseCode.ABNORMAL_CLOSURE, "Room uptime too short for reconnection.");
+            this.finish(CloseCode.ABNORMAL_CLOSURE, "Room uptime too short for reconnection.");
             return;
         }
 
@@ -773,8 +858,7 @@ export class Room<
         if (this.reconnection.retryCount >= this.reconnection.maxRetries) {
             // No more retries
             console.info(`[Colyseus reconnection]: ${String.fromCodePoint(0x274C)} ❌ Reconnection failed after ${this.reconnection.maxRetries} attempts.`); // ❌
-            this.reconnection.isReconnecting = false;
-            this.onLeave.invoke(CloseCode.FAILED_TO_RECONNECT, "No more retries. Reconnection failed.");
+            this.finish(CloseCode.FAILED_TO_RECONNECT, "No more retries. Reconnection failed.");
             return;
         }
 
@@ -784,7 +868,7 @@ export class Room<
         console.info(`[Colyseus reconnection]: ${String.fromCodePoint(0x023F3)} will retry in ${(delay/1000).toFixed(1)} seconds...`); // 🔄
 
         // Wait before attempting reconnection
-        setTimeout(() => {
+        this.retryTimeout = setTimeout(() => {
             try {
                 console.info(`[Colyseus reconnection]: ${String.fromCodePoint(0x1F504)} Re-establishing sessionId '${this.sessionId}' with roomId '${this.roomId}'... (attempt ${this.reconnection.retryCount} of ${this.reconnection.maxRetries})`); // 🔄
                 this.connection.reconnect({

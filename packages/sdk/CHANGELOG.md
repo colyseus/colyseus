@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.18.7
+
+- `room.leave()` while the room is reconnecting now stops the reconnection and resolves right away with `CloseCode.CONSENTED`, instead of only once every retry has failed. A `leave()` before the join completes leaves as soon as it does. Thanks @SvenChristian! [colyseus/react-tools#15](https://github.com/colyseus/react-tools/issues/15)
+- Node 22: a room now keeps retrying while the server is unreachable, instead of giving up after the first failed attempt.
+- A connection that never opened no longer keeps another room's connection open when the browser goes offline.
+- A throwing `onLeave` or `onDrop` listener no longer leaves the room's socket open.
+- Going offline in the browser now closes every open connection, not every other one.
+- Node 22: calling `leave(false)` from `onError` while a reconnection attempt fails no longer recurses.
+- A listener that throws no longer skips the other listeners of the event, nor what the room does after it: reconnecting after `onDrop`, completing the rejoin after `onReconnect`, or settling `leave()`. The first error is rethrown once every listener has run.
+
 ## 0.18.6
 
 - No longer requires the latest `@colyseus/shared-types`.
