@@ -270,6 +270,35 @@ describe("Room Reconnection", () => {
       assert.strictEqual(conn.reconnection.retryCount, 3);
     });
 
+    it("should report each failed attempt once when onError closes the connection", async () => {
+      matchMaker.defineRoomType('reconnect_unreachable_close_on_error', class _ extends Room {
+        onJoin(client: Client) { simulateAbnormalClosure(client); }
+      });
+
+      const conn = await client.joinOrCreate('reconnect_unreachable_close_on_error');
+      setupReconnection(conn);
+      conn.reconnection.maxRetries = 3;
+
+      // retries go to a port nothing listens on
+      const unreachable = net.createServer();
+      await new Promise<void>((resolve) => unreachable.listen(0, resolve));
+      const url = new URL(conn.connection.url!);
+      url.port = String((unreachable.address() as net.AddressInfo).port);
+      await new Promise((resolve) => unreachable.close(resolve));
+      conn.connection.url = url.toString();
+
+      let errors = 0;
+      conn.onError(() => {
+        if (++errors > 10) { return; } // a runaway would otherwise never stop
+        conn.leave(false);
+      });
+
+      const leaveCode = new Promise<number>((resolve) => conn.onLeave((code) => resolve(code)));
+
+      assert.strictEqual(await settle(leaveCode, 2000), CloseCode.FAILED_TO_RECONNECT);
+      assert.strictEqual(errors, 3);
+    });
+
     it("should send enqueued messages after reconnecting", async () => {
       type MessageType = { index: number };
 

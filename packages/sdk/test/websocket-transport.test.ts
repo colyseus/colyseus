@@ -62,6 +62,27 @@ describe("WebSocketTransport", () => {
         assert.deepEqual(closes.map((event) => event.code), [CloseCode.ABNORMAL_CLOSURE]);
     });
 
+    test("forwards a failed handshake's error once, even if a listener closes the socket (undici)", async () => {
+        const closes: any[] = [];
+        let errors = 0;
+        const transport = new WebSocketTransport({
+            onerror: () => { errors++; transport.close(); }, // e.g. room.leave(false) from onError
+            onclose: (event) => closes.push(event),
+        });
+        transport.connect("ws://localhost:2567");
+        const socket = FakeWebSocket.last;
+
+        // undici fires error again from close() while the socket is still CONNECTING
+        let refires = 0;
+        socket.close = () => { if (refires++ < 10) { socket.onerror?.({ type: "error" }); } };
+
+        socket.onerror!({ type: "error" });
+        await nextTick();
+
+        assert.strictEqual(errors, 1);
+        assert.deepEqual(closes.map((event) => event.code), [CloseCode.ABNORMAL_CLOSURE]);
+    });
+
     test("forwards the runtime's own close only once (browsers, ws)", async () => {
         const { socket, closes } = connect();
 

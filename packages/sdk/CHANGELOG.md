@@ -7,6 +7,7 @@
 - A connection that never opened no longer keeps another room's connection open when the browser goes offline.
 - A throwing `onLeave` or `onDrop` listener no longer leaves the room's socket open.
 - Going offline in the browser now closes every open connection, not every other one.
+- Node 22: calling `leave(false)` from `onError` while a reconnection attempt fails no longer recurses.
 
 ## 0.18.6
 

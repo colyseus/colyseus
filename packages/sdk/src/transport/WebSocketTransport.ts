@@ -78,6 +78,9 @@ export class WebSocketTransport implements ITransport {
             // undici (Node 22's global WebSocket) fires no close for a socket that never opened;
             // browsers and `ws` have closed it by the next tick. Scheduled first: a listener may throw.
             if (!opened) {
+                // forwarded once: undici fires error again from every close() while still CONNECTING
+                ws.onerror = null;
+
                 setTimeout(() => {
                     // close(MAY_TRY_RECONNECT) detaches the handler and reports the close itself
                     if (ws.onclose === onclose) { onclose({ code: CloseCode.ABNORMAL_CLOSURE, reason: "" }); }
