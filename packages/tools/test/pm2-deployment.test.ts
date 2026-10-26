@@ -796,6 +796,28 @@ describe('PM2 Deployment', function () {
       const apps = await waitForApps(EXPECTED_INSTANCES);
       assert.strictEqual((apps[0].pm2_env as any).wait_ready, true);
     });
+
+    it('should restart a stopped agent instead of falling back to the legacy script', async function () {
+      await cleanup();
+      await new Promise((resolve) => pm2.stop('@colyseus/tools', resolve));
+
+      // the agent is only started when installed as a module; the suite starts it by hand
+      const moduleDir = path.join(require('pm2/constants').DEFAULT_MODULE_PATH, '@colyseus/tools');
+      const created = !fs.existsSync(moduleDir) && fs.mkdirSync(moduleDir, { recursive: true });
+      try {
+        const output = await runPostDeployScript(TEST_DIR);
+
+        assert.match(output, /agent isn't running; starting it/, output);
+        assert.doesNotMatch(output, /legacy/, output);
+        assert.match(output, /Post-deploy success/, output);
+
+        const apps = await waitForApps(EXPECTED_INSTANCES);
+        assert.strictEqual((apps[0].pm2_env as any).wait_ready, true);
+
+      } finally {
+        if (created) { fs.rmSync(created, { recursive: true, force: true }); }
+      }
+    });
   });
 
   describe('Cloud panel variables', function () {

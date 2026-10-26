@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 const pm2 = require('pm2');
+const cst = require('pm2/constants');
 const fs = require('fs');
 const path = require('path');
 const shared = require('./pm2/shared.cjs');
@@ -89,26 +90,45 @@ function triggerAgent(params, cb) {
 }
 
 /**
- * Wait until the agent has registered its action.
+ * Wait until the agent has registered its action, starting it first when it's
+ * installed but not running.
  *
  * On boot, `pm2 ping` launches the agent and returns before the agent is
  * ready, and PM2 only delivers a trigger to processes that already registered
  * the action. Without waiting, every reboot fell back to the legacy script,
  * which starts the app without the agent's defaults (e.g. `kill_timeout`).
  *
- * Returns immediately when no agent is running (not installed, or crashed);
- * after AGENT_WAIT_MS the trigger is attempted anyway.
+ * PM2 launches modules only when its CLI or pm2.connect() spawns the daemon.
+ * One spawned any other way -- by an older report-stats' cron, or by this
+ * script's own pm2 calls after a failed colyseus-boot took the unit's daemon
+ * down -- runs without the agent, and every later deploy would take the
+ * legacy script.
+ *
+ * Returns immediately when the agent isn't installed or won't start; after
+ * AGENT_WAIT_MS the trigger is attempted anyway.
  */
 function waitForAgent() {
   const deadline = Date.now() + AGENT_WAIT_MS;
+  const installed = fs.existsSync(path.join(cst.DEFAULT_MODULE_PATH, AGENT_NAME));
   let waited = false;
+  let started = false;
 
   return new Promise((resolve) => {
-    (function check() {
+    // a daemon this connect() spawns launches its modules itself
+    pm2.connect(function check() {
       pm2.describe(AGENT_NAME, (err, procs) => {
         const envs = (procs || []).map((proc) => proc.pm2_env).filter(Boolean);
         const registered = envs.some((env) => env.axm_actions?.some((action) => action.action_name === AGENT_ACTION));
         const starting = envs.some((env) => env.status === 'online' || env.status === 'launching');
+
+        if (!err && !starting && installed && !started) {
+          started = true;
+          console.log(`The ${AGENT_NAME} agent isn't running; starting it...`);
+
+          // launching it again would leave a stopped entry next to a new one
+          const next = () => setTimeout(check, 250);
+          return envs.length ? pm2.restart(AGENT_NAME, next) : pm2.launchModules(next);
+        }
 
         if (err || registered || !starting || Date.now() >= deadline) {
           if (waited) {
@@ -125,7 +145,7 @@ function waitForAgent() {
         }
         setTimeout(check, 250);
       });
-    })();
+    });
   });
 }
 
