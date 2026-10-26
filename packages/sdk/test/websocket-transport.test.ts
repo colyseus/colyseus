@@ -73,4 +73,15 @@ describe("WebSocketTransport", () => {
         assert.strictEqual(closes.length, 1);
         assert.strictEqual(closes[0], close);
     });
+
+    test("close(MAY_TRY_RECONNECT) closes the socket even if a close listener throws", () => {
+        const transport = new WebSocketTransport({ onclose: () => { throw new Error("onLeave listener failed"); } });
+        transport.connect("ws://localhost:2567");
+
+        const closeCodes: number[] = [];
+        FakeWebSocket.last.close = (code?: number) => { closeCodes.push(code); };
+
+        assert.throws(() => transport.close(CloseCode.MAY_TRY_RECONNECT), "onLeave listener failed");
+        assert.deepEqual(closeCodes, [CloseCode.MAY_TRY_RECONNECT]);
+    });
 });

@@ -94,13 +94,16 @@ export class WebSocketTransport implements ITransport {
         // when "offline" event is triggered, the close frame is delayed. this
         // way client can try to reconnect immediately.
         //
-        if (code === CloseCode.MAY_TRY_RECONNECT && this.events.onclose) {
-            this.ws.onclose = null;
-            this.events.onclose({ code, reason });
-        }
+        try {
+            if (code === CloseCode.MAY_TRY_RECONNECT && this.events.onclose) {
+                this.ws.onclose = null;
+                this.events.onclose({ code, reason });
+            }
 
-        // then we close the connection
-        this.ws.close(code, reason);
+        } finally {
+            // then we close the connection, even if a room listener (onDrop, onLeave) threw
+            this.ws.close(code, reason);
+        }
     }
 
     get isOpen() {

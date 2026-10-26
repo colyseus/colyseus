@@ -257,8 +257,12 @@ export class Room<
 
                 if (this.reconnection.isReconnecting) {
                     // no joined socket to tell the server on, so stop retrying
-                    this.finish(CloseCode.CONSENTED);
-                    this.connection.close(); // the attempt in flight: connecting, or open but not joined
+                    try {
+                        this.finish(CloseCode.CONSENTED);
+                    } finally {
+                        // even if an onLeave listener threw
+                        this.connection.close(); // the attempt in flight: connecting, or open but not joined
+                    }
 
                 } else if (this.connection.isOpen) {
                     this.sharedBuffer[0] = Protocol.LEAVE_ROOM;

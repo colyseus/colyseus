@@ -872,6 +872,24 @@ describe("Room Reconnection", () => {
         assert.strictEqual(false, conn.connection.isOpen);
       });
 
+      it("should abort the reconnection attempt even if an onLeave listener throws", async () => {
+        defineReconnectableRoom('leave_with_throwing_listener');
+
+        const conn = await client.joinOrCreate('leave_with_throwing_listener');
+        setupReconnection(conn);
+
+        conn.onLeave(() => { throw new Error("onLeave listener failed"); });
+
+        let attempt!: WebSocket;
+        const leaving = new Promise<unknown>((resolve) => onReconnectAttempt(conn, () => {
+          attempt = (conn.connection.transport as any).ws;
+          conn.leave().then(resolve, resolve); // rejects with the listener's error
+        }));
+
+        assert.notStrictEqual(await settle(leaving), "pending");
+        assert.ok(attempt.readyState >= WebSocket.CLOSING);
+      });
+
       it("should ignore a reconnection JOIN_ROOM that lands after it left", async () => {
         matchMaker.defineRoomType('join_after_leave', class _ extends Room {});
 
