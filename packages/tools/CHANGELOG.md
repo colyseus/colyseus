@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.18.11
+
+- On Colyseus Cloud, deploys now restart the deploy agent if it has stopped, e.g. after a reboot that failed to start the app. Without it, every deploy cut players off instead of letting their games finish.
+- The stats reporter no longer starts PM2 on its own, which could leave a rebooting server without the deploy agent.
+
 ## 0.18.10
 
 - On Colyseus Cloud, a deploy whose new version crashes on startup or never starts listening now fails, and the previous version keeps serving. It used to be reported as deployed while players were sent to the broken version.
