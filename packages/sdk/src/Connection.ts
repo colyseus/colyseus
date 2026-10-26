@@ -47,7 +47,9 @@ export class Connection implements ITransport {
 
             const onClose = this.events.onclose;
             this.events.onclose = (ev: any) => {
-                onOfflineListeners.splice(onOfflineListeners.indexOf(this.#_offlineListener), 1);
+                // absent when the socket never opened
+                const index = onOfflineListeners.indexOf(this.#_offlineListener);
+                if (index !== -1) { onOfflineListeners.splice(index, 1); }
                 onClose?.(ev);
             };
         }
