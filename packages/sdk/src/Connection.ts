@@ -12,7 +12,8 @@ if (hasGlobalEventListeners) {
      */
     addEventListener("offline", () => {
         console.warn(`@colyseus/sdk: 🛑 Network offline. Closing ${onOfflineListeners.length} connection(s)`);
-        onOfflineListeners.forEach((listener) => listener());
+        // a copy: each connection unregisters its listener as it closes
+        onOfflineListeners.slice().forEach((listener) => listener());
     }, false);
 }
 

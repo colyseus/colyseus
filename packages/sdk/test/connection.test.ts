@@ -30,7 +30,11 @@ describe("Connection", () => {
             connect() {},
             send() {},
             sendUnreliable() {},
-            close: (code?: number) => { closeCodes.push(code); },
+            close: (code?: number) => {
+                closeCodes.push(code);
+                // as WebSocketTransport: reported right away, which unregisters the offline listener
+                if (code === CloseCode.MAY_TRY_RECONNECT) { connection.events.onclose!({ code }); }
+            },
         };
         connection.connect("ws://localhost:2567");
         return { connection, closeCodes };
@@ -47,5 +51,19 @@ describe("Connection", () => {
         goOffline();
 
         assert.deepEqual(open.closeCodes, [CloseCode.MAY_TRY_RECONNECT]);
+    });
+
+    test("going offline closes every open connection", () => {
+        const open = [connect(), connect(), connect()];
+        open.forEach(({ connection }) => connection.events.onopen!({}));
+
+        vi.spyOn(console, "warn").mockImplementation(() => {});
+        goOffline();
+
+        assert.deepEqual(open.map(({ closeCodes }) => closeCodes), [
+            [CloseCode.MAY_TRY_RECONNECT],
+            [CloseCode.MAY_TRY_RECONNECT],
+            [CloseCode.MAY_TRY_RECONNECT],
+        ]);
     });
 });

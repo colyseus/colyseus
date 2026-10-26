@@ -6,6 +6,7 @@
 - Node 22: a room now keeps retrying while the server is unreachable, instead of giving up after the first failed attempt.
 - A connection that never opened no longer keeps another room's connection open when the browser goes offline.
 - A throwing `onLeave` or `onDrop` listener no longer leaves the room's socket open.
+- Going offline in the browser now closes every open connection, not every other one.
 
 ## 0.18.6
 
