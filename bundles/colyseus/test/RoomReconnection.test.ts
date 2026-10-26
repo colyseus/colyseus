@@ -1,4 +1,5 @@
 import assert from "assert";
+import net from "net";
 import WebSocket from "ws";
 import { CloseCode, ColyseusSDK, getStateCallbacks, Room as SDKRoom } from "@colyseus/sdk";
 import { type Client,  type MatchMakerDriver, type Presence, matchMaker, Room, Server, Transport, LocalDriver, LocalPresence, Deferred } from "@colyseus/core";
@@ -244,6 +245,29 @@ describe("Room Reconnection", () => {
       assert.strictEqual(onReconnectCalled, true);
 
       assert.ok(!matchMaker.getLocalRoomById(conn.roomId));
+    });
+
+    it("should keep retrying while the server is unreachable", async () => {
+      matchMaker.defineRoomType('reconnect_unreachable', class _ extends Room {
+        onJoin(client: Client) { simulateAbnormalClosure(client); }
+      });
+
+      const conn = await client.joinOrCreate('reconnect_unreachable');
+      setupReconnection(conn);
+      conn.reconnection.maxRetries = 3;
+
+      // retries go to a port nothing listens on
+      const unreachable = net.createServer();
+      await new Promise<void>((resolve) => unreachable.listen(0, resolve));
+      const url = new URL(conn.connection.url!);
+      url.port = String((unreachable.address() as net.AddressInfo).port);
+      await new Promise((resolve) => unreachable.close(resolve));
+      conn.connection.url = url.toString();
+
+      const leaveCode = new Promise<number>((resolve) => conn.onLeave((code) => resolve(code)));
+
+      assert.strictEqual(await settle(leaveCode, 2000), CloseCode.FAILED_TO_RECONNECT);
+      assert.strictEqual(conn.reconnection.retryCount, 3);
     });
 
     it("should send enqueued messages after reconnecting", async () => {

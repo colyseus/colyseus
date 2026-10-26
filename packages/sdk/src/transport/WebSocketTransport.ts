@@ -57,11 +57,35 @@ export class WebSocketTransport implements ITransport {
             this.ws = new WebSocket(url, this.protocols);
         }
 
-        this.ws.binaryType = 'arraybuffer';
-        this.ws.onopen = (event) => this.events.onopen?.(event);
-        this.ws.onmessage = (event) => this.events.onmessage?.(event);
-        this.ws.onclose = (event) => this.events.onclose?.(event);
-        this.ws.onerror = (event) => this.events.onerror?.(event);
+        const ws = this.ws;
+        let opened = false;
+        let closed = false;
+
+        const onclose = (event: any) => {
+            if (closed) { return; }
+            closed = true;
+            this.events.onclose?.(event);
+        };
+
+        ws.binaryType = 'arraybuffer';
+        ws.onopen = (event) => {
+            opened = true;
+            this.events.onopen?.(event);
+        };
+        ws.onmessage = (event) => this.events.onmessage?.(event);
+        ws.onclose = onclose;
+        ws.onerror = (event) => {
+            // undici (Node 22's global WebSocket) fires no close for a socket that never opened;
+            // browsers and `ws` have closed it by the next tick. Scheduled first: a listener may throw.
+            if (!opened) {
+                setTimeout(() => {
+                    // close(MAY_TRY_RECONNECT) detaches the handler and reports the close itself
+                    if (ws.onclose === onclose) { onclose({ code: CloseCode.ABNORMAL_CLOSURE, reason: "" }); }
+                }, 0);
+            }
+
+            this.events.onerror?.(event);
+        };
     }
 
     public close(code?: number, reason?: string) {
