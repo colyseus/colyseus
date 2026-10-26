@@ -63,7 +63,13 @@ async function fetchRetry(url, options, retries = 3) {
   }
 };
 
-pm2.Client.executeRemote('getMonitorData', {}, async function(err, list) {
+// executeRemote spawns a daemon when none answers: one without the agent, which
+// leaves every later deploy on the legacy script, and at boot races colyseus-boot's.
+pm2.Client.pingDaemon((alive) => alive
+  ? pm2.Client.executeRemote('getMonitorData', {}, onMonitorData)
+  : console.log('PM2 is not running; nothing to report.'));
+
+async function onMonitorData(err, list) {
   if (err) { return console.error(err); }
 
   //
@@ -184,7 +190,7 @@ pm2.Client.executeRemote('getMonitorData', {}, async function(err, list) {
   } finally {
     process.exit();
   }
-});
+}
 
 /**
  * Check if a socket file is active
