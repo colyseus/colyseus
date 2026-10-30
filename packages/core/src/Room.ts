@@ -1858,6 +1858,10 @@ export class Room<T extends RoomOptions = RoomOptions> {
         // On async onAuth, client may have been disconnected.
         //
         if (client.state === ClientState.LEAVING) {
+          // never pushed, so _onLeave() below skips it: release the seat here,
+          // the auto-dispose timer is already gone
+          delete this._reservedSeats[sessionId];
+          await this.#_decrementClientCount();
           throw new ServerError(CloseCode.WITH_ERROR, 'already disconnected');
         }
 

@@ -5,7 +5,7 @@ import { Client as SDKClient, Room as SDKRoom } from "@colyseus/sdk";
 import { Schema, type, MapSchema, ArraySchema, view, StateView, schema, t, type SchemaType } from "@colyseus/schema";
 
 import { type Client, type AuthContext, type MatchMakerDriver, type Presence, matchMaker, Room, Server, ErrorCode,  Deferred, Transport, CloseCode } from "@colyseus/core";
-import { DummyRoom, DRIVERS, timeout, Room3Clients, PRESENCE_IMPLEMENTATIONS, Room2Clients, Room2ClientsExplicitLock } from "./utils/index.ts";
+import { DummyRoom, DRIVERS, timeout, waitUntil, Room3Clients, PRESENCE_IMPLEMENTATIONS, Room2Clients, Room2ClientsExplicitLock } from "./utils/index.ts";
 import { ServerError, Protocol } from "@colyseus/core";
 
 import { WebSocketTransport } from "@colyseus/ws-transport";
@@ -267,6 +267,57 @@ describe("Integration", () => {
             await onAuthDeferred;
             assert.ok(!onJoinCalled);
             assert.ok(!onLeaveCalled);
+          });
+
+          it("async onAuth() - room disposes if its only client left early", async() => {
+            let onDisposeCalled = false;
+            let onAuthDeferred = new Deferred();
+
+            matchMaker.defineRoomType('async_onauth_dispose', class _ extends Room {
+              async onAuth() {
+                setTimeout(() => { onAuthDeferred.resolve(true); }, 100);
+                return onAuthDeferred;
+              }
+              onDispose() { onDisposeCalled = true; }
+            });
+
+            const seatReservation = await matchMaker.joinOrCreate('async_onauth_dispose', {});
+            const lostConnection = new WebSocket(`${TEST_ENDPOINT}/${seatReservation.processId}/${seatReservation.roomId}?sessionId=${seatReservation.sessionId}`);
+            lostConnection.on("open", () => lostConnection.close());
+
+            await waitUntil(() => onDisposeCalled);
+            assert.ok(onDisposeCalled);
+            assert.strictEqual(0, (await matchMaker.query({ roomId: seatReservation.roomId })).length);
+          });
+
+          it("async onAuth() - client leaving early frees its seat in the listing", async() => {
+            let onDisposeCalled = false;
+            let onAuthDeferred = new Deferred();
+
+            matchMaker.defineRoomType('async_onauth_listing', class _ extends Room {
+              async onAuth(client: Client, options: any) {
+                if (!options.slow) { return true; }
+                setTimeout(() => { onAuthDeferred.resolve(true); }, 100);
+                return onAuthDeferred;
+              }
+              onDispose() { onDisposeCalled = true; }
+            });
+
+            const connectedRoom = await client.joinOrCreate('async_onauth_listing');
+            const seatReservation = await matchMaker.joinById(connectedRoom.roomId, { slow: true });
+            const lostConnection = new WebSocket(`${TEST_ENDPOINT}/${seatReservation.processId}/${seatReservation.roomId}?sessionId=${seatReservation.sessionId}`);
+            lostConnection.on("open", () => lostConnection.close());
+
+            await onAuthDeferred;
+            await timeout(100);
+
+            const [listing] = await matchMaker.query({ roomId: connectedRoom.roomId });
+            assert.strictEqual(1, listing.clients);
+            assert.ok(!onDisposeCalled);
+
+            await connectedRoom.leave();
+            await waitUntil(() => onDisposeCalled);
+            assert.ok(onDisposeCalled);
           });
 
           it("async onAuth() - maxClients should be respected", async() => {
