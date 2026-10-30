@@ -1,7 +1,6 @@
 /**
- * Bridges a Predict's engine-level `PredictCore` (published to the global
- * `__colyseusDebug` registry) into the panel-facing `PredictDebugHandle` that
- * the debug card renders.
+ * Bridges a Predict's engine-level `PredictCore` (published to the debug channel)
+ * into the panel-facing `PredictDebugHandle` that the debug card renders.
  *
  * The engine deliberately exposes only portable state; everything panel-shaped
  * — notably the profile → field-names mapping shown on each sub-card — is

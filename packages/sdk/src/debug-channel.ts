@@ -5,32 +5,26 @@
  * Publishers (a joined room in {@link Client}, a `Predict` instance) call
  * {@link publishDebug} whenever there's something the overlay could surface. If
  * the overlay is already loaded it renders immediately; if it loads LATER — the
- * usual dev-only `import("@colyseus/sdk/debug")` races the first room join — a
- * lightweight buffering stub captures the publishes so the overlay REPLAYS them
- * on install. No app-side ordering (awaiting the import) is required, and a
- * publisher that fires before the overlay loads is never dropped.
+ * usual dev-only `import("@colyseus/sdk/debug")` races the first room join —
+ * {@link setDebugReceiver} REPLAYS what was buffered. No app-side ordering
+ * (awaiting the import) is required, and a publisher that fires before the
+ * overlay loads is never dropped.
  *
- * Production (overlay never imported) stays effectively free: the stub is created
- * only on first publish, holds WeakRefs so nothing is pinned, and is bounded — an
- * app that never loads the overlay leaks neither memory nor room references.
+ * Module-private on purpose: rooms are reachable only by importing the overlay.
+ * Nothing here may read or write a global — a page script could then read a
+ * buffered room, or plant its own receiver and be handed every join.
+ *
+ * Production (overlay never imported) stays effectively free: the buffer holds
+ * WeakRefs so nothing is pinned, and is bounded — an app that never loads the
+ * overlay leaks neither memory nor room references.
+ *
+ * The script-tag builds share no module graph, so rollup swaps this file for
+ * `debug-channel.umd.ts` there.
  */
 
-/** The receiver `@colyseus/sdk/debug` installs on `globalThis.__colyseusDebug`. */
-export interface ColyseusDebugRegistry {
-    publish(channel: string, handle: object): void;
-}
+export type DebugReceiver = (channel: string, handle: object) => void;
 
 interface WeakRefLike { deref(): object | undefined; }
-
-// The pre-load buffer stub carries `__buffer`; the overlay's live receiver does
-// NOT. That absence is the discriminator {@link debugOverlayActive} keys on — a
-// buffered-but-unwatched publish must not read as a live overlay (else prod-only
-// diagnostics like reconciler drift bookkeeping would switch on without one).
-interface BufferStub extends ColyseusDebugRegistry {
-    readonly __buffer: Array<[string, WeakRefLike]>;
-}
-
-type DebugGlobal = { __colyseusDebug?: ColyseusDebugRegistry & Partial<BufferStub> };
 
 // Old embedded runtimes (some Cocos/Construct targets) lack WeakRef; fall back to
 // a strong ref there — still bounded, so the worst case is a few pinned handles in
@@ -42,34 +36,40 @@ const makeRef: (h: object) => WeakRefLike =
 // debug-less prod session from growing the buffer without limit.
 const MAX_BUFFERED = 64;
 
+const buffer: Array<[string, WeakRefLike]> = [];
+let receiver: DebugReceiver | undefined;
+
 /**
  * Publish a `handle` to the overlay `channel` (`"room"` | `"predict"` | …).
- * Prod fast path: one property read, then either a live `publish` (overlay
- * loaded) or a bounded WeakRef append (buffered for replay on install).
+ * Prod fast path: a live call (overlay loaded) or a bounded WeakRef append
+ * (buffered for replay on install).
  */
 export function publishDebug(channel: string, handle: object): void {
-    const g = globalThis as DebugGlobal;
-    let reg = g.__colyseusDebug;
-    if (!reg) {
-        const buffer: Array<[string, WeakRefLike]> = [];
-        reg = g.__colyseusDebug = {
-            __buffer: buffer,
-            publish(ch: string, h: object) {
-                buffer.push([ch, makeRef(h)]);
-                if (buffer.length > MAX_BUFFERED) { buffer.shift(); }
-            },
-        };
+    if (receiver) {
+        receiver(channel, handle);
+        return;
     }
-    reg.publish(channel, handle);
+    buffer.push([channel, makeRef(handle)]);
+    if (buffer.length > MAX_BUFFERED) { buffer.shift(); }
 }
 
 /**
- * True only when the overlay installed its LIVE receiver — NOT when
- * {@link publishDebug} merely created the pre-load buffer. Diagnostics that must
- * stay free in production (reconciler drift bookkeeping) gate on this.
+ * Connect the overlay and replay everything buffered before it loaded. `undefined`
+ * disconnects it again.
+ */
+export function setDebugReceiver(next: DebugReceiver | undefined): void {
+    receiver = next;
+    if (!next) { return; }
+    for (const [channel, ref] of buffer.splice(0)) {
+        const handle = ref.deref();
+        if (handle) { next(channel, handle); }
+    }
+}
+
+/**
+ * True only when the overlay is connected. Diagnostics that must stay free in
+ * production (reconciler drift bookkeeping) gate on this.
  */
 export function debugOverlayActive(): boolean {
-    if (typeof globalThis === "undefined") { return false; }
-    const reg = (globalThis as DebugGlobal).__colyseusDebug;
-    return reg != null && reg.__buffer === undefined;
+    return receiver !== undefined;
 }

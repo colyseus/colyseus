@@ -1,5 +1,6 @@
 import { Client } from "./Client.ts";
 import type { Room } from "./Room.ts";
+import { setDebugReceiver } from "./debug-channel.ts";
 import { applyPanelPosition, authInstances, getDebugRoot, loadPreferences, preferences, repositionDebugPanels, roomDebugInfo, savePreferences } from "./debug/core.ts";
 import { initLayout, onReflow } from "./debug/layout.ts";
 import { calculateRates, initialize, updateDebugPanel } from "./debug/panel.ts";
@@ -288,32 +289,16 @@ function applyMonkeyPatches() {
         return room;
     }
 
-    // Install the shared debug registry: route published handles to their panels
-    // and REPLAY anything a publisher buffered before this bundle loaded (the room
-    // panel's old failure mode — a fast join beat the dev-only dynamic import).
-    // Rooms now arrive on the "room" channel from Client.consumeSeatReservation,
-    // so one joined before this loaded is adopted on drain instead of missed
-    // forever — no consumeSeatReservation monkey-patch needed.
-    const debugGlobal = globalThis as {
-        __colyseusDebug?: {
-            publish(channel: string, handle: object): void;
-            __buffer?: Array<[string, { deref(): object | undefined }]>;
-        };
-    };
-    const buffered = debugGlobal.__colyseusDebug?.__buffer;
-    const registry = {
-        publish(channel: string, handle: object) {
-            if (channel === "predict") { onPredictPublished(handle as PredictCore); }
-            else if (channel === "room") { patchRoom(handle as Room); }
-        },
-    };
-    debugGlobal.__colyseusDebug = registry;
-    if (buffered) {
-        for (const [channel, ref] of buffered) {
-            const handle = ref.deref();
-            if (handle) { registry.publish(channel, handle); }
-        }
-    }
+    // Route published handles to their panels. Connecting REPLAYS anything a
+    // publisher buffered before this bundle loaded (the room panel's old failure
+    // mode — a fast join beat the dev-only dynamic import). Rooms now arrive on
+    // the "room" channel from Client.consumeSeatReservation, so one joined before
+    // this loaded is adopted on drain instead of missed forever — no
+    // consumeSeatReservation monkey-patch needed.
+    setDebugReceiver((channel, handle) => {
+        if (channel === "predict") { onPredictPublished(handle as PredictCore); }
+        else if (channel === "room") { patchRoom(handle as Room); }
+    });
 
     // Capture live `client.auth` on every matchmake attempt so the "Clear auth
     // token" dev-tool can null the in-memory token (not just storage). These run

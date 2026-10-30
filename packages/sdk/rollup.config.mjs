@@ -20,6 +20,13 @@ const replacePlugin = replace({
     preventAssignment: true,
 });
 
+// `dist/colyseus.js` and `dist/debug.js` share no module graph, so they can't use
+// the module-private channel. Must precede typescript(), which resolves relative
+// imports first.
+const umdDebugChannel = alias({
+    entries: [{ find: /^.*\/debug-channel\.ts$/, replacement: path.resolve('src/debug-channel.umd.ts') }],
+});
+
 /**
  * Minify a standalone browser chunk via esbuild (already in the toolchain).
  * Only applied to the `dist/` CDN bundles — the `build/` ESM/CJS outputs stay
@@ -77,6 +84,7 @@ export default [
             },
         ],
         plugins: [
+            umdDebugChannel,
             replacePlugin,
             typescript({ tsconfig: './tsconfig/tsconfig.cjs.json' }),
             alias({
@@ -104,10 +112,10 @@ export default [
     // standalone dist script that patches global Colyseus
     {
         input: 'src/debug.ts',
-        // Bundle the debug source tree (src/debug.ts + src/debug/**); everything
-        // else (the SDK, schema, …) is provided by the global `Colyseus`.
-        // Resolve relative specifiers against their importer so sibling imports
-        // like "./core.ts" (from src/debug/panel.ts) are recognised as local.
+        // Bundle the debug source tree (src/debug.ts + src/debug/**) and the
+        // channel; everything else (the SDK, schema, …) is provided by the global
+        // `Colyseus`. Resolve relative specifiers against their importer so sibling
+        // imports like "./core.ts" (from src/debug/panel.ts) are recognised as local.
         external: (id, importer) => {
             if (id === 'src/debug.ts' || id.startsWith('\0')) { return false; }
             const abs = (id.startsWith('.') && importer)
@@ -115,7 +123,8 @@ export default [
                 : id;
             const debugEntry = path.resolve('src/debug.ts');
             const debugDir = path.resolve('src/debug') + path.sep;
-            return !(abs === debugEntry || abs.startsWith(debugDir));
+            const debugChannel = path.resolve('src/debug-channel');
+            return !(abs === debugEntry || abs.startsWith(debugDir) || abs.startsWith(debugChannel));
         },
         treeshake: false,
         output: {
@@ -125,6 +134,7 @@ export default [
             globals: (id) => "Colyseus",
         },
         plugins: [
+            umdDebugChannel,
             typescript({ tsconfig: './tsconfig/tsconfig.cjs.json' }),
             minifyPlugin(banner),
         ],

@@ -22,9 +22,9 @@
  * file's docs for the underlying contracts.
  *
  * Debug surface: when `@colyseus/sdk/debug` is imported, this module's
- * `Predict` instances publish to a `globalThis.__colyseusDebug` registry the
- * debug panel polls. When the debug entrypoint isn't imported, the publish
- * is a no-op — the engine never references panel code directly.
+ * `Predict` instances publish to the debug channel the debug panel polls. When
+ * the debug entrypoint isn't imported, nothing reads the publish — the engine
+ * never references panel code directly.
  */
 
 export {

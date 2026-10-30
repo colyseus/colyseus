@@ -711,15 +711,14 @@ export type PredictGetOptions<T = any> = PredictOptions<T> & {
 };
 
 // -----------------------------------------------------------------------------
-// Introspection registry — `@colyseus/sdk/debug` installs a tiny
-// `globalThis.__colyseusDebug.publish()` receiver. Predict publishes a stable,
-// engine-level *core* handle to it at construction so the debug layer can build
-// its panel from OUTSIDE the engine. The handle exposes only portable engine
-// state (profiles, defaults, attached count) plus an `onTrack` subscription —
-// NO panel-shaped data (e.g. "which fields use a profile") lives here; the
-// debug bridge in `@colyseus/sdk/debug` derives that itself. When the registry
-// is absent (prod build, debug not imported), publishing is a no-op and Predict
-// carries no debug state at all.
+// Introspection registry — `@colyseus/sdk/debug` connects a receiver to the debug
+// channel. Predict publishes a stable, engine-level *core* handle to it at
+// construction so the debug layer can build its panel from OUTSIDE the engine.
+// The handle exposes only portable engine state (profiles, defaults, attached
+// count) plus an `onTrack` subscription — NO panel-shaped data (e.g. "which fields
+// use a profile") lives here; the debug bridge in `@colyseus/sdk/debug` derives
+// that itself. When no receiver is connected (prod build, debug not imported),
+// nothing reads the publish and Predict carries no debug state at all.
 // -----------------------------------------------------------------------------
 
 /**

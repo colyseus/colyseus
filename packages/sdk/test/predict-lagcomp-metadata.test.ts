@@ -4,6 +4,7 @@ import { assert } from 'chai';
 
 import { schema, t, Encoder, Decoder } from '@colyseus/schema';
 import { Predict } from '../src/predict.ts';
+import { setDebugReceiver } from '../src/debug-channel.ts';
 
 // -----------------------------------------------------------------------------
 // Predict per-type plan resolution.
@@ -57,11 +58,11 @@ describe('Predict per-type plan resolution', () => {
 
     beforeEach(() => {
         handles = {};
-        (globalThis as any).__colyseusDebug = { publish: (_ch: string, h: any) => { handles[h.name] = h; } };
+        setDebugReceiver((_ch: string, h: any) => { handles[h.name] = h; });
         warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     });
     afterEach(() => {
-        delete (globalThis as any).__colyseusDebug;
+        setDebugReceiver(undefined);
         warn.mockRestore();
     });
 

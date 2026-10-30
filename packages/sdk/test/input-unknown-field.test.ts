@@ -6,6 +6,7 @@ import { InputEncoder } from '@colyseus/schema/input';
 import { schema, t, type SchemaType } from '@colyseus/schema';
 
 import { InputHandleImpl, type InputHandleHost } from '../src/input/InputHandle.ts';
+import { publishDebug, setDebugReceiver } from '../src/debug-channel.ts';
 
 const MoveInput = schema({
     x: t.number().default(0),
@@ -27,12 +28,8 @@ function makeHandle() {
     return new InputHandleImpl<MoveInput>(host, instance, encoder, {});
 }
 
-// A live receiver has no `__buffer` (see debugOverlayActive); the pre-load
-// publish buffer DOES — the diagnostic must stay off for that one.
-function installOverlay(live = true): void {
-    (globalThis as any).__colyseusDebug = live
-        ? { publish: () => { /* live receiver */ } }
-        : { publish: () => { /* buffered */ }, __buffer: [] };
+function installOverlay(): void {
+    setDebugReceiver(() => { /* live receiver */ });
 }
 
 //
@@ -43,7 +40,7 @@ function installOverlay(live = true): void {
 //
 describe('input.data unknown-field warning', () => {
     afterEach(() => {
-        delete (globalThis as any).__colyseusDebug;
+        setDebugReceiver(undefined);
         vi.restoreAllMocks();
     });
 
@@ -78,7 +75,7 @@ describe('input.data unknown-field warning', () => {
         const handle = makeHandle();
         (handle.data as any).seed = 42;
         handle.send();                             // no overlay at all
-        installOverlay(false);                     // pre-load buffer ≠ live receiver
+        publishDebug('room', {});                  // pre-load buffer ≠ live receiver
         handle.send();
         assert.equal(warn.mock.calls.length, 0);
     });

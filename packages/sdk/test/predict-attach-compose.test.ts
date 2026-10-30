@@ -4,6 +4,7 @@ import { assert } from 'chai';
 
 import { schema, t, Encoder, Decoder } from '@colyseus/schema';
 import { Predict } from '../src/predict.ts';
+import { setDebugReceiver } from '../src/debug-channel.ts';
 
 // -----------------------------------------------------------------------------
 // Multiple attach()/attachAll() on the same collection must COMPOSE, not clobber.
@@ -34,12 +35,12 @@ describe('Predict attach composition (no clobber)', () => {
 
     beforeEach(() => {
         handles = {};
-        (globalThis as any).__colyseusDebug = { publish: (_c: string, h: any) => { handles[h.name] = h; } };
+        setDebugReceiver((_c: string, h: any) => { handles[h.name] = h; });
         now = 1000;
         nowSpy = vi.spyOn(performance, 'now').mockImplementation(() => now);
     });
     afterEach(() => {
-        delete (globalThis as any).__colyseusDebug;
+        setDebugReceiver(undefined);
         nowSpy.mockRestore();
     });
 

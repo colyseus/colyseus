@@ -1,10 +1,9 @@
 /**
- * Debug panel for `Predict` instances published via the global registry.
+ * Debug panel for `Predict` instances published via the debug channel.
  *
- * `@colyseus/sdk/debug` installs a tiny `globalThis.__colyseusDebug.publish()`
- * receiver. Any prediction layer (Predict, PredictedEvents, etc.) calls into
- * it at construction time; this module renders interactive cards under the
- * debug shadow root.
+ * `@colyseus/sdk/debug` connects a receiver to the channel. Any prediction layer
+ * (Predict, PredictedEvents, etc.) publishes to it at construction time; this
+ * module renders interactive cards under the debug shadow root.
  *
  * Stable contract:
  *   - The `predict` channel expects a `PredictCore` (the engine's portable
@@ -72,9 +71,8 @@ const MODE_ICONS: Record<string, string> = {
 
 /**
  * Render (or dedupe) a Predict card for a published core handle. The debug
- * entry (`debug.ts`) routes the `"predict"` channel of the shared
- * `globalThis.__colyseusDebug` registry here — including buffered publishes it
- * replays on install.
+ * entry (`debug.ts`) routes the `"predict"` channel here — including buffered
+ * publishes replayed when it connects.
  */
 export function onPredictPublished(core: PredictCore): void {
     if (panels.has(core.name)) return; // dedupe

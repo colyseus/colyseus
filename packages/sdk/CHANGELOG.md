@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.9
+
+- Hardened the debug tooling so it's only wired up when `@colyseus/sdk/debug` is imported. Script-tag apps must now load `dist/debug.js` before the first join.
+
 ## 0.18.8
 
 - Safari no longer logs `Wrong protocol for WebSocket '[object Object]'` each time a room connects. [colyseus/react-tools#15](https://github.com/colyseus/react-tools/issues/15)

@@ -5,6 +5,7 @@ import { assert } from 'chai';
 import { schema, t } from '@colyseus/schema';
 import { Reconciler } from '../src/predict.ts';
 import type { InputHandle } from '../src/input/InputHandle.ts';
+import { setDebugReceiver } from '../src/debug-channel.ts';
 
 // -----------------------------------------------------------------------------
 // TODO/25 — `fields` is optional: omitted, it derives from schema metadata
@@ -50,10 +51,8 @@ function captureWarn(fn: () => void): string[] {
 
 /** Run `fn` with the `@colyseus/sdk/debug` overlay simulated as loaded. */
 function withDiagnostics(fn: () => void): void {
-    const g = globalThis as { __colyseusDebug?: unknown };
-    const prev = g.__colyseusDebug;
-    g.__colyseusDebug = { publish() {} };
-    try { fn(); } finally { g.__colyseusDebug = prev; }
+    setDebugReceiver(() => {});
+    try { fn(); } finally { setDebugReceiver(undefined); }
 }
 
 function step(input: FakeInput, ax: number): void {

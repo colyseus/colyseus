@@ -3,14 +3,9 @@ import { debugOverlayActive } from "../debug-channel.ts";
 
 /**
  * True when drift telemetry is being watched — the `@colyseus/sdk/debug` overlay
- * is loaded (its live receiver on `globalThis.__colyseusDebug` is what the panel
- * reads). Reconcilers skip ALL drift/correction bookkeeping when this is false
+ * is loaded. Reconcilers skip ALL drift/correction bookkeeping when this is false
  * and no `warnOnDivergence` tolerance is set, so a production build that imports
  * neither pays nothing for the diagnostic.
- *
- * Delegates to {@link debugOverlayActive} so the pre-load PUBLISH BUFFER (which a
- * plain `Predict`/room publish now installs even without the overlay) doesn't
- * read as active — only the overlay's live receiver flips this on.
  */
 export function diagnosticsActive(): boolean {
     return debugOverlayActive();

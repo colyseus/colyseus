@@ -5,6 +5,7 @@ import { assert } from 'chai';
 import { SimReconciler, type SimReconcilerOptions } from '../src/predict.ts';
 import type { InputHandle } from '../src/input/InputHandle.ts';
 import { resetDivergenceThrottle } from '../src/predict/divergence.ts';
+import { setDebugReceiver } from '../src/debug-channel.ts';
 
 /** Run `fn` with `console.warn` captured; returns the joined warning strings. */
 function captureWarn(fn: () => void): string[] {
@@ -16,12 +17,10 @@ function captureWarn(fn: () => void): string[] {
 }
 
 /** Run `fn` with drift telemetry enabled (simulates the `@colyseus/sdk/debug`
- *  bundle being loaded), restoring the prior global afterward. */
+ *  bundle being loaded). */
 function withDiagnostics(fn: () => void): void {
-    const g = globalThis as { __colyseusDebug?: unknown };
-    const prev = g.__colyseusDebug;
-    g.__colyseusDebug = { publish() {} };
-    try { fn(); } finally { g.__colyseusDebug = prev; }
+    setDebugReceiver(() => {});
+    try { fn(); } finally { setDebugReceiver(undefined); }
 }
 
 // -----------------------------------------------------------------------------
