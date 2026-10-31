@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.18.24
+
+- Hardened `LobbyRoom` filtering. Thanks @Omair-Asdaq! [#994](https://github.com/colyseus/colyseus/pull/994)
+- `FilterInput.name` is now required in the types: a lobby filter without it has never matched any room.
+
 ## 0.18.23
 
 - No longer requires the latest `@colyseus/shared-types`, and installs alongside any 0.18 `@colyseus/auth` or `@colyseus/ws-transport`.

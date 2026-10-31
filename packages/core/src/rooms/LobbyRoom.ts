@@ -1,4 +1,5 @@
 import * as matchMaker from '../MatchMaker.ts';
+import { debugAndPrintError } from '../Debug.ts';
 import type { IRoomCache } from '../matchmaker/LocalDriver/LocalDriver.ts';
 import type { Client } from '../Transport.ts';
 import { subscribeLobby } from '../matchmaker/Lobby.ts';
@@ -23,7 +24,10 @@ type LobbyClient = Client<{
 }>;
 
 export interface FilterInput {
-  name?: string;
+  /** Room name to list. Required: a filter without it matches nothing. */
+  name: string;
+
+  /** Narrows the listing to rooms whose metadata has these exact values. */
   metadata?: any;
 }
 
@@ -57,7 +61,6 @@ export class LobbyRoom<Metadata = any> extends Room {
 
     this.unsubscribeLobby = await subscribeLobby((roomId, data) => {
       const roomIndex = this.rooms.findIndex((room) => room.roomId === roomId);
-      const clients = this.clients.filter((client) => this.clientOptions[client.sessionId]);
 
       if (!data) {
         // remove room listing data
@@ -66,8 +69,8 @@ export class LobbyRoom<Metadata = any> extends Room {
 
           this.rooms.splice(roomIndex, 1);
 
-          clients.forEach((client) => {
-            if (this.filterItemForClient(previousData, this.clientOptions[client.sessionId].filter)) {
+          this.#notifyClients((client, filter) => {
+            if (this.filterItemForClient(previousData, filter)) {
               client.send('-', roomId);
             }
           });
@@ -77,8 +80,8 @@ export class LobbyRoom<Metadata = any> extends Room {
         // append room listing data
         this.rooms.push(data);
 
-        clients.forEach((client) => {
-          if (this.filterItemForClient(data, this.clientOptions[client.sessionId].filter)) {
+        this.#notifyClients((client, filter) => {
+          if (this.filterItemForClient(data, filter)) {
             client.send('+', [roomId, data]);
           }
         });
@@ -89,9 +92,9 @@ export class LobbyRoom<Metadata = any> extends Room {
         // replace room listing data
         this.rooms[roomIndex] = data;
 
-        clients.forEach((client) => {
-          const hadData = this.filterItemForClient(previousData, this.clientOptions[client.sessionId].filter);
-          const hasData = this.filterItemForClient(data, this.clientOptions[client.sessionId].filter);
+        this.#notifyClients((client, filter) => {
+          const hadData = this.filterItemForClient(previousData, filter);
+          const hasData = this.filterItemForClient(data, filter);
 
           if (hadData && !hasData) {
             client.send('-', roomId);
@@ -122,6 +125,19 @@ export class LobbyRoom<Metadata = any> extends Room {
     if (this.unsubscribeLobby) {
       this.unsubscribeLobby();
     }
+  }
+
+  #notifyClients(notify: (client: LobbyClient, filter: FilterInput) => void) {
+    this.clients.forEach((client) => {
+      const options = this.clientOptions[client.sessionId];
+      if (!options) { return; }
+
+      try {
+        notify(client, options.filter);
+      } catch (e: any) {
+        debugAndPrintError(e); // one client's failure must not skip the rest
+      }
+    });
   }
 
   protected filterItemsForClient(options: LobbyOptions): IRoomCache<Metadata>[] {

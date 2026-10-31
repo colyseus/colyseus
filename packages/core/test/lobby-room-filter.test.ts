@@ -2,10 +2,9 @@
 /**
  * LobbyRoom lobby filtering. `filterItemForClient()` reads `room.metadata` for
  * every field a client's filter names, but `IRoomCache.metadata` is optional:
- * `initializeRoomCache()` leaves it `undefined` for any room whose handler
- * declares neither `filterBy()` nor `sortBy()`, and `LobbyRoom.onCreate()`
- * puts *every* public room into `this.rooms`. A metadata filter used to throw
- * out of `onJoin()` as soon as one of those rooms was in the lobby.
+ * it stays `undefined` unless the room sets metadata, or its create options
+ * carry a `filterBy()` / `sortBy()` field, and `LobbyRoom.onCreate()` puts
+ * *every* public room into `this.rooms`.
  *
  * Matrix: {room with metadata, room without} × {metadata filter, name filter}.
  */

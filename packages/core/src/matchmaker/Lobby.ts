@@ -1,4 +1,5 @@
 import * as matchMaker from '../MatchMaker.ts';
+import { debugAndPrintError } from '../Debug.ts';
 
 import type { Room } from '../Room.ts';
 import type { IRoomCache } from './driver.ts';
@@ -38,27 +39,33 @@ export async function subscribeLobby(callback: (roomId: string, roomListing: IRo
   const cb = async (message: string) => {
     const [roomId, isRemove] = message.split(',');
 
-    if (isRemove === '1') {
-      // Mark as removed and process immediately
-      removedRoomIds.add(roomId);
-      callback(roomId, null);
+    try {
+      if (isRemove === '1') {
+        // Mark as removed and process immediately
+        removedRoomIds.add(roomId);
 
-      // Clean up after a short timeout to prevent memory leaks
-      setTimeout(() => removedRoomIds.delete(roomId), 2000);
+        // Clean up after a short timeout to prevent memory leaks
+        setTimeout(() => removedRoomIds.delete(roomId), 2000);
 
-    } else {
-      // Clear removed status - room might be coming back (e.g., visibility change)
-      removedRoomIds.delete(roomId);
+        callback(roomId, null);
 
-      const room = (await matchMaker.query({ roomId }))[0];
+      } else {
+        // Clear removed status - room might be coming back (e.g., visibility change)
+        removedRoomIds.delete(roomId);
 
-      // Check if room was removed while we were querying
-      // See "updating metadata should not cause race condition" test in LobbyRoom.test.ts
-      if (removedRoomIds.has(roomId)) {
-        return;
+        const room = (await matchMaker.query({ roomId }))[0];
+
+        // Check if room was removed while we were querying
+        // See "updating metadata should not cause race condition" test in LobbyRoom.test.ts
+        if (removedRoomIds.has(roomId)) {
+          return;
+        }
+
+        callback(roomId, room);
       }
 
-      callback(roomId, room);
+    } catch (e: any) {
+      debugAndPrintError(e); // presence listener: nothing above this can catch it
     }
   };
 

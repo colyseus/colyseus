@@ -1,6 +1,6 @@
 import assert from "assert";
 import { matchMaker, LobbyRoom, type Presence, type MatchMakerDriver, Server, Room, updateLobby, Deferred } from "../../src/index.ts";
-import { PRESENCE_IMPLEMENTATIONS, DRIVERS, DummyRoom, timeout } from "../utils/index.ts";
+import { PRESENCE_IMPLEMENTATIONS, DRIVERS, DummyRoom, timeout, waitUntil } from "../utils/index.ts";
 import { Client as SDKClient, Room as SDKRoom } from "@colyseus/sdk";
 
 const TEST_PORT = 8567;
@@ -12,6 +12,15 @@ async function createLobbyRoom () {
 
 function createSDKClient() {
   return new SDKClient(`ws://localhost:${TEST_PORT}`);
+}
+
+function nextRooms(lobby: SDKRoom) {
+  return new Promise<any[]>((resolve) => {
+    const stop = lobby.onMessage("rooms", (rooms: any[]) => {
+      stop();
+      resolve(rooms);
+    });
+  });
 }
 
 describe("LobbyRoom", () => {
@@ -100,6 +109,63 @@ describe("LobbyRoom", () => {
           // Wait for the lobby to process the removal
           await timeout(50);
           assert.strictEqual(0, lobby.rooms.length, "Room should be removed from lobby list after disposal");
+        });
+
+        it("should not match a room without metadata against a metadata filter", async () => {
+          await matchMaker.createRoom("dummy_1", {});
+
+          const filter = { name: "dummy_1", metadata: { mode: "duel" } };
+          const lobby = await createSDKClient().joinOrCreate("lobby");
+          assert.strictEqual((await nextRooms(lobby)).length, 1);
+
+          const refiltered = nextRooms(lobby);
+          lobby.send("filter", filter);
+          assert.deepStrictEqual(await refiltered, []);
+
+          const joined = await createSDKClient().joinOrCreate("lobby", { filter });
+          assert.deepStrictEqual(await nextRooms(joined), []);
+
+          await Promise.all([lobby.leave(), joined.leave()]);
+        });
+
+        it("a metadata filter should not stop other clients receiving updates", async () => {
+          const filter = { name: "dummy_1", metadata: { mode: "duel" } };
+          const filtered = await createSDKClient().joinOrCreate("lobby", { filter });
+          filtered.onMessage("*", () => {});
+
+          const added: any[] = [];
+          const unfiltered = await createSDKClient().joinOrCreate("lobby");
+          unfiltered.onMessage("rooms", () => {});
+          unfiltered.onMessage("+", (entry) => added.push(entry));
+
+          await matchMaker.createRoom("dummy_1", {});
+          await waitUntil(() => added.length > 0);
+          assert.strictEqual(added[0]?.[1].name, "dummy_1");
+
+          await Promise.all([filtered.leave(), unfiltered.leave()]);
+        });
+
+        it("a client that fails to receive an update should not skip the others", async () => {
+          matchMaker.defineRoomType("faulty_lobby", class extends LobbyRoom {
+            protected filterItemForClient(room: any, filter?: any) {
+              if (filter?.name === "faulty") { throw new Error("faulty filter"); }
+              return super.filterItemForClient(room, filter);
+            }
+          });
+
+          const faulty = await createSDKClient().joinOrCreate("faulty_lobby", { filter: { name: "faulty" } });
+          faulty.onMessage("*", () => {});
+
+          const added: any[] = [];
+          const healthy = await createSDKClient().joinOrCreate("faulty_lobby");
+          healthy.onMessage("rooms", () => {});
+          healthy.onMessage("+", (entry) => added.push(entry));
+
+          await matchMaker.createRoom("dummy_1", {});
+          await waitUntil(() => added.length > 0);
+          assert.strictEqual(added[0]?.[1].name, "dummy_1");
+
+          await Promise.all([faulty.leave(), healthy.leave()]);
         });
 
         it("updating metadata should not cause race condition", async () => {
