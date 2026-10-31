@@ -4,6 +4,7 @@
 
 - Hardened `LobbyRoom` filtering. Thanks @Omair-Asdaq! [#994](https://github.com/colyseus/colyseus/pull/994)
 - `FilterInput.name` is now required in the types: a lobby filter without it has never matched any room.
+- An error thrown by an `onMessage()` handler in a room without `onUncaughtException()` is now logged, and the room keeps running, instead of shutting down the server.
 
 ## 0.18.23
 

@@ -797,6 +797,9 @@ export class Room<T extends RoomOptions = RoomOptions> {
    * - `clock.setTimeout` / `clock.setInterval`
    * - `setTimestep` / `setFixedTimestep`
    *
+   * Without this method, an error thrown by an `onMessage` handler is logged and the
+   * room keeps running, while an error thrown by a timer shuts the server down.
+   *
    * (Experimental: this feature is subject to change in the future - we're currently getting feedback to improve it)
    */
   public onUncaughtException?(error: RoomException, methodName: RoomMethodName): void;

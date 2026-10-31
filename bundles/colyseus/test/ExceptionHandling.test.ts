@@ -419,6 +419,42 @@ describe("Exception Handling", () => {
     assert.deepStrictEqual(caught.error.payload, onMessageArgs[1]);
   });
 
+  it("onMessage: without onUncaughtException, a throw should not stop the other handlers or the client", async () => {
+    const received: string[] = [];
+
+    matchMaker.defineRoomType("my_room", class extends Room {
+      onCreate() {
+        this.onMessage("sync", () => { throw new Error("sync onMessage Error"); });
+        this.onMessage("sync", () => { received.push("sync"); });
+
+        this.onMessage("async", async () => { throw new Error("async onMessage Error"); });
+        this.onMessage("async", () => { received.push("async"); });
+
+        this.onMessageBytes("bytes", () => { throw new Error("bytes onMessage Error"); });
+        this.onMessageBytes("bytes", () => { received.push("bytes"); });
+
+        this.onMessage("*", () => { throw new Error("wildcard onMessage Error"); });
+        this.onMessage("*", (_, type) => { received.push(type as string); });
+
+        this.onMessage("ping", (client) => client.send("pong"));
+      }
+    });
+
+    const conn = await client.joinOrCreate("my_room");
+    const pong = new Promise((resolve) => conn.onMessage("pong", resolve));
+
+    conn.send("sync");
+    conn.send("async");
+    conn.sendBytes("bytes", new Uint8Array([1]));
+    conn.send("unregistered");
+    conn.send("ping");
+
+    await pong;
+    assert.deepStrictEqual(received, ["sync", "async", "bytes", "unregistered"]);
+
+    await conn.leave();
+  });
+
   it("async onMessage: error should be caught", async () => {
     let caught: any = { error: undefined, methodName: undefined };
     let onMessageArgs: any = undefined;

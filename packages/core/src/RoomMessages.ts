@@ -197,13 +197,33 @@ export class RoomMessages {
     }
 
     if (this.events.events[messageType]) {
-      this.events.emit(messageType as string, client, message, SEND_CONTEXT);
+      this.#dispatch(this.events.events[messageType], client, message, SEND_CONTEXT);
 
     } else if (this.events.events['*']) {
-      this.events.emit('*', client, messageType, message);
+      this.#dispatch(this.events.events['*'], client, messageType, message);
 
     } else {
       this.#noHandler(client, messageType, message);
+    }
+  }
+
+  /**
+   * Call the handlers of a fire-and-forget frame. With no reply to carry an error
+   * and nothing above this to catch one, a throw would reach the socket's event
+   * listener and shut the process down, along with every other room in it. So
+   * errors are logged, and the remaining handlers still run. Handlers wrapped for
+   * `onUncaughtException` report their own errors and never throw here.
+   */
+  #dispatch(handlers: Array<(...args: any[]) => any>, ...args: any[]): void {
+    for (let i = 0, length = handlers.length; i < length; i++) {
+      try {
+        const result = handlers[i](...args);
+        if (typeof result?.catch === 'function') {
+          result.catch(debugAndPrintError);
+        }
+      } catch (e: any) {
+        debugAndPrintError(e);
+      }
     }
   }
 
@@ -314,10 +334,10 @@ export class RoomMessages {
     }
 
     if (this.events.events[bytesMessageType]) {
-      this.events.emit(bytesMessageType, client, message);
+      this.#dispatch(this.events.events[bytesMessageType], client, message);
 
     } else if (this.events.events['*']) {
-      this.events.emit('*', client, messageType, message);
+      this.#dispatch(this.events.events['*'], client, messageType, message);
 
     } else {
       this.#noHandler(client, messageType, message);
