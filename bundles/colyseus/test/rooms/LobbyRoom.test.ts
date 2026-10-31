@@ -14,6 +14,15 @@ function createSDKClient() {
   return new SDKClient(`ws://localhost:${TEST_PORT}`);
 }
 
+function nextRooms(lobby: SDKRoom) {
+  return new Promise<any[]>((resolve) => {
+    const stop = lobby.onMessage("rooms", (rooms: any[]) => {
+      stop();
+      resolve(rooms);
+    });
+  });
+}
+
 describe("LobbyRoom", () => {
   for (let i = 0; i < PRESENCE_IMPLEMENTATIONS.length; i++) {
 
@@ -100,6 +109,40 @@ describe("LobbyRoom", () => {
           // Wait for the lobby to process the removal
           await timeout(50);
           assert.strictEqual(0, lobby.rooms.length, "Room should be removed from lobby list after disposal");
+        });
+
+        it("should not match a room without metadata against a metadata filter", async () => {
+          await matchMaker.createRoom("dummy_1", {});
+
+          const filter = { name: "dummy_1", metadata: { mode: "duel" } };
+          const lobby = await createSDKClient().joinOrCreate("lobby");
+          assert.strictEqual((await nextRooms(lobby)).length, 1);
+
+          const refiltered = nextRooms(lobby);
+          lobby.send("filter", filter);
+          assert.deepStrictEqual(await refiltered, []);
+
+          const joined = await createSDKClient().joinOrCreate("lobby", { filter });
+          assert.deepStrictEqual(await nextRooms(joined), []);
+
+          await Promise.all([lobby.leave(), joined.leave()]);
+        });
+
+        it("a metadata filter should not stop other clients receiving updates", async () => {
+          const filter = { name: "dummy_1", metadata: { mode: "duel" } };
+          const filtered = await createSDKClient().joinOrCreate("lobby", { filter });
+          filtered.onMessage("*", () => {});
+
+          const added: any[] = [];
+          const unfiltered = await createSDKClient().joinOrCreate("lobby");
+          unfiltered.onMessage("rooms", () => {});
+          unfiltered.onMessage("+", (entry) => added.push(entry));
+
+          await matchMaker.createRoom("dummy_1", {});
+          await timeout(100);
+          assert.strictEqual(added[0]?.[1].name, "dummy_1");
+
+          await Promise.all([filtered.leave(), unfiltered.leave()]);
         });
 
         it("updating metadata should not cause race condition", async () => {

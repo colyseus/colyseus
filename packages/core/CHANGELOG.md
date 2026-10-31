@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.56
+
+- Hardened `LobbyRoom` filtering. Thanks @Omair-Asdaq! [#994](https://github.com/colyseus/colyseus/pull/994)
+
 ## 0.17.55
 
 - The process no longer stays alive after `server.gracefullyShutdown(false)` until unused seat reservations and pending `allowReconnection()` holds expire. Thanks @eminl! [#991](https://github.com/colyseus/colyseus/issues/991)
