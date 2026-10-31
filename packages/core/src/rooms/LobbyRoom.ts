@@ -141,7 +141,7 @@ export class LobbyRoom<Metadata = any> extends Room {
 
     if (filter.metadata) {
       for (const field in filter.metadata) {
-        if (room.metadata[field] !== filter.metadata[field]) {
+        if (room.metadata?.[field] !== filter.metadata[field]) {
           isAllowed = false;
           break;
         }
