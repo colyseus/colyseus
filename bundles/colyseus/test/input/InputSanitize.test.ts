@@ -64,6 +64,19 @@ describe("Input: compileSanitizer (defineInput({ sanitize }))", () => {
     assert.strictEqual(f.jump, true, "non-numeric fields untouched");
   });
 
+  it("writes only what it clamps: an honest frame costs no setter", () => {
+    const sanitize = compileSanitizer<MoveInput>({ moveF: [-1, 1], dt: [0, MAX_DT] });
+    const writes: (string | symbol)[] = [];
+    const f = new Proxy(frame({ moveF: 5, dt: 0.016 }), {
+      set(target, key, value) {
+        writes.push(key);
+        return Reflect.set(target, key, value);
+      },
+    });
+    sanitize(f);
+    assert.deepStrictEqual(writes, ["moveF"]);
+  });
+
   it("callback form passes through and mutates in place", () => {
     const wrap = (a: number) => ((a + Math.PI) % (2 * Math.PI)) - Math.PI;
     const spec: SanitizeInput<MoveInput> = (f) => {

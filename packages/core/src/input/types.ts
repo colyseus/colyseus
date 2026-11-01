@@ -193,7 +193,7 @@ export interface NormalizedInputOptions {
   seqField?: string;
 
   /**
-   * > 0 enables per-client buffering of cloned snapshots — required for
+   * > 0 enables per-client buffering of input snapshots — required for
    * `room.inputs.get(sessionId).drain() / .peek() / .at()` to return populated
    * data. Oldest drops on overflow. Set to `0` to disable (`.latest` still
    * works).
@@ -229,6 +229,12 @@ export interface NormalizedInputOptions {
    * `latest` / the buffer / the idle ctx.
    */
   sanitize?: (instance: any) => void;
+
+  /**
+   * COMPILED copy of a decoded frame for the buffer (see `compileSnapshot`).
+   * Reads and writes like the schema, without its change tracking.
+   */
+  snapshot: (instance: any) => any;
 }
 
 /**

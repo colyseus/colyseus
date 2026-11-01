@@ -2,7 +2,7 @@ import assert from "assert";
 
 import { Client as SDKClient } from "@colyseus/sdk";
 import { InputEncoder } from "@colyseus/schema/input";
-import { schema, t, MapSchema, type SchemaType } from "@colyseus/schema";
+import { schema, t, MapSchema, Schema, type, type SchemaType } from "@colyseus/schema";
 
 import { matchMaker, Room, Server, Transport, Protocol, type Presence, type MatchMakerDriver } from "@colyseus/core";
 import { DRIVERS, PRESENCE_IMPLEMENTATIONS, timeout } from "../utils/index.ts";
@@ -193,6 +193,46 @@ describe("Input (InputEncoder / InputDecoder integration)", () => {
     assert.strictEqual(captured[1].x, 200);
     // Distinct instances:
     assert.notStrictEqual(captured[0], captured[1]);
+    assert.ok(captured[0] instanceof MoveInput, "a frame is still the input's schema");
+
+    await conn.leave();
+    await timeout(50);
+  });
+
+  it("Tier 2 — inputs reach the buffer when class fields shadow the schema's accessors", async () => {
+    // Native class fields (`useDefineForClassFields`) are own properties: the
+    // decoder writes those, so the values are on the instance and `$values` stays empty.
+    class ShadowedInput extends Schema {
+      constructor() {
+        super();
+        Object.defineProperty(this, "x", { value: 0, writable: true, enumerable: true, configurable: true });
+      }
+    }
+    type("number")(ShadowedInput.prototype, "x");
+
+    let captured: any[] = [];
+
+    matchMaker.defineRoomType('input_shadowed', class _ extends Room<{ input: any }> {
+      inputs = this.defineInput(ShadowedInput, { bufferMaxSize: 16 });
+      onCreate() {
+        this.setSimulationInterval(() => {
+          for (const c of this.clients) {
+            captured = captured.concat(this.inputs.get(c.sessionId).drain());
+          }
+        }, 30);
+      }
+    });
+
+    const conn = await client.joinOrCreate('input_shadowed');
+    // The type off the server: a client's reflected class never shadows.
+    const input = conn.input() as any;
+
+    input.data.x = 100; input.send();
+    input.data.x = 200; input.send();
+
+    await timeout(80);
+
+    assert.deepStrictEqual(captured.map((f) => f.x), [100, 200]);
 
     await conn.leave();
     await timeout(50);

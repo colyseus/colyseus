@@ -4,7 +4,7 @@ import { HandshakeSection, InputFlags, ProtocolModifier } from '@colyseus/shared
 
 import {
   InputAccessorImpl, InputBufferImpl, NO_OP_INPUT_ACCESSOR,
-  compileSanitizer, seedInputZeroValues, validateSubSteps,
+  compileSanitizer, compileSnapshot, seedInputZeroValues, validateSubSteps,
 } from './InputBuffer.ts';
 import type {
   InputAccessor, InputAPI, NormalizedInputOptions,
@@ -148,6 +148,7 @@ export class RoomInput {
       idle: opts?.idle,
       // Compiled once (map → dense min/max walk); applied per decoded frame.
       sanitize: opts?.sanitize !== undefined ? compileSanitizer(opts.sanitize) : undefined,
+      snapshot: compileSnapshot(type),
       tickRate,
       subSteps: validateSubSteps(opts?.subSteps, 'defineInput'),
     };
@@ -220,15 +221,15 @@ export class RoomInput {
 
   /**
    * Sanitize the freshly-decoded `client._input`, then (when buffering is on)
-   * push a clone into the per-client buffer. Honors the framework seq
+   * push a snapshot into the per-client buffer. Honors the framework seq
    * (unreliable) / a user `inputOptions.seqField` (reliable) to dedupe the
    * redundancy ring.
    */
   capture(client: ClientPrivate, renderTime: number = 0, reckonTime: number = 0, seq?: number): void {
-    // Sanitize before anything reads it (latest, the clone below, the idle ctx).
+    // Sanitize before anything reads it (latest, the snapshot below, the idle ctx).
     this.options.sanitize?.(client._input);
     const buf = client._inputBuffer;
-    if (!buf) { return; } // no consumer registered — skip the clone allocation
+    if (!buf) { return; } // no consumer registered — skip the snapshot allocation
     const inst = client._input!;
     if (seq !== undefined) {
       // Unreliable: dedup the ring by the framework wire seq (user seqField is for .at() only).
@@ -241,7 +242,7 @@ export class RoomInput {
         if (typeof value === 'number' && !buf.accept(value)) { return; }
       }
     }
-    buf.push(inst.clone() as any, renderTime, reckonTime, seq);
+    buf.push(this.options.snapshot(inst), renderTime, reckonTime, seq);
   }
 
   /** Decode a `ROOM_INPUT_RELIABLE` frame: an optional TIMED stamp prefix (shape

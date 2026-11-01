@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.25
+
+- Capturing a `defineInput()` input is about 7× cheaper: buffered frames no longer carry change tracking, and a `sanitize` range map only writes the fields it clamps.
+
 ## 0.18.24
 
 - Hardened `LobbyRoom` filtering. Thanks @Omair-Asdaq! [#994](https://github.com/colyseus/colyseus/pull/994)

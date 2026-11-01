@@ -1,3 +1,5 @@
+import { $values } from '@colyseus/schema';
+
 import type { ClientPrivate } from '../Transport.ts';
 import { $METADATA } from '../utils/Utils.ts';
 
@@ -43,7 +45,9 @@ export function compileSanitizer<I>(spec: SanitizeInput<I>): (input: I) => void 
       // never assigned; the range floor turned "no input" into "held stick").
       if (v === undefined) { continue; }
       // NaN-safe: NaN fails both comparisons → clamp floor.
-      inst[names[i]] = v >= mins[i] ? (v <= maxs[i] ? v : maxs[i]) : mins[i];
+      const clamped = v >= mins[i] ? (v <= maxs[i] ? v : maxs[i]) : mins[i];
+      // Honest frames clamp nothing: a keyed write through the setter costs more than the walk.
+      if (clamped !== v) { inst[names[i]] = clamped; }
     }
   };
 }
@@ -61,6 +65,59 @@ function fieldNamesOf(ctor: new () => any): string[] {
     }
   }
   return names;
+}
+
+/** One per input schema, so every room's frames share a hidden class. */
+const _snapshots = new WeakMap<new () => any, (input: any) => any>();
+
+/**
+ * @internal Compile how a decoded input is copied into the buffer. `clone()`
+ * builds a Schema and its ChangeTree per input, for a frame that's never
+ * encoded, so a schema of plain values gets a lighter frame: its own array of
+ * values behind the ctor's prototype. Methods, getters, `instanceof`, `clone()`
+ * and `toJSON()` all hold, and a field write lands on the copy, untracked. A
+ * nested schema or collection keeps `clone()`, whose copy is deep.
+ *
+ * Fields are read by name, as `clone()` reads them, never by copying `$values`:
+ * native class fields (`useDefineForClassFields`) shadow the schema's accessors,
+ * so the decoder's values sit on the instance and `$values` stays empty.
+ */
+export function compileSnapshot<I>(ctor: new () => I): (input: I) => I {
+  let snapshot = _snapshots.get(ctor);
+  if (snapshot !== undefined) { return snapshot; }
+
+  const md = (ctor as any)[$METADATA] as Record<number, { type?: unknown }> | undefined;
+  const names = fieldNamesOf(ctor);
+  const plain = md !== undefined && names.every((_, i) => {
+    const type = md[i].type;
+    return typeof type === "string" || (type !== null && typeof type === "object" && "quantized" in type);
+  });
+
+  if (plain) {
+    const fields: PropertyDescriptorMap = {};
+    names.forEach((name, i) => {
+      fields[name] = {
+        get(this: any) { return this[$values][i]; },
+        set(this: any, value: unknown) { this[$values][i] = value; },
+        enumerable: true,
+        configurable: true,
+      };
+    });
+    // A function, not a class: `constructor` must stay the schema's (clone/toJSON read its metadata).
+    function Frame(this: any, values: unknown[]) { this[$values] = values; }
+    Frame.prototype = Object.create(ctor.prototype, fields);
+    const count = names.length;
+    snapshot = (input) => {
+      const values = new Array(count);
+      for (let i = 0; i < count; i++) { values[i] = input[names[i]]; }
+      return new (Frame as any)(values);
+    };
+  } else {
+    snapshot = (input) => input.clone();
+  }
+
+  _snapshots.set(ctor, snapshot!);
+  return snapshot!;
 }
 
 /**
