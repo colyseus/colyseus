@@ -263,6 +263,13 @@ export class H3Client implements Client, ClientPrivate {
       return;
     }
 
+    // corked: held until uncork() (the transport owns `data`, Client.raw)
+    if (this._holding) {
+      this._held.push(data);
+      this._heldBytes += data.length;
+      return;
+    }
+
     // include length of message, as the reader may receive multiple messages at once
     const prefixLength = encode.number(lengthPrefixBuffer, data.length, { offset: 0 });
     const dataWithPrefixedLength = new Uint8Array(prefixLength + data.length);
@@ -270,6 +277,39 @@ export class H3Client implements Client, ClientPrivate {
     dataWithPrefixedLength.set(data, prefixLength);
 
     this._bidiWriter.write(dataWithPrefixedLength);
+  }
+
+  /** Frames held while corked (reused), their bytes, and whether `raw` holds. */
+  private _held: Array<Uint8Array | Buffer> = [];
+  private _heldBytes: number = 0;
+  private _holding: boolean = false;
+
+  public cork() {
+    this._holding = true;
+  }
+
+  /** The stream is length-prefixed already: what was held goes out as one write of every frame, each prefixed. */
+  public uncork() {
+    this._holding = false;
+    const held = this._held;
+    if (held.length === 0) { return; }
+    try {
+      if (this.readyState !== 1) { return; } // OPEN
+      // one frame: written as raw() writes it (no gathering to do)
+      if (held.length === 1) { this.raw(held[0]); return; }
+      const out = new Uint8Array(this._heldBytes + held.length * 9); // 9: a prefix's most
+      let offset = 0;
+      for (let i = 0; i < held.length; i++) {
+        const it = { offset };
+        encode.number(out as any, held[i].length, it);
+        out.set(held[i], it.offset);
+        offset = it.offset + held[i].length;
+      }
+      this._bidiWriter.write(out.subarray(0, offset));
+    } finally {
+      held.length = 0;
+      this._heldBytes = 0;
+    }
   }
 
   public error(code: number, message: string = '', cb?: (err?: Error) => void) {

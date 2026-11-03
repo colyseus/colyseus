@@ -66,9 +66,48 @@ export class WebSocketClient implements Client, ClientPrivate {
       return;
     }
 
+    // corked: held until uncork() (the transport owns `data`, Client.raw)
+    if (this._holding) {
+      this._held.push(data);
+      return;
+    }
+
     // Bun's sendBinary requires an ArrayBufferView (Uint8Array, etc).
     // Ensure we don't pass a plain number[] array.
     this.ref.ws.sendBinary(ArrayBuffer.isView(data) ? data : new Uint8Array(data));
+  }
+
+  /** Frames held while corked (reused), and whether `raw` holds. */
+  private _held: Array<Uint8Array | Buffer> = [];
+  private _holding: boolean = false;
+  /** Send what's held (`uncork()`'s cork callback, made once). */
+  private _sendHeld = () => {
+    const ws = this.ref.ws, held = this._held;
+    for (let i = 0; i < held.length; i++) {
+      ws.sendBinary(ArrayBuffer.isView(held[i]) ? held[i] : new Uint8Array(held[i]));
+    }
+  };
+
+  /** Bun corks inside a callback (`ws.cork(cb)`), as uWS does: hold, then send them all in one. */
+  public cork() {
+    this._holding = true;
+  }
+
+  public uncork() {
+    this._holding = false;
+    const held = this._held;
+    if (held.length === 0) { return; }
+    try {
+      // @ts-ignore
+      if (this.ref.ws.readyState === WebSocket.OPEN) {
+        const ws = this.ref.ws;
+        // one frame is one write either way: send it as raw() would (a cork costs more than it saves)
+        if (held.length === 1 || typeof ws.cork !== 'function') { this._sendHeld(); }
+        else { ws.cork(this._sendHeld); }
+      }
+    } finally {
+      held.length = 0;
+    }
   }
 
   public error(code: number, message: string = '', cb?: (err?: Error) => void) {

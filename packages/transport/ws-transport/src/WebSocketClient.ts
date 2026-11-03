@@ -55,6 +55,25 @@ export class WebSocketClient implements Client, ClientPrivate {
     this.ref.send(data, SEND_OPTS, cb);
   }
 
+  /** The socket `cork()` held (the one to release, whatever `ref` is by then). */
+  private _corkedSocket: { cork(): void; uncork(): void } | undefined = undefined;
+
+  /**
+   * Hold the TCP socket's writes: `ws` still frames each message as it's sent
+   * (in order, into the socket's buffer), and `uncork()` writes them all in one
+   * go. Frames from every path (patches, messages, replies) keep their order.
+   */
+  public cork() {
+    // `_socket`: the net.Socket `ws` writes to (not in its types)
+    const socket = (this.ref as any)._socket;
+    if (socket) { socket.cork(); this._corkedSocket = socket; }
+  }
+
+  public uncork() {
+    const socket = this._corkedSocket;
+    if (socket) { this._corkedSocket = undefined; socket.uncork(); }
+  }
+
   public error(code: number, message: string = '', cb?: (err?: Error) => void) {
     this.raw(getMessageBytes[Protocol.ERROR](code, message), undefined, cb);
   }

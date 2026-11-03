@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.5
+
+- Supports `room.autoBatch` and `room.batch()` (`@colyseus/core` 0.18.28): what they hold for a client is sent in one `cork()`. With an older `@colyseus/core`, nothing changes.
+
 ## 0.18.4
 
 - No longer requires the latest `@colyseus/core`: any version from 0.18.5 works.

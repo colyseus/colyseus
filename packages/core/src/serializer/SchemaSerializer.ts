@@ -1,7 +1,7 @@
 import { Protocol, ProtocolModifier } from '@colyseus/shared-types';
 
 import type { PatchTimingContext, Serializer } from './Serializer.ts';
-import { type Client, type ClientPrivate, ClientState } from '../Transport.ts';
+import { type Client, type ClientPrivate, ClientState, sendClientRaw } from '../Transport.ts';
 
 import { type Iterator, $numFields, encode, Encoder, dumpChanges, Metadata, Reflection, Schema, StateView, TypeContext } from '@colyseus/schema';
 import { debugPatch } from '../Debug.ts';
@@ -74,10 +74,11 @@ function clientProcessedInputSeq(client: Client): number {
  * — they go out standalone right after the patch via `Room._flushPendingClientFrames`.
  */
 function sendClientFrame(client: Client, encodedBody: Uint8Array, timing?: PatchTimingContext): void {
+  // (through the Room's write window: a patch inside a tick joins the tick's one write)
   if (timing) {
-    client.raw(buildTimedFrame(encodedBody, timing.sNow, clientProcessedInputSeq(client)));
+    sendClientRaw(client, buildTimedFrame(encodedBody, timing.sNow, clientProcessedInputSeq(client)));
   } else {
-    client.raw(encodedBody);
+    sendClientRaw(client, encodedBody);
   }
 }
 

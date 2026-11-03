@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.18.28
+
+- `room.autoBatch = true` writes everything one tick of `setFixedTimestep()` / `setTimestep()` sends a client to its socket at once: the same messages in the same order, in one write instead of one per message. A tick that sends many messages (hits, projectiles, effects) costs a fraction of the server CPU it did. Off by default: a room that doesn't set it sends exactly as before.
+- `room.batch(fn)` does the same for whatever `fn` sends, anywhere: a message handler, a timer, a callback.
+
 ## 0.18.27
 
 - Matchmaking requests during a graceful shutdown now fail with a `MatchMakeError` (code 503) instead of `SyntaxError: Unexpected end of JSON input`. Thanks @portable-one! [#996](https://github.com/colyseus/colyseus/issues/996)
