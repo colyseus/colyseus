@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.26
+
+- Awaiting `allowReconnection()` in `onLeave()` no longer keeps a consented `room.leave()` waiting for the whole reconnection window, which let SDKs before 0.18.7 reconnect into the room the player had just left. Thanks @sylvainpolletvillard!
+
 ## 0.18.25
 
 - Capturing a `defineInput()` input is about 7× cheaper: buffered frames no longer carry change tracking, and a `sanitize` range map only writes the fields it clamps.

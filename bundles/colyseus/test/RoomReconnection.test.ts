@@ -842,6 +842,40 @@ describe("Room Reconnection", () => {
         await conn.leave();
         assert.strictEqual(CloseCode.CONSENTED, closeCode);
       });
+
+      // https://github.com/colyseus/issues/issues/11
+      it(".leave() should not wait for an awaited allowReconnection() in onLeave", async () => {
+        matchMaker.defineRoomType('leave_held_seat', class _ extends Room {
+          async onLeave(client: Client, code: number) {
+            if (code === CloseCode.CONSENTED) { await this.allowReconnection(client, 1); }
+          }
+        });
+
+        const conn = await client.joinOrCreate('leave_held_seat');
+        const reconnectionToken = conn.reconnectionToken;
+
+        assert.strictEqual(await settle(conn.leave()), CloseCode.CONSENTED);
+
+        // the seat is still held for an explicit reconnect
+        const newConn = await client.reconnect(reconnectionToken);
+        assert.strictEqual(newConn.sessionId, conn.sessionId);
+
+        await newConn.leave();
+      });
+
+      it(".leave() should still wait for the rest of an async onLeave", async () => {
+        const saved = new Deferred();
+        matchMaker.defineRoomType('leave_async_work', class _ extends Room {
+          async onLeave() { await saved; }
+        });
+
+        const conn = await client.joinOrCreate('leave_async_work');
+        const leaving = conn.leave();
+
+        assert.strictEqual(await settle(leaving, 50), "pending");
+        saved.resolve();
+        assert.strictEqual(await settle(leaving), CloseCode.CONSENTED);
+      });
     });
 
     describe(".leave() after the connection dropped", () => {

@@ -255,6 +255,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
   #_roomId: string;
   #_roomName: string;
   #_onLeaveConcurrent: number = 0; // number of onLeave calls in progress
+  #_pendingCloses = new WeakMap<Client, () => void>(); // server-initiated closes waiting on onLeave
 
   /**
    * Maximum number of clients allowed to connect into the room. When room reaches this limit,
@@ -1999,6 +2000,9 @@ export class Room<T extends RoomOptions = RoomOptions> {
 
     this._reserveSeat(sessionId, true, previousClient.auth, seconds, true);
 
+    // the seat is held now: run a server-initiated close that's still waiting on onLeave
+    this.#_pendingCloses.get(previousClient)?.();
+
     // keep reconnection reference in case the user reconnects into this room.
     const reconnection = new Deferred<Client & ClientPrivate>();
     this._reconnections[reconnectionToken] = [sessionId, reconnection];
@@ -2349,14 +2353,16 @@ export class Room<T extends RoomOptions = RoomOptions> {
     // prevent "onLeave" from being called twice if player asks to leave
     client.ref.removeListener('close', client.ref['onleave']);
 
-    // only effectively close connection when "onLeave" is fulfilled
+    // close once "onLeave" is fulfilled (#202), or earlier if allowReconnection() holds the seat
     const ref = client.ref;
-    this._onLeave(client, closeCode).then(() => {
-      // skip if a successful reconnection has transplanted a new ref (#950)
-      if (client.ref === ref) {
+    const close = () => {
+      // once only; skip if a successful reconnection has transplanted a new ref (#950)
+      if (this.#_pendingCloses.delete(client) && client.ref === ref) {
         (client as any).leave(closeCode, reason);
       }
-    });
+    };
+    this.#_pendingCloses.set(client, close);
+    this._onLeave(client, closeCode).then(close);
   }
 
   private async _onLeave(client: ExtractRoomClient<T>, code?: number): Promise<any> {
