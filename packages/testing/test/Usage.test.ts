@@ -62,8 +62,9 @@ describe("@colyseus/testing", () => {
       }
     }, sdkRoom.state.toJSON());
 
+    // compile-time check only: actually sending it gets the client kicked
     // @ts-expect-error - invalid message type
-    sdkRoom.send("invalid-message-type", "hey");
+    const sendInvalid = () => sdkRoom.send("invalid-message-type", "hey");
 
     await sdkRoom.leave();
     sinon.assert.callCount(onLeaveSpy, 1);
