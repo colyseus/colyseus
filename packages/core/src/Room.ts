@@ -806,6 +806,40 @@ export class Room<T extends RoomOptions = RoomOptions> {
   public onUncaughtException?(error: RoomException, methodName: RoomMethodName): void;
 
   /**
+   * Called when a client sends a message type that has no `onMessage()` handler.
+   * Use it to report the message, for example to an error tracker.
+   *
+   * It only observes. After it returns, the server still handles the message the
+   * usual way:
+   * - `room.send()`/`room.sendBytes()`: the client is disconnected with
+   *   `CloseCode.WITH_ERROR` (4002). In `devMode`, the client receives an
+   *   `ErrorCode.INVALID_PAYLOAD` error instead and stays connected.
+   * - `room.request()`: the request rejects with a `no_handler` error.
+   *
+   * To accept every message type without disconnecting the client, register a
+   * fallback handler with `onMessage("*", ...)` instead. Messages it receives
+   * don't reach this method, except requests: the fallback can't answer those.
+   *
+   * Without this method, the server logs a warning for unhandled `send()`/`sendBytes()`
+   * messages. An error thrown here goes to `onUncaughtException` (as an
+   * `OnMessageException`) when defined, or is logged.
+   *
+   * @param client - The client that sent the message.
+   * @param type - The message type it sent.
+   * @param message - The decoded payload (a `Buffer` for `sendBytes()`).
+   *
+   * @example
+   * ```typescript
+   * onUnhandledMessage(client: Client, type: string | number, message: unknown) {
+   *   Sentry.captureMessage(`unhandled message "${type}"`, {
+   *     extra: { roomId: this.roomId, sessionId: client.sessionId, message },
+   *   });
+   * }
+   * ```
+   */
+  public onUnhandledMessage?(client: ExtractRoomClient<T>, type: string | number, message: unknown): void | Promise<any>;
+
+  /**
    * This method is called before onJoin() - this is where you should authenticate the client
    * @param client - The client that is authenticating.
    * @param options - The options passed to the client when it is authenticating.

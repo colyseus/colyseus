@@ -7,8 +7,9 @@ import { createNanoEvents } from './utils/nanoevents.ts';
 import { standardValidate, type StandardSchemaV1 } from './utils/StandardSchema.ts';
 import { isDevMode } from './utils/DevMode.ts';
 import { debugMessage, debugAndPrintError } from './Debug.ts';
+import { logger } from './Logger.ts';
 import { OnMessageException } from './errors/RoomExceptions.ts';
-import type { Client, ClientPrivate } from './Transport.ts';
+import { ClientState, type Client, type ClientPrivate } from './Transport.ts';
 import type { Room } from './Room.ts';
 
 /** Normalize a thrown value into the `{ name, message, code? }` shape echoed in a
@@ -74,7 +75,7 @@ const SEND_CONTEXT: MessageContext = Object.freeze({
  * ROOM_DATA_BYTES). Room's `_onMessage` keeps the protocol/lifecycle frames
  * (JOIN/PING/LEAVE/input) and calls one of these per frame, preserving the
  * original dispatch order. Reads back into its Room only for `onUncaughtException`
- * (handler wrapping) and `roomId`/`roomName` (logging).
+ * (handler wrapping), `onUnhandledMessage` and `roomId`/`roomName` (logging).
  *
  * @internal
  */
@@ -263,6 +264,10 @@ export class RoomMessages {
     const handler = this.events.events[messageType as string]?.[0];
 
     if (handler === undefined) {
+      // no warning without the hook: the client already gets an explicit error
+      if (this.room.onUnhandledMessage !== undefined) {
+        this.#reportUnhandled(client, messageType, message);
+      }
       this.#replyToRequest(client, requestId, ResponseStatus.ERROR, {
         name: "no_handler",
         message: `room "${this.room.roomName}" has no onMessage("${messageType}") handler to answer this request.`,
@@ -351,13 +356,45 @@ export class RoomMessages {
   }
 
   /** No handler for the type: error the client in dev, drop it in production. */
-  #noHandler(client: Client, messageType: string | number, _message: unknown): void {
+  #noHandler(client: Client, messageType: string | number, message: unknown): void {
     const errorMessage = `room onMessage for "${messageType}" not registered.`;
-    debugMessage(`${errorMessage} (roomId: ${this.room.roomId})`);
+
+    if (this.room.onUnhandledMessage !== undefined) {
+      this.#reportUnhandled(client, messageType, message);
+
+    } else {
+      logger.warn(`room "${this.room.roomName}" (roomId: ${this.room.roomId}): client '${client.sessionId}' sent "${messageType}", which has no onMessage() handler. ${(isDevMode)
+        ? "Replied with an INVALID_PAYLOAD error (outside devMode, the client is disconnected)."
+        : "Disconnecting the client."}`);
+    }
+
     if (isDevMode) {
       client.error(ErrorCode.INVALID_PAYLOAD, errorMessage);
     } else {
+      // frames already received still arrive after leave(); Room#_onMessage skips them
+      client.state = ClientState.LEAVING;
       client.leave(CloseCode.WITH_ERROR, errorMessage);
+    }
+  }
+
+  /** Call `room.onUnhandledMessage`. A throw or rejection goes to
+   *  `onUncaughtException` when set, or is logged; it never stops the default. */
+  #reportUnhandled(client: Client, messageType: string | number, message: unknown): void {
+    const report = (e: any) => {
+      if (this.room.onUncaughtException !== undefined) {
+        this.room.onUncaughtException(new OnMessageException<Room<any>, any>(e, e?.message, client, message, messageType), 'onMessage');
+      } else {
+        debugAndPrintError(e);
+      }
+    };
+
+    try {
+      const result = this.room.onUnhandledMessage!(client, messageType, message) as any;
+      if (typeof result?.catch === 'function') {
+        result.catch(report);
+      }
+    } catch (e: any) {
+      report(e);
     }
   }
 }

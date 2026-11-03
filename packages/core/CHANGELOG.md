@@ -3,6 +3,7 @@
 ## 0.18.26
 
 - Awaiting `allowReconnection()` in `onLeave()` no longer keeps a consented `room.leave()` waiting for the whole reconnection window, which let SDKs before 0.18.7 reconnect into the room the player had just left. Thanks @sylvainpolletvillard!
+- When a client sends a message type with no `onMessage()` handler, the server now logs a warning instead of disconnecting it silently. Define `onUnhandledMessage()` in a room to report these messages yourself, for example to Sentry. Thanks @konistehrad!
 
 ## 0.18.25
 
