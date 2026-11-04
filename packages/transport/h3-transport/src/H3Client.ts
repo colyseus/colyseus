@@ -319,6 +319,7 @@ export class H3Client implements Client, ClientPrivate {
   public leave(code?: number, data?: string) {
     // `closed` can settle after a failure path already ran _close(); don't reopen
     if (this.readyState === 3) { return; }
+    this.uncork(); // what a write window held goes out before the close
     this.readyState = 2; // CLOSING;
     try {
       this._wtSession.close({ reason: data || "", closeCode: code });

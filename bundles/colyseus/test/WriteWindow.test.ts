@@ -6,7 +6,7 @@ import { Client as SDKClient } from "@colyseus/sdk";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import { uWebSocketClient, uWebSocketsTransport } from "@colyseus/uwebsockets-transport";
 import { H3Client } from "@colyseus/h3-transport";
-import { ClientState, LocalDriver, LocalPresence, matchMaker, Room, Server } from "@colyseus/core";
+import { ClientState, CloseCode, LocalDriver, LocalPresence, matchMaker, Room, Server } from "@colyseus/core";
 import { waitUntil } from "./utils/index.ts";
 
 //
@@ -21,12 +21,14 @@ type State = SchemaType<typeof State>;
 /**
  * On the step after `burst` is set: `burst` broadcasts and as many sends to each client (in a `batch()` of their own
  * with `nestBatch`), then a patch between two more; with `throwAfterBurst`, the step throws right after the burst
- * instead (once). On the step after `toOne` is set: that many sends to the first client alone.
+ * instead (once). On the step after `toOne` is set: that many sends to the first client alone, which then leaves
+ * with `kickAfter`.
  */
 class BurstRoom extends Room {
   state = new State();
   burst = 0;
   toOne = 0;
+  kickAfter = false;
   leaveFirst = false;
   throwAfterBurst = false;
   nestBatch = false;
@@ -41,6 +43,7 @@ class BurstRoom extends Room {
         const n = this.toOne;
         this.toOne = 0;
         for (let i = 0; i < n; i++) { this.clients[0].send("c", i); }
+        if (this.kickAfter) { this.clients[0].leave(CloseCode.CONSENTED); }
         return;
       }
       const n = this.burst;
@@ -113,6 +116,21 @@ function record(conn: any) {
   return seen;
 }
 
+/** A client made to leave mid-tick still gets, before its close, what the tick sent it. */
+async function kickedMidTick(endpoint: string) {
+  const a = await new SDKClient(endpoint).create<State>("burst");
+  const room = matchMaker.getLocalRoomById(a.roomId) as BurstRoom;
+  await waitUntil(() => room.clients[0]?.state === ClientState.JOINED);
+  const seen = record(a);
+  let seenAtClose: string[] | undefined;
+  a.onLeave(() => { seenAtClose = seen.slice(); });
+
+  room.kickAfter = true;
+  room.toOne = 5;
+  await waitUntil(() => seenAtClose !== undefined);
+  assert.deepStrictEqual(seenAtClose, ["c0", "c1", "c2", "c3", "c4"]);
+}
+
 /** What two clients each see from a burst of `n`. */
 const burstOf = (n: number) => [
   ...Array.from({ length: n }, (_, i) => [`b${i}`, `c${i}`]).flat(),
@@ -131,7 +149,8 @@ describe("Write window", () => {
     before(async () => {
       presence = new LocalPresence();
       driver = new LocalDriver();
-      server = new Server({ greet: false, gracefullyShutdown: false, presence, driver, transport: new WebSocketTransport() });
+      // no pings: a ping is a write of its own, and every write here is counted
+      server = new Server({ greet: false, gracefullyShutdown: false, presence, driver, transport: new WebSocketTransport({ pingInterval: 0 }) });
       await matchMaker.setup(presence, driver);
       server.define("burst", BurstRoom);
       server.define("burst-caught", CatchingBurstRoom);
@@ -411,6 +430,8 @@ describe("Write window", () => {
 
       await b.leave();
     });
+
+    it("a client made to leave mid-tick gets what the tick sent it first", () => kickedMidTick(`ws://localhost:${TEST_PORT}`));
   });
 
   describe("uwebsockets-transport, a real socket", () => {
@@ -448,6 +469,8 @@ describe("Write window", () => {
       await a.leave();
       await b.leave();
     });
+
+    it("a client made to leave mid-tick gets what the tick sent it first", () => kickedMidTick(`ws://localhost:${TEST_PORT}`));
   });
 
   describe("uwebsockets-transport", () => {
@@ -543,6 +566,23 @@ describe("Write window", () => {
       // uncorked, each frame is its own write again
       client.raw(new Uint8Array([9]));
       assert.strictEqual(writes.length, 2);
+    });
+
+    it("leave() writes what was held before it closes the session", () => {
+      const never = new Promise<any>(() => {});
+      const log: string[] = [];
+      const client = new H3Client({ ready: never, closed: never, close() { log.push("close"); } } as any, () => {});
+      (client as any)._bidiWriter = { write(bytes: Uint8Array) { log.push(`write ${bytes.byteLength}`); } };
+      client.readyState = 1;
+
+      client.cork();
+      client.raw(new Uint8Array([1]));
+      client.raw(new Uint8Array([2, 2]));
+      client.leave(CloseCode.CONSENTED);
+      assert.deepStrictEqual(log, ["write 5", "close"], "both frames, each with its 1-byte prefix, then the close");
+
+      client.uncork(); // the window's own close: nothing left
+      assert.deepStrictEqual(log, ["write 5", "close"]);
     });
   });
 

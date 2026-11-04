@@ -141,6 +141,8 @@ export class uWebSocketClient implements Client, ClientPrivate {
       return;
     }
 
+    this.uncork(); // what a write window held goes out before the close
+
     this.readyState = ReadyState.CLOSING;
 
     if (code !== undefined) {

@@ -124,6 +124,7 @@ export class WebSocketClient implements Client, ClientPrivate {
   }
 
   public leave(code?: number, data?: string) {
+    this.uncork(); // what a write window held goes out before the close
     this.ref.ws.close(code, data);
   }
 
