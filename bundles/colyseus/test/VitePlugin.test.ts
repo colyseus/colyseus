@@ -3,10 +3,10 @@ import fs from "fs";
 import http from "http";
 import type { Plugin, ViteDevServer } from "vite";
 
-import { matchMaker, Server, setDevMode, unregisterRoomDefinitions } from "@colyseus/core";
+import { Deferred, matchMaker, Server, setDevMode, unregisterRoomDefinitions } from "@colyseus/core";
 import { MatchMakerState } from "@colyseus/core/MatchMaker";
 import { setTransport } from "@colyseus/core/Transport";
-import { colyseus } from "colyseus/vite";
+import { colyseus, type ColyseusViteOptions } from "colyseus/vite";
 
 const ROOM_NAME = "vite_fixture_room";
 const SERVER_ENTRY = "/fixtures/vite-server-entry.ts";
@@ -40,7 +40,7 @@ const foreignEnvironmentFactory: Plugin = {
 
 // imported here, not at module scope: mocha loads every spec file up front, so
 // a static import would put vite in the process for the whole suite
-async function startDevServer(plugins: Plugin[] = []) {
+async function startDevServer(plugins: Plugin[] = [], options: Partial<ColyseusViteOptions> = {}) {
   const { createServer } = await import("vite");
 
   return createServer({
@@ -55,6 +55,7 @@ async function startDevServer(plugins: Plugin[] = []) {
         httpServer,
         loadWsTransport: async () => fakeWsTransport,
         quiet: true,
+        ...options,
       }),
     ],
   });
@@ -77,7 +78,6 @@ describe("colyseus() vite plugin", () => {
 
   afterEach(async () => {
     await vite?.close();
-    unregisterRoomDefinitions([ROOM_NAME]);
     setTransport(undefined as any);
 
     // before the shutdown: in dev mode it would cache room history to disk
@@ -86,6 +86,9 @@ describe("colyseus() vite plugin", () => {
     // best-effort: a failing load leaves the matchMaker half set up, and its
     // error would mask the assertion that actually failed
     await matchMaker.gracefullyShutdown().catch(() => { });
+
+    // after the shutdown: disposing a room looks up its handler
+    unregisterRoomDefinitions([ROOM_NAME]);
   });
 
   it("loads the server entry", async () => {
@@ -118,6 +121,57 @@ describe("colyseus() vite plugin", () => {
     await waitFor(() => matchMaker.state === MatchMakerState.READY, "the reload to finish");
 
     assert.notStrictEqual(roomHandler(), previous);
+  });
+
+  //
+  // See: https://github.com/colyseus/colyseus/issues/996
+  //
+  describe("matchmaking while the server entry loads", () => {
+    async function joinOrCreate() {
+      const server = http.createServer(vite.middlewares);
+      await new Promise<void>((resolve) => server.listen(0, resolve));
+
+      try {
+        const { port } = server.address() as { port: number };
+        const response = await fetch(`http://localhost:${port}/matchmake/joinOrCreate/${ROOM_NAME}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: "{}",
+        });
+        return { status: response.status, body: await response.text() };
+
+      } finally {
+        server.close();
+      }
+    }
+
+    it("waits for the rooms to be defined at startup", async () => {
+      const loaded = new Deferred<void>();
+
+      // holds the load open, as a slow top-level await in the entry would
+      vite = await startDevServer([], {
+        loadWsTransport: async () => { await loaded; return fakeWsTransport; },
+      });
+
+      const request = joinOrCreate();
+      setTimeout(() => loaded.resolve(), 100);
+      const { status, body } = await request;
+
+      assert.strictEqual(status, 200, body);
+      assert.ok(JSON.parse(body).sessionId);
+    });
+
+    it("waits for a reload to finish cycling the rooms", async () => {
+      vite = await startDevServer();
+      await waitFor(() => matchMaker.state === MatchMakerState.READY, "the entry to load");
+
+      vite.watcher.emit("change", `${import.meta.dirname}${SERVER_ENTRY}`);
+      await waitFor(() => matchMaker.state === MatchMakerState.SHUTTING_DOWN, "the reload to start");
+
+      const { status, body } = await joinOrCreate();
+
+      assert.strictEqual(status, 200, body);
+    });
   });
 });
 

@@ -256,6 +256,30 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
   let expressApp: any = null;
   let isStarted = false;
 
+  // Loads run one at a time: overlapping ones would set up the matchMaker
+  // twice, or run two hotReload()s over the same rooms.
+  let loading: Promise<void> = Promise.resolve();
+  let queued: Promise<void> | null = null;
+
+  // A burst of changes shares the one load still waiting to start: it
+  // re-imports everything, so each change would only repeat it.
+  function queueLoad(httpServer?: import('http').Server) {
+    return queued ??= loading = loading.then(() => {
+      queued = null;
+      return loadServerModule(httpServer);
+    });
+  }
+
+  // Vite listens before the entry has loaded, and a reload cycles the rooms,
+  // so matchmaking waits for every queued load.
+  async function whenLoaded() {
+    let current: Promise<void>;
+    do {
+      current = loading;
+      await current;
+    } while (current !== loading);
+  }
+
   return [
     {
       name: 'colyseus:config',
@@ -302,7 +326,12 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
       name: 'colyseus:dev-server',
       configureServer(server: any) {
         viteServer = server;
-        server.middlewares.use(createNodeMatchmakingMiddleware());
+
+        const matchmake = createNodeMatchmakingMiddleware();
+        server.middlewares.use((req: any, res: any, next: any) => {
+          if (!req.url?.startsWith(`/${matchMaker.controller.matchmakeRoute}/`)) { return next(); }
+          whenLoaded().then(() => matchmake(req, res, next));
+        });
 
         // Dynamic application middleware — handler is swapped on each HMR reload.
         server.middlewares.use((req: any, res: any, next: any) => {
@@ -318,7 +347,7 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
               'middlewareMode, pass `httpServer` to the colyseus() plugin.'
             );
           }
-          await loadServerModule(httpServer);
+          await queueLoad(httpServer);
           console.log("[colyseus] Server ready on " + (options.httpServer ? 'user-provided' : "Vite's") + ' HTTP server');
         };
       },
@@ -328,7 +357,7 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
       name: 'colyseus:hmr',
       hotUpdate({ file, modules }) {
         if (this.environment?.name === 'colyseus' && modules.length > 0) {
-          loadServerModule().then(() => {
+          queueLoad().then(() => {
             if (!options.quiet) {
               console.log(`[colyseus] Server code reloaded (${file})`);
             }
