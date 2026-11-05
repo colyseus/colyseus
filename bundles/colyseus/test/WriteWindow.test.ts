@@ -584,6 +584,26 @@ describe("Write window", () => {
       client.uncork(); // the window's own close: nothing left
       assert.deepStrictEqual(log, ["write 5", "close"]);
     });
+
+    // an `@unreliable` flush mutates what the reliable patch just added: the patch must be on the stream first
+    it("a datagram sent mid-window goes after the frames held before it, and the window keeps holding", () => {
+      const never = new Promise<any>(() => {});
+      const log: string[] = [];
+      const client = new H3Client({ ready: never, closed: never, datagrams: { maxDatagramSize: 0 } } as any, () => {});
+      (client as any)._bidiWriter = { write(bytes: Uint8Array) { log.push(`stream ${bytes.byteLength}`); } };
+      (client as any)._datagramWriter = { write(bytes: Uint8Array) { log.push(`datagram ${bytes.byteLength}`); } };
+      client.readyState = 1;
+
+      client.cork();
+      client.raw(new Uint8Array([1]));
+      client.raw(new Uint8Array([2, 2]));
+      client.rawUnreliable(new Uint8Array([9]));
+      client.raw(new Uint8Array([3]));
+      assert.deepStrictEqual(log, ["stream 5", "datagram 2"]);
+
+      client.uncork();
+      assert.deepStrictEqual(log, ["stream 5", "datagram 2", "stream 2"]);
+    });
   });
 
 });
