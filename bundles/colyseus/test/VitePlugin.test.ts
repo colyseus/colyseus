@@ -73,6 +73,21 @@ async function waitFor(condition: () => unknown, what: string) {
 
 const roomHandler = () => matchMaker.getAllHandlers()[ROOM_NAME];
 
+// a real HTTP round trip through the dev server's middleware stack
+async function request(vite: ViteDevServer, path: string, init?: RequestInit) {
+  const server = http.createServer(vite.middlewares);
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+
+  try {
+    const { port } = server.address() as { port: number };
+    const response = await fetch(`http://localhost:${port}${path}`, init);
+    return { status: response.status, body: await response.text() };
+
+  } finally {
+    server.close();
+  }
+}
+
 describe("colyseus() vite plugin", () => {
   let vite: ViteDevServer;
 
@@ -123,27 +138,32 @@ describe("colyseus() vite plugin", () => {
     assert.notStrictEqual(roomHandler(), previous);
   });
 
+  // the reload shuts down the database the previous evaluation opened, which
+  // an express app built only once would still be using
+  it("rebuilds the express app on reload", async () => {
+    const entry = "/fixtures/vite-express-entry.ts";
+    vite = await startDevServer([], { serverEntry: entry });
+    await waitFor(roomHandler, `room "${ROOM_NAME}"`);
+
+    const firstDatabase: any = Server.current!.options.database;
+    vite.watcher.emit("change", `${import.meta.dirname}${entry}`);
+    await waitFor(() => firstDatabase.closed, "the reload to shut down the first database");
+
+    const { status, body } = await request(vite, "/database");
+
+    assert.strictEqual(status, 200, body);
+    assert.deepStrictEqual(JSON.parse(body), { closed: false });
+  });
+
   //
   // See: https://github.com/colyseus/colyseus/issues/996
   //
   describe("matchmaking while the server entry loads", () => {
-    async function joinOrCreate() {
-      const server = http.createServer(vite.middlewares);
-      await new Promise<void>((resolve) => server.listen(0, resolve));
-
-      try {
-        const { port } = server.address() as { port: number };
-        const response = await fetch(`http://localhost:${port}/matchmake/joinOrCreate/${ROOM_NAME}`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: "{}",
-        });
-        return { status: response.status, body: await response.text() };
-
-      } finally {
-        server.close();
-      }
-    }
+    const joinOrCreate = () => request(vite, `/matchmake/joinOrCreate/${ROOM_NAME}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
 
     it("waits for the rooms to be defined at startup", async () => {
       const loaded = new Deferred<void>();
@@ -153,9 +173,9 @@ describe("colyseus() vite plugin", () => {
         loadWsTransport: async () => { await loaded; return fakeWsTransport; },
       });
 
-      const request = joinOrCreate();
+      const pending = joinOrCreate();
       setTimeout(() => loaded.resolve(), 100);
-      const { status, body } = await request;
+      const { status, body } = await pending;
 
       assert.strictEqual(status, 200, body);
       assert.ok(JSON.parse(body).sessionId);

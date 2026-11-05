@@ -16,7 +16,7 @@
  *
  * On HMR:
  * 1. Re-import user module (defineServer returns a fresh Server)
- * 2. Swap router handler + re-register room definitions
+ * 2. Swap router + express handlers, re-register room definitions
  * 3. matchMaker.hotReload() — cache rooms, dispose, restore
  */
 import * as matchMaker from '@colyseus/core/MatchMaker';
@@ -253,7 +253,6 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
   let viteServer: any;
   let currentRoomNames: string[] = [];
   let currentAppHandler: ((req: any, res: any, next: any) => void) | null = null;
-  let expressApp: any = null;
   let isStarted = false;
 
   // Loads run one at a time: overlapping ones would set up the matchMaker
@@ -374,8 +373,8 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
    * matchMaker, transport, rooms, and middleware.
    *
    * On initial load: sets up matchMaker, creates transport, registers rooms.
-   * On HMR reload: re-imports user code, swaps rooms/router, hot-reloads
-   * running rooms (cache → dispose → restore).
+   * On HMR reload: re-imports user code, swaps rooms, router and express
+   * app, hot-reloads running rooms (cache → dispose → restore).
    */
   async function loadServerModule(httpServer?: import('http').Server) {
     const env = viteServer.environments.colyseus;
@@ -441,20 +440,20 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
         : undefined;
 
       // ── Build application middleware (router + express) ──
-
-      // Set up express once — persistent across HMR reloads.
-      if (!expressApp && currentServer?.options?.express) {
-        try {
-          const expressModule = await dynamicImport<any>('express');
-          const express = expressModule?.default ?? expressModule;
-          expressApp = express();
-          await currentServer.options.express(expressApp);
-        } catch (e) {
+      // A new express app per import: its routes close over this evaluation's
+      // state, database included, and the previous database is shut down below.
+      let expressApp: any;
+      if (currentServer?.options?.express) {
+        // CJS resolves a missing module to undefined rather than rejecting
+        const expressModule = await dynamicImport<any>('express').catch(() => undefined);
+        if (!expressModule) {
           console.warn('[colyseus] Express not available. Install express to use the express option.');
+        } else {
+          expressApp = (expressModule.default ?? expressModule)();
+          await currentServer.options.express(expressApp);
         }
       }
 
-      // Build combined handler: router (hot-swappable) + express (persistent).
       if (router || expressApp) {
         const routerHandler = router ? toNodeHandler(router.handler) : null;
         currentAppHandler = (req: any, res: any, next: any) => {
