@@ -202,6 +202,16 @@ export class uWebSocketsTransport extends Transport {
     return this._expressApp;
   }
 
+  /**
+   * Serves an HTTP request that no Colyseus route matched, before the express app.
+   * Override it to hand the request to another framework running on the same uWS app.
+   * It is called synchronously, while `req` is still valid, and returns true when the
+   * request was taken.
+   */
+  protected handleUnmatchedRequest(res: uWebSockets.HttpResponse, req: uWebSockets.HttpRequest): boolean {
+    return false;
+  }
+
   public bindRouter(router: Router) {
     const getCorsHeaders = (requestHeaders: Headers) => {
       return Object.assign(
@@ -251,7 +261,9 @@ export class uWebSocketsTransport extends Transport {
       const headers = new Headers();
       req.forEach((key, value) => headers.set(key, value));
 
-      const method = req.getMethod().toUpperCase();
+      // getCaseSensitiveMethod(): getMethod() lowercases the method inside the request,
+      // and handleUnmatchedRequest() may hand the same request to another framework
+      const method = req.getCaseSensitiveMethod().toUpperCase();
       const url = req.getUrl();
       const query = req.getQuery();
       const remoteAddress = res.getRemoteAddressAsText();
@@ -309,6 +321,9 @@ export class uWebSocketsTransport extends Transport {
           });
           res.end(responseBody);
         });
+
+      } else if (this.handleUnmatchedRequest(res, req)) {
+        return;
 
       } else if (this._expressApp) {
         // skip if already aborted
