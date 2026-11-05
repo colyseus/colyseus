@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.27
+
+- Matchmaking requests during a graceful shutdown now fail with a `MatchMakeError` (code 503) instead of `SyntaxError: Unexpected end of JSON input`. Thanks @portable-one! [#996](https://github.com/colyseus/colyseus/issues/996)
+
 ## 0.18.26
 
 - Awaiting `allowReconnection()` in `onLeave()` no longer keeps a consented `room.leave()` waiting for the whole reconnection window, which let SDKs before 0.18.7 reconnect into the room the player had just left. Thanks @sylvainpolletvillard!

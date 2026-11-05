@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.18.11
+
+- Matchmaking requests sent while the Vite dev server loads or reloads your server code now wait for it, instead of failing with `provided room name "…" not defined` or `Unexpected end of JSON input`. Thanks @portable-one! [#996](https://github.com/colyseus/colyseus/issues/996)
+- Routes from the `express` option now reload with the rest of your server code in the Vite dev server, instead of running the startup version against a database the first reload had closed. [#997](https://github.com/colyseus/colyseus/pull/997)
+
 ## 0.18.10
 
 - No longer requires the latest version of each `@colyseus/*` package: any 0.18 version works (`@colyseus/core` from 0.18.10).

@@ -2,19 +2,19 @@ import { createEndpoint } from "@colyseus/better-call";
 import { createRouter } from "./index.ts";
 import * as matchMaker from "../MatchMaker.ts";
 import { createAuthContext, getTransport } from "../Transport.ts";
+import { ServerError } from "../errors/ServerError.ts";
 
 export const postMatchmakeMethod = createEndpoint("/matchmake/:method/:roomName", { method: "POST" }, async (ctx) => {
-  // do not accept matchmaking requests if already shutting down
-  if (matchMaker.state === matchMaker.MatchMakerState.SHUTTING_DOWN) {
-    throw ctx.error(503);
-  }
-
   const requestHeaders = ctx.request.headers;
 
   const method = ctx.params.method;
   const roomName = ctx.params.roomName;
 
   try {
+    if (matchMaker.state === matchMaker.MatchMakerState.SHUTTING_DOWN) {
+      throw new ServerError(503, "server is shutting down");
+    }
+
     const clientOptions = ctx.body;
     const response = await matchMaker.controller.invokeMethod(
       method,

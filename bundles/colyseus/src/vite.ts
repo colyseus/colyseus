@@ -16,7 +16,7 @@
  *
  * On HMR:
  * 1. Re-import user module (defineServer returns a fresh Server)
- * 2. Swap router handler + re-register room definitions
+ * 2. Swap router + express handlers, re-register room definitions
  * 3. matchMaker.hotReload() — cache rooms, dispose, restore
  */
 import * as matchMaker from '@colyseus/core/MatchMaker';
@@ -253,8 +253,31 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
   let viteServer: any;
   let currentRoomNames: string[] = [];
   let currentAppHandler: ((req: any, res: any, next: any) => void) | null = null;
-  let expressApp: any = null;
   let isStarted = false;
+
+  // Loads run one at a time: overlapping ones would set up the matchMaker
+  // twice, or run two hotReload()s over the same rooms.
+  let loading: Promise<void> = Promise.resolve();
+  let queued: Promise<void> | null = null;
+
+  // A burst of changes shares the one load still waiting to start: it
+  // re-imports everything, so each change would only repeat it.
+  function queueLoad(httpServer?: import('http').Server) {
+    return queued ??= loading = loading.then(() => {
+      queued = null;
+      return loadServerModule(httpServer);
+    });
+  }
+
+  // Vite listens before the entry has loaded, and a reload cycles the rooms,
+  // so matchmaking waits for every queued load.
+  async function whenLoaded() {
+    let current: Promise<void>;
+    do {
+      current = loading;
+      await current;
+    } while (current !== loading);
+  }
 
   return [
     {
@@ -302,7 +325,12 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
       name: 'colyseus:dev-server',
       configureServer(server: any) {
         viteServer = server;
-        server.middlewares.use(createNodeMatchmakingMiddleware());
+
+        const matchmake = createNodeMatchmakingMiddleware();
+        server.middlewares.use((req: any, res: any, next: any) => {
+          if (!req.url?.startsWith(`/${matchMaker.controller.matchmakeRoute}/`)) { return next(); }
+          whenLoaded().then(() => matchmake(req, res, next));
+        });
 
         // Dynamic application middleware — handler is swapped on each HMR reload.
         server.middlewares.use((req: any, res: any, next: any) => {
@@ -318,7 +346,7 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
               'middlewareMode, pass `httpServer` to the colyseus() plugin.'
             );
           }
-          await loadServerModule(httpServer);
+          await queueLoad(httpServer);
           console.log("[colyseus] Server ready on " + (options.httpServer ? 'user-provided' : "Vite's") + ' HTTP server');
         };
       },
@@ -328,7 +356,7 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
       name: 'colyseus:hmr',
       hotUpdate({ file, modules }) {
         if (this.environment?.name === 'colyseus' && modules.length > 0) {
-          loadServerModule().then(() => {
+          queueLoad().then(() => {
             if (!options.quiet) {
               console.log(`[colyseus] Server code reloaded (${file})`);
             }
@@ -345,8 +373,8 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
    * matchMaker, transport, rooms, and middleware.
    *
    * On initial load: sets up matchMaker, creates transport, registers rooms.
-   * On HMR reload: re-imports user code, swaps rooms/router, hot-reloads
-   * running rooms (cache → dispose → restore).
+   * On HMR reload: re-imports user code, swaps rooms, router and express
+   * app, hot-reloads running rooms (cache → dispose → restore).
    */
   async function loadServerModule(httpServer?: import('http').Server) {
     const env = viteServer.environments.colyseus;
@@ -412,20 +440,20 @@ export function colyseus(options: ColyseusViteOptions): Plugin[] {
         : undefined;
 
       // ── Build application middleware (router + express) ──
-
-      // Set up express once — persistent across HMR reloads.
-      if (!expressApp && currentServer?.options?.express) {
-        try {
-          const expressModule = await dynamicImport<any>('express');
-          const express = expressModule?.default ?? expressModule;
-          expressApp = express();
-          await currentServer.options.express(expressApp);
-        } catch (e) {
+      // A new express app per import: its routes close over this evaluation's
+      // state, database included, and the previous database is shut down below.
+      let expressApp: any;
+      if (currentServer?.options?.express) {
+        // CJS resolves a missing module to undefined rather than rejecting
+        const expressModule = await dynamicImport<any>('express').catch(() => undefined);
+        if (!expressModule) {
           console.warn('[colyseus] Express not available. Install express to use the express option.');
+        } else {
+          expressApp = (expressModule.default ?? expressModule)();
+          await currentServer.options.express(expressApp);
         }
       }
 
-      // Build combined handler: router (hot-swappable) + express (persistent).
       if (router || expressApp) {
         const routerHandler = router ? toNodeHandler(router.handler) : null;
         currentAppHandler = (req: any, res: any, next: any) => {

@@ -266,6 +266,29 @@ describe("Graceful Shutdown", () => {
     assert.strictEqual(timer['_destroyed'], true);
   });
 
+  //
+  // See: https://github.com/colyseus/colyseus/issues/996
+  //
+  it("should reject matchmaking with a MatchMakeError while shutting down", async () => {
+    const disposing = new Deferred();
+
+    server.define("my_room", class extends Room {
+      onDispose() { return disposing; } // holds the shutdown open
+    });
+
+    await client.joinOrCreate("my_room");
+    const shutdown = server.gracefullyShutdown(false);
+
+    await assert.rejects(client.joinOrCreate("my_room"), {
+      name: "MatchMakeError",
+      code: 503,
+      message: "server is shutting down",
+    });
+
+    disposing.resolve();
+    await shutdown;
+  });
+
 });
 
 describe("Graceful Shutdown - presence/driver race", () => {
