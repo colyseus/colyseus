@@ -2,8 +2,8 @@
 
 ## 0.18.28
 
-- `room.autoBatch = true` writes everything one tick of `setFixedTimestep()` / `setTimestep()` sends a client to its socket at once: the same messages in the same order, in one write instead of one per message. A tick that sends many messages (hits, projectiles, effects) costs a fraction of the server CPU it did. Off by default: a room that doesn't set it sends exactly as before.
-- `room.batch(fn)` does the same for whatever `fn` sends, anywhere: a message handler, a timer, a callback.
+- `room.autoBatchMessages = true` writes everything one tick of `setFixedTimestep()` / `setTimestep()` sends a client to its socket at once: the same messages in the same order, in one write instead of one per message. A tick that sends many messages (hits, projectiles, effects) costs a fraction of the server CPU it did. Off by default: a room that doesn't set it sends exactly as before.
+- `room.batchMessages(fn)` does the same for whatever `fn` sends, anywhere: a message handler, a timer, a callback.
 
 ## 0.18.27
 

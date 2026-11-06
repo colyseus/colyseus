@@ -2,7 +2,7 @@
 
 ## 0.18.5
 
-- Supports `room.autoBatch` and `room.batch()` (`@colyseus/core` 0.18.28): what they hold for a client is sent in one `cork()`. With an older `@colyseus/core`, nothing changes.
+- Supports `room.autoBatchMessages` and `room.batchMessages()` (`@colyseus/core` 0.18.28): what they hold for a client is sent in one `cork()`. With an older `@colyseus/core`, nothing changes.
 
 ## 0.18.4
 

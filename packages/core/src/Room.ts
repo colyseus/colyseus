@@ -333,18 +333,23 @@ export class Room<T extends RoomOptions = RoomOptions> {
   public maxMessagesPerSecond: number = Infinity;
 
   /**
-   * {@link batch} every tick for you: everything one tick of
+   * {@link batchMessages} every tick for you: everything one tick of
    * {@link setFixedTimestep} / {@link setTimestep} sends a client (and a patch
-   * with `afterNextPatch` frames after it) reaches its socket as one write, the
-   * same messages in the same order, instead of one write per message. For
-   * rooms that send many messages a tick (hits, projectiles, effects).
+   * with `afterNextPatch` frames after it) reaches its socket as one write,
+   * instead of one write per message. For rooms that send many messages a
+   * tick (hits, projectiles, effects).
+   *
+   * Each message still arrives on its own, in the same order: only how they
+   * reach the socket changes. An async tick only batches what it sends before
+   * its first `await`.
    *
    * Off by default: a room that doesn't set it sends exactly as before. For a
-   * burst outside the loop (a message handler, a timer), call {@link batch}.
+   * burst outside the loop (a message handler, a timer), call
+   * {@link batchMessages}.
    *
    * @default false
    */
-  public autoBatch: boolean = false;
+  public autoBatchMessages: boolean = false;
 
   /**
    * The state instance you provided to `setState()`.
@@ -1007,8 +1012,8 @@ export class Room<T extends RoomOptions = RoomOptions> {
         this.clock.tick();
         onTickCallback(this.clock.deltaTime);
       };
-      // autoBatch: what one firing sends a client goes out as one write
-      this._simulationInterval = setInterval(() => this.autoBatch ? this.batch(fire) : fire(), delay);
+      // autoBatchMessages: what one firing sends a client goes out as one write
+      this._simulationInterval = setInterval(() => this.autoBatchMessages ? this.batchMessages(fire) : fire(), delay);
     }
   }
 
@@ -1122,8 +1127,8 @@ export class Room<T extends RoomOptions = RoomOptions> {
       }
       if (ran === MAX_CATCHUP_STEPS) { acc = 0; } // hitch: drop backlog, don't spiral
     };
-    // autoBatch: what one firing (the clock's timers, every step) sends a client goes out as one write
-    this._simulationInterval = setInterval(() => this.autoBatch ? this.batch(fire) : fire(), stepMs);
+    // autoBatchMessages: what one firing (the clock's timers, every step) sends a client goes out as one write
+    this._simulationInterval = setInterval(() => this.autoBatchMessages ? this.batchMessages(fire) : fire(), stepMs);
   }
 
   /** Server-side lag compensation, lazily created. @see allowRewindState */
@@ -1433,7 +1438,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
    * sends reaches each client as one write (the same messages, in the same
    * order) instead of one write per message.
    *
-   * Works with or without {@link autoBatch} (which does this for each tick of
+   * Works with or without {@link autoBatchMessages} (which does this for each tick of
    * the loop): for bursts sent anywhere, a message handler, a timer, a
    * callback, or one part of a tick. Inside a batched tick (or another batch)
    * it adds nothing: the outer one writes. Returns what `fn` returns, and
@@ -1444,12 +1449,12 @@ export class Room<T extends RoomOptions = RoomOptions> {
    *
    * @example
    * ```typescript
-   * this.onMessage("volley", (client, arrows: number) => this.batch(() => {
+   * this.onMessage("volley", (client, arrows: number) => this.batchMessages(() => {
    *   for (let i = 0; i < arrows; i++) { this.broadcast("arrow", i); }
    * }));
    * ```
    */
-  public batch<R>(fn: () => R): R {
+  public batchMessages<R>(fn: () => R): R {
     this.#openWindow();
     try {
       return fn();
@@ -1479,10 +1484,10 @@ export class Room<T extends RoomOptions = RoomOptions> {
     // encode time inside `applyPatches`.
     const sNow = this.clock.elapsedTime;
 
-    // autoBatch: the patch and the frames that ride after it go out as one
+    // autoBatchMessages: the patch and the frames that ride after it go out as one
     // write per client (inside a tick's window already when the loop patches
     // itself). A patch with nothing after it is one frame a client: no window.
-    const framesAfter = this.autoBatch && (this.#pendingFrameClients.length > 0 || this.#afterPatchBroadcasts.length > 0);
+    const framesAfter = this.autoBatchMessages && (this.#pendingFrameClients.length > 0 || this.#afterPatchBroadcasts.length > 0);
     if (framesAfter) { this.#openWindow(); }
     let hasChanges: boolean;
     try {

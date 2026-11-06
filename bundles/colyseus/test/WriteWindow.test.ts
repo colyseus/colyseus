@@ -19,7 +19,7 @@ const State = schema({ n: t.uint16().default(0) });
 type State = SchemaType<typeof State>;
 
 /**
- * On the step after `burst` is set: `burst` broadcasts and as many sends to each client (in a `batch()` of their own
+ * On the step after `burst` is set: `burst` broadcasts and as many sends to each client (in a `batchMessages()` of their own
  * with `nestBatch`), then a patch between two more; with `throwAfterBurst`, the step throws right after the burst
  * instead (once). On the step after `toOne` is set: that many sends to the first client alone, which then leaves
  * with `kickAfter`.
@@ -32,12 +32,12 @@ class BurstRoom extends Room {
   leaveFirst = false;
   throwAfterBurst = false;
   nestBatch = false;
-  /** What the last `batched` handler's `this.batch()` returned, and what `batched-throw`'s threw. */
+  /** What the last `batched` handler's `this.batchMessages()` returned, and what `batched-throw`'s threw. */
   batchReturned: unknown = undefined;
   rethrown: Error | undefined = undefined;
   onCreate() {
     this.patchRate = 0; // patches only where the step asks: every write counted is the burst's
-    this.autoBatch = true;
+    this.autoBatchMessages = true;
     this.setFixedTimestep(() => {
       if (this.toOne > 0) {
         const n = this.toOne;
@@ -52,7 +52,7 @@ class BurstRoom extends Room {
       for (let i = 0; i < n; i++) {
         this.broadcast("b", i);
         const sendC = () => { for (const client of this.clients) { client.send("c", i); } };
-        if (this.nestBatch) { this.batch(sendC); } else { sendC(); }
+        if (this.nestBatch) { this.batchMessages(sendC); } else { sendC(); }
       }
       if (this.throwAfterBurst) { this.throwAfterBurst = false; throw new Error("the step failed"); }
       this.broadcast("order", "before patch");
@@ -65,11 +65,11 @@ class BurstRoom extends Room {
     this.onMessage("burst", (client, n: number) => { for (let i = 0; i < n; i++) { this.broadcast("b", i); } });
     // …and from one that batches it
     this.onMessage("batched", (client, n: number) => {
-      this.batchReturned = this.batch(() => { for (let i = 0; i < n; i++) { this.broadcast("b", i); } return n; });
+      this.batchReturned = this.batchMessages(() => { for (let i = 0; i < n; i++) { this.broadcast("b", i); } return n; });
     });
     this.onMessage("batched-throw", (client, n: number) => {
       try {
-        this.batch(() => { for (let i = 0; i < n; i++) { this.broadcast("b", i); } throw new Error("the batch failed"); });
+        this.batchMessages(() => { for (let i = 0; i < n; i++) { this.broadcast("b", i); } throw new Error("the batch failed"); });
       } catch (e: any) {
         this.rethrown = e;
       }
@@ -77,9 +77,9 @@ class BurstRoom extends Room {
   }
 }
 
-/** The same room as a room is by default: `autoBatch` off. */
+/** The same room as a room is by default: `autoBatchMessages` off. */
 class UnbatchedBurstRoom extends BurstRoom {
-  onCreate() { super.onCreate(); this.autoBatch = false; }
+  onCreate() { super.onCreate(); this.autoBatchMessages = false; }
 }
 
 /** The same room, catching its own exceptions (the loop's step is then wrapped: the throw never leaves the timer). */
@@ -199,9 +199,9 @@ describe("Write window", () => {
 
     const ticks = (n: number) => new Promise((r) => setTimeout(r, Math.ceil(n * 1000 / 30)));
 
-    it("by default (no autoBatch) a tick writes each frame as it comes, as before, and corks no client", async () => {
+    it("by default (no autoBatchMessages) a tick writes each frame as it comes, as before, and corks no client", async () => {
       const { a, b, room } = await twoClients(endpoint, "burst-unbatched");
-      assert.strictEqual(room.autoBatch, false);
+      assert.strictEqual(room.autoBatchMessages, false);
       const seenA = record(a);
       const corksA = countCorks(room, 0), corksB = countCorks(room, 1);
       const writesA = countWrites(room, 0);
@@ -224,7 +224,7 @@ describe("Write window", () => {
       await b.leave();
     });
 
-    it("by default (no autoBatch) batch() still writes its burst as one write", async () => {
+    it("by default (no autoBatchMessages) batchMessages() still writes its burst as one write", async () => {
       const { a, b, room } = await twoClients(endpoint, "burst-unbatched");
       const seenA = record(a);
       const writesA = countWrites(room, 0);
@@ -292,7 +292,7 @@ describe("Write window", () => {
       await b.leave();
     });
 
-    it("batch() inside a tick adds no window of its own", async () => {
+    it("batchMessages() inside a tick adds no window of its own", async () => {
       const { a, b, room } = await twoClients(endpoint);
       const seenA = record(a);
       const corksA = countCorks(room, 0);
@@ -360,7 +360,7 @@ describe("Write window", () => {
       await a.leave();
     });
 
-    it("this.batch() writes a handler's burst as one write, and returns what its function returns", async () => {
+    it("this.batchMessages() writes a handler's burst as one write, and returns what its function returns", async () => {
       const { a, room } = await oneClient(endpoint);
       const seen = record(a);
       const writes = countWrites(room, 0);

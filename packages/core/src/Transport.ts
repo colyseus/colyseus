@@ -458,7 +458,7 @@ export interface ClientPrivate {
 
 /**
  * @internal A Room's write window: open while `depth > 0` (a tick of its loop, a
- * patch with frames after it, a `batch()`; nested ones only count). A client is
+ * patch with frames after it, a `batchMessages()`; nested ones only count). A client is
  * corked by its first frame inside it and listed in `corked`; closing the
  * outermost uncorks those, and only those. A window nobody sends in touches no
  * client.
