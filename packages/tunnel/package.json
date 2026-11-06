@@ -1,0 +1,65 @@
+{
+  "name": "@colyseus/tunnel",
+  "version": "0.18.0",
+  "description": "Share a local server on a public URL through Colyseus Cloud",
+  "type": "module",
+  "input": "./src/index.ts",
+  "main": "./build/index.cjs",
+  "module": "./build/index.mjs",
+  "typings": "./build/index.d.ts",
+  "exports": {
+    ".": {
+      "@source": "./src/index.ts",
+      "types": "./build/index.d.ts",
+      "module-sync": "./build/index.mjs",
+      "import": "./build/index.mjs",
+      "require": "./build/index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "colyseus-tunnel": "./bin.mjs"
+  },
+  "files": [
+    "build",
+    "src",
+    "bin.mjs"
+  ],
+  "scripts": {
+    "test": "mocha --exit --timeout 15000 --require tsx test/*.test.ts"
+  },
+  "dependencies": {
+    "uqr": "^0.1.3"
+  },
+  "optionalDependencies": {
+    "@colyseus/tunnel-darwin-arm64": "0.18.0",
+    "@colyseus/tunnel-darwin-x64": "0.18.0",
+    "@colyseus/tunnel-linux-arm64": "0.18.0",
+    "@colyseus/tunnel-linux-x64": "0.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.14"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/colyseus/colyseus.git"
+  },
+  "keywords": [
+    "colyseus",
+    "tunnel",
+    "share",
+    "vite"
+  ],
+  "author": "Endel Dreyer",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/colyseus/colyseus/issues"
+  },
+  "homepage": "https://colyseus.io",
+  "engines": {
+    "node": ">= 22.x"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

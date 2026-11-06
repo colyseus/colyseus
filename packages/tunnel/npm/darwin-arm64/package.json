@@ -1,0 +1,16 @@
+{
+  "name": "@colyseus/tunnel-darwin-arm64",
+  "version": "0.18.0",
+  "description": "The tunnel agent of @colyseus/tunnel for darwin arm64",
+  "os": ["darwin"],
+  "cpu": ["arm64"],
+  "files": ["bin"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/colyseus/colyseus.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

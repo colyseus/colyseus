@@ -1,0 +1,16 @@
+{
+  "name": "@colyseus/tunnel-linux-x64",
+  "version": "0.18.0",
+  "description": "The tunnel agent of @colyseus/tunnel for linux x64",
+  "os": ["linux"],
+  "cpu": ["x64"],
+  "files": ["bin"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/colyseus/colyseus.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
