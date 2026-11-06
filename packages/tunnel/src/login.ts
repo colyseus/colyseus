@@ -8,7 +8,7 @@ import { statePage, wrongLinkPage, type PageState } from './page.ts';
 
 /** Colyseus Cloud: `CLOUD_ENDPOINT`, as for `@colyseus/cloud`, else production. */
 export function cloudEndpoint(): string {
-  return (process.env.CLOUD_ENDPOINT || 'https://cloud-prod.colyseus.io').replace(/\/+$/, '');
+  return (process.env.CLOUD_ENDPOINT || 'https://cloud.colyseus.io').replace(/\/+$/, '');
 }
 
 /** Tunnel tokens `login()` got, by Cloud endpoint. */
