@@ -267,6 +267,23 @@ export interface Client<T extends { userData?: any, auth?: any, messages?: Recor
   enqueueRaw(data: Uint8Array | Buffer, options?: ISendOptions): void;
 
   /**
+   * Hold this client's reliable writes until {@link uncork}, then put them on
+   * the wire together: the same frames in the same order, one write (one
+   * syscall, fewer TCP segments) instead of one per frame. The Room corks a
+   * client before a burst of frames and uncorks it after. Never nested: the
+   * Room pairs every `cork()` with one `uncork()`.
+   *
+   * Held frames count as sent: nothing sent after one (a `leave()`'s close, an
+   * unreliable datagram) may reach the peer before it, and `uncork()` must
+   * still work after a `leave()`.
+   *
+   * Optional: a transport without it writes each frame as it comes.
+   */
+  cork?(): void;
+  /** Write everything held since {@link cork}, in order. */
+  uncork?(): void;
+
+  /**
    * Send raw bytes over the transport's UNRELIABLE channel — no delivery,
    * ordering, or duplication guarantee. Used for `@unreliable` state patches.
    *
@@ -430,6 +447,46 @@ export interface ClientPrivate {
    * those clients rather than scanning every client.
    */
   _pendingFrameClients?: Array<Client & ClientPrivate>;
+
+  /**
+   * @internal The Room's {@link WriteWindow} (undefined when the transport can't
+   * cork), and whether this client is corked in it now.
+   */
+  _writeWindow?: WriteWindow;
+  _inWindow?: boolean;
+}
+
+/**
+ * @internal A Room's write window: open while `depth > 0` (a tick of its loop, a
+ * patch with frames after it, a `batchMessages()`; nested ones only count). A client is
+ * corked by its first frame inside it and listed in `corked`; closing the
+ * outermost uncorks those, and only those. A window nobody sends in touches no
+ * client.
+ */
+export interface WriteWindow {
+  depth: number;
+  corked: Array<Client & ClientPrivate>;
+}
+
+/**
+ * @internal Every reliable frame the framework sends a client goes through here.
+ * Inside an open {@link WriteWindow}, the client's first frame corks it
+ * ({@link Client.cork}) and lists it for the window's close; then (and outside
+ * any window) it's `raw()`. Frames sent straight to `raw()` meanwhile keep their
+ * order either way: a corked client holds whatever reaches it.
+ */
+export function sendClientRaw(
+  client: Client & ClientPrivate,
+  data: Uint8Array | Buffer,
+  options?: ISendOptions,
+): void {
+  const window = client._writeWindow;
+  if (window !== undefined && window.depth > 0 && client._inWindow === false) {
+    client._inWindow = true;
+    client.cork!(); // a window is only shared with clients that can cork
+    window.corked.push(client);
+  }
+  client.raw(data, options);
 }
 
 /**
@@ -465,7 +522,7 @@ export function enqueueClientRaw(
     client._enqueuedMessages?.push(data);
     return;
   }
-  client.raw(data, options);
+  sendClientRaw(client, data, options);
 }
 
 export class ClientArray<C extends Client = Client> extends Array<C> {

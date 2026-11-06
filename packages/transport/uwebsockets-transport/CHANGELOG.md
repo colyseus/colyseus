@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.5
+
+- Supports `room.autoBatchMessages` and `room.batchMessages()` (`@colyseus/core` 0.18.28): what they hold for a client is sent in one `cork()`. With an older `@colyseus/core`, nothing changes.
+
 ## 0.18.4
 
 - `require()` of this package now resolves to the same ESM build `import` gets, so a process that uses both no longer loads two copies. [#979](https://github.com/colyseus/colyseus/issues/979)

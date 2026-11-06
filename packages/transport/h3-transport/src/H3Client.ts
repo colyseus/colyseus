@@ -167,6 +167,9 @@ export class H3Client implements Client, ClientPrivate {
       return;
     }
 
+    // what a write window held goes first: this datagram may update what those frames create
+    this._writeHeld();
+
     const datagrams = this._wtSession.datagrams as any;
 
     if (!this._datagramWriter) {
@@ -263,6 +266,12 @@ export class H3Client implements Client, ClientPrivate {
       return;
     }
 
+    // corked: held until uncork() (the transport owns `data`, Client.raw)
+    if (this._holding) {
+      this._held.push(data);
+      return;
+    }
+
     // include length of message, as the reader may receive multiple messages at once
     const prefixLength = encode.number(lengthPrefixBuffer, data.length, { offset: 0 });
     const dataWithPrefixedLength = new Uint8Array(prefixLength + data.length);
@@ -272,6 +281,43 @@ export class H3Client implements Client, ClientPrivate {
     this._bidiWriter.write(dataWithPrefixedLength);
   }
 
+  /** Frames held while corked (reused), and whether `raw` holds. */
+  private _held: Array<Uint8Array | Buffer> = [];
+  private _holding: boolean = false;
+
+  public cork() {
+    this._holding = true;
+  }
+
+  public uncork() {
+    this._holding = false;
+    this._writeHeld();
+  }
+
+  /**
+   * The stream is length-prefixed already: what's held goes out as one write of every frame, each prefixed. Leaves
+   * `_holding` as it is: a datagram sent mid-window writes what's held so far, and the window goes on holding.
+   */
+  private _writeHeld() {
+    const held = this._held;
+    if (held.length === 0) { return; }
+    try {
+      if (this.readyState !== 1) { return; } // OPEN
+      let bytes = 0;
+      for (let i = 0; i < held.length; i++) { bytes += held[i].length; }
+      const out = new Uint8Array(bytes + held.length * MAX_LENGTH_PREFIX_BYTES);
+      const it = { offset: 0 };
+      for (let i = 0; i < held.length; i++) {
+        encode.number(out as any, held[i].length, it);
+        out.set(held[i], it.offset);
+        it.offset += held[i].length;
+      }
+      this._bidiWriter.write(out.subarray(0, it.offset));
+    } finally {
+      held.length = 0;
+    }
+  }
+
   public error(code: number, message: string = '', cb?: (err?: Error) => void) {
     this.raw(getMessageBytes[Protocol.ERROR](code, message), undefined, cb);
   }
@@ -279,6 +325,7 @@ export class H3Client implements Client, ClientPrivate {
   public leave(code?: number, data?: string) {
     // `closed` can settle after a failure path already ran _close(); don't reopen
     if (this.readyState === 3) { return; }
+    this.uncork(); // what a write window held goes out before the close
     this.readyState = 2; // CLOSING;
     try {
       this._wtSession.close({ reason: data || "", closeCode: code });

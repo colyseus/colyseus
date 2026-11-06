@@ -74,12 +74,54 @@ export class uWebSocketClient implements Client, ClientPrivate {
       return;
     }
 
+    // corked: held until uncork() (the transport owns `data`, Client.raw)
+    if (this._holding) {
+      this._held.push(data);
+      return;
+    }
+
     try {
       this._ref.ws.send(data, true, false);
     } catch (e: any) {
       // uWS throws "Invalid access of closed uWS.WebSocket" if the socket
       // closed between the readyState check and the send() call.
       this.readyState = ReadyState.CLOSED;
+    }
+  }
+
+  /** Frames held while corked (reused), and whether `raw` holds. */
+  private _held: Array<Uint8Array | Buffer> = [];
+  private _holding: boolean = false;
+  /** `uncork()`'s cork callback, made once (none allocated a tick). */
+  private _sendHeld = () => {
+    const ws = this._ref.ws, held = this._held;
+    for (let i = 0; i < held.length; i++) { ws.send(held[i], true, false); }
+  };
+
+  /**
+   * uWS corks only inside a callback (`ws.cork(cb)`: every send in it goes out
+   * as one syscall), so hold the frames here and send them all in one cork on
+   * `uncork()`. Outside a cork, each send is a syscall of its own.
+   */
+  public cork() {
+    this._holding = true;
+  }
+
+  public uncork() {
+    this._holding = false;
+    const held = this._held;
+    if (held.length === 0) { return; }
+    try {
+      if (this.readyState === ReadyState.OPEN) {
+        // one frame is one write either way: send it as raw() would (a cork costs more than it saves)
+        if (held.length === 1) { this._ref.ws.send(held[0], true, false); }
+        else { this._ref.ws.cork(this._sendHeld); }
+      }
+    } catch (e: any) {
+      // closed between the readyState check and the sends (see raw)
+      this.readyState = ReadyState.CLOSED;
+    } finally {
+      held.length = 0;
     }
   }
 
@@ -98,6 +140,8 @@ export class uWebSocketClient implements Client, ClientPrivate {
       // connection already closed. ignore.
       return;
     }
+
+    this.uncork(); // what a write window held goes out before the close
 
     this.readyState = ReadyState.CLOSING;
 

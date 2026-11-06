@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.5
+
+- Supports `room.autoBatchMessages` and `room.batchMessages()` (`@colyseus/core` 0.18.28): what they hold for a client is written to its socket at once. With an older `@colyseus/core`, nothing changes.
+
 ## 0.18.4
 
 - npm and pnpm now install `express` along with this package. It was declared optional, but the transport can't load without it, so a setup that didn't already have `express` crashed at startup with `Cannot find package 'express'`.

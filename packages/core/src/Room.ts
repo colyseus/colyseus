@@ -24,7 +24,7 @@ import { isDevMode } from './utils/DevMode.ts';
 
 import { debugAndPrintError, debugMatchMaking, debugMessage } from './Debug.ts';
 import { ServerError } from './errors/ServerError.ts';
-import { ClientState, type AuthContext, type Client, type ClientPrivate, ClientArray, type ISendOptions, type MessageArgs } from './Transport.ts';
+import { ClientState, type AuthContext, type Client, type ClientPrivate, ClientArray, type ISendOptions, type MessageArgs, type WriteWindow, sendClientRaw } from './Transport.ts';
 import { type RoomMethodName, OnAuthException, OnCreateException, OnDisposeException, OnDropException, OnJoinException, OnLeaveException, OnReconnectException, type RoomException, TimestepException, TimedEventException } from './errors/RoomExceptions.ts';
 
 import { type StandardSchemaV1 } from './utils/StandardSchema.ts';
@@ -60,6 +60,9 @@ const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
 // Shared so the unarmed `_flushUnreliable` call site stays monomorphic.
 const NOOP = () => {};
 const noneSerializer = new NoneSerializer();
+
+// Server-initiated closes waiting on onLeave: one map for every room, as a client belongs to one.
+const pendingCloses = new WeakMap<Client, () => void>();
 
 /** Shared `enqueueRaw` options routing a frame onto `_pendingFrames` to ride the
  *  next patch. Frozen + shared (read-only) → zero per-call allocation. */
@@ -255,7 +258,6 @@ export class Room<T extends RoomOptions = RoomOptions> {
   #_roomId: string;
   #_roomName: string;
   #_onLeaveConcurrent: number = 0; // number of onLeave calls in progress
-  #_pendingCloses = new WeakMap<Client, () => void>(); // server-initiated closes waiting on onLeave
 
   /**
    * Maximum number of clients allowed to connect into the room. When room reaches this limit,
@@ -329,6 +331,25 @@ export class Room<T extends RoomOptions = RoomOptions> {
    * @default Infinity
    */
   public maxMessagesPerSecond: number = Infinity;
+
+  /**
+   * {@link batchMessages} every tick for you: everything one tick of
+   * {@link setFixedTimestep} / {@link setTimestep} sends a client (and a patch
+   * with `afterNextPatch` frames after it) reaches its socket as one write,
+   * instead of one write per message. For rooms that send many messages a
+   * tick (hits, projectiles, effects).
+   *
+   * Each message still arrives on its own, in the same order: only how they
+   * reach the socket changes. An async tick only batches what it sends before
+   * its first `await`.
+   *
+   * Off by default: a room that doesn't set it sends exactly as before. For a
+   * burst outside the loop (a message handler, a timer), call
+   * {@link batchMessages}.
+   *
+   * @default false
+   */
+  public autoBatchMessages: boolean = false;
 
   /**
    * The state instance you provided to `setState()`.
@@ -434,6 +455,9 @@ export class Room<T extends RoomOptions = RoomOptions> {
    *  large rooms — sharing avoids that. TIMED rooms instead stage the broadcast onto
    *  each client's `_pendingFrames`. Drained each `broadcastPatch`. */
   #afterPatchBroadcasts: Array<{ bytes: Uint8Array; except: Client[] | undefined }> = [];
+
+  /** This room's {@link WriteWindow}, shared by reference with each client that can cork, at join. */
+  #window: WriteWindow = { depth: 0, corked: [] };
 
   private _simulationInterval: NodeJS.Timeout;
 
@@ -984,10 +1008,12 @@ export class Room<T extends RoomOptions = RoomOptions> {
         onTickCallback = wrapTryCatch(onTickCallback, this.onUncaughtException.bind(this), TimestepException, 'setTimestep');
       }
 
-      this._simulationInterval = setInterval(() => {
+      const fire = () => {
         this.clock.tick();
         onTickCallback(this.clock.deltaTime);
-      }, delay);
+      };
+      // autoBatchMessages: what one firing sends a client goes out as one write
+      this._simulationInterval = setInterval(() => this.autoBatchMessages ? this.batchMessages(fire) : fire(), delay);
     }
   }
 
@@ -1087,7 +1113,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
     };
     const MAX_CATCHUP_STEPS = 5;
 
-    this._simulationInterval = setInterval(() => {
+    const fire = () => {
       this.clock.tick();
       acc += this.clock.deltaTime;
 
@@ -1100,7 +1126,9 @@ export class Room<T extends RoomOptions = RoomOptions> {
         ran++;
       }
       if (ran === MAX_CATCHUP_STEPS) { acc = 0; } // hitch: drop backlog, don't spiral
-    }, stepMs);
+    };
+    // autoBatchMessages: what one firing (the clock's timers, every step) sends a client goes out as one write
+    this._simulationInterval = setInterval(() => this.autoBatchMessages ? this.batchMessages(fire) : fire(), stepMs);
   }
 
   /** Server-side lag compensation, lazily created. @see allowRewindState */
@@ -1406,6 +1434,36 @@ export class Room<T extends RoomOptions = RoomOptions> {
   }
 
   /**
+   * Run `fn` with every client's writes held, then write them together: what it
+   * sends reaches each client as one write (the same messages, in the same
+   * order) instead of one write per message.
+   *
+   * Works with or without {@link autoBatchMessages} (which does this for each tick of
+   * the loop): for bursts sent anywhere, a message handler, a timer, a
+   * callback, or one part of a tick. Inside a batched tick (or another batch)
+   * it adds nothing: the outer one writes. Returns what `fn` returns, and
+   * rethrows what it throws (what it sent before throwing is still written).
+   *
+   * Synchronous: for an async `fn`, only what it sends before its first `await`
+   * is held.
+   *
+   * @example
+   * ```typescript
+   * this.onMessage("volley", (client, arrows: number) => this.batchMessages(() => {
+   *   for (let i = 0; i < arrows; i++) { this.broadcast("arrow", i); }
+   * }));
+   * ```
+   */
+  public batchMessages<R>(fn: () => R): R {
+    this.#openWindow();
+    try {
+      return fn();
+    } finally {
+      this.#closeWindow();
+    }
+  }
+
+  /**
    * Checks whether mutations have occurred in the state, and broadcast them to all connected clients.
    */
   public broadcastPatch() {
@@ -1425,25 +1483,36 @@ export class Room<T extends RoomOptions = RoomOptions> {
     // each tick. The per-client `inputSeq` ack is read off the client at
     // encode time inside `applyPatches`.
     const sNow = this.clock.elapsedTime;
-    const hasChanges = this._serializer.applyPatches(
-      this.clients,
-      this.state,
-      this._inputController !== undefined ? { sNow } : undefined,
-    );
 
-    // Flush `@unreliable` fields over the datagram channel, after the reliable
-    // patch so a spawn's ADD is already on the wire when the datagram mutating
-    // it goes out. No-op unless the state declares such a field, and skipped
-    // when `unreliablePatchRate` gave the flush its own timer.
-    this._flushUnreliable();
+    // autoBatchMessages: the patch and the frames that ride after it go out as one
+    // write per client (inside a tick's window already when the loop patches
+    // itself). A patch with nothing after it is one frame a client: no window.
+    const framesAfter = this.autoBatchMessages && (this.#pendingFrameClients.length > 0 || this.#afterPatchBroadcasts.length > 0);
+    if (framesAfter) { this.#openWindow(); }
+    let hasChanges: boolean;
+    try {
+      hasChanges = this._serializer.applyPatches(
+        this.clients,
+        this.state,
+        this._inputController !== undefined ? { sNow } : undefined,
+      );
 
-    // Deliver any per-client `afterNextPatch` frames as standalone frames right
-    // after the patch (never coalesced into it). Iterates only the clients that
-    // staged frames this cycle (`#pendingFrameClients`), never the full list.
-    this._flushPendingClientFrames();
+      // Flush `@unreliable` fields over the datagram channel, after the reliable
+      // patch so a spawn's ADD is already on the wire when the datagram mutating
+      // it goes out. No-op unless the state declares such a field, and skipped
+      // when `unreliablePatchRate` gave the flush its own timer.
+      this._flushUnreliable();
 
-    // After-patch broadcasts ride here as shared frames (one buffer → N sends).
-    this._flushAfterPatchBroadcasts();
+      // Deliver any per-client `afterNextPatch` frames as standalone frames right
+      // after the patch (never coalesced into it). Iterates only the clients that
+      // staged frames this cycle (`#pendingFrameClients`), never the full list.
+      this._flushPendingClientFrames();
+
+      // After-patch broadcasts ride here as shared frames (one buffer → N sends).
+      this._flushAfterPatchBroadcasts();
+    } finally {
+      if (framesAfter) { this.#closeWindow(); }
+    }
 
     // Lag-comp: record the snapshot the client just received, on the broadcast
     // cadence and stamped with the SAME `sNow` the frame carries — so valueAt()
@@ -1815,7 +1884,11 @@ export class Room<T extends RoomOptions = RoomOptions> {
     // Share the after-patch flush list so a client can announce staged frames
     // without the flush scanning every client. `_pendingFrames` are delivered as
     // standalone frames right after the patch by `_flushPendingClientFrames`.
-    (client as Client & ClientPrivate)._pendingFrameClients = this.#pendingFrameClients;
+    client._pendingFrameClients = this.#pendingFrameClients;
+
+    // Share the write window too (not with a transport that can't cork: it writes each frame as it comes).
+    client._writeWindow = client.cork !== undefined ? this.#window : undefined;
+    client._inWindow = false;
 
     // add temporary callback to keep track of disconnections during `onJoin`.
     client.ref['onleave'] = (_) => client.state = ClientState.LEAVING;
@@ -2035,7 +2108,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
     this._reserveSeat(sessionId, true, previousClient.auth, seconds, true);
 
     // the seat is held now: run a server-initiated close that's still waiting on onLeave
-    this.#_pendingCloses.get(previousClient)?.();
+    pendingCloses.get(previousClient)?.();
 
     // keep reconnection reference in case the user reconnects into this room.
     const reconnection = new Deferred<Client & ClientPrivate>();
@@ -2159,6 +2232,27 @@ export class Room<T extends RoomOptions = RoomOptions> {
     ));
   }
 
+  /** Open the {@link WriteWindow}: a counter, no client is touched. */
+  #openWindow() {
+    this.#window.depth++;
+  }
+
+  /** Close the {@link WriteWindow}: the outermost close uncorks every client corked in it, one that left meanwhile
+   *  too (its transport drops a closed socket's frames, as `raw` would have). */
+  #closeWindow() {
+    const window = this.#window;
+    if (--window.depth > 0) { return; }
+    const corked = window.corked;
+    if (corked.length === 0) { return; } // the common case: skips the empty `length = 0`, a runtime call in V8
+    for (let i = 0; i < corked.length; i++) {
+      const client = corked[i];
+      client._inWindow = false;
+      // (one client's failing write must never leave the others held)
+      try { client.uncork!(); } catch (e: any) { debugAndPrintError(e); }
+    }
+    corked.length = 0;
+  }
+
   /** Send each client's staged `afterNextPatch` frames as standalone frames right
    *  after the patch, then reset the tracker. Iterates only the clients that staged
    *  frames this cycle (`#pendingFrameClients`), never the full client list; empty
@@ -2169,7 +2263,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
     for (let i = 0; i < dirty.length; i++) {
       const frames = dirty[i]._pendingFrames;
       if (frames !== undefined && frames.length > 0) {
-        for (let j = 0; j < frames.length; j++) { dirty[i].raw(frames[j]); }
+        for (let j = 0; j < frames.length; j++) { sendClientRaw(dirty[i], frames[j]); }
         frames.length = 0;
       }
     }
@@ -2391,11 +2485,11 @@ export class Room<T extends RoomOptions = RoomOptions> {
     const ref = client.ref;
     const close = () => {
       // once only; skip if a successful reconnection has transplanted a new ref (#950)
-      if (this.#_pendingCloses.delete(client) && client.ref === ref) {
+      if (pendingCloses.delete(client) && client.ref === ref) {
         (client as any).leave(closeCode, reason);
       }
     };
-    this.#_pendingCloses.set(client, close);
+    pendingCloses.set(client, close);
     this._onLeave(client, closeCode).then(close);
   }
 
