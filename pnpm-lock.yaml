@@ -1107,17 +1107,20 @@ importers:
         version: 22.19.19
     optionalDependencies:
       '@colyseus/tunnel-darwin-arm64':
-        specifier: 0.18.0
-        version: 0.18.0
+        specifier: 0.18.1
+        version: 0.18.1
       '@colyseus/tunnel-darwin-x64':
-        specifier: 0.18.0
-        version: 0.18.0
+        specifier: 0.18.1
+        version: 0.18.1
       '@colyseus/tunnel-linux-arm64':
-        specifier: 0.18.0
-        version: 0.18.0
+        specifier: 0.18.1
+        version: 0.18.1
       '@colyseus/tunnel-linux-x64':
-        specifier: 0.18.0
-        version: 0.18.0
+        specifier: 0.18.1
+        version: 0.18.1
+      '@colyseus/tunnel-win32-x64':
+        specifier: 0.18.1
+        version: 0.18.1
 
 packages:
 
@@ -1584,25 +1587,30 @@ packages:
   '@colyseus/timer@2.0.3':
     resolution: {integrity: sha512-75MI7LfXQncibesa7W6FKWUc8YBcVI6jwBrDXOq1TlgYQXSMRv7a5WFPBdDKkP5Pht9IWpE2hyUb8B1DPrLYqg==}
 
-  '@colyseus/tunnel-darwin-arm64@0.18.0':
-    resolution: {integrity: sha512-auyH0/NAJJNkJm0xrGe8jtQI0/XDcD+siOxR9QZiL2j8K2Q0/o8wKW2mdSKFheg2WB4LWeQM1bf/ZefUawUYYw==}
+  '@colyseus/tunnel-darwin-arm64@0.18.1':
+    resolution: {integrity: sha512-My1T7RUYmRAAHGgrXOoxGEQBtJYZih8LyXI/i5yYOWjW1s14R/dRJ1sVd/Kcbwk1jeZDUZB10XVenAOROL/TpQ==}
     cpu: [arm64]
     os: [darwin]
 
-  '@colyseus/tunnel-darwin-x64@0.18.0':
-    resolution: {integrity: sha512-8nHknPkcWwv/BKZLkcZTHzyNiVLUzm5Qc1mVujf8yQ6LlKKRFxO93dqIBHJq/ylZM59HtCLWPvKEVKfC06a03w==}
+  '@colyseus/tunnel-darwin-x64@0.18.1':
+    resolution: {integrity: sha512-lDkLdT3467RLl26pXVlKaIWEcNnjb5LxNAynE7UEDqlIiGS0OUqM2Vdq7ZIjQlfqsbbEQIfKzQOC83ewcsqdeQ==}
     cpu: [x64]
     os: [darwin]
 
-  '@colyseus/tunnel-linux-arm64@0.18.0':
-    resolution: {integrity: sha512-aopiE9XLk1L+OwYJceBpXaoooTACL24ZimrxXFoT4feUWuTHOdfygWa53R3SXySu0wheKMj/Kl1Gog/y43TL/Q==}
+  '@colyseus/tunnel-linux-arm64@0.18.1':
+    resolution: {integrity: sha512-8KyBOLOpyUip6b1Puq7DeTV/uelW6dITR/kX7svJjmEdLW7QVazISrLNiTrpf+Tz2iJs5S3F4Zmm/s9e1jWVlQ==}
     cpu: [arm64]
     os: [linux]
 
-  '@colyseus/tunnel-linux-x64@0.18.0':
-    resolution: {integrity: sha512-3SMnOdlrTXsv1bFcc/obdVZXrArd0etBoqcVImmBUcERheijeoGflYbxizIsnB6oIQTtzUNrIod5H8nfqAeiPQ==}
+  '@colyseus/tunnel-linux-x64@0.18.1':
+    resolution: {integrity: sha512-Y6wfSL0Dup6RKyWTpxNHA3InkO4Js2WrQiltw6Qp+lA+mDu3T0ZNJWhIH7tYTa9chWS+wbcQ9GmgtBc8IaDQlw==}
     cpu: [x64]
     os: [linux]
+
+  '@colyseus/tunnel-win32-x64@0.18.1':
+    resolution: {integrity: sha512-ZtJ5q7WuUJ30ddbFqofLsr77aRy6rH7onm9OgAKnfek9rKIHfTdJdLGnviJ1E+D/1YupqFPiwSvwfdv0OVO9Iw==}
+    cpu: [x64]
+    os: [win32]
 
   '@cspell/cspell-bundled-dicts@9.8.0':
     resolution: {integrity: sha512-MpXFpVyBPfJQ1YuVotljqUaGf6lWuf+fuWBBgs0PHFYTSjRPWuIxviAaCDnup/CJLLH60xQL4IlcQe4TOjzljw==}
@@ -9972,16 +9980,19 @@ snapshots:
     dependencies:
       '@colyseus/clock': 2.0.3
 
-  '@colyseus/tunnel-darwin-arm64@0.18.0':
+  '@colyseus/tunnel-darwin-arm64@0.18.1':
     optional: true
 
-  '@colyseus/tunnel-darwin-x64@0.18.0':
+  '@colyseus/tunnel-darwin-x64@0.18.1':
     optional: true
 
-  '@colyseus/tunnel-linux-arm64@0.18.0':
+  '@colyseus/tunnel-linux-arm64@0.18.1':
     optional: true
 
-  '@colyseus/tunnel-linux-x64@0.18.0':
+  '@colyseus/tunnel-linux-x64@0.18.1':
+    optional: true
+
+  '@colyseus/tunnel-win32-x64@0.18.1':
     optional: true
 
   '@cspell/cspell-bundled-dicts@9.8.0':

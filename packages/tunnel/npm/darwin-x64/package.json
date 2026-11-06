@@ -1,10 +1,16 @@
 {
   "name": "@colyseus/tunnel-darwin-x64",
-  "version": "0.18.0",
+  "version": "0.18.1",
   "description": "The tunnel agent of @colyseus/tunnel for darwin x64",
-  "os": ["darwin"],
-  "cpu": ["x64"],
-  "files": ["bin"],
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "files": [
+    "bin"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
