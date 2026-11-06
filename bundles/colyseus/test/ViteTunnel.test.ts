@@ -33,6 +33,18 @@ describe("Vite plugin: tunnel", () => {
     assert.strictEqual(statusOf("/src/server/index.ts", "play.colyseus.dev.evil.com"), "next");
   });
 
+  it("keeps the project's configuration out of reach, a monorepo's too", () => {
+    const parent = FS.slice(0, FS.lastIndexOf("/"));
+    for (const url of ["/package.json", "/pnpm-lock.yaml", "/vite.config.ts?import", "/tsconfig.app.json", "/Dockerfile", `${FS}/package.json`, `${parent}/pnpm-workspace.yaml`, `${parent}/package.json`]) {
+      assert.strictEqual(statusOf(url), 404, url);
+    }
+    // what the page itself may load from the root, or a config module of its own
+    for (const url of ["/main.js", "/style.css", "/src/app.config.ts", "/node_modules/react/package.json"]) {
+      assert.strictEqual(statusOf(url), "next", url);
+    }
+    assert.strictEqual(statusOf("/package.json", "localhost:5173"), "next");
+  });
+
   it("protects only the entry when it sits at the root", () => {
     assert.strictEqual(statusOf("/server.ts", undefined, "/server.ts"), 404);
     assert.strictEqual(statusOf("/src/main.ts", undefined, "/server.ts"), "next");

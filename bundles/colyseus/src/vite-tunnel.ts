@@ -9,6 +9,13 @@
  * stays out of reach as long as the client only `import type`s it, which
  * leaves no request behind. A server entry at the root protects only
  * itself.
+ *
+ * Nor do they get the project's configuration (`CONFIG_FILE`) from the
+ * root or a folder above it, a monorepo's included: package.json, lockfiles,
+ * tsconfig.json, vite.config.ts. The page never loads those, though it may
+ * load scripts that sit at the root (Vite's vanilla template keeps main.js
+ * there). Secrets anywhere (`.env`, `.git/`, keys) the tunnel edge refuses
+ * for every tunnel, Vite or not.
  */
 import path from 'node:path';
 import type { Logger, Plugin, ViteDevServer } from 'vite';
@@ -104,7 +111,10 @@ function localAddress(server: ViteDevServer): string | undefined {
   return host.includes(':') ? `[${host}]:${a.port}` : `${host}:${a.port}`;
 }
 
-/** A middleware turning tunnelled requests for the server entry's folder away. */
+/** Project and tool configuration a page never loads, by file name. */
+const CONFIG_FILE = /^(package(-lock)?\.json|npm-shrinkwrap\.json|pnpm-(lock|workspace)\.yaml|yarn\.lock|bun\.lockb?|deno\.jsonc?|[jt]sconfig(\..*)?\.json|.*\.config\.[cm]?[jt]s|dockerfile.*|docker-compose.*\.ya?ml|compose\.ya?ml)$/i;
+
+/** A middleware turning tunnelled requests for the server entry's folder and the project's configuration away. */
 export function guard(root: string, serverEntry: string, hostSuffix: string) {
   // Windows paths compare without case: C:\App and c:\app are one folder
   const key = (file: string) => process.platform === 'win32' ? path.resolve(file).toLowerCase() : path.resolve(file);
@@ -114,6 +124,13 @@ export function guard(root: string, serverEntry: string, hostSuffix: string) {
   const inside = (file: string) => {
     const f = key(file);
     return f === entry || (dir !== top && (f === dir || f.startsWith(dir + path.sep)));
+  };
+  // the root and every folder above it
+  const above = new Set<string>();
+  for (let d = top; !above.has(d); d = path.dirname(d)) { above.add(d); }
+  const config = (file: string) => {
+    const f = key(file);
+    return above.has(path.dirname(f)) && CONFIG_FILE.test(path.basename(f));
   };
 
   return (req: any, res: any, next: () => void) => {
@@ -125,7 +142,9 @@ export function guard(root: string, serverEntry: string, hostSuffix: string) {
     // on Windows the absolute path starts with its drive: /@fs/C:/app/...
     p = p.replace(/^\/@(fs|id)\//, '/');
     if (/^\/[A-Za-z]:[\\/]/.test(p)) { p = p.slice(1); }
-    if (inside(path.join(root, p)) || inside(path.resolve(p))) {
+    const asUrl = path.join(root, p);
+    const asFile = path.resolve(p);
+    if (inside(asUrl) || inside(asFile) || config(asUrl) || config(asFile)) {
       res.statusCode = 404;
       return res.end();
     }
