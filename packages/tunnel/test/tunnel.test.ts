@@ -38,13 +38,15 @@ function getWithHost(url: string, host: string): Promise<number> {
 describe('@colyseus/tunnel', () => {
   // Key by key: a replaced `process.env` is a plain object, which no longer
   // reaches `os.homedir()`.
-  const KEYS = ['HOME', 'CLOUD_ENDPOINT', 'COLYSEUS_TUNNEL_AGENT', 'BROWSER', 'COLYSEUS_CLOUD_TOKEN', 'FAKE_EDGE_KNOWS', 'FAKE_REVOKE_MS'];
+  // os.homedir() reads USERPROFILE on Windows, HOME elsewhere
+  const KEYS = ['HOME', 'USERPROFILE', 'CLOUD_ENDPOINT', 'COLYSEUS_TUNNEL_AGENT', 'BROWSER', 'COLYSEUS_CLOUD_TOKEN', 'FAKE_EDGE_KNOWS', 'FAKE_REVOKE_MS'];
   const saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
   let home: string;
 
   beforeEach(() => {
     home = fs.mkdtempSync(path.join(os.tmpdir(), 'tunnel-test-'));
     process.env.HOME = home;
+    process.env.USERPROFILE = home;
     process.env.CLOUD_ENDPOINT = 'http://cloud.test';
     process.env.COLYSEUS_TUNNEL_AGENT = FAKE_AGENT;
     process.env.BROWSER = 'none';
@@ -117,7 +119,9 @@ describe('@colyseus/tunnel', () => {
     assert.strictEqual(await pending, '7|good');
 
     assert.strictEqual(storedToken(), '7|good');
-    assert.strictEqual(fs.statSync(path.join(home, '.colyseus', 'tunnel.json')).mode & 0o777, 0o600);
+    if (process.platform !== 'win32') { // no POSIX modes there
+      assert.strictEqual(fs.statSync(path.join(home, '.colyseus', 'tunnel.json')).mode & 0o777, 0o600);
+    }
 
     const base = baseOf(prompt);
     assert.strictEqual(await getWithHost(`${base}/status`, 'rebound.example:80'), 400);

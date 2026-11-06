@@ -52,4 +52,4 @@ await tunnel.close();
 - `CLOUD_ENDPOINT`, `COLYSEUS_TUNNEL_EDGE`: another Colyseus Cloud, or another tunnel edge.
 - `COLYSEUS_TUNNEL_AGENT`: your own `routez-tunnel-agent` binary.
 
-Runs on macOS and Linux, x64 and arm64.
+Runs on macOS and Linux (x64 and arm64), and on Windows (x64).

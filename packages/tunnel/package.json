@@ -35,7 +35,8 @@
     "@colyseus/tunnel-darwin-arm64": "0.18.0",
     "@colyseus/tunnel-darwin-x64": "0.18.0",
     "@colyseus/tunnel-linux-arm64": "0.18.0",
-    "@colyseus/tunnel-linux-x64": "0.18.0"
+    "@colyseus/tunnel-linux-x64": "0.18.0",
+    "@colyseus/tunnel-win32-x64": "0.18.0"
   },
   "devDependencies": {
     "@types/node": "^22.13.14"

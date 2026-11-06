@@ -8,7 +8,7 @@ const BINARY = process.platform === 'win32' ? 'routez-tunnel-agent.exe' : 'route
 /**
  * The tunnel agent's executable: `COLYSEUS_TUNNEL_AGENT`, else the binary in
  * this platform's package (`@colyseus/tunnel-darwin-arm64`, ...), else
- * `routez-tunnel-agent` on the PATH.
+ * `routez-tunnel-agent` on the PATH. A `.js`/`.mjs` one runs under Node.
  */
 export function agentPath(): string {
   if (process.env.COLYSEUS_TUNNEL_AGENT) { return process.env.COLYSEUS_TUNNEL_AGENT; }
@@ -34,7 +34,7 @@ export interface AgentProcess {
   onUrl(listener: (url: string) => void): void;
   /** Settles when the process is gone. */
   exited: Promise<AgentExit>;
-  /** Ask it to close the tunnel and exit (SIGINT); killed if it takes over 3 s. */
+  /** Ask it to close the tunnel and exit (its stdin closes); killed if it takes over 5 s. */
   stop(): Promise<AgentExit>;
 }
 
@@ -44,11 +44,20 @@ export interface AgentProcess {
  * users' `ps` can't see them.
  */
 export function startAgent(edge: string, local: string, auth: string, name: string | undefined, log: (line: string) => void): AgentProcess {
+  const bin = agentPath();
   const args = [...(name ? ['-n', name] : []), edge, local];
-  const child = spawn(agentPath(), args, {
+  const script = /\.m?js$/.test(bin);
+  // stdin a pipe: closing it ends the tunnel, the one way that reaches a Windows process too.
+  // It closes when this process exits, however it exits, so the agent never outlives us with
+  // the name held. On Windows libuv otherwise puts the agent in a job that dies with us, before
+  // it can close the tunnel.
+  const child = spawn(script ? process.execPath : bin, script ? [bin, ...args] : args, {
     env: { ...process.env, ROUTEZ_TUNNEL_AUTH: auth },
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: ['pipe', 'pipe', 'pipe'],
+    detached: process.platform === 'win32',
+    windowsHide: true,
   });
+  child.stdin!.on('error', () => {}); // EPIPE once it has exited
 
   const listeners: Array<(url: string) => void> = [];
   let unauthorized = false;
@@ -70,13 +79,8 @@ export function startAgent(edge: string, local: string, auth: string, name: stri
     log(entry.message);
   });
 
-  // The tunnel closes with the process that opened it.
-  const onExit = () => child.kill();
-  process.once('exit', onExit);
-
   const exited = new Promise<AgentExit>((resolve) => {
     child.once('error', (e: NodeJS.ErrnoException) => {
-      process.off('exit', onExit);
       resolve({
         code: null,
         unauthorized: false,
@@ -86,7 +90,6 @@ export function startAgent(edge: string, local: string, auth: string, name: stri
       });
     });
     child.once('exit', (code) => {
-      process.off('exit', onExit);
       resolve({ code, unauthorized, reason });
     });
   });
@@ -96,8 +99,8 @@ export function startAgent(edge: string, local: string, auth: string, name: stri
     exited,
     stop() {
       if (child.exitCode === null && child.signalCode === null) {
-        child.kill('SIGINT');
-        const timer = setTimeout(() => child.kill('SIGKILL'), 3000);
+        child.stdin!.end();
+        const timer = setTimeout(() => child.kill('SIGKILL'), 5000);
         exited.finally(() => clearTimeout(timer));
       }
       return exited;

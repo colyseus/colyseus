@@ -27,5 +27,7 @@ if (name === 'taken') {
     }, Number(process.env.FAKE_REVOKE_MS));
   }
 }
+// as the real one: its stdin closing ends the tunnel
+process.stdin.on('end', () => process.exit(0)).resume();
 process.on('SIGINT', () => process.exit(0));
 setInterval(() => {}, 1000);
