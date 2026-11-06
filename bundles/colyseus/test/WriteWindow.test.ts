@@ -1,11 +1,11 @@
 import assert from "assert";
 import { EventEmitter } from "events";
 
-import { schema, t, decode, type SchemaType } from "@colyseus/schema";
+import { schema, t, type SchemaType } from "@colyseus/schema";
 import { Client as SDKClient } from "@colyseus/sdk";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import { uWebSocketClient, uWebSocketsTransport } from "@colyseus/uwebsockets-transport";
-import { H3Client } from "@colyseus/h3-transport";
+import { FrameReassembler, H3Client } from "@colyseus/h3-transport/H3Client";
 import { ClientState, CloseCode, LocalDriver, LocalPresence, matchMaker, Room, Server } from "@colyseus/core";
 import { waitUntil } from "./utils/index.ts";
 
@@ -116,11 +116,25 @@ function record(conn: any) {
   return seen;
 }
 
-/** A client made to leave mid-tick still gets, before its close, what the tick sent it. */
-async function kickedMidTick(endpoint: string) {
-  const a = await new SDKClient(endpoint).create<State>("burst");
+/** One SDK client in a fresh room, joined. */
+async function oneClient(endpoint: string, roomName = "burst") {
+  const a = await new SDKClient(endpoint).create<State>(roomName);
   const room = matchMaker.getLocalRoomById(a.roomId) as BurstRoom;
   await waitUntil(() => room.clients[0]?.state === ClientState.JOINED);
+  return { a, room };
+}
+
+/** Two SDK clients in a fresh room, both joined. */
+async function twoClients(endpoint: string, roomName = "burst") {
+  const { a, room } = await oneClient(endpoint, roomName);
+  const b = await new SDKClient(endpoint).joinById<State>(a.roomId);
+  await waitUntil(() => room.clients.length === 2 && room.clients.every((c) => c.state === ClientState.JOINED));
+  return { a, b, room };
+}
+
+/** A client made to leave mid-tick still gets, before its close, what the tick sent it. */
+async function kickedMidTick(endpoint: string) {
+  const { a, room } = await oneClient(endpoint);
   const seen = record(a);
   let seenAtClose: string[] | undefined;
   a.onLeave(() => { seenAtClose = seen.slice(); });
@@ -141,6 +155,7 @@ describe("Write window", () => {
 
   describe("ws-transport", () => {
     const TEST_PORT = 8583;
+    const endpoint = `ws://localhost:${TEST_PORT}`;
 
     let server: Server;
     let presence: LocalPresence;
@@ -182,19 +197,10 @@ describe("Write window", () => {
       return counted;
     }
 
-    /** Two SDK clients in a fresh room, both joined. */
-    async function twoClients(roomName = "burst") {
-      const a = await new SDKClient(`ws://localhost:${TEST_PORT}`).create<State>(roomName);
-      const room = matchMaker.getLocalRoomById(a.roomId) as BurstRoom;
-      const b = await new SDKClient(`ws://localhost:${TEST_PORT}`).joinById<State>(a.roomId);
-      await waitUntil(() => room.clients.length === 2 && room.clients.every((c) => c.state === ClientState.JOINED));
-      return { a, b, room };
-    }
-
     const ticks = (n: number) => new Promise((r) => setTimeout(r, Math.ceil(n * 1000 / 30)));
 
     it("by default (no autoBatch) a tick writes each frame as it comes, as before, and corks no client", async () => {
-      const { a, b, room } = await twoClients("burst-unbatched");
+      const { a, b, room } = await twoClients(endpoint, "burst-unbatched");
       assert.strictEqual(room.autoBatch, false);
       const seenA = record(a);
       const corksA = countCorks(room, 0), corksB = countCorks(room, 1);
@@ -219,7 +225,7 @@ describe("Write window", () => {
     });
 
     it("by default (no autoBatch) batch() still writes its burst as one write", async () => {
-      const { a, b, room } = await twoClients("burst-unbatched");
+      const { a, b, room } = await twoClients(endpoint, "burst-unbatched");
       const seenA = record(a);
       const writesA = countWrites(room, 0);
 
@@ -233,7 +239,7 @@ describe("Write window", () => {
     });
 
     it("a tick that sends nothing corks no client, nor does a patch with nothing after it", async () => {
-      const { a, b, room } = await twoClients();
+      const { a, b, room } = await twoClients(endpoint);
       const corksA = countCorks(room, 0), corksB = countCorks(room, 1);
       const writesA = countWrites(room, 0);
 
@@ -253,7 +259,7 @@ describe("Write window", () => {
     });
 
     it("a tick that sends to one client corks that one alone", async () => {
-      const { a, b, room } = await twoClients();
+      const { a, b, room } = await twoClients(endpoint);
       const seenA = record(a), seenB = record(b);
       const corksA = countCorks(room, 0), corksB = countCorks(room, 1);
       const writesA = countWrites(room, 0), writesB = countWrites(room, 1);
@@ -271,7 +277,7 @@ describe("Write window", () => {
     });
 
     it("a patch with frames after it goes out with them as one write", async () => {
-      const { a, b, room } = await twoClients();
+      const { a, b, room } = await twoClients(endpoint);
       const seenA = record(a);
       const writesA = countWrites(room, 0);
 
@@ -287,7 +293,7 @@ describe("Write window", () => {
     });
 
     it("batch() inside a tick adds no window of its own", async () => {
-      const { a, b, room } = await twoClients();
+      const { a, b, room } = await twoClients(endpoint);
       const seenA = record(a);
       const corksA = countCorks(room, 0);
       const writesA = countWrites(room, 0);
@@ -304,7 +310,7 @@ describe("Write window", () => {
     });
 
     it("a batch that throws is rethrown, what it sent is written, and the next batch writes on its own", async () => {
-      const { a, b, room } = await twoClients();
+      const { a, b, room } = await twoClients(endpoint);
       const seenA = record(a);
       const writesA = countWrites(room, 0);
 
@@ -323,10 +329,7 @@ describe("Write window", () => {
     });
 
     it("a tick's frames reach each socket as one write, in order", async () => {
-      const a = await new SDKClient(`ws://localhost:${TEST_PORT}`).joinOrCreate<State>("burst");
-      const room = matchMaker.getLocalRoomById(a.roomId) as BurstRoom;
-      const b = await new SDKClient(`ws://localhost:${TEST_PORT}`).joinById<State>(a.roomId);
-      await waitUntil(() => room.clients.length === 2 && room.clients.every((c) => c.state === ClientState.JOINED));
+      const { a, b, room } = await twoClients(endpoint);
       const seenA = record(a), seenB = record(b);
       const writesA = countWrites(room, 0), writesB = countWrites(room, 1);
 
@@ -346,9 +349,7 @@ describe("Write window", () => {
     });
 
     it("outside a tick (a message handler) each frame is its own write, as before", async () => {
-      const a = await new SDKClient(`ws://localhost:${TEST_PORT}`).joinOrCreate<State>("burst");
-      const room = matchMaker.getLocalRoomById(a.roomId) as BurstRoom;
-      await waitUntil(() => room.clients[0]?.state === ClientState.JOINED);
+      const { a, room } = await oneClient(endpoint);
       const seen = record(a);
       const writes = countWrites(room, 0);
 
@@ -360,9 +361,7 @@ describe("Write window", () => {
     });
 
     it("this.batch() writes a handler's burst as one write, and returns what its function returns", async () => {
-      const a = await new SDKClient(`ws://localhost:${TEST_PORT}`).joinOrCreate<State>("burst");
-      const room = matchMaker.getLocalRoomById(a.roomId) as BurstRoom;
-      await waitUntil(() => room.clients[0]?.state === ClientState.JOINED);
+      const { a, room } = await oneClient(endpoint);
       const seen = record(a);
       const writes = countWrites(room, 0);
 
@@ -380,9 +379,7 @@ describe("Write window", () => {
     for (const [name, roomName] of [["without onUncaughtException (the throw leaves the timer)", "burst"], ["with onUncaughtException", "burst-caught"]] as const) {
       it(`a step that throws, ${name}: what it sent is written, and the next ticks are too`, async () => {
         await withEscapes(async (escaped) => {
-          const a = await new SDKClient(`ws://localhost:${TEST_PORT}`).create<State>(roomName);
-          const room = matchMaker.getLocalRoomById(a.roomId) as BurstRoom;
-          await waitUntil(() => room.clients[0]?.state === ClientState.JOINED);
+          const { a, room } = await oneClient(endpoint, roomName);
           const seen = record(a);
           const writes = countWrites(room, 0);
 
@@ -411,10 +408,7 @@ describe("Write window", () => {
     }
 
     it("a client leaving mid-tick doesn't hold the others' frames", async () => {
-      const a = await new SDKClient(`ws://localhost:${TEST_PORT}`).joinOrCreate<State>("burst");
-      const room = matchMaker.getLocalRoomById(a.roomId) as BurstRoom;
-      const b = await new SDKClient(`ws://localhost:${TEST_PORT}`).joinById<State>(a.roomId);
-      await waitUntil(() => room.clients.length === 2 && room.clients.every((c) => c.state === ClientState.JOINED));
+      const { a, b, room } = await twoClients(endpoint);
       record(a);
       const seenB = record(b);
 
@@ -431,11 +425,12 @@ describe("Write window", () => {
       await b.leave();
     });
 
-    it("a client made to leave mid-tick gets what the tick sent it first", () => kickedMidTick(`ws://localhost:${TEST_PORT}`));
+    it("a client made to leave mid-tick gets what the tick sent it first", () => kickedMidTick(endpoint));
   });
 
   describe("uwebsockets-transport, a real socket", () => {
     const TEST_PORT = 8584;
+    const endpoint = `ws://localhost:${TEST_PORT}`;
     let server: Server;
     let presence: LocalPresence;
     let driver: LocalDriver;
@@ -455,10 +450,7 @@ describe("Write window", () => {
     });
 
     it("a tick's frames arrive whole and in order", async () => {
-      const a = await new SDKClient(`ws://localhost:${TEST_PORT}`).joinOrCreate<State>("burst");
-      const room = matchMaker.getLocalRoomById(a.roomId) as BurstRoom;
-      const b = await new SDKClient(`ws://localhost:${TEST_PORT}`).joinById<State>(a.roomId);
-      await waitUntil(() => room.clients.length === 2 && room.clients.every((c) => c.state === ClientState.JOINED));
+      const { a, b, room } = await twoClients(endpoint);
       const seenA = record(a), seenB = record(b);
 
       room.burst = 40;
@@ -470,7 +462,7 @@ describe("Write window", () => {
       await b.leave();
     });
 
-    it("a client made to leave mid-tick gets what the tick sent it first", () => kickedMidTick(`ws://localhost:${TEST_PORT}`));
+    it("a client made to leave mid-tick gets what the tick sent it first", () => kickedMidTick(endpoint));
   });
 
   describe("uwebsockets-transport", () => {
@@ -538,13 +530,21 @@ describe("Write window", () => {
   });
 
   describe("h3-transport", () => {
-    it("writes what was held as one write of length-prefixed frames", () => {
-      // (a session that never opens nor closes: the writer is set by hand)
+    /** A client on a session that never opens nor closes (the writers are set by hand), what reaches it logged. */
+    function fakeH3() {
       const never = new Promise<any>(() => {});
-      const client = new H3Client({ ready: never, closed: never } as any, () => {});
+      const log: string[] = [];
       const writes: Uint8Array[] = [];
-      (client as any)._bidiWriter = { write(bytes: Uint8Array) { writes.push(bytes.slice()); } };
+      const session = { ready: never, closed: never, datagrams: { maxDatagramSize: 0 }, close() { log.push("close"); } };
+      const client = new H3Client(session as any, () => {});
+      (client as any)._bidiWriter = { write(bytes: Uint8Array) { writes.push(bytes.slice()); log.push(`stream ${bytes.byteLength}`); } };
+      (client as any)._datagramWriter = { write(bytes: Uint8Array) { log.push(`datagram ${bytes.byteLength}`); } };
       client.readyState = 1;
+      return { client, log, writes };
+    }
+
+    it("writes what was held as one write of length-prefixed frames", () => {
+      const { client, writes } = fakeH3();
 
       client.cork();
       const frames = [new Uint8Array([1]), new Uint8Array(300).fill(7), new Uint8Array([3, 3])];
@@ -553,14 +553,8 @@ describe("Write window", () => {
       client.uncork();
       assert.strictEqual(writes.length, 1);
 
-      // the reader's framing: [varint length][frame], again and again
-      const out: number[][] = [];
-      const it = { offset: 0 };
-      while (it.offset < writes[0].byteLength) {
-        const length = decode.number(writes[0] as any, it);
-        out.push(Array.from(writes[0].subarray(it.offset, it.offset + length)));
-        it.offset += length;
-      }
+      // read back as the client's reader does
+      const out = new FrameReassembler().push(writes[0]).map((f) => Array.from(f));
       assert.deepStrictEqual(out, frames.map((f) => Array.from(f)));
 
       // uncorked, each frame is its own write again
@@ -569,30 +563,21 @@ describe("Write window", () => {
     });
 
     it("leave() writes what was held before it closes the session", () => {
-      const never = new Promise<any>(() => {});
-      const log: string[] = [];
-      const client = new H3Client({ ready: never, closed: never, close() { log.push("close"); } } as any, () => {});
-      (client as any)._bidiWriter = { write(bytes: Uint8Array) { log.push(`write ${bytes.byteLength}`); } };
-      client.readyState = 1;
+      const { client, log } = fakeH3();
 
       client.cork();
       client.raw(new Uint8Array([1]));
       client.raw(new Uint8Array([2, 2]));
       client.leave(CloseCode.CONSENTED);
-      assert.deepStrictEqual(log, ["write 5", "close"], "both frames, each with its 1-byte prefix, then the close");
+      assert.deepStrictEqual(log, ["stream 5", "close"], "both frames, each with its 1-byte prefix, then the close");
 
       client.uncork(); // the window's own close: nothing left
-      assert.deepStrictEqual(log, ["write 5", "close"]);
+      assert.deepStrictEqual(log, ["stream 5", "close"]);
     });
 
     // an `@unreliable` flush mutates what the reliable patch just added: the patch must be on the stream first
     it("a datagram sent mid-window goes after the frames held before it, and the window keeps holding", () => {
-      const never = new Promise<any>(() => {});
-      const log: string[] = [];
-      const client = new H3Client({ ready: never, closed: never, datagrams: { maxDatagramSize: 0 } } as any, () => {});
-      (client as any)._bidiWriter = { write(bytes: Uint8Array) { log.push(`stream ${bytes.byteLength}`); } };
-      (client as any)._datagramWriter = { write(bytes: Uint8Array) { log.push(`datagram ${bytes.byteLength}`); } };
-      client.readyState = 1;
+      const { client, log } = fakeH3();
 
       client.cork();
       client.raw(new Uint8Array([1]));

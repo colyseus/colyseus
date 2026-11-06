@@ -449,10 +449,7 @@ export class Room<T extends RoomOptions = RoomOptions> {
    *  each client's `_pendingFrames`. Drained each `broadcastPatch`. */
   #afterPatchBroadcasts: Array<{ bytes: Uint8Array; except: Client[] | undefined }> = [];
 
-  /** The write window (`#openWindow` / `#closeWindow`), shared by reference with each
-   *  client at join: how deep it is (a patch inside a tick opens no second one),
-   *  and the clients corked in it so far (by their first frame: `sendClientRaw`),
-   *  its own list, so one that leaves mid-tick is still uncorked. */
+  /** This room's {@link WriteWindow}, shared by reference with each client that can cork, at join. */
   #window: WriteWindow = { depth: 0, corked: [] };
 
   private _simulationInterval: NodeJS.Timeout;
@@ -1004,17 +1001,12 @@ export class Room<T extends RoomOptions = RoomOptions> {
         onTickCallback = wrapTryCatch(onTickCallback, this.onUncaughtException.bind(this), TimestepException, 'setTimestep');
       }
 
-      this._simulationInterval = setInterval(() => {
-        // (autoBatch: what this tick sends a client goes out as one write)
-        const batching = this.autoBatch;
-        if (batching) { this.#openWindow(); }
-        try {
-          this.clock.tick();
-          onTickCallback(this.clock.deltaTime);
-        } finally {
-          if (batching) { this.#closeWindow(); }
-        }
-      }, delay);
+      const fire = () => {
+        this.clock.tick();
+        onTickCallback(this.clock.deltaTime);
+      };
+      // autoBatch: what one firing sends a client goes out as one write
+      this._simulationInterval = setInterval(() => this.autoBatch ? this.batch(fire) : fire(), delay);
     }
   }
 
@@ -1114,28 +1106,22 @@ export class Room<T extends RoomOptions = RoomOptions> {
     };
     const MAX_CATCHUP_STEPS = 5;
 
-    this._simulationInterval = setInterval(() => {
-      // autoBatch: one write window per timer firing (what the clock's timers
-      // and every step send a client goes out as one write once they've run).
-      const batching = this.autoBatch;
-      if (batching) { this.#openWindow(); }
-      try {
-        this.clock.tick();
-        acc += this.clock.deltaTime;
+    const fire = () => {
+      this.clock.tick();
+      acc += this.clock.deltaTime;
 
-        // Run a whole number of FIXED steps to consume the measured time.
-        let ran = 0;
-        while (acc >= stepMs && ran < MAX_CATCHUP_STEPS) {
-          acc -= stepMs;
-          ctx.tick = tick++;
-          cb(ctx);
-          ran++;
-        }
-        if (ran === MAX_CATCHUP_STEPS) { acc = 0; } // hitch: drop backlog, don't spiral
-      } finally {
-        if (batching) { this.#closeWindow(); }
+      // Run a whole number of FIXED steps to consume the measured time.
+      let ran = 0;
+      while (acc >= stepMs && ran < MAX_CATCHUP_STEPS) {
+        acc -= stepMs;
+        ctx.tick = tick++;
+        cb(ctx);
+        ran++;
       }
-    }, stepMs);
+      if (ran === MAX_CATCHUP_STEPS) { acc = 0; } // hitch: drop backlog, don't spiral
+    };
+    // autoBatch: what one firing (the clock's timers, every step) sends a client goes out as one write
+    this._simulationInterval = setInterval(() => this.autoBatch ? this.batch(fire) : fire(), stepMs);
   }
 
   /** Server-side lag compensation, lazily created. @see allowRewindState */
@@ -1891,11 +1877,11 @@ export class Room<T extends RoomOptions = RoomOptions> {
     // Share the after-patch flush list so a client can announce staged frames
     // without the flush scanning every client. `_pendingFrames` are delivered as
     // standalone frames right after the patch by `_flushPendingClientFrames`.
-    (client as Client & ClientPrivate)._pendingFrameClients = this.#pendingFrameClients;
+    client._pendingFrameClients = this.#pendingFrameClients;
 
-    // Share the write window too: the client's first frame inside one corks it.
-    (client as Client & ClientPrivate)._writeWindow = this.#window;
-    (client as Client & ClientPrivate)._inWindow = false;
+    // Share the write window too (not with a transport that can't cork: it writes each frame as it comes).
+    client._writeWindow = client.cork !== undefined ? this.#window : undefined;
+    client._inWindow = false;
 
     // add temporary callback to keep track of disconnections during `onJoin`.
     client.ref['onleave'] = (_) => client.state = ClientState.LEAVING;
@@ -2239,21 +2225,18 @@ export class Room<T extends RoomOptions = RoomOptions> {
     ));
   }
 
-  /** Open the write window. No client is touched: each is corked by its own
-   *  first frame inside it (`sendClientRaw`), so a window nobody sends in costs
-   *  a counter. Nested opens (a patch inside a tick) only count. */
+  /** Open the {@link WriteWindow}: a counter, no client is touched. */
   #openWindow() {
     this.#window.depth++;
   }
 
-  /** Close the write window: the outermost close has every client corked in it
-   *  write what it held, in order (one that left meanwhile too: its transport
-   *  drops a closed socket's frames, as `raw` would have). */
+  /** Close the {@link WriteWindow}: the outermost close uncorks every client corked in it, one that left meanwhile
+   *  too (its transport drops a closed socket's frames, as `raw` would have). */
   #closeWindow() {
     const window = this.#window;
     if (--window.depth > 0) { return; }
     const corked = window.corked;
-    if (corked.length === 0) { return; }
+    if (corked.length === 0) { return; } // the common case: skips the empty `length = 0`, a runtime call in V8
     for (let i = 0; i < corked.length; i++) {
       const client = corked[i];
       client._inWindow = false;

@@ -269,14 +269,9 @@ export class H3Client implements Client, ClientPrivate {
     // corked: held until uncork() (the transport owns `data`, Client.raw)
     if (this._holding) {
       this._held.push(data);
-      this._heldBytes += data.length;
       return;
     }
 
-    this._writeFrame(data);
-  }
-
-  private _writeFrame(data: Buffer | Uint8Array) {
     // include length of message, as the reader may receive multiple messages at once
     const prefixLength = encode.number(lengthPrefixBuffer, data.length, { offset: 0 });
     const dataWithPrefixedLength = new Uint8Array(prefixLength + data.length);
@@ -286,9 +281,8 @@ export class H3Client implements Client, ClientPrivate {
     this._bidiWriter.write(dataWithPrefixedLength);
   }
 
-  /** Frames held while corked (reused), their bytes, and whether `raw` holds. */
+  /** Frames held while corked (reused), and whether `raw` holds. */
   private _held: Array<Uint8Array | Buffer> = [];
-  private _heldBytes: number = 0;
   private _holding: boolean = false;
 
   public cork() {
@@ -309,20 +303,18 @@ export class H3Client implements Client, ClientPrivate {
     if (held.length === 0) { return; }
     try {
       if (this.readyState !== 1) { return; } // OPEN
-      // one frame: written as raw() writes it (no gathering to do)
-      if (held.length === 1) { this._writeFrame(held[0]); return; }
-      const out = new Uint8Array(this._heldBytes + held.length * 9); // 9: a prefix's most
-      let offset = 0;
+      let bytes = 0;
+      for (let i = 0; i < held.length; i++) { bytes += held[i].length; }
+      const out = new Uint8Array(bytes + held.length * MAX_LENGTH_PREFIX_BYTES);
+      const it = { offset: 0 };
       for (let i = 0; i < held.length; i++) {
-        const it = { offset };
         encode.number(out as any, held[i].length, it);
         out.set(held[i], it.offset);
-        offset = it.offset + held[i].length;
+        it.offset += held[i].length;
       }
-      this._bidiWriter.write(out.subarray(0, offset));
+      this._bidiWriter.write(out.subarray(0, it.offset));
     } finally {
       held.length = 0;
-      this._heldBytes = 0;
     }
   }
 

@@ -66,15 +66,17 @@ export class WebSocketClient implements Client, ClientPrivate {
       return;
     }
 
+    // Bun's sendBinary requires an ArrayBufferView (Uint8Array, etc).
+    // Ensure we don't pass a plain number[] array.
+    const bytes = ArrayBuffer.isView(data) ? data : new Uint8Array(data);
+
     // corked: held until uncork() (the transport owns `data`, Client.raw)
     if (this._holding) {
-      this._held.push(data);
+      this._held.push(bytes);
       return;
     }
 
-    // Bun's sendBinary requires an ArrayBufferView (Uint8Array, etc).
-    // Ensure we don't pass a plain number[] array.
-    this.ref.ws.sendBinary(ArrayBuffer.isView(data) ? data : new Uint8Array(data));
+    this.ref.ws.sendBinary(bytes);
   }
 
   /** Frames held while corked (reused), and whether `raw` holds. */
@@ -83,9 +85,7 @@ export class WebSocketClient implements Client, ClientPrivate {
   /** Send what's held (`uncork()`'s cork callback, made once). */
   private _sendHeld = () => {
     const ws = this.ref.ws, held = this._held;
-    for (let i = 0; i < held.length; i++) {
-      ws.sendBinary(ArrayBuffer.isView(held[i]) ? held[i] : new Uint8Array(held[i]));
-    }
+    for (let i = 0; i < held.length; i++) { ws.sendBinary(held[i]); }
   };
 
   /** Bun corks inside a callback (`ws.cork(cb)`), as uWS does: hold, then send them all in one. */

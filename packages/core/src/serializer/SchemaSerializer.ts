@@ -75,11 +75,10 @@ function clientProcessedInputSeq(client: Client): number {
  */
 function sendClientFrame(client: Client, encodedBody: Uint8Array, timing?: PatchTimingContext): void {
   // (through the Room's write window: a patch inside a tick joins the tick's one write)
-  if (timing) {
-    sendClientRaw(client, buildTimedFrame(encodedBody, timing.sNow, clientProcessedInputSeq(client)));
-  } else {
-    sendClientRaw(client, encodedBody);
-  }
+  sendClientRaw(
+    client as Client & ClientPrivate,
+    timing ? buildTimedFrame(encodedBody, timing.sNow, clientProcessedInputSeq(client)) : encodedBody,
+  );
 }
 
 /**
